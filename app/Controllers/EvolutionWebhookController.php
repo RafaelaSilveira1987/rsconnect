@@ -6,6 +6,8 @@ namespace App\Controllers;
 
 use App\Core\Database;
 use App\Core\Env;
+use App\Services\AiAutomationService;
+use App\Services\AutomationWebhookService;
 use PDO;
 use Throwable;
 
@@ -116,10 +118,27 @@ final class EvolutionWebhookController
             );
 
             $pdo->commit();
+
+            $aiHandled = false;
+            if (!$fromMe && $inserted) {
+                (new AutomationWebhookService())->dispatch('message.received', [
+                    'tenant_id' => (int) $instance['tenant_id'],
+                    'instance_id' => (int) $instance['id'],
+                    'conversation_id' => $conversationId,
+                    'phone' => $phone,
+                    'message_type' => $messageType,
+                    'content' => $content,
+                ]);
+
+                (new AiAutomationService())->handleIncoming($instance, $conversationId, $content, $payload);
+                $aiHandled = true;
+            }
+
             $this->respond(200, [
                 'ok' => true,
                 'conversation_id' => $conversationId,
                 'message_inserted' => $inserted,
+                'ai_checked' => $aiHandled,
             ]);
         } catch (Throwable $exception) {
             if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
