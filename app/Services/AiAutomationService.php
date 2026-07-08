@@ -135,13 +135,14 @@ final class AiAutomationService
              WHERE tenant_id = :tenant_id
                AND status = "active"
                AND auto_reply_enabled = 1
-               AND (instance_id = :instance_id OR instance_id IS NULL OR is_default = 1)
-             ORDER BY (instance_id = :instance_id) DESC, is_default DESC, id DESC
+               AND (instance_id = :instance_id_filter OR instance_id IS NULL OR is_default = 1)
+             ORDER BY (instance_id = :instance_id_order) DESC, is_default DESC, id DESC
              LIMIT 1'
         );
         $statement->execute([
             'tenant_id' => $instance['tenant_id'],
-            'instance_id' => $instance['id'],
+            'instance_id_filter' => $instance['id'],
+            'instance_id_order' => $instance['id'],
         ]);
         $agent = $statement->fetch(PDO::FETCH_ASSOC);
         return $agent ?: null;
