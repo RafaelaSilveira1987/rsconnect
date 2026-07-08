@@ -1,0 +1,17 @@
+{
+  "event": "MESSAGES_UPSERT",
+  "instance": "rafa",
+  "data": {
+    "key": {
+      "id": "TESTE_RS_CONNECT_001",
+      "remoteJid": "5532999999999@s.whatsapp.net",
+      "fromMe": false
+    },
+    "pushName": "Lead Teste",
+    "messageType": "conversation",
+    "message": {
+      "conversation": "Teste de recebimento pelo webhook"
+    },
+    "messageTimestamp": 1783468313
+  }
+}

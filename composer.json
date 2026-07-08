@@ -1,0 +1,17 @@
+{
+  "name": "rs-connect/fundacao-saas",
+  "description": "Fundação SaaS multiempresa do RS Connect",
+  "type": "project",
+  "require": {
+    "php": ">=8.2",
+    "ext-curl": "*",
+    "ext-openssl": "*",
+    "ext-pdo": "*",
+    "ext-pdo_mysql": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "app/"
+    }
+  }
+}

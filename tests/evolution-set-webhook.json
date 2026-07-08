@@ -1,0 +1,14 @@
+{
+  "webhook": {
+    "enabled": true,
+    "url": "https://SEU-DOMINIO/webhooks/evolution?instance_id=1&token=SEU_TOKEN",
+    "webhookByEvents": false,
+    "webhookBase64": false,
+    "base64": false,
+    "events": [
+      "MESSAGES_UPSERT",
+      "MESSAGES_UPDATE",
+      "CONNECTION_UPDATE"
+    ]
+  }
+}
