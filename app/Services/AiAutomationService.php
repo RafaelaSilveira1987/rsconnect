@@ -77,13 +77,14 @@ final class AiAutomationService
             ]);
 
             if ((int) ($agent['n8n_enabled'] ?? 0) === 1) {
+                $legacyUrl = trim((string) ($agent['n8n_webhook_url'] ?? ''));
                 $this->automationWebhook->dispatch('ai.replied', [
                     'tenant_id' => (int) $instance['tenant_id'],
                     'conversation_id' => $conversationId,
                     'agent_id' => (int) $agent['id'],
                     'reply' => $reply,
                     'incoming' => $incomingContent,
-                ], (string) ($agent['n8n_webhook_url'] ?? ''));
+                ], $legacyUrl !== '' ? $legacyUrl : null, (int) $instance['tenant_id']);
             }
         } catch (Throwable $exception) {
             if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {

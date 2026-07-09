@@ -48,13 +48,28 @@ final class AutomationController
             $stats[(string) $row['status']] = (int) $row['total'];
         }
 
+        $n8nParams = [];
+        $n8nWhere = 'WHERE status = "active"';
+        if (!Auth::isSuperAdmin()) {
+            $n8nWhere .= ' AND tenant_id = :tenant_id';
+            $n8nParams['tenant_id'] = Auth::tenantId();
+        }
+        try {
+            $n8nStatement = $pdo->prepare('SELECT COUNT(*) FROM n8n_tenant_flows ' . $n8nWhere);
+            $n8nStatement->execute($n8nParams);
+            $tenantN8nFlows = (int) $n8nStatement->fetchColumn();
+        } catch (\Throwable) {
+            $tenantN8nFlows = 0;
+        }
+
         View::render('automations.index', [
             'title' => 'Automações',
             'logs' => $statement->fetchAll(PDO::FETCH_ASSOC),
             'stats' => $stats,
             'openaiConfigured' => trim((string) Env::get('OPENAI_API_KEY', '')) !== '',
             'geminiConfigured' => trim((string) Env::get('GEMINI_API_KEY', Env::get('GOOGLE_GEMINI_API_KEY', ''))) !== '',
-            'n8nConfigured' => trim((string) Env::get('N8N_WEBHOOK_URL', '')) !== '',
+            'n8nConfigured' => $tenantN8nFlows > 0 || trim((string) Env::get('N8N_WEBHOOK_URL', '')) !== '',
+            'tenantN8nFlows' => $tenantN8nFlows,
             'autoReplyEnabled' => filter_var(Env::get('AI_AUTOREPLY_ENABLED', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) !== false,
         ]);
     }

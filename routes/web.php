@@ -15,6 +15,7 @@ use App\Controllers\EvolutionWebhookController;
 use App\Controllers\DashboardController;
 use App\Controllers\InstanceController;
 use App\Controllers\OnboardingController;
+use App\Controllers\N8nFlowController;
 use App\Controllers\PermissionController;
 use App\Controllers\TaskController;
 use App\Controllers\UserController;
@@ -86,4 +87,8 @@ return static function (Router $router): void {
     $router->post('/agents', [AgentController::class, 'store'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->post('/agents/status', [AgentController::class, 'updateStatus'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->get('/automations', [AutomationController::class, 'index'], ['auth', 'permission:automations.view']);
+
+    $router->get('/n8n-flows', [N8nFlowController::class, 'index'], ['auth', 'super_admin']);
+    $router->post('/n8n-flows/save', [N8nFlowController::class, 'save'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/n8n-flows/test', [N8nFlowController::class, 'test'], ['auth', 'super_admin', 'csrf']);
 };

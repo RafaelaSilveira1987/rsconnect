@@ -22,7 +22,7 @@ $formatDate = static function (?string $date): string {
     <section class="metric-grid-compact">
         <article class="metric-card"><span>IA configurada</span><strong><?= ($openaiConfigured || $geminiConfigured) ? 'Sim' : 'Ver credenciais' ?></strong><small><?= $openaiConfigured ? 'OPENAI_API_KEY global encontrada' : ($geminiConfigured ? 'GEMINI_API_KEY global encontrada' : 'Use .env ou Credenciais de IA') ?></small></article>
         <article class="metric-card"><span>Resposta automática</span><strong><?= $autoReplyEnabled ? 'Ativa' : 'Global off' ?></strong><small>Controle por agente em Agentes de IA</small></article>
-        <article class="metric-card"><span>n8n</span><strong><?= $n8nConfigured ? 'Ativo' : 'Opcional' ?></strong><small><?= $n8nConfigured ? 'N8N_WEBHOOK_URL configurado' : 'Configure se quiser disparar fluxos' ?></small></article>
+        <article class="metric-card"><span>n8n</span><strong><?= $n8nConfigured ? 'Ativo' : 'Opcional' ?></strong><small><?= (int) ($tenantN8nFlows ?? 0) > 0 ? ((int) $tenantN8nFlows . ' fluxo(s) por empresa') : 'Configure em Fluxos n8n no painel RS' ?></small></article>
         <article class="metric-card"><span>Execuções</span><strong><?= array_sum($stats) ?></strong><small><?= (int) ($stats['success'] ?? 0) ?> sucesso · <?= (int) ($stats['error'] ?? 0) ?> erro</small></article>
     </section>
 
@@ -32,7 +32,7 @@ $formatDate = static function (?string $date): string {
             <div><b>1</b><span>Configure <code>OPENAI_API_KEY</code> global ou cadastre a chave do cliente em <code>Credenciais de IA</code>.</span></div>
             <div><b>2</b><span>Abra <a href="<?= View::e(Router::url('/agents')) ?>">Agentes de IA</a> e marque “Responder automaticamente”, horário e regras de transferência.</span></div>
             <div><b>3</b><span>Deixe a conversa em modo <strong>IA ativa</strong>. Se humano assumir, a IA para.</span></div>
-            <div><b>4</b><span>Envie uma mensagem real de lead e acompanhe o log abaixo.</span></div>
+            <div><b>4</b><span>Configure fluxos externos por empresa em <code>Fluxos n8n</code> quando precisar integrar agenda, CRM ou pós-venda.</span></div>
         </div>
     </section>
 

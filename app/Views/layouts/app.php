@@ -24,7 +24,7 @@ $isActive = static function (string $path) use ($currentPath): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=8.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=9.0')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -68,6 +68,7 @@ $isActive = static function (string $path) use ($currentPath): string {
             <?php endif; ?>
             <?php if (Auth::isSuperAdmin()): ?>
                 <a class="nav-link<?= $isActive('/ai-credentials') ?>" href="<?= View::e(Router::url('/ai-credentials')) ?>"><span class="nav-icon">🔐</span><span>Credenciais de IA</span></a>
+                <a class="nav-link<?= $isActive('/n8n-flows') ?>" href="<?= View::e(Router::url('/n8n-flows')) ?>"><span class="nav-icon">↔</span><span>Fluxos n8n</span></a>
             <?php endif; ?>
             <?php if (!Auth::isSuperAdmin() && Auth::can('agents.view')): ?>
                 <a class="nav-link<?= $isActive('/agents') ?>" href="<?= View::e(Router::url('/agents')) ?>"><span class="nav-icon">✦</span><span>Agentes de IA</span></a>
@@ -127,6 +128,6 @@ $isActive = static function (string $path) use ($currentPath): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=8.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=9.0')) ?>" defer></script>
 </body>
 </html>

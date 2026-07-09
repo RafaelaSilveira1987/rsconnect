@@ -1,0 +1,12 @@
+{
+  "event": "message.received",
+  "source": "rs-connect",
+  "tenant_id": 1,
+  "payload": {
+    "tenant_id": 1,
+    "conversation_id": 1,
+    "phone": "5511999999999",
+    "content": "Teste de fluxo n8n por empresa"
+  },
+  "sent_at": "2026-07-09T00:00:00-03:00"
+}

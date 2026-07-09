@@ -11,6 +11,7 @@ use App\Core\Env;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\AutomationWebhookService;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
@@ -384,56 +385,47 @@ final class CalendarController
 
     private function trySyncToN8n(int $appointmentId, int $tenantId, string $event): void
     {
-        $url = trim((string) Env::get('N8N_CALENDAR_WEBHOOK_URL', ''));
-        if ($url === '') {
+        $appointment = $this->findAppointment($appointmentId, $tenantId);
+        if (!$appointment) {
+            return;
+        }
+
+        $results = (new AutomationWebhookService())->dispatch('calendar.appointment.' . $event, [
+            'tenant_id' => $tenantId,
+            'appointment' => $appointment,
+        ], null, $tenantId);
+
+        if ($results === []) {
             Database::connection()->prepare(
                 'UPDATE calendar_appointments SET sync_status = "not_configured", sync_error = NULL WHERE id = :id AND tenant_id = :tenant_id'
             )->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
             return;
         }
 
-        $appointment = $this->findAppointment($appointmentId, $tenantId);
-        if (!$appointment) {
-            return;
+        $success = false;
+        $errors = [];
+        foreach ($results as $result) {
+            if (!empty($result['ok'])) {
+                $success = true;
+            } elseif (!empty($result['error'])) {
+                $errors[] = (string) $result['error'];
+            }
         }
 
-        $payload = json_encode([
-            'event' => 'calendar.appointment.' . $event,
-            'appointment' => $appointment,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
-        try {
-            $curl = curl_init($url);
-            if ($curl === false) {
-                throw new \RuntimeException('Não foi possível iniciar o cURL.');
-            }
-            curl_setopt_array($curl, [
-                CURLOPT_POST => true,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_CONNECTTIMEOUT => 8,
-                CURLOPT_TIMEOUT => 18,
-                CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json'],
-                CURLOPT_POSTFIELDS => $payload,
-            ]);
-            $response = curl_exec($curl);
-            $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-            $error = curl_error($curl);
-            curl_close($curl);
-            if ($response === false || $status < 200 || $status >= 300) {
-                throw new \RuntimeException($error !== '' ? $error : 'HTTP ' . $status);
-            }
+        if ($success) {
             Database::connection()->prepare(
                 'UPDATE calendar_appointments SET sync_status = "synced", sync_error = NULL, synced_at = NOW() WHERE id = :id AND tenant_id = :tenant_id'
             )->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
-        } catch (Throwable $exception) {
-            Database::connection()->prepare(
-                'UPDATE calendar_appointments SET sync_status = "failed", sync_error = :error WHERE id = :id AND tenant_id = :tenant_id'
-            )->execute([
-                'error' => mb_substr($exception->getMessage(), 0, 500),
-                'id' => $appointmentId,
-                'tenant_id' => $tenantId,
-            ]);
+            return;
         }
+
+        Database::connection()->prepare(
+            'UPDATE calendar_appointments SET sync_status = "failed", sync_error = :error WHERE id = :id AND tenant_id = :tenant_id'
+        )->execute([
+            'error' => mb_substr(implode(' | ', $errors) ?: 'Nenhum fluxo n8n respondeu com sucesso.', 0, 500),
+            'id' => $appointmentId,
+            'tenant_id' => $tenantId,
+        ]);
     }
 
     private function escapeIcs(string $value): string

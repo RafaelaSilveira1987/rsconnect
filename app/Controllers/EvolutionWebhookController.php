@@ -134,7 +134,7 @@ final class EvolutionWebhookController
                     'phone' => $phone,
                     'message_type' => $messageType,
                     'content' => $content,
-                ]);
+                ], null, (int) $instance['tenant_id']);
 
                 (new AiAutomationService())->handleIncoming($instance, $conversationId, $content, $payload);
                 $aiHandled = true;

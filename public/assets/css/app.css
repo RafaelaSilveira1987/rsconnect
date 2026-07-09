@@ -821,3 +821,27 @@ body { background: var(--rs-bg); }
 @media (max-width: 900px) {
     .calendar-actions { min-width: 0; justify-content: flex-start; }
 }
+
+/* ZIP 09 - Fluxos n8n por empresa */
+.checkbox-fieldset {
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 14px;
+    padding: 12px;
+    background: #fff;
+}
+.checkbox-fieldset legend {
+    padding: 0 6px;
+    color: var(--muted, #64748b);
+    font-size: .82rem;
+    font-weight: 700;
+}
+.actions-cell {
+    min-width: 140px;
+}
+.actions-cell form + details,
+.actions-cell details + form {
+    margin-top: 8px;
+}
+.n8n-flow-page .sticky-card {
+    top: 20px;
+}
