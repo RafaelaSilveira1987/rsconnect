@@ -24,7 +24,7 @@ $isActive = static function (string $path) use ($currentPath): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=6.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=8.0')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -41,7 +41,7 @@ $isActive = static function (string $path) use ($currentPath): string {
                 <a class="nav-link<?= $isActive('/onboarding') ?>" href="<?= View::e(Router::url('/onboarding')) ?>"><span class="nav-icon">✓</span><span>Configuração inicial</span></a>
             <?php endif; ?>
 
-            <?php if (Auth::can('conversations.view') || Auth::can('contacts.view') || Auth::can('crm.view') || Auth::can('tasks.view')): ?>
+            <?php if (Auth::can('conversations.view') || Auth::can('contacts.view') || Auth::can('crm.view') || Auth::can('tasks.view') || Auth::can('calendar.view')): ?>
                 <span class="nav-caption">Relacionamento</span>
             <?php endif; ?>
             <?php if (Auth::can('conversations.view')): ?>
@@ -55,6 +55,9 @@ $isActive = static function (string $path) use ($currentPath): string {
             <?php endif; ?>
             <?php if (Auth::can('tasks.view')): ?>
                 <a class="nav-link<?= $isActive('/tasks') ?>" href="<?= View::e(Router::url('/tasks')) ?>"><span class="nav-icon">◷</span><span>Tarefas</span></a>
+            <?php endif; ?>
+            <?php if (Auth::can('calendar.view')): ?>
+                <a class="nav-link<?= $isActive('/calendar') ?>" href="<?= View::e(Router::url('/calendar')) ?>"><span class="nav-icon">☷</span><span>Agenda</span></a>
             <?php endif; ?>
 
             <?php if (Auth::can('instances.view') || (!Auth::isSuperAdmin() && (Auth::can('agents.view') || Auth::can('automations.view')))): ?>
@@ -124,6 +127,6 @@ $isActive = static function (string $path) use ($currentPath): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=6.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=8.0')) ?>" defer></script>
 </body>
 </html>

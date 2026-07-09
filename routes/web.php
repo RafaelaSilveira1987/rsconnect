@@ -6,6 +6,7 @@ use App\Controllers\AgentController;
 use App\Controllers\AiCredentialController;
 use App\Controllers\AutomationController;
 use App\Controllers\AuthController;
+use App\Controllers\CalendarController;
 use App\Controllers\CompanyController;
 use App\Controllers\ContactController;
 use App\Controllers\CrmController;
@@ -49,6 +50,11 @@ return static function (Router $router): void {
     $router->post('/crm/notes', [CrmController::class, 'addNote'], ['auth', 'permission:crm.manage', 'csrf']);
 
     $router->get('/tasks', [TaskController::class, 'index'], ['auth', 'permission:tasks.view']);
+
+    $router->get('/calendar', [CalendarController::class, 'index'], ['auth', 'permission:calendar.view']);
+    $router->post('/calendar/appointments', [CalendarController::class, 'store'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->post('/calendar/status', [CalendarController::class, 'updateStatus'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->get('/calendar/ics', [CalendarController::class, 'ics'], ['auth', 'permission:calendar.view']);
     $router->post('/tasks', [TaskController::class, 'store'], ['auth', 'permission:tasks.manage', 'csrf']);
     $router->post('/tasks/status', [TaskController::class, 'updateStatus'], ['auth', 'permission:tasks.manage', 'csrf']);
 

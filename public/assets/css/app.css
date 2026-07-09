@@ -803,3 +803,21 @@ body { background: var(--rs-bg); }
         grid-template-columns: 1fr;
     }
 }
+
+
+/* ZIP 08 - Agenda */
+.calendar-list-card .task-list { gap: 10px; }
+.calendar-row { align-items: flex-start; }
+.calendar-row .task-main small a { color: var(--primary); font-weight: 700; }
+.calendar-actions { min-width: 260px; flex-wrap: wrap; justify-content: flex-end; }
+.calendar-status-confirmed { border-left: 4px solid #0891b2; }
+.calendar-status-completed { opacity: .78; }
+.calendar-status-cancelled, .calendar-status-no_show { opacity: .62; }
+.badge-confirmed { background: #e0f2fe; color: #075985; }
+.badge-scheduled { background: #ecfeff; color: #0e7490; }
+.badge-completed { background: #dcfce7; color: #166534; }
+.badge-cancelled, .badge-no_show { background: #f1f5f9; color: #475569; }
+.text-danger { color: #b91c1c; }
+@media (max-width: 900px) {
+    .calendar-actions { min-width: 0; justify-content: flex-start; }
+}
