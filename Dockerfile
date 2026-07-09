@@ -3,8 +3,8 @@ FROM php:8.3-apache
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
 RUN apt-get update \
-    && apt-get install -y libzip-dev unzip git \
-    && docker-php-ext-install pdo_mysql \
+    && apt-get install -y libzip-dev libcurl4-openssl-dev libonig-dev unzip git \
+    && docker-php-ext-install pdo_mysql curl mbstring zip \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
 

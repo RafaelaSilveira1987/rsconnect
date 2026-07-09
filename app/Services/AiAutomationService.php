@@ -7,6 +7,8 @@ namespace App\Services;
 use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Env;
+use DateTimeImmutable;
+use DateTimeZone;
 use PDO;
 use Throwable;
 
@@ -40,58 +42,38 @@ final class AiAutomationService
                 return;
             }
 
+            if ($this->isInCooldown($pdo, $conversationId, (int) ($agent['cooldown_seconds'] ?? 15))) {
+                $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.cooldown', 'skipped', 'Mensagem ignorada por anti-loop/cooldown.', null, null);
+                return;
+            }
+
             if ($this->shouldHandoff($incomingContent, (string) ($agent['handoff_keywords'] ?? ''))) {
-                $pdo->prepare('UPDATE conversations SET attendance_mode = "paused", status = "pending" WHERE id = :id')
-                    ->execute(['id' => $conversationId]);
-                $this->insertEvent($pdo, (int) $instance['tenant_id'], $conversationId, 'ai.handoff', 'IA pausada por palavra-chave de transferência.');
-                $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.handoff', 'skipped', 'Palavra-chave de transferência detectada.', null, null);
+                $this->handoff($pdo, $instance, $conversation, $agent, $conversationId);
+                return;
+            }
+
+            if (!$this->isInsideBusinessHours($agent)) {
+                $afterHoursMessage = trim((string) ($agent['after_hours_message'] ?? ''));
+                if ($afterHoursMessage !== '') {
+                    $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $afterHoursMessage, 'ai.after_hours', 'Mensagem fora do horário enviada pela IA.');
+                    $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.after_hours', 'success', null, $afterHoursMessage, null);
+                    return;
+                }
+
+                $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.after_hours', 'skipped', 'Fora do horário de atendimento e sem mensagem configurada.', null, null);
                 return;
             }
 
             $messages = $this->recentMessages($pdo, $conversationId, (int) ($agent['max_context_messages'] ?? 12));
             $reply = $this->ai->generateReply($agent, $messages, $conversation, $conversation);
 
-            $service = $this->evolutionService($instance);
-            $result = $service->sendText((string) $conversation['phone'], $reply);
-            $externalId = $this->extractMessageId($result['body'] ?? []);
-            $sentAt = date('Y-m-d H:i:s');
-
-            $pdo->beginTransaction();
-            $insert = $pdo->prepare(
-                'INSERT INTO conversation_messages
-                    (tenant_id, conversation_id, evolution_message_id, direction, sender_type,
-                     message_type, content, status, raw_payload_json, sent_at)
-                 VALUES
-                    (:tenant_id, :conversation_id, :external_id, "outgoing", "ai",
-                     "text", :content, "sent", :raw_payload, :sent_at)'
-            );
-            $insert->execute([
-                'tenant_id' => $instance['tenant_id'],
-                'conversation_id' => $conversationId,
-                'external_id' => $externalId,
-                'content' => $reply,
-                'raw_payload' => json_encode($result['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'sent_at' => $sentAt,
-            ]);
-
-            $pdo->prepare(
-                'UPDATE conversations
-                 SET last_message_at = :sent_at,
-                     last_message_preview = :preview,
-                     status = IF(status = "closed", "open", status)
-                 WHERE id = :id'
-            )->execute([
-                'sent_at' => $sentAt,
-                'preview' => mb_substr($reply, 0, 255),
-                'id' => $conversationId,
-            ]);
-
-            $this->insertEvent($pdo, (int) $instance['tenant_id'], $conversationId, 'ai.replied', 'Resposta automática enviada pela IA.');
-            $pdo->commit();
+            $result = $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $reply, 'ai.replied', 'Resposta automática enviada pela IA.');
 
             $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.replied', 'success', null, $reply, [
                 'http_status' => $result['status'] ?? null,
-                'external_id' => $externalId,
+                'external_id' => $this->extractMessageId($result['body'] ?? []),
+                'provider' => $agent['credential_provider'] ?? $agent['model_provider'] ?? null,
+                'credential_id' => $agent['credential_id'] ?? null,
             ]);
 
             if ((int) ($agent['n8n_enabled'] ?? 0) === 1) {
@@ -130,13 +112,33 @@ final class AiAutomationService
     private function agentFor(PDO $pdo, array $instance): ?array
     {
         $statement = $pdo->prepare(
-            'SELECT *
-             FROM ai_agents
-             WHERE tenant_id = :tenant_id
-               AND status = "active"
-               AND auto_reply_enabled = 1
-               AND (instance_id = :instance_id_filter OR instance_id IS NULL OR is_default = 1)
-             ORDER BY (instance_id = :instance_id_order) DESC, is_default DESC, id DESC
+            'SELECT a.*,
+                    COALESCE(ac_agent.id, ac_tenant.id) AS credential_id,
+                    COALESCE(ac_agent.label, ac_tenant.label) AS credential_label,
+                    COALESCE(ac_agent.provider, ac_tenant.provider) AS credential_provider,
+                    COALESCE(ac_agent.api_key_encrypted, ac_tenant.api_key_encrypted) AS credential_api_key_encrypted,
+                    COALESCE(ac_agent.base_url, ac_tenant.base_url) AS credential_base_url,
+                    COALESCE(ac_agent.default_model, ac_tenant.default_model) AS credential_default_model
+             FROM ai_agents a
+             LEFT JOIN ai_provider_credentials ac_agent ON ac_agent.id = (
+                SELECT x.id
+                FROM ai_provider_credentials x
+                WHERE x.agent_id = a.id AND x.status = "active"
+                ORDER BY x.is_default DESC, x.id DESC
+                LIMIT 1
+             )
+             LEFT JOIN ai_provider_credentials ac_tenant ON ac_tenant.id = (
+                SELECT y.id
+                FROM ai_provider_credentials y
+                WHERE y.tenant_id = a.tenant_id AND y.agent_id IS NULL AND y.status = "active"
+                ORDER BY y.is_default DESC, y.id DESC
+                LIMIT 1
+             )
+             WHERE a.tenant_id = :tenant_id
+               AND a.status = "active"
+               AND a.auto_reply_enabled = 1
+               AND (a.instance_id = :instance_id_filter OR a.instance_id IS NULL OR a.is_default = 1)
+             ORDER BY (a.instance_id = :instance_id_order) DESC, a.is_default DESC, a.id DESC
              LIMIT 1'
         );
         $statement->execute([
@@ -174,6 +176,126 @@ final class AiAutomationService
             }
         }
         return false;
+    }
+
+    private function handoff(PDO $pdo, array $instance, array $conversation, array $agent, int $conversationId): void
+    {
+        $mode = (string) ($agent['handoff_action'] ?? 'paused');
+        $mode = in_array($mode, ['human', 'paused'], true) ? $mode : 'paused';
+
+        $pdo->prepare('UPDATE conversations SET attendance_mode = :mode, status = "pending" WHERE id = :id')
+            ->execute(['mode' => $mode, 'id' => $conversationId]);
+
+        $message = trim((string) ($agent['human_handoff_message'] ?? ''));
+        if ($message !== '') {
+            $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $message, 'ai.handoff.message', 'Mensagem de transferência enviada pela IA.');
+        }
+
+        $this->insertEvent($pdo, (int) $instance['tenant_id'], $conversationId, 'ai.handoff', 'IA pausada por palavra-chave de transferência.');
+        $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.handoff', 'skipped', 'Palavra-chave de transferência detectada.', $message !== '' ? $message : null, null);
+    }
+
+    private function isInsideBusinessHours(array $agent): bool
+    {
+        if ((int) ($agent['business_hours_enabled'] ?? 0) !== 1) {
+            return true;
+        }
+
+        $timezone = trim((string) ($agent['business_timezone'] ?? Env::get('APP_TIMEZONE', 'America/Sao_Paulo'))) ?: 'America/Sao_Paulo';
+        try {
+            $now = new DateTimeImmutable('now', new DateTimeZone($timezone));
+        } catch (Throwable) {
+            $now = new DateTimeImmutable('now');
+        }
+
+        $days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        $dayKey = $days[(int) $now->format('w')] ?? 'mon';
+        $rules = json_decode((string) ($agent['business_hours_json'] ?? ''), true);
+        if (!is_array($rules) || !isset($rules[$dayKey]) || !is_array($rules[$dayKey])) {
+            return false;
+        }
+
+        $current = $now->format('H:i');
+        foreach ($rules[$dayKey] as $range) {
+            if (!is_array($range) || count($range) < 2) {
+                continue;
+            }
+            $start = (string) $range[0];
+            $end = (string) $range[1];
+            if ($start <= $current && $current <= $end) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isInCooldown(PDO $pdo, int $conversationId, int $seconds): bool
+    {
+        $seconds = max(0, min(3600, $seconds));
+        if ($seconds === 0) {
+            return false;
+        }
+
+        $statement = $pdo->prepare(
+            'SELECT sent_at
+             FROM conversation_messages
+             WHERE conversation_id = :conversation_id
+               AND direction = "outgoing"
+               AND sender_type = "ai"
+             ORDER BY sent_at DESC, id DESC
+             LIMIT 1'
+        );
+        $statement->execute(['conversation_id' => $conversationId]);
+        $last = $statement->fetchColumn();
+        if (!$last) {
+            return false;
+        }
+
+        return (time() - strtotime((string) $last)) < $seconds;
+    }
+
+    private function sendAutomatedMessage(PDO $pdo, array $instance, array $conversation, int $conversationId, string $reply, string $eventType, string $eventDescription): array
+    {
+        $service = $this->evolutionService($instance);
+        $result = $service->sendText((string) $conversation['phone'], $reply);
+        $externalId = $this->extractMessageId($result['body'] ?? []);
+        $sentAt = date('Y-m-d H:i:s');
+
+        $pdo->beginTransaction();
+        $insert = $pdo->prepare(
+            'INSERT INTO conversation_messages
+                (tenant_id, conversation_id, evolution_message_id, direction, sender_type,
+                 message_type, content, status, raw_payload_json, sent_at)
+             VALUES
+                (:tenant_id, :conversation_id, :external_id, "outgoing", "ai",
+                 "text", :content, "sent", :raw_payload, :sent_at)'
+        );
+        $insert->execute([
+            'tenant_id' => $instance['tenant_id'],
+            'conversation_id' => $conversationId,
+            'external_id' => $externalId,
+            'content' => $reply,
+            'raw_payload' => json_encode($result['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'sent_at' => $sentAt,
+        ]);
+
+        $pdo->prepare(
+            'UPDATE conversations
+             SET last_message_at = :sent_at,
+                 last_message_preview = :preview,
+                 status = IF(status = "closed", "open", status)
+             WHERE id = :id'
+        )->execute([
+            'sent_at' => $sentAt,
+            'preview' => mb_substr($reply, 0, 255),
+            'id' => $conversationId,
+        ]);
+
+        $this->insertEvent($pdo, (int) $instance['tenant_id'], $conversationId, $eventType, $eventDescription);
+        $pdo->commit();
+
+        return $result;
     }
 
     private function evolutionService(array $instance): EvolutionService

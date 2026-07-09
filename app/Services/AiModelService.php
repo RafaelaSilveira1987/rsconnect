@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Core\Crypto;
 use App\Core\Env;
 use RuntimeException;
+use Throwable;
 
 final class AiModelService
 {
     public function generateReply(array $agent, array $messages, array $contact, array $conversation): string
     {
-        $provider = strtolower((string) ($agent['model_provider'] ?? 'google'));
+        $provider = $this->provider($agent);
 
         return match ($provider) {
             'openai' => $this->generateWithOpenAi($agent, $messages, $contact, $conversation),
@@ -22,13 +24,13 @@ final class AiModelService
 
     private function generateWithOpenAi(array $agent, array $messages, array $contact, array $conversation): string
     {
-        $apiKey = trim((string) Env::get('OPENAI_API_KEY', ''));
+        $apiKey = $this->apiKey($agent, 'openai');
         if ($apiKey === '') {
-            throw new RuntimeException('Configure OPENAI_API_KEY no ambiente para ativar respostas automáticas com OpenAI.');
+            throw new RuntimeException('Configure OPENAI_API_KEY no ambiente ou uma credencial OpenAI no painel RS.');
         }
 
-        $model = trim((string) ($agent['model_name'] ?? 'gpt-4o-mini')) ?: 'gpt-4o-mini';
-        $endpointBase = rtrim((string) Env::get('OPENAI_API_BASE_URL', 'https://api.openai.com/v1'), '/');
+        $model = $this->model($agent, 'gpt-4o-mini');
+        $endpointBase = $this->baseUrl($agent, 'OPENAI_API_BASE_URL', 'https://api.openai.com/v1');
         $url = $endpointBase . '/responses';
 
         $systemPrompt = $this->buildSystemPrompt($agent, $contact, $conversation);
@@ -60,13 +62,13 @@ final class AiModelService
 
     private function generateWithGemini(array $agent, array $messages, array $contact, array $conversation): string
     {
-        $apiKey = trim((string) Env::get('GEMINI_API_KEY', Env::get('GOOGLE_GEMINI_API_KEY', '')));
+        $apiKey = $this->apiKey($agent, 'google');
         if ($apiKey === '') {
-            throw new RuntimeException('Configure GEMINI_API_KEY no ambiente para ativar respostas automáticas.');
+            throw new RuntimeException('Configure GEMINI_API_KEY no ambiente ou uma credencial Gemini no painel RS.');
         }
 
-        $model = trim((string) ($agent['model_name'] ?? 'gemini-2.0-flash')) ?: 'gemini-2.0-flash';
-        $endpointBase = rtrim((string) Env::get('GEMINI_API_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'), '/');
+        $model = $this->model($agent, 'gemini-2.0-flash');
+        $endpointBase = $this->baseUrl($agent, 'GEMINI_API_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta');
         $url = $endpointBase . '/models/' . rawurlencode($model) . ':generateContent?key=' . rawurlencode($apiKey);
 
         $systemPrompt = $this->buildSystemPrompt($agent, $contact, $conversation);
@@ -100,12 +102,59 @@ final class AiModelService
         return mb_substr($text, 0, (int) Env::get('AI_MAX_REPLY_CHARS', 1400));
     }
 
+    private function provider(array $agent): string
+    {
+        $credentialProvider = trim((string) ($agent['credential_provider'] ?? ''));
+        $provider = $credentialProvider !== '' ? $credentialProvider : (string) ($agent['model_provider'] ?? 'google');
+        return strtolower($provider);
+    }
+
+    private function model(array $agent, string $fallback): string
+    {
+        $credentialModel = trim((string) ($agent['credential_default_model'] ?? ''));
+        if ($credentialModel !== '') {
+            return $credentialModel;
+        }
+
+        $agentModel = trim((string) ($agent['model_name'] ?? ''));
+        return $agentModel !== '' ? $agentModel : $fallback;
+    }
+
+    private function baseUrl(array $agent, string $envKey, string $fallback): string
+    {
+        $credentialBaseUrl = trim((string) ($agent['credential_base_url'] ?? ''));
+        if ($credentialBaseUrl !== '') {
+            return rtrim($credentialBaseUrl, '/');
+        }
+
+        return rtrim((string) Env::get($envKey, $fallback), '/');
+    }
+
+    private function apiKey(array $agent, string $provider): string
+    {
+        $encrypted = trim((string) ($agent['credential_api_key_encrypted'] ?? ''));
+        if ($encrypted !== '') {
+            try {
+                return trim(Crypto::decrypt($encrypted));
+            } catch (Throwable) {
+                throw new RuntimeException('Não foi possível descriptografar a credencial de IA do cliente/agente. Confira a APP_KEY.');
+            }
+        }
+
+        return match ($provider) {
+            'openai' => trim((string) Env::get('OPENAI_API_KEY', '')),
+            'google' => trim((string) Env::get('GEMINI_API_KEY', Env::get('GOOGLE_GEMINI_API_KEY', ''))),
+            default => '',
+        };
+    }
+
     private function buildSystemPrompt(array $agent, array $contact, array $conversation): string
     {
         $base = trim((string) ($agent['system_prompt'] ?? ''));
         $knowledge = trim((string) ($agent['knowledge_base'] ?? ''));
         $contactName = trim((string) ($contact['name'] ?? $conversation['contact_name'] ?? ''));
         $contactPhone = trim((string) ($contact['phone'] ?? $conversation['phone'] ?? ''));
+        $timezone = trim((string) ($agent['business_timezone'] ?? Env::get('APP_TIMEZONE', 'America/Sao_Paulo')));
 
         $rules = [
             'Responda sempre em português do Brasil.',
@@ -113,11 +162,13 @@ final class AiModelService
             'Não invente preço, prazo, disponibilidade, política ou informação que não esteja no prompt/base.',
             'Se a pergunta exigir decisão humana, peça uma confirmação e diga que encaminhará para atendimento.',
             'Não mencione que você é um modelo de linguagem.',
+            'Se o lead pedir humano, atendente, suporte ou uma pessoa, sinalize transferência em vez de insistir no atendimento automático.',
         ];
 
         return trim($base . "\n\nContexto do contato:\n" .
             '- Nome: ' . ($contactName !== '' ? $contactName : 'não informado') . "\n" .
-            '- Telefone: ' . ($contactPhone !== '' ? $contactPhone : 'não informado') . "\n\n" .
+            '- Telefone: ' . ($contactPhone !== '' ? $contactPhone : 'não informado') . "\n" .
+            '- Fuso de atendimento: ' . ($timezone !== '' ? $timezone : 'não informado') . "\n\n" .
             ($knowledge !== '' ? "Base de conhecimento:\n" . $knowledge . "\n\n" : '') .
             "Regras obrigatórias:\n- " . implode("\n- ", $rules));
     }
@@ -137,12 +188,7 @@ final class AiModelService
 
             $input[] = [
                 'role' => $role,
-                'content' => [
-                    [
-                        'type' => 'input_text',
-                        'text' => $content,
-                    ],
-                ],
+                'content' => $content,
             ];
         }
 

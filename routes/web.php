@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Controllers\AgentController;
+use App\Controllers\AiCredentialController;
 use App\Controllers\AutomationController;
 use App\Controllers\AuthController;
 use App\Controllers\CompanyController;
@@ -72,6 +73,8 @@ return static function (Router $router): void {
     $router->post('/instances/test', [InstanceController::class, 'sendTest'], ['auth', 'permission:instances.manage', 'csrf']);
 
     $router->get('/agents', [AgentController::class, 'index'], ['auth', 'permission:agents.view']);
+    $router->get('/ai-credentials', [AiCredentialController::class, 'index'], ['auth', 'super_admin']);
+    $router->post('/ai-credentials/save', [AiCredentialController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/agents', [AgentController::class, 'store'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->post('/agents/status', [AgentController::class, 'updateStatus'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->get('/automations', [AutomationController::class, 'index'], ['auth', 'permission:automations.view']);

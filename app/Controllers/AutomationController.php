@@ -52,6 +52,7 @@ final class AutomationController
             'title' => 'Automações',
             'logs' => $statement->fetchAll(PDO::FETCH_ASSOC),
             'stats' => $stats,
+            'openaiConfigured' => trim((string) Env::get('OPENAI_API_KEY', '')) !== '',
             'geminiConfigured' => trim((string) Env::get('GEMINI_API_KEY', Env::get('GOOGLE_GEMINI_API_KEY', ''))) !== '',
             'n8nConfigured' => trim((string) Env::get('N8N_WEBHOOK_URL', '')) !== '',
             'autoReplyEnabled' => filter_var(Env::get('AI_AUTOREPLY_ENABLED', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) !== false,
