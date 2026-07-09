@@ -8,6 +8,7 @@ use App\Core\Database;
 use App\Core\Env;
 use App\Services\AiAutomationService;
 use App\Services\AutomationWebhookService;
+use App\Services\CrmAutoService;
 use PDO;
 use Throwable;
 
@@ -117,6 +118,11 @@ final class EvolutionWebhookController
                 $sentAt
             );
 
+            $leadId = null;
+            if (!$fromMe && $inserted) {
+                $leadId = (new CrmAutoService())->createFromConversation($pdo, $instance, $contactId, $conversationId, $content);
+            }
+
             $pdo->commit();
 
             $aiHandled = false;
@@ -138,6 +144,7 @@ final class EvolutionWebhookController
                 'ok' => true,
                 'conversation_id' => $conversationId,
                 'message_inserted' => $inserted,
+                'crm_lead_id' => $leadId,
                 'ai_checked' => $aiHandled,
             ]);
         } catch (Throwable $exception) {

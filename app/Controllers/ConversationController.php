@@ -12,6 +12,8 @@ use App\Core\Env;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\AiAutomationService;
+use App\Services\AiModelService;
 use App\Services\EvolutionService;
 use PDO;
 use Throwable;
@@ -490,6 +492,100 @@ final class ConversationController
         $this->redirect('/conversations?conversation_id=' . $conversationId);
     }
 
+
+    public function suggest(): void
+    {
+        $conversationId = (int) ($_POST['conversation_id'] ?? 0);
+        $conversation = $this->findConversation($conversationId);
+        if ($conversation === null) {
+            Flash::set('error', 'Conversa não encontrada.');
+            $this->redirect('/conversations');
+        }
+
+        try {
+            $pdo = Database::connection();
+            $agent = $this->agentForConversation($pdo, $conversation);
+            if (!$agent) {
+                Flash::set('error', 'Nenhum agente ativo encontrado para gerar sugestão.');
+                $this->redirect('/conversations?conversation_id=' . $conversationId);
+            }
+
+            $messages = $this->recentMessages($pdo, $conversationId, 14);
+            $suggestion = (new AiModelService())->generateReply($agent, $messages, $conversation, $conversation);
+
+            if ($this->hasColumn($pdo, 'conversations', 'last_ai_suggestion')) {
+                $pdo->prepare(
+                    'UPDATE conversations
+                     SET last_ai_suggestion = :suggestion,
+                         last_ai_suggestion_at = CURRENT_TIMESTAMP
+                     WHERE id = :id'
+                )->execute([
+                    'suggestion' => $suggestion,
+                    'id' => $conversationId,
+                ]);
+            }
+
+            $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'ai.suggestion', 'Sugestão de resposta gerada pela IA.');
+            Audit::log('conversation.ai_suggestion', ['conversation_id' => $conversationId], (int) $conversation['tenant_id']);
+            Flash::set('success', 'Sugestão de resposta gerada pela IA.');
+        } catch (Throwable $exception) {
+            Audit::log('conversation.ai_suggestion_failed', [
+                'conversation_id' => $conversationId,
+                'error' => $exception->getMessage(),
+            ], (int) $conversation['tenant_id']);
+            Flash::set('error', 'Não foi possível gerar sugestão: ' . $exception->getMessage());
+        }
+
+        $this->redirect('/conversations?conversation_id=' . $conversationId);
+    }
+
+    public function reprocessAi(): void
+    {
+        $conversationId = (int) ($_POST['conversation_id'] ?? 0);
+        $conversation = $this->findConversation($conversationId);
+        if ($conversation === null) {
+            Flash::set('error', 'Conversa não encontrada.');
+            $this->redirect('/conversations');
+        }
+
+        $pdo = Database::connection();
+        $message = $pdo->prepare(
+            'SELECT content
+             FROM conversation_messages
+             WHERE conversation_id = :conversation_id AND direction = "incoming"
+             ORDER BY sent_at DESC, id DESC
+             LIMIT 1'
+        );
+        $message->execute(['conversation_id' => $conversationId]);
+        $content = trim((string) $message->fetchColumn());
+
+        if ($content === '') {
+            Flash::set('error', 'Não existe mensagem recebida para reprocessar com IA.');
+            $this->redirect('/conversations?conversation_id=' . $conversationId);
+        }
+
+        $instance = [
+            'id' => (int) $conversation['evolution_instance_id'],
+            'tenant_id' => (int) $conversation['tenant_id'],
+            'base_url' => (string) $conversation['base_url'],
+            'api_key_encrypted' => (string) $conversation['api_key_encrypted'],
+            'instance_name' => (string) $conversation['instance_name'],
+        ];
+
+        try {
+            (new AiAutomationService())->handleIncoming($instance, $conversationId, $content, [
+                'event' => 'manual.reprocess',
+                'conversation_id' => $conversationId,
+            ]);
+            $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'ai.reprocess', 'Última mensagem reprocessada manualmente com IA.');
+            Flash::set('success', 'Reprocessamento solicitado. Confira a conversa e os logs de automação.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Falha ao reprocessar com IA: ' . $exception->getMessage());
+        }
+
+        $this->redirect('/conversations?conversation_id=' . $conversationId);
+    }
+
     private function findInstance(int $id): ?array
     {
         $sql = 'SELECT * FROM evolution_instances WHERE id = :id';
@@ -510,12 +606,17 @@ final class ConversationController
         $sql = 'SELECT c.*, ct.name AS contact_name, ct.phone, ct.email, ct.company, ct.notes,
                        ct.tags_json, ct.status AS contact_status, ct.id AS contact_id,
                        i.name AS instance_label, i.instance_name, i.base_url, i.api_key_encrypted,
-                       t.name AS tenant_name, u.name AS assigned_user_name
+                       t.name AS tenant_name, u.name AS assigned_user_name,
+                       l.id AS lead_id, l.title AS lead_title, l.status AS lead_status, l.value AS lead_value,
+                       l.priority AS lead_priority, l.pipeline_id AS lead_pipeline_id, l.stage_id AS lead_stage_id,
+                       s.name AS lead_stage_name
                 FROM conversations c
                 INNER JOIN contacts ct ON ct.id = c.contact_id
                 INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id
                 INNER JOIN tenants t ON t.id = c.tenant_id
                 LEFT JOIN users u ON u.id = c.assigned_user_id
+                LEFT JOIN crm_leads l ON l.id = c.crm_lead_id
+                LEFT JOIN crm_stages s ON s.id = l.stage_id
                 WHERE c.id = :id';
         $params = ['id' => $id];
 
@@ -590,6 +691,70 @@ final class ConversationController
             'event_type' => $type,
             'description' => $description,
         ]);
+    }
+
+
+    private function agentForConversation(PDO $pdo, array $conversation): ?array
+    {
+        $statement = $pdo->prepare(
+            'SELECT a.*,
+                    COALESCE(ac_agent.id, ac_tenant.id) AS credential_id,
+                    COALESCE(ac_agent.label, ac_tenant.label) AS credential_label,
+                    COALESCE(ac_agent.provider, ac_tenant.provider) AS credential_provider,
+                    COALESCE(ac_agent.api_key_encrypted, ac_tenant.api_key_encrypted) AS credential_api_key_encrypted,
+                    COALESCE(ac_agent.base_url, ac_tenant.base_url) AS credential_base_url,
+                    COALESCE(ac_agent.default_model, ac_tenant.default_model) AS credential_default_model
+             FROM ai_agents a
+             LEFT JOIN ai_provider_credentials ac_agent ON ac_agent.id = (
+                SELECT x.id FROM ai_provider_credentials x
+                WHERE x.agent_id = a.id AND x.status = "active"
+                ORDER BY x.is_default DESC, x.id DESC LIMIT 1
+             )
+             LEFT JOIN ai_provider_credentials ac_tenant ON ac_tenant.id = (
+                SELECT y.id FROM ai_provider_credentials y
+                WHERE y.tenant_id = a.tenant_id AND y.agent_id IS NULL AND y.status = "active"
+                ORDER BY y.is_default DESC, y.id DESC LIMIT 1
+             )
+             WHERE a.tenant_id = :tenant_id
+               AND a.status = "active"
+               AND (a.instance_id = :instance_id_filter OR a.instance_id IS NULL OR a.is_default = 1)
+             ORDER BY (a.instance_id = :instance_id_order) DESC, a.is_default DESC, a.id DESC
+             LIMIT 1'
+        );
+        $statement->execute([
+            'tenant_id' => $conversation['tenant_id'],
+            'instance_id_filter' => $conversation['evolution_instance_id'],
+            'instance_id_order' => $conversation['evolution_instance_id'],
+        ]);
+        $agent = $statement->fetch(PDO::FETCH_ASSOC);
+        return $agent ?: null;
+    }
+
+    private function recentMessages(PDO $pdo, int $conversationId, int $limit): array
+    {
+        $limit = max(4, min(30, $limit));
+        $statement = $pdo->prepare(
+            'SELECT * FROM (
+                SELECT direction, sender_type, content, sent_at
+                FROM conversation_messages
+                WHERE conversation_id = :conversation_id
+                ORDER BY sent_at DESC, id DESC
+                LIMIT ' . $limit . '
+             ) recent
+             ORDER BY sent_at ASC'
+        );
+        $statement->execute(['conversation_id' => $conversationId]);
+        return $statement->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private function hasColumn(PDO $pdo, string $table, string $column): bool
+    {
+        $statement = $pdo->prepare(
+            'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
+        );
+        $statement->execute(['table' => $table, 'column' => $column]);
+        return (int) $statement->fetchColumn() > 0;
     }
 
     private function redirect(string $path): never

@@ -757,3 +757,49 @@ body { background: var(--rs-bg); }
 .data-table details summary { cursor: pointer; list-style: none; }
 .data-table details[open] summary { margin-bottom: 10px; }
 .agent-data div strong { overflow-wrap: anywhere; }
+
+/* ZIP 07 - Conversas Pro + CRM automático */
+.ai-suggestion-card,
+.crm-auto-card {
+    border: 1px solid var(--border, #e5e7eb);
+    background: #f8fafc;
+    border-radius: 16px;
+    padding: 14px;
+    margin: 12px 0;
+    display: grid;
+    gap: 10px;
+}
+
+.ai-suggestion-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+}
+
+.ai-suggestion-card p,
+.crm-auto-card p {
+    margin: 4px 0 0;
+    color: var(--text, #111827);
+    line-height: 1.45;
+}
+
+.ai-suggestion-card small,
+.crm-auto-card span {
+    color: var(--muted, #6b7280);
+    font-size: 0.86rem;
+}
+
+.crm-auto-card strong {
+    display: block;
+    color: var(--text, #111827);
+    margin-top: 2px;
+}
+
+.chat-actions {
+    flex-wrap: wrap;
+}
+
+@media (max-width: 860px) {
+    .ai-suggestion-card {
+        grid-template-columns: 1fr;
+    }
+}

@@ -162,6 +162,14 @@ $currentQuery = array_filter([
                                 <button class="btn btn-outline btn-small" type="submit">Devolver para IA</button>
                             </form>
                         <?php endif; ?>
+                        <form method="post" action="<?= View::e(Router::url('/conversations/suggest')) ?>">
+                            <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
+                            <button class="btn btn-outline btn-small" type="submit">Gerar sugestão</button>
+                        </form>
+                        <form method="post" action="<?= View::e(Router::url('/conversations/reprocess-ai')) ?>">
+                            <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
+                            <button class="btn btn-ghost btn-small" type="submit">Reprocessar IA</button>
+                        </form>
                     </div>
                 <?php endif; ?>
             </header>
@@ -173,6 +181,24 @@ $currentQuery = array_filter([
                 <?php if (Auth::isSuperAdmin()): ?><small>Empresa: <strong><?= View::e($selected['tenant_name']) ?></strong></small><?php endif; ?>
                 <a class="refresh-chat" href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) $selected['id'])) ?>">↻ Atualizar</a>
             </div>
+
+            <?php if (!empty($selected['last_ai_suggestion'])): ?>
+                <div class="ai-suggestion-card">
+                    <div>
+                        <span class="eyebrow">Sugestão da IA</span>
+                        <p><?= nl2br(View::e($selected['last_ai_suggestion'])) ?></p>
+                        <?php if (!empty($selected['last_ai_suggestion_at'])): ?><small>Gerada em <?= View::e($formatDate($selected['last_ai_suggestion_at'])) ?></small><?php endif; ?>
+                    </div>
+                    <?php if ($canManage): ?>
+                        <form method="post" action="<?= View::e(Router::url('/conversations/send')) ?>">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
+                            <input type="hidden" name="message" value="<?= View::e($selected['last_ai_suggestion']) ?>">
+                            <button class="btn btn-primary btn-small" type="submit">Enviar sugestão</button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
 
             <div class="chat-thread" data-chat-thread>
                 <?php foreach ($messages as $message): ?>
@@ -223,7 +249,23 @@ $currentQuery = array_filter([
             <?php
             $tags = json_decode((string) ($selected['tags_json'] ?? ''), true);
             $tagText = is_array($tags) ? implode(', ', $tags) : '';
+            $interestLabel = $selected['ai_interest_level'] ?? '';
             ?>
+            <div class="crm-auto-card">
+                <span class="eyebrow">CRM automático</span>
+                <?php if (!empty($selected['lead_id'])): ?>
+                    <strong><?= View::e($selected['lead_title'] ?: 'Lead do WhatsApp') ?></strong>
+                    <span>Etapa: <?= View::e($selected['lead_stage_name'] ?: '—') ?></span>
+                    <span>Prioridade: <?= View::e($selected['lead_priority'] ?: '—') ?></span>
+                    <?php if ($interestLabel !== ''): ?><span>Interesse: <?= View::e($interestLabel) ?></span><?php endif; ?>
+                    <?php if (!empty($selected['ai_next_action'])): ?><p><?= View::e($selected['ai_next_action']) ?></p><?php endif; ?>
+                    <a class="btn btn-outline btn-small btn-block" href="<?= View::e(Router::url('/crm?tenant_id=' . (int) $selected['tenant_id'] . '&pipeline_id=' . (int) $selected['lead_pipeline_id'] . '&lead_id=' . (int) $selected['lead_id'])) ?>">Abrir no CRM</a>
+                <?php else: ?>
+                    <strong>Nenhum negócio vinculado</strong>
+                    <span>Novas mensagens recebidas pelo WhatsApp criam uma oportunidade automaticamente.</span>
+                <?php endif; ?>
+            </div>
+
             <form class="lead-form" method="post" action="<?= View::e(Router::url('/conversations/contact')) ?>">
                 <?= Csrf::input() ?>
                 <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
