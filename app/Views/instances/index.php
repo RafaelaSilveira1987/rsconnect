@@ -19,7 +19,7 @@ $canManage = Auth::can('instances.manage');
             <?php foreach ($instances as $instance): ?>
                 <article class="instance-item">
                     <div class="instance-main">
-                        <span class="instance-icon">◉</span>
+                        <span class="instance-icon instance-icon-device" aria-hidden="true"></span>
                         <div>
                             <h3><?= View::e($instance['name']) ?></h3>
                             <p><?= View::e($instance['instance_name']) ?> · <?= View::e($instance['tenant_name']) ?></p>

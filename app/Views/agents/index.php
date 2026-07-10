@@ -33,7 +33,7 @@ $firstHours = static function (?string $json): array {
                 <?php [$start, $end] = $firstHours($agent['business_hours_json'] ?? null); $days = $selectedDays($agent['business_hours_json'] ?? null); ?>
                 <article class="agent-card">
                     <div class="agent-card-head">
-                        <span class="agent-icon">✦</span>
+                        <span class="agent-icon agent-icon-bot" aria-hidden="true"></span>
                         <div><h3><?= View::e($agent['name']) ?></h3><p><?= View::e($agent['segment']) ?></p></div>
                     </div>
                     <div class="agent-data">

@@ -64,7 +64,7 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
         <select name="tenant_id" aria-label="Empresa" onchange="this.form.submit()"><option value="">Selecione a empresa</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= (int) ($filters['tenant_id'] ?? 0) === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select>
     <?php endif; ?>
     <select name="pipeline_id" aria-label="Funil" onchange="this.form.submit()"><?php foreach ($pipelines as $pipeline): ?><option value="<?= (int) $pipeline['id'] ?>" <?= (int) ($filters['pipeline_id'] ?? 0) === (int) $pipeline['id'] ? 'selected' : '' ?>><?= View::e($pipeline['name']) ?></option><?php endforeach; ?></select>
-    <label class="filter-search"><span>⌕</span><input name="search" value="<?= View::e($filters['search'] ?? '') ?>" placeholder="Buscar negócio ou contato"></label>
+    <label class="filter-search"><span class="search-icon" aria-hidden="true"></span><input name="search" value="<?= View::e($filters['search'] ?? '') ?>" placeholder="Buscar negócio ou contato"></label>
     <select name="owner_id" aria-label="Responsável"><option value="">Todos os responsáveis</option><?php foreach ($team as $member): ?><option value="<?= (int) $member['id'] ?>" <?= (int) ($filters['owner_id'] ?? 0) === (int) $member['id'] ? 'selected' : '' ?>><?= View::e($member['name']) ?></option><?php endforeach; ?></select>
     <button class="btn btn-secondary" type="submit">Filtrar</button>
 </form>
@@ -93,7 +93,7 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
                                     <strong><?= View::e($lead['title']) ?></strong>
                                     <span class="deal-contact"><?= View::e($lead['contact_name'] ?: $lead['phone']) ?></span>
                                     <span class="deal-value"><?= View::e($money($lead['value'])) ?></span>
-                                    <footer><span><?= View::e($lead['owner_name'] ?: 'Sem responsável') ?></span><?php if ((int) $lead['pending_tasks'] > 0): ?><span>◷ <?= (int) $lead['pending_tasks'] ?></span><?php endif; ?></footer>
+                                    <footer><span><?= View::e($lead['owner_name'] ?: 'Sem responsável') ?></span><?php if ((int) $lead['pending_tasks'] > 0): ?><span class="pending-tasks"><?= (int) $lead['pending_tasks'] ?> tarefa(s)</span><?php endif; ?></footer>
                                 </a>
                                 <?php if ($canManage): ?>
                                     <form class="deal-move" method="post" action="<?= View::e(Router::url('/crm/leads/move')) ?>">
@@ -154,7 +154,7 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
                 </form>
             <?php endif; ?>
             <div class="task-mini-list">
-                <?php foreach ($selectedTasks as $task): ?><article class="task-mini <?= $task['status'] === 'completed' ? 'is-completed' : '' ?>"><div><span class="activity-icon"><?= View::e($task['task_type'] === 'call' ? '☎' : ($task['task_type'] === 'meeting' ? '◫' : ($task['task_type'] === 'follow_up' ? '↻' : '✓'))) ?></span><span><strong><?= View::e($task['title']) ?></strong><small><?= View::e($typeLabels[$task['task_type']] ?? $task['task_type']) ?> · <?= View::e($task['assigned_name'] ?: 'Sem responsável') ?> · <?= View::e($date($task['due_at'], 'd/m H:i')) ?></small></span></div><?php if ($canManageTasks && $task['status'] === 'pending'): ?><form method="post" action="<?= View::e(Router::url('/tasks/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="task_id" value="<?= (int) $task['id'] ?>"><input type="hidden" name="status" value="completed"><input type="hidden" name="return_to" value="<?= View::e($currentUrl) ?>"><button class="btn-icon-check" type="submit" title="Concluir">✓</button></form><?php endif; ?></article><?php endforeach; ?>
+                <?php foreach ($selectedTasks as $task): ?><article class="task-mini <?= $task['status'] === 'completed' ? 'is-completed' : '' ?>"><div><span class="activity-icon activity-<?= View::e($task['task_type']) ?>" aria-hidden="true"></span><span><strong><?= View::e($task['title']) ?></strong><small><?= View::e($typeLabels[$task['task_type']] ?? $task['task_type']) ?> · <?= View::e($task['assigned_name'] ?: 'Sem responsável') ?> · <?= View::e($date($task['due_at'], 'd/m H:i')) ?></small></span></div><?php if ($canManageTasks && $task['status'] === 'pending'): ?><form method="post" action="<?= View::e(Router::url('/tasks/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="task_id" value="<?= (int) $task['id'] ?>"><input type="hidden" name="status" value="completed"><input type="hidden" name="return_to" value="<?= View::e($currentUrl) ?>"><button class="btn-icon-check" type="submit" title="Concluir"><span class="checkmark-icon" aria-hidden="true"></span></button></form><?php endif; ?></article><?php endforeach; ?>
                 <?php if (!$selectedTasks): ?><div class="empty-state">Nenhuma atividade vinculada.</div><?php endif; ?>
             </div>
         </section>

@@ -72,7 +72,7 @@ if (($filters['tenant_id'] ?? 0) > 0) $queryBase['tenant_id'] = (int) $filters['
 </div>
 
 <form class="filter-bar" method="get" action="<?= View::e(Router::url('/contacts')) ?>">
-    <label class="filter-search"><span>⌕</span><input name="search" value="<?= View::e($filters['search'] ?? '') ?>" placeholder="Buscar por nome, telefone, e-mail ou empresa"></label>
+    <label class="filter-search"><span class="search-icon" aria-hidden="true"></span><input name="search" value="<?= View::e($filters['search'] ?? '') ?>" placeholder="Buscar por nome, telefone, e-mail ou empresa"></label>
     <select name="status" aria-label="Classificação">
         <option value="">Todas as classificações</option>
         <?php foreach ($statusLabels as $value => $label): ?>

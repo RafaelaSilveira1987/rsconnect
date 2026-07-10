@@ -64,6 +64,30 @@ document.addEventListener('DOMContentLoaded', () => {
     filterInstances();
   });
 
+
+  const closePanel = (panel) => panel?.classList.remove('is-open');
+  document.querySelectorAll('[data-toggle-panel]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const panel = document.getElementById(button.dataset.togglePanel || '');
+      panel?.classList.toggle('is-open');
+    });
+  });
+  document.querySelectorAll('[data-close-panel]').forEach((button) => {
+    button.addEventListener('click', () => closePanel(document.getElementById(button.dataset.closePanel || '')));
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeSidebar();
+      document.querySelectorAll('.conversation-details.is-open').forEach((panel) => panel.classList.remove('is-open'));
+    }
+  });
+  document.addEventListener('click', (event) => {
+    document.querySelectorAll('.conversation-details.is-open').forEach((panel) => {
+      const toggleClicked = event.target.closest?.('[data-toggle-panel="' + panel.id + '"]');
+      if (!panel.contains(event.target) && !toggleClicked) panel.classList.remove('is-open');
+    });
+  });
+
   document.addEventListener('click', (event) => {
     document.querySelectorAll('details.action-popover[open]').forEach((details) => {
       if (!details.contains(event.target)) details.removeAttribute('open');

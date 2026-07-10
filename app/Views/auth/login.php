@@ -4,23 +4,28 @@ use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
 ?>
-<div class="login-grid">
-    <section class="login-hero">
+<div class="login-grid login-grid-pro">
+    <section class="login-hero login-hero-pro">
         <span class="brand-large"><b>RS</b> Connect</span>
-        <div>
-            <span class="eyebrow light">Centralize. Automatize. Cresça.</span>
-            <h1>Atendimento inteligente em uma única plataforma.</h1>
-            <p>Base SaaS multiempresa para conectar WhatsApp, automações, IA e operação humana.</p>
+        <div class="login-hero-content">
+            <span class="eyebrow light">Atendimento, CRM e automação</span>
+            <h1>Controle sua operação de WhatsApp em uma plataforma profissional.</h1>
+            <p>Multiempresa, agentes de IA, agenda, CRM, cobrança, n8n e atendimento humano trabalhando juntos.</p>
+            <div class="login-feature-grid">
+                <span>WhatsApp + Evolution API</span>
+                <span>IA com regras comerciais</span>
+                <span>CRM e agenda integrados</span>
+            </div>
         </div>
-        <small>ZIP 01 · Fundação SaaS</small>
+        <small>RS Automação Digital</small>
     </section>
 
-    <section class="login-panel">
-        <form class="card login-card" method="post" action="<?= View::e(Router::url('/login')) ?>">
+    <section class="login-panel login-panel-pro">
+        <form class="card login-card login-card-pro" method="post" action="<?= View::e(Router::url('/login')) ?>">
             <?= Csrf::input() ?>
-            <div class="card-heading">
+            <div class="card-heading login-card-heading">
                 <span class="brand-mark">RS</span>
-                <div><h2>Acessar o painel</h2><p>Use suas credenciais do RS Connect.</p></div>
+                <div><h2>Entrar no painel</h2><p>Acesse sua operação com segurança.</p></div>
             </div>
 
             <label class="field">
@@ -30,11 +35,11 @@ use App\Core\View;
 
             <label class="field">
                 <span>Senha</span>
-                <input type="password" name="password" autocomplete="current-password" placeholder="••••••••" required>
+                <input type="password" name="password" autocomplete="current-password" placeholder="Digite sua senha" required>
             </label>
 
-            <button class="btn btn-primary btn-block" type="submit">Entrar no RS Connect</button>
-            <p class="form-hint">Demo: admin@rsconnect.local / Admin@123</p>
+            <button class="btn btn-primary btn-block" type="submit">Acessar RS Connect</button>
+            <p class="form-hint">Ambiente seguro para administradores, equipes e clientes.</p>
         </form>
     </section>
 </div>

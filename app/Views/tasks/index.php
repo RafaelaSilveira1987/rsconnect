@@ -31,7 +31,7 @@ $returnUrl = '/tasks?' . http_build_query(array_filter([
     </div>
     <?php if ($canManage && ($filters['tenant_id'] ?? 0) > 0): ?>
         <details class="action-popover">
-            <summary class="btn btn-primary">+ Nova atividade</summary>
+            <summary class="btn btn-primary">Nova atividade</summary>
             <form class="popover-panel form-stack wide" method="post" action="<?= View::e(Router::url('/tasks')) ?>">
                 <?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>">
                 <strong>Criar atividade</strong>
@@ -67,7 +67,7 @@ $returnUrl = '/tasks?' . http_build_query(array_filter([
     <div class="task-list">
         <?php foreach ($tasks as $task): ?>
             <article class="task-row<?= $isOverdue($task) ? ' is-overdue' : '' ?><?= $task['status'] === 'completed' ? ' is-completed' : '' ?>">
-                <span class="activity-icon"><?= View::e($task['task_type'] === 'call' ? '☎' : ($task['task_type'] === 'meeting' ? '◫' : ($task['task_type'] === 'follow_up' ? '↻' : '✓'))) ?></span>
+                <span class="activity-icon activity-<?= View::e($task['task_type']) ?>" aria-hidden="true"></span>
                 <div class="task-main"><div class="task-title-line"><strong><?= View::e($task['title']) ?></strong><span class="badge badge-<?= View::e($task['status']) ?>"><?= View::e($statusLabels[$task['status']] ?? $task['status']) ?></span><span class="priority-text priority-<?= View::e($task['priority']) ?>"><?= View::e($priorityLabels[$task['priority']] ?? $task['priority']) ?></span></div><p><?= View::e($task['description'] ?: 'Sem descrição') ?></p><small><?= View::e($typeLabels[$task['task_type']] ?? $task['task_type']) ?> · <?= View::e($task['contact_name'] ?: ($task['lead_title'] ?: 'Sem vínculo')) ?> · Responsável: <?= View::e($task['assigned_name'] ?: 'não definido') ?></small></div>
                 <div class="task-deadline"><small><?= $isOverdue($task) ? 'Atrasada' : 'Prazo' ?></small><strong><?= View::e($date($task['due_at'])) ?></strong></div>
                 <?php if ($canManage): ?><div class="task-actions"><?php if ($task['status'] !== 'completed'): ?><form method="post" action="<?= View::e(Router::url('/tasks/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="task_id" value="<?= (int) $task['id'] ?>"><input type="hidden" name="status" value="completed"><input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>"><button class="btn btn-small btn-primary" type="submit">Concluir</button></form><?php endif; ?><?php if ($task['status'] === 'pending'): ?><form method="post" action="<?= View::e(Router::url('/tasks/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="task_id" value="<?= (int) $task['id'] ?>"><input type="hidden" name="status" value="cancelled"><input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>"><button class="btn btn-small btn-quiet" type="submit">Cancelar</button></form><?php endif; ?></div><?php endif; ?>

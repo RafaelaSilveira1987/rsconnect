@@ -57,7 +57,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=14.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=15.0')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -160,7 +160,6 @@ $svgIcon = static function (string $name): string {
                     <?= $notificationBadge($notificationUnread) ?>
                 </a>
             <?php endif; ?>
-            <span class="status-pill"><i></i><?= View::e(ucfirst((string) \App\Core\Env::get('APP_ENV', 'local'))) ?></span>
         </header>
 
         <?php if ($flashes): ?>
@@ -177,6 +176,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=14.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=15.0')) ?>" defer></script>
 </body>
 </html>

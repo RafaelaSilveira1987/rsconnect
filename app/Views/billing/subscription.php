@@ -10,39 +10,53 @@ $date = static function (?string $value): string {
     $timestamp = strtotime($value);
     return $timestamp ? date('d/m/Y', $timestamp) : $value;
 };
+$cycleLabel = ['monthly' => 'Mensal', 'yearly' => 'Anual', 'custom' => 'Personalizado'];
 $statusLabel = ['trialing' => 'Em teste', 'active' => 'Ativa', 'overdue' => 'Em atraso', 'suspended' => 'Suspensa', 'canceled' => 'Cancelada', 'open' => 'Aberta', 'paid' => 'Paga', 'cancelled' => 'Cancelada'];
+$nextInvoice = $invoices[0] ?? null;
+$nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['external_invoice_url'] ?? '';
 ?>
 
-<section class="card hero-card">
-    <div class="section-heading">
-        <div><span class="eyebrow">Assinatura</span><h2><?= View::e($tenant['name']) ?></h2></div>
+<section class="subscription-hero card">
+    <div class="subscription-main">
+        <div>
+            <span class="eyebrow">Minha assinatura</span>
+            <h2><?= View::e($tenant['name']) ?></h2>
+            <p>Resumo do plano contratado, limites de uso e próximas cobranças.</p>
+        </div>
         <span class="badge badge-<?= View::e($plan['billing_status']) ?>"><?= View::e($statusLabel[$plan['billing_status']] ?? $plan['billing_status']) ?></span>
     </div>
-    <div class="stats-grid">
-        <article class="stat-card"><span>Plano atual</span><strong><?= View::e($plan['name']) ?></strong><small><?= View::e($plan['key']) ?></small></article>
-        <article class="stat-card"><span>Valor mensal</span><strong><?= View::e($money($plan['monthly_price'])) ?></strong><small><?= View::e($plan['billing_cycle']) ?></small></article>
-        <article class="stat-card"><span>Período atual</span><strong><?= View::e($date($plan['current_period_ends_at'])) ?></strong><small>Início: <?= View::e($date($plan['current_period_starts_at'])) ?></small></article>
-        <article class="stat-card"><span>Próxima cobrança</span><strong><?= View::e($date($plan['next_billing_at'])) ?></strong><small>Fim do teste: <?= View::e($date($plan['trial_ends_at'])) ?></small></article>
+
+    <div class="subscription-summary-grid">
+        <article class="subscription-summary-card"><span>Plano atual</span><strong><?= View::e($plan['name']) ?></strong><small><?= View::e(ucfirst((string) $plan['key'])) ?></small></article>
+        <article class="subscription-summary-card"><span>Valor do plano</span><strong><?= View::e($money($plan['monthly_price'])) ?></strong><small><?= View::e($cycleLabel[$plan['billing_cycle']] ?? $plan['billing_cycle']) ?></small></article>
+        <article class="subscription-summary-card"><span>Período atual</span><strong><?= View::e($date($plan['current_period_starts_at'])) ?></strong><small>até <?= View::e($date($plan['current_period_ends_at'])) ?></small></article>
+        <article class="subscription-summary-card"><span>Próxima cobrança</span><strong><?= View::e($date($plan['next_billing_at'])) ?></strong><small>Fim do teste: <?= View::e($date($plan['trial_ends_at'])) ?></small></article>
     </div>
+
     <?php if (!empty($plan['features'])): ?>
-        <div class="pill-list"><?php foreach ($plan['features'] as $feature): ?><span class="tag-pill"><?= View::e($feature) ?></span><?php endforeach; ?></div>
+        <div class="pill-list subscription-features"><?php foreach ($plan['features'] as $feature): ?><span class="tag-pill"><?= View::e($feature) ?></span><?php endforeach; ?></div>
     <?php endif; ?>
-    <?php if (Auth::isSuperAdmin()): ?><p><a class="btn btn-outline" href="<?= View::e(Router::url('/billing')) ?>">Voltar para cobrança</a></p><?php endif; ?>
+
+    <div class="subscription-actions">
+        <?php if ($nextInvoice && $nextPaymentLink && ($nextInvoice['status'] ?? '') !== 'paid'): ?>
+            <a class="btn btn-primary" href="<?= View::e($nextPaymentLink) ?>" target="_blank" rel="noopener">Pagar próxima cobrança</a>
+        <?php endif; ?>
+        <?php if (Auth::isSuperAdmin()): ?><a class="btn btn-outline" href="<?= View::e(Router::url('/billing')) ?>">Voltar para cobrança</a><?php endif; ?>
+    </div>
 </section>
 
-<section class="card table-card">
+<section class="card table-card subscription-usage-card">
     <div class="section-heading"><div><span class="eyebrow">Uso do mês</span><h2>Limites do plano</h2></div></div>
-    <div class="table-wrap"><table class="clean-table"><thead><tr><th>Recurso</th><th>Usado</th><th>Limite</th><th>Consumo</th><th>Status</th></tr></thead><tbody>
+    <div class="usage-grid">
     <?php foreach ($limitRows as $row): ?>
-        <tr>
-            <td><strong><?= View::e($row['label']) ?></strong><br><small><?= View::e($row['key']) ?></small></td>
-            <td><?= (int) $row['used'] ?></td>
-            <td><?= $row['limit'] === null ? 'Ilimitado' : (int) $row['limit'] ?></td>
-            <td><div class="usage-bar"><span style="width: <?= (int) $row['percent'] ?>%"></span></div><small><?= (int) $row['percent'] ?>%</small></td>
-            <td><?= $row['blocked'] ? '<span class="badge badge-overdue">Limite atingido</span>' : '<span class="badge badge-active">OK</span>' ?></td>
-        </tr>
+        <article class="usage-tile <?= $row['blocked'] ? 'is-blocked' : '' ?>">
+            <div><strong><?= View::e($row['label']) ?></strong><small><?= View::e($row['key']) ?></small></div>
+            <div class="usage-values"><span><?= (int) $row['used'] ?></span><small>de <?= $row['limit'] === null ? 'ilimitado' : (int) $row['limit'] ?></small></div>
+            <div><div class="usage-bar"><span style="width: <?= (int) $row['percent'] ?>%"></span></div><small><?= (int) $row['percent'] ?>% utilizado</small></div>
+            <span class="badge <?= $row['blocked'] ? 'badge-overdue' : 'badge-active' ?>"><?= $row['blocked'] ? 'Limite atingido' : 'OK' ?></span>
+        </article>
     <?php endforeach; ?>
-    </tbody></table></div>
+    </div>
 </section>
 
 <section class="card table-card">
@@ -56,7 +70,7 @@ $statusLabel = ['trialing' => 'Em teste', 'active' => 'Ativa', 'overdue' => 'Em 
             <td><?= View::e($money($invoice['amount'])) ?></td>
             <td><?= View::e($date($invoice['due_date'])) ?></td>
             <td><span class="badge badge-<?= View::e($invoice['status']) ?>"><?= View::e($statusLabel[$invoice['status']] ?? $invoice['status']) ?></span></td>
-            <td><?php if ($paymentLink && $invoice['status'] !== 'paid'): ?><a class="btn btn-small btn-primary" href="<?= View::e($paymentLink) ?>" target="_blank" rel="noopener">Pagar agora</a><?php elseif ($paymentLink): ?><a class="btn btn-small btn-outline" href="<?= View::e($paymentLink) ?>" target="_blank" rel="noopener">Ver comprovante/link</a><?php else: ?><small>Aguardando link</small><?php endif; ?></td>
+            <td><?php if ($paymentLink && $invoice['status'] !== 'paid'): ?><a class="btn btn-small btn-primary" href="<?= View::e($paymentLink) ?>" target="_blank" rel="noopener">Pagar agora</a><?php elseif ($paymentLink): ?><a class="btn btn-small btn-outline" href="<?= View::e($paymentLink) ?>" target="_blank" rel="noopener">Ver link</a><?php else: ?><small>Aguardando link</small><?php endif; ?></td>
             <td><?= View::e($date($invoice['paid_at'] ?? null)) ?></td>
         </tr>
     <?php endforeach; ?>

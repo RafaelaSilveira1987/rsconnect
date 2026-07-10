@@ -26,7 +26,7 @@ $currentQuery = array_filter([
 
 <form class="conversation-filters card" method="get" action="<?= View::e(Router::url('/conversations')) ?>">
     <div class="filter-search">
-        <span>⌕</span>
+        <span class="search-icon" aria-hidden="true"></span>
         <input name="search" value="<?= View::e($filters['search'] ?? '') ?>" placeholder="Buscar por nome, telefone ou mensagem">
     </div>
 
@@ -144,6 +144,7 @@ $currentQuery = array_filter([
 
                 <?php if ($canManage): ?>
                     <div class="chat-actions">
+                        <button class="btn btn-outline btn-small" type="button" data-toggle-panel="conversation-details">Dados do lead</button>
                         <?php if ($selected['attendance_mode'] !== 'human'): ?>
                             <form method="post" action="<?= View::e(Router::url('/conversations/mode')) ?>">
                                 <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="mode" value="human">
@@ -179,7 +180,7 @@ $currentQuery = array_filter([
                 <span class="mini-badge mode-<?= View::e($selected['attendance_mode']) ?>"><?= View::e($modeLabel[$selected['attendance_mode']] ?? $selected['attendance_mode']) ?></span>
                 <?php if ($selected['assigned_user_name']): ?><small>Responsável: <strong><?= View::e($selected['assigned_user_name']) ?></strong></small><?php endif; ?>
                 <?php if (Auth::isSuperAdmin()): ?><small>Empresa: <strong><?= View::e($selected['tenant_name']) ?></strong></small><?php endif; ?>
-                <a class="refresh-chat" href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) $selected['id'])) ?>">↻ Atualizar</a>
+                <a class="refresh-chat" href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) $selected['id'])) ?>">Atualizar</a>
             </div>
 
             <?php if (!empty($selected['last_ai_suggestion'])): ?>
@@ -217,7 +218,7 @@ $currentQuery = array_filter([
                     </article>
                 <?php endforeach; ?>
                 <?php if (!$messages): ?>
-                    <div class="chat-empty"><span>◌</span><strong>Histórico vazio</strong><p>As novas mensagens recebidas pelo webhook aparecerão aqui.</p></div>
+                    <div class="chat-empty"><span class="empty-symbol"></span><strong>Histórico vazio</strong><p>As novas mensagens recebidas pelo webhook aparecerão aqui.</p></div>
                 <?php endif; ?>
             </div>
 
@@ -230,14 +231,15 @@ $currentQuery = array_filter([
                 </form>
             <?php endif; ?>
         <?php else: ?>
-            <div class="chat-empty workspace-empty"><span>◎</span><strong>Selecione uma conversa</strong><p>O histórico e as ações de atendimento aparecerão nesta área.</p></div>
+            <div class="chat-empty workspace-empty"><span class="empty-symbol"></span><strong>Selecione uma conversa</strong><p>O histórico e as ações de atendimento aparecerão nesta área.</p></div>
         <?php endif; ?>
     </section>
 
-    <aside class="conversation-details card">
+    <aside class="conversation-details card" id="conversation-details" aria-label="Informações do lead">
         <?php if ($selected): ?>
             <div class="conversation-panel-heading">
                 <div><span class="eyebrow">Lead</span><h2>Informações</h2></div>
+                <button class="icon-button drawer-close" type="button" data-close-panel="conversation-details" aria-label="Fechar informações">×</button>
             </div>
 
             <div class="lead-summary">

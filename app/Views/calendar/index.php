@@ -44,7 +44,7 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
     </div>
     <?php if ($canManage && ($filters['tenant_id'] ?? 0) > 0): ?>
         <details class="action-popover">
-            <summary class="btn btn-primary">+ Novo agendamento</summary>
+            <summary class="btn btn-primary">Novo agendamento</summary>
             <form class="popover-panel form-stack wide" method="post" action="<?= View::e(Router::url('/calendar/appointments')) ?>">
                 <?= Csrf::input() ?>
                 <input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>">
@@ -100,7 +100,7 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
     <div class="task-list calendar-list">
         <?php foreach ($appointments as $appointment): ?>
             <article class="task-row calendar-row calendar-status-<?= View::e($appointment['status']) ?>">
-                <span class="activity-icon"><?= View::e($appointment['location_type'] === 'telefone' ? '☎' : ($appointment['location_type'] === 'presencial' ? '⌖' : '◫')) ?></span>
+                <span class="activity-icon activity-<?= View::e($appointment['location_type']) ?>" aria-hidden="true"></span>
                 <div class="task-main">
                     <div class="task-title-line"><strong><?= View::e($appointment['title']) ?></strong><span class="badge badge-<?= View::e($appointment['status']) ?>"><?= View::e($statusLabels[$appointment['status']] ?? $appointment['status']) ?></span><span class="priority-text"><?= View::e($locationLabels[$appointment['location_type']] ?? $appointment['location_type']) ?></span></div>
                     <p><?= View::e($appointment['description'] ?: 'Sem descrição') ?></p>
