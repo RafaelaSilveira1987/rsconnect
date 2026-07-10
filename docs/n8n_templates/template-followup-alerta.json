@@ -1,0 +1,149 @@
+{
+  "name": "RS Connect - Follow-up e Alertas por Empresa",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rsconnect-followup-cliente",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -620,
+        0
+      ],
+      "id": "webhook_followup",
+      "name": "Webhook RS Connect"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json; const payload = body.payload || {};\nreturn [{ json: { event: body.event, tenant_id: body.tenant_id || payload.tenant_id, flow_id: body.flow_id, callback_url: body.callback?.url, callback_token: body.callback?.token, title: payload.title || 'Follow-up RS Connect', message: payload.description || payload.summary || payload.last_message || 'Existe uma ação pendente no RS Connect.', contact: payload.contact?.name || '', phone: payload.contact?.phone || '', due_at: payload.due_at || '' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        0
+      ],
+      "id": "normalize_followup",
+      "name": "Normalizar Follow-up"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "COLE_AQUI_WEBHOOK_INTERNO_SLACK_OU_WHATSAPP",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { text: '🔔 ' + $json.title + '\\nContato: ' + $json.contact + ' ' + $json.phone + '\\nPrazo: ' + $json.due_at + '\\n' + $json.message } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -100,
+        0
+      ],
+      "id": "notify",
+      "name": "Enviar alerta interno"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Normalizar Follow-up').first().json.callback_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-RS-Connect-Token",
+              "value": "={{ $('Normalizar Follow-up').first().json.callback_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { tenant_id: $('Normalizar Follow-up').first().json.tenant_id, flow_id: $('Normalizar Follow-up').first().json.flow_id, event: $('Normalizar Follow-up').first().json.event, status: 'success', message: 'Alerta de follow-up enviado' } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        0
+      ],
+      "id": "callback",
+      "name": "Callback RS Connect"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, message: 'Fluxo follow-up executado' } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        400,
+        0
+      ],
+      "id": "respond",
+      "name": "Responder Webhook"
+    }
+  ],
+  "connections": {
+    "Webhook RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Enviar alerta interno",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar alerta interno": {
+      "main": [
+        [
+          {
+            "node": "Callback RS Connect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "rs-connect-template"
+  }
+}

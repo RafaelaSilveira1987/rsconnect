@@ -16,6 +16,7 @@ use App\Controllers\DashboardController;
 use App\Controllers\InstanceController;
 use App\Controllers\OnboardingController;
 use App\Controllers\N8nFlowController;
+use App\Controllers\N8nTemplateController;
 use App\Controllers\PermissionController;
 use App\Controllers\TaskController;
 use App\Controllers\UserController;
@@ -29,6 +30,7 @@ return static function (Router $router): void {
     $router->get('/', [DashboardController::class, 'index'], ['auth']);
 
     $router->post('/webhooks/evolution', [EvolutionWebhookController::class, 'handle']);
+    $router->post('/webhooks/n8n/callback', [N8nTemplateController::class, 'callback']);
 
     $router->get('/conversations', [ConversationController::class, 'index'], ['auth', 'permission:conversations.view']);
     $router->post('/conversations/start', [ConversationController::class, 'start'], ['auth', 'permission:conversations.manage', 'csrf']);
@@ -89,6 +91,8 @@ return static function (Router $router): void {
     $router->get('/automations', [AutomationController::class, 'index'], ['auth', 'permission:automations.view']);
 
     $router->get('/n8n-flows', [N8nFlowController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/n8n-templates', [N8nTemplateController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/n8n-templates/download', [N8nTemplateController::class, 'download'], ['auth', 'super_admin']);
     $router->post('/n8n-flows/save', [N8nFlowController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/n8n-flows/test', [N8nFlowController::class, 'test'], ['auth', 'super_admin', 'csrf']);
 };

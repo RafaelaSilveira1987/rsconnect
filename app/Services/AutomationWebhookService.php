@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Env;
+use App\Core\Router;
 use PDO;
 use Throwable;
 
@@ -118,6 +119,11 @@ final class AutomationWebhookService
             return ['ok' => false, 'error' => 'URL inválida', 'flow_id' => $flowId];
         }
 
+        $callbackToken = trim((string) Env::get('N8N_CALLBACK_TOKEN', ''));
+        if ($callbackToken === '' && $secretToken !== null) {
+            $callbackToken = trim($secretToken);
+        }
+
         $body = [
             'event' => $event,
             'source' => 'rs-connect',
@@ -125,6 +131,10 @@ final class AutomationWebhookService
             'flow_id' => $flowId,
             'flow_name' => $flowName,
             'payload' => $payload,
+            'callback' => [
+                'url' => Router::url('/webhooks/n8n/callback'),
+                'token' => $callbackToken !== '' ? $callbackToken : null,
+            ],
             'sent_at' => date('c'),
         ];
 

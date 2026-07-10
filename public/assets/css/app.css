@@ -845,3 +845,14 @@ body { background: var(--rs-bg); }
 .n8n-flow-page .sticky-card {
     top: 20px;
 }
+
+
+/* ZIP 10 - n8n templates */
+.template-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+.template-grid.two-columns { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+.template-card { border: 1px solid var(--border-color, #e5e7eb); border-radius: 18px; padding: 1rem; background: #fff; box-shadow: 0 14px 35px rgba(15,23,42,.04); }
+.template-card h3 { margin: .65rem 0 .5rem; }
+.template-events { display: flex; flex-wrap: wrap; gap: .35rem; margin: .85rem 0; }
+.template-events code, .code-block code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.template-events code { padding: .2rem .45rem; border-radius: 999px; background: #eef6f6; color: #0f766e; font-size: .76rem; }
+.code-block { max-height: 360px; overflow: auto; background: #0f172a; color: #e5f2ff; padding: .9rem; border-radius: 14px; font-size: .78rem; line-height: 1.45; }

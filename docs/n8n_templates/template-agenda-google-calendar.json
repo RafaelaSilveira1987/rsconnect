@@ -1,0 +1,156 @@
+{
+  "name": "RS Connect - Agenda Google Calendar por Empresa",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rsconnect-agenda-cliente",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -620,
+        0
+      ],
+      "id": "webhook_agenda",
+      "name": "Webhook RS Connect"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nconst payload = body.payload || {};\nconst appointment = payload.appointment || payload;\nreturn [{ json: {\n  event: body.event, tenant_id: body.tenant_id || payload.tenant_id, flow_id: body.flow_id,\n  callback_url: body.callback?.url, callback_token: body.callback?.token,\n  title: appointment.title || 'Compromisso RS Connect',\n  description: appointment.description || appointment.notes || '',\n  start: appointment.start_time || appointment.start || appointment.starts_at,\n  end: appointment.end_time || appointment.end || appointment.ends_at,\n  location: appointment.meeting_url || appointment.location || '',\n  contact_name: appointment.contact?.name || payload.contact?.name || '',\n  contact_phone: appointment.contact?.phone || payload.contact?.phone || ''\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -380,
+        0
+      ],
+      "id": "normalize_agenda",
+      "name": "Normalizar Agenda"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "id"
+        },
+        "start": "={{ $json.start }}",
+        "end": "={{ $json.end }}",
+        "useDefaultReminders": true,
+        "additionalFields": {
+          "summary": "={{ $json.title }}",
+          "description": "={{ 'Contato: ' + $json.contact_name + ' - ' + $json.contact_phone + '\\n' + $json.description }}",
+          "location": "={{ $json.location }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -120,
+        0
+      ],
+      "id": "google_calendar_create",
+      "name": "Criar evento Google Calendar"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Normalizar Agenda').first().json.callback_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-RS-Connect-Token",
+              "value": "={{ $('Normalizar Agenda').first().json.callback_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { tenant_id: $('Normalizar Agenda').first().json.tenant_id, flow_id: $('Normalizar Agenda').first().json.flow_id, event: $('Normalizar Agenda').first().json.event, status: 'success', external_id: $json.id, message: 'Evento criado no Google Calendar', google_event: $json } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        140,
+        0
+      ],
+      "id": "callback_success",
+      "name": "Callback RS Connect"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, message: 'Fluxo agenda executado' } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        380,
+        0
+      ],
+      "id": "respond",
+      "name": "Responder Webhook"
+    }
+  ],
+  "connections": {
+    "Webhook RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Agenda": {
+      "main": [
+        [
+          {
+            "node": "Criar evento Google Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar evento Google Calendar": {
+      "main": [
+        [
+          {
+            "node": "Callback RS Connect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "rs-connect-template"
+  }
+}

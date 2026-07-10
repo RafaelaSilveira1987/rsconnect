@@ -1,0 +1,11 @@
+{
+  "tenant_id": 1,
+  "flow_id": 1,
+  "event": "calendar.appointment.created",
+  "status": "success",
+  "external_id": "google_event_id_teste",
+  "message": "Callback de teste recebido pelo RS Connect",
+  "metadata": {
+    "provider": "google_calendar"
+  }
+}
