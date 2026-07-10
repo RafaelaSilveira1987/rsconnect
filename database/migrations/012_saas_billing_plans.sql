@@ -97,17 +97,20 @@ INSERT INTO tenant_subscriptions
     (tenant_id, plan_id, billing_cycle, billing_status, starts_at, current_period_starts_at, current_period_ends_at, next_billing_at, amount, notes)
 SELECT
     t.id,
-    sp.id,
+    COALESCE(sp.id, sp_default.id),
     'monthly',
     CASE WHEN t.status = 'suspended' THEN 'suspended' ELSE 'active' END,
     CURDATE(),
     DATE_FORMAT(CURDATE(), '%Y-%m-01'),
     LAST_DAY(CURDATE()),
     DATE_ADD(LAST_DAY(CURDATE()), INTERVAL 1 DAY),
-    sp.monthly_price,
+    COALESCE(sp.monthly_price, sp_default.monthly_price),
     'Assinatura criada automaticamente ao aplicar ZIP 11, usando o plano atual da empresa.'
 FROM tenants t
-INNER JOIN saas_plans sp ON sp.plan_key = t.plan
+LEFT JOIN saas_plans sp
+    ON sp.plan_key = (CONVERT(t.plan USING utf8mb4) COLLATE utf8mb4_unicode_ci)
+INNER JOIN saas_plans sp_default
+    ON sp_default.plan_key = 'starter'
 WHERE NOT EXISTS (
     SELECT 1 FROM tenant_subscriptions ts WHERE ts.tenant_id = t.id
 );

@@ -22,7 +22,7 @@ $statusLabel = [
     <section class="card">
         <div class="section-heading">
             <div><span class="eyebrow">Comercial SaaS</span><h2>Planos cadastrados</h2></div>
-            <span class="badge"><?= count($plans) ?> plano(s)</span>
+            <div class="inline-actions"><a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/payment-gateways')) ?>">Gateways de pagamento</a><span class="badge"><?= count($plans) ?> plano(s)</span></div>
         </div>
         <p class="muted">Configure limites e recursos por plano. Esses limites aparecem para o cliente e servem como controle comercial da assinatura.</p>
 

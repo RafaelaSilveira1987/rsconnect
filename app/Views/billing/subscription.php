@@ -47,10 +47,19 @@ $statusLabel = ['trialing' => 'Em teste', 'active' => 'Ativa', 'overdue' => 'Em 
 
 <section class="card table-card">
     <div class="section-heading"><div><span class="eyebrow">Financeiro</span><h2>Cobranças</h2></div><span class="badge"><?= count($invoices) ?> registro(s)</span></div>
-    <div class="table-wrap"><table class="clean-table"><thead><tr><th>Número</th><th>Período</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Pago em</th></tr></thead><tbody>
+    <div class="table-wrap"><table class="clean-table"><thead><tr><th>Número</th><th>Período</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Pagamento</th><th>Pago em</th></tr></thead><tbody>
     <?php foreach ($invoices as $invoice): ?>
-        <tr><td><strong><?= View::e($invoice['invoice_number']) ?></strong></td><td><?= View::e($date($invoice['period_start'])) ?> a <?= View::e($date($invoice['period_end'])) ?></td><td><?= View::e($money($invoice['amount'])) ?></td><td><?= View::e($date($invoice['due_date'])) ?></td><td><span class="badge badge-<?= View::e($invoice['status']) ?>"><?= View::e($statusLabel[$invoice['status']] ?? $invoice['status']) ?></span></td><td><?= View::e($date($invoice['paid_at'] ?? null)) ?></td></tr>
+        <?php $paymentLink = $invoice['external_checkout_url'] ?? $invoice['external_invoice_url'] ?? ''; ?>
+        <tr>
+            <td><strong><?= View::e($invoice['invoice_number']) ?></strong></td>
+            <td><?= View::e($date($invoice['period_start'])) ?> a <?= View::e($date($invoice['period_end'])) ?></td>
+            <td><?= View::e($money($invoice['amount'])) ?></td>
+            <td><?= View::e($date($invoice['due_date'])) ?></td>
+            <td><span class="badge badge-<?= View::e($invoice['status']) ?>"><?= View::e($statusLabel[$invoice['status']] ?? $invoice['status']) ?></span></td>
+            <td><?php if ($paymentLink && $invoice['status'] !== 'paid'): ?><a class="btn btn-small btn-primary" href="<?= View::e($paymentLink) ?>" target="_blank" rel="noopener">Pagar agora</a><?php elseif ($paymentLink): ?><a class="btn btn-small btn-outline" href="<?= View::e($paymentLink) ?>" target="_blank" rel="noopener">Ver comprovante/link</a><?php else: ?><small>Aguardando link</small><?php endif; ?></td>
+            <td><?= View::e($date($invoice['paid_at'] ?? null)) ?></td>
+        </tr>
     <?php endforeach; ?>
-    <?php if (!$invoices): ?><tr><td colspan="6"><div class="empty-state">Nenhuma cobrança encontrada.</div></td></tr><?php endif; ?>
+    <?php if (!$invoices): ?><tr><td colspan="7"><div class="empty-state">Nenhuma cobrança encontrada.</div></td></tr><?php endif; ?>
     </tbody></table></div>
 </section>
