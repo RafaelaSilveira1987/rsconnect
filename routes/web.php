@@ -19,6 +19,7 @@ use App\Controllers\OnboardingController;
 use App\Controllers\N8nFlowController;
 use App\Controllers\N8nTemplateController;
 use App\Controllers\PaymentGatewayController;
+use App\Controllers\BillingReminderController;
 use App\Controllers\PermissionController;
 use App\Controllers\TaskController;
 use App\Controllers\UserController;
@@ -100,11 +101,17 @@ return static function (Router $router): void {
     $router->post('/billing/invoices/status', [BillingController::class, 'updateInvoice'], ['auth', 'super_admin', 'csrf']);
 
     $router->get('/payment-gateways', [PaymentGatewayController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/billing-reminders', [BillingReminderController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/payment-gateways/save', [PaymentGatewayController::class, 'save'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/billing-reminders/rules/save', [BillingReminderController::class, 'saveRule'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/billing-reminders/run', [BillingReminderController::class, 'run'], ['auth', 'super_admin', 'csrf']);
     $router->post('/payment-gateways/invoices/create-link', [PaymentGatewayController::class, 'createInvoiceLink'], ['auth', 'super_admin', 'csrf']);
     $router->post('/webhooks/payments/asaas', [PaymentGatewayController::class, 'webhookAsaas']);
     $router->post('/webhooks/payments/mercadopago', [PaymentGatewayController::class, 'webhookMercadoPago']);
     $router->post('/webhooks/payments/stripe', [PaymentGatewayController::class, 'webhookStripe']);
+    $router->post('/webhooks/payments/pagbank', [PaymentGatewayController::class, 'webhookPagBank']);
+    $router->post('/webhooks/billing/reminders/run', [BillingReminderController::class, 'cron']);
+    $router->get('/webhooks/billing/reminders/run', [BillingReminderController::class, 'cron']);
 
     $router->get('/n8n-flows', [N8nFlowController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/n8n-templates', [N8nTemplateController::class, 'index'], ['auth', 'super_admin']);

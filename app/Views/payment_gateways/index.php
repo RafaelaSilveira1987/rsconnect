@@ -41,6 +41,8 @@ $statusLabel = [
                                 <code><?= View::e(Router::url('/webhooks/payments/mercadopago')) ?></code>
                             <?php elseif ($gateway['provider'] === 'stripe'): ?>
                                 <code><?= View::e(Router::url('/webhooks/payments/stripe')) ?></code>
+                            <?php elseif ($gateway['provider'] === 'pagbank'): ?>
+                                <code><?= View::e(Router::url('/webhooks/payments/pagbank')) ?></code>
                             <?php else: ?>
                                 <small>Manual</small>
                             <?php endif; ?>
@@ -102,6 +104,7 @@ $statusLabel = [
                 <label class="field compact-field"><span>Asaas</span><input readonly value="<?= View::e(Router::url('/webhooks/payments/asaas')) ?>"></label>
                 <label class="field compact-field"><span>Mercado Pago</span><input readonly value="<?= View::e(Router::url('/webhooks/payments/mercadopago')) ?>"></label>
                 <label class="field compact-field"><span>Stripe</span><input readonly value="<?= View::e(Router::url('/webhooks/payments/stripe')) ?>"></label>
+                <label class="field compact-field"><span>PagBank</span><input readonly value="<?= View::e(Router::url('/webhooks/payments/pagbank')) ?>"></label>
             </div>
         </section>
     </aside>

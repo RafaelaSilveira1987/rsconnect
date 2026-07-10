@@ -183,6 +183,11 @@ final class PaymentGatewayController
         $this->handleWebhook('stripe');
     }
 
+    public function webhookPagBank(): void
+    {
+        $this->handleWebhook('pagbank');
+    }
+
     private function handleWebhook(string $provider): void
     {
         $rawBody = (string) file_get_contents('php://input');

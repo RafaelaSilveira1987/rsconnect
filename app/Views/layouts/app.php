@@ -24,7 +24,7 @@ $isActive = static function (string $path) use ($currentPath): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=12.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=13.0')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -72,6 +72,7 @@ $isActive = static function (string $path) use ($currentPath): string {
                 <a class="nav-link<?= $isActive('/n8n-templates') ?>" href="<?= View::e(Router::url('/n8n-templates')) ?>"><span class="nav-icon">▣</span><span>Templates n8n</span></a>
                 <a class="nav-link<?= $isActive('/billing') ?>" href="<?= View::e(Router::url('/billing')) ?>"><span class="nav-icon">$</span><span>Planos e cobrança</span></a>
                 <a class="nav-link<?= $isActive('/payment-gateways') ?>" href="<?= View::e(Router::url('/payment-gateways')) ?>"><span class="nav-icon">💳</span><span>Gateways de pagamento</span></a>
+                <a class="nav-link<?= $isActive('/billing-reminders') ?>" href="<?= View::e(Router::url('/billing-reminders')) ?>"><span class="nav-icon">🔔</span><span>Régua de cobrança</span></a>
             <?php endif; ?>
             <?php if (!Auth::isSuperAdmin() && Auth::can('agents.view')): ?>
                 <a class="nav-link<?= $isActive('/agents') ?>" href="<?= View::e(Router::url('/agents')) ?>"><span class="nav-icon">✦</span><span>Agentes de IA</span></a>
@@ -134,6 +135,6 @@ $isActive = static function (string $path) use ($currentPath): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=11.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=13.0')) ?>" defer></script>
 </body>
 </html>

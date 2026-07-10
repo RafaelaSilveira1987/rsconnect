@@ -18,6 +18,7 @@ final class PaymentGatewayService
         'asaas' => 'Asaas',
         'mercadopago' => 'Mercado Pago',
         'stripe' => 'Stripe',
+        'pagbank' => 'PagBank',
         'manual' => 'Manual / externo',
     ];
 
@@ -70,6 +71,7 @@ final class PaymentGatewayService
             'asaas' => $this->createAsaasPayment($gateway, $invoice, $method),
             'mercadopago' => $this->createMercadoPagoPreference($gateway, $invoice),
             'stripe' => $this->createStripeCheckoutSession($gateway, $invoice),
+            'pagbank' => $this->createPagBankCheckout($gateway, $invoice, $method),
             'manual' => [
                 'external_id' => $invoice['invoice_number'],
                 'checkout_url' => '',
@@ -136,6 +138,38 @@ final class PaymentGatewayService
             $invoiceNumber = (string) ($object['client_reference_id'] ?? ($object['metadata']['invoice_number'] ?? ''));
             $externalId = (string) ($object['id'] ?? '');
             $mappedStatus = $type === 'checkout.session.completed' || (($object['payment_status'] ?? '') === 'paid') ? 'paid' : null;
+        } elseif ($provider === 'pagbank') {
+            $checkout = is_array($payload['checkout'] ?? null) ? $payload['checkout'] : [];
+            $order = is_array($payload['order'] ?? null) ? $payload['order'] : [];
+            $charge = is_array($payload['charges'][0] ?? null) ? $payload['charges'][0] : [];
+            $payment = is_array($payload['payment'] ?? null) ? $payload['payment'] : [];
+
+            $invoiceNumber = (string) (
+                $payload['reference_id']
+                ?? $checkout['reference_id']
+                ?? $order['reference_id']
+                ?? $charge['reference_id']
+                ?? $payment['reference_id']
+                ?? ''
+            );
+            $externalId = (string) (
+                $payload['id']
+                ?? $payload['checkout_id']
+                ?? $checkout['id']
+                ?? $order['id']
+                ?? $charge['id']
+                ?? $payment['id']
+                ?? ''
+            );
+            $mappedStatus = $this->mapPagBankStatus((string) (
+                $payload['status']
+                ?? $checkout['status']
+                ?? $order['status']
+                ?? $charge['status']
+                ?? $payment['status']
+                ?? $payload['event']
+                ?? ''
+            ));
         }
 
         if ($invoiceNumber !== '' || $externalId !== '') {
@@ -230,6 +264,74 @@ final class PaymentGatewayService
         ];
     }
 
+
+    private function createPagBankCheckout(array $gateway, array $invoice, string $method): array
+    {
+        $amountInCents = max(1, (int) round(((float) $invoice['amount']) * 100));
+        $methodMap = [
+            'PIX' => 'PIX',
+            'BOLETO' => 'BOLETO',
+            'CREDIT_CARD' => 'CREDIT_CARD',
+        ];
+
+        $paymentMethods = [];
+        if (isset($methodMap[$method])) {
+            $paymentMethods[] = ['type' => $methodMap[$method]];
+        }
+
+        $payload = [
+            'reference_id' => (string) $invoice['invoice_number'],
+            'customer_modifiable' => true,
+            'items' => [[
+                'reference_id' => (string) $invoice['invoice_number'],
+                'name' => $this->invoiceDescription($invoice),
+                'quantity' => 1,
+                'unit_amount' => $amountInCents,
+            ]],
+            'redirect_url' => Router::url('/subscription?payment=pagbank'),
+            'return_url' => Router::url('/subscription?payment=pagbank'),
+            'notification_urls' => [Router::url('/webhooks/payments/pagbank')],
+            'payment_notification_urls' => [Router::url('/webhooks/payments/pagbank')],
+        ];
+
+        if ($paymentMethods !== []) {
+            $payload['payment_methods'] = $paymentMethods;
+        }
+
+        $email = trim((string) ($invoice['tenant_email'] ?? ''));
+        $phone = preg_replace('/\D+/', '', (string) ($invoice['tenant_phone'] ?? ''));
+        $document = preg_replace('/\D+/', '', (string) ($invoice['tenant_document'] ?? ''));
+        $customer = array_filter([
+            'name' => (string) ($invoice['tenant_legal_name'] ?: $invoice['tenant_name']),
+            'email' => $email,
+            'tax_id' => $document,
+            'phones' => $phone !== '' ? [[
+                'country' => '55',
+                'area' => strlen($phone) >= 10 ? substr($phone, -11, 2) : '',
+                'number' => strlen($phone) >= 8 ? substr($phone, -9) : $phone,
+                'type' => 'MOBILE',
+            ]] : null,
+        ], static fn ($value): bool => $value !== '' && $value !== null && $value !== []);
+        if ($customer !== []) {
+            $payload['customer'] = $customer;
+        }
+
+        $response = $this->requestJson('POST', rtrim($this->baseUrl($gateway), '/') . '/checkouts', [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $this->apiKey($gateway),
+        ], $payload);
+
+        $checkoutUrl = $this->extractPagBankCheckoutUrl($response);
+
+        return [
+            'external_id' => (string) ($response['id'] ?? $response['checkout_id'] ?? ''),
+            'checkout_url' => $checkoutUrl,
+            'invoice_url' => $checkoutUrl,
+            'external_status' => (string) ($response['status'] ?? 'created'),
+            'payload' => $response,
+        ];
+    }
+
     private function createStripeCheckoutSession(array $gateway, array $invoice): array
     {
         $amountInCents = max(1, (int) round(((float) $invoice['amount']) * 100));
@@ -258,6 +360,37 @@ final class PaymentGatewayService
             'external_status' => (string) ($response['payment_status'] ?? 'created'),
             'payload' => $response,
         ];
+    }
+
+
+    private function extractPagBankCheckoutUrl(array $response): string
+    {
+        foreach (['payment_url', 'checkout_url', 'redirect_url', 'url'] as $key) {
+            if (!empty($response[$key]) && is_string($response[$key])) {
+                return (string) $response[$key];
+            }
+        }
+
+        $links = $response['links'] ?? [];
+        if (is_array($links)) {
+            foreach ($links as $link) {
+                if (!is_array($link)) {
+                    continue;
+                }
+                $rel = strtoupper((string) ($link['rel'] ?? $link['type'] ?? ''));
+                $href = (string) ($link['href'] ?? $link['url'] ?? '');
+                if ($href !== '' && in_array($rel, ['PAY', 'PAYMENT', 'CHECKOUT', 'REDIRECT'], true)) {
+                    return $href;
+                }
+            }
+            foreach ($links as $link) {
+                if (is_array($link) && !empty($link['href'])) {
+                    return (string) $link['href'];
+                }
+            }
+        }
+
+        return '';
     }
 
     private function getOrCreateAsaasCustomer(array $gateway, array $invoice): string
@@ -433,6 +566,9 @@ final class PaymentGatewayService
                 : 'https://api.asaas.com/v3',
             'mercadopago' => 'https://api.mercadopago.com',
             'stripe' => 'https://api.stripe.com',
+            'pagbank' => ($gateway['environment'] ?? '') === 'sandbox'
+                ? 'https://sandbox.api.pagseguro.com'
+                : 'https://api.pagseguro.com',
             default => '',
         };
     }
@@ -504,6 +640,28 @@ final class PaymentGatewayService
             return 'cancelled';
         }
         if (str_contains($status, 'pending') || str_contains($status, 'in_process')) {
+            return 'open';
+        }
+        return null;
+    }
+
+
+    private function mapPagBankStatus(string $status): ?string
+    {
+        $source = strtoupper($status);
+        if ($source === '') {
+            return null;
+        }
+        if (str_contains($source, 'PAID') || str_contains($source, 'AUTHORIZED') || str_contains($source, 'APPROVED') || str_contains($source, 'COMPLETED')) {
+            return 'paid';
+        }
+        if (str_contains($source, 'CANCEL') || str_contains($source, 'DECLINED') || str_contains($source, 'DENIED') || str_contains($source, 'EXPIRED')) {
+            return 'cancelled';
+        }
+        if (str_contains($source, 'OVERDUE')) {
+            return 'overdue';
+        }
+        if (str_contains($source, 'WAITING') || str_contains($source, 'PENDING') || str_contains($source, 'IN_ANALYSIS')) {
             return 'open';
         }
         return null;
