@@ -12,6 +12,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\EvolutionService;
+use App\Services\SubscriptionService;
 use PDO;
 use Throwable;
 
@@ -77,6 +78,12 @@ final class InstanceController
 
         if (!in_array($status, ['connected', 'disconnected', 'pending'], true)) {
             $status = 'disconnected';
+        }
+
+        $limit = (new SubscriptionService())->ensureCanCreate($tenantId, 'instances');
+        if (empty($limit['ok'])) {
+            Flash::set('error', $limit['message']);
+            $this->redirect('/instances');
         }
 
         try {

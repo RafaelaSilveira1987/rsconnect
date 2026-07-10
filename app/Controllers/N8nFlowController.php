@@ -12,6 +12,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AutomationWebhookService;
+use App\Services\SubscriptionService;
 use PDO;
 use Throwable;
 
@@ -101,6 +102,13 @@ final class N8nFlowController
         }
 
         $pdo = Database::connection();
+        if ($id < 1) {
+            $limit = (new SubscriptionService())->ensureCanCreate($tenantId, 'n8n_flows');
+            if (empty($limit['ok'])) {
+                Flash::set('error', $limit['message']);
+                $this->redirect('/n8n-flows');
+            }
+        }
         try {
             $pdo->beginTransaction();
             if ($id > 0) {

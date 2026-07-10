@@ -24,7 +24,7 @@ $isActive = static function (string $path) use ($currentPath): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=10.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=11.0')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -70,6 +70,7 @@ $isActive = static function (string $path) use ($currentPath): string {
                 <a class="nav-link<?= $isActive('/ai-credentials') ?>" href="<?= View::e(Router::url('/ai-credentials')) ?>"><span class="nav-icon">🔐</span><span>Credenciais de IA</span></a>
                 <a class="nav-link<?= $isActive('/n8n-flows') ?>" href="<?= View::e(Router::url('/n8n-flows')) ?>"><span class="nav-icon">↔</span><span>Fluxos n8n</span></a>
                 <a class="nav-link<?= $isActive('/n8n-templates') ?>" href="<?= View::e(Router::url('/n8n-templates')) ?>"><span class="nav-icon">▣</span><span>Templates n8n</span></a>
+                <a class="nav-link<?= $isActive('/billing') ?>" href="<?= View::e(Router::url('/billing')) ?>"><span class="nav-icon">$</span><span>Planos e cobrança</span></a>
             <?php endif; ?>
             <?php if (!Auth::isSuperAdmin() && Auth::can('agents.view')): ?>
                 <a class="nav-link<?= $isActive('/agents') ?>" href="<?= View::e(Router::url('/agents')) ?>"><span class="nav-icon">✦</span><span>Agentes de IA</span></a>
@@ -86,6 +87,9 @@ $isActive = static function (string $path) use ($currentPath): string {
             <?php endif; ?>
             <?php if (Auth::can('users.view')): ?>
                 <a class="nav-link<?= $isActive('/users') ?>" href="<?= View::e(Router::url('/users')) ?>"><span class="nav-icon">○</span><span>Usuários</span></a>
+            <?php endif; ?>
+            <?php if (!Auth::isSuperAdmin() && Auth::can('billing.view')): ?>
+                <a class="nav-link<?= $isActive('/subscription') ?>" href="<?= View::e(Router::url('/subscription')) ?>"><span class="nav-icon">$</span><span>Minha assinatura</span></a>
             <?php endif; ?>
             <?php if (Auth::can('permissions.view')): ?>
                 <a class="nav-link<?= $isActive('/permissions') ?>" href="<?= View::e(Router::url('/permissions')) ?>"><span class="nav-icon">◆</span><span>Permissões</span></a>
@@ -129,6 +133,6 @@ $isActive = static function (string $path) use ($currentPath): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=10.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=11.0')) ?>" defer></script>
 </body>
 </html>

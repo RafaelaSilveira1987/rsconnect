@@ -10,6 +10,7 @@ use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\SubscriptionService;
 use PDO;
 use Throwable;
 
@@ -74,6 +75,12 @@ final class AgentController
 
         if ($instanceId < 1 || $name === '' || $segment === '' || $prompt === '') {
             Flash::set('error', 'Preencha instância, nome, segmento e prompt.');
+            $this->redirect('/agents');
+        }
+
+        $limit = (new SubscriptionService())->ensureCanCreate($tenantId, 'agents');
+        if (empty($limit['ok'])) {
+            Flash::set('error', $limit['message']);
             $this->redirect('/agents');
         }
 

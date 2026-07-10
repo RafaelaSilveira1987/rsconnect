@@ -12,6 +12,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AutomationWebhookService;
+use App\Services\SubscriptionService;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
@@ -161,6 +162,12 @@ final class CalendarController
             Flash::set('error', 'Informe empresa, título, início e fim do agendamento.');
             $this->redirect('/calendar');
         }
+        $limit = (new SubscriptionService())->ensureCanCreate($tenantId, 'appointments_month');
+        if (empty($limit['ok'])) {
+            Flash::set('error', $limit['message']);
+            $this->redirect('/calendar');
+        }
+
         if (!in_array($locationType, ['online', 'presencial', 'telefone'], true)) {
             $locationType = 'online';
         }

@@ -856,3 +856,28 @@ body { background: var(--rs-bg); }
 .template-events code, .code-block code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 .template-events code { padding: .2rem .45rem; border-radius: 999px; background: #eef6f6; color: #0f766e; font-size: .76rem; }
 .code-block { max-height: 360px; overflow: auto; background: #0f172a; color: #e5f2ff; padding: .9rem; border-radius: 14px; font-size: .78rem; line-height: 1.45; }
+
+/* ZIP 11 - Planos e cobrança SaaS */
+.billing-page .sticky-card { top: 20px; }
+.usage-bar {
+    height: 9px;
+    width: min(180px, 100%);
+    background: #e5e7eb;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+.usage-bar span {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #0891b2, #0d9488);
+    border-radius: inherit;
+}
+.badge-trialing { background: #fef3c7; color: #92400e; }
+.badge-overdue { background: #fee2e2; color: #991b1b; }
+.badge-suspended { background: #f3f4f6; color: #374151; }
+.badge-canceled, .badge-cancelled { background: #f1f5f9; color: #475569; }
+.badge-open { background: #eff6ff; color: #1d4ed8; }
+.badge-paid { background: #dcfce7; color: #166534; }
+.pill-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1rem; }
+.tag-pill { background: #eef6f6; border: 1px solid #ccfbf1; color: #0f766e; border-radius: 999px; padding: 6px 10px; font-size: .84rem; font-weight: 700; }

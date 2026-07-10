@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Controllers\AgentController;
 use App\Controllers\AiCredentialController;
 use App\Controllers\AutomationController;
+use App\Controllers\BillingController;
 use App\Controllers\AuthController;
 use App\Controllers\CalendarController;
 use App\Controllers\CompanyController;
@@ -89,6 +90,13 @@ return static function (Router $router): void {
     $router->post('/agents', [AgentController::class, 'store'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->post('/agents/status', [AgentController::class, 'updateStatus'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->get('/automations', [AutomationController::class, 'index'], ['auth', 'permission:automations.view']);
+
+    $router->get('/billing', [BillingController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/subscription', [BillingController::class, 'subscription'], ['auth', 'permission:billing.view']);
+    $router->post('/billing/plans/save', [BillingController::class, 'savePlan'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/billing/subscriptions/save', [BillingController::class, 'saveSubscription'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/billing/invoices/create', [BillingController::class, 'createInvoice'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/billing/invoices/status', [BillingController::class, 'updateInvoice'], ['auth', 'super_admin', 'csrf']);
 
     $router->get('/n8n-flows', [N8nFlowController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/n8n-templates', [N8nTemplateController::class, 'index'], ['auth', 'super_admin']);
