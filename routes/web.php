@@ -18,6 +18,7 @@ use App\Controllers\InstanceController;
 use App\Controllers\OnboardingController;
 use App\Controllers\N8nFlowController;
 use App\Controllers\N8nTemplateController;
+use App\Controllers\NotificationsController;
 use App\Controllers\PaymentGatewayController;
 use App\Controllers\BillingReminderController;
 use App\Controllers\PermissionController;
@@ -56,6 +57,9 @@ return static function (Router $router): void {
     $router->post('/crm/notes', [CrmController::class, 'addNote'], ['auth', 'permission:crm.manage', 'csrf']);
 
     $router->get('/tasks', [TaskController::class, 'index'], ['auth', 'permission:tasks.view']);
+
+    $router->get('/notifications', [NotificationsController::class, 'index'], ['auth', 'permission:notifications.view']);
+    $router->post('/notifications/read-all', [NotificationsController::class, 'markAllRead'], ['auth', 'permission:notifications.view', 'csrf']);
 
     $router->get('/calendar', [CalendarController::class, 'index'], ['auth', 'permission:calendar.view']);
     $router->post('/calendar/appointments', [CalendarController::class, 'store'], ['auth', 'permission:calendar.manage', 'csrf']);

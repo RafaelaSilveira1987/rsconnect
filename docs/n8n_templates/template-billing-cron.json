@@ -1,0 +1,84 @@
+{
+  "name": "RS Connect - Cron diário da régua de cobrança",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -520,
+        0
+      ],
+      "id": "schedule_daily",
+      "name": "Todo dia 09:00"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://SEU_DOMINIO_RS_CONNECT/webhooks/billing/reminders/run?token=SEU_BILLING_CRON_TOKEN",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -260,
+        0
+      ],
+      "id": "call_rs_connect_cron",
+      "name": "Processar régua no RS Connect"
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json;\nreturn [{ json: { status: result.ok ? 'success' : 'error', created: result.created || 0, dispatched: result.dispatched || 0, ignored: result.ignored || 0, errors: result.errors || [], processed_at: new Date().toISOString() } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "normalize_result",
+      "name": "Resumo do processamento"
+    }
+  ],
+  "connections": {
+    "Todo dia 09:00": {
+      "main": [
+        [
+          {
+            "node": "Processar régua no RS Connect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar régua no RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Resumo do processamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "rs-connect-template"
+  }
+}

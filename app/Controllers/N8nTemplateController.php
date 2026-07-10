@@ -35,6 +35,20 @@ final class N8nTemplateController
             'events' => ['task.created', 'followup.due', 'crm.lead.updated'],
             'description' => 'Dispara lembretes internos para equipe comercial ou atendimento quando um follow-up precisa de ação.',
         ],
+        'billing-cron' => [
+            'title' => 'Cron da régua de cobrança',
+            'segment' => 'Financeiro',
+            'file' => 'template-billing-cron.json',
+            'events' => ['billing.reminders.run', 'cron.daily'],
+            'description' => 'Executa todos os dias a URL do cron do RS Connect para processar regras de cobrança sem ação manual.',
+        ],
+        'billing-disparo-mensagens' => [
+            'title' => 'Disparo de cobrança por mensagem',
+            'segment' => 'Financeiro',
+            'file' => 'template-billing-whatsapp-email.json',
+            'events' => ['billing.reminder.before_due', 'billing.reminder.due_today', 'billing.reminder.overdue', 'billing.subscription.suspended'],
+            'description' => 'Recebe eventos billing.* por empresa, normaliza a cobrança, dispara mensagem externa e registra callback no RS Connect.',
+        ],
     ];
 
     public function index(): void
@@ -178,6 +192,17 @@ final class N8nTemplateController
                     'contact' => ['name' => 'Lead Teste', 'phone' => '5532988887777'],
                     'summary' => 'Lead pediu orçamento pelo WhatsApp.',
                 ],
+                'callback' => ['url' => Router::url('/webhooks/n8n/callback')],
+            ],
+            'billing.reminder.overdue' => [
+                'event' => 'billing.reminder.overdue',
+                'source' => 'rs-connect',
+                'tenant_id' => 1,
+                'flow_id' => 4,
+                'tenant' => ['id' => 1, 'name' => 'Cliente Teste', 'email' => 'financeiro@cliente.com.br', 'phone' => '5532999999999'],
+                'invoice' => ['id' => 50, 'number' => 'RS-202607-64550', 'amount' => 297.00, 'due_date' => '2026-07-08', 'status' => 'overdue', 'payment_url' => 'https://link-de-pagamento.example/checkout'],
+                'rule' => ['label' => '2 dias após vencimento', 'days_from_due' => 2, 'event' => 'billing.reminder.overdue', 'channel' => 'whatsapp'],
+                'message' => 'Olá, Cliente Teste. Identificamos que a cobrança RS-202607-64550 está em aberto há 2 dias. Link: https://link-de-pagamento.example/checkout',
                 'callback' => ['url' => Router::url('/webhooks/n8n/callback')],
             ],
         ];

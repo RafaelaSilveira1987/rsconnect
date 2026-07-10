@@ -22,6 +22,23 @@ $completed = !empty($company['onboarding_completed_at']);
     <?php endif; ?>
 </div>
 
+<?php if (!empty($notifications)): ?>
+<section class="card client-notification-panel">
+    <div class="section-heading">
+        <div><span class="eyebrow">Avisos recentes</span><h2>Notificações da conta</h2></div>
+        <a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/notifications')) ?>">Ver todas</a>
+    </div>
+    <div class="compact-notifications">
+        <?php foreach (array_slice($notifications, 0, 3) as $notification): ?>
+            <a class="compact-notification <?= ($notification['status'] ?? '') === 'unread' ? 'is-unread' : '' ?>" href="<?= View::e(Router::url('/notifications')) ?>">
+                <span class="notification-dot"></span>
+                <span><strong><?= View::e($notification['title'] ?? '') ?></strong><small><?= View::e(mb_strimwidth((string) ($notification['message'] ?? ''), 0, 110, '...')) ?></small></span>
+            </a>
+        <?php endforeach; ?>
+    </div>
+</section>
+<?php endif; ?>
+
 <div class="metric-grid metric-grid-six">
     <article class="metric-card"><span>Conversas abertas</span><strong><?= (int) ($conversations['open_count'] ?? 0) ?></strong><small>Em andamento</small></article>
     <article class="metric-card"><span>Não lidas</span><strong><?= (int) ($conversations['unread_count'] ?? 0) ?></strong><small>Mensagens aguardando</small></article>

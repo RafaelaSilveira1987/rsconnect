@@ -159,6 +159,7 @@ final class BillingReminderService
 
                     $payload = $this->payloadForInvoice($rule, $invoice);
                     $logId = $this->createLog((int) $rule['id'], (int) $invoice['tenant_id'], (int) $invoice['id'], 'pending', $payload);
+                    (new NotificationService())->createBillingNotification($payload, (int) $invoice['id']);
                     $created++;
 
                     if (($rule['channel'] ?? 'n8n') !== 'manual') {

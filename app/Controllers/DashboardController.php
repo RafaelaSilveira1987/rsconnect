@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\Database;
 use App\Core\View;
+use App\Services\NotificationService;
 use PDO;
 
 final class DashboardController
@@ -54,6 +55,8 @@ final class DashboardController
         );
         $conversationStatement->execute(['tenant_id' => $tenantId]);
 
+        $notificationService = new NotificationService();
+
         View::render('dashboard.client', [
             'title' => 'Dashboard',
             'instances' => $instances,
@@ -61,6 +64,8 @@ final class DashboardController
             'activeAgents' => (int) $agentStatement->fetchColumn(),
             'conversations' => $conversationStatement->fetch(PDO::FETCH_ASSOC) ?: [],
             'company' => $companyStatement->fetch(PDO::FETCH_ASSOC) ?: [],
+            'notifications' => $tenantId ? $notificationService->latestForTenant((int) $tenantId, 5) : [],
+            'notificationUnreadCount' => $tenantId ? $notificationService->unreadCount((int) $tenantId) : 0,
         ]);
     }
 
