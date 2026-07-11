@@ -1476,3 +1476,121 @@ body::before {
   .chat-actions { justify-content: flex-start; }
   .message-bubble { max-width: 92% !important; }
 }
+
+/* HOTFIX 16.1 — Sidebar clara e contraste aprimorado */
+.sidebar {
+  color: #273449 !important;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(1, 197, 182, .13), transparent 30%),
+    radial-gradient(circle at 92% 82%, rgba(20, 100, 152, .10), transparent 34%),
+    linear-gradient(180deg, rgba(255,255,255,.98), rgba(247,250,253,.98) 58%, rgba(239,248,247,.98)) !important;
+  border-right: 1px solid #dbe5ef !important;
+  box-shadow: 18px 0 45px rgba(15, 23, 42, .08) !important;
+  backdrop-filter: blur(16px);
+}
+.sidebar *,
+.sidebar a,
+.sidebar button {
+  color: inherit;
+}
+.brand,
+.brand-title,
+.sidebar .brand-title,
+.sidebar .brand-title strong,
+.sidebar .brand strong,
+.sidebar .user-mini strong,
+.sidebar-footer strong {
+  color: #172033 !important;
+}
+.sidebar .brand-title span,
+.sidebar .brand small,
+.sidebar .user-mini small,
+.sidebar-footer small,
+.sidebar .tenant-pill small {
+  color: #64748b !important;
+}
+.sidebar .brand-mark,
+.sidebar .avatar {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #631b7c, #146498 58%, #01c5b6) !important;
+  box-shadow: 0 12px 28px rgba(20, 100, 152, .22) !important;
+}
+.sidebar .nav-caption,
+.sidebar .menu-section-title,
+.sidebar .nav-section-title {
+  color: #8794a8 !important;
+  letter-spacing: .16em;
+}
+.sidebar .nav-link,
+.sidebar-nav .nav-link,
+.sidebar nav a {
+  color: #4b5a6f !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+}
+.sidebar .nav-link .nav-icon,
+.sidebar nav a .nav-icon,
+.sidebar .nav-link svg,
+.sidebar nav a svg {
+  color: #6b7a90 !important;
+}
+.sidebar .nav-link:hover,
+.sidebar-nav .nav-link:hover,
+.sidebar nav a:hover {
+  color: #0f5164 !important;
+  background: rgba(236, 247, 247, .92) !important;
+  border-color: #cfe7e4 !important;
+  transform: none !important;
+}
+.sidebar .nav-link.is-active,
+.sidebar .nav-link.active,
+.sidebar-nav .nav-link.is-active,
+.sidebar-nav .nav-link.active,
+.sidebar nav a.is-active,
+.sidebar nav a.active {
+  color: #075f5a !important;
+  background: linear-gradient(135deg, rgba(232, 247, 246, .98), rgba(239, 246, 255, .95)) !important;
+  border-color: #a7deda !important;
+  box-shadow: inset 4px 0 0 #02948e, 0 8px 22px rgba(2, 148, 142, .08) !important;
+  font-weight: 800;
+}
+.sidebar .nav-link.is-active .nav-icon,
+.sidebar .nav-link.active .nav-icon,
+.sidebar nav a.is-active svg,
+.sidebar nav a.active svg {
+  color: #02948e !important;
+}
+.sidebar .sidebar-footer,
+.sidebar-footer {
+  border-top-color: #dbe5ef !important;
+}
+.sidebar .tenant-pill,
+.sidebar .user-card,
+.sidebar .sidebar-user,
+.sidebar .logout-box {
+  color: #273449 !important;
+  background: rgba(255,255,255,.72) !important;
+  border-color: #dbe5ef !important;
+}
+.sidebar .btn,
+.sidebar button,
+.sidebar .logout-button,
+.sidebar a.logout-button {
+  color: #273449 !important;
+  background: rgba(255,255,255,.88) !important;
+  border-color: #d8e2ec !important;
+}
+.sidebar .btn:hover,
+.sidebar button:hover,
+.sidebar .logout-button:hover,
+.sidebar a.logout-button:hover {
+  color: #075f5a !important;
+  background: #eefafa !important;
+  border-color: #a7deda !important;
+}
+@media (max-width: 820px) {
+  .sidebar {
+    box-shadow: 24px 0 60px rgba(15, 23, 42, .16) !important;
+  }
+}
