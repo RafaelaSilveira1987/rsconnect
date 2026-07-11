@@ -2185,3 +2185,51 @@ body.modal-open {
   .prompt-form-stack, .prompt-preview-panel { padding: 16px; }
   .prompt-preview-panel textarea[data-prompt-output] { min-height: 380px; }
 }
+
+
+/* ZIP 19.1 — Implantações / checklist Super Admin */
+.implementations-hero { background: linear-gradient(135deg, #f7fbff, #eef7fb 48%, #f8f5fb); color: var(--rs-text); border: 1px solid var(--rs-border); }
+.implementation-metrics { margin-top: 0; }
+.implementation-list { display: grid; gap: 18px; }
+.implementation-card { display: grid; gap: 18px; }
+.implementation-card.is-complete { border-color: rgba(21,128,61,.22); box-shadow: 0 16px 44px rgba(21,128,61,.08); }
+.implementation-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.implementation-company { display: flex; gap: 14px; align-items: center; min-width: 0; }
+.implementation-company h2 { margin: 3px 0 4px; font-size: 1.22rem; }
+.implementation-company p { margin: 0; color: var(--rs-muted); }
+.implementation-score { display: grid; justify-items: end; gap: 4px; min-width: 156px; }
+.implementation-score strong { font-size: 2rem; line-height: 1; letter-spacing: -.07em; }
+.implementation-score small { color: var(--rs-muted); }
+.implementation-progress { height: 10px; overflow: hidden; border-radius: 999px; background: #eef2f7; }
+.implementation-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--rs-purple), var(--rs-blue), var(--rs-cyan)); }
+.implementation-alerts { display: flex; flex-wrap: wrap; gap: 8px; }
+.implementation-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.implementation-section { padding: 16px; border: 1px solid var(--rs-border); border-radius: 16px; background: #fbfcfe; }
+.implementation-section h3 { margin: 0 0 12px; color: var(--rs-blue); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; }
+.implementation-items { display: grid; gap: 9px; }
+.implementation-item { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid transparent; border-radius: 12px; background: #fff; }
+.implementation-item strong { display: block; font-size: .9rem; }
+.implementation-item small { display: block; margin-top: 3px; color: var(--rs-muted); line-height: 1.45; }
+.implementation-check { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; font-size: .86rem; font-weight: 900; }
+.implementation-item.is-done { border-color: #dcfce7; background: #f7fff9; }
+.implementation-item.is-done .implementation-check { color: #166534; background: #dcfce7; }
+.implementation-item.is-pending.severity-critical { border-color: #fee2e2; background: #fff8f8; }
+.implementation-item.is-pending.severity-critical .implementation-check { color: #991b1b; background: #fee2e2; }
+.implementation-item.is-pending.severity-warning { border-color: #fef3c7; background: #fffdf4; }
+.implementation-item.is-pending.severity-warning .implementation-check { color: #92400e; background: #fef3c7; }
+.implementation-item.is-pending.severity-info { border-color: #dbeafe; background: #f8fbff; }
+.implementation-item.is-pending.severity-info .implementation-check { color: #1d4ed8; background: #dbeafe; }
+.implementation-details summary { width: fit-content; list-style: none; }
+.implementation-details summary::-webkit-details-marker { display: none; }
+.implementation-form { display: grid; gap: 15px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--rs-border); }
+.manual-check-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.manual-check { padding: 10px 12px; border: 1px solid var(--rs-border); border-radius: 12px; background: #fff; }
+.badge-critical { color: #991b1b; background: #fee2e2; }
+.badge-warning-soft { color: #92400e; background: #fef3c7; }
+.badge-not_started { color: #475569; background: #e2e8f0; }
+.badge-in_progress { color: #1d4ed8; background: #dbeafe; }
+.badge-waiting_client { color: #92400e; background: #fef3c7; }
+.badge-waiting_rs { color: #991b1b; background: #fee2e2; }
+.badge-completed { color: #166534; background: #dcfce7; }
+@media (max-width: 1020px) { .implementation-sections { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .implementation-head { flex-direction: column; } .implementation-score { justify-items: start; } .manual-check-grid { grid-template-columns: 1fr; } }

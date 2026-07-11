@@ -38,6 +38,14 @@ if (Auth::check() && Auth::can('conversations.view')) {
         $conversationUnread = 0;
     }
 }
+$implementationPending = 0;
+if (Auth::isSuperAdmin()) {
+    try {
+        $implementationPending = (int) Database::connection()->query('SELECT COUNT(*) FROM tenants t LEFT JOIN tenant_implementation_checklists c ON c.tenant_id = t.id WHERE COALESCE(c.implementation_completed, 0) = 0 AND t.status <> "inactive"')->fetchColumn();
+    } catch (Throwable) {
+        $implementationPending = 0;
+    }
+}
 $svgIcon = static function (string $name): string {
     $icons = [
         'dashboard' => '<path d="M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-8.5Z"/>',
@@ -60,6 +68,7 @@ $svgIcon = static function (string $name): string {
         'company' => '<path d="M4 21V5h10v16M14 9h6v12M8 9h2M8 13h2M8 17h2M17 13h1M17 17h1"/>',
         'users' => '<path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
         'permissions' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
+        'implementation' => '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
         'menu' => '<path d="M4 7h16M4 12h16M4 17h16"/>',
     ];
     $path = $icons[$name] ?? $icons['dashboard'];
@@ -73,7 +82,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=19.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=19.1')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -135,6 +144,7 @@ $svgIcon = static function (string $name): string {
 
             <span class="nav-caption"><?= Auth::isSuperAdmin() ? 'Administração RS' : 'Administração' ?></span>
             <?php if (Auth::isSuperAdmin()): ?>
+                <a class="nav-link<?= $isActive('/implementations') ?>" href="<?= View::e(Router::url('/implementations')) ?>"><?= $svgIcon('implementation') ?><span>Implantações</span><?= $notificationBadge($implementationPending) ?></a>
                 <a class="nav-link<?= $isActive('/companies') ?>" href="<?= View::e(Router::url('/companies')) ?>"><?= $svgIcon('company') ?><span>Empresas</span></a>
             <?php elseif (Auth::can('company.view')): ?>
                 <a class="nav-link<?= $isActive('/company-settings') ?>" href="<?= View::e(Router::url('/company-settings')) ?>"><?= $svgIcon('company') ?><span>Minha empresa</span></a>
@@ -195,6 +205,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=19.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=19.1')) ?>" defer></script>
 </body>
 </html>

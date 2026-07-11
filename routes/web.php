@@ -15,6 +15,7 @@ use App\Controllers\ConversationController;
 use App\Controllers\EvolutionWebhookController;
 use App\Controllers\DashboardController;
 use App\Controllers\InstanceController;
+use App\Controllers\ImplementationController;
 use App\Controllers\OnboardingController;
 use App\Controllers\N8nFlowController;
 use App\Controllers\N8nTemplateController;
@@ -73,6 +74,10 @@ return static function (Router $router): void {
     $router->get('/calendar/ics', [CalendarController::class, 'ics'], ['auth', 'permission:calendar.view']);
     $router->post('/tasks', [TaskController::class, 'store'], ['auth', 'permission:tasks.manage', 'csrf']);
     $router->post('/tasks/status', [TaskController::class, 'updateStatus'], ['auth', 'permission:tasks.manage', 'csrf']);
+
+
+    $router->get('/implementations', [ImplementationController::class, 'index'], ['auth', 'super_admin']);
+    $router->post('/implementations/save', [ImplementationController::class, 'save'], ['auth', 'super_admin', 'csrf']);
 
     $router->get('/companies', [CompanyController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/companies', [CompanyController::class, 'store'], ['auth', 'super_admin', 'csrf']);
