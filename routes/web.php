@@ -33,7 +33,6 @@ return static function (Router $router): void {
     $router->post('/logout', [AuthController::class, 'logout'], ['auth', 'csrf']);
 
     $router->get('/', [DashboardController::class, 'index'], ['auth']);
-    $router->get('/dashboard/live', [DashboardController::class, 'live'], ['auth']);
 
     $router->post('/webhooks/evolution', [EvolutionWebhookController::class, 'handle']);
     $router->post('/webhooks/n8n/callback', [N8nTemplateController::class, 'callback']);
@@ -96,6 +95,8 @@ return static function (Router $router): void {
     $router->get('/instances', [InstanceController::class, 'index'], ['auth', 'permission:instances.view']);
     $router->post('/instances', [InstanceController::class, 'store'], ['auth', 'permission:instances.manage', 'csrf']);
     $router->post('/instances/test', [InstanceController::class, 'sendTest'], ['auth', 'permission:instances.manage', 'csrf']);
+    $router->post('/instances/qrcode', [InstanceController::class, 'qrCode'], ['auth', 'permission:instances.manage', 'csrf']);
+    $router->post('/instances/status', [InstanceController::class, 'status'], ['auth', 'permission:instances.view', 'csrf']);
 
     $router->get('/agents', [AgentController::class, 'index'], ['auth', 'permission:agents.view']);
     $router->get('/ai-credentials', [AiCredentialController::class, 'index'], ['auth', 'super_admin']);

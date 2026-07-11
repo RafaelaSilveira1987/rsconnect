@@ -23,12 +23,12 @@ $completed = !empty($company['onboarding_completed_at']);
 </div>
 
 <?php if (!empty($notifications)): ?>
-<section class="card client-notification-panel" data-dashboard-notifications-panel>
+<section class="card client-notification-panel">
     <div class="section-heading">
         <div><span class="eyebrow">Avisos recentes</span><h2>Notificações da conta</h2></div>
         <a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/notifications')) ?>">Ver todas</a>
     </div>
-    <div class="compact-notifications" data-dashboard-notifications-list>
+    <div class="compact-notifications">
         <?php foreach (array_slice($notifications, 0, 3) as $notification): ?>
             <a class="compact-notification <?= ($notification['status'] ?? '') === 'unread' ? 'is-unread' : '' ?>" href="<?= View::e(Router::url('/notifications')) ?>">
                 <span class="notification-dot"></span>
@@ -40,9 +40,9 @@ $completed = !empty($company['onboarding_completed_at']);
 <?php endif; ?>
 
 <div class="metric-grid metric-grid-six">
-    <article class="metric-card"><span>Conversas abertas</span><strong data-dashboard-live="open_conversations"><?= (int) ($conversations['open_count'] ?? 0) ?></strong><small>Em andamento</small></article>
-    <article class="metric-card"><span>Não lidas</span><strong data-dashboard-live="unread_conversations"><?= (int) ($conversations['unread_count'] ?? 0) ?></strong><small>Mensagens aguardando</small></article>
-    <article class="metric-card"><span>Atendimento humano</span><strong data-dashboard-live="human_conversations"><?= (int) ($conversations['human_count'] ?? 0) ?></strong><small>Assumidas pela equipe</small></article>
+    <article class="metric-card"><span>Conversas abertas</span><strong><?= (int) ($conversations['open_count'] ?? 0) ?></strong><small>Em andamento</small></article>
+    <article class="metric-card"><span>Não lidas</span><strong><?= (int) ($conversations['unread_count'] ?? 0) ?></strong><small>Mensagens aguardando</small></article>
+    <article class="metric-card"><span>Atendimento humano</span><strong><?= (int) ($conversations['human_count'] ?? 0) ?></strong><small>Assumidas pela equipe</small></article>
     <article class="metric-card"><span>Instâncias</span><strong><?= (int) ($instances['total'] ?? 0) ?></strong><small><?= (int) ($instances['connected'] ?? 0) ?> conectada(s)</small></article>
     <article class="metric-card"><span>Agentes ativos</span><strong><?= (int) $activeAgents ?></strong><small>Perfis configurados</small></article>
     <article class="metric-card"><span>Usuários ativos</span><strong><?= (int) $activeUsers ?></strong><small>Na sua empresa</small></article>

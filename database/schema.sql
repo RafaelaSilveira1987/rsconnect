@@ -47,12 +47,18 @@ CREATE TABLE evolution_instances (
     base_url VARCHAR(255) NOT NULL,
     api_key_encrypted TEXT NOT NULL,
     status ENUM('connected', 'disconnected', 'pending') NOT NULL DEFAULT 'disconnected',
+    connection_state VARCHAR(60) NULL,
+    last_status_check_at DATETIME NULL,
+    qrcode_requested_at DATETIME NULL,
+    connected_at DATETIME NULL,
+    disconnected_at DATETIME NULL,
     is_default TINYINT(1) NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_instances_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
     UNIQUE KEY uq_instance_tenant_name (tenant_id, instance_name),
-    INDEX idx_instances_tenant_status (tenant_id, status)
+    INDEX idx_instances_tenant_status (tenant_id, status),
+    INDEX idx_instances_connection_state (tenant_id, connection_state)
 ) ENGINE=InnoDB;
 
 CREATE TABLE permissions (

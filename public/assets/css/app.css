@@ -1819,12 +1819,227 @@ body::before {
     }
 }
 
-.metric-card.metric-pulse {
-  animation: metricPulse 0.5s ease;
+/* ZIP 18 - Instâncias com QR Code Evolution */
+.instances-panel .section-description {
+    margin: 8px 0 0;
+    color: var(--muted, #64748b);
+    max-width: 720px;
+    line-height: 1.55;
 }
 
-@keyframes metricPulse {
-  0% { transform: translateY(0); box-shadow: inherit; }
-  45% { transform: translateY(-2px); box-shadow: 0 18px 46px rgba(13,148,136,.18); }
-  100% { transform: translateY(0); box-shadow: inherit; }
+.instance-list-pro {
+    gap: 16px;
+}
+
+.instance-card-pro {
+    display: grid;
+    gap: 16px;
+    border: 1px solid rgba(15, 23, 42, .08);
+    background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(248,250,252,.78));
+    box-shadow: 0 18px 48px rgba(15, 23, 42, .08);
+}
+
+.instance-status-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.instance-status-line small {
+    color: var(--muted, #64748b);
+    font-size: .83rem;
+}
+
+.instance-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.instance-actions form {
+    margin: 0;
+}
+
+.webhook-details {
+    border-top: 1px solid rgba(15, 23, 42, .08);
+    padding-top: 12px;
+}
+
+.webhook-details summary {
+    cursor: pointer;
+    font-weight: 800;
+    color: #334155;
+    list-style: none;
+}
+
+.webhook-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.webhook-details summary::after {
+    content: "+";
+    margin-left: 8px;
+    color: #146498;
+}
+
+.webhook-details[open] summary::after {
+    content: "−";
+}
+
+.qr-modal[hidden] {
+    display: none;
+}
+
+.qr-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: grid;
+    place-items: center;
+    padding: 22px;
+}
+
+.qr-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, .48);
+    backdrop-filter: blur(10px);
+}
+
+.qr-modal-card {
+    position: relative;
+    width: min(760px, 100%);
+    max-height: min(92vh, 820px);
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    border: 1px solid rgba(255,255,255,.48);
+    border-radius: 30px;
+    background:
+        radial-gradient(circle at 10% 0%, rgba(99, 27, 124, .12), transparent 30%),
+        radial-gradient(circle at 90% 10%, rgba(20, 100, 152, .14), transparent 30%),
+        rgba(255,255,255,.95);
+    box-shadow: 0 34px 90px rgba(15, 23, 42, .30);
+    color: #0f172a;
+}
+
+.qr-modal-header,
+.qr-modal-footer {
+    padding: 20px 22px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    border-bottom: 1px solid rgba(15, 23, 42, .08);
+}
+
+.qr-modal-footer {
+    align-items: center;
+    border-top: 1px solid rgba(15, 23, 42, .08);
+    border-bottom: 0;
+    justify-content: flex-end;
+}
+
+.qr-modal-header h2 {
+    margin: 4px 0 0;
+    letter-spacing: -.04em;
+}
+
+.qr-modal-header p {
+    margin: 8px 0 0;
+    color: #64748b;
+}
+
+.qr-modal-body {
+    overflow: auto;
+    padding: 22px;
+    display: grid;
+    gap: 16px;
+}
+
+.qr-image-box {
+    min-height: 300px;
+    display: grid;
+    place-items: center;
+    border: 1px dashed rgba(20, 100, 152, .35);
+    border-radius: 28px;
+    background:
+        linear-gradient(135deg, rgba(99, 27, 124, .06), rgba(20, 100, 152, .08)),
+        #f8fafc;
+}
+
+.qr-image-box img {
+    width: min(320px, 78vw);
+    height: auto;
+    display: block;
+    border-radius: 22px;
+    padding: 14px;
+    background: white;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, .14);
+}
+
+.qr-loading,
+.qr-empty {
+    max-width: 420px;
+    text-align: center;
+    color: #64748b;
+    line-height: 1.6;
+    padding: 18px;
+}
+
+.qr-info-card,
+.qr-help {
+    border: 1px solid rgba(15, 23, 42, .08);
+    background: rgba(248,250,252,.92);
+    border-radius: 22px;
+    padding: 16px;
+}
+
+.qr-info-card strong,
+.qr-help strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #0f172a;
+}
+
+.qr-info-card p,
+.qr-info-card small,
+.qr-help li {
+    color: #64748b;
+    line-height: 1.55;
+}
+
+.qr-info-card code {
+    display: inline-flex;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: #e0f2fe;
+    color: #075985;
+    font-weight: 900;
+    letter-spacing: .08em;
+}
+
+.qr-help ol {
+    margin: 8px 0 0;
+    padding-left: 20px;
+}
+
+body.modal-open {
+    overflow: hidden;
+}
+
+@media (max-width: 720px) {
+    .instance-actions,
+    .qr-modal-header,
+    .qr-modal-footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .instance-actions .btn,
+    .instance-actions form {
+        width: 100%;
+    }
 }
