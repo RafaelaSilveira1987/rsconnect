@@ -20,7 +20,7 @@ final class OnboardingController
     public function index(): void
     {
         if (Auth::isSuperAdmin()) {
-            Flash::set('warning', 'O onboarding é realizado dentro da conta de cada cliente.');
+            Flash::set('warning', 'O onboarding é realizado dentro da conta de cada cliente. Os fluxos n8n continuam exclusivos do painel RS.');
             $this->redirect('/companies');
         }
 
@@ -29,7 +29,7 @@ final class OnboardingController
 
         $companyStatement = $pdo->prepare('SELECT * FROM tenants WHERE id = :id LIMIT 1');
         $companyStatement->execute(['id' => $tenantId]);
-        $company = $companyStatement->fetch(PDO::FETCH_ASSOC);
+        $company = $companyStatement->fetch(PDO::FETCH_ASSOC) ?: [];
 
         $instanceStatement = $pdo->prepare(
             'SELECT id, name, instance_name, base_url, status, is_default
@@ -50,11 +50,19 @@ final class OnboardingController
         $agentStatement->execute(['tenant_id' => $tenantId]);
         $agents = $agentStatement->fetchAll(PDO::FETCH_ASSOC);
 
+        $currentAgent = $agents[0] ?? [];
+        $builder = $this->decodeBuilder((string) ($currentAgent['prompt_builder_json'] ?? ''));
+        if (!$builder) {
+            $builder = $this->defaultBuilder($company, $currentAgent);
+        }
+
         View::render('onboarding.index', [
             'title' => 'Configuração inicial',
             'company' => $company,
             'instances' => $instances,
             'agents' => $agents,
+            'builder' => $builder,
+            'generatedPrompt' => (string) ($currentAgent['system_prompt'] ?? $this->buildPrompt($builder, $company)),
             'defaultUrl' => (string) Env::get('EVOLUTION_DEFAULT_URL', ''),
         ]);
     }
@@ -100,7 +108,7 @@ final class OnboardingController
 
         Auth::refreshUser();
         Audit::log('onboarding.company_completed', ['segment' => $segment], $tenantId);
-        Flash::set('success', 'Etapa 1 concluída. Agora configure a instância do WhatsApp.');
+        Flash::set('success', 'Dados da empresa salvos. Agora conecte ou selecione uma instância do WhatsApp.');
         $this->redirect('/onboarding');
     }
 
@@ -162,7 +170,7 @@ final class OnboardingController
 
             $pdo->commit();
             Audit::log('onboarding.instance_completed', ['instance_id' => $instanceId], $tenantId);
-            Flash::set('success', 'Etapa 2 concluída. Configure agora o primeiro agente de IA.');
+            Flash::set('success', 'WhatsApp vinculado. Agora personalize o assistente de atendimento.');
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -177,26 +185,38 @@ final class OnboardingController
     {
         $tenantId = (int) Auth::tenantId();
         $instanceId = (int) ($_POST['instance_id'] ?? 0);
-        $name = trim((string) ($_POST['name'] ?? ''));
+        $assistantName = trim((string) ($_POST['assistant_name'] ?? $_POST['name'] ?? ''));
         $segment = trim((string) ($_POST['segment'] ?? ''));
-        $modelProvider = (string) ($_POST['model_provider'] ?? 'google');
-        $modelName = trim((string) ($_POST['model_name'] ?? 'gemini-2.0-flash'));
-        $temperature = (float) ($_POST['temperature'] ?? 0.2);
+        $builder = $this->sanitizeBuilder($_POST);
         $prompt = trim((string) ($_POST['system_prompt'] ?? ''));
 
-        if ($name === '' || $segment === '' || $prompt === '' || !in_array($modelProvider, ['google', 'openai', 'anthropic', 'custom'], true)) {
-            Flash::set('error', 'Informe nome, segmento, provedor e prompt do agente.');
+        if ($assistantName === '' || $segment === '') {
+            Flash::set('error', 'Informe o nome do assistente e o segmento.');
             $this->redirect('/onboarding');
         }
 
-        $temperature = max(0, min(1, $temperature));
         $pdo = Database::connection();
+        $companyStatement = $pdo->prepare('SELECT * FROM tenants WHERE id = :id LIMIT 1');
+        $companyStatement->execute(['id' => $tenantId]);
+        $company = $companyStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+
         $instance = $pdo->prepare(
             'SELECT id FROM evolution_instances WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
         );
         $instance->execute(['id' => $instanceId, 'tenant_id' => $tenantId]);
         if (!$instance->fetchColumn()) {
-            Flash::set('error', 'Selecione uma instância válida da sua empresa.');
+            Flash::set('error', 'Selecione uma instância válida da sua empresa antes de concluir o assistente.');
+            $this->redirect('/onboarding');
+        }
+
+        $builder['assistant_name'] = $assistantName;
+        $builder['segment'] = $segment;
+        if ($prompt === '') {
+            $prompt = $this->buildPrompt($builder, $company);
+        }
+
+        if (mb_strlen($prompt) < 120) {
+            Flash::set('error', 'Revise o prompt. Ele precisa ter instruções suficientes para orientar o atendimento.');
             $this->redirect('/onboarding');
         }
 
@@ -204,40 +224,87 @@ final class OnboardingController
             $pdo->beginTransaction();
 
             $currentAgent = $pdo->prepare(
-                'SELECT id FROM ai_agents WHERE tenant_id = :tenant_id AND is_default = 1 LIMIT 1'
+                'SELECT id, model_provider, model_name, temperature
+                 FROM ai_agents
+                 WHERE tenant_id = :tenant_id AND is_default = 1
+                 LIMIT 1'
             );
             $currentAgent->execute(['tenant_id' => $tenantId]);
-            $agentId = (int) ($currentAgent->fetchColumn() ?: 0);
+            $agent = $currentAgent->fetch(PDO::FETCH_ASSOC) ?: [];
+            $agentId = (int) ($agent['id'] ?? 0);
 
-            $agentData = [
-                'tenant_id' => $tenantId,
-                'instance_id' => $instanceId,
-                'name' => $name,
-                'segment' => $segment,
-                'model_provider' => $modelProvider,
-                'model_name' => $modelName,
-                'temperature' => $temperature,
-                'system_prompt' => $prompt,
-            ];
+            $modelProvider = (string) ($agent['model_provider'] ?? 'openai');
+            if (!in_array($modelProvider, ['google', 'openai', 'anthropic', 'custom'], true)) {
+                $modelProvider = 'openai';
+            }
+            $modelName = (string) ($agent['model_name'] ?? 'gpt-4o-mini');
+            $temperature = (float) ($agent['temperature'] ?? 0.2);
+            $handoffKeywords = $builder['handoff_keywords'] !== '' ? $builder['handoff_keywords'] : 'humano, atendente, falar com alguém, suporte';
+            $handoffMessage = $builder['human_handoff_message'] !== ''
+                ? $builder['human_handoff_message']
+                : 'Vou encaminhar sua conversa para uma pessoa da equipe dar continuidade.';
+            $afterHoursMessage = $builder['after_hours_message'] !== ''
+                ? $builder['after_hours_message']
+                : null;
+            $builderJson = json_encode($builder, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
             if ($agentId > 0) {
                 $update = $pdo->prepare(
                     'UPDATE ai_agents
-                     SET instance_id = :instance_id, name = :name, segment = :segment,
-                         model_provider = :model_provider, model_name = :model_name,
-                         temperature = :temperature, system_prompt = :system_prompt,
-                         status = "active", is_default = 1
+                     SET instance_id = :instance_id,
+                         name = :name,
+                         segment = :segment,
+                         model_provider = :model_provider,
+                         model_name = :model_name,
+                         temperature = :temperature,
+                         system_prompt = :system_prompt,
+                         prompt_builder_json = :prompt_builder_json,
+                         auto_reply_enabled = 1,
+                         handoff_keywords = :handoff_keywords,
+                         human_handoff_message = :human_handoff_message,
+                         after_hours_message = :after_hours_message,
+                         status = "active",
+                         is_default = 1
                      WHERE id = :agent_id AND tenant_id = :tenant_id'
                 );
-                $update->execute($agentData + ['agent_id' => $agentId]);
+                $update->execute([
+                    'instance_id' => $instanceId,
+                    'name' => $assistantName,
+                    'segment' => $segment,
+                    'model_provider' => $modelProvider,
+                    'model_name' => $modelName,
+                    'temperature' => $temperature,
+                    'system_prompt' => $prompt,
+                    'prompt_builder_json' => $builderJson,
+                    'handoff_keywords' => $handoffKeywords,
+                    'human_handoff_message' => $handoffMessage,
+                    'after_hours_message' => $afterHoursMessage,
+                    'agent_id' => $agentId,
+                    'tenant_id' => $tenantId,
+                ]);
             } else {
                 $insert = $pdo->prepare(
                     'INSERT INTO ai_agents
-                        (tenant_id, instance_id, name, segment, model_provider, model_name, temperature, system_prompt, status, is_default)
+                        (tenant_id, instance_id, name, segment, model_provider, model_name, temperature, system_prompt, prompt_builder_json, status, is_default,
+                         auto_reply_enabled, handoff_keywords, human_handoff_message, after_hours_message)
                      VALUES
-                        (:tenant_id, :instance_id, :name, :segment, :model_provider, :model_name, :temperature, :system_prompt, "active", 1)'
+                        (:tenant_id, :instance_id, :name, :segment, :model_provider, :model_name, :temperature, :system_prompt, :prompt_builder_json, "active", 1,
+                         1, :handoff_keywords, :human_handoff_message, :after_hours_message)'
                 );
-                $insert->execute($agentData);
+                $insert->execute([
+                    'tenant_id' => $tenantId,
+                    'instance_id' => $instanceId,
+                    'name' => $assistantName,
+                    'segment' => $segment,
+                    'model_provider' => $modelProvider,
+                    'model_name' => $modelName,
+                    'temperature' => $temperature,
+                    'system_prompt' => $prompt,
+                    'prompt_builder_json' => $builderJson,
+                    'handoff_keywords' => $handoffKeywords,
+                    'human_handoff_message' => $handoffMessage,
+                    'after_hours_message' => $afterHoursMessage,
+                ]);
                 $agentId = (int) $pdo->lastInsertId();
             }
 
@@ -247,21 +314,138 @@ final class OnboardingController
             $reset->execute(['agent_id' => $agentId, 'tenant_id' => $tenantId]);
 
             $complete = $pdo->prepare(
-                'UPDATE tenants SET onboarding_step = 4, onboarding_completed_at = NOW() WHERE id = :id'
+                'UPDATE tenants
+                 SET onboarding_step = 4,
+                     onboarding_completed_at = COALESCE(onboarding_completed_at, NOW()),
+                     onboarding_assistant_prompt_completed_at = NOW()
+                 WHERE id = :id'
             );
             $complete->execute(['id' => $tenantId]);
 
             $pdo->commit();
-            Audit::log('onboarding.completed', ['agent_id' => $agentId], $tenantId);
-            Flash::set('success', 'Onboarding concluído! Sua base está pronta para receber o módulo de conversas.');
+            Audit::log('onboarding.agent_prompt_completed', ['agent_id' => $agentId, 'segment' => $segment], $tenantId);
+            Flash::set('success', 'Assistente configurado. A RS Connect pode concluir integrações técnicas como n8n, credenciais e fluxos externos.');
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            Flash::set('error', 'Não foi possível salvar o agente. Verifique os dados informados.');
+            Flash::set('error', 'Não foi possível salvar o assistente. Verifique se a migration 018 foi executada.');
         }
 
         $this->redirect('/onboarding');
+    }
+
+    private function sanitizeBuilder(array $source): array
+    {
+        $fields = [
+            'assistant_name',
+            'segment',
+            'tone',
+            'main_goal',
+            'audience',
+            'business_summary',
+            'products_services',
+            'service_area',
+            'prices_policy',
+            'common_questions',
+            'collect_fields',
+            'handoff_keywords',
+            'human_handoff_message',
+            'after_hours_message',
+            'restrictions',
+            'extra_context',
+        ];
+
+        $builder = [];
+        foreach ($fields as $field) {
+            $value = trim((string) ($source[$field] ?? ''));
+            $builder[$field] = mb_substr($value, 0, 5000);
+        }
+
+        $builder['tone'] = $builder['tone'] !== '' ? $builder['tone'] : 'Profissional, claro e acolhedor';
+        $builder['main_goal'] = $builder['main_goal'] !== '' ? $builder['main_goal'] : 'Atendimento inicial, qualificação do contato e encaminhamento para a equipe quando necessário';
+        $builder['collect_fields'] = $builder['collect_fields'] !== '' ? $builder['collect_fields'] : 'nome, telefone, necessidade principal e melhor horário para retorno';
+        $builder['restrictions'] = $builder['restrictions'] !== '' ? $builder['restrictions'] : 'Não inventar preços, prazos, políticas, disponibilidade ou informações não cadastradas.';
+
+        return $builder;
+    }
+
+    private function decodeBuilder(string $json): array
+    {
+        if ($json === '') {
+            return [];
+        }
+
+        $decoded = json_decode($json, true);
+        return is_array($decoded) ? $this->sanitizeBuilder($decoded) : [];
+    }
+
+    private function defaultBuilder(array $company, array $agent): array
+    {
+        $name = (string) ($company['name'] ?? 'empresa');
+        $segment = (string) ($company['segment'] ?? ($agent['segment'] ?? 'atendimento'));
+
+        return [
+            'assistant_name' => (string) ($agent['name'] ?? ('Assistente ' . $name)),
+            'segment' => $segment,
+            'tone' => 'Profissional, claro e acolhedor',
+            'main_goal' => 'Atendimento inicial, qualificação do contato e encaminhamento para a equipe quando necessário',
+            'audience' => 'Pessoas interessadas nos serviços da empresa',
+            'business_summary' => 'A empresa atua no segmento de ' . $segment . '.',
+            'products_services' => '',
+            'service_area' => '',
+            'prices_policy' => '',
+            'common_questions' => '',
+            'collect_fields' => 'nome, telefone, necessidade principal e melhor horário para retorno',
+            'handoff_keywords' => 'humano, atendente, falar com alguém, suporte',
+            'human_handoff_message' => 'Vou encaminhar sua conversa para uma pessoa da equipe dar continuidade.',
+            'after_hours_message' => '',
+            'restrictions' => 'Não inventar preços, prazos, políticas, disponibilidade ou informações não cadastradas.',
+            'extra_context' => '',
+        ];
+    }
+
+    private function buildPrompt(array $builder, array $company): string
+    {
+        $companyName = (string) ($company['name'] ?? 'empresa');
+        $assistant = $builder['assistant_name'] ?: 'Assistente virtual';
+        $segment = $builder['segment'] ?: (string) ($company['segment'] ?? 'atendimento');
+
+        $sections = [
+            'Você é ' . $assistant . ', assistente virtual de atendimento da empresa ' . $companyName . '.',
+            'A empresa atua no segmento de ' . $segment . '.',
+            'Objetivo principal: ' . $builder['main_goal'] . '.',
+            'Tom de atendimento: ' . $builder['tone'] . '.',
+        ];
+
+        $optionalMap = [
+            'Público atendido' => $builder['audience'] ?? '',
+            'Resumo do negócio' => $builder['business_summary'] ?? '',
+            'Produtos e serviços' => $builder['products_services'] ?? '',
+            'Região ou modalidade de atendimento' => $builder['service_area'] ?? '',
+            'Preços, condições e políticas comerciais' => $builder['prices_policy'] ?? '',
+            'Perguntas frequentes e respostas autorizadas' => $builder['common_questions'] ?? '',
+            'Informações que devem ser coletadas' => $builder['collect_fields'] ?? '',
+            'Palavras ou situações para transferir ao humano' => $builder['handoff_keywords'] ?? '',
+            'Mensagem de transferência para humano' => $builder['human_handoff_message'] ?? '',
+            'Mensagem fora do horário' => $builder['after_hours_message'] ?? '',
+            'Regras e restrições' => $builder['restrictions'] ?? '',
+            'Contexto adicional' => $builder['extra_context'] ?? '',
+        ];
+
+        foreach ($optionalMap as $label => $value) {
+            $value = trim((string) $value);
+            if ($value !== '') {
+                $sections[] = $label . ': ' . $value;
+            }
+        }
+
+        $sections[] = 'Regras de conversa: responda em português do Brasil, de forma objetiva, educada e natural. Faça uma pergunta por vez quando precisar coletar dados.';
+        $sections[] = 'Não confirme agendamentos, pagamentos, disponibilidade, descontos ou condições que não estejam claramente informados.';
+        $sections[] = 'Quando não tiver segurança, quando o cliente pedir atendimento humano ou quando o assunto exigir decisão da empresa, encaminhe para uma pessoa da equipe.';
+        $sections[] = 'Não diga que é uma inteligência artificial. Apresente-se como assistente virtual de atendimento.';
+
+        return implode("\n\n", $sections);
     }
 
     private function redirect(string $path): never

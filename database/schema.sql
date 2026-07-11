@@ -18,6 +18,7 @@ CREATE TABLE tenants (
     status ENUM('active', 'inactive', 'suspended') NOT NULL DEFAULT 'active',
     onboarding_step TINYINT UNSIGNED NOT NULL DEFAULT 1,
     onboarding_completed_at DATETIME NULL,
+    onboarding_assistant_prompt_completed_at DATETIME NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_tenants_status (status)
@@ -94,6 +95,7 @@ CREATE TABLE ai_agents (
     model_name VARCHAR(120) NOT NULL DEFAULT 'gemini-2.0-flash',
     temperature DECIMAL(3,2) NOT NULL DEFAULT 0.20,
     system_prompt TEXT NOT NULL,
+    prompt_builder_json JSON NULL,
     status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
     is_default TINYINT(1) NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
