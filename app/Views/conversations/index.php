@@ -235,70 +235,98 @@ $currentQuery = array_filter([
         <?php endif; ?>
     </section>
 
-    <aside class="conversation-details card" id="conversation-details" aria-label="Informações do lead">
+    <aside class="conversation-details conversation-drawer card" id="conversation-details" aria-label="Dados do atendimento">
         <?php if ($selected): ?>
-            <div class="conversation-panel-heading">
-                <div><span class="eyebrow">Lead</span><h2>Informações</h2></div>
-                <button class="icon-button drawer-close" type="button" data-close-panel="conversation-details" aria-label="Fechar informações">×</button>
-            </div>
-
-            <div class="lead-summary">
-                <span class="conversation-avatar large"><?= View::e(mb_strtoupper(mb_substr($selected['contact_name'] ?: $selected['phone'], 0, 1))) ?></span>
-                <strong><?= View::e($selected['contact_name'] ?: 'Contato sem nome') ?></strong>
-                <span><?= View::e($selected['phone']) ?></span>
-            </div>
-
             <?php
             $tags = json_decode((string) ($selected['tags_json'] ?? ''), true);
             $tagText = is_array($tags) ? implode(', ', $tags) : '';
             $interestLabel = $selected['ai_interest_level'] ?? '';
             ?>
-            <div class="crm-auto-card">
-                <span class="eyebrow">CRM automático</span>
-                <?php if (!empty($selected['lead_id'])): ?>
-                    <strong><?= View::e($selected['lead_title'] ?: 'Lead do WhatsApp') ?></strong>
-                    <span>Etapa: <?= View::e($selected['lead_stage_name'] ?: '—') ?></span>
-                    <span>Prioridade: <?= View::e($selected['lead_priority'] ?: '—') ?></span>
-                    <?php if ($interestLabel !== ''): ?><span>Interesse: <?= View::e($interestLabel) ?></span><?php endif; ?>
-                    <?php if (!empty($selected['ai_next_action'])): ?><p><?= View::e($selected['ai_next_action']) ?></p><?php endif; ?>
-                    <a class="btn btn-outline btn-small btn-block" href="<?= View::e(Router::url('/crm?tenant_id=' . (int) $selected['tenant_id'] . '&pipeline_id=' . (int) $selected['lead_pipeline_id'] . '&lead_id=' . (int) $selected['lead_id'])) ?>">Abrir no CRM</a>
-                <?php else: ?>
-                    <strong>Nenhum negócio vinculado</strong>
-                    <span>Novas mensagens recebidas pelo WhatsApp criam uma oportunidade automaticamente.</span>
-                <?php endif; ?>
+            <div class="conversation-drawer-header">
+                <div>
+                    <span class="eyebrow">Atendimento</span>
+                    <h2>Dados da conversa</h2>
+                    <p><?= View::e($selected['contact_name'] ?: 'Contato sem nome') ?> · <?= View::e($selected['phone']) ?></p>
+                </div>
+                <button class="icon-button drawer-close" type="button" data-close-panel="conversation-details" aria-label="Fechar painel">×</button>
             </div>
 
-            <form class="lead-form" method="post" action="<?= View::e(Router::url('/conversations/contact')) ?>">
-                <?= Csrf::input() ?>
-                <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
-                <label class="field"><span>Nome</span><input name="name" value="<?= View::e($selected['contact_name']) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
-                <label class="field"><span>E-mail</span><input type="email" name="email" value="<?= View::e($selected['email']) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
-                <label class="field"><span>Empresa</span><input name="company" value="<?= View::e($selected['company']) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
-                <label class="field"><span>Classificação</span>
-                    <select name="contact_status" <?= !$canManage ? 'disabled' : '' ?>>
-                        <option value="lead" <?= $selected['contact_status'] === 'lead' ? 'selected' : '' ?>>Lead</option>
-                        <option value="customer" <?= $selected['contact_status'] === 'customer' ? 'selected' : '' ?>>Cliente</option>
-                        <option value="inactive" <?= $selected['contact_status'] === 'inactive' ? 'selected' : '' ?>>Inativo</option>
-                    </select>
-                </label>
-                <label class="field"><span>Tags separadas por vírgula</span><input name="tags" value="<?= View::e($tagText) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
-                <label class="field"><span>Notas</span><textarea name="notes" rows="5" <?= !$canManage ? 'readonly' : '' ?>><?= View::e($selected['notes']) ?></textarea></label>
-                <?php if ($canManage): ?><button class="btn btn-secondary btn-block" type="submit">Salvar contato</button><?php endif; ?>
-            </form>
+            <div class="conversation-drawer-body">
+                <?php if ($canManage): ?>
+                    <section class="drawer-section drawer-status-card">
+                        <div class="drawer-section-title">
+                            <div>
+                                <span class="eyebrow">Status</span>
+                                <h3>Controle da conversa</h3>
+                            </div>
+                            <span class="mini-badge mode-<?= View::e($selected['attendance_mode']) ?>"><?= View::e($modeLabel[$selected['attendance_mode']] ?? $selected['attendance_mode']) ?></span>
+                        </div>
+                        <div class="status-button-grid pro-status-grid">
+                            <?php foreach ($statusLabel as $value => $label): ?>
+                                <form method="post" action="<?= View::e(Router::url('/conversations/status')) ?>">
+                                    <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="status" value="<?= View::e($value) ?>">
+                                    <button class="btn btn-small <?= $selected['status'] === $value ? 'btn-primary' : 'btn-outline' ?>" type="submit"><?= View::e($label) ?></button>
+                                </form>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                <?php endif; ?>
 
-            <?php if ($canManage): ?>
-                <div class="conversation-status-actions">
-                    <span class="field-label">Status da conversa</span>
-                    <div class="status-button-grid">
-                        <?php foreach ($statusLabel as $value => $label): ?>
-                            <form method="post" action="<?= View::e(Router::url('/conversations/status')) ?>">
-                                <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="status" value="<?= View::e($value) ?>">
-                                <button class="btn btn-small <?= $selected['status'] === $value ? 'btn-primary' : 'btn-ghost' ?>" type="submit"><?= View::e($label) ?></button>
-                            </form>
-                        <?php endforeach; ?>
+                <form class="lead-form drawer-form" method="post" action="<?= View::e(Router::url('/conversations/contact')) ?>">
+                    <?= Csrf::input() ?>
+                    <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
+
+                    <section class="drawer-section">
+                        <div class="drawer-section-title">
+                            <div>
+                                <span class="eyebrow">Contato</span>
+                                <h3>Informações principais</h3>
+                            </div>
+                        </div>
+                        <div class="drawer-form-grid">
+                            <label class="field"><span>Nome</span><input name="name" value="<?= View::e($selected['contact_name']) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
+                            <label class="field"><span>E-mail</span><input type="email" name="email" value="<?= View::e($selected['email']) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
+                            <label class="field"><span>Empresa</span><input name="company" value="<?= View::e($selected['company']) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
+                            <label class="field"><span>Classificação</span>
+                                <select name="contact_status" <?= !$canManage ? 'disabled' : '' ?>>
+                                    <option value="lead" <?= $selected['contact_status'] === 'lead' ? 'selected' : '' ?>>Lead</option>
+                                    <option value="customer" <?= $selected['contact_status'] === 'customer' ? 'selected' : '' ?>>Cliente</option>
+                                    <option value="inactive" <?= $selected['contact_status'] === 'inactive' ? 'selected' : '' ?>>Inativo</option>
+                                </select>
+                            </label>
+                        </div>
+                        <label class="field drawer-span"><span>Tags separadas por vírgula</span><input name="tags" value="<?= View::e($tagText) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
+                        <label class="field drawer-span"><span>Notas internas</span><textarea name="notes" rows="7" <?= !$canManage ? 'readonly' : '' ?>><?= View::e($selected['notes']) ?></textarea></label>
+                    </section>
+
+                    <?php if ($canManage): ?>
+                        <div class="drawer-savebar">
+                            <button class="btn btn-primary btn-block" type="submit">Salvar alterações</button>
+                        </div>
+                    <?php endif; ?>
+                </form>
+
+                <details class="drawer-section drawer-collapsed-card">
+                    <summary>
+                        <span>
+                            <span class="eyebrow">CRM automático</span>
+                            <strong><?= !empty($selected['lead_id']) ? View::e($selected['lead_title'] ?: 'Lead do WhatsApp') : 'Nenhum negócio vinculado' ?></strong>
+                        </span>
+                        <span class="drawer-chevron"></span>
+                    </summary>
+                    <div class="drawer-crm-content">
+                        <?php if (!empty($selected['lead_id'])): ?>
+                            <span>Etapa: <?= View::e($selected['lead_stage_name'] ?: '—') ?></span>
+                            <span>Prioridade: <?= View::e($selected['lead_priority'] ?: '—') ?></span>
+                            <?php if ($interestLabel !== ''): ?><span>Interesse: <?= View::e($interestLabel) ?></span><?php endif; ?>
+                            <?php if (!empty($selected['ai_next_action'])): ?><p><?= View::e($selected['ai_next_action']) ?></p><?php endif; ?>
+                            <a class="btn btn-outline btn-small btn-block" href="<?= View::e(Router::url('/crm?tenant_id=' . (int) $selected['tenant_id'] . '&pipeline_id=' . (int) $selected['lead_pipeline_id'] . '&lead_id=' . (int) $selected['lead_id'])) ?>">Abrir no CRM</a>
+                        <?php else: ?>
+                            <p>Novas mensagens recebidas pelo WhatsApp criam uma oportunidade automaticamente.</p>
+                        <?php endif; ?>
                     </div>
-                </div>
-            <?php endif; ?>
+                </details>
+            </div>
         <?php else: ?>
             <div class="empty-state">Selecione uma conversa para visualizar o contato.</div>
         <?php endif; ?>

@@ -1,93 +1,169 @@
-# RS Connect — ZIP 04: CRM + Refresh Visual
+# RS Connect — ZIP 06
 
-Base SaaS multiempresa em PHP 8.2+, MySQL, HTML, CSS e JavaScript puro.
+## IA Comercial, Regras de Atendimento e Credenciais por Cliente
 
-Este pacote contém o projeto completo atualizado até a Etapa 4. Ele pode ser usado tanto para atualizar o ZIP 03 quanto para uma instalação nova.
+Esta etapa consolida a IA para uso comercial no SaaS.
 
-## Recursos desta etapa
+### Inclui
 
-### CRM
+- credenciais de IA por empresa/cliente no painel Super Admin;
+- credenciais criptografadas com `APP_KEY`;
+- fallback para chave global da RS no `.env`;
+- suporte OpenAI e Gemini;
+- prioridade de credencial:
+  1. credencial específica do agente;
+  2. credencial padrão da empresa;
+  3. chave global da RS no `.env`;
+- regras de atendimento por agente;
+- horário de atendimento;
+- mensagem fora do horário;
+- palavras-chave para transferência humana;
+- ação ao transferir: pausar IA ou assumir humano;
+- cooldown anti-loop para evitar respostas repetidas em sequência;
+- hotfixes do webhook Evolution + OpenAI já incorporados;
+- menu Super Admin: **Credenciais de IA**.
 
-- base de contatos com busca, classificação, tags e notas;
-- contatos criados manualmente ou originados das conversas;
-- funil comercial em formato Kanban;
-- etapas padrão: Novo, Qualificação, Proposta, Negociação, Ganho e Perdido;
-- valor, prioridade, responsável e previsão de fechamento por negócio;
-- movimentação de negócios entre etapas;
-- atualização automática do status ao mover para Ganho ou Perdido;
-- notas cronológicas por negócio;
-- tarefas, ligações, reuniões e follow-ups;
-- prazo, prioridade, responsável e status das atividades;
-- indicadores de negócios e atividades;
-- isolamento por `tenant_id` em todas as consultas e gravações;
-- permissões específicas para contatos, CRM e tarefas.
+## Atualização a partir do ZIP 05
 
-### Refresh visual
-
-- paleta clara e mais limpa;
-- sidebar branca com navegação agrupada;
-- cards com menos sombra e menos gradientes;
-- formulários e filtros mais compactos;
-- dashboard mais leve;
-- tela de conversas reorganizada e com melhor responsividade;
-- layout responsivo para desktop, tablet e celular;
-- cache de CSS e JavaScript versionado com `v=4.0`.
-
-## Atualização a partir do ZIP 03
-
-Leia:
+1. Faça commit/push dos arquivos no GitHub.
+2. No EasyPanel, faça redeploy do serviço `rsconnect`.
+3. No Adminer, execute:
 
 ```text
-ATUALIZAR-DO-ZIP-03.md
+database/migrations/007_ai_commercial_rules.sql
 ```
 
-Execute uma única vez:
+Se você ainda não tinha executado o hotfix OpenAI anterior, execute também:
 
 ```text
-database/migrations/004_crm.sql
+database/migrations/006_switch_active_agents_to_openai.sql
 ```
 
-Não execute novamente `schema.sql`, `seed.sql` ou migrations anteriores em um banco já existente.
+## Variáveis recomendadas no EasyPanel
 
-## Instalação nova
+```env
+OPENAI_API_KEY=SUA_CHAVE_GLOBAL_DA_RS_OU_VAZIO
+OPENAI_API_BASE_URL=https://api.openai.com/v1
+GEMINI_API_KEY=
+GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+AI_AUTOREPLY_ENABLED=true
+AI_HTTP_TIMEOUT=28
+AI_MAX_OUTPUT_TOKENS=420
+AI_MAX_REPLY_CHARS=1400
+```
 
-1. Copie `.env.example` para `.env`.
-2. Configure banco, `APP_URL`, `APP_KEY` e Evolution API.
-3. Execute `database/schema.sql`.
-4. Execute `database/seed.sql`.
-5. Acesse a pasta `public` pelo Apache.
+A chave global da RS é opcional se você cadastrar uma credencial por empresa no painel **Credenciais de IA**.
 
-## Novos menus
+## Como cadastrar a chave do cliente
 
-- Contatos
-- CRM
-- Tarefas
+Entre como Super Admin RS:
 
-## Novas permissões
+```text
+Credenciais de IA → Nova credencial
+```
 
-- `contacts.view`
-- `contacts.manage`
-- `crm.view`
-- `crm.manage`
-- `tasks.view`
-- `tasks.manage`
+Preencha:
 
-A migration libera essas permissões para `client_admin` e `client_user`. Depois da atualização, saia da conta e entre novamente.
+- Empresa;
+- opcionalmente, agente específico;
+- provedor: OpenAI ou Google Gemini;
+- API Key;
+- modelo padrão, por exemplo `gpt-4o-mini`;
+- marque como padrão.
 
-## Funil padrão
+A API Key será criptografada e não será exibida novamente.
 
-A migration cria um funil chamado **Funil comercial** para cada empresa já existente. Novas empresas criadas pelo Super Admin também recebem o funil automaticamente.
+## Teste recomendado
 
-## Requisitos
+1. Envie mensagem do lead pelo WhatsApp.
+2. Confirme que a mensagem entra em **Conversas**.
+3. Confirme que a IA responde.
+4. Peça “quero falar com atendente” e confirme se a IA pausa/transfere.
+5. Ative horário de atendimento e teste a mensagem fora do horário.
 
-- PHP 8.2 ou superior;
-- extensões PDO MySQL, cURL, OpenSSL, mbstring e JSON;
-- MySQL 8 ou MariaDB compatível;
-- Apache com `mod_rewrite`.
+## Consultas úteis
 
-## Segurança
+```sql
+SELECT id, label, provider, default_model, status, is_default
+FROM ai_provider_credentials
+ORDER BY id DESC;
+```
 
-- preserve o arquivo `.env` da instalação atual;
-- não envie `.env` para repositórios;
-- em produção, mantenha `EVOLUTION_SSL_VERIFY=true`;
-- use uma API Key nova caso uma chave tenha sido exposta em testes.
+```sql
+SELECT event, status, response_preview, error_message, created_at
+FROM ai_automation_logs
+ORDER BY id DESC
+LIMIT 20;
+```
+
+
+## ZIP 07 — Conversas Pro + CRM Automático
+
+Inclui CRM automático vindo do WhatsApp, card comercial dentro da conversa, tags automáticas, sugestão de resposta com IA e reprocessamento manual da IA.
+
+Migration necessária:
+
+```text
+database/migrations/008_conversations_pro_crm_auto.sql
+```
+
+
+## ZIP 08 — Agenda e Google Calendar
+
+Inclui agenda comercial, vínculo com contatos/conversas/CRM, exportação `.ics`, link para Google Calendar e webhook opcional para n8n.
+
+## ZIP 09 — n8n por empresa
+
+A partir do ZIP 09, integrações n8n devem ser cadastradas no painel **Fluxos n8n**, por empresa. O uso de `N8N_WEBHOOK_URL` no `.env` permanece apenas como fallback legado.
+
+Consulte `README-ZIP-09.md` e o documento `Manual_RS_Connect_Funcionalidades_e_Implantacao.docx`.
+
+
+## ZIP 10 — Templates n8n por Segmento
+
+Adiciona templates JSON importáveis no n8n, tela Super Admin para download e payloads de exemplo, além de callback `/webhooks/n8n/callback` para registrar sucesso/erro dos fluxos por empresa.
+
+## ZIP 11 — Planos, assinaturas e cobrança SaaS
+
+Adiciona controle comercial do SaaS com planos, limites, assinatura por empresa, cobranças manuais e tela do cliente para acompanhar uso.
+
+Migration:
+
+```text
+database/migrations/012_saas_billing_plans.sql
+```
+
+---
+
+## ZIP 12 — Gateways de pagamento
+
+Adiciona integração inicial de cobrança com Asaas, Mercado Pago e Stripe, com geração de links de pagamento para as cobranças do SaaS e webhooks de retorno.
+
+Execute:
+
+```text
+database/migrations/013_payment_gateways.sql
+```
+
+Depois acesse como Super Admin:
+
+```text
+Gateways de pagamento
+```
+
+---
+
+## ZIP 13 — PagBank + Régua de cobrança
+
+Adiciona PagBank aos gateways de pagamento e cria a tela **Régua de cobrança** para avisos antes/no/depois do vencimento, envio de eventos `billing.*` para n8n por empresa e endpoint opcional de cron.
+
+Migration:
+
+```text
+database/migrations/014_pagbank_billing_reminders.sql
+```
+
+
+## ZIP 14 — Templates de cobrança, notificações e UI
+
+Inclui templates n8n de cron e disparo de cobrança, central de notificações do cliente, badge no menu e remoção de emojis no layout principal. Execute `database/migrations/015_notifications_frontend_billing_templates.sql`.
