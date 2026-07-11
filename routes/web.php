@@ -20,6 +20,7 @@ use App\Controllers\N8nFlowController;
 use App\Controllers\N8nTemplateController;
 use App\Controllers\NotificationsController;
 use App\Controllers\PaymentGatewayController;
+use App\Controllers\ReportController;
 use App\Controllers\BillingReminderController;
 use App\Controllers\PermissionController;
 use App\Controllers\TaskController;
@@ -37,6 +38,7 @@ return static function (Router $router): void {
     $router->post('/webhooks/n8n/callback', [N8nTemplateController::class, 'callback']);
 
     $router->get('/conversations', [ConversationController::class, 'index'], ['auth', 'permission:conversations.view']);
+    $router->get('/conversations/poll', [ConversationController::class, 'poll'], ['auth', 'permission:conversations.view']);
     $router->post('/conversations/start', [ConversationController::class, 'start'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/send', [ConversationController::class, 'send'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/mode', [ConversationController::class, 'setMode'], ['auth', 'permission:conversations.manage', 'csrf']);
@@ -57,6 +59,10 @@ return static function (Router $router): void {
     $router->post('/crm/notes', [CrmController::class, 'addNote'], ['auth', 'permission:crm.manage', 'csrf']);
 
     $router->get('/tasks', [TaskController::class, 'index'], ['auth', 'permission:tasks.view']);
+
+
+    $router->get('/reports', [ReportController::class, 'index'], ['auth', 'permission:reports.view']);
+    $router->get('/reports/export', [ReportController::class, 'export'], ['auth', 'permission:reports.view']);
 
     $router->get('/notifications', [NotificationsController::class, 'index'], ['auth', 'permission:notifications.view']);
     $router->post('/notifications/read-all', [NotificationsController::class, 'markAllRead'], ['auth', 'permission:notifications.view', 'csrf']);

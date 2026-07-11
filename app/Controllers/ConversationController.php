@@ -757,6 +757,179 @@ final class ConversationController
         return (int) $statement->fetchColumn() > 0;
     }
 
+
+    public function poll(): void
+    {
+        $pdo = Database::connection();
+        $selectedId = (int) ($_GET['conversation_id'] ?? 0);
+        $afterId = (int) ($_GET['after_id'] ?? 0);
+        $markRead = (int) ($_GET['mark_read'] ?? 1) === 1;
+
+        $filters = [
+            'search' => trim((string) ($_GET['search'] ?? '')),
+            'status' => trim((string) ($_GET['status'] ?? '')),
+            'mode' => trim((string) ($_GET['mode'] ?? '')),
+            'instance_id' => (int) ($_GET['instance_id'] ?? 0),
+            'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
+        ];
+
+        if ($selectedId > 0 && $markRead) {
+            $selected = $this->findConversation($selectedId);
+            if ($selected !== null) {
+                $pdo->prepare('UPDATE conversations SET unread_count = 0 WHERE id = :id')
+                    ->execute(['id' => $selectedId]);
+            }
+        }
+
+        $conversations = $this->conversationSummaries($pdo, $filters);
+        $messages = [];
+        $latestMessageId = $afterId;
+
+        if ($selectedId > 0) {
+            $selected = $this->findConversation($selectedId);
+            if ($selected !== null) {
+                $messageStatement = $pdo->prepare(
+                    'SELECT m.*, u.name AS sender_user_name
+                     FROM conversation_messages m
+                     LEFT JOIN users u ON u.id = m.sender_user_id
+                     WHERE m.conversation_id = :conversation_id
+                       AND m.id > :after_id
+                     ORDER BY m.sent_at ASC, m.id ASC
+                     LIMIT 120'
+                );
+                $messageStatement->execute([
+                    'conversation_id' => $selectedId,
+                    'after_id' => $afterId,
+                ]);
+                $rows = $messageStatement->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($rows as $message) {
+                    $latestMessageId = max($latestMessageId, (int) $message['id']);
+                    $messages[] = $this->formatMessageForJson($message);
+                }
+            }
+        }
+
+        $unreadTotal = 0;
+        foreach ($conversations as $conversation) {
+            $unreadTotal += (int) ($conversation['unread_count'] ?? 0);
+        }
+
+        $this->json([
+            'ok' => true,
+            'server_time' => date(DATE_ATOM),
+            'selected_conversation_id' => $selectedId,
+            'latest_message_id' => $latestMessageId,
+            'unread_total' => $unreadTotal,
+            'has_new_messages' => count($messages) > 0,
+            'conversations' => array_map(fn (array $conversation): array => $this->formatConversationForJson($conversation, $selectedId), $conversations),
+            'messages' => $messages,
+        ]);
+    }
+
+    private function conversationSummaries(PDO $pdo, array $filters): array
+    {
+        $conditions = [];
+        $params = [];
+
+        if (!Auth::isSuperAdmin()) {
+            $conditions[] = 'c.tenant_id = :tenant_scope';
+            $params['tenant_scope'] = Auth::tenantId();
+        } elseif (($filters['tenant_id'] ?? 0) > 0) {
+            $conditions[] = 'c.tenant_id = :tenant_scope';
+            $params['tenant_scope'] = (int) $filters['tenant_id'];
+        }
+
+        if (($filters['search'] ?? '') !== '') {
+            $conditions[] = '(ct.name LIKE :search OR ct.phone LIKE :search OR c.last_message_preview LIKE :search)';
+            $params['search'] = '%' . $filters['search'] . '%';
+        }
+
+        if (in_array($filters['status'] ?? '', ['open', 'pending', 'closed'], true)) {
+            $conditions[] = 'c.status = :status';
+            $params['status'] = $filters['status'];
+        }
+
+        if (in_array($filters['mode'] ?? '', ['ai', 'human', 'paused'], true)) {
+            $conditions[] = 'c.attendance_mode = :mode';
+            $params['mode'] = $filters['mode'];
+        }
+
+        if (($filters['instance_id'] ?? 0) > 0) {
+            $conditions[] = 'c.evolution_instance_id = :instance_id';
+            $params['instance_id'] = (int) $filters['instance_id'];
+        }
+
+        $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+        $statement = $pdo->prepare(
+            'SELECT c.id, c.status, c.attendance_mode, c.unread_count, c.last_message_at, c.last_message_preview,
+                    ct.name AS contact_name, ct.phone, i.name AS instance_label, i.instance_name,
+                    t.name AS tenant_name
+             FROM conversations c
+             INNER JOIN contacts ct ON ct.id = c.contact_id
+             INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id
+             INNER JOIN tenants t ON t.id = c.tenant_id
+             ' . $where . '
+             ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
+             LIMIT 100'
+        );
+        $statement->execute($params);
+        return $statement->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private function formatConversationForJson(array $conversation, int $selectedId): array
+    {
+        return [
+            'id' => (int) $conversation['id'],
+            'name' => (string) ($conversation['contact_name'] ?: $conversation['phone'] ?: 'Contato'),
+            'phone' => (string) ($conversation['phone'] ?? ''),
+            'tenant_name' => (string) ($conversation['tenant_name'] ?? ''),
+            'instance_label' => (string) ($conversation['instance_label'] ?: $conversation['instance_name'] ?? ''),
+            'preview' => (string) ($conversation['last_message_preview'] ?? ''),
+            'last_message_at' => (string) ($conversation['last_message_at'] ?? ''),
+            'last_message_label' => $this->formatTimeLabel((string) ($conversation['last_message_at'] ?? '')),
+            'unread_count' => (int) ($conversation['unread_count'] ?? 0),
+            'status' => (string) ($conversation['status'] ?? ''),
+            'mode' => (string) ($conversation['attendance_mode'] ?? ''),
+            'is_selected' => (int) $conversation['id'] === $selectedId,
+        ];
+    }
+
+    private function formatMessageForJson(array $message): array
+    {
+        return [
+            'id' => (int) $message['id'],
+            'direction' => (string) $message['direction'],
+            'sender_type' => (string) $message['sender_type'],
+            'sender_name' => (string) ($message['sender_user_name'] ?? ''),
+            'message_type' => (string) ($message['message_type'] ?? 'text'),
+            'content' => (string) ($message['content'] ?? ''),
+            'status' => (string) ($message['status'] ?? ''),
+            'sent_at' => (string) $message['sent_at'],
+            'time_label' => $this->formatTimeLabel((string) $message['sent_at']),
+        ];
+    }
+
+    private function formatTimeLabel(string $dateTime): string
+    {
+        if ($dateTime === '') {
+            return '';
+        }
+        $timestamp = strtotime($dateTime);
+        if (!$timestamp) {
+            return '';
+        }
+        return date('d/m H:i', $timestamp);
+    }
+
+    private function json(array $payload, int $status = 200): never
+    {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
     private function redirect(string $path): never
     {
         header('Location: ' . Router::url($path));

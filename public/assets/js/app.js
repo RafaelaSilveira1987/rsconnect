@@ -94,3 +94,198 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+
+(function () {
+  const workspace = document.querySelector('[data-conversation-realtime]');
+  if (!workspace) return;
+
+  const pollUrl = workspace.dataset.pollUrl || '';
+  const currentQuery = workspace.dataset.currentQuery || '';
+  let selectedConversationId = Number(workspace.dataset.conversationId || 0);
+  let lastMessageId = Number(workspace.dataset.lastMessageId || 0);
+  let unreadTotal = 0;
+  let timer = null;
+  let isPolling = false;
+  const baseTitle = workspace.dataset.baseTitle || document.title.replace(' — RS Connect', '');
+  const thread = document.querySelector('[data-chat-thread]');
+  const list = document.querySelector('[data-conversation-list]');
+  const status = document.querySelector('[data-realtime-status]');
+  const toast = document.querySelector('[data-realtime-toast]');
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function shouldStickToBottom() {
+    if (!thread) return false;
+    return thread.scrollHeight - thread.scrollTop - thread.clientHeight < 140;
+  }
+
+  function setStatus(text, mode) {
+    if (!status) return;
+    status.textContent = text;
+    status.dataset.status = mode || 'ok';
+  }
+
+  function showToast(message) {
+    if (!toast) return;
+    toast.textContent = message;
+    toast.hidden = false;
+    toast.classList.add('is-visible');
+    window.clearTimeout(showToast.timeout);
+    showToast.timeout = window.setTimeout(() => {
+      toast.classList.remove('is-visible');
+      window.setTimeout(() => { toast.hidden = true; }, 220);
+    }, 3800);
+  }
+
+  function pulseTitle(count) {
+    document.title = count > 0 ? `(${count}) ${baseTitle} — RS Connect` : `${baseTitle} — RS Connect`;
+  }
+
+  function buildConversationUrl(id) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('conversation_id', String(id));
+    return url.pathname + url.search;
+  }
+
+  function initials(name, phone) {
+    const source = String(name || phone || 'C').trim();
+    return source ? source.charAt(0).toUpperCase() : 'C';
+  }
+
+  function renderConversationItem(item) {
+    const unread = Number(item.unread_count || 0);
+    const selectedClass = item.is_selected ? ' is-selected' : '';
+    const unreadHidden = unread > 0 ? '' : ' hidden';
+    const modeClass = escapeHtml(item.mode || 'ai');
+    const modeLabel = item.mode === 'human' ? 'Humano' : (item.mode === 'paused' ? 'IA pausada' : 'IA ativa');
+    return `<a class="conversation-list-item${selectedClass}" data-conversation-item data-conversation-id="${Number(item.id)}" href="${escapeHtml(buildConversationUrl(item.id))}">
+      <span class="conversation-avatar">${escapeHtml(initials(item.name, item.phone))}</span>
+      <span class="conversation-summary">
+        <span class="conversation-title-row">
+          <strong data-conversation-name>${escapeHtml(item.name || item.phone || 'Contato')}</strong>
+          <time data-conversation-time>${escapeHtml(item.last_message_label || '')}</time>
+        </span>
+        <span class="conversation-preview" data-conversation-preview>${escapeHtml(item.preview || 'Sem mensagens')}</span>
+        <span class="conversation-meta-row">
+          <span class="mini-badge mode-${modeClass}">${escapeHtml(modeLabel)}</span>
+          <small>${escapeHtml(item.tenant_name || item.instance_label || '')}</small>
+          <b class="unread-count" data-unread-count${unreadHidden}>${unread}</b>
+        </span>
+      </span>
+    </a>`;
+  }
+
+  function updateConversationList(conversations) {
+    if (!list || !Array.isArray(conversations)) return;
+    const empty = list.querySelector('.conversation-empty');
+    if (empty && conversations.length > 0) empty.remove();
+
+    conversations.slice().reverse().forEach((item) => {
+      const id = Number(item.id);
+      let node = list.querySelector(`[data-conversation-item][data-conversation-id="${id}"]`);
+      if (!node) {
+        list.insertAdjacentHTML('afterbegin', renderConversationItem(item));
+        node = list.querySelector(`[data-conversation-item][data-conversation-id="${id}"]`);
+      }
+      node.classList.toggle('is-selected', id === selectedConversationId);
+      node.classList.toggle('has-unread', Number(item.unread_count || 0) > 0);
+      const name = node.querySelector('[data-conversation-name]');
+      const time = node.querySelector('[data-conversation-time]');
+      const preview = node.querySelector('[data-conversation-preview]');
+      const unread = node.querySelector('[data-unread-count]');
+      if (name) name.textContent = item.name || item.phone || 'Contato';
+      if (time) time.textContent = item.last_message_label || '';
+      if (preview) preview.textContent = item.preview || 'Sem mensagens';
+      if (unread) {
+        unread.textContent = Number(item.unread_count || 0);
+        unread.hidden = Number(item.unread_count || 0) < 1;
+      }
+      list.prepend(node);
+    });
+  }
+
+  function renderMessage(message) {
+    const outgoing = message.direction === 'outgoing';
+    const failed = message.status === 'failed';
+    const sender = outgoing ? (message.sender_type === 'ai' ? 'IA' : (message.sender_name || 'Equipe')) : '';
+    const content = escapeHtml(message.content || '[Sem conteúdo]').replace(/\n/g, '<br>');
+    const type = message.message_type && message.message_type !== 'text' ? `<span class="message-type">${escapeHtml(message.message_type)}</span>` : '';
+    const statusText = outgoing ? `<span class="message-status">${escapeHtml(message.status || '')}</span>` : '';
+    const senderText = outgoing ? `<span>${escapeHtml(sender)}</span>` : '';
+    return `<article class="message-row ${outgoing ? 'is-outgoing' : 'is-incoming'}" data-message-id="${Number(message.id)}">
+      <div class="message-bubble ${failed ? 'has-error' : ''}" data-sender="${escapeHtml(message.sender_type || '')}">
+        ${type}
+        <p>${content}</p>
+        <footer>${senderText}<time>${escapeHtml(message.time_label || '')}</time>${statusText}</footer>
+      </div>
+    </article>`;
+  }
+
+  function appendMessages(messages) {
+    if (!thread || !Array.isArray(messages) || messages.length === 0) return 0;
+    const stick = shouldStickToBottom();
+    let added = 0;
+    messages.forEach((message) => {
+      const id = Number(message.id || 0);
+      if (!id || thread.querySelector(`[data-message-id="${id}"]`)) return;
+      thread.insertAdjacentHTML('beforeend', renderMessage(message));
+      lastMessageId = Math.max(lastMessageId, id);
+      added += 1;
+    });
+    const empty = thread.querySelector('.chat-empty');
+    if (empty && added > 0) empty.remove();
+    workspace.dataset.lastMessageId = String(lastMessageId);
+    thread.dataset.lastMessageId = String(lastMessageId);
+    if (stick || added > 0) thread.scrollTop = thread.scrollHeight;
+    return added;
+  }
+
+  async function poll() {
+    if (isPolling || !pollUrl) return;
+    isPolling = true;
+    const params = new URLSearchParams(currentQuery);
+    params.set('after_id', String(lastMessageId));
+    params.set('mark_read', selectedConversationId > 0 ? '1' : '0');
+
+    try {
+      setStatus('Sincronizando...', 'loading');
+      const response = await fetch(`${pollUrl}?${params.toString()}`, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin',
+        cache: 'no-store'
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      updateConversationList(payload.conversations || []);
+      const added = appendMessages(payload.messages || []);
+      unreadTotal = Number(payload.unread_total || 0);
+      pulseTitle(unreadTotal);
+      if (added > 0) showToast(`${added} nova(s) mensagem(ns) recebida(s).`);
+      setStatus('Atualização automática ativa', 'ok');
+    } catch (error) {
+      setStatus('Reconectando atualização...', 'error');
+    } finally {
+      isPolling = false;
+      schedule();
+    }
+  }
+
+  function schedule() {
+    window.clearTimeout(timer);
+    const delay = document.hidden ? 12000 : 3500;
+    timer = window.setTimeout(poll, delay);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) poll();
+  });
+
+  schedule();
+})();

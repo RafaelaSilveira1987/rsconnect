@@ -2,6 +2,7 @@
 
 use App\Core\Auth;
 use App\Core\Csrf;
+use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
@@ -23,6 +24,20 @@ if (!Auth::isSuperAdmin() && Auth::tenantId()) {
     $notificationUnread = (new NotificationService())->unreadCount((int) Auth::tenantId());
 }
 $notificationBadge = static fn (int $count): string => $count > 0 ? '<span class="nav-badge">' . min(99, $count) . '</span>' : '';
+$conversationUnread = 0;
+if (Auth::check() && Auth::can('conversations.view')) {
+    try {
+        if (Auth::isSuperAdmin()) {
+            $conversationUnread = (int) Database::connection()->query('SELECT COALESCE(SUM(unread_count), 0) FROM conversations')->fetchColumn();
+        } elseif (Auth::tenantId()) {
+            $statement = Database::connection()->prepare('SELECT COALESCE(SUM(unread_count), 0) FROM conversations WHERE tenant_id = :tenant_id');
+            $statement->execute(['tenant_id' => Auth::tenantId()]);
+            $conversationUnread = (int) $statement->fetchColumn();
+        }
+    } catch (Throwable) {
+        $conversationUnread = 0;
+    }
+}
 $svgIcon = static function (string $name): string {
     $icons = [
         'dashboard' => '<path d="M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-8.5Z"/>',
@@ -31,6 +46,7 @@ $svgIcon = static function (string $name): string {
         'contacts' => '<path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/>',
         'crm' => '<path d="M4 6h16M4 12h16M4 18h16"/><path d="M8 6v12M16 6v12"/>',
         'tasks' => '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m4 6 1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
+        'reports' => '<path d="M4 19V5"/><path d="M8 17V9"/><path d="M12 17V7"/><path d="M16 17v-5"/><path d="M20 19H4"/>',
         'calendar' => '<path d="M7 3v4M17 3v4M4 9h16M5 5h14v16H5z"/>',
         'instance' => '<rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 9h6v6H9z"/>',
         'lock' => '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
@@ -57,7 +73,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=15.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=17.0')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -78,7 +94,7 @@ $svgIcon = static function (string $name): string {
                 <span class="nav-caption">Relacionamento</span>
             <?php endif; ?>
             <?php if (Auth::can('conversations.view')): ?>
-                <a class="nav-link<?= $isActive('/conversations') ?>" href="<?= View::e(Router::url('/conversations')) ?>"><?= $svgIcon('chat') ?><span>Conversas</span></a>
+                <a class="nav-link<?= $isActive('/conversations') ?>" href="<?= View::e(Router::url('/conversations')) ?>"><?= $svgIcon('chat') ?><span>Conversas</span><?= $notificationBadge($conversationUnread) ?></a>
             <?php endif; ?>
             <?php if (Auth::can('contacts.view')): ?>
                 <a class="nav-link<?= $isActive('/contacts') ?>" href="<?= View::e(Router::url('/contacts')) ?>"><?= $svgIcon('contacts') ?><span>Contatos</span></a>
@@ -91,6 +107,9 @@ $svgIcon = static function (string $name): string {
             <?php endif; ?>
             <?php if (Auth::can('calendar.view')): ?>
                 <a class="nav-link<?= $isActive('/calendar') ?>" href="<?= View::e(Router::url('/calendar')) ?>"><?= $svgIcon('calendar') ?><span>Agenda</span></a>
+            <?php endif; ?>
+            <?php if (Auth::can('reports.view')): ?>
+                <a class="nav-link<?= $isActive('/reports') ?>" href="<?= View::e(Router::url('/reports')) ?>"><?= $svgIcon('reports') ?><span>Relatórios</span></a>
             <?php endif; ?>
 
             <?php if (Auth::can('instances.view') || (!Auth::isSuperAdmin() && (Auth::can('agents.view') || Auth::can('automations.view')))): ?>
@@ -176,6 +195,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=15.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=17.0')) ?>" defer></script>
 </body>
 </html>

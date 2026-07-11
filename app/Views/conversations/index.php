@@ -22,6 +22,14 @@ $currentQuery = array_filter([
     'instance_id' => $filters['instance_id'] ?? 0,
     'tenant_id' => $filters['tenant_id'] ?? 0,
 ], static fn ($value) => $value !== '' && $value !== 0);
+$lastMessageId = 0;
+foreach ($messages as $message) {
+    $lastMessageId = max($lastMessageId, (int) ($message['id'] ?? 0));
+}
+$pollQuery = $currentQuery;
+if ($selected) {
+    $pollQuery['conversation_id'] = (int) $selected['id'];
+}
 ?>
 
 <form class="conversation-filters card" method="get" action="<?= View::e(Router::url('/conversations')) ?>">
@@ -65,7 +73,8 @@ $currentQuery = array_filter([
     <a class="btn btn-outline" href="<?= View::e(Router::url('/conversations')) ?>">Limpar</a>
 </form>
 
-<div class="conversation-workspace">
+<div class="conversation-workspace" data-conversation-realtime data-poll-url="<?= View::e(Router::url('/conversations/poll')) ?>" data-current-query="<?= View::e(http_build_query($pollQuery)) ?>" data-conversation-id="<?= (int) ($selected['id'] ?? 0) ?>" data-last-message-id="<?= (int) $lastMessageId ?>" data-base-title="<?= View::e($title ?? 'Conversas') ?>">
+    <div class="realtime-toast" data-realtime-toast hidden></div>
     <aside class="conversation-inbox card">
         <div class="conversation-panel-heading">
             <div>
@@ -98,7 +107,7 @@ $currentQuery = array_filter([
             </div>
         </div>
 
-        <div class="conversation-list">
+        <div class="conversation-list" data-conversation-list>
             <?php foreach ($conversations as $conversation): ?>
                 <?php
                 $query = $currentQuery;
@@ -106,18 +115,18 @@ $currentQuery = array_filter([
                 $isSelected = (int) ($selected['id'] ?? 0) === (int) $conversation['id'];
                 $initial = mb_strtoupper(mb_substr($conversation['contact_name'] ?: $conversation['phone'], 0, 1));
                 ?>
-                <a class="conversation-list-item<?= $isSelected ? ' is-selected' : '' ?>" href="<?= View::e(Router::url('/conversations?' . http_build_query($query))) ?>">
+                <a class="conversation-list-item<?= $isSelected ? ' is-selected' : '' ?>" data-conversation-item data-conversation-id="<?= (int) $conversation['id'] ?>" href="<?= View::e(Router::url('/conversations?' . http_build_query($query))) ?>">
                     <span class="conversation-avatar"><?= View::e($initial) ?></span>
                     <span class="conversation-summary">
                         <span class="conversation-title-row">
-                            <strong><?= View::e($conversation['contact_name'] ?: $conversation['phone']) ?></strong>
-                            <time><?= View::e($formatDate($conversation['last_message_at'], 'd/m H:i')) ?></time>
+                            <strong data-conversation-name><?= View::e($conversation['contact_name'] ?: $conversation['phone']) ?></strong>
+                            <time data-conversation-time><?= View::e($formatDate($conversation['last_message_at'], 'd/m H:i')) ?></time>
                         </span>
-                        <span class="conversation-preview"><?= View::e($conversation['last_message_preview'] ?: 'Sem mensagens') ?></span>
+                        <span class="conversation-preview" data-conversation-preview><?= View::e($conversation['last_message_preview'] ?: 'Sem mensagens') ?></span>
                         <span class="conversation-meta-row">
                             <span class="mini-badge mode-<?= View::e($conversation['attendance_mode']) ?>"><?= View::e($modeLabel[$conversation['attendance_mode']] ?? $conversation['attendance_mode']) ?></span>
                             <?php if (Auth::isSuperAdmin()): ?><small><?= View::e($conversation['tenant_name']) ?></small><?php endif; ?>
-                            <?php if ((int) $conversation['unread_count'] > 0): ?><b class="unread-count"><?= (int) $conversation['unread_count'] ?></b><?php endif; ?>
+                            <b class="unread-count" data-unread-count <?= (int) $conversation['unread_count'] > 0 ? '' : 'hidden' ?>><?= (int) $conversation['unread_count'] ?></b>
                         </span>
                     </span>
                 </a>
@@ -180,6 +189,7 @@ $currentQuery = array_filter([
                 <span class="mini-badge mode-<?= View::e($selected['attendance_mode']) ?>"><?= View::e($modeLabel[$selected['attendance_mode']] ?? $selected['attendance_mode']) ?></span>
                 <?php if ($selected['assigned_user_name']): ?><small>Responsável: <strong><?= View::e($selected['assigned_user_name']) ?></strong></small><?php endif; ?>
                 <?php if (Auth::isSuperAdmin()): ?><small>Empresa: <strong><?= View::e($selected['tenant_name']) ?></strong></small><?php endif; ?>
+                <span class="realtime-status" data-realtime-status>Atualização automática ativa</span>
                 <a class="refresh-chat" href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) $selected['id'])) ?>">Atualizar</a>
             </div>
 
@@ -201,10 +211,10 @@ $currentQuery = array_filter([
                 </div>
             <?php endif; ?>
 
-            <div class="chat-thread" data-chat-thread>
+            <div class="chat-thread" data-chat-thread data-last-message-id="<?= (int) $lastMessageId ?>">
                 <?php foreach ($messages as $message): ?>
                     <?php $outgoing = $message['direction'] === 'outgoing'; ?>
-                    <article class="message-row <?= $outgoing ? 'is-outgoing' : 'is-incoming' ?>">
+                    <article class="message-row <?= $outgoing ? 'is-outgoing' : 'is-incoming' ?>" data-message-id="<?= (int) $message['id'] ?>">
                         <div class="message-bubble <?= $message['status'] === 'failed' ? 'has-error' : '' ?>" data-sender="<?= View::e($message['sender_type']) ?>">
                             <?php if ($message['message_type'] !== 'text'): ?><span class="message-type"><?= View::e(ucfirst($message['message_type'])) ?></span><?php endif; ?>
                             <p><?= nl2br(View::e($message['content'] ?: '[Sem conteúdo]')) ?></p>
