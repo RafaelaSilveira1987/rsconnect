@@ -195,6 +195,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=17.1')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=17.2')) ?>" defer></script>
 </body>
 </html>
