@@ -15,6 +15,7 @@ use App\Core\View;
 use App\Services\AiAutomationService;
 use App\Services\AiModelService;
 use App\Services\EvolutionService;
+use App\Services\NotificationService;
 use PDO;
 use Throwable;
 
@@ -108,6 +109,7 @@ final class ConversationController
                 if ((int) $selected['unread_count'] > 0) {
                     $pdo->prepare('UPDATE conversations SET unread_count = 0 WHERE id = :id')
                         ->execute(['id' => $selectedId]);
+                    (new NotificationService())->markConversationRead((int) $selected['tenant_id'], $selectedId);
                     $selected['unread_count'] = 0;
                     foreach ($conversations as &$conversation) {
                         if ((int) $conversation['id'] === $selectedId) {
@@ -778,6 +780,7 @@ final class ConversationController
             if ($selected !== null) {
                 $pdo->prepare('UPDATE conversations SET unread_count = 0 WHERE id = :id')
                     ->execute(['id' => $selectedId]);
+                (new NotificationService())->markConversationRead((int) $selected['tenant_id'], $selectedId);
             }
         }
 

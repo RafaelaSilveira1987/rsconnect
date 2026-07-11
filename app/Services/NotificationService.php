@@ -95,6 +95,69 @@ final class NotificationService
         ]);
     }
 
+
+    public function markConversationRead(int $tenantId, int $conversationId): void
+    {
+        if ($tenantId <= 0 || $conversationId <= 0) {
+            return;
+        }
+
+        try {
+            Database::connection()->prepare(
+                'UPDATE client_notifications
+                 SET status = "read", read_at = COALESCE(read_at, NOW())
+                 WHERE tenant_id = :tenant_id
+                   AND status = "unread"
+                   AND reference_type = "conversation"
+                   AND reference_id = :conversation_id'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+            ]);
+        } catch (Throwable) {
+            // Mantém a leitura de conversas funcionando mesmo se a tabela de notificações ainda não existir.
+        }
+    }
+
+    public function createMessageNotification(
+        int $tenantId,
+        int $conversationId,
+        string $contactName,
+        string $phone,
+        string $messagePreview
+    ): void {
+        if ($tenantId <= 0 || $conversationId <= 0) {
+            return;
+        }
+
+        $label = trim($contactName) !== '' ? trim($contactName) : trim($phone);
+        if ($label === '') {
+            $label = 'Novo contato';
+        }
+
+        $preview = trim(preg_replace('/\s+/', ' ', $messagePreview) ?? '');
+        if ($preview === '') {
+            $preview = 'Nova mensagem recebida pelo WhatsApp.';
+        }
+
+        $this->create(
+            $tenantId,
+            'Nova mensagem recebida',
+            $label . ': ' . mb_substr($preview, 0, 180),
+            'info',
+            '/conversations?conversation_id=' . $conversationId,
+            'message',
+            'message.received',
+            'conversation',
+            $conversationId,
+            [
+                'contact_name' => $label,
+                'phone' => $phone,
+                'preview' => mb_substr($preview, 0, 240),
+            ]
+        );
+    }
+
     /** @param array<string,mixed> $payload */
     public function createBillingNotification(array $payload, ?int $invoiceId = null): void
     {

@@ -9,6 +9,7 @@ use App\Core\Env;
 use App\Services\AiAutomationService;
 use App\Services\AutomationWebhookService;
 use App\Services\CrmAutoService;
+use App\Services\NotificationService;
 use PDO;
 use Throwable;
 
@@ -124,6 +125,20 @@ final class EvolutionWebhookController
             }
 
             $pdo->commit();
+
+            if (!$fromMe && $inserted) {
+                try {
+                    (new NotificationService())->createMessageNotification(
+                        (int) $instance['tenant_id'],
+                        $conversationId,
+                        $pushName,
+                        $phone,
+                        $content
+                    );
+                } catch (Throwable) {
+                    // Notificação não pode interromper o recebimento da mensagem.
+                }
+            }
 
             $aiHandled = false;
             if (!$fromMe && $inserted) {

@@ -33,6 +33,7 @@ return static function (Router $router): void {
     $router->post('/logout', [AuthController::class, 'logout'], ['auth', 'csrf']);
 
     $router->get('/', [DashboardController::class, 'index'], ['auth']);
+    $router->get('/dashboard/live', [DashboardController::class, 'live'], ['auth']);
 
     $router->post('/webhooks/evolution', [EvolutionWebhookController::class, 'handle']);
     $router->post('/webhooks/n8n/callback', [N8nTemplateController::class, 'callback']);
