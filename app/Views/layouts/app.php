@@ -54,6 +54,7 @@ $svgIcon = static function (string $name): string {
         'contacts' => '<path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/>',
         'crm' => '<path d="M4 6h16M4 12h16M4 18h16"/><path d="M8 6v12M16 6v12"/>',
         'tasks' => '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m4 6 1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
+        'queue' => '<path d="M7 8h10M7 12h8M7 16h6"/><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M16 16l2 2 3-4"/>',
         'reports' => '<path d="M4 19V5"/><path d="M8 17V9"/><path d="M12 17V7"/><path d="M16 17v-5"/><path d="M20 19H4"/>',
         'calendar' => '<path d="M7 3v4M17 3v4M4 9h16M5 5h14v16H5z"/>',
         'instance' => '<rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 9h6v6H9z"/>',
@@ -82,7 +83,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=19.1')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=20')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -113,6 +114,9 @@ $svgIcon = static function (string $name): string {
             <?php endif; ?>
             <?php if (Auth::can('tasks.view')): ?>
                 <a class="nav-link<?= $isActive('/tasks') ?>" href="<?= View::e(Router::url('/tasks')) ?>"><?= $svgIcon('tasks') ?><span>Tarefas</span></a>
+            <?php endif; ?>
+            <?php if (Auth::can('queue.view')): ?>
+                <a class="nav-link<?= $isActive('/queue') ?>" href="<?= View::e(Router::url('/queue')) ?>"><?= $svgIcon('queue') ?><span>Fila de atendimento</span></a>
             <?php endif; ?>
             <?php if (Auth::can('calendar.view')): ?>
                 <a class="nav-link<?= $isActive('/calendar') ?>" href="<?= View::e(Router::url('/calendar')) ?>"><?= $svgIcon('calendar') ?><span>Agenda</span></a>
@@ -205,6 +209,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=19.1')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=20')) ?>" defer></script>
 </body>
 </html>

@@ -257,16 +257,17 @@ final class EvolutionWebhookController
         $statement = $pdo->prepare(
             'INSERT INTO conversations
                 (tenant_id, evolution_instance_id, contact_id, remote_jid, status,
-                 attendance_mode, unread_count, last_message_at, last_message_preview)
+                 attendance_mode, operational_status, priority, unread_count, last_message_at, last_message_preview)
              VALUES
                 (:tenant_id, :instance_id, :contact_id, :remote_jid, "open",
-                 "ai", :unread_count, :last_message_at, :preview)
+                 "ai", "new", "normal", :unread_count, :last_message_at, :preview)
              ON DUPLICATE KEY UPDATE
                 id = LAST_INSERT_ID(id),
                 contact_id = VALUES(contact_id),
                 last_message_at = VALUES(last_message_at),
                 last_message_preview = VALUES(last_message_preview),
                 unread_count = unread_count + VALUES(unread_count),
+                operational_status = IF(VALUES(unread_count) > 0 AND operational_status IN ("resolved", "archived"), "new", IF(VALUES(unread_count) > 0 AND assigned_user_id IS NULL, "waiting_agent", operational_status)),
                 status = IF(status = "closed", "open", status)'
         );
         $statement->execute([

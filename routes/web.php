@@ -22,6 +22,7 @@ use App\Controllers\N8nTemplateController;
 use App\Controllers\NotificationsController;
 use App\Controllers\PaymentGatewayController;
 use App\Controllers\ReportController;
+use App\Controllers\QueueController;
 use App\Controllers\BillingReminderController;
 use App\Controllers\PermissionController;
 use App\Controllers\TaskController;
@@ -44,6 +45,9 @@ return static function (Router $router): void {
     $router->post('/conversations/send', [ConversationController::class, 'send'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/mode', [ConversationController::class, 'setMode'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/status', [ConversationController::class, 'updateStatus'], ['auth', 'permission:conversations.manage', 'csrf']);
+    $router->post('/conversations/operational-status', [ConversationController::class, 'updateOperationalStatus'], ['auth', 'permission:conversations.manage', 'csrf']);
+    $router->post('/conversations/assign', [ConversationController::class, 'assign'], ['auth', 'permission:conversations.manage', 'csrf']);
+    $router->post('/conversations/note', [ConversationController::class, 'addInternalNote'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/contact', [ConversationController::class, 'updateContact'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/suggest', [ConversationController::class, 'suggest'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/reprocess-ai', [ConversationController::class, 'reprocessAi'], ['auth', 'permission:conversations.manage', 'csrf']);
@@ -64,6 +68,11 @@ return static function (Router $router): void {
 
     $router->get('/reports', [ReportController::class, 'index'], ['auth', 'permission:reports.view']);
     $router->get('/reports/export', [ReportController::class, 'export'], ['auth', 'permission:reports.view']);
+
+    $router->get('/queue', [QueueController::class, 'index'], ['auth', 'permission:queue.view']);
+    $router->post('/queue/departments', [QueueController::class, 'storeDepartment'], ['auth', 'permission:queue.manage', 'csrf']);
+    $router->post('/queue/departments/status', [QueueController::class, 'updateDepartmentStatus'], ['auth', 'permission:queue.manage', 'csrf']);
+    $router->post('/queue/assign', [QueueController::class, 'assign'], ['auth', 'permission:queue.manage', 'csrf']);
 
     $router->get('/notifications', [NotificationsController::class, 'index'], ['auth', 'permission:notifications.view']);
     $router->post('/notifications/read-all', [NotificationsController::class, 'markAllRead'], ['auth', 'permission:notifications.view', 'csrf']);

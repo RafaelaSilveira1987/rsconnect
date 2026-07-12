@@ -165,6 +165,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const unreadHidden = unread > 0 ? '' : ' hidden';
     const modeClass = escapeHtml(item.mode || 'ai');
     const modeLabel = item.mode === 'human' ? 'Humano' : (item.mode === 'paused' ? 'IA pausada' : 'IA ativa');
+    const queueStatus = item.operational_status || 'new';
+    const queueLabel = {
+      new: 'Novo',
+      waiting_agent: 'Aguardando atendimento',
+      in_service: 'Em atendimento',
+      waiting_customer: 'Aguardando cliente',
+      resolved: 'Resolvido',
+      archived: 'Arquivado'
+    }[queueStatus] || queueStatus;
     return `<a class="conversation-list-item${selectedClass}" data-conversation-item data-conversation-id="${Number(item.id)}" href="${escapeHtml(buildConversationUrl(item.id))}">
       <span class="conversation-avatar">${escapeHtml(initials(item.name, item.phone))}</span>
       <span class="conversation-summary">
@@ -175,6 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <span class="conversation-preview" data-conversation-preview>${escapeHtml(item.preview || 'Sem mensagens')}</span>
         <span class="conversation-meta-row">
           <span class="mini-badge mode-${modeClass}">${escapeHtml(modeLabel)}</span>
+          <span class="mini-badge queue-status-${escapeHtml(queueStatus)}">${escapeHtml(queueLabel)}</span>
           <small>${escapeHtml(item.tenant_name || item.instance_label || '')}</small>
           <b class="unread-count" data-unread-count${unreadHidden}>${unread}</b>
         </span>

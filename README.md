@@ -167,3 +167,35 @@ database/migrations/014_pagbank_billing_reminders.sql
 ## ZIP 14 — Templates de cobrança, notificações e UI
 
 Inclui templates n8n de cron e disparo de cobrança, central de notificações do cliente, badge no menu e remoção de emojis no layout principal. Execute `database/migrations/015_notifications_frontend_billing_templates.sql`.
+
+## ZIP 17 — Relatórios e Conversas quase em tempo real
+
+Adiciona relatórios operacionais, exportações CSV e atualização automática da tela de conversas com contador de não lidas.
+
+Migration:
+
+```sql
+database/migrations/016_reports_realtime_conversations.sql
+```
+
+## ZIP 18 — QR Code Evolution por empresa
+
+Adiciona geração de QR Code da Evolution API dentro da tela de Instâncias, com consulta de status e atualização do estado da conexão por empresa.
+
+Migration:
+
+```text
+database/migrations/017_evolution_qrcode_status.sql
+```
+
+## ZIP 19 — Onboarding do Cliente e Construtor de Prompt
+
+- Configuração inicial redesenhada.
+- Cliente pode gerar e editar o prompt do assistente por formulário guiado.
+- Integrações n8n, credenciais, webhooks e fluxos externos continuam restritos ao painel RS.
+- Migration: `database/migrations/018_onboarding_prompt_builder.sql`.
+
+
+## ZIP 20 — Equipe, Fila e Distribuição
+
+Adiciona fila de atendimento, setores, responsáveis por conversa, prioridade, status operacional e anotações internas. Execute `database/migrations/020_queue_team_distribution.sql` após o deploy.
