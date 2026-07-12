@@ -3,6 +3,7 @@
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\BrandingService;
 
 $selected = $selected ?? null;
 $companies = $companies ?? [];
@@ -13,6 +14,8 @@ $iconText = mb_substr((string) (($selected['brand_icon_text'] ?? '') ?: 'CL'), 0
 $primary = (string) (($selected['brand_primary_color'] ?? '') ?: '#146498');
 $secondary = (string) (($selected['brand_secondary_color'] ?? '') ?: '#631b7c');
 $accent = (string) (($selected['brand_accent_color'] ?? '') ?: '#01c5b6');
+$previewLogoUrl = BrandingService::assetUrl((string) ($selected['brand_logo_url'] ?? ''));
+$previewFaviconUrl = BrandingService::assetUrl((string) ($selected['brand_favicon_url'] ?? ''));
 ?>
 <section class="hero-card compact-hero hero-admin">
     <div>
@@ -48,7 +51,7 @@ $accent = (string) (($selected['brand_accent_color'] ?? '') ?: '#01c5b6');
         <?php if (!$selected): ?>
             <p class="empty-state">Cadastre uma empresa antes de configurar white label.</p>
         <?php else: ?>
-            <form method="post" action="<?= View::e(Router::url('/white-label/save')) ?>" class="white-label-form">
+            <form method="post" action="<?= View::e(Router::url('/white-label/save')) ?>" class="white-label-form" enctype="multipart/form-data">
                 <?= Csrf::input() ?>
                 <input type="hidden" name="tenant_id" value="<?= (int) $selected['id'] ?>">
 
@@ -82,15 +85,31 @@ $accent = (string) (($selected['brand_accent_color'] ?? '') ?: '#01c5b6');
                 </div>
 
                 <div class="form-grid two">
-                    <label class="field">
-                        <span>URL da logo</span>
-                        <input name="brand_logo_url" value="<?= $active('brand_logo_url') ?>" placeholder="https://.../logo.png">
+                    <label class="field upload-field">
+                        <span>Logo por arquivo</span>
+                        <input type="file" name="brand_logo_file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml">
+                        <small class="field-hint">PNG, JPG, WEBP ou SVG até 2MB. Ao enviar, substitui a URL atual.</small>
                     </label>
-                    <label class="field">
-                        <span>URL do favicon</span>
-                        <input name="brand_favicon_url" value="<?= $active('brand_favicon_url') ?>" placeholder="https://.../favicon.png">
+                    <label class="field upload-field">
+                        <span>Favicon por arquivo</span>
+                        <input type="file" name="brand_favicon_file" accept=".png,.jpg,.jpeg,.webp,.svg,.ico,image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon">
+                        <small class="field-hint">Ideal: PNG/ICO quadrado. Ao enviar, substitui a URL atual.</small>
                     </label>
                 </div>
+
+                <details class="advanced-fields">
+                    <summary>Usar imagem por URL externa</summary>
+                    <div class="form-grid two" style="margin-top:12px">
+                        <label class="field">
+                            <span>URL da logo</span>
+                            <input name="brand_logo_url" value="<?= $active('brand_logo_url') ?>" placeholder="https://.../logo.png ou /uploads/...">
+                        </label>
+                        <label class="field">
+                            <span>URL do favicon</span>
+                            <input name="brand_favicon_url" value="<?= $active('brand_favicon_url') ?>" placeholder="https://.../favicon.png ou /uploads/...">
+                        </label>
+                    </div>
+                </details>
 
                 <div class="form-divider">Cores</div>
                 <div class="form-grid three color-grid">
@@ -134,7 +153,7 @@ $accent = (string) (($selected['brand_accent_color'] ?? '') ?: '#01c5b6');
                 </label>
 
                 <div class="form-actions">
-                    <a class="btn btn-outline" href="<?= View::e(Router::url('/login?tenant=' . ($selected['slug'] ?? ''))) ?>" target="_blank">Pré-visualizar login</a>
+                    <a class="btn btn-outline" href="<?= View::e(Router::url('/white-label/preview?tenant_id=' . (int) ($selected['id'] ?? 0))) ?>" target="_blank">Pré-visualizar login</a>
                     <button class="btn btn-primary" type="submit">Salvar white label</button>
                 </div>
             </form>
@@ -154,8 +173,8 @@ $accent = (string) (($selected['brand_accent_color'] ?? '') ?: '#01c5b6');
             </div>
             <div class="brand-preview-shell">
                 <div class="brand-preview-sidebar">
-                    <?php if (($selected['brand_logo_url'] ?? '') !== ''): ?>
-                        <img src="<?= View::e($selected['brand_logo_url']) ?>" alt="Logo" class="brand-preview-logo">
+                    <?php if ($previewLogoUrl !== ''): ?>
+                        <img src="<?= View::e($previewLogoUrl) ?>" alt="Logo" class="brand-preview-logo">
                     <?php else: ?>
                         <span class="brand-preview-mark"><?= View::e($iconText) ?></span>
                     <?php endif; ?>
@@ -171,7 +190,7 @@ $accent = (string) (($selected['brand_accent_color'] ?? '') ?: '#01c5b6');
                     <div class="brand-preview-line short"></div>
                 </div>
             </div>
-            <p class="field-hint">A identidade é aplicada ao cliente logado e também pode ser vista na tela de login usando o parâmetro <code>?tenant=slug-da-empresa</code>.</p>
+            <p class="field-hint">A prévia abre sem passar pelo bloqueio de usuário logado. No cliente real, a identidade aparece para usuários da empresa e também pode funcionar por domínio personalizado.</p>
         </section>
 
         <section class="card">

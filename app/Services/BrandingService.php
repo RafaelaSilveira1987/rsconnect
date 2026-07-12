@@ -26,30 +26,48 @@ final class BrandingService
                 return $default;
             }
 
-            $brandName = trim((string) ($tenant['brand_name'] ?? ''));
-            $brandSubtitle = trim((string) ($tenant['brand_subtitle'] ?? ''));
-            $iconText = trim((string) ($tenant['brand_icon_text'] ?? ''));
-
-            return [
-                'enabled' => true,
-                'tenant_id' => (int) ($tenant['id'] ?? 0),
-                'app_name' => $brandName !== '' ? $brandName : (string) ($tenant['name'] ?? $default['app_name']),
-                'subtitle' => $brandSubtitle !== '' ? $brandSubtitle : 'Atendimento e CRM',
-                'icon_text' => $iconText !== '' ? mb_substr($iconText, 0, 4) : self::initials((string) ($tenant['name'] ?? 'RS')),
-                'logo_url' => trim((string) ($tenant['brand_logo_url'] ?? '')),
-                'favicon_url' => trim((string) ($tenant['brand_favicon_url'] ?? '')),
-                'primary' => self::color((string) ($tenant['brand_primary_color'] ?? ''), $default['primary']),
-                'secondary' => self::color((string) ($tenant['brand_secondary_color'] ?? ''), $default['secondary']),
-                'accent' => self::color((string) ($tenant['brand_accent_color'] ?? ''), $default['accent']),
-                'login_title' => trim((string) ($tenant['login_title'] ?? '')) ?: $default['login_title'],
-                'login_subtitle' => trim((string) ($tenant['login_subtitle'] ?? '')) ?: $default['login_subtitle'],
-                'footer_text' => trim((string) ($tenant['brand_footer_text'] ?? '')) ?: '',
-                'support_email' => trim((string) ($tenant['support_email'] ?? '')),
-                'show_powered_by' => (int) ($tenant['show_powered_by'] ?? 1) === 1,
-            ];
+            return self::buildFromTenant($tenant, $default, false);
         } catch (Throwable) {
             return $default;
         }
+    }
+
+
+
+    public static function forTenantId(int $tenantId): array
+    {
+        $default = self::defaults();
+        if ($tenantId < 1) {
+            return $default;
+        }
+
+        try {
+            $pdo = Database::connection();
+            $statement = $pdo->prepare('SELECT * FROM tenants WHERE id = :id LIMIT 1');
+            $statement->execute(['id' => $tenantId]);
+            $tenant = $statement->fetch(PDO::FETCH_ASSOC);
+            if (!$tenant) {
+                return $default;
+            }
+
+            return self::buildFromTenant($tenant, $default, true);
+        } catch (Throwable) {
+            return $default;
+        }
+    }
+
+    public static function assetUrl(string $path): string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return '';
+        }
+
+        if (preg_match('/^https?:\/\//i', $path) === 1 || str_starts_with($path, 'data:')) {
+            return $path;
+        }
+
+        return '/' . ltrim($path, '/');
     }
 
     public static function defaults(): array
@@ -70,6 +88,39 @@ final class BrandingService
             'footer_text' => 'RS Automação Digital',
             'support_email' => '',
             'show_powered_by' => true,
+        ];
+    }
+
+
+
+    private static function buildFromTenant(array $tenant, array $default, bool $allowInactivePreview): array
+    {
+        if (!$allowInactivePreview && (int) ($tenant['white_label_enabled'] ?? 0) !== 1) {
+            return $default;
+        }
+
+        $brandName = trim((string) ($tenant['brand_name'] ?? ''));
+        $brandSubtitle = trim((string) ($tenant['brand_subtitle'] ?? ''));
+        $iconText = trim((string) ($tenant['brand_icon_text'] ?? ''));
+        $logoUrl = self::assetUrl((string) ($tenant['brand_logo_url'] ?? ''));
+        $faviconUrl = self::assetUrl((string) ($tenant['brand_favicon_url'] ?? ''));
+
+        return [
+            'enabled' => true,
+            'tenant_id' => (int) ($tenant['id'] ?? 0),
+            'app_name' => $brandName !== '' ? $brandName : (string) ($tenant['name'] ?? $default['app_name']),
+            'subtitle' => $brandSubtitle !== '' ? $brandSubtitle : 'Atendimento e CRM',
+            'icon_text' => $iconText !== '' ? mb_substr($iconText, 0, 4) : self::initials((string) ($tenant['name'] ?? 'RS')),
+            'logo_url' => $logoUrl,
+            'favicon_url' => $faviconUrl,
+            'primary' => self::color((string) ($tenant['brand_primary_color'] ?? ''), $default['primary']),
+            'secondary' => self::color((string) ($tenant['brand_secondary_color'] ?? ''), $default['secondary']),
+            'accent' => self::color((string) ($tenant['brand_accent_color'] ?? ''), $default['accent']),
+            'login_title' => trim((string) ($tenant['login_title'] ?? '')) ?: $default['login_title'],
+            'login_subtitle' => trim((string) ($tenant['login_subtitle'] ?? '')) ?: $default['login_subtitle'],
+            'footer_text' => trim((string) ($tenant['brand_footer_text'] ?? '')) ?: '',
+            'support_email' => trim((string) ($tenant['support_email'] ?? '')),
+            'show_powered_by' => (int) ($tenant['show_powered_by'] ?? 1) === 1,
         ];
     }
 

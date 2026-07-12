@@ -9,6 +9,7 @@ use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\BrandingService;
 use PDO;
 use Throwable;
 
@@ -46,6 +47,16 @@ final class WhiteLabelController
             $this->redirect('/white-label');
         }
 
+        $pdo = Database::connection();
+        $current = null;
+        $statement = $pdo->prepare('SELECT * FROM tenants WHERE id = :id LIMIT 1');
+        $statement->execute(['id' => $tenantId]);
+        $current = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
+        if (!$current) {
+            Flash::set('error', 'Empresa não encontrada.');
+            $this->redirect('/white-label');
+        }
+
         $enabled = isset($_POST['white_label_enabled']) ? 1 : 0;
         $showPoweredBy = isset($_POST['show_powered_by']) ? 1 : 0;
         $brandName = trim((string) ($_POST['brand_name'] ?? ''));
@@ -62,9 +73,31 @@ final class WhiteLabelController
         $supportEmail = strtolower(trim((string) ($_POST['support_email'] ?? '')));
         $customDomain = strtolower(trim((string) ($_POST['custom_domain'] ?? '')));
 
+        if ($brandLogoUrl === '') {
+            $brandLogoUrl = (string) ($current['brand_logo_url'] ?? '');
+        }
+        if ($brandFaviconUrl === '') {
+            $brandFaviconUrl = (string) ($current['brand_favicon_url'] ?? '');
+        }
+
+        try {
+            $uploadedLogo = $this->uploadBrandAsset('brand_logo_file', $tenantId, 'logo');
+            if ($uploadedLogo !== null) {
+                $brandLogoUrl = $uploadedLogo;
+            }
+
+            $uploadedFavicon = $this->uploadBrandAsset('brand_favicon_file', $tenantId, 'favicon');
+            if ($uploadedFavicon !== null) {
+                $brandFaviconUrl = $uploadedFavicon;
+            }
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+            $this->redirect('/white-label?tenant_id=' . $tenantId);
+        }
+
         foreach ([$brandLogoUrl, $brandFaviconUrl] as $url) {
-            if ($url !== '' && !filter_var($url, FILTER_VALIDATE_URL)) {
-                Flash::set('error', 'Informe URLs completas para logo/favicon, incluindo https://.');
+            if ($url !== '' && !str_starts_with($url, '/uploads/') && !filter_var($url, FILTER_VALIDATE_URL)) {
+                Flash::set('error', 'Informe URLs completas para logo/favicon ou envie um arquivo de imagem.');
                 $this->redirect('/white-label?tenant_id=' . $tenantId);
             }
         }
@@ -74,13 +107,13 @@ final class WhiteLabelController
             $this->redirect('/white-label?tenant_id=' . $tenantId);
         }
 
-        if ($customDomain !== '' && !preg_match('/^[a-z0-9.-]+\\.[a-z]{2,}$/', $customDomain)) {
+        if ($customDomain !== '' && !preg_match('/^[a-z0-9.-]+\.[a-z]{2,}$/', $customDomain)) {
             Flash::set('error', 'Informe um domínio válido, sem https://. Exemplo: painel.cliente.com.br');
             $this->redirect('/white-label?tenant_id=' . $tenantId);
         }
 
         try {
-            $statement = Database::connection()->prepare(
+            $statement = $pdo->prepare(
                 'UPDATE tenants
                  SET white_label_enabled = :enabled,
                      brand_name = :brand_name,
@@ -119,12 +152,76 @@ final class WhiteLabelController
             ]);
 
             Audit::log('white_label.updated', ['enabled' => $enabled, 'custom_domain' => $customDomain], $tenantId);
-            Flash::set('success', 'White label atualizado para a empresa selecionada.');
+            Flash::set('success', $enabled === 1 ? 'White label ativado e atualizado.' : 'White label salvo como inativo.');
         } catch (Throwable) {
             Flash::set('error', 'Não foi possível salvar. Verifique se o domínio já não está em uso.');
         }
 
         $this->redirect('/white-label?tenant_id=' . $tenantId);
+    }
+
+    public function preview(): void
+    {
+        $tenantId = (int) ($_GET['tenant_id'] ?? 0);
+        $branding = BrandingService::forTenantId($tenantId);
+
+        View::render('auth.login', [
+            'title' => 'Pré-visualização do login',
+            'branding' => $branding,
+            'isPreview' => true,
+        ], 'guest');
+    }
+
+    private function uploadBrandAsset(string $field, int $tenantId, string $prefix): ?string
+    {
+        $file = $_FILES[$field] ?? null;
+        if (!is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            return null;
+        }
+
+        if ((int) $file['error'] !== UPLOAD_ERR_OK) {
+            throw new \RuntimeException('Não foi possível enviar a imagem. Tente novamente.');
+        }
+
+        $size = (int) ($file['size'] ?? 0);
+        if ($size < 1 || $size > 2 * 1024 * 1024) {
+            throw new \RuntimeException('A imagem deve ter no máximo 2MB.');
+        }
+
+        $tmpName = (string) ($file['tmp_name'] ?? '');
+        $mime = '';
+        if ($tmpName !== '' && is_file($tmpName)) {
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mime = (string) $finfo->file($tmpName);
+        }
+
+        $extensions = [
+            'image/png' => 'png',
+            'image/jpeg' => 'jpg',
+            'image/webp' => 'webp',
+            'image/svg+xml' => 'svg',
+            'image/x-icon' => 'ico',
+            'image/vnd.microsoft.icon' => 'ico',
+        ];
+
+        if (!isset($extensions[$mime])) {
+            throw new \RuntimeException('Envie uma imagem PNG, JPG, WEBP, SVG ou ICO.');
+        }
+
+        $publicPath = dirname(__DIR__, 2) . '/public';
+        $uploadDir = $publicPath . '/uploads/white-label/tenant-' . $tenantId;
+        if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
+            throw new \RuntimeException('Não foi possível criar a pasta de upload.');
+        }
+
+        $filename = $prefix . '-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $extensions[$mime];
+        $destination = $uploadDir . '/' . $filename;
+
+        if (!move_uploaded_file($tmpName, $destination)) {
+            throw new \RuntimeException('Não foi possível salvar a imagem enviada.');
+        }
+
+        return '/uploads/white-label/tenant-' . $tenantId . '/' . $filename;
     }
 
     private function color(string $value, string $fallback): string

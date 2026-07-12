@@ -99,6 +99,7 @@ return static function (Router $router): void {
 
     $router->get('/companies', [CompanyController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/white-label', [WhiteLabelController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/white-label/preview', [WhiteLabelController::class, 'preview'], ['auth', 'super_admin']);
     $router->post('/white-label/save', [WhiteLabelController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/companies', [CompanyController::class, 'store'], ['auth', 'super_admin', 'csrf']);
     $router->post('/companies/status', [CompanyController::class, 'updateStatus'], ['auth', 'super_admin', 'csrf']);

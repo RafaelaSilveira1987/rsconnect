@@ -26,7 +26,7 @@ RUN printf '%s\n' \
     '    CustomLog ${APACHE_LOG_DIR}/access.log combined' \
     '</VirtualHost>' \
     > /etc/apache2/sites-available/000-default.conf \
-    && mkdir -p /var/www/html/storage/logs /var/www/html/storage/cache \
-    && chown -R www-data:www-data /var/www/html/storage
+    && mkdir -p /var/www/html/storage/logs /var/www/html/storage/cache /var/www/html/public/uploads/white-label \
+    && chown -R www-data:www-data /var/www/html/storage /var/www/html/public/uploads
 
 EXPOSE 80

@@ -5,6 +5,9 @@ use App\Core\Router;
 use App\Core\View;
 ?>
 <div class="login-grid login-grid-pro">
+    <?php if (!empty($isPreview)): ?>
+        <div class="preview-login-banner">Pré-visualização do white label. Esta tela não altera o login real do usuário logado.</div>
+    <?php endif; ?>
     <section class="login-hero login-hero-pro">
         <span class="brand-large">
             <?php if (!empty($branding['logo_url'])): ?>

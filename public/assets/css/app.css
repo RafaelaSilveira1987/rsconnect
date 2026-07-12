@@ -2524,3 +2524,39 @@ body.modal-open {
     min-height: 140px;
   }
 }
+
+/* Hotfix 22.1 — White label: upload local e prévia isolada */
+.upload-field input[type="file"] {
+  width: 100%;
+  padding: 12px;
+  border: 1px dashed color-mix(in srgb, var(--rs-blue) 40%, var(--rs-border));
+  border-radius: 14px;
+  background: #f8fafc;
+  color: var(--rs-text);
+}
+.advanced-fields {
+  border: 1px solid var(--rs-border);
+  border-radius: 18px;
+  padding: 12px 14px;
+  background: #fbfdff;
+  margin: 12px 0 2px;
+}
+.advanced-fields summary {
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--rs-blue);
+}
+.preview-login-banner {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid rgba(20, 100, 152, .18);
+  border-radius: 18px;
+  background: rgba(255,255,255,.88);
+  color: #1f2a44;
+  font-weight: 800;
+  box-shadow: 0 16px 40px rgba(20, 60, 100, .14);
+}
