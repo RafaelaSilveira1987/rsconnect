@@ -8,6 +8,7 @@ use App\Controllers\AutomationController;
 use App\Controllers\BillingController;
 use App\Controllers\AuthController;
 use App\Controllers\CalendarController;
+use App\Controllers\CampaignController;
 use App\Controllers\CompanyController;
 use App\Controllers\ContactController;
 use App\Controllers\CrmController;
@@ -27,6 +28,7 @@ use App\Controllers\BillingReminderController;
 use App\Controllers\PermissionController;
 use App\Controllers\TaskController;
 use App\Controllers\UserController;
+use App\Controllers\WhiteLabelController;
 use App\Core\Router;
 
 return static function (Router $router): void {
@@ -58,6 +60,13 @@ return static function (Router $router): void {
     $router->post('/contacts/update', [ContactController::class, 'update'], ['auth', 'permission:contacts.manage', 'csrf']);
 
     $router->get('/crm', [CrmController::class, 'index'], ['auth', 'permission:crm.view']);
+
+    $router->get('/campaigns', [CampaignController::class, 'index'], ['auth', 'permission:campaigns.view']);
+    $router->post('/campaigns', [CampaignController::class, 'store'], ['auth', 'permission:campaigns.manage', 'csrf']);
+    $router->post('/campaigns/audience', [CampaignController::class, 'buildAudience'], ['auth', 'permission:campaigns.manage', 'csrf']);
+    $router->post('/campaigns/approve', [CampaignController::class, 'approve'], ['auth', 'permission:campaigns.manage', 'csrf']);
+    $router->post('/campaigns/dispatch', [CampaignController::class, 'dispatch'], ['auth', 'permission:campaigns.manage', 'csrf']);
+    $router->post('/campaigns/status', [CampaignController::class, 'status'], ['auth', 'permission:campaigns.manage', 'csrf']);
     $router->post('/crm/leads', [CrmController::class, 'store'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/leads/update', [CrmController::class, 'update'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/leads/move', [CrmController::class, 'move'], ['auth', 'permission:crm.manage', 'csrf']);
@@ -89,6 +98,8 @@ return static function (Router $router): void {
     $router->post('/implementations/save', [ImplementationController::class, 'save'], ['auth', 'super_admin', 'csrf']);
 
     $router->get('/companies', [CompanyController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/white-label', [WhiteLabelController::class, 'index'], ['auth', 'super_admin']);
+    $router->post('/white-label/save', [WhiteLabelController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/companies', [CompanyController::class, 'store'], ['auth', 'super_admin', 'csrf']);
     $router->post('/companies/status', [CompanyController::class, 'updateStatus'], ['auth', 'super_admin', 'csrf']);
     $router->get('/company-settings', [CompanyController::class, 'settings'], ['auth', 'permission:company.view']);

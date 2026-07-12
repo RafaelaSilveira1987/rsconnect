@@ -39,6 +39,7 @@ use App\Core\View;
                         </div>
                         <div class="action-row">
                             <a class="btn btn-soft" href="<?= View::e(Router::url('/company-settings?id=' . (int) $company['id'])) ?>">Editar dados</a>
+                            <a class="btn btn-outline" href="<?= View::e(Router::url('/white-label?tenant_id=' . (int) $company['id'])) ?>">White label</a>
                             <details class="compact-details">
                                 <summary class="btn btn-outline">Plano e status</summary>
                                 <form class="popover-form" method="post" action="<?= View::e(Router::url('/companies/status')) ?>">

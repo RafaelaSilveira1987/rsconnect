@@ -8,12 +8,13 @@ use App\Core\Auth;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\BrandingService;
 
 final class AuthController
 {
     public function showLogin(): void
     {
-        View::render('auth.login', ['title' => 'Entrar'], 'guest');
+        View::render('auth.login', ['title' => 'Entrar', 'branding' => BrandingService::forCurrentRequest()], 'guest');
     }
 
     public function login(): void

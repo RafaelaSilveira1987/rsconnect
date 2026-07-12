@@ -3,16 +3,29 @@
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\BrandingService;
 
 $flashes = Flash::all();
+$branding = $branding ?? BrandingService::forCurrentRequest();
 ?>
 <!doctype html>
 <html lang="pt-BR">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= View::e($title ?? 'Entrar') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css')) ?>">
+    <title><?= View::e($title ?? 'Entrar') ?> — <?= View::e($branding['app_name']) ?></title>
+    <?php if (!empty($branding['favicon_url'])): ?>
+        <link rel="icon" href="<?= View::e($branding['favicon_url']) ?>">
+    <?php endif; ?>
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=22')) ?>">
+    <style>
+        :root {
+            --rs-blue: <?= View::e($branding['primary']) ?>;
+            --rs-purple: <?= View::e($branding['secondary']) ?>;
+            --rs-cyan: <?= View::e($branding['accent']) ?>;
+            --rs-teal: <?= View::e($branding['accent']) ?>;
+        }
+    </style>
 </head>
 <body class="guest-page">
     <main class="guest-shell">

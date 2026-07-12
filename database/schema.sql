@@ -19,9 +19,25 @@ CREATE TABLE tenants (
     onboarding_step TINYINT UNSIGNED NOT NULL DEFAULT 1,
     onboarding_completed_at DATETIME NULL,
     onboarding_assistant_prompt_completed_at DATETIME NULL,
+    white_label_enabled TINYINT(1) NOT NULL DEFAULT 0,
+    brand_name VARCHAR(160) NULL,
+    brand_subtitle VARCHAR(190) NULL,
+    brand_logo_url VARCHAR(500) NULL,
+    brand_favicon_url VARCHAR(500) NULL,
+    brand_icon_text VARCHAR(8) NULL,
+    brand_primary_color CHAR(7) NOT NULL DEFAULT '#146498',
+    brand_secondary_color CHAR(7) NOT NULL DEFAULT '#631b7c',
+    brand_accent_color CHAR(7) NOT NULL DEFAULT '#01c5b6',
+    login_title VARCHAR(255) NULL,
+    login_subtitle TEXT NULL,
+    brand_footer_text VARCHAR(190) NULL,
+    support_email VARCHAR(190) NULL,
+    custom_domain VARCHAR(190) NULL,
+    show_powered_by TINYINT(1) NOT NULL DEFAULT 1,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_tenants_status (status)
+    INDEX idx_tenants_status (status),
+    UNIQUE KEY uq_tenants_custom_domain (custom_domain)
 ) ENGINE=InnoDB;
 
 CREATE TABLE users (

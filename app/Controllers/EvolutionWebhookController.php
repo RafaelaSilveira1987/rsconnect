@@ -94,6 +94,10 @@ final class EvolutionWebhookController
             $pdo->beginTransaction();
 
             $contactId = $this->upsertContact($pdo, $instance, $remoteJid, $phone, $pushName);
+            $optOutRequested = !$fromMe && $this->isOptOutMessage($content);
+            if ($optOutRequested) {
+                $this->markContactOptOut($pdo, $contactId);
+            }
             $conversationId = $this->upsertConversation(
                 $pdo,
                 $instance,
@@ -126,7 +130,7 @@ final class EvolutionWebhookController
             $pdo->commit();
 
             $aiHandled = false;
-            if (!$fromMe && $inserted) {
+            if (!$fromMe && $inserted && empty($optOutRequested)) {
                 (new AutomationWebhookService())->dispatch('message.received', [
                     'tenant_id' => (int) $instance['tenant_id'],
                     'instance_id' => (int) $instance['id'],
@@ -156,6 +160,23 @@ final class EvolutionWebhookController
                 : 422;
             $this->respond($status, ['ok' => false, 'error' => $exception->getMessage()]);
         }
+    }
+
+    private function isOptOutMessage(string $content): bool
+    {
+        $text = mb_strtolower(trim($content));
+        $text = preg_replace('/\s+/', ' ', $text) ?: $text;
+        return in_array($text, ['parar', 'sair', 'cancelar', 'remover', 'stop', 'não quero receber', 'nao quero receber'], true);
+    }
+
+    private function markContactOptOut(PDO $pdo, int $contactId): void
+    {
+        $statement = $pdo->prepare(
+            'UPDATE contacts
+             SET marketing_opt_in = 0, opt_out_at = NOW(), opt_out_reason = "Solicitado pelo WhatsApp"
+             WHERE id = :id'
+        );
+        $statement->execute(['id' => $contactId]);
     }
 
     private function normalizeEvent(string $event): string
