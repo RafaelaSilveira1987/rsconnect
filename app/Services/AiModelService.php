@@ -165,6 +165,11 @@ final class AiModelService
             'Se o lead pedir humano, atendente, suporte ou uma pessoa, sinalize transferência em vez de insistir no atendimento automático.',
         ];
 
+        $tenantId = (int) ($conversation['tenant_id'] ?? $contact['tenant_id'] ?? 0);
+        if ($tenantId > 0 && (new PreSchedulingService())->isEnabled($tenantId)) {
+            $rules[] = 'Quando o lead demonstrar intenção de agendar, coletar dia/período/horário preferido e modalidade. Não confirme horário, não diga que está marcado e não prometa link. Responda que a preferência será registrada e enviada para confirmação humana.';
+        }
+
         return trim($base . "\n\nContexto do contato:\n" .
             '- Nome: ' . ($contactName !== '' ? $contactName : 'não informado') . "\n" .
             '- Telefone: ' . ($contactPhone !== '' ? $contactPhone : 'não informado') . "\n" .

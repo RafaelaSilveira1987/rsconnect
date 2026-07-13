@@ -10,6 +10,8 @@ use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\PreSchedulingService;
+use App\Services\TenantModuleService;
 use PDO;
 use Throwable;
 
@@ -125,9 +127,15 @@ final class CompanyController
             $this->redirect(Auth::isSuperAdmin() ? '/companies' : '/');
         }
 
+        $preSchedulingService = new PreSchedulingService();
+        $moduleService = new TenantModuleService();
+
         View::render('companies.settings', [
             'title' => 'Configurações da empresa',
             'company' => $company,
+            'preScheduleSettings' => $preSchedulingService->settings($tenantId),
+            'availableModules' => TenantModuleService::modules(),
+            'moduleSettings' => $moduleService->settingsForTenant($tenantId),
         ]);
     }
 
@@ -177,6 +185,21 @@ final class CompanyController
             'segment' => $segment !== '' ? $segment : null,
             'id' => $tenantId,
         ]);
+
+        (new PreSchedulingService())->saveSettings($tenantId, [
+            'enabled' => isset($_POST['pre_schedule_enabled']),
+            'require_human_approval' => isset($_POST['pre_schedule_require_human_approval']),
+            'ai_can_suggest_slots' => isset($_POST['pre_schedule_ai_can_suggest_slots']),
+            'ai_can_confirm' => isset($_POST['pre_schedule_ai_can_confirm']),
+            'default_duration_minutes' => (int) ($_POST['pre_schedule_default_duration_minutes'] ?? 50),
+            'default_message' => trim((string) ($_POST['pre_schedule_default_message'] ?? '')),
+        ]);
+
+        (new TenantModuleService())->saveSettings(
+            $tenantId,
+            array_values(array_filter(array_map('strval', (array) ($_POST['module_visible'] ?? [])))),
+            array_values(array_filter(array_map('strval', (array) ($_POST['module_enabled'] ?? []))))
+        );
 
         if (!Auth::isSuperAdmin() && Auth::tenantId() === $tenantId) {
             Auth::refreshUser();

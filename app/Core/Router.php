@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Core;
 
+use App\Services\TenantModuleService;
+
 final class Router
 {
     private array $routes = [];
@@ -81,6 +83,17 @@ final class Router
                 Flash::set('error', 'Seu perfil não possui permissão para esta ação.');
                 $this->redirect('/');
                 return false;
+            }
+            if (!Auth::isSuperAdmin() && Auth::tenantId()) {
+                $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+                $moduleService = new TenantModuleService();
+                $module = $moduleService->moduleForPath($path);
+                if ($module !== null && !$moduleService->enabled((int) Auth::tenantId(), $module)) {
+                    http_response_code(403);
+                    Flash::set('warning', 'Este módulo está desativado para sua empresa.');
+                    $this->redirect('/');
+                    return false;
+                }
             }
         }
 

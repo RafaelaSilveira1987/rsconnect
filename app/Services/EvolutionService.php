@@ -29,27 +29,7 @@ final class EvolutionService
         return $this->request('POST', $endpoint, $payload);
     }
 
-    /**
-     * Solicita conexão da instância e retorna o QR Code/base64 ou pairingCode quando disponível.
-     */
-    public function connectInstance(): array
-    {
-        $endpoint = rtrim($this->baseUrl, '/') . '/instance/connect/' . rawurlencode($this->instanceName);
-
-        return $this->request('GET', $endpoint);
-    }
-
-    /**
-     * Consulta o estado atual da conexão na Evolution API.
-     */
-    public function connectionState(): array
-    {
-        $endpoint = rtrim($this->baseUrl, '/') . '/instance/connectionState/' . rawurlencode($this->instanceName);
-
-        return $this->request('GET', $endpoint);
-    }
-
-    private function request(string $method, string $url, ?array $payload = null): array
+    private function request(string $method, string $url, array $payload): array
     {
         $curl = curl_init($url);
         if ($curl === false) {
@@ -66,16 +46,13 @@ final class EvolutionService
                 'Accept: application/json',
                 'apikey: ' . $this->apiKey,
             ],
+            CURLOPT_POSTFIELDS => json_encode(
+                $payload,
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+            ),
             CURLOPT_SSL_VERIFYPEER => $this->verifySsl,
             CURLOPT_SSL_VERIFYHOST => $this->verifySsl ? 2 : 0,
         ];
-
-        if ($payload !== null) {
-            $options[CURLOPT_POSTFIELDS] = json_encode(
-                $payload,
-                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
-            );
-        }
 
         if ($this->verifySsl && $this->caBundle !== null && $this->caBundle !== '') {
             if (!is_file($this->caBundle) || !is_readable($this->caBundle)) {

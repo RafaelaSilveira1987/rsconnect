@@ -8,7 +8,6 @@ use App\Controllers\AutomationController;
 use App\Controllers\BillingController;
 use App\Controllers\AuthController;
 use App\Controllers\CalendarController;
-use App\Controllers\CampaignController;
 use App\Controllers\CompanyController;
 use App\Controllers\ContactController;
 use App\Controllers\CrmController;
@@ -16,19 +15,16 @@ use App\Controllers\ConversationController;
 use App\Controllers\EvolutionWebhookController;
 use App\Controllers\DashboardController;
 use App\Controllers\InstanceController;
-use App\Controllers\ImplementationController;
 use App\Controllers\OnboardingController;
 use App\Controllers\N8nFlowController;
 use App\Controllers\N8nTemplateController;
 use App\Controllers\NotificationsController;
 use App\Controllers\PaymentGatewayController;
 use App\Controllers\ReportController;
-use App\Controllers\QueueController;
 use App\Controllers\BillingReminderController;
 use App\Controllers\PermissionController;
 use App\Controllers\TaskController;
 use App\Controllers\UserController;
-use App\Controllers\WhiteLabelController;
 use App\Core\Router;
 
 return static function (Router $router): void {
@@ -47,9 +43,6 @@ return static function (Router $router): void {
     $router->post('/conversations/send', [ConversationController::class, 'send'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/mode', [ConversationController::class, 'setMode'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/status', [ConversationController::class, 'updateStatus'], ['auth', 'permission:conversations.manage', 'csrf']);
-    $router->post('/conversations/operational-status', [ConversationController::class, 'updateOperationalStatus'], ['auth', 'permission:conversations.manage', 'csrf']);
-    $router->post('/conversations/assign', [ConversationController::class, 'assign'], ['auth', 'permission:conversations.manage', 'csrf']);
-    $router->post('/conversations/note', [ConversationController::class, 'addInternalNote'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/contact', [ConversationController::class, 'updateContact'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/suggest', [ConversationController::class, 'suggest'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/reprocess-ai', [ConversationController::class, 'reprocessAi'], ['auth', 'permission:conversations.manage', 'csrf']);
@@ -60,13 +53,6 @@ return static function (Router $router): void {
     $router->post('/contacts/update', [ContactController::class, 'update'], ['auth', 'permission:contacts.manage', 'csrf']);
 
     $router->get('/crm', [CrmController::class, 'index'], ['auth', 'permission:crm.view']);
-
-    $router->get('/campaigns', [CampaignController::class, 'index'], ['auth', 'permission:campaigns.view']);
-    $router->post('/campaigns', [CampaignController::class, 'store'], ['auth', 'permission:campaigns.manage', 'csrf']);
-    $router->post('/campaigns/audience', [CampaignController::class, 'buildAudience'], ['auth', 'permission:campaigns.manage', 'csrf']);
-    $router->post('/campaigns/approve', [CampaignController::class, 'approve'], ['auth', 'permission:campaigns.manage', 'csrf']);
-    $router->post('/campaigns/dispatch', [CampaignController::class, 'dispatch'], ['auth', 'permission:campaigns.manage', 'csrf']);
-    $router->post('/campaigns/status', [CampaignController::class, 'status'], ['auth', 'permission:campaigns.manage', 'csrf']);
     $router->post('/crm/leads', [CrmController::class, 'store'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/leads/update', [CrmController::class, 'update'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/leads/move', [CrmController::class, 'move'], ['auth', 'permission:crm.manage', 'csrf']);
@@ -78,11 +64,6 @@ return static function (Router $router): void {
     $router->get('/reports', [ReportController::class, 'index'], ['auth', 'permission:reports.view']);
     $router->get('/reports/export', [ReportController::class, 'export'], ['auth', 'permission:reports.view']);
 
-    $router->get('/queue', [QueueController::class, 'index'], ['auth', 'permission:queue.view']);
-    $router->post('/queue/departments', [QueueController::class, 'storeDepartment'], ['auth', 'permission:queue.manage', 'csrf']);
-    $router->post('/queue/departments/status', [QueueController::class, 'updateDepartmentStatus'], ['auth', 'permission:queue.manage', 'csrf']);
-    $router->post('/queue/assign', [QueueController::class, 'assign'], ['auth', 'permission:queue.manage', 'csrf']);
-
     $router->get('/notifications', [NotificationsController::class, 'index'], ['auth', 'permission:notifications.view']);
     $router->post('/notifications/read-all', [NotificationsController::class, 'markAllRead'], ['auth', 'permission:notifications.view', 'csrf']);
 
@@ -93,14 +74,7 @@ return static function (Router $router): void {
     $router->post('/tasks', [TaskController::class, 'store'], ['auth', 'permission:tasks.manage', 'csrf']);
     $router->post('/tasks/status', [TaskController::class, 'updateStatus'], ['auth', 'permission:tasks.manage', 'csrf']);
 
-
-    $router->get('/implementations', [ImplementationController::class, 'index'], ['auth', 'super_admin']);
-    $router->post('/implementations/save', [ImplementationController::class, 'save'], ['auth', 'super_admin', 'csrf']);
-
     $router->get('/companies', [CompanyController::class, 'index'], ['auth', 'super_admin']);
-    $router->get('/white-label', [WhiteLabelController::class, 'index'], ['auth', 'super_admin']);
-    $router->get('/white-label/preview', [WhiteLabelController::class, 'preview'], ['auth', 'super_admin']);
-    $router->post('/white-label/save', [WhiteLabelController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/companies', [CompanyController::class, 'store'], ['auth', 'super_admin', 'csrf']);
     $router->post('/companies/status', [CompanyController::class, 'updateStatus'], ['auth', 'super_admin', 'csrf']);
     $router->get('/company-settings', [CompanyController::class, 'settings'], ['auth', 'permission:company.view']);
@@ -121,8 +95,6 @@ return static function (Router $router): void {
     $router->get('/instances', [InstanceController::class, 'index'], ['auth', 'permission:instances.view']);
     $router->post('/instances', [InstanceController::class, 'store'], ['auth', 'permission:instances.manage', 'csrf']);
     $router->post('/instances/test', [InstanceController::class, 'sendTest'], ['auth', 'permission:instances.manage', 'csrf']);
-    $router->post('/instances/qrcode', [InstanceController::class, 'qrCode'], ['auth', 'permission:instances.manage', 'csrf']);
-    $router->post('/instances/status', [InstanceController::class, 'status'], ['auth', 'permission:instances.view', 'csrf']);
 
     $router->get('/agents', [AgentController::class, 'index'], ['auth', 'permission:agents.view']);
     $router->get('/ai-credentials', [AiCredentialController::class, 'index'], ['auth', 'super_admin']);

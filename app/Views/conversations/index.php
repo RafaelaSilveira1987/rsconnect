@@ -15,19 +15,15 @@ $formatDate = static function (?string $date, string $format = 'd/m/Y H:i'): str
 };
 $modeLabel = ['ai' => 'IA ativa', 'human' => 'Humano', 'paused' => 'IA pausada'];
 $statusLabel = ['open' => 'Aberta', 'pending' => 'Pendente', 'closed' => 'Encerrada'];
-$operationalStatusLabel = ['new' => 'Novo', 'waiting_agent' => 'Aguardando atendimento', 'in_service' => 'Em atendimento', 'waiting_customer' => 'Aguardando cliente', 'resolved' => 'Resolvido', 'archived' => 'Arquivado'];
-$priorityLabel = ['low' => 'Baixa', 'normal' => 'Normal', 'high' => 'Alta', 'urgent' => 'Urgente'];
 $currentQuery = array_filter([
     'search' => $filters['search'] ?? '',
     'status' => $filters['status'] ?? '',
     'mode' => $filters['mode'] ?? '',
-    'operational_status' => $filters['operational_status'] ?? '',
-    'department_id' => $filters['department_id'] ?? 0,
-    'assigned_user_id' => $filters['assigned_user_id'] ?? 0,
-    'priority' => $filters['priority'] ?? '',
     'instance_id' => $filters['instance_id'] ?? 0,
     'tenant_id' => $filters['tenant_id'] ?? 0,
-], static fn ($value) => $value !== '' && $value !== 0);
+    'scope' => $filters['scope'] ?? '',
+    'intent' => $filters['intent'] ?? '',
+], static fn ($value) => $value !== '' && $value !== 0 && $value !== 'tenant');
 $lastMessageId = 0;
 foreach ($messages as $message) {
     $lastMessageId = max($lastMessageId, (int) ($message['id'] ?? 0));
@@ -39,6 +35,7 @@ if ($selected) {
 ?>
 
 <form class="conversation-filters card" method="get" action="<?= View::e(Router::url('/conversations')) ?>">
+    <?php if (($filters['intent'] ?? '') === 'agenda'): ?><input type="hidden" name="intent" value="agenda"><?php endif; ?>
     <div class="filter-search">
         <span class="search-icon" aria-hidden="true"></span>
         <input name="search" value="<?= View::e($filters['search'] ?? '') ?>" placeholder="Buscar por nome, telefone ou mensagem">
@@ -46,7 +43,7 @@ if ($selected) {
 
     <?php if (Auth::isSuperAdmin()): ?>
         <select name="tenant_id" aria-label="Filtrar por empresa">
-            <option value="">Todas as empresas</option>
+            <option value="">Selecione uma empresa</option>
             <?php foreach ($tenants as $tenant): ?>
                 <option value="<?= (int) $tenant['id'] ?>" <?= (int) ($filters['tenant_id'] ?? 0) === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option>
             <?php endforeach; ?>
@@ -56,7 +53,10 @@ if ($selected) {
     <select name="instance_id" aria-label="Filtrar por instância">
         <option value="">Todas as instâncias</option>
         <?php foreach ($instances as $instance): ?>
-            <?php if (Auth::isSuperAdmin() && (int) ($filters['tenant_id'] ?? 0) > 0 && (int) $instance['tenant_id'] !== (int) $filters['tenant_id']) continue; ?>
+            <?php
+            if (Auth::isSuperAdmin() && ($filters['scope'] ?? 'tenant') !== 'all' && (int) ($filters['tenant_id'] ?? 0) < 1) continue;
+            if (Auth::isSuperAdmin() && (int) ($filters['tenant_id'] ?? 0) > 0 && (int) $instance['tenant_id'] !== (int) $filters['tenant_id']) continue;
+            ?>
             <option value="<?= (int) $instance['id'] ?>" <?= (int) ($filters['instance_id'] ?? 0) === (int) $instance['id'] ? 'selected' : '' ?>><?= View::e($instance['name']) ?></option>
         <?php endforeach; ?>
     </select>
@@ -75,21 +75,11 @@ if ($selected) {
         <?php endforeach; ?>
     </select>
 
-    <select name="operational_status" aria-label="Filtrar por fila">
-        <option value="">Toda a fila</option>
-        <?php foreach ($operationalStatusLabel as $value => $label): ?>
-            <option value="<?= View::e($value) ?>" <?= ($filters['operational_status'] ?? '') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
-        <?php endforeach; ?>
-    </select>
-
-    <select name="priority" aria-label="Filtrar por prioridade">
-        <option value="">Todas as prioridades</option>
-        <?php foreach ($priorityLabel as $value => $label): ?>
-            <option value="<?= View::e($value) ?>" <?= ($filters['priority'] ?? '') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
-        <?php endforeach; ?>
-    </select>
-
+    <?php if (($filters['intent'] ?? '') === 'agenda'): ?><span class="badge badge-info">Intenção de agenda</span><?php endif; ?>
     <button class="btn btn-secondary" type="submit">Filtrar</button>
+    <?php if (Auth::isSuperAdmin()): ?>
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/conversations?scope=all')) ?>">Visão global</a>
+    <?php endif; ?>
     <a class="btn btn-outline" href="<?= View::e(Router::url('/conversations')) ?>">Limpar</a>
 </form>
 
@@ -113,6 +103,10 @@ if ($selected) {
                                 <select name="instance_id" required>
                                     <option value="">Selecione</option>
                                     <?php foreach ($instances as $instance): ?>
+                                        <?php
+                                        if (Auth::isSuperAdmin() && ($filters['scope'] ?? 'tenant') !== 'all' && (int) ($filters['tenant_id'] ?? 0) < 1) continue;
+                                        if (Auth::isSuperAdmin() && (int) ($filters['tenant_id'] ?? 0) > 0 && (int) $instance['tenant_id'] !== (int) $filters['tenant_id']) continue;
+                                        ?>
                                         <option value="<?= (int) $instance['id'] ?>"><?= View::e((Auth::isSuperAdmin() ? ($instance['tenant_name'] ?? '') . ' — ' : '') . $instance['name']) ?></option>
                                     <?php endforeach; ?>
                                 </select>
@@ -145,7 +139,6 @@ if ($selected) {
                         <span class="conversation-preview" data-conversation-preview><?= View::e($conversation['last_message_preview'] ?: 'Sem mensagens') ?></span>
                         <span class="conversation-meta-row">
                             <span class="mini-badge mode-<?= View::e($conversation['attendance_mode']) ?>"><?= View::e($modeLabel[$conversation['attendance_mode']] ?? $conversation['attendance_mode']) ?></span>
-                            <?php if (!empty($conversation['operational_status'])): ?><span class="mini-badge queue-status-<?= View::e($conversation['operational_status']) ?>"><?= View::e($operationalStatusLabel[$conversation['operational_status']] ?? $conversation['operational_status']) ?></span><?php endif; ?>
                             <?php if (Auth::isSuperAdmin()): ?><small><?= View::e($conversation['tenant_name']) ?></small><?php endif; ?>
                             <b class="unread-count" data-unread-count <?= (int) $conversation['unread_count'] > 0 ? '' : 'hidden' ?>><?= (int) $conversation['unread_count'] ?></b>
                         </span>
@@ -154,8 +147,13 @@ if ($selected) {
             <?php endforeach; ?>
             <?php if (!$conversations): ?>
                 <div class="empty-state conversation-empty">
-                    <strong>Nenhuma conversa encontrada.</strong>
-                    <span>Configure o webhook da Evolution para receber mensagens.</span>
+                    <?php if (Auth::isSuperAdmin() && ($filters['scope'] ?? 'tenant') !== 'all' && (int) ($filters['tenant_id'] ?? 0) < 1): ?>
+                        <strong>Selecione uma empresa.</strong>
+                        <span>Por segurança, o Super Admin não carrega conversas de todos os clientes automaticamente.</span>
+                    <?php else: ?>
+                        <strong>Nenhuma conversa encontrada.</strong>
+                        <span>Configure o webhook da Evolution para receber mensagens.</span>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
         </div>
@@ -175,7 +173,6 @@ if ($selected) {
                 <?php if ($canManage): ?>
                     <div class="chat-actions">
                         <button class="btn btn-outline btn-small" type="button" data-toggle-panel="conversation-details">Dados do lead</button>
-                        <a class="btn btn-outline btn-small" href="<?= View::e(Router::url('/queue?assigned_user_id=' . (int) ($selected['assigned_user_id'] ?? 0))) ?>">Ver fila</a>
                         <?php if ($selected['attendance_mode'] !== 'human'): ?>
                             <form method="post" action="<?= View::e(Router::url('/conversations/mode')) ?>">
                                 <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="mode" value="human">
@@ -209,8 +206,6 @@ if ($selected) {
             <div class="chat-state-bar">
                 <span class="badge badge-<?= View::e($selected['status']) ?>"><?= View::e($statusLabel[$selected['status']] ?? $selected['status']) ?></span>
                 <span class="mini-badge mode-<?= View::e($selected['attendance_mode']) ?>"><?= View::e($modeLabel[$selected['attendance_mode']] ?? $selected['attendance_mode']) ?></span>
-                <span class="mini-badge queue-status-<?= View::e($selected['operational_status'] ?? 'new') ?>"><?= View::e($operationalStatusLabel[$selected['operational_status'] ?? 'new'] ?? 'Novo') ?></span>
-                <span class="mini-badge priority-<?= View::e($selected['priority'] ?? 'normal') ?>">Prioridade: <?= View::e($priorityLabel[$selected['priority'] ?? 'normal'] ?? 'Normal') ?></span>
                 <?php if ($selected['assigned_user_name']): ?><small>Responsável: <strong><?= View::e($selected['assigned_user_name']) ?></strong></small><?php endif; ?>
                 <?php if (Auth::isSuperAdmin()): ?><small>Empresa: <strong><?= View::e($selected['tenant_name']) ?></strong></small><?php endif; ?>
                 <span class="realtime-status" data-realtime-status>Atualização automática ativa</span>
@@ -304,60 +299,6 @@ if ($selected) {
                             <?php endforeach; ?>
                         </div>
                     </section>
-
-                    <section class="drawer-section drawer-status-card">
-                        <div class="drawer-section-title">
-                            <div>
-                                <span class="eyebrow">Fila</span>
-                                <h3>Distribuição e prioridade</h3>
-                            </div>
-                        </div>
-                        <form class="drawer-form" method="post" action="<?= View::e(Router::url('/conversations/assign')) ?>">
-                            <?= Csrf::input() ?>
-                            <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
-                            <div class="drawer-form-grid">
-                                <label class="field"><span>Setor</span>
-                                    <select name="department_id">
-                                        <option value="">Sem setor</option>
-                                        <?php foreach ($departments as $department): ?>
-                                            <option value="<?= (int) $department['id'] ?>" <?= (int) ($selected['department_id'] ?? 0) === (int) $department['id'] ? 'selected' : '' ?>><?= View::e($department['name']) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </label>
-                                <label class="field"><span>Responsável</span>
-                                    <select name="assigned_user_id">
-                                        <option value="">Sem responsável</option>
-                                        <?php foreach ($team as $member): ?>
-                                            <option value="<?= (int) $member['id'] ?>" <?= (int) ($selected['assigned_user_id'] ?? 0) === (int) $member['id'] ? 'selected' : '' ?>><?= View::e($member['name']) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </label>
-                            </div>
-                            <button class="btn btn-primary btn-block" type="submit">Atualizar distribuição</button>
-                        </form>
-
-                        <form class="drawer-form" method="post" action="<?= View::e(Router::url('/conversations/operational-status')) ?>">
-                            <?= Csrf::input() ?>
-                            <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
-                            <div class="drawer-form-grid">
-                                <label class="field"><span>Status da fila</span>
-                                    <select name="operational_status">
-                                        <?php foreach ($operationalStatusLabel as $value => $label): ?>
-                                            <option value="<?= View::e($value) ?>" <?= ($selected['operational_status'] ?? 'new') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </label>
-                                <label class="field"><span>Prioridade</span>
-                                    <select name="priority">
-                                        <?php foreach ($priorityLabel as $value => $label): ?>
-                                            <option value="<?= View::e($value) ?>" <?= ($selected['priority'] ?? 'normal') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </label>
-                            </div>
-                            <button class="btn btn-outline btn-block" type="submit">Atualizar status da fila</button>
-                        </form>
-                    </section>
                 <?php endif; ?>
 
                 <form class="lead-form drawer-form" method="post" action="<?= View::e(Router::url('/conversations/contact')) ?>">
@@ -393,32 +334,6 @@ if ($selected) {
                         </div>
                     <?php endif; ?>
                 </form>
-
-                <section class="drawer-section internal-notes-card">
-                    <div class="drawer-section-title">
-                        <div>
-                            <span class="eyebrow">Equipe</span>
-                            <h3>Anotações internas</h3>
-                        </div>
-                    </div>
-                    <?php if ($canManage): ?>
-                        <form class="drawer-form" method="post" action="<?= View::e(Router::url('/conversations/note')) ?>">
-                            <?= Csrf::input() ?>
-                            <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
-                            <label class="field drawer-span"><span>Nota que o cliente não vê</span><textarea name="note" rows="3" placeholder="Ex.: retornar amanhã, cliente pediu financeiro, revisar proposta..."></textarea></label>
-                            <button class="btn btn-outline btn-block" type="submit">Adicionar anotação</button>
-                        </form>
-                    <?php endif; ?>
-                    <div class="internal-note-list">
-                        <?php foreach ($internalNotes as $note): ?>
-                            <article class="internal-note-item">
-                                <p><?= nl2br(View::e($note['note'])) ?></p>
-                                <small><?= View::e($note['user_name'] ?: 'Equipe') ?> · <?= View::e($formatDate($note['created_at'], 'd/m H:i')) ?></small>
-                            </article>
-                        <?php endforeach; ?>
-                        <?php if (!$internalNotes): ?><p class="muted-text">Nenhuma anotação interna registrada.</p><?php endif; ?>
-                    </div>
-                </section>
 
                 <details class="drawer-section drawer-collapsed-card">
                     <summary>

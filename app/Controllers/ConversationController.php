@@ -27,13 +27,16 @@ final class ConversationController
             'search' => trim((string) ($_GET['search'] ?? '')),
             'status' => trim((string) ($_GET['status'] ?? '')),
             'mode' => trim((string) ($_GET['mode'] ?? '')),
-            'operational_status' => trim((string) ($_GET['operational_status'] ?? '')),
-            'department_id' => (int) ($_GET['department_id'] ?? 0),
-            'assigned_user_id' => (int) ($_GET['assigned_user_id'] ?? 0),
-            'priority' => trim((string) ($_GET['priority'] ?? '')),
             'instance_id' => (int) ($_GET['instance_id'] ?? 0),
             'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
+            'scope' => Auth::isSuperAdmin() ? (string) ($_GET['scope'] ?? 'tenant') : 'tenant',
+            'intent' => trim((string) ($_GET['intent'] ?? '')),
         ];
+        if (!Auth::isSuperAdmin()) {
+            $filters['scope'] = 'tenant';
+        } elseif ($filters['scope'] !== 'all') {
+            $filters['scope'] = 'tenant';
+        }
 
         $conditions = [];
         $params = [];
@@ -41,9 +44,14 @@ final class ConversationController
         if (!Auth::isSuperAdmin()) {
             $conditions[] = 'c.tenant_id = :tenant_scope';
             $params['tenant_scope'] = Auth::tenantId();
+        } elseif ($filters['scope'] === 'all') {
+            // Visão global explícita do Super Admin. Não é usada por padrão para evitar misturar atendimentos de clientes.
         } elseif ($filters['tenant_id'] > 0) {
             $conditions[] = 'c.tenant_id = :tenant_scope';
             $params['tenant_scope'] = $filters['tenant_id'];
+        } else {
+            // Super Admin precisa escolher uma empresa antes de ver conversas.
+            $conditions[] = '1 = 0';
         }
 
         if ($filters['search'] !== '') {
@@ -61,43 +69,25 @@ final class ConversationController
             $params['mode'] = $filters['mode'];
         }
 
-        if (in_array($filters['operational_status'], ['new', 'waiting_agent', 'in_service', 'waiting_customer', 'resolved', 'archived'], true)) {
-            $conditions[] = 'c.operational_status = :operational_status';
-            $params['operational_status'] = $filters['operational_status'];
-        }
-
-        if (in_array($filters['priority'], ['low', 'normal', 'high', 'urgent'], true)) {
-            $conditions[] = 'c.priority = :priority';
-            $params['priority'] = $filters['priority'];
-        }
-
-        if ($filters['department_id'] > 0) {
-            $conditions[] = 'c.department_id = :department_id';
-            $params['department_id'] = $filters['department_id'];
-        }
-
-        if ($filters['assigned_user_id'] > 0) {
-            $conditions[] = 'c.assigned_user_id = :assigned_user_id';
-            $params['assigned_user_id'] = $filters['assigned_user_id'];
-        }
-
         if ($filters['instance_id'] > 0) {
             $conditions[] = 'c.evolution_instance_id = :instance_id';
             $params['instance_id'] = $filters['instance_id'];
+        }
+
+        if ($filters['intent'] === 'agenda') {
+            $conditions[] = 'c.agenda_intent_detected = 1';
         }
 
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
         $statement = $pdo->prepare(
             'SELECT c.*, ct.name AS contact_name, ct.phone, ct.email, ct.company, ct.notes, ct.tags_json,
                     ct.status AS contact_status, i.name AS instance_label, i.instance_name,
-                    t.name AS tenant_name, u.name AS assigned_user_name,
-                    d.name AS department_name, d.color AS department_color
+                    t.name AS tenant_name, u.name AS assigned_user_name
              FROM conversations c
              INNER JOIN contacts ct ON ct.id = c.contact_id
              INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id
              INNER JOIN tenants t ON t.id = c.tenant_id
              LEFT JOIN users u ON u.id = c.assigned_user_id
-             LEFT JOIN service_departments d ON d.id = c.department_id
              ' . $where . '
              ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
              LIMIT 100'
@@ -113,11 +103,13 @@ final class ConversationController
         $selected = null;
         $messages = [];
         $team = [];
-        $departments = [];
-        $internalNotes = [];
 
         if ($selectedId > 0) {
             $selected = $this->findConversation($selectedId);
+            if ($selected !== null && Auth::isSuperAdmin() && !$this->conversationAllowedInFilters($selected, $filters)) {
+                $selected = null;
+                $selectedId = 0;
+            }
             if ($selected !== null) {
                 $messageStatement = $pdo->prepare(
                     'SELECT * FROM (
@@ -154,26 +146,6 @@ final class ConversationController
                 );
                 $teamStatement->execute(['tenant_id' => $selected['tenant_id']]);
                 $team = $teamStatement->fetchAll(PDO::FETCH_ASSOC);
-
-                $departmentStatement = $pdo->prepare(
-                    'SELECT id, name, color
-                     FROM service_departments
-                     WHERE tenant_id = :tenant_id AND status = "active"
-                     ORDER BY name'
-                );
-                $departmentStatement->execute(['tenant_id' => $selected['tenant_id']]);
-                $departments = $departmentStatement->fetchAll(PDO::FETCH_ASSOC);
-
-                $noteStatement = $pdo->prepare(
-                    'SELECT n.*, u.name AS user_name
-                     FROM conversation_internal_notes n
-                     LEFT JOIN users u ON u.id = n.user_id
-                     WHERE n.conversation_id = :conversation_id
-                     ORDER BY n.created_at DESC, n.id DESC
-                     LIMIT 30'
-                );
-                $noteStatement->execute(['conversation_id' => $selectedId]);
-                $internalNotes = $noteStatement->fetchAll(PDO::FETCH_ASSOC);
             }
         }
 
@@ -200,8 +172,6 @@ final class ConversationController
             'selected' => $selected,
             'messages' => $messages,
             'team' => $team,
-            'departments' => $departments,
-            'internalNotes' => $internalNotes,
             'instances' => $instances,
             'tenants' => $tenants,
             'filters' => $filters,
@@ -260,18 +230,16 @@ final class ConversationController
             $conversationStatement = $pdo->prepare(
                 'INSERT INTO conversations
                     (tenant_id, evolution_instance_id, contact_id, remote_jid, status,
-                     attendance_mode, assigned_user_id, operational_status, priority, assigned_at, last_message_at, last_message_preview)
+                     attendance_mode, assigned_user_id, last_message_at, last_message_preview)
                  VALUES
                     (:tenant_id, :instance_id, :contact_id, :remote_jid, "open",
-                     "human", :user_id, "in_service", "normal", :sent_at, :sent_at, :preview)
+                     "human", :user_id, :sent_at, :preview)
                  ON DUPLICATE KEY UPDATE
                     id = LAST_INSERT_ID(id),
                     contact_id = VALUES(contact_id),
                     status = "open",
                     attendance_mode = "human",
                     assigned_user_id = VALUES(assigned_user_id),
-                    operational_status = IF(operational_status IN ("resolved", "archived"), "in_service", operational_status),
-                    assigned_at = VALUES(assigned_at),
                     last_message_at = VALUES(last_message_at),
                     last_message_preview = VALUES(last_message_preview)'
             );
@@ -395,16 +363,13 @@ final class ConversationController
                      last_message_preview = :preview,
                      status = IF(status = "closed", "open", status),
                      attendance_mode = "human",
-                     assigned_user_id = :user_id,
-                     operational_status = "waiting_customer",
-                     first_response_at = COALESCE(first_response_at, :sent_at_first)
+                     assigned_user_id = :user_id
                  WHERE id = :id'
             );
             $update->execute([
                 'sent_at' => $sentAt,
                 'preview' => mb_substr($message, 0, 255),
                 'user_id' => Auth::id(),
-                'sent_at_first' => $sentAt,
                 'id' => $conversationId,
             ]);
 
@@ -453,16 +418,12 @@ final class ConversationController
             'UPDATE conversations
              SET attendance_mode = :mode,
                  assigned_user_id = :assigned_user_id,
-                 assigned_at = IF(:assigned_user_id_for_date IS NULL, assigned_at, CURRENT_TIMESTAMP),
-                 operational_status = IF(:mode_for_status = "human", "in_service", operational_status),
                  status = IF(status = "closed", "open", status)
              WHERE id = :id'
         );
         $statement->execute([
             'mode' => $mode,
             'assigned_user_id' => $assignedUserId,
-            'assigned_user_id_for_date' => $assignedUserId,
-            'mode_for_status' => $mode,
             'id' => $conversationId,
         ]);
 
@@ -494,8 +455,8 @@ final class ConversationController
             $this->redirect('/conversations');
         }
 
-        Database::connection()->prepare('UPDATE conversations SET status = :status, operational_status = IF(:status_for_operational = "closed", "resolved", operational_status) WHERE id = :id')
-            ->execute(['status' => $status, 'status_for_operational' => $status, 'id' => $conversationId]);
+        Database::connection()->prepare('UPDATE conversations SET status = :status WHERE id = :id')
+            ->execute(['status' => $status, 'id' => $conversationId]);
 
         $label = ['open' => 'aberta', 'pending' => 'marcada como pendente', 'closed' => 'encerrada'][$status];
         $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'status.' . $status, 'Conversa ' . $label . '.');
@@ -548,127 +509,6 @@ final class ConversationController
 
         Audit::log('conversation.contact_updated', ['conversation_id' => $conversationId], (int) $conversation['tenant_id']);
         Flash::set('success', 'Dados do contato atualizados.');
-        $this->redirect('/conversations?conversation_id=' . $conversationId);
-    }
-
-
-    public function updateOperationalStatus(): void
-    {
-        $conversationId = (int) ($_POST['conversation_id'] ?? 0);
-        $status = (string) ($_POST['operational_status'] ?? '');
-        $priority = (string) ($_POST['priority'] ?? 'normal');
-
-        if (!in_array($status, ['new', 'waiting_agent', 'in_service', 'waiting_customer', 'resolved', 'archived'], true)) {
-            Flash::set('error', 'Status operacional inválido.');
-            $this->redirect('/conversations?conversation_id=' . $conversationId);
-        }
-        if (!in_array($priority, ['low', 'normal', 'high', 'urgent'], true)) {
-            $priority = 'normal';
-        }
-
-        $conversation = $this->findConversation($conversationId);
-        if ($conversation === null) {
-            Flash::set('error', 'Conversa não encontrada.');
-            $this->redirect('/conversations');
-        }
-
-        Database::connection()->prepare(
-            'UPDATE conversations
-             SET operational_status = :operational_status,
-                 priority = :priority,
-                 status = IF(:operational_status_for_status IN ("resolved", "archived"), "closed", IF(status = "closed", "open", status)),
-                 closed_at = IF(:operational_status_for_closed IN ("resolved", "archived"), COALESCE(closed_at, CURRENT_TIMESTAMP), closed_at)
-             WHERE id = :id'
-        )->execute([
-            'operational_status' => $status,
-            'priority' => $priority,
-            'operational_status_for_status' => $status,
-            'operational_status_for_closed' => $status,
-            'id' => $conversationId,
-        ]);
-
-        $labels = [
-            'new' => 'Novo',
-            'waiting_agent' => 'Aguardando atendimento',
-            'in_service' => 'Em atendimento',
-            'waiting_customer' => 'Aguardando cliente',
-            'resolved' => 'Resolvido',
-            'archived' => 'Arquivado',
-        ];
-        $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'queue.status', 'Status operacional alterado para ' . $labels[$status] . '.');
-        Audit::log('conversation.operational_status_changed', ['conversation_id' => $conversationId, 'operational_status' => $status, 'priority' => $priority], (int) $conversation['tenant_id']);
-        Flash::set('success', 'Status operacional atualizado.');
-        $this->redirect('/conversations?conversation_id=' . $conversationId);
-    }
-
-    public function assign(): void
-    {
-        $conversationId = (int) ($_POST['conversation_id'] ?? 0);
-        $assignedUserId = (int) ($_POST['assigned_user_id'] ?? 0) ?: null;
-        $departmentId = (int) ($_POST['department_id'] ?? 0) ?: null;
-
-        $conversation = $this->findConversation($conversationId);
-        if ($conversation === null) {
-            Flash::set('error', 'Conversa não encontrada.');
-            $this->redirect('/conversations');
-        }
-
-        if ($assignedUserId !== null && !$this->userBelongsToTenant($assignedUserId, (int) $conversation['tenant_id'])) {
-            Flash::set('error', 'Atendente fora da empresa da conversa.');
-            $this->redirect('/conversations?conversation_id=' . $conversationId);
-        }
-        if ($departmentId !== null && !$this->departmentBelongsToTenant($departmentId, (int) $conversation['tenant_id'])) {
-            Flash::set('error', 'Setor fora da empresa da conversa.');
-            $this->redirect('/conversations?conversation_id=' . $conversationId);
-        }
-
-        Database::connection()->prepare(
-            'UPDATE conversations
-             SET assigned_user_id = :assigned_user_id,
-                 department_id = :department_id,
-                 assigned_at = IF(:assigned_user_id_for_date IS NULL, assigned_at, CURRENT_TIMESTAMP),
-                 attendance_mode = IF(:assigned_user_id_for_mode IS NULL, attendance_mode, "human"),
-                 operational_status = IF(:assigned_user_id_for_status IS NULL, operational_status, "in_service"),
-                 status = IF(status = "closed", "open", status)
-             WHERE id = :id'
-        )->execute([
-            'assigned_user_id' => $assignedUserId,
-            'department_id' => $departmentId,
-            'assigned_user_id_for_date' => $assignedUserId,
-            'assigned_user_id_for_mode' => $assignedUserId,
-            'assigned_user_id_for_status' => $assignedUserId,
-            'id' => $conversationId,
-        ]);
-
-        $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'queue.assigned', 'Responsável/setor atualizado na conversa.');
-        Audit::log('conversation.assigned', ['conversation_id' => $conversationId, 'assigned_user_id' => $assignedUserId, 'department_id' => $departmentId], (int) $conversation['tenant_id']);
-        Flash::set('success', 'Responsável atualizado.');
-        $this->redirect('/conversations?conversation_id=' . $conversationId);
-    }
-
-    public function addInternalNote(): void
-    {
-        $conversationId = (int) ($_POST['conversation_id'] ?? 0);
-        $note = trim((string) ($_POST['note'] ?? ''));
-        $conversation = $this->findConversation($conversationId);
-
-        if ($conversation === null || $note === '') {
-            Flash::set('error', 'Informe uma anotação interna válida.');
-            $this->redirect('/conversations?conversation_id=' . $conversationId);
-        }
-
-        Database::connection()->prepare(
-            'INSERT INTO conversation_internal_notes (tenant_id, conversation_id, user_id, note)
-             VALUES (:tenant_id, :conversation_id, :user_id, :note)'
-        )->execute([
-            'tenant_id' => $conversation['tenant_id'],
-            'conversation_id' => $conversationId,
-            'user_id' => Auth::id(),
-            'note' => $note,
-        ]);
-        $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'internal.note', 'Nova anotação interna adicionada.');
-        Audit::log('conversation.internal_note_added', ['conversation_id' => $conversationId], (int) $conversation['tenant_id']);
-        Flash::set('success', 'Anotação interna registrada.');
         $this->redirect('/conversations?conversation_id=' . $conversationId);
     }
 
@@ -766,6 +606,21 @@ final class ConversationController
         $this->redirect('/conversations?conversation_id=' . $conversationId);
     }
 
+
+    private function conversationAllowedInFilters(array $conversation, array $filters): bool
+    {
+        if (!Auth::isSuperAdmin()) {
+            return (int) $conversation['tenant_id'] === (int) Auth::tenantId();
+        }
+
+        if (($filters['scope'] ?? 'tenant') === 'all') {
+            return true;
+        }
+
+        $tenantId = (int) ($filters['tenant_id'] ?? 0);
+        return $tenantId > 0 && (int) $conversation['tenant_id'] === $tenantId;
+    }
+
     private function findInstance(int $id): ?array
     {
         $sql = 'SELECT * FROM evolution_instances WHERE id = :id';
@@ -787,7 +642,6 @@ final class ConversationController
                        ct.tags_json, ct.status AS contact_status, ct.id AS contact_id,
                        i.name AS instance_label, i.instance_name, i.base_url, i.api_key_encrypted,
                        t.name AS tenant_name, u.name AS assigned_user_name,
-                       d.name AS department_name, d.color AS department_color,
                        l.id AS lead_id, l.title AS lead_title, l.status AS lead_status, l.value AS lead_value,
                        l.priority AS lead_priority, l.pipeline_id AS lead_pipeline_id, l.stage_id AS lead_stage_id,
                        s.name AS lead_stage_name
@@ -796,7 +650,6 @@ final class ConversationController
                 INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id
                 INNER JOIN tenants t ON t.id = c.tenant_id
                 LEFT JOIN users u ON u.id = c.assigned_user_id
-                LEFT JOIN service_departments d ON d.id = c.department_id
                 LEFT JOIN crm_leads l ON l.id = c.crm_lead_id
                 LEFT JOIN crm_stages s ON s.id = l.stage_id
                 WHERE c.id = :id';
@@ -859,21 +712,6 @@ final class ConversationController
         } catch (Throwable) {
             // O erro original do envio é mais importante que uma falha ao registrar o histórico.
         }
-    }
-
-
-    private function userBelongsToTenant(int $userId, int $tenantId): bool
-    {
-        $statement = Database::connection()->prepare('SELECT COUNT(*) FROM users WHERE id = :id AND tenant_id = :tenant_id AND status = "active"');
-        $statement->execute(['id' => $userId, 'tenant_id' => $tenantId]);
-        return (int) $statement->fetchColumn() > 0;
-    }
-
-    private function departmentBelongsToTenant(int $departmentId, int $tenantId): bool
-    {
-        $statement = Database::connection()->prepare('SELECT COUNT(*) FROM service_departments WHERE id = :id AND tenant_id = :tenant_id AND status = "active"');
-        $statement->execute(['id' => $departmentId, 'tenant_id' => $tenantId]);
-        return (int) $statement->fetchColumn() > 0;
     }
 
     private function insertEvent(int $conversationId, int $tenantId, string $type, string $description): void
@@ -966,17 +804,20 @@ final class ConversationController
             'search' => trim((string) ($_GET['search'] ?? '')),
             'status' => trim((string) ($_GET['status'] ?? '')),
             'mode' => trim((string) ($_GET['mode'] ?? '')),
-            'operational_status' => trim((string) ($_GET['operational_status'] ?? '')),
-            'department_id' => (int) ($_GET['department_id'] ?? 0),
-            'assigned_user_id' => (int) ($_GET['assigned_user_id'] ?? 0),
-            'priority' => trim((string) ($_GET['priority'] ?? '')),
             'instance_id' => (int) ($_GET['instance_id'] ?? 0),
             'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
+            'scope' => Auth::isSuperAdmin() ? (string) ($_GET['scope'] ?? 'tenant') : 'tenant',
+            'intent' => trim((string) ($_GET['intent'] ?? '')),
         ];
+        if (!Auth::isSuperAdmin()) {
+            $filters['scope'] = 'tenant';
+        } elseif ($filters['scope'] !== 'all') {
+            $filters['scope'] = 'tenant';
+        }
 
         if ($selectedId > 0 && $markRead) {
             $selected = $this->findConversation($selectedId);
-            if ($selected !== null) {
+            if ($selected !== null && (!Auth::isSuperAdmin() || $this->conversationAllowedInFilters($selected, $filters))) {
                 $pdo->prepare('UPDATE conversations SET unread_count = 0 WHERE id = :id')
                     ->execute(['id' => $selectedId]);
             }
@@ -988,6 +829,9 @@ final class ConversationController
 
         if ($selectedId > 0) {
             $selected = $this->findConversation($selectedId);
+            if ($selected !== null && Auth::isSuperAdmin() && !$this->conversationAllowedInFilters($selected, $filters)) {
+                $selected = null;
+            }
             if ($selected !== null) {
                 $messageStatement = $pdo->prepare(
                     'SELECT m.*, u.name AS sender_user_name
@@ -1035,9 +879,13 @@ final class ConversationController
         if (!Auth::isSuperAdmin()) {
             $conditions[] = 'c.tenant_id = :tenant_scope';
             $params['tenant_scope'] = Auth::tenantId();
+        } elseif (($filters['scope'] ?? 'tenant') === 'all') {
+            // Visão global explícita do Super Admin.
         } elseif (($filters['tenant_id'] ?? 0) > 0) {
             $conditions[] = 'c.tenant_id = :tenant_scope';
             $params['tenant_scope'] = (int) $filters['tenant_id'];
+        } else {
+            $conditions[] = '1 = 0';
         }
 
         if (($filters['search'] ?? '') !== '') {
@@ -1055,34 +903,18 @@ final class ConversationController
             $params['mode'] = $filters['mode'];
         }
 
-        if (in_array($filters['operational_status'] ?? '', ['new', 'waiting_agent', 'in_service', 'waiting_customer', 'resolved', 'archived'], true)) {
-            $conditions[] = 'c.operational_status = :operational_status';
-            $params['operational_status'] = $filters['operational_status'];
-        }
-
-        if (in_array($filters['priority'] ?? '', ['low', 'normal', 'high', 'urgent'], true)) {
-            $conditions[] = 'c.priority = :priority';
-            $params['priority'] = $filters['priority'];
-        }
-
-        if (($filters['department_id'] ?? 0) > 0) {
-            $conditions[] = 'c.department_id = :department_id';
-            $params['department_id'] = (int) $filters['department_id'];
-        }
-
-        if (($filters['assigned_user_id'] ?? 0) > 0) {
-            $conditions[] = 'c.assigned_user_id = :assigned_user_id';
-            $params['assigned_user_id'] = (int) $filters['assigned_user_id'];
-        }
-
         if (($filters['instance_id'] ?? 0) > 0) {
             $conditions[] = 'c.evolution_instance_id = :instance_id';
             $params['instance_id'] = (int) $filters['instance_id'];
         }
 
+        if (($filters['intent'] ?? '') === 'agenda') {
+            $conditions[] = 'c.agenda_intent_detected = 1';
+        }
+
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
         $statement = $pdo->prepare(
-            'SELECT c.id, c.status, c.attendance_mode, c.operational_status, c.priority, c.unread_count, c.last_message_at, c.last_message_preview,
+            'SELECT c.id, c.status, c.attendance_mode, c.unread_count, c.last_message_at, c.last_message_preview,
                     ct.name AS contact_name, ct.phone, i.name AS instance_label, i.instance_name,
                     t.name AS tenant_name
              FROM conversations c
@@ -1111,8 +943,6 @@ final class ConversationController
             'unread_count' => (int) ($conversation['unread_count'] ?? 0),
             'status' => (string) ($conversation['status'] ?? ''),
             'mode' => (string) ($conversation['attendance_mode'] ?? ''),
-            'operational_status' => (string) ($conversation['operational_status'] ?? ''),
-            'priority' => (string) ($conversation['priority'] ?? ''),
             'is_selected' => (int) $conversation['id'] === $selectedId,
         ];
     }

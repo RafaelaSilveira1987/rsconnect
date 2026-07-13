@@ -38,6 +38,73 @@ use App\Core\View;
         <div><span>Onboarding</span><strong><?= $company['onboarding_completed_at'] ? 'Concluído' : 'Etapa ' . (int) $company['onboarding_step'] . '/3' ?></strong></div>
     </div>
 
+
+    <section class="settings-block">
+        <div class="section-heading compact">
+            <div>
+                <span class="eyebrow">Pré-agendamento</span>
+                <h2>Agenda com aprovação humana</h2>
+                <p>Quando ativo, a IA pode registrar a preferência de dia/horário do lead e enviar para aprovação antes de confirmar.</p>
+            </div>
+            <span class="badge <?= !empty($preScheduleSettings['enabled']) ? 'badge-active' : 'badge-pending' ?>"><?= !empty($preScheduleSettings['enabled']) ? 'Ativo' : 'Desativado' ?></span>
+        </div>
+        <div class="settings-toggle-grid">
+            <label class="switch-card">
+                <input type="checkbox" name="pre_schedule_enabled" value="1" <?= !empty($preScheduleSettings['enabled']) ? 'checked' : '' ?>>
+                <span><strong>Usar pré-agendamento</strong><small>Cria solicitações na agenda a partir da intenção detectada na conversa.</small></span>
+            </label>
+            <label class="switch-card">
+                <input type="checkbox" name="pre_schedule_require_human_approval" value="1" <?= !empty($preScheduleSettings['require_human_approval']) ? 'checked' : '' ?>>
+                <span><strong>Exigir aprovação humana</strong><small>Recomendado para psicologia, saúde, consultorias e serviços com agenda sensível.</small></span>
+            </label>
+            <label class="switch-card">
+                <input type="checkbox" name="pre_schedule_ai_can_suggest_slots" value="1" <?= !empty($preScheduleSettings['ai_can_suggest_slots']) ? 'checked' : '' ?>>
+                <span><strong>IA pode sugerir disponibilidade</strong><small>Permite que a IA registre opções aproximadas, sem confirmar.</small></span>
+            </label>
+            <label class="switch-card">
+                <input type="checkbox" name="pre_schedule_ai_can_confirm" value="1" <?= !empty($preScheduleSettings['ai_can_confirm']) ? 'checked' : '' ?>>
+                <span><strong>IA pode confirmar sozinha</strong><small>Use apenas em negócios onde não há necessidade de validação humana.</small></span>
+            </label>
+        </div>
+        <div class="form-grid two">
+            <label class="field"><span>Duração padrão</span><input type="number" min="15" max="240" name="pre_schedule_default_duration_minutes" value="<?= (int) ($preScheduleSettings['default_duration_minutes'] ?? 50) ?>"></label>
+            <label class="field"><span>Mensagem padrão da IA</span><input name="pre_schedule_default_message" value="<?= View::e($preScheduleSettings['default_message'] ?? '') ?>"></label>
+        </div>
+    </section>
+
+    <section class="settings-block">
+        <div class="section-heading compact">
+            <div>
+                <span class="eyebrow">Módulos e menus</span>
+                <h2>Exibir ou ocultar recursos da empresa</h2>
+                <p>Controle o que aparece no menu e bloqueie o acesso direto às rotas dos módulos desativados.</p>
+            </div>
+        </div>
+        <div class="module-settings-grid">
+            <?php foreach (($availableModules ?? []) as $moduleKey => $module): ?>
+                <?php
+                $isVisible = (bool) (($moduleSettings[$moduleKey]['is_visible'] ?? null) ?? ($module['default_visible'] ?? true));
+                $isEnabled = (bool) (($moduleSettings[$moduleKey]['is_enabled'] ?? null) ?? ($module['default_enabled'] ?? true));
+                $locked = in_array($moduleKey, ['dashboard', 'company_settings'], true);
+                ?>
+                <article class="module-setting-card <?= $isEnabled ? 'is-enabled' : 'is-disabled' ?>">
+                    <div>
+                        <strong><?= View::e($module['label']) ?></strong>
+                        <small><?= View::e($module['description']) ?></small>
+                    </div>
+                    <div class="module-setting-actions">
+                        <label><input type="checkbox" name="module_visible[]" value="<?= View::e($moduleKey) ?>" <?= $isVisible ? 'checked' : '' ?> <?= $locked ? 'disabled' : '' ?>> Menu</label>
+                        <label><input type="checkbox" name="module_enabled[]" value="<?= View::e($moduleKey) ?>" <?= $isEnabled ? 'checked' : '' ?> <?= $locked ? 'disabled' : '' ?>> Acesso</label>
+                        <?php if ($locked): ?>
+                            <input type="hidden" name="module_visible[]" value="<?= View::e($moduleKey) ?>">
+                            <input type="hidden" name="module_enabled[]" value="<?= View::e($moduleKey) ?>">
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </section>
+
     <?php if (Auth::can('company.manage')): ?>
         <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar alterações</button></div>
     <?php endif; ?>

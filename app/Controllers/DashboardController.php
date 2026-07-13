@@ -55,6 +55,30 @@ final class DashboardController
         );
         $conversationStatement->execute(['tenant_id' => $tenantId]);
 
+        $agendaIntent = ['total' => 0, 'pending_pre_schedules' => 0, 'approved_pre_schedules' => 0];
+        try {
+            $hasAgendaIntent = (int) $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'conversations' AND COLUMN_NAME = 'agenda_intent_detected'")->fetchColumn() > 0;
+            if ($hasAgendaIntent) {
+                $intentStatement = $pdo->prepare('SELECT COUNT(*) FROM conversations WHERE tenant_id = :tenant_id AND agenda_intent_detected = 1 AND status <> "closed"');
+                $intentStatement->execute(['tenant_id' => $tenantId]);
+                $agendaIntent['total'] = (int) $intentStatement->fetchColumn();
+            }
+            $hasPreSchedule = (int) $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'calendar_appointments' AND COLUMN_NAME = 'is_pre_schedule'")->fetchColumn() > 0;
+            if ($hasPreSchedule) {
+                $preStatement = $pdo->prepare('SELECT
+                        COALESCE(SUM(is_pre_schedule = 1 AND status IN ("pre_scheduled", "awaiting_approval")), 0) AS pending_pre_schedules,
+                        COALESCE(SUM(is_pre_schedule = 1 AND status = "confirmed"), 0) AS approved_pre_schedules
+                    FROM calendar_appointments
+                    WHERE tenant_id = :tenant_id');
+                $preStatement->execute(['tenant_id' => $tenantId]);
+                $pre = $preStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+                $agendaIntent['pending_pre_schedules'] = (int) ($pre['pending_pre_schedules'] ?? 0);
+                $agendaIntent['approved_pre_schedules'] = (int) ($pre['approved_pre_schedules'] ?? 0);
+            }
+        } catch (\Throwable) {
+            $agendaIntent = ['total' => 0, 'pending_pre_schedules' => 0, 'approved_pre_schedules' => 0];
+        }
+
         $notificationService = new NotificationService();
 
         View::render('dashboard.client', [
@@ -66,6 +90,7 @@ final class DashboardController
             'company' => $companyStatement->fetch(PDO::FETCH_ASSOC) ?: [],
             'notifications' => $tenantId ? $notificationService->latestForTenant((int) $tenantId, 5) : [],
             'notificationUnreadCount' => $tenantId ? $notificationService->unreadCount((int) $tenantId) : 0,
+            'agendaIntent' => $agendaIntent,
         ]);
     }
 

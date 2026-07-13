@@ -27,7 +27,7 @@ final class CalendarController
         $today = new DateTimeImmutable('today', new DateTimeZone((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo')));
         $filters = [
             'tenant_id' => $tenantId,
-            'status' => (string) ($_GET['status'] ?? 'scheduled'),
+            'status' => (string) ($_GET['status'] ?? ''),
             'owner_user_id' => (int) ($_GET['owner_user_id'] ?? 0),
             'date_from' => trim((string) ($_GET['date_from'] ?? $today->format('Y-m-d'))),
             'date_to' => trim((string) ($_GET['date_to'] ?? $today->modify('+14 days')->format('Y-m-d'))),
@@ -48,7 +48,7 @@ final class CalendarController
             $conditions = ['a.tenant_id = :tenant_id'];
             $params = ['tenant_id' => $tenantId];
 
-            if (in_array($filters['status'], ['scheduled', 'confirmed', 'completed', 'cancelled', 'no_show'], true)) {
+            if (in_array($filters['status'], ['pre_scheduled', 'awaiting_approval', 'scheduled', 'confirmed', 'completed', 'cancelled', 'rejected', 'rescheduled', 'no_show'], true)) {
                 $conditions[] = 'a.status = :status';
                 $params['status'] = $filters['status'];
             }
@@ -118,6 +118,7 @@ final class CalendarController
                 'SELECT
                     COALESCE(SUM(status IN ("scheduled", "confirmed") AND DATE(starts_at) = CURDATE()), 0) AS today_count,
                     COALESCE(SUM(status IN ("scheduled", "confirmed") AND starts_at >= NOW()), 0) AS upcoming_count,
+                    COALESCE(SUM(status IN ("pre_scheduled", "awaiting_approval")), 0) AS pre_schedule_pending,
                     COALESCE(SUM(sync_status IN ("pending", "failed")), 0) AS pending_sync,
                     COALESCE(SUM(status = "completed" AND starts_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)), 0) AS completed_count
                  FROM calendar_appointments
@@ -157,6 +158,10 @@ final class CalendarController
         $location = trim((string) ($_POST['location'] ?? ''));
         $meetingUrl = trim((string) ($_POST['meeting_url'] ?? ''));
         $reminderMinutes = (int) ($_POST['reminder_minutes'] ?? 60);
+        $isPreSchedule = isset($_POST['is_pre_schedule']) ? 1 : 0;
+        $preferredDayText = trim((string) ($_POST['preferred_day_text'] ?? ''));
+        $preferredTimeText = trim((string) ($_POST['preferred_time_text'] ?? ''));
+        $initialStatus = $isPreSchedule === 1 ? 'pre_scheduled' : 'scheduled';
 
         if ($tenantId < 1 || $title === '' || $startsAt === '' || $endsAt === '') {
             Flash::set('error', 'Informe empresa, título, início e fim do agendamento.');
@@ -210,11 +215,13 @@ final class CalendarController
             'INSERT INTO calendar_appointments
                 (tenant_id, contact_id, crm_lead_id, conversation_id, owner_user_id, created_by_user_id,
                  title, description, starts_at, ends_at, timezone, status, location_type,
-                 location, meeting_url, reminder_minutes, sync_status)
+                 location, meeting_url, reminder_minutes, sync_status, is_pre_schedule, pre_schedule_source,
+                 preferred_day_text, preferred_time_text, approval_status)
              VALUES
                 (:tenant_id, :contact_id, :crm_lead_id, :conversation_id, :owner_user_id, :created_by_user_id,
-                 :title, :description, :starts_at, :ends_at, :timezone, "scheduled", :location_type,
-                 :location, :meeting_url, :reminder_minutes, "pending")'
+                 :title, :description, :starts_at, :ends_at, :timezone, :status, :location_type,
+                 :location, :meeting_url, :reminder_minutes, "pending", :is_pre_schedule, :pre_schedule_source,
+                 :preferred_day_text, :preferred_time_text, :approval_status)'
         );
         $statement->execute([
             'tenant_id' => $tenantId,
@@ -228,15 +235,21 @@ final class CalendarController
             'starts_at' => $normalized['starts_at'],
             'ends_at' => $normalized['ends_at'],
             'timezone' => $timezone !== '' ? $timezone : 'America/Sao_Paulo',
+            'status' => $initialStatus,
             'location_type' => $locationType,
             'location' => $location !== '' ? $location : null,
             'meeting_url' => $meetingUrl !== '' ? $meetingUrl : null,
             'reminder_minutes' => $reminderMinutes,
+            'is_pre_schedule' => $isPreSchedule,
+            'pre_schedule_source' => $isPreSchedule === 1 ? 'manual' : null,
+            'preferred_day_text' => $preferredDayText !== '' ? $preferredDayText : null,
+            'preferred_time_text' => $preferredTimeText !== '' ? $preferredTimeText : null,
+            'approval_status' => $isPreSchedule === 1 ? 'pending' : null,
         ]);
         $appointmentId = (int) Database::connection()->lastInsertId();
         Audit::log('calendar.appointment_created', ['appointment_id' => $appointmentId], $tenantId);
         $this->trySyncToN8n($appointmentId, $tenantId, 'created');
-        Flash::set('success', 'Agendamento criado.');
+        Flash::set('success', $isPreSchedule === 1 ? 'Pré-agendamento criado para aprovação.' : 'Agendamento criado.');
         $this->redirect('/calendar?tenant_id=' . $tenantId);
     }
 
@@ -246,17 +259,34 @@ final class CalendarController
         $appointmentId = (int) ($_POST['appointment_id'] ?? 0);
         $status = (string) ($_POST['status'] ?? 'scheduled');
 
-        if (!in_array($status, ['scheduled', 'confirmed', 'completed', 'cancelled', 'no_show'], true)) {
+        if (!in_array($status, ['pre_scheduled', 'awaiting_approval', 'scheduled', 'confirmed', 'completed', 'cancelled', 'rejected', 'rescheduled', 'no_show'], true)) {
             Flash::set('error', 'Status de agendamento inválido.');
             $this->redirect('/calendar?tenant_id=' . $tenantId);
         }
 
+        $approvalStatus = match ($status) {
+            'confirmed' => 'approved',
+            'rejected', 'cancelled' => 'rejected',
+            'rescheduled', 'pre_scheduled', 'awaiting_approval' => 'pending',
+            default => null,
+        };
+        $approvalSet = '';
+        $params = ['status' => $status, 'id' => $appointmentId, 'tenant_id' => $tenantId];
+        if ($this->hasColumn('calendar_appointments', 'approval_status') && $approvalStatus !== null) {
+            $approvalSet = ', approval_status = :approval_status';
+            $params['approval_status'] = $approvalStatus;
+            if ($approvalStatus === 'approved' && $this->hasColumn('calendar_appointments', 'approved_at')) {
+                $approvalSet .= ', approved_at = NOW(), approved_by_user_id = :approved_by_user_id';
+                $params['approved_by_user_id'] = Auth::id();
+            }
+        }
+
         $statement = Database::connection()->prepare(
             'UPDATE calendar_appointments
-             SET status = :status, updated_at = CURRENT_TIMESTAMP
+             SET status = :status' . $approvalSet . ', updated_at = CURRENT_TIMESTAMP
              WHERE id = :id AND tenant_id = :tenant_id'
         );
-        $statement->execute(['status' => $status, 'id' => $appointmentId, 'tenant_id' => $tenantId]);
+        $statement->execute($params);
 
         if ($statement->rowCount() === 0) {
             Flash::set('error', 'Agendamento não encontrado.');
@@ -433,6 +463,19 @@ final class CalendarController
             'id' => $appointmentId,
             'tenant_id' => $tenantId,
         ]);
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
+            );
+            $statement->execute(['table' => $table, 'column' => $column]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function escapeIcs(string $value): string

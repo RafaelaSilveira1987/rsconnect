@@ -40,6 +40,11 @@ $completed = !empty($company['onboarding_completed_at']);
 <?php endif; ?>
 
 <div class="metric-grid metric-grid-six">
+    <a class="metric-card metric-card-link agenda-intent-card" href="<?= View::e(Router::url('/conversations?intent=agenda')) ?>">
+        <span>Intenção de agenda</span>
+        <strong><?= (int) ($agendaIntent['total'] ?? 0) ?></strong>
+        <small><?= (int) ($agendaIntent['pending_pre_schedules'] ?? 0) ?> pré-agendamento(s) pendente(s)</small>
+    </a>
     <article class="metric-card"><span>Conversas abertas</span><strong><?= (int) ($conversations['open_count'] ?? 0) ?></strong><small>Em andamento</small></article>
     <article class="metric-card"><span>Não lidas</span><strong><?= (int) ($conversations['unread_count'] ?? 0) ?></strong><small>Mensagens aguardando</small></article>
     <article class="metric-card"><span>Atendimento humano</span><strong><?= (int) ($conversations['human_count'] ?? 0) ?></strong><small>Assumidas pela equipe</small></article>

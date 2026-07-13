@@ -18,26 +18,9 @@ CREATE TABLE tenants (
     status ENUM('active', 'inactive', 'suspended') NOT NULL DEFAULT 'active',
     onboarding_step TINYINT UNSIGNED NOT NULL DEFAULT 1,
     onboarding_completed_at DATETIME NULL,
-    onboarding_assistant_prompt_completed_at DATETIME NULL,
-    white_label_enabled TINYINT(1) NOT NULL DEFAULT 0,
-    brand_name VARCHAR(160) NULL,
-    brand_subtitle VARCHAR(190) NULL,
-    brand_logo_url VARCHAR(500) NULL,
-    brand_favicon_url VARCHAR(500) NULL,
-    brand_icon_text VARCHAR(8) NULL,
-    brand_primary_color CHAR(7) NOT NULL DEFAULT '#146498',
-    brand_secondary_color CHAR(7) NOT NULL DEFAULT '#631b7c',
-    brand_accent_color CHAR(7) NOT NULL DEFAULT '#01c5b6',
-    login_title VARCHAR(255) NULL,
-    login_subtitle TEXT NULL,
-    brand_footer_text VARCHAR(190) NULL,
-    support_email VARCHAR(190) NULL,
-    custom_domain VARCHAR(190) NULL,
-    show_powered_by TINYINT(1) NOT NULL DEFAULT 1,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_tenants_status (status),
-    UNIQUE KEY uq_tenants_custom_domain (custom_domain)
+    INDEX idx_tenants_status (status)
 ) ENGINE=InnoDB;
 
 CREATE TABLE users (
@@ -64,18 +47,12 @@ CREATE TABLE evolution_instances (
     base_url VARCHAR(255) NOT NULL,
     api_key_encrypted TEXT NOT NULL,
     status ENUM('connected', 'disconnected', 'pending') NOT NULL DEFAULT 'disconnected',
-    connection_state VARCHAR(60) NULL,
-    last_status_check_at DATETIME NULL,
-    qrcode_requested_at DATETIME NULL,
-    connected_at DATETIME NULL,
-    disconnected_at DATETIME NULL,
     is_default TINYINT(1) NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_instances_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
     UNIQUE KEY uq_instance_tenant_name (tenant_id, instance_name),
-    INDEX idx_instances_tenant_status (tenant_id, status),
-    INDEX idx_instances_connection_state (tenant_id, connection_state)
+    INDEX idx_instances_tenant_status (tenant_id, status)
 ) ENGINE=InnoDB;
 
 CREATE TABLE permissions (
@@ -111,7 +88,6 @@ CREATE TABLE ai_agents (
     model_name VARCHAR(120) NOT NULL DEFAULT 'gemini-2.0-flash',
     temperature DECIMAL(3,2) NOT NULL DEFAULT 0.20,
     system_prompt TEXT NOT NULL,
-    prompt_builder_json JSON NULL,
     status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
     is_default TINYINT(1) NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

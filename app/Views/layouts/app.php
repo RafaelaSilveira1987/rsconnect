@@ -7,10 +7,9 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\NotificationService;
-use App\Services\BrandingService;
+use App\Services\TenantModuleService;
 
 $user = Auth::user();
-$branding = BrandingService::forCurrentRequest();
 $flashes = Flash::all();
 $currentPath = rtrim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', '/');
 $isActive = static function (string $path) use ($currentPath): string {
@@ -26,11 +25,27 @@ if (!Auth::isSuperAdmin() && Auth::tenantId()) {
     $notificationUnread = (new NotificationService())->unreadCount((int) Auth::tenantId());
 }
 $notificationBadge = static fn (int $count): string => $count > 0 ? '<span class="nav-badge">' . min(99, $count) . '</span>' : '';
+
+$moduleService = new TenantModuleService();
+$moduleVisible = static function (string $moduleKey) use ($moduleService): bool {
+    if (Auth::isSuperAdmin()) {
+        return true;
+    }
+    $tenantId = Auth::tenantId();
+    return $tenantId ? $moduleService->visible((int) $tenantId, $moduleKey) : true;
+};
 $conversationUnread = 0;
 if (Auth::check() && Auth::can('conversations.view')) {
     try {
         if (Auth::isSuperAdmin()) {
-            $conversationUnread = (int) Database::connection()->query('SELECT COALESCE(SUM(unread_count), 0) FROM conversations')->fetchColumn();
+            $activeTenantId = (int) ($_GET['tenant_id'] ?? 0);
+            if ($activeTenantId > 0) {
+                $statement = Database::connection()->prepare('SELECT COALESCE(SUM(unread_count), 0) FROM conversations WHERE tenant_id = :tenant_id');
+                $statement->execute(['tenant_id' => $activeTenantId]);
+                $conversationUnread = (int) $statement->fetchColumn();
+            } else {
+                $conversationUnread = 0;
+            }
         } elseif (Auth::tenantId()) {
             $statement = Database::connection()->prepare('SELECT COALESCE(SUM(unread_count), 0) FROM conversations WHERE tenant_id = :tenant_id');
             $statement->execute(['tenant_id' => Auth::tenantId()]);
@@ -40,14 +55,6 @@ if (Auth::check() && Auth::can('conversations.view')) {
         $conversationUnread = 0;
     }
 }
-$implementationPending = 0;
-if (Auth::isSuperAdmin()) {
-    try {
-        $implementationPending = (int) Database::connection()->query('SELECT COUNT(*) FROM tenants t LEFT JOIN tenant_implementation_checklists c ON c.tenant_id = t.id WHERE COALESCE(c.implementation_completed, 0) = 0 AND t.status <> "inactive"')->fetchColumn();
-    } catch (Throwable) {
-        $implementationPending = 0;
-    }
-}
 $svgIcon = static function (string $name): string {
     $icons = [
         'dashboard' => '<path d="M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-8.5Z"/>',
@@ -55,9 +62,7 @@ $svgIcon = static function (string $name): string {
         'chat' => '<path d="M5 6h14v9H8l-3 3V6Z"/>',
         'contacts' => '<path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/>',
         'crm' => '<path d="M4 6h16M4 12h16M4 18h16"/><path d="M8 6v12M16 6v12"/>',
-        'campaigns' => '<path d="M4 11v2a2 2 0 0 0 2 2h3l5 4V5l-5 4H6a2 2 0 0 0-2 2Z"/><path d="M17 9.5a3 3 0 0 1 0 5"/><path d="M20 7a7 7 0 0 1 0 10"/>',
         'tasks' => '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m4 6 1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
-        'queue' => '<path d="M7 8h10M7 12h8M7 16h6"/><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M16 16l2 2 3-4"/>',
         'reports' => '<path d="M4 19V5"/><path d="M8 17V9"/><path d="M12 17V7"/><path d="M16 17v-5"/><path d="M20 19H4"/>',
         'calendar' => '<path d="M7 3v4M17 3v4M4 9h16M5 5h14v16H5z"/>',
         'instance' => '<rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 9h6v6H9z"/>',
@@ -72,9 +77,7 @@ $svgIcon = static function (string $name): string {
         'company' => '<path d="M4 21V5h10v16M14 9h6v12M8 9h2M8 13h2M8 17h2M17 13h1M17 17h1"/>',
         'users' => '<path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
         'permissions' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
-        'implementation' => '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
         'menu' => '<path d="M4 7h16M4 12h16M4 17h16"/>',
-        'paint' => '<path d="M12 22a7 7 0 0 0 7-7c0-4-3-8-7-13-4 5-7 9-7 13a7 7 0 0 0 7 7Z"/><path d="M12 18a3 3 0 0 0 3-3"/>',
     ];
     $path = $icons[$name] ?? $icons['dashboard'];
     return '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $path . '</svg>';
@@ -86,30 +89,15 @@ $svgIcon = static function (string $name): string {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
-    <title><?= View::e($title ?? $branding['app_name']) ?> — <?= View::e($branding['app_name']) ?></title>
-    <?php if (!empty($branding['favicon_url'])): ?>
-        <link rel="icon" href="<?= View::e($branding['favicon_url']) ?>">
-    <?php endif; ?>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=22')) ?>">
-    <style>
-        :root {
-            --rs-blue: <?= View::e($branding['primary']) ?>;
-            --rs-purple: <?= View::e($branding['secondary']) ?>;
-            --rs-cyan: <?= View::e($branding['accent']) ?>;
-            --rs-teal: <?= View::e($branding['accent']) ?>;
-        }
-    </style>
+    <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=18.0')) ?>">
 </head>
 <body>
 <div class="app-shell">
     <aside class="sidebar" id="sidebar">
         <a class="brand" href="<?= View::e(Router::url('/')) ?>">
-            <?php if (!empty($branding['logo_url'])): ?>
-                <img class="brand-logo-img" src="<?= View::e($branding['logo_url']) ?>" alt="<?= View::e($branding['app_name']) ?>">
-            <?php else: ?>
-                <span class="brand-mark"><?= View::e($branding['icon_text']) ?></span>
-            <?php endif; ?>
-            <span><strong><?= View::e($branding['app_name']) ?></strong><small><?= View::e($branding['subtitle']) ?></small></span>
+            <span class="brand-mark">RS</span>
+            <span><strong>RS Connect</strong><small>Atendimento e CRM</small></span>
         </a>
 
         <nav class="sidebar-nav" aria-label="Navegação principal">
@@ -119,38 +107,32 @@ $svgIcon = static function (string $name): string {
                 <a class="nav-link<?= $isActive('/onboarding') ?>" href="<?= View::e(Router::url('/onboarding')) ?>"><?= $svgIcon('check') ?><span>Configuração inicial</span></a>
             <?php endif; ?>
 
-            <?php if (Auth::can('conversations.view') || Auth::can('contacts.view') || Auth::can('crm.view') || Auth::can('tasks.view') || Auth::can('calendar.view')): ?>
+            <?php if ((Auth::can('conversations.view') && $moduleVisible('conversations')) || (Auth::can('contacts.view') && $moduleVisible('contacts')) || (Auth::can('crm.view') && $moduleVisible('crm')) || (Auth::can('tasks.view') && $moduleVisible('tasks')) || (Auth::can('calendar.view') && $moduleVisible('calendar'))): ?>
                 <span class="nav-caption">Relacionamento</span>
             <?php endif; ?>
-            <?php if (Auth::can('conversations.view')): ?>
+            <?php if (Auth::can('conversations.view') && $moduleVisible('conversations')): ?>
                 <a class="nav-link<?= $isActive('/conversations') ?>" href="<?= View::e(Router::url('/conversations')) ?>"><?= $svgIcon('chat') ?><span>Conversas</span><?= $notificationBadge($conversationUnread) ?></a>
             <?php endif; ?>
-            <?php if (Auth::can('contacts.view')): ?>
+            <?php if (Auth::can('contacts.view') && $moduleVisible('contacts')): ?>
                 <a class="nav-link<?= $isActive('/contacts') ?>" href="<?= View::e(Router::url('/contacts')) ?>"><?= $svgIcon('contacts') ?><span>Contatos</span></a>
             <?php endif; ?>
-            <?php if (Auth::can('crm.view')): ?>
+            <?php if (Auth::can('crm.view') && $moduleVisible('crm')): ?>
                 <a class="nav-link<?= $isActive('/crm') ?>" href="<?= View::e(Router::url('/crm')) ?>"><?= $svgIcon('crm') ?><span>CRM</span></a>
             <?php endif; ?>
-            <?php if (Auth::can('tasks.view')): ?>
+            <?php if (Auth::can('tasks.view') && $moduleVisible('tasks')): ?>
                 <a class="nav-link<?= $isActive('/tasks') ?>" href="<?= View::e(Router::url('/tasks')) ?>"><?= $svgIcon('tasks') ?><span>Tarefas</span></a>
             <?php endif; ?>
-            <?php if (Auth::can('campaigns.view')): ?>
-                <a class="nav-link<?= $isActive('/campaigns') ?>" href="<?= View::e(Router::url('/campaigns')) ?>"><?= $svgIcon('campaigns') ?><span>Campanhas</span></a>
-            <?php endif; ?>
-            <?php if (Auth::can('queue.view')): ?>
-                <a class="nav-link<?= $isActive('/queue') ?>" href="<?= View::e(Router::url('/queue')) ?>"><?= $svgIcon('queue') ?><span>Fila de atendimento</span></a>
-            <?php endif; ?>
-            <?php if (Auth::can('calendar.view')): ?>
+            <?php if (Auth::can('calendar.view') && $moduleVisible('calendar')): ?>
                 <a class="nav-link<?= $isActive('/calendar') ?>" href="<?= View::e(Router::url('/calendar')) ?>"><?= $svgIcon('calendar') ?><span>Agenda</span></a>
             <?php endif; ?>
-            <?php if (Auth::can('reports.view')): ?>
+            <?php if (Auth::can('reports.view') && $moduleVisible('reports')): ?>
                 <a class="nav-link<?= $isActive('/reports') ?>" href="<?= View::e(Router::url('/reports')) ?>"><?= $svgIcon('reports') ?><span>Relatórios</span></a>
             <?php endif; ?>
 
-            <?php if (Auth::can('instances.view') || (!Auth::isSuperAdmin() && (Auth::can('agents.view') || Auth::can('automations.view')))): ?>
+            <?php if ((Auth::can('instances.view') && $moduleVisible('instances')) || (!Auth::isSuperAdmin() && ((Auth::can('agents.view') && $moduleVisible('agents')) || (Auth::can('automations.view') && $moduleVisible('automations'))))): ?>
                 <span class="nav-caption">Automação</span>
             <?php endif; ?>
-            <?php if (Auth::can('instances.view')): ?>
+            <?php if (Auth::can('instances.view') && $moduleVisible('instances')): ?>
                 <a class="nav-link<?= $isActive('/instances') ?>" href="<?= View::e(Router::url('/instances')) ?>"><?= $svgIcon('instance') ?><span>Instâncias</span></a>
             <?php endif; ?>
             <?php if (Auth::isSuperAdmin()): ?>
@@ -161,31 +143,29 @@ $svgIcon = static function (string $name): string {
                 <a class="nav-link<?= $isActive('/payment-gateways') ?>" href="<?= View::e(Router::url('/payment-gateways')) ?>"><?= $svgIcon('card') ?><span>Gateways de pagamento</span></a>
                 <a class="nav-link<?= $isActive('/billing-reminders') ?>" href="<?= View::e(Router::url('/billing-reminders')) ?>"><?= $svgIcon('bell') ?><span>Régua de cobrança</span></a>
             <?php endif; ?>
-            <?php if (!Auth::isSuperAdmin() && Auth::can('agents.view')): ?>
+            <?php if (!Auth::isSuperAdmin() && Auth::can('agents.view') && $moduleVisible('agents')): ?>
                 <a class="nav-link<?= $isActive('/agents') ?>" href="<?= View::e(Router::url('/agents')) ?>"><?= $svgIcon('agent') ?><span>Agentes de IA</span></a>
             <?php endif; ?>
-            <?php if (!Auth::isSuperAdmin() && Auth::can('automations.view')): ?>
+            <?php if (!Auth::isSuperAdmin() && Auth::can('automations.view') && $moduleVisible('automations')): ?>
                 <a class="nav-link<?= $isActive('/automations') ?>" href="<?= View::e(Router::url('/automations')) ?>"><?= $svgIcon('automation') ?><span>Automações</span></a>
             <?php endif; ?>
 
             <span class="nav-caption"><?= Auth::isSuperAdmin() ? 'Administração RS' : 'Administração' ?></span>
             <?php if (Auth::isSuperAdmin()): ?>
-                <a class="nav-link<?= $isActive('/implementations') ?>" href="<?= View::e(Router::url('/implementations')) ?>"><?= $svgIcon('implementation') ?><span>Implantações</span><?= $notificationBadge($implementationPending) ?></a>
                 <a class="nav-link<?= $isActive('/companies') ?>" href="<?= View::e(Router::url('/companies')) ?>"><?= $svgIcon('company') ?><span>Empresas</span></a>
-                <a class="nav-link<?= $isActive('/white-label') ?>" href="<?= View::e(Router::url('/white-label')) ?>"><?= $svgIcon('paint') ?><span>White label</span></a>
-            <?php elseif (Auth::can('company.view')): ?>
+            <?php elseif (Auth::can('company.view') && $moduleVisible('company_settings')): ?>
                 <a class="nav-link<?= $isActive('/company-settings') ?>" href="<?= View::e(Router::url('/company-settings')) ?>"><?= $svgIcon('company') ?><span>Minha empresa</span></a>
             <?php endif; ?>
-            <?php if (Auth::can('users.view')): ?>
+            <?php if (Auth::can('users.view') && $moduleVisible('users')): ?>
                 <a class="nav-link<?= $isActive('/users') ?>" href="<?= View::e(Router::url('/users')) ?>"><?= $svgIcon('users') ?><span>Usuários</span></a>
             <?php endif; ?>
-            <?php if (!Auth::isSuperAdmin() && Auth::can('notifications.view')): ?>
+            <?php if (!Auth::isSuperAdmin() && Auth::can('notifications.view') && $moduleVisible('notifications')): ?>
                 <a class="nav-link<?= $isActive('/notifications') ?>" href="<?= View::e(Router::url('/notifications')) ?>"><?= $svgIcon('bell') ?><span>Notificações</span><?= $notificationBadge($notificationUnread) ?></a>
             <?php endif; ?>
-            <?php if (!Auth::isSuperAdmin() && Auth::can('billing.view')): ?>
+            <?php if (!Auth::isSuperAdmin() && Auth::can('billing.view') && $moduleVisible('subscription')): ?>
                 <a class="nav-link<?= $isActive('/subscription') ?>" href="<?= View::e(Router::url('/subscription')) ?>"><?= $svgIcon('billing') ?><span>Minha assinatura</span><?= $notificationBadge($notificationUnread) ?></a>
             <?php endif; ?>
-            <?php if (Auth::can('permissions.view')): ?>
+            <?php if (Auth::can('permissions.view') && $moduleVisible('permissions')): ?>
                 <a class="nav-link<?= $isActive('/permissions') ?>" href="<?= View::e(Router::url('/permissions')) ?>"><?= $svgIcon('permissions') ?><span>Permissões</span></a>
             <?php endif; ?>
         </nav>
@@ -210,7 +190,7 @@ $svgIcon = static function (string $name): string {
                 <span class="eyebrow"><?= Auth::isSuperAdmin() ? 'Operação RS' : View::e($user['tenant_name'] ?? 'Cliente') ?></span>
                 <h1><?= View::e($title ?? 'RS Connect') ?></h1>
             </div>
-            <?php if (!Auth::isSuperAdmin() && Auth::can('notifications.view')): ?>
+            <?php if (!Auth::isSuperAdmin() && Auth::can('notifications.view') && $moduleVisible('notifications')): ?>
                 <a class="topbar-notification" href="<?= View::e(Router::url('/notifications')) ?>" aria-label="Notificações">
                     <?= $svgIcon('bell') ?>
                     <?= $notificationBadge($notificationUnread) ?>
@@ -232,6 +212,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=22')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=18.0')) ?>" defer></script>
 </body>
 </html>

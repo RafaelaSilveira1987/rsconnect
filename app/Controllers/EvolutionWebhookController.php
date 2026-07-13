@@ -9,6 +9,7 @@ use App\Core\Env;
 use App\Services\AiAutomationService;
 use App\Services\AutomationWebhookService;
 use App\Services\CrmAutoService;
+use App\Services\PreSchedulingService;
 use PDO;
 use Throwable;
 
@@ -94,10 +95,6 @@ final class EvolutionWebhookController
             $pdo->beginTransaction();
 
             $contactId = $this->upsertContact($pdo, $instance, $remoteJid, $phone, $pushName);
-            $optOutRequested = !$fromMe && $this->isOptOutMessage($content);
-            if ($optOutRequested) {
-                $this->markContactOptOut($pdo, $contactId);
-            }
             $conversationId = $this->upsertConversation(
                 $pdo,
                 $instance,
@@ -125,12 +122,13 @@ final class EvolutionWebhookController
             $leadId = null;
             if (!$fromMe && $inserted) {
                 $leadId = (new CrmAutoService())->createFromConversation($pdo, $instance, $contactId, $conversationId, $content);
+                (new PreSchedulingService())->handleIncoming($pdo, $instance, $contactId, $conversationId, $content);
             }
 
             $pdo->commit();
 
             $aiHandled = false;
-            if (!$fromMe && $inserted && empty($optOutRequested)) {
+            if (!$fromMe && $inserted) {
                 (new AutomationWebhookService())->dispatch('message.received', [
                     'tenant_id' => (int) $instance['tenant_id'],
                     'instance_id' => (int) $instance['id'],
@@ -160,23 +158,6 @@ final class EvolutionWebhookController
                 : 422;
             $this->respond($status, ['ok' => false, 'error' => $exception->getMessage()]);
         }
-    }
-
-    private function isOptOutMessage(string $content): bool
-    {
-        $text = mb_strtolower(trim($content));
-        $text = preg_replace('/\s+/', ' ', $text) ?: $text;
-        return in_array($text, ['parar', 'sair', 'cancelar', 'remover', 'stop', 'não quero receber', 'nao quero receber'], true);
-    }
-
-    private function markContactOptOut(PDO $pdo, int $contactId): void
-    {
-        $statement = $pdo->prepare(
-            'UPDATE contacts
-             SET marketing_opt_in = 0, opt_out_at = NOW(), opt_out_reason = "Solicitado pelo WhatsApp"
-             WHERE id = :id'
-        );
-        $statement->execute(['id' => $contactId]);
     }
 
     private function normalizeEvent(string $event): string
@@ -278,17 +259,16 @@ final class EvolutionWebhookController
         $statement = $pdo->prepare(
             'INSERT INTO conversations
                 (tenant_id, evolution_instance_id, contact_id, remote_jid, status,
-                 attendance_mode, operational_status, priority, unread_count, last_message_at, last_message_preview)
+                 attendance_mode, unread_count, last_message_at, last_message_preview)
              VALUES
                 (:tenant_id, :instance_id, :contact_id, :remote_jid, "open",
-                 "ai", "new", "normal", :unread_count, :last_message_at, :preview)
+                 "ai", :unread_count, :last_message_at, :preview)
              ON DUPLICATE KEY UPDATE
                 id = LAST_INSERT_ID(id),
                 contact_id = VALUES(contact_id),
                 last_message_at = VALUES(last_message_at),
                 last_message_preview = VALUES(last_message_preview),
                 unread_count = unread_count + VALUES(unread_count),
-                operational_status = IF(VALUES(unread_count) > 0 AND operational_status IN ("resolved", "archived"), "new", IF(VALUES(unread_count) > 0 AND assigned_user_id IS NULL, "waiting_agent", operational_status)),
                 status = IF(status = "closed", "open", status)'
         );
         $statement->execute([

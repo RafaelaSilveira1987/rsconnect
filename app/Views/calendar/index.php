@@ -6,10 +6,14 @@ use App\Core\Router;
 use App\Core\View;
 
 $statusLabels = [
+    'pre_scheduled' => 'Pré-agendado',
+    'awaiting_approval' => 'Aguardando aprovação',
     'scheduled' => 'Agendado',
     'confirmed' => 'Confirmado',
     'completed' => 'Concluído',
     'cancelled' => 'Cancelado',
+    'rejected' => 'Recusado',
+    'rescheduled' => 'Remarcado',
     'no_show' => 'Não compareceu',
 ];
 $locationLabels = ['online' => 'Online', 'presencial' => 'Presencial', 'telefone' => 'Telefone'];
@@ -50,6 +54,11 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
                 <input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>">
                 <strong>Criar agendamento</strong>
                 <label class="field"><span>Título *</span><input name="title" maxlength="180" required placeholder="Ex.: Reunião de diagnóstico"></label>
+                <label class="switch-inline"><input type="checkbox" name="is_pre_schedule" value="1"><span>Criar como pré-agendamento para aprovação humana</span></label>
+                <div class="form-grid two">
+                    <label class="field"><span>Dia preferido informado</span><input name="preferred_day_text" maxlength="120" placeholder="Ex.: terça-feira"></label>
+                    <label class="field"><span>Horário/período informado</span><input name="preferred_time_text" maxlength="120" placeholder="Ex.: tarde ou 14:00"></label>
+                </div>
                 <div class="form-grid two">
                     <label class="field"><span>Início *</span><input type="datetime-local" name="starts_at" required></label>
                     <label class="field"><span>Fim *</span><input type="datetime-local" name="ends_at" required></label>
@@ -79,6 +88,7 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
 <div class="metric-grid metric-grid-compact">
     <article class="metric-card"><span>Hoje</span><strong><?= (int) ($metrics['today_count'] ?? 0) ?></strong><small>compromissos do dia</small></article>
     <article class="metric-card"><span>Próximos</span><strong><?= (int) ($metrics['upcoming_count'] ?? 0) ?></strong><small>em aberto</small></article>
+    <article class="metric-card metric-card-link"><span>Pré-agendamentos</span><strong><?= (int) ($metrics['pre_schedule_pending'] ?? 0) ?></strong><small>aguardando aprovação</small></article>
     <article class="metric-card"><span>Sincronização</span><strong><?= (int) ($metrics['pending_sync'] ?? 0) ?></strong><small>pendentes ou falhas</small></article>
     <article class="metric-card"><span>Concluídos em 30 dias</span><strong><?= (int) ($metrics['completed_count'] ?? 0) ?></strong><small>histórico recente</small></article>
 </div>
@@ -104,6 +114,12 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
                 <div class="task-main">
                     <div class="task-title-line"><strong><?= View::e($appointment['title']) ?></strong><span class="badge badge-<?= View::e($appointment['status']) ?>"><?= View::e($statusLabels[$appointment['status']] ?? $appointment['status']) ?></span><span class="priority-text"><?= View::e($locationLabels[$appointment['location_type']] ?? $appointment['location_type']) ?></span></div>
                     <p><?= View::e($appointment['description'] ?: 'Sem descrição') ?></p>
+                    <?php if (!empty($appointment['is_pre_schedule'])): ?>
+                        <div class="pre-schedule-note">
+                            <strong>Pré-agendamento</strong>
+                            <span>Preferência: <?= View::e(($appointment['preferred_day_text'] ?? '') ?: 'dia não informado') ?> · <?= View::e(($appointment['preferred_time_text'] ?? '') ?: 'horário não informado') ?></span>
+                        </div>
+                    <?php endif; ?>
                     <small><?= View::e($appointment['contact_name'] ?: ($appointment['phone'] ?: 'Sem contato')) ?> · <?= View::e($appointment['lead_title'] ?: 'Sem negócio') ?> · Responsável: <?= View::e($appointment['owner_name'] ?: 'não definido') ?></small>
                     <?php if (($appointment['meeting_url'] ?? '') !== ''): ?><small><a href="<?= View::e($appointment['meeting_url']) ?>" target="_blank" rel="noopener">Abrir link da reunião</a></small><?php endif; ?>
                     <?php if (($appointment['sync_status'] ?? '') === 'failed'): ?><small class="text-danger">Falha sync: <?= View::e($appointment['sync_error'] ?? 'erro não informado') ?></small><?php endif; ?>
@@ -113,10 +129,16 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
                     <a class="btn btn-small btn-quiet" target="_blank" rel="noopener" href="<?= View::e($googleLink($appointment)) ?>">Google</a>
                     <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/calendar/ics?id=' . (int) $appointment['id'] . '&tenant_id=' . (int) $appointment['tenant_id'])) ?>">.ics</a>
                     <?php if ($canManage): ?>
-                        <?php if (!in_array($appointment['status'], ['completed', 'cancelled'], true)): ?>
-                            <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>"><input type="hidden" name="status" value="confirmed"><input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>"><button class="btn btn-small btn-secondary" type="submit">Confirmar</button></form>
-                            <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>"><input type="hidden" name="status" value="completed"><input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>"><button class="btn btn-small btn-primary" type="submit">Concluir</button></form>
-                            <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>"><input type="hidden" name="status" value="cancelled"><input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>"><button class="btn btn-small btn-quiet" type="submit">Cancelar</button></form>
+                        <?php if (!in_array($appointment['status'], ['completed', 'cancelled', 'rejected'], true)): ?>
+                            <?php if (in_array($appointment['status'], ['pre_scheduled', 'awaiting_approval', 'rescheduled'], true)): ?>
+                                <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>"><input type="hidden" name="status" value="confirmed"><input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>"><button class="btn btn-small btn-primary" type="submit">Aprovar</button></form>
+                                <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>"><input type="hidden" name="status" value="rejected"><input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>"><button class="btn btn-small btn-quiet" type="submit">Recusar</button></form>
+                                <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>"><input type="hidden" name="status" value="rescheduled"><input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>"><button class="btn btn-small btn-secondary" type="submit">Remarcar</button></form>
+                            <?php else: ?>
+                                <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>"><input type="hidden" name="status" value="confirmed"><input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>"><button class="btn btn-small btn-secondary" type="submit">Confirmar</button></form>
+                                <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>"><input type="hidden" name="status" value="completed"><input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>"><button class="btn btn-small btn-primary" type="submit">Concluir</button></form>
+                                <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>"><input type="hidden" name="status" value="cancelled"><input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>"><button class="btn btn-small btn-quiet" type="submit">Cancelar</button></form>
+                            <?php endif; ?>
                         <?php endif; ?>
                     <?php endif; ?>
                 </div>
