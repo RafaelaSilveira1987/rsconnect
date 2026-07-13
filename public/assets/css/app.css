@@ -2087,3 +2087,125 @@ body::before {
     text-align: left;
   }
 }
+
+/* ZIP 20 — LGPD e Privacidade + ajuste de contraste da Segurança */
+.security-hero,
+.privacy-hero-clean {
+  background: linear-gradient(120deg, #ffffff, #f7fbfc) !important;
+  color: var(--rs-text, #182033) !important;
+  border: 1px solid #dce8ee !important;
+  box-shadow: var(--rs-shadow) !important;
+}
+.security-hero::after,
+.privacy-hero-clean::after {
+  background: radial-gradient(circle, rgba(20, 100, 152, .10), transparent 65%) !important;
+}
+.security-hero h2,
+.privacy-hero-clean h2 {
+  color: #182033 !important;
+}
+.security-hero p,
+.privacy-hero-clean p {
+  color: #596579 !important;
+}
+.security-hero .eyebrow,
+.security-hero .eyebrow.light,
+.privacy-hero-clean .eyebrow {
+  color: #0f766e !important;
+}
+.security-hero .badge,
+.privacy-hero-actions .badge {
+  background: #f7fafc;
+  color: #243044;
+  border-color: #dbe5ed;
+}
+.security-hero .badge-success,
+.privacy-hero-actions .badge-success {
+  color: #065f46;
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+}
+.security-hero .badge-warning,
+.privacy-hero-actions .badge-warning {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.privacy-kpis .report-kpi strong { color: #0f766e; }
+.privacy-company-filter { margin-top: 16px; }
+.privacy-document-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+.privacy-document-box {
+  border: 1px solid #dce8ee;
+  border-radius: 18px;
+  background: #fff;
+  padding: 18px;
+}
+.privacy-document-box h3 {
+  margin: 0 0 10px;
+  letter-spacing: -.03em;
+}
+.privacy-document-text {
+  max-height: 360px;
+  overflow: auto;
+  color: #4f5b6d;
+  line-height: 1.7;
+  font-size: .92rem;
+}
+.privacy-accept-card {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+.privacy-accept-head h2 {
+  margin: 6px 0 10px;
+  letter-spacing: -.04em;
+  font-size: clamp(1.5rem, 2.3vw, 2.25rem);
+}
+.privacy-accept-head p {
+  color: #596579;
+  max-width: 820px;
+  line-height: 1.65;
+}
+.privacy-accept-form {
+  margin-top: 18px;
+}
+.privacy-accept-checkbox {
+  background: #f8fbfc;
+  border-color: #d9e7ed;
+}
+.privacy-settings-form .field textarea {
+  min-height: 180px;
+}
+.settings-toggle-grid.single {
+  grid-template-columns: 1fr;
+}
+.inline-status-form {
+  display: grid;
+  grid-template-columns: minmax(120px, 150px) minmax(180px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.inline-status-form select,
+.inline-status-form input {
+  min-height: 34px;
+  border: 1px solid #dfe5ec;
+  border-radius: 9px;
+  padding: 7px 9px;
+  background: #fff;
+}
+.privacy-export-form {
+  display: grid;
+  gap: 12px;
+}
+.privacy-acceptance-list {
+  max-height: 440px;
+  overflow: auto;
+}
+@media (max-width: 980px) {
+  .privacy-document-grid { grid-template-columns: 1fr; }
+  .inline-status-form { grid-template-columns: 1fr; }
+}

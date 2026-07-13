@@ -92,6 +92,13 @@ final class TenantModuleService
                 'default_visible' => true,
                 'default_enabled' => true,
             ],
+            'privacy' => [
+                'label' => 'Privacidade/LGPD',
+                'description' => 'Políticas, aceite, solicitações de dados e registros LGPD.',
+                'paths' => ['/privacy', '/lgpd'],
+                'default_visible' => true,
+                'default_enabled' => true,
+            ],
             'subscription' => [
                 'label' => 'Minha assinatura',
                 'description' => 'Plano contratado, cobranças e limites.',
@@ -195,7 +202,6 @@ final class TenantModuleService
                 is_enabled = VALUES(is_enabled),
                 updated_at = CURRENT_TIMESTAMP'
         );
-        unset(self::$settingsCache[$tenantId]);
         foreach (self::modules() as $moduleKey => $module) {
             $alwaysEnabled = in_array($moduleKey, ['dashboard', 'company_settings'], true);
             $isEnabled = $alwaysEnabled ? 1 : (in_array($moduleKey, $enabledModules, true) ? 1 : 0);
@@ -218,7 +224,6 @@ final class TenantModuleService
         if ($path === '//') {
             $path = '/';
         }
-        unset(self::$settingsCache[$tenantId]);
         foreach (self::modules() as $moduleKey => $module) {
             foreach ($module['paths'] as $prefix) {
                 $prefix = '/' . trim($prefix, '/');

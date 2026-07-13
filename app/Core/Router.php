@@ -6,6 +6,7 @@ namespace App\Core;
 
 use App\Services\TenantModuleService;
 use App\Services\SecurityService;
+use App\Services\PrivacyService;
 
 final class Router
 {
@@ -69,6 +70,15 @@ final class Router
             if (!(new SecurityService())->enforceAuthenticatedSession()) {
                 Flash::set('warning', 'Sua sessão expirou ou foi encerrada. Faça login novamente.');
                 $this->redirect('/login');
+                return false;
+            }
+
+
+            $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+            $privacyExempt = in_array($this->normalize($path), ['/privacy/accept', '/logout', '/webhooks/evolution', '/webhooks/n8n/callback'], true);
+            if (!$privacyExempt && !Auth::isSuperAdmin() && (new PrivacyService())->requiresAcceptance(Auth::tenantId(), Auth::id())) {
+                Flash::set('warning', 'Leia e aceite os termos de privacidade/LGPD da sua empresa para continuar.');
+                $this->redirect('/privacy/accept');
                 return false;
             }
         }

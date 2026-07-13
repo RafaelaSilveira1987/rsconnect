@@ -20,6 +20,7 @@ use App\Controllers\N8nFlowController;
 use App\Controllers\N8nTemplateController;
 use App\Controllers\NotificationsController;
 use App\Controllers\PaymentGatewayController;
+use App\Controllers\PrivacyController;
 use App\Controllers\ReportController;
 use App\Controllers\SecurityController;
 use App\Controllers\BillingReminderController;
@@ -66,6 +67,18 @@ return static function (Router $router): void {
     $router->get('/reports/export', [ReportController::class, 'export'], ['auth', 'permission:reports.view']);
 
     $router->get('/security', [SecurityController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/seguranca', [SecurityController::class, 'index'], ['auth', 'super_admin']);
+
+    $router->get('/privacy/accept', [PrivacyController::class, 'accept'], ['auth']);
+    $router->post('/privacy/accept', [PrivacyController::class, 'acceptStore'], ['auth', 'csrf']);
+    $router->get('/privacy', [PrivacyController::class, 'index'], ['auth', 'permission:privacy.view']);
+    $router->post('/privacy/settings/save', [PrivacyController::class, 'saveSettings'], ['auth', 'permission:privacy.manage', 'csrf']);
+    $router->post('/privacy/requests/create', [PrivacyController::class, 'createRequest'], ['auth', 'permission:privacy.manage', 'csrf']);
+    $router->post('/privacy/requests/update', [PrivacyController::class, 'updateRequest'], ['auth', 'permission:privacy.manage', 'csrf']);
+    $router->get('/privacy/export-contact', [PrivacyController::class, 'exportContact'], ['auth', 'permission:privacy.view']);
+    $router->get('/lgpd', [PrivacyController::class, 'index'], ['auth', 'permission:privacy.view']);
+    $router->get('/privacidade', [PrivacyController::class, 'index'], ['auth', 'permission:privacy.view']);
+
     $router->post('/security/sessions/revoke', [SecurityController::class, 'revokeSession'], ['auth', 'super_admin', 'csrf']);
 
     $router->get('/notifications', [NotificationsController::class, 'index'], ['auth', 'permission:notifications.view']);

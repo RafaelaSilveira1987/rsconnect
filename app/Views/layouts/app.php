@@ -78,6 +78,7 @@ $svgIcon = static function (string $name): string {
         'users' => '<path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
         'permissions' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
         'security' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>',
+        'privacy' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="M9 12h6M12 9v6"/>',
         'menu' => '<path d="M4 7h16M4 12h16M4 17h16"/>',
     ];
     $path = $icons[$name] ?? $icons['dashboard'];
@@ -91,7 +92,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=19.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=20.0')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -144,6 +145,7 @@ $svgIcon = static function (string $name): string {
                 <a class="nav-link<?= $isActive('/payment-gateways') ?>" href="<?= View::e(Router::url('/payment-gateways')) ?>"><?= $svgIcon('card') ?><span>Gateways de pagamento</span></a>
                 <a class="nav-link<?= $isActive('/billing-reminders') ?>" href="<?= View::e(Router::url('/billing-reminders')) ?>"><?= $svgIcon('bell') ?><span>Régua de cobrança</span></a>
                 <a class="nav-link<?= $isActive('/security') ?>" href="<?= View::e(Router::url('/security')) ?>"><?= $svgIcon('security') ?><span>Segurança</span></a>
+                <a class="nav-link<?= $isActive('/privacy') ?>" href="<?= View::e(Router::url('/privacy')) ?>"><?= $svgIcon('privacy') ?><span>Privacidade/LGPD</span></a>
             <?php endif; ?>
             <?php if (!Auth::isSuperAdmin() && Auth::can('agents.view') && $moduleVisible('agents')): ?>
                 <a class="nav-link<?= $isActive('/agents') ?>" href="<?= View::e(Router::url('/agents')) ?>"><?= $svgIcon('agent') ?><span>Agentes de IA</span></a>
@@ -163,6 +165,9 @@ $svgIcon = static function (string $name): string {
             <?php endif; ?>
             <?php if (!Auth::isSuperAdmin() && Auth::can('notifications.view') && $moduleVisible('notifications')): ?>
                 <a class="nav-link<?= $isActive('/notifications') ?>" href="<?= View::e(Router::url('/notifications')) ?>"><?= $svgIcon('bell') ?><span>Notificações</span><?= $notificationBadge($notificationUnread) ?></a>
+            <?php endif; ?>
+            <?php if (!Auth::isSuperAdmin() && Auth::can('privacy.view') && $moduleVisible('privacy')): ?>
+                <a class="nav-link<?= $isActive('/privacy') ?>" href="<?= View::e(Router::url('/privacy')) ?>"><?= $svgIcon('privacy') ?><span>Privacidade/LGPD</span></a>
             <?php endif; ?>
             <?php if (!Auth::isSuperAdmin() && Auth::can('billing.view') && $moduleVisible('subscription')): ?>
                 <a class="nav-link<?= $isActive('/subscription') ?>" href="<?= View::e(Router::url('/subscription')) ?>"><?= $svgIcon('billing') ?><span>Minha assinatura</span><?= $notificationBadge($notificationUnread) ?></a>
@@ -214,6 +219,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=19.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=20.0')) ?>" defer></script>
 </body>
 </html>
