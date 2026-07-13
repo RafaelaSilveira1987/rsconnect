@@ -15,6 +15,7 @@ use App\Controllers\ConversationController;
 use App\Controllers\EvolutionWebhookController;
 use App\Controllers\DashboardController;
 use App\Controllers\InstanceController;
+use App\Controllers\ImplementationController;
 use App\Controllers\OnboardingController;
 use App\Controllers\N8nFlowController;
 use App\Controllers\N8nTemplateController;
@@ -69,6 +70,10 @@ return static function (Router $router): void {
 
     $router->get('/security', [SecurityController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/seguranca', [SecurityController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/implementation', [ImplementationController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/implantacao', [ImplementationController::class, 'index'], ['auth', 'super_admin']);
+    $router->post('/implementation/refresh', [ImplementationController::class, 'refresh'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/implementation/item', [ImplementationController::class, 'updateItem'], ['auth', 'super_admin', 'csrf']);
     $router->get('/operations', [OperationsController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/monitoramento', [OperationsController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/operations/checks/run', [OperationsController::class, 'runHealthChecks'], ['auth', 'super_admin', 'csrf']);
