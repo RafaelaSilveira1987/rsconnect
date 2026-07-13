@@ -267,6 +267,22 @@ final class CalendarController
             $this->redirect('/calendar?tenant_id=' . $tenantId);
         }
 
+        $appointmentBefore = $this->findAppointment($appointmentId, $tenantId);
+        if (!$appointmentBefore) {
+            Flash::set('error', 'Agendamento não encontrado.');
+            $this->redirect('/calendar?tenant_id=' . $tenantId);
+        }
+
+        $wasPreSchedule = (int) ($appointmentBefore['is_pre_schedule'] ?? 0) === 1;
+        if ($status === 'confirmed' && $wasPreSchedule) {
+            $preferredDay = trim((string) ($appointmentBefore['preferred_day_text'] ?? ''));
+            $preferredTime = trim((string) ($appointmentBefore['preferred_time_text'] ?? ''));
+            if ($preferredDay === '' || $preferredTime === '') {
+                Flash::set('error', 'Antes de aprovar, o pré-agendamento precisa ter dia e horário/período informados pelo cliente. Peça a preferência ou remarque manualmente.');
+                $this->redirect('/calendar?tenant_id=' . $tenantId);
+            }
+        }
+
         $approvalStatus = match ($status) {
             'confirmed' => 'approved',
             'rejected', 'cancelled' => 'rejected',
@@ -297,6 +313,19 @@ final class CalendarController
             Audit::log('calendar.appointment_status_updated', ['appointment_id' => $appointmentId, 'status' => $status], $tenantId);
             $this->trySyncToN8n($appointmentId, $tenantId, 'status_updated');
             $messageResult = $this->trySendPreScheduleStatusMessage($appointmentId, $tenantId, $status);
+            if ($status === 'confirmed' && $wasPreSchedule) {
+                Database::connection()->prepare(
+                    'UPDATE calendar_appointments
+                     SET is_pre_schedule = 0,
+                         pre_schedule_source = COALESCE(pre_schedule_source, "converted"),
+                         title = CASE
+                             WHEN title LIKE "Pré-agendamento - %" THEN REPLACE(title, "Pré-agendamento - ", "Agendamento - ")
+                             ELSE title
+                         END,
+                         updated_at = CURRENT_TIMESTAMP
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
+            }
             if ($messageResult['attempted'] && !$messageResult['ok']) {
                 Flash::set('warning', 'Status atualizado, mas a mensagem automática não foi enviada: ' . $messageResult['error']);
             } else {

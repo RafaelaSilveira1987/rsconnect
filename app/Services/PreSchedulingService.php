@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Core\Crypto;
 use App\Core\Database;
 use DateInterval;
 use DateTimeImmutable;
@@ -13,29 +14,48 @@ use Throwable;
 
 final class PreSchedulingService
 {
-    public function handleIncoming(PDO $pdo, array $instance, int $contactId, int $conversationId, string $content): void
+    public function handleIncoming(PDO $pdo, array $instance, int $contactId, int $conversationId, string $content): array
     {
+        $result = $this->defaultResult();
         $tenantId = (int) ($instance['tenant_id'] ?? 0);
         $content = trim($content);
         if ($tenantId < 1 || $content === '' || !$this->isEnabled($tenantId)) {
-            return;
+            return $result;
         }
 
         $intent = $this->detectIntent($content);
         if (!$intent['has_intent']) {
-            return;
+            return $result;
         }
+
+        $result['handled'] = true;
+        $result['has_preference'] = $this->hasAnyPreference($intent);
+        $result['has_full_preference'] = $this->hasFullPreference($intent);
 
         $this->markConversationIntent($pdo, $tenantId, $conversationId, $intent);
 
-        $existing = $this->pendingPreSchedule($pdo, $tenantId, $conversationId);
+        $existing = $this->pendingPreSchedule($pdo, $tenantId, $conversationId, $contactId);
         if ($existing !== null) {
-            $this->updatePendingPreSchedule($pdo, $tenantId, $existing, $intent, $content);
-            return;
+            $update = $this->updatePendingPreSchedule($pdo, $tenantId, $existing, $intent, $content);
+            $result = array_merge($result, [
+                'updated' => true,
+                'appointment_id' => (int) ($existing['id'] ?? 0),
+                'has_preference' => $update['has_preference'],
+                'has_full_preference' => $update['has_full_preference'],
+            ]);
+
+            if ($update['has_full_preference']) {
+                $ack = $this->sendPreferenceAcknowledgement($pdo, $instance, $conversationId, $contactId, $update['appointment'], $intent);
+                $result['ack_sent'] = $ack['ok'];
+                $result['ack_error'] = $ack['error'];
+                $result['skip_ai'] = $ack['ok'];
+            }
+
+            return $result;
         }
 
         if (!$this->hasColumn($pdo, 'calendar_appointments', 'is_pre_schedule')) {
-            return;
+            return $result;
         }
 
         $settings = $this->settings($tenantId);
@@ -44,6 +64,7 @@ final class PreSchedulingService
         $titleName = trim((string) ($contact['name'] ?? '')) ?: trim((string) ($contact['phone'] ?? 'Paciente'));
         $title = 'Pré-agendamento - ' . mb_substr($titleName, 0, 90);
         $description = $this->buildDescription($content, $intent);
+        $status = $this->hasFullPreference($intent) ? 'awaiting_approval' : 'pre_scheduled';
 
         $statement = $pdo->prepare(
             'INSERT INTO calendar_appointments
@@ -51,7 +72,7 @@ final class PreSchedulingService
                  location_type, location, reminder_minutes, sync_status, is_pre_schedule, pre_schedule_source,
                  preferred_day_text, preferred_time_text, approval_status, approval_notes)
              VALUES
-                (:tenant_id, :contact_id, :conversation_id, :title, :description, :starts_at, :ends_at, :timezone, "pre_scheduled",
+                (:tenant_id, :contact_id, :conversation_id, :title, :description, :starts_at, :ends_at, :timezone, :status,
                  :location_type, :location, 60, "pending", 1, "ai_whatsapp",
                  :preferred_day_text, :preferred_time_text, "pending", :approval_notes)'
         );
@@ -64,10 +85,11 @@ final class PreSchedulingService
             'starts_at' => $period['starts_at'],
             'ends_at' => $period['ends_at'],
             'timezone' => 'America/Sao_Paulo',
+            'status' => $status,
             'location_type' => $intent['location_type'],
             'location' => $intent['modality'] !== '' ? $intent['modality'] : null,
-            'preferred_day_text' => $this->displayDay($intent),
-            'preferred_time_text' => $this->displayTime($intent),
+            'preferred_day_text' => $this->displayDay($intent) ?: null,
+            'preferred_time_text' => $this->displayTime($intent) ?: null,
             'approval_notes' => 'Criado automaticamente a partir da intenção de agenda detectada na conversa #' . $conversationId,
         ]);
         $appointmentId = (int) $pdo->lastInsertId();
@@ -78,7 +100,9 @@ final class PreSchedulingService
         )->execute([
             'tenant_id' => $tenantId,
             'conversation_id' => $conversationId,
-            'description' => 'Pré-agendamento criado para aprovação humana.',
+            'description' => $this->hasFullPreference($intent)
+                ? 'Pré-agendamento criado com preferência de dia/horário para aprovação humana.'
+                : 'Pré-agendamento criado aguardando preferência de dia/horário.',
             'metadata_json' => json_encode(['appointment_id' => $appointmentId, 'intent' => $intent], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ]);
 
@@ -93,6 +117,46 @@ final class PreSchedulingService
             'modality' => $intent['modality'],
             'message' => $content,
         ], null, $tenantId);
+
+        $result['created'] = true;
+        $result['appointment_id'] = $appointmentId;
+
+        if ($this->hasFullPreference($intent)) {
+            $appointment = [
+                'id' => $appointmentId,
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'contact_id' => $contactId,
+                'title' => $title,
+                'starts_at' => $period['starts_at'],
+                'ends_at' => $period['ends_at'],
+                'preferred_day_text' => $this->displayDay($intent),
+                'preferred_time_text' => $this->displayTime($intent),
+                'location_type' => $intent['location_type'],
+                'location' => $intent['modality'] !== '' ? $intent['modality'] : null,
+            ];
+            $ack = $this->sendPreferenceAcknowledgement($pdo, $instance, $conversationId, $contactId, $appointment, $intent);
+            $result['ack_sent'] = $ack['ok'];
+            $result['ack_error'] = $ack['error'];
+            $result['skip_ai'] = $ack['ok'];
+        }
+
+        return $result;
+    }
+
+    private function defaultResult(): array
+    {
+        return [
+            'handled' => false,
+            'created' => false,
+            'updated' => false,
+            'appointment_id' => null,
+            'has_preference' => false,
+            'has_full_preference' => false,
+            'ack_sent' => false,
+            'ack_error' => null,
+            'skip_ai' => false,
+        ];
     }
 
     public function isEnabled(int $tenantId): bool
@@ -228,7 +292,10 @@ final class PreSchedulingService
         $directAgenda = (bool) preg_match('/\b(agenda|agendar|marcar|marca|marcamos|horario|hora|disponibilidade|encaixe|retorno|consulta|sessao|atendimento)\b/u', $text);
         $serviceInterest = (bool) preg_match('/\b(consulta|atendimento|sessao|terapia|avaliacao|psicologa|psicologo)\b/u', $text);
         $hasPreference = $preferredDate !== '' || $preferredDay !== '' || $preferredTime !== '';
-        $hasIntent = $directAgenda || ($serviceInterest && $hasPreference);
+        // Quando o pré-agendamento está ativo, mensagens curtas como "terça às 15h"
+        // normalmente são a continuação da conversa de agenda. Antes elas não atualizavam
+        // o compromisso porque não traziam a palavra "agendar".
+        $hasIntent = $directAgenda || ($serviceInterest && $hasPreference) || $hasPreference;
         $modality = $this->extractModality($text);
 
         return [
@@ -241,54 +308,101 @@ final class PreSchedulingService
         ];
     }
 
-    private function pendingPreSchedule(PDO $pdo, int $tenantId, int $conversationId): ?array
+    private function pendingPreSchedule(PDO $pdo, int $tenantId, int $conversationId, int $contactId = 0): ?array
     {
         if (!$this->hasColumn($pdo, 'calendar_appointments', 'is_pre_schedule')) {
             return null;
         }
+
         $statement = $pdo->prepare(
             'SELECT * FROM calendar_appointments
              WHERE tenant_id = :tenant_id
                AND conversation_id = :conversation_id
                AND is_pre_schedule = 1
-               AND status IN ("pre_scheduled", "awaiting_approval")
+               AND status IN ("pre_scheduled", "awaiting_approval", "rescheduled")
              ORDER BY id DESC
              LIMIT 1'
         );
         $statement->execute(['tenant_id' => $tenantId, 'conversation_id' => $conversationId]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        if ($row) {
+            return $row;
+        }
+
+        // Fallback importante: em alguns cenários a conversa pode mudar de ID
+        // após reconfiguração de instância/webhook. O pré-agendamento ainda pertence
+        // ao mesmo contato, então atualizamos o último pendente desse contato.
+        if ($contactId > 0) {
+            $statement = $pdo->prepare(
+                'SELECT * FROM calendar_appointments
+                 WHERE tenant_id = :tenant_id
+                   AND contact_id = :contact_id
+                   AND is_pre_schedule = 1
+                   AND status IN ("pre_scheduled", "awaiting_approval", "rescheduled")
+                   AND created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+                 ORDER BY id DESC
+                 LIMIT 1'
+            );
+            $statement->execute(['tenant_id' => $tenantId, 'contact_id' => $contactId]);
+            $row = $statement->fetch(PDO::FETCH_ASSOC);
+            if ($row) {
+                return $row;
+            }
+        }
+
+        return null;
     }
 
-    private function updatePendingPreSchedule(PDO $pdo, int $tenantId, array $appointment, array $intent, string $content): void
+    private function updatePendingPreSchedule(PDO $pdo, int $tenantId, array $appointment, array $intent, string $content): array
     {
         $settings = $this->settings($tenantId);
-        $period = $this->periodFromIntent($intent, (int) ($settings['default_duration_minutes'] ?? 50));
         $day = $this->displayDay($intent);
         $time = $this->displayTime($intent);
-        $description = (string) ($appointment['description'] ?? '');
-        $newLine = 'Nova informação do lead: ' . mb_substr($content, 0, 300);
-        if (!str_contains($description, $newLine)) {
-            $description = trim($description . "\n" . $newLine);
+        $hasPreference = $this->hasAnyPreference($intent);
+        $hasFullPreference = $this->hasFullPreference($intent);
+
+        $description = $hasPreference
+            ? $this->buildDescription($content, $intent)
+            : (string) ($appointment['description'] ?? '');
+
+        if (!$hasPreference) {
+            $newLine = 'Nova informação do lead: ' . mb_substr($content, 0, 300);
+            if (!str_contains($description, $newLine)) {
+                $description = trim($description . "\n" . $newLine);
+            }
         }
 
         $params = [
             'id' => (int) $appointment['id'],
             'tenant_id' => $tenantId,
             'description' => mb_substr($description, 0, 2000),
-            'starts_at' => $period['starts_at'],
-            'ends_at' => $period['ends_at'],
             'preferred_day_text' => $day !== '' ? $day : ($appointment['preferred_day_text'] ?? null),
             'preferred_time_text' => $time !== '' ? $time : ($appointment['preferred_time_text'] ?? null),
             'location_type' => $intent['location_type'] ?: ($appointment['location_type'] ?? 'online'),
             'location' => $intent['modality'] !== '' ? $intent['modality'] : ($appointment['location'] ?? null),
         ];
 
+        $setPeriod = '';
+        if ($hasPreference) {
+            $period = $this->periodFromIntent($intent, (int) ($settings['default_duration_minutes'] ?? 50));
+            $params['starts_at'] = $period['starts_at'];
+            $params['ends_at'] = $period['ends_at'];
+            $setPeriod = ', starts_at = :starts_at, ends_at = :ends_at';
+        } else {
+            $period = [
+                'starts_at' => (string) ($appointment['starts_at'] ?? ''),
+                'ends_at' => (string) ($appointment['ends_at'] ?? ''),
+            ];
+        }
+
+        $statusSet = '';
+        if ($hasFullPreference) {
+            $statusSet = ', status = "awaiting_approval"';
+        }
+
         $pdo->prepare(
             'UPDATE calendar_appointments
-             SET description = :description,
-                 starts_at = :starts_at,
-                 ends_at = :ends_at,
+             SET description = :description' . $setPeriod . $statusSet . ',
                  preferred_day_text = :preferred_day_text,
                  preferred_time_text = :preferred_time_text,
                  location_type = :location_type,
@@ -296,6 +410,151 @@ final class PreSchedulingService
                  updated_at = CURRENT_TIMESTAMP
              WHERE id = :id AND tenant_id = :tenant_id'
         )->execute($params);
+
+        $updatedAppointment = array_merge($appointment, [
+            'description' => $params['description'],
+            'preferred_day_text' => $params['preferred_day_text'],
+            'preferred_time_text' => $params['preferred_time_text'],
+            'location_type' => $params['location_type'],
+            'location' => $params['location'],
+            'starts_at' => $period['starts_at'],
+            'ends_at' => $period['ends_at'],
+            'status' => $hasFullPreference ? 'awaiting_approval' : ($appointment['status'] ?? 'pre_scheduled'),
+        ]);
+
+        $pdo->prepare(
+            'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
+             VALUES (:tenant_id, :conversation_id, "calendar.pre_schedule_updated", :description, :metadata_json)'
+        )->execute([
+            'tenant_id' => $tenantId,
+            'conversation_id' => (int) ($updatedAppointment['conversation_id'] ?? 0),
+            'description' => $hasFullPreference
+                ? 'Preferência de dia/horário recebida e pré-agendamento enviado para aprovação.'
+                : 'Pré-agendamento atualizado com nova informação do lead.',
+            'metadata_json' => json_encode(['appointment_id' => (int) $appointment['id'], 'intent' => $intent], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+
+        return [
+            'appointment' => $updatedAppointment,
+            'has_preference' => $hasPreference,
+            'has_full_preference' => $hasFullPreference,
+        ];
+    }
+
+    private function hasAnyPreference(array $intent): bool
+    {
+        return ((string) ($intent['preferred_date'] ?? '')) !== ''
+            || ((string) ($intent['preferred_day'] ?? '')) !== ''
+            || ((string) ($intent['preferred_time'] ?? '')) !== '';
+    }
+
+    private function hasFullPreference(array $intent): bool
+    {
+        $hasDateOrDay = ((string) ($intent['preferred_date'] ?? '')) !== '' || ((string) ($intent['preferred_day'] ?? '')) !== '';
+        $hasTime = ((string) ($intent['preferred_time'] ?? '')) !== '';
+        return $hasDateOrDay && $hasTime;
+    }
+
+    private function sendPreferenceAcknowledgement(PDO $pdo, array $instance, int $conversationId, int $contactId, array $appointment, array $intent): array
+    {
+        try {
+            $tenantId = (int) ($instance['tenant_id'] ?? 0);
+            $contact = $this->findContact($pdo, $tenantId, $contactId);
+            $phone = preg_replace('/\D+/', '', (string) ($contact['phone'] ?? '')) ?: '';
+            if ($phone === '') {
+                return ['ok' => false, 'error' => 'Contato sem telefone para confirmação de preferência.'];
+            }
+
+            $settings = $this->settings($tenantId);
+            $template = trim((string) ($settings['default_message'] ?? '')) ?: 'Certo. Vou registrar sua preferência e encaminhar para confirmação da profissional.';
+            $message = $this->renderMessage($template, array_merge($appointment, [
+                'contact_name' => $contact['name'] ?? '',
+                'name' => $contact['name'] ?? '',
+                'phone' => $phone,
+                'preferred_day_text' => $this->displayDay($intent),
+                'preferred_time_text' => $this->displayTime($intent),
+            ]));
+
+            if ($this->recentOutgoingSameMessage($pdo, $conversationId, $message)) {
+                return ['ok' => true, 'error' => null];
+            }
+
+            $service = new EvolutionService(
+                (string) $instance['base_url'],
+                Crypto::decrypt((string) $instance['api_key_encrypted']),
+                (string) $instance['instance_name'],
+                24,
+                filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL) !== false,
+                trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) !== '' ? trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) : null
+            );
+            $response = $service->sendText($phone, $message);
+            $externalId = $this->extractMessageId($response['body'] ?? []);
+            $sentAt = date('Y-m-d H:i:s');
+
+            $pdo->prepare(
+                'INSERT INTO conversation_messages
+                    (tenant_id, conversation_id, evolution_message_id, direction, sender_type, message_type, content, status, raw_payload_json, sent_at)
+                 VALUES
+                    (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", "text", :content, "sent", :raw_payload, :sent_at)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'external_id' => $externalId,
+                'content' => $message,
+                'raw_payload' => json_encode($response['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'sent_at' => $sentAt,
+            ]);
+
+            $pdo->prepare(
+                'UPDATE conversations
+                 SET last_message_at = :sent_at,
+                     last_message_preview = :preview,
+                     status = IF(status = "closed", "open", status)
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            )->execute([
+                'sent_at' => $sentAt,
+                'preview' => mb_substr($message, 0, 255),
+                'id' => $conversationId,
+                'tenant_id' => $tenantId,
+            ]);
+
+            $pdo->prepare(
+                'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
+                 VALUES (:tenant_id, :conversation_id, "calendar.pre_schedule_ack_sent", :description, :metadata_json)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'description' => 'Mensagem de registro da preferência enviada automaticamente.',
+                'metadata_json' => json_encode(['appointment_id' => (int) ($appointment['id'] ?? 0)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+
+            return ['ok' => true, 'error' => null];
+        } catch (Throwable $exception) {
+            return ['ok' => false, 'error' => $exception->getMessage()];
+        }
+    }
+
+    private function recentOutgoingSameMessage(PDO $pdo, int $conversationId, string $message): bool
+    {
+        try {
+            $statement = $pdo->prepare(
+                'SELECT COUNT(*) FROM conversation_messages
+                 WHERE conversation_id = :conversation_id
+                   AND direction = "outgoing"
+                   AND content = :content
+                   AND sent_at >= DATE_SUB(NOW(), INTERVAL 45 SECOND)'
+            );
+            $statement->execute(['conversation_id' => $conversationId, 'content' => $message]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function extractMessageId(array $body): ?string
+    {
+        $id = $body['key']['id'] ?? $body['messageId'] ?? $body['id'] ?? $body['data']['key']['id'] ?? null;
+        return is_scalar($id) && trim((string) $id) !== '' ? trim((string) $id) : null;
     }
 
     private function buildDescription(string $content, array $intent): string

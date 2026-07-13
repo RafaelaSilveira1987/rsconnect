@@ -120,9 +120,10 @@ final class EvolutionWebhookController
             );
 
             $leadId = null;
+            $preScheduleResult = ['skip_ai' => false];
             if (!$fromMe && $inserted) {
                 $leadId = (new CrmAutoService())->createFromConversation($pdo, $instance, $contactId, $conversationId, $content);
-                (new PreSchedulingService())->handleIncoming($pdo, $instance, $contactId, $conversationId, $content);
+                $preScheduleResult = (new PreSchedulingService())->handleIncoming($pdo, $instance, $contactId, $conversationId, $content);
             }
 
             $pdo->commit();
@@ -138,8 +139,10 @@ final class EvolutionWebhookController
                     'content' => $content,
                 ], null, (int) $instance['tenant_id']);
 
-                (new AiAutomationService())->handleIncoming($instance, $conversationId, $content, $payload);
-                $aiHandled = true;
+                if (!((bool) ($preScheduleResult['skip_ai'] ?? false))) {
+                    (new AiAutomationService())->handleIncoming($instance, $conversationId, $content, $payload);
+                    $aiHandled = true;
+                }
             }
 
             $this->respond(200, [
@@ -148,6 +151,7 @@ final class EvolutionWebhookController
                 'message_inserted' => $inserted,
                 'crm_lead_id' => $leadId,
                 'ai_checked' => $aiHandled,
+                'pre_schedule' => $preScheduleResult,
             ]);
         } catch (Throwable $exception) {
             if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {

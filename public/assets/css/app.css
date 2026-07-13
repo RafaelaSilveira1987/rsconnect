@@ -1952,3 +1952,28 @@ body::before {
         justify-content: flex-start;
     }
 }
+
+/* Hotfix 18.3 — pré-agendamento mais seguro */
+.pre-schedule-note.ready {
+    background: rgba(34, 197, 94, .10);
+    border-color: rgba(34, 197, 94, .22);
+}
+.pre-schedule-note.ready strong {
+    color: #15803d;
+}
+.pre-schedule-note.pending {
+    background: rgba(245, 158, 11, .10);
+    border-color: rgba(245, 158, 11, .24);
+}
+.pre-schedule-note.pending strong {
+    color: #b45309;
+}
+.btn-disabled,
+.btn-disabled:hover {
+    opacity: .55;
+    cursor: not-allowed;
+    transform: none;
+    background: rgba(148, 163, 184, .16);
+    border-color: rgba(148, 163, 184, .22);
+    color: #64748b;
+}
