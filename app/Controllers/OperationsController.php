@@ -72,11 +72,32 @@ final class OperationsController
         }
 
         $type = (string) ($_POST['backup_type'] ?? 'manual');
+        $storageType = (string) ($_POST['storage_type'] ?? 'manual_local');
+        $fileName = trim((string) ($_POST['file_name'] ?? ''));
         $location = trim((string) ($_POST['location'] ?? ''));
+        $sizeRaw = trim((string) ($_POST['size_bytes'] ?? ''));
+        $sizeBytes = $sizeRaw !== '' && is_numeric($sizeRaw) ? max(0, (int) $sizeRaw) : null;
+        $checksum = trim((string) ($_POST['checksum'] ?? ''));
         $notes = trim((string) ($_POST['notes'] ?? ''));
+        $verified = isset($_POST['verified']) && (string) $_POST['verified'] === '1';
 
-        (new OperationsService())->registerManualBackup($type, $location, $notes);
+        (new OperationsService())->registerManualBackup($type, $storageType, $fileName, $location, $sizeBytes, $checksum, $notes, $verified);
         Flash::set('success', 'Registro de backup salvo.');
+        header('Location: ' . Router::url('/operations'));
+        exit;
+    }
+
+    public function resolveIncident(): void
+    {
+        if (!Csrf::validate($_POST['_token'] ?? null)) {
+            Flash::set('error', 'Sessão expirada. Atualize a página e tente novamente.');
+            header('Location: ' . Router::url('/operations'));
+            exit;
+        }
+
+        $id = (int) ($_POST['id'] ?? 0);
+        (new OperationsService())->resolveIncident($id);
+        Flash::set('success', 'Alerta/incidente marcado como resolvido.');
         header('Location: ' . Router::url('/operations'));
         exit;
     }

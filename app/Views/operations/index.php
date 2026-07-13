@@ -14,8 +14,8 @@ $recovery = $data['recovery'] ?? [];
 $settings = $data['settings'] ?? [];
 $lastCheckedAt = $checks[0]['checked_at'] ?? null;
 $statusBadge = static fn (string $status): string => match ($status) {
-    'ok', 'success' => 'badge-success',
-    'down', 'error', 'failed' => 'badge-danger',
+    'ok', 'success', 'info' => 'badge-success',
+    'down', 'error', 'failed', 'critical' => 'badge-danger',
     'running' => 'badge-info',
     default => 'badge-warning',
 };
@@ -24,8 +24,28 @@ $statusLabel = static fn (string $status): string => match ($status) {
     'down' => 'Falha',
     'success' => 'Sucesso',
     'error', 'failed' => 'Erro',
+    'critical' => 'Crítico',
     'running' => 'Executando',
+    'info' => 'Info',
+    'warning' => 'Atenção',
     default => 'Atenção',
+};
+$storageLabel = static fn (string $storage): string => match ($storage) {
+    'manual_local' => 'Local da minha máquina',
+    'server' => 'Servidor/VPS',
+    'easypanel' => 'EasyPanel/Provedor',
+    'google_drive' => 'Google Drive',
+    's3_minio' => 'S3/MinIO',
+    'dropbox' => 'Dropbox',
+    default => 'Outro',
+};
+$formatBytes = static function ($bytes): string {
+    if ($bytes === null || $bytes === '') return '-';
+    $bytes = (float) $bytes;
+    if ($bytes <= 0) return '0 B';
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $power = min((int) floor(log($bytes, 1024)), count($units) - 1);
+    return round($bytes / (1024 ** $power), 2) . ' ' . $units[$power];
 };
 ?>
 
@@ -82,9 +102,11 @@ $statusLabel = static fn (string $status): string => match ($status) {
         <?php if ($lastBackup): ?>
             <div class="operations-backup-card">
                 <span class="badge <?= $statusBadge((string) ($lastBackup['status'] ?? 'warning')) ?>"><?= $statusLabel((string) ($lastBackup['status'] ?? 'warning')) ?></span>
+                <?php if (!empty($lastBackup['verified_at'])): ?><span class="badge badge-success">Verificado</span><?php endif; ?>
                 <strong><?= View::e($lastBackup['file_name'] ?? 'Backup registrado') ?></strong>
-                <p><?= View::e($lastBackup['location'] ?? '') ?></p>
-                <small>Finalizado em <?= View::e($lastBackup['finished_at'] ?? $lastBackup['created_at'] ?? '') ?></small>
+                <p><strong>Armazenamento:</strong> <?= View::e($storageLabel((string) ($lastBackup['storage_type'] ?? 'manual_local'))) ?></p>
+                <p><strong>Caminho/URL:</strong> <?= View::e($lastBackup['location'] ?? '-') ?></p>
+                <small>Finalizado em <?= View::e($lastBackup['finished_at'] ?? $lastBackup['created_at'] ?? '') ?><?= !empty($lastBackup['size_bytes']) ? ' · ' . $formatBytes($lastBackup['size_bytes']) : '' ?></small>
             </div>
         <?php else: ?>
             <div class="operations-backup-card pending">
@@ -105,13 +127,42 @@ $statusLabel = static fn (string $status): string => match ($status) {
                 </select>
             </div>
             <div class="field">
-                <label>Local/arquivo</label>
-                <input type="text" name="location" placeholder="Ex: EasyPanel backup 13/07/2026">
+                <label>Armazenamento</label>
+                <select name="storage_type">
+                    <option value="manual_local">Local da minha máquina</option>
+                    <option value="server">Servidor/VPS</option>
+                    <option value="easypanel">EasyPanel/Provedor</option>
+                    <option value="google_drive">Google Drive</option>
+                    <option value="s3_minio">S3/MinIO</option>
+                    <option value="dropbox">Dropbox</option>
+                    <option value="other">Outro</option>
+                </select>
+                <small class="muted-text">Se for “Local da minha máquina”, o sistema registra o caminho, mas não acessa seu computador.</small>
+            </div>
+            <div class="field">
+                <label>Nome do arquivo</label>
+                <input type="text" name="file_name" placeholder="Ex: rs-connect-2026-07-13.sql.gz">
+            </div>
+            <div class="field">
+                <label>Caminho/URL do arquivo</label>
+                <input type="text" name="location" placeholder="Ex: C:\\Backups\\rs-connect.sql.gz ou s3://bucket/arquivo.sql.gz">
+            </div>
+            <div class="field">
+                <label>Tamanho em bytes</label>
+                <input type="number" min="0" step="1" name="size_bytes" placeholder="Opcional">
+            </div>
+            <div class="field">
+                <label>Checksum</label>
+                <input type="text" name="checksum" placeholder="Opcional: sha256...">
             </div>
             <div class="field">
                 <label>Observações</label>
                 <textarea name="notes" rows="3" placeholder="Ex: backup realizado antes do deploy"></textarea>
             </div>
+            <label class="field" style="display:flex;align-items:center;gap:10px">
+                <input type="checkbox" name="verified" value="1">
+                <span>Marcar como conferido/verificado</span>
+            </label>
             <button class="btn btn-primary btn-block" type="submit">Registrar backup</button>
         </form>
     </aside>
@@ -119,12 +170,22 @@ $statusLabel = static fn (string $status): string => match ($status) {
 
 <div class="operations-grid" style="margin-top:16px">
     <section class="card">
-        <div class="section-heading"><div><span class="eyebrow">Alertas</span><h2>O que precisa de atenção</h2></div></div>
+        <div class="section-heading"><div><span class="eyebrow">Alertas ativos</span><h2>O que precisa de atenção</h2></div></div>
         <div class="operations-alert-list">
             <?php foreach ($alerts as $alert): ?>
                 <article class="operations-alert is-<?= View::e($alert['type'] ?? 'warning') ?>">
-                    <strong><?= View::e($alert['title'] ?? '') ?></strong>
-                    <p><?= View::e($alert['message'] ?? '') ?></p>
+                    <div>
+                        <strong><?= View::e($alert['title'] ?? '') ?></strong>
+                        <p><?= View::e($alert['message'] ?? '') ?></p>
+                        <?php if (!empty($alert['created_at'])): ?><small><?= View::e($alert['created_at']) ?></small><?php endif; ?>
+                    </div>
+                    <?php if (!empty($alert['id'])): ?>
+                        <form method="post" action="<?= View::e(Router::url('/operations/incidents/resolve')) ?>">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="id" value="<?= (int) $alert['id'] ?>">
+                            <button class="btn btn-quiet" type="submit">Resolver</button>
+                        </form>
+                    <?php endif; ?>
                 </article>
             <?php endforeach; ?>
             <?php if (!$alerts): ?><div class="empty-state">Nenhum alerta ativo no momento.</div><?php endif; ?>
@@ -153,18 +214,21 @@ $statusLabel = static fn (string $status): string => match ($status) {
         <div class="section-heading"><div><span class="eyebrow">Histórico</span><h2>Backups registrados</h2></div></div>
         <div class="table-wrap">
             <table>
-                <thead><tr><th>Data</th><th>Tipo</th><th>Arquivo</th><th>Status</th><th>Observação</th></tr></thead>
+                <thead><tr><th>Data</th><th>Tipo</th><th>Armazenamento</th><th>Arquivo</th><th>Caminho/URL</th><th>Status</th><th>Verificado</th><th>Observação</th></tr></thead>
                 <tbody>
                     <?php foreach ($backups as $backup): ?>
                         <tr>
                             <td><?= View::e($backup['finished_at'] ?? $backup['created_at'] ?? '') ?></td>
                             <td><?= View::e($backup['backup_type'] ?? '') ?></td>
-                            <td><?= View::e($backup['file_name'] ?? '') ?></td>
+                            <td><?= View::e($storageLabel((string) ($backup['storage_type'] ?? 'manual_local'))) ?></td>
+                            <td><?= View::e($backup['file_name'] ?? '') ?><?= !empty($backup['size_bytes']) ? '<br><small>' . View::e($formatBytes($backup['size_bytes'])) . '</small>' : '' ?></td>
+                            <td><?= View::e($backup['location'] ?? '') ?></td>
                             <td><span class="badge <?= $statusBadge((string) ($backup['status'] ?? 'warning')) ?>"><?= $statusLabel((string) ($backup['status'] ?? 'warning')) ?></span></td>
+                            <td><?= !empty($backup['verified_at']) ? '<span class="badge badge-success">Sim</span>' : '<span class="badge badge-warning">Não</span>' ?></td>
                             <td><?= View::e($backup['notes'] ?? '') ?></td>
                         </tr>
                     <?php endforeach; ?>
-                    <?php if (!$backups): ?><tr><td colspan="5"><div class="empty-state">Nenhum backup registrado ainda.</div></td></tr><?php endif; ?>
+                    <?php if (!$backups): ?><tr><td colspan="8"><div class="empty-state">Nenhum backup registrado ainda.</div></td></tr><?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -179,8 +243,15 @@ $statusLabel = static fn (string $status): string => match ($status) {
                     <div>
                         <strong><?= View::e($incident['event'] ?? '') ?></strong>
                         <p><?= View::e($incident['message'] ?? '') ?></p>
-                        <small><?= View::e($incident['created_at'] ?? '') ?></small>
+                        <small><?= View::e($incident['created_at'] ?? '') ?><?= !empty($incident['resolved_at']) ? ' · resolvido em ' . View::e($incident['resolved_at']) : '' ?></small>
                     </div>
+                    <?php if (empty($incident['resolved_at']) && in_array((string) ($incident['severity'] ?? ''), ['warning', 'error', 'critical'], true)): ?>
+                        <form method="post" action="<?= View::e(Router::url('/operations/incidents/resolve')) ?>">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="id" value="<?= (int) $incident['id'] ?>">
+                            <button class="btn btn-quiet" type="submit">Resolver</button>
+                        </form>
+                    <?php endif; ?>
                 </article>
             <?php endforeach; ?>
             <?php if (!$incidents): ?><div class="empty-state">Nenhum incidente operacional registrado.</div><?php endif; ?>
@@ -195,14 +266,15 @@ $statusLabel = static fn (string $status): string => match ($status) {
 {
   "status": "success",
   "backup_type": "automatic",
+  "storage_type": "s3_minio",
   "file_name": "rs-connect-2026-07-13.sql.gz",
   "location": "s3://bucket/rs-connect-2026-07-13.sql.gz",
   "size_bytes": 1234567,
   "checksum": "sha256...",
+  "verified": true,
   "notes": "Backup diário concluído"
 }</pre>
 </section>
-
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -247,15 +319,11 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             if (status) {
-                status.textContent = 'Verificação concluída em ' + (payload.checked_at || 'agora') + '. Dados salvos. Atualize a página apenas se quiser recarregar a lista completa.';
+                status.textContent = 'Verificação concluída em ' + (payload.checked_at || 'agora') + '. Dados salvos. Atualize a página para recarregar listas de alertas e incidentes.';
             }
             if (button) {
                 button.textContent = 'Concluído';
             }
-
-            // Não redireciona automaticamente. Antes o resumo atualizava via AJAX e, ao
-            // recarregar rápido, a tela podia voltar visualmente para zero por cache/renderização.
-            // Mantemos o resultado na tela e deixamos o próximo acesso carregar do banco.
         } catch (error) {
             if (status) {
                 status.textContent = error.message + ' Tentando pelo envio tradicional...';

@@ -73,6 +73,7 @@ return static function (Router $router): void {
     $router->get('/monitoramento', [OperationsController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/operations/checks/run', [OperationsController::class, 'runHealthChecks'], ['auth', 'super_admin', 'csrf']);
     $router->post('/operations/backups/register', [OperationsController::class, 'registerBackup'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/operations/incidents/resolve', [OperationsController::class, 'resolveIncident'], ['auth', 'super_admin', 'csrf']);
     $router->post('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);
     $router->get('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);
 

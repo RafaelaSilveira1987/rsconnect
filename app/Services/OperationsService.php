@@ -16,7 +16,7 @@ final class OperationsService
     {
         $checks = $this->latestChecks();
         $lastBackup = $this->lastBackup();
-        $alerts = $this->alerts($checks, $lastBackup);
+        $alerts = $this->activeAlerts($checks, $lastBackup);
 
         return [
             'summary' => [
@@ -53,21 +53,42 @@ final class OperationsService
         $this->recordCheck('backup', 'Backup', $this->checkBackupAge());
     }
 
-    public function registerManualBackup(string $type, string $location, string $notes): void
-    {
+    public function registerManualBackup(
+        string $type,
+        string $storageType,
+        string $fileName,
+        string $location,
+        ?int $sizeBytes,
+        string $checksum,
+        string $notes,
+        bool $verified
+    ): void {
+        $normalizedStorage = $this->normalizeStorageType($storageType);
+        $resolvedFileName = trim($fileName) !== ''
+            ? trim($fileName)
+            : ($location !== '' ? basename(str_replace('\\', '/', $location)) : 'backup-manual-' . date('Ymd-His'));
+
         $this->insertBackup([
             'backup_type' => $type !== '' ? $type : 'manual',
+            'storage_type' => $normalizedStorage,
             'status' => 'success',
-            'file_name' => $location !== '' ? basename($location) : 'backup-manual-' . date('Ymd-His'),
+            'file_name' => $resolvedFileName,
             'location' => $location,
-            'size_bytes' => null,
-            'checksum' => null,
+            'size_bytes' => $sizeBytes,
+            'checksum' => $checksum !== '' ? $checksum : null,
             'notes' => $notes,
+            'verified_at' => $verified ? date('Y-m-d H:i:s') : null,
+            'verified_by' => $verified ? Auth::id() : null,
             'started_at' => date('Y-m-d H:i:s'),
             'finished_at' => date('Y-m-d H:i:s'),
         ]);
 
-        $this->recordIncident('backup.manual_registered', 'info', 'Backup manual registrado no painel.', ['location' => $location]);
+        $this->recordIncident('backup.manual_registered', 'info', 'Backup manual registrado no painel.', [
+            'storage_type' => $normalizedStorage,
+            'file_name' => $resolvedFileName,
+            'location' => $location,
+            'verified' => $verified,
+        ]);
         $this->recordCheck('backup', 'Backup', $this->checkBackupAge());
     }
 
@@ -78,20 +99,40 @@ final class OperationsService
             $status = 'success';
         }
 
+        $storageType = $this->normalizeStorageType((string) ($payload['storage_type'] ?? $payload['storage'] ?? 'server'));
+        $verified = filter_var($payload['verified'] ?? ($status === 'success'), FILTER_VALIDATE_BOOL);
+
         $this->insertBackup([
             'backup_type' => (string) ($payload['backup_type'] ?? $payload['type'] ?? 'automatic'),
+            'storage_type' => $storageType,
             'status' => $status,
             'file_name' => (string) ($payload['file_name'] ?? $payload['filename'] ?? 'backup-' . date('Ymd-His')),
-            'location' => (string) ($payload['location'] ?? $payload['path'] ?? ''),
+            'location' => (string) ($payload['location'] ?? $payload['path'] ?? $payload['url'] ?? ''),
             'size_bytes' => isset($payload['size_bytes']) ? (int) $payload['size_bytes'] : null,
             'checksum' => (string) ($payload['checksum'] ?? ''),
             'notes' => (string) ($payload['notes'] ?? $payload['message'] ?? ''),
+            'verified_at' => $verified ? (string) ($payload['verified_at'] ?? date('Y-m-d H:i:s')) : null,
+            'verified_by' => null,
             'started_at' => (string) ($payload['started_at'] ?? date('Y-m-d H:i:s')),
             'finished_at' => (string) ($payload['finished_at'] ?? date('Y-m-d H:i:s')),
         ]);
 
         $this->recordCheck('backup', 'Backup', $this->checkBackupAge());
         return ['ok' => true, 'message' => 'Backup registrado no RS Connect.'];
+    }
+
+    public function resolveIncident(int $id): void
+    {
+        if ($id <= 0) {
+            return;
+        }
+
+        try {
+            $statement = Database::connection()->prepare('UPDATE system_incidents SET resolved_at = NOW() WHERE id = :id AND resolved_at IS NULL');
+            $statement->execute(['id' => $id]);
+        } catch (Throwable) {
+            // Mantém fluxo da tela mesmo se a migration ainda não foi aplicada.
+        }
     }
 
     public function validBackupToken(string $token): bool
@@ -217,6 +258,9 @@ final class OperationsService
 
     private function recordCheck(string $key, string $label, array $result): void
     {
+        $status = (string) ($result['status'] ?? 'warning');
+        $message = (string) ($result['message'] ?? '');
+
         try {
             $statement = Database::connection()->prepare(
                 'INSERT INTO system_health_checks (check_key, label, status, message, latency_ms, checked_at)
@@ -225,15 +269,41 @@ final class OperationsService
             $statement->execute([
                 'check_key' => $key,
                 'label' => $label,
-                'status' => $result['status'] ?? 'warning',
-                'message' => $result['message'] ?? '',
+                'status' => $status,
+                'message' => $message,
                 'latency_ms' => $result['latency_ms'] ?? null,
             ]);
-            if (($result['status'] ?? '') === 'down') {
-                $this->recordIncident('health.' . $key . '.down', 'critical', $result['message'] ?? 'Serviço indisponível', []);
-            }
+
+            $this->syncIncidentForCheck($key, $label, $status, $message);
         } catch (Throwable) {
             // Não derruba a aplicação caso a migration ainda não exista.
+        }
+    }
+
+    private function syncIncidentForCheck(string $key, string $label, string $status, string $message): void
+    {
+        $event = 'operations.alert.' . $key;
+
+        try {
+            if ($status === 'ok') {
+                $statement = Database::connection()->prepare('UPDATE system_incidents SET resolved_at = NOW() WHERE event = :event AND resolved_at IS NULL');
+                $statement->execute(['event' => $event]);
+                return;
+            }
+
+            $severity = $status === 'down' ? 'critical' : 'warning';
+            $exists = $this->fetchOne("SELECT id FROM system_incidents WHERE event = '" . str_replace("'", "''", $event) . "' AND resolved_at IS NULL LIMIT 1");
+            if ($exists) {
+                return;
+            }
+
+            $this->recordIncident($event, $severity, $label . ': ' . $message, [
+                'check_key' => $key,
+                'status' => $status,
+                'source' => 'health_check',
+            ]);
+        } catch (Throwable) {
+            // Não impede os checks.
         }
     }
 
@@ -241,23 +311,46 @@ final class OperationsService
     {
         try {
             $statement = Database::connection()->prepare(
-                'INSERT INTO system_backups (backup_type, status, file_name, location, size_bytes, checksum, notes, started_at, finished_at, created_by)
-                 VALUES (:backup_type, :status, :file_name, :location, :size_bytes, :checksum, :notes, :started_at, :finished_at, :created_by)'
+                'INSERT INTO system_backups (backup_type, storage_type, status, file_name, location, size_bytes, checksum, notes, verified_at, verified_by, started_at, finished_at, created_by)
+                 VALUES (:backup_type, :storage_type, :status, :file_name, :location, :size_bytes, :checksum, :notes, :verified_at, :verified_by, :started_at, :finished_at, :created_by)'
             );
             $statement->execute([
                 'backup_type' => $data['backup_type'] ?? 'manual',
+                'storage_type' => $data['storage_type'] ?? 'manual_local',
                 'status' => $data['status'] ?? 'success',
                 'file_name' => $data['file_name'] ?? '',
                 'location' => $data['location'] ?? '',
                 'size_bytes' => $data['size_bytes'] ?? null,
                 'checksum' => $data['checksum'] ?? null,
                 'notes' => $data['notes'] ?? null,
+                'verified_at' => $data['verified_at'] ?? null,
+                'verified_by' => $data['verified_by'] ?? null,
                 'started_at' => $data['started_at'] ?? null,
                 'finished_at' => $data['finished_at'] ?? null,
                 'created_by' => Auth::id(),
             ]);
         } catch (Throwable) {
-            // Ignora se a migration ainda não foi aplicada.
+            try {
+                // Fallback para banco antes da migration 024.
+                $statement = Database::connection()->prepare(
+                    'INSERT INTO system_backups (backup_type, status, file_name, location, size_bytes, checksum, notes, started_at, finished_at, created_by)
+                     VALUES (:backup_type, :status, :file_name, :location, :size_bytes, :checksum, :notes, :started_at, :finished_at, :created_by)'
+                );
+                $statement->execute([
+                    'backup_type' => $data['backup_type'] ?? 'manual',
+                    'status' => $data['status'] ?? 'success',
+                    'file_name' => $data['file_name'] ?? '',
+                    'location' => $data['location'] ?? '',
+                    'size_bytes' => $data['size_bytes'] ?? null,
+                    'checksum' => $data['checksum'] ?? null,
+                    'notes' => $data['notes'] ?? null,
+                    'started_at' => $data['started_at'] ?? null,
+                    'finished_at' => $data['finished_at'] ?? null,
+                    'created_by' => Auth::id(),
+                ]);
+            } catch (Throwable) {
+                // Ignora se a migration ainda não foi aplicada.
+            }
         }
     }
 
@@ -283,9 +376,6 @@ final class OperationsService
     private function latestChecks(): array
     {
         try {
-            // Consulta simples e resiliente: evita FIELD(), subquery e qualquer incompatibilidade
-            // de collation/SQL mode em alguns MySQL/MariaDB. Buscamos os últimos registros e
-            // mantemos apenas o mais recente por check_key no PHP.
             $rows = Database::connection()
                 ->query('SELECT * FROM system_health_checks ORDER BY id DESC LIMIT 120')
                 ->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -339,21 +429,52 @@ final class OperationsService
         }
     }
 
-    private function alerts(array $checks, ?array $lastBackup): array
+    private function activeAlerts(array $checks, ?array $lastBackup): array
     {
         $alerts = [];
-        foreach ($checks as $check) {
-            if (($check['status'] ?? '') !== 'ok') {
+
+        try {
+            $rows = Database::connection()
+                ->query("SELECT * FROM system_incidents WHERE resolved_at IS NULL AND severity IN ('warning','error','critical') ORDER BY FIELD(severity, 'critical', 'error', 'warning'), id DESC LIMIT 20")
+                ->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+            foreach ($rows as $row) {
                 $alerts[] = [
-                    'type' => $check['status'] ?? 'warning',
-                    'title' => $check['label'] ?? $check['check_key'],
-                    'message' => $check['message'] ?? 'Verificação requer atenção.',
+                    'id' => $row['id'] ?? null,
+                    'type' => $this->severityToStatus((string) ($row['severity'] ?? 'warning')),
+                    'title' => $this->friendlyIncidentTitle((string) ($row['event'] ?? 'Alerta')),
+                    'message' => (string) ($row['message'] ?? ''),
+                    'created_at' => $row['created_at'] ?? '',
+                    'event' => $row['event'] ?? '',
                 ];
             }
+        } catch (Throwable) {
+            // Fallback abaixo.
         }
+
+        foreach ($checks as $check) {
+            if (($check['status'] ?? '') !== 'ok') {
+                $alreadyListed = false;
+                foreach ($alerts as $alert) {
+                    if (str_contains((string) ($alert['event'] ?? ''), (string) ($check['check_key'] ?? ''))) {
+                        $alreadyListed = true;
+                        break;
+                    }
+                }
+                if (!$alreadyListed) {
+                    $alerts[] = [
+                        'type' => $check['status'] ?? 'warning',
+                        'title' => $check['label'] ?? $check['check_key'],
+                        'message' => $check['message'] ?? 'Verificação requer atenção.',
+                    ];
+                }
+            }
+        }
+
         if (!$lastBackup) {
             $alerts[] = ['type' => 'warning', 'title' => 'Backup', 'message' => 'Nenhum backup registrado.'];
         }
+
         return $alerts;
     }
 
@@ -386,6 +507,45 @@ final class OperationsService
         return (string) Env::get('OPERATIONS_BACKUP_TOKEN', '') !== '';
     }
 
+    private function normalizeStorageType(string $storageType): string
+    {
+        $storageType = trim($storageType) !== '' ? trim($storageType) : 'manual_local';
+        $allowed = ['manual_local', 'server', 'easypanel', 'google_drive', 's3_minio', 'dropbox', 'other'];
+        return in_array($storageType, $allowed, true) ? $storageType : 'other';
+    }
+
+    private function storageLabel(string $storageType): string
+    {
+        return match ($storageType) {
+            'manual_local' => 'Local da minha máquina',
+            'server' => 'Servidor/VPS',
+            'easypanel' => 'EasyPanel/Provedor',
+            'google_drive' => 'Google Drive',
+            's3_minio' => 'S3/MinIO',
+            'dropbox' => 'Dropbox',
+            default => 'Outro',
+        };
+    }
+
+    private function severityToStatus(string $severity): string
+    {
+        return match ($severity) {
+            'critical', 'error' => 'down',
+            default => 'warning',
+        };
+    }
+
+    private function friendlyIncidentTitle(string $event): string
+    {
+        if (str_starts_with($event, 'operations.alert.')) {
+            return 'Alerta: ' . str_replace('_', ' ', substr($event, strlen('operations.alert.')));
+        }
+        if (str_starts_with($event, 'backup.')) {
+            return 'Backup';
+        }
+        return $event;
+    }
+
     private function recoveryPlaybooks(): array
     {
         return [
@@ -394,6 +554,7 @@ final class OperationsService
             ['title' => 'n8n não executa fluxo', 'steps' => ['Testar fluxo em Fluxos n8n.', 'Conferir URL do webhook, evento cadastrado e token de callback.', 'Abrir logs do n8n e logs de callback no RS Connect.']],
             ['title' => 'Pagamento não confirma', 'steps' => ['Conferir webhook do gateway.', 'Revisar logs em Gateways de pagamento.', 'Atualizar manualmente a cobrança se o gateway confirmou fora do sistema.']],
             ['title' => 'Backup atrasado', 'steps' => ['Executar backup no provedor/VPS.', 'Registrar backup manual no painel.', 'Configurar rotina externa usando /webhooks/operations/backups.']],
+            ['title' => 'Backup local precisa ser conferido', 'steps' => ['Confirme se o arquivo existe no computador indicado.', 'Registre caminho completo ou observação que permita encontrar o arquivo.', 'Quando possível, use servidor/VPS, Google Drive ou S3/MinIO para validação futura.']],
         ];
     }
 }
