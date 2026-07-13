@@ -21,6 +21,7 @@ use App\Controllers\N8nTemplateController;
 use App\Controllers\NotificationsController;
 use App\Controllers\PaymentGatewayController;
 use App\Controllers\ReportController;
+use App\Controllers\SecurityController;
 use App\Controllers\BillingReminderController;
 use App\Controllers\PermissionController;
 use App\Controllers\TaskController;
@@ -63,6 +64,9 @@ return static function (Router $router): void {
 
     $router->get('/reports', [ReportController::class, 'index'], ['auth', 'permission:reports.view']);
     $router->get('/reports/export', [ReportController::class, 'export'], ['auth', 'permission:reports.view']);
+
+    $router->get('/security', [SecurityController::class, 'index'], ['auth', 'super_admin']);
+    $router->post('/security/sessions/revoke', [SecurityController::class, 'revokeSession'], ['auth', 'super_admin', 'csrf']);
 
     $router->get('/notifications', [NotificationsController::class, 'index'], ['auth', 'permission:notifications.view']);
     $router->post('/notifications/read-all', [NotificationsController::class, 'markAllRead'], ['auth', 'permission:notifications.view', 'csrf']);

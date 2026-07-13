@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Core;
 
 use App\Services\TenantModuleService;
+use App\Services\SecurityService;
 
 final class Router
 {
@@ -58,10 +59,18 @@ final class Router
 
     private function runMiddleware(string $middleware): bool
     {
-        if ($middleware === 'auth' && !Auth::check()) {
-            Flash::set('warning', 'Faça login para continuar.');
-            $this->redirect('/login');
-            return false;
+        if ($middleware === 'auth') {
+            if (!Auth::check()) {
+                Flash::set('warning', 'Faça login para continuar.');
+                $this->redirect('/login');
+                return false;
+            }
+
+            if (!(new SecurityService())->enforceAuthenticatedSession()) {
+                Flash::set('warning', 'Sua sessão expirou ou foi encerrada. Faça login novamente.');
+                $this->redirect('/login');
+                return false;
+            }
         }
 
         if ($middleware === 'guest' && Auth::check()) {

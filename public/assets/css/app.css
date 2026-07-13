@@ -1977,3 +1977,113 @@ body::before {
     border-color: rgba(148, 163, 184, .22);
     color: #64748b;
 }
+
+/* ZIP 19 — Segurança */
+.security-hero {
+  background:
+    radial-gradient(circle at 14% 18%, rgba(34, 197, 94, 0.18), transparent 28%),
+    linear-gradient(135deg, rgba(13, 148, 136, 0.95), rgba(20, 100, 152, 0.86));
+}
+.security-kpis .report-kpi strong {
+  color: var(--brand-800, #0f766e);
+}
+.security-checklist {
+  display: grid;
+  gap: 10px;
+}
+.security-check {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border, #dbe4f0);
+  border-radius: 18px;
+  background: rgba(255,255,255,.72);
+}
+.security-check strong {
+  color: var(--text, #1f2937);
+}
+.security-check span {
+  color: var(--muted, #64748b);
+  text-align: right;
+}
+.security-alert {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border, #dbe4f0);
+}
+.security-alert.warning {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+.security-alert.ok {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #065f46;
+}
+.security-alert p {
+  margin: 6px 0 0;
+}
+.security-list,
+.security-timeline {
+  display: grid;
+  gap: 10px;
+}
+.security-row,
+.security-event {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--border, #dbe4f0);
+  border-radius: 18px;
+  background: rgba(255,255,255,.75);
+}
+.security-event {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: flex-start;
+}
+.security-row strong,
+.security-event strong {
+  display: block;
+}
+.security-row small,
+.security-event small,
+.security-event p {
+  display: block;
+  margin: 4px 0 0;
+  color: var(--muted, #64748b);
+}
+.badge-danger {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+.badge-warning {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+.badge-info {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #bfdbfe;
+}
+.badge-success {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+@media (max-width: 860px) {
+  .security-check,
+  .security-row,
+  .security-event {
+    grid-template-columns: 1fr;
+  }
+  .security-check span {
+    text-align: left;
+  }
+}

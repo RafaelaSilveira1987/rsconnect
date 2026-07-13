@@ -27,6 +27,17 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
+
+if (!headers_sent() && filter_var(Env::get('SECURITY_HEADERS_ENABLED', true), FILTER_VALIDATE_BOOL)) {
+    header('X-Frame-Options: SAMEORIGIN');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+    if ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || str_starts_with((string) Env::get('APP_URL', ''), 'https://')) {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
+}
+
 set_exception_handler(static function (Throwable $exception) use ($debug): void {
     $logDir = __DIR__ . '/storage/logs';
     if (!is_dir($logDir)) {
