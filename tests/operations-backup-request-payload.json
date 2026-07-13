@@ -1,0 +1,19 @@
+{
+  "event": "operations.backup.requested",
+  "source": "rs-connect",
+  "routine_id": 1,
+  "backup_job_id": 10,
+  "trigger_type": "manual",
+  "backup": {
+    "database": "rs_connect",
+    "storage_type": "server",
+    "storage_path": "/backups/rs-connect",
+    "retention_days": 14,
+    "timezone": "America/Sao_Paulo"
+  },
+  "callback": {
+    "url": "https://rsconnect.rsautomacaodigital.cloud/webhooks/operations/backups",
+    "token": "SEU_OPERATIONS_BACKUP_TOKEN"
+  },
+  "requested_at": "2026-07-13T17:00:00-03:00"
+}

@@ -4,10 +4,8 @@ use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
 
-// Evita conflito com o parâmetro interno $data usado por App\Core\View::render().
-$dashboard = $dashboard ?? [];
-$summary = $dashboard['summary'] ?? [];
-$tenants = $dashboard['tenants'] ?? [];
+$summary = $data['summary'] ?? [];
+$tenants = $data['tenants'] ?? [];
 $statusClass = static fn (string $key): string => match ($key) {
     'ready' => 'badge-success',
     'testing' => 'badge-info',

@@ -49,6 +49,13 @@ final class N8nTemplateController
             'events' => ['billing.reminder.before_due', 'billing.reminder.due_today', 'billing.reminder.overdue', 'billing.subscription.suspended'],
             'description' => 'Recebe eventos billing.* por empresa, normaliza a cobrança, dispara mensagem externa e registra callback no RS Connect.',
         ],
+        'backup-rsconnect' => [
+            'title' => 'Backup automático RS Connect',
+            'segment' => 'Operação',
+            'file' => 'template-backup-rsconnect.json',
+            'events' => ['operations.backup.requested', 'cron.daily'],
+            'description' => 'Gera backup do banco, salva o arquivo no destino configurado e registra o resultado no Monitoramento do RS Connect.',
+        ],
     ];
 
     public function index(): void
@@ -204,6 +211,21 @@ final class N8nTemplateController
                 'rule' => ['label' => '2 dias após vencimento', 'days_from_due' => 2, 'event' => 'billing.reminder.overdue', 'channel' => 'whatsapp'],
                 'message' => 'Olá, Cliente Teste. Identificamos que a cobrança RS-202607-64550 está em aberto há 2 dias. Link: https://link-de-pagamento.example/checkout',
                 'callback' => ['url' => Router::url('/webhooks/n8n/callback')],
+            ],
+            'operations.backup.requested' => [
+                'event' => 'operations.backup.requested',
+                'source' => 'rs-connect',
+                'routine_id' => 1,
+                'backup_job_id' => 10,
+                'trigger_type' => 'manual',
+                'backup' => [
+                    'database' => 'rs_connect',
+                    'storage_type' => 'server',
+                    'storage_path' => '/backups/rs-connect',
+                    'retention_days' => 14,
+                    'max_age_hours' => 24,
+                ],
+                'callback' => ['url' => Router::url('/webhooks/operations/backups'), 'token' => 'SEU_OPERATIONS_BACKUP_TOKEN'],
             ],
         ];
     }

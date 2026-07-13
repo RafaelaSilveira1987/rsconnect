@@ -60,6 +60,7 @@ $formatBytes = static function ($bytes): string {
             <?= Csrf::input() ?>
             <button class="btn btn-primary" type="submit" data-operations-check-button>Verificar agora</button>
         </form>
+        <a class="btn btn-quiet" href="<?= View::e(Router::url('/operations/backups/automation')) ?>">Backup automático</a>
         <small class="muted-text" data-operations-check-status><?= $lastCheckedAt ? 'Última verificação: ' . View::e((string) $lastCheckedAt) : 'Nenhuma verificação executada nesta tela.' ?></small>
         <span class="badge <?= !empty($settings['strict_backup_token']) ? 'badge-success' : 'badge-warning' ?>">Webhook backup: <?= !empty($settings['strict_backup_token']) ? 'configurado' : 'pendente' ?></span>
     </div>

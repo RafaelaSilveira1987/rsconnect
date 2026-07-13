@@ -99,7 +99,7 @@ final class ImplementationChecklistService
         $notes = mb_substr(trim($notes), 0, 1000);
 
         $statement = $this->pdo->prepare(
-            'INSERT INTO tenant_implementation_checklist
+            'INSERT INTO ' . $this->checklistTableForWrite() . '
                 (tenant_id, item_key, label, category, manual_status, notes, updated_by, updated_at)
              VALUES
                 (:tenant_id, :item_key, :label, :category, :manual_status, :notes, :updated_by, NOW())
@@ -476,10 +476,11 @@ final class ImplementationChecklistService
     /** @return array<string, array<string, mixed>> */
     private function manualItems(int $tenantId): array
     {
-        if (!$this->tableExists('tenant_implementation_checklist')) {
+        $table = $this->checklistTableForRead();
+        if ($table === null) {
             return [];
         }
-        $statement = $this->pdo->prepare('SELECT * FROM tenant_implementation_checklist WHERE tenant_id = :tenant_id');
+        $statement = $this->pdo->prepare('SELECT * FROM ' . $table . ' WHERE tenant_id = :tenant_id');
         $statement->execute(['tenant_id' => $tenantId]);
         $items = [];
         foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -580,6 +581,63 @@ final class ImplementationChecklistService
             ['label' => 'Privacidade/LGPD', 'url' => '/privacy?tenant_id=' . $tenantId],
             ['label' => 'Monitoramento', 'url' => '/monitoramento'],
         ];
+    }
+
+    private function checklistTableForRead(): ?string
+    {
+        foreach (['tenant_implementation_checklist', 'tenant_implementation_checklist_items', 'tenant_implementation_checklists'] as $table) {
+            if (!$this->tableExists($table)) {
+                continue;
+            }
+
+            // Algumas instalações já possuíam tenant_implementation_checklists com outro formato
+            // (status, evolution_webhook_configured, etc.). Essa tabela antiga não pode receber
+            // itens manuais do checklist comercial.
+            if ($this->columnExists($table, 'item_key') && $this->columnExists($table, 'manual_status')) {
+                return $table;
+            }
+        }
+
+        return null;
+    }
+
+    private function checklistTableForWrite(): string
+    {
+        $table = $this->checklistTableForRead();
+        if ($table !== null) {
+            return $table;
+        }
+
+        $this->ensureManualChecklistTable();
+        return 'tenant_implementation_checklist';
+    }
+
+    private function ensureManualChecklistTable(): void
+    {
+        if ($this->tableExists('tenant_implementation_checklist')
+            && $this->columnExists('tenant_implementation_checklist', 'item_key')
+            && $this->columnExists('tenant_implementation_checklist', 'manual_status')) {
+            return;
+        }
+
+        // Sem FKs para evitar erro de collation/tipo em bases que vieram de versões antigas.
+        $this->pdo->exec(
+            'CREATE TABLE IF NOT EXISTS tenant_implementation_checklist (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                tenant_id BIGINT UNSIGNED NOT NULL,
+                item_key VARCHAR(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+                label VARCHAR(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+                category VARCHAR(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+                manual_status ENUM("auto","pending","complete","skipped","attention") COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT "auto",
+                notes TEXT COLLATE utf8mb4_unicode_ci NULL,
+                updated_by BIGINT UNSIGNED NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_impl_checklist_tenant_item (tenant_id, item_key),
+                KEY idx_impl_checklist_tenant_status (tenant_id, manual_status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+        );
     }
 
     private function tableExists(string $table): bool

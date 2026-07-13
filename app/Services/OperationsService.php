@@ -102,7 +102,7 @@ final class OperationsService
         $storageType = $this->normalizeStorageType((string) ($payload['storage_type'] ?? $payload['storage'] ?? 'server'));
         $verified = filter_var($payload['verified'] ?? ($status === 'success'), FILTER_VALIDATE_BOOL);
 
-        $this->insertBackup([
+        $backupId = $this->insertBackup([
             'backup_type' => (string) ($payload['backup_type'] ?? $payload['type'] ?? 'automatic'),
             'storage_type' => $storageType,
             'status' => $status,
@@ -116,6 +116,12 @@ final class OperationsService
             'started_at' => (string) ($payload['started_at'] ?? date('Y-m-d H:i:s')),
             'finished_at' => (string) ($payload['finished_at'] ?? date('Y-m-d H:i:s')),
         ]);
+
+        try {
+            (new BackupAutomationService())->markBackupCallback($payload, $backupId, $status);
+        } catch (Throwable) {
+            // Mantém compatibilidade se o ZIP 24 ainda não estiver com migration aplicada.
+        }
 
         $this->recordCheck('backup', 'Backup', $this->checkBackupAge());
         return ['ok' => true, 'message' => 'Backup registrado no RS Connect.'];
@@ -307,7 +313,7 @@ final class OperationsService
         }
     }
 
-    private function insertBackup(array $data): void
+    private function insertBackup(array $data): ?int
     {
         try {
             $statement = Database::connection()->prepare(
@@ -329,6 +335,7 @@ final class OperationsService
                 'finished_at' => $data['finished_at'] ?? null,
                 'created_by' => Auth::id(),
             ]);
+            return (int) Database::connection()->lastInsertId();
         } catch (Throwable) {
             try {
                 // Fallback para banco antes da migration 024.
@@ -348,10 +355,13 @@ final class OperationsService
                     'finished_at' => $data['finished_at'] ?? null,
                     'created_by' => Auth::id(),
                 ]);
+                return (int) Database::connection()->lastInsertId();
             } catch (Throwable) {
                 // Ignora se a migration ainda não foi aplicada.
             }
         }
+
+        return null;
     }
 
     private function recordIncident(string $event, string $severity, string $message, array $context = []): void

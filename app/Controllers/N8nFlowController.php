@@ -26,6 +26,7 @@ final class N8nFlowController
         'crm.lead.created' => 'Oportunidade criada no CRM',
         'crm.lead.updated' => 'Oportunidade atualizada',
         'crm.lead.moved' => 'Oportunidade movida no funil',
+        'operations.backup.requested' => 'Backup solicitado pelo RS Connect',
         '*' => 'Todos os eventos',
     ];
 

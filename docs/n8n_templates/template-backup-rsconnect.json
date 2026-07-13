@@ -1,0 +1,199 @@
+{
+  "name": "RS Connect - Backup automatico via n8n",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-backup-diario",
+      "name": "Agenda diaria 03h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -760,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rsconnect-backup",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-backup-request",
+      "name": "Webhook RS Connect",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json || {};\nconst routine = body.routine || {};\nconst backup = body.backup || {};\nconst now = new Date();\nconst stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);\nconst fileName = body.file_name || `rs-connect-${stamp}.sql.gz`;\nconst storagePath = backup.storage_path || $env.RS_CONNECT_BACKUP_PATH || '/tmp';\nconst callback = body.callback || { url: $env.RS_CONNECT_BACKUP_CALLBACK_URL, token: $env.RS_CONNECT_BACKUP_TOKEN };\nreturn [{ json: { ...body, callback, file_name: fileName, storage_path: storagePath, output_path: `${storagePath.replace(/\\/$/, '')}/${fileName}`, database: backup.database || $env.DB_DATABASE || 'rs_connect', started_at: now.toISOString(), backup: { ...backup, storage_path: storagePath } } }];"
+      },
+      "id": "normalizar-backup",
+      "name": "Normalizar backup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "command": "mkdir -p {{$json.storage_path}} && mysqldump -h {{$env.DB_HOST || 'mysql'}} -u {{$env.DB_USERNAME || 'rsconnect'}} -p{{$env.DB_PASSWORD || 'SUA_SENHA'}} {{$json.database}} | gzip > {{$json.output_path}} && sha256sum {{$json.output_path}} | awk '{print $1}'"
+      },
+      "id": "gerar-dump",
+      "name": "Gerar dump MySQL",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        0
+      ],
+      "notesInFlow": true,
+      "notes": "Ajuste DB_HOST, DB_USERNAME e DB_PASSWORD no ambiente do n8n ou substitua no comando. Em produção, prefira credenciais seguras e volume persistente para o caminho do backup."
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('Normalizar backup').first().json;\nconst checksum = ($json.stdout || '').trim().split(/\\s+/)[0] || '';\nreturn [{ json: { status: 'success', backup_type: 'automatic', storage_type: source.backup?.storage_type || 'server', routine_id: source.routine_id || source.backup_routine_id || null, backup_job_id: source.backup_job_id || null, file_name: source.file_name, location: source.output_path, checksum, verified: true, started_at: source.started_at, finished_at: new Date().toISOString(), notes: 'Backup automatico concluido pelo n8n' , callback: source.callback } }];"
+      },
+      "id": "montar-callback-sucesso",
+      "name": "Montar callback sucesso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callback?.url + '?token=' + ($json.callback?.token || '') }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "callback-rs-connect",
+      "name": "Callback RS Connect",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, message: 'Solicitacao de backup recebida pelo n8n' } }}",
+        "options": {}
+      },
+      "id": "responder-rs-connect",
+      "name": "Responder RS Connect",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        420,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Normalizar backup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar backup": {
+      "main": [
+        [
+          {
+            "node": "Gerar dump MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar dump MySQL": {
+      "main": [
+        [
+          {
+            "node": "Montar callback sucesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar callback sucesso": {
+      "main": [
+        [
+          {
+            "node": "Callback RS Connect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Responder RS Connect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agenda diaria 03h": {
+      "main": [
+        [
+          {
+            "node": "Normalizar backup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "RS Connect"
+    },
+    {
+      "name": "Backup"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-07-13T00:00:00.000Z",
+  "versionId": "rs-connect-backup-template"
+}

@@ -12,6 +12,7 @@ use App\Core\Env;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\OnboardingGuideService;
 use PDO;
 use Throwable;
 
@@ -20,8 +21,8 @@ final class OnboardingController
     public function index(): void
     {
         if (Auth::isSuperAdmin()) {
-            Flash::set('warning', 'O onboarding é realizado dentro da conta de cada cliente.');
-            $this->redirect('/companies');
+            Flash::set('warning', 'O onboarding guiado é realizado dentro da conta de cada cliente. Use Implantação para acompanhar pelo painel RS.');
+            $this->redirect('/implementation');
         }
 
         $tenantId = (int) Auth::tenantId();
@@ -29,7 +30,7 @@ final class OnboardingController
 
         $companyStatement = $pdo->prepare('SELECT * FROM tenants WHERE id = :id LIMIT 1');
         $companyStatement->execute(['id' => $tenantId]);
-        $company = $companyStatement->fetch(PDO::FETCH_ASSOC);
+        $company = $companyStatement->fetch(PDO::FETCH_ASSOC) ?: [];
 
         $instanceStatement = $pdo->prepare(
             'SELECT id, name, instance_name, base_url, status, is_default
@@ -50,12 +51,15 @@ final class OnboardingController
         $agentStatement->execute(['tenant_id' => $tenantId]);
         $agents = $agentStatement->fetchAll(PDO::FETCH_ASSOC);
 
+        $guide = (new OnboardingGuideService())->dashboard($tenantId, Auth::id());
+
         View::render('onboarding.index', [
-            'title' => 'Configuração inicial',
+            'title' => 'Primeiros passos',
             'company' => $company,
             'instances' => $instances,
             'agents' => $agents,
             'defaultUrl' => (string) Env::get('EVOLUTION_DEFAULT_URL', ''),
+            'guide' => $guide,
         ]);
     }
 
@@ -100,7 +104,8 @@ final class OnboardingController
 
         Auth::refreshUser();
         Audit::log('onboarding.company_completed', ['segment' => $segment], $tenantId);
-        Flash::set('success', 'Etapa 1 concluída. Agora configure a instância do WhatsApp.');
+        (new OnboardingGuideService())->saveStep($tenantId, 'company_profile', 'complete', 'Dados da empresa revisados no onboarding guiado.', Auth::id());
+        Flash::set('success', 'Dados da empresa salvos. Continue para a próxima etapa.');
         $this->redirect('/onboarding');
     }
 
@@ -162,7 +167,8 @@ final class OnboardingController
 
             $pdo->commit();
             Audit::log('onboarding.instance_completed', ['instance_id' => $instanceId], $tenantId);
-            Flash::set('success', 'Etapa 2 concluída. Configure agora o primeiro agente de IA.');
+            (new OnboardingGuideService())->saveStep($tenantId, 'whatsapp_connection', 'complete', 'Instância WhatsApp definida durante o onboarding guiado.', Auth::id());
+            Flash::set('success', 'WhatsApp salvo. Continue para agente IA.');
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -247,13 +253,14 @@ final class OnboardingController
             $reset->execute(['agent_id' => $agentId, 'tenant_id' => $tenantId]);
 
             $complete = $pdo->prepare(
-                'UPDATE tenants SET onboarding_step = 4, onboarding_completed_at = NOW() WHERE id = :id'
+                'UPDATE tenants SET onboarding_step = GREATEST(onboarding_step, 4) WHERE id = :id'
             );
             $complete->execute(['id' => $tenantId]);
 
             $pdo->commit();
-            Audit::log('onboarding.completed', ['agent_id' => $agentId], $tenantId);
-            Flash::set('success', 'Onboarding concluído! Sua base está pronta para receber o módulo de conversas.');
+            Audit::log('onboarding.agent_completed', ['agent_id' => $agentId], $tenantId);
+            (new OnboardingGuideService())->saveStep($tenantId, 'ai_agent', 'complete', 'Agente IA criado/revisado no onboarding guiado.', Auth::id());
+            Flash::set('success', 'Agente IA salvo. Continue configurando atendimento, agenda e LGPD.');
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -262,6 +269,61 @@ final class OnboardingController
         }
 
         $this->redirect('/onboarding');
+    }
+
+    public function updateStep(): void
+    {
+        $tenantId = (int) Auth::tenantId();
+        $stepKey = trim((string) ($_POST['step_key'] ?? ''));
+        $status = trim((string) ($_POST['status'] ?? 'auto'));
+        $notes = trim((string) ($_POST['notes'] ?? ''));
+
+        try {
+            (new OnboardingGuideService())->saveStep($tenantId, $stepKey, $status, $notes, Auth::id());
+            Flash::set('success', 'Etapa atualizada.');
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+        }
+
+        $this->redirect('/onboarding#' . $stepKey);
+    }
+
+    public function saveAttendance(): void
+    {
+        $tenantId = (int) Auth::tenantId();
+        try {
+            (new OnboardingGuideService())->saveAttendance($tenantId, $_POST, Auth::id());
+            Flash::set('success', 'Atendimento configurado.');
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+        }
+        $this->redirect('/onboarding#attendance-rules');
+    }
+
+    public function saveAgenda(): void
+    {
+        $tenantId = (int) Auth::tenantId();
+        try {
+            (new OnboardingGuideService())->saveAgenda($tenantId, $_POST, Auth::id());
+            Flash::set('success', 'Agenda revisada.');
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+        }
+        $this->redirect('/onboarding#agenda-setup');
+    }
+
+    public function finish(): void
+    {
+        $tenantId = (int) Auth::tenantId();
+        $notes = trim((string) ($_POST['notes'] ?? ''));
+        try {
+            (new OnboardingGuideService())->finish($tenantId, $notes, Auth::id());
+            Audit::log('onboarding.completed', ['notes' => $notes], $tenantId);
+            Flash::set('success', 'Onboarding finalizado. Sua operação está pronta para teste/uso.');
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+        }
+        $this->redirect('/onboarding#final_test');
     }
 
     private function redirect(string $path): never

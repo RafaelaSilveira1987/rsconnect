@@ -7,6 +7,7 @@ use App\Controllers\AiCredentialController;
 use App\Controllers\AutomationController;
 use App\Controllers\BillingController;
 use App\Controllers\AuthController;
+use App\Controllers\BackupAutomationController;
 use App\Controllers\CalendarController;
 use App\Controllers\CompanyController;
 use App\Controllers\ContactController;
@@ -79,6 +80,11 @@ return static function (Router $router): void {
     $router->post('/operations/checks/run', [OperationsController::class, 'runHealthChecks'], ['auth', 'super_admin', 'csrf']);
     $router->post('/operations/backups/register', [OperationsController::class, 'registerBackup'], ['auth', 'super_admin', 'csrf']);
     $router->post('/operations/incidents/resolve', [OperationsController::class, 'resolveIncident'], ['auth', 'super_admin', 'csrf']);
+    $router->get('/operations/backups/automation', [BackupAutomationController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/backup-automatico', [BackupAutomationController::class, 'index'], ['auth', 'super_admin']);
+    $router->post('/operations/backups/automation/save', [BackupAutomationController::class, 'save'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/operations/backups/automation/trigger', [BackupAutomationController::class, 'trigger'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/operations/backups/automation/toggle', [BackupAutomationController::class, 'toggle'], ['auth', 'super_admin', 'csrf']);
     $router->post('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);
     $router->get('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);
 
@@ -118,9 +124,14 @@ return static function (Router $router): void {
     $router->post('/permissions', [PermissionController::class, 'update'], ['auth', 'super_admin', 'csrf']);
 
     $router->get('/onboarding', [OnboardingController::class, 'index'], ['auth', 'permission:onboarding.manage']);
+    $router->get('/primeiros-passos', [OnboardingController::class, 'index'], ['auth', 'permission:onboarding.manage']);
     $router->post('/onboarding/company', [OnboardingController::class, 'saveCompany'], ['auth', 'permission:onboarding.manage', 'csrf']);
     $router->post('/onboarding/instance', [OnboardingController::class, 'saveInstance'], ['auth', 'permission:onboarding.manage', 'csrf']);
     $router->post('/onboarding/agent', [OnboardingController::class, 'saveAgent'], ['auth', 'permission:onboarding.manage', 'csrf']);
+    $router->post('/onboarding/step', [OnboardingController::class, 'updateStep'], ['auth', 'permission:onboarding.manage', 'csrf']);
+    $router->post('/onboarding/attendance', [OnboardingController::class, 'saveAttendance'], ['auth', 'permission:onboarding.manage', 'csrf']);
+    $router->post('/onboarding/agenda', [OnboardingController::class, 'saveAgenda'], ['auth', 'permission:onboarding.manage', 'csrf']);
+    $router->post('/onboarding/final-test', [OnboardingController::class, 'finish'], ['auth', 'permission:onboarding.manage', 'csrf']);
 
     $router->get('/instances', [InstanceController::class, 'index'], ['auth', 'permission:instances.view']);
     $router->post('/instances', [InstanceController::class, 'store'], ['auth', 'permission:instances.manage', 'csrf']);

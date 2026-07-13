@@ -35,7 +35,7 @@ final class ImplementationController
 
         View::render('implementation.index', [
             'title' => 'Implantação',
-            'dashboard' => $service->dashboard(),
+            'data' => $service->dashboard(),
         ]);
     }
 
