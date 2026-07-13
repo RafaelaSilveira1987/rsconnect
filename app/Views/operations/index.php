@@ -12,6 +12,7 @@ $alerts = $data['alerts'] ?? [];
 $incidents = $data['incidents'] ?? [];
 $recovery = $data['recovery'] ?? [];
 $settings = $data['settings'] ?? [];
+$lastCheckedAt = $checks[0]['checked_at'] ?? null;
 $statusBadge = static fn (string $status): string => match ($status) {
     'ok', 'success' => 'badge-success',
     'down', 'error', 'failed' => 'badge-danger',
@@ -35,19 +36,20 @@ $statusLabel = static fn (string $status): string => match ($status) {
         <p>Monitore banco, Evolution, n8n, IA, webhooks, pagamentos, cron de cobrança e status do último backup em uma tela única.</p>
     </div>
     <div class="hero-actions operations-hero-actions">
-        <form method="post" action="<?= View::e(Router::url('/operations/checks/run')) ?>">
+        <form method="post" action="<?= View::e(Router::url('/operations/checks/run')) ?>" data-operations-check-form>
             <?= Csrf::input() ?>
-            <button class="btn btn-primary" type="submit">Verificar agora</button>
+            <button class="btn btn-primary" type="submit" data-operations-check-button>Verificar agora</button>
         </form>
+        <small class="muted-text" data-operations-check-status><?= $lastCheckedAt ? 'Última verificação: ' . View::e((string) $lastCheckedAt) : 'Nenhuma verificação executada nesta tela.' ?></small>
         <span class="badge <?= !empty($settings['strict_backup_token']) ? 'badge-success' : 'badge-warning' ?>">Webhook backup: <?= !empty($settings['strict_backup_token']) ? 'configurado' : 'pendente' ?></span>
     </div>
 </section>
 
 <div class="report-kpi-grid operations-kpis">
-    <article class="card report-kpi"><span>Serviços OK</span><strong><?= (int) ($summary['healthy'] ?? 0) ?></strong><small>Última verificação registrada</small></article>
-    <article class="card report-kpi"><span>Atenções</span><strong><?= (int) ($summary['warning'] ?? 0) ?></strong><small>Requerem revisão</small></article>
-    <article class="card report-kpi"><span>Falhas</span><strong><?= (int) ($summary['down'] ?? 0) ?></strong><small>Prioridade operacional</small></article>
-    <article class="card report-kpi"><span>Alertas ativos</span><strong><?= (int) ($summary['alerts'] ?? 0) ?></strong><small>Inclui backup e integrações</small></article>
+    <article class="card report-kpi"><span>Serviços OK</span><strong data-operations-kpi="healthy"><?= (int) ($summary['healthy'] ?? 0) ?></strong><small>Última verificação registrada</small></article>
+    <article class="card report-kpi"><span>Atenções</span><strong data-operations-kpi="warning"><?= (int) ($summary['warning'] ?? 0) ?></strong><small>Requerem revisão</small></article>
+    <article class="card report-kpi"><span>Falhas</span><strong data-operations-kpi="down"><?= (int) ($summary['down'] ?? 0) ?></strong><small>Prioridade operacional</small></article>
+    <article class="card report-kpi"><span>Alertas ativos</span><strong data-operations-kpi="alerts"><?= (int) ($summary['alerts'] ?? 0) ?></strong><small>Inclui backup e integrações</small></article>
 </div>
 
 <div class="operations-grid">
@@ -200,3 +202,73 @@ $statusLabel = static fn (string $status): string => match ($status) {
   "notes": "Backup diário concluído"
 }</pre>
 </section>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.querySelector('[data-operations-check-form]');
+    if (!form) return;
+
+    const button = form.querySelector('[data-operations-check-button]');
+    const status = document.querySelector('[data-operations-check-status]');
+    const originalText = button ? button.textContent : 'Verificar agora';
+
+    form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Verificando...';
+        }
+        if (status) {
+            status.textContent = 'Executando verificações. Aguarde alguns segundos...';
+        }
+
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) {
+                throw new Error(payload.message || 'Não foi possível executar a verificação.');
+            }
+
+            const summary = payload.data && payload.data.summary ? payload.data.summary : {};
+            Object.keys(summary).forEach(function (key) {
+                const target = document.querySelector('[data-operations-kpi="' + key + '"]');
+                if (target) target.textContent = summary[key];
+            });
+
+            if (status) {
+                status.textContent = 'Verificação concluída em ' + (payload.checked_at || 'agora') + '. Atualizando painel...';
+            }
+            if (button) {
+                button.textContent = 'Concluído';
+            }
+
+            window.setTimeout(function () {
+                window.location.href = (payload.redirect || form.action.replace('/checks/run', '')) + '?checked=' + Date.now();
+            }, 650);
+        } catch (error) {
+            if (status) {
+                status.textContent = error.message + ' Tentando pelo envio tradicional...';
+            }
+            form.submit();
+        } finally {
+            window.setTimeout(function () {
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+            }, 1200);
+        }
+    });
+});
+</script>

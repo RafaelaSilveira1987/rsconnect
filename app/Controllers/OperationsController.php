@@ -23,13 +23,41 @@ final class OperationsController
 
     public function runHealthChecks(): void
     {
+        $wantsJson = str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')
+            || strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+
         if (!Csrf::validate($_POST['_token'] ?? null)) {
+            if ($wantsJson) {
+                http_response_code(419);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'ok' => false,
+                    'message' => 'Sessão expirada. Atualize a página e tente novamente.',
+                    'redirect' => Router::url('/operations'),
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                return;
+            }
+
             Flash::set('error', 'Sessão expirada. Atualize a página e tente novamente.');
             header('Location: ' . Router::url('/operations'));
             exit;
         }
 
-        (new OperationsService())->runChecks();
+        $service = new OperationsService();
+        $service->runChecks();
+
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'ok' => true,
+                'message' => 'Verificações executadas com sucesso.',
+                'redirect' => Router::url('/operations'),
+                'checked_at' => date('Y-m-d H:i:s'),
+                'data' => $service->dashboard(),
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            return;
+        }
+
         Flash::set('success', 'Verificações executadas. Confira o painel de monitoramento.');
         header('Location: ' . Router::url('/operations'));
         exit;
