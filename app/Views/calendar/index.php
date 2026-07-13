@@ -123,6 +123,8 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
                     <small><?= View::e($appointment['contact_name'] ?: ($appointment['phone'] ?: 'Sem contato')) ?> · <?= View::e($appointment['lead_title'] ?: 'Sem negócio') ?> · Responsável: <?= View::e($appointment['owner_name'] ?: 'não definido') ?></small>
                     <?php if (($appointment['meeting_url'] ?? '') !== ''): ?><small><a href="<?= View::e($appointment['meeting_url']) ?>" target="_blank" rel="noopener">Abrir link da reunião</a></small><?php endif; ?>
                     <?php if (($appointment['sync_status'] ?? '') === 'failed'): ?><small class="text-danger">Falha sync: <?= View::e($appointment['sync_error'] ?? 'erro não informado') ?></small><?php endif; ?>
+                    <?php if (!empty($appointment['approval_message_sent_at'])): ?><small class="text-success">Confirmação enviada em <?= View::e($date($appointment['approval_message_sent_at'])) ?></small><?php endif; ?>
+                    <?php if (!empty($appointment['approval_message_error'])): ?><small class="text-danger">Mensagem não enviada: <?= View::e($appointment['approval_message_error']) ?></small><?php endif; ?>
                 </div>
                 <div class="task-deadline"><small>Quando</small><strong><?= View::e($date($appointment['starts_at'])) ?></strong><small>até <?= View::e($date($appointment['ends_at'], 'H:i')) ?></small></div>
                 <div class="task-actions calendar-actions">

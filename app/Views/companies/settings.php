@@ -65,11 +65,22 @@ use App\Core\View;
                 <input type="checkbox" name="pre_schedule_ai_can_confirm" value="1" <?= !empty($preScheduleSettings['ai_can_confirm']) ? 'checked' : '' ?>>
                 <span><strong>IA pode confirmar sozinha</strong><small>Use apenas em negócios onde não há necessidade de validação humana.</small></span>
             </label>
+            <label class="switch-card">
+                <input type="checkbox" name="pre_schedule_send_approval_message" value="1" <?= !empty($preScheduleSettings['send_approval_message']) ? 'checked' : '' ?>>
+                <span><strong>Enviar mensagem ao aprovar</strong><small>Ao clicar em Aprovar/Confirmar na agenda, o RS Connect envia a confirmação pelo WhatsApp.</small></span>
+            </label>
         </div>
         <div class="form-grid two">
             <label class="field"><span>Duração padrão</span><input type="number" min="15" max="240" name="pre_schedule_default_duration_minutes" value="<?= (int) ($preScheduleSettings['default_duration_minutes'] ?? 50) ?>"></label>
-            <label class="field"><span>Mensagem padrão da IA</span><input name="pre_schedule_default_message" value="<?= View::e($preScheduleSettings['default_message'] ?? '') ?>"></label>
+            <label class="field"><span>Mensagem quando registrar preferência</span><input name="pre_schedule_default_message" value="<?= View::e($preScheduleSettings['default_message'] ?? '') ?>"></label>
         </div>
+        <div class="form-grid two">
+            <label class="field"><span>Mensagem para coletar dia/horário</span><textarea name="pre_schedule_collect_message" rows="3"><?= View::e($preScheduleSettings['collect_message'] ?? '') ?></textarea></label>
+            <label class="field"><span>Mensagem após aprovação</span><textarea name="pre_schedule_approved_message" rows="3"><?= View::e($preScheduleSettings['approved_message'] ?? '') ?></textarea></label>
+            <label class="field"><span>Mensagem ao recusar horário</span><textarea name="pre_schedule_rejected_message" rows="3"><?= View::e($preScheduleSettings['rejected_message'] ?? '') ?></textarea></label>
+            <label class="field"><span>Mensagem ao remarcar</span><textarea name="pre_schedule_reschedule_message" rows="3"><?= View::e($preScheduleSettings['reschedule_message'] ?? '') ?></textarea></label>
+        </div>
+        <p class="form-help">Você pode usar variáveis nas mensagens: <code>{{nome}}</code>, <code>{{data}}</code>, <code>{{hora}}</code>, <code>{{local}}</code>, <code>{{modalidade}}</code>, <code>{{dia_preferido}}</code> e <code>{{horario_preferido}}</code>.</p>
     </section>
 
     <section class="settings-block">

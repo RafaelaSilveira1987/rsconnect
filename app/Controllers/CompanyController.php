@@ -191,8 +191,13 @@ final class CompanyController
             'require_human_approval' => isset($_POST['pre_schedule_require_human_approval']),
             'ai_can_suggest_slots' => isset($_POST['pre_schedule_ai_can_suggest_slots']),
             'ai_can_confirm' => isset($_POST['pre_schedule_ai_can_confirm']),
+            'send_approval_message' => isset($_POST['pre_schedule_send_approval_message']),
             'default_duration_minutes' => (int) ($_POST['pre_schedule_default_duration_minutes'] ?? 50),
             'default_message' => trim((string) ($_POST['pre_schedule_default_message'] ?? '')),
+            'collect_message' => trim((string) ($_POST['pre_schedule_collect_message'] ?? '')),
+            'approved_message' => trim((string) ($_POST['pre_schedule_approved_message'] ?? '')),
+            'rejected_message' => trim((string) ($_POST['pre_schedule_rejected_message'] ?? '')),
+            'reschedule_message' => trim((string) ($_POST['pre_schedule_reschedule_message'] ?? '')),
         ]);
 
         (new TenantModuleService())->saveSettings(

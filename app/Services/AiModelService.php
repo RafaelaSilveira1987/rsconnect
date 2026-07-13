@@ -166,8 +166,20 @@ final class AiModelService
         ];
 
         $tenantId = (int) ($conversation['tenant_id'] ?? $contact['tenant_id'] ?? 0);
-        if ($tenantId > 0 && (new PreSchedulingService())->isEnabled($tenantId)) {
-            $rules[] = 'Quando o lead demonstrar intenção de agendar, coletar dia/período/horário preferido e modalidade. Não confirme horário, não diga que está marcado e não prometa link. Responda que a preferência será registrada e enviada para confirmação humana.';
+        $preScheduleBlock = '';
+        if ($tenantId > 0) {
+            $preScheduling = new PreSchedulingService();
+            if ($preScheduling->isEnabled($tenantId)) {
+                $settings = $preScheduling->settings($tenantId);
+                $rules[] = 'Quando o lead demonstrar intenção de agendar, colete dia/período/horário preferido e modalidade. Não confirme horário, não diga que está marcado e não prometa link.';
+                $rules[] = 'Se o lead ainda não informou dia ou horário, use a mensagem de coleta configurada pelo cliente, adaptando somente o nome se necessário.';
+                $rules[] = 'Se o lead informou preferência de dia ou horário, use a mensagem de registro configurada pelo cliente e deixe claro que depende de confirmação humana.';
+                $preScheduleBlock = "Configurações de pré-agendamento do cliente:\n" .
+                    '- Mensagem para coletar dia/horário: ' . (string) ($settings['collect_message'] ?? '') . "\n" .
+                    '- Mensagem após registrar preferência: ' . (string) ($settings['default_message'] ?? '') . "\n" .
+                    '- IA pode confirmar sozinha: ' . (!empty($settings['ai_can_confirm']) ? 'sim' : 'não') . "\n" .
+                    '- Aprovação humana obrigatória: ' . (!empty($settings['require_human_approval']) ? 'sim' : 'não') . "\n\n";
+            }
         }
 
         return trim($base . "\n\nContexto do contato:\n" .
@@ -175,6 +187,7 @@ final class AiModelService
             '- Telefone: ' . ($contactPhone !== '' ? $contactPhone : 'não informado') . "\n" .
             '- Fuso de atendimento: ' . ($timezone !== '' ? $timezone : 'não informado') . "\n\n" .
             ($knowledge !== '' ? "Base de conhecimento:\n" . $knowledge . "\n\n" : '') .
+            $preScheduleBlock .
             "Regras obrigatórias:\n- " . implode("\n- ", $rules));
     }
 

@@ -6,12 +6,15 @@ namespace App\Controllers;
 
 use App\Core\Audit;
 use App\Core\Auth;
+use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Env;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AutomationWebhookService;
+use App\Services\EvolutionService;
+use App\Services\PreSchedulingService;
 use App\Services\SubscriptionService;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -293,7 +296,12 @@ final class CalendarController
         } else {
             Audit::log('calendar.appointment_status_updated', ['appointment_id' => $appointmentId, 'status' => $status], $tenantId);
             $this->trySyncToN8n($appointmentId, $tenantId, 'status_updated');
-            Flash::set('success', 'Status do agendamento atualizado.');
+            $messageResult = $this->trySendPreScheduleStatusMessage($appointmentId, $tenantId, $status);
+            if ($messageResult['attempted'] && !$messageResult['ok']) {
+                Flash::set('warning', 'Status atualizado, mas a mensagem automática não foi enviada: ' . $messageResult['error']);
+            } else {
+                Flash::set('success', $messageResult['attempted'] ? 'Status atualizado e mensagem enviada ao cliente.' : 'Status do agendamento atualizado.');
+            }
         }
 
         $return = trim((string) ($_POST['return_to'] ?? ''));
@@ -463,6 +471,187 @@ final class CalendarController
             'id' => $appointmentId,
             'tenant_id' => $tenantId,
         ]);
+    }
+
+    private function trySendPreScheduleStatusMessage(int $appointmentId, int $tenantId, string $status): array
+    {
+        if (!in_array($status, ['confirmed', 'rejected', 'rescheduled'], true)) {
+            return ['attempted' => false, 'ok' => false, 'error' => null];
+        }
+
+        $appointment = $this->appointmentForMessaging($appointmentId, $tenantId);
+        if (!$appointment || (int) ($appointment['is_pre_schedule'] ?? 0) !== 1) {
+            return ['attempted' => false, 'ok' => false, 'error' => null];
+        }
+
+        $settings = (new PreSchedulingService())->settings($tenantId);
+        if ($status === 'confirmed' && empty($settings['send_approval_message'])) {
+            return ['attempted' => false, 'ok' => false, 'error' => null];
+        }
+
+        $templateKey = match ($status) {
+            'confirmed' => 'approved_message',
+            'rejected' => 'rejected_message',
+            'rescheduled' => 'reschedule_message',
+            default => 'approved_message',
+        };
+        $template = trim((string) ($settings[$templateKey] ?? ''));
+        if ($template === '') {
+            return ['attempted' => false, 'ok' => false, 'error' => null];
+        }
+
+        $message = (new PreSchedulingService())->renderMessage($template, $appointment);
+        if ($message === '') {
+            return ['attempted' => false, 'ok' => false, 'error' => null];
+        }
+
+        if (trim((string) ($appointment['phone'] ?? '')) === '') {
+            return ['attempted' => true, 'ok' => false, 'error' => 'Contato sem telefone.'];
+        }
+
+        try {
+            $instance = $this->instanceForMessaging($appointment, $tenantId);
+            if (!$instance) {
+                throw new \RuntimeException('Nenhuma instância Evolution conectada foi encontrada para a empresa.');
+            }
+
+            $verifySsl = filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+            $caBundle = trim((string) Env::get('EVOLUTION_CA_BUNDLE', ''));
+            $service = new EvolutionService(
+                (string) $instance['base_url'],
+                Crypto::decrypt((string) $instance['api_key_encrypted']),
+                (string) $instance['instance_name'],
+                24,
+                $verifySsl ?? true,
+                $caBundle !== '' ? $caBundle : null
+            );
+
+            $result = $service->sendText((string) $appointment['phone'], $message);
+            $this->recordOutgoingAppointmentMessage($appointment, $message, $result);
+
+            if ($this->hasColumn('calendar_appointments', 'approval_message_sent_at')) {
+                Database::connection()->prepare(
+                    'UPDATE calendar_appointments
+                     SET approval_message_sent_at = NOW(), approval_message_error = NULL
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
+            }
+
+            Audit::log('calendar.pre_schedule_message_sent', ['appointment_id' => $appointmentId, 'status' => $status], $tenantId);
+            return ['attempted' => true, 'ok' => true, 'error' => null];
+        } catch (Throwable $exception) {
+            if ($this->hasColumn('calendar_appointments', 'approval_message_error')) {
+                Database::connection()->prepare(
+                    'UPDATE calendar_appointments
+                     SET approval_message_error = :error
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute([
+                    'error' => mb_substr($exception->getMessage(), 0, 500),
+                    'id' => $appointmentId,
+                    'tenant_id' => $tenantId,
+                ]);
+            }
+            Audit::log('calendar.pre_schedule_message_failed', ['appointment_id' => $appointmentId, 'error' => $exception->getMessage()], $tenantId);
+            return ['attempted' => true, 'ok' => false, 'error' => $exception->getMessage()];
+        }
+    }
+
+    private function appointmentForMessaging(int $appointmentId, int $tenantId): ?array
+    {
+        $statement = Database::connection()->prepare(
+            'SELECT a.*, ct.name AS contact_name, ct.phone, ct.remote_jid,
+                    ct.evolution_instance_id AS contact_instance_id,
+                    c.evolution_instance_id AS conversation_instance_id
+             FROM calendar_appointments a
+             LEFT JOIN contacts ct ON ct.id = a.contact_id
+             LEFT JOIN conversations c ON c.id = a.conversation_id
+             WHERE a.id = :id AND a.tenant_id = :tenant_id
+             LIMIT 1'
+        );
+        $statement->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
+        $appointment = $statement->fetch(PDO::FETCH_ASSOC);
+        return $appointment ?: null;
+    }
+
+    private function instanceForMessaging(array $appointment, int $tenantId): ?array
+    {
+        $instanceId = (int) ($appointment['conversation_instance_id'] ?: $appointment['contact_instance_id'] ?: 0);
+        if ($instanceId > 0) {
+            $statement = Database::connection()->prepare('SELECT * FROM evolution_instances WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+            $statement->execute(['id' => $instanceId, 'tenant_id' => $tenantId]);
+            $instance = $statement->fetch(PDO::FETCH_ASSOC);
+            if ($instance) {
+                return $instance;
+            }
+        }
+
+        $statement = Database::connection()->prepare(
+            'SELECT * FROM evolution_instances
+             WHERE tenant_id = :tenant_id
+             ORDER BY (status = "connected") DESC, is_default DESC, id DESC
+             LIMIT 1'
+        );
+        $statement->execute(['tenant_id' => $tenantId]);
+        $instance = $statement->fetch(PDO::FETCH_ASSOC);
+        return $instance ?: null;
+    }
+
+    private function recordOutgoingAppointmentMessage(array $appointment, string $message, array $result): void
+    {
+        $conversationId = (int) ($appointment['conversation_id'] ?? 0);
+        if ($conversationId < 1) {
+            return;
+        }
+
+        $sentAt = date('Y-m-d H:i:s');
+        $externalId = $this->extractEvolutionMessageId($result['body'] ?? []);
+        $pdo = Database::connection();
+        $pdo->prepare(
+            'INSERT INTO conversation_messages
+                (tenant_id, conversation_id, evolution_message_id, direction, sender_type, sender_user_id,
+                 message_type, content, status, raw_payload_json, sent_at)
+             VALUES
+                (:tenant_id, :conversation_id, :external_id, "outgoing", "system", :sender_user_id,
+                 "text", :content, "sent", :raw_payload, :sent_at)'
+        )->execute([
+            'tenant_id' => (int) $appointment['tenant_id'],
+            'conversation_id' => $conversationId,
+            'external_id' => $externalId,
+            'sender_user_id' => Auth::id(),
+            'content' => $message,
+            'raw_payload' => json_encode($result['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'sent_at' => $sentAt,
+        ]);
+
+        $pdo->prepare(
+            'UPDATE conversations
+             SET last_message_at = :sent_at,
+                 last_message_preview = :preview,
+                 unread_count = 0,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id AND tenant_id = :tenant_id'
+        )->execute([
+            'sent_at' => $sentAt,
+            'preview' => mb_substr($message, 0, 255),
+            'id' => $conversationId,
+            'tenant_id' => (int) $appointment['tenant_id'],
+        ]);
+
+        $pdo->prepare(
+            'INSERT INTO conversation_events (tenant_id, conversation_id, user_id, event_type, description)
+             VALUES (:tenant_id, :conversation_id, :user_id, "calendar.confirmation_sent", :description)'
+        )->execute([
+            'tenant_id' => (int) $appointment['tenant_id'],
+            'conversation_id' => $conversationId,
+            'user_id' => Auth::id(),
+            'description' => 'Mensagem automática de pré-agendamento enviada ao contato.',
+        ]);
+    }
+
+    private function extractEvolutionMessageId(array $body): ?string
+    {
+        $id = $body['key']['id'] ?? $body['messageId'] ?? $body['id'] ?? $body['data']['key']['id'] ?? null;
+        return is_scalar($id) && trim((string) $id) !== '' ? trim((string) $id) : null;
     }
 
     private function hasColumn(string $table, string $column): bool
