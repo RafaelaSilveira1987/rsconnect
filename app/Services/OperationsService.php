@@ -283,15 +283,34 @@ final class OperationsService
     private function latestChecks(): array
     {
         try {
-            $sql = "SELECT hc.*
-                    FROM system_health_checks hc
-                    INNER JOIN (
-                        SELECT check_key, MAX(id) AS max_id
-                        FROM system_health_checks
-                        GROUP BY check_key
-                    ) latest ON latest.max_id = hc.id
-                    ORDER BY FIELD(hc.status, 'down', 'warning', 'ok'), hc.label";
-            return Database::connection()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            // Consulta simples e resiliente: evita FIELD(), subquery e qualquer incompatibilidade
+            // de collation/SQL mode em alguns MySQL/MariaDB. Buscamos os últimos registros e
+            // mantemos apenas o mais recente por check_key no PHP.
+            $rows = Database::connection()
+                ->query('SELECT * FROM system_health_checks ORDER BY id DESC LIMIT 120')
+                ->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+            $latestByKey = [];
+            foreach ($rows as $row) {
+                $key = (string) ($row['check_key'] ?? '');
+                if ($key === '' || isset($latestByKey[$key])) {
+                    continue;
+                }
+                $latestByKey[$key] = $row;
+            }
+
+            $checks = array_values($latestByKey);
+            $weight = ['down' => 0, 'warning' => 1, 'ok' => 2];
+            usort($checks, static function (array $a, array $b) use ($weight): int {
+                $statusA = $weight[(string) ($a['status'] ?? 'warning')] ?? 1;
+                $statusB = $weight[(string) ($b['status'] ?? 'warning')] ?? 1;
+                if ($statusA !== $statusB) {
+                    return $statusA <=> $statusB;
+                }
+                return strcasecmp((string) ($a['label'] ?? $a['check_key'] ?? ''), (string) ($b['label'] ?? $b['check_key'] ?? ''));
+            });
+
+            return $checks;
         } catch (Throwable) {
             return [];
         }

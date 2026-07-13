@@ -247,15 +247,15 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             if (status) {
-                status.textContent = 'Verificação concluída em ' + (payload.checked_at || 'agora') + '. Atualizando painel...';
+                status.textContent = 'Verificação concluída em ' + (payload.checked_at || 'agora') + '. Dados salvos. Atualize a página apenas se quiser recarregar a lista completa.';
             }
             if (button) {
                 button.textContent = 'Concluído';
             }
 
-            window.setTimeout(function () {
-                window.location.href = (payload.redirect || form.action.replace('/checks/run', '')) + '?checked=' + Date.now();
-            }, 650);
+            // Não redireciona automaticamente. Antes o resumo atualizava via AJAX e, ao
+            // recarregar rápido, a tela podia voltar visualmente para zero por cache/renderização.
+            // Mantemos o resultado na tela e deixamos o próximo acesso carregar do banco.
         } catch (error) {
             if (status) {
                 status.textContent = error.message + ' Tentando pelo envio tradicional...';
