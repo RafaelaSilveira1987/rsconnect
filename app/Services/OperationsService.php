@@ -143,7 +143,7 @@ final class OperationsService
 
     public function validBackupToken(string $token): bool
     {
-        $expected = (string) Env::get('OPERATIONS_BACKUP_TOKEN', '');
+        $expected = $this->backupToken();
         if ($expected === '') {
             return false;
         }
@@ -512,9 +512,21 @@ final class OperationsService
         }
     }
 
+    private function backupToken(): string
+    {
+        foreach (['OPERATIONS_BACKUP_TOKEN', 'BACKUP_WEBHOOK_TOKEN', 'RS_CONNECT_BACKUP_TOKEN'] as $key) {
+            $value = trim((string) Env::get($key, ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
     private function backupTokenConfigured(): bool
     {
-        return (string) Env::get('OPERATIONS_BACKUP_TOKEN', '') !== '';
+        return $this->backupToken() !== '';
     }
 
     private function normalizeStorageType(string $storageType): string

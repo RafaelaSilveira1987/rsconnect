@@ -82,9 +82,15 @@ return static function (Router $router): void {
     $router->post('/operations/incidents/resolve', [OperationsController::class, 'resolveIncident'], ['auth', 'super_admin', 'csrf']);
     $router->get('/operations/backups/automation', [BackupAutomationController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/backup-automatico', [BackupAutomationController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/backups/automatico', [BackupAutomationController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/backups/automation', [BackupAutomationController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/monitoramento/backups/automatico', [BackupAutomationController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/operations/backups/automation/save', [BackupAutomationController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/operations/backups/automation/trigger', [BackupAutomationController::class, 'trigger'], ['auth', 'super_admin', 'csrf']);
     $router->post('/operations/backups/automation/toggle', [BackupAutomationController::class, 'toggle'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/backup-automatico/save', [BackupAutomationController::class, 'save'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/backup-automatico/trigger', [BackupAutomationController::class, 'trigger'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/backup-automatico/toggle', [BackupAutomationController::class, 'toggle'], ['auth', 'super_admin', 'csrf']);
     $router->post('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);
     $router->get('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);
 

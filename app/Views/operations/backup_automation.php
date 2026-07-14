@@ -79,13 +79,13 @@ $frequencyLabel = static fn (string $frequency): string => match ($frequency) {
                         </small>
                     </div>
                     <span class="badge <?= $statusBadge((string) ($routine['status'] ?? 'inactive')) ?>"><?= $statusLabel((string) ($routine['status'] ?? 'inactive')) ?></span>
-                    <form method="post" action="<?= View::e(Router::url('/operations/backups/automation/trigger')) ?>">
+                    <form method="post" action="<?= View::e(Router::url('/backup-automatico/trigger')) ?>">
                         <?= Csrf::input() ?>
                         <input type="hidden" name="routine_id" value="<?= (int) ($routine['id'] ?? 0) ?>">
                         <input type="hidden" name="trigger_type" value="manual">
                         <button class="btn btn-quiet" type="submit">Testar agora</button>
                     </form>
-                    <form method="post" action="<?= View::e(Router::url('/operations/backups/automation/toggle')) ?>">
+                    <form method="post" action="<?= View::e(Router::url('/backup-automatico/toggle')) ?>">
                         <?= Csrf::input() ?>
                         <input type="hidden" name="routine_id" value="<?= (int) ($routine['id'] ?? 0) ?>">
                         <input type="hidden" name="status" value="<?= ($routine['status'] ?? '') === 'active' ? 'inactive' : 'active' ?>">
@@ -101,7 +101,7 @@ $frequencyLabel = static fn (string $frequency): string => match ($frequency) {
 
     <aside class="card">
         <div class="section-heading"><div><span class="eyebrow">Configuração</span><h2>Nova rotina</h2></div></div>
-        <form class="operations-form" method="post" action="<?= View::e(Router::url('/operations/backups/automation/save')) ?>">
+        <form class="operations-form" method="post" action="<?= View::e(Router::url('/backup-automatico/save')) ?>">
             <?= Csrf::input() ?>
             <div class="field">
                 <label>Nome</label>
@@ -211,7 +211,7 @@ $frequencyLabel = static fn (string $frequency): string => match ($frequency) {
   "notes": "Backup diário concluído"
 }</pre>
         <?php if (empty($settings['backup_token_configured'])): ?>
-            <div class="operations-alert is-warning"><strong>Token pendente</strong><p>Configure <code>OPERATIONS_BACKUP_TOKEN</code> no .env antes de ativar a rotina em produção.</p></div>
+            <div class="operations-alert is-warning"><strong>Token pendente</strong><p>Configure <code>OPERATIONS_BACKUP_TOKEN</code> no ambiente do serviço RS Connect no EasyPanel e faça redeploy. Também é aceito <code>BACKUP_WEBHOOK_TOKEN</code> como compatibilidade.</p></div>
         <?php endif; ?>
     </section>
 </div>

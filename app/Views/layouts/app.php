@@ -94,7 +94,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=24.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=24.1')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -149,7 +149,7 @@ $svgIcon = static function (string $name): string {
                 <a class="nav-link<?= $isActive('/implementation') ?>" href="<?= View::e(Router::url('/implementation')) ?>"><?= $svgIcon('implementation') ?><span>Implantação</span></a>
                 <a class="nav-link<?= $isActive('/security') ?>" href="<?= View::e(Router::url('/security')) ?>"><?= $svgIcon('security') ?><span>Segurança</span></a>
                 <a class="nav-link<?= $isActive('/operations') ?>" href="<?= View::e(Router::url('/operations')) ?>"><?= $svgIcon('operations') ?><span>Monitoramento</span></a>
-                <a class="nav-link<?= $isActive('/operations/backups/automation') ?>" href="<?= View::e(Router::url('/operations/backups/automation')) ?>"><?= $svgIcon('operations') ?><span>Backup automático</span></a>
+                <a class="nav-link<?= $isActive('/backup-automatico') || $isActive('/operations/backups/automation') ?>" href="<?= View::e(Router::url('/backup-automatico')) ?>"><?= $svgIcon('operations') ?><span>Backup automático</span></a>
                 <a class="nav-link<?= $isActive('/privacy') ?>" href="<?= View::e(Router::url('/privacy')) ?>"><?= $svgIcon('privacy') ?><span>Privacidade/LGPD</span></a>
             <?php endif; ?>
             <?php if (!Auth::isSuperAdmin() && Auth::can('agents.view') && $moduleVisible('agents')): ?>
@@ -224,6 +224,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=24.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=24.1')) ?>" defer></script>
 </body>
 </html>

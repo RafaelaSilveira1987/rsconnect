@@ -23,7 +23,7 @@ final class BackupAutomationService
             'settings' => [
                 'callback_url' => Router::url('/webhooks/operations/backups'),
                 'callback_url_sample' => Router::url('/webhooks/operations/backups') . '?token=SEU_TOKEN',
-                'backup_token_configured' => trim((string) Env::get('OPERATIONS_BACKUP_TOKEN', '')) !== '',
+                'backup_token_configured' => $this->backupToken() !== '',
                 'max_age_hours' => (int) Env::get('OPERATIONS_BACKUP_MAX_AGE_HOURS', 24),
                 'n8n_base_url' => (string) Env::get('N8N_BASE_URL', ''),
                 'template_url' => Router::url('/n8n-templates/download?template=backup-rsconnect'),
@@ -147,7 +147,7 @@ final class BackupAutomationService
         }
 
         $jobId = $this->createJob($routineId, $triggerType, ['routine' => $this->safeRoutine($routine)]);
-        $callbackToken = trim((string) Env::get('OPERATIONS_BACKUP_TOKEN', ''));
+        $callbackToken = $this->backupToken();
 
         $payload = [
             'event' => 'operations.backup.requested',

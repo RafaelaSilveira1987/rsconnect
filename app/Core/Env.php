@@ -25,9 +25,11 @@ final class Env
             $value = trim($value, " \t\n\r\0\x0B\"'");
 
             // Variáveis reais do servidor/contêiner têm prioridade sobre o arquivo .env.
-            $serverValue = getenv($key);
-            if ($serverValue !== false && $serverValue !== '') {
-                self::$values[$key] = $serverValue;
+            // Em alguns ambientes Apache/EasyPanel elas chegam em $_SERVER, não em getenv().
+            $serverValue = $_SERVER[$key] ?? getenv($key);
+            if ($serverValue !== false && $serverValue !== null && trim((string) $serverValue) !== '') {
+                self::$values[$key] = trim((string) $serverValue);
+                $_ENV[$key] = trim((string) $serverValue);
                 continue;
             }
 
@@ -39,7 +41,19 @@ final class Env
 
     public static function get(string $key, mixed $default = null): mixed
     {
-        $value = self::$values[$key] ?? $_ENV[$key] ?? getenv($key);
-        return ($value === false || $value === null || $value === '') ? $default : $value;
+        $candidates = [
+            self::$values[$key] ?? null,
+            $_ENV[$key] ?? null,
+            $_SERVER[$key] ?? null,
+            getenv($key),
+        ];
+
+        foreach ($candidates as $value) {
+            if ($value !== false && $value !== null && trim((string) $value) !== '') {
+                return trim((string) $value);
+            }
+        }
+
+        return $default;
     }
 }

@@ -26,7 +26,7 @@ final class BackupAutomationController
     {
         if (!Csrf::validate($_POST['_token'] ?? null)) {
             Flash::set('error', 'Sessão expirada. Atualize a página e tente novamente.');
-            $this->redirect('/backup-automatico');
+            $this->redirect('/operations/backups/automation');
         }
 
         try {
@@ -36,35 +36,35 @@ final class BackupAutomationController
             Flash::set('error', 'Não foi possível salvar a rotina: ' . $exception->getMessage());
         }
 
-        $this->redirect('/backup-automatico');
+        $this->redirect('/operations/backups/automation');
     }
 
     public function trigger(): void
     {
         if (!Csrf::validate($_POST['_token'] ?? null)) {
             Flash::set('error', 'Sessão expirada. Atualize a página e tente novamente.');
-            $this->redirect('/backup-automatico');
+            $this->redirect('/operations/backups/automation');
         }
 
         $routineId = (int) ($_POST['routine_id'] ?? 0);
         $triggerType = (string) ($_POST['trigger_type'] ?? 'manual');
         $result = (new BackupAutomationService())->triggerRoutine($routineId, $triggerType);
         Flash::set(!empty($result['ok']) ? 'success' : 'error', (string) ($result['message'] ?? 'Solicitação processada.'));
-        $this->redirect('/backup-automatico');
+        $this->redirect('/operations/backups/automation');
     }
 
     public function toggle(): void
     {
         if (!Csrf::validate($_POST['_token'] ?? null)) {
             Flash::set('error', 'Sessão expirada. Atualize a página e tente novamente.');
-            $this->redirect('/backup-automatico');
+            $this->redirect('/operations/backups/automation');
         }
 
         $routineId = (int) ($_POST['routine_id'] ?? 0);
         $status = (string) ($_POST['status'] ?? 'active');
         (new BackupAutomationService())->toggleRoutine($routineId, $status);
         Flash::set('success', 'Status da rotina atualizado.');
-        $this->redirect('/backup-automatico');
+        $this->redirect('/operations/backups/automation');
     }
 
     private function redirect(string $path): void
