@@ -36,6 +36,7 @@ final class CommercialBetaService
             'metrics' => $this->metrics(),
             'quick_actions' => $this->quickActions(),
             'release_notes' => $this->releaseNotes(),
+            'version_label' => 'Beta Comercial 1.0',
             'operational_routine' => $this->operationalRoutine(),
         ];
     }
@@ -159,6 +160,8 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => 'ZIP 26', 'title' => 'Estabilização final e Beta 1.0', 'summary' => 'Status da versão instalada, diagnóstico técnico e critérios finais de operação.'],
+            ['version' => 'ZIP 25', 'title' => 'Central de ajuda e Beta comercial', 'summary' => 'Painel de maturidade comercial e documentação central.'],
             ['version' => 'ZIP 24', 'title' => 'Backup automático via n8n', 'summary' => 'Rotina, callback e histórico de backup operacional.'],
             ['version' => 'ZIP 23', 'title' => 'Onboarding guiado do cliente', 'summary' => 'Primeiros passos, bloqueios inteligentes e sincronização com implantação.'],
             ['version' => 'ZIP 22', 'title' => 'Checklist comercial de implantação', 'summary' => 'Prontidão por empresa e ações rápidas para entrega.'],
@@ -179,15 +182,15 @@ final class CommercialBetaService
     private function statusLabel(int $score, int $blocked): string
     {
         if ($blocked > 0) {
-            return 'Com bloqueios';
+            return 'Beta 1.0 com bloqueios';
         }
         if ($score >= 90) {
-            return 'Pronto para beta comercial';
+            return 'Beta 1.0 operacional';
         }
         if ($score >= 70) {
-            return 'Pronto para testes controlados';
+            return 'Beta 1.0 em validação';
         }
-        return 'Em preparação';
+        return 'Beta 1.0 em preparação';
     }
 
     private function check(string $label, string $status, string $message, string $action): array

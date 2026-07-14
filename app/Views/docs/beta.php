@@ -16,12 +16,12 @@ $metrics = $data['metrics'] ?? [];
 
 <section class="hero-card docs-hero beta-hero">
     <div>
-        <span class="eyebrow">Versão beta comercial</span>
-        <h2>Prontidão para vender e operar clientes reais.</h2>
-        <p>Este painel consolida os módulos centrais do RS Connect: WhatsApp, IA, CRM, agenda, n8n, cobrança, LGPD, monitoramento, backup e onboarding.</p>
+        <span class="eyebrow">Beta Comercial 1.0</span>
+        <h2>Prontidão para operar clientes reais em beta controlada.</h2>
+        <p>Este painel consolida os módulos centrais do RS Connect e substitui o status genérico de preparação por critérios objetivos de Beta 1.0.</p>
     </div>
     <div class="beta-score-card">
-        <span class="eyebrow">Prontidão</span>
+        <span class="eyebrow">Status Beta 1.0</span>
         <strong><?= $score ?>%</strong>
         <span class="badge <?= $statusClass ?>"><?= View::e($data['status_label'] ?? 'Em preparação') ?></span>
     </div>
@@ -57,10 +57,11 @@ $metrics = $data['metrics'] ?? [];
                 <?php if (($action['scope'] ?? 'all') === 'client') { continue; } ?>
                 <a href="<?= View::e(Router::url($action['url'])) ?>"><?= View::e($action['label']) ?></a>
             <?php endforeach; ?>
+            <a href="<?= View::e(Router::url('/status-sistema')) ?>">Status Beta 1.0</a>
         </div>
         <div class="operations-alert is-info" style="margin-top:12px">
             <strong>Critério comercial sugerido</strong>
-            <p>Comece vendendo para poucos clientes controlados, com onboarding acompanhado, backup validado e monitoramento diário.</p>
+            <p>Use a Beta 1.0 com poucos clientes controlados, onboarding acompanhado, backup validado e monitoramento diário.</p>
         </div>
     </aside>
 </div>

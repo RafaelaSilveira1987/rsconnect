@@ -31,6 +31,7 @@ use App\Controllers\BillingReminderController;
 use App\Controllers\PermissionController;
 use App\Controllers\TaskController;
 use App\Controllers\UserController;
+use App\Controllers\VersionController;
 use App\Core\Router;
 
 return static function (Router $router): void {
@@ -44,6 +45,10 @@ return static function (Router $router): void {
     $router->get('/docs', [DocumentationController::class, 'index'], ['auth']);
     $router->get('/beta-comercial', [DocumentationController::class, 'beta'], ['auth', 'super_admin']);
     $router->get('/versao-beta', [DocumentationController::class, 'beta'], ['auth', 'super_admin']);
+    $router->get('/status-sistema', [VersionController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/versao-sistema', [VersionController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/diagnostico', [VersionController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/beta-1', [VersionController::class, 'index'], ['auth', 'super_admin']);
 
     $router->post('/webhooks/evolution', [EvolutionWebhookController::class, 'handle']);
     $router->post('/webhooks/n8n/callback', [N8nTemplateController::class, 'callback']);
