@@ -519,6 +519,11 @@ final class OperationsService
             if ($value !== '') {
                 return $value;
             }
+
+            $serverValue = $_SERVER[$key] ?? $_ENV[$key] ?? getenv($key);
+            if (is_string($serverValue) && trim($serverValue) !== '') {
+                return trim($serverValue);
+            }
         }
 
         return '';

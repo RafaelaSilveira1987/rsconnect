@@ -52,6 +52,7 @@ $frequencyLabel = static fn (string $frequency): string => match ($frequency) {
         <a class="btn btn-primary" href="<?= View::e((string) ($settings['template_url'] ?? Router::url('/n8n-templates'))) ?>">Baixar template n8n</a>
         <a class="btn btn-quiet" href="<?= View::e(Router::url('/operations')) ?>">Voltar ao monitoramento</a>
         <span class="badge <?= !empty($settings['backup_token_configured']) ? 'badge-success' : 'badge-warning' ?>">Token de backup: <?= !empty($settings['backup_token_configured']) ? 'configurado' : 'pendente' ?></span>
+        <?php if (!empty($settings['backup_token_source'])): ?><small class="muted-text">Fonte: <?= View::e($settings['backup_token_source']) ?></small><?php endif; ?>
     </div>
 </section>
 
@@ -196,7 +197,7 @@ $frequencyLabel = static fn (string $frequency): string => match ($frequency) {
 
     <section class="card">
         <div class="section-heading"><div><span class="eyebrow">Webhook</span><h2>Callback de resultado</h2></div></div>
-        <p class="muted-text">Depois de gerar e salvar o arquivo, o n8n deve chamar este endpoint para registrar o backup no painel de monitoramento.</p>
+        <p class="muted-text">Depois de gerar e salvar o arquivo, o n8n deve chamar este endpoint para registrar o backup no painel de monitoramento. Quando o callback traz <code>routine_id</code>, o sistema também atualiza o último sucesso da rotina e cria um job de histórico.</p>
         <pre class="codebox">POST <?= View::e((string) ($settings['callback_url_sample'] ?? '')) ?>{
   "status": "success",
   "backup_type": "automatic",

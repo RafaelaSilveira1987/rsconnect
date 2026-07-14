@@ -24,6 +24,7 @@ final class BackupAutomationService
                 'callback_url' => Router::url('/webhooks/operations/backups'),
                 'callback_url_sample' => Router::url('/webhooks/operations/backups') . '?token=SEU_TOKEN',
                 'backup_token_configured' => $this->backupToken() !== '',
+                'backup_token_source' => $this->backupTokenSource(),
                 'max_age_hours' => (int) Env::get('OPERATIONS_BACKUP_MAX_AGE_HOURS', 24),
                 'n8n_base_url' => (string) Env::get('N8N_BASE_URL', ''),
                 'template_url' => Router::url('/n8n-templates/download?template=backup-rsconnect'),
@@ -141,7 +142,7 @@ final class BackupAutomationService
             return ['ok' => false, 'message' => 'Rotina de backup não encontrada.'];
         }
 
-        $target = Crypto::decrypt((string) ($routine['n8n_webhook_url_encrypted'] ?? ''));
+        $target = $this->decryptSafe((string) ($routine['n8n_webhook_url_encrypted'] ?? ''));
         if (!filter_var($target, FILTER_VALIDATE_URL)) {
             return ['ok' => false, 'message' => 'URL do webhook n8n inválida ou não configurada.'];
         }
@@ -178,7 +179,7 @@ final class BackupAutomationService
             'requested_at' => date('c'),
         ];
 
-        $secret = !empty($routine['secret_token_encrypted']) ? Crypto::decrypt((string) $routine['secret_token_encrypted']) : '';
+        $secret = !empty($routine['secret_token_encrypted']) ? $this->decryptSafe((string) $routine['secret_token_encrypted']) : '';
         $result = $this->postJson($target, $payload, $secret);
 
         if (!empty($result['ok'])) {
@@ -197,9 +198,16 @@ final class BackupAutomationService
     {
         $routineId = (int) ($payload['routine_id'] ?? $payload['backup_routine_id'] ?? 0);
         $jobId = (int) ($payload['backup_job_id'] ?? $payload['job_id'] ?? 0);
+        if ($routineId < 1 && $jobId > 0) {
+            $routineId = $this->routineIdForJob($jobId);
+        }
         $message = (string) ($payload['notes'] ?? $payload['message'] ?? 'Callback de backup recebido.');
 
         try {
+            if ($routineId > 0 && $jobId < 1) {
+                $jobId = $this->createCallbackJob($routineId, $payload, $status, $backupId);
+            }
+
             if ($jobId > 0) {
                 $this->markJob($jobId, $status === 'success' ? 'success' : 'error', $status === 'success' ? $message : null, $status !== 'success' ? $message : null, $backupId);
             }
@@ -207,7 +215,10 @@ final class BackupAutomationService
                 if ($status === 'success') {
                     Database::connection()->prepare(
                         'UPDATE operations_backup_routines
-                         SET last_success_at = NOW(), last_error_at = NULL, last_error = NULL
+                         SET last_requested_at = COALESCE(last_requested_at, NOW()),
+                             last_success_at = NOW(),
+                             last_error_at = NULL,
+                             last_error = NULL
                          WHERE id = :id'
                     )->execute(['id' => $routineId]);
                 } else {
@@ -236,7 +247,8 @@ final class BackupAutomationService
         try {
             $rows = Database::connection()->query('SELECT * FROM operations_backup_routines ORDER BY status, id DESC')->fetchAll(PDO::FETCH_ASSOC) ?: [];
             foreach ($rows as &$row) {
-                $row['webhook_url_masked'] = $this->maskUrl(Crypto::decrypt((string) ($row['n8n_webhook_url_encrypted'] ?? '')));
+                $webhookUrl = $this->decryptSafe((string) ($row['n8n_webhook_url_encrypted'] ?? ''));
+                $row['webhook_url_masked'] = $webhookUrl !== '' ? $this->maskUrl($webhookUrl) : 'Webhook salvo, mas não foi possível exibir a URL mascarada';
                 unset($row['n8n_webhook_url_encrypted'], $row['secret_token_encrypted']);
             }
             unset($row);
@@ -287,6 +299,42 @@ final class BackupAutomationService
             return 0;
         }
     }
+
+    private function routineIdForJob(int $jobId): int
+    {
+        try {
+            $statement = Database::connection()->prepare('SELECT routine_id FROM operations_backup_jobs WHERE id = :id LIMIT 1');
+            $statement->execute(['id' => $jobId]);
+            return (int) ($statement->fetchColumn() ?: 0);
+        } catch (Throwable) {
+            return 0;
+        }
+    }
+
+    private function createCallbackJob(int $routineId, array $payload, string $status, ?int $backupId): int
+    {
+        try {
+            Database::connection()->prepare(
+                'INSERT INTO operations_backup_jobs
+                    (routine_id, status, trigger_type, request_payload_json, response_preview, error_message, requested_at, started_at, finished_at, backup_id, created_by)
+                 VALUES
+                    (:routine_id, :status, :trigger_type, :payload, :preview, :error, NOW(), NOW(), NOW(), :backup_id, :created_by)'
+            )->execute([
+                'routine_id' => $routineId,
+                'status' => $status === 'success' ? 'success' : 'error',
+                'trigger_type' => 'webhook',
+                'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'preview' => $status === 'success' ? mb_substr((string) ($payload['notes'] ?? $payload['message'] ?? 'Callback manual recebido.'), 0, 1000) : null,
+                'error' => $status !== 'success' ? mb_substr((string) ($payload['notes'] ?? $payload['message'] ?? 'Callback de erro recebido.'), 0, 900) : null,
+                'backup_id' => $backupId,
+                'created_by' => Auth::id(),
+            ]);
+            return (int) Database::connection()->lastInsertId();
+        } catch (Throwable) {
+            return 0;
+        }
+    }
+
 
     private function markJob(int $jobId, string $status, ?string $preview, ?string $error, ?int $backupId): void
     {
@@ -370,11 +418,45 @@ final class BackupAutomationService
 
     private function backupToken(): string
     {
-        $token = (string) Env::get('OPERATIONS_BACKUP_TOKEN', '');
-        if (trim($token) === '') {
-            $token = (string) Env::get('BACKUP_WEBHOOK_TOKEN', '');
+        foreach (['OPERATIONS_BACKUP_TOKEN', 'BACKUP_WEBHOOK_TOKEN'] as $key) {
+            $token = trim((string) Env::get($key, ''));
+            if ($token !== '') {
+                return $token;
+            }
+
+            $serverValue = $_SERVER[$key] ?? $_ENV[$key] ?? getenv($key);
+            if (is_string($serverValue) && trim($serverValue) !== '') {
+                return trim($serverValue);
+            }
         }
-        return trim($token);
+        return '';
+    }
+
+    private function backupTokenSource(): string
+    {
+        foreach (['OPERATIONS_BACKUP_TOKEN', 'BACKUP_WEBHOOK_TOKEN'] as $key) {
+            $token = trim((string) Env::get($key, ''));
+            if ($token !== '') {
+                return $key;
+            }
+            $serverValue = $_SERVER[$key] ?? $_ENV[$key] ?? getenv($key);
+            if (is_string($serverValue) && trim($serverValue) !== '') {
+                return $key;
+            }
+        }
+        return '';
+    }
+
+    private function decryptSafe(string $value): string
+    {
+        if (trim($value) === '') {
+            return '';
+        }
+        try {
+            return trim(Crypto::decrypt($value));
+        } catch (Throwable) {
+            return '';
+        }
     }
 
     private function normalizeStorageType(string $storageType): string
