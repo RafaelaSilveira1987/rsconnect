@@ -15,6 +15,7 @@ use App\Controllers\CrmController;
 use App\Controllers\ConversationController;
 use App\Controllers\EvolutionWebhookController;
 use App\Controllers\DashboardController;
+use App\Controllers\DocumentationController;
 use App\Controllers\InstanceController;
 use App\Controllers\ImplementationController;
 use App\Controllers\OnboardingController;
@@ -38,6 +39,11 @@ return static function (Router $router): void {
     $router->post('/logout', [AuthController::class, 'logout'], ['auth', 'csrf']);
 
     $router->get('/', [DashboardController::class, 'index'], ['auth']);
+    $router->get('/ajuda', [DocumentationController::class, 'index'], ['auth']);
+    $router->get('/central-ajuda', [DocumentationController::class, 'index'], ['auth']);
+    $router->get('/docs', [DocumentationController::class, 'index'], ['auth']);
+    $router->get('/beta-comercial', [DocumentationController::class, 'beta'], ['auth', 'super_admin']);
+    $router->get('/versao-beta', [DocumentationController::class, 'beta'], ['auth', 'super_admin']);
 
     $router->post('/webhooks/evolution', [EvolutionWebhookController::class, 'handle']);
     $router->post('/webhooks/n8n/callback', [N8nTemplateController::class, 'callback']);
