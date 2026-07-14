@@ -367,6 +367,16 @@ final class BackupAutomationService
         }
     }
 
+
+    private function backupToken(): string
+    {
+        $token = (string) Env::get('OPERATIONS_BACKUP_TOKEN', '');
+        if (trim($token) === '') {
+            $token = (string) Env::get('BACKUP_WEBHOOK_TOKEN', '');
+        }
+        return trim($token);
+    }
+
     private function normalizeStorageType(string $storageType): string
     {
         $allowed = ['server', 'easypanel', 'google_drive', 's3_minio', 'dropbox', 'other'];
