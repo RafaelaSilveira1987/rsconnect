@@ -123,6 +123,13 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
                             <strong><?= $hasPreSchedulePreference ? 'Preferência recebida' : 'Aguardando preferência' ?></strong>
                             <span>Preferência: <?= View::e(($appointment['preferred_day_text'] ?? '') ?: 'dia não informado') ?> · <?= View::e(($appointment['preferred_time_text'] ?? '') ?: 'horário não informado') ?></span>
                         </div>
+                        <?php if (!empty($appointment['availability_status'])): ?>
+                            <div class="pre-schedule-note ready">
+                                <strong>Disponibilidade</strong>
+                                <span><?= View::e(match ($appointment['availability_status']) { 'requested' => 'consulta solicitada', 'sent' => 'enviada ao n8n', 'received' => 'horários recebidos', 'empty' => 'sem horários livres', 'failed' => 'falha ao buscar', 'slot_selected' => 'horário validado/escolhido', default => $appointment['availability_status'] }) ?><?= !empty($appointment['availability_slot_count']) ? ' · ' . (int) $appointment['availability_slot_count'] . ' opção(ões)' : '' ?></span>
+                                <?php if (!empty($appointment['availability_error'])): ?><span class="text-danger"><?= View::e($appointment['availability_error']) ?></span><?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                     <?php endif; ?>
                     <small><?= View::e($appointment['contact_name'] ?: ($appointment['phone'] ?: 'Sem contato')) ?> · <?= View::e($appointment['lead_title'] ?: 'Sem negócio') ?> · Responsável: <?= View::e($appointment['owner_name'] ?: 'não definido') ?></small>
                     <?php if (($appointment['meeting_url'] ?? '') !== ''): ?><small><a href="<?= View::e($appointment['meeting_url']) ?>" target="_blank" rel="noopener">Abrir link da reunião</a></small><?php endif; ?>
@@ -146,6 +153,9 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
                     <?php if ($canManage): ?>
                         <?php if (!in_array($appointment['status'], ['completed', 'cancelled', 'rejected'], true)): ?>
                             <?php if (in_array($appointment['status'], ['pre_scheduled', 'awaiting_approval', 'rescheduled'], true)): ?>
+                                <?php if ($isPreSchedule && $hasPreSchedulePreference): ?>
+                                    <form method="post" action="<?= View::e(Router::url('/calendar/availability/request')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>"><input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>"><button class="btn btn-small btn-secondary" type="submit">Buscar disponibilidade</button></form>
+                                <?php endif; ?>
                                 <?php if ($isPreSchedule && !$hasPreSchedulePreference): ?>
                                     <button class="btn btn-small btn-disabled" type="button" disabled title="Aguardando dia e horário/período informado pelo cliente">Aprovar</button>
                                 <?php else: ?>

@@ -45,6 +45,7 @@ final class PreSchedulingService
             ]);
 
             if ($update['has_full_preference']) {
+                $this->tryAutoRequestAvailability($tenantId, (int) ($existing['id'] ?? 0));
                 $ack = $this->sendPreferenceAcknowledgement($pdo, $instance, $conversationId, $contactId, $update['appointment'], $intent);
                 $result['ack_sent'] = $ack['ok'];
                 $result['ack_error'] = $ack['error'];
@@ -122,6 +123,7 @@ final class PreSchedulingService
         $result['appointment_id'] = $appointmentId;
 
         if ($this->hasFullPreference($intent)) {
+            $this->tryAutoRequestAvailability($tenantId, $appointmentId);
             $appointment = [
                 'id' => $appointmentId,
                 'tenant_id' => $tenantId,
@@ -757,6 +759,23 @@ final class PreSchedulingService
             return (int) $statement->fetchColumn() > 0;
         } catch (Throwable) {
             return false;
+        }
+    }
+
+    private function tryAutoRequestAvailability(int $tenantId, int $appointmentId): void
+    {
+        if ($tenantId < 1 || $appointmentId < 1) {
+            return;
+        }
+        try {
+            $service = new CalendarAvailabilityService();
+            $settings = $service->settings($tenantId);
+            if (empty($settings['enabled']) || empty($settings['auto_request_on_pre_schedule'])) {
+                return;
+            }
+            $service->requestForAppointment($tenantId, $appointmentId, 'pre_schedule_ai');
+        } catch (Throwable) {
+            // Não bloqueia a conversa caso a integração de disponibilidade ainda não esteja configurada.
         }
     }
 

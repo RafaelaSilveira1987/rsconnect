@@ -13,6 +13,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AutomationWebhookService;
+use App\Services\CalendarAvailabilityService;
 use App\Services\EvolutionService;
 use App\Services\PreSchedulingService;
 use App\Services\SubscriptionService;
@@ -280,6 +281,11 @@ final class CalendarController
             if ($preferredDay === '' || $preferredTime === '') {
                 Flash::set('error', 'Antes de aprovar, o pré-agendamento precisa ter dia e horário/período informados pelo cliente. Peça a preferência ou remarque manualmente.');
                 $this->redirect('/calendar?tenant_id=' . $tenantId);
+            }
+            $availabilityCheck = (new CalendarAvailabilityService())->canApprove($tenantId, $appointmentBefore);
+            if (empty($availabilityCheck['ok'])) {
+                Flash::set('error', (string) $availabilityCheck['message']);
+                $this->redirect('/agenda-inteligente?tenant_id=' . $tenantId);
             }
         }
 

@@ -97,7 +97,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=26.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=27.0')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -131,6 +131,7 @@ $svgIcon = static function (string $name): string {
             <?php endif; ?>
             <?php if (Auth::can('calendar.view') && $moduleVisible('calendar')): ?>
                 <a class="nav-link<?= $isActive('/calendar') ?>" href="<?= View::e(Router::url('/calendar')) ?>"><?= $svgIcon('calendar') ?><span>Agenda</span></a>
+                <a class="nav-link<?= $isActive('/agenda-inteligente') || $isActive('/agenda-disponibilidade') || $isActive('/calendar/availability') ?>" href="<?= View::e(Router::url('/agenda-inteligente')) ?>"><?= $svgIcon('calendar') ?><span>Agenda inteligente</span></a>
             <?php endif; ?>
             <?php if (Auth::can('reports.view') && $moduleVisible('reports')): ?>
                 <a class="nav-link<?= $isActive('/reports') ?>" href="<?= View::e(Router::url('/reports')) ?>"><?= $svgIcon('reports') ?><span>Relatórios</span></a>
@@ -233,6 +234,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=26.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=27.0')) ?>" defer></script>
 </body>
 </html>

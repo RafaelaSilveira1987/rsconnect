@@ -2888,3 +2888,22 @@ pre.codebox {
 .version-module-card span { color: var(--muted, #667085); font-size: .88rem; }
 .version-module-card strong { font-size: 1.4rem; }
 @media (max-width: 820px) { .version-env-grid, .version-module-grid { grid-template-columns: 1fr; } .version-info-list > div { flex-direction: column; } .version-info-list strong { text-align: left; } }
+
+/* ZIP 27 — Agenda inteligente */
+.checkbox-grid.compact {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .45rem .75rem;
+  font-size: .86rem;
+}
+.checkbox-grid.compact label {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  color: var(--text, #172036);
+}
+.operations-check .text-danger,
+.text-danger { color: #b42318; }
+.text-success { color: #027a48; }
+.badge-success { background: #dcfae6; color: #067647; }
+.badge-danger { background: #fee4e2; color: #b42318; }

@@ -9,6 +9,7 @@ use App\Controllers\BillingController;
 use App\Controllers\AuthController;
 use App\Controllers\BackupAutomationController;
 use App\Controllers\CalendarController;
+use App\Controllers\CalendarAvailabilityController;
 use App\Controllers\CompanyController;
 use App\Controllers\ContactController;
 use App\Controllers\CrmController;
@@ -120,6 +121,14 @@ return static function (Router $router): void {
     $router->get('/notifications', [NotificationsController::class, 'index'], ['auth', 'permission:notifications.view']);
     $router->post('/notifications/read-all', [NotificationsController::class, 'markAllRead'], ['auth', 'permission:notifications.view', 'csrf']);
 
+    $router->get('/agenda-inteligente', [CalendarAvailabilityController::class, 'index'], ['auth', 'permission:calendar.view']);
+    $router->get('/agenda-disponibilidade', [CalendarAvailabilityController::class, 'index'], ['auth', 'permission:calendar.view']);
+    $router->get('/calendar/availability', [CalendarAvailabilityController::class, 'index'], ['auth', 'permission:calendar.view']);
+    $router->post('/calendar/availability/settings', [CalendarAvailabilityController::class, 'saveSettings'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->post('/calendar/availability/request', [CalendarAvailabilityController::class, 'request'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->post('/calendar/availability/apply', [CalendarAvailabilityController::class, 'applySlot'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->post('/webhooks/calendar/availability', [CalendarAvailabilityController::class, 'callback']);
+    $router->get('/webhooks/calendar/availability', [CalendarAvailabilityController::class, 'callback']);
     $router->get('/calendar', [CalendarController::class, 'index'], ['auth', 'permission:calendar.view']);
     $router->post('/calendar/appointments', [CalendarController::class, 'store'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/status', [CalendarController::class, 'updateStatus'], ['auth', 'permission:calendar.manage', 'csrf']);

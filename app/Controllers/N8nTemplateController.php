@@ -56,6 +56,13 @@ final class N8nTemplateController
             'events' => ['operations.backup.requested', 'cron.daily'],
             'description' => 'Gera backup do banco, salva o arquivo no destino configurado e registra o resultado no Monitoramento do RS Connect.',
         ],
+        'agenda-disponibilidade' => [
+            'title' => 'Agenda inteligente — disponibilidade',
+            'segment' => 'Agenda',
+            'file' => 'template-agenda-disponibilidade.json',
+            'events' => ['calendar.availability.requested'],
+            'description' => 'Recebe a preferência de pré-agendamento, consulta agenda externa/Google Calendar e devolve horários livres ao RS Connect.',
+        ],
     ];
 
     public function index(): void
@@ -211,6 +218,19 @@ final class N8nTemplateController
                 'rule' => ['label' => '2 dias após vencimento', 'days_from_due' => 2, 'event' => 'billing.reminder.overdue', 'channel' => 'whatsapp'],
                 'message' => 'Olá, Cliente Teste. Identificamos que a cobrança RS-202607-64550 está em aberto há 2 dias. Link: https://link-de-pagamento.example/checkout',
                 'callback' => ['url' => Router::url('/webhooks/n8n/callback')],
+            ],
+            'calendar.availability.requested' => [
+                'event' => 'calendar.availability.requested',
+                'source' => 'rs-connect',
+                'tenant_id' => 1,
+                'payload' => [
+                    'tenant_id' => 1,
+                    'appointment_id' => 15,
+                    'request_token' => 'REQUEST_TOKEN',
+                    'appointment' => ['title' => 'Pré-agendamento - Cliente', 'preferred_day_text' => 'sexta-feira', 'preferred_time_text' => '09:00'],
+                    'search' => ['start_at' => '2026-07-16 00:00:00', 'end_at' => '2026-07-30 23:59:59', 'duration_minutes' => 50, 'timezone' => 'America/Sao_Paulo', 'max_suggestions' => 5],
+                    'callback' => ['url' => Router::url('/webhooks/calendar/availability'), 'token' => 'REQUEST_TOKEN'],
+                ],
             ],
             'operations.backup.requested' => [
                 'event' => 'operations.backup.requested',
