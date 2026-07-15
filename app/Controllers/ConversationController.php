@@ -23,40 +23,41 @@ final class ConversationController
     public function index(): void
     {
         $pdo = Database::connection();
+        $tenantId = Auth::isSuperAdmin()
+            ? (int) ($_GET['tenant_id'] ?? 0)
+            : (int) (Auth::tenantId() ?? 0);
+
+        if (!Auth::isSuperAdmin() && $tenantId < 1) {
+            Flash::set('error', 'Sua conta não está vinculada a uma empresa ativa. Entre novamente ou solicite a correção do usuário.');
+            $this->redirect('/');
+        }
+
         $filters = [
             'search' => trim((string) ($_GET['search'] ?? '')),
             'status' => trim((string) ($_GET['status'] ?? '')),
             'mode' => trim((string) ($_GET['mode'] ?? '')),
             'instance_id' => (int) ($_GET['instance_id'] ?? 0),
-            'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
-            'scope' => Auth::isSuperAdmin() ? (string) ($_GET['scope'] ?? 'tenant') : 'tenant',
+            'tenant_id' => $tenantId,
             'intent' => trim((string) ($_GET['intent'] ?? '')),
         ];
-        if (!Auth::isSuperAdmin()) {
-            $filters['scope'] = 'tenant';
-        } elseif ($filters['scope'] !== 'all') {
-            $filters['scope'] = 'tenant';
-        }
 
         $conditions = [];
         $params = [];
 
-        if (!Auth::isSuperAdmin()) {
+        if ($tenantId > 0) {
             $conditions[] = 'c.tenant_id = :tenant_scope';
-            $params['tenant_scope'] = Auth::tenantId();
-        } elseif ($filters['scope'] === 'all') {
-            // Visão global explícita do Super Admin. Não é usada por padrão para evitar misturar atendimentos de clientes.
-        } elseif ($filters['tenant_id'] > 0) {
-            $conditions[] = 'c.tenant_id = :tenant_scope';
-            $params['tenant_scope'] = $filters['tenant_id'];
+            $params['tenant_scope'] = $tenantId;
         } else {
-            // Super Admin precisa escolher uma empresa antes de ver conversas.
+            // O Super Admin precisa escolher uma empresa. A visão global foi removida por privacidade.
             $conditions[] = '1 = 0';
         }
 
         if ($filters['search'] !== '') {
-            $conditions[] = '(ct.name LIKE :search OR ct.phone LIKE :search OR c.last_message_preview LIKE :search)';
-            $params['search'] = '%' . $filters['search'] . '%';
+            $conditions[] = '(ct.name LIKE :search_name OR ct.phone LIKE :search_phone OR c.last_message_preview LIKE :search_preview)';
+            $searchValue = '%' . $filters['search'] . '%';
+            $params['search_name'] = $searchValue;
+            $params['search_phone'] = $searchValue;
+            $params['search_preview'] = $searchValue;
         }
 
         if (in_array($filters['status'], ['open', 'pending', 'closed'], true)) {
@@ -75,7 +76,11 @@ final class ConversationController
         }
 
         if ($filters['intent'] === 'agenda') {
-            $conditions[] = 'c.agenda_intent_detected = 1';
+            if ($this->hasColumn($pdo, 'conversations', 'agenda_intent_detected')) {
+                $conditions[] = 'c.agenda_intent_detected = 1';
+            } else {
+                $conditions[] = '1 = 0';
+            }
         }
 
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
@@ -84,10 +89,10 @@ final class ConversationController
                     ct.status AS contact_status, i.name AS instance_label, i.instance_name,
                     t.name AS tenant_name, u.name AS assigned_user_name
              FROM conversations c
-             INNER JOIN contacts ct ON ct.id = c.contact_id
-             INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id
+             INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
+             INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = c.tenant_id
              INNER JOIN tenants t ON t.id = c.tenant_id
-             LEFT JOIN users u ON u.id = c.assigned_user_id
+             LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
              ' . $where . '
              ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
              LIMIT 100'
@@ -105,7 +110,7 @@ final class ConversationController
         $team = [];
 
         if ($selectedId > 0) {
-            $selected = $this->findConversation($selectedId);
+            $selected = $this->findConversation($selectedId, $tenantId > 0 ? $tenantId : null);
             if ($selected !== null && Auth::isSuperAdmin() && !$this->conversationAllowedInFilters($selected, $filters)) {
                 $selected = null;
                 $selectedId = 0;
@@ -115,19 +120,26 @@ final class ConversationController
                     'SELECT * FROM (
                         SELECT m.*, u.name AS sender_user_name
                         FROM conversation_messages m
-                        LEFT JOIN users u ON u.id = m.sender_user_id
+                        LEFT JOIN users u ON u.id = m.sender_user_id AND u.tenant_id = m.tenant_id
                         WHERE m.conversation_id = :conversation_id
+                          AND m.tenant_id = :tenant_id
                         ORDER BY m.sent_at DESC, m.id DESC
                         LIMIT 250
                     ) recent
                     ORDER BY recent.sent_at ASC, recent.id ASC'
                 );
-                $messageStatement->execute(['conversation_id' => $selectedId]);
+                $messageStatement->execute([
+                    'conversation_id' => $selectedId,
+                    'tenant_id' => (int) $selected['tenant_id'],
+                ]);
                 $messages = $messageStatement->fetchAll(PDO::FETCH_ASSOC);
 
                 if ((int) $selected['unread_count'] > 0) {
-                    $pdo->prepare('UPDATE conversations SET unread_count = 0 WHERE id = :id')
-                        ->execute(['id' => $selectedId]);
+                    $pdo->prepare('UPDATE conversations SET unread_count = 0 WHERE id = :id AND tenant_id = :tenant_id')
+                        ->execute([
+                            'id' => $selectedId,
+                            'tenant_id' => (int) $selected['tenant_id'],
+                        ]);
                     $selected['unread_count'] = 0;
                     foreach ($conversations as &$conversation) {
                         if ((int) $conversation['id'] === $selectedId) {
@@ -609,15 +621,10 @@ final class ConversationController
 
     private function conversationAllowedInFilters(array $conversation, array $filters): bool
     {
-        if (!Auth::isSuperAdmin()) {
-            return (int) $conversation['tenant_id'] === (int) Auth::tenantId();
-        }
+        $tenantId = Auth::isSuperAdmin()
+            ? (int) ($filters['tenant_id'] ?? 0)
+            : (int) (Auth::tenantId() ?? 0);
 
-        if (($filters['scope'] ?? 'tenant') === 'all') {
-            return true;
-        }
-
-        $tenantId = (int) ($filters['tenant_id'] ?? 0);
         return $tenantId > 0 && (int) $conversation['tenant_id'] === $tenantId;
     }
 
@@ -636,31 +643,62 @@ final class ConversationController
         return $instance ?: null;
     }
 
-    private function findConversation(int $id): ?array
+    private function findConversation(int $id, ?int $tenantScope = null): ?array
     {
+        $pdo = Database::connection();
+
+        $leadSelect = 'NULL AS lead_id, NULL AS lead_title, NULL AS lead_status, NULL AS lead_value,
+                       NULL AS lead_priority, NULL AS lead_pipeline_id, NULL AS lead_stage_id,
+                       NULL AS lead_stage_name';
+        $leadJoins = '';
+
+        $crmAvailable = $this->hasColumn($pdo, 'conversations', 'crm_lead_id')
+            && $this->hasTable($pdo, 'crm_leads')
+            && $this->hasTable($pdo, 'crm_stages')
+            && $this->hasColumn($pdo, 'crm_leads', 'tenant_id')
+            && $this->hasColumn($pdo, 'crm_leads', 'title')
+            && $this->hasColumn($pdo, 'crm_leads', 'status')
+            && $this->hasColumn($pdo, 'crm_leads', 'value')
+            && $this->hasColumn($pdo, 'crm_leads', 'priority')
+            && $this->hasColumn($pdo, 'crm_leads', 'pipeline_id')
+            && $this->hasColumn($pdo, 'crm_leads', 'stage_id')
+            && $this->hasColumn($pdo, 'crm_stages', 'tenant_id')
+            && $this->hasColumn($pdo, 'crm_stages', 'name');
+
+        if ($crmAvailable) {
+            $leadSelect = 'l.id AS lead_id, l.title AS lead_title, l.status AS lead_status, l.value AS lead_value,
+                           l.priority AS lead_priority, l.pipeline_id AS lead_pipeline_id, l.stage_id AS lead_stage_id,
+                           s.name AS lead_stage_name';
+            $leadJoins = ' LEFT JOIN crm_leads l ON l.id = c.crm_lead_id AND l.tenant_id = c.tenant_id
+                           LEFT JOIN crm_stages s ON s.id = l.stage_id AND s.tenant_id = c.tenant_id';
+        }
+
         $sql = 'SELECT c.*, ct.name AS contact_name, ct.phone, ct.email, ct.company, ct.notes,
                        ct.tags_json, ct.status AS contact_status, ct.id AS contact_id,
                        i.name AS instance_label, i.instance_name, i.base_url, i.api_key_encrypted,
                        t.name AS tenant_name, u.name AS assigned_user_name,
-                       l.id AS lead_id, l.title AS lead_title, l.status AS lead_status, l.value AS lead_value,
-                       l.priority AS lead_priority, l.pipeline_id AS lead_pipeline_id, l.stage_id AS lead_stage_id,
-                       s.name AS lead_stage_name
+                       ' . $leadSelect . '
                 FROM conversations c
-                INNER JOIN contacts ct ON ct.id = c.contact_id
-                INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id
+                INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
+                INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = c.tenant_id
                 INNER JOIN tenants t ON t.id = c.tenant_id
-                LEFT JOIN users u ON u.id = c.assigned_user_id
-                LEFT JOIN crm_leads l ON l.id = c.crm_lead_id
-                LEFT JOIN crm_stages s ON s.id = l.stage_id
+                LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
+                ' . $leadJoins . '
                 WHERE c.id = :id';
         $params = ['id' => $id];
 
-        if (!Auth::isSuperAdmin()) {
+        $effectiveTenantId = !Auth::isSuperAdmin()
+            ? (int) (Auth::tenantId() ?? 0)
+            : (int) ($tenantScope ?? 0);
+
+        if ($effectiveTenantId > 0) {
             $sql .= ' AND c.tenant_id = :tenant_id';
-            $params['tenant_id'] = Auth::tenantId();
+            $params['tenant_id'] = $effectiveTenantId;
+        } elseif (!Auth::isSuperAdmin()) {
+            return null;
         }
 
-        $statement = Database::connection()->prepare($sql . ' LIMIT 1');
+        $statement = $pdo->prepare($sql . ' LIMIT 1');
         $statement->execute($params);
         $conversation = $statement->fetch(PDO::FETCH_ASSOC);
         return $conversation ?: null;
@@ -792,6 +830,16 @@ final class ConversationController
         return (int) $statement->fetchColumn() > 0;
     }
 
+    private function hasTable(PDO $pdo, string $table): bool
+    {
+        $statement = $pdo->prepare(
+            'SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table'
+        );
+        $statement->execute(['table' => $table]);
+        return (int) $statement->fetchColumn() > 0;
+    }
+
 
     public function poll(): void
     {
@@ -800,26 +848,27 @@ final class ConversationController
         $afterId = (int) ($_GET['after_id'] ?? 0);
         $markRead = (int) ($_GET['mark_read'] ?? 1) === 1;
 
+        $tenantId = Auth::isSuperAdmin()
+            ? (int) ($_GET['tenant_id'] ?? 0)
+            : (int) (Auth::tenantId() ?? 0);
+
         $filters = [
             'search' => trim((string) ($_GET['search'] ?? '')),
             'status' => trim((string) ($_GET['status'] ?? '')),
             'mode' => trim((string) ($_GET['mode'] ?? '')),
             'instance_id' => (int) ($_GET['instance_id'] ?? 0),
-            'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
-            'scope' => Auth::isSuperAdmin() ? (string) ($_GET['scope'] ?? 'tenant') : 'tenant',
+            'tenant_id' => $tenantId,
             'intent' => trim((string) ($_GET['intent'] ?? '')),
         ];
-        if (!Auth::isSuperAdmin()) {
-            $filters['scope'] = 'tenant';
-        } elseif ($filters['scope'] !== 'all') {
-            $filters['scope'] = 'tenant';
-        }
 
         if ($selectedId > 0 && $markRead) {
-            $selected = $this->findConversation($selectedId);
-            if ($selected !== null && (!Auth::isSuperAdmin() || $this->conversationAllowedInFilters($selected, $filters))) {
-                $pdo->prepare('UPDATE conversations SET unread_count = 0 WHERE id = :id')
-                    ->execute(['id' => $selectedId]);
+            $selected = $this->findConversation($selectedId, $tenantId > 0 ? $tenantId : null);
+            if ($selected !== null && $this->conversationAllowedInFilters($selected, $filters)) {
+                $pdo->prepare('UPDATE conversations SET unread_count = 0 WHERE id = :id AND tenant_id = :tenant_id')
+                    ->execute([
+                        'id' => $selectedId,
+                        'tenant_id' => (int) $selected['tenant_id'],
+                    ]);
             }
         }
 
@@ -828,7 +877,7 @@ final class ConversationController
         $latestMessageId = $afterId;
 
         if ($selectedId > 0) {
-            $selected = $this->findConversation($selectedId);
+            $selected = $this->findConversation($selectedId, $tenantId > 0 ? $tenantId : null);
             if ($selected !== null && Auth::isSuperAdmin() && !$this->conversationAllowedInFilters($selected, $filters)) {
                 $selected = null;
             }
@@ -836,14 +885,16 @@ final class ConversationController
                 $messageStatement = $pdo->prepare(
                     'SELECT m.*, u.name AS sender_user_name
                      FROM conversation_messages m
-                     LEFT JOIN users u ON u.id = m.sender_user_id
+                     LEFT JOIN users u ON u.id = m.sender_user_id AND u.tenant_id = m.tenant_id
                      WHERE m.conversation_id = :conversation_id
+                       AND m.tenant_id = :tenant_id
                        AND m.id > :after_id
                      ORDER BY m.sent_at ASC, m.id ASC
                      LIMIT 120'
                 );
                 $messageStatement->execute([
                     'conversation_id' => $selectedId,
+                    'tenant_id' => (int) $selected['tenant_id'],
                     'after_id' => $afterId,
                 ]);
                 $rows = $messageStatement->fetchAll(PDO::FETCH_ASSOC);
@@ -876,21 +927,20 @@ final class ConversationController
         $conditions = [];
         $params = [];
 
-        if (!Auth::isSuperAdmin()) {
+        $tenantId = (int) ($filters['tenant_id'] ?? 0);
+        if ($tenantId > 0) {
             $conditions[] = 'c.tenant_id = :tenant_scope';
-            $params['tenant_scope'] = Auth::tenantId();
-        } elseif (($filters['scope'] ?? 'tenant') === 'all') {
-            // Visão global explícita do Super Admin.
-        } elseif (($filters['tenant_id'] ?? 0) > 0) {
-            $conditions[] = 'c.tenant_id = :tenant_scope';
-            $params['tenant_scope'] = (int) $filters['tenant_id'];
+            $params['tenant_scope'] = $tenantId;
         } else {
             $conditions[] = '1 = 0';
         }
 
         if (($filters['search'] ?? '') !== '') {
-            $conditions[] = '(ct.name LIKE :search OR ct.phone LIKE :search OR c.last_message_preview LIKE :search)';
-            $params['search'] = '%' . $filters['search'] . '%';
+            $conditions[] = '(ct.name LIKE :search_name OR ct.phone LIKE :search_phone OR c.last_message_preview LIKE :search_preview)';
+            $searchValue = '%' . $filters['search'] . '%';
+            $params['search_name'] = $searchValue;
+            $params['search_phone'] = $searchValue;
+            $params['search_preview'] = $searchValue;
         }
 
         if (in_array($filters['status'] ?? '', ['open', 'pending', 'closed'], true)) {
@@ -909,7 +959,11 @@ final class ConversationController
         }
 
         if (($filters['intent'] ?? '') === 'agenda') {
-            $conditions[] = 'c.agenda_intent_detected = 1';
+            if ($this->hasColumn($pdo, 'conversations', 'agenda_intent_detected')) {
+                $conditions[] = 'c.agenda_intent_detected = 1';
+            } else {
+                $conditions[] = '1 = 0';
+            }
         }
 
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
@@ -918,8 +972,8 @@ final class ConversationController
                     ct.name AS contact_name, ct.phone, i.name AS instance_label, i.instance_name,
                     t.name AS tenant_name
              FROM conversations c
-             INNER JOIN contacts ct ON ct.id = c.contact_id
-             INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id
+             INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
+             INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = c.tenant_id
              INNER JOIN tenants t ON t.id = c.tenant_id
              ' . $where . '
              ORDER BY COALESCE(c.last_message_at, c.created_at) DESC

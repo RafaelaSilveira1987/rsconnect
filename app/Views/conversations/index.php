@@ -15,13 +15,22 @@ $formatDate = static function (?string $date, string $format = 'd/m/Y H:i'): str
 };
 $modeLabel = ['ai' => 'IA ativa', 'human' => 'Humano', 'paused' => 'IA pausada'];
 $statusLabel = ['open' => 'Aberta', 'pending' => 'Pendente', 'closed' => 'Encerrada'];
+$contactLabel = static function (array $row): string {
+    $name = trim((string) ($row['contact_name'] ?? ''));
+    $phone = trim((string) ($row['phone'] ?? ''));
+    return $name !== '' ? $name : ($phone !== '' ? $phone : 'Contato sem identificação');
+};
+$contactInitial = static function (array $row) use ($contactLabel): string {
+    $label = $contactLabel($row);
+    $initial = mb_substr($label, 0, 1);
+    return $initial !== '' ? mb_strtoupper($initial) : '?';
+};
 $currentQuery = array_filter([
     'search' => $filters['search'] ?? '',
     'status' => $filters['status'] ?? '',
     'mode' => $filters['mode'] ?? '',
     'instance_id' => $filters['instance_id'] ?? 0,
     'tenant_id' => $filters['tenant_id'] ?? 0,
-    'scope' => $filters['scope'] ?? '',
     'intent' => $filters['intent'] ?? '',
 ], static fn ($value) => $value !== '' && $value !== 0 && $value !== 'tenant');
 $lastMessageId = 0;
@@ -54,8 +63,8 @@ if ($selected) {
         <option value="">Todas as instâncias</option>
         <?php foreach ($instances as $instance): ?>
             <?php
-            if (Auth::isSuperAdmin() && ($filters['scope'] ?? 'tenant') !== 'all' && (int) ($filters['tenant_id'] ?? 0) < 1) continue;
-            if (Auth::isSuperAdmin() && (int) ($filters['tenant_id'] ?? 0) > 0 && (int) $instance['tenant_id'] !== (int) $filters['tenant_id']) continue;
+            if (Auth::isSuperAdmin() && (int) ($filters['tenant_id'] ?? 0) < 1) continue;
+            if (Auth::isSuperAdmin() && (int) $instance['tenant_id'] !== (int) ($filters['tenant_id'] ?? 0)) continue;
             ?>
             <option value="<?= (int) $instance['id'] ?>" <?= (int) ($filters['instance_id'] ?? 0) === (int) $instance['id'] ? 'selected' : '' ?>><?= View::e($instance['name']) ?></option>
         <?php endforeach; ?>
@@ -77,9 +86,6 @@ if ($selected) {
 
     <?php if (($filters['intent'] ?? '') === 'agenda'): ?><span class="badge badge-info">Intenção de agenda</span><?php endif; ?>
     <button class="btn btn-secondary" type="submit">Filtrar</button>
-    <?php if (Auth::isSuperAdmin()): ?>
-        <a class="btn btn-outline" href="<?= View::e(Router::url('/conversations?scope=all')) ?>">Visão global</a>
-    <?php endif; ?>
     <a class="btn btn-outline" href="<?= View::e(Router::url('/conversations')) ?>">Limpar</a>
 </form>
 
@@ -104,8 +110,8 @@ if ($selected) {
                                     <option value="">Selecione</option>
                                     <?php foreach ($instances as $instance): ?>
                                         <?php
-                                        if (Auth::isSuperAdmin() && ($filters['scope'] ?? 'tenant') !== 'all' && (int) ($filters['tenant_id'] ?? 0) < 1) continue;
-                                        if (Auth::isSuperAdmin() && (int) ($filters['tenant_id'] ?? 0) > 0 && (int) $instance['tenant_id'] !== (int) $filters['tenant_id']) continue;
+                                        if (Auth::isSuperAdmin() && (int) ($filters['tenant_id'] ?? 0) < 1) continue;
+                                        if (Auth::isSuperAdmin() && (int) $instance['tenant_id'] !== (int) ($filters['tenant_id'] ?? 0)) continue;
                                         ?>
                                         <option value="<?= (int) $instance['id'] ?>"><?= View::e((Auth::isSuperAdmin() ? ($instance['tenant_name'] ?? '') . ' — ' : '') . $instance['name']) ?></option>
                                     <?php endforeach; ?>
@@ -127,13 +133,14 @@ if ($selected) {
                 $query = $currentQuery;
                 $query['conversation_id'] = (int) $conversation['id'];
                 $isSelected = (int) ($selected['id'] ?? 0) === (int) $conversation['id'];
-                $initial = mb_strtoupper(mb_substr($conversation['contact_name'] ?: $conversation['phone'], 0, 1));
+                $displayName = $contactLabel($conversation);
+                $initial = $contactInitial($conversation);
                 ?>
                 <a class="conversation-list-item<?= $isSelected ? ' is-selected' : '' ?>" data-conversation-item data-conversation-id="<?= (int) $conversation['id'] ?>" href="<?= View::e(Router::url('/conversations?' . http_build_query($query))) ?>">
                     <span class="conversation-avatar"><?= View::e($initial) ?></span>
                     <span class="conversation-summary">
                         <span class="conversation-title-row">
-                            <strong data-conversation-name><?= View::e($conversation['contact_name'] ?: $conversation['phone']) ?></strong>
+                            <strong data-conversation-name><?= View::e($displayName) ?></strong>
                             <time data-conversation-time><?= View::e($formatDate($conversation['last_message_at'], 'd/m H:i')) ?></time>
                         </span>
                         <span class="conversation-preview" data-conversation-preview><?= View::e($conversation['last_message_preview'] ?: 'Sem mensagens') ?></span>
@@ -147,7 +154,7 @@ if ($selected) {
             <?php endforeach; ?>
             <?php if (!$conversations): ?>
                 <div class="empty-state conversation-empty">
-                    <?php if (Auth::isSuperAdmin() && ($filters['scope'] ?? 'tenant') !== 'all' && (int) ($filters['tenant_id'] ?? 0) < 1): ?>
+                    <?php if (Auth::isSuperAdmin() && (int) ($filters['tenant_id'] ?? 0) < 1): ?>
                         <strong>Selecione uma empresa.</strong>
                         <span>Por segurança, o Super Admin não carrega conversas de todos os clientes automaticamente.</span>
                     <?php else: ?>
@@ -163,9 +170,9 @@ if ($selected) {
         <?php if ($selected): ?>
             <header class="chat-header">
                 <div class="chat-contact-title">
-                    <span class="conversation-avatar large"><?= View::e(mb_strtoupper(mb_substr($selected['contact_name'] ?: $selected['phone'], 0, 1))) ?></span>
+                    <span class="conversation-avatar large"><?= View::e($contactInitial($selected)) ?></span>
                     <div>
-                        <h2><?= View::e($selected['contact_name'] ?: $selected['phone']) ?></h2>
+                        <h2><?= View::e($contactLabel($selected)) ?></h2>
                         <p><?= View::e($selected['phone']) ?> · <?= View::e($selected['instance_label']) ?></p>
                     </div>
                 </div>
@@ -209,7 +216,8 @@ if ($selected) {
                 <?php if ($selected['assigned_user_name']): ?><small>Responsável: <strong><?= View::e($selected['assigned_user_name']) ?></strong></small><?php endif; ?>
                 <?php if (Auth::isSuperAdmin()): ?><small>Empresa: <strong><?= View::e($selected['tenant_name']) ?></strong></small><?php endif; ?>
                 <span class="realtime-status" data-realtime-status>Atualização automática ativa</span>
-                <a class="refresh-chat" href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) $selected['id'])) ?>">Atualizar</a>
+                <?php $refreshQuery = $currentQuery; $refreshQuery['conversation_id'] = (int) $selected['id']; ?>
+                <a class="refresh-chat" href="<?= View::e(Router::url('/conversations?' . http_build_query($refreshQuery))) ?>">Atualizar</a>
             </div>
 
             <?php if (!empty($selected['last_ai_suggestion'])): ?>
@@ -237,7 +245,7 @@ if ($selected) {
                         <div class="message-bubble <?= $message['status'] === 'failed' ? 'has-error' : '' ?>" data-sender="<?= View::e($message['sender_type']) ?>">
                             <?php if ($message['message_type'] !== 'text'): ?><span class="message-type"><?= View::e(ucfirst($message['message_type'])) ?></span><?php endif; ?>
                             <p><?= nl2br(View::e($message['content'] ?: '[Sem conteúdo]')) ?></p>
-                            <?php if ($message['error_message']): ?><small class="message-error"><?= View::e($message['error_message']) ?></small><?php endif; ?>
+                            <?php if (!empty($message['error_message'])): ?><small class="message-error"><?= View::e($message['error_message']) ?></small><?php endif; ?>
                             <footer>
                                 <?php if ($outgoing): ?><span><?= View::e($message['sender_type'] === 'ai' ? 'IA' : ($message['sender_user_name'] ?: 'Equipe')) ?></span><?php endif; ?>
                                 <time><?= View::e($formatDate($message['sent_at'], 'd/m H:i')) ?></time>
