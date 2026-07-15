@@ -1,0 +1,416 @@
+{
+  "name": "RS Connect — Agenda Google — Eventos VAGO",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rsconnect-agenda-google-eventos-vago",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -960,
+        80
+      ],
+      "id": "9283b455-0169-463e-9d17-9adf6095efac",
+      "name": "Webhook — eventos VAGO",
+      "webhookId": "75555e5c-3793-476f-bfe9-00e2b7c4c540"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.body ?? $json;\n\nfunction text(value, fallback = '') {\n  if (value === null || value === undefined) return fallback;\n  return String(value).trim();\n}\n\nfunction boolean(value, fallback = false) {\n  if (value === true || value === false) return value;\n  const normalized = text(value).toLowerCase();\n  if (['1', 'true', 'sim', 'yes', 'on'].includes(normalized)) return true;\n  if (['0', 'false', 'nao', 'não', 'no', 'off'].includes(normalized)) return false;\n  return fallback;\n}\n\nfunction modality(value) {\n  const normalized = text(value).toLowerCase();\n  if (['online', 'on-line', 'remoto'].includes(normalized)) return 'online';\n  if (['presencial', 'in_person', 'in-person'].includes(normalized)) return 'presencial';\n  return '';\n}\n\nconst action = text(raw.action, 'search').toLowerCase();\nif (!['search', 'hold', 'confirm', 'release'].includes(action)) {\n  throw new Error('action deve ser search, hold, confirm ou release.');\n}\n\nconst date = text(raw.date || raw.preferred_date || raw.data);\nconst utcOffset = text(raw.utc_offset, '-03:00');\nconst workStart = text(raw.work_start || raw.start_time, '00:00');\nconst workEnd = text(raw.work_end || raw.end_time, '23:59');\n\nif (action === 'search' && !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {\n  throw new Error('Para search, informe date no formato YYYY-MM-DD.');\n}\n\nconst eventId = text(raw.google_event_id || raw.event_id);\nif (action !== 'search' && !eventId) {\n  throw new Error('Para hold, confirm ou release, informe google_event_id.');\n}\n\nconst calendarId = text(raw.calendar_id, 'primary');\nconst encodedCalendar = encodeURIComponent(calendarId);\nconst windowStartIso = action === 'search' ? `${date}T${workStart}:00${utcOffset}` : '';\nconst windowEndIso = action === 'search' ? `${date}T${workEnd}:59${utcOffset}` : '';\nconst googleListUrl = action === 'search'\n  ? `https://www.googleapis.com/calendar/v3/calendars/${encodedCalendar}/events?singleEvents=true&orderBy=startTime&showDeleted=false&maxResults=2500&timeMin=${encodeURIComponent(windowStartIso)}&timeMax=${encodeURIComponent(windowEndIso)}`\n  : '';\nconst googleEventUrl = eventId\n  ? `https://www.googleapis.com/calendar/v3/calendars/${encodedCalendar}/events/${encodeURIComponent(eventId)}`\n  : '';\n\nreturn [{\n  json: {\n    action,\n    is_search: action === 'search',\n    tenant_id: Number(raw.tenant_id || 0),\n    request_id: text(raw.request_id || raw.availability_request_id, `req-${Date.now()}`),\n    appointment_id: raw.appointment_id ? Number(raw.appointment_id) : null,\n    conversation_id: raw.conversation_id ? Number(raw.conversation_id) : null,\n    contact_id: raw.contact_id ? Number(raw.contact_id) : null,\n    date,\n    work_start: workStart,\n    work_end: workEnd,\n    window_start_iso: windowStartIso,\n    window_end_iso: windowEndIso,\n    calendar_id: calendarId,\n    google_event_id: eventId,\n    google_list_url: googleListUrl,\n    google_event_url: googleEventUrl,\n    modality: modality(raw.modality || raw.format || raw.formato),\n    customer_name: text(raw.customer_name || raw.contact_name || raw.nome, 'Cliente'),\n    customer_phone: text(raw.customer_phone || raw.phone || raw.telefone),\n    online_title: text(raw.online_title, 'VAGO — ONLINE'),\n    in_person_title: text(raw.in_person_title, 'VAGO — PRESENCIAL'),\n    hold_prefix: text(raw.hold_prefix, 'PRÉ-RESERVADO'),\n    confirmed_prefix: text(raw.confirmed_prefix, 'AGENDADO'),\n    require_transparent: boolean(raw.require_transparent, true),\n    timezone: text(raw.timezone, 'America/Sao_Paulo'),\n    utc_offset: utcOffset,\n    callback_url: text(raw.callback_url, 'https://rsconnect.rsautomacaodigital.cloud/webhooks/calendar/availability'),\n    callback_token: text(raw.callback_token),\n    notes: text(raw.notes || raw.summary || raw.resumo)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        80
+      ],
+      "id": "75284bc7-0f21-44ee-a831-8b82d8413867",
+      "name": "Normalizar operação"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "94269680-8cf6-4648-a5a1-17eb61da1fe9",
+              "leftValue": "={{ $json.is_search === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -480,
+        80
+      ],
+      "id": "31f34542-3dc7-4179-981d-91d19119b456",
+      "name": "É busca de disponibilidade?"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Normalizar operação').first().json.google_list_url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        -80
+      ],
+      "id": "d13ed277-ae6a-40a5-850b-20a4ded53c11",
+      "name": "Google — listar eventos VAGO"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Normalizar operação').first().json;\nconst events = Array.isArray($json.items) ? $json.items : [];\n\nfunction normalizeTitle(value) {\n  return String(value || '')\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[–—-]+/g, ' - ')\n    .replace(/\\s+/g, ' ')\n    .trim()\n    .toUpperCase();\n}\n\nfunction inferModality(summary) {\n  const normalized = normalizeTitle(summary);\n  if (normalized === normalizeTitle(cfg.online_title)) return 'online';\n  if (normalized === normalizeTitle(cfg.in_person_title)) return 'presencial';\n  return '';\n}\n\nconst allowedTitles = [normalizeTitle(cfg.online_title), normalizeTitle(cfg.in_person_title)];\n\nconst slots = events\n  .filter(event => event && event.id && event.status !== 'cancelled')\n  .filter(event => allowedTitles.includes(normalizeTitle(event.summary)))\n  .filter(event => !cfg.require_transparent || String(event.transparency || 'opaque').toLowerCase() === 'transparent')\n  .map(event => ({ event, modality: inferModality(event.summary) }))\n  .filter(item => !cfg.modality || item.modality === cfg.modality)\n  .map(item => ({\n    start: item.event.start?.dateTime || item.event.start?.date || null,\n    end: item.event.end?.dateTime || item.event.end?.date || null,\n    label: item.event.start?.dateTime\n      ? new Date(item.event.start.dateTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: cfg.timezone })\n      : 'Dia inteiro',\n    modality: item.modality,\n    google_event_id: item.event.id,\n    google_calendar_id: cfg.calendar_id,\n    google_summary: item.event.summary || '',\n    google_transparency: item.event.transparency || 'opaque',\n    source: 'google_marked_slots'\n  }));\n\nconst callbackPayload = {\n  event: 'calendar.availability.result',\n  ok: true,\n  tenant_id: cfg.tenant_id,\n  request_id: cfg.request_id,\n  appointment_id: cfg.appointment_id,\n  conversation_id: cfg.conversation_id,\n  contact_id: cfg.contact_id,\n  source: 'google_marked_slots',\n  date: cfg.date,\n  timezone: cfg.timezone,\n  slots,\n  meta: {\n    calendar_id: cfg.calendar_id,\n    online_title: cfg.online_title,\n    in_person_title: cfg.in_person_title,\n    require_transparent: cfg.require_transparent,\n    events_read: events.length\n  }\n};\n\nreturn [{ json: { ...cfg, slots, callback_payload: callbackPayload } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -80
+      ],
+      "id": "ea687cce-5cbd-4e1a-829d-4f97d483b4f0",
+      "name": "Filtrar títulos VAGO"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Normalizar operação').first().json.callback_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-RS-Calendar-Token",
+              "value": "={{ $('Normalizar operação').first().json.callback_token || '' }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.callback_payload }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        -80
+      ],
+      "id": "dc7f5b2c-e5c1-4419-81ae-3f053d23edde",
+      "name": "Callback — horários VAGO"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, message: 'Eventos VAGO consultados.', source: 'google_marked_slots', slots: $('Filtrar títulos VAGO').first().json.slots.length } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        480,
+        -80
+      ],
+      "id": "b004cf80-b952-4da2-a155-dfd3f3f05778",
+      "name": "Responder — busca"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Normalizar operação').first().json.google_event_url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        240
+      ],
+      "id": "dd21f3d4-722c-4403-9593-0d2d7ec67aa4",
+      "name": "Google — reler evento"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Normalizar operação').first().json;\nconst event = $json || {};\n\nfunction normalizeTitle(value) {\n  return String(value || '')\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[–—-]+/g, ' - ')\n    .replace(/\\s+/g, ' ')\n    .trim()\n    .toUpperCase();\n}\n\nfunction inferModality(summary) {\n  const normalized = normalizeTitle(summary);\n  if (normalized.includes('ONLINE')) return 'online';\n  if (normalized.includes('PRESENCIAL')) return 'presencial';\n  return cfg.modality || '';\n}\n\nconst currentSummary = String(event.summary || '');\nconst normalizedCurrent = normalizeTitle(currentSummary);\nconst normalizedOnline = normalizeTitle(cfg.online_title);\nconst normalizedInPerson = normalizeTitle(cfg.in_person_title);\nconst currentModality = cfg.modality || inferModality(currentSummary);\nconst modalityLabel = currentModality === 'presencial' ? 'PRESENCIAL' : 'ONLINE';\n\nif (cfg.action === 'hold') {\n  if (![normalizedOnline, normalizedInPerson].includes(normalizedCurrent)) {\n    throw new Error('O evento não está mais marcado como VAGO. Atualize a disponibilidade antes de reservar.');\n  }\n  if (cfg.require_transparent && String(event.transparency || 'opaque').toLowerCase() !== 'transparent') {\n    throw new Error('O evento VAGO não está como Disponível/transparent.');\n  }\n}\n\nif (cfg.action === 'confirm' && !normalizedCurrent.startsWith(normalizeTitle(cfg.hold_prefix))) {\n  throw new Error('Somente um evento pré-reservado pode ser confirmado.');\n}\n\nif (cfg.action === 'release') {\n  const canRelease = normalizedCurrent.startsWith(normalizeTitle(cfg.hold_prefix))\n    || normalizedCurrent.startsWith(normalizeTitle(cfg.confirmed_prefix));\n  if (!canRelease) {\n    throw new Error('O evento não está pré-reservado ou agendado.');\n  }\n}\n\nlet state;\nlet newSummary;\nlet transparency;\n\nif (cfg.action === 'hold') {\n  state = 'held';\n  newSummary = `${cfg.hold_prefix} — ${modalityLabel} — ${cfg.customer_name}`;\n  transparency = 'opaque';\n} else if (cfg.action === 'confirm') {\n  state = 'confirmed';\n  newSummary = `${cfg.confirmed_prefix} — ${modalityLabel} — ${cfg.customer_name}`;\n  transparency = 'opaque';\n} else {\n  state = 'released';\n  newSummary = currentModality === 'presencial' ? cfg.in_person_title : cfg.online_title;\n  transparency = 'transparent';\n}\n\nconst descriptionLines = cfg.action === 'release'\n  ? []\n  : [\n      'Origem: RS Connect',\n      `Cliente: ${cfg.customer_name}`,\n      cfg.customer_phone ? `Telefone: ${cfg.customer_phone}` : '',\n      cfg.appointment_id ? `Pré-agendamento: #${cfg.appointment_id}` : '',\n      cfg.conversation_id ? `Conversa: #${cfg.conversation_id}` : '',\n      `Modalidade: ${modalityLabel}`,\n      `Status: ${state}`,\n      cfg.notes ? `Observações: ${cfg.notes}` : ''\n    ].filter(Boolean);\n\nconst patchBody = {\n  summary: newSummary,\n  description: descriptionLines.join('\\n'),\n  transparency,\n  extendedProperties: {\n    private: {\n      rs_connect_tenant_id: String(cfg.tenant_id || ''),\n      rs_connect_request_id: String(cfg.request_id || ''),\n      rs_connect_appointment_id: String(cfg.appointment_id || ''),\n      rs_connect_state: state,\n      rs_connect_modality: currentModality\n    }\n  }\n};\n\nreturn [{\n  json: {\n    ...cfg,\n    original_event: event,\n    original_summary: currentSummary,\n    original_transparency: event.transparency || 'opaque',\n    google_etag: event.etag || '',\n    resolved_modality: currentModality,\n    target_state: state,\n    patch_body: patchBody\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        240
+      ],
+      "id": "83816522-bc1b-495c-a1c3-9b13aadc991d",
+      "name": "Validar e preparar atualização"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $json.google_event_url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "If-Match",
+              "value": "={{ $json.google_etag }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.patch_body }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        240
+      ],
+      "id": "04e8602f-d1f5-4562-b587-4a60ab2a0bba",
+      "name": "Google — atualizar evento"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Validar e preparar atualização').first().json;\nconst updated = $json || {};\n\nconst callbackPayload = {\n  event: 'calendar.marked_slot.updated',\n  ok: true,\n  tenant_id: cfg.tenant_id,\n  request_id: cfg.request_id,\n  appointment_id: cfg.appointment_id,\n  conversation_id: cfg.conversation_id,\n  contact_id: cfg.contact_id,\n  source: 'google_marked_slots',\n  action: cfg.action,\n  state: cfg.target_state,\n  google_event_id: updated.id || cfg.google_event_id,\n  google_calendar_id: cfg.calendar_id,\n  modality: cfg.resolved_modality,\n  start: updated.start?.dateTime || updated.start?.date || cfg.original_event?.start?.dateTime || cfg.original_event?.start?.date || null,\n  end: updated.end?.dateTime || updated.end?.date || cfg.original_event?.end?.dateTime || cfg.original_event?.end?.date || null,\n  previous_summary: cfg.original_summary,\n  current_summary: updated.summary || cfg.patch_body.summary,\n  transparency: updated.transparency || cfg.patch_body.transparency,\n  updated_at: new Date().toISOString()\n};\n\nreturn [{ json: { ...cfg, updated_event: updated, callback_payload: callbackPayload } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        240
+      ],
+      "id": "d2f94091-28b8-430a-a421-2399b8d51a52",
+      "name": "Montar callback da atualização"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Normalizar operação').first().json.callback_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-RS-Calendar-Token",
+              "value": "={{ $('Normalizar operação').first().json.callback_token || '' }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.callback_payload }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        240
+      ],
+      "id": "a815ea4f-1c94-4c28-a1da-a4b15132c794",
+      "name": "Callback — evento atualizado"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, message: 'Evento do Google atualizado.', source: 'google_marked_slots', action: $('Normalizar operação').first().json.action, state: $('Montar callback da atualização').first().json.callback_payload.state } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        960,
+        240
+      ],
+      "id": "a7683fde-d36c-450f-86a2-70dfccb477a0",
+      "name": "Responder — atualização"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook — eventos VAGO": {
+      "main": [
+        [
+          {
+            "node": "Normalizar operação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar operação": {
+      "main": [
+        [
+          {
+            "node": "É busca de disponibilidade?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É busca de disponibilidade?": {
+      "main": [
+        [
+          {
+            "node": "Google — listar eventos VAGO",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google — reler evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google — listar eventos VAGO": {
+      "main": [
+        [
+          {
+            "node": "Filtrar títulos VAGO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar títulos VAGO": {
+      "main": [
+        [
+          {
+            "node": "Callback — horários VAGO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback — horários VAGO": {
+      "main": [
+        [
+          {
+            "node": "Responder — busca",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google — reler evento": {
+      "main": [
+        [
+          {
+            "node": "Validar e preparar atualização",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar e preparar atualização": {
+      "main": [
+        [
+          {
+            "node": "Google — atualizar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google — atualizar evento": {
+      "main": [
+        [
+          {
+            "node": "Montar callback da atualização",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar callback da atualização": {
+      "main": [
+        [
+          {
+            "node": "Callback — evento atualizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback — evento atualizado": {
+      "main": [
+        [
+          {
+            "node": "Responder — atualização",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  },
+  "versionId": "d2992e66-d309-4c44-b6e5-8c01541ac854",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
