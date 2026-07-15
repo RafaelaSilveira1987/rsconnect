@@ -22,7 +22,7 @@ final class DocumentationController
     {
         $service = new CommercialBetaService();
         View::render('docs.beta', [
-            'title' => 'Beta comercial',
+            'title' => 'Beta 1.0',
             'data' => $service->dashboard(),
         ]);
     }

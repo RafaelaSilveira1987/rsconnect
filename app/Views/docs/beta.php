@@ -3,7 +3,9 @@
 use App\Core\Router;
 use App\Core\View;
 
-$score = (int) ($data['score'] ?? 0);
+$dashboard = is_array($data['data'] ?? null) ? $data['data'] : ($data ?? []);
+
+$score = (int) ($dashboard['score'] ?? 0);
 $statusClass = $score >= 90 ? 'badge-success' : ($score >= 70 ? 'badge-warning' : 'badge-danger');
 $statusToBadge = static fn (string $status): string => match ($status) {
     'ok' => 'badge-success',
@@ -11,7 +13,7 @@ $statusToBadge = static fn (string $status): string => match ($status) {
     'blocked' => 'badge-danger',
     default => 'badge-info',
 };
-$metrics = $data['metrics'] ?? [];
+$metrics = $dashboard['metrics'] ?? [];
 ?>
 
 <section class="hero-card docs-hero beta-hero">
@@ -23,7 +25,7 @@ $metrics = $data['metrics'] ?? [];
     <div class="beta-score-card">
         <span class="eyebrow">Status Beta 1.0</span>
         <strong><?= $score ?>%</strong>
-        <span class="badge <?= $statusClass ?>"><?= View::e($data['status_label'] ?? 'Em preparação') ?></span>
+        <span class="badge <?= $statusClass ?>"><?= View::e($dashboard['status_label'] ?? 'Em preparação') ?></span>
     </div>
 </section>
 
@@ -38,7 +40,7 @@ $metrics = $data['metrics'] ?? [];
     <section class="card">
         <div class="section-heading"><div><span class="eyebrow">Checklist beta</span><h2>Critérios de prontidão</h2></div></div>
         <div class="beta-check-list">
-            <?php foreach (($data['checks'] ?? []) as $check): ?>
+            <?php foreach (($dashboard['checks'] ?? []) as $check): ?>
                 <div class="beta-check-row is-<?= View::e($check['status'] ?? 'warning') ?>">
                     <div>
                         <strong><?= View::e($check['label'] ?? '') ?></strong>
@@ -53,7 +55,7 @@ $metrics = $data['metrics'] ?? [];
     <aside class="card">
         <div class="section-heading"><div><span class="eyebrow">Ações rápidas</span><h2>Operar beta</h2></div></div>
         <div class="docs-action-list">
-            <?php foreach (($data['quick_actions'] ?? []) as $action): ?>
+            <?php foreach (($dashboard['quick_actions'] ?? []) as $action): ?>
                 <?php if (($action['scope'] ?? 'all') === 'client') { continue; } ?>
                 <a href="<?= View::e(Router::url($action['url'])) ?>"><?= View::e($action['label']) ?></a>
             <?php endforeach; ?>
@@ -70,7 +72,7 @@ $metrics = $data['metrics'] ?? [];
     <section class="card">
         <div class="section-heading"><div><span class="eyebrow">Rotina</span><h2>Governança operacional</h2></div></div>
         <div class="docs-timeline">
-            <?php foreach (($data['operational_routine'] ?? []) as $period => $items): ?>
+            <?php foreach (($dashboard['operational_routine'] ?? []) as $period => $items): ?>
                 <div>
                     <strong><?= View::e($period) ?></strong>
                     <span><?= View::e(implode(' · ', $items)) ?></span>
@@ -81,7 +83,7 @@ $metrics = $data['metrics'] ?? [];
     <section class="card">
         <div class="section-heading"><div><span class="eyebrow">Release notes</span><h2>Últimas entregas</h2></div></div>
         <div class="security-list">
-            <?php foreach (($data['release_notes'] ?? []) as $release): ?>
+            <?php foreach (($dashboard['release_notes'] ?? []) as $release): ?>
                 <div class="security-row">
                     <div><strong><?= View::e($release['version'] . ' — ' . $release['title']) ?></strong><small><?= View::e($release['summary']) ?></small></div>
                 </div>

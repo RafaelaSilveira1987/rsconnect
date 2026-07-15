@@ -3,8 +3,10 @@
 use App\Core\Router;
 use App\Core\View;
 
-$score = (int) ($data['score'] ?? 0);
-$statusLabel = (string) ($data['status_label'] ?? 'Beta 1.0 em preparação');
+$dashboard = is_array($data['data'] ?? null) ? $data['data'] : ($data ?? []);
+
+$score = (int) ($dashboard['score'] ?? 0);
+$statusLabel = (string) ($dashboard['status_label'] ?? 'Beta 1.0 em preparação');
 $statusClass = str_contains($statusLabel, 'operacional') ? 'badge-success' : (str_contains($statusLabel, 'bloqueios') ? 'badge-danger' : 'badge-warning');
 $statusToBadge = static fn (string $status): string => match ($status) {
     'ok' => 'badge-success',
@@ -17,28 +19,28 @@ $statusToBadge = static fn (string $status): string => match ($status) {
 <section class="hero-card docs-hero beta-hero version-hero">
     <div>
         <span class="eyebrow">Versão estabilizada</span>
-        <h2><?= View::e($data['version'] ?? 'Beta Comercial 1.0') ?></h2>
+        <h2><?= View::e($dashboard['version'] ?? 'Beta Comercial 1.0') ?></h2>
         <p>Este painel confirma se a instalação está pronta para uso controlado com clientes reais, sem campanhas e sem disparos em massa.</p>
     </div>
     <div class="beta-score-card">
-        <span class="eyebrow"><?= View::e($data['package'] ?? 'ZIP 26') ?></span>
+        <span class="eyebrow"><?= View::e($dashboard['package'] ?? 'ZIP 26') ?></span>
         <strong><?= $score ?>%</strong>
         <span class="badge <?= $statusClass ?>"><?= View::e($statusLabel) ?></span>
     </div>
 </section>
 
 <div class="report-kpi-grid implementation-kpis" style="margin-top:16px">
-    <article class="card report-kpi"><span>Checks OK</span><strong><?= (int) ($data['ok'] ?? 0) ?></strong><small>Critérios aprovados</small></article>
-    <article class="card report-kpi"><span>Atenções</span><strong><?= (int) ($data['warning'] ?? 0) ?></strong><small>Não bloqueiam venda controlada</small></article>
-    <article class="card report-kpi"><span>Bloqueios</span><strong><?= (int) ($data['blocked'] ?? 0) ?></strong><small>Resolver antes de entregar</small></article>
-    <article class="card report-kpi"><span>Migration base</span><strong>028</strong><small><?= View::e($data['required_migration'] ?? '') ?></small></article>
+    <article class="card report-kpi"><span>Checks OK</span><strong><?= (int) ($dashboard['ok'] ?? 0) ?></strong><small>Critérios aprovados</small></article>
+    <article class="card report-kpi"><span>Atenções</span><strong><?= (int) ($dashboard['warning'] ?? 0) ?></strong><small>Não bloqueiam venda controlada</small></article>
+    <article class="card report-kpi"><span>Bloqueios</span><strong><?= (int) ($dashboard['blocked'] ?? 0) ?></strong><small>Resolver antes de entregar</small></article>
+    <article class="card report-kpi"><span>Migration base</span><strong>028</strong><small><?= View::e($dashboard['required_migration'] ?? '') ?></small></article>
 </div>
 
 <div class="operations-grid" style="margin-top:16px">
     <section class="card">
         <div class="section-heading"><div><span class="eyebrow">Diagnóstico</span><h2>Checklist técnico final</h2></div></div>
         <div class="beta-check-list">
-            <?php foreach (($data['checks'] ?? []) as $check): ?>
+            <?php foreach (($dashboard['checks'] ?? []) as $check): ?>
                 <div class="beta-check-row is-<?= View::e($check['status'] ?? 'warning') ?>">
                     <div>
                         <strong><?= View::e($check['label'] ?? '') ?></strong>
@@ -54,10 +56,10 @@ $statusToBadge = static fn (string $status): string => match ($status) {
     <aside class="card">
         <div class="section-heading"><div><span class="eyebrow">Instalação</span><h2>Versão e ambiente</h2></div></div>
         <div class="version-info-list">
-            <div><span>Versão</span><strong><?= View::e($data['deploy']['version'] ?? '') ?></strong></div>
-            <div><span>Pacote</span><strong><?= View::e($data['deploy']['package'] ?? '') ?></strong></div>
-            <div><span>PHP</span><strong><?= View::e($data['deploy']['php_version'] ?? '') ?></strong></div>
-            <div><span>Último arquivo atualizado</span><strong><?= View::e($data['deploy']['last_file_update'] ?? '') ?></strong></div>
+            <div><span>Versão</span><strong><?= View::e($dashboard['deploy']['version'] ?? '') ?></strong></div>
+            <div><span>Pacote</span><strong><?= View::e($dashboard['deploy']['package'] ?? '') ?></strong></div>
+            <div><span>PHP</span><strong><?= View::e($dashboard['deploy']['php_version'] ?? '') ?></strong></div>
+            <div><span>Último arquivo atualizado</span><strong><?= View::e($dashboard['deploy']['last_file_update'] ?? '') ?></strong></div>
         </div>
         <div class="docs-action-list" style="margin-top:12px">
             <a href="<?= View::e(Router::url('/beta-comercial')) ?>">Abrir Beta comercial</a>
@@ -72,7 +74,7 @@ $statusToBadge = static fn (string $status): string => match ($status) {
     <section class="card">
         <div class="section-heading"><div><span class="eyebrow">Variáveis</span><h2>Ambiente carregado</h2></div></div>
         <div class="version-env-grid">
-            <?php foreach (($data['environment'] ?? []) as $env): ?>
+            <?php foreach (($dashboard['environment'] ?? []) as $env): ?>
                 <div class="version-env-item">
                     <span><?= View::e($env['label'] ?? '') ?></span>
                     <strong><?= View::e($env['value'] ?? '') ?></strong>
@@ -85,7 +87,7 @@ $statusToBadge = static fn (string $status): string => match ($status) {
     <section class="card">
         <div class="section-heading"><div><span class="eyebrow">Módulos</span><h2>Resumo operacional</h2></div></div>
         <div class="version-module-grid">
-            <?php foreach (($data['modules'] ?? []) as $module): ?>
+            <?php foreach (($dashboard['modules'] ?? []) as $module): ?>
                 <a class="version-module-card" href="<?= View::e(Router::url($module['url'] ?? '/')) ?>">
                     <span><?= View::e($module['name'] ?? '') ?></span>
                     <strong><?= (int) ($module['count'] ?? 0) ?></strong>
@@ -98,7 +100,7 @@ $statusToBadge = static fn (string $status): string => match ($status) {
 <section class="card" style="margin-top:16px">
     <div class="section-heading"><div><span class="eyebrow">Próximas ações</span><h2>Fechamento da beta</h2></div></div>
     <div class="security-list">
-        <?php foreach (($data['next_actions'] ?? []) as $action): ?>
+        <?php foreach (($dashboard['next_actions'] ?? []) as $action): ?>
             <div class="security-row">
                 <div>
                     <strong><?= View::e($action['label'] ?? '') ?></strong>
