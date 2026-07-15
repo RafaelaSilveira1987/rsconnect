@@ -48,7 +48,30 @@ $firstHours = static function (?string $json): array {
                         <?php if ((int) $agent['is_default'] === 1): ?><span class="badge">Padrão</span><?php endif; ?>
                         <?php if ((int) ($agent['business_hours_enabled'] ?? 0) === 1): ?><span class="badge">Horário</span><?php endif; ?>
                     </div>
-                    <details class="agent-prompt"><summary>Ver prompt/base</summary><pre><?= View::e($agent['system_prompt']) ?></pre><?php if (!empty($agent['knowledge_base'])): ?><pre><?= View::e($agent['knowledge_base']) ?></pre><?php endif; ?></details>
+                    <?php if (Auth::can('agents.manage')): ?>
+                        <details class="agent-prompt agent-prompt-editor">
+                            <summary>Editar prompt/base</summary>
+                            <form method="post" action="<?= View::e(Router::url('/agents/prompt')) ?>">
+                                <?= Csrf::input() ?>
+                                <input type="hidden" name="agent_id" value="<?= (int) $agent['id'] ?>">
+                                <label class="field">
+                                    <span>Prompt principal</span>
+                                    <textarea class="agent-prompt-textarea" name="system_prompt" rows="16" maxlength="60000" required><?= View::e($agent['system_prompt']) ?></textarea>
+                                    <small class="field-hint">Defina função, tom, regras, limites e processo de atendimento. A alteração vale nas próximas respostas.</small>
+                                </label>
+                                <label class="field">
+                                    <span>Base de conhecimento</span>
+                                    <textarea class="agent-knowledge-textarea" name="knowledge_base" rows="10" maxlength="500000" placeholder="Serviços, horários, links, preços permitidos, políticas e informações da empresa."><?= View::e($agent['knowledge_base'] ?? '') ?></textarea>
+                                </label>
+                                <div class="agent-prompt-actions">
+                                    <span class="muted-text">Salve apenas após revisar o conteúdo completo.</span>
+                                    <button class="btn btn-primary" type="submit">Salvar prompt/base</button>
+                                </div>
+                            </form>
+                        </details>
+                    <?php else: ?>
+                        <details class="agent-prompt"><summary>Ver prompt/base</summary><pre><?= View::e($agent['system_prompt']) ?></pre><?php if (!empty($agent['knowledge_base'])): ?><pre><?= View::e($agent['knowledge_base']) ?></pre><?php endif; ?></details>
+                    <?php endif; ?>
                     <?php if (Auth::can('agents.manage')): ?>
                         <form class="agent-actions agent-settings-form" method="post" action="<?= View::e(Router::url('/agents/status')) ?>">
                             <?= Csrf::input() ?>

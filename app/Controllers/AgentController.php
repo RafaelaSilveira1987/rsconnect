@@ -232,6 +232,66 @@ final class AgentController
         $this->redirect('/agents');
     }
 
+    public function updatePrompt(): void
+    {
+        $tenantId = (int) Auth::tenantId();
+        $agentId = (int) ($_POST['agent_id'] ?? 0);
+        $prompt = trim((string) ($_POST['system_prompt'] ?? ''));
+        $knowledgeBase = trim((string) ($_POST['knowledge_base'] ?? ''));
+
+        if ($agentId < 1 || $prompt === '') {
+            Flash::set('error', 'Informe um prompt válido para o agente.');
+            $this->redirect('/agents');
+        }
+
+        if (strlen($prompt) > 60000) {
+            Flash::set('error', 'O prompt ultrapassa o limite de 60.000 caracteres. Resuma o conteúdo antes de salvar.');
+            $this->redirect('/agents');
+        }
+
+        if (strlen($knowledgeBase) > 500000) {
+            Flash::set('error', 'A base de conhecimento ultrapassa o limite de 500.000 caracteres.');
+            $this->redirect('/agents');
+        }
+
+        $pdo = Database::connection();
+        try {
+            $agentStatement = $pdo->prepare(
+                'SELECT id, name FROM ai_agents WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+            );
+            $agentStatement->execute(['id' => $agentId, 'tenant_id' => $tenantId]);
+            $agent = $agentStatement->fetch(PDO::FETCH_ASSOC);
+            if (!$agent) {
+                throw new \RuntimeException('Agente não encontrado para esta empresa.');
+            }
+
+            $update = $pdo->prepare(
+                'UPDATE ai_agents
+                 SET system_prompt = :system_prompt,
+                     knowledge_base = :knowledge_base
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            );
+            $update->execute([
+                'system_prompt' => $prompt,
+                'knowledge_base' => $knowledgeBase !== '' ? $knowledgeBase : null,
+                'id' => $agentId,
+                'tenant_id' => $tenantId,
+            ]);
+
+            Audit::log('agent.prompt_updated', [
+                'agent_id' => $agentId,
+                'agent_name' => (string) ($agent['name'] ?? ''),
+                'prompt_length' => strlen($prompt),
+                'knowledge_base_length' => strlen($knowledgeBase),
+            ], $tenantId);
+            Flash::set('success', 'Prompt e base de conhecimento atualizados. As mudanças valem nas próximas respostas da IA.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível atualizar o prompt: ' . $exception->getMessage());
+        }
+
+        $this->redirect('/agents');
+    }
+
     private function businessHoursFromPost(): array
     {
         $enabled = isset($_POST['business_hours_enabled']) ? 1 : 0;

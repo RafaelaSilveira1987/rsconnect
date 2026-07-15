@@ -169,6 +169,7 @@ return static function (Router $router): void {
     $router->post('/ai-credentials/save', [AiCredentialController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/agents', [AgentController::class, 'store'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->post('/agents/status', [AgentController::class, 'updateStatus'], ['auth', 'permission:agents.manage', 'csrf']);
+    $router->post('/agents/prompt', [AgentController::class, 'updatePrompt'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->get('/automations', [AutomationController::class, 'index'], ['auth', 'permission:automations.view']);
 
     $router->get('/billing', [BillingController::class, 'index'], ['auth', 'super_admin']);

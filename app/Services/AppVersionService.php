@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'ZIP 30.2';
+    public const PACKAGE_LABEL = 'ZIP 30.3';
     public const REQUIRED_MIGRATION = '032_conversation_messages_compact_index.sql';
 
     private PDO $pdo;
@@ -61,7 +61,7 @@ final class AppVersionService
         $migrationTables = [
             'tenant_implementation_status',
             'tenant_implementation_checklist',
-            'onboarding_progress',
+            'tenant_onboarding_progress',
             'operations_backup_routines',
             'operations_backup_jobs',
             'system_backups',
@@ -75,8 +75,8 @@ final class AppVersionService
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
-            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 28 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 030, especialmente 029 e 030, se necessário.'
+            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 30.3 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
+            'Rodar as migrations pendentes até a 032, conforme o pacote implantado.'
         );
 
         $appKey = (string) Env::get('APP_KEY', '');
@@ -163,11 +163,11 @@ final class AppVersionService
             'Manter planos e régua de cobrança definidos para operação comercial.'
         );
 
-        $onboarding = $this->countTable('onboarding_progress');
+        $onboarding = $this->countTable('tenant_onboarding_progress');
         $checks[] = $this->check(
             'Onboarding do cliente',
-            $this->tableExists('onboarding_progress') ? 'ok' : 'warning',
-            $this->tableExists('onboarding_progress') ? $onboarding . ' registro(s) de onboarding.' : 'Tabela de onboarding ausente.',
+            $this->tableExists('tenant_onboarding_progress') ? 'ok' : 'warning',
+            $this->tableExists('tenant_onboarding_progress') ? $onboarding . ' registro(s) de onboarding.' : 'Tabela de onboarding ausente.',
             'Liberar Primeiros passos para clientes novos.'
         );
 

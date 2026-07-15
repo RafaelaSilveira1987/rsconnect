@@ -3014,3 +3014,48 @@ pre.codebox {
 }
 .calendar-inline-info strong { font-size: .9rem; }
 .calendar-inline-info span { color: var(--muted, #667085); font-size: .84rem; line-height: 1.45; }
+
+
+/* ZIP 30.3 — editor de prompt do agente */
+.agent-prompt-editor {
+  border: 1px solid rgba(37, 99, 235, .16);
+  border-radius: 16px;
+  background: #f8fbff;
+  overflow: hidden;
+}
+.agent-prompt-editor > summary {
+  padding: 13px 15px;
+  color: #1d4ed8;
+  background: rgba(239, 246, 255, .78);
+  list-style: none;
+}
+.agent-prompt-editor > summary::-webkit-details-marker { display: none; }
+.agent-prompt-editor[open] > summary { border-bottom: 1px solid rgba(37, 99, 235, .12); }
+.agent-prompt-editor form {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+.agent-prompt-editor .field { margin: 0; }
+.agent-prompt-editor textarea {
+  width: 100%;
+  resize: vertical;
+  border-radius: 14px;
+  background: #fff;
+  font: .82rem/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+  tab-size: 2;
+}
+.agent-prompt-textarea { min-height: 320px; }
+.agent-knowledge-textarea { min-height: 190px; }
+.agent-prompt-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 4px;
+}
+@media (max-width: 720px) {
+  .agent-prompt-actions { align-items: stretch; flex-direction: column; }
+  .agent-prompt-actions .btn { width: 100%; }
+  .agent-prompt-textarea { min-height: 260px; }
+}
