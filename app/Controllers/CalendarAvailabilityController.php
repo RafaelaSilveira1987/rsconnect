@@ -31,6 +31,7 @@ final class CalendarAvailabilityController
             'slots' => [],
             'googleLogs' => [],
             'metrics' => ['pending' => 0, 'requests' => 0, 'slots' => 0, 'selected' => 0, 'held' => 0],
+            'integration' => ['n8n_enabled' => false, 'active_url_configured' => false, 'token_configured' => false, 'calendar_configured' => false, 'active_mode' => 'free_slots', 'last_status' => '', 'last_error' => '', 'last_at' => ''],
         ];
 
         View::render('calendar_availability.index', [
@@ -43,6 +44,7 @@ final class CalendarAvailabilityController
             'slots' => $dashboard['slots'],
             'googleLogs' => $dashboard['googleLogs'] ?? [],
             'metrics' => $dashboard['metrics'],
+            'integration' => $dashboard['integration'] ?? [],
             'canManage' => Auth::can('calendar.manage'),
         ]);
     }
@@ -57,7 +59,7 @@ final class CalendarAvailabilityController
         }
 
         try {
-            (new CalendarAvailabilityService())->saveSettings($tenantId, $_POST);
+            (new CalendarAvailabilityService())->saveSettings($tenantId, $_POST, Auth::isSuperAdmin());
             Flash::set('success', 'Configuração da Agenda inteligente salva.');
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível salvar: ' . $exception->getMessage());

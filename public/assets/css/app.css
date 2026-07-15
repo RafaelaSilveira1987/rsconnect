@@ -2907,3 +2907,95 @@ pre.codebox {
 .text-success { color: #027a48; }
 .badge-success { background: #dcfae6; color: #067647; }
 .badge-danger { background: #fee4e2; color: #b42318; }
+
+/* ZIP 29 — Agenda inteligente: separação RS Admin/cliente e resultados atuais */
+.calendar-smart-hero { align-items: center; }
+.calendar-mode-kpi { font-size: clamp(1.35rem, 2vw, 2rem) !important; }
+.calendar-settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(340px, .75fr);
+  gap: 16px;
+  align-items: start;
+}
+.calendar-settings-grid.single { grid-template-columns: minmax(0, 860px); }
+.calendar-rule-card,
+.calendar-integration-card { display: grid; gap: 14px; }
+.calendar-toggle-stack { display: grid; gap: 10px; }
+.calendar-mode-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #dce8ee;
+  border-radius: 18px;
+  background: #f8fbfd;
+}
+.calendar-mode-panel h3 { margin: 0; font-size: 1rem; color: #172033; }
+.calendar-weekday-grid { display: grid; grid-template-columns: repeat(7, minmax(56px, 1fr)); gap: 8px; }
+.calendar-weekday-grid label { cursor: pointer; }
+.calendar-weekday-grid input { position: absolute; opacity: 0; pointer-events: none; }
+.calendar-weekday-grid span {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  border: 1px solid #d6e2e8;
+  border-radius: 12px;
+  background: #fff;
+  font-weight: 750;
+  color: #596579;
+}
+.calendar-weekday-grid input:checked + span { border-color: #146498; background: #eaf4fb; color: #0f4d72; }
+.input-with-suffix { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.input-with-suffix input { border-radius: 12px 0 0 12px !important; }
+.input-with-suffix span { align-self: stretch; display: grid; place-items: center; padding: 0 12px; border: 1px solid #d6e2e8; border-left: 0; border-radius: 0 12px 12px 0; background: #f2f7f9; color: #596579; font-weight: 700; }
+.calendar-settings-submit { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 4px 0; }
+.calendar-appointment-list { display: grid; gap: 12px; }
+.calendar-appointment-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 17px;
+  border: 1px solid #dce8ee;
+  border-radius: 18px;
+  background: #fff;
+}
+.calendar-appointment-card.is-ready { border-color: #a7e4c7; background: #f5fdf9; }
+.calendar-appointment-main { display: grid; gap: 6px; min-width: 0; }
+.calendar-appointment-main p,
+.calendar-appointment-main small { margin: 0; color: #596579; }
+.calendar-title-line { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.calendar-appointment-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.calendar-inline-alert { padding: 10px 12px; border: 1px solid #f8c9cf; border-radius: 12px; background: #fff5f6; color: #9f2635; line-height: 1.45; }
+.calendar-diagnostic-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.calendar-diagnostic { display: grid; gap: 3px; padding: 12px; border: 1px solid #dce8ee; border-radius: 14px; background: #f8fbfd; }
+.calendar-diagnostic strong { font-size: .82rem; color: #596579; }
+.calendar-diagnostic span { font-weight: 800; color: #172033; }
+.calendar-diagnostic.is-ok { background: #effbf5; border-color: #b8e8cf; }
+.calendar-diagnostic.is-warning { background: #fffbeb; border-color: #fde68a; }
+.calendar-diagnostic.is-error { background: #fff1f2; border-color: #fecdd3; }
+.calendar-admin-note { padding: 14px; border: 1px solid #cfe1ea; border-radius: 16px; background: #f5fafc; }
+.calendar-admin-note p { margin: 6px 0 0; color: #596579; line-height: 1.5; }
+.calendar-admin-note code { font-size: .86em; }
+.calendar-slot-groups { display: grid; gap: 14px; }
+.calendar-slot-group { overflow: hidden; border: 1px solid #dce8ee; border-radius: 18px; background: #fff; }
+.calendar-slot-group-title { padding: 14px 16px; border-bottom: 1px solid #e5edf1; background: #f8fbfd; }
+.calendar-slot-group-title strong,
+.calendar-slot-group-title small { display: block; }
+.calendar-slot-group-title small { margin-top: 4px; color: #596579; }
+.calendar-slot-list { display: grid; }
+.calendar-slot-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 16px; border-top: 1px solid #edf2f4; }
+.calendar-slot-row:first-child { border-top: 0; }
+.calendar-slot-row.is-selected { background: #f0fbf6; }
+.calendar-slot-row strong,
+.calendar-slot-row small { display: block; }
+.calendar-slot-row small { margin-top: 4px; color: #596579; }
+@media (max-width: 1020px) {
+  .calendar-settings-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .calendar-weekday-grid { grid-template-columns: repeat(4, minmax(56px, 1fr)); }
+  .calendar-appointment-card,
+  .calendar-slot-row { grid-template-columns: 1fr; }
+  .calendar-appointment-actions { justify-content: flex-start; }
+  .calendar-diagnostic-grid { grid-template-columns: 1fr; }
+}

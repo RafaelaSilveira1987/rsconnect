@@ -84,7 +84,7 @@ final class CalendarAvailabilityService
         }
     }
 
-    public function saveSettings(int $tenantId, array $data): void
+    public function saveSettings(int $tenantId, array $data, bool $canManageIntegration = true): void
     {
         if ($tenantId < 1 || !$this->tableExists('tenant_calendar_availability_settings')) {
             return;
@@ -93,7 +93,8 @@ final class CalendarAvailabilityService
             throw new \RuntimeException('Execute a migration 030 antes de salvar os modos do Google Agenda.');
         }
 
-        $mode = $this->normalizeMode((string) ($data['availability_mode'] ?? 'free_slots'));
+        $current = $this->settings($tenantId);
+        $mode = $this->normalizeMode((string) ($data['availability_mode'] ?? $current['availability_mode'] ?? 'free_slots'));
         $duration = max(15, min(240, (int) ($data['default_duration_minutes'] ?? 50)));
         $interval = max(5, min(240, (int) ($data['slot_interval_minutes'] ?? 30)));
         $buffer = max(0, min(180, (int) ($data['buffer_minutes'] ?? 10)));
@@ -121,17 +122,37 @@ final class CalendarAvailabilityService
             $end = '18:00';
         }
 
-        $freeSlotsUrl = trim((string) ($data['free_slots_webhook_url'] ?? ''));
-        $markedEventsUrl = trim((string) ($data['marked_events_webhook_url'] ?? ''));
-        $legacyUrl = trim((string) ($data['n8n_webhook_url'] ?? ''));
+        // Integração é administrada somente pela operação RS. Ao salvar como usuário da empresa,
+        // os campos técnicos que não aparecem na tela são preservados.
+        $freeSlotsUrl = $canManageIntegration
+            ? trim((string) ($data['free_slots_webhook_url'] ?? ''))
+            : trim((string) ($current['free_slots_webhook_url'] ?? ''));
+        $markedEventsUrl = $canManageIntegration
+            ? trim((string) ($data['marked_events_webhook_url'] ?? ''))
+            : trim((string) ($current['marked_events_webhook_url'] ?? ''));
+        $legacyUrl = $canManageIntegration
+            ? trim((string) ($data['n8n_webhook_url'] ?? ''))
+            : trim((string) ($current['n8n_webhook_url'] ?? ''));
         if ($legacyUrl === '') {
             $legacyUrl = $mode === 'marked_events' ? $markedEventsUrl : $freeSlotsUrl;
         }
-        $secret = trim((string) ($data['secret_token'] ?? ''));
-        $utcOffset = trim((string) ($data['google_utc_offset'] ?? '-03:00'));
+        $secret = $canManageIntegration
+            ? trim((string) ($data['secret_token'] ?? ''))
+            : trim((string) ($current['secret_token'] ?? ''));
+        $calendarId = $canManageIntegration
+            ? trim((string) ($data['google_calendar_id'] ?? 'primary'))
+            : trim((string) ($current['google_calendar_id'] ?? 'primary'));
+        $timezone = $canManageIntegration
+            ? trim((string) ($data['timezone'] ?? 'America/Sao_Paulo'))
+            : trim((string) ($current['timezone'] ?? 'America/Sao_Paulo'));
+        $utcOffset = $canManageIntegration
+            ? trim((string) ($data['google_utc_offset'] ?? '-03:00'))
+            : trim((string) ($current['google_utc_offset'] ?? '-03:00'));
         if (preg_match('/^[+-](0\d|1\d|2[0-3]):[0-5]\d$/', $utcOffset) !== 1) {
             $utcOffset = '-03:00';
         }
+        $useN8n = $canManageIntegration ? !empty($data['use_n8n']) : !empty($current['use_n8n']);
+        $useInternalFallback = $canManageIntegration ? !empty($data['use_internal_fallback']) : !empty($current['use_internal_fallback']);
 
         $statement = Database::connection()->prepare(
             'INSERT INTO tenant_calendar_availability_settings
@@ -189,14 +210,14 @@ final class CalendarAvailabilityService
             'availability_mode' => $mode,
             'require_before_approval' => !empty($data['require_before_approval']) ? 1 : 0,
             'auto_request_on_pre_schedule' => !empty($data['auto_request_on_pre_schedule']) ? 1 : 0,
-            'use_n8n' => !empty($data['use_n8n']) ? 1 : 0,
-            'use_internal_fallback' => !empty($data['use_internal_fallback']) ? 1 : 0,
+            'use_n8n' => $useN8n ? 1 : 0,
+            'use_internal_fallback' => $useInternalFallback ? 1 : 0,
             'n8n_webhook_url_encrypted' => $legacyUrl !== '' ? Crypto::encrypt($legacyUrl) : null,
             'free_slots_webhook_url_encrypted' => $freeSlotsUrl !== '' ? Crypto::encrypt($freeSlotsUrl) : null,
             'marked_events_webhook_url_encrypted' => $markedEventsUrl !== '' ? Crypto::encrypt($markedEventsUrl) : null,
             'secret_token_encrypted' => $secret !== '' ? Crypto::encrypt($secret) : null,
-            'google_calendar_id' => mb_substr(trim((string) ($data['google_calendar_id'] ?? 'primary')) ?: 'primary', 0, 255),
-            'timezone' => mb_substr(trim((string) ($data['timezone'] ?? 'America/Sao_Paulo')) ?: 'America/Sao_Paulo', 0, 80),
+            'google_calendar_id' => mb_substr($calendarId !== '' ? $calendarId : 'primary', 0, 255),
+            'timezone' => mb_substr($timezone !== '' ? $timezone : 'America/Sao_Paulo', 0, 80),
             'google_utc_offset' => $utcOffset,
             'ignore_transparent_events' => !empty($data['ignore_transparent_events']) ? 1 : 0,
             'marked_require_transparent' => !empty($data['marked_require_transparent']) ? 1 : 0,
@@ -275,7 +296,7 @@ final class CalendarAvailabilityService
                 'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ]);
 
-        $this->updateAppointmentAvailability($tenantId, $appointmentId, 'requested', $requestId, null, null, $mode === 'marked_events' ? 'google_marked_slots' : 'google_free_slots');
+        $this->updateAppointmentAvailability($tenantId, $appointmentId, 'requested', $requestId, 0, null, $mode === 'marked_events' ? 'google_marked_slots' : 'google_free_slots');
 
         $sent = false;
         $errors = [];
@@ -546,10 +567,13 @@ final class CalendarAvailabilityService
             $statement = $pdo->prepare(
                 'SELECT s.*, a.title AS appointment_title, ct.name AS contact_name
                  FROM calendar_availability_slots s
-                 LEFT JOIN calendar_appointments a ON a.id = s.appointment_id
+                 INNER JOIN calendar_appointments a
+                    ON a.id = s.appointment_id
+                   AND a.tenant_id = s.tenant_id
+                   AND a.availability_request_id = s.request_id
                  LEFT JOIN contacts ct ON ct.id = a.contact_id
                  WHERE s.tenant_id = :tenant_id
-                 ORDER BY (s.selected_at IS NOT NULL) DESC, s.starts_at ASC, s.id DESC
+                 ORDER BY a.updated_at DESC, (s.selected_at IS NOT NULL) DESC, s.starts_at ASC, s.id DESC
                  LIMIT 160'
             );
             $statement->execute(['tenant_id' => $tenantId]);
@@ -581,7 +605,20 @@ final class CalendarAvailabilityService
             }
         }
 
-        return compact('settings', 'pending', 'requests', 'slots', 'googleLogs', 'metrics');
+        $activeUrl = $this->webhookUrlForMode($settings, $this->normalizeMode((string) ($settings['availability_mode'] ?? 'free_slots')));
+        $latestRequest = $requests[0] ?? null;
+        $integration = [
+            'n8n_enabled' => !empty($settings['use_n8n']),
+            'active_url_configured' => $activeUrl !== '',
+            'token_configured' => trim((string) ($settings['secret_token'] ?? '')) !== '',
+            'calendar_configured' => trim((string) ($settings['google_calendar_id'] ?? '')) !== '',
+            'active_mode' => $this->normalizeMode((string) ($settings['availability_mode'] ?? 'free_slots')),
+            'last_status' => is_array($latestRequest) ? (string) ($latestRequest['status'] ?? '') : '',
+            'last_error' => is_array($latestRequest) ? (string) ($latestRequest['error_message'] ?? '') : '',
+            'last_at' => is_array($latestRequest) ? (string) ($latestRequest['responded_at'] ?? $latestRequest['requested_at'] ?? '') : '',
+        ];
+
+        return compact('settings', 'pending', 'requests', 'slots', 'googleLogs', 'metrics', 'integration');
     }
 
     private function handleAvailabilityCallback(array $payload, ?string $token): array
@@ -598,7 +635,10 @@ final class CalendarAvailabilityService
             $slots = [];
         }
 
+        $requestMode = $this->normalizeMode((string) ($request['availability_mode'] ?? 'free_slots'));
+        $source = $requestMode === 'marked_events' ? 'google_marked_slots' : 'google_free_slots';
         $normalizedSlots = [];
+        $deduplicated = [];
         foreach ($slots as $slot) {
             if (!is_array($slot)) {
                 continue;
@@ -618,16 +658,41 @@ final class CalendarAvailabilityService
                     ->add(new DateInterval('PT' . max(15, (int) $request['duration_minutes']) . 'M'))
                     ->format('Y-m-d H:i:s');
             }
+            if ($endSql <= $startSql) {
+                continue;
+            }
+            if (!empty($request['search_start_at']) && $startSql < (string) $request['search_start_at']) {
+                continue;
+            }
+            if (!empty($request['search_end_at']) && $endSql > (string) $request['search_end_at']) {
+                continue;
+            }
+
+            $googleEventId = trim((string) ($slot['google_event_id'] ?? ''));
+            if ($requestMode === 'marked_events' && $googleEventId === '') {
+                // O modo VAGO só aceita opções vinculadas a um evento real do Google.
+                continue;
+            }
+
+            $modality = $this->normalizeModality((string) ($slot['modality'] ?? 'indefinida'));
+            $dedupeKey = $googleEventId !== ''
+                ? 'google:' . $googleEventId
+                : implode('|', [$startSql, $endSql, $modality]);
+            if (isset($deduplicated[$dedupeKey])) {
+                continue;
+            }
+            $deduplicated[$dedupeKey] = true;
 
             $normalizedSlots[] = [
                 'start' => $startSql,
                 'end' => $endSql,
-                'label' => trim((string) ($slot['label'] ?? date('d/m/Y H:i', strtotime($startSql)))),
-                'source' => trim((string) ($slot['source'] ?? $payload['source'] ?? 'n8n')) ?: 'n8n',
+                // Não confia no label vindo de fluxos antigos: ele podia chegar com deslocamento de fuso.
+                'label' => $this->slotLabel($startSql, $modality),
+                'source' => $source,
                 'google_calendar_id' => trim((string) ($slot['google_calendar_id'] ?? $payload['google_calendar_id'] ?? '')) ?: null,
-                'google_event_id' => trim((string) ($slot['google_event_id'] ?? '')) ?: null,
+                'google_event_id' => $googleEventId !== '' ? $googleEventId : null,
                 'google_event_etag' => trim((string) ($slot['google_event_etag'] ?? $slot['etag'] ?? '')) ?: null,
-                'modality' => $this->normalizeModality((string) ($slot['modality'] ?? 'indefinida')),
+                'modality' => $modality,
                 'event_summary' => trim((string) ($slot['event_summary'] ?? $slot['summary'] ?? '')) ?: null,
                 'event_transparency' => trim((string) ($slot['event_transparency'] ?? $slot['transparency'] ?? '')) ?: null,
                 'event_state' => 'available',
@@ -635,10 +700,22 @@ final class CalendarAvailabilityService
             ];
         }
 
-        $source = trim((string) ($payload['source'] ?? 'n8n')) ?: 'n8n';
-        $this->storeSlots((int) $request['id'], (int) $request['tenant_id'], (int) $request['appointment_id'], $normalizedSlots, $source, $payload);
+        $diagnostic = $this->availabilityDiagnostic($requestMode, $payload, count($normalizedSlots));
+        $this->storeSlots(
+            (int) $request['id'],
+            (int) $request['tenant_id'],
+            (int) $request['appointment_id'],
+            $normalizedSlots,
+            $source,
+            $payload,
+            $diagnostic
+        );
         $this->logGoogleSync((int) $request['tenant_id'], (int) $request['appointment_id'], (int) $request['id'], null, 'callback', 'success', [], null, $payload);
-        return ['ok' => true, 'message' => 'Disponibilidade registrada no RS Connect.', 'slots' => count($normalizedSlots)];
+        return [
+            'ok' => true,
+            'message' => $diagnostic !== '' ? $diagnostic : 'Disponibilidade registrada no RS Connect.',
+            'slots' => count($normalizedSlots),
+        ];
     }
 
     private function handleMarkedUpdateCallback(array $payload, ?string $token): array
@@ -782,7 +859,7 @@ final class CalendarAvailabilityService
         return ['ok' => true, 'message' => 'Estado do evento Google atualizado no RS Connect.', 'state' => $state];
     }
 
-    private function storeSlots(int $requestId, int $tenantId, int $appointmentId, array $slots, string $source, ?array $rawPayload = null): void
+    private function storeSlots(int $requestId, int $tenantId, int $appointmentId, array $slots, string $source, ?array $rawPayload = null, ?string $diagnostic = null): void
     {
         $pdo = Database::connection();
         $pdo->prepare('DELETE FROM calendar_availability_slots WHERE request_id = :request_id')->execute(['request_id' => $requestId]);
@@ -822,14 +899,16 @@ final class CalendarAvailabilityService
              SET status = :status,
                  response_payload_json = :response_payload_json,
                  responded_at = NOW(),
-                 error_message = NULL
+                 error_message = :diagnostic
              WHERE id = :id'
         )->execute([
             'id' => $requestId,
             'status' => $status,
+            'diagnostic' => $slots === [] && trim((string) $diagnostic) !== '' ? mb_substr((string) $diagnostic, 0, 700) : null,
             'response_payload_json' => json_encode($rawPayload ?? ['slots' => $slots, 'source' => $source], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ]);
-        $this->updateAppointmentAvailability($tenantId, $appointmentId, $status, $requestId, count($slots), null, $source);
+        $appointmentMessage = $slots === [] && trim((string) $diagnostic) !== '' ? mb_substr((string) $diagnostic, 0, 700) : null;
+        $this->updateAppointmentAvailability($tenantId, $appointmentId, $status, $requestId, count($slots), $appointmentMessage, $source);
         Audit::log('calendar.availability_received', ['request_id' => $requestId, 'slots' => count($slots), 'source' => $source], $tenantId);
     }
 
@@ -1303,6 +1382,57 @@ final class CalendarAvailabilityService
             $timestamp = strtotime($value);
             return $timestamp === false ? null : date('Y-m-d H:i:s', $timestamp);
         }
+    }
+
+    private function slotLabel(string $startSql, string $modality = 'indefinida'): string
+    {
+        try {
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $startSql);
+            if (!$date) {
+                $date = new DateTimeImmutable($startSql);
+            }
+            $label = $date->format('d/m/Y H:i');
+            if ($modality === 'online') {
+                return $label . ' · Online';
+            }
+            if ($modality === 'presencial') {
+                return $label . ' · Presencial';
+            }
+            return $label;
+        } catch (Throwable) {
+            return $startSql;
+        }
+    }
+
+    private function availabilityDiagnostic(string $mode, array $payload, int $slotCount): string
+    {
+        if ($slotCount > 0) {
+            return $slotCount . ($slotCount === 1 ? ' horário disponível encontrado.' : ' horários disponíveis encontrados.');
+        }
+
+        $meta = isset($payload['meta']) && is_array($payload['meta']) ? $payload['meta'] : [];
+        if ($mode === 'marked_events') {
+            $eventsRead = (int) ($meta['events_read'] ?? 0);
+            $titleMatches = (int) ($meta['title_matches'] ?? 0);
+            $transparencyRejected = (int) ($meta['transparency_rejected'] ?? 0);
+            $modalityRejected = (int) ($meta['modality_rejected'] ?? 0);
+            if ($eventsRead === 0) {
+                return 'O Google Agenda não retornou eventos no período pesquisado. Confira a data, a conta conectada e o ID do calendário.';
+            }
+            if ($titleMatches === 0) {
+                return 'Foram lidos ' . $eventsRead . ' evento(s), mas nenhum possui exatamente os títulos VAGO configurados.';
+            }
+            if ($transparencyRejected > 0) {
+                return 'Os eventos VAGO foram encontrados, mas estão como Ocupado. No Google Agenda, altere “Mostrar como” para Disponível.';
+            }
+            if ($modalityRejected > 0) {
+                return 'Existem eventos VAGO, mas nenhum corresponde à modalidade solicitada pelo cliente.';
+            }
+            return 'Nenhum evento VAGO válido foi encontrado para a preferência informada.';
+        }
+
+        $eventsRead = (int) ($meta['events_read'] ?? $meta['occupied_events_considered'] ?? 0);
+        return 'Nenhum espaço livre foi encontrado dentro do expediente e das regras configuradas' . ($eventsRead > 0 ? ' após analisar ' . $eventsRead . ' compromisso(s).' : '.');
     }
 
     private function normalizeHour(string $value, string $fallback): string
