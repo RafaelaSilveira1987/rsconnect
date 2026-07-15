@@ -116,23 +116,23 @@ final class ConversationController
                 $selectedId = 0;
             }
             if ($selected !== null) {
+                // Busca apenas as 250 mensagens mais recentes usando um índice compacto.
+                // A versão anterior ordenava linhas completas (incluindo TEXT/JSON) duas vezes no MySQL,
+                // o que podia estourar o sort_buffer em conversas com muito histórico.
                 $messageStatement = $pdo->prepare(
-                    'SELECT * FROM (
-                        SELECT m.*, u.name AS sender_user_name
-                        FROM conversation_messages m
-                        LEFT JOIN users u ON u.id = m.sender_user_id AND u.tenant_id = m.tenant_id
-                        WHERE m.conversation_id = :conversation_id
-                          AND m.tenant_id = :tenant_id
-                        ORDER BY m.sent_at DESC, m.id DESC
-                        LIMIT 250
-                    ) recent
-                    ORDER BY recent.sent_at ASC, recent.id ASC'
+                    'SELECT m.*, u.name AS sender_user_name
+                     FROM conversation_messages m
+                     LEFT JOIN users u ON u.id = m.sender_user_id AND u.tenant_id = m.tenant_id
+                     WHERE m.tenant_id = :tenant_id
+                       AND m.conversation_id = :conversation_id
+                     ORDER BY m.id DESC
+                     LIMIT 250'
                 );
                 $messageStatement->execute([
-                    'conversation_id' => $selectedId,
                     'tenant_id' => (int) $selected['tenant_id'],
+                    'conversation_id' => $selectedId,
                 ]);
-                $messages = $messageStatement->fetchAll(PDO::FETCH_ASSOC);
+                $messages = array_reverse($messageStatement->fetchAll(PDO::FETCH_ASSOC));
 
                 if ((int) $selected['unread_count'] > 0) {
                     $pdo->prepare('UPDATE conversations SET unread_count = 0 WHERE id = :id AND tenant_id = :tenant_id')
