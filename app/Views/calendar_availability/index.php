@@ -214,8 +214,12 @@ $requestInsight = static function (array $request): string {
             <div class="calendar-mode-panel" data-calendar-mode="marked_events">
                 <h3>Regras para eventos VAGO</h3>
                 <div class="field-grid two">
-                    <div class="field"><label>Título disponível online</label><input type="text" name="marked_online_title" value="<?= View::e($settings['marked_online_title'] ?? 'VAGO — ONLINE') ?>"></div>
-                    <div class="field"><label>Título disponível presencial</label><input type="text" name="marked_in_person_title" value="<?= View::e($settings['marked_in_person_title'] ?? 'VAGO — PRESENCIAL') ?>"></div>
+                    <div class="field"><label>Título disponível online ou genérico</label><input type="text" name="marked_online_title" value="<?= View::e($settings['marked_online_title'] ?? 'VAGO — ONLINE') ?>" placeholder="Ex.: Vago ou VAGO — ONLINE"></div>
+                    <div class="field"><label>Título disponível presencial ou repita o genérico</label><input type="text" name="marked_in_person_title" value="<?= View::e($settings['marked_in_person_title'] ?? 'VAGO — PRESENCIAL') ?>" placeholder="Ex.: Vago ou VAGO — PRESENCIAL"></div>
+                </div>
+                <div class="calendar-inline-info">
+                    <strong>Um único título também é aceito.</strong>
+                    <span>Você pode preencher <b>Vago</b> nos dois campos. Nesse caso, o fluxo usa a modalidade Online ou Presencial identificada na conversa ou no pré-agendamento.</span>
                 </div>
                 <div class="field-grid two">
                     <div class="field"><label>Título ao pré-reservar</label><input type="text" name="marked_hold_prefix" value="<?= View::e($settings['marked_hold_prefix'] ?? 'PRÉ-RESERVADO') ?>"></div>
@@ -239,6 +243,20 @@ $requestInsight = static function (array $request): string {
                     <div class="calendar-diagnostic <?= (($integration['last_status'] ?? '') === 'received') ? 'is-ok' : ((($integration['last_status'] ?? '') === 'failed') ? 'is-error' : 'is-warning') ?>"><strong>Última consulta</strong><span><?= View::e($statusLabels[$integration['last_status'] ?? ''] ?? (($integration['last_status'] ?? '') ?: 'Sem teste')) ?></span></div>
                 </div>
                 <?php if (!empty($integration['last_error'])): ?><div class="calendar-inline-alert"><?= View::e($integration['last_error']) ?></div><?php endif; ?>
+                <?php if (!empty($integration['last_online_title']) || !empty($integration['last_in_person_title'])): ?>
+                    <div class="calendar-admin-note">
+                        <strong>Configuração usada na última busca</strong>
+                        <p>
+                            Online: <b><?= View::e($integration['last_online_title'] ?: 'não informado') ?></b> ·
+                            Presencial: <b><?= View::e($integration['last_in_person_title'] ?: 'não informado') ?></b>
+                            <?= !empty($integration['last_shared_title']) ? ' · título genérico compartilhado' : '' ?>
+                            <?php if (!empty($integration['last_requested_modality'])): ?> · modalidade: <b><?= View::e($integration['last_requested_modality']) ?></b><?php endif; ?>
+                        </p>
+                        <?php if (!empty($integration['last_event_titles'])): ?>
+                            <p>Títulos lidos no Google: <?= View::e(implode(' · ', array_slice($integration['last_event_titles'], 0, 8))) ?></p>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
 
                 <div class="calendar-toggle-stack">
                     <label class="switch-inline"><input type="checkbox" name="use_n8n" value="1" <?= !empty($settings['use_n8n']) ? 'checked' : '' ?>><span>Usar n8n para consultar o Google Agenda</span></label>

@@ -116,23 +116,14 @@ final class ConversationController
                 $selectedId = 0;
             }
             if ($selected !== null) {
-                // Busca apenas as 250 mensagens mais recentes usando um índice compacto.
-                // A versão anterior ordenava linhas completas (incluindo TEXT/JSON) duas vezes no MySQL,
-                // o que podia estourar o sort_buffer em conversas com muito histórico.
-                $messageStatement = $pdo->prepare(
-                    'SELECT m.*, u.name AS sender_user_name
-                     FROM conversation_messages m
-                     LEFT JOIN users u ON u.id = m.sender_user_id AND u.tenant_id = m.tenant_id
-                     WHERE m.tenant_id = :tenant_id
-                       AND m.conversation_id = :conversation_id
-                     ORDER BY m.id DESC
-                     LIMIT 250'
+                // HOTFIX 30.2: primeiro seleciona somente os IDs mais recentes e depois busca
+                // o conteúdo completo. Assim o MySQL nunca precisa ordenar TEXT/JSON no sort_buffer.
+                $messages = $this->loadRecentConversationMessages(
+                    $pdo,
+                    (int) $selected['tenant_id'],
+                    $selectedId,
+                    250
                 );
-                $messageStatement->execute([
-                    'tenant_id' => (int) $selected['tenant_id'],
-                    'conversation_id' => $selectedId,
-                ]);
-                $messages = array_reverse($messageStatement->fetchAll(PDO::FETCH_ASSOC));
 
                 if ((int) $selected['unread_count'] > 0) {
                     $pdo->prepare('UPDATE conversations SET unread_count = 0 WHERE id = :id AND tenant_id = :tenant_id')
@@ -542,7 +533,7 @@ final class ConversationController
                 $this->redirect('/conversations?conversation_id=' . $conversationId);
             }
 
-            $messages = $this->recentMessages($pdo, $conversationId, 14);
+            $messages = $this->recentMessages($pdo, (int) $conversation['tenant_id'], $conversationId, 14);
             $suggestion = (new AiModelService())->generateReply($agent, $messages, $conversation, $conversation);
 
             if ($this->hasColumn($pdo, 'conversations', 'last_ai_suggestion')) {
@@ -803,21 +794,143 @@ final class ConversationController
         return $agent ?: null;
     }
 
-    private function recentMessages(PDO $pdo, int $conversationId, int $limit): array
+    private function recentMessages(PDO $pdo, int $tenantId, int $conversationId, int $limit): array
     {
-        $limit = max(4, min(30, $limit));
+        $rows = $this->loadRecentConversationMessages($pdo, $tenantId, $conversationId, max(4, min(30, $limit)));
+
+        return array_map(static fn (array $message): array => [
+            'direction' => (string) ($message['direction'] ?? ''),
+            'sender_type' => (string) ($message['sender_type'] ?? ''),
+            'content' => (string) ($message['content'] ?? ''),
+            'sent_at' => (string) ($message['sent_at'] ?? ''),
+        ], $rows);
+    }
+
+    /**
+     * Carrega as mensagens mais recentes sem ordenar as colunas TEXT/JSON.
+     * A primeira consulta trabalha apenas com BIGINT (id); a ordenação final ocorre no PHP.
+     */
+    private function loadRecentConversationMessages(
+        PDO $pdo,
+        int $tenantId,
+        int $conversationId,
+        int $limit
+    ): array {
+        $limit = max(1, min(500, $limit));
+        $indexHint = $this->messageIndexHint($pdo);
         $statement = $pdo->prepare(
-            'SELECT * FROM (
-                SELECT direction, sender_type, content, sent_at
-                FROM conversation_messages
-                WHERE conversation_id = :conversation_id
-                ORDER BY sent_at DESC, id DESC
-                LIMIT ' . $limit . '
-             ) recent
-             ORDER BY sent_at ASC'
+            'SELECT id
+             FROM conversation_messages' . $indexHint . '
+             WHERE tenant_id = :tenant_id
+               AND conversation_id = :conversation_id
+             ORDER BY id DESC
+             LIMIT ' . $limit
         );
-        $statement->execute(['conversation_id' => $conversationId]);
-        return $statement->fetchAll(PDO::FETCH_ASSOC);
+        $statement->execute([
+            'tenant_id' => $tenantId,
+            'conversation_id' => $conversationId,
+        ]);
+
+        $ids = array_values(array_filter(array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN)), static fn (int $id): bool => $id > 0));
+        return $this->fetchConversationMessagesByIds($pdo, $tenantId, $conversationId, $ids);
+    }
+
+    /**
+     * Carrega somente mensagens posteriores ao último ID conhecido para o polling em tempo real.
+     */
+    private function loadConversationMessagesAfter(
+        PDO $pdo,
+        int $tenantId,
+        int $conversationId,
+        int $afterId,
+        int $limit
+    ): array {
+        $limit = max(1, min(250, $limit));
+        $indexHint = $this->messageIndexHint($pdo);
+        $statement = $pdo->prepare(
+            'SELECT id
+             FROM conversation_messages' . $indexHint . '
+             WHERE tenant_id = :tenant_id
+               AND conversation_id = :conversation_id
+               AND id > :after_id
+             ORDER BY id ASC
+             LIMIT ' . $limit
+        );
+        $statement->execute([
+            'tenant_id' => $tenantId,
+            'conversation_id' => $conversationId,
+            'after_id' => $afterId,
+        ]);
+
+        $ids = array_values(array_filter(array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN)), static fn (int $id): bool => $id > 0));
+        return $this->fetchConversationMessagesByIds($pdo, $tenantId, $conversationId, $ids);
+    }
+
+    private function fetchConversationMessagesByIds(
+        PDO $pdo,
+        int $tenantId,
+        int $conversationId,
+        array $ids
+    ): array {
+        if ($ids === []) {
+            return [];
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($ids), '?'));
+        $statement = $pdo->prepare(
+            'SELECT m.*, u.name AS sender_user_name
+             FROM conversation_messages m
+             LEFT JOIN users u ON u.id = m.sender_user_id AND u.tenant_id = m.tenant_id
+             WHERE m.tenant_id = ?
+               AND m.conversation_id = ?
+               AND m.id IN (' . $placeholders . ')'
+        );
+        $statement->execute(array_merge([$tenantId, $conversationId], $ids));
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+        usort($rows, static fn (array $left, array $right): int => (int) $left['id'] <=> (int) $right['id']);
+        return $rows;
+    }
+
+    /**
+     * Usa o índice novo quando disponível e mantém compatibilidade com bancos ainda sem a migration 032.
+     */
+    private function messageIndexHint(PDO $pdo): string
+    {
+        if ($this->hasIndexColumns($pdo, 'conversation_messages', 'idx_messages_tenant_conversation_id_v2', ['tenant_id', 'conversation_id', 'id'])) {
+            return ' FORCE INDEX (idx_messages_tenant_conversation_id_v2)';
+        }
+
+        if ($this->hasIndexColumns($pdo, 'conversation_messages', 'idx_messages_tenant_conversation_id', ['tenant_id', 'conversation_id', 'id'])) {
+            return ' FORCE INDEX (idx_messages_tenant_conversation_id)';
+        }
+
+        return '';
+    }
+
+    private function hasIndexColumns(PDO $pdo, string $table, string $index, array $expectedColumns): bool
+    {
+        static $cache = [];
+        $cacheKey = $table . ':' . $index;
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
+        $statement = $pdo->prepare(
+            'SELECT COLUMN_NAME
+             FROM INFORMATION_SCHEMA.STATISTICS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = :table
+               AND INDEX_NAME = :index_name
+             ORDER BY SEQ_IN_INDEX'
+        );
+        $statement->execute([
+            'table' => $table,
+            'index_name' => $index,
+        ]);
+        $columns = array_map('strval', $statement->fetchAll(PDO::FETCH_COLUMN));
+        $cache[$cacheKey] = $columns === $expectedColumns;
+        return $cache[$cacheKey];
     }
 
     private function hasColumn(PDO $pdo, string $table, string $column): bool
@@ -882,22 +995,13 @@ final class ConversationController
                 $selected = null;
             }
             if ($selected !== null) {
-                $messageStatement = $pdo->prepare(
-                    'SELECT m.*, u.name AS sender_user_name
-                     FROM conversation_messages m
-                     LEFT JOIN users u ON u.id = m.sender_user_id AND u.tenant_id = m.tenant_id
-                     WHERE m.conversation_id = :conversation_id
-                       AND m.tenant_id = :tenant_id
-                       AND m.id > :after_id
-                     ORDER BY m.sent_at ASC, m.id ASC
-                     LIMIT 120'
+                $rows = $this->loadConversationMessagesAfter(
+                    $pdo,
+                    (int) $selected['tenant_id'],
+                    $selectedId,
+                    $afterId,
+                    120
                 );
-                $messageStatement->execute([
-                    'conversation_id' => $selectedId,
-                    'tenant_id' => (int) $selected['tenant_id'],
-                    'after_id' => $afterId,
-                ]);
-                $rows = $messageStatement->fetchAll(PDO::FETCH_ASSOC);
                 foreach ($rows as $message) {
                     $latestMessageId = max($latestMessageId, (int) $message['id']);
                     $messages[] = $this->formatMessageForJson($message);

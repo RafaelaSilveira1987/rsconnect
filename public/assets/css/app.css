@@ -2999,3 +2999,18 @@ pre.codebox {
   .calendar-appointment-actions { justify-content: flex-start; }
   .calendar-diagnostic-grid { grid-template-columns: 1fr; }
 }
+
+
+/* ZIP 30 — título VAGO genérico configurável */
+.calendar-inline-info {
+  display: grid;
+  gap: 3px;
+  margin: 2px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(2, 148, 142, .22);
+  border-radius: 12px;
+  background: rgba(2, 148, 142, .06);
+  color: var(--text, #101828);
+}
+.calendar-inline-info strong { font-size: .9rem; }
+.calendar-inline-info span { color: var(--muted, #667085); font-size: .84rem; line-height: 1.45; }

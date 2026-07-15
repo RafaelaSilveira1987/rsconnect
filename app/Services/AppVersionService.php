@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'ZIP 28';
-    public const REQUIRED_MIGRATION = '030_google_calendar_availability_modes.sql';
+    public const PACKAGE_LABEL = 'ZIP 30.2';
+    public const REQUIRED_MIGRATION = '032_conversation_messages_compact_index.sql';
 
     private PDO $pdo;
 

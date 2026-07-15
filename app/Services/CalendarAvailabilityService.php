@@ -221,10 +221,10 @@ final class CalendarAvailabilityService
             'google_utc_offset' => $utcOffset,
             'ignore_transparent_events' => !empty($data['ignore_transparent_events']) ? 1 : 0,
             'marked_require_transparent' => !empty($data['marked_require_transparent']) ? 1 : 0,
-            'marked_online_title' => mb_substr(trim((string) ($data['marked_online_title'] ?? 'VAGO — ONLINE')) ?: 'VAGO — ONLINE', 0, 190),
-            'marked_in_person_title' => mb_substr(trim((string) ($data['marked_in_person_title'] ?? 'VAGO — PRESENCIAL')) ?: 'VAGO — PRESENCIAL', 0, 190),
-            'marked_hold_prefix' => mb_substr(trim((string) ($data['marked_hold_prefix'] ?? 'PRÉ-RESERVADO')) ?: 'PRÉ-RESERVADO', 0, 120),
-            'marked_confirmed_prefix' => mb_substr(trim((string) ($data['marked_confirmed_prefix'] ?? 'AGENDADO')) ?: 'AGENDADO', 0, 120),
+            'marked_online_title' => mb_substr(trim((string) ($data['marked_online_title'] ?? $current['marked_online_title'] ?? 'VAGO — ONLINE')) ?: 'VAGO — ONLINE', 0, 190),
+            'marked_in_person_title' => mb_substr(trim((string) ($data['marked_in_person_title'] ?? $current['marked_in_person_title'] ?? 'VAGO — PRESENCIAL')) ?: 'VAGO — PRESENCIAL', 0, 190),
+            'marked_hold_prefix' => mb_substr(trim((string) ($data['marked_hold_prefix'] ?? $current['marked_hold_prefix'] ?? 'PRÉ-RESERVADO')) ?: 'PRÉ-RESERVADO', 0, 120),
+            'marked_confirmed_prefix' => mb_substr(trim((string) ($data['marked_confirmed_prefix'] ?? $current['marked_confirmed_prefix'] ?? 'AGENDADO')) ?: 'AGENDADO', 0, 120),
             'hold_minutes' => $holdMinutes,
             'revalidate_before_update' => !empty($data['revalidate_before_update']) ? 1 : 0,
             'restore_on_cancel' => !empty($data['restore_on_cancel']) ? 1 : 0,
@@ -607,6 +607,13 @@ final class CalendarAvailabilityService
 
         $activeUrl = $this->webhookUrlForMode($settings, $this->normalizeMode((string) ($settings['availability_mode'] ?? 'free_slots')));
         $latestRequest = $requests[0] ?? null;
+        $latestResponseMeta = [];
+        if (is_array($latestRequest) && !empty($latestRequest['response_payload_json'])) {
+            $decodedResponse = json_decode((string) $latestRequest['response_payload_json'], true);
+            if (is_array($decodedResponse) && isset($decodedResponse['meta']) && is_array($decodedResponse['meta'])) {
+                $latestResponseMeta = $decodedResponse['meta'];
+            }
+        }
         $integration = [
             'n8n_enabled' => !empty($settings['use_n8n']),
             'active_url_configured' => $activeUrl !== '',
@@ -616,6 +623,11 @@ final class CalendarAvailabilityService
             'last_status' => is_array($latestRequest) ? (string) ($latestRequest['status'] ?? '') : '',
             'last_error' => is_array($latestRequest) ? (string) ($latestRequest['error_message'] ?? '') : '',
             'last_at' => is_array($latestRequest) ? (string) ($latestRequest['responded_at'] ?? $latestRequest['requested_at'] ?? '') : '',
+            'last_online_title' => trim((string) ($latestResponseMeta['online_title'] ?? '')),
+            'last_in_person_title' => trim((string) ($latestResponseMeta['in_person_title'] ?? '')),
+            'last_shared_title' => !empty($latestResponseMeta['shared_title']),
+            'last_requested_modality' => trim((string) ($latestResponseMeta['requested_modality'] ?? '')),
+            'last_event_titles' => array_values(array_filter(array_map('strval', (array) ($latestResponseMeta['event_titles_sample'] ?? [])))),
         ];
 
         return compact('settings', 'pending', 'requests', 'slots', 'googleLogs', 'metrics', 'integration');
@@ -1416,17 +1428,40 @@ final class CalendarAvailabilityService
             $titleMatches = (int) ($meta['title_matches'] ?? 0);
             $transparencyRejected = (int) ($meta['transparency_rejected'] ?? 0);
             $modalityRejected = (int) ($meta['modality_rejected'] ?? 0);
+            $onlineTitle = trim((string) ($meta['online_title'] ?? ''));
+            $inPersonTitle = trim((string) ($meta['in_person_title'] ?? ''));
+            $configuredTitles = array_values(array_unique(array_filter([$onlineTitle, $inPersonTitle], static fn (string $title): bool => $title !== '')));
+            $configuredLabel = $configuredTitles !== []
+                ? '“' . implode('” e “', $configuredTitles) . '”'
+                : 'os títulos configurados';
+            $eventTitles = [];
+            foreach ((array) ($meta['event_titles_sample'] ?? []) as $eventTitle) {
+                $eventTitle = trim((string) $eventTitle);
+                if ($eventTitle !== '' && !in_array($eventTitle, $eventTitles, true)) {
+                    $eventTitles[] = $eventTitle;
+                }
+                if (count($eventTitles) >= 8) {
+                    break;
+                }
+            }
+            $foundLabel = $eventTitles !== []
+                ? ' Títulos lidos: “' . implode('”, “', $eventTitles) . '”.'
+                : '';
+
             if ($eventsRead === 0) {
                 return 'O Google Agenda não retornou eventos no período pesquisado. Confira a data, a conta conectada e o ID do calendário.';
             }
             if ($titleMatches === 0) {
-                return 'Foram lidos ' . $eventsRead . ' evento(s), mas nenhum possui exatamente os títulos VAGO configurados.';
+                return 'Foram lidos ' . $eventsRead . ' evento(s), mas nenhum correspondeu a ' . $configuredLabel . '.' . $foundLabel;
             }
             if ($transparencyRejected > 0) {
-                return 'Os eventos VAGO foram encontrados, mas estão como Ocupado. No Google Agenda, altere “Mostrar como” para Disponível.';
+                return 'O título configurado foi encontrado, mas o evento está como Ocupado. No Google Agenda, altere “Mostrar como” para Disponível.';
             }
             if ($modalityRejected > 0) {
-                return 'Existem eventos VAGO, mas nenhum corresponde à modalidade solicitada pelo cliente.';
+                return 'O título configurado foi encontrado, mas não corresponde à modalidade solicitada pelo cliente.';
+            }
+            if (!empty($meta['shared_title']) && (($meta['requested_modality'] ?? 'indefinida') === 'indefinida')) {
+                return 'O título genérico foi encontrado, mas a modalidade ainda não está definida. Informe Online ou Presencial no pré-agendamento.';
             }
             return 'Nenhum evento VAGO válido foi encontrado para a preferência informada.';
         }
