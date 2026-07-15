@@ -275,6 +275,9 @@ final class CalendarController
         }
 
         $wasPreSchedule = (int) ($appointmentBefore['is_pre_schedule'] ?? 0) === 1;
+        $availabilityService = new CalendarAvailabilityService();
+        $googleReleaseWarning = null;
+
         if ($status === 'confirmed' && $wasPreSchedule) {
             $preferredDay = trim((string) ($appointmentBefore['preferred_day_text'] ?? ''));
             $preferredTime = trim((string) ($appointmentBefore['preferred_time_text'] ?? ''));
@@ -282,10 +285,23 @@ final class CalendarController
                 Flash::set('error', 'Antes de aprovar, o pré-agendamento precisa ter dia e horário/período informados pelo cliente. Peça a preferência ou remarque manualmente.');
                 $this->redirect('/calendar?tenant_id=' . $tenantId);
             }
-            $availabilityCheck = (new CalendarAvailabilityService())->canApprove($tenantId, $appointmentBefore);
+            $availabilityCheck = $availabilityService->canApprove($tenantId, $appointmentBefore);
             if (empty($availabilityCheck['ok'])) {
                 Flash::set('error', (string) $availabilityCheck['message']);
                 $this->redirect('/agenda-inteligente?tenant_id=' . $tenantId);
+            }
+
+            $googleConfirmation = $availabilityService->confirmMarkedAppointment($tenantId, $appointmentId);
+            if (!empty($googleConfirmation['attempted']) && empty($googleConfirmation['ok'])) {
+                Flash::set('error', 'O pré-agendamento não foi aprovado: ' . (string) ($googleConfirmation['message'] ?? 'falha ao confirmar o evento no Google Agenda.'));
+                $this->redirect('/agenda-inteligente?tenant_id=' . $tenantId);
+            }
+        }
+
+        if (in_array($status, ['rejected', 'cancelled', 'rescheduled'], true)) {
+            $googleRelease = $availabilityService->releaseMarkedAppointment($tenantId, $appointmentId);
+            if (!empty($googleRelease['attempted']) && empty($googleRelease['ok'])) {
+                $googleReleaseWarning = (string) ($googleRelease['message'] ?? 'Não foi possível restaurar o evento como VAGO.');
             }
         }
 
@@ -332,8 +348,15 @@ final class CalendarController
                      WHERE id = :id AND tenant_id = :tenant_id'
                 )->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
             }
+            $warnings = [];
+            if ($googleReleaseWarning !== null) {
+                $warnings[] = 'O evento do Google não foi restaurado: ' . $googleReleaseWarning;
+            }
             if ($messageResult['attempted'] && !$messageResult['ok']) {
-                Flash::set('warning', 'Status atualizado, mas a mensagem automática não foi enviada: ' . $messageResult['error']);
+                $warnings[] = 'A mensagem automática não foi enviada: ' . $messageResult['error'];
+            }
+            if ($warnings !== []) {
+                Flash::set('warning', 'Status atualizado. ' . implode(' ', $warnings));
             } else {
                 Flash::set('success', $messageResult['attempted'] ? 'Status atualizado e mensagem enviada ao cliente.' : 'Status do agendamento atualizado.');
             }

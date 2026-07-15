@@ -1,0 +1,69 @@
+{
+  "free_slots_search": {
+    "event": "calendar.availability.requested",
+    "source": "rs-connect",
+    "tenant_id": 2,
+    "payload": {
+      "tenant_id": 2,
+      "appointment_id": 15,
+      "request_id": 101,
+      "request_token": "TOKEN",
+      "availability_mode": "free_slots",
+      "action": "search",
+      "search": {
+        "start_at": "2026-07-18 00:00:00",
+        "end_at": "2026-07-25 23:59:59",
+        "working_start": "08:00",
+        "working_end": "18:00",
+        "workdays": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "duration_minutes": 60,
+        "slot_interval_minutes": 60,
+        "buffer_minutes": 0,
+        "min_notice_hours": 2,
+        "max_suggestions": 5,
+        "timezone": "America/Sao_Paulo",
+        "utc_offset": "-03:00",
+        "calendar_id": "primary",
+        "ignore_transparent_events": true
+      },
+      "callback": {
+        "url": "https://rsconnect.example/webhooks/calendar/availability",
+        "token": "TOKEN"
+      }
+    }
+  },
+  "marked_search": {
+    "event": "calendar.availability.requested",
+    "source": "rs-connect",
+    "tenant_id": 2,
+    "payload": {
+      "tenant_id": 2,
+      "appointment_id": 15,
+      "request_id": 102,
+      "request_token": "TOKEN",
+      "availability_mode": "marked_events",
+      "action": "search",
+      "search": {
+        "start_at": "2026-07-18 00:00:00",
+        "end_at": "2026-07-25 23:59:59",
+        "max_suggestions": 5,
+        "timezone": "America/Sao_Paulo",
+        "utc_offset": "-03:00",
+        "calendar_id": "primary",
+        "marked_online_title": "VAGO — ONLINE",
+        "marked_in_person_title": "VAGO — PRESENCIAL",
+        "marked_require_transparent": true
+      },
+      "callback": {
+        "url": "https://rsconnect.example/webhooks/calendar/availability",
+        "token": "TOKEN"
+      }
+    }
+  }
+}

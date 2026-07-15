@@ -1,5 +1,5 @@
 {
-  "name": "RS Connect — Agenda Google — Espaços livres",
+  "name": "RS Connect — Google Agenda — Espaços livres",
   "nodes": [
     {
       "parameters": {
@@ -9,18 +9,18 @@
         "options": {}
       },
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
+      "typeVersion": 2,
       "position": [
         -720,
         0
       ],
-      "id": "449fb330-d633-469d-8086-9ddf8d64816a",
-      "name": "Webhook — consultar espaços livres",
-      "webhookId": "8f82ed60-ce41-4322-bd74-1f4e81e6d32c"
+      "id": "8c3b1093-42f7-47f4-9f44-51e9ebe75deb",
+      "name": "Webhook — espaços livres",
+      "webhookId": "5c18ae69-e1d8-4db6-83bd-0c495eda34fc"
     },
     {
       "parameters": {
-        "jsCode": "const raw = $json.body ?? $json;\n\nfunction text(value, fallback = '') {\n  if (value === null || value === undefined) return fallback;\n  return String(value).trim();\n}\n\nfunction integer(value, fallback, min = 0, max = 1440) {\n  const parsed = Number.parseInt(value, 10);\n  if (!Number.isFinite(parsed)) return fallback;\n  return Math.max(min, Math.min(max, parsed));\n}\n\nfunction boolean(value, fallback = false) {\n  if (value === true || value === false) return value;\n  const normalized = text(value).toLowerCase();\n  if (['1', 'true', 'sim', 'yes', 'on'].includes(normalized)) return true;\n  if (['0', 'false', 'nao', 'não', 'no', 'off'].includes(normalized)) return false;\n  return fallback;\n}\n\nconst date = text(raw.date || raw.preferred_date || raw.data);\nif (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {\n  throw new Error('Informe date no formato YYYY-MM-DD.');\n}\n\nconst workStart = text(raw.work_start || raw.start_time || raw.janela_inicio, '08:00');\nconst workEnd = text(raw.work_end || raw.end_time || raw.janela_fim, '18:00');\nif (!/^\\d{2}:\\d{2}$/.test(workStart) || !/^\\d{2}:\\d{2}$/.test(workEnd)) {\n  throw new Error('work_start e work_end devem usar HH:mm.');\n}\n\nconst utcOffset = text(raw.utc_offset, '-03:00');\nif (!/^[+-]\\d{2}:\\d{2}$/.test(utcOffset)) {\n  throw new Error('utc_offset deve usar o formato -03:00.');\n}\n\nconst durationMinutes = integer(raw.duration_minutes || raw.duration, 60, 5, 720);\nconst intervalMinutes = integer(raw.interval_minutes || raw.interval, 0, 0, 720);\nconst minimumNoticeMinutes = integer(raw.minimum_notice_minutes || raw.minimum_notice, 0, 0, 43200);\nconst maxSlots = integer(raw.max_slots, 30, 1, 200);\n\nconst allowedWeekdays = Array.isArray(raw.allowed_weekdays)\n  ? raw.allowed_weekdays.map(Number).filter(v => Number.isInteger(v) && v >= 0 && v <= 6)\n  : [1, 2, 3, 4, 5];\n\nconst windowStartIso = `${date}T${workStart}:00${utcOffset}`;\nconst windowEndIso = `${date}T${workEnd}:00${utcOffset}`;\nconst start = new Date(windowStartIso);\nconst end = new Date(windowEndIso);\nif (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) {\n  throw new Error('A janela de atendimento é inválida.');\n}\n\nconst weekday = new Date(`${date}T12:00:00${utcOffset}`).getUTCDay();\n\nreturn [{\n  json: {\n    tenant_id: Number(raw.tenant_id || 0),\n    request_id: text(raw.request_id || raw.availability_request_id, `req-${Date.now()}`),\n    appointment_id: raw.appointment_id ? Number(raw.appointment_id) : null,\n    conversation_id: raw.conversation_id ? Number(raw.conversation_id) : null,\n    contact_id: raw.contact_id ? Number(raw.contact_id) : null,\n    date,\n    work_start: workStart,\n    work_end: workEnd,\n    window_start_iso: windowStartIso,\n    window_end_iso: windowEndIso,\n    duration_minutes: durationMinutes,\n    interval_minutes: intervalMinutes,\n    minimum_notice_minutes: minimumNoticeMinutes,\n    max_slots: maxSlots,\n    allowed_weekdays: allowedWeekdays,\n    requested_weekday: weekday,\n    calendar_id: text(raw.calendar_id, 'primary'),\n    timezone: text(raw.timezone, 'America/Sao_Paulo'),\n    utc_offset: utcOffset,\n    callback_url: text(raw.callback_url, 'https://rsconnect.rsautomacaodigital.cloud/webhooks/calendar/availability'),\n    callback_token: text(raw.callback_token),\n    ignore_transparent: boolean(raw.ignore_transparent, true),\n    now_iso: text(raw.now_iso, new Date().toISOString())\n  }\n}];"
+        "jsCode": "const envelope = $json.body ?? $json;\nconst payload = envelope.payload ?? envelope;\nconst search = payload.search ?? {};\nconst callback = payload.callback ?? envelope.callback ?? {};\nconst preference = payload.preference ?? {};\n\nfunction text(value, fallback = '') {\n  if (value === null || value === undefined) return fallback;\n  return String(value).trim();\n}\n\nfunction integer(value, fallback, min = 0, max = 99999) {\n  const parsed = Number.parseInt(value, 10);\n  if (!Number.isFinite(parsed)) return fallback;\n  return Math.max(min, Math.min(max, parsed));\n}\n\nfunction boolean(value, fallback = false) {\n  if (value === true || value === false) return value;\n  const normalized = text(value).toLowerCase();\n  if (['1', 'true', 'sim', 'yes', 'on'].includes(normalized)) return true;\n  if (['0', 'false', 'nao', 'não', 'no', 'off'].includes(normalized)) return false;\n  return fallback;\n}\n\nfunction normalizedOffset(value) {\n  const offset = text(value, '-03:00');\n  return /^[+-]\\d{2}:\\d{2}$/.test(offset) ? offset : '-03:00';\n}\n\nfunction toIso(value, offset) {\n  const source = text(value);\n  if (!source) return '';\n  if (/Z$|[+-]\\d{2}:\\d{2}$/.test(source)) return new Date(source).toISOString();\n  const normalized = source.replace(' ', 'T').replace(/\\.\\d+$/, '');\n  return new Date(`${normalized}${offset}`).toISOString();\n}\n\nconst utcOffset = normalizedOffset(search.utc_offset || payload.google_utc_offset || '-03:00');\nconst startAt = text(search.start_at || payload.search_start_at);\nconst endAt = text(search.end_at || payload.search_end_at);\nconst windowStartIso = toIso(startAt, utcOffset);\nconst windowEndIso = toIso(endAt, utcOffset);\nif (!windowStartIso || !windowEndIso || new Date(windowStartIso) >= new Date(windowEndIso)) {\n  throw new Error('A janela de busca recebida é inválida.');\n}\n\nconst calendarId = text(search.calendar_id || payload.calendar_id, 'primary');\nconst encodedCalendar = encodeURIComponent(calendarId);\nconst googleListUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodedCalendar}/events?singleEvents=true&orderBy=startTime&showDeleted=false&maxResults=2500&timeMin=${encodeURIComponent(windowStartIso)}&timeMax=${encodeURIComponent(windowEndIso)}`;\nconst workdays = Array.isArray(search.workdays) ? search.workdays.map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6) : [1, 2, 3, 4, 5];\n\nreturn [{\n  json: {\n    tenant_id: Number(payload.tenant_id || envelope.tenant_id || 0),\n    appointment_id: payload.appointment_id ? Number(payload.appointment_id) : null,\n    conversation_id: payload.conversation_id ? Number(payload.conversation_id) : null,\n    contact_id: payload.contact_id ? Number(payload.contact_id) : null,\n    request_id: Number(payload.request_id || 0),\n    request_token: text(payload.request_token || callback.token),\n    callback_url: text(callback.url, 'https://rsconnect.rsautomacaodigital.cloud/webhooks/calendar/availability'),\n    availability_mode: 'free_slots',\n    calendar_id: calendarId,\n    google_list_url: googleListUrl,\n    timezone: text(search.timezone, 'America/Sao_Paulo'),\n    utc_offset: utcOffset,\n    search_start_at: startAt,\n    search_end_at: endAt,\n    window_start_iso: windowStartIso,\n    window_end_iso: windowEndIso,\n    working_start: text(search.working_start, '08:00'),\n    working_end: text(search.working_end, '18:00'),\n    workdays: workdays.length ? workdays : [1, 2, 3, 4, 5],\n    duration_minutes: integer(search.duration_minutes, 50, 5, 720),\n    slot_interval_minutes: integer(search.slot_interval_minutes, 30, 5, 720),\n    buffer_minutes: integer(search.buffer_minutes, 0, 0, 720),\n    min_notice_minutes: integer(search.min_notice_hours, 0, 0, 720) * 60,\n    max_suggestions: integer(search.max_suggestions, 5, 1, 200),\n    ignore_transparent_events: boolean(search.ignore_transparent_events, true),\n    preferred_start_at: text(preference.starts_at || payload.appointment?.starts_at),\n    original: envelope\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -28,35 +28,30 @@
         -480,
         0
       ],
-      "id": "7947f7eb-9da5-40ae-b546-aeca39b2040c",
-      "name": "Normalizar requisição"
+      "id": "a9325b38-91ca-41b9-a524-afa10546fd83",
+      "name": "Normalizar pedido"
     },
     {
       "parameters": {
-        "operation": "getAll",
-        "calendar": {
-          "__rl": true,
-          "value": "={{ $('Normalizar requisição').first().json.calendar_id }}",
-          "mode": "id"
-        },
-        "returnAll": true,
-        "timeMin": "={{ $('Normalizar requisição').first().json.window_start_iso }}",
-        "timeMax": "={{ $('Normalizar requisição').first().json.window_end_iso }}",
-        "options": {}
+        "url": "={{ $('Normalizar pedido').first().json.google_list_url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "options": {
+          "timeout": 30000
+        }
       },
-      "type": "n8n-nodes-base.googleCalendar",
-      "typeVersion": 1.3,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         -240,
         0
       ],
-      "id": "6856403d-89b1-4e3e-8e08-9810105296a5",
-      "name": "Google Calendar — listar eventos",
-      "alwaysOutputData": true
+      "id": "063f162e-885a-4940-82dd-7748ea6e5bdb",
+      "name": "Google — listar compromissos"
     },
     {
       "parameters": {
-        "jsCode": "const cfg = $('Normalizar requisição').first().json;\nconst rawEvents = $input.all().map(item => item.json || {});\n\nfunction eventStart(event) {\n  return new Date(event.start?.dateTime || event.start?.date || event.startTime || event.start_time || '');\n}\n\nfunction eventEnd(event) {\n  return new Date(event.end?.dateTime || event.end?.date || event.endTime || event.end_time || '');\n}\n\nfunction overlaps(startA, endA, startB, endB) {\n  return startA < endB && startB < endA;\n}\n\nfunction formatTime(date, offset) {\n  const sign = offset.startsWith('-') ? -1 : 1;\n  const [hours, minutes] = offset.slice(1).split(':').map(Number);\n  const shifted = new Date(date.getTime() + sign * (hours * 60 + minutes) * 60000);\n  return `${String(shifted.getUTCHours()).padStart(2, '0')}:${String(shifted.getUTCMinutes()).padStart(2, '0')}`;\n}\n\nconst dayAllowed = cfg.allowed_weekdays.includes(cfg.requested_weekday);\nconst windowStart = new Date(cfg.window_start_iso);\nconst windowEnd = new Date(cfg.window_end_iso);\nconst now = new Date(cfg.now_iso);\nconst earliestAllowed = new Date(now.getTime() + cfg.minimum_notice_minutes * 60000);\n\nconst occupied = rawEvents\n  .filter(event => {\n    if (!event || Object.keys(event).length === 0) return false;\n    if (String(event.status || '').toLowerCase() === 'cancelled') return false;\n    if (cfg.ignore_transparent && String(event.transparency || '').toLowerCase() === 'transparent') return false;\n    return true;\n  })\n  .map(event => {\n    const start = eventStart(event);\n    const end = eventEnd(event);\n    return {\n      start,\n      end: new Date(end.getTime() + cfg.interval_minutes * 60000),\n      event_id: event.id || null,\n      summary: event.summary || ''\n    };\n  })\n  .filter(event => !Number.isNaN(event.start.getTime()) && !Number.isNaN(event.end.getTime()));\n\nconst slots = [];\nconst stepMinutes = cfg.duration_minutes + cfg.interval_minutes;\n\nif (dayAllowed) {\n  for (\n    let slotStart = new Date(windowStart);\n    slotStart.getTime() + cfg.duration_minutes * 60000 <= windowEnd.getTime();\n    slotStart = new Date(slotStart.getTime() + stepMinutes * 60000)\n  ) {\n    const slotEnd = new Date(slotStart.getTime() + cfg.duration_minutes * 60000);\n    if (slotStart < earliestAllowed) continue;\n\n    const conflict = occupied.some(event => overlaps(slotStart, slotEnd, event.start, event.end));\n    if (conflict) continue;\n\n    slots.push({\n      start: slotStart.toISOString(),\n      end: slotEnd.toISOString(),\n      local_start: `${cfg.date} ${formatTime(slotStart, cfg.utc_offset)}`,\n      local_end: `${cfg.date} ${formatTime(slotEnd, cfg.utc_offset)}`,\n      label: formatTime(slotStart, cfg.utc_offset),\n      modality: null,\n      google_event_id: null,\n      google_calendar_id: cfg.calendar_id,\n      source: 'google_free_slots'\n    });\n\n    if (slots.length >= cfg.max_slots) break;\n  }\n}\n\nconst callbackPayload = {\n  event: 'calendar.availability.result',\n  ok: true,\n  tenant_id: cfg.tenant_id,\n  request_id: cfg.request_id,\n  appointment_id: cfg.appointment_id,\n  conversation_id: cfg.conversation_id,\n  contact_id: cfg.contact_id,\n  source: 'google_free_slots',\n  date: cfg.date,\n  timezone: cfg.timezone,\n  slots,\n  meta: {\n    calendar_id: cfg.calendar_id,\n    duration_minutes: cfg.duration_minutes,\n    interval_minutes: cfg.interval_minutes,\n    minimum_notice_minutes: cfg.minimum_notice_minutes,\n    ignored_transparent_events: cfg.ignore_transparent,\n    occupied_events_considered: occupied.length,\n    weekday_allowed: dayAllowed\n  }\n};\n\nreturn [{ json: { ...cfg, slots, callback_payload: callbackPayload } }];"
+        "jsCode": "const cfg = $('Normalizar pedido').first().json;\nconst response = $json ?? {};\nconst events = Array.isArray(response.items) ? response.items : [];\n\nfunction offsetMinutes(offset) {\n  const sign = offset.startsWith('-') ? -1 : 1;\n  const [hours, minutes] = offset.slice(1).split(':').map(Number);\n  return sign * ((hours || 0) * 60 + (minutes || 0));\n}\n\nconst offset = offsetMinutes(cfg.utc_offset);\n\nfunction localSql(date) {\n  const shifted = new Date(date.getTime() + offset * 60000);\n  return shifted.toISOString().slice(0, 19).replace('T', ' ');\n}\n\nfunction localLabel(date) {\n  const shifted = new Date(date.getTime() + offset * 60000);\n  const iso = shifted.toISOString();\n  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)} ${iso.slice(11, 16)}`;\n}\n\nfunction localDateKey(date) {\n  const shifted = new Date(date.getTime() + offset * 60000);\n  return shifted.toISOString().slice(0, 10);\n}\n\nfunction localDateTime(dateKey, time) {\n  return new Date(`${dateKey}T${time}:00${cfg.utc_offset}`);\n}\n\nfunction eventDate(value, allDayEnd = false) {\n  if (!value) return null;\n  if (value.dateTime) return new Date(value.dateTime);\n  if (value.date) return new Date(`${value.date}T00:00:00${cfg.utc_offset}`);\n  return null;\n}\n\nfunction overlaps(startA, endA, startB, endB) {\n  return startA < endB && startB < endA;\n}\n\nconst globalStart = new Date(cfg.window_start_iso);\nconst globalEnd = new Date(cfg.window_end_iso);\nconst earliestAllowed = new Date(Date.now() + cfg.min_notice_minutes * 60000);\nconst bufferMs = cfg.buffer_minutes * 60000;\n\nconst busy = events\n  .filter(event => {\n    if (!event || String(event.status || '').toLowerCase() === 'cancelled') return false;\n    if (cfg.ignore_transparent_events && String(event.transparency || 'opaque').toLowerCase() === 'transparent') return false;\n    return true;\n  })\n  .map(event => {\n    const start = eventDate(event.start);\n    const end = eventDate(event.end, true);\n    return start && end ? {\n      start: new Date(start.getTime() - bufferMs),\n      end: new Date(end.getTime() + bufferMs),\n      id: event.id || null,\n      summary: event.summary || ''\n    } : null;\n  })\n  .filter(Boolean);\n\nconst firstDate = localDateKey(globalStart);\nconst lastDate = localDateKey(new Date(globalEnd.getTime() - 1));\nconst dayCursor = new Date(`${firstDate}T00:00:00Z`);\nconst finalDay = new Date(`${lastDate}T00:00:00Z`);\nconst candidates = [];\n\nfor (let day = new Date(dayCursor); day <= finalDay; day = new Date(day.getTime() + 86400000)) {\n  const dateKey = day.toISOString().slice(0, 10);\n  const weekday = day.getUTCDay();\n  if (!cfg.workdays.includes(weekday)) continue;\n\n  const businessStart = localDateTime(dateKey, cfg.working_start);\n  const businessEnd = localDateTime(dateKey, cfg.working_end);\n  if (Number.isNaN(businessStart.getTime()) || Number.isNaN(businessEnd.getTime()) || businessStart >= businessEnd) continue;\n\n  for (let slotStart = new Date(businessStart); slotStart < businessEnd; slotStart = new Date(slotStart.getTime() + cfg.slot_interval_minutes * 60000)) {\n    const slotEnd = new Date(slotStart.getTime() + cfg.duration_minutes * 60000);\n    if (slotEnd > businessEnd || slotStart < globalStart || slotEnd > globalEnd || slotStart < earliestAllowed) continue;\n    if (busy.some(event => overlaps(slotStart, slotEnd, event.start, event.end))) continue;\n\n    candidates.push({\n      startDate: slotStart,\n      endDate: slotEnd,\n      start: localSql(slotStart),\n      end: localSql(slotEnd),\n      label: localLabel(slotStart),\n      modality: 'indefinida',\n      google_event_id: null,\n      google_calendar_id: cfg.calendar_id,\n      source: 'google_free_slots'\n    });\n  }\n}\n\nlet preferred = null;\nif (cfg.preferred_start_at) {\n  const value = /Z$|[+-]\\d{2}:\\d{2}$/.test(cfg.preferred_start_at)\n    ? cfg.preferred_start_at\n    : `${cfg.preferred_start_at.replace(' ', 'T')}${cfg.utc_offset}`;\n  const parsed = new Date(value);\n  if (!Number.isNaN(parsed.getTime())) preferred = parsed;\n}\n\ncandidates.sort((a, b) => {\n  if (preferred) {\n    const distanceA = Math.abs(a.startDate.getTime() - preferred.getTime());\n    const distanceB = Math.abs(b.startDate.getTime() - preferred.getTime());\n    if (distanceA !== distanceB) return distanceA - distanceB;\n  }\n  return a.startDate - b.startDate;\n});\n\nconst slots = candidates.slice(0, cfg.max_suggestions).map(({ startDate, endDate, ...slot }) => slot);\nconst callbackPayload = {\n  event: 'calendar.availability.result',\n  ok: true,\n  tenant_id: cfg.tenant_id,\n  appointment_id: cfg.appointment_id,\n  request_id: cfg.request_id,\n  request_token: cfg.request_token,\n  source: 'google_free_slots',\n  google_calendar_id: cfg.calendar_id,\n  slots,\n  meta: {\n    occupied_events_considered: busy.length,\n    transparent_events_ignored: cfg.ignore_transparent_events,\n    duration_minutes: cfg.duration_minutes,\n    slot_interval_minutes: cfg.slot_interval_minutes,\n    buffer_minutes: cfg.buffer_minutes\n  }\n};\n\nreturn [{ json: { ...cfg, slots, callback_payload: callbackPayload } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -64,13 +59,13 @@
         0,
         0
       ],
-      "id": "91e19bc5-f0a2-46de-b583-2351422679bf",
-      "name": "Calcular slots livres"
+      "id": "3e71d9e0-4f05-4ff4-82f9-02cb61b5664f",
+      "name": "Calcular espaços livres"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Normalizar requisição').first().json.callback_url }}",
+        "url": "={{ $('Normalizar pedido').first().json.callback_url + (String($('Normalizar pedido').first().json.callback_url).includes('?') ? '&' : '?') + 'token=' + encodeURIComponent($('Normalizar pedido').first().json.request_token) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -80,7 +75,7 @@
             },
             {
               "name": "X-RS-Calendar-Token",
-              "value": "={{ $('Normalizar requisição').first().json.callback_token || '' }}"
+              "value": "={{ $('Normalizar pedido').first().json.request_token }}"
             }
           ]
         },
@@ -97,61 +92,61 @@
         240,
         0
       ],
-      "id": "af920912-da0a-44c5-9703-a2188240c41b",
+      "id": "6ec32163-c01a-4f93-871a-f53d6646278b",
       "name": "Callback — RS Connect"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { ok: true, message: 'Disponibilidade do Google processada.', source: 'google_free_slots', slots: $('Calcular slots livres').first().json.slots.length } }}",
+        "responseBody": "={{ { ok: true, message: 'Espaços livres consultados no Google Agenda.', source: 'google_free_slots', slots: $('Calcular espaços livres').first().json.slots.length } }}",
         "options": {}
       },
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.4,
+      "typeVersion": 1.1,
       "position": [
         480,
         0
       ],
-      "id": "7b84dfd7-efaa-4df9-bfb0-9517194cc702",
-      "name": "Responder ao webhook"
+      "id": "80e0c50b-478e-47fd-b4d4-08900be6f5f1",
+      "name": "Responder ao RS Connect"
     }
   ],
   "pinData": {},
   "connections": {
-    "Webhook — consultar espaços livres": {
+    "Webhook — espaços livres": {
       "main": [
         [
           {
-            "node": "Normalizar requisição",
+            "node": "Normalizar pedido",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Normalizar requisição": {
+    "Normalizar pedido": {
       "main": [
         [
           {
-            "node": "Google Calendar — listar eventos",
+            "node": "Google — listar compromissos",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Google Calendar — listar eventos": {
+    "Google — listar compromissos": {
       "main": [
         [
           {
-            "node": "Calcular slots livres",
+            "node": "Calcular espaços livres",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Calcular slots livres": {
+    "Calcular espaços livres": {
       "main": [
         [
           {
@@ -166,7 +161,7 @@
       "main": [
         [
           {
-            "node": "Responder ao webhook",
+            "node": "Responder ao RS Connect",
             "type": "main",
             "index": 0
           }
@@ -179,7 +174,7 @@
     "executionOrder": "v1",
     "timezone": "America/Sao_Paulo"
   },
-  "versionId": "11b8638e-8ea9-48f1-882a-040c646b7300",
+  "versionId": "d9afcf92-b74e-48fc-b56a-8ab471731a13",
   "meta": {
     "templateCredsSetupCompleted": false
   },

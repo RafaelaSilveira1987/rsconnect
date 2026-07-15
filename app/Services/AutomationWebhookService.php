@@ -23,7 +23,7 @@ final class AutomationWebhookService
      *
      * @return array<int,array<string,mixed>>
      */
-    public function dispatch(string $event, array $payload, ?string $url = null, ?int $tenantId = null): array
+    public function dispatch(string $event, array $payload, ?string $url = null, ?int $tenantId = null, ?string $secretToken = null): array
     {
         $event = trim($event);
         $tenantId = $tenantId ?: $this->tenantIdFromPayload($payload);
@@ -31,7 +31,7 @@ final class AutomationWebhookService
 
         $explicitUrl = trim((string) ($url ?? ''));
         if ($explicitUrl !== '') {
-            $results[] = $this->sendToUrl($explicitUrl, $event, $payload, $tenantId, null, null);
+            $results[] = $this->sendToUrl($explicitUrl, $event, $payload, $tenantId, null, $secretToken);
             return $results;
         }
 

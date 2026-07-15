@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'ZIP 26';
-    public const REQUIRED_MIGRATION = '028_backup_automation_n8n.sql';
+    public const PACKAGE_LABEL = 'ZIP 28';
+    public const REQUIRED_MIGRATION = '030_google_calendar_availability_modes.sql';
 
     private PDO $pdo;
 
@@ -66,13 +66,17 @@ final class AppVersionService
             'operations_backup_jobs',
             'system_backups',
             'system_health_checks',
+            'tenant_calendar_availability_settings',
+            'calendar_availability_requests',
+            'calendar_availability_slots',
+            'calendar_google_sync_logs',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
-            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 24 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes, especialmente 026, 027 e 028, se necessário.'
+            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 28 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
+            'Rodar as migrations pendentes até a 030, especialmente 029 e 030, se necessário.'
         );
 
         $appKey = (string) Env::get('APP_KEY', '');

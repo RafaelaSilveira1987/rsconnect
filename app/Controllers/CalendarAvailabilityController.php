@@ -29,7 +29,8 @@ final class CalendarAvailabilityController
             'pending' => [],
             'requests' => [],
             'slots' => [],
-            'metrics' => ['pending' => 0, 'requests' => 0, 'slots' => 0, 'selected' => 0],
+            'googleLogs' => [],
+            'metrics' => ['pending' => 0, 'requests' => 0, 'slots' => 0, 'selected' => 0, 'held' => 0],
         ];
 
         View::render('calendar_availability.index', [
@@ -40,6 +41,7 @@ final class CalendarAvailabilityController
             'pending' => $dashboard['pending'],
             'requests' => $dashboard['requests'],
             'slots' => $dashboard['slots'],
+            'googleLogs' => $dashboard['googleLogs'] ?? [],
             'metrics' => $dashboard['metrics'],
             'canManage' => Auth::can('calendar.manage'),
         ]);
@@ -53,8 +55,13 @@ final class CalendarAvailabilityController
             Flash::set('error', 'Selecione uma empresa para salvar a configuração.');
             $this->redirect('/agenda-inteligente');
         }
-        (new CalendarAvailabilityService())->saveSettings($tenantId, $_POST);
-        Flash::set('success', 'Configuração de disponibilidade salva.');
+
+        try {
+            (new CalendarAvailabilityService())->saveSettings($tenantId, $_POST);
+            Flash::set('success', 'Configuração da Agenda inteligente salva.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar: ' . $exception->getMessage());
+        }
         $this->redirect('/agenda-inteligente?tenant_id=' . $tenantId);
     }
 
@@ -75,9 +82,21 @@ final class CalendarAvailabilityController
         $tenantId = $this->resolveTenantFromPost();
         $appointmentId = (int) ($_POST['appointment_id'] ?? 0);
         $slotId = (int) ($_POST['slot_id'] ?? 0);
+        $returnTo = trim((string) ($_POST['return_to'] ?? ''));
         $result = (new CalendarAvailabilityService())->applySlot($tenantId, $appointmentId, $slotId);
         Flash::set(!empty($result['ok']) ? 'success' : 'error', (string) ($result['message'] ?? 'Horário processado.'));
-        $this->redirect('/agenda-inteligente?tenant_id=' . $tenantId);
+        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/agenda-inteligente?tenant_id=' . $tenantId);
+    }
+
+    public function releaseSlot(): void
+    {
+        Csrf::validate($_POST['_token'] ?? null);
+        $tenantId = $this->resolveTenantFromPost();
+        $appointmentId = (int) ($_POST['appointment_id'] ?? 0);
+        $returnTo = trim((string) ($_POST['return_to'] ?? ''));
+        $result = (new CalendarAvailabilityService())->releaseSelectedSlot($tenantId, $appointmentId);
+        Flash::set(!empty($result['ok']) ? 'success' : 'error', (string) ($result['message'] ?? 'Liberação processada.'));
+        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/agenda-inteligente?tenant_id=' . $tenantId);
     }
 
     public function callback(): void
@@ -87,7 +106,17 @@ final class CalendarAvailabilityController
         if (!is_array($payload)) {
             $payload = $_POST;
         }
-        $token = trim((string) ($_GET['token'] ?? ($_SERVER['HTTP_X_RS_CONNECT_TOKEN'] ?? '')));
+
+        $bearer = trim((string) ($_SERVER['HTTP_AUTHORIZATION'] ?? ''));
+        $bearerToken = str_starts_with($bearer, 'Bearer ') ? trim(substr($bearer, 7)) : '';
+        $token = trim((string) (
+            $_GET['token']
+            ?? $_SERVER['HTTP_X_RS_CALENDAR_TOKEN']
+            ?? $_SERVER['HTTP_X_RS_CONNECT_TOKEN']
+            ?? $bearerToken
+            ?? ''
+        ));
+
         $result = (new CalendarAvailabilityService())->handleCallback($payload, $token !== '' ? $token : null);
         http_response_code(!empty($result['ok']) ? 200 : 400);
         header('Content-Type: application/json; charset=UTF-8');

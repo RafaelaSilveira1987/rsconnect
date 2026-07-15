@@ -127,6 +127,7 @@ return static function (Router $router): void {
     $router->post('/calendar/availability/settings', [CalendarAvailabilityController::class, 'saveSettings'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/request', [CalendarAvailabilityController::class, 'request'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/apply', [CalendarAvailabilityController::class, 'applySlot'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->post('/calendar/availability/release', [CalendarAvailabilityController::class, 'releaseSlot'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/webhooks/calendar/availability', [CalendarAvailabilityController::class, 'callback']);
     $router->get('/webhooks/calendar/availability', [CalendarAvailabilityController::class, 'callback']);
     $router->get('/calendar', [CalendarController::class, 'index'], ['auth', 'permission:calendar.view']);
