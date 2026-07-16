@@ -98,7 +98,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 (function () {
   const toggle = document.querySelector('[data-toggle-bulk-read]');
+  const toggleLabel = toggle?.querySelector('[data-bulk-toggle-label]');
   const form = document.querySelector('[data-bulk-read-form]');
+  const cancelButton = document.querySelector('[data-cancel-bulk-select]');
   const selectAll = document.querySelector('[data-select-all-conversations]');
   const count = document.querySelector('[data-selection-count]');
   const submit = document.querySelector('[data-mark-read-button]');
@@ -108,6 +110,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function checkboxes() {
     return Array.from(list.querySelectorAll('[data-conversation-select]'));
+  }
+
+  function isSelecting() {
+    return !form.hidden;
+  }
+
+  function selectedCount() {
+    return checkboxes().filter((item) => item.checked).length;
   }
 
   function refresh() {
@@ -120,16 +130,25 @@ document.addEventListener('DOMContentLoaded', () => {
       selectAll.checked = items.length > 0 && selected === items.length;
       selectAll.indeterminate = selected > 0 && selected < items.length;
     }
-    list.classList.toggle('is-selecting', !form.hidden);
+
+    list.classList.toggle('is-selecting', isSelecting());
+    document.body.classList.toggle('conversation-bulk-mode', isSelecting());
+    items.forEach((item) => {
+      item.closest('[data-conversation-row]')?.classList.toggle('is-bulk-selected', item.checked);
+    });
   }
 
-  toggle.addEventListener('click', () => {
-    form.hidden = !form.hidden;
-    toggle.setAttribute('aria-expanded', form.hidden ? 'false' : 'true');
-    toggle.textContent = form.hidden ? 'Selecionar' : 'Cancelar seleção';
-    if (form.hidden) checkboxes().forEach((item) => { item.checked = false; });
+  function setSelecting(active) {
+    form.hidden = !active;
+    toggle.setAttribute('aria-expanded', active ? 'true' : 'false');
+    toggle.classList.toggle('is-active', active);
+    if (toggleLabel) toggleLabel.textContent = active ? 'Cancelar' : 'Selecionar';
+    if (!active) checkboxes().forEach((item) => { item.checked = false; });
     refresh();
-  });
+  }
+
+  toggle.addEventListener('click', () => setSelecting(!isSelecting()));
+  cancelButton?.addEventListener('click', () => setSelecting(false));
 
   selectAll?.addEventListener('change', () => {
     checkboxes().forEach((item) => { item.checked = Boolean(selectAll.checked); });
@@ -140,8 +159,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.target.matches?.('[data-conversation-select]')) refresh();
   });
 
+  list.addEventListener('click', (event) => {
+    if (!isSelecting()) return;
+    const conversationLink = event.target.closest?.('[data-conversation-item]');
+    if (!conversationLink) return;
+    event.preventDefault();
+    const row = conversationLink.closest('[data-conversation-row]');
+    const checkbox = row?.querySelector('[data-conversation-select]');
+    if (!checkbox) return;
+    checkbox.checked = !checkbox.checked;
+    refresh();
+  });
+
   deleteButton?.addEventListener('click', (event) => {
-    const selected = checkboxes().filter((item) => item.checked).length;
+    const selected = selectedCount();
     if (selected < 1) {
       event.preventDefault();
       refresh();
@@ -156,11 +187,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   form.addEventListener('submit', (event) => {
-    const selected = checkboxes().filter((item) => item.checked).length;
-    if (selected < 1) {
+    if (selectedCount() < 1) {
       event.preventDefault();
       refresh();
     }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && isSelecting()) setSelecting(false);
   });
 
   refresh();

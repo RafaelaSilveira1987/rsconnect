@@ -101,7 +101,10 @@ $returnQuery = http_build_query($pollQuery);
             <div class="conversation-heading-actions">
                 <span class="badge"><?= count($conversations) ?></span>
                 <?php if ($canManage && $conversations): ?>
-                    <button class="btn btn-outline btn-small" type="button" data-toggle-bulk-read aria-expanded="false">Selecionar</button>
+                    <button class="btn btn-outline btn-small conversation-select-toggle" type="button" data-toggle-bulk-read aria-expanded="false" aria-controls="conversation-bulk-read-form">
+                        <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="m14.5 17 2 2 4-5"/></svg>
+                        <span data-bulk-toggle-label>Selecionar</span>
+                    </button>
                 <?php endif; ?>
                 <?php if ($canManage): ?>
                     <details class="new-conversation-details">
@@ -136,13 +139,30 @@ $returnQuery = http_build_query($pollQuery);
                 <?= Csrf::input() ?>
                 <input type="hidden" name="tenant_id" value="<?= (int) ($filters['tenant_id'] ?? Auth::tenantId() ?? 0) ?>">
                 <input type="hidden" name="return_query" value="<?= View::e($returnQuery) ?>">
-                <label class="conversation-select-all">
-                    <input type="checkbox" data-select-all-conversations>
-                    <span>Selecionar todas</span>
-                </label>
-                <span class="conversation-selection-count" data-selection-count>0 selecionadas</span>
-                <button class="btn btn-primary btn-small" type="submit" data-mark-read-button disabled>Marcar como lidas</button>
-                <button class="btn btn-danger btn-small" type="submit" formaction="<?= View::e(Router::url('/conversations/delete')) ?>" data-delete-conversations-button disabled>Excluir selecionadas</button>
+
+                <div class="conversation-bulk-summary">
+                    <label class="conversation-select-all">
+                        <input type="checkbox" data-select-all-conversations>
+                        <span class="conversation-checkbox-ui" aria-hidden="true"></span>
+                        <span>Selecionar todas</span>
+                    </label>
+                    <span class="conversation-selection-count" data-selection-count role="status" aria-live="polite">0 selecionadas</span>
+                </div>
+
+                <div class="conversation-bulk-actions">
+                    <button class="btn btn-primary btn-small conversation-bulk-action" type="submit" data-mark-read-button disabled>
+                        <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 6"/></svg>
+                        <span class="label-full">Marcar como lidas</span><span class="label-compact">Marcar lidas</span>
+                    </button>
+                    <button class="btn btn-danger btn-small conversation-bulk-action" type="submit" formaction="<?= View::e(Router::url('/conversations/delete')) ?>" data-delete-conversations-button disabled>
+                        <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>
+                        <span class="label-full">Excluir selecionadas</span><span class="label-compact">Excluir</span>
+                    </button>
+                    <button class="conversation-bulk-cancel" type="button" data-cancel-bulk-select aria-label="Cancelar seleção" title="Cancelar seleção">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                    </button>
+                </div>
+                <small class="conversation-bulk-help">As ações serão aplicadas somente às conversas selecionadas.</small>
             </form>
         <?php endif; ?>
 

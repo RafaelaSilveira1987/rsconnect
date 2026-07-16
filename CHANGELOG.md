@@ -1,3 +1,13 @@
+# ZIP 30.7 — Conversas: seleção responsiva e ações em lote
+
+- Reorganiza a barra de seleção para caber corretamente na caixa de entrada.
+- Separa resumo da seleção e ações, com botões de largura uniforme.
+- Permite tocar/clicar em qualquer parte da conversa para selecionar durante o modo em lote.
+- Destaca visualmente as linhas selecionadas.
+- Adiciona barra flutuante no mobile com áreas de toque maiores e botão de fechar.
+- Melhora filtros, ações do cabeçalho, chat e compositor em telas pequenas.
+- Mantém marcar como lidas e excluir conversas sem alteração nas regras de segurança.
+
 # ZIP 30.6 — Exclusão protegida de conversas
 
 - Adiciona o comando “Excluir selecionadas” ao modo de seleção da caixa de entrada.
