@@ -610,3 +610,157 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 })();
+
+/* =========================================================
+   ZIP 32.2 — Credenciais de IA com gaveta e filtros
+   ========================================================= */
+document.addEventListener('DOMContentLoaded', () => {
+  const drawer = document.getElementById('ai-credential-drawer');
+  const form = drawer?.querySelector('[data-ai-credential-form]');
+  if (!drawer || !form) return;
+
+  const field = (name) => form.querySelector(`[data-ai-field="${name}"]`);
+  const title = drawer.querySelector('[data-ai-credential-drawer-title]');
+  const eyebrow = drawer.querySelector('[data-ai-credential-drawer-eyebrow]');
+  const description = drawer.querySelector('[data-ai-credential-drawer-description]');
+  const submit = drawer.querySelector('[data-ai-credential-submit]');
+  const tenantSelect = form.querySelector('[data-ai-credential-tenant]');
+  const scopeSelect = form.querySelector('[data-ai-credential-scope]');
+  const agentSelect = form.querySelector('[data-ai-credential-agent]');
+  const agentField = form.querySelector('[data-ai-agent-field]');
+  const providerSelect = form.querySelector('[data-ai-credential-provider]');
+  const apiKeyInput = field('api_key');
+  const apiKeyHint = drawer.querySelector('[data-ai-api-key-hint]');
+
+  const filterAgents = (selectedAgentId = '') => {
+    const tenantId = tenantSelect?.value || '';
+    let available = 0;
+    Array.from(agentSelect?.options || []).forEach((option, index) => {
+      if (index === 0) return;
+      const visible = tenantId !== '' && option.dataset.tenantId === tenantId;
+      option.hidden = !visible;
+      option.disabled = !visible;
+      if (visible) available += 1;
+    });
+
+    if (selectedAgentId && agentSelect?.querySelector(`option[value="${CSS.escape(String(selectedAgentId))}"]:not([disabled])`)) {
+      agentSelect.value = String(selectedAgentId);
+    } else if (agentSelect) {
+      agentSelect.value = '0';
+    }
+
+    if (scopeSelect?.value === 'agent' && available === 0) {
+      scopeSelect.value = 'company';
+    }
+    toggleScope();
+  };
+
+  const toggleScope = () => {
+    const useAgent = scopeSelect?.value === 'agent';
+    if (agentField) agentField.hidden = !useAgent;
+    if (agentSelect) {
+      agentSelect.required = useAgent;
+      if (!useAgent) agentSelect.value = '0';
+    }
+  };
+
+  const providerDefaults = (force = false) => {
+    const provider = providerSelect?.value || 'openai';
+    const modelInput = field('default_model');
+    const baseInput = field('base_url');
+    const models = { openai: 'gpt-4o-mini', google: 'gemini-2.0-flash', custom: '' };
+    if (force || !modelInput?.value.trim()) modelInput.value = models[provider] || '';
+    if (force && baseInput) baseInput.value = '';
+  };
+
+  const resetForm = () => {
+    form.reset();
+    field('id').value = '0';
+    tenantSelect.value = '';
+    scopeSelect.value = 'company';
+    agentSelect.value = '0';
+    field('provider').value = 'openai';
+    field('status').value = 'active';
+    field('is_default').checked = true;
+    field('default_model').value = 'gpt-4o-mini';
+    field('base_url').value = '';
+    apiKeyInput.required = true;
+    apiKeyInput.value = '';
+    if (eyebrow) eyebrow.textContent = 'Nova credencial';
+    if (title) title.textContent = 'Cadastrar acesso à IA';
+    if (description) description.textContent = 'Defina quem usará a chave e configure somente as informações necessárias.';
+    if (submit) submit.textContent = 'Salvar credencial';
+    if (apiKeyHint) apiKeyHint.textContent = 'Informe a chave fornecida pelo provedor. Depois de salvar, ela não será exibida novamente.';
+    filterAgents();
+  };
+
+  const fillEditForm = (button) => {
+    form.reset();
+    field('id').value = button.dataset.id || '0';
+    tenantSelect.value = button.dataset.tenantId || '';
+    const agentId = button.dataset.agentId || '0';
+    scopeSelect.value = agentId !== '0' ? 'agent' : 'company';
+    field('label').value = button.dataset.label || '';
+    field('provider').value = button.dataset.provider || 'openai';
+    field('base_url').value = button.dataset.baseUrl || '';
+    field('default_model').value = button.dataset.defaultModel || '';
+    field('status').value = button.dataset.status || 'active';
+    field('is_default').checked = button.dataset.isDefault === '1';
+    apiKeyInput.value = '';
+    apiKeyInput.required = false;
+    if (eyebrow) eyebrow.textContent = 'Editar credencial';
+    if (title) title.textContent = button.dataset.label || 'Atualizar acesso à IA';
+    if (description) description.textContent = 'Atualize o vínculo, modelo ou situação. A chave atual será mantida se o campo ficar vazio.';
+    if (submit) submit.textContent = 'Salvar alterações';
+    if (apiKeyHint) apiKeyHint.textContent = 'Deixe em branco para manter a chave atual. Preencha somente para substituí-la.';
+    filterAgents(agentId);
+  };
+
+  document.querySelectorAll('[data-ai-credential-open]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (button.dataset.aiCredentialOpen === 'edit') fillEditForm(button);
+      else resetForm();
+    });
+  });
+
+  tenantSelect?.addEventListener('change', () => filterAgents());
+  scopeSelect?.addEventListener('change', toggleScope);
+  providerSelect?.addEventListener('change', () => providerDefaults(true));
+  resetForm();
+
+  const searchInput = document.querySelector('[data-ai-credential-search]');
+  const providerFilter = document.querySelector('[data-ai-credential-provider-filter]');
+  const statusFilter = document.querySelector('[data-ai-credential-status-filter]');
+  const clearButton = document.querySelector('[data-ai-credential-clear]');
+  const visibleCount = document.querySelector('[data-ai-credential-visible-count]');
+  const filterEmpty = document.querySelector('[data-ai-credential-filter-empty]');
+  const cards = Array.from(document.querySelectorAll('[data-ai-credential-card]'));
+
+  const normalize = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const applyFilters = () => {
+    const query = normalize(searchInput?.value);
+    const provider = providerFilter?.value || '';
+    const status = statusFilter?.value || '';
+    let shown = 0;
+    cards.forEach((card) => {
+      const matches = (!query || normalize(card.dataset.search).includes(query))
+        && (!provider || card.dataset.provider === provider)
+        && (!status || card.dataset.status === status);
+      card.hidden = !matches;
+      if (matches) shown += 1;
+    });
+    if (visibleCount) visibleCount.textContent = `${shown} registro(s)`;
+    if (filterEmpty) filterEmpty.hidden = shown !== 0 || cards.length === 0;
+  };
+
+  searchInput?.addEventListener('input', applyFilters);
+  providerFilter?.addEventListener('change', applyFilters);
+  statusFilter?.addEventListener('change', applyFilters);
+  clearButton?.addEventListener('click', () => {
+    if (searchInput) searchInput.value = '';
+    if (providerFilter) providerFilter.value = '';
+    if (statusFilter) statusFilter.value = '';
+    applyFilters();
+    searchInput?.focus();
+  });
+});
