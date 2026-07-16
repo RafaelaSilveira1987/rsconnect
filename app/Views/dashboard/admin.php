@@ -9,6 +9,7 @@ $attentionCompanies = $data['attention_companies'] ?? [];
 $recentCompanies = $data['recent_companies'] ?? [];
 $recentActivity = $data['recent_activity'] ?? [];
 $companySummary = $data['company_summary'] ?? [];
+$refreshedAt = $metrics['refreshed_at'] ?? null;
 $dataWarnings = $data['data_warnings'] ?? [];
 
 $money = static fn (float $value): string => 'R$ ' . number_format($value, 2, ',', '.');
@@ -45,7 +46,9 @@ $statusLabel = static fn (string $status): string => match ($status) {
     <div class="admin-executive-hero-actions">
         <a class="btn btn-primary" href="<?= View::e(Router::url('/companies')) ?>">Gerenciar empresas</a>
         <a class="btn btn-outline" href="<?= View::e(Router::url('/operations')) ?>">Abrir monitoramento</a>
+        <a class="btn btn-quiet" href="<?= View::e(Router::url('/?refresh=' . time())) ?>">Atualizar dados</a>
     </div>
+    <?php if ($refreshedAt): ?><small class="admin-dashboard-updated">Dados consultados em <?= View::e($dateTime((string) $refreshedAt)) ?></small><?php endif; ?>
 </section>
 
 <?php if ($dataWarnings): ?>

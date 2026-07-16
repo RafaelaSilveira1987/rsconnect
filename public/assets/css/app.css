@@ -5189,3 +5189,27 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
   .admin-company-filters { grid-template-columns: 1fr; }
   .admin-company-filters .admin-company-search { grid-column: auto; }
 }
+
+
+/* HOTFIX 32.1.1 — dados reais do dashboard e gaveta administrativa */
+.admin-executive-hero { position: relative; }
+.admin-dashboard-updated {
+  position: absolute;
+  right: 24px;
+  bottom: 14px;
+  color: var(--rs-muted);
+  font-size: .68rem;
+}
+#admin-company-create-drawer.admin-company-drawer,
+#admin-company-create-drawer.admin-company-drawer.is-open {
+  display: flex !important;
+  grid-template-columns: none !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  width: min(720px, 96vw) !important;
+  max-width: 720px !important;
+  min-width: 0 !important;
+}
+#admin-company-create-drawer > * { min-width: 0 !important; max-width: 100% !important; }
+@media (max-width: 760px) {
+  .admin-dashboard-updated { position: static; display: block; margin-top: 10px; }
+}

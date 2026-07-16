@@ -250,69 +250,79 @@ final class AdminDashboardService
     /** @param array<int,array<string,mixed>> $companies */
     private function dashboardMetrics(array $companies): array
     {
+        // Os cards principais usam consultas diretas. Não dependem de information_schema,
+        // pois alguns usuários MySQL conseguem ler as tabelas da aplicação, mas não
+        // recebem metadados completos nessa visão do banco.
         $fallbackTotal = count($companies);
         $fallbackActive = count(array_filter($companies, static fn (array $company): bool => ($company['status'] ?? '') === 'active'));
 
-        $totalCompanies = $this->tableExists('tenants')
-            ? (int) $this->fetchValue('SELECT COUNT(*) FROM tenants', [], $fallbackTotal)
-            : $fallbackTotal;
-        $activeCompanies = $this->tableExists('tenants')
-            ? (int) $this->fetchValue("SELECT COUNT(*) FROM tenants WHERE status = 'active'", [], $fallbackActive)
-            : $fallbackActive;
+        $companyRow = $this->fetchOne(
+            "SELECT COUNT(*) AS total,
+                    COALESCE(SUM(status = 'active'), 0) AS active_count
+             FROM tenants"
+        );
+        $totalCompanies = array_key_exists('total', $companyRow) ? (int) $companyRow['total'] : $fallbackTotal;
+        $activeCompanies = array_key_exists('active_count', $companyRow) ? (int) $companyRow['active_count'] : $fallbackActive;
 
-        if ($this->tableExists('tenant_implementation_status')) {
-            $onboarding = (int) $this->fetchValue(
+        $onboarding = 0;
+        try {
+            $statement = $this->pdo->query(
                 "SELECT COUNT(*)
                  FROM tenants t
                  LEFT JOIN tenant_implementation_status tis ON tis.tenant_id = t.id
                  WHERE t.status = 'active'
-                   AND (t.onboarding_completed_at IS NULL OR COALESCE(tis.status, 'pending') <> 'ready')",
+                   AND (t.onboarding_completed_at IS NULL OR COALESCE(tis.status, 'pending') <> 'ready')"
+            );
+            $onboarding = (int) $statement->fetchColumn();
+        } catch (Throwable) {
+            $onboarding = (int) $this->fetchValue(
+                "SELECT COUNT(*) FROM tenants WHERE status = 'active' AND onboarding_completed_at IS NULL",
                 [],
                 0
             );
-        } else {
-            $onboarding = $this->tableExists('tenants')
-                ? (int) $this->fetchValue("SELECT COUNT(*) FROM tenants WHERE status = 'active' AND onboarding_completed_at IS NULL", [], 0)
-                : 0;
         }
 
-        $messages24 = $this->tableExists('conversation_messages')
-            ? (int) $this->fetchValue('SELECT COUNT(*) FROM conversation_messages WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)', [], 0)
-            : 0;
-        $connectedInstances = $this->tableExists('evolution_instances')
-            ? (int) $this->fetchValue("SELECT COUNT(*) FROM evolution_instances WHERE status IN ('connected','open','active','online')", [], 0)
-            : 0;
-        $unread = $this->tableExists('conversations')
-            ? (int) $this->fetchValue('SELECT COALESCE(SUM(unread_count), 0) FROM conversations', [], 0)
-            : 0;
-        $criticalIncidents = $this->tableExists('system_incidents')
-            ? (int) $this->fetchValue("SELECT COUNT(*) FROM system_incidents WHERE resolved_at IS NULL AND severity IN ('error','critical')", [], 0)
-            : 0;
+        $messages24 = (int) $this->fetchValue(
+            'SELECT COUNT(*) FROM conversation_messages WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)',
+            [],
+            0
+        );
+        $connectedInstances = (int) $this->fetchValue(
+            "SELECT COUNT(*) FROM evolution_instances WHERE status IN ('connected','open','active','online')",
+            [],
+            0
+        );
+        $unread = (int) $this->fetchValue(
+            'SELECT COALESCE(SUM(unread_count), 0) FROM conversations',
+            [],
+            0
+        );
+        $criticalIncidents = (int) $this->fetchValue(
+            "SELECT COUNT(*) FROM system_incidents WHERE resolved_at IS NULL AND severity IN ('error','critical')",
+            [],
+            0
+        );
 
-        $activeSubscriptions = 0;
-        $mrr = 0.0;
-        if ($this->tableExists('tenant_subscriptions')) {
-            $row = $this->fetchOne(
-                "SELECT COUNT(*) AS active_count,
-                        COALESCE(SUM(
-                            CASE ts.billing_cycle
-                                WHEN 'quarterly' THEN ts.amount / 3
-                                WHEN 'semiannual' THEN ts.amount / 6
-                                WHEN 'annual' THEN ts.amount / 12
-                                ELSE ts.amount
-                            END
-                        ), 0) AS mrr
-                 FROM tenant_subscriptions ts
-                 INNER JOIN (
-                    SELECT tenant_id, MAX(id) AS max_id
-                    FROM tenant_subscriptions
-                    GROUP BY tenant_id
-                 ) latest ON latest.max_id = ts.id
-                 WHERE ts.billing_status IN ('active','trialing','overdue')"
-            );
-            $activeSubscriptions = (int) ($row['active_count'] ?? 0);
-            $mrr = (float) ($row['mrr'] ?? 0);
-        }
+        $subscriptionRow = $this->fetchOne(
+            "SELECT COUNT(*) AS active_count,
+                    COALESCE(SUM(
+                        CASE ts.billing_cycle
+                            WHEN 'quarterly' THEN ts.amount / 3
+                            WHEN 'semiannual' THEN ts.amount / 6
+                            WHEN 'annual' THEN ts.amount / 12
+                            ELSE ts.amount
+                        END
+                    ), 0) AS mrr
+             FROM tenant_subscriptions ts
+             INNER JOIN (
+                SELECT tenant_id, MAX(id) AS max_id
+                FROM tenant_subscriptions
+                GROUP BY tenant_id
+             ) latest ON latest.max_id = ts.id
+             WHERE ts.billing_status IN ('active','trialing','overdue')"
+        );
+        $activeSubscriptions = (int) ($subscriptionRow['active_count'] ?? 0);
+        $mrr = (float) ($subscriptionRow['mrr'] ?? 0);
 
         return [
             'active_companies' => $activeCompanies,
@@ -324,6 +334,7 @@ final class AdminDashboardService
             'connected_instances' => $connectedInstances,
             'critical_incidents' => $criticalIncidents,
             'unread' => $unread,
+            'refreshed_at' => date('Y-m-d H:i:s'),
         ];
     }
 
@@ -579,15 +590,13 @@ final class AdminDashboardService
     /** @return array<int,array<string,mixed>> */
     private function fetchTenants(): array
     {
-        if (!$this->tableExists('tenants')) {
-            $this->queryErrors[] = 'A tabela de empresas não foi encontrada.';
-            return [];
-        }
+        // Consulta a tabela diretamente. A existência é confirmada pelo próprio SELECT,
+        // sem bloquear a leitura quando information_schema estiver restrito.
         $rows = $this->fetchAll('SELECT * FROM tenants ORDER BY id DESC');
         if ($rows === []) {
             $count = (int) $this->fetchValue('SELECT COUNT(*) FROM tenants', [], 0);
             if ($count > 0) {
-                $this->queryErrors[] = 'Existem empresas no banco, mas a listagem não pôde ser carregada. Revise o log da aplicação.';
+                $this->queryErrors[] = 'Existem empresas no banco, mas a listagem não pôde ser carregada. Revise storage/logs/app.log.';
             }
         }
         return $rows;
@@ -596,9 +605,8 @@ final class AdminDashboardService
     /** @return array<int,array<string,mixed>> */
     private function aggregateMap(string $table, string $sql): array
     {
-        if (!$this->tableExists($table)) {
-            return [];
-        }
+        // O SELECT é a fonte de verdade. Se a tabela opcional não existir, fetchAll()
+        // captura o erro e o módulo continua funcionando com os demais dados.
         $rows = $this->fetchAll($sql);
         $map = [];
         foreach ($rows as $row) {
@@ -716,14 +724,16 @@ final class AdminDashboardService
         if (array_key_exists($table, $this->tableCache)) {
             return $this->tableCache[$table];
         }
+        if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+            return $this->tableCache[$table] = false;
+        }
+
         try {
-            $statement = $this->pdo->prepare(
-                'SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table'
-            );
-            $statement->execute(['table' => $table]);
-            return $this->tableCache[$table] = (int) $statement->fetchColumn() > 0;
-        } catch (Throwable $exception) {
-            $this->queryErrors[] = 'Não foi possível verificar a tabela ' . $table . ': ' . $exception->getMessage();
+            // A execução bem-sucedida confirma acesso à tabela mesmo quando
+            // information_schema não está disponível para o usuário da aplicação.
+            $this->pdo->query('SELECT 1 FROM `' . $table . '` LIMIT 1');
+            return $this->tableCache[$table] = true;
+        } catch (Throwable) {
             return $this->tableCache[$table] = false;
         }
     }
@@ -734,12 +744,13 @@ final class AdminDashboardService
         if (array_key_exists($key, $this->columnCache)) {
             return $this->columnCache[$key];
         }
+        if (!preg_match('/^[A-Za-z0-9_]+$/', $table) || !preg_match('/^[A-Za-z0-9_]+$/', $column)) {
+            return $this->columnCache[$key] = false;
+        }
+
         try {
-            $statement = $this->pdo->prepare(
-                'SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
-            );
-            $statement->execute(['table' => $table, 'column' => $column]);
-            return $this->columnCache[$key] = (int) $statement->fetchColumn() > 0;
+            $this->pdo->query('SELECT `' . $column . '` FROM `' . $table . '` LIMIT 0');
+            return $this->columnCache[$key] = true;
         } catch (Throwable) {
             return $this->columnCache[$key] = false;
         }
