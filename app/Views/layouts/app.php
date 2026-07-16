@@ -19,6 +19,15 @@ $isActive = static function (string $path) use ($currentPath): string {
     }
     return str_ends_with($currentPath, rtrim($path, '/')) ? ' is-active' : '';
 };
+$isAnyActive = static function (array $paths) use ($isActive): string {
+    foreach ($paths as $path) {
+        if ($isActive((string) $path) !== '') {
+            return ' is-active';
+        }
+    }
+
+    return '';
+};
 
 $notificationUnread = 0;
 if (!Auth::isSuperAdmin() && Auth::tenantId()) {
@@ -97,7 +106,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=30.8')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=30.8.1')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -130,7 +139,7 @@ $svgIcon = static function (string $name): string {
                 <a class="nav-link<?= $isActive('/tasks') ?>" href="<?= View::e(Router::url('/tasks')) ?>"><?= $svgIcon('tasks') ?><span>Atividades</span></a>
             <?php endif; ?>
             <?php if (Auth::can('calendar.view') && $moduleVisible('calendar')): ?>
-                <a class="nav-link<?= $isActive('/calendar') || $isActive('/agenda-inteligente') || $isActive('/agenda-disponibilidade') ?>" href="<?= View::e(Router::url('/calendar')) ?>"><?= $svgIcon('calendar') ?><span>Agenda</span></a>
+                <a class="nav-link<?= $isAnyActive(['/calendar', '/calendar/availability', '/agenda-inteligente', '/agenda-disponibilidade']) ?>" href="<?= View::e(Router::url('/calendar')) ?>"><?= $svgIcon('calendar') ?><span>Agenda</span></a>
             <?php endif; ?>
             <?php if (Auth::can('reports.view') && $moduleVisible('reports')): ?>
                 <a class="nav-link<?= $isActive('/reports') ?>" href="<?= View::e(Router::url('/reports')) ?>"><?= $svgIcon('reports') ?><span>Relatórios</span></a>
@@ -152,7 +161,7 @@ $svgIcon = static function (string $name): string {
                 <a class="nav-link<?= $isActive('/implementation') ?>" href="<?= View::e(Router::url('/implementation')) ?>"><?= $svgIcon('implementation') ?><span>Implantação</span></a>
                 <a class="nav-link<?= $isActive('/security') ?>" href="<?= View::e(Router::url('/security')) ?>"><?= $svgIcon('security') ?><span>Segurança</span></a>
                 <a class="nav-link<?= $isActive('/operations') ?>" href="<?= View::e(Router::url('/operations')) ?>"><?= $svgIcon('operations') ?><span>Monitoramento</span></a>
-                <a class="nav-link<?= $isActive('/backup-automatico') || $isActive('/operations/backups/automation') ?>" href="<?= View::e(Router::url('/backup-automatico')) ?>"><?= $svgIcon('operations') ?><span>Backup automático</span></a>
+                <a class="nav-link<?= $isAnyActive(['/backup-automatico', '/operations/backups/automation']) ?>" href="<?= View::e(Router::url('/backup-automatico')) ?>"><?= $svgIcon('operations') ?><span>Backup automático</span></a>
                 <a class="nav-link<?= $isActive('/beta-comercial') ?>" href="<?= View::e(Router::url('/beta-comercial')) ?>"><?= $svgIcon('rocket') ?><span>Beta 1.0</span></a>
                 <a class="nav-link<?= $isActive('/status-sistema') ?>" href="<?= View::e(Router::url('/status-sistema')) ?>"><?= $svgIcon('status') ?><span>Status do sistema</span></a>
                 <a class="nav-link<?= $isActive('/ajuda') ?>" href="<?= View::e(Router::url('/ajuda')) ?>"><?= $svgIcon('help') ?><span>Central de ajuda</span></a>
@@ -233,6 +242,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=30.8')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=30.8.1')) ?>" defer></script>
 </body>
 </html>
