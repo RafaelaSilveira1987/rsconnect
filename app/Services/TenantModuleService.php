@@ -45,7 +45,7 @@ final class TenantModuleService
             ],
             'tasks' => [
                 'label' => 'Tarefas',
-                'description' => 'Follow-ups e atividades internas.',
+                'description' => 'Retornos e atividades internas.',
                 'paths' => ['/tasks'],
                 'default_visible' => true,
                 'default_enabled' => true,
@@ -65,7 +65,7 @@ final class TenantModuleService
                 'default_enabled' => true,
             ],
             'instances' => [
-                'label' => 'Instâncias WhatsApp',
+                'label' => 'Conexões WhatsApp',
                 'description' => 'Conexões da Evolution API por empresa.',
                 'paths' => ['/instances'],
                 'default_visible' => true,

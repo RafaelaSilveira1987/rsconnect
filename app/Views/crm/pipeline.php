@@ -10,7 +10,7 @@ $date = static function (?string $value, string $format = 'd/m/Y'): string {
     if (!$value) return 'Sem data';
     try { return (new DateTime($value))->format($format); } catch (Throwable) { return $value; }
 };
-$typeLabels = ['task' => 'Tarefa', 'follow_up' => 'Follow-up', 'call' => 'Ligação', 'meeting' => 'Reunião'];
+$typeLabels = ['task' => 'Tarefa', 'follow_up' => 'Retorno', 'call' => 'Ligação', 'meeting' => 'Reunião'];
 $priorityLabels = ['low' => 'Baixa', 'medium' => 'Média', 'high' => 'Alta'];
 $leadsByStage = [];
 foreach ($leads as $lead) $leadsByStage[(int) $lead['stage_id']][] = $lead;
@@ -147,7 +147,7 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
             <?php if ($canManageTasks): ?>
                 <form class="form-stack compact-form" method="post" action="<?= View::e(Router::url('/tasks')) ?>">
                     <?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="lead_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="return_to" value="<?= View::e($currentUrl) ?>">
-                    <div class="form-grid two"><label class="field"><span>Atividade</span><select name="task_type"><option value="follow_up">Follow-up</option><option value="call">Ligação</option><option value="meeting">Reunião</option><option value="task">Tarefa</option></select></label><label class="field"><span>Prazo</span><input type="datetime-local" name="due_at"></label></div>
+                    <div class="form-grid two"><label class="field"><span>Atividade</span><select name="task_type"><option value="follow_up">Retorno</option><option value="call">Ligação</option><option value="meeting">Reunião</option><option value="task">Tarefa</option></select></label><label class="field"><span>Prazo</span><input type="datetime-local" name="due_at"></label></div>
                     <label class="field"><span>Título</span><input name="title" placeholder="Próximo passo" required></label>
                     <div class="form-grid two"><label class="field"><span>Responsável</span><select name="assigned_user_id"><option value="">Sem responsável</option><?php foreach ($team as $member): ?><option value="<?= (int) $member['id'] ?>"><?= View::e($member['name']) ?></option><?php endforeach; ?></select></label><label class="field"><span>Prioridade</span><select name="priority"><option value="low">Baixa</option><option value="medium" selected>Média</option><option value="high">Alta</option></select></label></div>
                     <button class="btn btn-primary btn-small" type="submit">Criar atividade</button>

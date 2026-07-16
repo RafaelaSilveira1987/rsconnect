@@ -14,14 +14,14 @@ $instancesByTenant = $instancesByTenant ?? [];
 <div class="content-grid <?= $canManage ? 'instances-layout' : '' ?>">
     <section class="card">
         <div class="section-heading">
-            <div><span class="eyebrow">Evolution API</span><h2>Instâncias cadastradas</h2></div>
+            <div><span class="eyebrow">Evolution API</span><h2>Conexões WhatsApp cadastradas</h2></div>
             <span class="badge"><?= count($instances) ?> registro(s)</span>
         </div>
 
         <?php if ($isSuperAdmin): ?>
             <div class="admin-technical-note">
                 <strong>Operação técnica RS</strong>
-                <span>Quando a instância for recriada na Evolution, atualize o cadastro existente abaixo. Isso mantém o mesmo ID e preserva agente, conversas e histórico.</span>
+                <span>Quando uma conexão do WhatsApp for refeita na Evolution, atualize o cadastro existente abaixo. Isso mantém o mesmo ID e preserva agente, conversas e histórico.</span>
             </div>
         <?php endif; ?>
 
@@ -62,7 +62,7 @@ $instancesByTenant = $instancesByTenant ?? [];
                         </div>
 
                         <details class="admin-technical-panel">
-                            <summary>Atualizar ou excluir esta instância</summary>
+                            <summary>Atualizar ou excluir esta conexão</summary>
                             <div class="admin-technical-grid">
                                 <form class="admin-technical-form" method="post" action="<?= View::e(Router::url('/instances/update')) ?>">
                                     <?= Csrf::input() ?>
@@ -70,7 +70,7 @@ $instancesByTenant = $instancesByTenant ?? [];
                                     <div class="section-heading compact-heading"><div><span class="eyebrow">Reconfiguração</span><h3>Atualizar conexão</h3></div></div>
                                     <p class="field-hint">Use esta opção após recriar a instância na Evolution. Deixe a API Key vazia para manter a atual.</p>
                                     <label class="field"><span>Nome interno</span><input name="name" value="<?= View::e($instance['name']) ?>" required></label>
-                                    <label class="field"><span>Novo nome na Evolution</span><input name="instance_name" value="<?= View::e($instance['instance_name']) ?>" required></label>
+                                    <label class="field"><span>Novo identificador na Evolution</span><input name="instance_name" value="<?= View::e($instance['instance_name']) ?>" required></label>
                                     <label class="field"><span>URL base</span><input type="url" name="base_url" value="<?= View::e($instance['base_url']) ?>" required></label>
                                     <label class="field"><span>Nova API Key</span><input type="password" name="api_key" placeholder="Deixe vazio para preservar a chave atual"></label>
                                     <div class="form-grid two">
@@ -79,7 +79,7 @@ $instancesByTenant = $instancesByTenant ?? [];
                                                 <option value="<?= View::e($value) ?>" <?= $instance['status'] === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
                                             <?php endforeach; ?>
                                         </select></label>
-                                        <label class="check-field admin-default-check"><input type="checkbox" name="is_default" value="1" <?= (int) $instance['is_default'] === 1 ? 'checked' : '' ?>><span>Instância padrão</span></label>
+                                        <label class="check-field admin-default-check"><input type="checkbox" name="is_default" value="1" <?= (int) $instance['is_default'] === 1 ? 'checked' : '' ?>><span>Conexão padrão</span></label>
                                     </div>
                                     <button class="btn btn-primary btn-block" type="submit">Atualizar sem perder vínculos</button>
                                 </form>
@@ -88,7 +88,7 @@ $instancesByTenant = $instancesByTenant ?? [];
                                     <?= Csrf::input() ?>
                                     <input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>">
                                     <div class="section-heading compact-heading"><div><span class="eyebrow text-danger">Ação restrita</span><h3>Excluir cadastro</h3></div></div>
-                                    <p class="field-hint">A exclusão ocorre somente no RS Connect. Ela não remove a instância no painel da Evolution.</p>
+                                    <p class="field-hint">A exclusão ocorre somente no RS Connect. Ela não remove a conexão no painel da Evolution.</p>
                                     <label class="field"><span>Migrar vínculos para</span><select name="replacement_instance_id">
                                         <option value="">Nenhuma — permitido apenas se não houver vínculos</option>
                                         <?php foreach (($instancesByTenant[(int) $instance['tenant_id']] ?? []) as $replacement): ?>
@@ -97,14 +97,14 @@ $instancesByTenant = $instancesByTenant ?? [];
                                         <?php endforeach; ?>
                                     </select><small class="field-hint">Com substituta, agentes, contatos, conversas e campanhas são preservados e migrados.</small></label>
                                     <label class="field"><span>Confirmação</span><input name="confirmation" autocomplete="off" placeholder="EXCLUIR <?= View::e($instance['instance_name']) ?>" required><small class="field-hint">Digite exatamente: <strong>EXCLUIR <?= View::e($instance['instance_name']) ?></strong></small></label>
-                                    <button class="btn btn-danger btn-block" type="submit">Excluir cadastro da instância</button>
+                                    <button class="btn btn-danger btn-block" type="submit">Excluir cadastro da conexão</button>
                                 </form>
                             </div>
                         </details>
                     <?php endif; ?>
                 </article>
             <?php endforeach; ?>
-            <?php if (!$instances): ?><div class="empty-state">Nenhuma instância cadastrada.</div><?php endif; ?>
+            <?php if (!$instances): ?><div class="empty-state">Nenhuma conexão WhatsApp cadastrada.</div><?php endif; ?>
         </div>
     </section>
 
@@ -112,19 +112,19 @@ $instancesByTenant = $instancesByTenant ?? [];
         <aside class="stack">
             <form class="card" method="post" action="<?= View::e(Router::url('/instances')) ?>">
                 <?= Csrf::input() ?>
-                <div class="section-heading"><div><span class="eyebrow">Nova conexão</span><h2>Cadastrar instância</h2></div></div>
+                <div class="section-heading"><div><span class="eyebrow">Nova conexão</span><h2>Conectar novo WhatsApp</h2></div></div>
 
                 <?php if ($isSuperAdmin): ?>
                     <label class="field"><span>Empresa</span><select name="tenant_id" required><option value="">Selecione</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>"><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select></label>
                 <?php endif; ?>
 
                 <label class="field"><span>Nome interno</span><input name="name" placeholder="WhatsApp Comercial" required></label>
-                <label class="field"><span>Nome na Evolution</span><input name="instance_name" placeholder="rsconnect-comercial" required></label>
+                <label class="field"><span>Identificador na Evolution</span><input name="instance_name" placeholder="rsconnect-comercial" required></label>
                 <label class="field"><span>URL base</span><input type="url" name="base_url" value="<?= View::e($defaultUrl) ?>" placeholder="https://evolution.seudominio.com" required></label>
-                <label class="field"><span>API Key</span><input type="password" name="api_key" placeholder="Chave global ou da instância" required></label>
+                <label class="field"><span>API Key</span><input type="password" name="api_key" placeholder="Chave global ou da conexão" required></label>
                 <label class="field"><span>Status</span><select name="status"><option value="disconnected">Desconectada</option><option value="pending">Pendente</option><option value="connected">Conectada</option></select></label>
-                <label class="check-field"><input type="checkbox" name="is_default" value="1"><span>Definir como instância padrão</span></label>
-                <button class="btn btn-primary btn-block" type="submit">Salvar instância</button>
+                <label class="check-field"><input type="checkbox" name="is_default" value="1"><span>Definir como conexão padrão</span></label>
+                <button class="btn btn-primary btn-block" type="submit">Salvar conexão</button>
             </form>
 
             <form class="card" method="post" action="<?= View::e(Router::url('/instances/test')) ?>">
@@ -145,7 +145,7 @@ $instancesByTenant = $instancesByTenant ?? [];
         <div><span class="eyebrow">Administração RS</span><h2>Recuperar ou atualizar agentes de IA</h2></div>
         <span class="badge"><?= count($adminAgents) ?> agente(s)</span>
     </div>
-    <p class="muted-text">Use esta área quando uma instância for recriada. A alteração reassocia o agente à nova conexão sem apagar prompt, base de conhecimento, horários, n8n ou credenciais de IA.</p>
+    <p class="muted-text">Use esta área quando uma conexão do WhatsApp for recriada. A alteração reassocia o agente à nova conexão sem apagar prompt, base de conhecimento, horários, n8n ou credenciais de IA.</p>
 
     <div class="admin-agent-list">
         <?php foreach ($adminAgents as $agent): ?>
@@ -187,7 +187,7 @@ $instancesByTenant = $instancesByTenant ?? [];
                             <label class="check-field"><input type="checkbox" name="is_default" value="1" <?= (int) $agent['is_default'] === 1 ? 'checked' : '' ?>><span>Agente padrão da empresa</span></label>
                         </div>
                     </div>
-                    <?php if (!$tenantInstances): ?><p class="message-error">Cadastre primeiro uma nova instância para esta empresa.</p><?php endif; ?>
+                    <?php if (!$tenantInstances): ?><p class="message-error">Cadastre primeiro uma nova conexão para esta empresa.</p><?php endif; ?>
                     <button class="btn btn-primary" type="submit" <?= !$tenantInstances ? 'disabled' : '' ?>>Salvar vínculo e informações</button>
                 </form>
             </details>

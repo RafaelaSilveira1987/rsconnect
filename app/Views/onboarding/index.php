@@ -121,7 +121,7 @@ $statusClass = static fn (string $status): string => match ($status) {
                 <?php elseif ($step['key'] === 'whatsapp_connection'): ?>
                     <div class="onboarding-action-grid">
                         <div>
-                            <h3>Instâncias cadastradas</h3>
+                            <h3>Conexões WhatsApp cadastradas</h3>
                             <?php foreach ($instances as $instance): ?>
                                 <div class="mini-status-row"><strong><?= View::e($instance['name'] ?? $instance['instance_name'] ?? 'WhatsApp') ?></strong><span class="badge <?= ($instance['status'] ?? '') === 'connected' ? 'badge-success' : 'badge-warning' ?>"><?= View::e($instance['status'] ?? 'pendente') ?></span></div>
                             <?php endforeach; ?>

@@ -12,7 +12,7 @@ final class SubscriptionService
 {
     public const LIMIT_LABELS = [
         'users' => 'Usuários ativos',
-        'instances' => 'Instâncias WhatsApp',
+        'instances' => 'Conexões WhatsApp',
         'agents' => 'Agentes de IA',
         'n8n_flows' => 'Fluxos n8n',
         'contacts_month' => 'Novos contatos/mês',

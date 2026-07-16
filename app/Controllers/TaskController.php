@@ -106,7 +106,7 @@ final class TaskController
         }
 
         View::render('tasks.index', [
-            'title' => 'Tarefas e follow-ups',
+            'title' => 'Atividades e retornos',
             'tenants' => $tenants,
             'tasks' => $tasks,
             'contacts' => $contacts,

@@ -26,6 +26,11 @@ final class CalendarController
 {
     public function index(): void
     {
+        if ((string) ($_GET['section'] ?? '') === 'availability') {
+            (new CalendarAvailabilityController())->index();
+            return;
+        }
+
         $pdo = Database::connection();
         $tenantId = $this->resolveTenantFromQuery();
         $today = new DateTimeImmutable('today', new DateTimeZone((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo')));
@@ -144,6 +149,17 @@ final class CalendarController
             'filters' => $filters,
             'canManage' => Auth::can('calendar.manage'),
         ]);
+    }
+
+    /** Mantém os endereços antigos funcionando, mas concentra a agenda em uma única página. */
+    public function availability(): void
+    {
+        $query = ['section' => 'availability'];
+        $tenantId = Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId();
+        if ($tenantId > 0) {
+            $query['tenant_id'] = $tenantId;
+        }
+        $this->redirect('/calendar?' . http_build_query($query));
     }
 
     public function store(): void
@@ -288,13 +304,13 @@ final class CalendarController
             $availabilityCheck = $availabilityService->canApprove($tenantId, $appointmentBefore);
             if (empty($availabilityCheck['ok'])) {
                 Flash::set('error', (string) $availabilityCheck['message']);
-                $this->redirect('/agenda-inteligente?tenant_id=' . $tenantId);
+                $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId);
             }
 
             $googleConfirmation = $availabilityService->confirmMarkedAppointment($tenantId, $appointmentId);
             if (!empty($googleConfirmation['attempted']) && empty($googleConfirmation['ok'])) {
                 Flash::set('error', 'O pré-agendamento não foi aprovado: ' . (string) ($googleConfirmation['message'] ?? 'falha ao confirmar o evento no Google Agenda.'));
-                $this->redirect('/agenda-inteligente?tenant_id=' . $tenantId);
+                $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId);
             }
         }
 
@@ -367,6 +383,48 @@ final class CalendarController
             $this->redirect($return);
         }
         $this->redirect('/calendar?tenant_id=' . $tenantId);
+    }
+
+    /** Exclui o compromisso do RS Connect sem enviar mensagem ao contato. */
+    public function delete(): void
+    {
+        $tenantId = $this->resolveTenantFromPost();
+        $appointmentId = (int) ($_POST['appointment_id'] ?? 0);
+        $return = trim((string) ($_POST['return_to'] ?? ''));
+
+        $appointment = $this->findAppointment($appointmentId, $tenantId);
+        if (!$appointment) {
+            Flash::set('error', 'Agendamento não encontrado.');
+            $this->redirect($return !== '' && str_starts_with($return, '/') ? $return : '/calendar?tenant_id=' . $tenantId);
+        }
+
+        $release = (new CalendarAvailabilityService())->releaseMarkedAppointment($tenantId, $appointmentId, true);
+        if (!empty($release['attempted']) && empty($release['ok'])) {
+            Flash::set('error', 'O agendamento não foi excluído porque o horário não pôde ser liberado no Google Agenda: ' . (string) ($release['message'] ?? 'falha não informada.'));
+            $this->redirect($return !== '' && str_starts_with($return, '/') ? $return : '/calendar?tenant_id=' . $tenantId);
+        }
+
+        $pdo = Database::connection();
+        try {
+            // Exclusão local: não dispara mensagens nem automações de atendimento.
+            $statement = $pdo->prepare('DELETE FROM calendar_appointments WHERE id = :id AND tenant_id = :tenant_id');
+            $statement->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
+            if ($statement->rowCount() === 0) {
+                throw new \RuntimeException('O registro não foi excluído.');
+            }
+
+            Audit::log('calendar.appointment_deleted', [
+                'appointment_id' => $appointmentId,
+                'title' => (string) ($appointment['title'] ?? ''),
+                'status' => (string) ($appointment['status'] ?? ''),
+                'message_sent' => false,
+            ], $tenantId);
+            Flash::set('success', 'Agendamento excluído do RS Connect. Nenhuma mensagem foi enviada ao contato.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível excluir o agendamento: ' . $exception->getMessage());
+        }
+
+        $this->redirect($return !== '' && str_starts_with($return, '/') ? $return : '/calendar?tenant_id=' . $tenantId);
     }
 
     public function ics(): void

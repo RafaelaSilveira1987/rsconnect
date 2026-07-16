@@ -97,7 +97,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=30.7')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=30.8')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -127,11 +127,10 @@ $svgIcon = static function (string $name): string {
                 <a class="nav-link<?= $isActive('/crm') ?>" href="<?= View::e(Router::url('/crm')) ?>"><?= $svgIcon('crm') ?><span>CRM</span></a>
             <?php endif; ?>
             <?php if (Auth::can('tasks.view') && $moduleVisible('tasks')): ?>
-                <a class="nav-link<?= $isActive('/tasks') ?>" href="<?= View::e(Router::url('/tasks')) ?>"><?= $svgIcon('tasks') ?><span>Tarefas</span></a>
+                <a class="nav-link<?= $isActive('/tasks') ?>" href="<?= View::e(Router::url('/tasks')) ?>"><?= $svgIcon('tasks') ?><span>Atividades</span></a>
             <?php endif; ?>
             <?php if (Auth::can('calendar.view') && $moduleVisible('calendar')): ?>
-                <a class="nav-link<?= $isActive('/calendar') ?>" href="<?= View::e(Router::url('/calendar')) ?>"><?= $svgIcon('calendar') ?><span>Agenda</span></a>
-                <a class="nav-link<?= $isActive('/agenda-inteligente') || $isActive('/agenda-disponibilidade') || $isActive('/calendar/availability') ?>" href="<?= View::e(Router::url('/agenda-inteligente')) ?>"><?= $svgIcon('calendar') ?><span>Agenda inteligente</span></a>
+                <a class="nav-link<?= $isActive('/calendar') || $isActive('/agenda-inteligente') || $isActive('/agenda-disponibilidade') ?>" href="<?= View::e(Router::url('/calendar')) ?>"><?= $svgIcon('calendar') ?><span>Agenda</span></a>
             <?php endif; ?>
             <?php if (Auth::can('reports.view') && $moduleVisible('reports')): ?>
                 <a class="nav-link<?= $isActive('/reports') ?>" href="<?= View::e(Router::url('/reports')) ?>"><?= $svgIcon('reports') ?><span>Relatórios</span></a>
@@ -141,7 +140,7 @@ $svgIcon = static function (string $name): string {
                 <span class="nav-caption">Automação</span>
             <?php endif; ?>
             <?php if (Auth::can('instances.view') && $moduleVisible('instances')): ?>
-                <a class="nav-link<?= $isActive('/instances') ?>" href="<?= View::e(Router::url('/instances')) ?>"><?= $svgIcon('instance') ?><span>Instâncias</span></a>
+                <a class="nav-link<?= $isActive('/instances') ?>" href="<?= View::e(Router::url('/instances')) ?>"><?= $svgIcon('instance') ?><span>WhatsApp</span></a>
             <?php endif; ?>
             <?php if (Auth::isSuperAdmin()): ?>
                 <a class="nav-link<?= $isActive('/ai-credentials') ?>" href="<?= View::e(Router::url('/ai-credentials')) ?>"><?= $svgIcon('lock') ?><span>Credenciais de IA</span></a>
@@ -234,6 +233,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=30.7')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=30.8')) ?>" defer></script>
 </body>
 </html>

@@ -40,6 +40,18 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
 ], static fn ($value) => $value !== '' && $value !== 0));
 ?>
 
+
+<nav class="agenda-unified-tabs" aria-label="Áreas da agenda">
+    <a class="agenda-unified-tab is-active" href="<?= View::e(Router::url('/calendar' . (($filters['tenant_id'] ?? 0) > 0 ? '?tenant_id=' . (int) $filters['tenant_id'] : ''))) ?>">
+        <span class="agenda-tab-icon" aria-hidden="true">1</span>
+        <span><strong>Compromissos</strong><small>Agendamentos e pré-agendamentos</small></span>
+    </a>
+    <a class="agenda-unified-tab" href="<?= View::e(Router::url('/calendar?section=availability' . (($filters['tenant_id'] ?? 0) > 0 ? '&tenant_id=' . (int) $filters['tenant_id'] : ''))) ?>">
+        <span class="agenda-tab-icon" aria-hidden="true">2</span>
+        <span><strong>Disponibilidade</strong><small>Dias, horários e regras</small></span>
+    </a>
+</nav>
+
 <div class="page-heading">
     <div>
         <span class="eyebrow">Agenda comercial</span>
@@ -131,7 +143,7 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
                                     <span>Evento Google: <?= View::e(match ($appointment['google_event_state'] ?? '') { 'held' => 'pré-reservado', 'confirmed' => 'confirmado', 'released' => 'liberado', 'hold_requested' => 'pré-reserva em processamento', 'confirm_requested' => 'confirmação em processamento', 'release_requested' => 'liberação em processamento', 'error' => 'falha na sincronização', default => ($appointment['google_event_state'] ?? 'não vinculado') }) ?><?= !empty($appointment['google_event_summary']) ? ' · ' . View::e($appointment['google_event_summary']) : '' ?></span>
                                 <?php endif; ?>
                                 <?php if (!empty($appointment['availability_error'])): ?><span class="text-danger"><?= View::e($appointment['availability_error']) ?></span><?php endif; ?>
-                                <?php if (!empty($appointment['availability_slot_count'])): ?><span><a href="<?= View::e(Router::url('/agenda-inteligente?tenant_id=' . (int) $appointment['tenant_id'] . '#horarios-disponiveis')) ?>">Ver horários disponíveis</a></span><?php endif; ?>
+                                <?php if (!empty($appointment['availability_slot_count'])): ?><span><a href="<?= View::e(Router::url('/calendar?section=availability&tenant_id=' . (int) $appointment['tenant_id'] . '#horarios-disponiveis')) ?>">Ver horários disponíveis</a></span><?php endif; ?>
                             </div>
                         <?php endif; ?>
                     <?php endif; ?>
@@ -153,7 +165,6 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
                 </div>
                 <div class="task-actions calendar-actions">
                     <a class="btn btn-small btn-quiet" target="_blank" rel="noopener" href="<?= View::e($googleLink($appointment)) ?>">Google</a>
-                    <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/calendar/ics?id=' . (int) $appointment['id'] . '&tenant_id=' . (int) $appointment['tenant_id'])) ?>">.ics</a>
                     <?php if ($canManage): ?>
                         <?php if (!in_array($appointment['status'], ['completed', 'cancelled', 'rejected'], true)): ?>
                             <?php if (in_array($appointment['status'], ['pre_scheduled', 'awaiting_approval', 'rescheduled'], true)): ?>
@@ -173,6 +184,15 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
                                 <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>"><input type="hidden" name="status" value="cancelled"><input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>"><button class="btn btn-small btn-quiet" type="submit">Cancelar</button></form>
                             <?php endif; ?>
                         <?php endif; ?>
+                    <?php endif; ?>
+                    <?php if ($canManage): ?>
+                        <form class="calendar-delete-form" method="post" action="<?= View::e(Router::url('/calendar/delete')) ?>" onsubmit="return confirm('Excluir este agendamento do RS Connect? Nenhuma mensagem será enviada ao contato.');">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>">
+                            <input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>">
+                            <input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>">
+                            <button class="btn btn-small btn-calendar-delete" type="submit">Excluir</button>
+                        </form>
                     <?php endif; ?>
                 </div>
             </article>

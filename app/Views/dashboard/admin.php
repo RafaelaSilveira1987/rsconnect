@@ -17,7 +17,7 @@ use App\Core\View;
     <article class="metric-card"><span>Empresas ativas</span><strong><?= (int) $metrics['activeTenants'] ?></strong><small>Em operação</small></article>
     <article class="metric-card"><span>Onboarding concluído</span><strong><?= (int) $metrics['onboarded'] ?></strong><small>Clientes preparados</small></article>
     <article class="metric-card"><span>Usuários ativos</span><strong><?= (int) $metrics['users'] ?></strong><small>Em todos os tenants</small></article>
-    <article class="metric-card"><span>Instâncias</span><strong><?= (int) $metrics['instances'] ?></strong><small>Evolution API</small></article>
+    <article class="metric-card"><span>Conexões WhatsApp</span><strong><?= (int) $metrics['instances'] ?></strong><small>Evolution API</small></article>
     <article class="metric-card"><span>Agentes ativos</span><strong><?= (int) $metrics['agents'] ?></strong><small>Configurações de IA</small></article>
     <article class="metric-card"><span>Conversas</span><strong><?= (int) $metrics['conversations'] ?></strong><small><?= (int) $metrics['unread'] ?> não lida(s)</small></article>
 </div>
@@ -29,7 +29,7 @@ use App\Core\View;
     </div>
     <div class="table-wrap">
         <table>
-            <thead><tr><th>Empresa</th><th>Plano</th><th>Usuários</th><th>Instâncias</th><th>Agentes</th><th>Conversas</th><th>Onboarding</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Empresa</th><th>Plano</th><th>Usuários</th><th>Conexões WhatsApp</th><th>Agentes</th><th>Conversas</th><th>Onboarding</th><th>Status</th><th></th></tr></thead>
             <tbody>
             <?php foreach ($tenants as $tenant): ?>
                 <tr>

@@ -29,11 +29,11 @@ final class N8nTemplateController
             'description' => 'Espelha contatos, oportunidades e mensagens em uma planilha por cliente sem transformar a planilha em fonte principal.',
         ],
         'followup-alerta' => [
-            'title' => 'Follow-up e Alertas',
+            'title' => 'Retorno e Alertas',
             'segment' => 'Operação',
             'file' => 'template-followup-alerta.json',
             'events' => ['task.created', 'followup.due', 'crm.lead.updated'],
-            'description' => 'Dispara lembretes internos para equipe comercial ou atendimento quando um follow-up precisa de ação.',
+            'description' => 'Dispara lembretes internos para equipe comercial ou atendimento quando um retorno precisa de ação.',
         ],
         'billing-cron' => [
             'title' => 'Cron da régua de cobrança',

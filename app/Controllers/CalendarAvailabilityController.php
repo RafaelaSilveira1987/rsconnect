@@ -35,7 +35,7 @@ final class CalendarAvailabilityController
         ];
 
         View::render('calendar_availability.index', [
-            'title' => 'Agenda inteligente',
+            'title' => 'Agenda — disponibilidade',
             'tenantId' => $tenantId,
             'tenants' => $tenants,
             'settings' => $dashboard['settings'],
@@ -55,16 +55,16 @@ final class CalendarAvailabilityController
         $tenantId = $this->resolveTenantFromPost();
         if ($tenantId < 1) {
             Flash::set('error', 'Selecione uma empresa para salvar a configuração.');
-            $this->redirect('/agenda-inteligente');
+            $this->redirect('/calendar?section=availability');
         }
 
         try {
             (new CalendarAvailabilityService())->saveSettings($tenantId, $_POST, Auth::isSuperAdmin());
-            Flash::set('success', 'Configuração da Agenda inteligente salva.');
+            Flash::set('success', 'Configuração de disponibilidade salva.');
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível salvar: ' . $exception->getMessage());
         }
-        $this->redirect('/agenda-inteligente?tenant_id=' . $tenantId);
+        $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId);
     }
 
     public function request(): void
@@ -75,7 +75,7 @@ final class CalendarAvailabilityController
         $returnTo = trim((string) ($_POST['return_to'] ?? ''));
         $result = (new CalendarAvailabilityService())->requestForAppointment($tenantId, $appointmentId, 'manual_panel');
         Flash::set(!empty($result['ok']) ? 'success' : 'warning', (string) ($result['message'] ?? 'Solicitação processada.'));
-        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/agenda-inteligente?tenant_id=' . $tenantId);
+        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?section=availability&tenant_id=' . $tenantId);
     }
 
     public function applySlot(): void
@@ -87,7 +87,7 @@ final class CalendarAvailabilityController
         $returnTo = trim((string) ($_POST['return_to'] ?? ''));
         $result = (new CalendarAvailabilityService())->applySlot($tenantId, $appointmentId, $slotId);
         Flash::set(!empty($result['ok']) ? 'success' : 'error', (string) ($result['message'] ?? 'Horário processado.'));
-        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/agenda-inteligente?tenant_id=' . $tenantId);
+        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?section=availability&tenant_id=' . $tenantId);
     }
 
     public function releaseSlot(): void
@@ -98,7 +98,7 @@ final class CalendarAvailabilityController
         $returnTo = trim((string) ($_POST['return_to'] ?? ''));
         $result = (new CalendarAvailabilityService())->releaseSelectedSlot($tenantId, $appointmentId);
         Flash::set(!empty($result['ok']) ? 'success' : 'error', (string) ($result['message'] ?? 'Liberação processada.'));
-        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/agenda-inteligente?tenant_id=' . $tenantId);
+        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?section=availability&tenant_id=' . $tenantId);
     }
 
     public function callback(): void

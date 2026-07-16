@@ -620,7 +620,7 @@ final class OnboardingGuideService
     {
         return [
             ['label' => 'Conversas', 'url' => '/conversations'],
-            ['label' => 'Instâncias', 'url' => '/instances'],
+            ['label' => 'Conexões WhatsApp', 'url' => '/instances'],
             ['label' => 'Agentes IA', 'url' => '/agents'],
             ['label' => 'Agenda', 'url' => '/calendar'],
             ['label' => 'Privacidade/LGPD', 'url' => '/privacy'],

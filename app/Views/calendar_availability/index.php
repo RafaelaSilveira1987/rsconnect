@@ -74,23 +74,35 @@ $requestInsight = static function (array $request): string {
 };
 ?>
 
+
+<nav class="agenda-unified-tabs" aria-label="Áreas da agenda">
+    <a class="agenda-unified-tab" href="<?= View::e(Router::url('/calendar' . ($tenantId > 0 ? '?tenant_id=' . (int) $tenantId : ''))) ?>">
+        <span class="agenda-tab-icon" aria-hidden="true">1</span>
+        <span><strong>Compromissos</strong><small>Agendamentos e pré-agendamentos</small></span>
+    </a>
+    <a class="agenda-unified-tab is-active" href="<?= View::e(Router::url('/calendar?section=availability' . ($tenantId > 0 ? '&tenant_id=' . (int) $tenantId : ''))) ?>">
+        <span class="agenda-tab-icon" aria-hidden="true">2</span>
+        <span><strong>Disponibilidade</strong><small>Dias, horários e regras</small></span>
+    </a>
+</nav>
+
 <section class="hero-card operations-hero-clean calendar-smart-hero">
     <div>
-        <span class="eyebrow">Agenda inteligente</span>
-        <h2>Regras claras para encontrar e reservar horários.</h2>
+        <span class="eyebrow">Disponibilidade da agenda</span>
+        <h2>Defina quando sua equipe pode receber novos agendamentos.</h2>
         <p><?= $isRsAdmin
             ? 'Configure a integração técnica do n8n separadamente das regras que o cliente utiliza no dia a dia.'
             : 'Defina seus dias, horários, duração e o modo de disponibilidade sem precisar acessar configurações técnicas.' ?></p>
     </div>
     <div class="hero-actions operations-hero-actions">
-        <a class="btn btn-quiet" href="<?= View::e(Router::url('/calendar?tenant_id=' . (int) $tenantId)) ?>">Abrir agenda</a>
+        <a class="btn btn-quiet" href="<?= View::e(Router::url('/calendar?tenant_id=' . (int) $tenantId)) ?>">Ver compromissos</a>
         <?php if ($isRsAdmin): ?><a class="btn btn-primary" href="<?= View::e(Router::url('/n8n-templates')) ?>">Fluxos n8n</a><?php endif; ?>
-        <span class="badge <?= !empty($settings['enabled']) ? 'badge-success' : 'badge-warning' ?>"><?= !empty($settings['enabled']) ? 'Agenda ativa' : 'Agenda desativada' ?></span>
+        <span class="badge <?= !empty($settings['enabled']) ? 'badge-success' : 'badge-warning' ?>"><?= !empty($settings['enabled']) ? 'Busca automática ativa' : 'Busca automática desativada' ?></span>
     </div>
 </section>
 
 <?php if ($isRsAdmin): ?>
-    <form class="toolbar-card" method="get" action="<?= View::e(Router::url('/agenda-inteligente')) ?>">
+    <form class="toolbar-card" method="get" action="<?= View::e(Router::url('/calendar')) ?>"><input type="hidden" name="section" value="availability">
         <div class="field inline-field">
             <label>Empresa</label>
             <select name="tenant_id" onchange="this.form.submit()">
@@ -168,7 +180,7 @@ $requestInsight = static function (array $request): string {
             </div>
 
             <div class="calendar-toggle-stack">
-                <label class="switch-inline"><input type="checkbox" name="enabled" value="1" <?= !empty($settings['enabled']) ? 'checked' : '' ?>><span>Ativar Agenda inteligente</span></label>
+                <label class="switch-inline"><input type="checkbox" name="enabled" value="1" <?= !empty($settings['enabled']) ? 'checked' : '' ?>><span>Ativar busca automática de horários</span></label>
                 <label class="switch-inline"><input type="checkbox" name="require_before_approval" value="1" <?= !empty($settings['require_before_approval']) ? 'checked' : '' ?>><span>Exigir horário validado antes de aprovar</span></label>
                 <label class="switch-inline"><input type="checkbox" name="auto_request_on_pre_schedule" value="1" <?= !empty($settings['auto_request_on_pre_schedule']) ? 'checked' : '' ?>><span>Consultar automaticamente quando a IA identificar dia e horário</span></label>
             </div>

@@ -123,9 +123,9 @@ return static function (Router $router): void {
     $router->get('/notifications', [NotificationsController::class, 'index'], ['auth', 'permission:notifications.view']);
     $router->post('/notifications/read-all', [NotificationsController::class, 'markAllRead'], ['auth', 'permission:notifications.view', 'csrf']);
 
-    $router->get('/agenda-inteligente', [CalendarAvailabilityController::class, 'index'], ['auth', 'permission:calendar.view']);
-    $router->get('/agenda-disponibilidade', [CalendarAvailabilityController::class, 'index'], ['auth', 'permission:calendar.view']);
-    $router->get('/calendar/availability', [CalendarAvailabilityController::class, 'index'], ['auth', 'permission:calendar.view']);
+    $router->get('/agenda-inteligente', [CalendarController::class, 'availability'], ['auth', 'permission:calendar.view']);
+    $router->get('/agenda-disponibilidade', [CalendarController::class, 'availability'], ['auth', 'permission:calendar.view']);
+    $router->get('/calendar/availability', [CalendarController::class, 'availability'], ['auth', 'permission:calendar.view']);
     $router->post('/calendar/availability/settings', [CalendarAvailabilityController::class, 'saveSettings'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/request', [CalendarAvailabilityController::class, 'request'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/apply', [CalendarAvailabilityController::class, 'applySlot'], ['auth', 'permission:calendar.manage', 'csrf']);
@@ -135,6 +135,7 @@ return static function (Router $router): void {
     $router->get('/calendar', [CalendarController::class, 'index'], ['auth', 'permission:calendar.view']);
     $router->post('/calendar/appointments', [CalendarController::class, 'store'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/status', [CalendarController::class, 'updateStatus'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->post('/calendar/delete', [CalendarController::class, 'delete'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->get('/calendar/ics', [CalendarController::class, 'ics'], ['auth', 'permission:calendar.view']);
     $router->post('/tasks', [TaskController::class, 'store'], ['auth', 'permission:tasks.manage', 'csrf']);
     $router->post('/tasks/status', [TaskController::class, 'updateStatus'], ['auth', 'permission:tasks.manage', 'csrf']);

@@ -48,7 +48,7 @@ $completed = !empty($company['onboarding_completed_at']);
     <article class="metric-card"><span>Conversas abertas</span><strong><?= (int) ($conversations['open_count'] ?? 0) ?></strong><small>Em andamento</small></article>
     <article class="metric-card"><span>Não lidas</span><strong><?= (int) ($conversations['unread_count'] ?? 0) ?></strong><small>Mensagens aguardando</small></article>
     <article class="metric-card"><span>Atendimento humano</span><strong><?= (int) ($conversations['human_count'] ?? 0) ?></strong><small>Assumidas pela equipe</small></article>
-    <article class="metric-card"><span>Instâncias</span><strong><?= (int) ($instances['total'] ?? 0) ?></strong><small><?= (int) ($instances['connected'] ?? 0) ?> conectada(s)</small></article>
+    <article class="metric-card"><span>Conexões WhatsApp</span><strong><?= (int) ($instances['total'] ?? 0) ?></strong><small><?= (int) ($instances['connected'] ?? 0) ?> conectada(s)</small></article>
     <article class="metric-card"><span>Agentes ativos</span><strong><?= (int) $activeAgents ?></strong><small>Perfis configurados</small></article>
     <article class="metric-card"><span>Usuários ativos</span><strong><?= (int) $activeUsers ?></strong><small>Na sua empresa</small></article>
 </div>
@@ -60,7 +60,7 @@ $completed = !empty($company['onboarding_completed_at']);
             <?php if (Auth::can('conversations.view')): ?><li><span>1</span><div><strong><a href="<?= View::e(Router::url('/conversations')) ?>">Responder conversas</a></strong><small>Mensagens, atendimento humano e IA.</small></div></li><?php endif; ?>
             <?php if (Auth::can('contacts.view')): ?><li><span>2</span><div><strong><a href="<?= View::e(Router::url('/contacts')) ?>">Organizar contatos</a></strong><small>Leads, clientes, tags e observações.</small></div></li><?php endif; ?>
             <?php if (Auth::can('crm.view')): ?><li><span>3</span><div><strong><a href="<?= View::e(Router::url('/crm')) ?>">Atualizar o funil</a></strong><small>Oportunidades, valores e responsáveis.</small></div></li><?php endif; ?>
-            <?php if (Auth::can('tasks.view')): ?><li><span>4</span><div><strong><a href="<?= View::e(Router::url('/tasks')) ?>">Executar follow-ups</a></strong><small>Tarefas, ligações e reuniões.</small></div></li><?php endif; ?>
+            <?php if (Auth::can('tasks.view')): ?><li><span>4</span><div><strong><a href="<?= View::e(Router::url('/tasks')) ?>">Executar retornos</a></strong><small>Tarefas, ligações e reuniões.</small></div></li><?php endif; ?>
         </ol>
     </article>
 
@@ -68,6 +68,6 @@ $completed = !empty($company['onboarding_completed_at']);
         <span class="eyebrow">ZIP 04 instalado</span>
         <h2>CRM integrado ao atendimento.</h2>
         <p>Transforme contatos das conversas em oportunidades, mova cada negócio pelo Kanban e registre notas e próximos passos.</p>
-        <div class="tag-row"><span>Contatos</span><span>Kanban</span><span>Notas</span><span>Follow-ups</span></div>
+        <div class="tag-row"><span>Contatos</span><span>Kanban</span><span>Notas</span><span>Retornos</span></div>
     </article>
 </div>

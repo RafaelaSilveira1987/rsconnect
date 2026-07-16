@@ -78,7 +78,7 @@ final class InstanceController
         }
 
         View::render('instances.index', [
-            'title' => 'Instâncias',
+            'title' => 'Conexões WhatsApp',
             'instances' => $instances,
             'tenants' => $tenants,
             'adminAgents' => $adminAgents,
@@ -100,7 +100,7 @@ final class InstanceController
         $status = (string) ($_POST['status'] ?? 'disconnected');
 
         if ($tenantId < 1 || $name === '' || $instanceName === '' || !filter_var($baseUrl, FILTER_VALIDATE_URL) || $apiKey === '') {
-            Flash::set('error', 'Preencha empresa, nome, instância, URL válida e API Key.');
+            Flash::set('error', 'Preencha empresa, nome, identificador da Evolution, URL válida e API Key.');
             $this->redirect('/instances');
         }
 
@@ -179,7 +179,7 @@ final class InstanceController
             Flash::set(
                 'error',
                 $isDuplicate
-                    ? 'Essa instância já está cadastrada para esta empresa. Use outro nome na Evolution ou atualize o cadastro existente.'
+                    ? 'Essa conexão já está cadastrada para esta empresa. Use outro nome na Evolution ou atualize o cadastro existente.'
                     : 'Não foi possível cadastrar a instância. Verifique os dados informados e tente novamente.'
             );
         }
@@ -313,7 +313,7 @@ final class InstanceController
 
             $instance = $this->findInstance($pdo, $instanceId);
             if (!$instance || (int) $instance['tenant_id'] !== (int) $agent['tenant_id']) {
-                throw new \RuntimeException('A instância escolhida não pertence à mesma empresa do agente.');
+                throw new \RuntimeException('A conexão escolhida não pertence à mesma empresa do agente.');
             }
 
             $pdo->beginTransaction();
@@ -358,7 +358,7 @@ final class InstanceController
                 'status' => $status,
                 'auto_reply_enabled' => $autoReply,
             ]);
-            Flash::set('success', 'Agente atualizado e associado à instância selecionada. Prompt, base e credenciais foram preservados.');
+            Flash::set('success', 'Agente atualizado e associado à conexão selecionada. Prompt, base e credenciais foram preservados.');
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();

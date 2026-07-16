@@ -5,7 +5,7 @@ use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
 
-$typeLabels = ['task' => 'Tarefa', 'follow_up' => 'Follow-up', 'call' => 'Ligação', 'meeting' => 'Reunião'];
+$typeLabels = ['task' => 'Tarefa', 'follow_up' => 'Retorno', 'call' => 'Ligação', 'meeting' => 'Reunião'];
 $statusLabels = ['pending' => 'Pendente', 'completed' => 'Concluída', 'cancelled' => 'Cancelada'];
 $priorityLabels = ['low' => 'Baixa', 'medium' => 'Média', 'high' => 'Alta'];
 $date = static function (?string $value, string $format = 'd/m/Y H:i'): string {
@@ -26,7 +26,7 @@ $returnUrl = '/tasks?' . http_build_query(array_filter([
 <div class="page-heading">
     <div>
         <span class="eyebrow">Organização comercial</span>
-        <h2>Tarefas e follow-ups</h2>
+        <h2>Atividades e retornos</h2>
         <p>Controle ligações, reuniões e próximos passos sem perder oportunidades.</p>
     </div>
     <?php if ($canManage && ($filters['tenant_id'] ?? 0) > 0): ?>
@@ -35,7 +35,7 @@ $returnUrl = '/tasks?' . http_build_query(array_filter([
             <form class="popover-panel form-stack wide" method="post" action="<?= View::e(Router::url('/tasks')) ?>">
                 <?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>">
                 <strong>Criar atividade</strong>
-                <div class="form-grid two"><label class="field"><span>Tipo</span><select name="task_type"><option value="follow_up">Follow-up</option><option value="call">Ligação</option><option value="meeting">Reunião</option><option value="task">Tarefa</option></select></label><label class="field"><span>Prazo</span><input type="datetime-local" name="due_at"></label></div>
+                <div class="form-grid two"><label class="field"><span>Tipo</span><select name="task_type"><option value="follow_up">Retorno</option><option value="call">Ligação</option><option value="meeting">Reunião</option><option value="task">Tarefa</option></select></label><label class="field"><span>Prazo</span><input type="datetime-local" name="due_at"></label></div>
                 <label class="field"><span>Título *</span><input name="title" maxlength="180" required></label>
                 <label class="field"><span>Descrição</span><textarea name="description" rows="3"></textarea></label>
                 <div class="form-grid two"><label class="field"><span>Negócio</span><select name="lead_id"><option value="">Sem negócio</option><?php foreach ($leads as $lead): ?><option value="<?= (int) $lead['id'] ?>"><?= View::e($lead['title'] . ' · ' . ($lead['contact_name'] ?: $lead['phone'])) ?></option><?php endforeach; ?></select></label><label class="field"><span>Contato</span><select name="contact_id"><option value="">Sem contato</option><?php foreach ($contacts as $contact): ?><option value="<?= (int) $contact['id'] ?>"><?= View::e($contact['name'] ?: $contact['phone']) ?></option><?php endforeach; ?></select></label></div>

@@ -36,7 +36,7 @@ $statusLabel = [
                         <td><strong><?= View::e($money($plan['monthly_price'])) ?></strong><br><small>mensal</small></td>
                         <td>
                             <small>Usuários: <?= View::e((string) ($plan['limits']['users'] ?? '∞')) ?></small><br>
-                            <small>Instâncias: <?= View::e((string) ($plan['limits']['instances'] ?? '∞')) ?></small><br>
+                            <small>Conexões WhatsApp: <?= View::e((string) ($plan['limits']['instances'] ?? '∞')) ?></small><br>
                             <small>Agentes: <?= View::e((string) ($plan['limits']['agents'] ?? '∞')) ?></small><br>
                             <small>Mensagens/mês: <?= View::e((string) ($plan['limits']['messages_month'] ?? '∞')) ?></small>
                         </td>

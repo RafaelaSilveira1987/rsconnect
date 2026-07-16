@@ -3430,3 +3430,102 @@ pre.codebox {
   .form-grid.three { grid-template-columns: 1fr; }
   .admin-agent-item > summary { align-items: flex-start; flex-direction: column; }
 }
+
+
+/* ZIP 30.8 — agenda unificada, nomenclatura comercial e ações responsivas */
+.agenda-unified-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 6px;
+  border: 1px solid #dce7ef;
+  border-radius: 18px;
+  background: rgba(255,255,255,.76);
+  box-shadow: 0 12px 30px rgba(30,64,90,.06);
+}
+.agenda-unified-tab {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 13px 15px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: #526477;
+  text-decoration: none;
+  transition: background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
+.agenda-unified-tab:hover { background: #f3f8fa; color: #174f68; }
+.agenda-unified-tab.is-active {
+  border-color: #bfe6e2;
+  background: #ecf9f7;
+  color: #086b66;
+  box-shadow: 0 8px 20px rgba(8,107,102,.08);
+}
+.agenda-unified-tab > span:last-child { display: grid; min-width: 0; gap: 2px; }
+.agenda-unified-tab strong { font-size: .92rem; }
+.agenda-unified-tab small { color: #758496; font-size: .73rem; white-space: normal; }
+.agenda-tab-icon {
+  display: inline-flex;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #eef4f7;
+  color: #507084;
+  font-size: .76rem;
+  font-weight: 800;
+}
+.agenda-unified-tab.is-active .agenda-tab-icon { background: #0d9488; color: #fff; }
+
+.calendar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 300px;
+}
+.calendar-actions form { margin: 0; }
+.calendar-actions .btn { min-height: 38px; white-space: nowrap; }
+.btn-calendar-delete {
+  border: 1px solid #f0b8b5 !important;
+  background: #fff8f7 !important;
+  color: #a33a34 !important;
+}
+.btn-calendar-delete:hover { border-color: #cf514a !important; background: #fff0ee !important; color: #842b27 !important; }
+
+@media (max-width: 1080px) {
+  .calendar-row { grid-template-columns: 44px minmax(0, 1fr); }
+  .calendar-row .task-deadline,
+  .calendar-row .calendar-actions { grid-column: 2; }
+  .calendar-actions { min-width: 0; justify-content: flex-start; }
+}
+@media (max-width: 680px) {
+  .agenda-unified-tabs { grid-template-columns: 1fr; gap: 6px; padding: 5px; }
+  .agenda-unified-tab { padding: 11px 12px; }
+  .calendar-list-card { padding-inline: 10px !important; }
+  .calendar-row { grid-template-columns: 36px minmax(0, 1fr); gap: 10px; padding: 14px 10px !important; }
+  .calendar-row .task-main { min-width: 0; }
+  .calendar-row .task-title-line { align-items: flex-start; }
+  .calendar-row .task-deadline,
+  .calendar-row .calendar-actions { grid-column: 1 / -1; }
+  .calendar-row .task-deadline { padding: 10px 12px; border-radius: 12px; background: #f7fafc; }
+  .calendar-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+  }
+  .calendar-actions > a,
+  .calendar-actions > form,
+  .calendar-actions > form .btn,
+  .calendar-actions > .btn { width: 100%; }
+  .calendar-actions .btn { min-height: 44px; justify-content: center; text-align: center; }
+}
+@media (max-width: 390px) {
+  .calendar-actions { grid-template-columns: 1fr; }
+}

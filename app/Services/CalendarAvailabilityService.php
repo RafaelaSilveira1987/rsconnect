@@ -258,7 +258,7 @@ final class CalendarAvailabilityService
 
         $settings = $this->settings($tenantId);
         if (empty($settings['enabled'])) {
-            return ['ok' => false, 'message' => 'Agenda inteligente ainda não está ativada para esta empresa.'];
+            return ['ok' => false, 'message' => 'A busca automática de horários ainda não está ativada para esta empresa.'];
         }
 
         $mode = $this->normalizeMode((string) ($settings['availability_mode'] ?? 'free_slots'));
