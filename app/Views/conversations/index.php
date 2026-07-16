@@ -142,6 +142,7 @@ $returnQuery = http_build_query($pollQuery);
                 </label>
                 <span class="conversation-selection-count" data-selection-count>0 selecionadas</span>
                 <button class="btn btn-primary btn-small" type="submit" data-mark-read-button disabled>Marcar como lidas</button>
+                <button class="btn btn-danger btn-small" type="submit" formaction="<?= View::e(Router::url('/conversations/delete')) ?>" data-delete-conversations-button disabled>Excluir selecionadas</button>
             </form>
         <?php endif; ?>
 

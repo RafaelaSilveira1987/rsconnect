@@ -1,3 +1,12 @@
+# ZIP 30.6 — Exclusão protegida de conversas
+
+- Adiciona o comando “Excluir selecionadas” ao modo de seleção da caixa de entrada.
+- Permite excluir uma ou várias conversas visíveis, sempre limitadas à empresa atual.
+- Apaga definitivamente mensagens, eventos e notas internas da conversa.
+- Preserva contatos, negócios do CRM, agenda, consentimentos e logs técnicos, removendo apenas o vínculo com a conversa excluída.
+- Inclui confirmação explícita, CSRF, permissão `conversations.manage`, transação e auditoria.
+- Uma nova mensagem futura do mesmo contato pode criar uma nova conversa normalmente.
+
 # ZIP 30.5 — Administração técnica de instâncias e agentes
 
 - Permite ao Super Admin atualizar nome, URL, API Key, status e nome Evolution sem perder o ID interno.

@@ -102,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectAll = document.querySelector('[data-select-all-conversations]');
   const count = document.querySelector('[data-selection-count]');
   const submit = document.querySelector('[data-mark-read-button]');
+  const deleteButton = document.querySelector('[data-delete-conversations-button]');
   const list = document.querySelector('[data-conversation-list]');
   if (!toggle || !form || !list) return;
 
@@ -114,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const selected = items.filter((item) => item.checked).length;
     if (count) count.textContent = `${selected} selecionada${selected === 1 ? '' : 's'}`;
     if (submit) submit.disabled = selected < 1;
+    if (deleteButton) deleteButton.disabled = selected < 1;
     if (selectAll) {
       selectAll.checked = items.length > 0 && selected === items.length;
       selectAll.indeterminate = selected > 0 && selected < items.length;
@@ -136,6 +138,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   list.addEventListener('change', (event) => {
     if (event.target.matches?.('[data-conversation-select]')) refresh();
+  });
+
+  deleteButton?.addEventListener('click', (event) => {
+    const selected = checkboxes().filter((item) => item.checked).length;
+    if (selected < 1) {
+      event.preventDefault();
+      refresh();
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Excluir ${selected} conversa${selected === 1 ? '' : 's'} do RS Connect?\n\n` +
+      'O histórico de mensagens será apagado definitivamente. O contato, os negócios do CRM e os compromissos serão preservados sem o vínculo com a conversa.'
+    );
+    if (!confirmed) event.preventDefault();
   });
 
   form.addEventListener('submit', (event) => {

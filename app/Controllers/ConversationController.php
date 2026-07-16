@@ -461,6 +461,147 @@ final class ConversationController
         $this->redirect($this->conversationReturnPath());
     }
 
+    public function delete(): void
+    {
+        $tenantId = Auth::isSuperAdmin()
+            ? (int) ($_POST['tenant_id'] ?? 0)
+            : (int) (Auth::tenantId() ?? 0);
+
+        if ($tenantId < 1) {
+            Flash::set('error', 'Selecione uma empresa antes de excluir conversas.');
+            $this->redirect($this->conversationReturnPath(false));
+        }
+
+        $rawIds = $_POST['conversation_ids'] ?? [];
+        if (!is_array($rawIds)) {
+            $rawIds = [$rawIds];
+        }
+
+        $conversationIds = array_values(array_unique(array_filter(
+            array_map(static fn ($value): int => (int) $value, $rawIds),
+            static fn (int $value): bool => $value > 0
+        )));
+        $conversationIds = array_slice($conversationIds, 0, 100);
+
+        if ($conversationIds === []) {
+            Flash::set('warning', 'Selecione ao menos uma conversa para excluir.');
+            $this->redirect($this->conversationReturnPath(false));
+        }
+
+        $placeholders = [];
+        $params = ['tenant_id' => $tenantId];
+        foreach ($conversationIds as $index => $conversationId) {
+            $key = 'conversation_' . $index;
+            $placeholders[] = ':' . $key;
+            $params[$key] = $conversationId;
+        }
+        $inClause = implode(', ', $placeholders);
+
+        $pdo = Database::connection();
+        $lookup = $pdo->prepare(
+            'SELECT c.id, c.remote_jid, ct.name AS contact_name, ct.phone
+             FROM conversations c
+             INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
+             WHERE c.tenant_id = :tenant_id
+               AND c.id IN (' . $inClause . ')'
+        );
+        $lookup->execute($params);
+        $existing = $lookup->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($existing === []) {
+            Flash::set('warning', 'Nenhuma das conversas selecionadas pertence à empresa atual.');
+            $this->redirect($this->conversationReturnPath(false));
+        }
+
+        $existingIds = array_map(static fn (array $row): int => (int) $row['id'], $existing);
+        $deletePlaceholders = [];
+        $deleteParams = ['tenant_id' => $tenantId];
+        foreach ($existingIds as $index => $conversationId) {
+            $key = 'delete_conversation_' . $index;
+            $deletePlaceholders[] = ':' . $key;
+            $deleteParams[$key] = $conversationId;
+        }
+        $deleteInClause = implode(', ', $deletePlaceholders);
+
+        try {
+            $pdo->beginTransaction();
+
+            // Mantém CRM, agenda, consentimentos e logs, removendo somente o vínculo
+            // com a conversa que será apagada.
+            $nullableReferences = [
+                ['crm_leads', 'source_conversation_id'],
+                ['ai_automation_logs', 'conversation_id'],
+                ['calendar_appointments', 'conversation_id'],
+                ['privacy_consents', 'conversation_id'],
+            ];
+            foreach ($nullableReferences as [$table, $column]) {
+                if (!$this->hasTable($pdo, $table) || !$this->hasColumn($pdo, $table, $column)) {
+                    continue;
+                }
+                $statement = $pdo->prepare(
+                    'UPDATE `' . $table . '`
+                     SET `' . $column . '` = NULL
+                     WHERE tenant_id = :tenant_id
+                       AND `' . $column . '` IN (' . $deleteInClause . ')'
+                );
+                $statement->execute($deleteParams);
+            }
+
+            // A exclusão explícita também funciona em instalações antigas onde as
+            // chaves estrangeiras CASCADE podem não ter sido criadas corretamente.
+            foreach (['conversation_internal_notes', 'conversation_events', 'conversation_messages'] as $table) {
+                if (!$this->hasTable($pdo, $table) || !$this->hasColumn($pdo, $table, 'conversation_id')) {
+                    continue;
+                }
+                $statement = $pdo->prepare(
+                    'DELETE FROM `' . $table . '`
+                     WHERE tenant_id = :tenant_id
+                       AND conversation_id IN (' . $deleteInClause . ')'
+                );
+                $statement->execute($deleteParams);
+            }
+
+            $delete = $pdo->prepare(
+                'DELETE FROM conversations
+                 WHERE tenant_id = :tenant_id
+                   AND id IN (' . $deleteInClause . ')'
+            );
+            $delete->execute($deleteParams);
+            $deleted = $delete->rowCount();
+
+            $pdo->commit();
+
+            Audit::log('conversation.bulk_deleted', [
+                'selected_count' => count($conversationIds),
+                'deleted_count' => $deleted,
+                'conversation_ids' => $existingIds,
+                'contacts' => array_map(static fn (array $row): array => [
+                    'name' => (string) ($row['contact_name'] ?? ''),
+                    'phone' => (string) ($row['phone'] ?? ''),
+                    'remote_jid' => (string) ($row['remote_jid'] ?? ''),
+                ], $existing),
+            ], $tenantId);
+
+            Flash::set(
+                'success',
+                $deleted === 1
+                    ? '1 conversa e seu histórico foram excluídos do RS Connect.'
+                    : $deleted . ' conversas e seus históricos foram excluídos do RS Connect.'
+            );
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            Audit::log('conversation.bulk_delete_failed', [
+                'conversation_ids' => $existingIds,
+                'error' => $exception->getMessage(),
+            ], $tenantId);
+            Flash::set('error', 'Não foi possível excluir as conversas: ' . $exception->getMessage());
+        }
+
+        $this->redirect($this->conversationReturnPath(false));
+    }
+
     public function setMode(): void
     {
         $conversationId = (int) ($_POST['conversation_id'] ?? 0);
@@ -1202,7 +1343,7 @@ final class ConversationController
         exit;
     }
 
-    private function conversationReturnPath(): string
+    private function conversationReturnPath(bool $includeConversationId = true): string
     {
         $rawQuery = trim((string) ($_POST['return_query'] ?? ''));
         if ($rawQuery === '') {
@@ -1210,7 +1351,10 @@ final class ConversationController
         }
 
         parse_str(ltrim($rawQuery, '?'), $parsed);
-        $allowedKeys = ['search', 'status', 'mode', 'instance_id', 'tenant_id', 'intent', 'conversation_id'];
+        $allowedKeys = ['search', 'status', 'mode', 'instance_id', 'tenant_id', 'intent'];
+        if ($includeConversationId) {
+            $allowedKeys[] = 'conversation_id';
+        }
         $safe = [];
         foreach ($allowedKeys as $key) {
             if (!array_key_exists($key, $parsed) || is_array($parsed[$key])) {

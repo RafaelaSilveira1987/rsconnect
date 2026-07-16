@@ -64,6 +64,7 @@ return static function (Router $router): void {
     $router->post('/conversations/suggest', [ConversationController::class, 'suggest'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/reprocess-ai', [ConversationController::class, 'reprocessAi'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/mark-read', [ConversationController::class, 'markRead'], ['auth', 'permission:conversations.manage', 'csrf']);
+    $router->post('/conversations/delete', [ConversationController::class, 'delete'], ['auth', 'permission:conversations.manage', 'csrf']);
 
 
     $router->get('/contacts', [ContactController::class, 'index'], ['auth', 'permission:contacts.view']);
