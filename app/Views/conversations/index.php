@@ -41,6 +41,7 @@ $pollQuery = $currentQuery;
 if ($selected) {
     $pollQuery['conversation_id'] = (int) $selected['id'];
 }
+$returnQuery = http_build_query($pollQuery);
 ?>
 
 <form class="conversation-filters card" method="get" action="<?= View::e(Router::url('/conversations')) ?>">
@@ -99,6 +100,9 @@ if ($selected) {
             </div>
             <div class="conversation-heading-actions">
                 <span class="badge"><?= count($conversations) ?></span>
+                <?php if ($canManage && $conversations): ?>
+                    <button class="btn btn-outline btn-small" type="button" data-toggle-bulk-read aria-expanded="false">Selecionar</button>
+                <?php endif; ?>
                 <?php if ($canManage): ?>
                     <details class="new-conversation-details">
                         <summary class="btn btn-primary btn-small">+ Nova</summary>
@@ -127,6 +131,20 @@ if ($selected) {
             </div>
         </div>
 
+        <?php if ($canManage && $conversations): ?>
+            <form id="conversation-bulk-read-form" class="conversation-bulk-toolbar" method="post" action="<?= View::e(Router::url('/conversations/mark-read')) ?>" data-bulk-read-form hidden>
+                <?= Csrf::input() ?>
+                <input type="hidden" name="tenant_id" value="<?= (int) ($filters['tenant_id'] ?? Auth::tenantId() ?? 0) ?>">
+                <input type="hidden" name="return_query" value="<?= View::e($returnQuery) ?>">
+                <label class="conversation-select-all">
+                    <input type="checkbox" data-select-all-conversations>
+                    <span>Selecionar todas</span>
+                </label>
+                <span class="conversation-selection-count" data-selection-count>0 selecionadas</span>
+                <button class="btn btn-primary btn-small" type="submit" data-mark-read-button disabled>Marcar como lidas</button>
+            </form>
+        <?php endif; ?>
+
         <div class="conversation-list" data-conversation-list>
             <?php foreach ($conversations as $conversation): ?>
                 <?php
@@ -136,7 +154,14 @@ if ($selected) {
                 $displayName = $contactLabel($conversation);
                 $initial = $contactInitial($conversation);
                 ?>
-                <a class="conversation-list-item<?= $isSelected ? ' is-selected' : '' ?>" data-conversation-item data-conversation-id="<?= (int) $conversation['id'] ?>" href="<?= View::e(Router::url('/conversations?' . http_build_query($query))) ?>">
+                <div class="conversation-list-row<?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>">
+                    <?php if ($canManage): ?>
+                        <label class="conversation-select-control" title="Selecionar <?= View::e($displayName) ?>">
+                            <input type="checkbox" name="conversation_ids[]" value="<?= (int) $conversation['id'] ?>" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de <?= View::e($displayName) ?>">
+                            <span aria-hidden="true"></span>
+                        </label>
+                    <?php endif; ?>
+                    <a class="conversation-list-item<?= $isSelected ? ' is-selected' : '' ?>" data-conversation-item data-conversation-id="<?= (int) $conversation['id'] ?>" href="<?= View::e(Router::url('/conversations?' . http_build_query($query))) ?>">
                     <span class="conversation-avatar"><?= View::e($initial) ?></span>
                     <span class="conversation-summary">
                         <span class="conversation-title-row">
@@ -150,7 +175,8 @@ if ($selected) {
                             <b class="unread-count" data-unread-count <?= (int) $conversation['unread_count'] > 0 ? '' : 'hidden' ?>><?= (int) $conversation['unread_count'] ?></b>
                         </span>
                     </span>
-                </a>
+                    </a>
+                </div>
             <?php endforeach; ?>
             <?php if (!$conversations): ?>
                 <div class="empty-state conversation-empty">

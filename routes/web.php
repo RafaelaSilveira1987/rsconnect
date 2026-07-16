@@ -63,6 +63,7 @@ return static function (Router $router): void {
     $router->post('/conversations/contact', [ConversationController::class, 'updateContact'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/suggest', [ConversationController::class, 'suggest'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/reprocess-ai', [ConversationController::class, 'reprocessAi'], ['auth', 'permission:conversations.manage', 'csrf']);
+    $router->post('/conversations/mark-read', [ConversationController::class, 'markRead'], ['auth', 'permission:conversations.manage', 'csrf']);
 
 
     $router->get('/contacts', [ContactController::class, 'index'], ['auth', 'permission:contacts.view']);

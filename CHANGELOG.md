@@ -1,3 +1,18 @@
+# ZIP 30.4 — Conversas em lote como lidas
+
+- Adiciona modo de seleção na caixa de entrada.
+- Permite selecionar uma ou todas as conversas visíveis.
+- Adiciona comando “Marcar como lidas” com escopo por empresa.
+- Remove os contadores pendentes do menu, dashboard e lista após a atualização.
+- Preserva o hotfix de memória das conversas, a Agenda Inteligente e o prompt editável.
+
+# ZIP 30.3 — Prompt editável e diagnóstico de onboarding
+
+- Permite editar prompt principal e base de conhecimento de agentes existentes.
+- Protege a alteração por permissão, CSRF e tenant.
+- Corrige o falso positivo de `onboarding_progress` no diagnóstico técnico.
+- Preserva as correções de Agenda Inteligente e Conversas do ZIP 30.2.
+
 # Changelog — ZIP 28
 
 - configuração por empresa para `free_slots` ou `marked_events`;

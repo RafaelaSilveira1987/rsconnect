@@ -95,6 +95,60 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+
+(function () {
+  const toggle = document.querySelector('[data-toggle-bulk-read]');
+  const form = document.querySelector('[data-bulk-read-form]');
+  const selectAll = document.querySelector('[data-select-all-conversations]');
+  const count = document.querySelector('[data-selection-count]');
+  const submit = document.querySelector('[data-mark-read-button]');
+  const list = document.querySelector('[data-conversation-list]');
+  if (!toggle || !form || !list) return;
+
+  function checkboxes() {
+    return Array.from(list.querySelectorAll('[data-conversation-select]'));
+  }
+
+  function refresh() {
+    const items = checkboxes();
+    const selected = items.filter((item) => item.checked).length;
+    if (count) count.textContent = `${selected} selecionada${selected === 1 ? '' : 's'}`;
+    if (submit) submit.disabled = selected < 1;
+    if (selectAll) {
+      selectAll.checked = items.length > 0 && selected === items.length;
+      selectAll.indeterminate = selected > 0 && selected < items.length;
+    }
+    list.classList.toggle('is-selecting', !form.hidden);
+  }
+
+  toggle.addEventListener('click', () => {
+    form.hidden = !form.hidden;
+    toggle.setAttribute('aria-expanded', form.hidden ? 'false' : 'true');
+    toggle.textContent = form.hidden ? 'Selecionar' : 'Cancelar seleção';
+    if (form.hidden) checkboxes().forEach((item) => { item.checked = false; });
+    refresh();
+  });
+
+  selectAll?.addEventListener('change', () => {
+    checkboxes().forEach((item) => { item.checked = Boolean(selectAll.checked); });
+    refresh();
+  });
+
+  list.addEventListener('change', (event) => {
+    if (event.target.matches?.('[data-conversation-select]')) refresh();
+  });
+
+  form.addEventListener('submit', (event) => {
+    const selected = checkboxes().filter((item) => item.checked).length;
+    if (selected < 1) {
+      event.preventDefault();
+      refresh();
+    }
+  });
+
+  refresh();
+})();
+
 (function () {
   const workspace = document.querySelector('[data-conversation-realtime]');
   if (!workspace) return;
@@ -165,21 +219,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const unreadHidden = unread > 0 ? '' : ' hidden';
     const modeClass = escapeHtml(item.mode || 'ai');
     const modeLabel = item.mode === 'human' ? 'Humano' : (item.mode === 'paused' ? 'IA pausada' : 'IA ativa');
-    return `<a class="conversation-list-item${selectedClass}" data-conversation-item data-conversation-id="${Number(item.id)}" href="${escapeHtml(buildConversationUrl(item.id))}">
-      <span class="conversation-avatar">${escapeHtml(initials(item.name, item.phone))}</span>
-      <span class="conversation-summary">
-        <span class="conversation-title-row">
-          <strong data-conversation-name>${escapeHtml(item.name || item.phone || 'Contato')}</strong>
-          <time data-conversation-time>${escapeHtml(item.last_message_label || '')}</time>
+    return `<div class="conversation-list-row${unread > 0 ? ' has-unread' : ''}" data-conversation-row data-conversation-id="${Number(item.id)}">
+      <label class="conversation-select-control" title="Selecionar ${escapeHtml(item.name || item.phone || 'conversa')}">
+        <input type="checkbox" name="conversation_ids[]" value="${Number(item.id)}" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de ${escapeHtml(item.name || item.phone || 'contato')}">
+        <span aria-hidden="true"></span>
+      </label>
+      <a class="conversation-list-item${selectedClass}" data-conversation-item data-conversation-id="${Number(item.id)}" href="${escapeHtml(buildConversationUrl(item.id))}">
+        <span class="conversation-avatar">${escapeHtml(initials(item.name, item.phone))}</span>
+        <span class="conversation-summary">
+          <span class="conversation-title-row">
+            <strong data-conversation-name>${escapeHtml(item.name || item.phone || 'Contato')}</strong>
+            <time data-conversation-time>${escapeHtml(item.last_message_label || '')}</time>
+          </span>
+          <span class="conversation-preview" data-conversation-preview>${escapeHtml(item.preview || 'Sem mensagens')}</span>
+          <span class="conversation-meta-row">
+            <span class="mini-badge mode-${modeClass}">${escapeHtml(modeLabel)}</span>
+            <small>${escapeHtml(item.tenant_name || item.instance_label || '')}</small>
+            <b class="unread-count" data-unread-count${unreadHidden}>${unread}</b>
+          </span>
         </span>
-        <span class="conversation-preview" data-conversation-preview>${escapeHtml(item.preview || 'Sem mensagens')}</span>
-        <span class="conversation-meta-row">
-          <span class="mini-badge mode-${modeClass}">${escapeHtml(modeLabel)}</span>
-          <small>${escapeHtml(item.tenant_name || item.instance_label || '')}</small>
-          <b class="unread-count" data-unread-count${unreadHidden}>${unread}</b>
-        </span>
-      </span>
-    </a>`;
+      </a>
+    </div>`;
   }
 
   function updateConversationList(conversations) {
@@ -195,7 +255,8 @@ document.addEventListener('DOMContentLoaded', () => {
         node = list.querySelector(`[data-conversation-item][data-conversation-id="${id}"]`);
       }
       node.classList.toggle('is-selected', id === selectedConversationId);
-      node.classList.toggle('has-unread', Number(item.unread_count || 0) > 0);
+      const row = node.closest('[data-conversation-row]');
+      row?.classList.toggle('has-unread', Number(item.unread_count || 0) > 0);
       const name = node.querySelector('[data-conversation-name]');
       const time = node.querySelector('[data-conversation-time]');
       const preview = node.querySelector('[data-conversation-preview]');
@@ -207,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
         unread.textContent = Number(item.unread_count || 0);
         unread.hidden = Number(item.unread_count || 0) < 1;
       }
-      list.prepend(node);
+      list.prepend(row || node);
     });
   }
 

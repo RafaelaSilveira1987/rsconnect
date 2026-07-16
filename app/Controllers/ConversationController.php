@@ -400,6 +400,67 @@ final class ConversationController
         $this->redirect('/conversations?conversation_id=' . $conversationId);
     }
 
+    public function markRead(): void
+    {
+        $tenantId = Auth::isSuperAdmin()
+            ? (int) ($_POST['tenant_id'] ?? 0)
+            : (int) (Auth::tenantId() ?? 0);
+
+        if ($tenantId < 1) {
+            Flash::set('error', 'Selecione uma empresa antes de marcar conversas como lidas.');
+            $this->redirect($this->conversationReturnPath());
+        }
+
+        $rawIds = $_POST['conversation_ids'] ?? [];
+        if (!is_array($rawIds)) {
+            $rawIds = [$rawIds];
+        }
+
+        $conversationIds = array_values(array_unique(array_filter(
+            array_map(static fn ($value): int => (int) $value, $rawIds),
+            static fn (int $value): bool => $value > 0
+        )));
+        $conversationIds = array_slice($conversationIds, 0, 100);
+
+        if ($conversationIds === []) {
+            Flash::set('warning', 'Selecione ao menos uma conversa para marcar como lida.');
+            $this->redirect($this->conversationReturnPath());
+        }
+
+        $placeholders = [];
+        $params = ['tenant_id' => $tenantId];
+        foreach ($conversationIds as $index => $conversationId) {
+            $key = 'conversation_' . $index;
+            $placeholders[] = ':' . $key;
+            $params[$key] = $conversationId;
+        }
+
+        $pdo = Database::connection();
+        $statement = $pdo->prepare(
+            'UPDATE conversations
+             SET unread_count = 0
+             WHERE tenant_id = :tenant_id
+               AND unread_count > 0
+               AND id IN (' . implode(', ', $placeholders) . ')'
+        );
+        $statement->execute($params);
+        $updated = $statement->rowCount();
+
+        Audit::log('conversation.bulk_marked_read', [
+            'selected_count' => count($conversationIds),
+            'updated_count' => $updated,
+            'conversation_ids' => $conversationIds,
+        ], $tenantId);
+
+        Flash::set(
+            'success',
+            $updated === 1
+                ? '1 conversa foi marcada como lida.'
+                : $updated . ' conversas foram marcadas como lidas.'
+        );
+        $this->redirect($this->conversationReturnPath());
+    }
+
     public function setMode(): void
     {
         $conversationId = (int) ($_POST['conversation_id'] ?? 0);
@@ -1139,6 +1200,29 @@ final class ConversationController
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
+    }
+
+    private function conversationReturnPath(): string
+    {
+        $rawQuery = trim((string) ($_POST['return_query'] ?? ''));
+        if ($rawQuery === '') {
+            return '/conversations';
+        }
+
+        parse_str(ltrim($rawQuery, '?'), $parsed);
+        $allowedKeys = ['search', 'status', 'mode', 'instance_id', 'tenant_id', 'intent', 'conversation_id'];
+        $safe = [];
+        foreach ($allowedKeys as $key) {
+            if (!array_key_exists($key, $parsed) || is_array($parsed[$key])) {
+                continue;
+            }
+            $value = trim((string) $parsed[$key]);
+            if ($value !== '') {
+                $safe[$key] = $value;
+            }
+        }
+
+        return '/conversations' . ($safe !== [] ? '?' . http_build_query($safe) : '');
     }
 
     private function redirect(string $path): never
