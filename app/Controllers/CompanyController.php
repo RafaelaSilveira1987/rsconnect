@@ -150,13 +150,43 @@ final class CompanyController
             $this->redirect('/');
         }
 
-        $name = trim((string) ($_POST['name'] ?? ''));
-        $legalName = trim((string) ($_POST['legal_name'] ?? ''));
-        $document = trim((string) ($_POST['document'] ?? ''));
-        $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
-        $phone = trim((string) ($_POST['phone'] ?? ''));
-        $website = trim((string) ($_POST['website'] ?? ''));
-        $segment = trim((string) ($_POST['segment'] ?? ''));
+        $pdo = Database::connection();
+        $currentStatement = $pdo->prepare('SELECT * FROM tenants WHERE id = :id LIMIT 1');
+        $currentStatement->execute(['id' => $tenantId]);
+        $current = $currentStatement->fetch(PDO::FETCH_ASSOC);
+        if (!$current) {
+            Flash::set('error', 'Empresa não encontrada.');
+            $this->redirect(Auth::isSuperAdmin() ? '/companies' : '/');
+        }
+
+        $posted = static function (string $key, array $current, bool $lowercase = false): string {
+            $value = array_key_exists($key, $_POST)
+                ? trim((string) $_POST[$key])
+                : trim((string) ($current[$key] ?? ''));
+            return $lowercase ? mb_strtolower($value) : $value;
+        };
+
+        $name = $posted('name', $current);
+        $legalName = $posted('legal_name', $current);
+        $document = $posted('document', $current);
+        $email = $posted('email', $current, true);
+        $phone = $posted('phone', $current);
+        $website = $posted('website', $current);
+        $segment = $posted('segment', $current);
+        $commercialWhatsapp = $posted('commercial_whatsapp', $current);
+        $instagram = $posted('instagram', $current);
+        $postalCode = $posted('postal_code', $current);
+        $addressLine = $posted('address_line', $current);
+        $addressNumber = $posted('address_number', $current);
+        $addressComplement = $posted('address_complement', $current);
+        $district = $posted('district', $current);
+        $city = $posted('city', $current);
+        $state = $posted('state', $current);
+        $companyAbout = $posted('company_about', $current);
+        $companyServices = $posted('company_services', $current);
+        $companyDifferentials = $posted('company_differentials', $current);
+        $companyBusinessHours = $posted('company_business_hours', $current);
+        $companyNotes = $posted('company_notes', $current);
 
         if ($name === '' || ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))) {
             Flash::set('error', 'Informe o nome da empresa e um e-mail válido.');
@@ -168,10 +198,16 @@ final class CompanyController
             $this->redirect('/company-settings' . (Auth::isSuperAdmin() ? '?id=' . $tenantId : ''));
         }
 
-        $statement = Database::connection()->prepare(
+        $statement = $pdo->prepare(
             'UPDATE tenants
              SET name = :name, legal_name = :legal_name, document = :document, email = :email,
                  phone = :phone, website = :website, segment = :segment,
+                 commercial_whatsapp = :commercial_whatsapp, instagram = :instagram,
+                 postal_code = :postal_code, address_line = :address_line, address_number = :address_number,
+                 address_complement = :address_complement, district = :district, city = :city, state = :state,
+                 company_about = :company_about, company_services = :company_services,
+                 company_differentials = :company_differentials,
+                 company_business_hours = :company_business_hours, company_notes = :company_notes,
                  onboarding_step = GREATEST(onboarding_step, 2)
              WHERE id = :id'
         );
@@ -183,6 +219,20 @@ final class CompanyController
             'phone' => $phone !== '' ? $phone : null,
             'website' => $website !== '' ? $website : null,
             'segment' => $segment !== '' ? $segment : null,
+            'commercial_whatsapp' => $commercialWhatsapp !== '' ? $commercialWhatsapp : null,
+            'instagram' => $instagram !== '' ? $instagram : null,
+            'postal_code' => $postalCode !== '' ? $postalCode : null,
+            'address_line' => $addressLine !== '' ? $addressLine : null,
+            'address_number' => $addressNumber !== '' ? $addressNumber : null,
+            'address_complement' => $addressComplement !== '' ? $addressComplement : null,
+            'district' => $district !== '' ? $district : null,
+            'city' => $city !== '' ? $city : null,
+            'state' => $state !== '' ? $state : null,
+            'company_about' => $companyAbout !== '' ? $companyAbout : null,
+            'company_services' => $companyServices !== '' ? $companyServices : null,
+            'company_differentials' => $companyDifferentials !== '' ? $companyDifferentials : null,
+            'company_business_hours' => $companyBusinessHours !== '' ? $companyBusinessHours : null,
+            'company_notes' => $companyNotes !== '' ? $companyNotes : null,
             'id' => $tenantId,
         ]);
 
@@ -210,8 +260,8 @@ final class CompanyController
             Auth::refreshUser();
         }
 
-        Audit::log('company.updated', ['company_name' => $name], $tenantId);
-        Flash::set('success', 'Dados da empresa atualizados.');
+        Audit::log('company.updated', ['company_name' => $name, 'profile_enriched' => !Auth::isSuperAdmin()], $tenantId);
+        Flash::set('success', 'Dados da empresa atualizados. As novas informações já podem ser usadas pelos assistentes.');
         $this->redirect('/company-settings' . (Auth::isSuperAdmin() ? '?id=' . $tenantId : ''));
     }
 

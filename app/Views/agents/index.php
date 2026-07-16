@@ -22,8 +22,26 @@ $firstHours = static function (?string $json): array {
     return ['08:00', '18:00'];
 };
 $canManage = Auth::can('agents.manage');
+$isClientExperience = !Auth::isSuperAdmin();
+$profile = is_array($companyProfile ?? null) ? $companyProfile : [];
+$companyKnowledge = [];
+foreach ([
+    'Sobre a empresa' => $profile['company_about'] ?? '',
+    'Principais serviços' => $profile['company_services'] ?? '',
+    'Diferenciais' => $profile['company_differentials'] ?? '',
+    'Horário de atendimento' => $profile['company_business_hours'] ?? '',
+    'Site' => $profile['website'] ?? '',
+    'Instagram' => $profile['instagram'] ?? '',
+    'Observações importantes' => $profile['company_notes'] ?? '',
+] as $label => $value) {
+    $value = trim((string) $value);
+    if ($value !== '') {
+        $companyKnowledge[] = $label . ":\n" . $value;
+    }
+}
+$defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
 ?>
-<div class="agent-management-page">
+<div class="agent-management-page <?= $isClientExperience ? 'agent-client-experience' : 'agent-admin-experience' ?>">
     <section class="card agent-list-card">
         <div class="section-heading agent-page-heading">
             <div><span class="eyebrow">Assistentes virtuais</span><h2>Assistentes cadastrados</h2></div>
@@ -132,6 +150,94 @@ $canManage = Auth::can('agents.manage');
 </div>
 
 <?php if ($canManage): ?>
+<?php if ($isClientExperience): ?>
+<aside class="conversation-details agent-create-drawer agent-client-drawer" id="agent-create-drawer" aria-label="Criar novo assistente" aria-modal="true" role="dialog">
+    <div class="conversation-drawer-header agent-client-drawer-header">
+        <div>
+            <span class="eyebrow">Novo assistente</span>
+            <h2>Crie seu assistente de atendimento</h2>
+            <p>Defina quem ele atende, como conversa e quais informações pode usar nas respostas.</p>
+        </div>
+        <button class="icon-button drawer-close" type="button" data-close-panel="agent-create-drawer" aria-label="Fechar painel">×</button>
+    </div>
+
+    <form class="drawer-form agent-create-form agent-guided-form" method="post" action="<?= View::e(Router::url('/agents')) ?>">
+        <?= Csrf::input() ?>
+        <div class="agent-drawer-progress" aria-label="Etapas do cadastro">
+            <span><b>1</b> Identificação</span>
+            <span><b>2</b> Atendimento</span>
+            <span><b>3</b> Empresa</span>
+        </div>
+
+        <div class="conversation-drawer-body agent-client-drawer-body">
+            <section class="drawer-section agent-step-card">
+                <div class="drawer-section-title">
+                    <div><span class="eyebrow">Etapa 1</span><h3>Quem vai atender?</h3><p>Escolha o WhatsApp e dê uma identidade simples ao assistente.</p></div>
+                </div>
+                <div class="drawer-form-grid">
+                    <label class="field drawer-span"><span>Conexão WhatsApp</span><select name="instance_id" required><option value="">Selecione o WhatsApp</option><?php foreach ($instances as $instance): ?><option value="<?= (int) $instance['id'] ?>"><?= View::e($instance['name']) ?></option><?php endforeach; ?></select><small class="field-hint">É o número em que ele responderá os contatos.</small></label>
+                    <label class="field"><span>Nome do assistente</span><input name="name" placeholder="Ex.: Digi" required></label>
+                    <label class="field"><span>Área de atendimento</span><input name="segment" placeholder="Ex.: vendas e agendamentos" required></label>
+                    <label class="field drawer-span"><span>Objetivo do atendimento</span><textarea name="service_objective" rows="4" placeholder="Ex.: responder dúvidas, identificar a necessidade do cliente, apresentar os serviços e encaminhar oportunidades para a equipe." required></textarea><small class="field-hint">Explique em palavras simples o resultado esperado de cada conversa.</small></label>
+                </div>
+            </section>
+
+            <section class="drawer-section agent-step-card">
+                <div class="drawer-section-title">
+                    <div><span class="eyebrow">Etapa 2</span><h3>Como ele deve responder?</h3><p>Defina o estilo da conversa e as regras mais importantes.</p></div>
+                </div>
+                <div class="drawer-form-grid">
+                    <label class="field"><span>Tom de voz</span><select name="tone_of_voice"><option value="claro, cordial e profissional">Claro e profissional</option><option value="acolhedor, paciente e próximo">Acolhedor e próximo</option><option value="objetivo, direto e consultivo">Objetivo e consultivo</option><option value="descontraído, simpático e respeitoso">Descontraído e simpático</option></select></label>
+                    <label class="field"><span>Mensagem de boas-vindas</span><input name="welcome_message" placeholder="Ex.: Olá! Como posso ajudar você hoje?"></label>
+                    <label class="field drawer-span"><span>Regras principais</span><textarea name="assistant_rules" rows="7" placeholder="Ex.: faça uma pergunta por vez; não informe preços sem confirmar; encaminhe para uma pessoa quando o cliente pedir; nunca invente informações." required></textarea></label>
+                </div>
+                <div class="agent-create-behavior agent-friendly-toggles">
+                    <label class="switch-card"><input type="checkbox" name="auto_reply_enabled" value="1" checked><span><strong>Responder automaticamente</strong><small>O assistente responde quando a conversa estiver no modo IA ativa.</small></span></label>
+                    <label class="switch-card"><input type="checkbox" name="is_default" value="1"><span><strong>Assistente principal</strong><small>Use este assistente como padrão para a empresa.</small></span></label>
+                </div>
+            </section>
+
+            <section class="drawer-section agent-step-card">
+                <div class="drawer-section-title">
+                    <div><span class="eyebrow">Etapa 3</span><h3>O que ele precisa saber sobre a empresa?</h3><p>Revise as informações que poderão ser usadas nas respostas.</p></div>
+                </div>
+                <label class="field"><span>Informações da empresa</span><textarea name="knowledge_base" rows="11" placeholder="Serviços, horários, links, políticas, perguntas frequentes e outras informações importantes."><?= View::e($defaultCompanyKnowledge) ?></textarea><small class="field-hint">O conteúdo foi preenchido com os dados do Perfil da empresa. Você pode complementar antes de criar.</small></label>
+            </section>
+
+            <details class="drawer-section drawer-collapsed-card agent-advanced-settings">
+                <summary>
+                    <span><span class="eyebrow">Opcional</span><strong>Configurações avançadas</strong><small>Horários, transferência para a equipe e ajustes técnicos.</small></span>
+                    <span class="drawer-chevron"></span>
+                </summary>
+                <div class="agent-advanced-body">
+                    <div class="form-grid two">
+                        <label class="field"><span>Serviço de IA</span><select name="model_provider"><option value="openai">OpenAI</option><option value="google">Google Gemini</option><option value="custom">Outro serviço</option></select></label>
+                        <label class="field"><span>Estilo das respostas</span><select name="temperature"><option value="0.1">Mais objetivo</option><option value="0.2" selected>Equilibrado</option><option value="0.5">Mais criativo</option><option value="0.8">Bem criativo</option></select></label>
+                    </div>
+                    <label class="field"><span>Modelo de IA</span><input name="model_name" value="gpt-4o-mini" required><small class="field-hint">A equipe RS Connect pode orientar este ajuste.</small></label>
+                    <label class="field"><span>Palavras para chamar uma pessoa</span><input name="handoff_keywords" value="humano, atendente, pessoa, suporte"></label>
+                    <label class="field"><span>Mensagem ao encaminhar para a equipe</span><input name="human_handoff_message" value="Vou encaminhar você para uma pessoa da nossa equipe. Aguarde um momento, por favor."></label>
+                    <input type="hidden" name="handoff_action" value="paused">
+                    <div class="form-grid two"><label class="field"><span>Atendimento começa</span><input type="time" name="business_start" value="08:00"></label><label class="field"><span>Atendimento termina</span><input type="time" name="business_end" value="18:00"></label></div>
+                    <label class="field"><span>Fuso horário</span><input name="business_timezone" value="America/Sao_Paulo"></label>
+                    <div class="weekday-row"><?php foreach ($dayLabels as $dayKey => $label): ?><label class="check-field compact-check"><input type="checkbox" name="business_days[]" value="<?= View::e($dayKey) ?>" <?= in_array($dayKey, ['mon', 'tue', 'wed', 'thu', 'fri'], true) ? 'checked' : '' ?>><span><?= View::e($label) ?></span></label><?php endforeach; ?></div>
+                    <label class="field"><span>Mensagem fora do horário</span><input name="after_hours_message" value="Estamos fora do horário de atendimento agora. Assim que retornarmos, nossa equipe responde por aqui."></label>
+                    <div class="form-grid two"><label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label><label class="field"><span>Intervalo entre respostas (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"></label></div>
+                    <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
+                    <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
+                    <label class="check-field"><input type="checkbox" name="n8n_enabled" value="1"><span>Usar integração externa neste assistente</span></label>
+                </div>
+            </details>
+        </div>
+
+        <div class="drawer-savebar agent-create-savebar agent-client-savebar">
+            <button class="btn btn-quiet" type="button" data-close-panel="agent-create-drawer">Cancelar</button>
+            <button class="btn btn-primary" type="submit" <?= !$instances ? 'disabled' : '' ?>>Criar assistente</button>
+            <?php if (!$instances): ?><p class="field-hint">A equipe RS Connect precisa preparar uma conexão WhatsApp primeiro.</p><?php endif; ?>
+        </div>
+    </form>
+</aside>
+<?php else: ?>
 <aside class="conversation-details agent-create-drawer" id="agent-create-drawer" aria-label="Cadastrar novo assistente">
     <div class="conversation-drawer-header">
         <div>
@@ -197,4 +303,5 @@ $canManage = Auth::can('agents.manage');
         </form>
     </div>
 </aside>
+<?php endif; ?>
 <?php endif; ?>

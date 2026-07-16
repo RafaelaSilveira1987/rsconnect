@@ -48,10 +48,14 @@ final class AgentController
         );
         $instancesStatement->execute(['tenant_id' => $tenantId]);
 
+        $companyStatement = $pdo->prepare('SELECT * FROM tenants WHERE id = :tenant_id LIMIT 1');
+        $companyStatement->execute(['tenant_id' => $tenantId]);
+
         View::render('agents.index', [
             'title' => 'Assistentes de IA',
             'agents' => $agentsStatement->fetchAll(PDO::FETCH_ASSOC),
             'instances' => $instancesStatement->fetchAll(PDO::FETCH_ASSOC),
+            'companyProfile' => $companyStatement->fetch(PDO::FETCH_ASSOC) ?: [],
         ]);
     }
 
@@ -65,6 +69,9 @@ final class AgentController
         $model = trim((string) ($_POST['model_name'] ?? 'gpt-4o-mini'));
         $temperature = max(0, min(1, (float) ($_POST['temperature'] ?? 0.2)));
         $prompt = trim((string) ($_POST['system_prompt'] ?? ''));
+        if ($prompt === '') {
+            $prompt = $this->guidedPromptFromPost($name, $segment);
+        }
         $knowledgeBase = trim((string) ($_POST['knowledge_base'] ?? ''));
         $handoffKeywords = trim((string) ($_POST['handoff_keywords'] ?? 'humano, atendente, pessoa, suporte'));
         $maxContextMessages = max(4, min(30, (int) ($_POST['max_context_messages'] ?? 12)));
@@ -290,6 +297,47 @@ final class AgentController
         }
 
         $this->redirect('/agents');
+    }
+
+    private function guidedPromptFromPost(string $name, string $segment): string
+    {
+        $objective = trim((string) ($_POST['service_objective'] ?? ''));
+        $tone = trim((string) ($_POST['tone_of_voice'] ?? 'claro, cordial e profissional'));
+        $welcome = trim((string) ($_POST['welcome_message'] ?? ''));
+        $rules = trim((string) ($_POST['assistant_rules'] ?? ''));
+
+        if ($objective === '' && $rules === '') {
+            return '';
+        }
+
+        $sections = [
+            '# Identidade',
+            'Você é ' . ($name !== '' ? $name : 'o assistente virtual') . ', responsável por ' . ($segment !== '' ? $segment : 'atendimento ao cliente') . '.',
+            '',
+            '# Objetivo do atendimento',
+            $objective !== '' ? $objective : 'Atender, entender a necessidade do contato e encaminhar a conversa de forma útil e segura.',
+            '',
+            '# Tom de voz',
+            $tone !== '' ? $tone : 'Claro, cordial e profissional.',
+        ];
+
+        if ($welcome !== '') {
+            $sections[] = '';
+            $sections[] = '# Mensagem de boas-vindas';
+            $sections[] = $welcome;
+        }
+
+        if ($rules !== '') {
+            $sections[] = '';
+            $sections[] = '# Regras principais';
+            $sections[] = $rules;
+        }
+
+        $sections[] = '';
+        $sections[] = '# Segurança do atendimento';
+        $sections[] = 'Não invente informações. Quando faltar contexto, faça perguntas objetivas ou encaminhe para uma pessoa da equipe.';
+
+        return trim(implode("\n", $sections));
     }
 
     private function businessHoursFromPost(): array

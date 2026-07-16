@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'ZIP 30.9';
-    public const REQUIRED_MIGRATION = '032_conversation_messages_compact_index.sql';
+    public const PACKAGE_LABEL = 'ZIP 31.0';
+    public const REQUIRED_MIGRATION = '033_customer_company_profile.sql';
 
     private PDO $pdo;
 
@@ -75,8 +75,8 @@ final class AppVersionService
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
-            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 30.9 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 032, conforme o pacote implantado.'
+            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 31.0 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
+            'Rodar as migrations pendentes até a 033, conforme o pacote implantado.'
         );
 
         $appKey = (string) Env::get('APP_KEY', '');

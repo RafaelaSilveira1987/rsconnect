@@ -106,7 +106,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=30.9')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=31.0')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -242,6 +242,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=30.9')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=31.0')) ?>" defer></script>
 </body>
 </html>
