@@ -1,109 +1,24 @@
 <?php
-
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
-
-$formatDate = static function (?string $date): string {
-    if (!$date) {
-        return '—';
-    }
-    $timestamp = strtotime($date);
-    return $timestamp ? date('d/m/Y H:i:s', $timestamp) : $date;
-};
+$formatDate = static function (?string $date): string { if (!$date) return '—'; $timestamp = strtotime($date); return $timestamp ? date('d/m/Y H:i', $timestamp) : $date; };
 $statusLabel = ['active' => 'Ativo', 'inactive' => 'Inativo', 'success' => 'Sucesso', 'error' => 'Erro', 'skipped' => 'Ignorado'];
+$total = count($flows);
+$active = count(array_filter($flows, static fn(array $flow): bool => ($flow['status'] ?? '') === 'active'));
+$failedLogs = count(array_filter($logs, static fn(array $log): bool => ($log['status'] ?? '') === 'error'));
+$tenantsCovered = count(array_unique(array_map(static fn(array $flow): int => (int) ($flow['tenant_id'] ?? 0), $flows)));
 ?>
-
-<div class="content-grid management-layout n8n-flow-page">
-    <section class="card">
-        <div class="section-heading">
-            <div>
-                <span class="eyebrow">Integrações por empresa</span>
-                <h2>Fluxos n8n</h2>
-            </div>
-            <span class="badge"><?= count($flows) ?> fluxo(s)</span>
-        </div>
-        <p class="muted">Cadastre um webhook n8n separado para cada empresa. Assim cada cliente pode ter automações próprias sem depender de uma URL global no <code>.env</code>.</p>
-
-        <div class="table-wrap">
-            <table class="data-table">
-                <thead>
-                <tr><th>Empresa</th><th>Fluxo</th><th>Eventos</th><th>Webhook</th><th>Status</th><th>Último resultado</th><th>Ações</th></tr>
-                </thead>
-                <tbody>
-                <?php foreach ($flows as $flow): ?>
-                    <tr>
-                        <td><strong><?= View::e($flow['tenant_name']) ?></strong></td>
-                        <td><strong><?= View::e($flow['name']) ?></strong><br><small><?= View::e($flow['flow_key']) ?></small><?php if (!empty($flow['description'])): ?><br><small><?= View::e($flow['description']) ?></small><?php endif; ?></td>
-                        <td><?= View::e($flow['events_label']) ?></td>
-                        <td><small><?= View::e($flow['webhook_url_masked']) ?></small><br><small>Token: <?= View::e($flow['secret_masked']) ?></small></td>
-                        <td><span class="badge badge-<?= View::e($flow['status']) ?>"><?= View::e($statusLabel[$flow['status']] ?? $flow['status']) ?></span></td>
-                        <td><small>Sucesso: <?= View::e($formatDate($flow['last_success_at'] ?? null)) ?></small><br><small>Erro: <?= View::e($flow['last_error'] ?? '—') ?></small></td>
-                        <td class="actions-cell">
-                            <form method="post" action="<?= View::e(Router::url('/n8n-flows/test')) ?>">
-                                <?= Csrf::input() ?>
-                                <input type="hidden" name="flow_id" value="<?= (int) $flow['id'] ?>">
-                                <button class="btn btn-small btn-outline" type="submit">Testar</button>
-                            </form>
-                            <details>
-                                <summary class="btn btn-small btn-quiet">Editar</summary>
-                                <form class="stack compact-form" method="post" action="<?= View::e(Router::url('/n8n-flows/save')) ?>">
-                                    <?= Csrf::input() ?>
-                                    <input type="hidden" name="id" value="<?= (int) $flow['id'] ?>">
-                                    <label class="field compact-field"><span>Empresa</span><select name="tenant_id" required><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= (int) $tenant['id'] === (int) $flow['tenant_id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select></label>
-                                    <div class="form-grid two"><label class="field compact-field"><span>Identificador</span><input name="flow_key" value="<?= View::e($flow['flow_key']) ?>" required></label><label class="field compact-field"><span>Status</span><select name="status"><option value="active" <?= $flow['status'] === 'active' ? 'selected' : '' ?>>Ativo</option><option value="inactive" <?= $flow['status'] === 'inactive' ? 'selected' : '' ?>>Inativo</option></select></label></div>
-                                    <label class="field compact-field"><span>Nome</span><input name="name" value="<?= View::e($flow['name']) ?>" required></label>
-                                    <label class="field compact-field"><span>Descrição</span><input name="description" value="<?= View::e($flow['description'] ?? '') ?>"></label>
-                                    <label class="field compact-field"><span>Nova URL do webhook</span><input name="webhook_url" placeholder="Deixe em branco para manter a atual"></label>
-                                    <label class="field compact-field"><span>Novo token secreto</span><input name="secret_token" type="password" placeholder="Opcional; em branco mantém o atual"></label>
-                                    <fieldset class="field checkbox-fieldset"><legend>Eventos</legend><?php $currentEvents = json_decode((string) ($flow['events_json'] ?? '[]'), true); $currentEvents = is_array($currentEvents) ? $currentEvents : []; foreach ($eventOptions as $eventKey => $eventLabel): ?><label class="check-field compact-check"><input type="checkbox" name="events[]" value="<?= View::e($eventKey) ?>" <?= in_array($eventKey, $currentEvents, true) ? 'checked' : '' ?>><span><?= View::e($eventLabel) ?></span></label><?php endforeach; ?></fieldset>
-                                    <button class="btn btn-primary btn-block" type="submit">Salvar alterações</button>
-                                </form>
-                            </details>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-                <?php if (!$flows): ?><tr><td colspan="7"><div class="empty-state">Nenhum fluxo n8n cadastrado ainda.</div></td></tr><?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <aside class="stack">
-        <form class="card sticky-card" method="post" action="<?= View::e(Router::url('/n8n-flows/save')) ?>">
-            <?= Csrf::input() ?>
-            <div class="section-heading"><div><span class="eyebrow">Novo fluxo</span><h2>Webhook do cliente</h2></div></div>
-            <label class="field"><span>Empresa</span><select name="tenant_id" required><option value="">Selecione</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>"><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select></label>
-            <div class="form-grid two"><label class="field"><span>Identificador</span><input name="flow_key" placeholder="agenda-google" required><small class="field-hint">Ex.: agenda-google, crm-leads, pos-venda.</small></label><label class="field"><span>Status</span><select name="status"><option value="active">Ativo</option><option value="inactive">Inativo</option></select></label></div>
-            <label class="field"><span>Nome do fluxo</span><input name="name" placeholder="Agenda Google do Cliente X" required></label>
-            <label class="field"><span>Descrição</span><input name="description" placeholder="Fluxo que cria eventos no Google Calendar"></label>
-            <label class="field"><span>URL do Webhook n8n</span><input name="webhook_url" placeholder="https://n8n.seudominio.com/webhook/..." required></label>
-            <label class="field"><span>Token secreto opcional</span><input name="secret_token" type="password" placeholder="Será enviado em Authorization: Bearer"><small class="field-hint">Use para validar no fluxo n8n se o evento veio do RS Connect.</small></label>
-            <fieldset class="field checkbox-fieldset"><legend>Eventos que disparam este fluxo</legend><?php foreach ($eventOptions as $eventKey => $eventLabel): ?><label class="check-field"><input type="checkbox" name="events[]" value="<?= View::e($eventKey) ?>" <?= $eventKey === '*' ? 'checked' : '' ?>><span><?= View::e($eventLabel) ?></span></label><?php endforeach; ?></fieldset>
-            <button class="btn btn-primary btn-block" type="submit">Salvar fluxo da empresa</button>
-        </form>
-    </aside>
-</div>
-
-<section class="card table-card">
-    <div class="section-heading"><div><span class="eyebrow">Auditoria</span><h2>Últimos envios para n8n</h2></div><span class="badge"><?= count($logs) ?> registros</span></div>
-    <div class="table-wrap">
-        <table class="clean-table">
-            <thead><tr><th>Data</th><th>Empresa</th><th>Fluxo</th><th>Evento</th><th>Status</th><th>HTTP</th><th>Detalhe</th></tr></thead>
-            <tbody>
-            <?php foreach ($logs as $log): ?>
-                <tr>
-                    <td><?= View::e($formatDate($log['created_at'])) ?></td>
-                    <td><?= View::e($log['tenant_name']) ?></td>
-                    <td><?= View::e($log['flow_name'] ?? '—') ?></td>
-                    <td><?= View::e($log['event']) ?></td>
-                    <td><span class="badge badge-<?= View::e($log['status']) ?>"><?= View::e($statusLabel[$log['status']] ?? $log['status']) ?></span></td>
-                    <td><?= View::e((string) ($log['http_status'] ?? '—')) ?></td>
-                    <td class="automation-detail"><?= View::e($log['error_message'] ?: ($log['response_preview'] ?: '—')) ?></td>
-                </tr>
-            <?php endforeach; ?>
-            <?php if (!$logs): ?><tr><td colspan="7"><div class="empty-state">Nenhum envio registrado.</div></td></tr><?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-</section>
+<section class="admin-module-hero"><div><span class="eyebrow">Integrações por empresa</span><h2>Fluxos n8n</h2><p>Organize webhooks, eventos e testes por cliente em uma visão clara, sem formulários permanentes na lateral.</p></div><button class="btn btn-primary" type="button" data-n8n-open="new" data-toggle-panel="n8n-flow-drawer">Novo fluxo</button></section>
+<section class="admin-module-summary"><article><span>Total</span><strong><?= $total ?></strong><small>fluxos configurados</small></article><article class="is-success"><span>Ativos</span><strong><?= $active ?></strong><small>recebendo eventos</small></article><article class="is-blue"><span>Empresas atendidas</span><strong><?= $tenantsCovered ?></strong><small>com automação própria</small></article><article class="is-warning"><span>Falhas recentes</span><strong><?= $failedLogs ?></strong><small>nos últimos registros</small></article></section>
+<section class="card admin-module-panel"><div class="section-heading admin-module-heading"><div><span class="eyebrow">Automações configuradas</span><h2>Fluxos por empresa</h2><p>Teste, edite e identifique rapidamente a última situação de cada integração.</p></div><span class="badge" data-admin-visible-count><?= $total ?> registro(s)</span></div>
+<div class="admin-module-filters" data-admin-filter-root><label class="field admin-module-search"><span>Buscar</span><input type="search" placeholder="Empresa, fluxo, evento ou identificador" data-admin-search></label><label class="field"><span>Situação</span><select data-admin-filter="status"><option value="">Todas</option><option value="active">Ativos</option><option value="inactive">Inativos</option></select></label><button class="btn btn-quiet" type="button" data-admin-clear>Limpar</button></div>
+<div class="admin-module-card-list" data-admin-card-list>
+<?php foreach ($flows as $flow): ?><?php $events = json_decode((string)($flow['events_json'] ?? '[]'), true); $events = is_array($events) ? $events : []; $searchText = mb_strtolower(trim(implode(' ', [$flow['tenant_name'], $flow['name'], $flow['flow_key'], $flow['events_label'], $flow['description'] ?? '']))); ?>
+<article class="admin-record-card" data-admin-card data-search="<?= View::e($searchText) ?>" data-status="<?= View::e($flow['status']) ?>"><div class="admin-record-main"><span class="admin-record-mark is-n8n" aria-hidden="true">n8n</span><div class="admin-record-copy"><div class="admin-record-title-row"><div><h3><?= View::e($flow['name']) ?></h3><p><?= View::e($flow['tenant_name']) ?> · <?= View::e($flow['flow_key']) ?></p></div><div class="admin-record-badges"><span class="badge badge-<?= View::e($flow['status']) ?>"><?= View::e($statusLabel[$flow['status']] ?? $flow['status']) ?></span></div></div><?php if (!empty($flow['description'])): ?><small class="admin-record-muted"><?= View::e($flow['description']) ?></small><?php endif; ?></div></div>
+<dl class="admin-record-details"><div><dt>Eventos</dt><dd><?= View::e($flow['events_label']) ?></dd></div><div><dt>Webhook</dt><dd><?= View::e($flow['webhook_url_masked']) ?></dd></div><div><dt>Token</dt><dd><?= View::e($flow['secret_masked']) ?></dd></div><div><dt>Último sucesso</dt><dd><?= View::e($formatDate($flow['last_success_at'] ?? null)) ?></dd></div></dl>
+<?php if (!empty($flow['last_error'])): ?><div class="admin-record-alert"><strong>Última falha</strong><span><?= View::e($flow['last_error']) ?></span></div><?php endif; ?>
+<div class="admin-record-actions"><form method="post" action="<?= View::e(Router::url('/n8n-flows/test')) ?>"><?= Csrf::input() ?><input type="hidden" name="flow_id" value="<?= (int)$flow['id'] ?>"><button class="btn btn-small btn-outline" type="submit">Testar fluxo</button></form><button class="btn btn-small btn-primary-soft" type="button" data-toggle-panel="n8n-flow-drawer" data-n8n-open="edit" data-id="<?= (int)$flow['id'] ?>" data-tenant-id="<?= (int)$flow['tenant_id'] ?>" data-flow-key="<?= View::e($flow['flow_key']) ?>" data-name="<?= View::e($flow['name']) ?>" data-description="<?= View::e($flow['description'] ?? '') ?>" data-status="<?= View::e($flow['status']) ?>" data-events="<?= View::e(rawurlencode(json_encode($events, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES))) ?>">Editar</button></div></article>
+<?php endforeach; ?><?php if (!$flows): ?><div class="empty-state admin-filter-empty">Nenhum fluxo cadastrado.</div><?php endif; ?><div class="empty-state admin-filter-empty" data-admin-filter-empty hidden>Nenhum fluxo corresponde aos filtros.</div></div></section>
+<section class="card admin-secondary-panel"><div class="section-heading"><div><span class="eyebrow">Histórico de integração</span><h2>Últimos envios ao n8n</h2><p>Erros ficam destacados para facilitar a investigação.</p></div><span class="badge"><?= count($logs) ?> registro(s)</span></div><div class="admin-log-list"><?php foreach ($logs as $log): ?><article class="admin-log-item is-<?= View::e($log['status']) ?>"><div><strong><?= View::e($log['flow_name'] ?? 'Fluxo não identificado') ?></strong><span><?= View::e($log['tenant_name']) ?> · <?= View::e($log['event']) ?></span><small><?= View::e($formatDate($log['created_at'])) ?> · HTTP <?= View::e((string)($log['http_status'] ?? '—')) ?></small></div><div><span class="badge badge-<?= View::e($log['status']) ?>"><?= View::e($statusLabel[$log['status']] ?? $log['status']) ?></span><?php if ($log['error_message'] || $log['response_preview']): ?><details class="admin-inline-details"><summary>Ver retorno</summary><p><?= View::e($log['error_message'] ?: $log['response_preview']) ?></p></details><?php endif; ?></div></article><?php endforeach; ?><?php if (!$logs): ?><div class="empty-state">Nenhum envio registrado.</div><?php endif; ?></div></section>
+<aside class="conversation-details conversation-drawer admin-form-drawer" id="n8n-flow-drawer" aria-label="Configurar fluxo n8n" aria-modal="true" role="dialog"><div class="conversation-drawer-header"><div><span class="eyebrow" data-n8n-eyebrow>Novo fluxo</span><h2 data-n8n-title>Configurar automação</h2><p data-n8n-description>Defina a empresa, o webhook e quando este fluxo deve ser acionado.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="n8n-flow-drawer" aria-label="Fechar">×</button></div><div class="conversation-drawer-body"><form class="drawer-form" method="post" action="<?= View::e(Router::url('/n8n-flows/save')) ?>" data-n8n-form><?= Csrf::input() ?><input type="hidden" name="id" value="0" data-n8n-field="id"><section class="drawer-section"><div class="drawer-section-title"><div><span class="eyebrow">1. Identificação</span><h3>Empresa e nome do fluxo</h3></div></div><div class="drawer-form-grid"><label class="field drawer-span"><span>Empresa</span><select name="tenant_id" data-n8n-field="tenant_id" required><option value="">Selecione</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int)$tenant['id'] ?>"><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select></label><label class="field"><span>Identificador</span><input name="flow_key" data-n8n-field="flow_key" placeholder="agenda-google" required><small class="field-hint">Nome curto usado internamente.</small></label><label class="field"><span>Situação</span><select name="status" data-n8n-field="status"><option value="active">Ativo</option><option value="inactive">Inativo</option></select></label><label class="field drawer-span"><span>Nome do fluxo</span><input name="name" data-n8n-field="name" placeholder="Agenda Google da Clínica" required></label><label class="field drawer-span"><span>Descrição</span><input name="description" data-n8n-field="description" placeholder="Explique o objetivo desta automação"></label></div></section><section class="drawer-section"><div class="drawer-section-title"><div><span class="eyebrow">2. Conexão</span><h3>Webhook e segurança</h3></div></div><div class="drawer-form-grid"><label class="field drawer-span"><span data-n8n-url-label>URL do webhook n8n</span><input name="webhook_url" type="url" data-n8n-field="webhook_url" placeholder="https://n8n.seudominio.com/webhook/..."><small class="field-hint" data-n8n-url-hint>Obrigatória no primeiro cadastro.</small></label><label class="field drawer-span"><span>Novo token secreto</span><input name="secret_token" type="password" data-n8n-field="secret_token" placeholder="Opcional"><small class="field-hint">Enviado em Authorization: Bearer.</small></label></div></section><section class="drawer-section"><div class="drawer-section-title"><div><span class="eyebrow">3. Disparos</span><h3>Eventos que iniciam o fluxo</h3></div></div><fieldset class="field checkbox-fieldset admin-event-grid" data-n8n-events><?php foreach ($eventOptions as $eventKey=>$eventLabel): ?><label class="check-field"><input type="checkbox" name="events[]" value="<?= View::e($eventKey) ?>" <?= $eventKey==='*'?'checked':'' ?>><span><?= View::e($eventLabel) ?></span></label><?php endforeach; ?></fieldset></section><div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="n8n-flow-drawer">Cancelar</button><button class="btn btn-primary" type="submit" data-n8n-submit>Salvar fluxo</button></div></form></div></aside>

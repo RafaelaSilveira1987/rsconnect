@@ -1,87 +1,11 @@
 <?php
-
-use App\Core\Auth;
-use App\Core\Csrf;
-use App\Core\Router;
-use App\Core\View;
-
-$roleLabels = [
-    'super_admin' => 'Super Admin RS',
-    'client_admin' => 'Administrador do cliente',
-    'client_user' => 'Usuário do cliente',
-];
+use App\Core\Auth;use App\Core\Csrf;use App\Core\Router;use App\Core\View;
+$roleLabels=['super_admin'=>'Super Admin RS','client_admin'=>'Administrador do cliente','client_user'=>'Membro da equipe'];
+$isSuperAdmin=Auth::isSuperAdmin();
+if(!$isSuperAdmin){ require __DIR__.'/_client.php'; return; }
+$total=count($users);$active=count(array_filter($users,static fn(array $u):bool=>($u['status']??'')==='active'));$rsUsers=count(array_filter($users,static fn(array $u):bool=>($u['tenant_id']??null)===null));$neverLogged=count(array_filter($users,static fn(array $u):bool=>empty($u['last_login_at'])));
 ?>
-<div class="content-grid management-layout">
-    <section class="card">
-        <div class="section-heading">
-            <div><span class="eyebrow">Controle de acesso</span><h2>Usuários cadastrados</h2></div>
-            <span class="badge"><?= count($users) ?> usuário(s)</span>
-        </div>
-
-        <div class="table-wrap">
-            <table>
-                <thead><tr><th>Usuário</th><th>Empresa</th><th>Perfil</th><th>Status</th><th>Último acesso</th><th></th></tr></thead>
-                <tbody>
-                <?php foreach ($users as $userItem): ?>
-                    <tr>
-                        <td><strong><?= View::e($userItem['name']) ?></strong><small><?= View::e($userItem['email']) ?></small></td>
-                        <td><?= View::e($userItem['tenant_name'] ?? 'Equipe RS') ?></td>
-                        <td><span class="badge"><?= View::e($roleLabels[$userItem['role']] ?? $userItem['role']) ?></span></td>
-                        <td><span class="badge badge-<?= View::e($userItem['status']) ?>"><?= $userItem['status'] === 'active' ? 'Ativo' : 'Inativo' ?></span></td>
-                        <td><?= $userItem['last_login_at'] ? View::e(date('d/m/Y H:i', strtotime($userItem['last_login_at']))) : 'Nunca' ?></td>
-                        <td>
-                            <?php if (Auth::can('users.manage')): ?>
-                                <details class="table-details">
-                                    <summary class="table-link">Editar</summary>
-                                    <form class="edit-panel" method="post" action="<?= View::e(Router::url('/users/update')) ?>">
-                                        <?= Csrf::input() ?>
-                                        <input type="hidden" name="user_id" value="<?= (int) $userItem['id'] ?>">
-                                        <label class="field"><span>Nome</span><input name="name" value="<?= View::e($userItem['name']) ?>" required></label>
-                                        <label class="field"><span>E-mail</span><input type="email" name="email" value="<?= View::e($userItem['email']) ?>" required></label>
-                                        <div class="form-grid two">
-                                            <label class="field"><span>Perfil</span><select name="role">
-                                                <?php if ($userItem['tenant_id'] === null): ?>
-                                                    <option value="super_admin" selected>Super Admin RS</option>
-                                                <?php else: ?>
-                                                    <option value="client_admin" <?= $userItem['role'] === 'client_admin' ? 'selected' : '' ?>>Administrador</option>
-                                                    <option value="client_user" <?= $userItem['role'] === 'client_user' ? 'selected' : '' ?>>Usuário</option>
-                                                <?php endif; ?>
-                                            </select></label>
-                                            <label class="field"><span>Status</span><select name="status"><option value="active" <?= $userItem['status'] === 'active' ? 'selected' : '' ?>>Ativo</option><option value="inactive" <?= $userItem['status'] === 'inactive' ? 'selected' : '' ?>>Inativo</option></select></label>
-                                        </div>
-                                        <label class="field"><span>Nova senha</span><input type="password" name="password" minlength="8" placeholder="Deixe vazio para manter"></label>
-                                        <button class="btn btn-primary btn-block" type="submit">Salvar usuário</button>
-                                    </form>
-                                </details>
-                            <?php endif; ?>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-                <?php if (!$users): ?><tr><td colspan="6" class="empty-state">Nenhum usuário cadastrado.</td></tr><?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <?php if (Auth::can('users.manage')): ?>
-        <aside class="stack">
-            <form class="card sticky-card" method="post" action="<?= View::e(Router::url('/users')) ?>">
-                <?= Csrf::input() ?>
-                <div class="section-heading"><div><span class="eyebrow">Novo acesso</span><h2>Adicionar usuário</h2></div></div>
-
-                <?php if (Auth::isSuperAdmin()): ?>
-                    <label class="field"><span>Empresa</span><select name="tenant_id"><option value="global">Equipe RS — acesso global</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>"><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select></label>
-                    <label class="field"><span>Perfil</span><select name="role"><option value="super_admin">Super Admin RS</option><option value="client_admin">Administrador do cliente</option><option value="client_user">Usuário do cliente</option></select></label>
-                    <p class="field-hint">Para perfis de cliente, selecione uma empresa. Super Admin deve usar “Equipe RS”.</p>
-                <?php else: ?>
-                    <label class="field"><span>Perfil</span><select name="role"><option value="client_user">Usuário</option><option value="client_admin">Administrador</option></select></label>
-                <?php endif; ?>
-
-                <label class="field"><span>Nome</span><input name="name" placeholder="Nome completo" required></label>
-                <label class="field"><span>E-mail</span><input type="email" name="email" placeholder="usuario@empresa.com" required></label>
-                <label class="field"><span>Senha inicial</span><input type="password" name="password" minlength="8" placeholder="Mínimo de 8 caracteres" required></label>
-                <button class="btn btn-primary btn-block" type="submit">Cadastrar usuário</button>
-            </form>
-        </aside>
-    <?php endif; ?>
-</div>
+<section class="admin-module-hero"><div><span class="eyebrow">Controle de acesso</span><h2>Usuários da plataforma</h2><p>Gerencie equipe RS e acessos de clientes com filtros, cartões claros e edição em gaveta.</p></div><?php if(Auth::can('users.manage')):?><button class="btn btn-primary" type="button" data-user-open="new" data-toggle-panel="user-drawer">Novo usuário</button><?php endif;?></section>
+<section class="admin-module-summary"><article><span>Total</span><strong><?= $total ?></strong><small>usuários cadastrados</small></article><article class="is-success"><span>Ativos</span><strong><?= $active ?></strong><small>com acesso liberado</small></article><article class="is-blue"><span>Equipe RS</span><strong><?= $rsUsers ?></strong><small>acesso global</small></article><article class="is-warning"><span>Nunca acessaram</span><strong><?= $neverLogged ?></strong><small>podem precisar de orientação</small></article></section>
+<section class="card admin-module-panel"><div class="section-heading admin-module-heading"><div><span class="eyebrow">Acessos cadastrados</span><h2>Usuários por empresa</h2><p>Busque por nome, e-mail, empresa ou perfil.</p></div><span class="badge" data-admin-visible-count><?= $total ?> registro(s)</span></div><div class="admin-module-filters admin-user-filters" data-admin-filter-root><label class="field admin-module-search"><span>Buscar</span><input type="search" placeholder="Nome, e-mail ou empresa" data-admin-search></label><label class="field"><span>Perfil</span><select data-admin-filter="role"><option value="">Todos</option><option value="super_admin">Equipe RS</option><option value="client_admin">Administrador do cliente</option><option value="client_user">Membro da equipe</option></select></label><label class="field"><span>Situação</span><select data-admin-filter="status"><option value="">Todas</option><option value="active">Ativos</option><option value="inactive">Inativos</option></select></label><button class="btn btn-quiet" type="button" data-admin-clear>Limpar</button></div><div class="admin-module-card-list" data-admin-card-list><?php foreach($users as $userItem):?><?php $searchText=mb_strtolower(trim(implode(' ',[$userItem['name'],$userItem['email'],$userItem['tenant_name']??'Equipe RS',$roleLabels[$userItem['role']]??$userItem['role']])));?><article class="admin-record-card" data-admin-card data-search="<?= View::e($searchText) ?>" data-role="<?= View::e($userItem['role']) ?>" data-status="<?= View::e($userItem['status']) ?>"><div class="admin-record-main"><span class="admin-record-mark is-user"><?= View::e(mb_strtoupper(mb_substr($userItem['name'],0,2))) ?></span><div class="admin-record-copy"><div class="admin-record-title-row"><div><h3><?= View::e($userItem['name']) ?></h3><p><?= View::e($userItem['email']) ?></p></div><div class="admin-record-badges"><span class="badge badge-<?= View::e($userItem['status']) ?>"><?= $userItem['status']==='active'?'Ativo':'Inativo' ?></span></div></div><small class="admin-record-muted"><?= View::e($userItem['tenant_name']??'Equipe RS') ?> · <?= View::e($roleLabels[$userItem['role']]??$userItem['role']) ?></small></div></div><dl class="admin-record-details"><div><dt>Perfil</dt><dd><?= View::e($roleLabels[$userItem['role']]??$userItem['role']) ?></dd></div><div><dt>Empresa</dt><dd><?= View::e($userItem['tenant_name']??'Equipe RS') ?></dd></div><div><dt>Último acesso</dt><dd><?= $userItem['last_login_at']?View::e(date('d/m/Y H:i',strtotime($userItem['last_login_at']))):'Nunca' ?></dd></div><div><dt>Cadastrado em</dt><dd><?= !empty($userItem['created_at'])?View::e(date('d/m/Y',strtotime($userItem['created_at']))):'—' ?></dd></div></dl><?php if(Auth::can('users.manage')):?><div class="admin-record-actions"><button class="btn btn-small btn-outline" type="button" data-toggle-panel="user-drawer" data-user-open="edit" data-id="<?= (int)$userItem['id'] ?>" data-name="<?= View::e($userItem['name']) ?>" data-email="<?= View::e($userItem['email']) ?>" data-role="<?= View::e($userItem['role']) ?>" data-status="<?= View::e($userItem['status']) ?>" data-tenant-id="<?= $userItem['tenant_id']===null?'global':(int)$userItem['tenant_id'] ?>">Editar usuário</button></div><?php endif;?></article><?php endforeach;?><?php if(!$users):?><div class="empty-state admin-filter-empty">Nenhum usuário cadastrado.</div><?php endif;?><div class="empty-state admin-filter-empty" data-admin-filter-empty hidden>Nenhum usuário corresponde aos filtros.</div></div></section>
+<?php if(Auth::can('users.manage')):?><aside class="conversation-details conversation-drawer admin-form-drawer" id="user-drawer" aria-label="Configurar usuário" aria-modal="true" role="dialog"><div class="conversation-drawer-header"><div><span class="eyebrow" data-user-eyebrow>Novo usuário</span><h2 data-user-title>Criar acesso</h2><p data-user-description>Defina a empresa, o perfil e os dados de entrada.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="user-drawer">×</button></div><div class="conversation-drawer-body"><form class="drawer-form" method="post" action="<?= View::e(Router::url('/users')) ?>" data-user-form><?= Csrf::input() ?><input type="hidden" name="user_id" value="0" data-user-field="id"><section class="drawer-section"><div class="drawer-form-grid"><label class="field drawer-span" data-user-tenant-field><span>Empresa</span><select name="tenant_id" data-user-field="tenant_id"><option value="global">Equipe RS — acesso global</option><?php foreach($tenants as $tenant):?><option value="<?= (int)$tenant['id'] ?>"><?= View::e($tenant['name']) ?></option><?php endforeach;?></select></label><label class="field drawer-span"><span>Perfil</span><select name="role" data-user-field="role"><option value="super_admin">Super Admin RS</option><option value="client_admin">Administrador do cliente</option><option value="client_user">Membro da equipe</option></select></label><label class="field drawer-span"><span>Nome</span><input name="name" data-user-field="name" placeholder="Nome completo" required></label><label class="field drawer-span"><span>E-mail</span><input type="email" name="email" data-user-field="email" placeholder="usuario@empresa.com" required></label><label class="field drawer-span"><span data-user-password-label>Senha inicial</span><input type="password" name="password" minlength="8" data-user-field="password" placeholder="Mínimo de 8 caracteres"><small class="field-hint" data-user-password-hint>Obrigatória no primeiro cadastro.</small></label><label class="field drawer-span" data-user-status-field hidden><span>Situação</span><select name="status" data-user-field="status"><option value="active">Ativo</option><option value="inactive">Inativo</option></select></label></div></section><div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="user-drawer">Cancelar</button><button class="btn btn-primary" type="submit" data-user-submit>Salvar usuário</button></div></form></div></aside><?php endif;?>

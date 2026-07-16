@@ -1,44 +1,8 @@
 <?php
-
-use App\Core\Csrf;
-use App\Core\Router;
-use App\Core\View;
-
-$groups = [];
-foreach ($permissions as $permission) {
-    $groups[$permission['category']][] = $permission;
-}
+use App\Core\Csrf;use App\Core\Router;use App\Core\View;
+$groups=[];foreach($permissions as $permission){$groups[$permission['category']][]=$permission;}
+$total=count($permissions);$adminCount=count(array_filter($permissions,static fn(array $p):bool=>!empty($matrix['client_admin'][$p['permission_key']])));$userCount=count(array_filter($permissions,static fn(array $p):bool=>!empty($matrix['client_user'][$p['permission_key']])));
 ?>
-<div class="hero-card compact-hero hero-admin">
-    <div>
-        <span class="eyebrow light">Autorização por perfil</span>
-        <h2>Matriz de permissões do RS Connect.</h2>
-        <p>As rotas consultam essas permissões no banco. Super Admin possui acesso global; os perfis do cliente seguem a matriz abaixo.</p>
-    </div>
-    <span class="hero-badge"><?= $canEdit ? 'Modo de edição' : 'Somente leitura' ?></span>
-</div>
-
-<form class="card permission-card" method="post" action="<?= View::e(Router::url('/permissions')) ?>">
-    <?php if ($canEdit): ?><?= Csrf::input() ?><?php endif; ?>
-    <div class="permission-header">
-        <div><span class="eyebrow">Perfis padrão</span><h2>Permissões disponíveis</h2></div>
-        <div class="permission-role-head"><strong>Administrador</strong><strong>Usuário</strong></div>
-    </div>
-
-    <?php foreach ($groups as $category => $items): ?>
-        <section class="permission-group">
-            <h3><?= View::e($category) ?></h3>
-            <?php foreach ($items as $permission): ?>
-                <div class="permission-row">
-                    <div><strong><?= View::e($permission['name']) ?></strong><small><?= View::e($permission['description']) ?><code><?= View::e($permission['permission_key']) ?></code></small></div>
-                    <label class="permission-check"><input type="checkbox" name="permissions[client_admin][]" value="<?= View::e($permission['permission_key']) ?>" <?= !empty($matrix['client_admin'][$permission['permission_key']]) ? 'checked' : '' ?> <?= !$canEdit ? 'disabled' : '' ?>><span>Admin</span></label>
-                    <label class="permission-check"><input type="checkbox" name="permissions[client_user][]" value="<?= View::e($permission['permission_key']) ?>" <?= !empty($matrix['client_user'][$permission['permission_key']]) ? 'checked' : '' ?> <?= !$canEdit ? 'disabled' : '' ?>><span>Usuário</span></label>
-                </div>
-            <?php endforeach; ?>
-        </section>
-    <?php endforeach; ?>
-
-    <?php if ($canEdit): ?>
-        <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar matriz de permissões</button></div>
-    <?php endif; ?>
-</form>
+<section class="admin-module-hero"><div><span class="eyebrow">Autorização por perfil</span><h2>Permissões padrão dos clientes</h2><p>Defina o que administradores e membros da equipe podem fazer. As alterações valem após uma nova entrada no sistema.</p></div><span class="badge"><?= $canEdit?'Modo de edição':'Somente leitura' ?></span></section>
+<section class="admin-module-summary"><article><span>Permissões</span><strong><?= $total ?></strong><small>ações disponíveis</small></article><article class="is-success"><span>Administrador</span><strong><?= $adminCount ?></strong><small>acessos liberados</small></article><article class="is-blue"><span>Membro da equipe</span><strong><?= $userCount ?></strong><small>acessos liberados</small></article><article class="is-purple"><span>Grupos</span><strong><?= count($groups) ?></strong><small>módulos organizados</small></article></section>
+<form class="card admin-permissions-panel" method="post" action="<?= View::e(Router::url('/permissions')) ?>" data-permissions-form><?php if($canEdit):?><?= Csrf::input() ?><?php endif;?><div class="section-heading admin-module-heading"><div><span class="eyebrow">Matriz de acessos</span><h2>Permissões por módulo</h2><p>Pesquise uma ação ou use os atalhos de seleção por perfil.</p></div><?php if($canEdit):?><button class="btn btn-primary" type="submit">Salvar permissões</button><?php endif;?></div><div class="admin-permission-toolbar"><label class="field"><span>Buscar permissão</span><input type="search" placeholder="Ex.: conversas, agenda, usuários" data-permission-search></label><?php if($canEdit):?><div class="admin-permission-shortcuts"><button class="btn btn-small btn-outline" type="button" data-permission-set="client_admin" data-value="1">Liberar tudo para administradores</button><button class="btn btn-small btn-quiet" type="button" data-permission-set="client_user" data-value="0">Remover tudo da equipe</button></div><?php endif;?></div><div class="admin-permission-groups"><?php foreach($groups as $category=>$items):?><?php $categorySearch=mb_strtolower($category.' '.implode(' ',array_map(static fn(array $i):string=>$i['name'].' '.$i['description'],$items)));?><details class="admin-permission-group" open data-permission-group data-search="<?= View::e($categorySearch) ?>"><summary><span><strong><?= View::e($category) ?></strong><small><?= count($items) ?> permissões</small></span><span class="admin-permission-role-head"><b>Administrador</b><b>Equipe</b></span></summary><div class="admin-permission-table"><?php if($canEdit):?><div class="admin-permission-category-actions"><button type="button" class="table-link" data-permission-category="client_admin" data-value="1">Marcar admin</button><button type="button" class="table-link" data-permission-category="client_user" data-value="1">Marcar equipe</button><button type="button" class="table-link" data-permission-category="client_user" data-value="0">Limpar equipe</button></div><?php endif;?><?php foreach($items as $permission):?><div class="admin-permission-row" data-permission-row data-search="<?= View::e(mb_strtolower($permission['name'].' '.$permission['description'].' '.$permission['permission_key'])) ?>"><div><strong><?= View::e($permission['name']) ?></strong><small><?= View::e($permission['description']) ?></small><code><?= View::e($permission['permission_key']) ?></code></div><label class="permission-switch"><input type="checkbox" name="permissions[client_admin][]" value="<?= View::e($permission['permission_key']) ?>" <?= !empty($matrix['client_admin'][$permission['permission_key']])?'checked':'' ?> <?= !$canEdit?'disabled':'' ?> data-permission-role="client_admin"><span></span></label><label class="permission-switch"><input type="checkbox" name="permissions[client_user][]" value="<?= View::e($permission['permission_key']) ?>" <?= !empty($matrix['client_user'][$permission['permission_key']])?'checked':'' ?> <?= !$canEdit?'disabled':'' ?> data-permission-role="client_user"><span></span></label></div><?php endforeach;?></div></details><?php endforeach;?></div><?php if($canEdit):?><div class="admin-permission-savebar"><span>Revise os acessos antes de salvar. Usuários devem entrar novamente para atualizar a sessão.</span><button class="btn btn-primary" type="submit">Salvar matriz de permissões</button></div><?php endif;?></form>
