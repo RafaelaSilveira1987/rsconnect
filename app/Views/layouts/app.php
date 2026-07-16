@@ -107,7 +107,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=31.3.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=32.0.0')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -177,7 +177,7 @@ $svgIcon = static function (string $name): string {
 
             <span class="nav-caption"><?= Auth::isSuperAdmin() ? 'Administração RS' : 'Administração' ?></span>
             <?php if (Auth::isSuperAdmin()): ?>
-                <a class="nav-link<?= $isActive('/companies') ?>" href="<?= View::e(Router::url('/companies')) ?>"><?= $svgIcon('company') ?><span>Empresas</span></a>
+                <a class="nav-link<?= $isAnyActive(['/companies', '/companies/overview', '/company-settings']) ?>" href="<?= View::e(Router::url('/companies')) ?>"><?= $svgIcon('company') ?><span>Empresas</span></a>
             <?php elseif (Auth::can('company.view') && $moduleVisible('company_settings')): ?>
                 <a class="nav-link<?= $isActive('/company-settings') ?>" href="<?= View::e(Router::url('/company-settings')) ?>"><?= $svgIcon('company') ?><span>Minha empresa</span></a>
             <?php endif; ?>
@@ -243,6 +243,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=31.3.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=32.0.0')) ?>" defer></script>
 </body>
 </html>

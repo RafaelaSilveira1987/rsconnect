@@ -143,6 +143,7 @@ return static function (Router $router): void {
     $router->post('/tasks/status', [TaskController::class, 'updateStatus'], ['auth', 'permission:tasks.manage', 'csrf']);
 
     $router->get('/companies', [CompanyController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/companies/overview', [CompanyController::class, 'overview'], ['auth', 'super_admin']);
     $router->post('/companies', [CompanyController::class, 'store'], ['auth', 'super_admin', 'csrf']);
     $router->post('/companies/status', [CompanyController::class, 'updateStatus'], ['auth', 'super_admin', 'csrf']);
     $router->get('/company-settings', [CompanyController::class, 'settings'], ['auth', 'permission:company.view']);

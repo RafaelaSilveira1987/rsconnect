@@ -10,6 +10,7 @@ use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\AdminDashboardService;
 use App\Services\PreSchedulingService;
 use App\Services\TenantModuleService;
 use PDO;
@@ -19,23 +20,33 @@ final class CompanyController
 {
     public function index(): void
     {
-        $pdo = Database::connection();
-        $companies = $pdo->query(
-            'SELECT t.*,
-                    COUNT(DISTINCT u.id) AS users_count,
-                    COUNT(DISTINCT i.id) AS instances_count,
-                    COUNT(DISTINCT a.id) AS agents_count
-             FROM tenants t
-             LEFT JOIN users u ON u.tenant_id = t.id
-             LEFT JOIN evolution_instances i ON i.tenant_id = t.id
-             LEFT JOIN ai_agents a ON a.tenant_id = t.id
-             GROUP BY t.id
-             ORDER BY t.created_at DESC'
-        )->fetchAll(PDO::FETCH_ASSOC);
+        $data = (new AdminDashboardService())->companies([
+            'q' => (string) ($_GET['q'] ?? ''),
+            'status' => (string) ($_GET['status'] ?? ''),
+            'plan' => (string) ($_GET['plan'] ?? ''),
+            'health' => (string) ($_GET['health'] ?? ''),
+        ]);
 
         View::render('companies.index', [
             'title' => 'Empresas',
-            'companies' => $companies,
+            'companies' => $data['companies'],
+            'summary' => $data['summary'],
+            'filters' => $data['filters'],
+        ]);
+    }
+
+    public function overview(): void
+    {
+        $tenantId = (int) ($_GET['id'] ?? 0);
+        $company = (new AdminDashboardService())->companyOverview($tenantId);
+        if (!$company) {
+            Flash::set('error', 'Empresa não encontrada.');
+            $this->redirect('/companies');
+        }
+
+        View::render('companies.overview', [
+            'title' => 'Visão geral da empresa',
+            'company' => $company,
         ]);
     }
 
