@@ -38,7 +38,22 @@ final class AiAutomationService
 
             $agent = $this->agentFor($pdo, $instance);
             if (!$agent) {
-                $this->log((int) $instance['tenant_id'], $conversationId, null, 'ai.skipped', 'skipped', 'Nenhum agente ativo com resposta automática.', null, null);
+                $tenantId = (int) $instance['tenant_id'];
+                $this->log($tenantId, $conversationId, null, 'ai.skipped', 'skipped', 'Nenhum agente ativo com resposta automática.', null, null);
+                (new NotificationService())->createIfEnabled(
+                    $tenantId,
+                    'ai_errors',
+                    'Nenhum assistente disponível para responder',
+                    'Uma nova mensagem chegou, mas não existe um assistente ativo com respostas automáticas para esta conexão WhatsApp.',
+                    'warning',
+                    '/agents',
+                    'ai_error',
+                    'ai.agent_missing',
+                    'conversation',
+                    $conversationId,
+                    ['instance_id' => (int) ($instance['id'] ?? 0)],
+                    600
+                );
                 return;
             }
 
@@ -90,9 +105,29 @@ final class AiAutomationService
             if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            $this->log((int) $instance['tenant_id'], $conversationId, isset($agent['id']) ? (int) $agent['id'] : null, 'ai.failed', 'error', $exception->getMessage(), null, [
+            $tenantId = (int) $instance['tenant_id'];
+            $agentId = isset($agent['id']) ? (int) $agent['id'] : null;
+            $this->log($tenantId, $conversationId, $agentId, 'ai.failed', 'error', $exception->getMessage(), null, [
                 'payload_event' => $payload['event'] ?? null,
             ]);
+
+            (new NotificationService())->createIfEnabled(
+                $tenantId,
+                'ai_errors',
+                'O assistente virtual precisa de atenção',
+                $this->friendlyAiFailure($exception->getMessage()),
+                'danger',
+                '/conversations?conversation_id=' . $conversationId,
+                'ai_error',
+                'ai.failed',
+                'conversation',
+                $conversationId,
+                [
+                    'agent_id' => $agentId,
+                    'technical_error' => mb_substr($exception->getMessage(), 0, 700),
+                ],
+                600
+            );
         }
     }
 
@@ -331,6 +366,30 @@ final class AiAutomationService
             'event_type' => $type,
             'description' => $description,
         ]);
+    }
+
+
+    private function friendlyAiFailure(string $error): string
+    {
+        $normalized = mb_strtolower($error);
+
+        if (str_contains($normalized, '401') || str_contains($normalized, 'invalid api key') || str_contains($normalized, 'chave')) {
+            return 'A chave de acesso da IA parece inválida ou expirou. Revise a credencial do assistente para voltar a responder.';
+        }
+        if (str_contains($normalized, '403') || str_contains($normalized, 'forbidden') || str_contains($normalized, 'acesso recusado')) {
+            return 'O serviço de IA recusou o acesso. Revise a credencial e a URL configuradas para este assistente.';
+        }
+        if (str_contains($normalized, '429') || str_contains($normalized, 'quota') || str_contains($normalized, 'saldo') || str_contains($normalized, 'limit')) {
+            return 'O limite de uso ou o saldo da IA pode ter sido atingido. Verifique a conta do provedor antes de tentar novamente.';
+        }
+        if (str_contains($normalized, 'timeout') || str_contains($normalized, 'timed out') || str_contains($normalized, 'tempo limite')) {
+            return 'O serviço de IA demorou mais que o esperado para responder. Tente novamente e confira a conexão do provedor.';
+        }
+        if (str_contains($normalized, 'modelo') || str_contains($normalized, 'model')) {
+            return 'O modelo escolhido pode não estar disponível para esta credencial. Revise o modelo configurado no assistente.';
+        }
+
+        return 'O assistente não conseguiu responder uma conversa. Abra os detalhes da conversa e revise a configuração da IA.';
     }
 
     private function log(int $tenantId, int $conversationId, ?int $agentId, string $event, string $status, ?string $error, ?string $responsePreview, ?array $raw): void

@@ -15,6 +15,7 @@ use App\Core\View;
 use App\Services\AutomationWebhookService;
 use App\Services\CalendarAvailabilityService;
 use App\Services\EvolutionService;
+use App\Services\NotificationService;
 use App\Services\PreSchedulingService;
 use App\Services\SubscriptionService;
 use DateTimeImmutable;
@@ -269,6 +270,19 @@ final class CalendarController
         $appointmentId = (int) Database::connection()->lastInsertId();
         Audit::log('calendar.appointment_created', ['appointment_id' => $appointmentId], $tenantId);
         $this->trySyncToN8n($appointmentId, $tenantId, 'created');
+        (new NotificationService())->createIfEnabled(
+            $tenantId,
+            'calendar',
+            $isPreSchedule === 1 ? 'Novo pré-agendamento' : 'Novo agendamento',
+            $title . ' — ' . date('d/m/Y H:i', strtotime($normalized['starts_at'])),
+            'info',
+            '/calendar',
+            'calendar',
+            'calendar.appointment.created',
+            'appointment',
+            $appointmentId,
+            ['status' => $initialStatus, 'starts_at' => $normalized['starts_at']]
+        );
         Flash::set('success', $isPreSchedule === 1 ? 'Pré-agendamento criado para aprovação.' : 'Agendamento criado.');
         $this->redirect('/calendar?tenant_id=' . $tenantId);
     }
@@ -350,6 +364,31 @@ final class CalendarController
         } else {
             Audit::log('calendar.appointment_status_updated', ['appointment_id' => $appointmentId, 'status' => $status], $tenantId);
             $this->trySyncToN8n($appointmentId, $tenantId, 'status_updated');
+            $statusLabel = match ($status) {
+                'pre_scheduled' => 'Pré-agendado',
+                'awaiting_approval' => 'Aguardando aprovação',
+                'scheduled' => 'Agendado',
+                'confirmed' => 'Confirmado',
+                'completed' => 'Concluído',
+                'cancelled' => 'Cancelado',
+                'rejected' => 'Recusado',
+                'rescheduled' => 'Remarcação solicitada',
+                'no_show' => 'Não compareceu',
+                default => ucfirst(str_replace('_', ' ', $status)),
+            };
+            (new NotificationService())->createIfEnabled(
+                $tenantId,
+                'calendar',
+                'Agenda atualizada',
+                trim((string) ($appointmentBefore['title'] ?? 'Compromisso')) . ': ' . $statusLabel . '.',
+                in_array($status, ['cancelled', 'rejected', 'no_show'], true) ? 'warning' : 'info',
+                '/calendar',
+                'calendar',
+                'calendar.appointment.status_updated.' . $status,
+                'appointment',
+                $appointmentId,
+                ['status' => $status]
+            );
             $messageResult = $this->trySendPreScheduleStatusMessage($appointmentId, $tenantId, $status);
             if ($status === 'confirmed' && $wasPreSchedule) {
                 Database::connection()->prepare(

@@ -121,6 +121,8 @@ return static function (Router $router): void {
     $router->post('/security/sessions/revoke', [SecurityController::class, 'revokeSession'], ['auth', 'super_admin', 'csrf']);
 
     $router->get('/notifications', [NotificationsController::class, 'index'], ['auth', 'permission:notifications.view']);
+    $router->get('/notifications/count', [NotificationsController::class, 'count'], ['auth', 'permission:notifications.view']);
+    $router->post('/notifications/preferences', [NotificationsController::class, 'savePreferences'], ['auth', 'permission:notifications.manage', 'csrf']);
     $router->post('/notifications/read-all', [NotificationsController::class, 'markAllRead'], ['auth', 'permission:notifications.view', 'csrf']);
 
     $router->get('/agenda-inteligente', [CalendarController::class, 'availability'], ['auth', 'permission:calendar.view']);

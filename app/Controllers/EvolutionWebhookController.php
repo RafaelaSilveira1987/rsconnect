@@ -9,6 +9,7 @@ use App\Core\Env;
 use App\Services\AiAutomationService;
 use App\Services\AutomationWebhookService;
 use App\Services\CrmAutoService;
+use App\Services\NotificationService;
 use App\Services\PreSchedulingService;
 use PDO;
 use Throwable;
@@ -130,6 +131,36 @@ final class EvolutionWebhookController
 
             $aiHandled = false;
             if (!$fromMe && $inserted) {
+                $senderName = $pushName !== '' ? $pushName : $phone;
+                $preview = trim($content);
+                if ($preview === '') {
+                    $preview = match ($messageType) {
+                        'image' => '[Imagem recebida]',
+                        'audio' => '[Áudio recebido]',
+                        'video' => '[Vídeo recebido]',
+                        'document' => '[Documento recebido]',
+                        default => '[Nova mensagem]',
+                    };
+                }
+                (new NotificationService())->createIfEnabled(
+                    (int) $instance['tenant_id'],
+                    'messages',
+                    'Nova mensagem recebida',
+                    mb_substr($senderName . ': ' . $preview, 0, 500),
+                    'info',
+                    '/conversations?conversation_id=' . $conversationId,
+                    'message',
+                    'message.received',
+                    'conversation',
+                    $conversationId,
+                    [
+                        'instance_id' => (int) $instance['id'],
+                        'phone' => $phone,
+                        'message_type' => $messageType,
+                        'external_id' => $externalId,
+                    ]
+                );
+
                 (new AutomationWebhookService())->dispatch('message.received', [
                     'tenant_id' => (int) $instance['tenant_id'],
                     'instance_id' => (int) $instance['id'],

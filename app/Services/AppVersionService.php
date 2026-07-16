@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'HOTFIX 31.0.1';
-    public const REQUIRED_MIGRATION = '033_customer_company_profile.sql';
+    public const PACKAGE_LABEL = 'ZIP 31.1';
+    public const REQUIRED_MIGRATION = '034_notification_preferences_and_alerts.sql';
 
     private PDO $pdo;
 
@@ -70,13 +70,14 @@ final class AppVersionService
             'calendar_availability_requests',
             'calendar_availability_slots',
             'calendar_google_sync_logs',
+            'tenant_notification_preferences',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
-            count($missingTables) === 0 ? 'Estrutura principal até o HOTFIX 31.0.1 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 033, conforme o pacote implantado.'
+            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 31.1 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
+            'Rodar as migrations pendentes até a 034, conforme o pacote implantado.'
         );
 
         $appKey = (string) Env::get('APP_KEY', '');

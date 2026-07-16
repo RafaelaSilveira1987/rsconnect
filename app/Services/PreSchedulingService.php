@@ -52,6 +52,23 @@ final class PreSchedulingService
                 $result['skip_ai'] = $ack['ok'];
             }
 
+            $appointmentLabel = trim((string) ($existing['title'] ?? 'Pré-agendamento')) ?: 'Pré-agendamento';
+            $preferenceLabel = trim($this->displayDay($intent) . ' ' . $this->displayTime($intent));
+            (new NotificationService())->createIfEnabled(
+                $tenantId,
+                'calendar',
+                'Preferência de agenda atualizada',
+                $appointmentLabel . ($preferenceLabel !== '' ? ': ' . $preferenceLabel : ' recebeu novas informações.'),
+                'info',
+                '/calendar',
+                'calendar',
+                'calendar.pre_schedule.updated',
+                'appointment',
+                (int) ($existing['id'] ?? 0),
+                ['conversation_id' => $conversationId],
+                120
+            );
+
             return $result;
         }
 
@@ -118,6 +135,25 @@ final class PreSchedulingService
             'modality' => $intent['modality'],
             'message' => $content,
         ], null, $tenantId);
+
+        $preferenceLabel = trim($this->displayDay($intent) . ' ' . $this->displayTime($intent));
+        (new NotificationService())->createIfEnabled(
+            $tenantId,
+            'calendar',
+            'Novo pedido de agendamento',
+            $titleName . ($preferenceLabel !== '' ? ' informou preferência para ' . $preferenceLabel . '.' : ' iniciou um pedido de agendamento.'),
+            'info',
+            '/calendar',
+            'calendar',
+            'calendar.pre_schedule.created',
+            'appointment',
+            $appointmentId,
+            [
+                'conversation_id' => $conversationId,
+                'contact_id' => $contactId,
+                'modality' => $intent['modality'],
+            ]
+        );
 
         $result['created'] = true;
         $result['appointment_id'] = $appointmentId;

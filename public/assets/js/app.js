@@ -497,3 +497,116 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 })();
+
+(function () {
+  const links = Array.from(document.querySelectorAll('[data-notification-link]'));
+  if (links.length < 1) return;
+
+  const countUrl = links.find((link) => link.dataset.countUrl)?.dataset.countUrl || '';
+  if (!countUrl) return;
+
+  const badges = () => Array.from(document.querySelectorAll('[data-notification-badge]'));
+  const storageKey = 'rs-connect-notification-latest-id';
+  let initialized = false;
+  let lastId = Number(window.sessionStorage.getItem(storageKey) || 0);
+  let polling = false;
+
+  function updateBadges(count) {
+    const value = Math.max(0, Number(count || 0));
+    badges().forEach((badge) => {
+      badge.textContent = String(Math.min(99, value));
+      badge.hidden = value < 1;
+      badge.closest('[data-notification-link]')?.setAttribute(
+        'aria-label',
+        value > 0 ? `Notificações: ${value} nova${value === 1 ? '' : 's'}` : 'Notificações'
+      );
+    });
+  }
+
+  function showNotificationToast(notification) {
+    if (!notification || !notification.title) return;
+
+    let toast = document.querySelector('[data-notification-live-toast]');
+    if (!toast) {
+      toast = document.createElement('a');
+      toast.className = 'notification-live-toast';
+      toast.dataset.notificationLiveToast = '';
+      toast.innerHTML = '<span class="notification-live-toast-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg></span><span class="notification-live-toast-copy"><strong></strong><small></small></span>';
+      document.body.appendChild(toast);
+    }
+
+    const title = toast.querySelector('strong');
+    const message = toast.querySelector('small');
+    if (title) title.textContent = notification.title || 'Nova notificação';
+    if (message) message.textContent = notification.message || 'Abra para ver os detalhes.';
+    toast.href = notification.action_url || links[0].href;
+    toast.classList.add('is-visible');
+
+    window.clearTimeout(showNotificationToast.timeout);
+    showNotificationToast.timeout = window.setTimeout(() => {
+      toast.classList.remove('is-visible');
+    }, 6500);
+  }
+
+  async function pollNotifications() {
+    if (polling) return;
+    polling = true;
+    try {
+      const response = await fetch(countUrl, {
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        cache: 'no-store'
+      });
+      if (!response.ok) return;
+
+      const payload = await response.json();
+      if (!payload || !payload.ok) return;
+      updateBadges(payload.count);
+
+      const latest = payload.latest || null;
+      const latestId = Number(latest?.id || 0);
+      if (!initialized) {
+        initialized = true;
+        if (latestId > lastId) {
+          lastId = latestId;
+          window.sessionStorage.setItem(storageKey, String(lastId));
+        }
+        return;
+      }
+
+      if (latestId > lastId) {
+        lastId = latestId;
+        window.sessionStorage.setItem(storageKey, String(lastId));
+        showNotificationToast(latest);
+        links.forEach((link) => {
+          link.classList.remove('has-new-notification');
+          void link.offsetWidth;
+          link.classList.add('has-new-notification');
+        });
+      }
+    } catch (error) {
+      // O sininho continua funcional pelo carregamento normal caso o polling falhe.
+    } finally {
+      polling = false;
+    }
+  }
+
+  pollNotifications();
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') pollNotifications();
+  }, 10000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') pollNotifications();
+  });
+})();
+
+(function () {
+  document.querySelectorAll('.notification-preference-option input[type="checkbox"]').forEach((input) => {
+    input.addEventListener('change', () => {
+      input.closest('.notification-preference-option')?.classList.toggle('is-enabled', input.checked);
+    });
+  });
+})();

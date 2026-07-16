@@ -116,6 +116,7 @@ final class AutomationWebhookService
         $target = trim($target);
         if ($target === '' || !filter_var($target, FILTER_VALIDATE_URL)) {
             $this->log($tenantId, $flowId, $event, 'error', null, $this->maskUrl($target), 'URL do webhook n8n inválida.', $payload);
+            $this->notifyFailure($tenantId, $flowId, $flowName, $event, 'A integração está com um endereço inválido. Revise a configuração antes de tentar novamente.');
             return ['ok' => false, 'error' => 'URL inválida', 'flow_id' => $flowId];
         }
 
@@ -182,8 +183,58 @@ final class AutomationWebhookService
             $message = mb_substr($exception->getMessage(), 0, 700);
             $this->markFlowError($flowId, $message);
             $this->log($tenantId, $flowId, $event, 'error', null, $this->maskUrl($target), $message, $payload);
+            $this->notifyFailure($tenantId, $flowId, $flowName, $event, $this->friendlyAutomationFailure($message));
             return ['ok' => false, 'error' => $message, 'flow_id' => $flowId];
         }
+    }
+
+
+    private function notifyFailure(?int $tenantId, ?int $flowId, ?string $flowName, string $event, string $message): void
+    {
+        if ($tenantId === null || $tenantId < 1) {
+            return;
+        }
+
+        $label = trim((string) $flowName);
+        $title = $label !== ''
+            ? 'A automação “' . mb_substr($label, 0, 80) . '” precisa de atenção'
+            : 'Uma integração precisa de atenção';
+
+        (new NotificationService())->createIfEnabled(
+            $tenantId,
+            'automation_errors',
+            $title,
+            $message,
+            'warning',
+            '/automations',
+            'automation_error',
+            'automation.failed.' . mb_substr($event, 0, 80),
+            $flowId !== null ? 'n8n_flow' : 'automation_event',
+            $flowId,
+            [
+                'flow_name' => $flowName,
+                'event' => $event,
+            ],
+            600
+        );
+    }
+
+    private function friendlyAutomationFailure(string $error): string
+    {
+        $normalized = mb_strtolower($error);
+        if (str_contains($normalized, '404') || str_contains($normalized, 'not registered')) {
+            return 'O fluxo não está disponível. Confirme se ele está ativo e se a URL cadastrada é a de produção.';
+        }
+        if (str_contains($normalized, '401') || str_contains($normalized, '403') || str_contains($normalized, 'unauthorized')) {
+            return 'A integração recusou o acesso. Revise o token ou a credencial configurada.';
+        }
+        if (str_contains($normalized, 'timeout') || str_contains($normalized, 'timed out')) {
+            return 'A integração demorou mais que o esperado para responder. Verifique se o serviço externo está online.';
+        }
+        if (str_contains($normalized, 'connection refused') || str_contains($normalized, 'could not resolve') || str_contains($normalized, 'failed to connect')) {
+            return 'Não foi possível conectar ao serviço externo. Revise a URL e a disponibilidade da integração.';
+        }
+        return 'Uma automação não conseguiu concluir a tarefa. Abra a área de automações para revisar a configuração.';
     }
 
     private function tenantIdFromPayload(array $payload): int
