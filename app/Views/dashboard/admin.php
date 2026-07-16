@@ -11,6 +11,9 @@ $recentActivity = $data['recent_activity'] ?? [];
 $companySummary = $data['company_summary'] ?? [];
 $refreshedAt = $metrics['refreshed_at'] ?? null;
 $dataWarnings = $data['data_warnings'] ?? [];
+$diagnostic = $data['diagnostic'] ?? [];
+$sourceVersion = (string) ($diagnostic['service_version'] ?? ($metrics['source_version'] ?? ''));
+$databaseName = (string) ($diagnostic['database'] ?? '');
 
 $money = static fn (float $value): string => 'R$ ' . number_format($value, 2, ',', '.');
 $dateTime = static function (?string $value): string {
@@ -48,7 +51,7 @@ $statusLabel = static fn (string $status): string => match ($status) {
         <a class="btn btn-outline" href="<?= View::e(Router::url('/operations')) ?>">Abrir monitoramento</a>
         <a class="btn btn-quiet" href="<?= View::e(Router::url('/?refresh=' . time())) ?>">Atualizar dados</a>
     </div>
-    <?php if ($refreshedAt): ?><small class="admin-dashboard-updated">Dados consultados em <?= View::e($dateTime((string) $refreshedAt)) ?></small><?php endif; ?>
+    <?php if ($refreshedAt): ?><small class="admin-dashboard-updated">Dados consultados em <?= View::e($dateTime((string) $refreshedAt)) ?><?= $sourceVersion !== '' ? ' · motor ' . View::e($sourceVersion) : '' ?><?= $databaseName !== '' ? ' · banco ' . View::e($databaseName) : '' ?></small><?php endif; ?>
 </section>
 
 <?php if ($dataWarnings): ?>

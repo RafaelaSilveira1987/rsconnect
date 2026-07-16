@@ -7,7 +7,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\Database;
 use App\Core\View;
-use App\Services\AdminDashboardService;
+use App\Services\AdminExecutiveDashboardService;
 use App\Services\NotificationService;
 use PDO;
 
@@ -97,7 +97,7 @@ final class DashboardController
 
     private function adminDashboard(): void
     {
-        $data = (new AdminDashboardService())->dashboard();
+        $data = (new AdminExecutiveDashboardService())->dashboard();
 
         View::render('dashboard.admin', [
             'title' => 'Visão geral da operação',
