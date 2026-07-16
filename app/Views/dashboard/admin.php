@@ -3,15 +3,16 @@
 use App\Core\Router;
 use App\Core\View;
 
-$metrics = $data['metrics'] ?? [];
-$healthChecks = $data['health_checks'] ?? [];
-$attentionCompanies = $data['attention_companies'] ?? [];
-$recentCompanies = $data['recent_companies'] ?? [];
-$recentActivity = $data['recent_activity'] ?? [];
-$companySummary = $data['company_summary'] ?? [];
+$dashboardData = isset($dashboardData) && is_array($dashboardData) ? $dashboardData : [];
+$metrics = $dashboardData['metrics'] ?? [];
+$healthChecks = $dashboardData['health_checks'] ?? [];
+$attentionCompanies = $dashboardData['attention_companies'] ?? [];
+$recentCompanies = $dashboardData['recent_companies'] ?? [];
+$recentActivity = $dashboardData['recent_activity'] ?? [];
+$companySummary = $dashboardData['company_summary'] ?? [];
 $refreshedAt = $metrics['refreshed_at'] ?? null;
-$dataWarnings = $data['data_warnings'] ?? [];
-$diagnostic = $data['diagnostic'] ?? [];
+$dataWarnings = $dashboardData['data_warnings'] ?? [];
+$diagnostic = $dashboardData['diagnostic'] ?? [];
 $sourceVersion = (string) ($diagnostic['service_version'] ?? ($metrics['source_version'] ?? ''));
 $databaseName = (string) ($diagnostic['database'] ?? '');
 

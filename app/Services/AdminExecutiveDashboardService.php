@@ -10,7 +10,7 @@ use Throwable;
 
 final class AdminExecutiveDashboardService
 {
-    private const VERSION = '32.1.2-direct';
+    private const VERSION = '32.1.3-view-binding';
 
     private PDO $pdo;
     /** @var array<int,string> */

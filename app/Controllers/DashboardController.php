@@ -97,11 +97,11 @@ final class DashboardController
 
     private function adminDashboard(): void
     {
-        $data = (new AdminExecutiveDashboardService())->dashboard();
+        $dashboardData = (new AdminExecutiveDashboardService())->dashboard();
 
         View::render('dashboard.admin', [
             'title' => 'Visão geral da operação',
-            'data' => $data,
+            'dashboardData' => $dashboardData,
         ]);
     }
 }
