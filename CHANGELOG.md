@@ -1,3 +1,12 @@
+# ZIP 30.5 — Administração técnica de instâncias e agentes
+
+- Permite ao Super Admin atualizar nome, URL, API Key, status e nome Evolution sem perder o ID interno.
+- Adiciona recuperação/reassociação do agente de IA após recriação da instância.
+- Permite atualizar informações técnicas do agente sem apagar prompt, base ou credenciais.
+- Adiciona exclusão protegida da instância, com migração opcional de agentes, contatos, conversas e campanhas.
+- Consolida conversas duplicadas durante a substituição para preservar mensagens e histórico.
+- Mantém essas ações ocultas e bloqueadas para usuários finais.
+
 # ZIP 30.4 — Conversas em lote como lidas
 
 - Adiciona modo de seleção na caixa de entrada.

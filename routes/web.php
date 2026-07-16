@@ -164,6 +164,9 @@ return static function (Router $router): void {
     $router->get('/instances', [InstanceController::class, 'index'], ['auth', 'permission:instances.view']);
     $router->post('/instances', [InstanceController::class, 'store'], ['auth', 'permission:instances.manage', 'csrf']);
     $router->post('/instances/test', [InstanceController::class, 'sendTest'], ['auth', 'permission:instances.manage', 'csrf']);
+    $router->post('/instances/update', [InstanceController::class, 'update'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/instances/agent-update', [InstanceController::class, 'updateAgent'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/instances/delete', [InstanceController::class, 'delete'], ['auth', 'super_admin', 'csrf']);
 
     $router->get('/agents', [AgentController::class, 'index'], ['auth', 'permission:agents.view']);
     $router->get('/ai-credentials', [AiCredentialController::class, 'index'], ['auth', 'super_admin']);
