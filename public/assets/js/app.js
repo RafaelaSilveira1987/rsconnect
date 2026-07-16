@@ -401,3 +401,99 @@ document.addEventListener('DOMContentLoaded', () => {
 
   schedule();
 })();
+
+(function () {
+  const modal = document.querySelector('[data-qr-code-modal]');
+  const forms = document.querySelectorAll('[data-qr-code-form]');
+  if (!modal || forms.length === 0) return;
+
+  const image = modal.querySelector('[data-qr-image]');
+  const loading = modal.querySelector('[data-qr-loading]');
+  const errorBox = modal.querySelector('[data-qr-error]');
+  const message = modal.querySelector('[data-qr-message]');
+
+  function openModal() {
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('has-modal-open');
+  }
+
+  function closeModal() {
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('has-modal-open');
+  }
+
+  function resetModal() {
+    if (image) {
+      image.hidden = true;
+      image.removeAttribute('src');
+    }
+    if (loading) {
+      loading.hidden = false;
+      loading.textContent = 'Gerando QR Code com segurança...';
+    }
+    if (errorBox) {
+      errorBox.hidden = true;
+      errorBox.textContent = '';
+    }
+    if (message) message.hidden = false;
+  }
+
+  modal.querySelectorAll('[data-close-qr-modal]').forEach((button) => button.addEventListener('click', closeModal));
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !modal.hidden) closeModal();
+  });
+
+  forms.forEach((form) => {
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      resetModal();
+      openModal();
+      const button = form.querySelector('[data-qr-code-button]');
+      const originalText = button?.textContent || 'Gerar QR Code';
+      if (button) {
+        button.disabled = true;
+        button.textContent = 'Gerando...';
+      }
+
+      try {
+        const response = await fetch(form.action, {
+          method: 'POST',
+          body: new FormData(form),
+          credentials: 'same-origin',
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        });
+        const contentType = response.headers.get('content-type') || '';
+        const payload = contentType.includes('application/json')
+          ? await response.json()
+          : { ok: false, message: 'O servidor não retornou um QR Code válido.' };
+
+        if (!response.ok || !payload.ok || !payload.qr_code) {
+          throw new Error(payload.message || 'Não foi possível gerar o QR Code.');
+        }
+
+        if (loading) loading.hidden = true;
+        if (image) {
+          image.src = payload.qr_code;
+          image.hidden = false;
+        }
+      } catch (error) {
+        if (loading) loading.hidden = true;
+        if (message) message.hidden = true;
+        if (errorBox) {
+          errorBox.textContent = error.message || 'Não foi possível gerar o QR Code.';
+          errorBox.hidden = false;
+        }
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = originalText;
+        }
+      }
+    });
+  });
+})();

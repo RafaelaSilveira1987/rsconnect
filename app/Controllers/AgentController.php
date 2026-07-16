@@ -49,7 +49,7 @@ final class AgentController
         $instancesStatement->execute(['tenant_id' => $tenantId]);
 
         View::render('agents.index', [
-            'title' => 'Agentes de IA',
+            'title' => 'Assistentes de IA',
             'agents' => $agentsStatement->fetchAll(PDO::FETCH_ASSOC),
             'instances' => $instancesStatement->fetchAll(PDO::FETCH_ASSOC),
         ]);
@@ -74,7 +74,7 @@ final class AgentController
         $isDefault = isset($_POST['is_default']);
 
         if ($instanceId < 1 || $name === '' || $segment === '' || $prompt === '') {
-            Flash::set('error', 'Preencha instância, nome, segmento e prompt.');
+            Flash::set('error', 'Escolha a conexão WhatsApp e informe o nome, a área de atendimento e as instruções do assistente.');
             $this->redirect('/agents');
         }
 
@@ -90,7 +90,7 @@ final class AgentController
         );
         $check->execute(['id' => $instanceId, 'tenant_id' => $tenantId]);
         if (!$check->fetchColumn()) {
-            Flash::set('error', 'Instância inválida para sua empresa.');
+            Flash::set('error', 'A conexão WhatsApp escolhida não está disponível para sua empresa.');
             $this->redirect('/agents');
         }
 
@@ -142,7 +142,7 @@ final class AgentController
 
             $pdo->commit();
             Audit::log('agent.created', ['agent_id' => (int) $pdo->lastInsertId(), 'name' => $name], $tenantId);
-            Flash::set('success', 'Agente cadastrado. A chave de IA pode ser global da RS ou configurada no painel RS por cliente.');
+            Flash::set('success', 'Assistente criado. Revise as instruções e faça uma conversa de teste antes de liberar o atendimento.');
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -166,7 +166,7 @@ final class AgentController
         $isDefault = isset($_POST['is_default']);
 
         if ($agentId < 1 || !in_array($status, ['active', 'inactive'], true)) {
-            Flash::set('error', 'Dados do agente inválidos.');
+            Flash::set('error', 'Não foi possível identificar o assistente ou a opção escolhida.');
             $this->redirect('/agents');
         }
 
@@ -221,7 +221,7 @@ final class AgentController
 
             $pdo->commit();
             Audit::log('agent.status_updated', ['agent_id' => $agentId, 'status' => $status], $tenantId);
-            Flash::set('success', 'Agente atualizado.');
+            Flash::set('success', 'Configurações do assistente atualizadas.');
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -240,7 +240,7 @@ final class AgentController
         $knowledgeBase = trim((string) ($_POST['knowledge_base'] ?? ''));
 
         if ($agentId < 1 || $prompt === '') {
-            Flash::set('error', 'Informe um prompt válido para o agente.');
+            Flash::set('error', 'Informe como o assistente deve atender antes de salvar.');
             $this->redirect('/agents');
         }
 
@@ -284,9 +284,9 @@ final class AgentController
                 'prompt_length' => strlen($prompt),
                 'knowledge_base_length' => strlen($knowledgeBase),
             ], $tenantId);
-            Flash::set('success', 'Prompt e base de conhecimento atualizados. As mudanças valem nas próximas respostas da IA.');
+            Flash::set('success', 'Instruções e informações atualizadas. As mudanças valem nas próximas respostas.');
         } catch (Throwable $exception) {
-            Flash::set('error', 'Não foi possível atualizar o prompt: ' . $exception->getMessage());
+            Flash::set('error', 'Não foi possível atualizar as instruções: ' . $exception->getMessage());
         }
 
         $this->redirect('/agents');

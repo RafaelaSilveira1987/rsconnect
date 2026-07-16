@@ -452,6 +452,92 @@ final class InstanceController
         $this->redirect('/instances');
     }
 
+    /** Gera o QR Code da conexão já cadastrada. Disponível ao cliente sem expor URL ou API Key. */
+    public function qrCode(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+
+        $instanceId = (int) ($_POST['instance_id'] ?? 0);
+        if ($instanceId < 1) {
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'message' => 'Selecione uma conexão WhatsApp válida.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            return;
+        }
+
+        $pdo = Database::connection();
+        $sql = 'SELECT * FROM evolution_instances WHERE id = :id';
+        $params = ['id' => $instanceId];
+        if (!Auth::isSuperAdmin()) {
+            $sql .= ' AND tenant_id = :tenant_id';
+            $params['tenant_id'] = Auth::tenantId();
+        }
+        $statement = $pdo->prepare($sql . ' LIMIT 1');
+        $statement->execute($params);
+        $instance = $statement->fetch(PDO::FETCH_ASSOC);
+
+        if (!$instance) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'message' => 'Essa conexão não foi encontrada para sua empresa.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            return;
+        }
+
+        try {
+            $verifySsl = filter_var(
+                Env::get('EVOLUTION_SSL_VERIFY', true),
+                FILTER_VALIDATE_BOOL,
+                FILTER_NULL_ON_FAILURE
+            );
+            $caBundle = trim((string) Env::get('EVOLUTION_CA_BUNDLE', ''));
+            $service = new EvolutionService(
+                (string) $instance['base_url'],
+                Crypto::decrypt((string) $instance['api_key_encrypted']),
+                (string) $instance['instance_name'],
+                25,
+                $verifySsl ?? true,
+                $caBundle !== '' ? $caBundle : null
+            );
+            $result = $service->connectQrCode();
+            $body = is_array($result['body'] ?? null) ? $result['body'] : [];
+            $base64 = trim((string) ($body['base64'] ?? $body['qrcode'] ?? $body['qrCode'] ?? ''));
+            $pairingCode = trim((string) ($body['pairingCode'] ?? ''));
+
+            if ($base64 === '' || !str_starts_with($base64, 'data:image/')) {
+                throw new \RuntimeException(
+                    $pairingCode !== ''
+                        ? 'A Evolution retornou apenas um código de pareamento. Gere novamente o QR Code no painel administrativo.'
+                        : 'O QR Code não foi retornado. A conexão pode já estar ativa ou ainda estar iniciando.'
+                );
+            }
+
+            $update = $pdo->prepare(
+                'UPDATE evolution_instances SET status = "pending" WHERE id = :id AND status <> "connected"'
+            );
+            $update->execute(['id' => $instanceId]);
+
+            $this->audit((int) $instance['tenant_id'], 'evolution.qrcode_generated', [
+                'instance_id' => $instanceId,
+                'instance_name' => (string) $instance['instance_name'],
+            ]);
+
+            echo json_encode([
+                'ok' => true,
+                'qr_code' => $base64,
+                'connection_name' => (string) $instance['name'],
+                'message' => 'QR Code gerado. Escaneie pelo WhatsApp em Dispositivos conectados.',
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        } catch (Throwable $exception) {
+            $this->audit((int) $instance['tenant_id'], 'evolution.qrcode_failed', [
+                'instance_id' => $instanceId,
+                'error' => $exception->getMessage(),
+            ]);
+            http_response_code(422);
+            echo json_encode([
+                'ok' => false,
+                'message' => 'Não foi possível gerar o QR Code agora. ' . $exception->getMessage(),
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+    }
+
     public function sendTest(): void
     {
         $instanceId = (int) ($_POST['instance_id'] ?? 0);

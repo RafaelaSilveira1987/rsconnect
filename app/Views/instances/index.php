@@ -8,15 +8,23 @@ use App\Core\View;
 
 $canManage = Auth::can('instances.manage');
 $isSuperAdmin = Auth::isSuperAdmin();
+$canGenerateQr = $canManage;
 $adminAgents = $adminAgents ?? [];
 $instancesByTenant = $instancesByTenant ?? [];
 ?>
-<div class="content-grid <?= $canManage ? 'instances-layout' : '' ?>">
+<div class="content-grid <?= $isSuperAdmin ? 'instances-layout' : 'instances-client-layout' ?>">
     <section class="card">
         <div class="section-heading">
-            <div><span class="eyebrow">Evolution API</span><h2>Conexões WhatsApp cadastradas</h2></div>
+            <div><span class="eyebrow"><?= $isSuperAdmin ? 'Evolution API' : 'WhatsApp da empresa' ?></span><h2>Conexões WhatsApp cadastradas</h2></div>
             <span class="badge"><?= count($instances) ?> registro(s)</span>
         </div>
+
+        <?php if (!$isSuperAdmin): ?>
+            <div class="client-connection-note">
+                <strong>A configuração técnica é feita pela equipe RS Connect.</strong>
+                <span>Quando uma nova conexão estiver disponível, use o botão de QR Code para vincular o WhatsApp da empresa.</span>
+            </div>
+        <?php endif; ?>
 
         <?php if ($isSuperAdmin): ?>
             <div class="admin-technical-note">
@@ -32,8 +40,13 @@ $instancesByTenant = $instancesByTenant ?? [];
                         <span class="instance-icon instance-icon-device" aria-hidden="true"></span>
                         <div>
                             <h3><?= View::e($instance['name']) ?></h3>
-                            <p><?= View::e($instance['instance_name']) ?> · <?= View::e($instance['tenant_name']) ?></p>
-                            <small><?= View::e($instance['base_url']) ?></small>
+                            <?php if ($isSuperAdmin): ?>
+                                <p><?= View::e($instance['instance_name']) ?> · <?= View::e($instance['tenant_name']) ?></p>
+                                <small><?= View::e($instance['base_url']) ?></small>
+                            <?php else: ?>
+                                <p><?= View::e($instance['tenant_name']) ?></p>
+                                <small><?= $instance['status'] === 'connected' ? 'WhatsApp pronto para atendimento.' : 'Aguardando vinculação pelo QR Code.' ?></small>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <div class="instance-meta">
@@ -41,7 +54,7 @@ $instancesByTenant = $instancesByTenant ?? [];
                         <?php if ((int) $instance['is_default'] === 1): ?><span class="badge">Padrão</span><?php endif; ?>
                     </div>
 
-                    <?php if ($canManage): ?>
+                    <?php if ($isSuperAdmin): ?>
                         <?php
                         $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
                         $webhookUrl = Router::url('/webhooks/evolution?instance_id=' . (int) $instance['id'] . ($webhookToken !== '' ? '&token=' . rawurlencode($webhookToken) : ''));
@@ -51,6 +64,21 @@ $instancesByTenant = $instancesByTenant ?? [];
                             <code><?= View::e($webhookUrl) ?></code>
                             <small><?= $webhookToken === '' ? 'Defina EVOLUTION_WEBHOOK_TOKEN no .env antes de usar este endereço.' : 'Configure este endereço na Evolution para o evento messages.upsert.' ?></small>
                         </div>
+                    <?php endif; ?>
+
+                    <?php if ($canGenerateQr && $instance['status'] !== 'connected'): ?>
+                        <div class="instance-client-actions">
+                            <form method="post" action="<?= View::e(Router::url('/instances/qr')) ?>" data-qr-code-form>
+                                <?= Csrf::input() ?>
+                                <input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>">
+                                <button class="btn btn-primary" type="submit" data-qr-code-button>
+                                    Gerar QR Code para conectar
+                                </button>
+                            </form>
+                            <small>Abra o WhatsApp no celular e acesse Dispositivos conectados.</small>
+                        </div>
+                    <?php elseif (!$isSuperAdmin && $instance['status'] === 'connected'): ?>
+                        <div class="instance-connected-message"><span aria-hidden="true">✓</span><strong>WhatsApp conectado</strong></div>
                     <?php endif; ?>
 
                     <?php if ($isSuperAdmin): ?>
@@ -108,7 +136,7 @@ $instancesByTenant = $instancesByTenant ?? [];
         </div>
     </section>
 
-    <?php if ($canManage): ?>
+    <?php if ($isSuperAdmin): ?>
         <aside class="stack">
             <form class="card" method="post" action="<?= View::e(Router::url('/instances')) ?>">
                 <?= Csrf::input() ?>
@@ -138,6 +166,27 @@ $instancesByTenant = $instancesByTenant ?? [];
         </aside>
     <?php endif; ?>
 </div>
+
+<?php if ($canGenerateQr): ?>
+<div class="qr-connection-modal" data-qr-code-modal hidden aria-hidden="true">
+    <button class="qr-modal-backdrop" type="button" data-close-qr-modal aria-label="Fechar QR Code"></button>
+    <section class="qr-modal-card" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
+        <div class="qr-modal-header">
+            <div><span class="eyebrow">Conectar WhatsApp</span><h2 id="qr-modal-title">Escaneie o QR Code</h2></div>
+            <button class="icon-button" type="button" data-close-qr-modal aria-label="Fechar">×</button>
+        </div>
+        <div class="qr-modal-body">
+            <div class="qr-loading" data-qr-loading>Gerando QR Code com segurança...</div>
+            <img data-qr-image alt="QR Code para conectar o WhatsApp" hidden>
+            <p data-qr-message>Abra o WhatsApp no celular, toque em <strong>Dispositivos conectados</strong> e depois em <strong>Conectar dispositivo</strong>.</p>
+            <div class="qr-error-message" data-qr-error hidden></div>
+        </div>
+        <div class="qr-modal-actions">
+            <button class="btn btn-quiet" type="button" data-close-qr-modal>Fechar</button>
+        </div>
+    </section>
+</div>
+<?php endif; ?>
 
 <?php if ($isSuperAdmin): ?>
 <section class="card admin-agent-recovery" style="margin-top:18px">
