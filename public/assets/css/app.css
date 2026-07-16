@@ -4114,3 +4114,66 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
   .client-ai-profile-note { flex-direction: column; }
   .client-company-savebar { grid-template-columns: 1fr 1.3fr; }
 }
+
+/* HOTFIX 31.0.1 — gaveta de criação de assistente estável em zoom 100% */
+#agent-create-drawer.agent-client-drawer {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  grid-template-columns: none !important;
+  grid-template-rows: none !important;
+  width: min(680px, 100vw) !important;
+  max-width: 100vw !important;
+  min-width: 0 !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+}
+#agent-create-drawer.agent-client-drawer > .agent-client-drawer-header,
+#agent-create-drawer.agent-client-drawer > .agent-guided-form {
+  display: flex !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  grid-column: 1 / -1 !important;
+  grid-row: auto !important;
+}
+#agent-create-drawer.agent-client-drawer > .agent-client-drawer-header {
+  flex: 0 0 auto !important;
+}
+#agent-create-drawer.agent-client-drawer > .agent-guided-form {
+  flex: 1 1 auto !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+#agent-create-drawer.agent-client-drawer .agent-drawer-progress,
+#agent-create-drawer.agent-client-drawer .agent-client-drawer-body,
+#agent-create-drawer.agent-client-drawer .agent-client-savebar {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  grid-column: 1 / -1 !important;
+}
+#agent-create-drawer.agent-client-drawer .agent-client-drawer-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+#agent-create-drawer.agent-client-drawer .agent-step-card,
+#agent-create-drawer.agent-client-drawer .drawer-collapsed-card,
+#agent-create-drawer.agent-client-drawer .drawer-form-grid,
+#agent-create-drawer.agent-client-drawer .form-grid,
+#agent-create-drawer.agent-client-drawer .field {
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+@media (max-width: 760px) {
+  #agent-create-drawer.agent-client-drawer {
+    width: 100vw !important;
+    border-radius: 0 !important;
+  }
+}
