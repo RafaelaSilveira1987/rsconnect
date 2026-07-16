@@ -5059,3 +5059,133 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
   .admin-recent-company { grid-template-columns: 38px minmax(0, 1fr); }
   .admin-recent-company .admin-health-badge { grid-column: 2; justify-self: start; }
 }
+
+/* =========================================================
+   ZIP 32.1 — Dashboard confiável, acompanhamento e empresas
+   ========================================================= */
+.admin-data-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid #f0d49a;
+  border-radius: 16px;
+  background: #fff9e8;
+  color: #6f5214;
+}
+.admin-data-warning > div { display: grid; gap: 3px; }
+.admin-data-warning strong { color: #5f4510; }
+.admin-data-warning span { font-size: .78rem; line-height: 1.45; }
+.admin-company-summary-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.admin-company-summary-card.is-inactive { border-top-color: #94a3b8; }
+.admin-company-summary-card.is-inactive strong { color: #526173; }
+.btn-danger-soft {
+  color: #a12d3b !important;
+  border: 1px solid #f1c3ca !important;
+  background: #fff3f5 !important;
+  box-shadow: none !important;
+}
+.btn-danger-soft:hover { border-color: #e8aab4 !important; background: #ffe9ed !important; }
+.admin-activity-item > div small {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: .7rem;
+  line-height: 1.42;
+}
+.admin-company-actions > form { display: inline-flex; }
+.admin-tracking-popover .popover-form { min-width: 340px; }
+.admin-tracking-popover textarea { width: 100%; resize: vertical; }
+.admin-company-tracking-card { margin-bottom: 16px; }
+.admin-company-tracking-card .section-heading { align-items: flex-start; }
+.admin-company-tracking-card .section-heading p { max-width: 720px; margin: 5px 0 0; color: var(--rs-muted); line-height: 1.45; }
+.admin-company-tracking-form {
+  display: grid;
+  grid-template-columns: minmax(190px, .7fr) minmax(160px, .55fr) minmax(280px, 1.5fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+.admin-company-tracking-form .field { margin: 0; min-width: 0; }
+.admin-company-tracking-form .btn { min-width: 170px; }
+
+/* A gaveta de empresa precisa permanecer flex, mesmo nas regras antigas de Conversas. */
+#admin-company-create-drawer.admin-company-drawer {
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-columns: none !important;
+  align-items: stretch !important;
+  width: min(720px, 96vw) !important;
+  max-width: 720px !important;
+  overflow: hidden !important;
+}
+#admin-company-create-drawer .conversation-drawer-header,
+#admin-company-create-drawer .conversation-drawer-body,
+#admin-company-create-drawer .admin-company-create-form,
+#admin-company-create-drawer .drawer-section,
+#admin-company-create-drawer .drawer-form-grid {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+#admin-company-create-drawer .conversation-drawer-body {
+  display: block !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+#admin-company-create-drawer .admin-company-create-form {
+  display: block !important;
+  overflow: visible !important;
+}
+#admin-company-create-drawer .drawer-form-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+#admin-company-create-drawer input,
+#admin-company-create-drawer select,
+#admin-company-create-drawer textarea { min-width: 0; width: 100%; }
+#admin-company-create-drawer .drawer-savebar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 1280px) {
+  .admin-company-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .admin-company-tracking-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-company-tracking-form .admin-tracking-note { grid-column: 1 / -1; }
+  .admin-company-tracking-form .btn { justify-self: start; }
+}
+@media (max-width: 760px) {
+  .admin-data-warning { align-items: flex-start; flex-direction: column; }
+  .admin-company-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-company-tracking-form { grid-template-columns: 1fr; }
+  .admin-company-tracking-form .admin-tracking-note { grid-column: auto; }
+  .admin-company-tracking-form .btn { width: 100%; }
+  #admin-company-create-drawer.admin-company-drawer {
+    width: 100vw !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+  }
+  #admin-company-create-drawer .drawer-form-grid { grid-template-columns: 1fr !important; }
+  #admin-company-create-drawer .drawer-savebar { flex-direction: column-reverse; }
+  #admin-company-create-drawer .drawer-savebar .btn { width: 100%; }
+}
+@media (max-width: 460px) {
+  .admin-company-summary-grid { grid-template-columns: 1fr; }
+}
+.admin-company-filters { grid-template-columns: minmax(250px, 1.45fr) repeat(4, minmax(135px, .55fr)) auto auto; }
+@media (max-width: 1280px) {
+  .admin-company-filters { grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(145px, .55fr)); }
+  .admin-company-filters .btn { justify-self: start; }
+}
+@media (max-width: 760px) {
+  .admin-company-filters { grid-template-columns: 1fr 1fr; }
+  .admin-company-filters .admin-company-search { grid-column: 1 / -1; }
+}
+@media (max-width: 520px) {
+  .admin-company-filters { grid-template-columns: 1fr; }
+  .admin-company-filters .admin-company-search { grid-column: auto; }
+}

@@ -9,6 +9,7 @@ $attentionCompanies = $data['attention_companies'] ?? [];
 $recentCompanies = $data['recent_companies'] ?? [];
 $recentActivity = $data['recent_activity'] ?? [];
 $companySummary = $data['company_summary'] ?? [];
+$dataWarnings = $data['data_warnings'] ?? [];
 
 $money = static fn (float $value): string => 'R$ ' . number_format($value, 2, ',', '.');
 $dateTime = static function (?string $value): string {
@@ -46,6 +47,13 @@ $statusLabel = static fn (string $status): string => match ($status) {
         <a class="btn btn-outline" href="<?= View::e(Router::url('/operations')) ?>">Abrir monitoramento</a>
     </div>
 </section>
+
+<?php if ($dataWarnings): ?>
+<section class="admin-data-warning" role="alert">
+    <div><strong>Alguns dados não puderam ser atualizados.</strong><span>O painel evitou exibir números presumidos. Consulte o log da aplicação ou faça o redeploy completo.</span></div>
+    <a class="btn btn-outline btn-small" href="<?= View::e(Router::url('/status-sistema')) ?>">Ver diagnóstico</a>
+</section>
+<?php endif; ?>
 
 <section class="admin-kpi-grid" aria-label="Indicadores principais">
     <a class="admin-kpi-card" href="<?= View::e(Router::url('/companies?status=active')) ?>">
@@ -132,14 +140,18 @@ $statusLabel = static fn (string $status): string => match ($status) {
 <div class="admin-dashboard-grid admin-dashboard-grid-secondary">
     <section class="card">
         <div class="section-heading">
-            <div><span class="eyebrow">Atividade recente</span><h2>O que mudou na plataforma</h2></div>
+            <div><span class="eyebrow">Histórico administrativo</span><h2>Últimas correções e atualizações</h2></div>
             <a class="table-link" href="<?= View::e(Router::url('/security')) ?>">Auditoria</a>
         </div>
         <div class="admin-activity-list">
             <?php foreach ($recentActivity as $activity): ?>
                 <article class="admin-activity-item">
                     <span class="admin-activity-marker"></span>
-                    <div><strong><?= View::e((string) $activity['label']) ?></strong><p><?= View::e((string) ($activity['tenant_name'] ?: 'Operação geral')) ?><?= !empty($activity['user_name']) ? ' · ' . View::e((string) $activity['user_name']) : '' ?></p></div>
+                    <div>
+                        <strong><?= View::e((string) $activity['label']) ?></strong>
+                        <p><?= View::e((string) ($activity['tenant_name'] ?: 'Operação geral')) ?><?= !empty($activity['user_name']) ? ' · ' . View::e((string) $activity['user_name']) : '' ?></p>
+                        <?php if (!empty($activity['description'])): ?><small><?= View::e((string) $activity['description']) ?></small><?php endif; ?>
+                    </div>
                     <time datetime="<?= View::e((string) $activity['created_at']) ?>" title="<?= View::e($dateTime((string) $activity['created_at'])) ?>"><?= View::e($relative((string) $activity['created_at'])) ?></time>
                 </article>
             <?php endforeach; ?>
@@ -156,7 +168,7 @@ $statusLabel = static fn (string $status): string => match ($status) {
             <?php foreach ($recentCompanies as $company): ?>
                 <a class="admin-recent-company" href="<?= View::e(Router::url('/companies/overview?id=' . (int) $company['id'])) ?>">
                     <span class="company-avatar"><?= View::e(mb_strtoupper(mb_substr((string) $company['name'], 0, 2))) ?></span>
-                    <span><strong><?= View::e((string) $company['name']) ?></strong><small><?= View::e(ucfirst((string) $company['plan'])) ?> · <?= (int) ($company['users']['active_count'] ?? 0) ?> usuário(s)</small></span>
+                    <span><strong><?= View::e((string) $company['name']) ?></strong><small><?= View::e(ucfirst((string) $company['plan'])) ?> · cadastrada em <?= View::e($dateTime((string) ($company['created_at'] ?? ''))) ?></small></span>
                     <span class="admin-health-badge is-<?= View::e((string) $company['health']) ?>"><?= View::e((string) $company['health_label']) ?></span>
                 </a>
             <?php endforeach; ?>
@@ -165,7 +177,7 @@ $statusLabel = static fn (string $status): string => match ($status) {
     </section>
 </div>
 
-<aside class="conversation-details admin-company-drawer" id="admin-company-create-drawer" aria-label="Cadastrar nova empresa" aria-modal="true" role="dialog">
+<aside class="conversation-details conversation-drawer admin-company-drawer" id="admin-company-create-drawer" aria-label="Cadastrar nova empresa" aria-modal="true" role="dialog">
     <div class="conversation-drawer-header">
         <div><span class="eyebrow">Novo cliente</span><h2>Cadastrar empresa</h2><p>Crie a empresa e o primeiro acesso administrativo.</p></div>
         <button class="icon-button drawer-close" type="button" data-close-panel="admin-company-create-drawer" aria-label="Fechar painel">×</button>

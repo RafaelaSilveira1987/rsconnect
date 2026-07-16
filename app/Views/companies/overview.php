@@ -40,6 +40,10 @@ $implementationPercent = (int) ($company['implementation']['percent_complete'] ?
 $instanceTotal = (int) ($company['instances']['total'] ?? 0);
 $connectedInstances = (int) ($company['instances']['connected_count'] ?? 0);
 $activeAgents = (int) ($company['agents']['active_count'] ?? 0);
+$tracking = (array) ($company['admin_tracking'] ?? []);
+$trackingStatus = (string) ($tracking['tracking_status'] ?? 'automatic');
+$trackingPriority = (string) ($tracking['priority'] ?? 'attention');
+$trackingNote = (string) ($tracking['note'] ?? '');
 ?>
 
 <nav class="admin-breadcrumb" aria-label="Navegação"><a href="<?= View::e(Router::url('/companies')) ?>">Empresas</a><span>›</span><strong><?= View::e((string) $company['name']) ?></strong></nav>
@@ -58,6 +62,14 @@ $activeAgents = (int) ($company['agents']['active_count'] ?? 0);
         <a class="btn btn-primary" href="<?= View::e(Router::url('/company-settings?id=' . $tenantId)) ?>">Editar empresa</a>
         <a class="btn btn-outline" href="<?= View::e(Router::url('/implementation?tenant_id=' . $tenantId)) ?>">Ver implantação</a>
         <a class="btn btn-quiet" href="<?= View::e(Router::url('/conversations?tenant_id=' . $tenantId)) ?>">Abrir conversas</a>
+        <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" onsubmit="return confirm('<?= $company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?' ?>');">
+            <?= Csrf::input() ?>
+            <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
+            <input type="hidden" name="return_to" value="/companies/overview?id=<?= $tenantId ?>">
+            <input type="hidden" name="plan" value="<?= View::e((string) $company['plan']) ?>">
+            <input type="hidden" name="status" value="<?= $company['status'] === 'inactive' ? 'active' : 'inactive' ?>">
+            <button class="btn <?= $company['status'] === 'inactive' ? 'btn-primary' : 'btn-danger-soft' ?>" type="submit"><?= $company['status'] === 'inactive' ? 'Reativar empresa' : 'Inativar empresa' ?></button>
+        </form>
     </div>
 </section>
 
@@ -78,6 +90,31 @@ $activeAgents = (int) ($company['agents']['active_count'] ?? 0);
 </section>
 <?php endif; ?>
 
+<section class="card admin-company-tracking-card">
+    <div class="section-heading">
+        <div><span class="eyebrow">Acompanhamento RS</span><h2>Revisão e correções</h2><p>Registre quando uma pendência foi visualizada, está em andamento ou já foi corrigida.</p></div>
+        <?php if (!empty($tracking['updated_at'])): ?><small class="muted-text">Última atualização: <?= View::e($relative((string) $tracking['updated_at'])) ?></small><?php endif; ?>
+    </div>
+    <form class="admin-company-tracking-form" method="post" action="<?= View::e(Router::url('/companies/tracking')) ?>">
+        <?= Csrf::input() ?>
+        <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
+        <input type="hidden" name="return_to" value="/companies/overview?id=<?= $tenantId ?>">
+        <label class="field"><span>Situação administrativa</span><select name="tracking_status">
+            <option value="automatic" <?= $trackingStatus === 'automatic' ? 'selected' : '' ?>>Usar análise automática</option>
+            <option value="attention" <?= $trackingStatus === 'attention' ? 'selected' : '' ?>>Precisa de atenção</option>
+            <option value="reviewed" <?= $trackingStatus === 'reviewed' ? 'selected' : '' ?>>Visualizada / em acompanhamento</option>
+            <option value="resolved" <?= $trackingStatus === 'resolved' ? 'selected' : '' ?>>Corrigida / resolvida</option>
+        </select></label>
+        <label class="field"><span>Prioridade</span><select name="priority">
+            <option value="attention" <?= $trackingPriority === 'attention' ? 'selected' : '' ?>>Atenção</option>
+            <option value="critical" <?= $trackingPriority === 'critical' ? 'selected' : '' ?>>Crítica</option>
+            <option value="implantation" <?= $trackingPriority === 'implantation' ? 'selected' : '' ?>>Implantação</option>
+        </select></label>
+        <label class="field admin-tracking-note"><span>Observação da equipe RS</span><input name="note" value="<?= View::e($trackingNote) ?>" placeholder="Ex.: integração corrigida; aguardando validação do cliente."></label>
+        <button class="btn btn-primary" type="submit">Salvar acompanhamento</button>
+    </form>
+</section>
+
 <div class="admin-company-overview-grid">
     <section class="card">
         <div class="section-heading"><div><span class="eyebrow">Conta e cobrança</span><h2>Plano e assinatura</h2></div><a class="table-link" href="<?= View::e(Router::url('/billing?tenant_id=' . $tenantId)) ?>">Gerenciar</a></div>
@@ -91,7 +128,7 @@ $activeAgents = (int) ($company['agents']['active_count'] ?? 0);
         <details class="admin-inline-edit">
             <summary>Alterar plano ou status</summary>
             <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>">
-                <?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
+                <?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= $tenantId ?>"><input type="hidden" name="return_to" value="/companies/overview?id=<?= $tenantId ?>">
                 <label class="field"><span>Plano</span><select name="plan"><?php foreach (['starter' => 'Starter', 'pro' => 'Profissional', 'business' => 'Business', 'custom' => 'Personalizado'] as $value => $label): ?><option value="<?= $value ?>" <?= $company['plan'] === $value ? 'selected' : '' ?>><?= $label ?></option><?php endforeach; ?></select></label>
                 <label class="field"><span>Status</span><select name="status"><?php foreach (['active' => 'Ativa', 'inactive' => 'Inativa', 'suspended' => 'Suspensa'] as $value => $label): ?><option value="<?= $value ?>" <?= $company['status'] === $value ? 'selected' : '' ?>><?= $label ?></option><?php endforeach; ?></select></label>
                 <button class="btn btn-primary" type="submit">Salvar</button>
@@ -141,7 +178,7 @@ $activeAgents = (int) ($company['agents']['active_count'] ?? 0);
         <div class="section-heading"><div><span class="eyebrow">Histórico</span><h2>Atividade administrativa</h2></div></div>
         <div class="admin-activity-list">
             <?php foreach (($company['recent_activity'] ?? []) as $activity): ?>
-                <article class="admin-activity-item"><span class="admin-activity-marker"></span><div><strong><?= View::e((string) $activity['label']) ?></strong><p><?= View::e((string) ($activity['user_name'] ?: 'Sistema')) ?></p></div><time><?= View::e($relative((string) $activity['created_at'])) ?></time></article>
+                <article class="admin-activity-item"><span class="admin-activity-marker"></span><div><strong><?= View::e((string) $activity['label']) ?></strong><p><?= View::e((string) ($activity['user_name'] ?: 'Sistema')) ?></p><?php if (!empty($activity['description'])): ?><small><?= View::e((string) $activity['description']) ?></small><?php endif; ?></div><time><?= View::e($relative((string) $activity['created_at'])) ?></time></article>
             <?php endforeach; ?>
             <?php if (empty($company['recent_activity'])): ?><div class="empty-state">Nenhuma atividade administrativa registrada.</div><?php endif; ?>
         </div>

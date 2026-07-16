@@ -25,6 +25,7 @@ final class CompanyController
             'status' => (string) ($_GET['status'] ?? ''),
             'plan' => (string) ($_GET['plan'] ?? ''),
             'health' => (string) ($_GET['health'] ?? ''),
+            'tracking' => (string) ($_GET['tracking'] ?? ''),
         ]);
 
         View::render('companies.index', [
@@ -32,6 +33,7 @@ final class CompanyController
             'companies' => $data['companies'],
             'summary' => $data['summary'],
             'filters' => $data['filters'],
+            'dataWarnings' => $data['data_warnings'] ?? [],
         ]);
     }
 
@@ -276,6 +278,92 @@ final class CompanyController
         $this->redirect('/company-settings' . (Auth::isSuperAdmin() ? '?id=' . $tenantId : ''));
     }
 
+    public function updateTracking(): void
+    {
+        $tenantId = (int) ($_POST['tenant_id'] ?? 0);
+        $trackingStatus = trim((string) ($_POST['tracking_status'] ?? 'automatic'));
+        $priority = trim((string) ($_POST['priority'] ?? 'attention'));
+        $note = trim((string) ($_POST['note'] ?? ''));
+
+        if ($tenantId < 1
+            || !in_array($trackingStatus, ['automatic', 'attention', 'reviewed', 'resolved'], true)
+            || !in_array($priority, ['attention', 'critical', 'implantation'], true)) {
+            Flash::set('error', 'Não foi possível atualizar o acompanhamento da empresa.');
+            $this->redirect('/companies');
+        }
+
+        $pdo = Database::connection();
+        $company = $pdo->prepare('SELECT id, name FROM tenants WHERE id = :id LIMIT 1');
+        $company->execute(['id' => $tenantId]);
+        $tenant = $company->fetch(PDO::FETCH_ASSOC);
+        if (!$tenant) {
+            Flash::set('error', 'Empresa não encontrada.');
+            $this->redirect('/companies');
+        }
+
+        try {
+            $acknowledgedAt = in_array($trackingStatus, ['reviewed', 'resolved'], true) ? date('Y-m-d H:i:s') : null;
+            $resolvedAt = $trackingStatus === 'resolved' ? date('Y-m-d H:i:s') : null;
+            if ($trackingStatus === 'automatic') {
+                $note = '';
+                $acknowledgedAt = null;
+                $resolvedAt = null;
+            }
+
+            $statement = $pdo->prepare(
+                'INSERT INTO tenant_admin_tracking
+                    (tenant_id, tracking_status, priority, note, acknowledged_at, resolved_at, updated_by)
+                 VALUES
+                    (:tenant_id, :tracking_status, :priority, :note, :acknowledged_at, :resolved_at, :updated_by)
+                 ON DUPLICATE KEY UPDATE
+                    tracking_status = VALUES(tracking_status),
+                    priority = VALUES(priority),
+                    note = VALUES(note),
+                    acknowledged_at = VALUES(acknowledged_at),
+                    resolved_at = VALUES(resolved_at),
+                    updated_by = VALUES(updated_by)'
+            );
+            $statement->execute([
+                'tenant_id' => $tenantId,
+                'tracking_status' => $trackingStatus,
+                'priority' => $priority,
+                'note' => $note !== '' ? $note : null,
+                'acknowledged_at' => $acknowledgedAt,
+                'resolved_at' => $resolvedAt,
+                'updated_by' => Auth::id(),
+            ]);
+
+            $action = match ($trackingStatus) {
+                'attention' => 'company.attention_marked',
+                'reviewed' => 'company.attention_reviewed',
+                'resolved' => 'company.attention_resolved',
+                default => 'company.attention_reset',
+            };
+            Audit::log($action, [
+                'company_name' => (string) ($tenant['name'] ?? ''),
+                'tracking_status' => $trackingStatus,
+                'priority' => $priority,
+                'note' => $note,
+            ], $tenantId);
+
+            $message = match ($trackingStatus) {
+                'attention' => 'Empresa marcada para atenção.',
+                'reviewed' => 'Pendência marcada como visualizada e em acompanhamento.',
+                'resolved' => 'Pendência marcada como corrigida. Falhas antigas foram reconhecidas.',
+                default => 'Classificação automática restaurada.',
+            };
+            Flash::set('success', $message);
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar o acompanhamento. Execute a migration 035 e tente novamente.');
+        }
+
+        $returnTo = trim((string) ($_POST['return_to'] ?? '/companies'));
+        if (!str_starts_with($returnTo, '/companies')) {
+            $returnTo = '/companies';
+        }
+        $this->redirect($returnTo);
+    }
+
     public function updateStatus(): void
     {
         $tenantId = (int) ($_POST['tenant_id'] ?? 0);
@@ -293,8 +381,17 @@ final class CompanyController
         );
         $statement->execute(['status' => $status, 'plan' => $plan, 'id' => $tenantId]);
         Audit::log('company.status_updated', ['status' => $status, 'plan' => $plan], $tenantId);
-        Flash::set('success', 'Plano e status da empresa atualizados.');
-        $this->redirect('/companies');
+        $statusMessage = match ($status) {
+            'inactive' => 'Empresa inativada. Os usuários do cliente não poderão entrar enquanto ela estiver inativa.',
+            'suspended' => 'Empresa suspensa. Revise cobrança e acesso antes de reativar.',
+            default => 'Empresa ativada e plano atualizado.',
+        };
+        Flash::set('success', $statusMessage);
+        $returnTo = trim((string) ($_POST['return_to'] ?? '/companies'));
+        if (!str_starts_with($returnTo, '/companies')) {
+            $returnTo = '/companies';
+        }
+        $this->redirect($returnTo);
     }
 
 
