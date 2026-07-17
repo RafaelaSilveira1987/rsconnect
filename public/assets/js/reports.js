@@ -1,21 +1,16 @@
-/* ZIP 34.1 — comportamento autônomo dos relatórios */
+/* ZIP 34.2 — navegação dos relatórios em cards */
 document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.executive-report-page [data-tabs]').forEach((tabs) => {
-    if (tabs.dataset.reportTabsBound === '1') return;
-    tabs.dataset.reportTabsBound = '1';
-    const buttons = Array.from(tabs.querySelectorAll('[data-tab-target]'));
-    const container = tabs.parentElement;
-    buttons.forEach((button) => {
-      button.addEventListener('click', () => {
-        const target = button.dataset.tabTarget || '';
-        buttons.forEach((item) => item.classList.toggle('is-active', item === button));
-        container?.querySelectorAll('[data-tab-panel]').forEach((panel) => {
-          panel.hidden = panel.dataset.tabPanel !== target;
-        });
-        const url = new URL(window.location.href);
-        url.searchParams.set('section', target);
-        window.history.replaceState({}, '', url);
-      });
+  document.querySelectorAll('[data-report-section-link]').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      const selector = link.getAttribute('href') || '';
+      if (!selector.startsWith('#')) return;
+      const target = document.querySelector(selector);
+      if (!target) return;
+      event.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.history.replaceState({}, '', selector);
+      target.classList.add('is-highlighted');
+      window.setTimeout(() => target.classList.remove('is-highlighted'), 900);
     });
   });
 });

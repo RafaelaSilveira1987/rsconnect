@@ -74,11 +74,6 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
 <?php elseif (!$stages): ?>
     <div class="card empty-state">Nenhum funil foi encontrado. Execute a migration 004 para criar o funil padrão.</div>
 <?php else: ?>
-<?php if ($canManage): ?>
-<div class="crm-drag-hint" role="status" data-crm-status>
-    <strong>Movimentação rápida:</strong> arraste o negócio para outra etapa. A atualização acontece sem recarregar a página.
-</div>
-<?php endif; ?>
 <div class="crm-shell<?= $selected ? ' has-detail' : '' ?>">
     <section class="kanban-scroll" aria-label="Funil de vendas">
         <div class="kanban-board" data-crm-board data-crm-kind="client"

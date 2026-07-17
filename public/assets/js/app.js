@@ -884,7 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-/* ZIP 34.1 — movimentação do CRM sem recarregar a tela */
+/* ZIP 34.2 — movimentação do CRM sem recarregar a tela */
 (function () {
   const boards = Array.from(document.querySelectorAll('[data-crm-board]'));
   if (!boards.length) return;
@@ -966,7 +966,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let dragging = null;
     let originalZone = null;
     let originalNext = null;
-    const status = board.closest('.page-content')?.querySelector('[data-crm-status]') || document.querySelector('[data-crm-status]');
 
     const prepareCard = (card) => {
       if (card.getAttribute('draggable') !== 'true') return;
@@ -977,7 +976,6 @@ document.addEventListener('DOMContentLoaded', () => {
         card.classList.add('is-dragging');
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/plain', card.dataset.itemId || '');
-        if (status) status.innerHTML = '<strong>Movendo card:</strong> solte na etapa desejada.';
       });
       card.addEventListener('dragend', () => {
         card.classList.remove('is-dragging');
@@ -985,7 +983,6 @@ document.addEventListener('DOMContentLoaded', () => {
         dragging = null;
         originalZone = null;
         originalNext = null;
-        if (status) status.innerHTML = '<strong>Funil atualizado:</strong> arraste os cards entre as etapas. A alteração é salva automaticamente.';
       });
     };
 

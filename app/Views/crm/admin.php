@@ -32,7 +32,7 @@ foreach ($opportunities as $opportunity) {
     </div>
     <div class="admin-executive-hero-actions">
         <button class="btn btn-primary" type="button" data-toggle-panel="admin-crm-create-drawer">Nova oportunidade</button>
-        <a class="btn btn-outline" href="<?= View::e(Router::url('/reports?section=commercial')) ?>">Ver resultados comerciais</a>
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/reports#report-commercial')) ?>">Ver resultados comerciais</a>
     </div>
 </section>
 
@@ -51,9 +51,6 @@ foreach ($opportunities as $opportunity) {
     <div class="admin-crm-toolbar-actions"><button class="btn btn-primary" type="submit">Filtrar</button><a class="btn btn-quiet" href="<?= View::e(Router::url('/crm')) ?>">Limpar</a></div>
 </form>
 
-<div class="crm-drag-hint" role="status" data-crm-status>
-    <strong>Funil no estilo Trello:</strong> arraste os cards entre as etapas. A alteração é salva automaticamente, sem recarregar a tela.
-</div>
 
 <div class="admin-crm-layout">
     <section class="admin-crm-board-wrap">
