@@ -190,6 +190,25 @@ final class AdminExecutiveDashboardService
              FROM tenant_admin_tracking'
         ));
 
+        $tenantHealth = $this->mapByTenant($this->all(
+            'SELECT hs.tenant_id, hs.overall_status, hs.score, hs.warning_count, hs.critical_count, hs.checked_at
+             FROM tenant_health_snapshots hs
+             INNER JOIN (
+                SELECT tenant_id, MAX(id) AS max_id
+                FROM tenant_health_snapshots
+                GROUP BY tenant_id
+             ) latest ON latest.max_id = hs.id'
+        ));
+
+        $tenantHealthIncidents = $this->mapByTenant($this->all(
+            'SELECT tenant_id,
+                    SUM(status <> "resolved") AS open_count,
+                    SUM(status <> "resolved" AND severity = "critical") AS critical_count,
+                    MAX(CASE WHEN status <> "resolved" THEN summary END) AS latest_summary
+             FROM tenant_health_incidents
+             GROUP BY tenant_id'
+        ));
+
         $subscriptions = $this->mapByTenant($this->all(
             "SELECT ts.tenant_id, ts.billing_status, ts.amount, ts.billing_cycle, ts.updated_at
              FROM tenant_subscriptions ts
@@ -209,6 +228,8 @@ final class AdminExecutiveDashboardService
             $message = $messages[$tenantId] ?? [];
             $adminTracking = $tracking[$tenantId] ?? [];
             $subscription = $subscriptions[$tenantId] ?? [];
+            $healthSnapshot = $tenantHealth[$tenantId] ?? [];
+            $healthIncidents = $tenantHealthIncidents[$tenantId] ?? [];
 
             $reasons = [];
             $health = 'healthy';
@@ -224,14 +245,25 @@ final class AdminExecutiveDashboardService
                 $reasons[] = 'Empresa suspensa.';
             } else {
                 $trackingStatus = (string) ($adminTracking['tracking_status'] ?? 'automatic');
+                $snapshotStatus = (string) ($healthSnapshot['overall_status'] ?? '');
+                $hasNewCritical = (int) ($healthIncidents['critical_count'] ?? 0) > 0;
+                $hasNewAttention = (int) ($healthIncidents['open_count'] ?? 0) > 0;
                 if ($trackingStatus === 'attention') {
                     $health = 'attention';
                     $label = 'Atenção';
                     $reasons[] = trim((string) ($adminTracking['note'] ?? '')) ?: 'Acompanhamento manual solicitado.';
                 } elseif ($trackingStatus === 'reviewed') {
-                    $health = 'attention';
-                    $label = 'Em acompanhamento';
+                    $health = $hasNewCritical ? 'critical' : 'attention';
+                    $label = $hasNewCritical ? 'Crítica em acompanhamento' : 'Em acompanhamento';
                     $reasons[] = trim((string) ($adminTracking['note'] ?? '')) ?: 'A equipe RS já está acompanhando.';
+                } elseif ($hasNewCritical || in_array($snapshotStatus, ['critical','blocked'], true)) {
+                    $health = 'critical';
+                    $label = $snapshotStatus === 'blocked' ? 'Bloqueada' : 'Crítica';
+                    $reasons[] = trim((string) ($healthIncidents['latest_summary'] ?? '')) ?: 'O diagnóstico encontrou um problema crítico.';
+                } elseif ($hasNewAttention || $snapshotStatus === 'attention') {
+                    $health = 'attention';
+                    $label = 'Atenção';
+                    $reasons[] = trim((string) ($healthIncidents['latest_summary'] ?? '')) ?: 'O diagnóstico encontrou um ponto de atenção.';
                 } elseif ($trackingStatus === 'resolved') {
                     $health = 'healthy';
                     $label = 'Corrigida';
@@ -267,6 +299,8 @@ final class AdminExecutiveDashboardService
             $tenant['conversations'] = $conversation;
             $tenant['subscription'] = $subscription;
             $tenant['admin_tracking'] = $adminTracking;
+            $tenant['health_snapshot'] = $healthSnapshot;
+            $tenant['health_incidents'] = $healthIncidents;
             $tenant['health'] = $health;
             $tenant['health_label'] = $label;
             $tenant['attention_reasons'] = $reasons;

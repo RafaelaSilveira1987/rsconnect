@@ -119,7 +119,7 @@ $statusLabel = static fn (string $status): string => match ($status) {
                         <p><?= View::e((string) (($company['attention_reasons'][0] ?? 'Revisar configuração da empresa.'))) ?></p>
                         <small>Última atividade: <?= View::e($relative($company['last_activity_at'] ?? null)) ?></small>
                     </div>
-                    <a class="btn btn-soft btn-small" href="<?= View::e(Router::url('/companies/overview?id=' . (int) $company['id'])) ?>">Abrir</a>
+                    <div class="admin-attention-actions"><a class="btn btn-soft btn-small" href="<?= View::e(Router::url('/companies/overview?id=' . (int) $company['id'])) ?>">Empresa</a><a class="btn btn-outline btn-small" href="<?= View::e(Router::url('/companies/health?tenant_id=' . (int) $company['id'])) ?>">Diagnóstico</a></div>
                 </article>
             <?php endforeach; ?>
             <?php if (!$attentionCompanies): ?><div class="empty-state">Nenhum cliente precisa de atenção neste momento.</div><?php endif; ?>

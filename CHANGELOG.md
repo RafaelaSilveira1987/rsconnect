@@ -151,3 +151,15 @@
 - Reações do WhatsApp são ignoradas por padrão e podem ser habilitadas por assistente.
 - Migration 038 não altera valores existentes de `cooldown_seconds`.
 
+
+## ZIP 34.4 — Saúde do cliente e diagnóstico por empresa
+
+- nova página de saúde por empresa, exclusiva do Super Admin;
+- snapshots de WhatsApp, IA, n8n, agenda, assinatura e segurança;
+- consulta da conexão e webhook diretamente na Evolution;
+- incidentes deduplicados com visualização, acompanhamento e resolução;
+- resolução automática quando a falha deixa de existir;
+- histórico completo de incidentes;
+- integração com Dashboard, Empresas e Checklist de implantação;
+- execução manual, por CLI ou webhook protegido;
+- migration `039_tenant_health_diagnostics.sql`.

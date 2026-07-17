@@ -62,6 +62,7 @@ $trackingNote = (string) ($tracking['note'] ?? '');
         <a class="btn btn-primary" href="<?= View::e(Router::url('/company-settings?id=' . $tenantId)) ?>">Editar empresa</a>
         <a class="btn btn-outline" href="<?= View::e(Router::url('/company-settings?id=' . $tenantId)) ?>#company-module-settings">Menus do cliente</a>
         <a class="btn btn-outline" href="<?= View::e(Router::url('/implementation?tenant_id=' . $tenantId)) ?>">Ver implantação</a>
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId)) ?>">Saúde e diagnóstico</a>
         <a class="btn btn-quiet" href="<?= View::e(Router::url('/conversations?tenant_id=' . $tenantId)) ?>">Abrir conversas</a>
         <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" onsubmit="return confirm('<?= $company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?' ?>');">
             <?= Csrf::input() ?>
@@ -161,6 +162,7 @@ $trackingNote = (string) ($tracking['note'] ?? '');
         <a href="<?= View::e(Router::url('/reports?tenant_id=' . $tenantId)) ?>"><span>06</span><strong>Relatórios da empresa</strong><small>Uso, conversas, IA, CRM e agenda.</small></a>
         <a href="<?= View::e(Router::url('/calendar?tenant_id=' . $tenantId)) ?>"><span>07</span><strong>Agenda</strong><small>Compromissos, disponibilidade e pré-agendamentos.</small></a>
         <a href="<?= View::e(Router::url('/n8n-flows')) ?>"><span>08</span><strong>Integrações</strong><small>Fluxos n8n e comunicação com serviços externos.</small></a>
+        <a href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId)) ?>"><span>09</span><strong>Saúde e diagnóstico</strong><small>WhatsApp, IA, agenda, integrações, acesso e incidentes.</small></a>
     </div>
 </section>
 

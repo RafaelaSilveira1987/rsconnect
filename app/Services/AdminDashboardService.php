@@ -136,6 +136,19 @@ final class AdminDashboardService
              GROUP BY tenant_id"
         );
         $tracking = $this->aggregateMap('tenant_admin_tracking', 'SELECT * FROM tenant_admin_tracking');
+        $healthSnapshots = $this->aggregateMap(
+            'tenant_health_snapshots',
+            'SELECT hs.* FROM tenant_health_snapshots hs
+             INNER JOIN (SELECT tenant_id, MAX(id) AS max_id FROM tenant_health_snapshots GROUP BY tenant_id) latest ON latest.max_id = hs.id'
+        );
+        $healthIncidents = $this->aggregateMap(
+            'tenant_health_incidents',
+            'SELECT tenant_id,
+                    SUM(status <> "resolved") AS open_count,
+                    SUM(status <> "resolved" AND severity = "critical") AS critical_count,
+                    MAX(CASE WHEN status <> "resolved" THEN summary END) AS latest_summary
+             FROM tenant_health_incidents GROUP BY tenant_id'
+        );
 
         $enriched = [];
         foreach ($tenants as $tenant) {
@@ -158,6 +171,8 @@ final class AdminDashboardService
                 'acknowledged_at' => null,
                 'resolved_at' => null,
             ];
+            $company['health_snapshot'] = $healthSnapshots[$tenantId] ?? [];
+            $company['health_incidents'] = $healthIncidents[$tenantId] ?? [];
             $company['last_activity_at'] = $this->latestDate([
                 $company['messages']['last_message_at'] ?? null,
                 $company['conversations']['last_update_at'] ?? null,
@@ -366,6 +381,17 @@ final class AdminDashboardService
         $n8nErrors = (int) ($company['n8n_errors']['error_count'] ?? 0);
         $aiLastError = strtotime((string) ($company['ai_errors']['last_error_at'] ?? '')) ?: 0;
         $n8nLastError = strtotime((string) ($company['n8n_errors']['last_error_at'] ?? '')) ?: 0;
+
+        $healthSnapshotStatus = (string) ($company['health_snapshot']['overall_status'] ?? '');
+        $healthOpenIncidents = (int) ($company['health_incidents']['open_count'] ?? 0);
+        $healthCriticalIncidents = (int) ($company['health_incidents']['critical_count'] ?? 0);
+        $healthLatestSummary = trim((string) ($company['health_incidents']['latest_summary'] ?? ''));
+
+        if ($healthCriticalIncidents > 0 || in_array($healthSnapshotStatus, ['critical', 'blocked'], true)) {
+            $critical[] = $healthLatestSummary !== '' ? $healthLatestSummary : 'O diagnóstico atual encontrou um problema crítico.';
+        } elseif ($healthOpenIncidents > 0 || $healthSnapshotStatus === 'attention') {
+            $attention[] = $healthLatestSummary !== '' ? $healthLatestSummary : 'O diagnóstico atual encontrou um ponto de atenção.';
+        }
 
         if ($status === 'suspended') {
             $critical[] = 'Conta suspensa no RS Connect.';

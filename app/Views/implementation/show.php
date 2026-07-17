@@ -37,6 +37,7 @@ $statusLabel = static fn (string $status): string => match ($status) {
             <input type="hidden" name="tenant_id" value="<?= (int) ($tenant['id'] ?? 0) ?>">
             <button class="btn btn-primary" type="submit">Recalcular</button>
         </form>
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/companies/health?tenant_id=' . (int) ($tenant['id'] ?? 0))) ?>">Ver saúde atual</a>
         <a class="btn" href="<?= View::e(Router::url('/implementation')) ?>">Voltar</a>
     </div>
 </section>

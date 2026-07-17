@@ -34,6 +34,7 @@ use App\Controllers\SecurityController;
 use App\Controllers\BillingReminderController;
 use App\Controllers\PermissionController;
 use App\Controllers\TaskController;
+use App\Controllers\TenantHealthController;
 use App\Controllers\UserController;
 use App\Controllers\VersionController;
 use App\Core\Router;
@@ -155,6 +156,11 @@ return static function (Router $router): void {
     $router->post('/tasks', [TaskController::class, 'store'], ['auth', 'permission:tasks.manage', 'csrf']);
     $router->post('/tasks/status', [TaskController::class, 'updateStatus'], ['auth', 'permission:tasks.manage', 'csrf']);
 
+    $router->get('/companies/health', [TenantHealthController::class, 'index'], ['auth', 'super_admin']);
+    $router->post('/companies/health/run', [TenantHealthController::class, 'run'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/companies/health/incident', [TenantHealthController::class, 'incident'], ['auth', 'super_admin', 'csrf']);
+    $router->get('/webhooks/tenant-health/run', [TenantHealthController::class, 'cron']);
+    $router->post('/webhooks/tenant-health/run', [TenantHealthController::class, 'cron']);
     $router->get('/companies', [CompanyController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/companies/overview', [CompanyController::class, 'overview'], ['auth', 'super_admin']);
     $router->post('/companies', [CompanyController::class, 'store'], ['auth', 'super_admin', 'csrf']);
