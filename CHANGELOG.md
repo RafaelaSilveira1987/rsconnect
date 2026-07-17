@@ -163,3 +163,12 @@
 - integração com Dashboard, Empresas e Checklist de implantação;
 - execução manual, por CLI ou webhook protegido;
 - migration `039_tenant_health_diagnostics.sql`.
+
+## ZIP 34.4.1 — Configurações completas por empresa
+
+- botão **Ver todas as configurações** na saúde do cliente;
+- inventário central de empresa, assinatura, WhatsApp, IA, n8n, agenda, usuários, menus, notificações e privacidade;
+- prompts e bases de conhecimento consultáveis em painéis recolhíveis;
+- chaves, tokens e senhas sempre protegidos;
+- busca, índice, expansão em massa e cópia de resumo técnico;
+- gaveta responsiva, sem rolagem horizontal.

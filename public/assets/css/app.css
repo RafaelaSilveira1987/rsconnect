@@ -5676,3 +5676,265 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
 @media(max-width:720px){.tenant-health-hero{align-items:flex-start;flex-direction:column;padding:20px}.tenant-health-hero h2{font-size:1.55rem}.tenant-health-hero-actions{justify-content:flex-start;width:100%}.tenant-health-hero-actions .btn,.tenant-health-hero-actions form{width:100%}.tenant-health-hero-actions form .btn{width:100%}.tenant-health-summary-grid{grid-template-columns:1fr 1fr;gap:9px}.tenant-health-summary-grid article{padding:13px;align-items:flex-start}.health-summary-icon{width:34px;height:34px;border-radius:11px}.tenant-health-check-main{grid-template-columns:auto minmax(0,1fr)}.tenant-health-check-main .health-check-label{grid-column:2;justify-self:start}.tenant-health-check-actions{margin-left:0}.tenant-health-check-actions dl{grid-template-columns:1fr}.tenant-health-incident>header{align-items:flex-start;flex-direction:column}.tenant-health-inline-actions{display:grid;grid-template-columns:1fr}.tenant-health-inline-actions .btn{width:100%}.tenant-health-timeline article{grid-template-columns:auto minmax(0,1fr)}.tenant-health-timeline time{grid-column:2}}
 @media(max-width:430px){.tenant-health-summary-grid{grid-template-columns:1fr}.tenant-health-check-actions .btn,.tenant-health-check-actions details{width:100%;min-width:0}.tenant-health-incident-actions>.btn{width:100%}}
 .admin-attention-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}@media(max-width:720px){.admin-attention-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.admin-attention-actions .btn{width:100%}}
+
+/* ZIP 34.4.1 — visão completa das configurações da empresa */
+.tenant-health-config-drawer,
+.tenant-health-config-drawer.is-open {
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-columns: none !important;
+  align-items: stretch !important;
+  width: min(900px, 96vw) !important;
+  max-width: 900px !important;
+  overflow: hidden !important;
+  z-index: 180 !important;
+}
+.tenant-health-config-drawer > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+.tenant-health-config-body {
+  display: block !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding: 18px 22px 36px !important;
+  scroll-behavior: smooth;
+}
+.tenant-health-config-notice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, .8fr);
+  gap: 14px;
+  align-items: center;
+  padding: 15px 17px;
+  margin-bottom: 14px;
+  border: 1px solid #cde5e1;
+  border-radius: 17px;
+  background: linear-gradient(135deg, #f3fbfa, #f8fbff);
+}
+.tenant-health-config-notice strong,
+.tenant-health-config-notice span { display: block; }
+.tenant-health-config-notice strong { color: var(--rs-ink); font-size: .94rem; }
+.tenant-health-config-notice span,
+.tenant-health-config-notice p { color: var(--rs-muted); font-size: .76rem; line-height: 1.45; }
+.tenant-health-config-notice p { margin: 0; }
+.tenant-health-config-toolbar {
+  position: sticky;
+  top: -18px;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 14px 0 13px;
+  margin-bottom: 3px;
+  background: linear-gradient(180deg, rgba(248,250,252,.98) 78%, rgba(248,250,252,0));
+  backdrop-filter: blur(12px);
+}
+.tenant-health-config-search { margin: 0 !important; }
+.tenant-health-config-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+  padding-bottom: 1px;
+}
+.tenant-health-config-index {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin: 4px 0 16px;
+}
+.tenant-health-config-index button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px 13px;
+  border: 1px solid var(--rs-border);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--rs-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.tenant-health-config-index button:hover {
+  transform: translateY(-1px);
+  border-color: #78c9c2;
+  box-shadow: 0 9px 22px rgba(15, 23, 42, .06);
+}
+.tenant-health-config-index strong {
+  max-width: 100%;
+  font-size: .78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tenant-health-config-index small { color: var(--rs-muted); font-size: .67rem; }
+.tenant-health-config-groups { display: flex; flex-direction: column; gap: 13px; }
+.tenant-health-config-group {
+  margin: 0 !important;
+  scroll-margin-top: 84px;
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+.tenant-health-config-group.is-highlighted {
+  border-color: #16a59b !important;
+  background: #f5fcfb !important;
+  box-shadow: 0 0 0 4px rgba(20, 165, 154, .10), 0 18px 42px rgba(15, 23, 42, .08) !important;
+}
+.tenant-health-config-group-title { margin-bottom: 12px !important; }
+.tenant-health-config-group-title small {
+  display: block;
+  max-width: 620px;
+  margin-top: 5px;
+  color: var(--rs-muted);
+  line-height: 1.45;
+}
+.tenant-health-config-records { display: flex; flex-direction: column; gap: 9px; }
+.tenant-health-config-record {
+  overflow: hidden;
+  border: 1px solid var(--rs-border);
+  border-radius: 15px;
+  background: #fff;
+}
+.tenant-health-config-record > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.tenant-health-config-record > summary::-webkit-details-marker { display: none; }
+.tenant-health-config-record > summary::after {
+  content: '›';
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  margin-right: 88px;
+  color: #6b7e8f;
+  font-size: 1.15rem;
+  transform: rotate(90deg);
+  transition: transform .18s ease;
+}
+.tenant-health-config-record[open] > summary::after { transform: rotate(-90deg); }
+.tenant-health-config-record > summary > span { min-width: 0; }
+.tenant-health-config-record > summary strong,
+.tenant-health-config-record > summary small { display: block; }
+.tenant-health-config-record > summary strong {
+  overflow: hidden;
+  color: var(--rs-ink);
+  font-size: .86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tenant-health-config-record > summary small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--rs-muted);
+  font-size: .7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tenant-health-config-record > summary .health-check-label {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 78px;
+  justify-content: center;
+}
+.tenant-health-config-record[open] > summary { border-bottom: 1px solid var(--rs-border); background: #fbfdfe; }
+.tenant-health-config-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  background: var(--rs-border);
+}
+.tenant-health-config-fields > div {
+  min-width: 0;
+  padding: 11px 13px;
+  background: #fff;
+}
+.tenant-health-config-fields dt {
+  margin: 0 0 4px;
+  color: var(--rs-muted);
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .07em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+.tenant-health-config-fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--rs-ink);
+  font-size: .76rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+.tenant-health-config-long-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--rs-border);
+  background: #f8fbfd;
+}
+.tenant-health-config-long-fields details {
+  overflow: hidden;
+  border: 1px solid var(--rs-border);
+  border-radius: 12px;
+  background: #fff;
+}
+.tenant-health-config-long-fields summary {
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--rs-ink);
+  font-size: .74rem;
+  font-weight: 800;
+}
+.tenant-health-config-long-fields pre {
+  max-height: 340px;
+  margin: 0;
+  padding: 13px;
+  overflow: auto;
+  border-top: 1px solid var(--rs-border);
+  background: #172231;
+  color: #eef7ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .72rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 860px) {
+  .tenant-health-config-notice,
+  .tenant-health-config-toolbar { grid-template-columns: 1fr; }
+  .tenant-health-config-toolbar-actions { justify-content: flex-start; }
+  .tenant-health-config-index { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .tenant-health-config-drawer,
+  .tenant-health-config-drawer.is-open {
+    width: 100vw !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+  }
+  .tenant-health-config-body { padding: 14px 14px 28px !important; }
+  .tenant-health-config-toolbar { top: -14px; }
+  .tenant-health-config-index { grid-template-columns: 1fr 1fr; }
+  .tenant-health-config-fields { grid-template-columns: 1fr; }
+  .tenant-health-config-group-title { align-items: flex-start; flex-direction: column; }
+  .tenant-health-config-group-title .btn { width: 100%; }
+  .tenant-health-config-record > summary::after { display: none; }
+}
+@media (max-width: 440px) {
+  .tenant-health-config-index { grid-template-columns: 1fr; }
+  .tenant-health-config-toolbar-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .tenant-health-config-toolbar-actions .btn:last-child { grid-column: 1 / -1; }
+  .tenant-health-config-record > summary { grid-template-columns: minmax(0, 1fr); }
+  .tenant-health-config-record > summary .health-check-label { grid-column: 1; grid-row: auto; justify-self: start; }
+}

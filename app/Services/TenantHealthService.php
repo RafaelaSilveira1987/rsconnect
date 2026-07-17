@@ -12,7 +12,7 @@ use Throwable;
 
 final class TenantHealthService
 {
-    public const VERSION = '34.4-tenant-health';
+    public const VERSION = '34.4.1-configuration-view';
 
     private PDO $pdo;
 
@@ -79,11 +79,14 @@ final class TenantHealthService
 
         $openIncidents = array_values(array_filter($incidents, static fn (array $i): bool => ($i['status'] ?? '') !== 'resolved'));
 
+        $configuration = $this->configurationInventory($tenantId, $checks);
+
         return [
             'tenant' => $tenant,
             'snapshot' => $snapshot,
             'checks' => $checks,
             'groups' => $groups,
+            'configuration' => $configuration,
             'incidents' => $incidents,
             'open_incidents' => $openIncidents,
             'events' => $events,
@@ -524,6 +527,559 @@ final class TenantHealthService
             'Usuários bloqueados' => (string) ($summary['locked_count'] ?? 0),
             'Último login' => (string) ($summary['last_login_at'] ?? 'Nenhum'),
         ], '/users', 100)];
+    }
+
+    /**
+     * Retorna uma leitura completa das configurações operacionais da empresa.
+     * Segredos nunca são exibidos: chaves e tokens aparecem apenas como configurados ou ausentes.
+     *
+     * @param array<int,array<string,mixed>> $checks
+     * @return array<string,mixed>
+     */
+    private function configurationInventory(int $tenantId, array $checks = []): array
+    {
+        $tenant = $this->row('SELECT * FROM tenants WHERE id = :id LIMIT 1', ['id' => $tenantId]) ?? [];
+        $checkMap = [];
+        foreach ($checks as $check) {
+            $key = (string) ($check['component_key'] ?? $check['key'] ?? '');
+            if ($key !== '') {
+                $checkMap[$key] = $check;
+            }
+        }
+
+        $access = (new AccessControlService())->statusForTenant($tenantId);
+        $subscription = $this->row(
+            'SELECT ts.*, sp.name AS plan_name, sp.plan_key, sp.description AS plan_description,
+                    sp.features_json, sp.limits_json
+             FROM tenant_subscriptions ts
+             LEFT JOIN saas_plans sp ON sp.id = ts.plan_id
+             WHERE ts.tenant_id = :tenant_id
+             ORDER BY ts.id DESC LIMIT 1',
+            ['tenant_id' => $tenantId]
+        ) ?? [];
+        $invoiceSummary = $this->row(
+            'SELECT COUNT(*) AS total,
+                    COALESCE(SUM(status = "open"),0) AS open_count,
+                    COALESCE(SUM(status = "overdue"),0) AS overdue_count,
+                    MIN(CASE WHEN status IN ("open","overdue") THEN due_date END) AS oldest_due,
+                    MAX(paid_at) AS last_paid_at
+             FROM tenant_invoices WHERE tenant_id = :tenant_id',
+            ['tenant_id' => $tenantId]
+        ) ?? [];
+
+        $companyFields = [
+            'Nome de exibição' => $this->valueOr($tenant['name'] ?? null),
+            'Razão social' => $this->valueOr($tenant['legal_name'] ?? null),
+            'CNPJ/CPF' => $this->valueOr($tenant['document'] ?? null),
+            'Situação cadastral' => $this->valueOr($tenant['status'] ?? null),
+            'Plano cadastral' => $this->valueOr($tenant['plan'] ?? null),
+            'Segmento' => $this->valueOr($tenant['segment'] ?? null),
+            'E-mail comercial' => $this->valueOr($tenant['email'] ?? null),
+            'Telefone' => $this->valueOr($tenant['phone'] ?? null),
+            'WhatsApp comercial' => $this->valueOr($tenant['commercial_whatsapp'] ?? null),
+            'Site' => $this->valueOr($tenant['website'] ?? null),
+            'Instagram' => $this->valueOr($tenant['instagram'] ?? null),
+            'Endereço' => $this->addressLabel($tenant),
+            'Etapa de implantação' => (string) ($tenant['onboarding_step'] ?? 1),
+            'Implantação concluída em' => $this->valueOr($tenant['onboarding_completed_at'] ?? null),
+            'Cadastrada em' => $this->valueOr($tenant['created_at'] ?? null),
+            'Atualizada em' => $this->valueOr($tenant['updated_at'] ?? null),
+        ];
+        $accessFields = [
+            'Acesso atual' => !empty($access['allowed']) ? 'Liberado' : 'Bloqueado',
+            'Motivo da validação' => $this->valueOr($access['message'] ?? null),
+            'Código da validação' => $this->valueOr($access['code'] ?? null),
+            'Tolerância financeira' => (string) ($access['grace_days'] ?? Env::get('BILLING_ACCESS_GRACE_DAYS', 5)) . ' dia(s)',
+            'Plano da assinatura' => $this->valueOr($subscription['plan_name'] ?? $subscription['plan_key'] ?? null),
+            'Situação da assinatura' => $this->valueOr($subscription['billing_status'] ?? null),
+            'Ciclo de cobrança' => $this->valueOr($subscription['billing_cycle'] ?? null),
+            'Valor' => isset($subscription['amount']) ? 'R$ ' . number_format((float) $subscription['amount'], 2, ',', '.') : 'Não informado',
+            'Início da vigência' => $this->valueOr($subscription['current_period_starts_at'] ?? null),
+            'Fim da vigência' => $this->valueOr($subscription['current_period_ends_at'] ?? null),
+            'Fim do teste' => $this->valueOr($subscription['trial_ends_at'] ?? null),
+            'Próxima cobrança' => $this->valueOr($subscription['next_billing_at'] ?? null),
+            'Cobranças abertas' => (string) ($invoiceSummary['open_count'] ?? 0),
+            'Cobranças vencidas' => (string) ($invoiceSummary['overdue_count'] ?? 0),
+            'Vencimento pendente mais antigo' => $this->valueOr($invoiceSummary['oldest_due'] ?? null),
+            'Último pagamento' => $this->valueOr($invoiceSummary['last_paid_at'] ?? null),
+        ];
+
+        $groups = [[
+            'key' => 'company',
+            'label' => 'Empresa, plano e acesso',
+            'description' => 'Dados cadastrais, vigência, cobrança e motivo atual de liberação ou bloqueio.',
+            'action_url' => '/company-settings?id=' . $tenantId,
+            'records' => [
+                $this->configurationRecord('Dados da empresa', (string) ($tenant['name'] ?? 'Empresa'), (string) ($tenant['status'] ?? 'info'), $companyFields, [
+                    'Sobre a empresa' => $this->valueOr($tenant['company_about'] ?? null),
+                    'Serviços ou produtos' => $this->valueOr($tenant['company_services'] ?? null),
+                    'Diferenciais' => $this->valueOr($tenant['company_differentials'] ?? null),
+                    'Horário comercial informado' => $this->valueOr($tenant['company_business_hours'] ?? null),
+                    'Observações internas' => $this->valueOr($tenant['company_notes'] ?? null),
+                ]),
+                $this->configurationRecord('Assinatura e acesso', (string) ($subscription['plan_name'] ?? 'Sem assinatura'), !empty($access['allowed']) ? 'ok' : 'critical', $accessFields, [
+                    'Recursos do plano' => $this->jsonReadable($subscription['features_json'] ?? null),
+                    'Limites do plano' => $this->jsonReadable($subscription['limits_json'] ?? null),
+                    'Observações da assinatura' => $this->valueOr($subscription['notes'] ?? null),
+                ]),
+            ],
+        ]];
+
+        $instances = $this->all(
+            'SELECT i.*,
+                    (SELECT COUNT(*) FROM ai_agents a WHERE a.instance_id = i.id) AS linked_agents
+             FROM evolution_instances i WHERE i.tenant_id = :tenant_id
+             ORDER BY i.is_default DESC, i.id',
+            ['tenant_id' => $tenantId]
+        );
+        $instanceRecords = [];
+        foreach ($instances as $instance) {
+            $id = (int) ($instance['id'] ?? 0);
+            $healthDetails = (array) ($checkMap['instance.' . $id]['details'] ?? []);
+            $fields = [
+                'Nome interno' => $this->valueOr($instance['name'] ?? null),
+                'Identificador na Evolution' => $this->valueOr($instance['instance_name'] ?? null),
+                'URL base' => $this->valueOr($instance['base_url'] ?? null),
+                'API Key' => !empty($instance['api_key_encrypted']) ? 'Configurada e protegida' : 'Não configurada',
+                'Situação salva' => $this->valueOr($instance['status'] ?? null),
+                'Conexão padrão' => $this->yesNo($instance['is_default'] ?? 0),
+                'Assistentes vinculados' => (string) ($instance['linked_agents'] ?? 0),
+                'Criada em' => $this->valueOr($instance['created_at'] ?? null),
+                'Atualizada em' => $this->valueOr($instance['updated_at'] ?? null),
+            ];
+            foreach ($healthDetails as $label => $value) {
+                $fields[(string) $label] = (string) $value;
+            }
+            $instanceRecords[] = $this->configurationRecord(
+                'Conexão WhatsApp — ' . (string) ($instance['name'] ?? $instance['instance_name'] ?? '#' . $id),
+                (string) ($instance['instance_name'] ?? ''),
+                (string) ($checkMap['instance.' . $id]['status'] ?? $instance['status'] ?? 'info'),
+                $fields
+            );
+        }
+        if (!$instanceRecords) {
+            $instanceRecords[] = $this->configurationRecord('Conexões WhatsApp', 'Nenhuma conexão cadastrada', 'critical', ['Situação' => 'Não configurada']);
+        }
+        $groups[] = [
+            'key' => 'whatsapp',
+            'label' => 'WhatsApp e Evolution',
+            'description' => 'Conexões, identificadores, webhooks e atividade recente, sem expor chaves.',
+            'action_url' => '/instances',
+            'records' => $instanceRecords,
+        ];
+
+        $credentials = $this->all(
+            'SELECT c.*, a.name AS agent_name
+             FROM ai_provider_credentials c
+             LEFT JOIN ai_agents a ON a.id = c.agent_id
+             WHERE c.tenant_id = :tenant_id
+             ORDER BY c.is_default DESC, c.id',
+            ['tenant_id' => $tenantId]
+        );
+        $credentialsByAgent = [];
+        foreach ($credentials as $credential) {
+            $credentialsByAgent[(int) ($credential['agent_id'] ?? 0)][] = $credential;
+        }
+
+        $agents = $this->all(
+            'SELECT a.*, i.name AS instance_label, i.instance_name
+             FROM ai_agents a
+             LEFT JOIN evolution_instances i ON i.id = a.instance_id
+             WHERE a.tenant_id = :tenant_id
+             ORDER BY a.is_default DESC, a.id',
+            ['tenant_id' => $tenantId]
+        );
+        $agentRecords = [];
+        foreach ($agents as $agent) {
+            $id = (int) ($agent['id'] ?? 0);
+            $agentCredentials = array_merge($credentialsByAgent[0] ?? [], $credentialsByAgent[$id] ?? []);
+            $credentialLabels = [];
+            foreach ($agentCredentials as $credential) {
+                $credentialLabels[] = sprintf(
+                    '%s · %s · %s · chave %s',
+                    (string) ($credential['label'] ?? 'Credencial'),
+                    (string) ($credential['provider'] ?? ''),
+                    (string) ($credential['status'] ?? ''),
+                    !empty($credential['api_key_encrypted']) ? 'configurada' : 'ausente'
+                );
+            }
+            $fields = [
+                'Nome' => $this->valueOr($agent['name'] ?? null),
+                'Área de atendimento' => $this->valueOr($agent['segment'] ?? null),
+                'Situação' => $this->valueOr($agent['status'] ?? null),
+                'Assistente principal' => $this->yesNo($agent['is_default'] ?? 0),
+                'Respostas automáticas' => $this->yesNo($agent['auto_reply_enabled'] ?? 0),
+                'Conexão WhatsApp' => $this->valueOr($agent['instance_label'] ?? $agent['instance_name'] ?? null),
+                'Provedor' => $this->valueOr($agent['model_provider'] ?? null),
+                'Modelo' => $this->valueOr($agent['model_name'] ?? null),
+                'Criatividade' => isset($agent['temperature']) ? (string) $agent['temperature'] : 'Não informada',
+                'Mensagens lembradas' => (string) ($agent['max_context_messages'] ?? 12),
+                'Intervalo mínimo' => (string) ($agent['cooldown_seconds'] ?? 0) . ' segundo(s)',
+                'Responder a reações' => $this->yesNo($agent['reply_to_reactions'] ?? 0),
+                'Palavras de atendimento humano' => $this->valueOr($agent['handoff_keywords'] ?? null),
+                'Ação ao chamar uma pessoa' => $this->valueOr($agent['handoff_action'] ?? null),
+                'Horário de atendimento ativado' => $this->yesNo($agent['business_hours_enabled'] ?? 0),
+                'Fuso horário' => $this->valueOr($agent['business_timezone'] ?? null),
+                'Horários configurados' => $this->jsonReadable($agent['business_hours_json'] ?? null),
+                'Integração externa do assistente' => $this->yesNo($agent['n8n_enabled'] ?? 0),
+                'Webhook externo' => !empty($agent['n8n_webhook_url']) ? $this->maskEndpoint((string) $agent['n8n_webhook_url']) : 'Não configurado',
+                'Credenciais disponíveis' => $credentialLabels ? implode("\n", $credentialLabels) : 'Nenhuma credencial encontrada',
+            ];
+            $agentRecords[] = $this->configurationRecord(
+                'Assistente — ' . (string) ($agent['name'] ?? '#' . $id),
+                (string) ($agent['segment'] ?? ''),
+                (string) ($checkMap['agent.' . $id]['status'] ?? $agent['status'] ?? 'info'),
+                $fields,
+                [
+                    'Instruções principais' => $this->valueOr($agent['system_prompt'] ?? null),
+                    'Base de conhecimento' => $this->valueOr($agent['knowledge_base'] ?? null),
+                    'Construtor do prompt' => $this->jsonReadable($agent['prompt_builder_json'] ?? null),
+                    'Mensagem fora do horário' => $this->valueOr($agent['after_hours_message'] ?? null),
+                    'Mensagem de encaminhamento humano' => $this->valueOr($agent['human_handoff_message'] ?? null),
+                ]
+            );
+        }
+        foreach ($credentials as $credential) {
+            $scope = !empty($credential['agent_id']) ? 'Assistente: ' . (string) ($credential['agent_name'] ?? '#' . $credential['agent_id']) : 'Toda a empresa';
+            $agentRecords[] = $this->configurationRecord(
+                'Credencial de IA — ' . (string) ($credential['label'] ?? '#' . $credential['id']),
+                $scope,
+                (string) ($credential['status'] ?? 'info'),
+                [
+                    'Escopo' => $scope,
+                    'Provedor' => $this->valueOr($credential['provider'] ?? null),
+                    'Modelo padrão' => $this->valueOr($credential['default_model'] ?? null),
+                    'URL base' => $this->valueOr($credential['base_url'] ?? null),
+                    'Situação' => $this->valueOr($credential['status'] ?? null),
+                    'Credencial padrão' => $this->yesNo($credential['is_default'] ?? 0),
+                    'API Key' => !empty($credential['api_key_encrypted']) ? 'Configurada e protegida' : 'Não configurada',
+                    'Atualizada em' => $this->valueOr($credential['updated_at'] ?? null),
+                ]
+            );
+        }
+        if (!$agentRecords) {
+            $agentRecords[] = $this->configurationRecord('Assistentes e credenciais', 'Nenhum assistente cadastrado', 'critical', ['Situação' => 'Não configurado']);
+        }
+        $groups[] = [
+            'key' => 'ai',
+            'label' => 'Assistentes e credenciais de IA',
+            'description' => 'Comportamento, prompt, horários, intervalo, reações, modelo e credenciais protegidas.',
+            'action_url' => '/agents',
+            'records' => $agentRecords,
+        ];
+
+        $flows = $this->all('SELECT * FROM n8n_tenant_flows WHERE tenant_id = :tenant_id ORDER BY id', ['tenant_id' => $tenantId]);
+        $flowRecords = [];
+        foreach ($flows as $flow) {
+            $id = (int) ($flow['id'] ?? 0);
+            $flowRecords[] = $this->configurationRecord(
+                'Fluxo n8n — ' . (string) ($flow['name'] ?? '#' . $id),
+                (string) ($flow['flow_key'] ?? ''),
+                (string) ($checkMap['flow.' . $id]['status'] ?? $flow['status'] ?? 'info'),
+                [
+                    'Chave do fluxo' => $this->valueOr($flow['flow_key'] ?? null),
+                    'Descrição' => $this->valueOr($flow['description'] ?? null),
+                    'Situação' => $this->valueOr($flow['status'] ?? null),
+                    'Eventos' => $this->jsonReadable($flow['events_json'] ?? null),
+                    'URL do webhook' => $this->maskedEncryptedEndpoint($flow['webhook_url_encrypted'] ?? null),
+                    'Token secreto' => !empty($flow['secret_token_encrypted']) ? 'Configurado e protegido' : 'Não configurado',
+                    'Último sucesso' => $this->valueOr($flow['last_success_at'] ?? null),
+                    'Último erro' => $this->valueOr($flow['last_error_at'] ?? null),
+                    'Atualizado em' => $this->valueOr($flow['updated_at'] ?? null),
+                ],
+                ['Mensagem do último erro' => $this->valueOr($flow['last_error'] ?? null)]
+            );
+        }
+        if (!$flowRecords) {
+            $flowRecords[] = $this->configurationRecord('Fluxos n8n', 'Nenhum fluxo cadastrado', 'info', ['Situação' => 'Não configurado']);
+        }
+        $groups[] = [
+            'key' => 'n8n',
+            'label' => 'Integrações e fluxos n8n',
+            'description' => 'Eventos, webhooks mascarados, tokens protegidos e situação das últimas execuções.',
+            'action_url' => '/n8n-flows',
+            'records' => $flowRecords,
+        ];
+
+        $calendar = $this->row('SELECT * FROM tenant_calendar_availability_settings WHERE tenant_id = :tenant_id LIMIT 1', ['tenant_id' => $tenantId]) ?? [];
+        $preSchedule = $this->row('SELECT * FROM tenant_pre_schedule_settings WHERE tenant_id = :tenant_id LIMIT 1', ['tenant_id' => $tenantId]) ?? [];
+        $calendarFields = [
+            'Agenda Inteligente ativada' => $this->yesNo($calendar['enabled'] ?? 0),
+            'Modo de disponibilidade' => ($calendar['availability_mode'] ?? 'free_slots') === 'marked_events' ? 'Eventos VAGO' : 'Espaços livres',
+            'Exigir disponibilidade antes de aprovar' => $this->yesNo($calendar['require_before_approval'] ?? 0),
+            'Consultar automaticamente' => $this->yesNo($calendar['auto_request_on_pre_schedule'] ?? 0),
+            'Usar n8n' => $this->yesNo($calendar['use_n8n'] ?? 0),
+            'Fallback interno' => $this->yesNo($calendar['use_internal_fallback'] ?? 0),
+            'Fuso horário' => $this->valueOr($calendar['timezone'] ?? null),
+            'Duração padrão' => (string) ($calendar['default_duration_minutes'] ?? 0) . ' minuto(s)',
+            'Intervalo entre horários' => (string) ($calendar['slot_interval_minutes'] ?? 0) . ' minuto(s)',
+            'Intervalo de segurança' => (string) ($calendar['buffer_minutes'] ?? 0) . ' minuto(s)',
+            'Antecedência mínima' => (string) ($calendar['min_notice_hours'] ?? 0) . ' hora(s)',
+            'Dias pesquisados' => (string) ($calendar['search_days_ahead'] ?? 0),
+            'Máximo de sugestões' => (string) ($calendar['max_suggestions'] ?? 0),
+            'Dias de atendimento' => $this->workdaysLabel($calendar['workdays_json'] ?? null),
+            'Horário de atendimento' => $this->workingHoursLabel($calendar['working_hours_json'] ?? null),
+            'Google Calendar' => $this->valueOr($calendar['google_calendar_id'] ?? null),
+            'Fuso UTC Google' => $this->valueOr($calendar['google_utc_offset'] ?? null),
+            'Ignorar eventos transparentes' => $this->yesNo($calendar['ignore_transparent_events'] ?? 0),
+            'Exigir VAGO como disponível' => $this->yesNo($calendar['marked_require_transparent'] ?? 0),
+            'Título VAGO online' => $this->valueOr($calendar['marked_online_title'] ?? null),
+            'Título VAGO presencial' => $this->valueOr($calendar['marked_in_person_title'] ?? null),
+            'Prefixo de pré-reserva' => $this->valueOr($calendar['marked_hold_prefix'] ?? null),
+            'Prefixo de confirmação' => $this->valueOr($calendar['marked_confirmed_prefix'] ?? null),
+            'Tempo de pré-reserva' => (string) ($calendar['hold_minutes'] ?? 0) . ' minuto(s)',
+            'Revalidar antes de atualizar' => $this->yesNo($calendar['revalidate_before_update'] ?? 0),
+            'Restaurar ao cancelar' => $this->yesNo($calendar['restore_on_cancel'] ?? 0),
+            'Webhook espaços livres' => $this->maskedEncryptedEndpoint($calendar['free_slots_webhook_url_encrypted'] ?? $calendar['n8n_webhook_url_encrypted'] ?? null),
+            'Webhook eventos VAGO' => $this->maskedEncryptedEndpoint($calendar['marked_events_webhook_url_encrypted'] ?? null),
+            'Token da agenda' => !empty($calendar['secret_token_encrypted']) ? 'Configurado e protegido' : 'Não configurado',
+        ];
+        $preFields = [
+            'Pré-agendamento ativado' => $this->yesNo($preSchedule['enabled'] ?? 0),
+            'Exigir aprovação humana' => $this->yesNo($preSchedule['require_human_approval'] ?? 0),
+            'IA pode sugerir horários' => $this->yesNo($preSchedule['ai_can_suggest_slots'] ?? 0),
+            'IA pode confirmar' => $this->yesNo($preSchedule['ai_can_confirm'] ?? 0),
+            'Enviar mensagem ao aprovar' => $this->yesNo($preSchedule['send_approval_message'] ?? 0),
+            'Duração padrão' => (string) ($preSchedule['default_duration_minutes'] ?? 0) . ' minuto(s)',
+        ];
+        $groups[] = [
+            'key' => 'calendar',
+            'label' => 'Agenda e pré-agendamento',
+            'description' => 'Regras de disponibilidade, Google Calendar, eventos VAGO e mensagens enviadas ao contato.',
+            'action_url' => '/calendar?tab=availability',
+            'records' => [
+                $this->configurationRecord('Agenda Inteligente', 'Disponibilidade e Google Calendar', !empty($calendar['enabled']) ? 'ok' : 'info', $calendarFields),
+                $this->configurationRecord('Pré-agendamento', 'Regras e mensagens ao cliente', !empty($preSchedule['enabled']) ? 'ok' : 'info', $preFields, [
+                    'Mensagem padrão' => $this->valueOr($preSchedule['default_message'] ?? null),
+                    'Mensagem para coletar preferência' => $this->valueOr($preSchedule['collect_message'] ?? null),
+                    'Mensagem de aprovação' => $this->valueOr($preSchedule['approved_message'] ?? null),
+                    'Mensagem de recusa' => $this->valueOr($preSchedule['rejected_message'] ?? null),
+                    'Mensagem de remarcação' => $this->valueOr($preSchedule['reschedule_message'] ?? null),
+                ]),
+            ],
+        ];
+
+        $users = $this->all('SELECT * FROM users WHERE tenant_id = :tenant_id ORDER BY role, name', ['tenant_id' => $tenantId]);
+        $userRecords = [$this->configurationRecord('Política de acesso', 'Regras globais aplicadas à empresa', 'info', [
+            'Limite de tentativas incorretas' => (string) Env::get('SECURITY_LOGIN_ATTEMPT_LIMIT', 6),
+            'Janela de bloqueio' => (string) Env::get('SECURITY_LOGIN_ATTEMPT_WINDOW_MINUTES', 15) . ' minuto(s)',
+            'Sessão ociosa' => (string) Env::get('SECURITY_SESSION_IDLE_MINUTES', 120) . ' minuto(s)',
+            'Headers de segurança' => $this->yesNo(Env::get('SECURITY_HEADERS_ENABLED', true)),
+            'Tolerância de cobrança' => (string) Env::get('BILLING_ACCESS_GRACE_DAYS', 5) . ' dia(s)',
+        ])];
+        foreach ($users as $user) {
+            $locked = !empty($user['locked_until']) && strtotime((string) $user['locked_until']) > time();
+            $userRecords[] = $this->configurationRecord(
+                'Usuário — ' . (string) ($user['name'] ?? '#' . $user['id']),
+                (string) ($user['email'] ?? ''),
+                $locked ? 'warning' : (string) ($user['status'] ?? 'info'),
+                [
+                    'Perfil' => $this->valueOr($user['role'] ?? null),
+                    'Situação' => $this->valueOr($user['status'] ?? null),
+                    'Tentativas incorretas' => (string) ($user['failed_login_count'] ?? 0),
+                    'Última tentativa incorreta' => $this->valueOr($user['last_failed_login_at'] ?? null),
+                    'Bloqueado até' => $this->valueOr($user['locked_until'] ?? null),
+                    'Motivo do bloqueio' => $this->valueOr($user['lock_reason'] ?? null),
+                    'Último acesso' => $this->valueOr($user['last_login_at'] ?? null),
+                    'Cadastrado em' => $this->valueOr($user['created_at'] ?? null),
+                ]
+            );
+        }
+        $groups[] = [
+            'key' => 'security',
+            'label' => 'Usuários e segurança',
+            'description' => 'Perfis, bloqueios, tentativas incorretas e políticas globais aplicadas ao acesso.',
+            'action_url' => '/users',
+            'records' => $userRecords,
+        ];
+
+        $moduleService = new TenantModuleService();
+        $moduleSettings = $moduleService->settingsForTenant($tenantId);
+        $moduleFields = [];
+        foreach (TenantModuleService::modules() as $key => $definition) {
+            $enabled = (bool) ($moduleSettings[$key]['is_enabled'] ?? $definition['default_enabled']);
+            $visible = (bool) ($moduleSettings[$key]['is_visible'] ?? $definition['default_visible']);
+            $moduleFields[(string) $definition['label']] = ($enabled ? 'Acesso permitido' : 'Acesso bloqueado') . ' · ' . ($visible ? 'visível no menu' : 'oculto no menu');
+        }
+        $notifications = $this->row('SELECT * FROM tenant_notification_preferences WHERE tenant_id = :tenant_id LIMIT 1', ['tenant_id' => $tenantId]) ?? [];
+        $privacy = $this->row('SELECT * FROM tenant_privacy_settings WHERE tenant_id = :tenant_id LIMIT 1', ['tenant_id' => $tenantId]) ?? [];
+        $groups[] = [
+            'key' => 'experience',
+            'label' => 'Menus, notificações e privacidade',
+            'description' => 'O que a equipe do cliente vê, quais alertas recebe e quais regras de privacidade estão vigentes.',
+            'action_url' => '/company-settings?id=' . $tenantId,
+            'records' => [
+                $this->configurationRecord('Módulos do cliente', 'Visibilidade e permissão de acesso', 'info', $moduleFields),
+                $this->configurationRecord('Preferências de notificação', 'Alertas exibidos no sininho', 'info', [
+                    'Novas mensagens' => $this->yesNo($notifications['messages_enabled'] ?? 1),
+                    'Falhas do assistente' => $this->yesNo($notifications['ai_errors_enabled'] ?? 1),
+                    'Falhas de automação' => $this->yesNo($notifications['automation_errors_enabled'] ?? 1),
+                    'Agenda' => $this->yesNo($notifications['calendar_enabled'] ?? 1),
+                    'Financeiro e assinatura' => $this->yesNo($notifications['billing_enabled'] ?? 1),
+                    'Avisos da plataforma' => $this->yesNo($notifications['system_enabled'] ?? 1),
+                    'Atualizada em' => $this->valueOr($notifications['updated_at'] ?? null),
+                ]),
+                $this->configurationRecord('Privacidade e LGPD', 'Políticas aplicadas à empresa', 'info', [
+                    'Exigir aceite da empresa' => $this->yesNo($privacy['require_company_acceptance'] ?? 1),
+                    'Versão da política' => $this->valueOr($privacy['policy_version'] ?? null),
+                    'Responsável/DPO' => $this->valueOr($privacy['dpo_name'] ?? null),
+                    'E-mail do responsável' => $this->valueOr($privacy['dpo_email'] ?? null),
+                    'Retenção de dados' => (string) ($privacy['retention_days'] ?? 365) . ' dia(s)',
+                    'Permitir exportação' => $this->yesNo($privacy['allow_export_requests'] ?? 1),
+                    'Permitir exclusão' => $this->yesNo($privacy['allow_delete_requests'] ?? 1),
+                ], [
+                    'Política de privacidade' => $this->valueOr($privacy['privacy_policy_text'] ?? null),
+                    'Termos de uso' => $this->valueOr($privacy['terms_text'] ?? null),
+                ]),
+            ],
+        ];
+
+        return [
+            'generated_at' => date('Y-m-d H:i:s'),
+            'groups' => $groups,
+            'record_count' => array_sum(array_map(static fn (array $group): int => count($group['records'] ?? []), $groups)),
+            'secrets_notice' => 'Chaves de API, tokens e senhas permanecem ocultos. A tela mostra apenas se estão configurados.',
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function configurationRecord(string $title, string $subtitle, string $tone, array $fields, array $longFields = []): array
+    {
+        $allowed = ['ok', 'active', 'connected', 'warning', 'critical', 'info', 'inactive', 'suspended', 'blocked'];
+        $tone = strtolower(trim($tone));
+        if (!in_array($tone, $allowed, true)) {
+            $tone = 'info';
+        }
+        if (in_array($tone, ['active', 'connected'], true)) {
+            $tone = 'ok';
+        } elseif (in_array($tone, ['inactive', 'suspended', 'blocked'], true)) {
+            $tone = 'warning';
+        }
+        return compact('title', 'subtitle', 'tone', 'fields') + ['long_fields' => $longFields];
+    }
+
+    private function valueOr(mixed $value, string $fallback = 'Não informado'): string
+    {
+        if ($value === null) {
+            return $fallback;
+        }
+        $text = trim((string) $value);
+        return $text !== '' ? $text : $fallback;
+    }
+
+    private function yesNo(mixed $value): string
+    {
+        return filter_var($value, FILTER_VALIDATE_BOOL) || (int) $value === 1 ? 'Sim' : 'Não';
+    }
+
+    private function addressLabel(array $tenant): string
+    {
+        $parts = array_filter([
+            trim((string) ($tenant['address_line'] ?? '')),
+            trim((string) ($tenant['address_number'] ?? '')),
+            trim((string) ($tenant['address_complement'] ?? '')),
+            trim((string) ($tenant['district'] ?? '')),
+            trim((string) ($tenant['city'] ?? '')),
+            trim((string) ($tenant['state'] ?? '')),
+            trim((string) ($tenant['postal_code'] ?? '')),
+        ], static fn (string $value): bool => $value !== '');
+        return $parts ? implode(' · ', $parts) : 'Não informado';
+    }
+
+    private function jsonReadable(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return 'Não configurado';
+        }
+        $decoded = is_array($value) ? $value : json_decode((string) $value, true);
+        if (!is_array($decoded)) {
+            return $this->valueOr($value, 'Não configurado');
+        }
+        if (array_is_list($decoded)) {
+            return $decoded ? implode(', ', array_map(static fn (mixed $item): string => is_scalar($item) ? (string) $item : json_encode($item, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $decoded)) : 'Nenhum';
+        }
+        $lines = [];
+        foreach ($decoded as $key => $item) {
+            if (is_bool($item)) {
+                $item = $item ? 'Sim' : 'Não';
+            } elseif (is_array($item)) {
+                $item = json_encode($item, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            } elseif ($item === null) {
+                $item = 'Sem limite';
+            }
+            $lines[] = (string) $key . ': ' . (string) $item;
+        }
+        return $lines ? implode("\n", $lines) : 'Nenhum';
+    }
+
+    private function workdaysLabel(mixed $value): string
+    {
+        $days = is_array($value) ? $value : json_decode((string) ($value ?? ''), true);
+        if (!is_array($days) || !$days) {
+            return 'Não configurado';
+        }
+        $labels = [0 => 'Domingo', 1 => 'Segunda', 2 => 'Terça', 3 => 'Quarta', 4 => 'Quinta', 5 => 'Sexta', 6 => 'Sábado'];
+        $result = [];
+        foreach ($days as $day) {
+            $result[] = $labels[(int) $day] ?? (string) $day;
+        }
+        return implode(', ', $result);
+    }
+
+    private function workingHoursLabel(mixed $value): string
+    {
+        $hours = is_array($value) ? $value : json_decode((string) ($value ?? ''), true);
+        if (!is_array($hours)) {
+            return 'Não configurado';
+        }
+        if (isset($hours['start'], $hours['end'])) {
+            return (string) $hours['start'] . ' às ' . (string) $hours['end'];
+        }
+        return $this->jsonReadable($hours);
+    }
+
+    private function maskedEncryptedEndpoint(mixed $encrypted): string
+    {
+        if ($encrypted === null || trim((string) $encrypted) === '') {
+            return 'Não configurado';
+        }
+        try {
+            return $this->maskEndpoint(Crypto::decrypt((string) $encrypted));
+        } catch (Throwable) {
+            return 'Configurado e protegido';
+        }
+    }
+
+    private function maskEndpoint(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return 'Não configurado';
+        }
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return preg_replace('/(token|apikey|api_key|secret|signature|key)=([^&\s]+)/i', '$1=OCULTO', $url) ?: $url;
+        }
+        $scheme = (string) ($parts['scheme'] ?? 'https');
+        $result = $scheme . '://' . (string) $parts['host'];
+        if (!empty($parts['port'])) {
+            $result .= ':' . (int) $parts['port'];
+        }
+        $result .= (string) ($parts['path'] ?? '');
+        if (!empty($parts['query'])) {
+            parse_str((string) $parts['query'], $query);
+            foreach ($query as $key => &$value) {
+                if (preg_match('/token|apikey|api_key|secret|signature|auth|key/i', (string) $key)) {
+                    $value = 'OCULTO';
+                }
+            }
+            unset($value);
+            $encoded = http_build_query($query);
+            if ($encoded !== '') {
+                $result .= '?' . $encoded;
+            }
+        }
+        return $result;
     }
 
     private function syncIncidents(int $tenantId, int $snapshotId, array $checks, ?int $userId, string $checkedAt): void

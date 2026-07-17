@@ -1053,3 +1053,89 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 })();
+
+// ZIP 34.4.1 — leitura completa das configurações por empresa.
+(function () {
+  const drawer = document.getElementById('tenant-health-config-drawer');
+  if (!drawer) return;
+
+  const search = drawer.querySelector('[data-health-config-search]');
+  const groups = Array.from(drawer.querySelectorAll('[data-health-config-group]'));
+  const empty = drawer.querySelector('[data-health-config-empty]');
+
+  const normalize = (value) => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  const applySearch = () => {
+    const term = normalize(search?.value);
+    let visible = 0;
+    groups.forEach((group) => {
+      const haystack = normalize(group.dataset.healthConfigSearchText || group.textContent);
+      const matches = term === '' || haystack.includes(term);
+      group.hidden = !matches;
+      if (matches) visible += 1;
+    });
+    if (empty) empty.hidden = visible > 0;
+  };
+
+  search?.addEventListener('input', applySearch);
+
+  drawer.querySelector('[data-health-config-expand]')?.addEventListener('click', () => {
+    drawer.querySelectorAll('.tenant-health-config-record').forEach((details) => {
+      details.open = true;
+    });
+  });
+
+  drawer.querySelector('[data-health-config-collapse]')?.addEventListener('click', () => {
+    drawer.querySelectorAll('.tenant-health-config-record, .tenant-health-config-long-fields details').forEach((details) => {
+      details.open = false;
+    });
+  });
+
+  drawer.querySelectorAll('[data-health-config-jump]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.healthConfigJump || '';
+      const target = drawer.querySelector('#health-config-' + CSS.escape(key));
+      if (!target) return;
+      target.hidden = false;
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      target.classList.add('is-highlighted');
+      window.setTimeout(() => target.classList.remove('is-highlighted'), 1300);
+    });
+  });
+
+  drawer.querySelector('[data-health-config-copy]')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    const lines = [];
+    const company = drawer.querySelector('.conversation-drawer-header h2')?.textContent?.trim();
+    if (company) lines.push(company, '');
+
+    groups.forEach((group) => {
+      if (group.hidden) return;
+      const title = group.querySelector('.tenant-health-config-group-title h3')?.textContent?.trim();
+      if (title) lines.push('## ' + title);
+      group.querySelectorAll('.tenant-health-config-record').forEach((record) => {
+        const recordTitle = record.querySelector(':scope > summary strong')?.textContent?.trim();
+        if (recordTitle) lines.push('- ' + recordTitle);
+        record.querySelectorAll(':scope > .tenant-health-config-fields > div').forEach((field) => {
+          const label = field.querySelector('dt')?.textContent?.trim();
+          const value = field.querySelector('dd')?.textContent?.trim();
+          if (label) lines.push('  ' + label + ': ' + (value || 'Não informado'));
+        });
+      });
+      lines.push('');
+    });
+
+    try {
+      await navigator.clipboard.writeText(lines.join('\n').trim());
+      const original = button.textContent;
+      button.textContent = 'Resumo copiado';
+      window.setTimeout(() => { button.textContent = original; }, 1800);
+    } catch (_) {
+      window.prompt('Copie o resumo abaixo:', lines.join('\n').trim());
+    }
+  });
+})();

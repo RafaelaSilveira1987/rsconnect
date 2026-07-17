@@ -11,6 +11,8 @@ $groups = $data['groups'] ?? [];
 $incidents = $data['incidents'] ?? [];
 $events = $data['events'] ?? [];
 $summary = $data['summary'] ?? [];
+$configuration = $data['configuration'] ?? [];
+$configGroups = $configuration['groups'] ?? [];
 $tenantId = (int) ($tenant['id'] ?? 0);
 
 $statusLabels = [
@@ -21,6 +23,7 @@ $statusLabels = [
     'blocked' => 'Bloqueado',
 ];
 $checkLabels = ['ok' => 'Operacional', 'info' => 'Informação', 'warning' => 'Atenção', 'critical' => 'Crítico'];
+$configToneLabels = ['ok' => 'Configurado', 'info' => 'Informação', 'warning' => 'Revisar', 'critical' => 'Crítico'];
 $incidentLabels = ['open' => 'Aberto', 'acknowledged' => 'Visualizado', 'monitoring' => 'Em acompanhamento', 'resolved' => 'Resolvido'];
 $eventLabels = [
     'opened' => 'Problema identificado',
@@ -59,6 +62,7 @@ $overall = (string) ($snapshot['overall_status'] ?? 'attention');
     <div class="tenant-health-hero-actions">
         <span class="tenant-health-status is-<?= View::e($overall) ?>"><?= View::e($statusLabels[$overall] ?? 'Atenção') ?></span>
         <strong><?= (int) ($snapshot['score'] ?? 0) ?>%</strong>
+        <button class="btn btn-outline" type="button" data-toggle-panel="tenant-health-config-drawer">Ver todas as configurações</button>
         <form method="post" action="<?= View::e(Router::url('/companies/health/run')) ?>">
             <?= Csrf::input() ?>
             <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
@@ -190,3 +194,108 @@ $overall = (string) ($snapshot['overall_status'] ?? 'attention');
         <?php if (!$events): ?><div class="empty-state">Ainda não há movimentações no histórico.</div><?php endif; ?>
     </div>
 </section>
+
+<aside class="conversation-details conversation-drawer tenant-health-config-drawer" id="tenant-health-config-drawer" aria-label="Configurações completas da empresa" aria-modal="true" role="dialog">
+    <div class="conversation-drawer-header">
+        <div>
+            <span class="eyebrow">Visão técnica completa</span>
+            <h2>Configurações de <?= View::e((string) ($tenant['name'] ?? 'empresa')) ?></h2>
+            <p>Consulte o que está configurado em cada módulo sem precisar abrir várias telas.</p>
+        </div>
+        <button class="icon-button drawer-close" type="button" data-close-panel="tenant-health-config-drawer" aria-label="Fechar painel">×</button>
+    </div>
+    <div class="conversation-drawer-body tenant-health-config-body">
+        <div class="tenant-health-config-notice">
+            <div>
+                <strong><?= (int) ($configuration['record_count'] ?? 0) ?> configuração(ões) localizada(s)</strong>
+                <span>Leitura gerada em <?= View::e($formatDate((string) ($configuration['generated_at'] ?? ''))) ?>.</span>
+            </div>
+            <p><?= View::e((string) ($configuration['secrets_notice'] ?? 'Chaves, tokens e senhas permanecem protegidos.')) ?></p>
+        </div>
+
+        <div class="tenant-health-config-toolbar">
+            <label class="field tenant-health-config-search">
+                <span>Buscar configuração</span>
+                <input type="search" placeholder="Ex.: webhook, horário, modelo, vigência..." data-health-config-search>
+            </label>
+            <div class="tenant-health-config-toolbar-actions">
+                <button class="btn btn-small btn-outline" type="button" data-health-config-expand>Expandir tudo</button>
+                <button class="btn btn-small btn-quiet" type="button" data-health-config-collapse>Recolher</button>
+                <button class="btn btn-small btn-primary-soft" type="button" data-health-config-copy>Copiar resumo</button>
+            </div>
+        </div>
+
+        <nav class="tenant-health-config-index" aria-label="Índice das configurações">
+            <?php foreach ($configGroups as $group): ?>
+                <button type="button" data-health-config-jump="<?= View::e((string) ($group['key'] ?? '')) ?>">
+                    <strong><?= View::e((string) ($group['label'] ?? 'Configuração')) ?></strong>
+                    <small><?= count($group['records'] ?? []) ?> item(ns)</small>
+                </button>
+            <?php endforeach; ?>
+        </nav>
+
+        <div class="tenant-health-config-groups">
+            <?php foreach ($configGroups as $group): ?>
+                <?php
+                $groupTextParts = [(string) ($group['label'] ?? ''), (string) ($group['description'] ?? '')];
+                foreach (($group['records'] ?? []) as $record) {
+                    $groupTextParts[] = (string) ($record['title'] ?? '');
+                    $groupTextParts[] = (string) ($record['subtitle'] ?? '');
+                    foreach (($record['fields'] ?? []) as $label => $value) {
+                        $groupTextParts[] = (string) $label . ' ' . (string) $value;
+                    }
+                }
+                $groupSearch = mb_strtolower(implode(' ', $groupTextParts));
+                ?>
+                <section class="drawer-section tenant-health-config-group" id="health-config-<?= View::e((string) ($group['key'] ?? 'group')) ?>" data-health-config-group data-health-config-search-text="<?= View::e($groupSearch) ?>">
+                    <div class="drawer-section-title tenant-health-config-group-title">
+                        <div>
+                            <span class="eyebrow">Configuração atual</span>
+                            <h3><?= View::e((string) ($group['label'] ?? 'Configuração')) ?></h3>
+                            <small><?= View::e((string) ($group['description'] ?? '')) ?></small>
+                        </div>
+                        <?php if (!empty($group['action_url'])): ?>
+                            <a class="btn btn-small btn-outline" href="<?= View::e(Router::url((string) $group['action_url'])) ?>">Editar módulo</a>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="tenant-health-config-records">
+                        <?php foreach (($group['records'] ?? []) as $record): ?>
+                            <?php $tone = (string) ($record['tone'] ?? 'info'); ?>
+                            <details class="tenant-health-config-record">
+                                <summary>
+                                    <span>
+                                        <strong><?= View::e((string) ($record['title'] ?? 'Registro')) ?></strong>
+                                        <?php if (!empty($record['subtitle'])): ?><small><?= View::e((string) $record['subtitle']) ?></small><?php endif; ?>
+                                    </span>
+                                    <em class="health-check-label is-<?= View::e($tone) ?>"><?= View::e($configToneLabels[$tone] ?? 'Informação') ?></em>
+                                </summary>
+                                <dl class="tenant-health-config-fields">
+                                    <?php foreach (($record['fields'] ?? []) as $label => $value): ?>
+                                        <div>
+                                            <dt><?= View::e((string) $label) ?></dt>
+                                            <dd><?= nl2br(View::e((string) $value)) ?></dd>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </dl>
+                                <?php if (!empty($record['long_fields'])): ?>
+                                    <div class="tenant-health-config-long-fields">
+                                        <?php foreach ($record['long_fields'] as $label => $value): ?>
+                                            <details>
+                                                <summary><?= View::e((string) $label) ?></summary>
+                                                <pre><?= View::e((string) $value) ?></pre>
+                                            </details>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </details>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+            <?php endforeach; ?>
+            <?php if (!$configGroups): ?><div class="empty-state">Não foi possível carregar as configurações desta empresa.</div><?php endif; ?>
+            <div class="empty-state" data-health-config-empty hidden>Nenhuma configuração corresponde à busca.</div>
+        </div>
+    </div>
+</aside>
+
