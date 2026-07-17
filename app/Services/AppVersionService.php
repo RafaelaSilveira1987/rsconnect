@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'ZIP 33.2';
-    public const REQUIRED_MIGRATION = '036_security_access_enforcement.sql';
+    public const PACKAGE_LABEL = 'ZIP 34.0';
+    public const REQUIRED_MIGRATION = '037_admin_commercial_crm_reports.sql';
 
     private PDO $pdo;
 
@@ -72,13 +72,16 @@ final class AppVersionService
             'calendar_google_sync_logs',
             'tenant_notification_preferences',
             'tenant_admin_tracking',
+            'admin_crm_stages',
+            'admin_crm_opportunities',
+            'admin_crm_activities',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
-            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 33.2 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 036, conforme o pacote implantado.'
+            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 34.0 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
+            'Rodar as migrations pendentes até a 037, conforme o pacote implantado.'
         );
 
         $appKey = (string) Env::get('APP_KEY', '');

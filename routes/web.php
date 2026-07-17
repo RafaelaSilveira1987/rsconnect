@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Controllers\AccessController;
 use App\Controllers\AgentController;
+use App\Controllers\AdminCrmController;
 use App\Controllers\AiCredentialController;
 use App\Controllers\AutomationController;
 use App\Controllers\BillingController;
@@ -80,6 +81,13 @@ return static function (Router $router): void {
     $router->post('/crm/leads/update', [CrmController::class, 'update'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/leads/move', [CrmController::class, 'move'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/notes', [CrmController::class, 'addNote'], ['auth', 'permission:crm.manage', 'csrf']);
+    $router->post('/crm/admin/opportunities', [AdminCrmController::class, 'store'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/crm/admin/opportunities/update', [AdminCrmController::class, 'update'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/crm/admin/opportunities/move', [AdminCrmController::class, 'move'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/crm/admin/notes', [AdminCrmController::class, 'addNote'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/crm/admin/activities', [AdminCrmController::class, 'addActivity'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/crm/admin/activities/status', [AdminCrmController::class, 'activityStatus'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/crm/admin/convert', [AdminCrmController::class, 'convert'], ['auth', 'super_admin', 'csrf']);
 
     $router->get('/tasks', [TaskController::class, 'index'], ['auth', 'permission:tasks.view']);
 

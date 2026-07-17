@@ -17,6 +17,10 @@ final class CrmController
 {
     public function index(): void
     {
+        if (Auth::isSuperAdmin()) {
+            (new AdminCrmController())->index();
+            return;
+        }
         $pdo = Database::connection();
         $tenantId = $this->resolveTenantFromQuery();
 
