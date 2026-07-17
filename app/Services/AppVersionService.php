@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'ZIP 34.4.1';
-    public const REQUIRED_MIGRATION = '039_tenant_health_diagnostics.sql';
+    public const PACKAGE_LABEL = 'ZIP 34.5';
+    public const REQUIRED_MIGRATION = '040_conversation_flow_contact_groups.sql';
 
     private PDO $pdo;
 
@@ -79,13 +79,15 @@ final class AppVersionService
             'tenant_health_checks',
             'tenant_health_incidents',
             'tenant_health_incident_events',
+            'conversation_flow_states',
+            'ai_agent_group_rules',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
-            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 34.4.1 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 039, conforme o pacote implantado.'
+            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 34.5 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
+            'Rodar as migrations pendentes até a 040, conforme o pacote implantado.'
         );
 
         $reactionPreferenceReady = $this->columnExists('ai_agents', 'reply_to_reactions');
@@ -94,6 +96,16 @@ final class AppVersionService
             $reactionPreferenceReady ? 'ok' : 'blocked',
             $reactionPreferenceReady ? 'Preferência de resposta a reações disponível por assistente.' : 'A coluna reply_to_reactions ainda não foi criada.',
             'Executar database/migrations/038_ai_reaction_preferences.sql.'
+        );
+
+        $conversationFlowReady = $this->columnExists('contacts', 'contact_group')
+            && $this->tableExists('conversation_flow_states')
+            && $this->tableExists('ai_agent_group_rules');
+        $checks[] = $this->check(
+            'Fluxo e grupos de contato',
+            $conversationFlowReady ? 'ok' : 'blocked',
+            $conversationFlowReady ? 'Etapas, demanda e regras por grupo disponíveis para a IA e o pré-agendamento.' : 'A estrutura de fluxo e grupos ainda não foi aplicada.',
+            'Executar database/migrations/040_conversation_flow_contact_groups.sql.'
         );
 
         $appKey = (string) Env::get('APP_KEY', '');

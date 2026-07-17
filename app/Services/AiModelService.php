@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Core\Crypto;
+use App\Core\Database;
 use App\Core\Env;
 use RuntimeException;
 use Throwable;
@@ -156,13 +157,29 @@ final class AiModelService
         $contactPhone = trim((string) ($contact['phone'] ?? $conversation['phone'] ?? ''));
         $timezone = trim((string) ($agent['business_timezone'] ?? Env::get('APP_TIMEZONE', 'America/Sao_Paulo')));
 
+        $group = trim((string) ($conversation['contact_group'] ?? $contact['contact_group'] ?? 'unclassified')) ?: 'unclassified';
+        $groupLabel = ConversationFlowService::GROUPS[$group] ?? 'Outro grupo';
+        $contactStatus = trim((string) ($conversation['contact_status'] ?? $contact['contact_status'] ?? $contact['status'] ?? ''));
+        $tagsRaw = $conversation['tags_json'] ?? $contact['tags_json'] ?? null;
+        $tags = is_array($tagsRaw) ? $tagsRaw : json_decode((string) $tagsRaw, true);
+        $tagsText = is_array($tags) && $tags !== [] ? implode(', ', array_map('strval', $tags)) : 'nenhuma';
+        $flowStage = trim((string) ($conversation['flow_stage'] ?? 'identifying_contact')) ?: 'identifying_contact';
+        $demandStatus = trim((string) ($conversation['demand_status'] ?? 'pending')) ?: 'pending';
+        $demandSummary = trim((string) ($conversation['demand_summary'] ?? ''));
+        $flowStageLabel = ConversationFlowService::STAGES[$flowStage] ?? $flowStage;
+        $demandStatusLabel = ConversationFlowService::DEMAND_STATUSES[$demandStatus] ?? $demandStatus;
+
         $rules = [
             'Responda sempre em português do Brasil.',
             'Seja breve, educada e objetiva. Evite textos longos.',
+            'Faça somente uma pergunta por mensagem.',
             'Não invente preço, prazo, disponibilidade, política ou informação que não esteja no prompt/base.',
+            'Não pergunte novamente informações que já estejam no histórico, no cadastro do contato ou no resumo da demanda.',
             'Se a pergunta exigir decisão humana, peça uma confirmação e diga que encaminhará para atendimento.',
             'Não mencione que você é um modelo de linguagem.',
             'Se o lead pedir humano, atendente, suporte ou uma pessoa, sinalize transferência em vez de insistir no atendimento automático.',
+            'Não inicie nem prometa pré-agendamento somente porque apareceram palavras como horário, agenda ou disponibilidade.',
+            'Antes de conduzir ao pré-agendamento, confirme que a demanda foi coletada ou que o contato preferiu não informá-la. Paciente atual em remarcação pode seguir sem repetir a queixa quando a regra do grupo permitir.',
         ];
 
         $tenantId = (int) ($conversation['tenant_id'] ?? $contact['tenant_id'] ?? 0);
@@ -171,9 +188,9 @@ final class AiModelService
             $preScheduling = new PreSchedulingService();
             if ($preScheduling->isEnabled($tenantId)) {
                 $settings = $preScheduling->settings($tenantId);
-                $rules[] = 'Quando o lead demonstrar intenção de agendar, colete dia/período/horário preferido e modalidade. Não confirme horário, não diga que está marcado e não prometa link.';
-                $rules[] = 'Se o lead ainda não informou dia ou horário, use a mensagem de coleta configurada pelo cliente, adaptando somente o nome se necessário.';
-                $rules[] = 'Se o lead informou preferência de dia ou horário, use a mensagem de registro configurada pelo cliente e deixe claro que depende de confirmação humana.';
+                $rules[] = 'Quando o contato estiver liberado pela etapa da demanda e demonstrar intenção real de agendar, colete dia/período/horário preferido e modalidade. Não confirme horário, não diga que está marcado e não prometa link.';
+                $rules[] = 'Se o contato ainda não informou dia ou horário depois de concluir a etapa da demanda, use a mensagem de coleta configurada pelo cliente, adaptando somente o nome se necessário.';
+                $rules[] = 'Se o contato informou preferência de dia ou horário, use a mensagem de registro configurada pelo cliente e deixe claro que depende de confirmação humana.';
                 $preScheduleBlock = "Configurações de pré-agendamento do cliente:\n" .
                     '- Mensagem para coletar dia/horário: ' . (string) ($settings['collect_message'] ?? '') . "\n" .
                     '- Mensagem após registrar preferência: ' . (string) ($settings['default_message'] ?? '') . "\n" .
@@ -182,11 +199,37 @@ final class AiModelService
             }
         }
 
+        $groupRule = [];
+        try {
+            $groupRule = (new ConversationFlowService())->ruleForAgent(
+                Database::connection(),
+                $tenantId,
+                (int) ($agent['id'] ?? 0),
+                $group
+            );
+        } catch (Throwable) {
+            $groupRule = [];
+        }
+        $groupInstructions = trim((string) ($groupRule['instructions'] ?? ''));
+        $groupRuleBlock = "Regras do grupo de contato:\n" .
+            '- Grupo: ' . $groupLabel . "\n" .
+            '- Pré-agendamento permitido: ' . (!empty($groupRule['allow_pre_schedule']) ? 'sim' : 'não') . "\n" .
+            '- Exigir demanda antes do pré-agendamento: ' . (!empty($groupRule['require_demand_before_pre_schedule']) ? 'sim' : 'não') . "\n" .
+            '- Remarcação sem repetir a demanda: ' . (!empty($groupRule['allow_reschedule_without_demand']) ? 'sim' : 'não') . "\n" .
+            ($groupInstructions !== '' ? '- Orientação específica: ' . $groupInstructions . "\n" : '') . "\n";
+
         return trim($base . "\n\nContexto do contato:\n" .
             '- Nome: ' . ($contactName !== '' ? $contactName : 'não informado') . "\n" .
             '- Telefone: ' . ($contactPhone !== '' ? $contactPhone : 'não informado') . "\n" .
+            '- Classificação cadastral: ' . ($contactStatus !== '' ? $contactStatus : 'não informada') . "\n" .
+            '- Grupo de contato: ' . $groupLabel . "\n" .
+            '- Tags: ' . $tagsText . "\n" .
+            '- Etapa atual: ' . $flowStageLabel . "\n" .
+            '- Situação da demanda: ' . $demandStatusLabel . "\n" .
+            '- Resumo da demanda: ' . ($demandSummary !== '' ? $demandSummary : 'ainda não registrado') . "\n" .
             '- Fuso de atendimento: ' . ($timezone !== '' ? $timezone : 'não informado') . "\n\n" .
             ($knowledge !== '' ? "Base de conhecimento:\n" . $knowledge . "\n\n" : '') .
+            $groupRuleBlock .
             $preScheduleBlock .
             "Regras obrigatórias:\n- " . implode("\n- ", $rules));
     }

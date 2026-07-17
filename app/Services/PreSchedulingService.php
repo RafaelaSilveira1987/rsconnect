@@ -14,7 +14,7 @@ use Throwable;
 
 final class PreSchedulingService
 {
-    public function handleIncoming(PDO $pdo, array $instance, int $contactId, int $conversationId, string $content): array
+    public function handleIncoming(PDO $pdo, array $instance, int $contactId, int $conversationId, string $content, array $flowContext = []): array
     {
         $result = $this->defaultResult();
         $tenantId = (int) ($instance['tenant_id'] ?? 0);
@@ -32,9 +32,29 @@ final class PreSchedulingService
         $result['has_preference'] = $this->hasAnyPreference($intent);
         $result['has_full_preference'] = $this->hasFullPreference($intent);
 
+        $existing = $this->pendingPreSchedule($pdo, $tenantId, $conversationId, $contactId);
+        if ($existing === null) {
+            $decision = (new ConversationFlowService())->schedulingDecision(
+                $pdo,
+                $instance,
+                $contactId,
+                $conversationId,
+                $content,
+                $flowContext
+            );
+            if (empty($decision['allowed'])) {
+                $result['handled'] = true;
+                $result['blocked'] = true;
+                $result['blocked_reason'] = (string) ($decision['code'] ?? 'flow_blocked');
+                $result['blocked_message'] = (string) ($decision['message'] ?? 'Pré-agendamento aguardando a etapa anterior do atendimento.');
+                $result['conversation_flow'] = $decision['flow'] ?? $flowContext;
+                return $result;
+            }
+            $flowContext = is_array($decision['flow'] ?? null) ? $decision['flow'] : $flowContext;
+        }
+
         $this->markConversationIntent($pdo, $tenantId, $conversationId, $intent);
 
-        $existing = $this->pendingPreSchedule($pdo, $tenantId, $conversationId, $contactId);
         if ($existing !== null) {
             $update = $this->updatePendingPreSchedule($pdo, $tenantId, $existing, $intent, $content);
             $result = array_merge($result, [
@@ -81,7 +101,7 @@ final class PreSchedulingService
         $period = $this->periodFromIntent($intent, (int) ($settings['default_duration_minutes'] ?? 50));
         $titleName = trim((string) ($contact['name'] ?? '')) ?: trim((string) ($contact['phone'] ?? 'Paciente'));
         $title = 'Pré-agendamento - ' . mb_substr($titleName, 0, 90);
-        $description = $this->buildDescription($content, $intent);
+        $description = $this->buildDescription($content, $intent, $flowContext);
         $status = $this->hasFullPreference($intent) ? 'awaiting_approval' : 'pre_scheduled';
 
         $statement = $pdo->prepare(
@@ -134,6 +154,9 @@ final class PreSchedulingService
             'preferred_date' => $intent['preferred_date'],
             'modality' => $intent['modality'],
             'message' => $content,
+            'contact_group' => (string) ($flowContext['contact_group'] ?? 'unclassified'),
+            'demand_status' => (string) ($flowContext['demand_status'] ?? 'pending'),
+            'demand_summary' => (string) ($flowContext['demand_summary'] ?? ''),
         ], null, $tenantId);
 
         $preferenceLabel = trim($this->displayDay($intent) . ' ' . $this->displayTime($intent));
@@ -595,10 +618,15 @@ final class PreSchedulingService
         return is_scalar($id) && trim((string) $id) !== '' ? trim((string) $id) : null;
     }
 
-    private function buildDescription(string $content, array $intent): string
+    private function buildDescription(string $content, array $intent, array $flowContext = []): string
     {
         return implode("\n", array_filter([
             'Preferência recebida pelo WhatsApp/IA. Necessita aprovação humana antes de confirmar.',
+            'Grupo do contato: ' . ((string) ($flowContext['contact_group_label'] ?? $flowContext['contact_group'] ?? 'não identificado')),
+            'Situação da demanda: ' . ((string) ($flowContext['demand_status_label'] ?? $flowContext['demand_status'] ?? 'não informada')),
+            trim((string) ($flowContext['demand_summary'] ?? '')) !== ''
+                ? 'Resumo da demanda: ' . mb_substr(trim((string) $flowContext['demand_summary']), 0, 800)
+                : null,
             'Dia/período informado: ' . ($this->displayDay($intent) ?: 'não informado'),
             'Horário/período informado: ' . ($this->displayTime($intent) ?: 'não informado'),
             'Modalidade: ' . ($intent['modality'] ?: 'não informada'),

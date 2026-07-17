@@ -359,7 +359,7 @@ final class TenantHealthService
             ['tenant_id' => $tenantId]
         );
         if (!$agents) {
-            return [$this->check('Assistente de IA', 'agents.none', 'Assistentes virtuais', 'critical', 'Nenhum assistente virtual foi cadastrado.', [], '/agents', 40)];
+            return [$this->check('Assistente de IA', 'agents.none', 'Assistentes virtuais', 'critical', 'Nenhum assistente virtual foi cadastrado.', [], '/agents?tenant_id=' . $tenantId, 40)];
         }
 
         $checks = [];
@@ -416,7 +416,7 @@ final class TenantHealthService
                 'Mensagens aguardando reprocessamento' => (string) $pendingCooldown,
                 'Intervalo configurado' => (string) ($agent['cooldown_seconds'] ?? 0) . ' segundo(s)',
             ];
-            $checks[] = $this->check('Assistente de IA', 'agent.' . $id, 'Assistente — ' . (string) $agent['name'], $status, $summary, $details, '/agents', 40 + $id);
+            $checks[] = $this->check('Assistente de IA', 'agent.' . $id, 'Assistente — ' . (string) $agent['name'], $status, $summary, $details, '/agents?tenant_id=' . $tenantId, 40 + $id);
         }
         return $checks;
     }
@@ -681,6 +681,19 @@ final class TenantHealthService
             $credentialsByAgent[(int) ($credential['agent_id'] ?? 0)][] = $credential;
         }
 
+        $groupRulesRows = $this->all(
+            'SELECT agent_id, contact_group, allow_pre_schedule,
+                    require_demand_before_pre_schedule, allow_reschedule_without_demand, instructions
+             FROM ai_agent_group_rules
+             WHERE tenant_id = :tenant_id
+             ORDER BY agent_id, contact_group',
+            ['tenant_id' => $tenantId]
+        );
+        $groupRulesByAgent = [];
+        foreach ($groupRulesRows as $groupRuleRow) {
+            $groupRulesByAgent[(int) ($groupRuleRow['agent_id'] ?? 0)][] = $groupRuleRow;
+        }
+
         $agents = $this->all(
             'SELECT a.*, i.name AS instance_label, i.instance_name
              FROM ai_agents a
@@ -703,6 +716,16 @@ final class TenantHealthService
                     !empty($credential['api_key_encrypted']) ? 'configurada' : 'ausente'
                 );
             }
+            $groupRuleLines = [];
+            foreach ($groupRulesByAgent[$id] ?? [] as $groupRule) {
+                $groupKey = (string) ($groupRule['contact_group'] ?? 'unclassified');
+                $groupLabel = ConversationFlowService::GROUPS[$groupKey] ?? $groupKey;
+                $groupRuleLines[] = $groupLabel . ': agenda ' . ((int) ($groupRule['allow_pre_schedule'] ?? 0) === 1 ? 'permitida' : 'bloqueada') .
+                    '; demanda ' . ((int) ($groupRule['require_demand_before_pre_schedule'] ?? 0) === 1 ? 'obrigatória' : 'dispensada') .
+                    '; remarcação sem repetir ' . ((int) ($groupRule['allow_reschedule_without_demand'] ?? 0) === 1 ? 'sim' : 'não') .
+                    (trim((string) ($groupRule['instructions'] ?? '')) !== '' ? '; orientação: ' . trim((string) $groupRule['instructions']) : '');
+            }
+
             $fields = [
                 'Nome' => $this->valueOr($agent['name'] ?? null),
                 'Área de atendimento' => $this->valueOr($agent['segment'] ?? null),
@@ -736,6 +759,7 @@ final class TenantHealthService
                     'Construtor do prompt' => $this->jsonReadable($agent['prompt_builder_json'] ?? null),
                     'Mensagem fora do horário' => $this->valueOr($agent['after_hours_message'] ?? null),
                     'Mensagem de encaminhamento humano' => $this->valueOr($agent['human_handoff_message'] ?? null),
+                    'Regras por grupo de contato' => $groupRuleLines ? implode("\n", $groupRuleLines) : 'Usando regras padrão da plataforma',
                 ]
             );
         }
@@ -764,7 +788,7 @@ final class TenantHealthService
             'key' => 'ai',
             'label' => 'Assistentes e credenciais de IA',
             'description' => 'Comportamento, prompt, horários, intervalo, reações, modelo e credenciais protegidas.',
-            'action_url' => '/agents',
+            'action_url' => '/agents?tenant_id=' . $tenantId,
             'records' => $agentRecords,
         ];
 

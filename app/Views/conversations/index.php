@@ -15,6 +15,9 @@ $formatDate = static function (?string $date, string $format = 'd/m/Y H:i'): str
 };
 $modeLabel = ['ai' => 'IA ativa', 'human' => 'Humano', 'paused' => 'IA pausada'];
 $statusLabel = ['open' => 'Aberta', 'pending' => 'Pendente', 'closed' => 'Encerrada'];
+$contactGroupLabels = \App\Services\ConversationFlowService::GROUPS;
+$flowStageLabels = \App\Services\ConversationFlowService::STAGES;
+$demandStatusLabels = \App\Services\ConversationFlowService::DEMAND_STATUSES;
 $contactLabel = static function (array $row): string {
     $name = trim((string) ($row['contact_name'] ?? ''));
     $phone = trim((string) ($row['phone'] ?? ''));
@@ -378,9 +381,41 @@ $returnQuery = http_build_query($pollQuery);
                                     <option value="inactive" <?= $selected['contact_status'] === 'inactive' ? 'selected' : '' ?>>Inativo</option>
                                 </select>
                             </label>
+                            <label class="field"><span>Grupo de atendimento</span>
+                                <select name="contact_group" <?= !$canManage ? 'disabled' : '' ?>>
+                                    <?php foreach ($contactGroupLabels as $value => $label): ?>
+                                        <option value="<?= View::e($value) ?>" <?= ($selected['contact_group'] ?? 'unclassified') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <small class="field-hint">O assistente recebe esse grupo junto com as tags e aplica as regras específicas.</small>
+                            </label>
                         </div>
                         <label class="field drawer-span"><span>Tags separadas por vírgula</span><input name="tags" value="<?= View::e($tagText) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
                         <label class="field drawer-span"><span>Notas internas</span><textarea name="notes" rows="7" <?= !$canManage ? 'readonly' : '' ?>><?= View::e($selected['notes']) ?></textarea></label>
+                    </section>
+
+                    <section class="drawer-section conversation-flow-card">
+                        <div class="drawer-section-title">
+                            <div>
+                                <span class="eyebrow">Fluxo do atendimento</span>
+                                <h3>Etapa e demanda</h3>
+                                <small>Esses dados impedem que a agenda seja aberta antes da hora e são enviados ao assistente.</small>
+                            </div>
+                        </div>
+                        <div class="drawer-form-grid">
+                            <label class="field"><span>Etapa atual</span><select name="flow_stage" <?= !$canManage ? 'disabled' : '' ?>>
+                                <?php foreach ($flowStageLabels as $value => $label): ?><option value="<?= View::e($value) ?>" <?= ($selected['flow_stage'] ?? 'identifying_contact') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?>
+                            </select></label>
+                            <label class="field"><span>Situação da demanda</span><select name="demand_status" <?= !$canManage ? 'disabled' : '' ?>>
+                                <?php foreach ($demandStatusLabels as $value => $label): ?><option value="<?= View::e($value) ?>" <?= ($selected['demand_status'] ?? 'pending') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?>
+                            </select></label>
+                        </div>
+                        <label class="field drawer-span"><span>Resumo da demanda</span><textarea name="demand_summary" rows="5" <?= !$canManage ? 'readonly' : '' ?> placeholder="Registre a queixa, necessidade ou a recusa em informar."><?= View::e($selected['demand_summary'] ?? '') ?></textarea></label>
+                        <?php if (($selected['demand_status'] ?? 'pending') === 'pending'): ?>
+                            <div class="message-warning">O pré-agendamento automático ficará bloqueado até a demanda ser coletada, recusada ou dispensada pela regra do grupo.</div>
+                        <?php else: ?>
+                            <div class="message-success">Etapa da demanda concluída. A agenda poderá seguir quando houver intenção real de agendamento.</div>
+                        <?php endif; ?>
                     </section>
 
                     <?php if ($canManage): ?>

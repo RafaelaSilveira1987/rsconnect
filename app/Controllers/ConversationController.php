@@ -14,6 +14,7 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\AiAutomationService;
 use App\Services\AiModelService;
+use App\Services\ConversationFlowService;
 use App\Services\EvolutionService;
 use PDO;
 use Throwable;
@@ -685,6 +686,10 @@ final class ConversationController
         $company = trim((string) ($_POST['company'] ?? ''));
         $notes = trim((string) ($_POST['notes'] ?? ''));
         $status = (string) ($_POST['contact_status'] ?? 'lead');
+        $contactGroup = (string) ($_POST['contact_group'] ?? 'unclassified');
+        $flowStage = (string) ($_POST['flow_stage'] ?? 'identifying_contact');
+        $demandStatus = (string) ($_POST['demand_status'] ?? 'pending');
+        $demandSummary = trim((string) ($_POST['demand_summary'] ?? ''));
         $tags = array_values(array_filter(array_map('trim', explode(',', (string) ($_POST['tags'] ?? '')))));
 
         if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -694,11 +699,15 @@ final class ConversationController
         if (!in_array($status, ['lead', 'customer', 'inactive'], true)) {
             $status = 'lead';
         }
+        if (!array_key_exists($contactGroup, ConversationFlowService::GROUPS)) {
+            $contactGroup = 'unclassified';
+        }
 
-        $statement = Database::connection()->prepare(
+        $pdo = Database::connection();
+        $statement = $pdo->prepare(
             'UPDATE contacts
              SET name = :name, email = :email, company = :company, notes = :notes,
-                 tags_json = :tags_json, status = :status
+                 tags_json = :tags_json, status = :status, contact_group = :contact_group
              WHERE id = :contact_id AND tenant_id = :tenant_id'
         );
         $statement->execute([
@@ -708,11 +717,24 @@ final class ConversationController
             'notes' => $notes !== '' ? $notes : null,
             'tags_json' => $tags ? json_encode($tags, JSON_UNESCAPED_UNICODE) : null,
             'status' => $status,
+            'contact_group' => $contactGroup,
             'contact_id' => $conversation['contact_id'],
             'tenant_id' => $conversation['tenant_id'],
         ]);
 
-        Audit::log('conversation.contact_updated', ['conversation_id' => $conversationId], (int) $conversation['tenant_id']);
+        (new ConversationFlowService())->updateManual($pdo, (int) $conversation['tenant_id'], $conversationId, (int) $conversation['contact_id'], [
+            'contact_group' => $contactGroup,
+            'flow_stage' => $flowStage,
+            'demand_status' => $demandStatus,
+            'demand_summary' => $demandSummary,
+        ]);
+
+        Audit::log('conversation.contact_updated', [
+            'conversation_id' => $conversationId,
+            'contact_group' => $contactGroup,
+            'flow_stage' => $flowStage,
+            'demand_status' => $demandStatus,
+        ], (int) $conversation['tenant_id']);
         Flash::set('success', 'Dados do contato atualizados.');
         $this->redirect('/conversations?conversation_id=' . $conversationId);
     }
@@ -868,7 +890,11 @@ final class ConversationController
         }
 
         $sql = 'SELECT c.*, ct.name AS contact_name, ct.phone, ct.email, ct.company, ct.notes,
-                       ct.tags_json, ct.status AS contact_status, ct.id AS contact_id,
+                       ct.tags_json, ct.status AS contact_status,
+                       COALESCE(NULLIF(ct.contact_group, ""), "unclassified") AS contact_group,
+                       ct.id AS contact_id,
+                       fs.stage AS flow_stage, fs.demand_status, fs.demand_summary,
+                       fs.is_existing_patient, fs.last_intent,
                        i.name AS instance_label, i.instance_name, i.base_url, i.api_key_encrypted,
                        t.name AS tenant_name, u.name AS assigned_user_name,
                        ' . $leadSelect . '
@@ -877,6 +903,7 @@ final class ConversationController
                 INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = c.tenant_id
                 INNER JOIN tenants t ON t.id = c.tenant_id
                 LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
+                LEFT JOIN conversation_flow_states fs ON fs.conversation_id = c.id AND fs.tenant_id = c.tenant_id
                 ' . $leadJoins . '
                 WHERE c.id = :id';
         $params = ['id' => $id];

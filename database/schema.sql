@@ -139,6 +139,7 @@ CREATE TABLE contacts (
     tags_json JSON NULL,
     avatar_url VARCHAR(500) NULL,
     status ENUM('lead', 'customer', 'inactive') NOT NULL DEFAULT 'lead',
+    contact_group VARCHAR(40) NOT NULL DEFAULT 'unclassified',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_contacts_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
@@ -324,4 +325,45 @@ CREATE TABLE IF NOT EXISTS tenant_admin_tracking (
     KEY idx_tenant_admin_tracking_status (tracking_status, priority),
     CONSTRAINT fk_tenant_admin_tracking_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
     CONSTRAINT fk_tenant_admin_tracking_user FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ZIP 34.5 — estado do fluxo de atendimento e regras por grupo
+CREATE TABLE IF NOT EXISTS conversation_flow_states (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
+    conversation_id BIGINT UNSIGNED NOT NULL,
+    contact_id BIGINT UNSIGNED NOT NULL,
+    stage VARCHAR(60) NOT NULL DEFAULT 'identifying_contact',
+    demand_status ENUM('pending','collected','refused','not_required') NOT NULL DEFAULT 'pending',
+    demand_summary TEXT NULL,
+    is_existing_patient TINYINT(1) NOT NULL DEFAULT 0,
+    last_intent VARCHAR(80) NULL,
+    source VARCHAR(40) NOT NULL DEFAULT 'platform',
+    metadata_json JSON NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_conversation_flow_state (conversation_id),
+    KEY idx_conversation_flow_tenant_stage (tenant_id, stage, demand_status),
+    KEY idx_conversation_flow_contact (contact_id),
+    CONSTRAINT fk_conversation_flow_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    CONSTRAINT fk_conversation_flow_conversation FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_conversation_flow_contact FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS ai_agent_group_rules (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
+    agent_id BIGINT UNSIGNED NOT NULL,
+    contact_group VARCHAR(40) NOT NULL,
+    allow_pre_schedule TINYINT(1) NOT NULL DEFAULT 1,
+    require_demand_before_pre_schedule TINYINT(1) NOT NULL DEFAULT 1,
+    allow_reschedule_without_demand TINYINT(1) NOT NULL DEFAULT 0,
+    instructions TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_agent_group_rule (agent_id, contact_group),
+    KEY idx_agent_group_rules_tenant (tenant_id, contact_group),
+    CONSTRAINT fk_agent_group_rule_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    CONSTRAINT fk_agent_group_rule_agent FOREIGN KEY (agent_id) REFERENCES ai_agents(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

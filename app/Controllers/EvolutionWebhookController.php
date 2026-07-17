@@ -10,6 +10,7 @@ use App\Services\AccessControlService;
 use App\Services\AiAutomationService;
 use App\Services\AutomationWebhookService;
 use App\Services\CrmAutoService;
+use App\Services\ConversationFlowService;
 use App\Services\NotificationService;
 use App\Services\PreSchedulingService;
 use PDO;
@@ -148,10 +149,25 @@ final class EvolutionWebhookController
             );
 
             $leadId = null;
+            $flowContext = [];
             $preScheduleResult = ['skip_ai' => false];
             if (!$fromMe && $inserted && $automationAllowed && !$isReaction) {
+                $flowContext = (new ConversationFlowService())->ingestIncoming(
+                    $pdo,
+                    $instance,
+                    $contactId,
+                    $conversationId,
+                    $content
+                );
                 $leadId = (new CrmAutoService())->createFromConversation($pdo, $instance, $contactId, $conversationId, $content);
-                $preScheduleResult = (new PreSchedulingService())->handleIncoming($pdo, $instance, $contactId, $conversationId, $content);
+                $preScheduleResult = (new PreSchedulingService())->handleIncoming(
+                    $pdo,
+                    $instance,
+                    $contactId,
+                    $conversationId,
+                    $content,
+                    $flowContext
+                );
             } elseif (!$fromMe && $inserted && !$automationAllowed) {
                 $preScheduleResult = ['skip_ai' => true, 'access_blocked' => true, 'reason' => $tenantAccess['code'] ?? 'blocked'];
             }
@@ -214,6 +230,7 @@ final class EvolutionWebhookController
                 'crm_lead_id' => $leadId,
                 'ai_checked' => $aiHandled,
                 'pre_schedule' => $preScheduleResult,
+                'conversation_flow' => $flowContext,
                 'access_allowed' => $automationAllowed,
                 'access_reason' => $automationAllowed ? null : ($tenantAccess['code'] ?? 'blocked'),
             ]);

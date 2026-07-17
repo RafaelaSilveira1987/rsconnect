@@ -6,6 +6,7 @@ use App\Core\Router;
 use App\Core\View;
 
 $statusLabels = ['lead' => 'Lead', 'customer' => 'Cliente', 'inactive' => 'Inativo'];
+$groupLabels = \App\Services\ConversationFlowService::GROUPS;
 $formatDate = static function (?string $value): string {
     if (!$value) {
         return 'Sem interação';
@@ -19,6 +20,7 @@ $formatDate = static function (?string $value): string {
 $queryBase = [];
 if (($filters['search'] ?? '') !== '') $queryBase['search'] = $filters['search'];
 if (($filters['status'] ?? '') !== '') $queryBase['status'] = $filters['status'];
+if (($filters['contact_group'] ?? '') !== '') $queryBase['contact_group'] = $filters['contact_group'];
 if (($filters['tenant_id'] ?? 0) > 0) $queryBase['tenant_id'] = (int) $filters['tenant_id'];
 ?>
 
@@ -54,6 +56,9 @@ if (($filters['tenant_id'] ?? 0) > 0) $queryBase['tenant_id'] = (int) $filters['
                     <label class="field"><span>Classificação</span><select name="status">
                         <option value="lead">Lead</option><option value="customer">Cliente</option><option value="inactive">Inativo</option>
                     </select></label>
+                    <label class="field"><span>Grupo de atendimento</span><select name="contact_group">
+                        <?php foreach ($groupLabels as $value => $label): ?><option value="<?= View::e($value) ?>"><?= View::e($label) ?></option><?php endforeach; ?>
+                    </select><small class="field-hint">Essa informação é enviada ao assistente para aplicar as regras corretas.</small></label>
                     <label class="field"><span>Instância</span><select name="evolution_instance_id" data-instance-select>
                         <option value="">Sem vínculo</option>
                         <?php foreach ($instances as $instance): ?>
@@ -77,6 +82,12 @@ if (($filters['tenant_id'] ?? 0) > 0) $queryBase['tenant_id'] = (int) $filters['
         <option value="">Todas as classificações</option>
         <?php foreach ($statusLabels as $value => $label): ?>
             <option value="<?= View::e($value) ?>" <?= ($filters['status'] ?? '') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
+        <?php endforeach; ?>
+    </select>
+    <select name="contact_group" aria-label="Grupo de atendimento">
+        <option value="">Todos os grupos</option>
+        <?php foreach ($groupLabels as $value => $label): ?>
+            <option value="<?= View::e($value) ?>" <?= ($filters['contact_group'] ?? '') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
         <?php endforeach; ?>
     </select>
     <?php if (Auth::isSuperAdmin()): ?>
@@ -113,7 +124,7 @@ if (($filters['tenant_id'] ?? 0) > 0) $queryBase['tenant_id'] = (int) $filters['
                                 <span><strong><?= View::e($contact['name'] ?: 'Contato sem nome') ?></strong><small><?= View::e($contact['phone']) ?><?= $contact['company'] ? ' · ' . View::e($contact['company']) : '' ?></small></span>
                             </div>
                         </td>
-                        <td><span class="badge badge-<?= View::e($contact['status']) ?>"><?= View::e($statusLabels[$contact['status']] ?? $contact['status']) ?></span></td>
+                        <td><span class="badge badge-<?= View::e($contact['status']) ?>"><?= View::e($statusLabels[$contact['status']] ?? $contact['status']) ?></span><small><?= View::e($groupLabels[$contact['contact_group'] ?? 'unclassified'] ?? 'Não identificado') ?></small></td>
                         <td><strong><?= (int) $contact['conversations_count'] ?> conversas</strong><small><?= (int) $contact['leads_count'] ?> negócios<?= Auth::isSuperAdmin() ? ' · ' . View::e($contact['tenant_name']) : '' ?></small></td>
                         <td><span><?= View::e($formatDate($contact['last_interaction_at'])) ?></span><?php if (is_array($tags) && $tags): ?><small><?= View::e(implode(' · ', array_slice($tags, 0, 3))) ?></small><?php endif; ?></td>
                         <td><a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/contacts?' . http_build_query($params))) ?>">Ver</a></td>
@@ -144,6 +155,9 @@ if (($filters['tenant_id'] ?? 0) > 0) $queryBase['tenant_id'] = (int) $filters['
                 <label class="field"><span>Empresa do contato</span><input name="company" value="<?= View::e($selected['company']) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
                 <label class="field"><span>Classificação</span><select name="status" <?= !$canManage ? 'disabled' : '' ?>>
                     <?php foreach ($statusLabels as $value => $label): ?><option value="<?= View::e($value) ?>" <?= $selected['status'] === $value ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?>
+                </select></label>
+                <label class="field"><span>Grupo de atendimento</span><select name="contact_group" <?= !$canManage ? 'disabled' : '' ?>>
+                    <?php foreach ($groupLabels as $value => $label): ?><option value="<?= View::e($value) ?>" <?= ($selected['contact_group'] ?? 'unclassified') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?>
                 </select></label>
                 <label class="field"><span>Tags</span><input name="tags" value="<?= View::e(is_array($selectedTags) ? implode(', ', $selectedTags) : '') ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
                 <label class="field"><span>Notas</span><textarea name="notes" rows="5" <?= !$canManage ? 'readonly' : '' ?>><?= View::e($selected['notes']) ?></textarea></label>

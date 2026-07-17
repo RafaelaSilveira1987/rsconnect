@@ -11,6 +11,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AiAutomationService;
+use App\Services\ConversationFlowService;
 use App\Services\SubscriptionService;
 use PDO;
 use Throwable;
@@ -19,50 +20,85 @@ final class AgentController
 {
     public function index(): void
     {
-        $tenantId = (int) Auth::tenantId();
         $pdo = Database::connection();
+        $tenantId = $this->resolveTenantId();
+        $tenants = [];
 
-        $agentsStatement = $pdo->prepare(
-            'SELECT a.*, i.name AS instance_name,
-                    COALESCE(ac_agent.label, ac_tenant.label) AS credential_label,
-                    COALESCE(ac_agent.provider, ac_tenant.provider) AS credential_provider,
-                    COALESCE(ac_agent.default_model, ac_tenant.default_model) AS credential_model
-             FROM ai_agents a
-             LEFT JOIN evolution_instances i ON i.id = a.instance_id
-             LEFT JOIN ai_provider_credentials ac_agent ON ac_agent.id = (
-                SELECT x.id FROM ai_provider_credentials x
-                WHERE x.agent_id = a.id AND x.status = "active"
-                ORDER BY x.is_default DESC, x.id DESC LIMIT 1
-             )
-             LEFT JOIN ai_provider_credentials ac_tenant ON ac_tenant.id = (
-                SELECT y.id FROM ai_provider_credentials y
-                WHERE y.tenant_id = a.tenant_id AND y.agent_id IS NULL AND y.status = "active"
-                ORDER BY y.is_default DESC, y.id DESC LIMIT 1
-             )
-             WHERE a.tenant_id = :tenant_id
-             ORDER BY a.is_default DESC, a.created_at DESC'
-        );
-        $agentsStatement->execute(['tenant_id' => $tenantId]);
+        if (Auth::isSuperAdmin()) {
+            $tenants = $pdo->query(
+                'SELECT t.id, t.name, t.status,
+                        COUNT(DISTINCT a.id) AS agents_count,
+                        COUNT(DISTINCT i.id) AS instances_count
+                 FROM tenants t
+                 LEFT JOIN ai_agents a ON a.tenant_id = t.id
+                 LEFT JOIN evolution_instances i ON i.tenant_id = t.id
+                 GROUP BY t.id
+                 ORDER BY (t.id = ' . (int) $tenantId . ') DESC, t.status = "active" DESC, t.name'
+            )->fetchAll(PDO::FETCH_ASSOC);
+        }
 
-        $instancesStatement = $pdo->prepare(
-            'SELECT id, name FROM evolution_instances WHERE tenant_id = :tenant_id ORDER BY is_default DESC, name'
-        );
-        $instancesStatement->execute(['tenant_id' => $tenantId]);
+        $agents = [];
+        $instances = [];
+        $companyProfile = [];
+        $groupRules = [];
 
-        $companyStatement = $pdo->prepare('SELECT * FROM tenants WHERE id = :tenant_id LIMIT 1');
-        $companyStatement->execute(['tenant_id' => $tenantId]);
+        if ($tenantId > 0) {
+            $agentsStatement = $pdo->prepare(
+                'SELECT a.*, i.name AS instance_name, t.name AS tenant_name,
+                        COALESCE(ac_agent.label, ac_tenant.label) AS credential_label,
+                        COALESCE(ac_agent.provider, ac_tenant.provider) AS credential_provider,
+                        COALESCE(ac_agent.default_model, ac_tenant.default_model) AS credential_model
+                 FROM ai_agents a
+                 INNER JOIN tenants t ON t.id = a.tenant_id
+                 LEFT JOIN evolution_instances i ON i.id = a.instance_id
+                 LEFT JOIN ai_provider_credentials ac_agent ON ac_agent.id = (
+                    SELECT x.id FROM ai_provider_credentials x
+                    WHERE x.agent_id = a.id AND x.status = "active"
+                    ORDER BY x.is_default DESC, x.id DESC LIMIT 1
+                 )
+                 LEFT JOIN ai_provider_credentials ac_tenant ON ac_tenant.id = (
+                    SELECT y.id FROM ai_provider_credentials y
+                    WHERE y.tenant_id = a.tenant_id AND y.agent_id IS NULL AND y.status = "active"
+                    ORDER BY y.is_default DESC, y.id DESC LIMIT 1
+                 )
+                 WHERE a.tenant_id = :tenant_id
+                 ORDER BY a.is_default DESC, a.created_at DESC'
+            );
+            $agentsStatement->execute(['tenant_id' => $tenantId]);
+            $agents = $agentsStatement->fetchAll(PDO::FETCH_ASSOC);
+
+            $instancesStatement = $pdo->prepare(
+                'SELECT id, name FROM evolution_instances WHERE tenant_id = :tenant_id ORDER BY is_default DESC, name'
+            );
+            $instancesStatement->execute(['tenant_id' => $tenantId]);
+            $instances = $instancesStatement->fetchAll(PDO::FETCH_ASSOC);
+
+            $companyStatement = $pdo->prepare('SELECT * FROM tenants WHERE id = :tenant_id LIMIT 1');
+            $companyStatement->execute(['tenant_id' => $tenantId]);
+            $companyProfile = $companyStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+
+            $groupRules = (new ConversationFlowService())->rulesForAgents(
+                $pdo,
+                $tenantId,
+                array_column($agents, 'id')
+            );
+        }
 
         View::render('agents.index', [
             'title' => 'Assistentes de IA',
-            'agents' => $agentsStatement->fetchAll(PDO::FETCH_ASSOC),
-            'instances' => $instancesStatement->fetchAll(PDO::FETCH_ASSOC),
-            'companyProfile' => $companyStatement->fetch(PDO::FETCH_ASSOC) ?: [],
+            'agents' => $agents,
+            'instances' => $instances,
+            'companyProfile' => $companyProfile,
+            'tenants' => $tenants,
+            'selectedTenantId' => $tenantId,
+            'groupRules' => $groupRules,
+            'contactGroups' => ConversationFlowService::GROUPS,
         ]);
     }
 
     public function store(): void
     {
-        $tenantId = (int) Auth::tenantId();
+        $tenantId = $this->resolveTenantId();
         $instanceId = (int) ($_POST['instance_id'] ?? 0);
         $name = trim((string) ($_POST['name'] ?? ''));
         $segment = trim((string) ($_POST['segment'] ?? ''));
@@ -84,13 +120,13 @@ final class AgentController
 
         if ($instanceId < 1 || $name === '' || $segment === '' || $prompt === '') {
             Flash::set('error', 'Escolha a conexão WhatsApp e informe o nome, a área de atendimento e as instruções do assistente.');
-            $this->redirect('/agents');
+            $this->redirectToAgents($tenantId ?? 0);
         }
 
         $limit = (new SubscriptionService())->ensureCanCreate($tenantId, 'agents');
         if (empty($limit['ok'])) {
             Flash::set('error', $limit['message']);
-            $this->redirect('/agents');
+            $this->redirectToAgents($tenantId ?? 0);
         }
 
         $pdo = Database::connection();
@@ -100,7 +136,7 @@ final class AgentController
         $check->execute(['id' => $instanceId, 'tenant_id' => $tenantId]);
         if (!$check->fetchColumn()) {
             Flash::set('error', 'A conexão WhatsApp escolhida não está disponível para sua empresa.');
-            $this->redirect('/agents');
+            $this->redirectToAgents($tenantId ?? 0);
         }
 
         try {
@@ -160,12 +196,12 @@ final class AgentController
             Flash::set('error', 'Não foi possível cadastrar o agente: ' . $exception->getMessage());
         }
 
-        $this->redirect('/agents');
+        $this->redirectToAgents($tenantId ?? 0);
     }
 
     public function updateStatus(): void
     {
-        $tenantId = (int) Auth::tenantId();
+        $tenantId = $this->resolveTenantId();
         $agentId = (int) ($_POST['agent_id'] ?? 0);
         $status = (string) ($_POST['status'] ?? 'inactive');
         $autoReplyEnabled = isset($_POST['auto_reply_enabled']);
@@ -178,7 +214,7 @@ final class AgentController
 
         if ($agentId < 1 || !in_array($status, ['active', 'inactive'], true)) {
             Flash::set('error', 'Não foi possível identificar o assistente ou a opção escolhida.');
-            $this->redirect('/agents');
+            $this->redirectToAgents($tenantId ?? 0);
         }
 
         $business = $this->businessHoursFromPost();
@@ -252,29 +288,29 @@ final class AgentController
             Flash::set('error', $exception->getMessage());
         }
 
-        $this->redirect('/agents');
+        $this->redirectToAgents($tenantId ?? 0);
     }
 
     public function updatePrompt(): void
     {
-        $tenantId = (int) Auth::tenantId();
+        $tenantId = $this->resolveTenantId();
         $agentId = (int) ($_POST['agent_id'] ?? 0);
         $prompt = trim((string) ($_POST['system_prompt'] ?? ''));
         $knowledgeBase = trim((string) ($_POST['knowledge_base'] ?? ''));
 
         if ($agentId < 1 || $prompt === '') {
             Flash::set('error', 'Informe como o assistente deve atender antes de salvar.');
-            $this->redirect('/agents');
+            $this->redirectToAgents($tenantId ?? 0);
         }
 
         if (strlen($prompt) > 60000) {
             Flash::set('error', 'O prompt ultrapassa o limite de 60.000 caracteres. Resuma o conteúdo antes de salvar.');
-            $this->redirect('/agents');
+            $this->redirectToAgents($tenantId ?? 0);
         }
 
         if (strlen($knowledgeBase) > 500000) {
             Flash::set('error', 'A base de conhecimento ultrapassa o limite de 500.000 caracteres.');
-            $this->redirect('/agents');
+            $this->redirectToAgents($tenantId ?? 0);
         }
 
         $pdo = Database::connection();
@@ -314,7 +350,37 @@ final class AgentController
             Flash::set('error', 'Não foi possível atualizar as instruções: ' . $exception->getMessage());
         }
 
-        $this->redirect('/agents');
+        $this->redirectToAgents($tenantId ?? 0);
+    }
+
+    public function updateGroupRules(): void
+    {
+        $tenantId = $this->resolveTenantId();
+        $agentId = (int) ($_POST['agent_id'] ?? 0);
+        $rules = is_array($_POST['group_rules'] ?? null) ? $_POST['group_rules'] : [];
+
+        if ($tenantId < 1 || $agentId < 1) {
+            Flash::set('error', 'Selecione a empresa e o assistente antes de salvar as regras dos grupos.');
+            $this->redirectToAgents($tenantId);
+        }
+
+        $pdo = Database::connection();
+        $check = $pdo->prepare('SELECT id FROM ai_agents WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+        $check->execute(['id' => $agentId, 'tenant_id' => $tenantId]);
+        if (!$check->fetchColumn()) {
+            Flash::set('error', 'Assistente não encontrado para a empresa selecionada.');
+            $this->redirectToAgents($tenantId);
+        }
+
+        try {
+            (new ConversationFlowService())->saveGroupRules($pdo, $tenantId, $agentId, $rules);
+            Audit::log('agent.group_rules_updated', ['agent_id' => $agentId], $tenantId);
+            Flash::set('success', 'Regras por grupo de contato atualizadas. Elas passam a valer nas próximas mensagens.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar as regras por grupo: ' . $exception->getMessage());
+        }
+
+        $this->redirectToAgents($tenantId);
     }
 
     private function guidedPromptFromPost(string $name, string $segment): string
@@ -412,6 +478,55 @@ final class AgentController
             'handoff_action' => $handoffAction,
             'cooldown_seconds' => max(0, min(3600, (int) ($_POST['cooldown_seconds'] ?? 15))),
         ];
+    }
+
+    private function resolveTenantId(): int
+    {
+        if (!Auth::isSuperAdmin()) {
+            return (int) (Auth::tenantId() ?? 0);
+        }
+
+        $requested = (int) ($_POST['tenant_id'] ?? $_GET['tenant_id'] ?? 0);
+        if ($requested > 0 && $this->tenantExists($requested)) {
+            $_SESSION['admin_agents_tenant_id'] = $requested;
+            return $requested;
+        }
+
+        $remembered = (int) ($_SESSION['admin_agents_tenant_id'] ?? 0);
+        if ($remembered > 0 && $this->tenantExists($remembered)) {
+            return $remembered;
+        }
+
+        $statement = Database::connection()->query(
+            'SELECT t.id
+             FROM tenants t
+             LEFT JOIN ai_agents a ON a.tenant_id = t.id
+             GROUP BY t.id
+             ORDER BY COUNT(a.id) DESC, t.status = "active" DESC, t.name
+             LIMIT 1'
+        );
+        $tenantId = (int) ($statement->fetchColumn() ?: 0);
+        if ($tenantId > 0) {
+            $_SESSION['admin_agents_tenant_id'] = $tenantId;
+        }
+        return $tenantId;
+    }
+
+    private function tenantExists(int $tenantId): bool
+    {
+        $statement = Database::connection()->prepare('SELECT COUNT(*) FROM tenants WHERE id = :id');
+        $statement->execute(['id' => $tenantId]);
+        return (int) $statement->fetchColumn() > 0;
+    }
+
+    private function redirectToAgents(int $tenantId = 0): never
+    {
+        $path = '/agents';
+        if (Auth::isSuperAdmin() && $tenantId > 0) {
+            $path .= '?tenant_id=' . $tenantId;
+        }
+        header('Location: ' . Router::url($path));
+        exit;
     }
 
     private function redirect(string $path): never

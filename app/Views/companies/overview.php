@@ -156,7 +156,7 @@ $trackingNote = (string) ($tracking['note'] ?? '');
     <div class="admin-company-module-grid">
         <a href="<?= View::e(Router::url('/company-settings?id=' . $tenantId)) ?>"><span>01</span><strong>Dados da empresa</strong><small>Cadastro, contato e informações usadas pela IA.</small></a>
         <a href="<?= View::e(Router::url('/instances')) ?>"><span>02</span><strong>Conexões WhatsApp</strong><small>Prepare, atualize ou recupere a conexão.</small></a>
-        <a href="<?= View::e(Router::url('/agents')) ?>"><span>03</span><strong>Assistentes virtuais</strong><small>Revise vínculo, instruções e respostas automáticas.</small></a>
+        <a href="<?= View::e(Router::url('/agents?tenant_id=' . (int) $company['id'])) ?>"><span>03</span><strong>Assistentes virtuais</strong><small>Revise vínculo, instruções e respostas automáticas.</small></a>
         <a href="<?= View::e(Router::url('/billing?tenant_id=' . $tenantId . '&edit_subscription=1')) ?>"><span>04</span><strong>Vigência e cobrança</strong><small>Edite o período de acesso, plano, faturas e pagamentos.</small></a>
         <a href="<?= View::e(Router::url('/implementation?tenant_id=' . $tenantId)) ?>"><span>05</span><strong>Implantação</strong><small>Acompanhe o checklist e as pendências.</small></a>
         <a href="<?= View::e(Router::url('/reports?tenant_id=' . $tenantId)) ?>"><span>06</span><strong>Relatórios da empresa</strong><small>Uso, conversas, IA, CRM e agenda.</small></a>

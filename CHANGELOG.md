@@ -172,3 +172,16 @@
 - chaves, tokens e senhas sempre protegidos;
 - busca, índice, expansão em massa e cópia de resumo técnico;
 - gaveta responsiva, sem rolagem horizontal.
+
+## ZIP 34.5 — Fluxo seguro de atendimento e administração de assistentes
+
+- Corrige a tela de Assistentes de IA do Super Admin, com seleção da empresa e carregamento das configurações corretas.
+- Links da Saúde e diagnóstico passam a abrir `/agents` já filtrado pela empresa.
+- Adiciona grupo de atendimento aos contatos: não identificado, interessado, paciente atual, familiar, casal e outro.
+- Salva a etapa atual da conversa, a situação da demanda e seu resumo.
+- Envia grupo, status, tags, etapa e demanda para o contexto da IA.
+- Bloqueia a criação de novo pré-agendamento enquanto a demanda não estiver coletada, recusada ou dispensada.
+- Permite remarcação de paciente atual sem repetir a queixa quando a regra do grupo autorizar.
+- Adiciona regras configuráveis por grupo em cada assistente.
+- Permite revisar manualmente grupo, etapa e demanda na gaveta da conversa.
+- Migration `040_conversation_flow_contact_groups.sql`.

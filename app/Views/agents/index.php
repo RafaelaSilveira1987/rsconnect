@@ -23,6 +23,10 @@ $firstHours = static function (?string $json): array {
 };
 $canManage = Auth::can('agents.manage');
 $isClientExperience = !Auth::isSuperAdmin();
+$selectedTenantId = (int) ($selectedTenantId ?? 0);
+$tenants = is_array($tenants ?? null) ? $tenants : [];
+$groupRules = is_array($groupRules ?? null) ? $groupRules : [];
+$contactGroups = is_array($contactGroups ?? null) ? $contactGroups : [];
 $profile = is_array($companyProfile ?? null) ? $companyProfile : [];
 $companyKnowledge = [];
 foreach ([
@@ -54,6 +58,27 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                 <?php endif; ?>
             </div>
         </div>
+
+        <?php if (Auth::isSuperAdmin()): ?>
+            <form class="agent-admin-tenant-selector" method="get" action="<?= View::e(Router::url('/agents')) ?>">
+                <div>
+                    <span class="eyebrow">Empresa em edição</span>
+                    <strong><?= View::e($profile['name'] ?? 'Selecione uma empresa') ?></strong>
+                    <small>Escolha a empresa para visualizar e editar as conexões, assistentes e instruções corretas.</small>
+                </div>
+                <label class="field compact-field">
+                    <span>Empresa</span>
+                    <select name="tenant_id" onchange="this.form.submit()" required>
+                        <option value="">Selecione</option>
+                        <?php foreach ($tenants as $tenant): ?>
+                            <option value="<?= (int) $tenant['id'] ?>" <?= $selectedTenantId === (int) $tenant['id'] ? 'selected' : '' ?>>
+                                <?= View::e($tenant['name']) ?> · <?= (int) ($tenant['agents_count'] ?? 0) ?> assistente(s) · <?= (int) ($tenant['instances_count'] ?? 0) ?> WhatsApp(s)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+            </form>
+        <?php endif; ?>
 
         <?php if ($canManage && !$instances): ?>
             <div class="message-warning agent-connection-warning">
@@ -87,6 +112,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                             <summary>Editar instruções e informações</summary>
                             <form method="post" action="<?= View::e(Router::url('/agents/prompt')) ?>">
                                 <?= Csrf::input() ?>
+                                <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
                                 <input type="hidden" name="agent_id" value="<?= (int) $agent['id'] ?>">
                                 <label class="field">
                                     <span>Como o assistente deve atender</span>
@@ -110,6 +136,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                     <?php if ($canManage): ?>
                         <form class="agent-actions agent-settings-form" method="post" action="<?= View::e(Router::url('/agents/status')) ?>">
                             <?= Csrf::input() ?>
+                            <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
                             <input type="hidden" name="agent_id" value="<?= (int) $agent['id'] ?>">
                             <div class="form-grid two">
                                 <label class="field compact-field"><span>Disponibilidade do assistente</span><select name="status"><option value="active" <?= $agent['status'] === 'active' ? 'selected' : '' ?>>Ativo</option><option value="inactive" <?= $agent['status'] === 'inactive' ? 'selected' : '' ?>>Inativo</option></select></label>
@@ -144,6 +171,43 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                             </div>
                             <button class="btn btn-outline" type="submit">Salvar configurações</button>
                         </form>
+
+                        <details class="agent-group-rules">
+                            <summary>
+                                <span><strong>Regras por grupo de contato</strong><small>Defina como pacientes, interessados, familiares e outros grupos devem ser atendidos.</small></span>
+                                <span class="drawer-chevron"></span>
+                            </summary>
+                            <form method="post" action="<?= View::e(Router::url('/agents/group-rules')) ?>">
+                                <?= Csrf::input() ?>
+                                <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
+                                <input type="hidden" name="agent_id" value="<?= (int) $agent['id'] ?>">
+                                <div class="agent-group-rule-grid">
+                                    <?php foreach ($contactGroups as $groupKey => $groupLabel): ?>
+                                        <?php
+                                        $savedRule = $groupRules[(int) $agent['id']][$groupKey] ?? [];
+                                        $defaults = match ($groupKey) {
+                                            'patient' => ['allow' => 1, 'require' => 1, 'reschedule' => 1, 'instructions' => 'Paciente atual: não peça novamente a queixa quando ele estiver apenas remarcando um atendimento.'],
+                                            'family' => ['allow' => 0, 'require' => 1, 'reschedule' => 0, 'instructions' => 'Siga a regra da empresa para familiares antes de oferecer atendimento ou agenda.'],
+                                            'couple' => ['allow' => 0, 'require' => 1, 'reschedule' => 0, 'instructions' => 'Não abra pré-agendamento automático quando a empresa atende somente individualmente.'],
+                                            default => ['allow' => 1, 'require' => 1, 'reschedule' => 0, 'instructions' => ''],
+                                        };
+                                        $allow = array_key_exists('allow_pre_schedule', $savedRule) ? (int) $savedRule['allow_pre_schedule'] : $defaults['allow'];
+                                        $require = array_key_exists('require_demand_before_pre_schedule', $savedRule) ? (int) $savedRule['require_demand_before_pre_schedule'] : $defaults['require'];
+                                        $reschedule = array_key_exists('allow_reschedule_without_demand', $savedRule) ? (int) $savedRule['allow_reschedule_without_demand'] : $defaults['reschedule'];
+                                        $instructions = trim((string) ($savedRule['instructions'] ?? $defaults['instructions']));
+                                        ?>
+                                        <section class="agent-group-rule-card">
+                                            <div><span class="eyebrow">Grupo</span><h4><?= View::e($groupLabel) ?></h4></div>
+                                            <label class="check-field compact-check"><input type="checkbox" name="group_rules[<?= View::e($groupKey) ?>][allow_pre_schedule]" value="1" <?= $allow === 1 ? 'checked' : '' ?>><span>Permitir pré-agendamento</span></label>
+                                            <label class="check-field compact-check"><input type="checkbox" name="group_rules[<?= View::e($groupKey) ?>][require_demand_before_pre_schedule]" value="1" <?= $require === 1 ? 'checked' : '' ?>><span>Exigir demanda antes da agenda</span></label>
+                                            <label class="check-field compact-check"><input type="checkbox" name="group_rules[<?= View::e($groupKey) ?>][allow_reschedule_without_demand]" value="1" <?= $reschedule === 1 ? 'checked' : '' ?>><span>Permitir remarcação sem repetir a demanda</span></label>
+                                            <label class="field compact-field"><span>Orientação específica</span><textarea name="group_rules[<?= View::e($groupKey) ?>][instructions]" rows="4" placeholder="Explique como o assistente deve agir com este grupo."><?= View::e($instructions) ?></textarea></label>
+                                        </section>
+                                    <?php endforeach; ?>
+                                </div>
+                                <div class="agent-group-rule-actions"><button class="btn btn-primary" type="submit">Salvar regras dos grupos</button></div>
+                            </form>
+                        </details>
                     <?php endif; ?>
                 </article>
             <?php endforeach; ?>
@@ -166,6 +230,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
 
     <form class="drawer-form agent-create-form agent-guided-form" method="post" action="<?= View::e(Router::url('/agents')) ?>">
         <?= Csrf::input() ?>
+        <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
         <div class="agent-drawer-progress" aria-label="Etapas do cadastro">
             <span><b>1</b> Identificação</span>
             <span><b>2</b> Atendimento</span>
@@ -258,6 +323,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
     <div class="conversation-drawer-body">
         <form class="drawer-form agent-create-form" method="post" action="<?= View::e(Router::url('/agents')) ?>">
             <?= Csrf::input() ?>
+            <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
 
             <section class="drawer-section">
                 <div class="drawer-section-title"><div><span class="eyebrow">1. Identificação</span><h3>Quem vai atender?</h3></div></div>

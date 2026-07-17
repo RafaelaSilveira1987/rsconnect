@@ -1,0 +1,30 @@
+{
+  "version": "34.5",
+  "scenarios": [
+    {
+      "group": "interested",
+      "message": "Tem horário amanhã às 14h?",
+      "expected": "pre_schedule_blocked_demand_required"
+    },
+    {
+      "group": "interested",
+      "message": "Estou buscando terapia porque tenho tido crises de ansiedade e gostaria de horário amanhã às 14h.",
+      "expected": "demand_collected_pre_schedule_allowed"
+    },
+    {
+      "group": "patient",
+      "message": "Preciso remarcar minha sessão para sexta às 15h.",
+      "expected": "reschedule_allowed_without_repeating_demand"
+    },
+    {
+      "group": "family",
+      "message": "Quero marcar para outra pessoa da família.",
+      "expected": "pre_schedule_blocked_by_group_rule"
+    },
+    {
+      "group": "couple",
+      "message": "Vocês atendem casal? Quero agendar.",
+      "expected": "pre_schedule_blocked_by_group_rule"
+    }
+  ]
+}

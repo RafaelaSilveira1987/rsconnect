@@ -289,16 +289,39 @@ final class AiAutomationService
 
     private function conversation(PDO $pdo, int $conversationId): ?array
     {
-        $statement = $pdo->prepare(
-            'SELECT c.*, ct.name, ct.phone, ct.email, ct.company, ct.notes, ct.tags_json
-             FROM conversations c
-             INNER JOIN contacts ct ON ct.id = c.contact_id
-             WHERE c.id = :id
-             LIMIT 1'
-        );
-        $statement->execute(['id' => $conversationId]);
-        $conversation = $statement->fetch(PDO::FETCH_ASSOC);
-        return $conversation ?: null;
+        try {
+            $statement = $pdo->prepare(
+                'SELECT c.*, ct.name, ct.phone, ct.email, ct.company, ct.notes, ct.tags_json,
+                        ct.status AS contact_status,
+                        COALESCE(NULLIF(ct.contact_group, ""), "unclassified") AS contact_group,
+                        fs.stage AS flow_stage, fs.demand_status, fs.demand_summary,
+                        fs.is_existing_patient, fs.last_intent
+                 FROM conversations c
+                 INNER JOIN contacts ct ON ct.id = c.contact_id
+                 LEFT JOIN conversation_flow_states fs
+                        ON fs.conversation_id = c.id AND fs.tenant_id = c.tenant_id
+                 WHERE c.id = :id
+                 LIMIT 1'
+            );
+            $statement->execute(['id' => $conversationId]);
+            $conversation = $statement->fetch(PDO::FETCH_ASSOC);
+            return $conversation ?: null;
+        } catch (Throwable) {
+            $statement = $pdo->prepare(
+                'SELECT c.*, ct.name, ct.phone, ct.email, ct.company, ct.notes, ct.tags_json,
+                        ct.status AS contact_status,
+                        "unclassified" AS contact_group,
+                        NULL AS flow_stage, NULL AS demand_status, NULL AS demand_summary,
+                        0 AS is_existing_patient, NULL AS last_intent
+                 FROM conversations c
+                 INNER JOIN contacts ct ON ct.id = c.contact_id
+                 WHERE c.id = :id
+                 LIMIT 1'
+            );
+            $statement->execute(['id' => $conversationId]);
+            $conversation = $statement->fetch(PDO::FETCH_ASSOC);
+            return $conversation ?: null;
+        }
     }
 
     private function agentFor(PDO $pdo, array $instance): ?array

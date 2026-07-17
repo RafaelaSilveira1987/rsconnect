@@ -21,6 +21,7 @@ final class ContactController
         $filters = [
             'search' => trim((string) ($_GET['search'] ?? '')),
             'status' => trim((string) ($_GET['status'] ?? '')),
+            'contact_group' => trim((string) ($_GET['contact_group'] ?? '')),
             'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
         ];
 
@@ -44,6 +45,11 @@ final class ContactController
         if (in_array($filters['status'], ['lead', 'customer', 'inactive'], true)) {
             $conditions[] = 'ct.status = :status';
             $params['status'] = $filters['status'];
+        }
+
+        if (array_key_exists($filters['contact_group'], \App\Services\ConversationFlowService::GROUPS)) {
+            $conditions[] = 'ct.contact_group = :contact_group';
+            $params['contact_group'] = $filters['contact_group'];
         }
 
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
@@ -108,6 +114,7 @@ final class ContactController
         $company = trim((string) ($_POST['company'] ?? ''));
         $instanceId = (int) ($_POST['evolution_instance_id'] ?? 0);
         $status = (string) ($_POST['status'] ?? 'lead');
+        $contactGroup = (string) ($_POST['contact_group'] ?? 'unclassified');
         $notes = trim((string) ($_POST['notes'] ?? ''));
         $tags = $this->normalizeTags((string) ($_POST['tags'] ?? ''));
 
@@ -122,6 +129,9 @@ final class ContactController
         if (!in_array($status, ['lead', 'customer', 'inactive'], true)) {
             $status = 'lead';
         }
+        if (!array_key_exists($contactGroup, \App\Services\ConversationFlowService::GROUPS)) {
+            $contactGroup = 'unclassified';
+        }
         if ($instanceId > 0 && !$this->instanceBelongsToTenant($instanceId, $tenantId)) {
             Flash::set('error', 'A instância selecionada não pertence à empresa.');
             $this->redirect('/contacts');
@@ -130,9 +140,9 @@ final class ContactController
         try {
             $statement = Database::connection()->prepare(
                 'INSERT INTO contacts
-                    (tenant_id, evolution_instance_id, phone, name, email, company, notes, tags_json, status)
+                    (tenant_id, evolution_instance_id, phone, name, email, company, notes, tags_json, status, contact_group)
                  VALUES
-                    (:tenant_id, :instance_id, :phone, :name, :email, :company, :notes, :tags_json, :status)'
+                    (:tenant_id, :instance_id, :phone, :name, :email, :company, :notes, :tags_json, :status, :contact_group)'
             );
             $statement->execute([
                 'tenant_id' => $tenantId,
@@ -144,6 +154,7 @@ final class ContactController
                 'notes' => $notes !== '' ? $notes : null,
                 'tags_json' => $tags ? json_encode($tags, JSON_UNESCAPED_UNICODE) : null,
                 'status' => $status,
+                'contact_group' => $contactGroup,
             ]);
             $contactId = (int) Database::connection()->lastInsertId();
             Audit::log('contact.created', ['contact_id' => $contactId, 'phone' => $phone], $tenantId);
@@ -173,6 +184,7 @@ final class ContactController
         $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
         $company = trim((string) ($_POST['company'] ?? ''));
         $status = (string) ($_POST['status'] ?? 'lead');
+        $contactGroup = (string) ($_POST['contact_group'] ?? 'unclassified');
         $notes = trim((string) ($_POST['notes'] ?? ''));
         $tags = $this->normalizeTags((string) ($_POST['tags'] ?? ''));
 
@@ -183,12 +195,15 @@ final class ContactController
         if (!in_array($status, ['lead', 'customer', 'inactive'], true)) {
             $status = 'lead';
         }
+        if (!array_key_exists($contactGroup, \App\Services\ConversationFlowService::GROUPS)) {
+            $contactGroup = 'unclassified';
+        }
 
         try {
             $statement = Database::connection()->prepare(
                 'UPDATE contacts
                  SET name = :name, phone = :phone, email = :email, company = :company,
-                     notes = :notes, tags_json = :tags_json, status = :status
+                     notes = :notes, tags_json = :tags_json, status = :status, contact_group = :contact_group
                  WHERE id = :id AND tenant_id = :tenant_id'
             );
             $statement->execute([
@@ -199,6 +214,7 @@ final class ContactController
                 'notes' => $notes !== '' ? $notes : null,
                 'tags_json' => $tags ? json_encode($tags, JSON_UNESCAPED_UNICODE) : null,
                 'status' => $status,
+                'contact_group' => $contactGroup,
                 'id' => $contactId,
                 'tenant_id' => $contact['tenant_id'],
             ]);
