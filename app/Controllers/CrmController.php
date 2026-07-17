@@ -284,6 +284,9 @@ final class CrmController
         $lead = $this->findLead($leadId, $tenantId);
 
         if (!$lead || !$this->stageBelongsToPipeline($stageId, (int) $lead['pipeline_id'], $tenantId)) {
+            if ($this->wantsJson()) {
+                $this->json(['ok' => false, 'message' => 'Não foi possível mover o negócio para essa etapa.'], 422);
+            }
             Flash::set('error', 'Não foi possível mover o negócio para essa etapa.');
             $this->redirect('/crm');
         }
@@ -311,6 +314,16 @@ final class CrmController
             'stage_id' => $stageId,
             'status' => $status,
         ], $tenantId);
+        if ($this->wantsJson()) {
+            $this->json([
+                'ok' => true,
+                'message' => 'Negócio movido para ' . ($stage['name'] ?? 'a nova etapa') . '.',
+                'item_id' => $leadId,
+                'stage_id' => $stageId,
+                'stage_name' => $stage['name'] ?? '',
+                'status' => $status,
+            ]);
+        }
         Flash::set('success', 'Negócio movido para ' . ($stage['name'] ?? 'a nova etapa') . '.');
         $lead['stage_id'] = $stageId;
         $this->redirect($this->leadUrl($lead));
@@ -447,6 +460,20 @@ final class CrmController
         return '/crm?tenant_id=' . (int) $lead['tenant_id']
             . '&pipeline_id=' . (int) $lead['pipeline_id']
             . '&lead_id=' . (int) $lead['id'];
+    }
+
+    private function wantsJson(): bool
+    {
+        return strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+            || str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
+    }
+
+    private function json(array $payload, int $status = 200): never
+    {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
     }
 
     private function redirect(string $path): never

@@ -5592,3 +5592,64 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
 @media(max-width:720px){.admin-crm-kpis,.executive-report-kpis{grid-template-columns:1fr 1fr;gap:9px}.admin-crm-kpis .card,.executive-report-kpis .card{padding:14px}.admin-crm-kpis strong,.executive-report-kpis strong{font-size:1.3rem}.admin-crm-toolbar,.executive-report-filters{grid-template-columns:1fr;padding:13px}.admin-crm-search,.executive-report-company{grid-column:auto}.admin-crm-toolbar-actions,.executive-report-filter-actions{display:grid;grid-template-columns:1fr 1fr}.admin-crm-board{grid-template-columns:repeat(8,minmax(82vw,1fr));min-width:calc(8 * 82vw + 7 * 12px);scroll-snap-type:x mandatory}.admin-crm-column{scroll-snap-align:start}.admin-crm-create-drawer,.admin-crm-detail-drawer{width:100vw!important;max-width:100vw!important}.executive-report-panel{padding:13px}.executive-report-tabs{padding-inline:10px}.executive-bars>div{grid-template-columns:80px minmax(90px,1fr) 55px}.executive-bars small{display:none}.executive-card-list,.executive-commercial-grid{grid-template-columns:1fr}.executive-table .table-wrap{overflow-x:auto}.executive-report-kpis a:nth-child(n+5){grid-column:span 2}}
 @media(max-width:430px){.admin-crm-kpis,.executive-report-kpis{grid-template-columns:1fr}.executive-report-kpis a:nth-child(n+5){grid-column:auto}.admin-crm-toolbar-actions,.executive-report-filter-actions{grid-template-columns:1fr}.executive-bars>div{grid-template-columns:70px minmax(80px,1fr) 52px}}
 @media print{.sidebar,.topbar,.admin-executive-hero-actions,.executive-report-filters,.executive-report-tabs{display:none!important}.main-content{margin:0!important}.page-content{padding:0!important}.executive-report-panel[hidden]{display:block!important}.executive-report-tabs-card{border:0;box-shadow:none}.executive-report-panel{page-break-inside:avoid}}
+
+/* ZIP 34.1 — CRM sem refresh, estilo Trello */
+.crm-drag-hint {
+  margin: 0 0 14px;
+  padding: 11px 14px;
+  border: 1px solid #bce2dc;
+  border-radius: 14px;
+  background: #f0fbf9;
+  color: #426069;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: .8rem;
+}
+.crm-drag-hint strong { color: #087f78; }
+[data-crm-card][draggable="true"] { cursor: grab; touch-action: pan-y; }
+[data-crm-card][draggable="true"]:active { cursor: grabbing; }
+[data-crm-card].is-dragging { opacity: .38; transform: rotate(1deg) scale(.985); }
+[data-crm-dropzone] { min-height: 130px; transition: background .18s ease, outline .18s ease; }
+[data-crm-dropzone].is-drag-over {
+  background: rgba(15, 157, 148, .075);
+  outline: 2px dashed rgba(15, 157, 148, .48);
+  outline-offset: -6px;
+  border-radius: 13px;
+}
+[data-crm-card].is-saving { pointer-events: none; opacity: .66; }
+[data-crm-card].is-move-error { animation: crmMoveError .38s ease; }
+@keyframes crmMoveError { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+.crm-ajax-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 9999;
+  max-width: min(390px, calc(100vw - 32px));
+  padding: 13px 16px;
+  border-radius: 14px;
+  background: #173d45;
+  color: #fff;
+  box-shadow: 0 20px 45px rgba(16, 38, 52, .25);
+  font-size: .82rem;
+  font-weight: 750;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: .2s ease;
+}
+.crm-ajax-toast.is-visible { opacity: 1; transform: translateY(0); }
+.crm-ajax-toast.is-error { background: #9f3039; }
+.admin-crm-quick-move select,
+.deal-move select { cursor: pointer; }
+@media (pointer: fine) and (min-width: 821px) {
+  .admin-crm-quick-move,
+  .deal-move { opacity: .42; transition: opacity .18s ease; }
+  [data-crm-card]:hover .admin-crm-quick-move,
+  [data-crm-card]:hover .deal-move,
+  .admin-crm-quick-move:focus-within,
+  .deal-move:focus-within { opacity: 1; }
+}
+@media (max-width: 720px) {
+  .crm-drag-hint { align-items: flex-start; flex-direction: column; }
+  .crm-ajax-toast { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); }
+}

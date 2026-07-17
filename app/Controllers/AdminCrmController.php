@@ -244,6 +244,9 @@ final class AdminCrmController
         $opportunity = $this->findOpportunity($id);
         $stage = $this->findStage($stageId);
         if (!$opportunity || !$stage) {
+            if ($this->wantsJson()) {
+                $this->json(['ok' => false, 'message' => 'Não foi possível mover a oportunidade.'], 422);
+            }
             Flash::set('error', 'Não foi possível mover a oportunidade.');
             $this->redirect('/crm');
         }
@@ -259,6 +262,16 @@ final class AdminCrmController
             'id' => $id,
         ]);
         Audit::log('admin_crm.opportunity_moved', ['opportunity_id' => $id, 'stage' => $stage['stage_key']]);
+        if ($this->wantsJson()) {
+            $this->json([
+                'ok' => true,
+                'message' => 'Oportunidade movida para ' . $stage['name'] . '.',
+                'item_id' => $id,
+                'stage_id' => $stageId,
+                'stage_name' => $stage['name'],
+                'status' => $status,
+            ]);
+        }
         Flash::set('success', 'Oportunidade movida para ' . $stage['name'] . '.');
         $this->redirect('/crm?opportunity_id=' . $id);
     }
@@ -572,6 +585,20 @@ final class AdminCrmController
             }
             $slug = $base . '-' . $counter++;
         }
+    }
+
+    private function wantsJson(): bool
+    {
+        return strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+            || str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
+    }
+
+    private function json(array $payload, int $status = 200): never
+    {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
     }
 
     private function redirect(string $path): never

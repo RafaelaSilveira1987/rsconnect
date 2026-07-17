@@ -21,14 +21,16 @@ $max = static function (array $rows, string $key = 'total'): int {
     $values = array_map(static fn (array $row): int => (int) ($row[$key] ?? 0), $rows);
     return max(1, ...($values ?: [1]));
 };
-$activeSection = in_array((string) ($_GET['section'] ?? 'growth'), ['growth','revenue','usage','automation','agenda','commercial'], true) ? (string) $_GET['section'] : 'growth';
+$requestedSection = (string) ($_GET['section'] ?? 'growth');
+$activeSection = in_array($requestedSection, ['growth','revenue','usage','automation','agenda','commercial'], true) ? $requestedSection : 'growth';
 $queryBase = array_filter([
     'start' => $filters['start'] ?? '',
     'end' => $filters['end'] ?? '',
     'tenant_id' => (int) ($filters['tenant_id'] ?? 0),
 ], static fn ($value) => $value !== '' && $value !== 0);
 ?>
-
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=34.1')) ?>">
+<div class="executive-report-page executive-report-admin">
 <section class="admin-executive-hero executive-report-hero">
     <div class="admin-executive-hero-copy">
         <span class="eyebrow">Inteligência administrativa</span>
@@ -107,3 +109,5 @@ $queryBase = array_filter([
         <div class="executive-commercial-grid"><?php foreach ($commercialStages as $row): ?><a href="<?= View::e(Router::url('/crm')) ?>" class="stage-<?= View::e($row['color_key']) ?>"><span><?= View::e($row['label']) ?></span><strong><?= (int) $row['total'] ?></strong><small><?= $money($row['value']) ?></small></a><?php endforeach; ?><?php if (!$commercialStages): ?><div class="empty-state">Aplique a migration 037 para carregar o CRM comercial.</div><?php endif; ?></div>
     </div>
 </section>
+<script src="<?= View::e(Router::url('/assets/js/reports.js?v=34.1')) ?>" defer></script>
+</div>

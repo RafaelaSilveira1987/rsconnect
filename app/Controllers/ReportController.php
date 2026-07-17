@@ -21,7 +21,7 @@ final class ReportController
                 'title' => 'Relatórios executivos',
                 'filters' => $filters,
                 'reportData' => $reportData,
-            ]);
+            ], 'app');
             return;
         }
         $pdo = Database::connection();
@@ -50,12 +50,98 @@ final class ReportController
             'expected_amount' => $this->money($pdo, 'SELECT COALESCE(SUM(i.amount),0) FROM tenant_invoices i WHERE ' . $invoiceScopeSql . ' AND i.status IN ("open","overdue")', $invoiceScopeParams),
         ];
 
+        $metrics['closed_conversations'] = $this->scalar($pdo, 'SELECT COUNT(*) FROM conversations c WHERE ' . $conversationScopeSql . ' AND c.status = "closed" AND c.updated_at BETWEEN :start AND :end', $conversationScopeParams + $this->dateParams($filters));
+        $metrics['human_replies'] = $this->scalar($pdo, 'SELECT COUNT(*) FROM conversation_messages m WHERE ' . $messageScopeSql . ' AND m.direction = "outgoing" AND m.sender_type = "user" AND m.sent_at BETWEEN :start AND :end', $messageScopeParams + $this->dateParams($filters));
+        $metrics['failed_messages'] = $this->scalar($pdo, 'SELECT COUNT(*) FROM conversation_messages m WHERE ' . $messageScopeSql . ' AND m.status = "failed" AND m.sent_at BETWEEN :start AND :end', $messageScopeParams + $this->dateParams($filters));
+        $metrics['appointments_confirmed'] = $this->scalar($pdo, 'SELECT COUNT(*) FROM calendar_appointments a WHERE ' . $appointmentScopeSql . ' AND a.status IN ("confirmed","completed") AND a.starts_at BETWEEN :start AND :end', $appointmentScopeParams + $this->dateParams($filters));
+        $metrics['appointments_cancelled'] = $this->scalar($pdo, 'SELECT COUNT(*) FROM calendar_appointments a WHERE ' . $appointmentScopeSql . ' AND a.status IN ("cancelled","no_show") AND a.starts_at BETWEEN :start AND :end', $appointmentScopeParams + $this->dateParams($filters));
+        $metrics['avg_first_response_seconds'] = $this->scalar($pdo,
+            'SELECT COALESCE(AVG(TIMESTAMPDIFF(SECOND, x.first_incoming, x.first_outgoing)), 0)
+             FROM (
+                SELECT m.conversation_id,
+                       MIN(CASE WHEN m.direction = "incoming" THEN m.sent_at END) AS first_incoming,
+                       MIN(CASE WHEN m.direction = "outgoing" THEN m.sent_at END) AS first_outgoing
+                FROM conversation_messages m
+                WHERE ' . $messageScopeSql . ' AND m.sent_at BETWEEN :start AND :end
+                GROUP BY m.conversation_id
+                HAVING first_incoming IS NOT NULL AND first_outgoing IS NOT NULL AND first_outgoing >= first_incoming
+             ) x',
+            $messageScopeParams + $this->dateParams($filters)
+        );
+        try {
+            $metrics['ai_success'] = $this->scalar($pdo, 'SELECT COUNT(*) FROM ai_automation_logs l WHERE l.tenant_id = :tenant_id AND l.status = "success" AND l.created_at BETWEEN :start AND :end', ['tenant_id' => (int) $filters['tenant_id']] + $this->dateParams($filters));
+            $metrics['ai_errors'] = $this->scalar($pdo, 'SELECT COUNT(*) FROM ai_automation_logs l WHERE l.tenant_id = :tenant_id AND l.status = "error" AND l.created_at BETWEEN :start AND :end', ['tenant_id' => (int) $filters['tenant_id']] + $this->dateParams($filters));
+        } catch (\Throwable) {
+            $metrics['ai_success'] = 0;
+            $metrics['ai_errors'] = 0;
+        }
+
+        $metrics['total_messages'] = (int) $metrics['incoming_messages'] + (int) $metrics['outgoing_messages'];
+        $metrics['ai_share'] = (int) $metrics['outgoing_messages'] > 0 ? round(((int) $metrics['ai_replies'] / (int) $metrics['outgoing_messages']) * 100, 1) : 0;
+        $metrics['human_share'] = (int) $metrics['outgoing_messages'] > 0 ? round(((int) $metrics['human_replies'] / (int) $metrics['outgoing_messages']) * 100, 1) : 0;
+        $metrics['crm_conversion'] = (int) $metrics['crm_leads'] > 0 ? round(((int) $metrics['crm_won'] / (int) $metrics['crm_leads']) * 100, 1) : 0;
+        $metrics['agenda_conversion'] = (int) $metrics['appointments'] > 0 ? round(((int) $metrics['appointments_confirmed'] / (int) $metrics['appointments']) * 100, 1) : 0;
+        $metrics['avg_messages_per_conversation'] = (int) $metrics['conversations'] > 0 ? round((int) $metrics['total_messages'] / (int) $metrics['conversations'], 1) : 0;
+
         $byDay = $this->rows($pdo,
-            'SELECT DATE(m.sent_at) AS label, COUNT(*) AS total
+            'SELECT DATE(m.sent_at) AS label, COUNT(*) AS total,
+                    SUM(m.direction = "incoming") AS incoming,
+                    SUM(m.direction = "outgoing") AS outgoing,
+                    SUM(m.sender_type = "ai") AS ai
              FROM conversation_messages m
              WHERE ' . $messageScopeSql . ' AND m.sent_at BETWEEN :start AND :end
              GROUP BY DATE(m.sent_at)
              ORDER BY label ASC',
+            $messageScopeParams + $this->dateParams($filters)
+        );
+
+        $byHour = $this->rows($pdo,
+            'SELECT HOUR(m.sent_at) AS label, COUNT(*) AS total
+             FROM conversation_messages m
+             WHERE ' . $messageScopeSql . ' AND m.direction = "incoming" AND m.sent_at BETWEEN :start AND :end
+             GROUP BY HOUR(m.sent_at)
+             ORDER BY label ASC',
+            $messageScopeParams + $this->dateParams($filters)
+        );
+
+        $crmByStage = $this->rows($pdo,
+            'SELECT s.name AS label, s.color_key, COUNT(l.id) AS total, COALESCE(SUM(l.value),0) AS value
+             FROM crm_stages s
+             LEFT JOIN crm_leads l ON l.stage_id = s.id AND l.tenant_id = s.tenant_id
+                  AND l.created_at BETWEEN :start AND :end
+             WHERE s.tenant_id = :tenant_id
+             GROUP BY s.id, s.name, s.color_key, s.position
+             ORDER BY s.position',
+            ['tenant_id' => (int) $filters['tenant_id']] + $this->dateParams($filters)
+        );
+
+        $agendaByStatus = $this->rows($pdo,
+            'SELECT a.status AS label, COUNT(*) AS total
+             FROM calendar_appointments a
+             WHERE ' . $appointmentScopeSql . ' AND a.starts_at BETWEEN :start AND :end
+             GROUP BY a.status ORDER BY total DESC',
+            $appointmentScopeParams + $this->dateParams($filters)
+        );
+
+        $teamPerformance = $this->rows($pdo,
+            'SELECT COALESCE(u.name, "Equipe") AS label, COUNT(m.id) AS total,
+                    COUNT(DISTINCT m.conversation_id) AS conversations
+             FROM conversation_messages m
+             LEFT JOIN users u ON u.id = m.sender_user_id
+             WHERE ' . $messageScopeSql . ' AND m.sender_type = "user" AND m.direction = "outgoing"
+               AND m.sent_at BETWEEN :start AND :end
+             GROUP BY m.sender_user_id, u.name ORDER BY total DESC LIMIT 10',
+            $messageScopeParams + $this->dateParams($filters)
+        );
+
+        $topContacts = $this->rows($pdo,
+            'SELECT ct.id, COALESCE(NULLIF(ct.name, ""), ct.phone) AS label, ct.phone,
+                    COUNT(m.id) AS total, MAX(m.sent_at) AS last_message_at
+             FROM conversation_messages m
+             INNER JOIN conversations c ON c.id = m.conversation_id
+             INNER JOIN contacts ct ON ct.id = c.contact_id
+             WHERE ' . $messageScopeSql . ' AND m.sent_at BETWEEN :start AND :end
+             GROUP BY ct.id, ct.name, ct.phone ORDER BY total DESC LIMIT 8',
             $messageScopeParams + $this->dateParams($filters)
         );
 
@@ -102,10 +188,15 @@ final class ReportController
             'tenants' => $tenants,
             'metrics' => $metrics,
             'byDay' => $byDay,
+            'byHour' => $byHour,
+            'crmByStage' => $crmByStage,
+            'agendaByStatus' => $agendaByStatus,
+            'teamPerformance' => $teamPerformance,
+            'topContacts' => $topContacts,
             'byTenant' => $byTenant,
             'attention' => $attention,
             'recentInvoices' => $recentInvoices,
-        ]);
+        ], 'app');
     }
 
     public function export(): void

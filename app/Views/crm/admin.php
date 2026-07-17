@@ -51,17 +51,27 @@ foreach ($opportunities as $opportunity) {
     <div class="admin-crm-toolbar-actions"><button class="btn btn-primary" type="submit">Filtrar</button><a class="btn btn-quiet" href="<?= View::e(Router::url('/crm')) ?>">Limpar</a></div>
 </form>
 
+<div class="crm-drag-hint" role="status" data-crm-status>
+    <strong>Funil no estilo Trello:</strong> arraste os cards entre as etapas. A alteração é salva automaticamente, sem recarregar a tela.
+</div>
+
 <div class="admin-crm-layout">
     <section class="admin-crm-board-wrap">
-        <div class="admin-crm-board" aria-label="Funil comercial da RS Connect">
+        <div class="admin-crm-board" aria-label="Funil comercial da RS Connect"
+             data-crm-board data-crm-kind="admin"
+             data-move-url="<?= View::e(Router::url('/crm/admin/opportunities/move')) ?>"
+             data-csrf="<?= View::e(Csrf::token()) ?>">
             <?php foreach ($stages as $stage): ?>
                 <?php $stageItems = $byStage[(int) $stage['id']] ?? []; ?>
-                <section class="admin-crm-column stage-<?= View::e($stage['color_key']) ?>">
-                    <header><div><span class="stage-dot"></span><strong><?= View::e($stage['name']) ?></strong></div><b><?= count($stageItems) ?></b></header>
-                    <div class="admin-crm-column-list">
+                <section class="admin-crm-column stage-<?= View::e($stage['color_key']) ?>" data-crm-stage data-stage-id="<?= (int) $stage['id'] ?>">
+                    <header><div><span class="stage-dot"></span><strong><?= View::e($stage['name']) ?></strong></div><b data-stage-count><?= count($stageItems) ?></b></header>
+                    <div class="admin-crm-column-list" data-crm-dropzone>
                         <?php foreach ($stageItems as $opportunity): ?>
                             <?php $url = '/crm?' . http_build_query($baseQuery + ['opportunity_id' => (int) $opportunity['id']]); ?>
-                            <article class="admin-crm-deal <?= $opportunity['priority'] === 'high' ? 'is-high' : '' ?>">
+                            <article class="admin-crm-deal <?= $opportunity['priority'] === 'high' ? 'is-high' : '' ?>"
+                                     draggable="true" data-crm-card
+                                     data-item-id="<?= (int) $opportunity['id'] ?>"
+                                     data-current-stage="<?= (int) $opportunity['stage_id'] ?>">
                                 <a class="admin-crm-deal-main" href="<?= View::e(Router::url($url)) ?>">
                                     <div class="admin-crm-deal-top"><span class="badge priority-<?= View::e($opportunity['priority']) ?>"><?= View::e($priorityLabels[$opportunity['priority']] ?? $opportunity['priority']) ?></span><?php if ($opportunity['tenant_id']): ?><span class="badge badge-success">Cliente cadastrado</span><?php endif; ?></div>
                                     <h3><?= View::e($opportunity['company_name']) ?></h3>
@@ -70,15 +80,15 @@ foreach ($opportunities as $opportunity) {
                                     <footer><span><?= View::e($opportunity['owner_name'] ?: 'Sem responsável') ?></span><span><?= (int) $opportunity['pending_activities'] ?> atividade(s)</span></footer>
                                     <?php if ($opportunity['next_due_at']): ?><small class="admin-crm-next <?= strtotime($opportunity['next_due_at']) < time() ? 'is-late' : '' ?>">Próximo contato: <?= View::e($date($opportunity['next_due_at'], 'd/m H:i')) ?></small><?php endif; ?>
                                 </a>
-                                <form class="admin-crm-quick-move" method="post" action="<?= View::e(Router::url('/crm/admin/opportunities/move')) ?>">
+                                <form class="admin-crm-quick-move" method="post" action="<?= View::e(Router::url('/crm/admin/opportunities/move')) ?>" data-crm-fallback-move>
                                     <?= Csrf::input() ?><input type="hidden" name="opportunity_id" value="<?= (int) $opportunity['id'] ?>">
-                                    <select name="stage_id" aria-label="Mover oportunidade" onchange="this.form.submit()">
+                                    <select name="stage_id" aria-label="Mover oportunidade" data-crm-stage-select>
                                         <?php foreach ($stages as $target): ?><option value="<?= (int) $target['id'] ?>" <?= (int) $target['id'] === (int) $opportunity['stage_id'] ? 'selected' : '' ?>>Mover para: <?= View::e($target['name']) ?></option><?php endforeach; ?>
                                     </select>
                                 </form>
                             </article>
                         <?php endforeach; ?>
-                        <?php if (!$stageItems): ?><div class="admin-crm-column-empty">Nenhuma oportunidade nesta etapa.</div><?php endif; ?>
+                        <div class="admin-crm-column-empty" data-crm-empty <?= $stageItems ? 'hidden' : '' ?>>Nenhuma oportunidade nesta etapa.</div>
                     </div>
                 </section>
             <?php endforeach; ?>

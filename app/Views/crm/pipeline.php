@@ -74,20 +74,31 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
 <?php elseif (!$stages): ?>
     <div class="card empty-state">Nenhum funil foi encontrado. Execute a migration 004 para criar o funil padrão.</div>
 <?php else: ?>
+<?php if ($canManage): ?>
+<div class="crm-drag-hint" role="status" data-crm-status>
+    <strong>Movimentação rápida:</strong> arraste o negócio para outra etapa. A atualização acontece sem recarregar a página.
+</div>
+<?php endif; ?>
 <div class="crm-shell<?= $selected ? ' has-detail' : '' ?>">
     <section class="kanban-scroll" aria-label="Funil de vendas">
-        <div class="kanban-board">
+        <div class="kanban-board" data-crm-board data-crm-kind="client"
+                 data-move-url="<?= View::e(Router::url('/crm/leads/move')) ?>"
+                 data-csrf="<?= View::e(Csrf::token()) ?>"
+                 data-tenant-id="<?= (int) $filters['tenant_id'] ?>">
             <?php foreach ($stages as $stage): ?>
                 <?php $stageLeads = $leadsByStage[(int) $stage['id']] ?? []; $stageValue = array_sum(array_map(static fn ($item) => (float) $item['value'], $stageLeads)); ?>
-                <section class="kanban-column stage-<?= View::e($stage['color_key']) ?>">
+                <section class="kanban-column stage-<?= View::e($stage['color_key']) ?>" data-crm-stage data-stage-id="<?= (int) $stage['id'] ?>">
                     <header class="kanban-header">
-                        <div><span class="stage-dot"></span><strong><?= View::e($stage['name']) ?></strong><span class="stage-count"><?= count($stageLeads) ?></span></div>
+                        <div><span class="stage-dot"></span><strong><?= View::e($stage['name']) ?></strong><span class="stage-count" data-stage-count><?= count($stageLeads) ?></span></div>
                         <small><?= View::e($money($stageValue)) ?></small>
                     </header>
-                    <div class="kanban-cards">
+                    <div class="kanban-cards" data-crm-dropzone>
                         <?php foreach ($stageLeads as $lead): ?>
                             <?php $leadUrl = '/crm?' . http_build_query(array_filter(['tenant_id' => (int) $filters['tenant_id'], 'pipeline_id' => (int) $filters['pipeline_id'], 'search' => $filters['search'] ?? '', 'owner_id' => (int) ($filters['owner_id'] ?? 0), 'lead_id' => (int) $lead['id']], static fn ($v) => $v !== '' && $v !== 0)); ?>
-                            <article class="deal-card<?= $selected && (int) $selected['id'] === (int) $lead['id'] ? ' is-selected' : '' ?>">
+                            <article class="deal-card<?= $selected && (int) $selected['id'] === (int) $lead['id'] ? ' is-selected' : '' ?>"
+                                     draggable="<?= $canManage ? 'true' : 'false' ?>" data-crm-card
+                                     data-item-id="<?= (int) $lead['id'] ?>"
+                                     data-current-stage="<?= (int) $lead['stage_id'] ?>">
                                 <a class="deal-main" href="<?= View::e(Router::url($leadUrl)) ?>">
                                     <span class="priority-marker priority-<?= View::e($lead['priority']) ?>"></span>
                                     <strong><?= View::e($lead['title']) ?></strong>
@@ -96,16 +107,16 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
                                     <footer><span><?= View::e($lead['owner_name'] ?: 'Sem responsável') ?></span><?php if ((int) $lead['pending_tasks'] > 0): ?><span class="pending-tasks"><?= (int) $lead['pending_tasks'] ?> tarefa(s)</span><?php endif; ?></footer>
                                 </a>
                                 <?php if ($canManage): ?>
-                                    <form class="deal-move" method="post" action="<?= View::e(Router::url('/crm/leads/move')) ?>">
+                                    <form class="deal-move" method="post" action="<?= View::e(Router::url('/crm/leads/move')) ?>" data-crm-fallback-move>
                                         <?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="lead_id" value="<?= (int) $lead['id'] ?>">
-                                        <select name="stage_id" aria-label="Mover negócio" onchange="this.form.submit()">
+                                        <select name="stage_id" aria-label="Mover negócio" data-crm-stage-select>
                                             <?php foreach ($stages as $target): ?><option value="<?= (int) $target['id'] ?>" <?= (int) $lead['stage_id'] === (int) $target['id'] ? 'selected' : '' ?>><?= View::e($target['name']) ?></option><?php endforeach; ?>
                                         </select>
                                     </form>
                                 <?php endif; ?>
                             </article>
                         <?php endforeach; ?>
-                        <?php if (!$stageLeads): ?><div class="kanban-empty">Sem negócios nesta etapa</div><?php endif; ?>
+                        <div class="kanban-empty" data-crm-empty <?= $stageLeads ? 'hidden' : '' ?>>Sem negócios nesta etapa</div>
                     </div>
                 </section>
             <?php endforeach; ?>

@@ -883,3 +883,176 @@ document.addEventListener('DOMContentLoaded', () => {
     input.addEventListener('change', () => input.closest('.client-menu-option')?.classList.toggle('is-visible', input.checked));
   });
 });
+
+/* ZIP 34.1 — movimentação do CRM sem recarregar a tela */
+(function () {
+  const boards = Array.from(document.querySelectorAll('[data-crm-board]'));
+  if (!boards.length) return;
+
+  let toastTimer = null;
+  const toast = (message, error = false) => {
+    let element = document.querySelector('.crm-ajax-toast');
+    if (!element) {
+      element = document.createElement('div');
+      element.className = 'crm-ajax-toast';
+      element.setAttribute('role', 'status');
+      document.body.appendChild(element);
+    }
+    element.textContent = message;
+    element.classList.toggle('is-error', error);
+    element.classList.add('is-visible');
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => element.classList.remove('is-visible'), 3200);
+  };
+
+  const refreshStage = (stage) => {
+    if (!stage) return;
+    const cards = stage.querySelectorAll(':scope [data-crm-dropzone] > [data-crm-card]');
+    const counter = stage.querySelector('[data-stage-count]');
+    const empty = stage.querySelector('[data-crm-empty]');
+    if (counter) counter.textContent = String(cards.length);
+    if (empty) empty.hidden = cards.length > 0;
+  };
+
+  const moveRequest = async (board, card, stageId, rollback) => {
+    const kind = board.dataset.crmKind || 'client';
+    const payload = new FormData();
+    payload.set('_token', board.dataset.csrf || '');
+    payload.set('stage_id', String(stageId));
+    payload.set(kind === 'admin' ? 'opportunity_id' : 'lead_id', card.dataset.itemId || '0');
+    if (kind === 'client') payload.set('tenant_id', board.dataset.tenantId || '0');
+
+    card.classList.add('is-saving');
+    try {
+      const response = await fetch(board.dataset.moveUrl || '', {
+        method: 'POST',
+        body: payload,
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin'
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.message || 'Não foi possível salvar a nova etapa.');
+      card.dataset.currentStage = String(stageId);
+      card.querySelectorAll('[data-crm-stage-select]').forEach((select) => { select.value = String(stageId); });
+      toast(data.message || 'Etapa atualizada.');
+      return true;
+    } catch (error) {
+      rollback?.();
+      card.classList.add('is-move-error');
+      window.setTimeout(() => card.classList.remove('is-move-error'), 420);
+      toast(error instanceof Error ? error.message : 'Não foi possível mover o card.', true);
+      return false;
+    } finally {
+      card.classList.remove('is-saving');
+    }
+  };
+
+  const insertBeforeForPointer = (zone, y, dragging) => {
+    const cards = Array.from(zone.querySelectorAll(':scope > [data-crm-card]:not(.is-dragging)'));
+    let closest = { offset: Number.NEGATIVE_INFINITY, element: null };
+    cards.forEach((card) => {
+      const rect = card.getBoundingClientRect();
+      const offset = y - rect.top - rect.height / 2;
+      if (offset < 0 && offset > closest.offset) closest = { offset, element: card };
+    });
+    if (closest.element) zone.insertBefore(dragging, closest.element);
+    else zone.appendChild(dragging);
+  };
+
+  boards.forEach((board) => {
+    let dragging = null;
+    let originalZone = null;
+    let originalNext = null;
+    const status = board.closest('.page-content')?.querySelector('[data-crm-status]') || document.querySelector('[data-crm-status]');
+
+    const prepareCard = (card) => {
+      if (card.getAttribute('draggable') !== 'true') return;
+      card.addEventListener('dragstart', (event) => {
+        dragging = card;
+        originalZone = card.parentElement;
+        originalNext = card.nextElementSibling;
+        card.classList.add('is-dragging');
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', card.dataset.itemId || '');
+        if (status) status.innerHTML = '<strong>Movendo card:</strong> solte na etapa desejada.';
+      });
+      card.addEventListener('dragend', () => {
+        card.classList.remove('is-dragging');
+        board.querySelectorAll('[data-crm-dropzone]').forEach((zone) => zone.classList.remove('is-drag-over'));
+        dragging = null;
+        originalZone = null;
+        originalNext = null;
+        if (status) status.innerHTML = '<strong>Funil atualizado:</strong> arraste os cards entre as etapas. A alteração é salva automaticamente.';
+      });
+    };
+
+    board.querySelectorAll('[data-crm-card]').forEach(prepareCard);
+
+    board.querySelectorAll('[data-crm-dropzone]').forEach((zone) => {
+      zone.addEventListener('dragover', (event) => {
+        if (!dragging) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        board.querySelectorAll('[data-crm-dropzone]').forEach((item) => item.classList.toggle('is-drag-over', item === zone));
+        insertBeforeForPointer(zone, event.clientY, dragging);
+      });
+      zone.addEventListener('drop', async (event) => {
+        if (!dragging) return;
+        event.preventDefault();
+        const card = dragging;
+        const oldZone = originalZone;
+        const next = originalNext;
+        const targetStage = zone.closest('[data-crm-stage]');
+        const targetStageId = Number(targetStage?.dataset.stageId || 0);
+        const previousStage = oldZone?.closest('[data-crm-stage]');
+        zone.classList.remove('is-drag-over');
+        if (!targetStageId || String(targetStageId) === String(card.dataset.currentStage || '')) {
+          refreshStage(previousStage);
+          refreshStage(targetStage);
+          return;
+        }
+        refreshStage(previousStage);
+        refreshStage(targetStage);
+        await moveRequest(board, card, targetStageId, () => {
+          if (!oldZone) return;
+          if (next && next.parentElement === oldZone) oldZone.insertBefore(card, next);
+          else oldZone.appendChild(card);
+          refreshStage(previousStage);
+          refreshStage(targetStage);
+        });
+      });
+    });
+
+    board.querySelectorAll('[data-crm-fallback-move]').forEach((form) => {
+      const select = form.querySelector('[data-crm-stage-select]');
+      const card = form.closest('[data-crm-card]');
+      if (!select || !card) return;
+      select.addEventListener('change', async (event) => {
+        event.preventDefault();
+        const targetStageId = Number(select.value || 0);
+        const targetStage = board.querySelector(`[data-crm-stage][data-stage-id="${targetStageId}"]`);
+        const targetZone = targetStage?.querySelector('[data-crm-dropzone]');
+        const oldZone = card.parentElement;
+        const oldStage = oldZone?.closest('[data-crm-stage]');
+        const oldStageId = card.dataset.currentStage || '';
+        const oldNext = card.nextElementSibling;
+        if (!targetZone || String(targetStageId) === String(oldStageId)) return;
+        targetZone.appendChild(card);
+        refreshStage(oldStage);
+        refreshStage(targetStage);
+        const ok = await moveRequest(board, card, targetStageId, () => {
+          if (oldNext && oldNext.parentElement === oldZone) oldZone.insertBefore(card, oldNext);
+          else oldZone?.appendChild(card);
+          select.value = String(oldStageId);
+          refreshStage(oldStage);
+          refreshStage(targetStage);
+        });
+        if (!ok) select.value = String(oldStageId);
+      });
+      form.addEventListener('submit', (event) => event.preventDefault());
+    });
+  });
+})();
