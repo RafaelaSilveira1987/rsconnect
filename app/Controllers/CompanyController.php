@@ -113,6 +113,7 @@ final class CompanyController
                 'password_hash' => password_hash($ownerPassword, PASSWORD_DEFAULT),
             ]);
 
+            $this->createInitialSubscription($pdo, $tenantId, $plan);
             $this->createDefaultPipeline($pdo, $tenantId);
 
             $pdo->commit();
@@ -394,6 +395,41 @@ final class CompanyController
         $this->redirect($returnTo);
     }
 
+
+    private function createInitialSubscription(PDO $pdo, int $tenantId, string $planKey): void
+    {
+        $planStatement = $pdo->prepare('SELECT id, monthly_price FROM saas_plans WHERE plan_key = :plan_key LIMIT 1');
+        $planStatement->execute(['plan_key' => $planKey]);
+        $plan = $planStatement->fetch(PDO::FETCH_ASSOC);
+        if (!$plan) {
+            return;
+        }
+
+        $startsAt = date('Y-m-d');
+        $periodEndsAt = date('Y-m-d', strtotime('+1 month -1 day'));
+        $nextBillingAt = date('Y-m-d', strtotime('+1 month'));
+        $statement = $pdo->prepare(
+            'INSERT INTO tenant_subscriptions
+                (tenant_id, plan_id, billing_cycle, billing_status, starts_at,
+                 current_period_starts_at, current_period_ends_at, next_billing_at,
+                 amount, notes, created_by_user_id)
+             VALUES
+                (:tenant_id, :plan_id, "monthly", "active", :starts_at,
+                 :period_starts_at, :period_ends_at, :next_billing_at,
+                 :amount, :notes, :created_by_user_id)'
+        );
+        $statement->execute([
+            'tenant_id' => $tenantId,
+            'plan_id' => $plan['id'],
+            'starts_at' => $startsAt,
+            'period_starts_at' => $startsAt,
+            'period_ends_at' => $periodEndsAt,
+            'next_billing_at' => $nextBillingAt,
+            'amount' => $plan['monthly_price'] ?? 0,
+            'notes' => 'Assinatura inicial criada junto com o cadastro da empresa.',
+            'created_by_user_id' => Auth::id(),
+        ]);
+    }
 
     private function createDefaultPipeline(PDO $pdo, int $tenantId): void
     {

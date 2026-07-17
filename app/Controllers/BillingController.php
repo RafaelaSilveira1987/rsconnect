@@ -272,14 +272,63 @@ final class BillingController
             $this->redirect('/billing');
         }
 
-        $statement = Database::connection()->prepare(
-            'UPDATE tenant_invoices
-             SET status = :status, paid_at = CASE WHEN :status_paid = "paid" THEN NOW() ELSE paid_at END
-             WHERE id = :id'
-        );
-        $statement->execute(['status' => $status, 'status_paid' => $status, 'id' => $invoiceId]);
-        Audit::log('billing.invoice_updated', ['invoice_id' => $invoiceId, 'status' => $status]);
-        Flash::set('success', 'Cobrança atualizada.');
+        $pdo = Database::connection();
+        try {
+            $pdo->beginTransaction();
+            $invoiceStatement = $pdo->prepare('SELECT tenant_id FROM tenant_invoices WHERE id = :id LIMIT 1 FOR UPDATE');
+            $invoiceStatement->execute(['id' => $invoiceId]);
+            $tenantId = (int) ($invoiceStatement->fetchColumn() ?: 0);
+
+            $statement = $pdo->prepare(
+                'UPDATE tenant_invoices
+                 SET status = :status,
+                     paid_at = CASE WHEN :status_paid = "paid" THEN COALESCE(paid_at, NOW()) ELSE paid_at END
+                 WHERE id = :id'
+            );
+            $statement->execute(['status' => $status, 'status_paid' => $status, 'id' => $invoiceId]);
+
+            if ($tenantId > 0 && $status === 'paid') {
+                $graceDays = max(0, (int) \App\Core\Env::get('BILLING_ACCESS_GRACE_DAYS', 5));
+                $pending = $pdo->prepare(
+                    'SELECT COUNT(*) FROM tenant_invoices
+                     WHERE tenant_id = :tenant_id
+                       AND status IN ("open", "overdue")
+                       AND DATEDIFF(CURDATE(), due_date) > :grace_days'
+                );
+                $pending->bindValue(':tenant_id', $tenantId, PDO::PARAM_INT);
+                $pending->bindValue(':grace_days', $graceDays, PDO::PARAM_INT);
+                $pending->execute();
+                if ((int) $pending->fetchColumn() === 0) {
+                    $pdo->prepare(
+                        'UPDATE tenant_subscriptions
+                         SET billing_status = CASE
+                            WHEN current_period_ends_at >= CURDATE() THEN "active"
+                            ELSE billing_status
+                         END
+                         WHERE tenant_id = :tenant_id
+                         ORDER BY id DESC
+                         LIMIT 1'
+                    )->execute(['tenant_id' => $tenantId]);
+                }
+            } elseif ($tenantId > 0 && $status === 'overdue') {
+                $pdo->prepare(
+                    'UPDATE tenant_subscriptions
+                     SET billing_status = "overdue"
+                     WHERE tenant_id = :tenant_id
+                     ORDER BY id DESC
+                     LIMIT 1'
+                )->execute(['tenant_id' => $tenantId]);
+            }
+
+            $pdo->commit();
+            Audit::log('billing.invoice_updated', ['invoice_id' => $invoiceId, 'status' => $status], $tenantId ?: null);
+            Flash::set('success', 'Cobrança atualizada. As regras de acesso serão recalculadas automaticamente.');
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            Flash::set('error', 'Não foi possível atualizar a cobrança: ' . $exception->getMessage());
+        }
         $this->redirect('/billing');
     }
 

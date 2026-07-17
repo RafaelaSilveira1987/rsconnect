@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Core\Database;
 use App\Core\Env;
+use App\Services\AccessControlService;
 use App\Services\AiAutomationService;
 use App\Services\AutomationWebhookService;
 use App\Services\CrmAutoService;
@@ -30,6 +31,12 @@ final class EvolutionWebhookController
 
             $event = $this->normalizeEvent((string) ($payload['event'] ?? ''));
             $instance = $this->resolveInstance($payload);
+            $accessService = new AccessControlService();
+            $tenantAccess = $accessService->statusForTenant((int) $instance['tenant_id']);
+            $automationAllowed = !empty($tenantAccess['allowed']);
+            if (!$automationAllowed) {
+                $accessService->recordBlockedAccess($tenantAccess, 'evolution_webhook');
+            }
 
             if (str_contains($event, 'messages.update')) {
                 $updated = $this->applyStatusUpdate($instance, $payload);
@@ -122,9 +129,11 @@ final class EvolutionWebhookController
 
             $leadId = null;
             $preScheduleResult = ['skip_ai' => false];
-            if (!$fromMe && $inserted) {
+            if (!$fromMe && $inserted && $automationAllowed) {
                 $leadId = (new CrmAutoService())->createFromConversation($pdo, $instance, $contactId, $conversationId, $content);
                 $preScheduleResult = (new PreSchedulingService())->handleIncoming($pdo, $instance, $contactId, $conversationId, $content);
+            } elseif (!$fromMe && $inserted && !$automationAllowed) {
+                $preScheduleResult = ['skip_ai' => true, 'access_blocked' => true, 'reason' => $tenantAccess['code'] ?? 'blocked'];
             }
 
             $pdo->commit();
@@ -161,16 +170,18 @@ final class EvolutionWebhookController
                     ]
                 );
 
-                (new AutomationWebhookService())->dispatch('message.received', [
+                if ($automationAllowed) {
+                    (new AutomationWebhookService())->dispatch('message.received', [
                     'tenant_id' => (int) $instance['tenant_id'],
                     'instance_id' => (int) $instance['id'],
                     'conversation_id' => $conversationId,
                     'phone' => $phone,
                     'message_type' => $messageType,
                     'content' => $content,
-                ], null, (int) $instance['tenant_id']);
+                    ], null, (int) $instance['tenant_id']);
+                }
 
-                if (!((bool) ($preScheduleResult['skip_ai'] ?? false))) {
+                if ($automationAllowed && !((bool) ($preScheduleResult['skip_ai'] ?? false))) {
                     (new AiAutomationService())->handleIncoming($instance, $conversationId, $content, $payload);
                     $aiHandled = true;
                 }
@@ -183,6 +194,8 @@ final class EvolutionWebhookController
                 'crm_lead_id' => $leadId,
                 'ai_checked' => $aiHandled,
                 'pre_schedule' => $preScheduleResult,
+                'access_allowed' => $automationAllowed,
+                'access_reason' => $automationAllowed ? null : ($tenantAccess['code'] ?? 'blocked'),
             ]);
         } catch (Throwable $exception) {
             if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {

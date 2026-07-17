@@ -552,6 +552,36 @@ final class PaymentGatewayService
             'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'id' => $invoiceId,
         ]);
+
+        if ($status === 'paid') {
+            $tenantStatement = Database::connection()->prepare('SELECT tenant_id FROM tenant_invoices WHERE id = :id LIMIT 1');
+            $tenantStatement->execute(['id' => $invoiceId]);
+            $tenantId = (int) ($tenantStatement->fetchColumn() ?: 0);
+            if ($tenantId > 0) {
+                $graceDays = max(0, (int) Env::get('BILLING_ACCESS_GRACE_DAYS', 5));
+                $pending = Database::connection()->prepare(
+                    'SELECT COUNT(*) FROM tenant_invoices
+                     WHERE tenant_id = :tenant_id
+                       AND status IN ("open", "overdue")
+                       AND DATEDIFF(CURDATE(), due_date) > :grace_days'
+                );
+                $pending->bindValue(':tenant_id', $tenantId, PDO::PARAM_INT);
+                $pending->bindValue(':grace_days', $graceDays, PDO::PARAM_INT);
+                $pending->execute();
+                if ((int) $pending->fetchColumn() === 0) {
+                    Database::connection()->prepare(
+                        'UPDATE tenant_subscriptions
+                         SET billing_status = CASE
+                            WHEN current_period_ends_at >= CURDATE() THEN "active"
+                            ELSE billing_status
+                         END
+                         WHERE tenant_id = :tenant_id
+                         ORDER BY id DESC
+                         LIMIT 1'
+                    )->execute(['tenant_id' => $tenantId]);
+                }
+            }
+        }
     }
 
     private function baseUrl(array $gateway): string

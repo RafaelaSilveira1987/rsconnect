@@ -59,6 +59,173 @@ final class SecurityService
         ], $tenantId, $userId);
     }
 
+
+    public function loginLockState(string $email): array
+    {
+        $normalized = mb_strtolower(trim($email));
+        $state = [
+            'locked' => false,
+            'locked_until' => null,
+            'remaining_seconds' => 0,
+            'failed_login_count' => 0,
+            'user_id' => null,
+        ];
+
+        if ($normalized === '') {
+            return $state;
+        }
+
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT id, failed_login_count, locked_until
+                 FROM users
+                 WHERE email = :email
+                 LIMIT 1'
+            );
+            $statement->execute(['email' => $normalized]);
+            $user = $statement->fetch(PDO::FETCH_ASSOC);
+            if (!$user) {
+                return $state;
+            }
+
+            $state['user_id'] = (int) $user['id'];
+            $state['failed_login_count'] = (int) ($user['failed_login_count'] ?? 0);
+            $lockedUntil = $user['locked_until'] ?? null;
+            if ($lockedUntil && strtotime((string) $lockedUntil) > time()) {
+                $state['locked'] = true;
+                $state['locked_until'] = (string) $lockedUntil;
+                $state['remaining_seconds'] = max(1, strtotime((string) $lockedUntil) - time());
+                return $state;
+            }
+
+            if ($lockedUntil) {
+                Database::connection()->prepare(
+                    'UPDATE users
+                     SET failed_login_count = 0, locked_until = NULL, lock_reason = NULL
+                     WHERE id = :id'
+                )->execute(['id' => $user['id']]);
+                $state['failed_login_count'] = 0;
+            }
+        } catch (Throwable) {
+            // Migration ainda não aplicada: mantém comportamento anterior.
+        }
+
+        return $state;
+    }
+
+    public function applyFailedLoginLock(string $email): array
+    {
+        $normalized = mb_strtolower(trim($email));
+        $limit = max(1, (int) Env::get('SECURITY_LOGIN_ATTEMPT_LIMIT', 6));
+        $windowMinutes = max(1, (int) Env::get('SECURITY_LOGIN_ATTEMPT_WINDOW_MINUTES', 15));
+        $state = $this->loginLockState($normalized);
+
+        if (!empty($state['locked']) || empty($state['user_id'])) {
+            return $state;
+        }
+
+        try {
+            $pdo = Database::connection();
+            $pdo->beginTransaction();
+            $statement = $pdo->prepare(
+                'SELECT id, failed_login_count, last_failed_login_at
+                 FROM users
+                 WHERE id = :id
+                 FOR UPDATE'
+            );
+            $statement->execute(['id' => $state['user_id']]);
+            $user = $statement->fetch(PDO::FETCH_ASSOC);
+
+            if (!$user) {
+                $pdo->rollBack();
+                return $state;
+            }
+
+            $lastFailed = $user['last_failed_login_at'] ?? null;
+            $count = (int) ($user['failed_login_count'] ?? 0);
+            if (!$lastFailed || strtotime((string) $lastFailed) < time() - ($windowMinutes * 60)) {
+                $count = 0;
+            }
+            $count++;
+            $lockedUntil = $count >= $limit ? date('Y-m-d H:i:s', time() + ($windowMinutes * 60)) : null;
+
+            $update = $pdo->prepare(
+                'UPDATE users
+                 SET failed_login_count = :failed_login_count,
+                     last_failed_login_at = NOW(),
+                     locked_until = :locked_until,
+                     lock_reason = :lock_reason
+                 WHERE id = :id'
+            );
+            $update->execute([
+                'failed_login_count' => $count,
+                'locked_until' => $lockedUntil,
+                'lock_reason' => $lockedUntil ? 'too_many_failed_logins' : null,
+                'id' => $user['id'],
+            ]);
+            $pdo->commit();
+
+            $state['failed_login_count'] = $count;
+            $state['locked'] = $lockedUntil !== null;
+            $state['locked_until'] = $lockedUntil;
+            $state['remaining_seconds'] = $lockedUntil ? $windowMinutes * 60 : 0;
+
+            if ($lockedUntil) {
+                $this->recordEvent('auth.user_temporarily_locked', 'critical', [
+                    'email' => $normalized,
+                    'failed_login_count' => $count,
+                    'locked_until' => $lockedUntil,
+                ], null, (int) $user['id']);
+            }
+        } catch (Throwable) {
+            if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+        }
+
+        return $state;
+    }
+
+    public function resetLoginFailures(string $email): void
+    {
+        try {
+            Database::connection()->prepare(
+                'UPDATE users
+                 SET failed_login_count = 0,
+                     last_failed_login_at = NULL,
+                     locked_until = NULL,
+                     lock_reason = NULL
+                 WHERE email = :email'
+            )->execute(['email' => mb_strtolower(trim($email))]);
+        } catch (Throwable) {
+            // Migration ainda não aplicada.
+        }
+    }
+
+    public function unlockUser(int $userId): void
+    {
+        try {
+            Database::connection()->prepare(
+                'UPDATE users
+                 SET failed_login_count = 0,
+                     last_failed_login_at = NULL,
+                     locked_until = NULL,
+                     lock_reason = NULL
+                 WHERE id = :id'
+            )->execute(['id' => $userId]);
+            $this->recordEvent('auth.user_unlocked_by_admin', 'warning', ['unlocked_user_id' => $userId]);
+        } catch (Throwable) {
+            // Migration ainda não aplicada.
+        }
+    }
+
+    public function lockMessage(array $state): string
+    {
+        $seconds = max(1, (int) ($state['remaining_seconds'] ?? 0));
+        $minutes = max(1, (int) ceil($seconds / 60));
+        return 'Acesso temporariamente bloqueado após várias tentativas incorretas. Tente novamente em cerca de ' . $minutes . ' minuto(s).';
+    }
+
     public function tooManyFailedLoginAttempts(string $email): bool
     {
         $limit = max(1, (int) Env::get('SECURITY_LOGIN_ATTEMPT_LIMIT', 6));
@@ -110,8 +277,15 @@ final class SecurityService
     {
         $_SESSION['last_activity_at'] = time();
         try {
-            $statement = Database::connection()->prepare('UPDATE user_sessions SET last_seen_at = NOW() WHERE session_id = :session_id AND revoked_at IS NULL');
-            $statement->execute(['session_id' => session_id()]);
+            $statement = Database::connection()->prepare(
+                'UPDATE user_sessions
+                 SET last_seen_at = NOW(), expires_at = :expires_at
+                 WHERE session_id = :session_id AND revoked_at IS NULL'
+            );
+            $statement->execute([
+                'session_id' => session_id(),
+                'expires_at' => date('Y-m-d H:i:s', time() + ((int) Env::get('SESSION_LIFETIME', 120) * 60)),
+            ]);
         } catch (Throwable) {
             // Ignora se as tabelas ainda não existem.
         }
@@ -120,12 +294,30 @@ final class SecurityService
     public function isCurrentSessionRevoked(): bool
     {
         try {
-            $statement = Database::connection()->prepare('SELECT revoked_at FROM user_sessions WHERE session_id = :session_id LIMIT 1');
+            $statement = Database::connection()->prepare('SELECT revoked_at, expires_at FROM user_sessions WHERE session_id = :session_id LIMIT 1');
             $statement->execute(['session_id' => session_id()]);
-            $revokedAt = $statement->fetchColumn();
-            return $revokedAt !== false && $revokedAt !== null;
+            $session = $statement->fetch(PDO::FETCH_ASSOC);
+            if (!$session) {
+                return false;
+            }
+            if (!empty($session['revoked_at'])) {
+                return true;
+            }
+            return !empty($session['expires_at']) && strtotime((string) $session['expires_at']) <= time();
         } catch (Throwable) {
             return false;
+        }
+    }
+
+    public function closeCurrentSession(): void
+    {
+        try {
+            Database::connection()->prepare(
+                'UPDATE user_sessions SET revoked_at = NOW(), last_seen_at = NOW() WHERE session_id = :session_id'
+            )->execute(['session_id' => session_id()]);
+            $this->recordEvent('auth.session_closed', 'info');
+        } catch (Throwable) {
+            // Ignora se as tabelas ainda não existem.
         }
     }
 
@@ -165,27 +357,115 @@ final class SecurityService
 
     public function dashboard(): array
     {
-        $pdo = Database::connection();
-        $today = date('Y-m-d');
+        $idleMinutes = max(5, (int) Env::get('SECURITY_SESSION_IDLE_MINUTES', Env::get('SESSION_LIFETIME', 120)));
+        $access = (new AccessControlService())->securitySummary();
 
         return [
             'failed_logins_24h' => $this->count('SELECT COUNT(*) FROM login_attempts WHERE success = 0 AND created_at >= (NOW() - INTERVAL 1 DAY)'),
             'successful_logins_24h' => $this->count('SELECT COUNT(*) FROM login_attempts WHERE success = 1 AND created_at >= (NOW() - INTERVAL 1 DAY)'),
-            'active_sessions' => $this->count('SELECT COUNT(*) FROM user_sessions WHERE revoked_at IS NULL AND last_seen_at >= (NOW() - INTERVAL 2 HOUR)'),
+            'active_sessions' => $this->count(
+                'SELECT COUNT(*) FROM user_sessions
+                 WHERE revoked_at IS NULL
+                   AND (expires_at IS NULL OR expires_at > NOW())
+                   AND last_seen_at >= (NOW() - INTERVAL ' . $idleMinutes . ' MINUTE)'
+            ),
+            'expired_sessions' => $this->count(
+                'SELECT COUNT(*) FROM user_sessions
+                 WHERE revoked_at IS NULL
+                   AND ((expires_at IS NOT NULL AND expires_at <= NOW())
+                        OR last_seen_at < (NOW() - INTERVAL ' . $idleMinutes . ' MINUTE))'
+            ),
             'critical_events_7d' => $this->count("SELECT COUNT(*) FROM security_events WHERE severity IN ('critical','error') AND created_at >= (NOW() - INTERVAL 7 DAY)"),
             'webhook_events_24h' => $this->count("SELECT COUNT(*) FROM security_events WHERE event LIKE 'webhook.%' AND created_at >= (NOW() - INTERVAL 1 DAY)"),
             'api_key_warnings' => $this->apiKeyWarnings(),
-            'login_attempts' => $this->fetchAll('SELECT * FROM login_attempts ORDER BY id DESC LIMIT 20'),
-            'events' => $this->fetchAll('SELECT se.*, u.name AS user_name, t.name AS tenant_name FROM security_events se LEFT JOIN users u ON u.id = se.user_id LEFT JOIN tenants t ON t.id = se.tenant_id ORDER BY se.id DESC LIMIT 40'),
-            'sessions' => $this->fetchAll('SELECT us.*, u.name AS user_name, u.email FROM user_sessions us INNER JOIN users u ON u.id = us.user_id ORDER BY us.last_seen_at DESC LIMIT 30'),
+            'login_attempts' => $this->fetchAll(
+                'SELECT la.*, u.locked_until, u.failed_login_count
+                 FROM login_attempts la
+                 LEFT JOIN users u ON u.id = la.user_id
+                 ORDER BY la.id DESC
+                 LIMIT 30'
+            ),
+            'events' => $this->fetchAll('SELECT se.*, u.name AS user_name, t.name AS tenant_name FROM security_events se LEFT JOIN users u ON u.id = se.user_id LEFT JOIN tenants t ON t.id = se.tenant_id ORDER BY se.id DESC LIMIT 50'),
+            'sessions' => $this->fetchAll(
+                'SELECT us.*, u.name AS user_name, u.email,
+                        CASE
+                            WHEN us.revoked_at IS NOT NULL THEN "revoked"
+                            WHEN us.expires_at IS NOT NULL AND us.expires_at <= NOW() THEN "expired"
+                            WHEN us.last_seen_at < (NOW() - INTERVAL ' . $idleMinutes . ' MINUTE) THEN "idle_expired"
+                            ELSE "active"
+                        END AS session_status
+                 FROM user_sessions us
+                 INNER JOIN users u ON u.id = us.user_id
+                 ORDER BY us.last_seen_at DESC
+                 LIMIT 40'
+            ),
+            'locked_users' => $this->fetchAll(
+                'SELECT id, tenant_id, name, email, failed_login_count, locked_until, lock_reason
+                 FROM users
+                 WHERE locked_until IS NOT NULL AND locked_until > NOW()
+                 ORDER BY locked_until DESC'
+            ),
+            'access' => $access,
+            'checks' => $this->validationChecks($access),
             'settings' => [
                 'attempt_limit' => (int) Env::get('SECURITY_LOGIN_ATTEMPT_LIMIT', 6),
                 'attempt_window' => (int) Env::get('SECURITY_LOGIN_ATTEMPT_WINDOW_MINUTES', 15),
-                'idle_minutes' => (int) Env::get('SECURITY_SESSION_IDLE_MINUTES', Env::get('SESSION_LIFETIME', 120)),
+                'idle_minutes' => $idleMinutes,
                 'webhook_strict' => filter_var(Env::get('SECURITY_WEBHOOK_STRICT', false), FILTER_VALIDATE_BOOL),
                 'headers_enabled' => filter_var(Env::get('SECURITY_HEADERS_ENABLED', true), FILTER_VALIDATE_BOOL),
+                'invoice_grace_days' => (int) ($access['invoice_grace_days'] ?? 5),
+                'timezone' => date_default_timezone_get(),
+                'database' => $this->databaseName(),
             ],
+            'checked_at' => date('Y-m-d H:i:s'),
+            'version' => '33.0-security-validation',
         ];
+    }
+
+    private function validationChecks(array $access): array
+    {
+        $tables = ['security_events', 'login_attempts', 'user_sessions', 'tenant_subscriptions', 'tenant_invoices'];
+        $checks = [];
+        foreach ($tables as $table) {
+            $exists = $this->tableExists($table);
+            $checks[] = [
+                'label' => 'Tabela ' . $table,
+                'status' => $exists ? 'ok' : 'error',
+                'detail' => $exists ? 'Disponível no banco.' : 'Não encontrada. Execute a migration correspondente.',
+            ];
+        }
+
+        $headers = filter_var(Env::get('SECURITY_HEADERS_ENABLED', true), FILTER_VALIDATE_BOOL);
+        $strict = filter_var(Env::get('SECURITY_WEBHOOK_STRICT', false), FILTER_VALIDATE_BOOL);
+        $checks[] = ['label' => 'Headers de segurança', 'status' => $headers ? 'ok' : 'warning', 'detail' => $headers ? 'Configurados para todas as respostas.' : 'Desativados no ambiente.'];
+        $checks[] = ['label' => 'Tokens obrigatórios em webhooks', 'status' => $strict ? 'ok' : 'warning', 'detail' => $strict ? 'Validação estrita ativada.' : 'Validação estrita desativada; revisar antes de produção.'];
+        $checks[] = ['label' => 'Bloqueio por vigência', 'status' => 'ok', 'detail' => (int) ($access['expired_subscriptions'] ?? 0) . ' assinatura(s) vencida(s) identificada(s).'];
+        $checks[] = ['label' => 'Bloqueio por inadimplência', 'status' => 'ok', 'detail' => 'Tolerância configurada em ' . (int) ($access['invoice_grace_days'] ?? 5) . ' dia(s).'];
+        $checks[] = ['label' => 'Bloqueio de login', 'status' => 'ok', 'detail' => (int) ($access['locked_users'] ?? 0) . ' usuário(s) bloqueado(s) neste momento.'];
+        return $checks;
+    }
+
+    private function tableExists(string $table): bool
+    {
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT COUNT(*) FROM information_schema.tables
+                 WHERE table_schema = DATABASE() AND table_name = :table'
+            );
+            $statement->execute(['table' => $table]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function databaseName(): string
+    {
+        try {
+            return (string) Database::connection()->query('SELECT DATABASE()')->fetchColumn();
+        } catch (Throwable) {
+            return 'indisponível';
+        }
     }
 
     public function verifyWebhookToken(string $type, ?string $providedToken, ?string $expectedToken): bool

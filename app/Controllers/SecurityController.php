@@ -17,8 +17,29 @@ final class SecurityController
         $service = new SecurityService();
         View::render('security.index', [
             'title' => 'Segurança',
-            'data' => $service->dashboard(),
+            'securityData' => $service->dashboard(),
         ]);
+    }
+
+    public function unlockUser(): void
+    {
+        if (!Csrf::validate($_POST['_token'] ?? null)) {
+            Flash::set('error', 'Sessão expirada. Atualize a página e tente novamente.');
+            header('Location: ' . Router::url('/security'));
+            exit;
+        }
+
+        $userId = (int) ($_POST['user_id'] ?? 0);
+        if ($userId < 1) {
+            Flash::set('error', 'Usuário inválido.');
+            header('Location: ' . Router::url('/security'));
+            exit;
+        }
+
+        (new SecurityService())->unlockUser($userId);
+        Flash::set('success', 'Bloqueio de login removido.');
+        header('Location: ' . Router::url('/security'));
+        exit;
     }
 
     public function revokeSession(): void

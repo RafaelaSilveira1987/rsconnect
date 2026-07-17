@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Core;
 
 use App\Services\TenantModuleService;
+use App\Services\AccessControlService;
 use App\Services\SecurityService;
 use App\Services\PrivacyService;
 
@@ -73,9 +74,27 @@ final class Router
                 return false;
             }
 
-
             $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-            $privacyExempt = in_array($this->normalize($path), ['/privacy/accept', '/logout', '/webhooks/evolution', '/webhooks/n8n/callback'], true);
+            if (!Auth::isSuperAdmin() && Auth::tenantId()) {
+                $normalizedPath = $this->normalize($path);
+                $accessExempt = in_array($normalizedPath, ['/access-restricted', '/subscription', '/logout'], true);
+                $accessService = new AccessControlService();
+                $accessStatus = $accessService->statusForTenant((int) Auth::tenantId());
+                $_SESSION['tenant_access_status'] = $accessStatus;
+
+                if (empty($accessStatus['allowed']) && !$accessExempt) {
+                    $accessService->recordBlockedAccess($accessStatus, 'web');
+                    $this->redirect('/access-restricted');
+                    return false;
+                }
+
+                if (!empty($accessStatus['allowed']) && $normalizedPath === '/access-restricted') {
+                    $this->redirect('/');
+                    return false;
+                }
+            }
+
+            $privacyExempt = in_array($this->normalize($path), ['/privacy/accept', '/logout', '/access-restricted', '/subscription', '/webhooks/evolution', '/webhooks/n8n/callback'], true);
             if (!$privacyExempt && !Auth::isSuperAdmin() && (new PrivacyService())->requiresAcceptance(Auth::tenantId(), Auth::id())) {
                 Flash::set('warning', 'Leia e aceite os termos de privacidade/LGPD da sua empresa para continuar.');
                 $this->redirect('/privacy/accept');
@@ -105,13 +124,17 @@ final class Router
             }
             if (!Auth::isSuperAdmin() && Auth::tenantId()) {
                 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-                $moduleService = new TenantModuleService();
-                $module = $moduleService->moduleForPath($path);
-                if ($module !== null && !$moduleService->enabled((int) Auth::tenantId(), $module)) {
-                    http_response_code(403);
-                    Flash::set('warning', 'Este módulo está desativado para sua empresa.');
-                    $this->redirect('/');
-                    return false;
+                $subscriptionDuringBlock = $this->normalize($path) === '/subscription'
+                    && empty($_SESSION['tenant_access_status']['allowed']);
+                if (!$subscriptionDuringBlock) {
+                    $moduleService = new TenantModuleService();
+                    $module = $moduleService->moduleForPath($path);
+                    if ($module !== null && !$moduleService->enabled((int) Auth::tenantId(), $module)) {
+                        http_response_code(403);
+                        Flash::set('warning', 'Este módulo está desativado para sua empresa.');
+                        $this->redirect('/');
+                        return false;
+                    }
                 }
             }
         }

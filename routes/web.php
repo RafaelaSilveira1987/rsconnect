@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Controllers\AccessController;
 use App\Controllers\AgentController;
 use App\Controllers\AiCredentialController;
 use App\Controllers\AutomationController;
@@ -39,6 +40,7 @@ return static function (Router $router): void {
     $router->get('/login', [AuthController::class, 'showLogin'], ['guest']);
     $router->post('/login', [AuthController::class, 'login'], ['guest', 'csrf']);
     $router->post('/logout', [AuthController::class, 'logout'], ['auth', 'csrf']);
+    $router->get('/access-restricted', [AccessController::class, 'restricted'], ['auth']);
 
     $router->get('/', [DashboardController::class, 'index'], ['auth']);
     $router->get('/ajuda', [DocumentationController::class, 'index'], ['auth']);
@@ -119,6 +121,7 @@ return static function (Router $router): void {
     $router->get('/privacidade', [PrivacyController::class, 'index'], ['auth', 'permission:privacy.view']);
 
     $router->post('/security/sessions/revoke', [SecurityController::class, 'revokeSession'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/security/users/unlock', [SecurityController::class, 'unlockUser'], ['auth', 'super_admin', 'csrf']);
 
     $router->get('/notifications', [NotificationsController::class, 'index'], ['auth', 'permission:notifications.view']);
     $router->get('/notifications/count', [NotificationsController::class, 'count'], ['auth', 'permission:notifications.view']);
