@@ -14,7 +14,7 @@ use Throwable;
 
 final class TenantHealthService
 {
-    public const VERSION = '34.5.1-health-time-pending';
+    public const VERSION = '34.5.3-health-stable';
 
     private PDO $pdo;
     private ?int $databaseOffsetMinutes = null;
@@ -80,6 +80,23 @@ final class TenantHealthService
             ['tenant_id' => $tenantId]
         );
 
+        $tracking = $this->row(
+            'SELECT * FROM tenant_admin_tracking WHERE tenant_id = :tenant_id LIMIT 1',
+            ['tenant_id' => $tenantId]
+        ) ?? [];
+        $occurrences = $this->recentOperationalOccurrences(
+            $tenantId,
+            !empty($tracking['acknowledged_at']) ? (string) $tracking['acknowledged_at'] : null,
+            100
+        );
+        $occurrenceSummary = [
+            'total' => count($occurrences),
+            'unreviewed' => count(array_filter($occurrences, static fn (array $item): bool => empty($item['reviewed']))),
+            'reviewed' => count(array_filter($occurrences, static fn (array $item): bool => !empty($item['reviewed']))),
+            'ai' => count(array_filter($occurrences, static fn (array $item): bool => ($item['source'] ?? '') === 'ai')),
+            'integration' => count(array_filter($occurrences, static fn (array $item): bool => ($item['source'] ?? '') === 'integration')),
+        ];
+
         $openIncidents = array_values(array_filter($incidents, static fn (array $i): bool => ($i['status'] ?? '') !== 'resolved'));
 
         $configuration = $this->configurationInventory($tenantId, $checks);
@@ -90,6 +107,9 @@ final class TenantHealthService
             'checks' => $checks,
             'groups' => $groups,
             'configuration' => $configuration,
+            'tracking' => $tracking,
+            'occurrences' => $occurrences,
+            'occurrence_summary' => $occurrenceSummary,
             'incidents' => $incidents,
             'open_incidents' => $openIncidents,
             'events' => $events,
@@ -1231,6 +1251,137 @@ final class TenantHealthService
         return $result;
     }
 
+    /**
+     * Falhas reais registradas nos módulos de IA e integração nos últimos 7 dias.
+     * Essas são exatamente as ocorrências usadas pelos badges "ainda não revisadas"
+     * da listagem de empresas.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function recentOperationalOccurrences(int $tenantId, ?string $acknowledgedAt, int $limit = 100): array
+    {
+        $limit = max(10, min(200, $limit));
+        $items = [];
+
+        $aiRows = $this->all(
+            'SELECT l.id, l.created_at, l.event, l.error_message, l.response_preview,
+                    l.conversation_id, l.agent_id,
+                    a.name AS agent_name,
+                    ct.name AS contact_name, ct.phone AS contact_phone
+             FROM ai_automation_logs l
+             LEFT JOIN ai_agents a ON a.id = l.agent_id
+             LEFT JOIN conversations c ON c.id = l.conversation_id
+             LEFT JOIN contacts ct ON ct.id = c.contact_id
+             WHERE l.tenant_id = :tenant_id
+               AND l.status = "error"
+               AND l.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+             ORDER BY l.id DESC
+             LIMIT ' . $limit,
+            ['tenant_id' => $tenantId]
+        );
+        foreach ($aiRows as $row) {
+            $createdAt = (string) ($row['created_at'] ?? '');
+            $event = trim((string) ($row['event'] ?? 'ai.failed'));
+            $conversationId = (int) ($row['conversation_id'] ?? 0);
+            $agentId = (int) ($row['agent_id'] ?? 0);
+            $items[] = [
+                'source' => 'ai',
+                'source_label' => 'Assistente de IA',
+                'id' => (int) ($row['id'] ?? 0),
+                'event' => $event,
+                'title' => $this->friendlyOccurrenceTitle('ai', $event),
+                'message' => $this->valueOr($row['error_message'] ?? null, 'A execução da IA terminou com erro.'),
+                'created_at' => $createdAt,
+                'created_at_display' => $this->formatDatabaseDate($createdAt),
+                'reviewed' => $this->occurrenceWasReviewed($createdAt, $acknowledgedAt),
+                'related_url' => $conversationId > 0
+                    ? '/conversations?conversation_id=' . $conversationId
+                    : ($agentId > 0 ? '/agents?tenant_id=' . $tenantId : '/automations'),
+                'secondary_url' => $agentId > 0 ? '/agents?tenant_id=' . $tenantId : null,
+                'details' => array_filter([
+                    'Evento' => $event,
+                    'Assistente' => trim((string) ($row['agent_name'] ?? '')) ?: 'Não identificado',
+                    'Contato' => trim((string) ($row['contact_name'] ?? '')) ?: (trim((string) ($row['contact_phone'] ?? '')) ?: 'Não identificado'),
+                    'Conversa' => $conversationId > 0 ? '#' . $conversationId : 'Não vinculada',
+                    'Prévia da resposta' => trim((string) ($row['response_preview'] ?? '')) ?: null,
+                ], static fn (mixed $value): bool => $value !== null && $value !== ''),
+            ];
+        }
+
+        $n8nRows = $this->all(
+            'SELECT l.id, l.created_at, l.event, l.error_message, l.http_status,
+                    l.request_url_masked, l.response_preview, l.flow_id,
+                    f.name AS flow_name
+             FROM n8n_flow_logs l
+             LEFT JOIN n8n_tenant_flows f ON f.id = l.flow_id
+             WHERE l.tenant_id = :tenant_id
+               AND l.status = "error"
+               AND l.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+             ORDER BY l.id DESC
+             LIMIT ' . $limit,
+            ['tenant_id' => $tenantId]
+        );
+        foreach ($n8nRows as $row) {
+            $createdAt = (string) ($row['created_at'] ?? '');
+            $event = trim((string) ($row['event'] ?? 'n8n.failed'));
+            $flowId = (int) ($row['flow_id'] ?? 0);
+            $items[] = [
+                'source' => 'integration',
+                'source_label' => 'Integração',
+                'id' => (int) ($row['id'] ?? 0),
+                'event' => $event,
+                'title' => $this->friendlyOccurrenceTitle('integration', $event),
+                'message' => $this->valueOr($row['error_message'] ?? null, 'A integração terminou com erro.'),
+                'created_at' => $createdAt,
+                'created_at_display' => $this->formatDatabaseDate($createdAt),
+                'reviewed' => $this->occurrenceWasReviewed($createdAt, $acknowledgedAt),
+                'related_url' => '/n8n-flows' . ($flowId > 0 ? '?flow_id=' . $flowId : ''),
+                'secondary_url' => null,
+                'details' => array_filter([
+                    'Evento' => $event,
+                    'Fluxo' => trim((string) ($row['flow_name'] ?? '')) ?: 'Não identificado',
+                    'HTTP' => !empty($row['http_status']) ? (string) $row['http_status'] : 'Não informado',
+                    'Destino' => trim((string) ($row['request_url_masked'] ?? '')) ?: null,
+                    'Retorno' => trim((string) ($row['response_preview'] ?? '')) ?: null,
+                ], static fn (mixed $value): bool => $value !== null && $value !== ''),
+            ];
+        }
+
+        usort($items, static fn (array $left, array $right): int => strcmp((string) ($right['created_at'] ?? ''), (string) ($left['created_at'] ?? '')));
+        return array_slice($items, 0, $limit);
+    }
+
+    private function occurrenceWasReviewed(string $createdAt, ?string $acknowledgedAt): bool
+    {
+        if ($createdAt === '' || $acknowledgedAt === null || trim($acknowledgedAt) === '') {
+            return false;
+        }
+        $created = strtotime($createdAt);
+        $acknowledged = strtotime($acknowledgedAt);
+        return $created !== false && $acknowledged !== false && $created <= $acknowledged;
+    }
+
+    private function friendlyOccurrenceTitle(string $source, string $event): string
+    {
+        $event = strtolower(trim($event));
+        if ($source === 'ai') {
+            return match (true) {
+                str_contains($event, 'credential'), str_contains($event, 'auth') => 'Credencial da IA recusada',
+                str_contains($event, 'quota'), str_contains($event, 'limit'), str_contains($event, '429') => 'Limite da IA atingido',
+                str_contains($event, 'timeout') => 'A IA demorou para responder',
+                str_contains($event, 'send') => 'Falha ao enviar a resposta',
+                default => 'Falha no assistente de IA',
+            };
+        }
+        return match (true) {
+            str_contains($event, 'calendar'), str_contains($event, 'agenda') => 'Falha na integração da agenda',
+            str_contains($event, 'callback') => 'Callback da integração falhou',
+            str_contains($event, 'webhook') => 'Webhook da integração falhou',
+            str_contains($event, 'timeout') => 'Integração sem resposta',
+            default => 'Falha em integração externa',
+        };
+    }
+
     private function syncIncidents(int $tenantId, int $snapshotId, array $checks, ?int $userId, string $checkedAt): void
     {
         $problemFingerprints = [];
@@ -1287,8 +1438,7 @@ final class TenantHealthService
                     'summary' => $check['summary'],
                     'details' => $details,
                     'related_url' => $check['action_url'] ?? null,
-                    'first_seen_at' => $checkedAt,
-                    'last_seen_at' => $checkedAt,
+                    'seen_at' => $checkedAt,
                     'snapshot_id' => $snapshotId,
                     'id' => (int) $existing['id'],
                 ]);

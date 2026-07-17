@@ -11,6 +11,9 @@ $groups = $data['groups'] ?? [];
 $incidents = $data['incidents'] ?? [];
 $events = $data['events'] ?? [];
 $summary = $data['summary'] ?? [];
+$tracking = $data['tracking'] ?? [];
+$occurrences = $data['occurrences'] ?? [];
+$occurrenceSummary = $data['occurrence_summary'] ?? [];
 $configuration = $data['configuration'] ?? [];
 $configGroups = $configuration['groups'] ?? [];
 $tenantId = (int) ($tenant['id'] ?? 0);
@@ -48,6 +51,23 @@ $relative = static function (?string $value): string {
     return 'há ' . max(1, (int) floor($seconds / 86400)) . ' dia(s)';
 };
 $overall = (string) ($snapshot['overall_status'] ?? 'attention');
+$occurrenceFilter = (string) ($_GET['occurrence_filter'] ?? 'unreviewed');
+if (!in_array($occurrenceFilter, ['unreviewed', 'all', 'ai', 'integration', 'reviewed'], true)) {
+    $occurrenceFilter = 'unreviewed';
+}
+$visibleOccurrences = array_values(array_filter($occurrences, static function (array $item) use ($occurrenceFilter): bool {
+    return match ($occurrenceFilter) {
+        'all' => true,
+        'ai' => ($item['source'] ?? '') === 'ai',
+        'integration' => ($item['source'] ?? '') === 'integration',
+        'reviewed' => !empty($item['reviewed']),
+        default => empty($item['reviewed']),
+    };
+}));
+$trackingPriority = (string) ($tracking['priority'] ?? 'attention');
+if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true)) {
+    $trackingPriority = 'attention';
+}
 ?>
 
 <section class="tenant-health-hero is-<?= View::e($overall) ?>">
@@ -149,6 +169,86 @@ $overall = (string) ($snapshot['overall_status'] ?? 'attention');
     <?php endforeach; ?>
 </div>
 <?php endif; ?>
+
+<section class="card tenant-health-occurrences" id="occurrences">
+    <div class="section-heading tenant-health-occurrence-heading">
+        <div>
+            <span class="eyebrow">Ocorrências registradas</span>
+            <h2>Falhas de IA e integrações</h2>
+            <p>Esta lista mostra exatamente os registros que geram as marcações “ainda não revisadas” na tela de empresas.</p>
+        </div>
+        <span class="badge badge-warning"><?= (int) ($occurrenceSummary['unreviewed'] ?? 0) ?> não revisada(s)</span>
+    </div>
+
+    <div class="tenant-health-occurrence-summary">
+        <a class="<?= $occurrenceFilter === 'unreviewed' ? 'is-active' : '' ?>" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId . '&occurrence_filter=unreviewed#occurrences')) ?>"><small>Não revisadas</small><strong><?= (int) ($occurrenceSummary['unreviewed'] ?? 0) ?></strong></a>
+        <a class="<?= $occurrenceFilter === 'ai' ? 'is-active' : '' ?>" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId . '&occurrence_filter=ai#occurrences')) ?>"><small>Falhas de IA</small><strong><?= (int) ($occurrenceSummary['ai'] ?? 0) ?></strong></a>
+        <a class="<?= $occurrenceFilter === 'integration' ? 'is-active' : '' ?>" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId . '&occurrence_filter=integration#occurrences')) ?>"><small>Integrações</small><strong><?= (int) ($occurrenceSummary['integration'] ?? 0) ?></strong></a>
+        <a class="<?= $occurrenceFilter === 'reviewed' ? 'is-active' : '' ?>" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId . '&occurrence_filter=reviewed#occurrences')) ?>"><small>Já revisadas</small><strong><?= (int) ($occurrenceSummary['reviewed'] ?? 0) ?></strong></a>
+        <a class="<?= $occurrenceFilter === 'all' ? 'is-active' : '' ?>" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId . '&occurrence_filter=all#occurrences')) ?>"><small>Todas</small><strong><?= (int) ($occurrenceSummary['total'] ?? 0) ?></strong></a>
+    </div>
+
+    <?php if ((int) ($occurrenceSummary['unreviewed'] ?? 0) > 0): ?>
+        <form class="tenant-health-occurrence-reviewbar" method="post" action="<?= View::e(Router::url('/companies/tracking')) ?>">
+            <?= Csrf::input() ?>
+            <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
+            <input type="hidden" name="priority" value="<?= View::e($trackingPriority) ?>">
+            <input type="hidden" name="return_to" value="/companies/health?tenant_id=<?= $tenantId ?>&occurrence_filter=unreviewed#occurrences">
+            <label class="field">
+                <span>Observação da revisão</span>
+                <input name="note" placeholder="Ex.: credencial corrigida e conversa testada.">
+            </label>
+            <div>
+                <button class="btn btn-outline" name="tracking_status" value="reviewed" type="submit">Marcar todas como revisadas</button>
+                <button class="btn btn-primary" name="tracking_status" value="resolved" type="submit">Marcar empresa como corrigida</button>
+            </div>
+            <small>Ao revisar, as marcações antigas desaparecem. Se surgir uma falha nova, a empresa volta automaticamente para Atenção.</small>
+        </form>
+    <?php endif; ?>
+
+    <div class="tenant-health-occurrence-list">
+        <?php foreach ($visibleOccurrences as $occurrence): ?>
+            <article class="tenant-health-occurrence <?= !empty($occurrence['reviewed']) ? 'is-reviewed' : 'is-unreviewed' ?>">
+                <div class="tenant-health-occurrence-icon is-<?= View::e((string) ($occurrence['source'] ?? 'integration')) ?>">
+                    <?= ($occurrence['source'] ?? '') === 'ai' ? 'IA' : 'IN' ?>
+                </div>
+                <div class="tenant-health-occurrence-content">
+                    <header>
+                        <div>
+                            <span class="eyebrow"><?= View::e((string) ($occurrence['source_label'] ?? 'Ocorrência')) ?></span>
+                            <h3><?= View::e((string) ($occurrence['title'] ?? 'Falha registrada')) ?></h3>
+                        </div>
+                        <span class="health-incident-status is-<?= !empty($occurrence['reviewed']) ? 'acknowledged' : 'open' ?>"><?= !empty($occurrence['reviewed']) ? 'Revisada' : 'Não revisada' ?></span>
+                    </header>
+                    <p><?= View::e((string) ($occurrence['message'] ?? '')) ?></p>
+                    <div class="tenant-health-occurrence-meta">
+                        <span><?= View::e((string) ($occurrence['created_at_display'] ?? '')) ?></span>
+                        <code><?= View::e((string) ($occurrence['event'] ?? '')) ?></code>
+                    </div>
+                    <div class="tenant-health-occurrence-actions">
+                        <?php if (!empty($occurrence['related_url'])): ?><a class="btn btn-small btn-primary" href="<?= View::e(Router::url((string) $occurrence['related_url'])) ?>"><?= ($occurrence['source'] ?? '') === 'ai' ? 'Abrir conversa' : 'Abrir integração' ?></a><?php endif; ?>
+                        <?php if (!empty($occurrence['secondary_url'])): ?><a class="btn btn-small btn-outline" href="<?= View::e(Router::url((string) $occurrence['secondary_url'])) ?>">Abrir assistente</a><?php endif; ?>
+                        <?php if (!empty($occurrence['details'])): ?>
+                            <details>
+                                <summary>Ver detalhes técnicos</summary>
+                                <dl>
+                                    <?php foreach ($occurrence['details'] as $label => $value): ?>
+                                        <div><dt><?= View::e((string) $label) ?></dt><dd><?= View::e((string) $value) ?></dd></div>
+                                    <?php endforeach; ?>
+                                </dl>
+                            </details>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </article>
+        <?php endforeach; ?>
+        <?php if (!$visibleOccurrences): ?>
+            <div class="empty-state">
+                <?= $occurrenceFilter === 'unreviewed' ? 'Nenhuma falha aguarda revisão.' : 'Nenhuma ocorrência encontrada neste filtro.' ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
 
 <section class="card tenant-health-incidents" id="incidents">
     <div class="section-heading">

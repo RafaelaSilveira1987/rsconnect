@@ -59,7 +59,7 @@ final class BillingReminderController
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível processar a régua: ' . $exception->getMessage());
         }
-        $this->redirect('/billing-reminders');
+        $this->redirect($this->safeReturnPath((string) ($_POST['return_to'] ?? ''), '/billing-reminders'));
     }
 
 
@@ -85,6 +85,15 @@ final class BillingReminderController
             echo json_encode(['ok' => false, 'error' => $exception->getMessage()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
         exit;
+    }
+
+    private function safeReturnPath(string $path, string $fallback): string
+    {
+        $path = trim($path);
+        if ($path === '' || !str_starts_with($path, '/') || str_starts_with($path, '//')) {
+            return $fallback;
+        }
+        return $path;
     }
 
     private function redirect(string $path): never

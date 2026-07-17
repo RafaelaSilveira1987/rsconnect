@@ -190,7 +190,7 @@ $trackingNote = (string) ($tracking['note'] ?? '');
 
 <?php if (!empty($company['recent_failures'])): ?>
 <section class="card admin-company-failure-card">
-    <div class="section-heading"><div><span class="eyebrow">Falhas recentes</span><h2>IA e integrações</h2></div><a class="table-link" href="<?= View::e(Router::url('/automations')) ?>">Abrir monitoramento do cliente</a></div>
+    <div class="section-heading"><div><span class="eyebrow">Falhas recentes</span><h2>IA e integrações</h2></div><a class="table-link" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId . '&occurrence_filter=unreviewed#occurrences')) ?>">Ver ocorrências e revisar</a></div>
     <div class="admin-company-failure-list">
         <?php foreach ($company['recent_failures'] as $failure): ?><article><span class="admin-health-dot is-warning"></span><div><strong><?= ($failure['source'] ?? '') === 'ia' ? 'Assistente virtual' : 'Integração' ?></strong><p><?= View::e((string) ($failure['message'] ?: $failure['event'])) ?></p></div><time><?= View::e($relative((string) $failure['created_at'])) ?></time></article><?php endforeach; ?>
     </div>

@@ -55,9 +55,10 @@ final class TenantHealthController
             Audit::log('tenant.health.checked', ['tenant_id' => $tenantId], $tenantId);
             Flash::set('success', 'Diagnóstico atualizado. Os problemas normalizados foram resolvidos automaticamente.');
         } catch (Throwable $e) {
-            Flash::set('error', 'Não foi possível concluir a verificação: ' . $e->getMessage());
+            error_log('[TenantHealthController 34.5.3][tenant=' . $tenantId . '] ' . $e->getMessage());
+            Flash::set('error', 'Não foi possível concluir a verificação. O erro técnico foi registrado para análise (código TH-3453).');
         }
-        $this->redirect('/companies/health?tenant_id=' . $tenantId);
+        $this->redirect('/companies/health?tenant_id=' . $tenantId . '#occurrences');
     }
 
     public function incident(): void

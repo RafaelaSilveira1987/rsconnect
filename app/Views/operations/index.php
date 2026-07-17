@@ -7,6 +7,7 @@ use App\Core\View;
 $summary = $data['summary'] ?? [];
 $checks = $data['checks'] ?? [];
 $lastBackup = $data['last_backup'] ?? null;
+$activeBackupRoutine = $data['active_backup_routine'] ?? null;
 $backups = $data['backups'] ?? [];
 $alerts = $data['alerts'] ?? [];
 $incidents = $data['incidents'] ?? [];
@@ -88,6 +89,30 @@ $formatBytes = static function ($bytes): string {
                         <small>Verificado em <?= View::e($check['checked_at'] ?? '') ?><?= isset($check['latency_ms']) && $check['latency_ms'] !== null ? ' · ' . (int) $check['latency_ms'] . 'ms' : '' ?></small>
                     </div>
                     <span class="badge <?= $statusBadge((string) ($check['status'] ?? 'warning')) ?>"><?= $statusLabel((string) ($check['status'] ?? 'warning')) ?></span>
+                    <?php $checkKey = (string) ($check['check_key'] ?? ''); ?>
+                    <?php if ($checkKey === 'billing_cron'): ?>
+                        <form method="post" action="<?= View::e(Router::url('/billing-reminders/run')) ?>">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="return_to" value="/central-operacao?tab=monitoring">
+                            <button class="btn btn-small btn-outline" type="submit">Processar agora</button>
+                        </form>
+                    <?php elseif ($checkKey === 'backup' && !empty($activeBackupRoutine['id'])): ?>
+                        <form method="post" action="<?= View::e(Router::url('/backup-automatico/trigger')) ?>">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="routine_id" value="<?= (int) $activeBackupRoutine['id'] ?>">
+                            <input type="hidden" name="trigger_type" value="manual">
+                            <input type="hidden" name="return_to" value="/central-operacao?tab=monitoring">
+                            <button class="btn btn-small btn-outline" type="submit">Executar backup</button>
+                        </form>
+                    <?php elseif ($checkKey === 'backup'): ?>
+                        <a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/central-operacao?tab=backups')) ?>">Configurar backup</a>
+                    <?php elseif ($checkKey === 'openai'): ?>
+                        <a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/ai-credentials')) ?>">Ver credenciais</a>
+                    <?php elseif ($checkKey === 'n8n'): ?>
+                        <a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/n8n-flows')) ?>">Ver fluxos</a>
+                    <?php elseif ($checkKey === 'evolution'): ?>
+                        <a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/instances')) ?>">Ver WhatsApp</a>
+                    <?php endif; ?>
                 </article>
             <?php endforeach; ?>
             <?php if (!$checks): ?>

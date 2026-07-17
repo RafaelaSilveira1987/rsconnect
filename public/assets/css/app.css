@@ -5998,3 +5998,121 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
     .agent-group-rule-grid { grid-template-columns: 1fr; }
     .agent-group-rule-actions .btn { width: 100%; }
 }
+
+/* ZIP 34.5.2 — ocorrências reais de IA e integrações no diagnóstico */
+.tenant-health-occurrences { scroll-margin-top: 92px; }
+.tenant-health-occurrence-heading { align-items: flex-start; }
+.tenant-health-occurrence-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+.tenant-health-occurrence-summary a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--rs-border);
+  border-radius: 14px;
+  background: #f8fbfd;
+  color: var(--rs-ink);
+  text-decoration: none;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.tenant-health-occurrence-summary a:hover,
+.tenant-health-occurrence-summary a.is-active {
+  border-color: #84cbc2;
+  background: #effbf8;
+  transform: translateY(-1px);
+}
+.tenant-health-occurrence-summary small { color: var(--rs-muted); font-size: .7rem; font-weight: 750; }
+.tenant-health-occurrence-summary strong { font-size: 1.1rem; }
+.tenant-health-occurrence-reviewbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 12px 18px;
+  align-items: end;
+  margin: 14px 0 18px;
+  padding: 15px;
+  border: 1px solid #f0d48d;
+  border-radius: 16px;
+  background: #fffaf0;
+}
+.tenant-health-occurrence-reviewbar > div { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.tenant-health-occurrence-reviewbar > small { grid-column: 1 / -1; color: #75633b; }
+.tenant-health-occurrence-list { display: grid; gap: 12px; }
+.tenant-health-occurrence {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 14px;
+  padding: 15px;
+  border: 1px solid var(--rs-border);
+  border-radius: 16px;
+  background: #fff;
+}
+.tenant-health-occurrence.is-unreviewed { border-color: #eccf80; box-shadow: inset 4px 0 0 #dca824; }
+.tenant-health-occurrence.is-reviewed { opacity: .82; background: #f8fafc; }
+.tenant-health-occurrence-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  font-size: .72rem;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+.tenant-health-occurrence-icon.is-ai { background: #eef0ff; color: #5550a8; }
+.tenant-health-occurrence-icon.is-integration { background: #eaf8ff; color: #19749b; }
+.tenant-health-occurrence-content { min-width: 0; }
+.tenant-health-occurrence-content > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.tenant-health-occurrence-content h3 { margin: 2px 0 0; font-size: .98rem; }
+.tenant-health-occurrence-content > p { margin: 9px 0; color: var(--rs-muted); overflow-wrap: anywhere; }
+.tenant-health-occurrence-meta { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; color: var(--rs-muted); font-size: .72rem; }
+.tenant-health-occurrence-meta code { padding: 4px 7px; border-radius: 8px; background: #f0f4f8; color: #425066; font-size: .68rem; }
+.tenant-health-occurrence-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; margin-top: 12px; }
+.tenant-health-occurrence-actions details { flex: 1 1 100%; overflow: hidden; border: 1px solid var(--rs-border); border-radius: 12px; background: #f8fbfd; }
+.tenant-health-occurrence-actions summary { padding: 9px 11px; cursor: pointer; font-size: .72rem; font-weight: 800; }
+.tenant-health-occurrence-actions dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; background: var(--rs-border); }
+.tenant-health-occurrence-actions dl > div { min-width: 0; padding: 10px 11px; background: #fff; }
+.tenant-health-occurrence-actions dt { color: var(--rs-muted); font-size: .62rem; font-weight: 800; text-transform: uppercase; }
+.tenant-health-occurrence-actions dd { margin: 4px 0 0; overflow-wrap: anywhere; font-size: .74rem; }
+.admin-company-reason-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid #eed58e;
+  border-radius: 999px;
+  background: #fff8df;
+  color: #7d5c08;
+  font-size: .68rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+.admin-company-reason-link:hover { border-color: #d6ad39; background: #fff2c5; }
+@media (max-width: 980px) {
+  .tenant-health-occurrence-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .tenant-health-occurrence-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tenant-health-occurrence-reviewbar { grid-template-columns: 1fr; }
+  .tenant-health-occurrence-reviewbar > div { justify-content: stretch; }
+  .tenant-health-occurrence-reviewbar .btn { flex: 1 1 100%; }
+  .tenant-health-occurrence-reviewbar > small { grid-column: auto; }
+  .tenant-health-occurrence { grid-template-columns: 1fr; }
+  .tenant-health-occurrence-content > header { flex-direction: column; }
+  .tenant-health-occurrence-actions .btn { flex: 1 1 100%; }
+  .tenant-health-occurrence-actions dl { grid-template-columns: 1fr; }
+}
+@media (max-width: 440px) {
+  .tenant-health-occurrence-summary { grid-template-columns: 1fr; }
+}

@@ -50,7 +50,7 @@ final class BackupAutomationController
         $triggerType = (string) ($_POST['trigger_type'] ?? 'manual');
         $result = (new BackupAutomationService())->triggerRoutine($routineId, $triggerType);
         Flash::set(!empty($result['ok']) ? 'success' : 'error', (string) ($result['message'] ?? 'Solicitação processada.'));
-        $this->redirect('/backup-automatico');
+        $this->redirect($this->safeReturnPath((string) ($_POST['return_to'] ?? ''), '/backup-automatico'));
     }
 
     public function toggle(): void
@@ -65,6 +65,15 @@ final class BackupAutomationController
         (new BackupAutomationService())->toggleRoutine($routineId, $status);
         Flash::set('success', 'Status da rotina atualizado.');
         $this->redirect('/backup-automatico');
+    }
+
+    private function safeReturnPath(string $path, string $fallback): string
+    {
+        $path = trim($path);
+        if ($path === '' || !str_starts_with($path, '/') || str_starts_with($path, '//')) {
+            return $fallback;
+        }
+        return $path;
     }
 
     private function redirect(string $path): void

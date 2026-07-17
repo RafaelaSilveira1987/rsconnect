@@ -194,3 +194,20 @@
 - Altera o status do assistente para Atenção quando há conversa aguardando resposta.
 - Adiciona o botão Reprocessar agora na Saúde do cliente.
 - Inclui diagnóstico SQL de timezone e pendências.
+
+## ZIP 34.5.2
+
+- adiciona ocorrências reais de IA e integrações à Saúde e diagnóstico;
+- alinha a tela de diagnóstico aos badges “ainda não revisadas” da listagem de empresas;
+- inclui filtros, detalhes técnicos e links para correção;
+- permite revisar o lote atual ou marcar a empresa como corrigida;
+- torna os badges de falha da listagem de empresas clicáveis;
+- após Verificar agora, direciona para a seção de ocorrências;
+- atualiza cache visual para 34.5.2.
+## ZIP 34.5.3
+
+- Corrigido parâmetro ausente `:seen_at` no sincronismo de incidentes da saúde do cliente.
+- Monitoramento reconhece credenciais de IA por empresa e heartbeat real da régua de cobrança.
+- Ações operacionais adicionadas aos avisos de backup, cobrança, IA, n8n e Evolution.
+- Status técnicos traduzidos para linguagem do usuário.
+

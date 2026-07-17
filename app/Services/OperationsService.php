@@ -27,6 +27,7 @@ final class OperationsService
             ],
             'checks' => $checks,
             'last_backup' => $lastBackup,
+            'active_backup_routine' => $this->activeBackupRoutine(),
             'backups' => $this->backups(),
             'alerts' => $alerts,
             'incidents' => $this->incidents(),
@@ -201,15 +202,32 @@ final class OperationsService
 
     private function checkOpenAi(): array
     {
-        $key = (string) Env::get('OPENAI_API_KEY', '');
-        $base = (string) Env::get('OPENAI_API_BASE_URL', 'https://api.openai.com/v1');
-        if ($key === '') {
-            return ['status' => 'warning', 'message' => 'OPENAI_API_KEY global não configurada. Clientes com chave própria continuam funcionando.', 'latency_ms' => null];
+        $key = trim((string) Env::get('OPENAI_API_KEY', ''));
+        $base = trim((string) Env::get('OPENAI_API_BASE_URL', 'https://api.openai.com/v1'));
+        $activeCredentials = $this->count("SELECT COUNT(*) FROM ai_provider_credentials WHERE status = 'active' AND api_key_encrypted IS NOT NULL AND api_key_encrypted <> ''");
+
+        if ($key === '' && $activeCredentials < 1) {
+            return [
+                'status' => 'warning',
+                'message' => 'Nenhuma credencial ativa de IA foi encontrada. Cadastre uma chave por empresa/assistente ou configure a chave global.',
+                'latency_ms' => null,
+            ];
         }
-        if (!str_starts_with($base, 'https://api.openai.com')) {
-            return ['status' => 'warning', 'message' => 'Base URL da OpenAI parece diferente do endpoint oficial: ' . $base, 'latency_ms' => null];
+
+        if ($key === '' && $activeCredentials > 0) {
+            return [
+                'status' => 'ok',
+                'message' => $activeCredentials . ' credencial(is) ativa(s) por empresa/assistente. A chave global é opcional e não está sendo usada.',
+                'latency_ms' => null,
+            ];
         }
-        return ['status' => 'ok', 'message' => 'Chave global preenchida e base URL conferida.', 'latency_ms' => null];
+
+        if ($base !== '' && !preg_match('#^https?://#i', $base)) {
+            return ['status' => 'warning', 'message' => 'A URL base da IA está inválida ou incompleta: ' . $base, 'latency_ms' => null];
+        }
+
+        $extra = $activeCredentials > 0 ? ' Também existem ' . $activeCredentials . ' credencial(is) por empresa/assistente.' : '';
+        return ['status' => 'ok', 'message' => 'Chave global preenchida e URL base conferida.' . $extra, 'latency_ms' => null];
     }
 
     private function checkWebhooks(): array
@@ -234,15 +252,47 @@ final class OperationsService
 
     private function checkBillingCron(): array
     {
+        $heartbeat = $this->fetchOne(
+            "SELECT status, message, checked_at FROM system_health_checks WHERE check_key = 'billing_cron_heartbeat' ORDER BY id DESC LIMIT 1"
+        );
+
+        if ($heartbeat) {
+            $checkedAt = strtotime((string) ($heartbeat['checked_at'] ?? '')) ?: 0;
+            $status = (string) ($heartbeat['status'] ?? 'warning');
+            if ($checkedAt >= time() - 86400) {
+                return [
+                    'status' => $status === 'down' ? 'warning' : $status,
+                    'message' => (string) (($heartbeat['message'] ?? '') ?: ('Régua executada em ' . ($heartbeat['checked_at'] ?? ''))),
+                    'latency_ms' => null,
+                ];
+            }
+
+            return [
+                'status' => 'warning',
+                'message' => 'A última execução completa da régua ocorreu há mais de 24 horas: ' . ($heartbeat['checked_at'] ?? ''),
+                'latency_ms' => null,
+            ];
+        }
+
         $last = $this->fetchOne("SELECT created_at FROM billing_reminder_logs ORDER BY id DESC LIMIT 1");
         if (!$last) {
-            return ['status' => 'warning', 'message' => 'Nenhuma execução da régua de cobrança registrada ainda.', 'latency_ms' => null];
+            return [
+                'status' => 'warning',
+                'message' => 'Nenhuma execução completa da régua foi registrada. Processe manualmente uma vez e configure o cron diário.',
+                'latency_ms' => null,
+            ];
         }
+
         $createdAt = strtotime((string) ($last['created_at'] ?? '')) ?: 0;
         if ($createdAt < time() - 86400) {
-            return ['status' => 'warning', 'message' => 'Última execução há mais de 24 horas: ' . ($last['created_at'] ?? ''), 'latency_ms' => null];
+            return ['status' => 'warning', 'message' => 'Último aviso da régua registrado há mais de 24 horas: ' . ($last['created_at'] ?? ''), 'latency_ms' => null];
         }
-        return ['status' => 'ok', 'message' => 'Régua executada recentemente: ' . ($last['created_at'] ?? ''), 'latency_ms' => null];
+
+        return [
+            'status' => 'ok',
+            'message' => 'Há atividade recente da régua: ' . ($last['created_at'] ?? '') . '. Execute o processamento atualizado para registrar o heartbeat completo.',
+            'latency_ms' => null,
+        ];
     }
 
     private function checkBackupAge(): array
@@ -419,6 +469,17 @@ final class OperationsService
     private function lastBackup(): ?array
     {
         return $this->fetchOne('SELECT * FROM system_backups ORDER BY id DESC LIMIT 1');
+    }
+
+    private function activeBackupRoutine(): ?array
+    {
+        try {
+            return $this->fetchOne(
+                "SELECT id, name, status, last_success_at, last_error FROM operations_backup_routines WHERE status = 'active' ORDER BY id DESC LIMIT 1"
+            );
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private function backups(): array

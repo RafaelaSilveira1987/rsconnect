@@ -101,7 +101,14 @@ $subscriptionLabel = static fn (string $status): string => match ($status) {
             <div class="admin-company-card-footer">
                 <div class="admin-company-reasons">
                     <?php if (!empty($company['attention_reasons'])): ?>
-                        <?php foreach (array_slice((array) $company['attention_reasons'], 0, 2) as $reason): ?><span><?= View::e((string) $reason) ?></span><?php endforeach; ?>
+                        <?php foreach (array_slice((array) $company['attention_reasons'], 0, 2) as $reason): ?>
+                            <?php $reasonText = (string) $reason; $isFailureReason = str_contains($reasonText, 'falha(s) de IA') || str_contains($reasonText, 'falha(s) de integração'); ?>
+                            <?php if ($isFailureReason): ?>
+                                <a class="admin-company-reason-link" href="<?= View::e(Router::url('/companies/health?tenant_id=' . (int) $company['id'] . '&occurrence_filter=unreviewed#occurrences')) ?>"><?= View::e($reasonText) ?></a>
+                            <?php else: ?>
+                                <span><?= View::e($reasonText) ?></span>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
                         <?php if ((int) $company['attention_count'] > 2): ?><small>+<?= (int) $company['attention_count'] - 2 ?> ponto(s) para revisar</small><?php endif; ?>
                     <?php else: ?>
                         <span class="is-ok">Configurações principais em ordem.</span>

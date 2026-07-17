@@ -182,12 +182,40 @@ final class BillingReminderService
             }
         }
 
-        return [
+        $result = [
             'created' => $created,
             'dispatched' => $dispatched,
             'ignored' => $ignored,
             'errors' => $errors,
         ];
+        $this->recordExecutionHeartbeat($result);
+        return $result;
+    }
+
+    private function recordExecutionHeartbeat(array $result): void
+    {
+        try {
+            $errors = is_array($result['errors'] ?? null) ? $result['errors'] : [];
+            $status = $errors === [] ? 'ok' : 'warning';
+            $message = sprintf(
+                'Régua processada: %d aviso(s) criado(s), %d enviado(s), %d ignorado(s)%s',
+                (int) ($result['created'] ?? 0),
+                (int) ($result['dispatched'] ?? 0),
+                (int) ($result['ignored'] ?? 0),
+                $errors !== [] ? '; ' . count($errors) . ' erro(s).' : '.'
+            );
+            Database::connection()->prepare(
+                'INSERT INTO system_health_checks (check_key, label, status, message, latency_ms, checked_at)
+                 VALUES (:check_key, :label, :status, :message, NULL, NOW())'
+            )->execute([
+                'check_key' => 'billing_cron_heartbeat',
+                'label' => 'Execução da régua de cobrança',
+                'status' => $status,
+                'message' => $message,
+            ]);
+        } catch (Throwable) {
+            // A régua continua funcionando mesmo em instalações sem a tabela de monitoramento.
+        }
     }
 
     private function invoicesForRule(array $rule): array

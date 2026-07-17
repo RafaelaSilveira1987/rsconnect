@@ -13,6 +13,12 @@ $statusToBadge = static fn (string $status): string => match ($status) {
     'blocked' => 'badge-danger',
     default => 'badge-info',
 };
+$statusText = static fn (string $status): string => match ($status) {
+    'ok' => 'Operando',
+    'warning' => 'Atenção',
+    'blocked' => 'Bloqueado',
+    default => 'Informação',
+};
 $metrics = $dashboard['metrics'] ?? [];
 ?>
 
@@ -47,7 +53,7 @@ $metrics = $dashboard['metrics'] ?? [];
                         <small><?= View::e($check['message'] ?? '') ?></small>
                         <p><?= View::e($check['action'] ?? '') ?></p>
                     </div>
-                    <span class="badge <?= $statusToBadge((string) ($check['status'] ?? 'warning')) ?>"><?= View::e($check['status'] ?? '') ?></span>
+                    <span class="badge <?= $statusToBadge((string) ($check['status'] ?? 'warning')) ?>"><?= View::e($statusText((string) ($check['status'] ?? 'warning'))) ?></span>
                 </div>
             <?php endforeach; ?>
         </div>
