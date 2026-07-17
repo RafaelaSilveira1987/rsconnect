@@ -216,6 +216,48 @@ final class TenantModuleService
                 'is_enabled' => $isEnabled,
             ]);
         }
+        unset(self::$settingsCache[$tenantId]);
+    }
+
+    /**
+     * Permite ao administrador da empresa organizar apenas a navegação.
+     * O acesso técnico continua sendo definido pelo Admin RS.
+     *
+     * @param array<int,string> $visibleModules
+     */
+    public function saveVisibility(int $tenantId, array $visibleModules): void
+    {
+        if ($tenantId < 1 || !$this->tableExists('tenant_module_settings')) {
+            return;
+        }
+
+        $current = $this->settingsForTenant($tenantId);
+        $statement = Database::connection()->prepare(
+            'INSERT INTO tenant_module_settings (tenant_id, module_key, is_visible, is_enabled)
+             VALUES (:tenant_id, :module_key, :is_visible, :is_enabled)
+             ON DUPLICATE KEY UPDATE
+                is_visible = VALUES(is_visible),
+                updated_at = CURRENT_TIMESTAMP'
+        );
+
+        foreach (self::modules() as $moduleKey => $module) {
+            $mandatory = in_array($moduleKey, ['dashboard', 'company_settings'], true);
+            $isEnabled = $mandatory
+                ? 1
+                : (int) (($current[$moduleKey]['is_enabled'] ?? null) ?? ($module['default_enabled'] ?? true));
+            $isVisible = $mandatory || in_array($moduleKey, $visibleModules, true) ? 1 : 0;
+            if ($isEnabled === 0) {
+                $isVisible = 0;
+            }
+            $statement->execute([
+                'tenant_id' => $tenantId,
+                'module_key' => $moduleKey,
+                'is_visible' => $isVisible,
+                'is_enabled' => $isEnabled,
+            ]);
+        }
+
+        unset(self::$settingsCache[$tenantId]);
     }
 
     public function moduleForPath(string $path): ?string

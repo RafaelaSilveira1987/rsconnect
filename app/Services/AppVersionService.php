@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'ZIP 33.1';
+    public const PACKAGE_LABEL = 'ZIP 33.2';
     public const REQUIRED_MIGRATION = '036_security_access_enforcement.sql';
 
     private PDO $pdo;
@@ -77,7 +77,7 @@ final class AppVersionService
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
-            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 33.1 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
+            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 33.2 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
             'Rodar as migrations pendentes até a 036, conforme o pacote implantado.'
         );
 

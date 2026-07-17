@@ -237,6 +237,33 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
         </div>
     </details>
 
+    <details class="card client-settings-accordion client-menu-preferences" id="my-menu-settings">
+        <summary><span><span class="eyebrow">Meu menu</span><strong>Organizar módulos visíveis</strong><small>Escolha quais atalhos sua equipe verá na navegação.</small></span><span class="drawer-chevron"></span></summary>
+        <div class="client-settings-accordion-body">
+            <input type="hidden" name="module_settings_submitted" value="1">
+            <div class="client-menu-preferences-note">
+                <strong>Isso altera apenas a organização do menu.</strong>
+                <span>As permissões e os módulos contratados continuam sendo definidos pela RS Connect. Itens obrigatórios não podem ser ocultados.</span>
+            </div>
+            <div class="client-menu-preferences-grid">
+                <?php foreach (($availableModules ?? []) as $moduleKey => $module): ?>
+                    <?php
+                    $isVisible = (bool) (($moduleSettings[$moduleKey]['is_visible'] ?? null) ?? ($module['default_visible'] ?? true));
+                    $isEnabled = (bool) (($moduleSettings[$moduleKey]['is_enabled'] ?? null) ?? ($module['default_enabled'] ?? true));
+                    $locked = in_array($moduleKey, ['dashboard', 'company_settings'], true);
+                    if (!$isEnabled && !$locked) { continue; }
+                    ?>
+                    <label class="client-menu-option <?= $isVisible ? 'is-visible' : '' ?> <?= $locked ? 'is-locked' : '' ?>">
+                        <input type="checkbox" name="module_visible[]" value="<?= View::e($moduleKey) ?>" <?= $isVisible ? 'checked' : '' ?> <?= $locked ? 'disabled' : '' ?>>
+                        <span><strong><?= View::e($module['label']) ?></strong><small><?= View::e($module['description']) ?></small></span>
+                        <em><?= $locked ? 'Obrigatório' : 'Mostrar' ?></em>
+                        <?php if ($locked): ?><input type="hidden" name="module_visible[]" value="<?= View::e($moduleKey) ?>"><?php endif; ?>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </details>
+
     <details class="card client-settings-accordion client-account-details">
         <summary><span><span class="eyebrow">Conta</span><strong>Informações do plano</strong><small>Dados internos da sua conta no RS Connect.</small></span><span class="drawer-chevron"></span></summary>
         <div class="client-settings-accordion-body readonly-grid">

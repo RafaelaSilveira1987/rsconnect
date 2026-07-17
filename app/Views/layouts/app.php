@@ -107,7 +107,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=33.1')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=33.2')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -160,11 +160,7 @@ $svgIcon = static function (string $name): string {
                 <a class="nav-link<?= $isActive('/payment-gateways') ?>" href="<?= View::e(Router::url('/payment-gateways')) ?>"><?= $svgIcon('card') ?><span>Gateways de pagamento</span></a>
                 <a class="nav-link<?= $isActive('/billing-reminders') ?>" href="<?= View::e(Router::url('/billing-reminders')) ?>"><?= $svgIcon('bell') ?><span>Régua de cobrança</span></a>
                 <a class="nav-link<?= $isActive('/implementation') ?>" href="<?= View::e(Router::url('/implementation')) ?>"><?= $svgIcon('implementation') ?><span>Implantação</span></a>
-                <a class="nav-link<?= $isActive('/security') ?>" href="<?= View::e(Router::url('/security')) ?>"><?= $svgIcon('security') ?><span>Segurança</span></a>
-                <a class="nav-link<?= $isActive('/operations') ?>" href="<?= View::e(Router::url('/operations')) ?>"><?= $svgIcon('operations') ?><span>Monitoramento</span></a>
-                <a class="nav-link<?= $isAnyActive(['/backup-automatico', '/operations/backups/automation']) ?>" href="<?= View::e(Router::url('/backup-automatico')) ?>"><?= $svgIcon('operations') ?><span>Backup automático</span></a>
-                <a class="nav-link<?= $isActive('/beta-comercial') ?>" href="<?= View::e(Router::url('/beta-comercial')) ?>"><?= $svgIcon('rocket') ?><span>Beta 1.0</span></a>
-                <a class="nav-link<?= $isActive('/status-sistema') ?>" href="<?= View::e(Router::url('/status-sistema')) ?>"><?= $svgIcon('status') ?><span>Status do sistema</span></a>
+                <a class="nav-link<?= $isAnyActive(['/central-operacao', '/security', '/seguranca', '/operations', '/monitoramento', '/backup-automatico', '/operations/backups/automation', '/beta-comercial', '/status-sistema']) ?>" href="<?= View::e(Router::url('/central-operacao')) ?>"><?= $svgIcon('operations') ?><span>Central de operação</span></a>
                 <a class="nav-link<?= $isActive('/ajuda') ?>" href="<?= View::e(Router::url('/ajuda')) ?>"><?= $svgIcon('help') ?><span>Central de ajuda</span></a>
                 <a class="nav-link<?= $isActive('/privacy') ?>" href="<?= View::e(Router::url('/privacy')) ?>"><?= $svgIcon('privacy') ?><span>Privacidade/LGPD</span></a>
             <?php endif; ?>
@@ -243,6 +239,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=33.1')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=33.2')) ?>" defer></script>
 </body>
 </html>

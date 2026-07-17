@@ -11,6 +11,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AccessControlService;
+use App\Services\PaymentGatewayService;
 use App\Services\SubscriptionService;
 use PDO;
 use Throwable;
@@ -54,6 +55,11 @@ final class BillingController
              LIMIT 120'
         )->fetchAll(PDO::FETCH_ASSOC);
 
+        $paymentGateways = array_values(array_filter(
+            (new PaymentGatewayService())->gateways(),
+            static fn (array $gateway): bool => ($gateway['status'] ?? '') === 'active'
+        ));
+
         $accessService = new AccessControlService();
         foreach ($tenants as &$tenant) {
             $tenant['access_status'] = $accessService->statusForTenant((int) $tenant['id']);
@@ -68,6 +74,8 @@ final class BillingController
             'limitLabels' => SubscriptionService::LIMIT_LABELS,
             'selectedTenantId' => (int) ($_GET['tenant_id'] ?? 0),
             'autoEditSubscription' => isset($_GET['edit_subscription']),
+            'paymentGateways' => $paymentGateways,
+            'paymentMethodLabels' => PaymentGatewayService::METHOD_LABELS,
         ]);
     }
 

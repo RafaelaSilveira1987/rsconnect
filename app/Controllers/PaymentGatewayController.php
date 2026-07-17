@@ -152,9 +152,13 @@ final class PaymentGatewayController
         $invoiceId = (int) ($_POST['invoice_id'] ?? 0);
         $gatewayId = (int) ($_POST['gateway_id'] ?? 0);
         $paymentMethod = (string) ($_POST['payment_method'] ?? '');
+        $returnTo = (string) ($_POST['return_to'] ?? '/payment-gateways');
+        if (!in_array($returnTo, ['/billing', '/payment-gateways'], true)) {
+            $returnTo = '/payment-gateways';
+        }
         if ($invoiceId < 1) {
             Flash::set('error', 'Cobrança inválida.');
-            $this->redirect('/payment-gateways');
+            $this->redirect($returnTo);
         }
 
         try {
@@ -165,7 +169,7 @@ final class PaymentGatewayController
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível gerar link de pagamento: ' . $exception->getMessage());
         }
-        $this->redirect('/payment-gateways');
+        $this->redirect($returnTo);
     }
 
     public function webhookAsaas(): void
