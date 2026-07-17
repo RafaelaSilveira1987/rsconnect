@@ -24,7 +24,7 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
         <h2><?= View::e($company['name']) ?></h2>
         <p>Esses dados identificam a empresa dentro do RS Connect e serão usados nos módulos de atendimento e automação.</p>
     </div>
-    <?php if (Auth::isSuperAdmin()): ?><a class="btn btn-light" href="<?= View::e(Router::url('/companies')) ?>">Voltar às empresas</a><?php endif; ?>
+    <?php if (Auth::isSuperAdmin()): ?><div class="hero-actions"><a class="btn btn-light" href="#company-module-settings">Menus do cliente</a><a class="btn btn-light" href="<?= View::e(Router::url('/companies')) ?>">Voltar às empresas</a></div><?php endif; ?>
 </div>
 
 <form class="card form-card-wide" method="post" action="<?= View::e(Router::url('/company-settings')) ?>">
@@ -96,12 +96,13 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
         <p class="form-help">Você pode usar variáveis nas mensagens: <code>{{nome}}</code>, <code>{{data}}</code>, <code>{{hora}}</code>, <code>{{local}}</code>, <code>{{modalidade}}</code>, <code>{{dia_preferido}}</code> e <code>{{horario_preferido}}</code>.</p>
     </section>
 
-    <section class="settings-block">
+    <section class="settings-block admin-client-menu-settings" id="company-module-settings">
+        <input type="hidden" name="module_settings_submitted" value="1">
         <div class="section-heading compact">
             <div>
-                <span class="eyebrow">Módulos e menus</span>
-                <h2>Exibir ou ocultar recursos da empresa</h2>
-                <p>Controle o que aparece no menu e bloqueie o acesso direto às rotas dos módulos desativados.</p>
+                <span class="eyebrow">Menus do cliente</span>
+                <h2>Escolha o que a empresa verá e poderá acessar</h2>
+                <p><strong>Mostrar no menu</strong> controla a navegação. <strong>Permitir acesso</strong> também bloqueia a abertura direta do módulo.</p>
             </div>
         </div>
         <div class="module-settings-grid">
@@ -233,23 +234,6 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
                 <label class="field"><span>Mensagem quando o horário não for aceito</span><textarea name="pre_schedule_rejected_message" rows="3"><?= View::e($preScheduleSettings['rejected_message'] ?? '') ?></textarea></label>
                 <label class="field"><span>Mensagem para remarcar</span><textarea name="pre_schedule_reschedule_message" rows="3"><?= View::e($preScheduleSettings['reschedule_message'] ?? '') ?></textarea></label>
             </div>
-        </div>
-    </details>
-
-    <details class="card client-settings-accordion">
-        <summary><span><span class="eyebrow">Organização</span><strong>Recursos disponíveis no menu</strong><small>Escolha o que sua equipe verá e poderá acessar.</small></span><span class="drawer-chevron"></span></summary>
-        <div class="client-settings-accordion-body module-settings-grid">
-            <?php foreach (($availableModules ?? []) as $moduleKey => $module): ?>
-                <?php $isVisible = (bool) (($moduleSettings[$moduleKey]['is_visible'] ?? null) ?? ($module['default_visible'] ?? true)); $isEnabled = (bool) (($moduleSettings[$moduleKey]['is_enabled'] ?? null) ?? ($module['default_enabled'] ?? true)); $locked = in_array($moduleKey, ['dashboard', 'company_settings'], true); ?>
-                <article class="module-setting-card <?= $isEnabled ? 'is-enabled' : 'is-disabled' ?>">
-                    <div><strong><?= View::e($module['label']) ?></strong><small><?= View::e($module['description']) ?></small></div>
-                    <div class="module-setting-actions">
-                        <label><input type="checkbox" name="module_visible[]" value="<?= View::e($moduleKey) ?>" <?= $isVisible ? 'checked' : '' ?> <?= $locked ? 'disabled' : '' ?>> Mostrar no menu</label>
-                        <label><input type="checkbox" name="module_enabled[]" value="<?= View::e($moduleKey) ?>" <?= $isEnabled ? 'checked' : '' ?> <?= $locked ? 'disabled' : '' ?>> Permitir acesso</label>
-                        <?php if ($locked): ?><input type="hidden" name="module_visible[]" value="<?= View::e($moduleKey) ?>"><input type="hidden" name="module_enabled[]" value="<?= View::e($moduleKey) ?>"><?php endif; ?>
-                    </div>
-                </article>
-            <?php endforeach; ?>
         </div>
     </details>
 

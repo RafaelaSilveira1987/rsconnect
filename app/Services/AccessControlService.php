@@ -11,7 +11,7 @@ use Throwable;
 
 final class AccessControlService
 {
-    public const VERSION = '33.0-access-enforcement';
+    public const VERSION = '33.1-access-enforcement';
 
     public function statusForTenant(int $tenantId): array
     {

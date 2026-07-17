@@ -10,6 +10,7 @@ use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\AccessControlService;
 use App\Services\SubscriptionService;
 use PDO;
 use Throwable;
@@ -28,8 +29,10 @@ final class BillingController
 
         $tenants = $pdo->query(
             'SELECT t.id, t.name, t.plan, t.status,
-                    ts.id AS subscription_id, ts.billing_status, ts.current_period_ends_at, ts.next_billing_at,
-                    sp.name AS plan_name, sp.plan_key, ts.amount
+                    ts.id AS subscription_id, ts.plan_id, ts.billing_cycle, ts.billing_status,
+                    ts.starts_at, ts.trial_ends_at, ts.current_period_starts_at,
+                    ts.current_period_ends_at, ts.next_billing_at, ts.amount, ts.notes,
+                    sp.name AS plan_name, sp.plan_key
              FROM tenants t
              LEFT JOIN tenant_subscriptions ts ON ts.id = (
                 SELECT ts2.id FROM tenant_subscriptions ts2
@@ -51,12 +54,20 @@ final class BillingController
              LIMIT 120'
         )->fetchAll(PDO::FETCH_ASSOC);
 
+        $accessService = new AccessControlService();
+        foreach ($tenants as &$tenant) {
+            $tenant['access_status'] = $accessService->statusForTenant((int) $tenant['id']);
+        }
+        unset($tenant);
+
         View::render('billing.index', [
             'title' => 'Planos e cobrança',
             'plans' => $plans,
             'tenants' => $tenants,
             'invoices' => $invoices,
             'limitLabels' => SubscriptionService::LIMIT_LABELS,
+            'selectedTenantId' => (int) ($_GET['tenant_id'] ?? 0),
+            'autoEditSubscription' => isset($_GET['edit_subscription']),
         ]);
     }
 
@@ -155,6 +166,7 @@ final class BillingController
 
     public function saveSubscription(): void
     {
+        $subscriptionId = (int) ($_POST['subscription_id'] ?? 0);
         $tenantId = (int) ($_POST['tenant_id'] ?? 0);
         $planId = (int) ($_POST['plan_id'] ?? 0);
         $billingStatus = (string) ($_POST['billing_status'] ?? 'active');
@@ -173,53 +185,114 @@ final class BillingController
         if (!in_array($billingCycle, ['monthly', 'quarterly', 'semiannual', 'annual'], true)) {
             $billingCycle = 'monthly';
         }
+        if ($currentPeriodEndsAt < $currentPeriodStartsAt) {
+            Flash::set('error', 'O fim da vigência não pode ser anterior ao início do período.');
+            $this->redirect('/billing?tenant_id=' . $tenantId . '&edit_subscription=1');
+        }
+        if ($billingStatus === 'trialing' && $trialEndsAt !== null && $trialEndsAt < $currentPeriodStartsAt) {
+            Flash::set('error', 'O fim do teste não pode ser anterior ao início do período.');
+            $this->redirect('/billing?tenant_id=' . $tenantId . '&edit_subscription=1');
+        }
 
         $pdo = Database::connection();
         try {
             $pdo->beginTransaction();
-            $old = $pdo->prepare('UPDATE tenant_subscriptions SET billing_status = "canceled", cancel_at = NOW() WHERE tenant_id = :tenant_id AND billing_status IN ("trialing", "active", "overdue", "suspended")');
-            $old->execute(['tenant_id' => $tenantId]);
+            $action = 'billing.subscription_created';
 
-            $statement = $pdo->prepare(
-                'INSERT INTO tenant_subscriptions
-                    (tenant_id, plan_id, billing_cycle, billing_status, starts_at, trial_ends_at,
-                     current_period_starts_at, current_period_ends_at, next_billing_at, amount, notes)
-                 VALUES
-                    (:tenant_id, :plan_id, :billing_cycle, :billing_status, :starts_at, :trial_ends_at,
-                     :current_period_starts_at, :current_period_ends_at, :next_billing_at, :amount, :notes)'
-            );
-            $statement->execute([
-                'tenant_id' => $tenantId,
-                'plan_id' => $planId,
-                'billing_cycle' => $billingCycle,
-                'billing_status' => $billingStatus,
-                'starts_at' => $currentPeriodStartsAt,
-                'trial_ends_at' => $trialEndsAt,
-                'current_period_starts_at' => $currentPeriodStartsAt,
-                'current_period_ends_at' => $currentPeriodEndsAt,
-                'next_billing_at' => $nextBillingAt,
-                'amount' => $amount,
-                'notes' => $notes !== '' ? $notes : null,
-            ]);
-            $subscriptionId = (int) $pdo->lastInsertId();
+            if ($subscriptionId > 0) {
+                $existing = $pdo->prepare('SELECT id, tenant_id FROM tenant_subscriptions WHERE id = :id LIMIT 1 FOR UPDATE');
+                $existing->execute(['id' => $subscriptionId]);
+                $current = $existing->fetch(PDO::FETCH_ASSOC);
+                if (!$current || (int) $current['tenant_id'] !== $tenantId) {
+                    throw new \RuntimeException('A assinatura selecionada não pertence à empresa informada.');
+                }
+
+                $statement = $pdo->prepare(
+                    'UPDATE tenant_subscriptions
+                     SET plan_id = :plan_id,
+                         billing_cycle = :billing_cycle,
+                         billing_status = :billing_status,
+                         starts_at = :starts_at,
+                         trial_ends_at = :trial_ends_at,
+                         current_period_starts_at = :current_period_starts_at,
+                         current_period_ends_at = :current_period_ends_at,
+                         next_billing_at = :next_billing_at,
+                         amount = :amount,
+                         notes = :notes,
+                         cancel_at = CASE WHEN :reactivated = 1 THEN NULL ELSE cancel_at END
+                     WHERE id = :id'
+                );
+                $statement->execute([
+                    'plan_id' => $planId,
+                    'billing_cycle' => $billingCycle,
+                    'billing_status' => $billingStatus,
+                    'starts_at' => $currentPeriodStartsAt,
+                    'trial_ends_at' => $trialEndsAt,
+                    'current_period_starts_at' => $currentPeriodStartsAt,
+                    'current_period_ends_at' => $currentPeriodEndsAt,
+                    'next_billing_at' => $nextBillingAt,
+                    'amount' => $amount,
+                    'notes' => $notes !== '' ? $notes : null,
+                    'reactivated' => in_array($billingStatus, ['trialing', 'active', 'overdue'], true) ? 1 : 0,
+                    'id' => $subscriptionId,
+                ]);
+                $action = 'billing.subscription_updated';
+            } else {
+                $old = $pdo->prepare('UPDATE tenant_subscriptions SET billing_status = "canceled", cancel_at = NOW() WHERE tenant_id = :tenant_id AND billing_status IN ("trialing", "active", "overdue", "suspended")');
+                $old->execute(['tenant_id' => $tenantId]);
+
+                $statement = $pdo->prepare(
+                    'INSERT INTO tenant_subscriptions
+                        (tenant_id, plan_id, billing_cycle, billing_status, starts_at, trial_ends_at,
+                         current_period_starts_at, current_period_ends_at, next_billing_at, amount, notes)
+                     VALUES
+                        (:tenant_id, :plan_id, :billing_cycle, :billing_status, :starts_at, :trial_ends_at,
+                         :current_period_starts_at, :current_period_ends_at, :next_billing_at, :amount, :notes)'
+                );
+                $statement->execute([
+                    'tenant_id' => $tenantId,
+                    'plan_id' => $planId,
+                    'billing_cycle' => $billingCycle,
+                    'billing_status' => $billingStatus,
+                    'starts_at' => $currentPeriodStartsAt,
+                    'trial_ends_at' => $trialEndsAt,
+                    'current_period_starts_at' => $currentPeriodStartsAt,
+                    'current_period_ends_at' => $currentPeriodEndsAt,
+                    'next_billing_at' => $nextBillingAt,
+                    'amount' => $amount,
+                    'notes' => $notes !== '' ? $notes : null,
+                ]);
+                $subscriptionId = (int) $pdo->lastInsertId();
+            }
 
             $planKey = $pdo->prepare('SELECT plan_key FROM saas_plans WHERE id = :id');
             $planKey->execute(['id' => $planId]);
             $tenantPlan = (string) ($planKey->fetchColumn() ?: 'custom');
-            $status = $billingStatus === 'suspended' ? 'suspended' : 'active';
+            $tenantStatus = $billingStatus === 'suspended' ? 'suspended' : 'active';
             $tenantUpdate = $pdo->prepare('UPDATE tenants SET plan = :plan, status = :status WHERE id = :id');
-            $tenantUpdate->execute(['plan' => $tenantPlan, 'status' => $status, 'id' => $tenantId]);
+            $tenantUpdate->execute(['plan' => $tenantPlan, 'status' => $tenantStatus, 'id' => $tenantId]);
 
             $pdo->commit();
-            Audit::log('billing.subscription_created', ['subscription_id' => $subscriptionId, 'plan_id' => $planId], $tenantId);
-            Flash::set('success', 'Assinatura da empresa atualizada.');
+            Audit::log($action, [
+                'subscription_id' => $subscriptionId,
+                'plan_id' => $planId,
+                'billing_status' => $billingStatus,
+                'current_period_ends_at' => $currentPeriodEndsAt,
+            ], $tenantId);
+
+            $accessStatus = (new AccessControlService())->statusForTenant($tenantId);
+            if (!empty($accessStatus['allowed'])) {
+                Flash::set('success', 'Vigência atualizada e acesso da empresa liberado.');
+            } else {
+                Flash::set('warning', 'A vigência foi atualizada, mas o acesso continua bloqueado: ' . (string) ($accessStatus['message'] ?? 'revise as cobranças e o status da assinatura.'));
+            }
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             Flash::set('error', 'Não foi possível atualizar assinatura: ' . $exception->getMessage());
         }
-        $this->redirect('/billing');
+        $this->redirect('/billing?tenant_id=' . $tenantId);
     }
 
     public function createInvoice(): void

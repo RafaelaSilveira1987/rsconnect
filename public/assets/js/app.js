@@ -817,6 +817,52 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   setupSimpleDrawer({drawer:'n8n-flow-drawer',form:'[data-n8n-form]',buttons:'[data-n8n-open]',attr:'data-n8n-field',fill:({button,drawer,form,field})=>{form.reset();field('id').value='0';field('status').value='active';form.querySelectorAll('input[name="events[]"]').forEach((input)=>{input.checked=input.value==='*';});const edit=button.dataset.n8nOpen==='edit';if(edit){field('id').value=button.dataset.id||'0';field('tenant_id').value=button.dataset.tenantId||'';field('flow_key').value=button.dataset.flowKey||'';field('name').value=button.dataset.name||'';field('description').value=button.dataset.description||'';field('status').value=button.dataset.status||'active';try{const events=JSON.parse(decodeURIComponent(button.dataset.events||'%5B%5D'));form.querySelectorAll('input[name="events[]"]').forEach((input)=>input.checked=events.includes(input.value));}catch(e){} drawer.querySelector('[data-n8n-eyebrow]').textContent='Editar fluxo';drawer.querySelector('[data-n8n-title]').textContent=button.dataset.name||'Atualizar automação';drawer.querySelector('[data-n8n-description]').textContent='A URL e o token atuais serão mantidos quando os campos ficarem vazios.';drawer.querySelector('[data-n8n-url-hint]').textContent='Deixe em branco para manter a URL atual.';drawer.querySelector('[data-n8n-submit]').textContent='Salvar alterações';}else{drawer.querySelector('[data-n8n-eyebrow]').textContent='Novo fluxo';drawer.querySelector('[data-n8n-title]').textContent='Configurar automação';drawer.querySelector('[data-n8n-description]').textContent='Defina a empresa, o webhook e quando este fluxo deve ser acionado.';drawer.querySelector('[data-n8n-url-hint]').textContent='Obrigatória no primeiro cadastro.';drawer.querySelector('[data-n8n-submit]').textContent='Salvar fluxo';}}});
   setupSimpleDrawer({drawer:'plan-drawer',form:'[data-plan-form]',buttons:'[data-plan-open]',attr:'data-plan-field',fill:({button,drawer,form,field})=>{form.reset();field('id').value='0';field('status').value='active';field('sort_order').value='50';form.querySelectorAll('[data-plan-limit]').forEach((input)=>input.value='');const edit=button.dataset.planOpen==='edit';if(edit){field('id').value=button.dataset.id||'0';field('plan_key').value=button.dataset.planKey||'';field('name').value=button.dataset.name||'';field('description').value=button.dataset.description||'';field('monthly_price').value=button.dataset.price||'';field('status').value=button.dataset.status||'active';field('sort_order').value=button.dataset.sortOrder||'50';field('features').value=decodeURIComponent(button.dataset.features||'');try{const limits=JSON.parse(decodeURIComponent(button.dataset.limits||'%7B%7D'));Object.entries(limits).forEach(([key,value])=>{const input=form.querySelector(`[data-plan-limit="${CSS.escape(key)}"]`);if(input)input.value=value??'';});}catch(e){}drawer.querySelector('[data-plan-eyebrow]').textContent='Editar plano';drawer.querySelector('[data-plan-title]').textContent=button.dataset.name||'Atualizar plano';drawer.querySelector('[data-plan-submit]').textContent='Salvar alterações';}else{drawer.querySelector('[data-plan-eyebrow]').textContent='Novo plano';drawer.querySelector('[data-plan-title]').textContent='Criar pacote comercial';drawer.querySelector('[data-plan-submit]').textContent='Salvar plano';}}});
+  setupSimpleDrawer({drawer:'subscription-drawer',form:'[data-subscription-form]',buttons:'[data-subscription-open]',attr:'data-subscription-field',fill:({button,drawer,form,field})=>{
+    form.reset();
+    field('subscription_id').value='0';
+    field('billing_status').value='active';
+    field('billing_cycle').value='monthly';
+    const now=new Date();
+    const pad=(value)=>String(value).padStart(2,'0');
+    const first=`${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
+    const lastDate=new Date(now.getFullYear(),now.getMonth()+1,0);
+    const last=`${lastDate.getFullYear()}-${pad(lastDate.getMonth()+1)}-${pad(lastDate.getDate())}`;
+    field('current_period_starts_at').value=first;
+    field('current_period_ends_at').value=last;
+    const note=drawer.querySelector('[data-subscription-access-note]');
+    if(note){note.hidden=true;note.textContent='';}
+    const edit=button.dataset.subscriptionOpen==='edit';
+    if(edit){
+      field('subscription_id').value=button.dataset.subscriptionId||'0';
+      field('tenant_id').value=button.dataset.tenantId||'';
+      field('plan_id').value=button.dataset.planId||'';
+      field('billing_status').value=button.dataset.billingStatus||'active';
+      field('billing_cycle').value=button.dataset.billingCycle||'monthly';
+      field('amount').value=button.dataset.amount||'';
+      field('current_period_starts_at').value=button.dataset.periodStart||first;
+      field('current_period_ends_at').value=button.dataset.periodEnd||last;
+      field('next_billing_at').value=button.dataset.nextBilling||'';
+      field('trial_ends_at').value=button.dataset.trialEnd||'';
+      field('notes').value=decodeURIComponent(button.dataset.notes||'');
+      drawer.querySelector('[data-subscription-eyebrow]').textContent='Editar vigência';
+      drawer.querySelector('[data-subscription-title]').textContent=button.dataset.tenantName||'Atualizar assinatura';
+      drawer.querySelector('[data-subscription-description]').textContent='Altere a data final, o plano ou a situação e salve para recalcular o acesso imediatamente.';
+      drawer.querySelector('[data-subscription-submit]').textContent='Salvar e recalcular acesso';
+      const accessMessage=decodeURIComponent(button.dataset.accessMessage||'');
+      if(note&&accessMessage){note.textContent=accessMessage;note.hidden=false;}
+    }else{
+      drawer.querySelector('[data-subscription-eyebrow]').textContent='Nova assinatura';
+      drawer.querySelector('[data-subscription-title]').textContent='Vincular plano';
+      drawer.querySelector('[data-subscription-description]').textContent='Defina o plano e o primeiro período de acesso da empresa.';
+      drawer.querySelector('[data-subscription-submit]').textContent='Salvar assinatura';
+    }
+  }});
+  const autoSubscription=document.querySelector('[data-subscription-auto-open="1"]');
+  if(autoSubscription){
+    document.querySelector('[data-tab-target="subscriptions"]')?.click();
+    window.setTimeout(()=>autoSubscription.click(),40);
+  }
+
   document.querySelectorAll('[data-invoice-open]').forEach((button)=>button.addEventListener('click',()=>{const form=document.querySelector('[data-invoice-form]');if(!form)return;form.querySelector('[data-invoice-field="tenant_id"]').value=button.dataset.tenantId||'';form.querySelector('[data-invoice-field="subscription_id"]').value=button.dataset.subscriptionId||'';form.querySelector('[data-invoice-field="amount"]').value=button.dataset.amount||'';const title=document.querySelector('[data-invoice-title]');if(title)title.textContent=`Criar cobrança — ${button.dataset.tenantName||''}`;}));
   setupSimpleDrawer({drawer:'gateway-drawer',form:'[data-gateway-form]',buttons:'[data-gateway-open]',attr:'data-gateway-field',fill:({button,drawer,form,field})=>{form.reset();field('id').value='0';field('environment').value='production';field('status').value='active';field('is_default').checked=true;const edit=button.dataset.gatewayOpen==='edit';if(edit){field('id').value=button.dataset.id||'0';field('label').value=button.dataset.label||'';field('provider').value=button.dataset.provider||'manual';field('environment').value=button.dataset.environment||'production';field('status').value=button.dataset.status||'active';field('api_base_url').value=button.dataset.apiBaseUrl||'';field('public_key').value=button.dataset.publicKey||'';field('method').value=button.dataset.method||'UNDEFINED';field('is_default').checked=button.dataset.isDefault==='1';field('notes').value=decodeURIComponent(button.dataset.notes||'');field('api_key').value='';field('webhook_secret').value='';drawer.querySelector('[data-gateway-eyebrow]').textContent='Editar gateway';drawer.querySelector('[data-gateway-title]').textContent=button.dataset.label||'Atualizar gateway';drawer.querySelector('[data-gateway-key-hint]').textContent='Deixe em branco para manter a chave atual.';drawer.querySelector('[data-gateway-submit]').textContent='Salvar alterações';}else{drawer.querySelector('[data-gateway-eyebrow]').textContent='Novo gateway';drawer.querySelector('[data-gateway-title]').textContent='Configurar pagamento';drawer.querySelector('[data-gateway-key-hint]').textContent='Informe a chave do provedor.';drawer.querySelector('[data-gateway-submit]').textContent='Salvar gateway';}}});
   setupSimpleDrawer({drawer:'reminder-drawer',form:'[data-reminder-form]',buttons:'[data-reminder-open]',attr:'data-reminder-field',fill:({button,drawer,form,field})=>{form.reset();field('id').value='0';field('days_from_due').value='-3';field('status').value='active';field('message_template').value='Olá, {{empresa}}. Sua cobrança {{invoice_number}} no valor de {{valor}} vence em {{vencimento}}. Link: {{link_pagamento}}';const edit=button.dataset.reminderOpen==='edit';if(edit){field('id').value=button.dataset.id||'0';field('label').value=button.dataset.label||'';field('days_from_due').value=button.dataset.days||'0';field('status').value=button.dataset.status||'active';field('event_key').value=button.dataset.eventKey||'';field('channel').value=button.dataset.channel||'';field('auto_mark_overdue').checked=button.dataset.autoOverdue==='1';field('auto_suspend').checked=button.dataset.autoSuspend==='1';field('message_template').value=decodeURIComponent(button.dataset.message||'');drawer.querySelector('[data-reminder-eyebrow]').textContent='Editar regra';drawer.querySelector('[data-reminder-title]').textContent=button.dataset.label||'Atualizar aviso';drawer.querySelector('[data-reminder-submit]').textContent='Salvar alterações';}else{drawer.querySelector('[data-reminder-eyebrow]').textContent='Nova regra';drawer.querySelector('[data-reminder-title]').textContent='Criar aviso automático';drawer.querySelector('[data-reminder-submit]').textContent='Salvar regra';}}});

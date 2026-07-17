@@ -5463,3 +5463,12 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
     .security-row { align-items:flex-start; gap:12px; }
     .security-row-actions { width:100%; justify-content:flex-start; }
 }
+
+/* ZIP 33.1 — vigência e menus do cliente */
+.admin-client-menu-settings { scroll-margin-top: 92px; }
+.admin-client-menu-settings:target { outline: 3px solid rgba(13,148,136,.18); box-shadow: 0 0 0 7px rgba(13,148,136,.07); }
+.admin-table-card.is-access-blocked { border-color: rgba(220,38,38,.28); background: linear-gradient(180deg,#fff 0%,#fff8f8 100%); }
+.admin-access-reason { display:block; max-width: 280px; margin-top:6px; color:#991b1b; line-height:1.35; }
+.admin-access-edit-note { margin: 0 0 16px; padding: 12px 14px; border:1px solid #fecaca; border-radius:14px; background:#fff7f7; color:#991b1b; line-height:1.45; }
+.hero-actions { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+@media (max-width:720px){ .hero-actions{width:100%;justify-content:stretch}.hero-actions .btn{flex:1 1 100%}.admin-access-reason{max-width:none} }

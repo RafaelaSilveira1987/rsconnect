@@ -264,11 +264,13 @@ final class CompanyController
             'reschedule_message' => trim((string) ($_POST['pre_schedule_reschedule_message'] ?? '')),
         ]);
 
-        (new TenantModuleService())->saveSettings(
-            $tenantId,
-            array_values(array_filter(array_map('strval', (array) ($_POST['module_visible'] ?? [])))),
-            array_values(array_filter(array_map('strval', (array) ($_POST['module_enabled'] ?? []))))
-        );
+        if (Auth::isSuperAdmin() && isset($_POST['module_settings_submitted'])) {
+            (new TenantModuleService())->saveSettings(
+                $tenantId,
+                array_values(array_filter(array_map('strval', (array) ($_POST['module_visible'] ?? [])))),
+                array_values(array_filter(array_map('strval', (array) ($_POST['module_enabled'] ?? []))))
+            );
+        }
 
         if (!Auth::isSuperAdmin() && Auth::tenantId() === $tenantId) {
             Auth::refreshUser();

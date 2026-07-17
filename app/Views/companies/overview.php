@@ -60,6 +60,7 @@ $trackingNote = (string) ($tracking['note'] ?? '');
     </div>
     <div class="admin-company-overview-actions">
         <a class="btn btn-primary" href="<?= View::e(Router::url('/company-settings?id=' . $tenantId)) ?>">Editar empresa</a>
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/company-settings?id=' . $tenantId)) ?>#company-module-settings">Menus do cliente</a>
         <a class="btn btn-outline" href="<?= View::e(Router::url('/implementation?tenant_id=' . $tenantId)) ?>">Ver implantação</a>
         <a class="btn btn-quiet" href="<?= View::e(Router::url('/conversations?tenant_id=' . $tenantId)) ?>">Abrir conversas</a>
         <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" onsubmit="return confirm('<?= $company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?' ?>');">
@@ -155,7 +156,7 @@ $trackingNote = (string) ($tracking['note'] ?? '');
         <a href="<?= View::e(Router::url('/company-settings?id=' . $tenantId)) ?>"><span>01</span><strong>Dados da empresa</strong><small>Cadastro, contato e informações usadas pela IA.</small></a>
         <a href="<?= View::e(Router::url('/instances')) ?>"><span>02</span><strong>Conexões WhatsApp</strong><small>Prepare, atualize ou recupere a conexão.</small></a>
         <a href="<?= View::e(Router::url('/agents')) ?>"><span>03</span><strong>Assistentes virtuais</strong><small>Revise vínculo, instruções e respostas automáticas.</small></a>
-        <a href="<?= View::e(Router::url('/billing?tenant_id=' . $tenantId)) ?>"><span>04</span><strong>Assinatura e cobrança</strong><small>Plano, faturas, vencimentos e pagamentos.</small></a>
+        <a href="<?= View::e(Router::url('/billing?tenant_id=' . $tenantId . '&edit_subscription=1')) ?>"><span>04</span><strong>Vigência e cobrança</strong><small>Edite o período de acesso, plano, faturas e pagamentos.</small></a>
         <a href="<?= View::e(Router::url('/implementation?tenant_id=' . $tenantId)) ?>"><span>05</span><strong>Implantação</strong><small>Acompanhe o checklist e as pendências.</small></a>
         <a href="<?= View::e(Router::url('/reports?tenant_id=' . $tenantId)) ?>"><span>06</span><strong>Relatórios da empresa</strong><small>Uso, conversas, IA, CRM e agenda.</small></a>
         <a href="<?= View::e(Router::url('/calendar?tenant_id=' . $tenantId)) ?>"><span>07</span><strong>Agenda</strong><small>Compromissos, disponibilidade e pré-agendamentos.</small></a>
