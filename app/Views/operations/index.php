@@ -59,6 +59,7 @@ $formatBytes = static function ($bytes): string {
     <div class="hero-actions operations-hero-actions">
         <form method="post" action="<?= View::e(Router::url('/operations/checks/run')) ?>" data-operations-check-form>
             <?= Csrf::input() ?>
+            <input type="hidden" name="return_to" value="<?= View::e(str_starts_with((string) ($_SERVER['REQUEST_URI'] ?? ''), '/central-operacao') ? '/central-operacao?tab=monitoring' : '/operations') ?>">
             <button class="btn btn-primary" type="submit" data-operations-check-button>Verificar agora</button>
         </form>
         <a class="btn btn-quiet" href="<?= View::e(Router::url('/backup-automatico')) ?>">Backup automático</a>
@@ -345,11 +346,16 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             if (status) {
-                status.textContent = 'Verificação concluída em ' + (payload.checked_at || 'agora') + '. Dados salvos. Atualize a página para recarregar listas de alertas e incidentes.';
+                status.textContent = 'Verificação concluída. Atualizando o painel...';
             }
             if (button) {
-                button.textContent = 'Concluído';
+                button.textContent = 'Atualizando...';
             }
+
+            const redirect = payload.redirect || window.location.href;
+            const separator = redirect.includes('?') ? '&' : '?';
+            window.location.assign(redirect + separator + 'refresh=' + Date.now());
+            return;
         } catch (error) {
             if (status) {
                 status.textContent = error.message + ' Tentando pelo envio tradicional...';

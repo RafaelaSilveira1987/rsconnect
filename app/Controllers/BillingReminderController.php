@@ -10,6 +10,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\BillingReminderService;
+use App\Services\OperationsService;
 use Throwable;
 
 final class BillingReminderController
@@ -56,6 +57,9 @@ final class BillingReminderController
             } else {
                 Flash::set('success', $message);
             }
+
+            // Atualiza imediatamente o card do Monitoramento antes do redirecionamento.
+            (new OperationsService())->refreshBillingCronCheck();
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível processar a régua: ' . $exception->getMessage());
         }

@@ -45,13 +45,15 @@ final class OperationsController
 
         $service = new OperationsService();
         $service->runChecks();
+        $returnPath = $this->safeReturnPath((string) ($_POST['return_to'] ?? ''), '/operations');
+        $redirectUrl = Router::url($returnPath);
 
         if ($wantsJson) {
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
                 'ok' => true,
                 'message' => 'Verificações executadas com sucesso.',
-                'redirect' => Router::url('/operations'),
+                'redirect' => $redirectUrl,
                 'checked_at' => date('Y-m-d H:i:s'),
                 'data' => $service->dashboard(),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -59,7 +61,7 @@ final class OperationsController
         }
 
         Flash::set('success', 'Verificações executadas. Confira o painel de monitoramento.');
-        header('Location: ' . Router::url('/operations'));
+        header('Location: ' . $redirectUrl);
         exit;
     }
 
@@ -123,4 +125,13 @@ final class OperationsController
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
+    private function safeReturnPath(string $path, string $fallback): string
+    {
+        $path = trim($path);
+        if ($path === '' || !str_starts_with($path, '/') || str_starts_with($path, '//')) {
+            return $fallback;
+        }
+        return $path;
+    }
+
 }

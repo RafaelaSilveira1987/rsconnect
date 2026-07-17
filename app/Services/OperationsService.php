@@ -50,8 +50,13 @@ final class OperationsService
         $this->recordCheck('openai', 'OpenAI/IA', $this->checkOpenAi());
         $this->recordCheck('webhooks', 'Webhooks recentes', $this->checkWebhooks());
         $this->recordCheck('payments', 'Pagamentos', $this->checkPayments());
-        $this->recordCheck('billing_cron', 'Cron de cobrança', $this->checkBillingCron());
+        $this->refreshBillingCronCheck();
         $this->recordCheck('backup', 'Backup', $this->checkBackupAge());
+    }
+
+    public function refreshBillingCronCheck(): void
+    {
+        $this->recordCheck('billing_cron', 'Cron de cobrança', $this->checkBillingCron());
     }
 
     public function registerManualBackup(
@@ -443,7 +448,7 @@ final class OperationsService
             $latestByKey = [];
             foreach ($rows as $row) {
                 $key = (string) ($row['check_key'] ?? '');
-                if ($key === '' || isset($latestByKey[$key])) {
+                if ($key === '' || $key === 'billing_cron_heartbeat' || isset($latestByKey[$key])) {
                     continue;
                 }
                 $latestByKey[$key] = $row;

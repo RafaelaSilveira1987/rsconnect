@@ -1,3 +1,11 @@
+
+## 34.5.4 — Monitoramento sincronizado
+
+- O botão **Verificar agora** recarrega automaticamente a Central de operação com os cards atualizados.
+- O processamento manual da régua de cobrança atualiza o card **Cron de cobrança** antes do redirecionamento.
+- O heartbeat interno da régua não aparece mais como serviço duplicado.
+- Corrigido parâmetro duplicado no registro das verificações.
+
 ## ZIP 33.1 — Vigência e menus do cliente
 
 - Edição direta da vigência de assinaturas, inclusive para empresas bloqueadas.
