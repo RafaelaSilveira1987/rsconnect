@@ -57,8 +57,30 @@ final class AiAutomationService
                 return;
             }
 
-            if ($this->isInCooldown($pdo, $conversationId, (int) ($agent['cooldown_seconds'] ?? 15))) {
-                $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.cooldown', 'skipped', 'Mensagem ignorada por anti-loop/cooldown.', null, null);
+            $bypassCooldown = filter_var(
+                $payload['bypass_cooldown'] ?? false,
+                FILTER_VALIDATE_BOOL,
+                FILTER_NULL_ON_FAILURE
+            ) === true;
+            $cooldownSeconds = max(0, min(3600, (int) ($agent['cooldown_seconds'] ?? 15)));
+            $remainingSeconds = $this->cooldownRemaining($pdo, $conversationId, $cooldownSeconds);
+
+            if (!$bypassCooldown && $remainingSeconds > 0) {
+                $this->log(
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    'ai.cooldown',
+                    'skipped',
+                    'Mensagem aguardando o intervalo mínimo configurado antes da próxima resposta.',
+                    null,
+                    [
+                        'pending_reprocess' => true,
+                        'cooldown_seconds' => $cooldownSeconds,
+                        'remaining_seconds' => $remainingSeconds,
+                        'incoming_message_id' => $this->payloadMessageId($payload),
+                    ]
+                );
                 return;
             }
 
@@ -128,6 +150,140 @@ final class AiAutomationService
                 ],
                 600
             );
+        }
+    }
+
+    /**
+     * Reavalia apenas a mensagem mais recente que ficou sem resposta por causa do intervalo.
+     * Não responde novamente quando uma pessoa ou a IA já enviou algo depois da mensagem.
+     *
+     * @return array{status:string,conversation_id?:int,message_id?:int}
+     */
+    public function reprocessLatestPendingForAgent(int $tenantId, int $agentId): array
+    {
+        try {
+            $pdo = Database::connection();
+            $agentStatement = $pdo->prepare(
+                'SELECT a.id, a.tenant_id, a.instance_id, a.status, a.auto_reply_enabled,
+                        COALESCE(a.reply_to_reactions, 0) AS reply_to_reactions,
+                        i.id AS evolution_instance_id, i.base_url, i.api_key_encrypted, i.instance_name
+                 FROM ai_agents a
+                 INNER JOIN evolution_instances i
+                    ON i.id = a.instance_id
+                   AND i.tenant_id = a.tenant_id
+                 WHERE a.id = :agent_id
+                   AND a.tenant_id = :tenant_id
+                 LIMIT 1'
+            );
+            $agentStatement->execute([
+                'agent_id' => $agentId,
+                'tenant_id' => $tenantId,
+            ]);
+            $agent = $agentStatement->fetch(PDO::FETCH_ASSOC);
+
+            if (!$agent
+                || (string) ($agent['status'] ?? '') !== 'active'
+                || (int) ($agent['auto_reply_enabled'] ?? 0) !== 1
+                || (int) ($agent['instance_id'] ?? 0) < 1
+            ) {
+                return ['status' => 'none'];
+            }
+
+            $candidateStatement = $pdo->prepare(
+                'SELECT cm.id AS message_id,
+                        cm.conversation_id,
+                        cm.content,
+                        cm.message_type,
+                        cm.sent_at
+                 FROM conversation_messages cm
+                 INNER JOIN conversations c
+                    ON c.id = cm.conversation_id
+                   AND c.tenant_id = cm.tenant_id
+                 WHERE cm.tenant_id = :tenant_id
+                   AND c.evolution_instance_id = :instance_id
+                   AND c.attendance_mode = "ai"
+                   AND c.status <> "closed"
+                   AND cm.direction = "incoming"
+                   AND (:reply_to_reactions = 1 OR cm.message_type <> "reaction")
+                   AND (
+                        SELECT al.event
+                        FROM ai_automation_logs al
+                        WHERE al.tenant_id = cm.tenant_id
+                          AND al.conversation_id = cm.conversation_id
+                          AND al.agent_id = :agent_id
+                        ORDER BY al.id DESC
+                        LIMIT 1
+                   ) = "ai.cooldown"
+                   AND NOT EXISTS (
+                        SELECT 1
+                        FROM conversation_messages outgoing
+                        WHERE outgoing.conversation_id = cm.conversation_id
+                          AND outgoing.direction = "outgoing"
+                          AND (
+                                outgoing.sent_at > cm.sent_at
+                                OR (outgoing.sent_at = cm.sent_at AND outgoing.id > cm.id)
+                          )
+                   )
+                 ORDER BY cm.sent_at DESC, cm.id DESC
+                 LIMIT 1'
+            );
+            $candidateStatement->execute([
+                'tenant_id' => $tenantId,
+                'instance_id' => (int) $agent['instance_id'],
+                'reply_to_reactions' => (int) ($agent['reply_to_reactions'] ?? 0),
+                'agent_id' => $agentId,
+            ]);
+            $candidate = $candidateStatement->fetch(PDO::FETCH_ASSOC);
+
+            if (!$candidate || trim((string) ($candidate['content'] ?? '')) === '') {
+                return ['status' => 'none'];
+            }
+
+            $instance = [
+                'id' => (int) $agent['evolution_instance_id'],
+                'tenant_id' => $tenantId,
+                'base_url' => (string) $agent['base_url'],
+                'api_key_encrypted' => (string) $agent['api_key_encrypted'],
+                'instance_name' => (string) $agent['instance_name'],
+            ];
+
+            $this->handleIncoming(
+                $instance,
+                (int) $candidate['conversation_id'],
+                (string) $candidate['content'],
+                [
+                    'event' => 'agent.settings_saved.reprocess',
+                    'bypass_cooldown' => true,
+                    'message_id' => (int) $candidate['message_id'],
+                ]
+            );
+
+            $replyCheck = $pdo->prepare(
+                'SELECT id
+                 FROM conversation_messages
+                 WHERE conversation_id = :conversation_id
+                   AND direction = "outgoing"
+                   AND (
+                        sent_at > :sent_at_after
+                        OR (sent_at = :sent_at_equal AND id > :message_id)
+                   )
+                 ORDER BY sent_at DESC, id DESC
+                 LIMIT 1'
+            );
+            $replyCheck->execute([
+                'conversation_id' => (int) $candidate['conversation_id'],
+                'sent_at_after' => (string) $candidate['sent_at'],
+                'sent_at_equal' => (string) $candidate['sent_at'],
+                'message_id' => (int) $candidate['message_id'],
+            ]);
+
+            return [
+                'status' => $replyCheck->fetchColumn() ? 'replied' : 'evaluated',
+                'conversation_id' => (int) $candidate['conversation_id'],
+                'message_id' => (int) $candidate['message_id'],
+            ];
+        } catch (Throwable $exception) {
+            return ['status' => 'error'];
         }
     }
 
@@ -266,11 +422,11 @@ final class AiAutomationService
         return false;
     }
 
-    private function isInCooldown(PDO $pdo, int $conversationId, int $seconds): bool
+    private function cooldownRemaining(PDO $pdo, int $conversationId, int $seconds): int
     {
         $seconds = max(0, min(3600, $seconds));
         if ($seconds === 0) {
-            return false;
+            return 0;
         }
 
         $statement = $pdo->prepare(
@@ -285,10 +441,27 @@ final class AiAutomationService
         $statement->execute(['conversation_id' => $conversationId]);
         $last = $statement->fetchColumn();
         if (!$last) {
-            return false;
+            return 0;
         }
 
-        return (time() - strtotime((string) $last)) < $seconds;
+        $elapsed = max(0, time() - strtotime((string) $last));
+        return max(0, $seconds - $elapsed);
+    }
+
+    private function payloadMessageId(array $payload): ?string
+    {
+        $id = $payload['message_id']
+            ?? $payload['data']['key']['id']
+            ?? $payload['data']['id']
+            ?? $payload['key']['id']
+            ?? null;
+
+        if (!is_scalar($id)) {
+            return null;
+        }
+
+        $value = trim((string) $id);
+        return $value !== '' ? $value : null;
     }
 
     private function sendAutomatedMessage(PDO $pdo, array $instance, array $conversation, int $conversationId, string $reply, string $eventType, string $eventDescription): array

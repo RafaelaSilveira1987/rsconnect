@@ -12,6 +12,7 @@ use App\Core\Env;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\AiAutomationService;
 use App\Services\OnboardingGuideService;
 use PDO;
 use Throwable;
@@ -293,7 +294,16 @@ final class OnboardingController
         $tenantId = (int) Auth::tenantId();
         try {
             (new OnboardingGuideService())->saveAttendance($tenantId, $_POST, Auth::id());
-            Flash::set('success', 'Atendimento configurado.');
+            $agentId = (int) ($_POST['agent_id'] ?? 0);
+            $reprocess = $agentId > 0
+                ? (new AiAutomationService())->reprocessLatestPendingForAgent($tenantId, $agentId)
+                : ['status' => 'none'];
+            Flash::set(
+                'success',
+                ($reprocess['status'] ?? 'none') === 'replied'
+                    ? 'Atendimento configurado. A última mensagem pendente foi reprocessada e respondida.'
+                    : 'Atendimento configurado.'
+            );
         } catch (Throwable $exception) {
             Flash::set('error', $exception->getMessage());
         }

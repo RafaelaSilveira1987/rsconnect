@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'ZIP 34.2';
-    public const REQUIRED_MIGRATION = '037_admin_commercial_crm_reports.sql';
+    public const PACKAGE_LABEL = 'ZIP 34.3.1';
+    public const REQUIRED_MIGRATION = '038_ai_reaction_preferences.sql';
 
     private PDO $pdo;
 
@@ -80,8 +80,16 @@ final class AppVersionService
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
-            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 34.2 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 037, conforme o pacote implantado.'
+            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 34.3.1 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
+            'Rodar as migrations pendentes até a 038, conforme o pacote implantado.'
+        );
+
+        $reactionPreferenceReady = $this->columnExists('ai_agents', 'reply_to_reactions');
+        $checks[] = $this->check(
+            'Reações no WhatsApp',
+            $reactionPreferenceReady ? 'ok' : 'blocked',
+            $reactionPreferenceReady ? 'Preferência de resposta a reações disponível por assistente.' : 'A coluna reply_to_reactions ainda não foi criada.',
+            'Executar database/migrations/038_ai_reaction_preferences.sql.'
         );
 
         $appKey = (string) Env::get('APP_KEY', '');
@@ -348,6 +356,20 @@ final class AppVersionService
             return (int) $this->pdo->query('SELECT COUNT(*) FROM `' . str_replace('`', '', $table) . '` WHERE ' . $where)->fetchColumn();
         } catch (Throwable) {
             return 0;
+        }
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        try {
+            $statement = $this->pdo->prepare(
+                'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
+            );
+            $statement->execute(['table' => $table, 'column' => $column]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
         }
     }
 

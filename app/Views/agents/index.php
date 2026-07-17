@@ -114,12 +114,14 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                             <div class="form-grid two">
                                 <label class="field compact-field"><span>Disponibilidade do assistente</span><select name="status"><option value="active" <?= $agent['status'] === 'active' ? 'selected' : '' ?>>Ativo</option><option value="inactive" <?= $agent['status'] === 'inactive' ? 'selected' : '' ?>>Inativo</option></select></label>
                                 <label class="field compact-field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="<?= (int) ($agent['max_context_messages'] ?? 12) ?>" min="4" max="30"></label>
+                                <label class="field compact-field">
+                                    <span>Intervalo mínimo entre respostas (seg.)</span>
+                                    <input type="number" name="cooldown_seconds" value="<?= (int) ($agent['cooldown_seconds'] ?? 15) ?>" min="0" max="3600">
+                                    <small class="field-hint">Se uma mensagem chegar durante o intervalo, ela fica pendente. Ao salvar, a última pendência é reavaliada automaticamente.</small>
+                                </label>
                             </div>
                             <label class="field compact-field"><span>Palavras que pedem atendimento humano</span><input name="handoff_keywords" value="<?= View::e($agent['handoff_keywords'] ?? '') ?>" placeholder="humano, atendente, pessoa"></label>
-                            <div class="form-grid two">
-                                <label class="field compact-field"><span>Ao chamar uma pessoa</span><select name="handoff_action"><option value="paused" <?= ($agent['handoff_action'] ?? 'paused') === 'paused' ? 'selected' : '' ?>>Pausar respostas automáticas</option><option value="human" <?= ($agent['handoff_action'] ?? '') === 'human' ? 'selected' : '' ?>>Marcar atendimento humano</option></select></label>
-                                <label class="field compact-field"><span>Intervalo mínimo entre respostas (seg.)</span><input type="number" name="cooldown_seconds" value="<?= (int) ($agent['cooldown_seconds'] ?? 15) ?>" min="0" max="3600"></label>
-                            </div>
+                            <label class="field compact-field"><span>Ao chamar uma pessoa</span><select name="handoff_action"><option value="paused" <?= ($agent['handoff_action'] ?? 'paused') === 'paused' ? 'selected' : '' ?>>Pausar respostas automáticas</option><option value="human" <?= ($agent['handoff_action'] ?? '') === 'human' ? 'selected' : '' ?>>Marcar atendimento humano</option></select></label>
                             <label class="field compact-field"><span>Mensagem ao encaminhar para a equipe</span><input name="human_handoff_message" value="<?= View::e($agent['human_handoff_message'] ?? '') ?>" placeholder="Vou encaminhar você para uma pessoa da equipe."></label>
                             <div class="form-grid two">
                                 <label class="field compact-field"><span>Atendimento começa</span><input type="time" name="business_start" value="<?= View::e($start) ?>"></label>
@@ -137,6 +139,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                                 <label class="check-field compact-check"><input type="checkbox" name="auto_reply_enabled" value="1" <?= (int) ($agent['auto_reply_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder automaticamente</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="business_hours_enabled" value="1" <?= (int) ($agent['business_hours_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Seguir horário de atendimento</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="n8n_enabled" value="1" <?= (int) ($agent['n8n_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Usar integração externa</span></label>
+                                <label class="check-field compact-check"><input type="checkbox" name="reply_to_reactions" value="1" <?= (int) ($agent['reply_to_reactions'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder a reações em mensagens</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="is_default" value="1" <?= (int) $agent['is_default'] === 1 ? 'checked' : '' ?>><span>Assistente principal</span></label>
                             </div>
                             <button class="btn btn-outline" type="submit">Salvar configurações</button>
@@ -222,10 +225,14 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                     <label class="field"><span>Fuso horário</span><input name="business_timezone" value="America/Sao_Paulo"></label>
                     <div class="weekday-row"><?php foreach ($dayLabels as $dayKey => $label): ?><label class="check-field compact-check"><input type="checkbox" name="business_days[]" value="<?= View::e($dayKey) ?>" <?= in_array($dayKey, ['mon', 'tue', 'wed', 'thu', 'fri'], true) ? 'checked' : '' ?>><span><?= View::e($label) ?></span></label><?php endforeach; ?></div>
                     <label class="field"><span>Mensagem fora do horário</span><input name="after_hours_message" value="Estamos fora do horário de atendimento agora. Assim que retornarmos, nossa equipe responde por aqui."></label>
-                    <div class="form-grid two"><label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label><label class="field"><span>Intervalo entre respostas (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"></label></div>
+                    <div class="form-grid two">
+                        <label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label>
+                        <label class="field"><span>Intervalo mínimo entre respostas (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">Evita respostas seguidas demais. Mensagens dentro do intervalo podem ser reprocessadas após salvar.</small></label>
+                    </div>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
                     <label class="check-field"><input type="checkbox" name="n8n_enabled" value="1"><span>Usar integração externa neste assistente</span></label>
+                    <label class="check-field"><input type="checkbox" name="reply_to_reactions" value="1"><span>Responder quando o contato reagir a uma mensagem</span><small class="field-hint">Desativado por padrão. Curtidas e emojis de reação não geram resposta automática.</small></label>
                 </div>
             </details>
         </div>
@@ -289,10 +296,14 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                     <label class="field"><span>Fuso horário</span><input name="business_timezone" value="America/Sao_Paulo"></label>
                     <div class="weekday-row"><?php foreach ($dayLabels as $dayKey => $label): ?><label class="check-field compact-check"><input type="checkbox" name="business_days[]" value="<?= View::e($dayKey) ?>" <?= in_array($dayKey, ['mon', 'tue', 'wed', 'thu', 'fri'], true) ? 'checked' : '' ?>><span><?= View::e($label) ?></span></label><?php endforeach; ?></div>
                     <label class="field"><span>Mensagem fora do horário</span><input name="after_hours_message" value="Estamos fora do horário de atendimento agora. Assim que retornarmos, nossa equipe responde por aqui."></label>
-                    <div class="form-grid two"><label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label><label class="field"><span>Intervalo entre respostas (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"></label></div>
+                    <div class="form-grid two">
+                        <label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label>
+                        <label class="field"><span>Intervalo mínimo entre respostas (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">Evita respostas seguidas demais. Mensagens dentro do intervalo podem ser reprocessadas após salvar.</small></label>
+                    </div>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
                     <label class="check-field"><input type="checkbox" name="n8n_enabled" value="1"><span>Usar integração externa neste assistente</span></label>
+                    <label class="check-field"><input type="checkbox" name="reply_to_reactions" value="1"><span>Responder quando o contato reagir a uma mensagem</span><small class="field-hint">Desativado por padrão. Curtidas e emojis de reação não geram resposta automática.</small></label>
                 </div>
             </details>
 

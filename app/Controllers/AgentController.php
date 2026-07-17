@@ -10,6 +10,7 @@ use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\AiAutomationService;
 use App\Services\SubscriptionService;
 use PDO;
 use Throwable;
@@ -79,6 +80,7 @@ final class AgentController
         $autoReplyEnabled = isset($_POST['auto_reply_enabled']);
         $n8nEnabled = isset($_POST['n8n_enabled']);
         $isDefault = isset($_POST['is_default']);
+        $replyToReactions = isset($_POST['reply_to_reactions']);
 
         if ($instanceId < 1 || $name === '' || $segment === '' || $prompt === '') {
             Flash::set('error', 'Escolha a conexão WhatsApp e informe o nome, a área de atendimento e as instruções do assistente.');
@@ -115,12 +117,12 @@ final class AgentController
                     (tenant_id, instance_id, name, segment, model_provider, model_name, temperature, system_prompt,
                      status, is_default, auto_reply_enabled, handoff_keywords, max_context_messages,
                      knowledge_base, n8n_enabled, n8n_webhook_url, business_hours_enabled, business_timezone,
-                     business_hours_json, after_hours_message, human_handoff_message, handoff_action, cooldown_seconds)
+                     business_hours_json, after_hours_message, human_handoff_message, handoff_action, cooldown_seconds, reply_to_reactions)
                  VALUES
                     (:tenant_id, :instance_id, :name, :segment, :provider, :model, :temperature, :prompt,
                      "active", :is_default, :auto_reply_enabled, :handoff_keywords, :max_context_messages,
                      :knowledge_base, :n8n_enabled, :n8n_webhook_url, :business_hours_enabled, :business_timezone,
-                     :business_hours_json, :after_hours_message, :human_handoff_message, :handoff_action, :cooldown_seconds)'
+                     :business_hours_json, :after_hours_message, :human_handoff_message, :handoff_action, :cooldown_seconds, :reply_to_reactions)'
             );
             $insert->execute([
                 'tenant_id' => $tenantId,
@@ -145,6 +147,7 @@ final class AgentController
                 'human_handoff_message' => $business['human_handoff_message'],
                 'handoff_action' => $business['handoff_action'],
                 'cooldown_seconds' => $business['cooldown_seconds'],
+                'reply_to_reactions' => $replyToReactions ? 1 : 0,
             ]);
 
             $pdo->commit();
@@ -171,6 +174,7 @@ final class AgentController
         $maxContextMessages = max(4, min(30, (int) ($_POST['max_context_messages'] ?? 12)));
         $n8nWebhookUrl = trim((string) ($_POST['n8n_webhook_url'] ?? ''));
         $isDefault = isset($_POST['is_default']);
+        $replyToReactions = isset($_POST['reply_to_reactions']);
 
         if ($agentId < 1 || !in_array($status, ['active', 'inactive'], true)) {
             Flash::set('error', 'Não foi possível identificar o assistente ou a opção escolhida.');
@@ -201,7 +205,8 @@ final class AgentController
                      after_hours_message = :after_hours_message,
                      human_handoff_message = :human_handoff_message,
                      handoff_action = :handoff_action,
-                     cooldown_seconds = :cooldown_seconds
+                     cooldown_seconds = :cooldown_seconds,
+                     reply_to_reactions = :reply_to_reactions
                  WHERE id = :id AND tenant_id = :tenant_id'
             );
             $update->execute([
@@ -219,16 +224,27 @@ final class AgentController
                 'human_handoff_message' => $business['human_handoff_message'],
                 'handoff_action' => $business['handoff_action'],
                 'cooldown_seconds' => $business['cooldown_seconds'],
+                'reply_to_reactions' => $replyToReactions ? 1 : 0,
                 'id' => $agentId,
                 'tenant_id' => $tenantId,
             ]);
             if ($update->rowCount() < 1) {
-                throw new \RuntimeException('Agente não encontrado.');
+                $exists = $pdo->prepare('SELECT id FROM ai_agents WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+                $exists->execute(['id' => $agentId, 'tenant_id' => $tenantId]);
+                if (!$exists->fetchColumn()) {
+                    throw new \RuntimeException('Agente não encontrado.');
+                }
             }
 
             $pdo->commit();
-            Audit::log('agent.status_updated', ['agent_id' => $agentId, 'status' => $status], $tenantId);
-            Flash::set('success', 'Configurações do assistente atualizadas.');
+            Audit::log('agent.status_updated', [
+                'agent_id' => $agentId,
+                'status' => $status,
+                'cooldown_seconds' => $business['cooldown_seconds'],
+            ], $tenantId);
+
+            $reprocess = (new AiAutomationService())->reprocessLatestPendingForAgent($tenantId, $agentId);
+            Flash::set('success', $this->settingsSavedMessage($reprocess));
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -291,7 +307,9 @@ final class AgentController
                 'prompt_length' => strlen($prompt),
                 'knowledge_base_length' => strlen($knowledgeBase),
             ], $tenantId);
-            Flash::set('success', 'Instruções e informações atualizadas. As mudanças valem nas próximas respostas.');
+
+            $reprocess = (new AiAutomationService())->reprocessLatestPendingForAgent($tenantId, $agentId);
+            Flash::set('success', $this->promptSavedMessage($reprocess));
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível atualizar as instruções: ' . $exception->getMessage());
         }
@@ -338,6 +356,29 @@ final class AgentController
         $sections[] = 'Não invente informações. Quando faltar contexto, faça perguntas objetivas ou encaminhe para uma pessoa da equipe.';
 
         return trim(implode("\n", $sections));
+    }
+
+    private function settingsSavedMessage(array $reprocess): string
+    {
+        $status = (string) ($reprocess['status'] ?? 'none');
+
+        return match ($status) {
+            'replied' => 'Configurações atualizadas. A última mensagem que aguardava o intervalo foi reprocessada e respondida.',
+            'evaluated' => 'Configurações atualizadas. A última mensagem pendente foi reavaliada automaticamente; confira a conversa e os logs.',
+            'skipped_reaction' => 'Configurações atualizadas. A última pendência era uma reação e foi ignorada conforme a preferência do assistente.',
+            default => 'Configurações do assistente atualizadas.',
+        };
+    }
+
+    private function promptSavedMessage(array $reprocess): string
+    {
+        $status = (string) ($reprocess['status'] ?? 'none');
+
+        return match ($status) {
+            'replied' => 'Instruções atualizadas. A última mensagem pendente foi reprocessada e respondida com as novas regras.',
+            'evaluated' => 'Instruções atualizadas. A última mensagem pendente foi reavaliada automaticamente; confira a conversa e os logs.',
+            default => 'Instruções e informações atualizadas. As mudanças valem nas próximas respostas.',
+        };
     }
 
     private function businessHoursFromPost(): array

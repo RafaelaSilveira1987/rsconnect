@@ -801,6 +801,7 @@ final class ConversationController
             (new AiAutomationService())->handleIncoming($instance, $conversationId, $content, [
                 'event' => 'manual.reprocess',
                 'conversation_id' => $conversationId,
+                'bypass_cooldown' => true,
             ]);
             $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'ai.reprocess', 'Última mensagem reprocessada manualmente com IA.');
             Flash::set('success', 'Reprocessamento solicitado. Confira a conversa e os logs de automação.');

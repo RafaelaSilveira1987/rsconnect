@@ -66,6 +66,25 @@ final class EvolutionWebhookController
             }
 
             $fromMe = filter_var($key['fromMe'] ?? $data['fromMe'] ?? false, FILTER_VALIDATE_BOOL);
+            $reaction = $this->reactionDetails($data);
+            if ($reaction !== null) {
+                if ($fromMe) {
+                    $this->respond(202, ['ok' => true, 'ignored' => 'outgoing_reaction']);
+                }
+                if (($reaction['removed'] ?? false) === true) {
+                    $this->respond(202, ['ok' => true, 'ignored' => 'reaction_removed']);
+                }
+
+                $reactionPdo = Database::connection();
+                if (!$this->replyToReactionsEnabled($reactionPdo, $instance)) {
+                    $this->respond(202, [
+                        'ok' => true,
+                        'ignored' => 'reaction',
+                        'reason' => 'reply_to_reactions_disabled',
+                    ]);
+                }
+            }
+
             $externalId = trim((string) ($key['id'] ?? $data['id'] ?? '')) ?: null;
             $pushName = trim((string) ($data['pushName'] ?? $data['senderName'] ?? ''));
             $phone = preg_replace('/\D+/', '', strstr($remoteJid, '@', true) ?: $remoteJid) ?: '';
@@ -74,6 +93,7 @@ final class EvolutionWebhookController
             }
 
             [$messageType, $content] = $this->extractContent($data);
+            $isReaction = $messageType === 'reaction';
             $sentAt = $this->extractDate($data);
             $direction = $fromMe ? 'outgoing' : 'incoming';
             $senderType = $fromMe ? 'system' : 'contact';
@@ -129,7 +149,7 @@ final class EvolutionWebhookController
 
             $leadId = null;
             $preScheduleResult = ['skip_ai' => false];
-            if (!$fromMe && $inserted && $automationAllowed) {
+            if (!$fromMe && $inserted && $automationAllowed && !$isReaction) {
                 $leadId = (new CrmAutoService())->createFromConversation($pdo, $instance, $contactId, $conversationId, $content);
                 $preScheduleResult = (new PreSchedulingService())->handleIncoming($pdo, $instance, $contactId, $conversationId, $content);
             } elseif (!$fromMe && $inserted && !$automationAllowed) {
@@ -170,7 +190,7 @@ final class EvolutionWebhookController
                     ]
                 );
 
-                if ($automationAllowed) {
+                if ($automationAllowed && !$isReaction) {
                     (new AutomationWebhookService())->dispatch('message.received', [
                     'tenant_id' => (int) $instance['tenant_id'],
                     'instance_id' => (int) $instance['id'],
@@ -415,10 +435,71 @@ final class EvolutionWebhookController
         return $statement->rowCount() > 0;
     }
 
+    /**
+     * Identifica reações do WhatsApp. Uma reação vazia representa remoção da reação.
+     */
+    private function reactionDetails(array $data): ?array
+    {
+        $message = is_array($data['message'] ?? null) ? $data['message'] : [];
+        $reaction = is_array($message['reactionMessage'] ?? null) ? $message['reactionMessage'] : null;
+        $type = mb_strtolower(trim((string) ($data['messageType'] ?? '')));
+
+        if ($reaction === null && !str_contains($type, 'reaction')) {
+            return null;
+        }
+
+        $reaction ??= [];
+        $text = trim((string) ($reaction['text'] ?? $data['reaction'] ?? ''));
+        $targetKey = is_array($reaction['key'] ?? null) ? $reaction['key'] : [];
+        $targetId = trim((string) ($targetKey['id'] ?? $reaction['messageId'] ?? ''));
+
+        return [
+            'text' => $text,
+            'target_id' => $targetId,
+            'removed' => $text === '',
+        ];
+    }
+
+    private function replyToReactionsEnabled(PDO $pdo, array $instance): bool
+    {
+        try {
+            $statement = $pdo->prepare(
+                'SELECT reply_to_reactions
+                 FROM ai_agents
+                 WHERE tenant_id = :tenant_id
+                   AND status = "active"
+                   AND auto_reply_enabled = 1
+                   AND (instance_id = :instance_id_filter OR instance_id IS NULL OR is_default = 1)
+                 ORDER BY (instance_id = :instance_id_order) DESC, is_default DESC, id DESC
+                 LIMIT 1'
+            );
+            $statement->execute([
+                'tenant_id' => $instance['tenant_id'],
+                'instance_id_filter' => $instance['id'],
+                'instance_id_order' => $instance['id'],
+            ]);
+            return (int) ($statement->fetchColumn() ?: 0) === 1;
+        } catch (Throwable) {
+            // Antes da migration 038, reações permanecem ignoradas por segurança.
+            return false;
+        }
+    }
+
     private function extractContent(array $data): array
     {
         $message = is_array($data['message'] ?? null) ? $data['message'] : [];
         $type = (string) ($data['messageType'] ?? '');
+
+        $reaction = $this->reactionDetails($data);
+        if ($reaction !== null) {
+            $emoji = trim((string) ($reaction['text'] ?? ''));
+            $targetId = trim((string) ($reaction['target_id'] ?? ''));
+            $content = 'O contato reagiu com ' . ($emoji !== '' ? '“' . $emoji . '”' : 'uma reação') . ' a uma mensagem.';
+            if ($targetId !== '') {
+                $content .= ' Mensagem relacionada: ' . $targetId . '.';
+            }
+            return ['reaction', $content];
+        }
 
         $candidates = [
             'conversation' => $message['conversation'] ?? null,
