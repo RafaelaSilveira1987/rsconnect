@@ -11,6 +11,7 @@ use App\Core\Env;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\AiAutomationService;
 use App\Services\TenantHealthService;
 use Throwable;
 
@@ -73,6 +74,63 @@ final class TenantHealthController
             Flash::set('error', 'Não foi possível atualizar o incidente: ' . $e->getMessage());
         }
         $this->redirect('/companies/health?tenant_id=' . $tenantId . '#incidents');
+    }
+
+    public function reprocessAi(): void
+    {
+        $tenantId = (int) ($_POST['tenant_id'] ?? 0);
+        $agentId = (int) ($_POST['agent_id'] ?? 0);
+        $processed = 0;
+        $evaluated = 0;
+        $errors = 0;
+
+        try {
+            if ($tenantId < 1 || $agentId < 1) {
+                throw new \RuntimeException('Empresa ou assistente inválido.');
+            }
+
+            $service = new AiAutomationService();
+            for ($attempt = 0; $attempt < 10; $attempt++) {
+                $result = $service->reprocessLatestPendingForAgent($tenantId, $agentId);
+                $status = (string) ($result['status'] ?? 'none');
+
+                if ($status === 'none') {
+                    break;
+                }
+                if ($status === 'replied') {
+                    $processed++;
+                    continue;
+                }
+                if ($status === 'evaluated') {
+                    $evaluated++;
+                    continue;
+                }
+
+                $errors++;
+                break;
+            }
+
+            (new TenantHealthService())->runForTenant($tenantId, Auth::id(), 'manual');
+            Audit::log('tenant.health.ai.reprocessed', [
+                'tenant_id' => $tenantId,
+                'agent_id' => $agentId,
+                'replied' => $processed,
+                'evaluated' => $evaluated,
+                'errors' => $errors,
+            ], $tenantId);
+
+            if ($processed > 0) {
+                Flash::set('success', $processed . ' conversa(s) receberam resposta. O diagnóstico foi atualizado.');
+            } elseif ($evaluated > 0) {
+                Flash::set('warning', 'As mensagens foram reavaliadas, mas outra regra impediu o envio. Confira horário, modo da conversa e configuração do assistente.');
+            } else {
+                Flash::set('info', 'Nenhuma conversa realmente aguardava resposta por causa do intervalo.');
+            }
+        } catch (Throwable $e) {
+            Flash::set('error', 'Não foi possível reprocessar as conversas: ' . $e->getMessage());
+        }
+
+        $this->redirect('/companies/health?tenant_id=' . $tenantId);
     }
 
     public function cron(): void

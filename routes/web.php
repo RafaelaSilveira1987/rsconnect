@@ -159,6 +159,7 @@ return static function (Router $router): void {
     $router->get('/companies/health', [TenantHealthController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/companies/health/run', [TenantHealthController::class, 'run'], ['auth', 'super_admin', 'csrf']);
     $router->post('/companies/health/incident', [TenantHealthController::class, 'incident'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/companies/health/reprocess-ai', [TenantHealthController::class, 'reprocessAi'], ['auth', 'super_admin', 'csrf']);
     $router->get('/webhooks/tenant-health/run', [TenantHealthController::class, 'cron']);
     $router->post('/webhooks/tenant-health/run', [TenantHealthController::class, 'cron']);
     $router->get('/companies', [CompanyController::class, 'index'], ['auth', 'super_admin']);

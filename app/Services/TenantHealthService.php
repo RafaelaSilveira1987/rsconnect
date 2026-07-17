@@ -7,14 +7,17 @@ namespace App\Services;
 use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Env;
+use DateTimeImmutable;
+use DateTimeZone;
 use PDO;
 use Throwable;
 
 final class TenantHealthService
 {
-    public const VERSION = '34.4.1-configuration-view';
+    public const VERSION = '34.5.1-health-time-pending';
 
     private PDO $pdo;
+    private ?int $databaseOffsetMinutes = null;
 
     public function __construct()
     {
@@ -335,8 +338,8 @@ final class TenantHealthService
                  WHERE cm.tenant_id = :tenant_id AND c.evolution_instance_id = :instance_id',
                 ['tenant_id' => $tenantId, 'instance_id' => $id]
             );
-            $details['Última mensagem recebida'] = (string) ($last['last_incoming'] ?? 'Nenhuma registrada');
-            $details['Última mensagem enviada'] = (string) ($last['last_outgoing'] ?? 'Nenhuma registrada');
+            $details['Última mensagem recebida'] = $this->formatDatabaseDate($last['last_incoming'] ?? null, 'Nenhuma registrada');
+            $details['Última mensagem enviada'] = $this->formatDatabaseDate($last['last_outgoing'] ?? null, 'Nenhuma registrada');
 
             $checks[] = $this->check('WhatsApp', 'instance.' . $id, 'WhatsApp — ' . (string) $instance['name'], $status, $summary, $details, '/instances', 20 + $id);
         }
@@ -392,16 +395,21 @@ final class TenantHealthService
                 $problems[] = (int) $agent['errors_24h'] . ' falha(s) nas últimas 24h';
             }
 
-            $pendingCooldown = (int) $this->value(
-                'SELECT COUNT(*) FROM ai_automation_logs l
-                 WHERE l.agent_id = :agent_id AND l.event = "ai.cooldown" AND l.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-                   AND NOT EXISTS (
-                       SELECT 1 FROM ai_automation_logs ok
-                       WHERE ok.conversation_id = l.conversation_id AND ok.event = "ai.replied" AND ok.status = "success" AND ok.created_at > l.created_at
-                   )',
-                ['agent_id' => $id],
-                0
+            $pending = $this->pendingAiResponses(
+                $tenantId,
+                $id,
+                (int) ($agent['instance_id'] ?? 0),
+                (int) ($agent['reply_to_reactions'] ?? 0) === 1
             );
+            $pendingConversations = (int) ($pending['conversation_count'] ?? 0);
+            $pendingMessages = (int) ($pending['message_count'] ?? 0);
+
+            if ($pendingConversations > 0) {
+                if ($status === 'ok') {
+                    $status = 'warning';
+                }
+                $problems[] = $pendingConversations . ' conversa(s) aguardando resposta após o intervalo';
+            }
 
             $summary = $problems ? 'Revisar: ' . implode('; ', $problems) . '.' : 'Assistente configurado e sem falhas recentes.';
             $details = [
@@ -410,10 +418,15 @@ final class TenantHealthService
                 'Conexão vinculada' => (string) ($agent['instance_label'] ?? 'Não vinculada'),
                 'Credencial ativa encontrada' => (int) ($agent['credential_count'] ?? 0) > 0 ? 'Sim' : 'Não',
                 'Modelo' => (string) ($agent['model_name'] ?? ''),
-                'Última resposta bem-sucedida' => (string) ($agent['last_success'] ?? 'Nenhuma'),
-                'Última falha' => (string) ($agent['last_error'] ?? 'Nenhuma'),
+                'Última resposta bem-sucedida' => $this->formatDatabaseDate($agent['last_success'] ?? null, 'Nenhuma'),
+                'Última falha' => $this->formatDatabaseDate($agent['last_error'] ?? null, 'Nenhuma'),
                 'Falhas consecutivas' => (string) $consecutive,
-                'Mensagens aguardando reprocessamento' => (string) $pendingCooldown,
+                'Conversas aguardando resposta' => (string) $pendingConversations,
+                'Mensagens acumuladas nessas conversas' => (string) $pendingMessages,
+                'Aguardando desde' => $this->formatDatabaseDate($pending['oldest_pending_at'] ?? null, 'Nenhuma'),
+                'O que significa' => $pendingConversations > 0
+                    ? 'A conversa recebeu mensagem durante o intervalo mínimo e ainda não possui resposta posterior. Use Reprocessar agora ou abra a conversa.'
+                    : 'Não há conversa sem resposta causada pelo intervalo mínimo.',
                 'Intervalo configurado' => (string) ($agent['cooldown_seconds'] ?? 0) . ' segundo(s)',
             ];
             $checks[] = $this->check('Assistente de IA', 'agent.' . $id, 'Assistente — ' . (string) $agent['name'], $status, $summary, $details, '/agents?tenant_id=' . $tenantId, 40 + $id);
@@ -446,8 +459,8 @@ final class TenantHealthService
             }
             $details = [
                 'Situação' => (string) ($flow['status'] ?? ''),
-                'Último sucesso' => (string) ($flow['last_success_at'] ?? 'Nenhum'),
-                'Último erro' => (string) ($flow['last_error_at'] ?? 'Nenhum'),
+                'Último sucesso' => $this->formatDatabaseDate($flow['last_success_at'] ?? null, 'Nenhum'),
+                'Último erro' => $this->formatDatabaseDate($flow['last_error_at'] ?? null, 'Nenhum'),
                 'Falhas em 24h' => (string) $errors,
             ];
             $checks[] = $this->check('Integrações n8n', 'flow.' . $id, 'Fluxo — ' . (string) $flow['name'], $status, $summary, $details, '/n8n-flows', 60 + $id);
@@ -490,9 +503,9 @@ final class TenantHealthService
         return [$this->check('Agenda', 'calendar.integration', 'Agenda e Google Calendar', $status, $summary, [
             'Modo' => $mode === 'marked_events' ? 'Eventos VAGO' : 'Espaços livres',
             'Calendário' => (string) ($settings['google_calendar_id'] ?? 'primary'),
-            'Última busca' => (string) ($lastRequest['created_at'] ?? 'Nenhuma'),
+            'Última busca' => $this->formatDatabaseDate($lastRequest['created_at'] ?? null, 'Nenhuma'),
             'Situação da última busca' => (string) ($lastRequest['status'] ?? 'Não disponível'),
-            'Última sincronização Google' => (string) ($lastSync['created_at'] ?? 'Nenhuma'),
+            'Última sincronização Google' => $this->formatDatabaseDate($lastSync['created_at'] ?? null, 'Nenhuma'),
             'Pré-reservas vencidas' => (string) $expiredHolds,
         ], '/calendar?tab=availability', 80)];
     }
@@ -525,7 +538,7 @@ final class TenantHealthService
             'Usuários ativos' => (string) ($summary['active_count'] ?? 0),
             'Administradores ativos' => (string) ($summary['admin_count'] ?? 0),
             'Usuários bloqueados' => (string) ($summary['locked_count'] ?? 0),
-            'Último login' => (string) ($summary['last_login_at'] ?? 'Nenhum'),
+            'Último login' => $this->formatDatabaseDate($summary['last_login_at'] ?? null, 'Nenhum'),
         ], '/users', 100)];
     }
 
@@ -980,6 +993,118 @@ final class TenantHealthService
             $tone = 'warning';
         }
         return compact('title', 'subtitle', 'tone', 'fields') + ['long_fields' => $longFields];
+    }
+
+    /**
+     * Resume apenas conversas realmente aguardando resposta:
+     * o último evento do assistente é ai.cooldown e não existe mensagem de saída
+     * posterior às mensagens recebidas acumuladas.
+     *
+     * @return array{conversation_count:int,message_count:int,oldest_pending_at:?string}
+     */
+    private function pendingAiResponses(int $tenantId, int $agentId, int $instanceId, bool $replyToReactions): array
+    {
+        if ($instanceId < 1) {
+            return ['conversation_count' => 0, 'message_count' => 0, 'oldest_pending_at' => null];
+        }
+
+        $row = $this->row(
+            'SELECT
+                COUNT(DISTINCT c.id) AS conversation_count,
+                COUNT(cm.id) AS message_count,
+                MIN(cm.sent_at) AS oldest_pending_at
+             FROM conversations c
+             INNER JOIN conversation_messages cm
+                ON cm.conversation_id = c.id
+               AND cm.tenant_id = c.tenant_id
+             WHERE c.tenant_id = :tenant_id
+               AND c.evolution_instance_id = :instance_id
+               AND c.attendance_mode = "ai"
+               AND c.status <> "closed"
+               AND cm.direction = "incoming"
+               AND (:reply_to_reactions = 1 OR cm.message_type <> "reaction")
+               AND (
+                    SELECT al.event
+                    FROM ai_automation_logs al
+                    WHERE al.tenant_id = c.tenant_id
+                      AND al.conversation_id = c.id
+                      AND al.agent_id = :agent_id
+                    ORDER BY al.id DESC
+                    LIMIT 1
+               ) = "ai.cooldown"
+               AND NOT EXISTS (
+                    SELECT 1
+                    FROM conversation_messages outgoing
+                    WHERE outgoing.conversation_id = c.id
+                      AND outgoing.direction = "outgoing"
+                      AND (
+                            outgoing.sent_at > cm.sent_at
+                            OR (outgoing.sent_at = cm.sent_at AND outgoing.id > cm.id)
+                      )
+               )',
+            [
+                'tenant_id' => $tenantId,
+                'instance_id' => $instanceId,
+                'reply_to_reactions' => $replyToReactions ? 1 : 0,
+                'agent_id' => $agentId,
+            ]
+        );
+
+        return [
+            'conversation_count' => (int) ($row['conversation_count'] ?? 0),
+            'message_count' => (int) ($row['message_count'] ?? 0),
+            'oldest_pending_at' => !empty($row['oldest_pending_at']) ? (string) $row['oldest_pending_at'] : null,
+        ];
+    }
+
+    /**
+     * Datas TIMESTAMP do banco são convertidas do fuso real da sessão MySQL
+     * para APP_TIMEZONE. Isso evita exibir UTC como se fosse horário local.
+     */
+    private function formatDatabaseDate(mixed $value, string $fallback = 'Não informado'): string
+    {
+        if ($value === null) {
+            return $fallback;
+        }
+
+        $text = trim((string) $value);
+        if ($text === '') {
+            return $fallback;
+        }
+
+        try {
+            $offset = $this->databaseOffsetMinutes();
+            $sign = $offset >= 0 ? '+' : '-';
+            $absolute = abs($offset);
+            $sourceTimezone = new DateTimeZone(sprintf('%s%02d:%02d', $sign, intdiv($absolute, 60), $absolute % 60));
+            $targetTimezone = new DateTimeZone((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo'));
+
+            return (new DateTimeImmutable($text, $sourceTimezone))
+                ->setTimezone($targetTimezone)
+                ->format('d/m/Y H:i:s');
+        } catch (Throwable) {
+            return $text;
+        }
+    }
+
+    private function databaseOffsetMinutes(): int
+    {
+        if ($this->databaseOffsetMinutes !== null) {
+            return $this->databaseOffsetMinutes;
+        }
+
+        try {
+            $offset = (int) $this->value(
+                'SELECT TIMESTAMPDIFF(MINUTE, UTC_TIMESTAMP(), NOW())',
+                [],
+                0
+            );
+            $this->databaseOffsetMinutes = max(-840, min(840, $offset));
+        } catch (Throwable) {
+            $this->databaseOffsetMinutes = 0;
+        }
+
+        return $this->databaseOffsetMinutes;
     }
 
     private function valueOr(mixed $value, string $fallback = 'Não informado'): string

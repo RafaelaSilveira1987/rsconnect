@@ -185,3 +185,12 @@
 - Adiciona regras configuráveis por grupo em cada assistente.
 - Permite revisar manualmente grupo, etapa e demanda na gaveta da conversa.
 - Migration `040_conversation_flow_contact_groups.sql`.
+
+## 34.5.1 — Horário local e pendências reais da IA
+
+- Converte datas do diagnóstico do fuso da sessão MySQL para `APP_TIMEZONE`.
+- Substitui a contagem de logs `ai.cooldown` pela contagem real de conversas sem resposta posterior.
+- Separa conversas pendentes de mensagens acumuladas.
+- Altera o status do assistente para Atenção quando há conversa aguardando resposta.
+- Adiciona o botão Reprocessar agora na Saúde do cliente.
+- Inclui diagnóstico SQL de timezone e pendências.

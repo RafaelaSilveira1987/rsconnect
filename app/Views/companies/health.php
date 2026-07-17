@@ -118,6 +118,19 @@ $overall = (string) ($snapshot['overall_status'] ?? 'attention');
                         </div>
                         <div class="tenant-health-check-actions">
                             <?php if (!empty($check['action_url'])): ?><a class="btn btn-quiet" href="<?= View::e(Router::url((string) $check['action_url'])) ?>">Abrir configuração</a><?php endif; ?>
+                            <?php
+                            $pendingConversationCount = (int) (($check['details']['Conversas aguardando resposta'] ?? 0));
+                            $componentKey = (string) ($check['component_key'] ?? '');
+                            $pendingAgentId = str_starts_with($componentKey, 'agent.') ? (int) substr($componentKey, 6) : 0;
+                            ?>
+                            <?php if ($pendingConversationCount > 0 && $pendingAgentId > 0): ?>
+                                <form method="post" action="<?= View::e(Router::url('/companies/health/reprocess-ai')) ?>">
+                                    <?= Csrf::input() ?>
+                                    <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
+                                    <input type="hidden" name="agent_id" value="<?= $pendingAgentId ?>">
+                                    <button class="btn btn-primary" type="submit">Reprocessar agora</button>
+                                </form>
+                            <?php endif; ?>
                             <?php if (!empty($check['details'])): ?>
                                 <details>
                                     <summary>Ver detalhes</summary>
