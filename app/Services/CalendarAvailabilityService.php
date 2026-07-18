@@ -35,7 +35,7 @@ final class CalendarAvailabilityService
             'timezone' => 'America/Sao_Paulo',
             'google_utc_offset' => '-03:00',
             'ignore_transparent_events' => 1,
-            'marked_require_transparent' => 1,
+            'marked_require_transparent' => 0,
             'marked_online_title' => 'VAGO — ONLINE',
             'marked_in_person_title' => 'VAGO — PRESENCIAL',
             'marked_hold_prefix' => 'PRÉ-RESERVADO',

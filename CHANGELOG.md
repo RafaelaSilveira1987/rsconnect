@@ -1,3 +1,9 @@
+## ZIP 35.0.1 — 2026-07-18
+
+- Corrige filtro de Eventos VAGO para aceitar aliases.
+- Torna a transparência do Google uma regra opcional e mais clara.
+- Melhora diagnóstico de eventos rejeitados.
+
 
 ## 34.5.4 — Monitoramento sincronizado
 

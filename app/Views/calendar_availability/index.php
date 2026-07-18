@@ -233,19 +233,19 @@ $requestInsight = static function (array $request): string {
             <div class="calendar-mode-panel" data-calendar-mode="marked_events">
                 <h3>Regras para eventos VAGO</h3>
                 <div class="field-grid two">
-                    <div class="field"><label>Título disponível online ou genérico</label><input type="text" name="marked_online_title" value="<?= View::e($settings['marked_online_title'] ?? 'VAGO — ONLINE') ?>" placeholder="Ex.: Vago ou VAGO — ONLINE"></div>
-                    <div class="field"><label>Título disponível presencial ou repita o genérico</label><input type="text" name="marked_in_person_title" value="<?= View::e($settings['marked_in_person_title'] ?? 'VAGO — PRESENCIAL') ?>" placeholder="Ex.: Vago ou VAGO — PRESENCIAL"></div>
+                    <div class="field"><label>Títulos disponíveis online ou genéricos</label><input type="text" name="marked_online_title" value="<?= View::e($settings['marked_online_title'] ?? 'VAGO — ONLINE') ?>" placeholder="Ex.: Vago, Disponível, VAGO — ONLINE"></div>
+                    <div class="field"><label>Títulos disponíveis presenciais ou repita os genéricos</label><input type="text" name="marked_in_person_title" value="<?= View::e($settings['marked_in_person_title'] ?? 'VAGO — PRESENCIAL') ?>" placeholder="Ex.: Vago, Disponível, VAGO — PRESENCIAL"></div>
                 </div>
                 <div class="calendar-inline-info">
-                    <strong>Um único título também é aceito.</strong>
-                    <span>Você pode preencher <b>Vago</b> nos dois campos. Nesse caso, o fluxo usa a modalidade Online ou Presencial identificada na conversa ou no pré-agendamento.</span>
+                    <strong>Você pode informar mais de um título.</strong>
+                    <span>Separe por vírgula, ponto e vírgula ou quebra de linha. Ex.: <b>Vago, Disponível</b>. Quando os mesmos títulos estiverem nos dois campos, a modalidade vem da conversa ou do pré-agendamento.</span>
                 </div>
                 <div class="field-grid two">
                     <div class="field"><label>Título ao pré-reservar</label><input type="text" name="marked_hold_prefix" value="<?= View::e($settings['marked_hold_prefix'] ?? 'PRÉ-RESERVADO') ?>"></div>
                     <div class="field"><label>Título ao confirmar</label><input type="text" name="marked_confirmed_prefix" value="<?= View::e($settings['marked_confirmed_prefix'] ?? 'AGENDADO') ?>"></div>
                 </div>
                 <div class="field"><label>Tempo de pré-reserva</label><div class="input-with-suffix"><input type="number" name="hold_minutes" min="5" max="1440" value="<?= (int) ($settings['hold_minutes'] ?? 30) ?>"><span>min</span></div></div>
-                <label class="switch-inline"><input type="checkbox" name="marked_require_transparent" value="1" <?= !empty($settings['marked_require_transparent']) ? 'checked' : '' ?>><span>Aceitar somente eventos VAGO marcados como “Disponível”</span></label>
+                <label class="switch-inline"><input type="checkbox" name="marked_require_transparent" value="1" <?= !empty($settings['marked_require_transparent']) ? 'checked' : '' ?>><span>Além do título, exigir “Mostrar como: Disponível” no Google Agenda</span></label>
                 <label class="switch-inline"><input type="checkbox" name="revalidate_before_update" value="1" <?= !empty($settings['revalidate_before_update']) ? 'checked' : '' ?>><span>Confirmar que o evento ainda está VAGO antes de reservar</span></label>
                 <label class="switch-inline"><input type="checkbox" name="restore_on_cancel" value="1" <?= !empty($settings['restore_on_cancel']) ? 'checked' : '' ?>><span>Restaurar o evento para VAGO ao recusar, cancelar ou remarcar</span></label>
             </div>
