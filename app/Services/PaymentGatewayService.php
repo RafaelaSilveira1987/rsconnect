@@ -63,6 +63,32 @@ final class PaymentGatewayService
 
         $existingUrl = trim((string) ($invoice['external_checkout_url'] ?? $invoice['external_invoice_url'] ?? ''));
         $sameGateway = !$gatewayId || (int) ($invoice['payment_gateway_id'] ?? 0) === $gatewayId;
+
+        // O PagBank devolve também a URL de retorno do lojista. Versões anteriores
+        // podiam salvar essa URL interna como se fosse o link de pagamento.
+        // Quando isso ocorrer, tenta recuperar o link PAY do Checkout já criado,
+        // evitando gerar uma cobrança duplicada.
+        if ($existingUrl !== '' && !$this->isUsableCheckoutUrl($existingUrl)) {
+            if (
+                strtolower((string) ($invoice['gateway_provider'] ?? '')) === 'pagbank'
+                && trim((string) ($invoice['external_payment_id'] ?? '')) !== ''
+            ) {
+                try {
+                    $this->refreshInvoiceStatus($invoiceId);
+                    $invoice = $this->loadInvoice($invoiceId) ?: $invoice;
+                    $existingUrl = trim((string) ($invoice['external_checkout_url'] ?? $invoice['external_invoice_url'] ?? ''));
+                } catch (Throwable) {
+                    // Se a consulta não conseguir reparar, o link inválido é removido
+                    // e a criação segue normalmente.
+                }
+            }
+
+            if (!$this->isUsableCheckoutUrl($existingUrl)) {
+                $this->clearInvalidPaymentUrl($invoiceId);
+                $existingUrl = '';
+            }
+        }
+
         if ($existingUrl !== '' && $sameGateway && in_array((string) ($invoice['status'] ?? ''), ['open', 'overdue'], true)) {
             return [
                 'external_id' => (string) ($invoice['external_payment_id'] ?? ''),
@@ -331,16 +357,27 @@ final class PaymentGatewayService
         );
         $statusSource = $this->extractPagBankStatus($response);
         $mappedStatus = $this->mapPagBankStatus($statusSource) ?? 'open';
-        $this->updateInvoiceStatus($invoiceId, $mappedStatus, $externalId, $response);
+        $checkoutUrl = $this->extractPagBankCheckoutUrl($response);
+        $payloadForUpdate = $response;
+        if ($checkoutUrl !== '') {
+            $payloadForUpdate['checkout_url'] = $checkoutUrl;
+        }
+        $this->updateInvoiceStatus($invoiceId, $mappedStatus, $externalId, $payloadForUpdate);
         $this->logEvent((int) $invoice['tenant_id'], (int) $gateway['id'], 'payment.status_refreshed', 'success', [
             'invoice_id' => $invoiceId,
             'external_id' => $externalId,
             'provider' => 'pagbank',
             'source_status' => $statusSource,
             'mapped_status' => $mappedStatus,
+            'checkout_url_repaired' => $checkoutUrl !== '',
         ]);
 
-        return ['status' => $mappedStatus, 'source_status' => $statusSource, 'payload' => $response];
+        return [
+            'status' => $mappedStatus,
+            'source_status' => $statusSource,
+            'checkout_url' => $checkoutUrl,
+            'payload' => $response,
+        ];
     }
 
     public function setInvoiceStatus(int $invoiceId, string $status, array $payload = []): array
@@ -461,18 +498,34 @@ final class PaymentGatewayService
         }
 
         $email = trim((string) ($invoice['tenant_email'] ?? ''));
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $email = '';
+        }
+
         $phone = preg_replace('/\D+/', '', (string) ($invoice['tenant_phone'] ?? ''));
+        if (str_starts_with($phone, '55') && in_array(strlen($phone), [12, 13], true)) {
+            $phone = substr($phone, 2);
+        }
+        $phonePayload = null;
+        if (in_array(strlen($phone), [10, 11], true)) {
+            $phonePayload = [[
+                'country' => '+55',
+                'area' => substr($phone, 0, 2),
+                'number' => substr($phone, 2),
+                'type' => 'MOBILE',
+            ]];
+        }
+
         $document = preg_replace('/\D+/', '', (string) ($invoice['tenant_document'] ?? ''));
+        if (!in_array(strlen($document), [11, 14], true)) {
+            $document = '';
+        }
+
         $customer = array_filter([
-            'name' => (string) ($invoice['tenant_legal_name'] ?: $invoice['tenant_name']),
+            'name' => trim((string) ($invoice['tenant_legal_name'] ?: $invoice['tenant_name'])),
             'email' => $email,
             'tax_id' => $document,
-            'phones' => $phone !== '' ? [[
-                'country' => '55',
-                'area' => strlen($phone) >= 10 ? substr($phone, -11, 2) : '',
-                'number' => strlen($phone) >= 8 ? substr($phone, -9) : $phone,
-                'type' => 'MOBILE',
-            ]] : null,
+            'phones' => $phonePayload,
         ], static fn ($value): bool => $value !== '' && $value !== null && $value !== []);
         if ($customer !== []) {
             $payload['customer'] = $customer;
@@ -527,32 +580,81 @@ final class PaymentGatewayService
 
     private function extractPagBankCheckoutUrl(array $response): string
     {
-        foreach (['payment_url', 'checkout_url', 'redirect_url', 'url'] as $key) {
-            if (!empty($response[$key]) && is_string($response[$key])) {
-                return (string) $response[$key];
-            }
-        }
-
+        // No Checkout PagBank, o link correto para o comprador é o link com rel=PAY.
+        // A resposta também pode conter redirect_url/return_url do lojista, que nunca
+        // devem ser persistidas como link de pagamento.
         $links = $response['links'] ?? [];
         if (is_array($links)) {
             foreach ($links as $link) {
                 if (!is_array($link)) {
                     continue;
                 }
-                $rel = strtoupper((string) ($link['rel'] ?? $link['type'] ?? ''));
-                $href = (string) ($link['href'] ?? $link['url'] ?? '');
-                if ($href !== '' && in_array($rel, ['PAY', 'PAYMENT', 'CHECKOUT', 'REDIRECT'], true)) {
+                $rel = strtoupper(trim((string) ($link['rel'] ?? $link['type'] ?? '')));
+                $href = trim((string) ($link['href'] ?? $link['url'] ?? ''));
+                if ($this->isUsableCheckoutUrl($href) && in_array($rel, ['PAY', 'PAYMENT', 'CHECKOUT'], true)) {
                     return $href;
                 }
             }
+        }
+
+        foreach (['payment_url', 'checkout_url', 'url'] as $key) {
+            $candidate = trim((string) ($response[$key] ?? ''));
+            if ($this->isUsableCheckoutUrl($candidate)) {
+                return $candidate;
+            }
+        }
+
+        // Fallback conservador: usa outro link externo somente quando não for SELF,
+        // redirect, return, notification ou recurso da própria API.
+        if (is_array($links)) {
             foreach ($links as $link) {
-                if (is_array($link) && !empty($link['href'])) {
-                    return (string) $link['href'];
+                if (!is_array($link)) {
+                    continue;
+                }
+                $rel = strtoupper(trim((string) ($link['rel'] ?? $link['type'] ?? '')));
+                $href = trim((string) ($link['href'] ?? $link['url'] ?? ''));
+                if (
+                    $this->isUsableCheckoutUrl($href)
+                    && !in_array($rel, ['SELF', 'REDIRECT', 'RETURN', 'NOTIFICATION', 'PAYMENT_NOTIFICATION'], true)
+                ) {
+                    return $href;
                 }
             }
         }
 
         return '';
+    }
+
+    private function isUsableCheckoutUrl(string $url): bool
+    {
+        $url = trim($url);
+        if ($url === '' || filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return false;
+        }
+
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        if (!in_array($scheme, ['http', 'https'], true)) {
+            return false;
+        }
+
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $appHost = strtolower((string) parse_url(Router::url('/'), PHP_URL_HOST));
+        if ($host !== '' && $appHost !== '' && $host === $appHost) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function clearInvalidPaymentUrl(int $invoiceId): void
+    {
+        $statement = Database::connection()->prepare(
+            'UPDATE tenant_invoices
+             SET external_checkout_url = NULL,
+                 external_invoice_url = NULL
+             WHERE id = :id'
+        );
+        $statement->execute(['id' => $invoiceId]);
     }
 
     private function getOrCreateAsaasCustomer(array $gateway, array $invoice): string
@@ -699,6 +801,9 @@ final class PaymentGatewayService
     private function updateInvoiceStatus(int $invoiceId, string $status, string $externalId, array $payload): void
     {
         $checkoutUrl = trim((string) ($payload['checkout_url'] ?? $payload['payment_url'] ?? $payload['link'] ?? ''));
+        if (!$this->isUsableCheckoutUrl($checkoutUrl)) {
+            $checkoutUrl = $this->extractPagBankCheckoutUrl($payload);
+        }
         $statement = Database::connection()->prepare(
             'UPDATE tenant_invoices
              SET status = :status,
@@ -990,11 +1095,21 @@ final class PaymentGatewayService
             $decoded = ['raw' => (string) $response];
         }
         if ($status < 200 || $status >= 300) {
-            $message = $decoded['errors'][0]['description']
+            $pagBankError = is_array($decoded['error_messages'][0] ?? null)
+                ? $decoded['error_messages'][0]
+                : [];
+            $description = (string) (
+                $pagBankError['description']
+                ?? $decoded['errors'][0]['description']
                 ?? $decoded['message']
                 ?? $decoded['error']['message']
                 ?? $decoded['raw']
-                ?? ('HTTP ' . $status);
+                ?? ('HTTP ' . $status)
+            );
+            $parameter = trim((string) ($pagBankError['parameter_name'] ?? ''));
+            $message = $parameter !== ''
+                ? $description . ' Campo recusado: ' . $parameter . '.'
+                : $description;
             throw new RuntimeException('Gateway retornou erro: ' . $message);
         }
 

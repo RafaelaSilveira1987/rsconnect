@@ -198,7 +198,11 @@ final class PaymentGatewayController
         try {
             $result = (new PaymentGatewayService())->refreshInvoiceStatus($invoiceId);
             Audit::log('payment.invoice_status_refreshed', ['invoice_id' => $invoiceId] + $result);
-            Flash::set('success', 'Situação consultada no PagBank: ' . (string) ($result['status'] ?? 'atualizada') . '.');
+            $message = 'Situação consultada no PagBank: ' . (string) ($result['status'] ?? 'atualizada') . '.';
+            if (!empty($result['checkout_url'])) {
+                $message .= ' Link de pagamento atualizado.';
+            }
+            Flash::set('success', $message);
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível consultar a cobrança: ' . $exception->getMessage());
         }
