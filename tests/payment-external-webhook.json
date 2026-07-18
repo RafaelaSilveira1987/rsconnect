@@ -1,0 +1,6 @@
+{
+  "invoice_number": "RS-202607-00001",
+  "external_id": "COBRANCA-INFINITEPAY-123",
+  "status": "paid",
+  "checkout_url": "https://exemplo.infinitepay.io/cobranca/123"
+}

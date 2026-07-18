@@ -220,10 +220,14 @@ return static function (Router $router): void {
     $router->post('/billing-reminders/rules/save', [BillingReminderController::class, 'saveRule'], ['auth', 'super_admin', 'csrf']);
     $router->post('/billing-reminders/run', [BillingReminderController::class, 'run'], ['auth', 'super_admin', 'csrf']);
     $router->post('/payment-gateways/invoices/create-link', [PaymentGatewayController::class, 'createInvoiceLink'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/payment-gateways/invoices/import-external', [PaymentGatewayController::class, 'importExternalCharge'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/payment-gateways/invoices/refresh-status', [PaymentGatewayController::class, 'refreshInvoiceStatus'], ['auth', 'super_admin', 'csrf']);
     $router->post('/webhooks/payments/asaas', [PaymentGatewayController::class, 'webhookAsaas']);
     $router->post('/webhooks/payments/mercadopago', [PaymentGatewayController::class, 'webhookMercadoPago']);
     $router->post('/webhooks/payments/stripe', [PaymentGatewayController::class, 'webhookStripe']);
     $router->post('/webhooks/payments/pagbank', [PaymentGatewayController::class, 'webhookPagBank']);
+    $router->post('/webhooks/payments/infinitepay', [PaymentGatewayController::class, 'webhookInfinitePay']);
+    $router->post('/webhooks/payments/external', [PaymentGatewayController::class, 'webhookExternal']);
     $router->post('/webhooks/billing/reminders/run', [BillingReminderController::class, 'cron']);
     $router->get('/webhooks/billing/reminders/run', [BillingReminderController::class, 'cron']);
 

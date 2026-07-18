@@ -172,6 +172,49 @@ final class PaymentGatewayController
         $this->redirect($returnTo);
     }
 
+    public function importExternalCharge(): void
+    {
+        $returnTo = (string) ($_POST['return_to'] ?? '/billing');
+        if (!in_array($returnTo, ['/billing', '/payment-gateways'], true)) {
+            $returnTo = '/billing';
+        }
+        try {
+            $result = (new PaymentGatewayService())->importExternalCharge($_POST);
+            Audit::log('payment.external_charge_imported', $result);
+            Flash::set('success', 'Cobrança externa vinculada. O link já pode ser enviado ao cliente.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível importar a cobrança externa: ' . $exception->getMessage());
+        }
+        $this->redirect($returnTo);
+    }
+
+    public function refreshInvoiceStatus(): void
+    {
+        $invoiceId = (int) ($_POST['invoice_id'] ?? 0);
+        $returnTo = (string) ($_POST['return_to'] ?? '/billing');
+        if (!in_array($returnTo, ['/billing', '/payment-gateways'], true)) {
+            $returnTo = '/billing';
+        }
+        try {
+            $result = (new PaymentGatewayService())->refreshInvoiceStatus($invoiceId);
+            Audit::log('payment.invoice_status_refreshed', ['invoice_id' => $invoiceId] + $result);
+            Flash::set('success', 'Situação consultada no PagBank: ' . (string) ($result['status'] ?? 'atualizada') . '.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível consultar a cobrança: ' . $exception->getMessage());
+        }
+        $this->redirect($returnTo);
+    }
+
+    public function webhookInfinitePay(): void
+    {
+        $this->handleWebhook('infinitepay');
+    }
+
+    public function webhookExternal(): void
+    {
+        $this->handleWebhook('external');
+    }
+
     public function webhookAsaas(): void
     {
         $this->handleWebhook('asaas');

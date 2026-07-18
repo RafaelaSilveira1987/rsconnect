@@ -1,3 +1,9 @@
+## ZIP 36.0 — Pagamentos reais e conciliação
+- PagBank com consulta manual de checkout e webhooks.
+- Importação de cobranças existentes da InfinitePay/outros provedores.
+- Deduplicação de links e identificadores externos.
+- Renovação de vigência e desbloqueio após pagamento.
+
 ## ZIP 35.0.1 — 2026-07-18
 
 - Corrige filtro de Eventos VAGO para aceitar aliases.

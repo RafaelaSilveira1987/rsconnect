@@ -46,11 +46,12 @@ final class BillingController
         )->fetchAll(PDO::FETCH_ASSOC);
 
         $invoices = $pdo->query(
-            'SELECT i.*, t.name AS tenant_name, sp.name AS plan_name
+            'SELECT i.*, t.name AS tenant_name, sp.name AS plan_name, pg.label AS gateway_label
              FROM tenant_invoices i
              INNER JOIN tenants t ON t.id = i.tenant_id
              LEFT JOIN tenant_subscriptions ts ON ts.id = i.subscription_id
              LEFT JOIN saas_plans sp ON sp.id = ts.plan_id
+             LEFT JOIN payment_gateways pg ON pg.id = i.payment_gateway_id
              ORDER BY i.created_at DESC
              LIMIT 120'
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -353,61 +354,13 @@ final class BillingController
             $this->redirect('/billing');
         }
 
-        $pdo = Database::connection();
         try {
-            $pdo->beginTransaction();
-            $invoiceStatement = $pdo->prepare('SELECT tenant_id FROM tenant_invoices WHERE id = :id LIMIT 1 FOR UPDATE');
-            $invoiceStatement->execute(['id' => $invoiceId]);
-            $tenantId = (int) ($invoiceStatement->fetchColumn() ?: 0);
-
-            $statement = $pdo->prepare(
-                'UPDATE tenant_invoices
-                 SET status = :status,
-                     paid_at = CASE WHEN :status_paid = "paid" THEN COALESCE(paid_at, NOW()) ELSE paid_at END
-                 WHERE id = :id'
-            );
-            $statement->execute(['status' => $status, 'status_paid' => $status, 'id' => $invoiceId]);
-
-            if ($tenantId > 0 && $status === 'paid') {
-                $graceDays = max(0, (int) \App\Core\Env::get('BILLING_ACCESS_GRACE_DAYS', 5));
-                $pending = $pdo->prepare(
-                    'SELECT COUNT(*) FROM tenant_invoices
-                     WHERE tenant_id = :tenant_id
-                       AND status IN ("open", "overdue")
-                       AND DATEDIFF(CURDATE(), due_date) > :grace_days'
-                );
-                $pending->bindValue(':tenant_id', $tenantId, PDO::PARAM_INT);
-                $pending->bindValue(':grace_days', $graceDays, PDO::PARAM_INT);
-                $pending->execute();
-                if ((int) $pending->fetchColumn() === 0) {
-                    $pdo->prepare(
-                        'UPDATE tenant_subscriptions
-                         SET billing_status = CASE
-                            WHEN current_period_ends_at >= CURDATE() THEN "active"
-                            ELSE billing_status
-                         END
-                         WHERE tenant_id = :tenant_id
-                         ORDER BY id DESC
-                         LIMIT 1'
-                    )->execute(['tenant_id' => $tenantId]);
-                }
-            } elseif ($tenantId > 0 && $status === 'overdue') {
-                $pdo->prepare(
-                    'UPDATE tenant_subscriptions
-                     SET billing_status = "overdue"
-                     WHERE tenant_id = :tenant_id
-                     ORDER BY id DESC
-                     LIMIT 1'
-                )->execute(['tenant_id' => $tenantId]);
-            }
-
-            $pdo->commit();
-            Audit::log('billing.invoice_updated', ['invoice_id' => $invoiceId, 'status' => $status], $tenantId ?: null);
-            Flash::set('success', 'Cobrança atualizada. As regras de acesso serão recalculadas automaticamente.');
+            $result = (new PaymentGatewayService())->setInvoiceStatus($invoiceId, $status, ['changed_by' => 'admin']);
+            Audit::log('billing.invoice_updated', ['invoice_id' => $invoiceId, 'status' => $status], (int) ($result['tenant_id'] ?? 0) ?: null);
+            Flash::set('success', $status === 'paid'
+                ? 'Pagamento confirmado. Vigência e acesso foram recalculados automaticamente.'
+                : 'Cobrança atualizada. As regras de acesso foram recalculadas.');
         } catch (Throwable $exception) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
             Flash::set('error', 'Não foi possível atualizar a cobrança: ' . $exception->getMessage());
         }
         $this->redirect('/billing');

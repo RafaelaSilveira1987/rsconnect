@@ -19,6 +19,8 @@ final class PaymentGatewayService
         'mercadopago' => 'Mercado Pago',
         'stripe' => 'Stripe',
         'pagbank' => 'PagBank',
+        'infinitepay' => 'InfinitePay — cobrança existente',
+        'external' => 'Outro provedor externo',
         'manual' => 'Manual / externo',
     ];
 
@@ -27,6 +29,7 @@ final class PaymentGatewayService
         'PIX' => 'Pix',
         'BOLETO' => 'Boleto',
         'CREDIT_CARD' => 'Cartão de crédito',
+        'LINK' => 'Link já criado',
     ];
 
     public function gateways(): array
@@ -58,6 +61,21 @@ final class PaymentGatewayService
             throw new RuntimeException('Essa cobrança já está paga.');
         }
 
+        $existingUrl = trim((string) ($invoice['external_checkout_url'] ?? $invoice['external_invoice_url'] ?? ''));
+        $sameGateway = !$gatewayId || (int) ($invoice['payment_gateway_id'] ?? 0) === $gatewayId;
+        if ($existingUrl !== '' && $sameGateway && in_array((string) ($invoice['status'] ?? ''), ['open', 'overdue'], true)) {
+            return [
+                'external_id' => (string) ($invoice['external_payment_id'] ?? ''),
+                'checkout_url' => $existingUrl,
+                'invoice_url' => (string) ($invoice['external_invoice_url'] ?? $existingUrl),
+                'external_status' => (string) ($invoice['external_status'] ?? 'existing'),
+                'payload' => ['reused' => true, 'message' => 'Link já existente reutilizado para evitar duplicidade.'],
+                'provider' => (string) ($invoice['gateway_provider'] ?? 'external'),
+                'gateway_label' => '',
+                'reused' => true,
+            ];
+        }
+
         $gateway = $this->loadGateway($gatewayId);
         if (!$gateway) {
             throw new RuntimeException('Nenhum gateway ativo configurado.');
@@ -72,13 +90,9 @@ final class PaymentGatewayService
             'mercadopago' => $this->createMercadoPagoPreference($gateway, $invoice),
             'stripe' => $this->createStripeCheckoutSession($gateway, $invoice),
             'pagbank' => $this->createPagBankCheckout($gateway, $invoice, $method),
-            'manual' => [
-                'external_id' => $invoice['invoice_number'],
-                'checkout_url' => '',
-                'invoice_url' => '',
-                'external_status' => 'manual',
-                'payload' => ['message' => 'Gateway manual. Preencha o link externo na observação, se necessário.'],
-            ],
+            'infinitepay', 'external', 'manual' => throw new RuntimeException(
+                'Esse provedor utiliza uma cobrança já criada. Use “Importar cobrança externa” e informe o link existente.'
+            ),
             default => throw new RuntimeException('Gateway não suportado: ' . $provider),
         };
 
@@ -108,6 +122,9 @@ final class PaymentGatewayService
         if ($gateway && !$this->passesInternalWebhookToken($gateway, $headers, $payload)) {
             $this->logEvent(null, (int) $gateway['id'], 'payment.webhook_denied', 'error', ['provider' => $provider, 'payload' => $payload]);
             throw new RuntimeException('Token de webhook inválido.');
+        }
+        if (in_array($provider, ['infinitepay', 'external'], true) && !$gateway) {
+            throw new RuntimeException('Configure um gateway ativo para receber atualizações externas com segurança.');
         }
 
         if ($provider === 'asaas') {
@@ -170,6 +187,10 @@ final class PaymentGatewayService
                 ?? $payload['event']
                 ?? ''
             ));
+        } elseif (in_array($provider, ['infinitepay', 'external'], true)) {
+            $invoiceNumber = (string) ($payload['invoice_number'] ?? $payload['reference_id'] ?? $payload['external_reference'] ?? '');
+            $externalId = (string) ($payload['external_id'] ?? $payload['charge_id'] ?? $payload['id'] ?? '');
+            $mappedStatus = $this->mapExternalStatus((string) ($payload['status'] ?? $payload['event'] ?? ''));
         }
 
         if ($invoiceNumber !== '' || $externalId !== '') {
@@ -192,6 +213,147 @@ final class PaymentGatewayService
         ]);
 
         return ['status' => $status, 'message' => $message];
+    }
+
+    public function importExternalCharge(array $data): array
+    {
+        $invoiceId = (int) ($data['invoice_id'] ?? 0);
+        $provider = strtolower(trim((string) ($data['provider'] ?? 'infinitepay')));
+        $externalId = trim((string) ($data['external_id'] ?? ''));
+        $checkoutUrl = trim((string) ($data['checkout_url'] ?? ''));
+        $externalStatus = trim((string) ($data['status'] ?? 'open'));
+        $gatewayId = (int) ($data['gateway_id'] ?? 0);
+
+        if ($invoiceId < 1 || !in_array($provider, ['infinitepay', 'external'], true)) {
+            throw new RuntimeException('Selecione uma cobrança e um provedor externo válido.');
+        }
+        if ($externalId === '' || $checkoutUrl === '') {
+            throw new RuntimeException('Informe o identificador e o link da cobrança externa.');
+        }
+        if (!filter_var($checkoutUrl, FILTER_VALIDATE_URL)) {
+            throw new RuntimeException('Informe um link de pagamento válido.');
+        }
+
+        $invoice = $this->loadInvoice($invoiceId);
+        if (!$invoice) {
+            throw new RuntimeException('Cobrança não encontrada.');
+        }
+
+        $duplicate = Database::connection()->prepare(
+            'SELECT id, invoice_number FROM tenant_invoices
+             WHERE gateway_provider = :provider AND external_payment_id = :external_id AND id <> :invoice_id
+             LIMIT 1'
+        );
+        $duplicate->execute(['provider' => $provider, 'external_id' => $externalId, 'invoice_id' => $invoiceId]);
+        if ($duplicateInvoice = $duplicate->fetch(PDO::FETCH_ASSOC)) {
+            throw new RuntimeException('Esse identificador externo já está vinculado à cobrança ' . $duplicateInvoice['invoice_number'] . '.');
+        }
+
+        $gateway = $gatewayId > 0 ? $this->loadGateway($gatewayId) : $this->gatewayByProvider($provider);
+        $gatewayDbId = $gateway ? (int) $gateway['id'] : null;
+        $mappedStatus = $this->mapExternalStatus($externalStatus) ?? 'open';
+        $payload = [
+            'source' => 'admin_import',
+            'provider' => $provider,
+            'external_id' => $externalId,
+            'checkout_url' => $checkoutUrl,
+            'status' => $externalStatus,
+            'imported_at' => date(DATE_ATOM),
+        ];
+
+        $statement = Database::connection()->prepare(
+            'UPDATE tenant_invoices
+             SET payment_gateway_id = :gateway_id,
+                 gateway_provider = :provider,
+                 external_payment_id = :external_id,
+                 external_checkout_url = :checkout_url_a,
+                 external_invoice_url = :checkout_url_b,
+                 external_status = :external_status,
+                 payment_payload_json = :payload,
+                 payment_link_created_at = COALESCE(payment_link_created_at, NOW()),
+                 external_imported_at = NOW(),
+                 payment_status_checked_at = NOW()
+             WHERE id = :id'
+        );
+        $statement->execute([
+            'gateway_id' => $gatewayDbId,
+            'provider' => $provider,
+            'external_id' => $externalId,
+            'checkout_url_a' => $checkoutUrl,
+            'checkout_url_b' => $checkoutUrl,
+            'external_status' => $externalStatus,
+            'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'id' => $invoiceId,
+        ]);
+
+        $this->updateInvoiceStatus($invoiceId, $mappedStatus, $externalId, $payload + ['checkout_url' => $checkoutUrl]);
+        $this->logEvent((int) $invoice['tenant_id'], $gatewayDbId, 'payment.external_imported', 'success', $payload + [
+            'invoice_id' => $invoiceId,
+            'invoice_number' => $invoice['invoice_number'],
+        ]);
+
+        return [
+            'invoice_id' => $invoiceId,
+            'invoice_number' => $invoice['invoice_number'],
+            'provider' => $provider,
+            'external_id' => $externalId,
+            'checkout_url' => $checkoutUrl,
+            'status' => $mappedStatus,
+        ];
+    }
+
+    public function refreshInvoiceStatus(int $invoiceId): array
+    {
+        $invoice = $this->loadInvoice($invoiceId);
+        if (!$invoice) {
+            throw new RuntimeException('Cobrança não encontrada.');
+        }
+        $provider = strtolower((string) ($invoice['gateway_provider'] ?? ''));
+        $externalId = trim((string) ($invoice['external_payment_id'] ?? ''));
+        if ($provider !== 'pagbank') {
+            throw new RuntimeException('A consulta direta de status está disponível para cobranças PagBank. Provedores externos são atualizados pelo webhook normalizado ou manualmente.');
+        }
+        if ($externalId === '') {
+            throw new RuntimeException('A cobrança não possui identificador PagBank.');
+        }
+
+        $gateway = !empty($invoice['payment_gateway_id'])
+            ? $this->loadGateway((int) $invoice['payment_gateway_id'])
+            : $this->gatewayByProvider('pagbank');
+        if (!$gateway) {
+            throw new RuntimeException('Gateway PagBank ativo não encontrado.');
+        }
+
+        $response = $this->requestJson(
+            'GET',
+            rtrim($this->baseUrl($gateway), '/') . '/checkouts/' . rawurlencode($externalId),
+            ['Authorization: Bearer ' . $this->apiKey($gateway)]
+        );
+        $statusSource = $this->extractPagBankStatus($response);
+        $mappedStatus = $this->mapPagBankStatus($statusSource) ?? 'open';
+        $this->updateInvoiceStatus($invoiceId, $mappedStatus, $externalId, $response);
+        $this->logEvent((int) $invoice['tenant_id'], (int) $gateway['id'], 'payment.status_refreshed', 'success', [
+            'invoice_id' => $invoiceId,
+            'external_id' => $externalId,
+            'provider' => 'pagbank',
+            'source_status' => $statusSource,
+            'mapped_status' => $mappedStatus,
+        ]);
+
+        return ['status' => $mappedStatus, 'source_status' => $statusSource, 'payload' => $response];
+    }
+
+    public function setInvoiceStatus(int $invoiceId, string $status, array $payload = []): array
+    {
+        if (!in_array($status, ['open', 'paid', 'overdue', 'cancelled'], true)) {
+            throw new RuntimeException('Situação da cobrança inválida.');
+        }
+        $invoice = $this->loadInvoice($invoiceId);
+        if (!$invoice) {
+            throw new RuntimeException('Cobrança não encontrada.');
+        }
+        $this->updateInvoiceStatus($invoiceId, $status, (string) ($invoice['external_payment_id'] ?? ''), $payload + ['source' => 'admin']);
+        return ['tenant_id' => (int) $invoice['tenant_id'], 'status' => $status];
     }
 
     private function createAsaasPayment(array $gateway, array $invoice, string $method): array
@@ -517,7 +679,8 @@ final class PaymentGatewayService
                  external_invoice_url = :invoice_url,
                  external_status = :external_status,
                  payment_payload_json = :payload,
-                 payment_link_created_at = NOW()
+                 payment_link_created_at = NOW(),
+                 payment_status_checked_at = NOW()
              WHERE id = :id'
         );
         $statement->execute([
@@ -535,52 +698,86 @@ final class PaymentGatewayService
 
     private function updateInvoiceStatus(int $invoiceId, string $status, string $externalId, array $payload): void
     {
+        $checkoutUrl = trim((string) ($payload['checkout_url'] ?? $payload['payment_url'] ?? $payload['link'] ?? ''));
         $statement = Database::connection()->prepare(
             'UPDATE tenant_invoices
              SET status = :status,
                  paid_at = CASE WHEN :paid_status = "paid" THEN COALESCE(paid_at, NOW()) ELSE paid_at END,
                  external_payment_id = COALESCE(NULLIF(:external_id, ""), external_payment_id),
+                 external_checkout_url = COALESCE(NULLIF(:checkout_url_a, ""), external_checkout_url),
+                 external_invoice_url = COALESCE(NULLIF(:checkout_url_b, ""), external_invoice_url),
                  external_status = :external_status,
-                 payment_payload_json = :payload
+                 payment_payload_json = :payload,
+                 payment_status_checked_at = NOW()
              WHERE id = :id'
         );
         $statement->execute([
             'status' => $status,
             'paid_status' => $status,
             'external_id' => $externalId,
+            'checkout_url_a' => $checkoutUrl,
+            'checkout_url_b' => $checkoutUrl,
             'external_status' => $status,
             'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'id' => $invoiceId,
         ]);
 
-        if ($status === 'paid') {
-            $tenantStatement = Database::connection()->prepare('SELECT tenant_id FROM tenant_invoices WHERE id = :id LIMIT 1');
-            $tenantStatement->execute(['id' => $invoiceId]);
-            $tenantId = (int) ($tenantStatement->fetchColumn() ?: 0);
-            if ($tenantId > 0) {
-                $graceDays = max(0, (int) Env::get('BILLING_ACCESS_GRACE_DAYS', 5));
-                $pending = Database::connection()->prepare(
-                    'SELECT COUNT(*) FROM tenant_invoices
-                     WHERE tenant_id = :tenant_id
-                       AND status IN ("open", "overdue")
-                       AND DATEDIFF(CURDATE(), due_date) > :grace_days'
-                );
-                $pending->bindValue(':tenant_id', $tenantId, PDO::PARAM_INT);
-                $pending->bindValue(':grace_days', $graceDays, PDO::PARAM_INT);
-                $pending->execute();
-                if ((int) $pending->fetchColumn() === 0) {
+        $invoiceStatement = Database::connection()->prepare(
+            'SELECT tenant_id, subscription_id, period_start, period_end
+             FROM tenant_invoices WHERE id = :id LIMIT 1'
+        );
+        $invoiceStatement->execute(['id' => $invoiceId]);
+        $invoice = $invoiceStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+        $tenantId = (int) ($invoice['tenant_id'] ?? 0);
+
+        if ($status === 'paid' && $tenantId > 0) {
+            $graceDays = max(0, (int) Env::get('BILLING_ACCESS_GRACE_DAYS', 5));
+            $pending = Database::connection()->prepare(
+                'SELECT COUNT(*) FROM tenant_invoices
+                 WHERE tenant_id = :tenant_id
+                   AND status IN ("open", "overdue")
+                   AND DATEDIFF(CURDATE(), due_date) > :grace_days'
+            );
+            $pending->bindValue(':tenant_id', $tenantId, PDO::PARAM_INT);
+            $pending->bindValue(':grace_days', $graceDays, PDO::PARAM_INT);
+            $pending->execute();
+            if ((int) $pending->fetchColumn() === 0) {
+                $subscriptionId = (int) ($invoice['subscription_id'] ?? 0);
+                if ($subscriptionId > 0) {
                     Database::connection()->prepare(
                         'UPDATE tenant_subscriptions
-                         SET billing_status = CASE
-                            WHEN current_period_ends_at >= CURDATE() THEN "active"
-                            ELSE billing_status
-                         END
-                         WHERE tenant_id = :tenant_id
-                         ORDER BY id DESC
-                         LIMIT 1'
-                    )->execute(['tenant_id' => $tenantId]);
+                         SET billing_status = "active",
+                             current_period_starts_at = COALESCE(NULLIF(:period_start, ""), current_period_starts_at),
+                             current_period_ends_at = CASE
+                                 WHEN :period_end_check <> "" AND :period_end_compare > current_period_ends_at THEN :period_end_value
+                                 ELSE current_period_ends_at
+                             END,
+                             next_billing_at = CASE
+                                 WHEN :period_end_next_check <> "" THEN DATE_ADD(:period_end_next_value, INTERVAL 1 DAY)
+                                 ELSE next_billing_at
+                             END,
+                             cancel_at = NULL
+                         WHERE id = :subscription_id'
+                    )->execute([
+                        'period_start' => (string) ($invoice['period_start'] ?? ''),
+                        'period_end_check' => (string) ($invoice['period_end'] ?? ''),
+                        'period_end_compare' => (string) ($invoice['period_end'] ?? ''),
+                        'period_end_value' => (string) ($invoice['period_end'] ?? ''),
+                        'period_end_next_check' => (string) ($invoice['period_end'] ?? ''),
+                        'period_end_next_value' => (string) ($invoice['period_end'] ?? ''),
+                        'subscription_id' => $subscriptionId,
+                    ]);
                 }
+                Database::connection()->prepare('UPDATE tenants SET status = "active" WHERE id = :tenant_id')
+                    ->execute(['tenant_id' => $tenantId]);
+                Database::connection()->prepare('UPDATE tenant_invoices SET access_released_at = NOW() WHERE id = :id')
+                    ->execute(['id' => $invoiceId]);
             }
+        } elseif ($status === 'overdue' && $tenantId > 0) {
+            Database::connection()->prepare(
+                'UPDATE tenant_subscriptions SET billing_status = "overdue"
+                 WHERE tenant_id = :tenant_id ORDER BY id DESC LIMIT 1'
+            )->execute(['tenant_id' => $tenantId]);
         }
     }
 
@@ -695,6 +892,52 @@ final class PaymentGatewayService
             return 'open';
         }
         return null;
+    }
+
+    private function mapExternalStatus(string $status): ?string
+    {
+        $source = mb_strtolower(trim($status));
+        if ($source === '') {
+            return null;
+        }
+        if (in_array($source, ['paid', 'paga', 'pago', 'approved', 'completed', 'confirmed', 'recebida', 'recebido'], true)) {
+            return 'paid';
+        }
+        if (in_array($source, ['overdue', 'vencida', 'vencido', 'late'], true)) {
+            return 'overdue';
+        }
+        if (in_array($source, ['cancelled', 'canceled', 'cancelada', 'cancelado', 'expired', 'expirada', 'expirado', 'declined'], true)) {
+            return 'cancelled';
+        }
+        if (in_array($source, ['open', 'aberta', 'aberto', 'pending', 'pendente', 'waiting', 'created', 'active'], true)) {
+            return 'open';
+        }
+        return null;
+    }
+
+    private function extractPagBankStatus(array $payload): string
+    {
+        foreach (['payments', 'charges'] as $collectionKey) {
+            $collection = $payload[$collectionKey] ?? [];
+            if (!is_array($collection)) {
+                continue;
+            }
+            foreach ($collection as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $status = strtoupper((string) ($item['status'] ?? ''));
+                if ($status === 'PAID') {
+                    return $status;
+                }
+            }
+            foreach ($collection as $item) {
+                if (is_array($item) && !empty($item['status'])) {
+                    return (string) $item['status'];
+                }
+            }
+        }
+        return (string) ($payload['status'] ?? '');
     }
 
     private function requestJson(string $method, string $url, array $headers = [], array $payload = []): array
