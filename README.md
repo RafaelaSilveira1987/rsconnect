@@ -1,18 +1,20 @@
 # RS Connect
 
-Pacote consolidado até o ZIP 21.
+Pacote consolidado até o ZIP 35.0.
 
 ## Última etapa incluída
 
-ZIP 21 — Campanhas e disparos controlados.
+ZIP 35.0 — Agenda Google com ciclo completo e rotinas automáticas.
 
 ## Atualização principal
 
-Execute as migrations em ordem. Para sair do ZIP 20 para o ZIP 21, execute:
+Execute as migrations em ordem. Para atualizar a base mais recente, mantenha as migrations anteriores aplicadas e execute:
 
 ```text
-database/migrations/021_campaigns_controlled_broadcasts.sql
+database/migrations/041_calendar_google_full_cycle.sql
 ```
+
+Consulte `README-ZIP-35.0.md` para configurar o workflow n8n e a manutenção automática.
 
 ## Módulos principais
 

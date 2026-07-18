@@ -504,7 +504,7 @@ final class SecurityService
     private function apiKeyWarnings(): array
     {
         $warnings = [];
-        foreach (['EVOLUTION_DEFAULT_API_KEY', 'OPENAI_API_KEY', 'N8N_CALLBACK_TOKEN', 'BILLING_CRON_TOKEN'] as $key) {
+        foreach (['EVOLUTION_DEFAULT_API_KEY', 'OPENAI_API_KEY', 'N8N_CALLBACK_TOKEN', 'BILLING_CRON_TOKEN', 'CALENDAR_MAINTENANCE_TOKEN'] as $key) {
             $value = (string) Env::get($key, '');
             if ($value === '' || str_contains($value, 'troque') || str_contains($value, 'SUA_CHAVE') || strlen($value) < 12) {
                 $warnings[] = $key;

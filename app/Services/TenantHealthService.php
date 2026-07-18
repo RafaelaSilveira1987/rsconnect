@@ -493,7 +493,7 @@ final class TenantHealthService
     {
         $settings = $this->row('SELECT * FROM tenant_calendar_availability_settings WHERE tenant_id = :tenant_id LIMIT 1', ['tenant_id' => $tenantId]);
         if (!$settings || (int) ($settings['enabled'] ?? 0) !== 1) {
-            return [$this->check('Agenda', 'calendar.disabled', 'Agenda inteligente', 'info', 'A Agenda Inteligente não está ativada para esta empresa.', [], '/calendar?tab=availability', 80)];
+            return [$this->check('Agenda', 'calendar.disabled', 'Agenda inteligente', 'info', 'A Agenda Inteligente não está ativada para esta empresa.', [], '/calendar?section=availability', 80)];
         }
 
         $status = 'ok';
@@ -503,6 +503,12 @@ final class TenantHealthService
         if (empty($settings[$urlField]) && empty($settings['n8n_webhook_url_encrypted'])) {
             $status = 'critical';
             $problems[] = 'webhook n8n não configurado';
+        }
+        if ($mode === 'free_slots'
+            && !empty($settings['create_google_event_on_confirm'])
+            && empty($settings['calendar_event_webhook_url_encrypted'])) {
+            $status = 'critical';
+            $problems[] = 'fluxo do ciclo Google não configurado';
         }
         $lastRequest = $this->row('SELECT * FROM calendar_availability_requests WHERE tenant_id = :tenant_id ORDER BY id DESC LIMIT 1', ['tenant_id' => $tenantId]);
         $lastSync = $this->row('SELECT * FROM calendar_google_sync_logs WHERE tenant_id = :tenant_id ORDER BY id DESC LIMIT 1', ['tenant_id' => $tenantId]);
@@ -519,6 +525,41 @@ final class TenantHealthService
             $status = $status === 'critical' ? 'critical' : 'warning';
             $problems[] = $expiredHolds . ' pré-reserva(s) vencida(s)';
         }
+        $confirmedWithoutEvent = 0;
+        $failedSyncs = 0;
+        $lastMaintenance = null;
+        if ($this->hasColumn('calendar_appointments', 'google_sync_key')) {
+            $confirmedWithoutEvent = (int) $this->value(
+                'SELECT COUNT(*) FROM calendar_appointments
+                 WHERE tenant_id = :tenant_id
+                   AND availability_source IN ("google_free_slots", "internal_fallback")
+                   AND status IN ("scheduled", "confirmed")
+                   AND starts_at >= NOW()
+                   AND (google_event_id IS NULL OR google_event_id = "")',
+                ['tenant_id' => $tenantId],
+                0
+            );
+            $failedSyncs = (int) $this->value(
+                'SELECT COUNT(*) FROM calendar_appointments
+                 WHERE tenant_id = :tenant_id AND (sync_status = "failed" OR google_event_state = "error")',
+                ['tenant_id' => $tenantId],
+                0
+            );
+            if ($this->tableExists('calendar_maintenance_runs')) {
+                $lastMaintenance = $this->row(
+                    'SELECT * FROM calendar_maintenance_runs WHERE tenant_id = :tenant_id OR tenant_id IS NULL ORDER BY id DESC LIMIT 1',
+                    ['tenant_id' => $tenantId]
+                );
+            }
+        }
+        if ($confirmedWithoutEvent > 0) {
+            $status = $status === 'critical' ? 'critical' : 'warning';
+            $problems[] = $confirmedWithoutEvent . ' compromisso(s) confirmado(s) sem evento Google';
+        }
+        if ($failedSyncs > 0) {
+            $status = $status === 'critical' ? 'critical' : 'warning';
+            $problems[] = $failedSyncs . ' sincronização(ões) com falha';
+        }
         $summary = $problems ? 'Revisar: ' . implode('; ', $problems) . '.' : 'Agenda configurada e sem falhas recentes.';
         return [$this->check('Agenda', 'calendar.integration', 'Agenda e Google Calendar', $status, $summary, [
             'Modo' => $mode === 'marked_events' ? 'Eventos VAGO' : 'Espaços livres',
@@ -526,8 +567,11 @@ final class TenantHealthService
             'Última busca' => $this->formatDatabaseDate($lastRequest['created_at'] ?? null, 'Nenhuma'),
             'Situação da última busca' => (string) ($lastRequest['status'] ?? 'Não disponível'),
             'Última sincronização Google' => $this->formatDatabaseDate($lastSync['created_at'] ?? null, 'Nenhuma'),
+            'Última manutenção' => $this->formatDatabaseDate($lastMaintenance['finished_at'] ?? $lastMaintenance['started_at'] ?? null, 'Nenhuma'),
             'Pré-reservas vencidas' => (string) $expiredHolds,
-        ], '/calendar?tab=availability', 80)];
+            'Confirmados sem evento' => (string) $confirmedWithoutEvent,
+            'Sincronizações com falha' => (string) $failedSyncs,
+        ], '/calendar?section=availability', 80)];
     }
 
     /** @return array<int,array<string,mixed>> */
@@ -903,7 +947,7 @@ final class TenantHealthService
             'key' => 'calendar',
             'label' => 'Agenda e pré-agendamento',
             'description' => 'Regras de disponibilidade, Google Calendar, eventos VAGO e mensagens enviadas ao contato.',
-            'action_url' => '/calendar?tab=availability',
+            'action_url' => '/calendar?section=availability',
             'records' => [
                 $this->configurationRecord('Agenda Inteligente', 'Disponibilidade e Google Calendar', !empty($calendar['enabled']) ? 'ok' : 'info', $calendarFields),
                 $this->configurationRecord('Pré-agendamento', 'Regras e mensagens ao cliente', !empty($preSchedule['enabled']) ? 'ok' : 'info', $preFields, [
@@ -1552,6 +1596,34 @@ final class TenantHealthService
             return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
             return [];
+        }
+    }
+
+    private function tableExists(string $table): bool
+    {
+        try {
+            $statement = $this->pdo->prepare(
+                'SELECT 1 FROM information_schema.tables
+                 WHERE table_schema = DATABASE() AND table_name = :table LIMIT 1'
+            );
+            $statement->execute(['table' => $table]);
+            return (bool) $statement->fetchColumn();
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        try {
+            $statement = $this->pdo->prepare(
+                'SELECT 1 FROM information_schema.columns
+                 WHERE table_schema = DATABASE() AND table_name = :table AND column_name = :column LIMIT 1'
+            );
+            $statement->execute(['table' => $table, 'column' => $column]);
+            return (bool) $statement->fetchColumn();
+        } catch (Throwable) {
+            return false;
         }
     }
 

@@ -12,6 +12,7 @@ $slots = $slots ?? [];
 $googleLogs = $googleLogs ?? [];
 $metrics = $metrics ?? [];
 $integration = $integration ?? [];
+$maintenance = $maintenance ?? [];
 $isRsAdmin = Auth::isSuperAdmin();
 $availabilityMode = ($settings['availability_mode'] ?? 'free_slots') === 'marked_events' ? 'marked_events' : 'free_slots';
 $workdays = json_decode((string) ($settings['workdays_json'] ?? '[]'), true);
@@ -44,6 +45,12 @@ $eventStateLabels = [
     'confirmed' => 'Confirmado',
     'released' => 'Liberado',
     'error' => 'Erro',
+    'create_requested' => 'Criação em andamento',
+    'update_requested' => 'Atualização em andamento',
+    'delete_requested' => 'Remoção em andamento',
+    'created' => 'Criado no Google',
+    'updated' => 'Atualizado no Google',
+    'deleted' => 'Removido do Google',
 ];
 $modeLabels = [
     'free_slots' => 'Calcular espaços livres',
@@ -252,6 +259,7 @@ $requestInsight = static function (array $request): string {
                     <div class="calendar-diagnostic <?= !empty($integration['n8n_enabled']) ? 'is-ok' : 'is-warning' ?>"><strong>n8n</strong><span><?= !empty($integration['n8n_enabled']) ? 'Ativado' : 'Desativado' ?></span></div>
                     <div class="calendar-diagnostic <?= !empty($integration['active_url_configured']) ? 'is-ok' : 'is-error' ?>"><strong>URL do modo atual</strong><span><?= !empty($integration['active_url_configured']) ? 'Configurada' : 'Não configurada' ?></span></div>
                     <div class="calendar-diagnostic <?= !empty($integration['token_configured']) ? 'is-ok' : 'is-warning' ?>"><strong>Token</strong><span><?= !empty($integration['token_configured']) ? 'Protegido' : 'Não informado' ?></span></div>
+                    <div class="calendar-diagnostic <?= !empty($settings['calendar_event_webhook_url']) ? 'is-ok' : 'is-error' ?>"><strong>Ciclo do evento</strong><span><?= !empty($settings['calendar_event_webhook_url']) ? 'Configurado' : 'Não configurado' ?></span></div>
                     <div class="calendar-diagnostic <?= (($integration['last_status'] ?? '') === 'received') ? 'is-ok' : ((($integration['last_status'] ?? '') === 'failed') ? 'is-error' : 'is-warning') ?>"><strong>Última consulta</strong><span><?= View::e($statusLabels[$integration['last_status'] ?? ''] ?? (($integration['last_status'] ?? '') ?: 'Sem teste')) ?></span></div>
                 </div>
                 <?php if (!empty($integration['last_error'])): ?><div class="calendar-inline-alert"><?= View::e($integration['last_error']) ?></div><?php endif; ?>
@@ -276,6 +284,7 @@ $requestInsight = static function (array $request): string {
 
                 <div class="field"><label>URL — fluxo Espaços livres</label><input type="url" name="free_slots_webhook_url" value="<?= View::e($settings['free_slots_webhook_url'] ?? '') ?>" placeholder="https://n8n.../webhook/..."></div>
                 <div class="field"><label>URL — fluxo Eventos VAGO</label><input type="url" name="marked_events_webhook_url" value="<?= View::e($settings['marked_events_webhook_url'] ?? '') ?>" placeholder="https://n8n.../webhook/..."></div>
+                <div class="field"><label>URL — criar, atualizar e remover eventos confirmados</label><input type="url" name="calendar_event_webhook_url" value="<?= View::e($settings['calendar_event_webhook_url'] ?? '') ?>" placeholder="https://n8n.../webhook/rsconnect-agenda-google-ciclo-completo"><small class="muted-text">Usada no modo Espaços livres depois que o horário é aprovado.</small></div>
                 <div class="field"><label>Token dos webhooks</label><input type="password" name="secret_token" autocomplete="off" value="<?= View::e($settings['secret_token'] ?? '') ?>" placeholder="Mesmo token configurado no n8n"></div>
                 <div class="field"><label>ID do calendário Google</label><input type="text" name="google_calendar_id" value="<?= View::e($settings['google_calendar_id'] ?? 'primary') ?>" placeholder="primary ou ID do calendário"></div>
                 <div class="field-grid two">
@@ -286,9 +295,21 @@ $requestInsight = static function (array $request): string {
                     <label class="switch-inline"><input type="checkbox" name="use_internal_fallback" value="1" <?= !empty($settings['use_internal_fallback']) ? 'checked' : '' ?>><span>Usar fallback interno quando o n8n falhar</span></label>
                     <p class="muted-text">Durante os testes, desative o fallback para não confundir horários locais com o retorno real do Google.</p>
                 </div>
+                <div class="calendar-lifecycle-settings">
+                    <h3>Ciclo do compromisso confirmado</h3>
+                    <label class="switch-inline"><input type="checkbox" name="create_google_event_on_confirm" value="1" <?= !empty($settings['create_google_event_on_confirm']) ? 'checked' : '' ?>><span>Criar evento no Google ao confirmar um horário livre</span></label>
+                    <label class="switch-inline"><input type="checkbox" name="require_google_sync_on_confirm" value="1" <?= !empty($settings['require_google_sync_on_confirm']) ? 'checked' : '' ?>><span>Não concluir a aprovação se o Google não confirmar o evento</span></label>
+                    <label class="switch-inline"><input type="checkbox" name="update_google_event_on_reschedule" value="1" <?= !empty($settings['update_google_event_on_reschedule']) ? 'checked' : '' ?>><span>Atualizar o mesmo evento quando o horário mudar</span></label>
+                    <label class="switch-inline"><input type="checkbox" name="delete_google_event_on_cancel" value="1" <?= !empty($settings['delete_google_event_on_cancel']) ? 'checked' : '' ?>><span>Remover o evento ao cancelar, recusar ou remarcar</span></label>
+                    <label class="switch-inline"><input type="checkbox" name="maintenance_enabled" value="1" <?= !empty($settings['maintenance_enabled']) ? 'checked' : '' ?>><span>Ativar manutenção automática da agenda</span></label>
+                    <div class="field-grid two">
+                        <div class="field"><label>Executar manutenção a cada</label><div class="input-with-suffix"><input type="number" name="maintenance_interval_minutes" min="5" max="1440" value="<?= (int) ($settings['maintenance_interval_minutes'] ?? 10) ?>"><span>min</span></div></div>
+                        <div class="field"><label>Máximo de novas tentativas</label><input type="number" name="max_sync_attempts" min="1" max="10" value="<?= (int) ($settings['max_sync_attempts'] ?? 3) ?>"></div>
+                    </div>
+                </div>
                 <div class="calendar-admin-note">
                     <strong>Teste recomendado</strong>
-                    <p>Desative o fallback, faça uma busca e confira a execução no n8n. No modo VAGO, o retorno precisa conter <code>google_event_id</code>.</p>
+                    <p>Desative o fallback, faça uma busca e confira a execução no n8n. No modo VAGO, o retorno precisa conter <code>google_event_id</code>. No modo Espaços livres, confirme um horário e valide a criação do evento pelo fluxo de ciclo completo.</p>
                 </div>
             </aside>
         <?php endif; ?>
@@ -299,6 +320,34 @@ $requestInsight = static function (array $request): string {
         <?php if (!$isRsAdmin): ?><small class="muted-text">As URLs, credenciais e tokens são administrados pela equipe RS.</small><?php endif; ?>
     </div>
 </form>
+
+<?php if ($isRsAdmin): ?>
+<section class="card calendar-maintenance-card" id="calendar-maintenance" style="margin-top:16px">
+    <div class="section-heading">
+        <div><span class="eyebrow">Automação da agenda</span><h2>Manutenção e ciclo do Google</h2></div>
+        <form method="post" action="<?= View::e(Router::url('/calendar/maintenance/run')) ?>">
+            <?= Csrf::input() ?>
+            <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
+            <button class="btn btn-secondary" type="submit">Executar manutenção agora</button>
+        </form>
+    </div>
+    <div class="calendar-maintenance-grid">
+        <div><span>Pré-reservas vencidas</span><strong><?= (int) ($maintenance['expired_holds'] ?? 0) ?></strong><small>eventos VAGO aguardando liberação</small></div>
+        <div><span>Confirmados sem evento</span><strong><?= (int) ($maintenance['confirmed_without_event'] ?? 0) ?></strong><small>sincronização pendente</small></div>
+        <div><span>Sincronizações com falha</span><strong><?= (int) ($maintenance['failed_syncs'] ?? 0) ?></strong><small>novas tentativas limitadas</small></div>
+        <div><span>Callbacks vencidos</span><strong><?= (int) ($maintenance['stale_requests'] ?? 0) ?></strong><small>mais de 30 minutos</small></div>
+    </div>
+    <?php $lastRun = $maintenance['last_run'] ?? null; ?>
+    <div class="calendar-maintenance-footer">
+        <span class="badge <?= !empty($maintenance['enabled']) ? 'badge-success' : 'badge-warning' ?>"><?= !empty($maintenance['enabled']) ? 'Manutenção ativa' : 'Manutenção desativada' ?></span>
+        <span><?= $lastRun ? 'Última execução: ' . View::e($date($lastRun['finished_at'] ?? $lastRun['started_at'] ?? null)) . ' · ' . View::e((string) ($lastRun['status'] ?? '')) : 'Nenhuma execução registrada.' ?></span>
+    </div>
+    <div class="calendar-admin-note">
+        <strong>Execução automática</strong>
+        <p>Agende no n8n ou no cron a chamada <code>/webhooks/calendar/maintenance/run?token=SEU_TOKEN</code>. A rotina libera pré-reservas vencidas, encerra callbacks antigos e tenta sincronizar eventos confirmados.</p>
+    </div>
+</section>
+<?php endif; ?>
 
 <section class="card" id="horarios-disponiveis" style="margin-top:16px">
     <div class="section-heading">

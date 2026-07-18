@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "run_id": 12,
+  "status": "success",
+  "result": {
+    "expired_holds_found": 1,
+    "expired_holds_released": 1,
+    "syncs_retried": 1,
+    "google_events_created": 1,
+    "google_events_updated": 0,
+    "google_events_deleted": 0,
+    "stale_requests_closed": 2,
+    "errors": []
+  }
+}

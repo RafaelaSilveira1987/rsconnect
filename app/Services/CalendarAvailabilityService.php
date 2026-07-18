@@ -29,6 +29,7 @@ final class CalendarAvailabilityService
             'n8n_webhook_url' => '',
             'free_slots_webhook_url' => '',
             'marked_events_webhook_url' => '',
+            'calendar_event_webhook_url' => '',
             'secret_token' => '',
             'google_calendar_id' => 'primary',
             'timezone' => 'America/Sao_Paulo',
@@ -42,6 +43,13 @@ final class CalendarAvailabilityService
             'hold_minutes' => 30,
             'revalidate_before_update' => 1,
             'restore_on_cancel' => 1,
+            'create_google_event_on_confirm' => 1,
+            'require_google_sync_on_confirm' => 1,
+            'update_google_event_on_reschedule' => 1,
+            'delete_google_event_on_cancel' => 1,
+            'maintenance_enabled' => 1,
+            'maintenance_interval_minutes' => 10,
+            'max_sync_attempts' => 3,
             'default_duration_minutes' => 50,
             'slot_interval_minutes' => 30,
             'buffer_minutes' => 10,
@@ -69,6 +77,7 @@ final class CalendarAvailabilityService
                 'n8n_webhook_url_encrypted' => 'n8n_webhook_url',
                 'free_slots_webhook_url_encrypted' => 'free_slots_webhook_url',
                 'marked_events_webhook_url_encrypted' => 'marked_events_webhook_url',
+                'calendar_event_webhook_url_encrypted' => 'calendar_event_webhook_url',
                 'secret_token_encrypted' => 'secret_token',
             ] as $encryptedKey => $plainKey) {
                 if (!empty($row[$encryptedKey])) {
@@ -153,6 +162,20 @@ final class CalendarAvailabilityService
         }
         $useN8n = $canManageIntegration ? !empty($data['use_n8n']) : !empty($current['use_n8n']);
         $useInternalFallback = $canManageIntegration ? !empty($data['use_internal_fallback']) : !empty($current['use_internal_fallback']);
+        $calendarEventUrl = $canManageIntegration
+            ? trim((string) ($data['calendar_event_webhook_url'] ?? ''))
+            : trim((string) ($current['calendar_event_webhook_url'] ?? ''));
+        $createGoogleEvent = $canManageIntegration ? !empty($data['create_google_event_on_confirm']) : !empty($current['create_google_event_on_confirm']);
+        $requireGoogleSync = $canManageIntegration ? !empty($data['require_google_sync_on_confirm']) : !empty($current['require_google_sync_on_confirm']);
+        $updateGoogleEvent = $canManageIntegration ? !empty($data['update_google_event_on_reschedule']) : !empty($current['update_google_event_on_reschedule']);
+        $deleteGoogleEvent = $canManageIntegration ? !empty($data['delete_google_event_on_cancel']) : !empty($current['delete_google_event_on_cancel']);
+        $maintenanceEnabled = $canManageIntegration ? !empty($data['maintenance_enabled']) : !empty($current['maintenance_enabled']);
+        $maintenanceInterval = $canManageIntegration
+            ? max(5, min(1440, (int) ($data['maintenance_interval_minutes'] ?? 10)))
+            : max(5, min(1440, (int) ($current['maintenance_interval_minutes'] ?? 10)));
+        $maxSyncAttempts = $canManageIntegration
+            ? max(1, min(10, (int) ($data['max_sync_attempts'] ?? 3)))
+            : max(1, min(10, (int) ($current['max_sync_attempts'] ?? 3)));
 
         $statement = Database::connection()->prepare(
             'INSERT INTO tenant_calendar_availability_settings
@@ -237,6 +260,32 @@ final class CalendarAvailabilityService
             'min_notice_hours' => $notice,
             'max_suggestions' => $maxSuggestions,
         ]);
+
+        if ($this->hasColumn('tenant_calendar_availability_settings', 'calendar_event_webhook_url_encrypted')) {
+            Database::connection()->prepare(
+                'UPDATE tenant_calendar_availability_settings
+                 SET calendar_event_webhook_url_encrypted = :calendar_event_webhook_url_encrypted,
+                     create_google_event_on_confirm = :create_google_event_on_confirm,
+                     require_google_sync_on_confirm = :require_google_sync_on_confirm,
+                     update_google_event_on_reschedule = :update_google_event_on_reschedule,
+                     delete_google_event_on_cancel = :delete_google_event_on_cancel,
+                     maintenance_enabled = :maintenance_enabled,
+                     maintenance_interval_minutes = :maintenance_interval_minutes,
+                     max_sync_attempts = :max_sync_attempts,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE tenant_id = :tenant_id'
+            )->execute([
+                'calendar_event_webhook_url_encrypted' => $calendarEventUrl !== '' ? Crypto::encrypt($calendarEventUrl) : null,
+                'create_google_event_on_confirm' => $createGoogleEvent ? 1 : 0,
+                'require_google_sync_on_confirm' => $requireGoogleSync ? 1 : 0,
+                'update_google_event_on_reschedule' => $updateGoogleEvent ? 1 : 0,
+                'delete_google_event_on_cancel' => $deleteGoogleEvent ? 1 : 0,
+                'maintenance_enabled' => $maintenanceEnabled ? 1 : 0,
+                'maintenance_interval_minutes' => $maintenanceInterval,
+                'max_sync_attempts' => $maxSyncAttempts,
+                'tenant_id' => $tenantId,
+            ]);
+        }
     }
 
     public function requestForAppointment(int $tenantId, int $appointmentId, string $origin = 'manual'): array
@@ -361,6 +410,9 @@ final class CalendarAvailabilityService
         }
 
         $event = trim((string) ($payload['event'] ?? 'calendar.availability.result'));
+        if ($event === 'calendar.free_slot.updated') {
+            return (new CalendarGoogleLifecycleService())->handleCallback($payload, $token);
+        }
         return $event === 'calendar.marked_slot.updated'
             ? $this->handleMarkedUpdateCallback($payload, $token)
             : $this->handleAvailabilityCallback($payload, $token);
@@ -630,7 +682,8 @@ final class CalendarAvailabilityService
             'last_event_titles' => array_values(array_filter(array_map('strval', (array) ($latestResponseMeta['event_titles_sample'] ?? [])))),
         ];
 
-        return compact('settings', 'pending', 'requests', 'slots', 'googleLogs', 'metrics', 'integration');
+        $maintenance = (new CalendarGoogleLifecycleService())->maintenanceSummary($tenantId);
+        return compact('settings', 'pending', 'requests', 'slots', 'googleLogs', 'metrics', 'integration', 'maintenance');
     }
 
     private function handleAvailabilityCallback(array $payload, ?string $token): array

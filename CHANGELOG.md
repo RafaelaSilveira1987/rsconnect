@@ -219,3 +219,16 @@
 - Ações operacionais adicionadas aos avisos de backup, cobrança, IA, n8n e Evolution.
 - Status técnicos traduzidos para linguagem do usuário.
 
+
+## ZIP 35.0 — Agenda Google: ciclo completo e rotinas automáticas
+
+- Cria o evento no Google Agenda ao confirmar um horário no modo Espaços livres.
+- Usa chave idempotente por compromisso para reduzir risco de evento duplicado.
+- Atualiza ou remove o evento vinculado em remarcações, cancelamentos e exclusões.
+- Adiciona callback `calendar.free_slot.updated` com estados criado, atualizado, removido ou falha.
+- Bloqueia opcionalmente a aprovação enquanto o Google não confirmar a operação.
+- Libera automaticamente pré-reservas VAGO vencidas.
+- Encerra solicitações sem callback e tenta novamente sincronizações pendentes.
+- Adiciona execução manual, CLI e webhook protegido da manutenção.
+- Inclui painel de manutenção na Agenda e novos indicadores na Saúde do cliente.
+- Adiciona migration `041_calendar_google_full_cycle.sql` e template n8n de ciclo completo.

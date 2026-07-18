@@ -6116,3 +6116,66 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
 @media (max-width: 440px) {
   .tenant-health-occurrence-summary { grid-template-columns: 1fr; }
 }
+
+/* ZIP 35.0 — ciclo completo do Google Agenda */
+.calendar-lifecycle-settings {
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px solid #dbe7ef;
+    border-radius: 16px;
+    background: #f8fbfd;
+}
+.calendar-lifecycle-settings h3 {
+    margin: 0 0 12px;
+    color: #16233b;
+}
+.calendar-maintenance-card {
+    overflow: hidden;
+}
+.calendar-maintenance-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+.calendar-maintenance-grid > div {
+    display: flex;
+    min-height: 112px;
+    flex-direction: column;
+    gap: 5px;
+    padding: 16px;
+    border: 1px solid #dbe7ef;
+    border-radius: 16px;
+    background: #f8fbfd;
+}
+.calendar-maintenance-grid span {
+    color: #64748b;
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+.calendar-maintenance-grid strong {
+    color: #16233b;
+    font-size: 1.65rem;
+}
+.calendar-maintenance-grid small {
+    color: #64748b;
+    line-height: 1.35;
+}
+.calendar-maintenance-footer {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+    color: #64748b;
+}
+@media (max-width: 900px) {
+    .calendar-maintenance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+    .calendar-maintenance-grid { grid-template-columns: 1fr; }
+    .calendar-maintenance-card .section-heading { align-items: stretch; }
+    .calendar-maintenance-card .section-heading form,
+    .calendar-maintenance-card .section-heading .btn { width: 100%; }
+}

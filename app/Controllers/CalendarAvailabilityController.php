@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Audit;
 use App\Core\Auth;
 use App\Core\Csrf;
 use App\Core\Database;
+use App\Core\Env;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\CalendarAvailabilityService;
+use App\Services\CalendarGoogleLifecycleService;
 use PDO;
 use Throwable;
 
@@ -32,6 +35,7 @@ final class CalendarAvailabilityController
             'googleLogs' => [],
             'metrics' => ['pending' => 0, 'requests' => 0, 'slots' => 0, 'selected' => 0, 'held' => 0],
             'integration' => ['n8n_enabled' => false, 'active_url_configured' => false, 'token_configured' => false, 'calendar_configured' => false, 'active_mode' => 'free_slots', 'last_status' => '', 'last_error' => '', 'last_at' => ''],
+            'maintenance' => ['enabled' => false, 'expired_holds' => 0, 'confirmed_without_event' => 0, 'failed_syncs' => 0, 'stale_requests' => 0, 'last_run' => null],
         ];
 
         View::render('calendar_availability.index', [
@@ -45,6 +49,7 @@ final class CalendarAvailabilityController
             'googleLogs' => $dashboard['googleLogs'] ?? [],
             'metrics' => $dashboard['metrics'],
             'integration' => $dashboard['integration'] ?? [],
+            'maintenance' => $dashboard['maintenance'] ?? [],
             'canManage' => Auth::can('calendar.manage'),
         ]);
     }
@@ -99,6 +104,46 @@ final class CalendarAvailabilityController
         $result = (new CalendarAvailabilityService())->releaseSelectedSlot($tenantId, $appointmentId);
         Flash::set(!empty($result['ok']) ? 'success' : 'error', (string) ($result['message'] ?? 'Liberação processada.'));
         $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?section=availability&tenant_id=' . $tenantId);
+    }
+
+
+    public function runMaintenance(): void
+    {
+        Csrf::validate($_POST['_token'] ?? null);
+        $tenantId = $this->resolveTenantFromPost();
+        if ($tenantId < 1) {
+            Flash::set('error', 'Selecione uma empresa para executar a manutenção da agenda.');
+            $this->redirect('/calendar?section=availability');
+        }
+
+        $result = (new CalendarGoogleLifecycleService())->runMaintenance($tenantId, 'manual');
+        Audit::log('calendar.maintenance.manual', ['result' => $result], $tenantId);
+        if (!empty($result['ok']) && ($result['status'] ?? '') === 'success') {
+            Flash::set('success', 'Manutenção concluída. Pré-reservas vencidas, sincronizações e callbacks foram revisados.');
+        } elseif (!empty($result['ok'])) {
+            Flash::set('warning', 'Manutenção concluída com avisos. Abra os detalhes para revisar as ações que não puderam ser concluídas.');
+        } else {
+            Flash::set('error', 'Não foi possível concluir a manutenção da agenda: ' . (string) ($result['message'] ?? 'erro não informado'));
+        }
+        $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId . '#calendar-maintenance');
+    }
+
+    public function maintenanceCron(): void
+    {
+        $token = trim((string) ($_GET['token'] ?? $_POST['token'] ?? ''));
+        $expected = trim((string) Env::get('CALENDAR_MAINTENANCE_TOKEN', ''));
+        if ($expected === '' || !hash_equals($expected, $token)) {
+            http_response_code(403);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode(['ok' => false, 'message' => 'Token inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $tenantId = (int) ($_GET['tenant_id'] ?? $_POST['tenant_id'] ?? 0);
+        $result = (new CalendarGoogleLifecycleService())->runMaintenance($tenantId > 0 ? $tenantId : null, 'cron');
+        http_response_code(!empty($result['ok']) ? 200 : 500);
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     public function callback(): void

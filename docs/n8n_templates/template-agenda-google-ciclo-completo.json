@@ -1,0 +1,598 @@
+{
+  "name": "RS Connect — Google Agenda — Ciclo completo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rsconnect-agenda-google-ciclo-completo",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -900,
+        0
+      ],
+      "id": "webhook_cycle",
+      "name": "Webhook — ciclo completo"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nconst payload = body.payload || body;\nconst action = String(payload.action || 'create').toLowerCase();\nconst calendarId = String(payload.calendar_id || 'primary');\nconst safeId = String(payload.google_event_id || payload.google_event_id_hint || payload.idempotency_key || `rsconnect${payload.tenant_id}a${payload.appointment_id}`)\n  .toLowerCase().replace(/[^0-9a-v]/g, '').slice(0, 180);\nconst eventUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(safeId)}`;\nconst eventsUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;\nconst callback = payload.callback || body.callback || {};\nconst descriptionParts = [];\nif (payload.customer?.name) descriptionParts.push(`Contato: ${payload.customer.name}`);\nif (payload.customer?.phone) descriptionParts.push(`WhatsApp: ${payload.customer.phone}`);\nif (payload.description) descriptionParts.push(String(payload.description));\ndescriptionParts.push(`RS Connect: ${payload.idempotency_key || safeId}`);\nconst eventBody = {\n  id: safeId,\n  summary: payload.title || 'Agendamento RS Connect',\n  description: descriptionParts.join('\\n'),\n  start: { dateTime: payload.start, timeZone: payload.timezone || 'America/Sao_Paulo' },\n  end: { dateTime: payload.end, timeZone: payload.timezone || 'America/Sao_Paulo' },\n  location: payload.meeting_url || payload.location || '',\n  extendedProperties: { private: {\n    rs_connect_key: String(payload.idempotency_key || safeId),\n    rs_connect_tenant_id: String(payload.tenant_id || ''),\n    rs_connect_appointment_id: String(payload.appointment_id || '')\n  }}\n};\nreturn [{json:{...payload, action, calendar_id:calendarId, google_event_id:safeId, event_url:eventUrl, events_url:eventsUrl, callback_url:callback.url, callback_token:callback.token, event_body:eventBody}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -680,
+        0
+      ],
+      "id": "normalize",
+      "name": "Normalizar operação"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "create",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Criar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Atualizar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "delete",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Remover"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -460,
+        0
+      ],
+      "id": "switch_action",
+      "name": "Qual ação?"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.event_url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -220,
+        -240
+      ],
+      "id": "google_get",
+      "name": "Google — verificar ID"
+    },
+    {
+      "parameters": {
+        "jsCode": "const normalized = $('Normalizar operação').first().json;\nconst response = $json;\nconst status = Number(response.statusCode || response.status || 0);\nconst body = response.body || response;\nreturn [{json:{...normalized, event_exists: status === 200 && !!body.id, existing_event: body}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        -240
+      ],
+      "id": "check_exists",
+      "name": "Evento já existe?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.event_exists }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        -240
+      ],
+      "id": "if_exists",
+      "name": "Já existe"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Normalizar operação').first().json.events_url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Normalizar operação').first().json.event_body }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        -140
+      ],
+      "id": "google_create",
+      "name": "Google — criar evento"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $json.event_url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => { const b = {...$json.event_body}; delete b.id; return b; })() }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -220,
+        0
+      ],
+      "id": "google_update",
+      "name": "Google — atualizar evento"
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "={{ $json.event_url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -220,
+        240
+      ],
+      "id": "google_delete",
+      "name": "Google — remover evento"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Normalizar operação').first().json.callback_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-RS-Calendar-Token",
+              "value": "={{ $('Normalizar operação').first().json.callback_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "timeout": 30000
+        },
+        "jsonBody": "={{ { event: 'calendar.free_slot.updated', action: 'create', state: 'created', tenant_id: $('Normalizar operação').first().json.tenant_id, request_id: $('Normalizar operação').first().json.request_id, request_token: $('Normalizar operação').first().json.request_token, appointment_id: $('Normalizar operação').first().json.appointment_id, google_calendar_id: $('Normalizar operação').first().json.calendar_id, google_event_id: $('Normalizar operação').first().json.google_event_id, google_event: $json.existing_event, message: 'Evento já existia; vínculo reaproveitado.' } }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        -340
+      ],
+      "id": "callback_exists",
+      "name": "Callback — evento existente"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Normalizar operação').first().json.callback_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-RS-Calendar-Token",
+              "value": "={{ $('Normalizar operação').first().json.callback_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "timeout": 30000
+        },
+        "jsonBody": "={{ { event: 'calendar.free_slot.updated', action: 'create', state: 'created', tenant_id: $('Normalizar operação').first().json.tenant_id, request_id: $('Normalizar operação').first().json.request_id, request_token: $('Normalizar operação').first().json.request_token, appointment_id: $('Normalizar operação').first().json.appointment_id, google_calendar_id: $('Normalizar operação').first().json.calendar_id, google_event_id: $json.id || $('Normalizar operação').first().json.google_event_id, google_event: $json } }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        -140
+      ],
+      "id": "callback_create",
+      "name": "Callback — criado"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Normalizar operação').first().json.callback_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-RS-Calendar-Token",
+              "value": "={{ $('Normalizar operação').first().json.callback_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "timeout": 30000
+        },
+        "jsonBody": "={{ { event: 'calendar.free_slot.updated', action: 'update', state: 'updated', tenant_id: $('Normalizar operação').first().json.tenant_id, request_id: $('Normalizar operação').first().json.request_id, request_token: $('Normalizar operação').first().json.request_token, appointment_id: $('Normalizar operação').first().json.appointment_id, google_calendar_id: $('Normalizar operação').first().json.calendar_id, google_event_id: $json.id || $('Normalizar operação').first().json.google_event_id, google_event: $json } }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        20,
+        0
+      ],
+      "id": "callback_update",
+      "name": "Callback — atualizado"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Normalizar operação').first().json.callback_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-RS-Calendar-Token",
+              "value": "={{ $('Normalizar operação').first().json.callback_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "timeout": 30000
+        },
+        "jsonBody": "={{ { event: 'calendar.free_slot.updated', action: 'delete', state: 'deleted', tenant_id: $('Normalizar operação').first().json.tenant_id, request_id: $('Normalizar operação').first().json.request_id, request_token: $('Normalizar operação').first().json.request_token, appointment_id: $('Normalizar operação').first().json.appointment_id, google_calendar_id: $('Normalizar operação').first().json.calendar_id, google_event_id: $('Normalizar operação').first().json.google_event_id } }}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        20,
+        240
+      ],
+      "id": "callback_delete",
+      "name": "Callback — removido"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, message: 'Ciclo do Google Agenda processado', action: $('Normalizar operação').first().json.action } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        980,
+        0
+      ],
+      "id": "respond",
+      "name": "Responder RS Connect"
+    }
+  ],
+  "connections": {
+    "Webhook — ciclo completo": {
+      "main": [
+        [
+          {
+            "node": "Normalizar operação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar operação": {
+      "main": [
+        [
+          {
+            "node": "Qual ação?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qual ação?": {
+      "main": [
+        [
+          {
+            "node": "Google — verificar ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google — atualizar evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google — remover evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Google — verificar ID": {
+      "main": [
+        [
+          {
+            "node": "Evento já existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evento já existe?": {
+      "main": [
+        [
+          {
+            "node": "Já existe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Já existe": {
+      "main": [
+        [
+          {
+            "node": "Callback — evento existente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google — criar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google — criar evento": {
+      "main": [
+        [
+          {
+            "node": "Callback — criado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google — atualizar evento": {
+      "main": [
+        [
+          {
+            "node": "Callback — atualizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google — remover evento": {
+      "main": [
+        [
+          {
+            "node": "Callback — removido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback — evento existente": {
+      "main": [
+        [
+          {
+            "node": "Responder RS Connect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback — criado": {
+      "main": [
+        [
+          {
+            "node": "Responder RS Connect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback — atualizado": {
+      "main": [
+        [
+          {
+            "node": "Responder RS Connect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback — removido": {
+      "main": [
+        [
+          {
+            "node": "Responder RS Connect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "rs-connect-template-35"
+  }
+}

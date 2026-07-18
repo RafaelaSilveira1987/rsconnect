@@ -77,6 +77,13 @@ final class N8nTemplateController
             'events' => ['calendar.availability.requested', 'calendar.marked_slot.*'],
             'description' => 'Localiza VAGO — ONLINE/PRESENCIAL e atualiza o mesmo evento ao pré-reservar, confirmar ou liberar o horário.',
         ],
+        'agenda-google-ciclo-completo' => [
+            'title' => 'Agenda Google — ciclo completo',
+            'segment' => 'Agenda',
+            'file' => 'template-agenda-google-ciclo-completo.json',
+            'events' => ['calendar.free_slot.create', 'calendar.free_slot.update', 'calendar.free_slot.delete'],
+            'description' => 'Cria, atualiza e remove o evento confirmado no modo Espaços livres, usando uma chave idempotente para evitar duplicidade.',
+        ],
     ];
 
     public function index(): void
@@ -273,6 +280,26 @@ final class N8nTemplateController
                         'online_title' => 'VAGO — ONLINE',
                         'presential_title' => 'VAGO — PRESENCIAL',
                     ],
+                    'callback' => ['url' => Router::url('/webhooks/calendar/availability'), 'token' => 'REQUEST_TOKEN'],
+                ],
+            ],
+            'calendar.free_slot.create' => [
+                'event' => 'calendar.free_slot.create',
+                'source' => 'rs-connect',
+                'tenant_id' => 1,
+                'payload' => [
+                    'tenant_id' => 1,
+                    'action' => 'create',
+                    'request_id' => 40,
+                    'request_token' => 'REQUEST_TOKEN',
+                    'appointment_id' => 15,
+                    'idempotency_key' => 'rsconnect-1-15',
+                    'calendar_id' => 'primary',
+                    'title' => 'Atendimento confirmado',
+                    'start' => '2026-07-20 14:00:00',
+                    'end' => '2026-07-20 15:00:00',
+                    'timezone' => 'America/Sao_Paulo',
+                    'customer' => ['name' => 'Cliente Teste', 'phone' => '5532999999999'],
                     'callback' => ['url' => Router::url('/webhooks/calendar/availability'), 'token' => 'REQUEST_TOKEN'],
                 ],
             ],

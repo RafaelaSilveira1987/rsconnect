@@ -14,6 +14,7 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\AutomationWebhookService;
 use App\Services\CalendarAvailabilityService;
+use App\Services\CalendarGoogleLifecycleService;
 use App\Services\EvolutionService;
 use App\Services\NotificationService;
 use App\Services\PreSchedulingService;
@@ -306,7 +307,9 @@ final class CalendarController
 
         $wasPreSchedule = (int) ($appointmentBefore['is_pre_schedule'] ?? 0) === 1;
         $availabilityService = new CalendarAvailabilityService();
+        $googleLifecycleService = new CalendarGoogleLifecycleService();
         $googleReleaseWarning = null;
+        $googleLifecycleWarning = null;
 
         if ($status === 'confirmed' && $wasPreSchedule) {
             $preferredDay = trim((string) ($appointmentBefore['preferred_day_text'] ?? ''));
@@ -328,10 +331,28 @@ final class CalendarController
             }
         }
 
+        if ($status === 'confirmed') {
+            $freeSlotSync = $googleLifecycleService->syncConfirmedAppointment($tenantId, $appointmentId);
+            if (!empty($freeSlotSync['attempted']) && empty($freeSlotSync['ok'])) {
+                $settings = $availabilityService->settings($tenantId);
+                if (!empty($settings['require_google_sync_on_confirm'])) {
+                    Flash::set('error', 'O agendamento não foi confirmado porque o Google Agenda não concluiu a sincronização: ' . (string) ($freeSlotSync['message'] ?? 'falha não informada.'));
+                    $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId);
+                }
+                $googleLifecycleWarning = (string) ($freeSlotSync['message'] ?? 'O evento ainda não foi criado no Google Agenda.');
+            }
+        }
+
         if (in_array($status, ['rejected', 'cancelled', 'rescheduled'], true)) {
             $googleRelease = $availabilityService->releaseMarkedAppointment($tenantId, $appointmentId);
             if (!empty($googleRelease['attempted']) && empty($googleRelease['ok'])) {
                 $googleReleaseWarning = (string) ($googleRelease['message'] ?? 'Não foi possível restaurar o evento como VAGO.');
+            }
+            if (in_array($status, ['rejected', 'cancelled'], true)) {
+                $freeSlotDelete = $googleLifecycleService->cancelAppointment($tenantId, $appointmentId);
+                if (!empty($freeSlotDelete['attempted']) && empty($freeSlotDelete['ok'])) {
+                    $googleLifecycleWarning = (string) ($freeSlotDelete['message'] ?? 'Não foi possível remover o evento do Google Agenda.');
+                }
             }
         }
 
@@ -407,6 +428,9 @@ final class CalendarController
             if ($googleReleaseWarning !== null) {
                 $warnings[] = 'O evento do Google não foi restaurado: ' . $googleReleaseWarning;
             }
+            if ($googleLifecycleWarning !== null) {
+                $warnings[] = 'Sincronização do Google Agenda: ' . $googleLifecycleWarning;
+            }
             if ($messageResult['attempted'] && !$messageResult['ok']) {
                 $warnings[] = 'A mensagem automática não foi enviada: ' . $messageResult['error'];
             }
@@ -440,6 +464,11 @@ final class CalendarController
         $release = (new CalendarAvailabilityService())->releaseMarkedAppointment($tenantId, $appointmentId, true);
         if (!empty($release['attempted']) && empty($release['ok'])) {
             Flash::set('error', 'O agendamento não foi excluído porque o horário não pôde ser liberado no Google Agenda: ' . (string) ($release['message'] ?? 'falha não informada.'));
+            $this->redirect($return !== '' && str_starts_with($return, '/') ? $return : '/calendar?tenant_id=' . $tenantId);
+        }
+        $freeSlotDelete = (new CalendarGoogleLifecycleService())->cancelAppointment($tenantId, $appointmentId, true);
+        if (!empty($freeSlotDelete['attempted']) && empty($freeSlotDelete['ok'])) {
+            Flash::set('error', 'O agendamento não foi excluído porque o evento confirmado não pôde ser removido do Google Agenda: ' . (string) ($freeSlotDelete['message'] ?? 'falha não informada.'));
             $this->redirect($return !== '' && str_starts_with($return, '/') ? $return : '/calendar?tenant_id=' . $tenantId);
         }
 
