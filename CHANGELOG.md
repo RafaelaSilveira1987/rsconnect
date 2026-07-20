@@ -1,3 +1,13 @@
+# HOTFIX 36.1.2 — Persistência antes do processamento e fim do 422
+
+- Salva a mensagem antes de CRM, agenda, n8n e IA.
+- Impede que falhas auxiliares removam a entrada recebida.
+- Registra diagnóstico em `storage/logs/evolution-webhook.log`.
+- Ignora broadcasts/status/newsletters sem HTTP 422.
+- Fila compatível com bancos sem `incoming_message_id`.
+- Considera apenas `sent`, `delivered` e `read` como resposta válida.
+- Migration `045_ai_webhook_ingestion_resilience.sql`.
+
 # HOTFIX 36.1.1 — Pendências reais da IA
 
 - Vincula cada tentativa da IA à mensagem recebida correspondente.

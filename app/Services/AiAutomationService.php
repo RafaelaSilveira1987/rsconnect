@@ -271,8 +271,19 @@ final class AiAutomationService
                 return ['status' => 'none'];
             }
 
-            $candidateStatement = $pdo->prepare(
-                'SELECT cm.id AS message_id,
+            try {
+                $tenantAccess = (new AccessControlService())->statusForTenant($tenantId);
+                if (empty($tenantAccess['allowed'])) {
+                    return ['status' => 'none'];
+                }
+            } catch (Throwable $exception) {
+                return ['status' => 'error', 'error' => 'Não foi possível validar o acesso da empresa: ' . $exception->getMessage()];
+            }
+
+            $hasMessageLink = $this->hasColumn($pdo, 'ai_automation_logs', 'incoming_message_id');
+
+            $candidateSql = $hasMessageLink
+                ? 'SELECT cm.id AS message_id,
                         cm.conversation_id,
                         cm.content,
                         cm.message_type,
@@ -308,7 +319,7 @@ final class AiAutomationService
                         FROM conversation_messages outgoing
                         WHERE outgoing.conversation_id = cm.conversation_id
                           AND outgoing.direction = "outgoing"
-                          AND outgoing.status <> "failed"
+                          AND outgoing.status IN ("sent", "delivered", "read")
                           AND (
                                 outgoing.sent_at > cm.sent_at
                                 OR (outgoing.sent_at = cm.sent_at AND outgoing.id > cm.id)
@@ -356,7 +367,7 @@ final class AiAutomationService
                             WHERE failed_outgoing.conversation_id = cm.conversation_id
                               AND failed_outgoing.direction = "outgoing"
                               AND failed_outgoing.sender_type = "ai"
-                              AND failed_outgoing.status = "failed"
+                              AND failed_outgoing.status IN ("failed", "pending")
                               AND COALESCE((
                                     SELECT al_failed.event
                                     FROM ai_automation_logs al_failed
@@ -372,14 +383,99 @@ final class AiAutomationService
                    )
                  ORDER BY cm.sent_at DESC, cm.id DESC
                  LIMIT 1'
-            );
-            $candidateStatement->execute([
+                : 'SELECT cm.id AS message_id,
+                        cm.conversation_id,
+                        cm.content,
+                        cm.message_type,
+                        cm.sent_at,
+                        c.evolution_instance_id
+                 FROM conversation_messages cm
+                 INNER JOIN conversations c
+                    ON c.id = cm.conversation_id
+                   AND c.tenant_id = cm.tenant_id
+                 WHERE cm.tenant_id = :tenant_id
+                   AND c.attendance_mode = "ai"
+                   AND c.status <> "closed"
+                   AND cm.direction = "incoming"
+                   AND (:reply_to_reactions = 1 OR cm.message_type <> "reaction")
+                   AND (
+                        SELECT aa.id
+                        FROM ai_agents aa
+                        WHERE aa.tenant_id = cm.tenant_id
+                          AND aa.status = "active"
+                          AND aa.auto_reply_enabled = 1
+                          AND (
+                                aa.instance_id = c.evolution_instance_id
+                                OR aa.instance_id IS NULL
+                                OR aa.is_default = 1
+                          )
+                        ORDER BY (aa.instance_id = c.evolution_instance_id) DESC,
+                                 aa.is_default DESC,
+                                 aa.id DESC
+                        LIMIT 1
+                   ) = :selected_agent_id
+                   AND NOT EXISTS (
+                        SELECT 1
+                        FROM conversation_messages outgoing
+                        WHERE outgoing.conversation_id = cm.conversation_id
+                          AND outgoing.direction = "outgoing"
+                          AND outgoing.status IN ("sent", "delivered", "read")
+                          AND (
+                                outgoing.sent_at > cm.sent_at
+                                OR (outgoing.sent_at = cm.sent_at AND outgoing.id > cm.id)
+                          )
+                   )
+                   AND (
+                        COALESCE((
+                            SELECT al.event
+                            FROM ai_automation_logs al
+                            WHERE al.tenant_id = cm.tenant_id
+                              AND al.conversation_id = cm.conversation_id
+                              AND al.agent_id = :event_agent_id
+                              AND al.created_at >= cm.sent_at
+                            ORDER BY al.id DESC
+                            LIMIT 1
+                        ), "") IN ("ai.cooldown", "ai.failed")
+                        OR (
+                            NOT EXISTS (
+                                SELECT 1
+                                FROM ai_automation_logs al_missing
+                                WHERE al_missing.tenant_id = cm.tenant_id
+                                  AND al_missing.conversation_id = cm.conversation_id
+                                  AND al_missing.agent_id = :missing_agent_id
+                                  AND al_missing.created_at >= cm.sent_at
+                            )
+                            AND cm.sent_at <= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+                        )
+                        OR EXISTS (
+                            SELECT 1
+                            FROM conversation_messages failed_outgoing
+                            WHERE failed_outgoing.conversation_id = cm.conversation_id
+                              AND failed_outgoing.direction = "outgoing"
+                              AND failed_outgoing.sender_type = "ai"
+                              AND failed_outgoing.status IN ("failed", "pending")
+                              AND (
+                                    failed_outgoing.sent_at > cm.sent_at
+                                    OR (failed_outgoing.sent_at = cm.sent_at AND failed_outgoing.id > cm.id)
+                              )
+                        )
+                   )
+                 ORDER BY cm.sent_at DESC, cm.id DESC
+                 LIMIT 1';
+            $candidateStatement = $pdo->prepare($candidateSql);
+            $candidateParams = [
                 'tenant_id' => $tenantId,
                 'reply_to_reactions' => (int) ($agent['reply_to_reactions'] ?? 0),
                 'selected_agent_id' => $agentId,
-                'legacy_agent_id' => $agentId,
-                'legacy_agent_id_missing' => $agentId,
-            ]);
+            ];
+            if ($hasMessageLink) {
+                $candidateParams['legacy_agent_id'] = $agentId;
+                $candidateParams['legacy_agent_id_missing'] = $agentId;
+            } else {
+                $candidateParams['event_agent_id'] = $agentId;
+                $candidateParams['missing_agent_id'] = $agentId;
+            }
+            $candidateStatement->execute($candidateParams);
             $candidate = $candidateStatement->fetch(PDO::FETCH_ASSOC);
 
             if (!$candidate || trim((string) ($candidate['content'] ?? '')) === '') {
@@ -419,7 +515,7 @@ final class AiAutomationService
                  FROM conversation_messages
                  WHERE conversation_id = :conversation_id
                    AND direction = "outgoing"
-                   AND status <> "failed"
+                   AND status IN ("sent", "delivered", "read")
                    AND (
                         sent_at > :sent_at_after
                         OR (sent_at = :sent_at_equal AND id > :message_id)
@@ -442,14 +538,33 @@ final class AiAutomationService
                 ];
             }
 
-            $attemptStatement = $pdo->prepare(
-                'SELECT event, status, error_message
-                 FROM ai_automation_logs
-                 WHERE incoming_message_id = :message_id
-                 ORDER BY id DESC
-                 LIMIT 1'
-            );
-            $attemptStatement->execute(['message_id' => (int) $candidate['message_id']]);
+            if ($hasMessageLink) {
+                $attemptStatement = $pdo->prepare(
+                    'SELECT event, status, error_message
+                     FROM ai_automation_logs
+                     WHERE incoming_message_id = :message_id
+                     ORDER BY id DESC
+                     LIMIT 1'
+                );
+                $attemptStatement->execute(['message_id' => (int) $candidate['message_id']]);
+            } else {
+                $attemptStatement = $pdo->prepare(
+                    'SELECT event, status, error_message
+                     FROM ai_automation_logs
+                     WHERE tenant_id = :tenant_id
+                       AND conversation_id = :conversation_id
+                       AND agent_id = :agent_id
+                       AND created_at >= :message_sent_at
+                     ORDER BY id DESC
+                     LIMIT 1'
+                );
+                $attemptStatement->execute([
+                    'tenant_id' => $tenantId,
+                    'conversation_id' => (int) $candidate['conversation_id'],
+                    'agent_id' => $agentId,
+                    'message_sent_at' => (string) $candidate['sent_at'],
+                ]);
+            }
             $attempt = $attemptStatement->fetch(PDO::FETCH_ASSOC) ?: [];
             $event = (string) ($attempt['event'] ?? '');
 
@@ -675,7 +790,7 @@ final class AiAutomationService
              FROM conversation_messages outgoing
              WHERE outgoing.conversation_id = :conversation_id
                AND outgoing.direction = "outgoing"
-               AND outgoing.status <> "failed"
+               AND outgoing.status IN ("sent", "delivered", "read")
                AND (
                     outgoing.sent_at > :sent_at_after
                     OR (outgoing.sent_at = :sent_at_equal AND outgoing.id > :message_id)
@@ -705,7 +820,7 @@ final class AiAutomationService
              WHERE conversation_id = :conversation_id
                AND direction = "outgoing"
                AND sender_type = "ai"
-               AND status <> "failed"
+               AND status IN ("sent", "delivered", "read")
              ORDER BY sent_at DESC, id DESC
              LIMIT 1'
         );
@@ -812,6 +927,32 @@ final class AiAutomationService
         ]);
     }
 
+
+    private function hasColumn(PDO $pdo, string $table, string $column): bool
+    {
+        static $cache = [];
+        $key = $table . '.' . $column;
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        try {
+            $statement = $pdo->prepare(
+                'SELECT COUNT(*)
+                 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = :table_name
+                   AND COLUMN_NAME = :column_name'
+            );
+            $statement->execute([
+                'table_name' => $table,
+                'column_name' => $column,
+            ]);
+            return $cache[$key] = (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return $cache[$key] = false;
+        }
+    }
 
     private function decodeContactTags(mixed $raw): array
     {

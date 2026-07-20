@@ -1,10 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o HOTFIX 36.1.1.
+Pacote consolidado até o HOTFIX 36.1.2.
 
 ## Última etapa incluída
 
-HOTFIX 36.1.1 — Pendências da IA vinculadas à mensagem recebida.
+HOTFIX 36.1.2 — Persistência do webhook antes do processamento e fila resiliente.
 
 ## Atualização principal
 
@@ -13,6 +13,7 @@ Execute as migrations em ordem. Para atualizar a base mais recente, mantenha as 
 ```text
 database/migrations/043_ai_reprocess_schedule.sql
 database/migrations/044_ai_pending_failures_message_link.sql
+database/migrations/045_ai_webhook_ingestion_resilience.sql
 ```
 
 Consulte `docs/AI-REPROCESSAMENTO-AGENDADO.md` para configurar o horário, o cron ou o workflow n8n.

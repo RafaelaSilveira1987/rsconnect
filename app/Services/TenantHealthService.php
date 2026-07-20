@@ -1142,7 +1142,7 @@ final class TenantHealthService
                         WHERE failed_outgoing.conversation_id = cm.conversation_id
                           AND failed_outgoing.direction = "outgoing"
                           AND failed_outgoing.sender_type = "ai"
-                          AND failed_outgoing.status = "failed"
+                          AND failed_outgoing.status IN ("failed", "pending")
                           AND COALESCE((
                                 SELECT al_failed.event
                                 FROM ai_automation_logs al_failed
@@ -1161,7 +1161,7 @@ final class TenantHealthService
                     FROM conversation_messages outgoing
                     WHERE outgoing.conversation_id = c.id
                       AND outgoing.direction = "outgoing"
-                      AND outgoing.status <> "failed"
+                      AND outgoing.status IN ("sent", "delivered", "read")
                       AND (
                             outgoing.sent_at > cm.sent_at
                             OR (outgoing.sent_at = cm.sent_at AND outgoing.id > cm.id)

@@ -30,6 +30,12 @@ $statusLabel = static function (string $status): string {
     <p>Execute <code><?= View::e((string) ($data['migration'] ?? 'database/migrations/044_ai_pending_failures_message_link.sql')) ?></code> antes de usar esta rotina.</p>
 </section>
 <?php else: ?>
+<?php if (!empty($data['migration_recommended'])): ?>
+<section class="card operations-alert is-warning">
+    <strong>Fila em modo de compatibilidade</strong>
+    <p>As pendências já podem ser encontradas, mas execute <code><?= View::e((string) ($data['migration'] ?? 'database/migrations/045_ai_webhook_ingestion_resilience.sql')) ?></code> para vincular cada tentativa à mensagem correta e otimizar a rotina.</p>
+</section>
+<?php endif; ?>
 <section class="admin-module-summary">
     <article class="<?= (int) ($data['pending_total'] ?? 0) > 0 ? 'is-warning' : 'is-success' ?>">
         <span>Mensagens presas</span>

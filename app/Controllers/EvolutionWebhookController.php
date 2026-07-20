@@ -22,6 +22,14 @@ final class EvolutionWebhookController
     {
         header('Content-Type: application/json; charset=UTF-8');
 
+        $pdo = null;
+        $payload = [];
+        $event = '';
+        $instance = [];
+        $storedMessageId = 0;
+        $conversationId = 0;
+        $externalId = null;
+
         try {
             $this->validateToken();
             $raw = file_get_contents('php://input') ?: '';
@@ -32,16 +40,24 @@ final class EvolutionWebhookController
 
             $event = $this->normalizeEvent((string) ($payload['event'] ?? ''));
             $instance = $this->resolveInstance($payload);
-            $accessService = new AccessControlService();
-            $tenantAccess = $accessService->statusForTenant((int) $instance['tenant_id']);
-            $automationAllowed = !empty($tenantAccess['allowed']);
-            if (!$automationAllowed) {
-                $accessService->recordBlockedAccess($tenantAccess, 'evolution_webhook');
-            }
 
             if (str_contains($event, 'messages.update')) {
-                $updated = $this->applyStatusUpdate($instance, $payload);
-                $this->respond(200, ['ok' => true, 'updated' => $updated]);
+                try {
+                    $updated = $this->applyStatusUpdate($instance, $payload);
+                    $this->respond(200, ['ok' => true, 'updated' => $updated]);
+                } catch (Throwable $exception) {
+                    $this->logWebhookFailure($exception, [
+                        'phase' => 'messages.update',
+                        'event' => $event,
+                        'instance_id' => (int) ($instance['id'] ?? 0),
+                    ]);
+                    // Atualizações de entrega não podem fazer a Evolution repetir o evento indefinidamente.
+                    $this->respond(200, [
+                        'ok' => true,
+                        'updated' => false,
+                        'accepted_with_warning' => true,
+                    ]);
+                }
             }
 
             if ($event !== '' && !str_contains($event, 'messages.upsert') && !str_contains($event, 'send.message')) {
@@ -62,8 +78,8 @@ final class EvolutionWebhookController
                 throw new \RuntimeException('remoteJid não informado.');
             }
 
-            if (str_contains($remoteJid, '@g.us')) {
-                $this->respond(202, ['ok' => true, 'ignored' => 'group']);
+            if ($this->isIgnoredRemoteJid($remoteJid)) {
+                $this->respond(202, ['ok' => true, 'ignored' => 'non_contact_jid']);
             }
 
             $fromMe = filter_var($key['fromMe'] ?? $data['fromMe'] ?? false, FILTER_VALIDATE_BOOL);
@@ -90,7 +106,8 @@ final class EvolutionWebhookController
             $pushName = trim((string) ($data['pushName'] ?? $data['senderName'] ?? ''));
             $phone = preg_replace('/\D+/', '', strstr($remoteJid, '@', true) ?: $remoteJid) ?: '';
             if ($phone === '') {
-                throw new \RuntimeException('Não foi possível identificar o telefone do contato.');
+                // Eventos de status, canais e broadcasts não devem derrubar o webhook.
+                $this->respond(202, ['ok' => true, 'ignored' => 'jid_without_phone']);
             }
 
             [$messageType, $content] = $this->extractContent($data);
@@ -121,8 +138,9 @@ final class EvolutionWebhookController
                 }
             }
 
+            // A mensagem é persistida antes de CRM, agenda, n8n ou IA.
+            // Assim, qualquer falha posterior continua recuperável pela fila.
             $pdo->beginTransaction();
-
             $contactId = $this->upsertContact($pdo, $instance, $remoteJid, $phone, $pushName);
             $conversationId = $this->upsertConversation(
                 $pdo,
@@ -133,7 +151,6 @@ final class EvolutionWebhookController
                 $sentAt,
                 !$fromMe
             );
-
             $storedMessageId = $this->insertMessage(
                 $pdo,
                 (int) $instance['tenant_id'],
@@ -147,33 +164,100 @@ final class EvolutionWebhookController
                 $payload,
                 $sentAt
             );
+            $pdo->commit();
             $inserted = $storedMessageId > 0;
+
+            $tenantAccess = ['allowed' => true, 'code' => null];
+            $automationAllowed = true;
+            try {
+                $accessService = new AccessControlService();
+                $tenantAccess = $accessService->statusForTenant((int) $instance['tenant_id']);
+                $automationAllowed = !empty($tenantAccess['allowed']);
+                if (!$automationAllowed) {
+                    $accessService->recordBlockedAccess($tenantAccess, 'evolution_webhook');
+                }
+            } catch (Throwable $exception) {
+                $automationAllowed = false;
+                $tenantAccess = ['allowed' => false, 'code' => 'access_check_failed'];
+                $this->logWebhookFailure($exception, [
+                    'phase' => 'access_check',
+                    'event' => $event,
+                    'instance_id' => (int) ($instance['id'] ?? 0),
+                    'conversation_id' => $conversationId,
+                    'stored_message_id' => $storedMessageId,
+                ]);
+            }
 
             $leadId = null;
             $flowContext = [];
-            $preScheduleResult = ['skip_ai' => false];
-            if (!$fromMe && $inserted && $automationAllowed && !$isReaction) {
-                $flowContext = (new ConversationFlowService())->ingestIncoming(
-                    $pdo,
-                    $instance,
-                    $contactId,
-                    $conversationId,
-                    $content
-                );
-                $leadId = (new CrmAutoService())->createFromConversation($pdo, $instance, $contactId, $conversationId, $content);
-                $preScheduleResult = (new PreSchedulingService())->handleIncoming(
-                    $pdo,
-                    $instance,
-                    $contactId,
-                    $conversationId,
-                    $content,
-                    $flowContext
-                );
-            } elseif (!$fromMe && $inserted && !$automationAllowed) {
-                $preScheduleResult = ['skip_ai' => true, 'access_blocked' => true, 'reason' => $tenantAccess['code'] ?? 'blocked'];
-            }
+            $preScheduleResult = ['skip_ai' => false, 'handled' => false];
+            $processingWarnings = [];
 
-            $pdo->commit();
+            if (!$fromMe && $inserted && $automationAllowed && !$isReaction) {
+                try {
+                    $flowContext = (new ConversationFlowService())->ingestIncoming(
+                        $pdo,
+                        $instance,
+                        $contactId,
+                        $conversationId,
+                        $content
+                    );
+                } catch (Throwable $exception) {
+                    $processingWarnings[] = 'conversation_flow';
+                    $this->logWebhookFailure($exception, [
+                        'phase' => 'conversation_flow',
+                        'event' => $event,
+                        'instance_id' => (int) ($instance['id'] ?? 0),
+                        'conversation_id' => $conversationId,
+                        'stored_message_id' => $storedMessageId,
+                    ]);
+                }
+
+                try {
+                    $leadId = (new CrmAutoService())->createFromConversation(
+                        $pdo,
+                        $instance,
+                        $contactId,
+                        $conversationId,
+                        $content
+                    );
+                } catch (Throwable $exception) {
+                    $processingWarnings[] = 'crm';
+                    $this->logWebhookFailure($exception, [
+                        'phase' => 'crm',
+                        'event' => $event,
+                        'instance_id' => (int) ($instance['id'] ?? 0),
+                        'conversation_id' => $conversationId,
+                        'stored_message_id' => $storedMessageId,
+                    ]);
+                }
+
+                try {
+                    $preScheduleResult = (new PreSchedulingService())->handleIncoming(
+                        $pdo,
+                        $instance,
+                        $contactId,
+                        $conversationId,
+                        $content,
+                        $flowContext
+                    );
+                } catch (Throwable $exception) {
+                    $processingWarnings[] = 'pre_schedule';
+                    $this->logWebhookFailure($exception, [
+                        'phase' => 'pre_schedule',
+                        'event' => $event,
+                        'instance_id' => (int) ($instance['id'] ?? 0),
+                        'conversation_id' => $conversationId,
+                        'stored_message_id' => $storedMessageId,
+                    ]);
+                }
+            } elseif (!$fromMe && $inserted && !$automationAllowed) {
+                $preScheduleResult = [
+                    'skip_ai' => true,
+                    'access_blocked' => true,
+                    'reason' => $tenantAccess['code'] ?? 'blocked',
+                ];
+            }
 
             $aiHandled = false;
             if (!$fromMe && $inserted) {
@@ -188,34 +272,53 @@ final class EvolutionWebhookController
                         default => '[Nova mensagem]',
                     };
                 }
-                (new NotificationService())->createIfEnabled(
-                    (int) $instance['tenant_id'],
-                    'messages',
-                    'Nova mensagem recebida',
-                    mb_substr($senderName . ': ' . $preview, 0, 500),
-                    'info',
-                    '/conversations?conversation_id=' . $conversationId,
-                    'message',
-                    'message.received',
-                    'conversation',
-                    $conversationId,
-                    [
-                        'instance_id' => (int) $instance['id'],
-                        'phone' => $phone,
-                        'message_type' => $messageType,
-                        'external_id' => $externalId,
-                    ]
-                );
+
+                try {
+                    (new NotificationService())->createIfEnabled(
+                        (int) $instance['tenant_id'],
+                        'messages',
+                        'Nova mensagem recebida',
+                        mb_substr($senderName . ': ' . $preview, 0, 500),
+                        'info',
+                        '/conversations?conversation_id=' . $conversationId,
+                        'message',
+                        'message.received',
+                        'conversation',
+                        $conversationId,
+                        [
+                            'instance_id' => (int) $instance['id'],
+                            'phone' => $phone,
+                            'message_type' => $messageType,
+                            'external_id' => $externalId,
+                        ]
+                    );
+                } catch (Throwable $exception) {
+                    $processingWarnings[] = 'notification';
+                    $this->logWebhookFailure($exception, [
+                        'phase' => 'notification',
+                        'conversation_id' => $conversationId,
+                        'stored_message_id' => $storedMessageId,
+                    ]);
+                }
 
                 if ($automationAllowed && !$isReaction) {
-                    (new AutomationWebhookService())->dispatch('message.received', [
-                    'tenant_id' => (int) $instance['tenant_id'],
-                    'instance_id' => (int) $instance['id'],
-                    'conversation_id' => $conversationId,
-                    'phone' => $phone,
-                    'message_type' => $messageType,
-                    'content' => $content,
-                    ], null, (int) $instance['tenant_id']);
+                    try {
+                        (new AutomationWebhookService())->dispatch('message.received', [
+                            'tenant_id' => (int) $instance['tenant_id'],
+                            'instance_id' => (int) $instance['id'],
+                            'conversation_id' => $conversationId,
+                            'phone' => $phone,
+                            'message_type' => $messageType,
+                            'content' => $content,
+                        ], null, (int) $instance['tenant_id']);
+                    } catch (Throwable $exception) {
+                        $processingWarnings[] = 'n8n';
+                        $this->logWebhookFailure($exception, [
+                            'phase' => 'n8n',
+                            'conversation_id' => $conversationId,
+                            'stored_message_id' => $storedMessageId,
+                        ]);
+                    }
                 }
 
                 if ($automationAllowed && !((bool) ($preScheduleResult['skip_ai'] ?? false))) {
@@ -230,21 +333,181 @@ final class EvolutionWebhookController
                 'ok' => true,
                 'conversation_id' => $conversationId,
                 'message_inserted' => $inserted,
+                'stored_message_id' => $storedMessageId,
                 'crm_lead_id' => $leadId,
                 'ai_checked' => $aiHandled,
                 'pre_schedule' => $preScheduleResult,
                 'conversation_flow' => $flowContext,
+                'processing_warnings' => array_values(array_unique($processingWarnings)),
                 'access_allowed' => $automationAllowed,
                 'access_reason' => $automationAllowed ? null : ($tenantAccess['code'] ?? 'blocked'),
             ]);
         } catch (Throwable $exception) {
-            if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+            if ($pdo instanceof PDO && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            $status = $exception->getCode() >= 400 && $exception->getCode() <= 599
-                ? $exception->getCode()
-                : 422;
-            $this->respond($status, ['ok' => false, 'error' => $exception->getMessage()]);
+
+            $this->logWebhookFailure($exception, [
+                'phase' => $storedMessageId > 0 ? 'after_message_saved' : 'before_message_saved',
+                'event' => $event,
+                'instance_id' => (int) ($instance['id'] ?? 0),
+                'tenant_id' => (int) ($instance['tenant_id'] ?? 0),
+                'conversation_id' => $conversationId,
+                'stored_message_id' => $storedMessageId,
+                'external_id' => $externalId,
+            ]);
+
+            if ($storedMessageId > 0 && $conversationId > 0 && $instance !== []) {
+                $this->recordStoredMessageFailure($instance, $conversationId, $storedMessageId, $exception, $payload);
+                // A mensagem já está salva. Retornar 200 evita duplicação da entrada pela Evolution.
+                $this->respond(200, [
+                    'ok' => true,
+                    'accepted_with_error' => true,
+                    'conversation_id' => $conversationId,
+                    'stored_message_id' => $storedMessageId,
+                ]);
+            }
+
+            $status = $exception->getCode() >= 400 && $exception->getCode() <= 499
+                ? (int) $exception->getCode()
+                : 500;
+            $this->respond($status, [
+                'ok' => false,
+                'error' => $exception->getMessage(),
+                'retryable' => $status >= 500,
+            ]);
+        }
+    }
+
+    private function isIgnoredRemoteJid(string $remoteJid): bool
+    {
+        $jid = mb_strtolower(trim($remoteJid));
+        if ($jid === '') {
+            return true;
+        }
+
+        foreach (['@g.us', 'status@broadcast', '@broadcast', '@newsletter', 'newsletter'] as $pattern) {
+            if (str_contains($jid, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function recordStoredMessageFailure(
+        array $instance,
+        int $conversationId,
+        int $storedMessageId,
+        Throwable $exception,
+        array $payload
+    ): void {
+        try {
+            $pdo = Database::connection();
+            $agentStatement = $pdo->prepare(
+                'SELECT id
+                 FROM ai_agents
+                 WHERE tenant_id = :tenant_id
+                   AND status = "active"
+                   AND auto_reply_enabled = 1
+                   AND (
+                        instance_id = :instance_id_filter
+                        OR instance_id IS NULL
+                        OR is_default = 1
+                   )
+                 ORDER BY (instance_id = :instance_id_order) DESC, is_default DESC, id DESC
+                 LIMIT 1'
+            );
+            $agentStatement->execute([
+                'tenant_id' => (int) ($instance['tenant_id'] ?? 0),
+                'instance_id_filter' => (int) ($instance['id'] ?? 0),
+                'instance_id_order' => (int) ($instance['id'] ?? 0),
+            ]);
+            $agentId = (int) ($agentStatement->fetchColumn() ?: 0);
+            $error = mb_substr('Falha após salvar a mensagem recebida: ' . $exception->getMessage(), 0, 500);
+            $rawJson = json_encode([
+                'payload_event' => $payload['event'] ?? null,
+                'exception' => get_class($exception),
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            try {
+                $already = $pdo->prepare(
+                    'SELECT 1 FROM ai_automation_logs
+                     WHERE incoming_message_id = :message_id AND event = "ai.failed"
+                     LIMIT 1'
+                );
+                $already->execute(['message_id' => $storedMessageId]);
+                if ($already->fetchColumn()) {
+                    return;
+                }
+
+                $pdo->prepare(
+                    'INSERT INTO ai_automation_logs
+                        (tenant_id, conversation_id, agent_id, incoming_message_id, event, status,
+                         response_preview, error_message, raw_json)
+                     VALUES
+                        (:tenant_id, :conversation_id, :agent_id, :incoming_message_id,
+                         "ai.failed", "error", NULL, :error_message, :raw_json)'
+                )->execute([
+                    'tenant_id' => (int) ($instance['tenant_id'] ?? 0),
+                    'conversation_id' => $conversationId,
+                    'agent_id' => $agentId > 0 ? $agentId : null,
+                    'incoming_message_id' => $storedMessageId,
+                    'error_message' => $error,
+                    'raw_json' => $rawJson,
+                ]);
+                return;
+            } catch (Throwable) {
+                // Compatibilidade quando a migration 044 ainda não foi aplicada.
+            }
+
+            $pdo->prepare(
+                'INSERT INTO ai_automation_logs
+                    (tenant_id, conversation_id, agent_id, event, status,
+                     response_preview, error_message, raw_json)
+                 VALUES
+                    (:tenant_id, :conversation_id, :agent_id,
+                     "ai.failed", "error", NULL, :error_message, :raw_json)'
+            )->execute([
+                'tenant_id' => (int) ($instance['tenant_id'] ?? 0),
+                'conversation_id' => $conversationId,
+                'agent_id' => $agentId > 0 ? $agentId : null,
+                'error_message' => $error,
+                'raw_json' => $rawJson,
+            ]);
+        } catch (Throwable $logException) {
+            $this->logWebhookFailure($logException, [
+                'phase' => 'record_saved_message_failure',
+                'conversation_id' => $conversationId,
+                'stored_message_id' => $storedMessageId,
+            ]);
+        }
+    }
+
+    /** @param array<string,mixed> $context */
+    private function logWebhookFailure(Throwable $exception, array $context = []): void
+    {
+        try {
+            $logDir = dirname(__DIR__, 2) . '/storage/logs';
+            if (!is_dir($logDir)) {
+                mkdir($logDir, 0775, true);
+            }
+
+            $record = [
+                'at' => date(DATE_ATOM),
+                'message' => $exception->getMessage(),
+                'exception' => get_class($exception),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
+                'context' => $context,
+            ];
+            error_log(
+                json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
+                3,
+                $logDir . '/evolution-webhook.log'
+            );
+        } catch (Throwable) {
+            // O diagnóstico nunca pode interromper o webhook.
         }
     }
 
@@ -442,23 +705,54 @@ final class EvolutionWebhookController
             default => 'sent',
         };
 
-        $statement = Database::connection()->prepare(
-            'UPDATE conversation_messages
-             SET status = :status
-             WHERE tenant_id = :tenant_id AND evolution_message_id = :external_id'
-        );
-        $statement->execute([
-            'status' => $status,
-            'tenant_id' => $instance['tenant_id'],
-            'external_id' => $externalId,
-        ]);
-        $updated = $statement->rowCount() > 0;
+        $pdo = Database::connection();
+        $updated = false;
+        $usedPendingFallback = false;
 
-        if ($updated && $status === 'failed') {
+        try {
+            $statement = $pdo->prepare(
+                'UPDATE conversation_messages
+                 SET status = :status
+                 WHERE tenant_id = :tenant_id AND evolution_message_id = :external_id'
+            );
+            $statement->execute([
+                'status' => $status,
+                'tenant_id' => $instance['tenant_id'],
+                'external_id' => $externalId,
+            ]);
+            $updated = $statement->rowCount() > 0;
+        } catch (Throwable $exception) {
+            if ($status !== 'failed') {
+                throw $exception;
+            }
+
+            // Bancos antigos podem não possuir "failed" no ENUM. "pending" mantém a saída
+            // fora do conjunto de mensagens entregues e permite que a fila tente novamente.
+            $fallback = $pdo->prepare(
+                'UPDATE conversation_messages
+                 SET status = "pending",
+                     error_message = :error_message
+                 WHERE tenant_id = :tenant_id AND evolution_message_id = :external_id'
+            );
+            $fallback->execute([
+                'error_message' => mb_substr('Falha de entrega informada pela Evolution: ' . $rawStatus, 0, 500),
+                'tenant_id' => $instance['tenant_id'],
+                'external_id' => $externalId,
+            ]);
+            $updated = $fallback->rowCount() > 0;
+            $usedPendingFallback = true;
+            $this->logWebhookFailure($exception, [
+                'phase' => 'delivery_status_failed_enum_fallback',
+                'instance_id' => (int) ($instance['id'] ?? 0),
+                'external_id' => $externalId,
+            ]);
+        }
+
+        if ($status === 'failed') {
             $this->recordAiDeliveryFailure($instance, $externalId, $payload, $rawStatus);
         }
 
-        return $updated;
+        return $updated || $usedPendingFallback;
     }
 
     private function recordAiDeliveryFailure(array $instance, string $externalId, array $payload, string $rawStatus): void
