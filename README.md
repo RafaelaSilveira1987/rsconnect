@@ -1,20 +1,20 @@
 # RS Connect
 
-Pacote consolidado até o ZIP 35.0.
+Pacote consolidado até o ZIP 36.1.
 
 ## Última etapa incluída
 
-ZIP 35.0 — Agenda Google com ciclo completo e rotinas automáticas.
+ZIP 36.1 — Reprocessamento seguro e agendado da fila da IA.
 
 ## Atualização principal
 
 Execute as migrations em ordem. Para atualizar a base mais recente, mantenha as migrations anteriores aplicadas e execute:
 
 ```text
-database/migrations/041_calendar_google_full_cycle.sql
+database/migrations/043_ai_reprocess_schedule.sql
 ```
 
-Consulte `README-ZIP-35.0.md` para configurar o workflow n8n e a manutenção automática.
+Consulte `docs/AI-REPROCESSAMENTO-AGENDADO.md` para configurar o horário, o cron ou o workflow n8n.
 
 ## Módulos principais
 

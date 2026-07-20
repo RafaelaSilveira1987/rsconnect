@@ -116,6 +116,7 @@ $subscriptionLabel = static fn (string $status): string => match ($status) {
                 </div>
                 <div class="admin-company-actions">
                     <a class="btn btn-primary" href="<?= View::e(Router::url('/companies/overview?id=' . (int) $company['id'])) ?>">Visão geral</a>
+                    <a class="btn btn-outline" href="<?= View::e(Router::url('/companies/health?tenant_id=' . (int) $company['id'])) ?>">Saúde e IA</a>
                     <a class="btn btn-outline" href="<?= View::e(Router::url('/company-settings?id=' . (int) $company['id'])) ?>">Editar dados</a>
                     <a class="btn btn-outline" href="<?= View::e(Router::url('/company-settings?id=' . (int) $company['id'])) ?>#company-module-settings">Menus do cliente</a>
                     <details class="action-popover admin-tracking-popover">

@@ -2,7 +2,7 @@
 
 use App\Core\View;
 
-$selectedTab = in_array(($selectedTab ?? 'monitoring'), ['monitoring', 'security', 'backups', 'beta', 'status'], true)
+$selectedTab = in_array(($selectedTab ?? 'monitoring'), ['monitoring', 'ai_reprocess', 'security', 'backups', 'beta', 'status'], true)
     ? (string) $selectedTab
     : 'monitoring';
 $renderPartial = static function (string $file, array $variables): void {
@@ -22,6 +22,7 @@ $viewBase = dirname(__DIR__);
 <div class="admin-tab-shell operations-center-shell" data-tabs-shell>
     <div class="admin-tab-bar operations-center-tabs" data-tabs>
         <button class="<?= $selectedTab === 'monitoring' ? 'is-active' : '' ?>" type="button" data-tab-target="monitoring">Monitoramento</button>
+        <button class="<?= $selectedTab === 'ai_reprocess' ? 'is-active' : '' ?>" type="button" data-tab-target="ai_reprocess">Fila da IA</button>
         <button class="<?= $selectedTab === 'security' ? 'is-active' : '' ?>" type="button" data-tab-target="security">Segurança</button>
         <button class="<?= $selectedTab === 'backups' ? 'is-active' : '' ?>" type="button" data-tab-target="backups">Backups</button>
         <button class="<?= $selectedTab === 'status' ? 'is-active' : '' ?>" type="button" data-tab-target="status">Status do sistema</button>
@@ -30,6 +31,9 @@ $viewBase = dirname(__DIR__);
 
     <section class="operations-center-panel" data-tab-panel="monitoring" <?= $selectedTab !== 'monitoring' ? 'hidden' : '' ?>>
         <?php $renderPartial($viewBase . '/operations/index.php', ['data' => $operationsData ?? []]); ?>
+    </section>
+    <section class="operations-center-panel" data-tab-panel="ai_reprocess" <?= $selectedTab !== 'ai_reprocess' ? 'hidden' : '' ?>>
+        <?php $renderPartial($viewBase . '/operations/ai_reprocess.php', ['aiReprocessData' => $aiReprocessData ?? []]); ?>
     </section>
     <section class="operations-center-panel" data-tab-panel="security" <?= $selectedTab !== 'security' ? 'hidden' : '' ?>>
         <?php $renderPartial($viewBase . '/security/index.php', ['securityData' => $securityData ?? []]); ?>

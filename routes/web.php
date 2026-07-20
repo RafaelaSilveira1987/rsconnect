@@ -6,6 +6,7 @@ use App\Controllers\AccessController;
 use App\Controllers\AgentController;
 use App\Controllers\AdminCrmController;
 use App\Controllers\AiCredentialController;
+use App\Controllers\AiReprocessController;
 use App\Controllers\AutomationController;
 use App\Controllers\BillingController;
 use App\Controllers\AuthController;
@@ -103,6 +104,9 @@ return static function (Router $router): void {
     $router->post('/implementation/refresh', [ImplementationController::class, 'refresh'], ['auth', 'super_admin', 'csrf']);
     $router->post('/implementation/item', [ImplementationController::class, 'updateItem'], ['auth', 'super_admin', 'csrf']);
     $router->get('/operations', [OperationsCenterController::class, 'monitoring'], ['auth', 'super_admin']);
+    $router->get('/operations/ai-reprocess', [OperationsCenterController::class, 'aiReprocess'], ['auth', 'super_admin']);
+    $router->post('/operations/ai-reprocess/save', [AiReprocessController::class, 'save'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/operations/ai-reprocess/run', [AiReprocessController::class, 'run'], ['auth', 'super_admin', 'csrf']);
     $router->get('/monitoramento', [OperationsCenterController::class, 'monitoring'], ['auth', 'super_admin']);
     $router->post('/operations/checks/run', [OperationsController::class, 'runHealthChecks'], ['auth', 'super_admin', 'csrf']);
     $router->post('/operations/backups/register', [OperationsController::class, 'registerBackup'], ['auth', 'super_admin', 'csrf']);
@@ -118,6 +122,8 @@ return static function (Router $router): void {
     $router->post('/backup-automatico/save', [BackupAutomationController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/backup-automatico/trigger', [BackupAutomationController::class, 'trigger'], ['auth', 'super_admin', 'csrf']);
     $router->post('/backup-automatico/toggle', [BackupAutomationController::class, 'toggle'], ['auth', 'super_admin', 'csrf']);
+    $router->get('/webhooks/ai-reprocess/run', [AiReprocessController::class, 'cron']);
+    $router->post('/webhooks/ai-reprocess/run', [AiReprocessController::class, 'cron']);
     $router->post('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);
     $router->get('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);
 

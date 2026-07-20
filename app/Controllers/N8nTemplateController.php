@@ -56,6 +56,13 @@ final class N8nTemplateController
             'events' => ['operations.backup.requested', 'cron.daily'],
             'description' => 'Gera backup do banco, salva o arquivo no destino configurado e registra o resultado no Monitoramento do RS Connect.',
         ],
+        'ai-reprocessamento-agendado' => [
+            'title' => 'Verificação agendada da fila da IA',
+            'segment' => 'Operação',
+            'file' => 'template-ai-reprocessamento-agendado.json',
+            'events' => ['ai.queue.check', 'cron.every_5_minutes'],
+            'description' => 'Consulta a rotina segura da fila da IA a cada cinco minutos. O RS Connect decide pelo horário salvo e só responde mensagens realmente presas.',
+        ],
         'agenda-disponibilidade' => [
             'title' => 'Agenda inteligente — simulação/fallback',
             'segment' => 'Agenda',

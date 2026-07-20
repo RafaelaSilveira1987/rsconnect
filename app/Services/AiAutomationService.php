@@ -22,6 +22,10 @@ final class AiAutomationService
 
     public function handleIncoming(array $instance, int $conversationId, string $incomingContent, array $payload): void
     {
+        $pdo = null;
+        $agent = null;
+        $conversationLockName = mb_substr('rs_ai_conversation_' . $conversationId, 0, 64);
+        $conversationLockAcquired = false;
         $globalEnabled = filter_var(Env::get('AI_AUTOREPLY_ENABLED', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
         if ($globalEnabled === false) {
             $this->log((int) $instance['tenant_id'], $conversationId, null, 'ai.skipped', 'skipped', 'AI_AUTOREPLY_ENABLED=false', null, null);
@@ -57,11 +61,57 @@ final class AiAutomationService
                 return;
             }
 
+            $lockStatement = $pdo->prepare('SELECT GET_LOCK(:lock_name, 35)');
+            $lockStatement->execute(['lock_name' => $conversationLockName]);
+            $conversationLockAcquired = (int) $lockStatement->fetchColumn() === 1;
+            if (!$conversationLockAcquired) {
+                $this->log(
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    'ai.cooldown',
+                    'skipped',
+                    'Mensagem aguardando outra execução da IA terminar.',
+                    null,
+                    [
+                        'pending_reprocess' => true,
+                        'lock_busy' => true,
+                        'incoming_message_id' => $this->payloadMessageId($payload),
+                    ]
+                );
+                return;
+            }
+
+            // A conversa pode ter mudado enquanto aguardava outra execução.
+            $conversation = $this->conversation($pdo, $conversationId);
+            if (!$conversation || $conversation['attendance_mode'] !== 'ai' || $conversation['status'] === 'closed') {
+                $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.skipped', 'skipped', 'Conversa não está mais em modo IA.', null, null);
+                return;
+            }
+
             $bypassCooldown = filter_var(
                 $payload['bypass_cooldown'] ?? false,
                 FILTER_VALIDATE_BOOL,
                 FILTER_NULL_ON_FAILURE
             ) === true;
+
+            $storedMessageId = $bypassCooldown && isset($payload['message_id']) && is_numeric($payload['message_id'])
+                ? (int) $payload['message_id']
+                : 0;
+            if ($storedMessageId > 0 && $this->hasOutgoingAfterStoredMessage($pdo, $conversationId, $storedMessageId)) {
+                $this->log(
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    'ai.reprocess.skipped',
+                    'skipped',
+                    'A mensagem já recebeu uma resposta posterior e não será reenviada.',
+                    null,
+                    ['message_id' => $storedMessageId, 'duplicate_prevented' => true]
+                );
+                return;
+            }
+
             $cooldownSeconds = max(0, min(3600, (int) ($agent['cooldown_seconds'] ?? 15)));
             $remainingSeconds = $this->cooldownRemaining($pdo, $conversationId, $cooldownSeconds);
 
@@ -157,6 +207,15 @@ final class AiAutomationService
                 ],
                 600
             );
+        } finally {
+            if ($conversationLockAcquired && $pdo instanceof PDO) {
+                try {
+                    $releaseStatement = $pdo->prepare('SELECT RELEASE_LOCK(:lock_name)');
+                    $releaseStatement->execute(['lock_name' => $conversationLockName]);
+                } catch (Throwable) {
+                    // O lock também é liberado quando a conexão é encerrada.
+                }
+            }
         }
     }
 
@@ -166,10 +225,21 @@ final class AiAutomationService
      *
      * @return array{status:string,conversation_id?:int,message_id?:int}
      */
-    public function reprocessLatestPendingForAgent(int $tenantId, int $agentId): array
+    public function reprocessLatestPendingForAgent(int $tenantId, int $agentId, string $source = 'manual'): array
     {
+        $pdo = null;
+        $lockName = mb_substr('rs_ai_agent_' . $tenantId . '_' . $agentId, 0, 64);
+        $lockAcquired = false;
+
         try {
             $pdo = Database::connection();
+            $lockStatement = $pdo->prepare('SELECT GET_LOCK(:lock_name, 0)');
+            $lockStatement->execute(['lock_name' => $lockName]);
+            $lockAcquired = (int) $lockStatement->fetchColumn() === 1;
+            if (!$lockAcquired) {
+                return ['status' => 'busy'];
+            }
+
             $agentStatement = $pdo->prepare(
                 'SELECT a.id, a.tenant_id, a.instance_id, a.status, a.auto_reply_enabled,
                         COALESCE(a.reply_to_reactions, 0) AS reply_to_reactions,
@@ -178,6 +248,9 @@ final class AiAutomationService
                  INNER JOIN evolution_instances i
                     ON i.id = a.instance_id
                    AND i.tenant_id = a.tenant_id
+                 INNER JOIN tenants t
+                    ON t.id = a.tenant_id
+                   AND t.status = "active"
                  WHERE a.id = :agent_id
                    AND a.tenant_id = :tenant_id
                  LIMIT 1'
@@ -259,7 +332,7 @@ final class AiAutomationService
                 (int) $candidate['conversation_id'],
                 (string) $candidate['content'],
                 [
-                    'event' => 'agent.settings_saved.reprocess',
+                    'event' => 'ai.queue.reprocess.' . preg_replace('/[^a-z0-9_.-]+/i', '_', $source),
                     'bypass_cooldown' => true,
                     'message_id' => (int) $candidate['message_id'],
                 ]
@@ -290,7 +363,16 @@ final class AiAutomationService
                 'message_id' => (int) $candidate['message_id'],
             ];
         } catch (Throwable $exception) {
-            return ['status' => 'error'];
+            return ['status' => 'error', 'error' => $exception->getMessage()];
+        } finally {
+            if ($lockAcquired && $pdo instanceof PDO) {
+                try {
+                    $releaseStatement = $pdo->prepare('SELECT RELEASE_LOCK(:lock_name)');
+                    $releaseStatement->execute(['lock_name' => $lockName]);
+                } catch (Throwable) {
+                    // O lock também é liberado quando a conexão é encerrada.
+                }
+            }
         }
     }
 
@@ -450,6 +532,46 @@ final class AiAutomationService
         }
 
         return false;
+    }
+
+    private function hasOutgoingAfterStoredMessage(PDO $pdo, int $conversationId, int $messageId): bool
+    {
+        $statement = $pdo->prepare(
+            'SELECT cm.sent_at
+             FROM conversation_messages cm
+             WHERE cm.id = :message_id
+               AND cm.conversation_id = :conversation_id
+               AND cm.direction = "incoming"
+             LIMIT 1'
+        );
+        $statement->execute([
+            'message_id' => $messageId,
+            'conversation_id' => $conversationId,
+        ]);
+        $sentAt = $statement->fetchColumn();
+        if (!$sentAt) {
+            return true;
+        }
+
+        $check = $pdo->prepare(
+            'SELECT 1
+             FROM conversation_messages outgoing
+             WHERE outgoing.conversation_id = :conversation_id
+               AND outgoing.direction = "outgoing"
+               AND (
+                    outgoing.sent_at > :sent_at_after
+                    OR (outgoing.sent_at = :sent_at_equal AND outgoing.id > :message_id)
+               )
+             LIMIT 1'
+        );
+        $check->execute([
+            'conversation_id' => $conversationId,
+            'sent_at_after' => (string) $sentAt,
+            'sent_at_equal' => (string) $sentAt,
+            'message_id' => $messageId,
+        ]);
+
+        return (bool) $check->fetchColumn();
     }
 
     private function cooldownRemaining(PDO $pdo, int $conversationId, int $seconds): int

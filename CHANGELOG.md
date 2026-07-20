@@ -1,3 +1,15 @@
+# ZIP 36.1 — Fila da IA e reprocessamento agendado
+
+- Novo acesso **Central de operação > Fila da IA** para o Super Admin RS.
+- Configuração de horário diário, fuso e limite de mensagens por execução.
+- Verificação de todas as empresas sem reenviar conversas já respondidas.
+- Reprocessamento restrito a mensagens realmente presas após `ai.cooldown`.
+- Locks no MySQL para impedir execuções simultâneas e respostas duplicadas.
+- Histórico de execuções, total pendente e empresas que precisam de atenção.
+- Acesso **Saúde e IA** adicionado diretamente nos cards de empresas.
+- Endpoint, comando CLI e template n8n para acionamento periódico.
+- Migration `043_ai_reprocess_schedule.sql`.
+
 # HOTFIX 36.0.2 — Contatos com rolagem
 
 - Corrige o painel lateral de edição para rolar dentro da altura visível.
