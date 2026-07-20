@@ -805,16 +805,18 @@ final class ConversationController
 
         $pdo = Database::connection();
         $message = $pdo->prepare(
-            'SELECT content
+            'SELECT id, content
              FROM conversation_messages
              WHERE conversation_id = :conversation_id AND direction = "incoming"
              ORDER BY sent_at DESC, id DESC
              LIMIT 1'
         );
         $message->execute(['conversation_id' => $conversationId]);
-        $content = trim((string) $message->fetchColumn());
+        $incomingMessage = $message->fetch(PDO::FETCH_ASSOC) ?: [];
+        $messageId = (int) ($incomingMessage['id'] ?? 0);
+        $content = trim((string) ($incomingMessage['content'] ?? ''));
 
-        if ($content === '') {
+        if ($messageId < 1 || $content === '') {
             Flash::set('error', 'Não existe mensagem recebida para reprocessar com IA.');
             $this->redirect('/conversations?conversation_id=' . $conversationId);
         }
@@ -832,6 +834,8 @@ final class ConversationController
                 'event' => 'manual.reprocess',
                 'conversation_id' => $conversationId,
                 'bypass_cooldown' => true,
+                'message_id' => $messageId,
+                'stored_message_id' => $messageId,
             ]);
             $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'ai.reprocess', 'Última mensagem reprocessada manualmente com IA.');
             Flash::set('success', 'Reprocessamento solicitado. Confira a conversa e os logs de automação.');

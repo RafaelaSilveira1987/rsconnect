@@ -1,4 +1,4 @@
--- ZIP 34.5.1 — Diagnóstico de horário e conversas aguardando resposta
+-- HOTFIX 36.1.1 — Diagnóstico de horário e mensagens realmente sem resposta
 -- Ajuste os IDs antes de executar.
 SET @tenant_id := 2;
 SET @agent_id := 1;
@@ -22,22 +22,41 @@ LEFT JOIN ai_automation_logs l ON l.agent_id = a.id
 WHERE a.tenant_id = @tenant_id AND a.id = @agent_id
 GROUP BY a.id, a.name, a.instance_id, a.cooldown_seconds;
 
--- Conversas realmente sem resposta posterior e cujo último evento da IA é ai.cooldown.
+-- Cada linha abaixo é uma mensagem recebida sem saída válida posterior.
+-- Motivos elegíveis: cooldown, falha da IA, falha de entrega da Evolution
+-- ou execução interrompida antes de registrar o log.
 SELECT
     c.id AS conversation_id,
+    cm.id AS incoming_message_id,
     ct.name AS contact_name,
-    COUNT(cm.id) AS incoming_messages_without_reply,
-    MIN(cm.sent_at) AS waiting_since,
-    MAX(cm.sent_at) AS latest_incoming,
+    cm.content AS incoming_content,
+    cm.sent_at AS waiting_since,
     (
         SELECT al.event
         FROM ai_automation_logs al
-        WHERE al.tenant_id = c.tenant_id
-          AND al.conversation_id = c.id
-          AND al.agent_id = @agent_id
+        WHERE al.incoming_message_id = cm.id
         ORDER BY al.id DESC
         LIMIT 1
-    ) AS latest_ai_event
+    ) AS latest_message_event,
+    (
+        SELECT al.error_message
+        FROM ai_automation_logs al
+        WHERE al.incoming_message_id = cm.id
+        ORDER BY al.id DESC
+        LIMIT 1
+    ) AS latest_error,
+    EXISTS (
+        SELECT 1
+        FROM conversation_messages failed_outgoing
+        WHERE failed_outgoing.conversation_id = cm.conversation_id
+          AND failed_outgoing.direction = 'outgoing'
+          AND failed_outgoing.sender_type = 'ai'
+          AND failed_outgoing.status = 'failed'
+          AND (
+                failed_outgoing.sent_at > cm.sent_at
+                OR (failed_outgoing.sent_at = cm.sent_at AND failed_outgoing.id > cm.id)
+          )
+    ) AS has_failed_ai_delivery
 FROM conversations c
 INNER JOIN contacts ct ON ct.id = c.contact_id
 INNER JOIN conversation_messages cm
@@ -48,24 +67,71 @@ WHERE c.tenant_id = @tenant_id
   AND c.status <> 'closed'
   AND cm.direction = 'incoming'
   AND cm.message_type <> 'reaction'
-  AND (
-        SELECT al.event
-        FROM ai_automation_logs al
-        WHERE al.tenant_id = c.tenant_id
-          AND al.conversation_id = c.id
-          AND al.agent_id = @agent_id
-        ORDER BY al.id DESC
-        LIMIT 1
-  ) = 'ai.cooldown'
   AND NOT EXISTS (
         SELECT 1
         FROM conversation_messages outgoing
         WHERE outgoing.conversation_id = c.id
           AND outgoing.direction = 'outgoing'
+          AND outgoing.status <> 'failed'
           AND (
                 outgoing.sent_at > cm.sent_at
                 OR (outgoing.sent_at = cm.sent_at AND outgoing.id > cm.id)
           )
   )
-GROUP BY c.id, ct.name
-ORDER BY waiting_since;
+  AND (
+        COALESCE((
+            SELECT al.event
+            FROM ai_automation_logs al
+            WHERE al.incoming_message_id = cm.id
+            ORDER BY al.id DESC
+            LIMIT 1
+        ), '') IN ('ai.cooldown', 'ai.failed')
+        OR EXISTS (
+            SELECT 1
+            FROM conversation_messages failed_outgoing
+            WHERE failed_outgoing.conversation_id = cm.conversation_id
+              AND failed_outgoing.direction = 'outgoing'
+              AND failed_outgoing.sender_type = 'ai'
+              AND failed_outgoing.status = 'failed'
+              AND COALESCE((
+                    SELECT al_failed.event
+                    FROM ai_automation_logs al_failed
+                    WHERE al_failed.incoming_message_id = cm.id
+                    ORDER BY al_failed.id DESC
+                    LIMIT 1
+              ), '') IN ('', 'ai.replied', 'ai.failed')
+              AND (
+                    failed_outgoing.sent_at > cm.sent_at
+                    OR (failed_outgoing.sent_at = cm.sent_at AND failed_outgoing.id > cm.id)
+              )
+        )
+        OR (
+            NOT EXISTS (
+                SELECT 1
+                FROM ai_automation_logs al_msg
+                WHERE al_msg.incoming_message_id = cm.id
+            )
+            AND cm.sent_at <= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+            AND (
+                COALESCE((
+                    SELECT al_legacy.event
+                    FROM ai_automation_logs al_legacy
+                    WHERE al_legacy.tenant_id = c.tenant_id
+                      AND al_legacy.conversation_id = c.id
+                      AND al_legacy.agent_id = @agent_id
+                      AND al_legacy.created_at >= cm.sent_at
+                    ORDER BY al_legacy.id DESC
+                    LIMIT 1
+                ), '') IN ('ai.cooldown', 'ai.failed')
+                OR NOT EXISTS (
+                    SELECT 1
+                    FROM ai_automation_logs al_missing
+                    WHERE al_missing.tenant_id = c.tenant_id
+                      AND al_missing.conversation_id = c.id
+                      AND al_missing.agent_id = @agent_id
+                      AND al_missing.created_at >= cm.sent_at
+                )
+            )
+        )
+  )
+ORDER BY cm.sent_at;

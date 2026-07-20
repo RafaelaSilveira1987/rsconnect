@@ -134,7 +134,7 @@ final class EvolutionWebhookController
                 !$fromMe
             );
 
-            $inserted = $this->insertMessage(
+            $storedMessageId = $this->insertMessage(
                 $pdo,
                 (int) $instance['tenant_id'],
                 $conversationId,
@@ -147,6 +147,7 @@ final class EvolutionWebhookController
                 $payload,
                 $sentAt
             );
+            $inserted = $storedMessageId > 0;
 
             $leadId = null;
             $flowContext = [];
@@ -218,7 +219,9 @@ final class EvolutionWebhookController
                 }
 
                 if ($automationAllowed && !((bool) ($preScheduleResult['skip_ai'] ?? false))) {
-                    (new AiAutomationService())->handleIncoming($instance, $conversationId, $content, $payload);
+                    $aiPayload = $payload;
+                    $aiPayload['stored_message_id'] = $storedMessageId;
+                    (new AiAutomationService())->handleIncoming($instance, $conversationId, $content, $aiPayload);
                     $aiHandled = true;
                 }
             }
@@ -380,7 +383,7 @@ final class EvolutionWebhookController
         string $status,
         array $payload,
         string $sentAt
-    ): bool {
+    ): int {
         if ($externalId !== null) {
             $exists = $pdo->prepare(
                 'SELECT id FROM conversation_messages
@@ -389,7 +392,7 @@ final class EvolutionWebhookController
             );
             $exists->execute(['tenant_id' => $tenantId, 'external_id' => $externalId]);
             if ($exists->fetchColumn()) {
-                return false;
+                return 0;
             }
         }
 
@@ -413,7 +416,7 @@ final class EvolutionWebhookController
             'raw_payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'sent_at' => $sentAt,
         ]);
-        return true;
+        return (int) $pdo->lastInsertId();
     }
 
     private function applyStatusUpdate(array $instance, array $payload): bool
@@ -449,7 +452,135 @@ final class EvolutionWebhookController
             'tenant_id' => $instance['tenant_id'],
             'external_id' => $externalId,
         ]);
-        return $statement->rowCount() > 0;
+        $updated = $statement->rowCount() > 0;
+
+        if ($updated && $status === 'failed') {
+            $this->recordAiDeliveryFailure($instance, $externalId, $payload, $rawStatus);
+        }
+
+        return $updated;
+    }
+
+    private function recordAiDeliveryFailure(array $instance, string $externalId, array $payload, string $rawStatus): void
+    {
+        try {
+            $pdo = Database::connection();
+            $outgoingStatement = $pdo->prepare(
+                'SELECT cm.id, cm.conversation_id, cm.sent_at, c.evolution_instance_id
+                 FROM conversation_messages cm
+                 INNER JOIN conversations c
+                    ON c.id = cm.conversation_id
+                   AND c.tenant_id = cm.tenant_id
+                 WHERE cm.tenant_id = :tenant_id
+                   AND cm.evolution_message_id = :external_id
+                   AND cm.direction = "outgoing"
+                   AND cm.sender_type = "ai"
+                 LIMIT 1'
+            );
+            $outgoingStatement->execute([
+                'tenant_id' => (int) $instance['tenant_id'],
+                'external_id' => $externalId,
+            ]);
+            $outgoing = $outgoingStatement->fetch(PDO::FETCH_ASSOC);
+            if (!$outgoing) {
+                return;
+            }
+
+            $incomingStatement = $pdo->prepare(
+                'SELECT id
+                 FROM conversation_messages
+                 WHERE conversation_id = :conversation_id
+                   AND direction = "incoming"
+                   AND (
+                        sent_at < :sent_at_before
+                        OR (sent_at = :sent_at_equal AND id < :outgoing_id)
+                   )
+                 ORDER BY sent_at DESC, id DESC
+                 LIMIT 1'
+            );
+            $incomingStatement->execute([
+                'conversation_id' => (int) $outgoing['conversation_id'],
+                'sent_at_before' => (string) $outgoing['sent_at'],
+                'sent_at_equal' => (string) $outgoing['sent_at'],
+                'outgoing_id' => (int) $outgoing['id'],
+            ]);
+            $incomingMessageId = (int) ($incomingStatement->fetchColumn() ?: 0);
+            if ($incomingMessageId < 1) {
+                return;
+            }
+
+            $agentStatement = $pdo->prepare(
+                'SELECT a.id
+                 FROM ai_agents a
+                 WHERE a.tenant_id = :tenant_id
+                   AND a.status = "active"
+                   AND a.auto_reply_enabled = 1
+                   AND (
+                        a.instance_id = :instance_id_filter
+                        OR a.instance_id IS NULL
+                        OR a.is_default = 1
+                   )
+                 ORDER BY (a.instance_id = :instance_id_order) DESC,
+                          a.is_default DESC,
+                          a.id DESC
+                 LIMIT 1'
+            );
+            $agentStatement->execute([
+                'tenant_id' => (int) $instance['tenant_id'],
+                'instance_id_filter' => (int) $outgoing['evolution_instance_id'],
+                'instance_id_order' => (int) $outgoing['evolution_instance_id'],
+            ]);
+            $agentId = (int) ($agentStatement->fetchColumn() ?: 0);
+
+            $alreadyStatement = $pdo->prepare(
+                'SELECT 1
+                 FROM ai_automation_logs
+                 WHERE incoming_message_id = :incoming_message_id
+                   AND event = "ai.failed"
+                   AND error_message LIKE "Falha de entrega pela Evolution%"
+                 LIMIT 1'
+            );
+            $alreadyStatement->execute(['incoming_message_id' => $incomingMessageId]);
+            if ($alreadyStatement->fetchColumn()) {
+                return;
+            }
+
+            $failureData = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+            if (isset($failureData[0]) && is_array($failureData[0])) {
+                $failureData = $failureData[0];
+            }
+            $detailValue = $failureData['message']
+                ?? $failureData['error']
+                ?? $payload['message']
+                ?? $payload['error']
+                ?? $rawStatus;
+            if (is_array($detailValue)) {
+                $detailValue = json_encode($detailValue, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+            $detail = is_scalar($detailValue) ? trim((string) $detailValue) : '';
+            $error = 'Falha de entrega pela Evolution.';
+            if ($detail !== '') {
+                $error .= ' Retorno: ' . mb_substr($detail, 0, 350);
+            }
+
+            $pdo->prepare(
+                'INSERT INTO ai_automation_logs
+                    (tenant_id, conversation_id, agent_id, incoming_message_id, event, status,
+                     response_preview, error_message, raw_json)
+                 VALUES
+                    (:tenant_id, :conversation_id, :agent_id, :incoming_message_id,
+                     "ai.failed", "error", NULL, :error_message, :raw_json)'
+            )->execute([
+                'tenant_id' => (int) $instance['tenant_id'],
+                'conversation_id' => (int) $outgoing['conversation_id'],
+                'agent_id' => $agentId > 0 ? $agentId : null,
+                'incoming_message_id' => $incomingMessageId,
+                'error_message' => mb_substr($error, 0, 500),
+                'raw_json' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+        } catch (Throwable) {
+            // A atualização de status não pode falhar por causa do registro auxiliar da fila.
+        }
     }
 
     /**

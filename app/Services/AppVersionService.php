@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'ZIP 34.5';
-    public const REQUIRED_MIGRATION = '040_conversation_flow_contact_groups.sql';
+    public const PACKAGE_LABEL = 'ZIP 36.1.1';
+    public const REQUIRED_MIGRATION = '044_ai_pending_failures_message_link.sql';
 
     private PDO $pdo;
 

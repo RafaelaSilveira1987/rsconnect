@@ -39,7 +39,7 @@ final class AiReprocessService
         } catch (Throwable $exception) {
             return [
                 'migration_required' => true,
-                'migration' => 'database/migrations/043_ai_reprocess_schedule.sql',
+                'migration' => 'database/migrations/044_ai_pending_failures_message_link.sql',
                 'error' => $exception->getMessage(),
                 'settings' => $this->defaultSettings(),
                 'pending' => [],
@@ -323,34 +323,96 @@ final class AiReprocessService
              INNER JOIN conversations c
                 ON c.id = cm.conversation_id
                AND c.tenant_id = cm.tenant_id
+             INNER JOIN tenants t
+                ON t.id = cm.tenant_id
+               AND t.status = "active"
              INNER JOIN ai_agents a
-                ON a.tenant_id = cm.tenant_id
-               AND a.instance_id = c.evolution_instance_id
-               AND a.status = "active"
-               AND a.auto_reply_enabled = 1
-             INNER JOIN tenants t ON t.id = cm.tenant_id AND t.status = "active"
+                ON a.id = (
+                    SELECT aa.id
+                    FROM ai_agents aa
+                    WHERE aa.tenant_id = cm.tenant_id
+                      AND aa.status = "active"
+                      AND aa.auto_reply_enabled = 1
+                      AND (
+                            aa.instance_id = c.evolution_instance_id
+                            OR aa.instance_id IS NULL
+                            OR aa.is_default = 1
+                      )
+                    ORDER BY (aa.instance_id = c.evolution_instance_id) DESC,
+                             aa.is_default DESC,
+                             aa.id DESC
+                    LIMIT 1
+                )
              WHERE c.attendance_mode = "ai"
                AND c.status <> "closed"
                AND cm.direction = "incoming"
                AND (COALESCE(a.reply_to_reactions, 0) = 1 OR cm.message_type <> "reaction")
-               AND (
-                    SELECT al.event
-                    FROM ai_automation_logs al
-                    WHERE al.tenant_id = cm.tenant_id
-                      AND al.conversation_id = cm.conversation_id
-                      AND al.agent_id = a.id
-                    ORDER BY al.id DESC
-                    LIMIT 1
-               ) = "ai.cooldown"
                AND NOT EXISTS (
                     SELECT 1
                     FROM conversation_messages outgoing
                     WHERE outgoing.conversation_id = cm.conversation_id
                       AND outgoing.direction = "outgoing"
+                      AND outgoing.status <> "failed"
                       AND (
                             outgoing.sent_at > cm.sent_at
                             OR (outgoing.sent_at = cm.sent_at AND outgoing.id > cm.id)
                       )
+               )
+               AND (
+                    COALESCE((
+                        SELECT al.event
+                        FROM ai_automation_logs al
+                        WHERE al.incoming_message_id = cm.id
+                        ORDER BY al.id DESC
+                        LIMIT 1
+                    ), "") IN ("ai.cooldown", "ai.failed")
+                    OR (
+                        NOT EXISTS (
+                            SELECT 1
+                            FROM ai_automation_logs al_msg
+                            WHERE al_msg.incoming_message_id = cm.id
+                        )
+                        AND cm.sent_at <= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+                        AND (
+                            COALESCE((
+                                SELECT al_legacy.event
+                                FROM ai_automation_logs al_legacy
+                                WHERE al_legacy.tenant_id = cm.tenant_id
+                                  AND al_legacy.conversation_id = cm.conversation_id
+                                  AND al_legacy.agent_id = a.id
+                                  AND al_legacy.created_at >= cm.sent_at
+                                ORDER BY al_legacy.id DESC
+                                LIMIT 1
+                            ), "") IN ("ai.cooldown", "ai.failed")
+                            OR NOT EXISTS (
+                                SELECT 1
+                                FROM ai_automation_logs al_missing
+                                WHERE al_missing.tenant_id = cm.tenant_id
+                                  AND al_missing.conversation_id = cm.conversation_id
+                                  AND al_missing.agent_id = a.id
+                                  AND al_missing.created_at >= cm.sent_at
+                            )
+                        )
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM conversation_messages failed_outgoing
+                        WHERE failed_outgoing.conversation_id = cm.conversation_id
+                          AND failed_outgoing.direction = "outgoing"
+                          AND failed_outgoing.sender_type = "ai"
+                          AND failed_outgoing.status = "failed"
+                          AND COALESCE((
+                                SELECT al_failed.event
+                                FROM ai_automation_logs al_failed
+                                WHERE al_failed.incoming_message_id = cm.id
+                                ORDER BY al_failed.id DESC
+                                LIMIT 1
+                          ), "") IN ("", "ai.replied", "ai.failed")
+                          AND (
+                                failed_outgoing.sent_at > cm.sent_at
+                                OR (failed_outgoing.sent_at = cm.sent_at AND failed_outgoing.id > cm.id)
+                          )
+                    )
                )'
         );
 
@@ -368,34 +430,96 @@ final class AiReprocessService
              INNER JOIN conversations c
                 ON c.id = cm.conversation_id
                AND c.tenant_id = cm.tenant_id
+             INNER JOIN tenants t
+                ON t.id = cm.tenant_id
+               AND t.status = "active"
              INNER JOIN ai_agents a
-                ON a.tenant_id = cm.tenant_id
-               AND a.instance_id = c.evolution_instance_id
-               AND a.status = "active"
-               AND a.auto_reply_enabled = 1
-             INNER JOIN tenants t ON t.id = cm.tenant_id AND t.status = "active"
+                ON a.id = (
+                    SELECT aa.id
+                    FROM ai_agents aa
+                    WHERE aa.tenant_id = cm.tenant_id
+                      AND aa.status = "active"
+                      AND aa.auto_reply_enabled = 1
+                      AND (
+                            aa.instance_id = c.evolution_instance_id
+                            OR aa.instance_id IS NULL
+                            OR aa.is_default = 1
+                      )
+                    ORDER BY (aa.instance_id = c.evolution_instance_id) DESC,
+                             aa.is_default DESC,
+                             aa.id DESC
+                    LIMIT 1
+                )
              WHERE c.attendance_mode = "ai"
                AND c.status <> "closed"
                AND cm.direction = "incoming"
                AND (COALESCE(a.reply_to_reactions, 0) = 1 OR cm.message_type <> "reaction")
-               AND (
-                    SELECT al.event
-                    FROM ai_automation_logs al
-                    WHERE al.tenant_id = cm.tenant_id
-                      AND al.conversation_id = cm.conversation_id
-                      AND al.agent_id = a.id
-                    ORDER BY al.id DESC
-                    LIMIT 1
-               ) = "ai.cooldown"
                AND NOT EXISTS (
                     SELECT 1
                     FROM conversation_messages outgoing
                     WHERE outgoing.conversation_id = cm.conversation_id
                       AND outgoing.direction = "outgoing"
+                      AND outgoing.status <> "failed"
                       AND (
                             outgoing.sent_at > cm.sent_at
                             OR (outgoing.sent_at = cm.sent_at AND outgoing.id > cm.id)
                       )
+               )
+               AND (
+                    COALESCE((
+                        SELECT al.event
+                        FROM ai_automation_logs al
+                        WHERE al.incoming_message_id = cm.id
+                        ORDER BY al.id DESC
+                        LIMIT 1
+                    ), "") IN ("ai.cooldown", "ai.failed")
+                    OR (
+                        NOT EXISTS (
+                            SELECT 1
+                            FROM ai_automation_logs al_msg
+                            WHERE al_msg.incoming_message_id = cm.id
+                        )
+                        AND cm.sent_at <= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+                        AND (
+                            COALESCE((
+                                SELECT al_legacy.event
+                                FROM ai_automation_logs al_legacy
+                                WHERE al_legacy.tenant_id = cm.tenant_id
+                                  AND al_legacy.conversation_id = cm.conversation_id
+                                  AND al_legacy.agent_id = a.id
+                                  AND al_legacy.created_at >= cm.sent_at
+                                ORDER BY al_legacy.id DESC
+                                LIMIT 1
+                            ), "") IN ("ai.cooldown", "ai.failed")
+                            OR NOT EXISTS (
+                                SELECT 1
+                                FROM ai_automation_logs al_missing
+                                WHERE al_missing.tenant_id = cm.tenant_id
+                                  AND al_missing.conversation_id = cm.conversation_id
+                                  AND al_missing.agent_id = a.id
+                                  AND al_missing.created_at >= cm.sent_at
+                            )
+                        )
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM conversation_messages failed_outgoing
+                        WHERE failed_outgoing.conversation_id = cm.conversation_id
+                          AND failed_outgoing.direction = "outgoing"
+                          AND failed_outgoing.sender_type = "ai"
+                          AND failed_outgoing.status = "failed"
+                          AND COALESCE((
+                                SELECT al_failed.event
+                                FROM ai_automation_logs al_failed
+                                WHERE al_failed.incoming_message_id = cm.id
+                                ORDER BY al_failed.id DESC
+                                LIMIT 1
+                          ), "") IN ("", "ai.replied", "ai.failed")
+                          AND (
+                                failed_outgoing.sent_at > cm.sent_at
+                                OR (failed_outgoing.sent_at = cm.sent_at AND failed_outgoing.id > cm.id)
+                          )
+                    )
                )
              GROUP BY t.id, t.name
              ORDER BY pending_count DESC, t.name'
@@ -409,12 +533,21 @@ final class AiReprocessService
         $statement = Database::connection()->query(
             'SELECT a.id, a.tenant_id
              FROM ai_agents a
-             INNER JOIN tenants t ON t.id = a.tenant_id AND t.status = "active"
-             INNER JOIN evolution_instances i
-                ON i.id = a.instance_id
-               AND i.tenant_id = a.tenant_id
+             INNER JOIN tenants t
+                ON t.id = a.tenant_id
+               AND t.status = "active"
              WHERE a.status = "active"
                AND a.auto_reply_enabled = 1
+               AND EXISTS (
+                    SELECT 1
+                    FROM evolution_instances i
+                    WHERE i.tenant_id = a.tenant_id
+                      AND (
+                            a.instance_id = i.id
+                            OR a.instance_id IS NULL
+                            OR a.is_default = 1
+                      )
+               )
              ORDER BY a.tenant_id, a.id'
         );
 

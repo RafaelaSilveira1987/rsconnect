@@ -47,7 +47,12 @@ final class AiReprocessController
             if (($result['status'] ?? '') === 'busy') {
                 Flash::set('warning', (string) ($result['message'] ?? 'Já existe uma execução em andamento.'));
             } elseif ((int) ($result['replied'] ?? 0) > 0) {
-                Flash::set('success', (int) $result['replied'] . ' conversa(s) presa(s) receberam resposta. Nenhuma mensagem já respondida foi reenviada.');
+                $attention = (int) ($result['errors'] ?? 0) > 0
+                    ? ' Algumas pendências continuam com erro e permanecem visíveis na fila.'
+                    : '';
+                Flash::set('success', (int) $result['replied'] . ' conversa(s) presa(s) receberam resposta. Nenhuma mensagem já respondida foi reenviada.' . $attention);
+            } elseif ((int) ($result['errors'] ?? 0) > 0) {
+                Flash::set('error', 'A fila encontrou mensagem sem resposta, mas a IA ou a Evolution voltou a falhar. A pendência foi mantida para nova tentativa; consulte os logs do assistente.');
             } elseif ((int) ($result['attempted'] ?? 0) > 0) {
                 Flash::set('warning', 'As mensagens pendentes foram reavaliadas, mas regras do atendimento impediram novos envios.');
             } else {

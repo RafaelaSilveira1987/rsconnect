@@ -14,6 +14,8 @@ use Throwable;
 
 final class AiAutomationService
 {
+    private ?int $currentIncomingMessageId = null;
+
     public function __construct(
         private readonly AiModelService $ai = new AiModelService(),
         private readonly AutomationWebhookService $automationWebhook = new AutomationWebhookService(),
@@ -22,6 +24,11 @@ final class AiAutomationService
 
     public function handleIncoming(array $instance, int $conversationId, string $incomingContent, array $payload): void
     {
+        $candidateMessageId = $payload['stored_message_id'] ?? $payload['message_id'] ?? null;
+        $this->currentIncomingMessageId = is_numeric($candidateMessageId) && (int) $candidateMessageId > 0
+            ? (int) $candidateMessageId
+            : null;
+
         $pdo = null;
         $agent = null;
         $conversationLockName = mb_substr('rs_ai_conversation_' . $conversationId, 0, 64);
@@ -29,6 +36,7 @@ final class AiAutomationService
         $globalEnabled = filter_var(Env::get('AI_AUTOREPLY_ENABLED', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
         if ($globalEnabled === false) {
             $this->log((int) $instance['tenant_id'], $conversationId, null, 'ai.skipped', 'skipped', 'AI_AUTOREPLY_ENABLED=false', null, null);
+            $this->currentIncomingMessageId = null;
             return;
         }
 
@@ -95,9 +103,7 @@ final class AiAutomationService
                 FILTER_NULL_ON_FAILURE
             ) === true;
 
-            $storedMessageId = $bypassCooldown && isset($payload['message_id']) && is_numeric($payload['message_id'])
-                ? (int) $payload['message_id']
-                : 0;
+            $storedMessageId = $bypassCooldown ? (int) ($this->currentIncomingMessageId ?? 0) : 0;
             if ($storedMessageId > 0 && $this->hasOutgoingAfterStoredMessage($pdo, $conversationId, $storedMessageId)) {
                 $this->log(
                     (int) $instance['tenant_id'],
@@ -216,14 +222,15 @@ final class AiAutomationService
                     // O lock também é liberado quando a conexão é encerrada.
                 }
             }
+            $this->currentIncomingMessageId = null;
         }
     }
 
     /**
-     * Reavalia apenas a mensagem mais recente que ficou sem resposta por causa do intervalo.
-     * Não responde novamente quando uma pessoa ou a IA já enviou algo depois da mensagem.
+     * Reavalia a mensagem mais recente sem resposta, incluindo intervalo,
+     * falha de IA/Evolution e execução interrompida antes do registro do log.
      *
-     * @return array{status:string,conversation_id?:int,message_id?:int}
+     * @return array{status:string,conversation_id?:int,message_id?:int,error?:string,event?:string}
      */
     public function reprocessLatestPendingForAgent(int $tenantId, int $agentId, string $source = 'manual'): array
     {
@@ -241,13 +248,9 @@ final class AiAutomationService
             }
 
             $agentStatement = $pdo->prepare(
-                'SELECT a.id, a.tenant_id, a.instance_id, a.status, a.auto_reply_enabled,
-                        COALESCE(a.reply_to_reactions, 0) AS reply_to_reactions,
-                        i.id AS evolution_instance_id, i.base_url, i.api_key_encrypted, i.instance_name
+                'SELECT a.id, a.tenant_id, a.status, a.auto_reply_enabled,
+                        COALESCE(a.reply_to_reactions, 0) AS reply_to_reactions
                  FROM ai_agents a
-                 INNER JOIN evolution_instances i
-                    ON i.id = a.instance_id
-                   AND i.tenant_id = a.tenant_id
                  INNER JOIN tenants t
                     ON t.id = a.tenant_id
                    AND t.status = "active"
@@ -264,7 +267,6 @@ final class AiAutomationService
             if (!$agent
                 || (string) ($agent['status'] ?? '') !== 'active'
                 || (int) ($agent['auto_reply_enabled'] ?? 0) !== 1
-                || (int) ($agent['instance_id'] ?? 0) < 1
             ) {
                 return ['status' => 'none'];
             }
@@ -274,44 +276,109 @@ final class AiAutomationService
                         cm.conversation_id,
                         cm.content,
                         cm.message_type,
-                        cm.sent_at
+                        cm.sent_at,
+                        c.evolution_instance_id
                  FROM conversation_messages cm
                  INNER JOIN conversations c
                     ON c.id = cm.conversation_id
                    AND c.tenant_id = cm.tenant_id
                  WHERE cm.tenant_id = :tenant_id
-                   AND c.evolution_instance_id = :instance_id
                    AND c.attendance_mode = "ai"
                    AND c.status <> "closed"
                    AND cm.direction = "incoming"
                    AND (:reply_to_reactions = 1 OR cm.message_type <> "reaction")
                    AND (
-                        SELECT al.event
-                        FROM ai_automation_logs al
-                        WHERE al.tenant_id = cm.tenant_id
-                          AND al.conversation_id = cm.conversation_id
-                          AND al.agent_id = :agent_id
-                        ORDER BY al.id DESC
+                        SELECT aa.id
+                        FROM ai_agents aa
+                        WHERE aa.tenant_id = cm.tenant_id
+                          AND aa.status = "active"
+                          AND aa.auto_reply_enabled = 1
+                          AND (
+                                aa.instance_id = c.evolution_instance_id
+                                OR aa.instance_id IS NULL
+                                OR aa.is_default = 1
+                          )
+                        ORDER BY (aa.instance_id = c.evolution_instance_id) DESC,
+                                 aa.is_default DESC,
+                                 aa.id DESC
                         LIMIT 1
-                   ) = "ai.cooldown"
+                   ) = :selected_agent_id
                    AND NOT EXISTS (
                         SELECT 1
                         FROM conversation_messages outgoing
                         WHERE outgoing.conversation_id = cm.conversation_id
                           AND outgoing.direction = "outgoing"
+                          AND outgoing.status <> "failed"
                           AND (
                                 outgoing.sent_at > cm.sent_at
                                 OR (outgoing.sent_at = cm.sent_at AND outgoing.id > cm.id)
                           )
+                   )
+                   AND (
+                        COALESCE((
+                            SELECT al.event
+                            FROM ai_automation_logs al
+                            WHERE al.incoming_message_id = cm.id
+                            ORDER BY al.id DESC
+                            LIMIT 1
+                        ), "") IN ("ai.cooldown", "ai.failed")
+                        OR (
+                            NOT EXISTS (
+                                SELECT 1
+                                FROM ai_automation_logs al_msg
+                                WHERE al_msg.incoming_message_id = cm.id
+                            )
+                            AND cm.sent_at <= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+                            AND (
+                                COALESCE((
+                                    SELECT al_legacy.event
+                                    FROM ai_automation_logs al_legacy
+                                    WHERE al_legacy.tenant_id = cm.tenant_id
+                                      AND al_legacy.conversation_id = cm.conversation_id
+                                      AND al_legacy.agent_id = :legacy_agent_id
+                                      AND al_legacy.created_at >= cm.sent_at
+                                    ORDER BY al_legacy.id DESC
+                                    LIMIT 1
+                                ), "") IN ("ai.cooldown", "ai.failed")
+                                OR NOT EXISTS (
+                                    SELECT 1
+                                    FROM ai_automation_logs al_missing
+                                    WHERE al_missing.tenant_id = cm.tenant_id
+                                      AND al_missing.conversation_id = cm.conversation_id
+                                      AND al_missing.agent_id = :legacy_agent_id_missing
+                                      AND al_missing.created_at >= cm.sent_at
+                                )
+                            )
+                        )
+                        OR EXISTS (
+                            SELECT 1
+                            FROM conversation_messages failed_outgoing
+                            WHERE failed_outgoing.conversation_id = cm.conversation_id
+                              AND failed_outgoing.direction = "outgoing"
+                              AND failed_outgoing.sender_type = "ai"
+                              AND failed_outgoing.status = "failed"
+                              AND COALESCE((
+                                    SELECT al_failed.event
+                                    FROM ai_automation_logs al_failed
+                                    WHERE al_failed.incoming_message_id = cm.id
+                                    ORDER BY al_failed.id DESC
+                                    LIMIT 1
+                              ), "") IN ("", "ai.replied", "ai.failed")
+                              AND (
+                                    failed_outgoing.sent_at > cm.sent_at
+                                    OR (failed_outgoing.sent_at = cm.sent_at AND failed_outgoing.id > cm.id)
+                              )
+                        )
                    )
                  ORDER BY cm.sent_at DESC, cm.id DESC
                  LIMIT 1'
             );
             $candidateStatement->execute([
                 'tenant_id' => $tenantId,
-                'instance_id' => (int) $agent['instance_id'],
                 'reply_to_reactions' => (int) ($agent['reply_to_reactions'] ?? 0),
-                'agent_id' => $agentId,
+                'selected_agent_id' => $agentId,
+                'legacy_agent_id' => $agentId,
+                'legacy_agent_id_missing' => $agentId,
             ]);
             $candidate = $candidateStatement->fetch(PDO::FETCH_ASSOC);
 
@@ -319,13 +386,21 @@ final class AiAutomationService
                 return ['status' => 'none'];
             }
 
-            $instance = [
-                'id' => (int) $agent['evolution_instance_id'],
+            $instanceStatement = $pdo->prepare(
+                'SELECT id, tenant_id, base_url, api_key_encrypted, instance_name
+                 FROM evolution_instances
+                 WHERE id = :instance_id
+                   AND tenant_id = :tenant_id
+                 LIMIT 1'
+            );
+            $instanceStatement->execute([
+                'instance_id' => (int) $candidate['evolution_instance_id'],
                 'tenant_id' => $tenantId,
-                'base_url' => (string) $agent['base_url'],
-                'api_key_encrypted' => (string) $agent['api_key_encrypted'],
-                'instance_name' => (string) $agent['instance_name'],
-            ];
+            ]);
+            $instance = $instanceStatement->fetch(PDO::FETCH_ASSOC);
+            if (!$instance) {
+                return ['status' => 'error', 'error' => 'A conexão WhatsApp vinculada à conversa não foi encontrada.'];
+            }
 
             $this->handleIncoming(
                 $instance,
@@ -335,6 +410,7 @@ final class AiAutomationService
                     'event' => 'ai.queue.reprocess.' . preg_replace('/[^a-z0-9_.-]+/i', '_', $source),
                     'bypass_cooldown' => true,
                     'message_id' => (int) $candidate['message_id'],
+                    'stored_message_id' => (int) $candidate['message_id'],
                 ]
             );
 
@@ -343,6 +419,7 @@ final class AiAutomationService
                  FROM conversation_messages
                  WHERE conversation_id = :conversation_id
                    AND direction = "outgoing"
+                   AND status <> "failed"
                    AND (
                         sent_at > :sent_at_after
                         OR (sent_at = :sent_at_equal AND id > :message_id)
@@ -357,10 +434,49 @@ final class AiAutomationService
                 'message_id' => (int) $candidate['message_id'],
             ]);
 
+            if ($replyCheck->fetchColumn()) {
+                return [
+                    'status' => 'replied',
+                    'conversation_id' => (int) $candidate['conversation_id'],
+                    'message_id' => (int) $candidate['message_id'],
+                ];
+            }
+
+            $attemptStatement = $pdo->prepare(
+                'SELECT event, status, error_message
+                 FROM ai_automation_logs
+                 WHERE incoming_message_id = :message_id
+                 ORDER BY id DESC
+                 LIMIT 1'
+            );
+            $attemptStatement->execute(['message_id' => (int) $candidate['message_id']]);
+            $attempt = $attemptStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+            $event = (string) ($attempt['event'] ?? '');
+
+            if ($event === 'ai.failed' || (string) ($attempt['status'] ?? '') === 'error') {
+                return [
+                    'status' => 'error',
+                    'conversation_id' => (int) $candidate['conversation_id'],
+                    'message_id' => (int) $candidate['message_id'],
+                    'event' => $event,
+                    'error' => (string) ($attempt['error_message'] ?? 'A IA não conseguiu concluir a resposta.'),
+                ];
+            }
+
+            if ($event === 'ai.cooldown') {
+                return [
+                    'status' => 'busy',
+                    'conversation_id' => (int) $candidate['conversation_id'],
+                    'message_id' => (int) $candidate['message_id'],
+                    'event' => $event,
+                ];
+            }
+
             return [
-                'status' => $replyCheck->fetchColumn() ? 'replied' : 'evaluated',
+                'status' => 'evaluated',
                 'conversation_id' => (int) $candidate['conversation_id'],
                 'message_id' => (int) $candidate['message_id'],
+                'event' => $event,
             ];
         } catch (Throwable $exception) {
             return ['status' => 'error', 'error' => $exception->getMessage()];
@@ -462,6 +578,7 @@ final class AiAutomationService
                 SELECT direction, sender_type, content, sent_at
                 FROM conversation_messages
                 WHERE conversation_id = :conversation_id
+                  AND NOT (direction = "outgoing" AND status = "failed")
                 ORDER BY sent_at DESC, id DESC
                 LIMIT ' . $limit . '
              ) recent
@@ -558,6 +675,7 @@ final class AiAutomationService
              FROM conversation_messages outgoing
              WHERE outgoing.conversation_id = :conversation_id
                AND outgoing.direction = "outgoing"
+               AND outgoing.status <> "failed"
                AND (
                     outgoing.sent_at > :sent_at_after
                     OR (outgoing.sent_at = :sent_at_equal AND outgoing.id > :message_id)
@@ -587,6 +705,7 @@ final class AiAutomationService
              WHERE conversation_id = :conversation_id
                AND direction = "outgoing"
                AND sender_type = "ai"
+               AND status <> "failed"
              ORDER BY sent_at DESC, id DESC
              LIMIT 1'
         );
@@ -728,22 +847,40 @@ final class AiAutomationService
 
     private function log(int $tenantId, int $conversationId, ?int $agentId, string $event, string $status, ?string $error, ?string $responsePreview, ?array $raw): void
     {
+        $payload = [
+            'tenant_id' => $tenantId,
+            'conversation_id' => $conversationId,
+            'agent_id' => $agentId,
+            'incoming_message_id' => $this->currentIncomingMessageId,
+            'event' => $event,
+            'status' => $status,
+            'response_preview' => $responsePreview !== null ? mb_substr($responsePreview, 0, 500) : null,
+            'error_message' => $error !== null ? mb_substr($error, 0, 500) : null,
+            'raw_json' => $raw !== null ? json_encode($raw, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+        ];
+
         try {
+            Database::connection()->prepare(
+                'INSERT INTO ai_automation_logs
+                    (tenant_id, conversation_id, agent_id, incoming_message_id, event, status,
+                     response_preview, error_message, raw_json)
+                 VALUES
+                    (:tenant_id, :conversation_id, :agent_id, :incoming_message_id, :event, :status,
+                     :response_preview, :error_message, :raw_json)'
+            )->execute($payload);
+            return;
+        } catch (Throwable) {
+            // Compatibilidade temporária enquanto a migration 044 ainda não foi executada.
+        }
+
+        try {
+            unset($payload['incoming_message_id']);
             Database::connection()->prepare(
                 'INSERT INTO ai_automation_logs
                     (tenant_id, conversation_id, agent_id, event, status, response_preview, error_message, raw_json)
                  VALUES
                     (:tenant_id, :conversation_id, :agent_id, :event, :status, :response_preview, :error_message, :raw_json)'
-            )->execute([
-                'tenant_id' => $tenantId,
-                'conversation_id' => $conversationId,
-                'agent_id' => $agentId,
-                'event' => $event,
-                'status' => $status,
-                'response_preview' => $responsePreview !== null ? mb_substr($responsePreview, 0, 500) : null,
-                'error_message' => $error !== null ? mb_substr($error, 0, 500) : null,
-                'raw_json' => $raw !== null ? json_encode($raw, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
-            ]);
+            )->execute($payload);
         } catch (Throwable) {
             // Não interrompe webhook por falha de log.
         }

@@ -1,3 +1,14 @@
+# HOTFIX 36.1.1 — Pendências reais da IA
+
+- Vincula cada tentativa da IA à mensagem recebida correspondente.
+- Mensagens com `ai.failed` passam a permanecer visíveis na **Fila da IA**.
+- Respostas que a Evolution marcar depois como `failed` retornam à fila com segurança.
+- Detecta mensagens gravadas cujo processamento foi interrompido antes do registro do log.
+- Mantém a proteção contra reenvio quando já existe qualquer saída posterior.
+- Corrige o reprocessamento para assistentes padrão ou sem conexão fixa.
+- Evita repetir várias vezes a mesma falha durante uma única execução geral.
+- Migration `044_ai_pending_failures_message_link.sql`.
+
 # ZIP 36.1 — Fila da IA e reprocessamento agendado
 
 - Novo acesso **Central de operação > Fila da IA** para o Super Admin RS.

@@ -1,10 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o ZIP 36.1.
+Pacote consolidado até o HOTFIX 36.1.1.
 
 ## Última etapa incluída
 
-ZIP 36.1 — Reprocessamento seguro e agendado da fila da IA.
+HOTFIX 36.1.1 — Pendências da IA vinculadas à mensagem recebida.
 
 ## Atualização principal
 
@@ -12,6 +12,7 @@ Execute as migrations em ordem. Para atualizar a base mais recente, mantenha as 
 
 ```text
 database/migrations/043_ai_reprocess_schedule.sql
+database/migrations/044_ai_pending_failures_message_link.sql
 ```
 
 Consulte `docs/AI-REPROCESSAMENTO-AGENDADO.md` para configurar o horário, o cron ou o workflow n8n.

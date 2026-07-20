@@ -371,6 +371,7 @@ final class TenantHealthService
     {
         $agents = $this->all(
             'SELECT a.*, i.name AS instance_label, i.status AS instance_status,
+                    (SELECT COUNT(*) FROM evolution_instances ii WHERE ii.tenant_id = a.tenant_id) AS tenant_instance_count,
                     (SELECT COUNT(*) FROM ai_provider_credentials c WHERE c.tenant_id = a.tenant_id AND c.status = "active" AND (c.agent_id = a.id OR c.agent_id IS NULL)) AS credential_count,
                     (SELECT MAX(created_at) FROM ai_automation_logs l WHERE l.agent_id = a.id AND l.status = "success") AS last_success,
                     (SELECT MAX(created_at) FROM ai_automation_logs l WHERE l.agent_id = a.id AND l.status = "error") AS last_error,
@@ -398,9 +399,11 @@ final class TenantHealthService
                 $status = 'warning';
                 $problems[] = 'respostas automáticas desligadas';
             }
-            if (empty($agent['instance_id'])) {
+            if (empty($agent['instance_id'])
+                && ((int) ($agent['is_default'] ?? 0) !== 1 || (int) ($agent['tenant_instance_count'] ?? 0) < 1)
+            ) {
                 $status = 'critical';
-                $problems[] = 'sem conexão WhatsApp vinculada';
+                $problems[] = 'sem conexão WhatsApp disponível';
             }
             if ((int) ($agent['credential_count'] ?? 0) < 1) {
                 $status = 'critical';
@@ -418,7 +421,6 @@ final class TenantHealthService
             $pending = $this->pendingAiResponses(
                 $tenantId,
                 $id,
-                (int) ($agent['instance_id'] ?? 0),
                 (int) ($agent['reply_to_reactions'] ?? 0) === 1
             );
             $pendingConversations = (int) ($pending['conversation_count'] ?? 0);
@@ -428,7 +430,7 @@ final class TenantHealthService
                 if ($status === 'ok') {
                     $status = 'warning';
                 }
-                $problems[] = $pendingConversations . ' conversa(s) aguardando resposta após o intervalo';
+                $problems[] = $pendingConversations . ' conversa(s) aguardando resposta da IA';
             }
 
             $summary = $problems ? 'Revisar: ' . implode('; ', $problems) . '.' : 'Assistente configurado e sem falhas recentes.';
@@ -1060,18 +1062,14 @@ final class TenantHealthService
     }
 
     /**
-     * Resume apenas conversas realmente aguardando resposta:
-     * o último evento do assistente é ai.cooldown e não existe mensagem de saída
-     * posterior às mensagens recebidas acumuladas.
+     * Resume conversas realmente aguardando resposta:
+     * intervalo, falha da IA/Evolution ou execução interrompida, sempre sem
+     * qualquer mensagem de saída posterior.
      *
      * @return array{conversation_count:int,message_count:int,oldest_pending_at:?string}
      */
-    private function pendingAiResponses(int $tenantId, int $agentId, int $instanceId, bool $replyToReactions): array
+    private function pendingAiResponses(int $tenantId, int $agentId, bool $replyToReactions): array
     {
-        if ($instanceId < 1) {
-            return ['conversation_count' => 0, 'message_count' => 0, 'oldest_pending_at' => null];
-        }
-
         $row = $this->row(
             'SELECT
                 COUNT(DISTINCT c.id) AS conversation_count,
@@ -1082,25 +1080,88 @@ final class TenantHealthService
                 ON cm.conversation_id = c.id
                AND cm.tenant_id = c.tenant_id
              WHERE c.tenant_id = :tenant_id
-               AND c.evolution_instance_id = :instance_id
+               AND (
+                    SELECT aa.id
+                    FROM ai_agents aa
+                    WHERE aa.tenant_id = c.tenant_id
+                      AND aa.status = "active"
+                      AND aa.auto_reply_enabled = 1
+                      AND (
+                            aa.instance_id = c.evolution_instance_id
+                            OR aa.instance_id IS NULL
+                            OR aa.is_default = 1
+                      )
+                    ORDER BY (aa.instance_id = c.evolution_instance_id) DESC,
+                             aa.is_default DESC,
+                             aa.id DESC
+                    LIMIT 1
+               ) = :selected_agent_id
                AND c.attendance_mode = "ai"
                AND c.status <> "closed"
                AND cm.direction = "incoming"
                AND (:reply_to_reactions = 1 OR cm.message_type <> "reaction")
                AND (
-                    SELECT al.event
-                    FROM ai_automation_logs al
-                    WHERE al.tenant_id = c.tenant_id
-                      AND al.conversation_id = c.id
-                      AND al.agent_id = :agent_id
-                    ORDER BY al.id DESC
-                    LIMIT 1
-               ) = "ai.cooldown"
+                    COALESCE((
+                        SELECT al.event
+                        FROM ai_automation_logs al
+                        WHERE al.incoming_message_id = cm.id
+                        ORDER BY al.id DESC
+                        LIMIT 1
+                    ), "") IN ("ai.cooldown", "ai.failed")
+                    OR (
+                        NOT EXISTS (
+                            SELECT 1
+                            FROM ai_automation_logs al_msg
+                            WHERE al_msg.incoming_message_id = cm.id
+                        )
+                        AND cm.sent_at <= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+                        AND (
+                            COALESCE((
+                                SELECT al_legacy.event
+                                FROM ai_automation_logs al_legacy
+                                WHERE al_legacy.tenant_id = c.tenant_id
+                                  AND al_legacy.conversation_id = c.id
+                                  AND al_legacy.agent_id = :legacy_agent_id
+                                  AND al_legacy.created_at >= cm.sent_at
+                                ORDER BY al_legacy.id DESC
+                                LIMIT 1
+                            ), "") IN ("ai.cooldown", "ai.failed")
+                            OR NOT EXISTS (
+                                SELECT 1
+                                FROM ai_automation_logs al_missing
+                                WHERE al_missing.tenant_id = c.tenant_id
+                                  AND al_missing.conversation_id = c.id
+                                  AND al_missing.agent_id = :legacy_agent_id_missing
+                                  AND al_missing.created_at >= cm.sent_at
+                            )
+                        )
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM conversation_messages failed_outgoing
+                        WHERE failed_outgoing.conversation_id = cm.conversation_id
+                          AND failed_outgoing.direction = "outgoing"
+                          AND failed_outgoing.sender_type = "ai"
+                          AND failed_outgoing.status = "failed"
+                          AND COALESCE((
+                                SELECT al_failed.event
+                                FROM ai_automation_logs al_failed
+                                WHERE al_failed.incoming_message_id = cm.id
+                                ORDER BY al_failed.id DESC
+                                LIMIT 1
+                          ), "") IN ("", "ai.replied", "ai.failed")
+                          AND (
+                                failed_outgoing.sent_at > cm.sent_at
+                                OR (failed_outgoing.sent_at = cm.sent_at AND failed_outgoing.id > cm.id)
+                          )
+                    )
+               )
                AND NOT EXISTS (
                     SELECT 1
                     FROM conversation_messages outgoing
                     WHERE outgoing.conversation_id = c.id
                       AND outgoing.direction = "outgoing"
+                      AND outgoing.status <> "failed"
                       AND (
                             outgoing.sent_at > cm.sent_at
                             OR (outgoing.sent_at = cm.sent_at AND outgoing.id > cm.id)
@@ -1108,9 +1169,10 @@ final class TenantHealthService
                )',
             [
                 'tenant_id' => $tenantId,
-                'instance_id' => $instanceId,
+                'selected_agent_id' => $agentId,
                 'reply_to_reactions' => $replyToReactions ? 1 : 0,
-                'agent_id' => $agentId,
+                'legacy_agent_id' => $agentId,
+                'legacy_agent_id_missing' => $agentId,
             ]
         );
 

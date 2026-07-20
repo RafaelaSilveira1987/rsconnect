@@ -27,14 +27,14 @@ $statusLabel = static function (string $status): string {
 <?php if (!empty($data['migration_required'])): ?>
 <section class="card operations-alert is-warning">
     <strong>Atualização do banco necessária</strong>
-    <p>Execute <code><?= View::e((string) ($data['migration'] ?? 'database/migrations/043_ai_reprocess_schedule.sql')) ?></code> antes de usar esta rotina.</p>
+    <p>Execute <code><?= View::e((string) ($data['migration'] ?? 'database/migrations/044_ai_pending_failures_message_link.sql')) ?></code> antes de usar esta rotina.</p>
 </section>
 <?php else: ?>
 <section class="admin-module-summary">
     <article class="<?= (int) ($data['pending_total'] ?? 0) > 0 ? 'is-warning' : 'is-success' ?>">
         <span>Mensagens presas</span>
         <strong><?= (int) ($data['pending_total'] ?? 0) ?></strong>
-        <small>sem resposta posterior</small>
+        <small>intervalo, falha ou execução interrompida</small>
     </article>
     <article class="<?= !empty($settings['enabled']) ? 'is-success' : 'is-warning' ?>">
         <span>Rotina automática</span>
@@ -59,7 +59,7 @@ $statusLabel = static function (string $status): string {
             <div>
                 <span class="eyebrow">Agendamento geral</span>
                 <h2>Reprocessar fila da IA</h2>
-                <p>A rotina percorre todas as empresas, mas só atua quando encontra uma mensagem realmente presa. Conversas já respondidas não recebem novo envio.</p>
+                <p>A rotina percorre todas as empresas e identifica mensagens sem resposta por intervalo, erro da IA/Evolution ou execução interrompida. Conversas já respondidas não recebem novo envio.</p>
             </div>
         </div>
 
@@ -93,7 +93,7 @@ $statusLabel = static function (string $status): string {
         <div class="section-heading">
             <div><span class="eyebrow">Ação imediata</span><h2>Verificar agora</h2></div>
         </div>
-        <p>Executa a mesma validação segura em todas as empresas. Se não houver mensagem presa, nenhum WhatsApp será enviado.</p>
+        <p>Executa a mesma validação segura em todas as empresas. Falhas continuam registradas na fila e, se não houver mensagem sem resposta, nenhum WhatsApp será enviado.</p>
         <form method="post" action="<?= View::e(Router::url('/operations/ai-reprocess/run')) ?>" onsubmit="return confirm('Verificar agora as filas de IA de todas as empresas? Mensagens já respondidas não serão reenviadas.');">
             <?= Csrf::input() ?>
             <button class="btn btn-primary" type="submit">Reprocessar pendências agora</button>

@@ -12,11 +12,12 @@ A rotina não dispara mensagens em massa e não reinicia conversas já respondid
 
 1. a empresa, o assistente e a resposta automática estão ativos;
 2. a conversa está em modo IA e não está encerrada;
-3. a última decisão registrada foi `ai.cooldown`;
-4. não existe mensagem de saída posterior à mensagem recebida;
-5. reações são ignoradas quando o assistente está configurado para não respondê-las.
+3. a tentativa está em `ai.cooldown`, `ai.failed`, teve entrega marcada como `failed` pela Evolution ou ficou sem registro porque a execução foi interrompida;
+4. a tentativa está vinculada à mensagem recebida correspondente;
+5. não existe mensagem de saída posterior à mensagem recebida;
+6. reações são ignoradas quando o assistente está configurado para não respondê-las.
 
-Execuções simultâneas são bloqueadas no MySQL para evitar duplicidade.
+Execuções simultâneas são bloqueadas no MySQL para evitar duplicidade. Uma falha continua na fila, mas é tentada apenas uma vez por execução geral.
 
 ## Banco de dados
 
@@ -24,6 +25,7 @@ Execute:
 
 ```sql
 SOURCE database/migrations/043_ai_reprocess_schedule.sql;
+SOURCE database/migrations/044_ai_pending_failures_message_link.sql;
 ```
 
 Ou importe o arquivo pelo gerenciador MySQL usado no ambiente.
