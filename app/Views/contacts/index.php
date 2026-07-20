@@ -33,7 +33,7 @@ if (($filters['tenant_id'] ?? 0) > 0) $queryBase['tenant_id'] = (int) $filters['
     <?php if ($canManage): ?>
         <details class="action-popover">
             <summary class="btn btn-primary">+ Novo contato</summary>
-            <form class="popover-panel form-stack" method="post" action="<?= View::e(Router::url('/contacts')) ?>">
+            <form class="popover-panel form-stack contact-create-panel" method="post" action="<?= View::e(Router::url('/contacts')) ?>">
                 <?= Csrf::input() ?>
                 <strong>Cadastrar contato</strong>
                 <?php if (Auth::isSuperAdmin()): ?>
@@ -70,7 +70,7 @@ if (($filters['tenant_id'] ?? 0) > 0) $queryBase['tenant_id'] = (int) $filters['
                 </div>
                 <label class="field"><span>Tags</span><input name="tags" placeholder="novo, indicação, prioridade"></label>
                 <label class="field"><span>Notas</span><textarea name="notes" rows="3"></textarea></label>
-                <button class="btn btn-primary" type="submit">Salvar contato</button>
+                <div class="contact-panel-actions"><button class="btn btn-primary" type="submit">Salvar contato</button></div>
             </form>
         </details>
     <?php endif; ?>
@@ -138,7 +138,7 @@ if (($filters['tenant_id'] ?? 0) > 0) $queryBase['tenant_id'] = (int) $filters['
 
     <?php if ($selected): ?>
         <?php $selectedTags = json_decode((string) ($selected['tags_json'] ?? ''), true); ?>
-        <aside class="card detail-card">
+        <aside class="card detail-card contact-detail-card">
             <div class="detail-header">
                 <div class="person-cell">
                     <span class="soft-avatar large"><?= View::e(mb_strtoupper(mb_substr($selected['name'] ?: $selected['phone'], 0, 1))) ?></span>
@@ -147,7 +147,7 @@ if (($filters['tenant_id'] ?? 0) > 0) $queryBase['tenant_id'] = (int) $filters['
                 <a class="icon-close" href="<?= View::e(Router::url('/contacts?' . http_build_query($queryBase))) ?>" aria-label="Fechar">×</a>
             </div>
 
-            <form class="form-stack" method="post" action="<?= View::e(Router::url('/contacts/update')) ?>">
+            <form class="form-stack contact-detail-form" method="post" action="<?= View::e(Router::url('/contacts/update')) ?>">
                 <?= Csrf::input() ?><input type="hidden" name="contact_id" value="<?= (int) $selected['id'] ?>">
                 <label class="field"><span>Nome</span><input name="name" value="<?= View::e($selected['name']) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
                 <label class="field"><span>Telefone</span><input name="phone" value="<?= View::e($selected['phone']) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
@@ -162,7 +162,7 @@ if (($filters['tenant_id'] ?? 0) > 0) $queryBase['tenant_id'] = (int) $filters['
                 <label class="field"><span>Tags</span><input name="tags" value="<?= View::e(is_array($selectedTags) ? implode(', ', $selectedTags) : '') ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
                 <label class="field"><span>Notas</span><textarea name="notes" rows="5" <?= !$canManage ? 'readonly' : '' ?>><?= View::e($selected['notes']) ?></textarea></label>
                 <div class="info-strip"><span>Origem</span><strong><?= View::e($selected['instance_name'] ?: 'Cadastro manual') ?></strong></div>
-                <?php if ($canManage): ?><button class="btn btn-primary" type="submit">Salvar alterações</button><?php endif; ?>
+                <?php if ($canManage): ?><div class="contact-panel-actions"><button class="btn btn-primary" type="submit">Salvar alterações</button></div><?php endif; ?>
             </form>
         </aside>
     <?php endif; ?>

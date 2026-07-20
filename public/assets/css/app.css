@@ -6179,3 +6179,83 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
     .calendar-maintenance-card .section-heading form,
     .calendar-maintenance-card .section-heading .btn { width: 100%; }
 }
+
+/* HOTFIX 36.0.2 — Contatos: painel de cadastro/edição com rolagem */
+.contact-create-panel {
+  max-height: min(76vh, 720px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.contact-detail-card {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 116px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.contact-detail-card .detail-header {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  background: #fff;
+}
+
+.contact-detail-form {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.contact-panel-actions {
+  position: sticky;
+  bottom: -18px;
+  z-index: 3;
+  display: flex;
+  justify-content: stretch;
+  margin: 2px -18px -18px;
+  padding: 12px 18px 18px;
+  border-top: 1px solid var(--rs-border);
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 -10px 24px rgba(31,49,77,.06);
+  backdrop-filter: blur(10px);
+}
+
+.contact-panel-actions .btn {
+  width: 100%;
+}
+
+@media (max-width: 1100px) {
+  .contact-detail-card {
+    display: block;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .contact-detail-form {
+    overflow: visible;
+  }
+
+  .contact-detail-card .contact-panel-actions {
+    position: static;
+    margin: 2px -18px -18px;
+  }
+}
+
+@media (max-width: 680px) {
+  .contact-create-panel {
+    max-height: 86dvh;
+    padding-bottom: 0;
+  }
+
+  .contact-create-panel .contact-panel-actions {
+    bottom: 0;
+    margin-inline: -18px;
+    margin-bottom: 0;
+  }
+}

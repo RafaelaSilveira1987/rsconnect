@@ -1,3 +1,10 @@
+# HOTFIX 36.0.2 — Contatos com rolagem
+
+- Corrige o painel lateral de edição para rolar dentro da altura visível.
+- Mantém a ação de salvar acessível.
+- Adiciona rolagem ao formulário de novo contato.
+- Preserva o comportamento responsivo em tablet e celular.
+
 ## ZIP 36.0 — Pagamentos reais e conciliação
 - PagBank com consulta manual de checkout e webhooks.
 - Importação de cobranças existentes da InfinitePay/outros provedores.
