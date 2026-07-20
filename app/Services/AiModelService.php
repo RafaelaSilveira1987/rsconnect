@@ -160,9 +160,17 @@ final class AiModelService
         $group = trim((string) ($conversation['contact_group'] ?? $contact['contact_group'] ?? 'unclassified')) ?: 'unclassified';
         $groupLabel = ConversationFlowService::GROUPS[$group] ?? 'Outro grupo';
         $contactStatus = trim((string) ($conversation['contact_status'] ?? $contact['contact_status'] ?? $contact['status'] ?? ''));
+        $contactStatusLabel = $this->contactStatusLabel($contactStatus);
         $tagsRaw = $conversation['tags_json'] ?? $contact['tags_json'] ?? null;
         $tags = is_array($tagsRaw) ? $tagsRaw : json_decode((string) $tagsRaw, true);
-        $tagsText = is_array($tags) && $tags !== [] ? implode(', ', array_map('strval', $tags)) : 'nenhuma';
+        $tags = is_array($tags)
+            ? array_values(array_unique(array_filter(array_map(static fn ($tag): string => trim((string) $tag), $tags))))
+            : [];
+        $tagsText = $tags !== [] ? implode(', ', $tags) : 'nenhuma';
+        $tagFacts = $this->tagFacts($tags);
+        $isExistingCustomer = $contactStatus === 'customer'
+            || $group === 'patient'
+            || $this->hasAnyNormalizedTag($tags, ['cliente', 'customer', 'client', 'paciente', 'paciente atual']);
         $flowStage = trim((string) ($conversation['flow_stage'] ?? 'identifying_contact')) ?: 'identifying_contact';
         $demandStatus = trim((string) ($conversation['demand_status'] ?? 'pending')) ?: 'pending';
         $demandSummary = trim((string) ($conversation['demand_summary'] ?? ''));
@@ -218,20 +226,121 @@ final class AiModelService
             '- Remarcação sem repetir a demanda: ' . (!empty($groupRule['allow_reschedule_without_demand']) ? 'sim' : 'não') . "\n" .
             ($groupInstructions !== '' ? '- Orientação específica: ' . $groupInstructions . "\n" : '') . "\n";
 
-        return trim($base . "\n\nContexto do contato:\n" .
-            '- Nome: ' . ($contactName !== '' ? $contactName : 'não informado') . "\n" .
-            '- Telefone: ' . ($contactPhone !== '' ? $contactPhone : 'não informado') . "\n" .
-            '- Classificação cadastral: ' . ($contactStatus !== '' ? $contactStatus : 'não informada') . "\n" .
-            '- Grupo de contato: ' . $groupLabel . "\n" .
-            '- Tags: ' . $tagsText . "\n" .
-            '- Etapa atual: ' . $flowStageLabel . "\n" .
-            '- Situação da demanda: ' . $demandStatusLabel . "\n" .
-            '- Resumo da demanda: ' . ($demandSummary !== '' ? $demandSummary : 'ainda não registrado') . "\n" .
-            '- Fuso de atendimento: ' . ($timezone !== '' ? $timezone : 'não informado') . "\n\n" .
-            ($knowledge !== '' ? "Base de conhecimento:\n" . $knowledge . "\n\n" : '') .
+        $structuredContext = "CONTEXTO CADASTRAL PRIORITÁRIO DO RS CONNECT (fonte de verdade):
+" .
+            '- Nome: ' . ($contactName !== '' ? $contactName : 'não informado') . "
+" .
+            '- Telefone: ' . ($contactPhone !== '' ? $contactPhone : 'não informado') . "
+" .
+            '- Classificação: ' . $contactStatusLabel . ($contactStatus !== '' ? ' (código: ' . $contactStatus . ')' : '') . "
+" .
+            '- Relacionamento atual: ' . ($isExistingCustomer ? 'já é cliente/paciente da empresa' : 'não confirmado como cliente atual') . "
+" .
+            '- Grupo de atendimento: ' . $groupLabel . "
+" .
+            '- Tags cadastradas: ' . $tagsText . "
+" .
+            ($tagFacts !== [] ? '- Fatos derivados das tags: ' . implode('; ', $tagFacts) . "
+" : '') .
+            '- Etapa atual: ' . $flowStageLabel . "
+" .
+            '- Situação da demanda: ' . $demandStatusLabel . "
+" .
+            '- Resumo da demanda: ' . ($demandSummary !== '' ? $demandSummary : 'ainda não registrado') . "
+" .
+            '- Fuso de atendimento: ' . ($timezone !== '' ? $timezone : 'não informado') . "
+
+" .
+            "COMO USAR ESTE CONTEXTO:
+" .
+            "- Trate classificação, grupo e tags como informações já conhecidas e válidas.
+" .
+            "- Não pergunte novamente se a pessoa é cliente, paciente, interessada ou pertence a um grupo quando isso já estiver indicado acima.
+" .
+            "- Se a classificação for Cliente, fale com ela como relacionamento já existente, sem reiniciar o fluxo de novo interessado.
+" .
+            "- Use as tags para personalizar a resposta e respeitar segmentações, mas não invente significado além do texto da tag.
+" .
+            "- As regras do Grupo de atendimento têm prioridade para agenda e pré-agendamento. Tags não liberam agenda quando a regra do grupo bloquear.
+
+";
+
+        return trim($base . "
+
+" .
+            $structuredContext .
+            ($knowledge !== '' ? "Base de conhecimento:
+" . $knowledge . "
+
+" : '') .
             $groupRuleBlock .
             $preScheduleBlock .
-            "Regras obrigatórias:\n- " . implode("\n- ", $rules));
+            "Regras obrigatórias:
+- " . implode("
+- ", $rules));
+    }
+
+    private function contactStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'lead' => 'Lead / novo contato',
+            'customer' => 'Cliente atual',
+            'inactive' => 'Contato inativo',
+            '' => 'Não informada',
+            default => $status,
+        };
+    }
+
+    /** @param array<int, string> $tags */
+    private function tagFacts(array $tags): array
+    {
+        $facts = [];
+        foreach ($tags as $tag) {
+            $normalized = $this->normalizeTag($tag);
+            if ($normalized === '') {
+                continue;
+            }
+            if (in_array($normalized, ['cliente', 'customer', 'client'], true)) {
+                $facts[] = 'o contato está identificado como cliente';
+            } elseif (str_contains($normalized, 'paciente')) {
+                $facts[] = 'o contato está identificado como paciente';
+            } elseif (str_contains($normalized, 'interessad') || $normalized === 'lead' || str_contains($normalized, 'prospect')) {
+                $facts[] = 'o contato está identificado como novo interessado';
+            } elseif (str_contains($normalized, 'familiar') || str_contains($normalized, 'familia')) {
+                $facts[] = 'o contato está relacionado a um familiar';
+            } elseif (str_contains($normalized, 'casal')) {
+                $facts[] = 'o contato está relacionado a atendimento de casal';
+            } elseif (str_contains($normalized, 'prioridade') || str_contains($normalized, 'urgente')) {
+                $facts[] = 'o contato possui marcação de prioridade';
+            }
+        }
+        return array_values(array_unique($facts));
+    }
+
+    /** @param array<int, string> $tags @param array<int, string> $needles */
+    private function hasAnyNormalizedTag(array $tags, array $needles): bool
+    {
+        $normalizedNeedles = array_map([$this, 'normalizeTag'], $needles);
+        foreach ($tags as $tag) {
+            $normalized = $this->normalizeTag($tag);
+            if (in_array($normalized, $normalizedNeedles, true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function normalizeTag(string $value): string
+    {
+        $value = mb_strtolower(trim($value));
+        $value = strtr($value, [
+            'á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a',
+            'é' => 'e', 'ê' => 'e', 'í' => 'i',
+            'ó' => 'o', 'ô' => 'o', 'õ' => 'o',
+            'ú' => 'u', 'ü' => 'u', 'ç' => 'c',
+        ]);
+        $normalized = preg_replace('/[^a-z0-9]+/u', ' ', $value);
+        return trim((string) $normalized);
     }
 
     private function buildOpenAiInput(array $messages): array

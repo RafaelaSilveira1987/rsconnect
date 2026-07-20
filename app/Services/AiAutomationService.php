@@ -111,6 +111,13 @@ final class AiAutomationService
                 'external_id' => $this->extractMessageId($result['body'] ?? []),
                 'provider' => $agent['credential_provider'] ?? $agent['model_provider'] ?? null,
                 'credential_id' => $agent['credential_id'] ?? null,
+                'contact_context' => [
+                    'status' => $conversation['contact_status'] ?? null,
+                    'group' => $conversation['contact_group'] ?? null,
+                    'tags' => $this->decodeContactTags($conversation['tags_json'] ?? null),
+                    'flow_stage' => $conversation['flow_stage'] ?? null,
+                    'demand_status' => $conversation['demand_status'] ?? null,
+                ],
             ]);
 
             if ((int) ($agent['n8n_enabled'] ?? 0) === 1) {
@@ -564,6 +571,15 @@ final class AiAutomationService
         ]);
     }
 
+
+    private function decodeContactTags(mixed $raw): array
+    {
+        if (is_array($raw)) {
+            return array_values(array_filter(array_map('strval', $raw)));
+        }
+        $decoded = json_decode((string) $raw, true);
+        return is_array($decoded) ? array_values(array_filter(array_map('strval', $decoded))) : [];
+    }
 
     private function friendlyAiFailure(string $error): string
     {

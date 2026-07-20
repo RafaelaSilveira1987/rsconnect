@@ -218,8 +218,18 @@ final class ContactController
                 'id' => $contactId,
                 'tenant_id' => $contact['tenant_id'],
             ]);
-            Audit::log('contact.updated', ['contact_id' => $contactId], (int) $contact['tenant_id']);
-            Flash::set('success', 'Contato atualizado.');
+            (new \App\Services\ConversationFlowService())->refreshContactContext(
+                Database::connection(),
+                (int) $contact['tenant_id'],
+                $contactId
+            );
+            Audit::log('contact.updated', [
+                'contact_id' => $contactId,
+                'status' => $status,
+                'contact_group' => $contactGroup,
+                'tags' => $tags,
+            ], (int) $contact['tenant_id']);
+            Flash::set('success', 'Contato atualizado. O assistente usará a classificação, o grupo e as tags na próxima resposta.');
         } catch (Throwable $exception) {
             Flash::set('error', str_contains($exception->getMessage(), 'Duplicate entry')
                 ? 'Esse telefone já pertence a outro contato da empresa.'

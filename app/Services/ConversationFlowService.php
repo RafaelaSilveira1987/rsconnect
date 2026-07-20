@@ -19,6 +19,13 @@ final class ConversationFlowService
         'other' => 'Outro grupo',
     ];
 
+
+    public const STATUS_LABELS = [
+        'lead' => 'Lead / novo contato',
+        'customer' => 'Cliente atual',
+        'inactive' => 'Contato inativo',
+    ];
+
     public const DEMAND_STATUSES = [
         'pending' => 'Ainda não coletada',
         'collected' => 'Demanda coletada',
@@ -69,10 +76,14 @@ final class ConversationFlowService
         }
 
         $stage = $this->stageFor($intent, $demandStatus, $existingPatient);
+        $contactStatus = (string) ($contact['status'] ?? '');
+        $contactTags = $this->tags($contact['tags_json'] ?? null);
         $metadata = [
             'contact_group' => $group,
-            'contact_status' => (string) ($contact['status'] ?? ''),
-            'tags' => $this->tags($contact['tags_json'] ?? null),
+            'contact_status' => $contactStatus,
+            'contact_status_label' => self::STATUS_LABELS[$contactStatus] ?? ($contactStatus !== '' ? $contactStatus : 'Não informado'),
+            'tags' => $contactTags,
+            'is_existing_customer' => $this->isExistingCustomer($contactStatus, $group, $contactTags),
             'last_message_preview' => mb_substr(trim($content), 0, 300),
         ];
 
@@ -184,7 +195,9 @@ final class ConversationFlowService
             'last_intent' => (string) ($row['last_intent'] ?? ''),
             'contact_group' => $group,
             'contact_status' => (string) ($row['contact_status'] ?? ''),
+            'contact_status_label' => self::STATUS_LABELS[(string) ($row['contact_status'] ?? '')] ?? ((string) ($row['contact_status'] ?? '') !== '' ? (string) $row['contact_status'] : 'Não informado'),
             'tags' => $this->tags($row['tags_json'] ?? null),
+            'is_existing_customer' => $this->isExistingCustomer((string) ($row['contact_status'] ?? ''), $group, $this->tags($row['tags_json'] ?? null)),
             'stage_label' => self::STAGES[(string) ($row['stage'] ?? '')] ?? 'Em atendimento',
             'demand_status_label' => self::DEMAND_STATUSES[(string) ($row['demand_status'] ?? '')] ?? 'Ainda não coletada',
             'contact_group_label' => self::GROUPS[$group] ?? 'Outro grupo',
@@ -379,6 +392,53 @@ final class ConversationFlowService
         };
     }
 
+    public function refreshContactContext(PDO $pdo, int $tenantId, int $contactId): void
+    {
+        try {
+            $contact = $this->contact($pdo, $tenantId, $contactId);
+            if (!$contact) {
+                return;
+            }
+            $group = $this->resolveGroup($contact);
+            $status = (string) ($contact['status'] ?? '');
+            $tags = $this->tags($contact['tags_json'] ?? null);
+
+            $statement = $pdo->prepare(
+                'SELECT id, metadata_json
+                 FROM conversation_flow_states
+                 WHERE tenant_id = :tenant_id AND contact_id = :contact_id'
+            );
+            $statement->execute(['tenant_id' => $tenantId, 'contact_id' => $contactId]);
+            $update = $pdo->prepare(
+                'UPDATE conversation_flow_states
+                 SET is_existing_patient = :is_existing_patient,
+                     metadata_json = :metadata_json,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id'
+            );
+
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $metadata = json_decode((string) ($row['metadata_json'] ?? ''), true);
+                if (!is_array($metadata)) {
+                    $metadata = [];
+                }
+                $metadata['contact_group'] = $group;
+                $metadata['contact_status'] = $status;
+                $metadata['contact_status_label'] = self::STATUS_LABELS[$status] ?? ($status !== '' ? $status : 'Não informado');
+                $metadata['tags'] = $tags;
+                $metadata['is_existing_customer'] = $this->isExistingCustomer($status, $group, $tags);
+
+                $update->execute([
+                    'is_existing_patient' => $group === 'patient' ? 1 : 0,
+                    'metadata_json' => json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'id' => (int) $row['id'],
+                ]);
+            }
+        } catch (Throwable) {
+            // A atualização do contato não pode falhar por ausência de tabelas antigas.
+        }
+    }
+
     private function contact(PDO $pdo, int $tenantId, int $contactId): ?array
     {
         $statement = $pdo->prepare(
@@ -418,6 +478,21 @@ final class ConversationFlowService
             if (str_contains($tag, 'casal')) return 'couple';
         }
         return array_key_exists($explicit, self::GROUPS) ? $explicit : 'unclassified';
+    }
+
+    /** @param array<int, string> $tags */
+    private function isExistingCustomer(string $status, string $group, array $tags): bool
+    {
+        if ($status === 'customer' || $group === 'patient') {
+            return true;
+        }
+        foreach ($tags as $tag) {
+            $normalized = $this->normalize($tag);
+            if (in_array($normalized, ['cliente', 'customer', 'client', 'paciente', 'paciente atual'], true)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function tags(mixed $raw): array

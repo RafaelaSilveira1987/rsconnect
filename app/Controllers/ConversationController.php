@@ -722,20 +722,28 @@ final class ConversationController
             'tenant_id' => $conversation['tenant_id'],
         ]);
 
-        (new ConversationFlowService())->updateManual($pdo, (int) $conversation['tenant_id'], $conversationId, (int) $conversation['contact_id'], [
+        $flowService = new ConversationFlowService();
+        $flowService->updateManual($pdo, (int) $conversation['tenant_id'], $conversationId, (int) $conversation['contact_id'], [
             'contact_group' => $contactGroup,
             'flow_stage' => $flowStage,
             'demand_status' => $demandStatus,
             'demand_summary' => $demandSummary,
         ]);
+        $flowService->refreshContactContext(
+            $pdo,
+            (int) $conversation['tenant_id'],
+            (int) $conversation['contact_id']
+        );
 
         Audit::log('conversation.contact_updated', [
             'conversation_id' => $conversationId,
             'contact_group' => $contactGroup,
             'flow_stage' => $flowStage,
             'demand_status' => $demandStatus,
+            'contact_status' => $status,
+            'tags' => $tags,
         ], (int) $conversation['tenant_id']);
-        Flash::set('success', 'Dados do contato atualizados.');
+        Flash::set('success', 'Dados do contato atualizados. O assistente usará esse contexto na próxima resposta.');
         $this->redirect('/conversations?conversation_id=' . $conversationId);
     }
 
