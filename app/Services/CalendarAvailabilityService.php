@@ -369,8 +369,13 @@ final class CalendarAvailabilityService
         }
 
         if ($sent) {
-            $pdo->prepare('UPDATE calendar_availability_requests SET status = "sent", sent_at = NOW(), error_message = NULL WHERE id = :id')
-                ->execute(['id' => $requestId]);
+            // O callback pode concluir antes do POST síncrono do n8n retornar.
+            // Nunca rebaixa received/empty para sent.
+            $pdo->prepare(
+                'UPDATE calendar_availability_requests
+                 SET status = "sent", sent_at = COALESCE(sent_at, NOW()), error_message = NULL
+                 WHERE id = :id AND responded_at IS NULL AND status IN ("pending", "sent")'
+            )->execute(['id' => $requestId]);
             $this->logGoogleSync($tenantId, $appointmentId, $requestId, null, 'search', 'success', $settings, $payload, ['dispatch' => $results]);
             Audit::log('calendar.availability_requested', ['request_id' => $requestId, 'appointment_id' => $appointmentId, 'mode' => $mode], $tenantId);
             return [
@@ -379,6 +384,39 @@ final class CalendarAvailabilityService
                 'message' => $mode === 'marked_events'
                     ? 'Consulta enviada ao fluxo de eventos VAGO. Aguarde o retorno dos horários marcados.'
                     : 'Consulta enviada ao fluxo de espaços livres. Aguarde o retorno dos horários.',
+            ];
+        }
+
+        $latestRequest = $this->findRequest($requestId, $token);
+        if ($latestRequest && (!empty($latestRequest['responded_at']) || in_array((string) ($latestRequest['status'] ?? ''), ['received', 'empty'], true))) {
+            return [
+                'ok' => true,
+                'request_id' => $requestId,
+                'message' => 'O fluxo concluiu pelo callback mesmo depois de a conexão síncrona encerrar.',
+            ];
+        }
+
+        $timedOut = false;
+        foreach ($errors as $dispatchError) {
+            $normalizedError = mb_strtolower((string) $dispatchError);
+            if (str_contains($normalizedError, 'timed out') || str_contains($normalizedError, 'timeout') || str_contains($normalizedError, 'tempo limite')) {
+                $timedOut = true;
+                break;
+            }
+        }
+        if ($timedOut) {
+            // Timeout do POST não significa falha do fluxo: o n8n pode continuar e devolver o callback.
+            $pdo->prepare(
+                'UPDATE calendar_availability_requests
+                 SET status = "sent", sent_at = COALESCE(sent_at, NOW()), error_message = NULL
+                 WHERE id = :id AND responded_at IS NULL AND status IN ("pending", "sent")'
+            )->execute(['id' => $requestId]);
+            $this->logGoogleSync($tenantId, $appointmentId, $requestId, null, 'search', 'pending', $settings, $payload, $results, 'Conexão síncrona encerrada; aguardando callback do n8n.');
+            return [
+                'ok' => true,
+                'request_id' => $requestId,
+                'message' => 'Consulta enviada. O n8n ainda está processando e o retorno será aplicado pelo callback.',
+                'awaiting_callback' => true,
             ];
         }
 
@@ -410,7 +448,7 @@ final class CalendarAvailabilityService
         return ['ok' => false, 'request_id' => $requestId, 'message' => $error];
     }
 
-    public function handleCallback(array $payload, ?string $token = null): array
+    public function handleCallback(array $payload, ?string $token = null, bool $deferConversation = false): array
     {
         if (!$this->tableExists('calendar_availability_requests') || !$this->tableExists('calendar_availability_slots')) {
             return ['ok' => false, 'message' => 'Tabelas de disponibilidade não encontradas.'];
@@ -422,7 +460,21 @@ final class CalendarAvailabilityService
         }
         return $event === 'calendar.marked_slot.updated'
             ? $this->handleMarkedUpdateCallback($payload, $token)
-            : $this->handleAvailabilityCallback($payload, $token);
+            : $this->handleAvailabilityCallback($payload, $token, $deferConversation);
+    }
+
+    public function processDeferredConversation(int $requestId, string $requestToken, string $diagnostic = ''): array
+    {
+        if ($requestId < 1 || trim($requestToken) === '') {
+            return ['handled' => false, 'code' => 'invalid_deferred_request'];
+        }
+
+        $request = $this->findRequest($requestId, trim($requestToken));
+        if (!$request) {
+            return ['handled' => false, 'code' => 'deferred_request_not_found'];
+        }
+
+        return (new CalendarConversationService())->handleAvailabilityResult($request, $diagnostic);
     }
 
     public function applySlot(int $tenantId, int $appointmentId, int $slotId): array
@@ -727,7 +779,7 @@ final class CalendarAvailabilityService
         return compact('settings', 'pending', 'requests', 'slots', 'googleLogs', 'metrics', 'integration', 'maintenance');
     }
 
-    private function handleAvailabilityCallback(array $payload, ?string $token): array
+    private function handleAvailabilityCallback(array $payload, ?string $token, bool $deferConversation = false): array
     {
         $requestId = (int) ($payload['request_id'] ?? $payload['availability_request_id'] ?? 0);
         $requestToken = trim((string) ($payload['request_token'] ?? $payload['callback_token'] ?? $token ?? ''));
@@ -829,6 +881,20 @@ final class CalendarAvailabilityService
             $diagnostic
         );
         $this->logGoogleSync((int) $request['tenant_id'], (int) $request['appointment_id'], (int) $request['id'], null, 'callback', 'success', [], null, $payload);
+
+        if ($deferConversation) {
+            return [
+                'ok' => true,
+                'message' => $diagnostic !== '' ? $diagnostic : 'Disponibilidade registrada no RS Connect.',
+                'slots' => count($normalizedSlots),
+                '_deferred_conversation' => [
+                    'request_id' => (int) $request['id'],
+                    'request_token' => (string) $request['request_token'],
+                    'diagnostic' => $diagnostic,
+                ],
+            ];
+        }
+
         $conversation = (new CalendarConversationService())->handleAvailabilityResult($request, $diagnostic);
         return [
             'ok' => true,

@@ -1,3 +1,11 @@
+# HOTFIX 36.2.3 — Callback da agenda sem falso timeout
+
+- Resposta HTTP do callback enviada antes das tarefas lentas de conversa.
+- Proteção contra rebaixamento de `received/empty` para `sent/failed`.
+- Timeout específico e configurável para eventos de calendário.
+- Timeout de transporte passa a aguardar callback em vez de marcar falha definitiva.
+- Manutenção ignora solicitações que já possuem `responded_at`.
+
 # HOTFIX 36.2.2 — Excluir remove evento do Google Agenda
 
 - A ação **Excluir** não restaura mais eventos VAGO como disponíveis.

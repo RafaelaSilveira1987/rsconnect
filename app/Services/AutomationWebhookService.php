@@ -158,11 +158,15 @@ final class AutomationWebhookService
                 throw new \RuntimeException('Não foi possível iniciar o cURL.');
             }
 
+            $timeoutSeconds = str_starts_with($event, 'calendar.')
+                ? max(20, min(90, (int) Env::get('N8N_CALENDAR_HTTP_TIMEOUT', 45)))
+                : max(8, min(60, (int) Env::get('N8N_HTTP_TIMEOUT', 18)));
+
             curl_setopt_array($curl, [
                 CURLOPT_POST => true,
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_CONNECTTIMEOUT => 6,
-                CURLOPT_TIMEOUT => 18,
+                CURLOPT_TIMEOUT => $timeoutSeconds,
                 CURLOPT_HTTPHEADER => $headers,
                 CURLOPT_POSTFIELDS => json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
             ]);

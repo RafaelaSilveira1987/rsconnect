@@ -164,10 +164,74 @@ final class CalendarAvailabilityController
             ?? ''
         ));
 
-        $result = (new CalendarAvailabilityService())->handleCallback($payload, $token !== '' ? $token : null);
-        http_response_code(!empty($result['ok']) ? 200 : 400);
+        $service = new CalendarAvailabilityService();
+        // A busca do Google devolve o callback antes de disparar WhatsApp/pré-reserva.
+        // Isso evita o ciclo síncrono RS -> n8n -> RS -> n8n ultrapassar o timeout
+        // enquanto o resultado já foi salvo corretamente no banco.
+        $result = $service->handleCallback($payload, $token !== '' ? $token : null, true);
+        $deferred = isset($result['_deferred_conversation']) && is_array($result['_deferred_conversation'])
+            ? $result['_deferred_conversation']
+            : null;
+        unset($result['_deferred_conversation']);
+        if ($deferred !== null) {
+            $result['conversation_processing'] = 'queued';
+        }
+
+        if ($deferred !== null) {
+            ignore_user_abort(true);
+            @set_time_limit(120);
+        }
+
+        $this->respondJsonAndContinue($result, !empty($result['ok']) ? 200 : 400);
+
+        if ($deferred !== null) {
+            try {
+                $service->processDeferredConversation(
+                    (int) ($deferred['request_id'] ?? 0),
+                    (string) ($deferred['request_token'] ?? ''),
+                    (string) ($deferred['diagnostic'] ?? '')
+                );
+            } catch (Throwable $exception) {
+                Audit::log('calendar.callback.deferred_failed', [
+                    'request_id' => (int) ($deferred['request_id'] ?? 0),
+                    'error' => mb_substr($exception->getMessage(), 0, 700),
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Entrega o HTTP ao n8n antes das tarefas lentas de conversa.
+     * Funciona com FastCGI e também com Apache mod_php usado no container atual.
+     */
+    private function respondJsonAndContinue(array $payload, int $status): void
+    {
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($json)) {
+            $json = '{"ok":false,"message":"Falha ao montar resposta do callback."}';
+            $status = 500;
+        }
+
+        @ini_set('zlib.output_compression', '0');
+        if (function_exists('apache_setenv')) {
+            @apache_setenv('no-gzip', '1');
+        }
+
+        http_response_code($status);
         header('Content-Type: application/json; charset=UTF-8');
-        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        header('Content-Length: ' . strlen($json));
+        header('Connection: close');
+        echo $json;
+
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+            return;
+        }
+
+        while (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+        @flush();
     }
 
     private function resolveTenantFromQuery(): int

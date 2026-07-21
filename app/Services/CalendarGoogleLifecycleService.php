@@ -658,6 +658,7 @@ final class CalendarGoogleLifecycleService
         $select = $pdo->prepare(
             'SELECT id, appointment_id FROM calendar_availability_requests
              WHERE tenant_id = :tenant_id AND status IN ("pending", "sent")
+               AND responded_at IS NULL
                AND COALESCE(sent_at, requested_at, created_at) < DATE_SUB(NOW(), INTERVAL 30 MINUTE)
              ORDER BY id ASC LIMIT 100'
         );
@@ -671,7 +672,7 @@ final class CalendarGoogleLifecycleService
         $update = $pdo->prepare(
             'UPDATE calendar_availability_requests
              SET status = "failed", error_message = "Tempo de resposta do fluxo excedido.", responded_at = NOW(), updated_at = CURRENT_TIMESTAMP
-             WHERE id IN (' . $placeholders . ')'
+             WHERE responded_at IS NULL AND id IN (' . $placeholders . ')'
         );
         $update->execute($ids);
         $result['stale_requests_closed'] += $update->rowCount();
