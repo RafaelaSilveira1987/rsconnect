@@ -162,12 +162,19 @@ final class CalendarConversationService
         array $instance,
         int $contactId,
         int $conversationId,
-        string $content
+        string $content,
+        int $incomingMessageId = 0
     ): array {
         $tenantId = (int) ($instance['tenant_id'] ?? 0);
         $content = trim($content);
         if ($tenantId < 1 || $conversationId < 1 || $content === '') {
             return $this->incomingResult(false, false, 'invalid_input');
+        }
+
+        // Idempotência por mensagem recebida: se esse comando já foi consumido pela agenda,
+        // não deixa uma repetição do webhook ou um reprocessamento tardio cair na IA.
+        if ($incomingMessageId > 0 && $this->incomingAlreadyHandledByCalendar($pdo, $incomingMessageId)) {
+            return $this->incomingResult(true, true, 'already_handled');
         }
 
         $appointment = $this->appointmentWaitingSelection($pdo, $tenantId, $conversationId, $contactId);
@@ -201,7 +208,20 @@ final class CalendarConversationService
                 $appointment,
                 $message,
                 'calendar.invalid_slot_selection',
-                ['request_id' => $requestId, 'reason' => $selection['reason'] ?? 'not_found']
+                [
+                    'request_id' => $requestId,
+                    'reason' => $selection['reason'] ?? 'not_found',
+                    'incoming_message_id' => $incomingMessageId > 0 ? $incomingMessageId : null,
+                ]
+            );
+            $this->markIncomingHandledByCalendar(
+                $pdo,
+                $instance,
+                $conversationId,
+                $incomingMessageId,
+                'invalid_selection',
+                (int) $appointment['id'],
+                null
             );
             return array_merge($this->incomingResult(true, true, 'invalid_selection'), [
                 'appointment_id' => (int) $appointment['id'],
@@ -224,7 +244,21 @@ final class CalendarConversationService
                 $appointment,
                 $message,
                 'calendar.slot_hold_failed',
-                ['request_id' => $requestId, 'slot_id' => (int) $slot['id'], 'error' => $apply['message'] ?? null]
+                [
+                    'request_id' => $requestId,
+                    'slot_id' => (int) $slot['id'],
+                    'error' => $apply['message'] ?? null,
+                    'incoming_message_id' => $incomingMessageId > 0 ? $incomingMessageId : null,
+                ]
+            );
+            $this->markIncomingHandledByCalendar(
+                $pdo,
+                $instance,
+                $conversationId,
+                $incomingMessageId,
+                'hold_failed',
+                (int) $appointment['id'],
+                (int) $slot['id']
             );
             $this->notifyFailure($tenantId, $appointment, (string) ($apply['message'] ?? 'Falha ao pré-reservar o horário.'));
             return array_merge($this->incomingResult(true, true, 'hold_failed'), [
@@ -242,7 +276,20 @@ final class CalendarConversationService
             $appointment,
             $message,
             'calendar.slot_selected_by_contact',
-            ['request_id' => $requestId, 'slot_id' => (int) $slot['id']]
+            [
+                'request_id' => $requestId,
+                'slot_id' => (int) $slot['id'],
+                'incoming_message_id' => $incomingMessageId > 0 ? $incomingMessageId : null,
+            ]
+        );
+        $this->markIncomingHandledByCalendar(
+            $pdo,
+            $instance,
+            $conversationId,
+            $incomingMessageId,
+            'slot_selected',
+            (int) $appointment['id'],
+            (int) $slot['id']
         );
         $this->notifyProfessional($tenantId, $appointment, $slot, 'Cliente escolheu um horário');
         if (empty($send['ok'])) {
@@ -269,11 +316,99 @@ final class CalendarConversationService
         return [
             'handled' => $handled,
             'skip_ai' => $skipAi,
+            'terminal_handled' => $handled && $skipAi,
             'calendar_selection' => true,
             'code' => $code,
             'availability_request_needed' => false,
             'appointment_event_payload' => null,
         ];
+    }
+
+    private function incomingAlreadyHandledByCalendar(PDO $pdo, int $incomingMessageId): bool
+    {
+        try {
+            $statement = $pdo->prepare(
+                'SELECT 1
+                 FROM ai_automation_logs
+                 WHERE incoming_message_id = :incoming_message_id
+                   AND event = "ai.skipped"
+                   AND raw_json LIKE "%calendar_handled%"
+                 LIMIT 1'
+            );
+            $statement->execute(['incoming_message_id' => $incomingMessageId]);
+            return (bool) $statement->fetchColumn();
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function markIncomingHandledByCalendar(
+        PDO $pdo,
+        array $instance,
+        int $conversationId,
+        int $incomingMessageId,
+        string $code,
+        int $appointmentId,
+        ?int $slotId
+    ): void {
+        if ($incomingMessageId < 1) {
+            return;
+        }
+
+        try {
+            if ($this->incomingAlreadyHandledByCalendar($pdo, $incomingMessageId)) {
+                return;
+            }
+
+            $tenantId = (int) ($instance['tenant_id'] ?? 0);
+            $instanceId = (int) ($instance['id'] ?? 0);
+            $agentId = null;
+            if ($tenantId > 0) {
+                $agentStatement = $pdo->prepare(
+                    'SELECT id
+                     FROM ai_agents
+                     WHERE tenant_id = :tenant_id
+                       AND status = "active"
+                       AND auto_reply_enabled = 1
+                       AND (instance_id = :instance_id OR instance_id IS NULL OR is_default = 1)
+                     ORDER BY (instance_id = :instance_id_order) DESC, is_default DESC, id DESC
+                     LIMIT 1'
+                );
+                $agentStatement->execute([
+                    'tenant_id' => $tenantId,
+                    'instance_id' => $instanceId,
+                    'instance_id_order' => $instanceId,
+                ]);
+                $value = $agentStatement->fetchColumn();
+                $agentId = $value !== false ? (int) $value : null;
+            }
+
+            $raw = json_encode([
+                'calendar_handled' => true,
+                'calendar_code' => $code,
+                'appointment_id' => $appointmentId,
+                'slot_id' => $slotId,
+                'skip_ai' => true,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            $pdo->prepare(
+                'INSERT INTO ai_automation_logs
+                    (tenant_id, conversation_id, agent_id, incoming_message_id, event, status,
+                     response_preview, error_message, raw_json)
+                 VALUES
+                    (:tenant_id, :conversation_id, :agent_id, :incoming_message_id,
+                     "ai.skipped", "skipped", :response_preview, NULL, :raw_json)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'agent_id' => $agentId,
+                'incoming_message_id' => $incomingMessageId,
+                'response_preview' => 'Mensagem tratada pela agenda conversacional; IA não acionada.',
+                'raw_json' => $raw,
+            ]);
+        } catch (Throwable) {
+            // O marcador melhora a idempotência e a fila, mas nunca interrompe o agendamento.
+        }
     }
 
     /** @return array<string,mixed>|null */

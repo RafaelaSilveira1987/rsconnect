@@ -31,6 +31,35 @@ final class AiAutomationService
 
         $pdo = null;
         $agent = null;
+
+        // Defesa adicional contra eco de mensagens enviadas pela própria Evolution.
+        // Mesmo que outro chamador encaminhe SEND_MESSAGE ou fromMe=true por engano,
+        // esse payload nunca deve chegar ao provedor de IA.
+        $payloadEvent = mb_strtolower(trim((string) ($payload['event'] ?? '')));
+        $payloadEvent = str_replace(['_', '-'], '.', $payloadEvent);
+        $payloadFromMe = filter_var(
+            $payload['data']['key']['fromMe']
+                ?? $payload['data']['fromMe']
+                ?? $payload['key']['fromMe']
+                ?? $payload['fromMe']
+                ?? false,
+            FILTER_VALIDATE_BOOL
+        );
+        if (str_contains($payloadEvent, 'send.message') || $payloadFromMe) {
+            $this->log(
+                (int) ($instance['tenant_id'] ?? 0),
+                $conversationId,
+                null,
+                'ai.skipped',
+                'skipped',
+                'Evento de saída ignorado; a própria mensagem enviada não pode acionar o assistente.',
+                null,
+                ['outgoing_event' => true, 'payload_event' => $payloadEvent]
+            );
+            $this->currentIncomingMessageId = null;
+            return;
+        }
+
         $conversationLockName = mb_substr('rs_ai_conversation_' . $conversationId, 0, 64);
         $conversationLockAcquired = false;
         $globalEnabled = filter_var(Env::get('AI_AUTOREPLY_ENABLED', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);

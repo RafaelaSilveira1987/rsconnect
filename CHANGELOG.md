@@ -1,3 +1,11 @@
+# HOTFIX 36.2.1 — Seleção de horário não aciona IA
+
+- Eventos `SEND_MESSAGE` da Evolution agora são tratados como eco de saída e não entram no fluxo de mensagens recebidas.
+- Respostas consumidas pela agenda (`1`, `opção 2`, `14h`, etc.) encerram o processamento antes da IA e dos fluxos genéricos de `message.received`.
+- Cada seleção tratada ganha um marcador `ai.skipped` vinculado à mensagem recebida, impedindo reprocessamento posterior pela fila.
+- Mantidas as validações da agenda, pré-reserva, aprovação profissional, tags, grupos, cooldown e proteção contra duplicidade.
+- Não requer migration nova.
+
 # ZIP 36.2 — Agenda conversacional e pré-reserva com aprovação
 
 - Horário ocupado passa a gerar alternativas reais do Google Agenda pelo WhatsApp.

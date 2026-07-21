@@ -40,6 +40,17 @@ final class EvolutionWebhookController
             }
 
             $event = $this->normalizeEvent((string) ($payload['event'] ?? ''));
+
+            // SEND_MESSAGE é um eco gerado pela própria Evolution após um envio pela API.
+            // Ele não representa uma nova mensagem recebida do contato e nunca deve acionar IA,
+            // agenda ou CRM. A mensagem de saída já foi persistida pelo serviço que a enviou.
+            if (str_contains($event, 'send.message')) {
+                $this->respond(202, [
+                    'ok' => true,
+                    'ignored' => 'outgoing_send_message_event',
+                ]);
+            }
+
             $instance = $this->resolveInstance($payload);
 
             if (str_contains($event, 'messages.update')) {
@@ -61,7 +72,7 @@ final class EvolutionWebhookController
                 }
             }
 
-            if ($event !== '' && !str_contains($event, 'messages.upsert') && !str_contains($event, 'send.message')) {
+            if ($event !== '' && !str_contains($event, 'messages.upsert')) {
                 $this->respond(202, ['ok' => true, 'ignored' => $event]);
             }
 
@@ -239,7 +250,8 @@ final class EvolutionWebhookController
                         $instance,
                         $contactId,
                         $conversationId,
-                        $content
+                        $content,
+                        $storedMessageId
                     );
                     $preScheduleResult = !empty($calendarSelection['handled'])
                         ? $calendarSelection
@@ -359,23 +371,28 @@ final class EvolutionWebhookController
                         }
                     }
 
-                    try {
-                        (new AutomationWebhookService())->dispatch('message.received', [
-                            'tenant_id' => (int) $instance['tenant_id'],
-                            'instance_id' => (int) $instance['id'],
-                            'conversation_id' => $conversationId,
-                            'incoming_message_id' => $storedMessageId,
-                            'phone' => $phone,
-                            'message_type' => $messageType,
-                            'content' => $content,
-                        ], null, (int) $instance['tenant_id']);
-                    } catch (Throwable $exception) {
-                        $processingWarnings[] = 'n8n';
-                        $this->logWebhookFailure($exception, [
-                            'phase' => 'n8n_after_reply',
-                            'conversation_id' => $conversationId,
-                            'stored_message_id' => $storedMessageId,
-                        ]);
+                    // Uma resposta consumida pela agenda (ex.: "1", "o primeiro", "14h")
+                    // termina aqui. Não encaminha o mesmo comando para fluxos genéricos do n8n,
+                    // evitando que ele volte como uma nova tentativa de IA.
+                    if (empty($preScheduleResult['terminal_handled'])) {
+                        try {
+                            (new AutomationWebhookService())->dispatch('message.received', [
+                                'tenant_id' => (int) $instance['tenant_id'],
+                                'instance_id' => (int) $instance['id'],
+                                'conversation_id' => $conversationId,
+                                'incoming_message_id' => $storedMessageId,
+                                'phone' => $phone,
+                                'message_type' => $messageType,
+                                'content' => $content,
+                            ], null, (int) $instance['tenant_id']);
+                        } catch (Throwable $exception) {
+                            $processingWarnings[] = 'n8n';
+                            $this->logWebhookFailure($exception, [
+                                'phase' => 'n8n_after_reply',
+                                'conversation_id' => $conversationId,
+                                'stored_message_id' => $storedMessageId,
+                            ]);
+                        }
                     }
                 }
             }
