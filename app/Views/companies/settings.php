@@ -92,6 +92,10 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
             <label class="field"><span>Mensagem após aprovação</span><textarea name="pre_schedule_approved_message" rows="3"><?= View::e($preScheduleSettings['approved_message'] ?? '') ?></textarea></label>
             <label class="field"><span>Mensagem ao recusar horário</span><textarea name="pre_schedule_rejected_message" rows="3"><?= View::e($preScheduleSettings['rejected_message'] ?? '') ?></textarea></label>
             <label class="field"><span>Mensagem ao remarcar</span><textarea name="pre_schedule_reschedule_message" rows="3"><?= View::e($preScheduleSettings['reschedule_message'] ?? '') ?></textarea></label>
+            <label class="field"><span>Mensagem com horários alternativos</span><textarea name="pre_schedule_availability_options_message" rows="5"><?= View::e($preScheduleSettings['availability_options_message'] ?? '') ?></textarea><small>Use {{opcoes}} para inserir a lista real retornada pelo Google.</small></label>
+            <label class="field"><span>Mensagem após o cliente escolher</span><textarea name="pre_schedule_slot_selected_message" rows="4"><?= View::e($preScheduleSettings['slot_selected_message'] ?? '') ?></textarea><small>Disponível: {{data}}, {{hora}}, {{inicio}}, {{nome}} e {{modalidade}}.</small></label>
+            <label class="field"><span>Mensagem quando não houver horários</span><textarea name="pre_schedule_no_availability_message" rows="3"><?= View::e($preScheduleSettings['no_availability_message'] ?? '') ?></textarea></label>
+            <label class="field"><span>Mensagem quando a escolha não for identificada</span><textarea name="pre_schedule_invalid_slot_message" rows="3"><?= View::e($preScheduleSettings['invalid_slot_message'] ?? '') ?></textarea></label>
         </div>
         <p class="form-help">Você pode usar variáveis nas mensagens: <code>{{nome}}</code>, <code>{{data}}</code>, <code>{{hora}}</code>, <code>{{local}}</code>, <code>{{modalidade}}</code>, <code>{{dia_preferido}}</code> e <code>{{horario_preferido}}</code>.</p>
     </section>
@@ -233,6 +237,10 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
                 <label class="field"><span>Mensagem após aprovação</span><textarea name="pre_schedule_approved_message" rows="3"><?= View::e($preScheduleSettings['approved_message'] ?? '') ?></textarea></label>
                 <label class="field"><span>Mensagem quando o horário não for aceito</span><textarea name="pre_schedule_rejected_message" rows="3"><?= View::e($preScheduleSettings['rejected_message'] ?? '') ?></textarea></label>
                 <label class="field"><span>Mensagem para remarcar</span><textarea name="pre_schedule_reschedule_message" rows="3"><?= View::e($preScheduleSettings['reschedule_message'] ?? '') ?></textarea></label>
+                <label class="field"><span>Mensagem com horários alternativos</span><textarea name="pre_schedule_availability_options_message" rows="5"><?= View::e($preScheduleSettings['availability_options_message'] ?? '') ?></textarea><small>Use {{opcoes}} para inserir a lista real retornada pelo Google.</small></label>
+                <label class="field"><span>Mensagem após o cliente escolher</span><textarea name="pre_schedule_slot_selected_message" rows="4"><?= View::e($preScheduleSettings['slot_selected_message'] ?? '') ?></textarea><small>Disponível: {{data}}, {{hora}}, {{inicio}}, {{nome}} e {{modalidade}}.</small></label>
+                <label class="field"><span>Mensagem quando não houver horários</span><textarea name="pre_schedule_no_availability_message" rows="3"><?= View::e($preScheduleSettings['no_availability_message'] ?? '') ?></textarea></label>
+                <label class="field"><span>Mensagem quando a escolha não for identificada</span><textarea name="pre_schedule_invalid_slot_message" rows="3"><?= View::e($preScheduleSettings['invalid_slot_message'] ?? '') ?></textarea></label>
             </div>
         </div>
     </details>

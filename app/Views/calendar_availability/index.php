@@ -24,6 +24,8 @@ $statusLabels = [
     'pending' => 'Pendente',
     'sent' => 'Enviado ao n8n',
     'received' => 'Disponibilidade recebida',
+    'communicating' => 'Enviando opções ao cliente',
+    'options_sent' => 'Opções enviadas ao cliente',
     'empty' => 'Nenhum horário encontrado',
     'failed' => 'Falhou',
     'requested' => 'Consulta solicitada',
@@ -155,6 +157,12 @@ $requestInsight = static function (array $request): string {
                     <small>Preferência: <?= View::e(($appointment['preferred_day_text'] ?? '') ?: 'dia não informado') ?> · <?= View::e(($appointment['preferred_time_text'] ?? '') ?: 'horário não informado') ?></small>
                     <?php if ($isMarked): ?>
                         <small>Evento Google: <?= View::e($eventStateLabels[$googleState] ?? ($googleState ?: 'não vinculado')) ?><?= !empty($appointment['google_event_summary']) ? ' · ' . View::e($appointment['google_event_summary']) : '' ?></small>
+                    <?php endif; ?>
+                    <?php if ($availabilityStatus === 'options_sent'): ?>
+                        <small>Opções enviadas ao cliente<?= !empty($appointment['availability_options_sent_at']) ? ' em ' . View::e($date($appointment['availability_options_sent_at'])) : '' ?><?= !empty($appointment['availability_selection_expires_at']) ? ' · escolha válida até ' . View::e($date($appointment['availability_selection_expires_at'])) : '' ?></small>
+                    <?php endif; ?>
+                    <?php if (!empty($appointment['availability_selected_at'])): ?>
+                        <small>Horário escolhido em <?= View::e($date($appointment['availability_selected_at'])) ?><?= !empty($appointment['availability_selected_by']) ? ' · origem: ' . View::e((string) $appointment['availability_selected_by']) : '' ?></small>
                     <?php endif; ?>
                     <?php if (!empty($appointment['availability_error'])): ?><div class="calendar-inline-alert"><?= View::e($appointment['availability_error']) ?></div><?php endif; ?>
                 </div>
@@ -372,6 +380,7 @@ $requestInsight = static function (array $request): string {
                         <div class="calendar-slot-row <?= $isSelected ? 'is-selected' : '' ?>">
                             <div>
                                 <strong><?= View::e($date($slot['starts_at'])) ?> até <?= View::e($date($slot['ends_at'], 'H:i')) ?></strong>
+                                <?php if (!empty($slot['suggestion_position'])): ?><span class="badge badge-info">Opção <?= (int) $slot['suggestion_position'] ?></span><?php endif; ?>
                                 <small><?= View::e($sourceLabels[$slot['source'] ?? ''] ?? ($slot['source'] ?? 'n8n')) ?><?= ($slot['modality'] ?? 'indefinida') !== 'indefinida' ? ' · ' . View::e(ucfirst((string) $slot['modality'])) : '' ?></small>
                                 <?php if ($isMarkedSlot): ?><small>Evento: <?= View::e($eventStateLabels[$eventState] ?? $eventState) ?><?= !empty($slot['event_summary']) ? ' · ' . View::e($slot['event_summary']) : '' ?></small><?php endif; ?>
                             </div>

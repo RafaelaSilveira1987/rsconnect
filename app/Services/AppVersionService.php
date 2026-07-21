@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'HOTFIX 36.1.3';
-    public const REQUIRED_MIGRATION = '045_ai_webhook_ingestion_resilience.sql';
+    public const PACKAGE_LABEL = 'ZIP 36.2';
+    public const REQUIRED_MIGRATION = '046_calendar_conversational_slot_selection.sql';
 
     private PDO $pdo;
 
@@ -106,6 +106,18 @@ final class AppVersionService
             $conversationFlowReady ? 'ok' : 'blocked',
             $conversationFlowReady ? 'Etapas, demanda e regras por grupo disponíveis para a IA e o pré-agendamento.' : 'A estrutura de fluxo e grupos ainda não foi aplicada.',
             'Executar database/migrations/040_conversation_flow_contact_groups.sql.'
+        );
+
+        $calendarConversationReady = $this->columnExists('calendar_appointments', 'availability_options_request_id')
+            && $this->columnExists('calendar_availability_slots', 'suggestion_position')
+            && $this->columnExists('tenant_pre_schedule_settings', 'availability_options_message');
+        $checks[] = $this->check(
+            'Agenda conversacional',
+            $calendarConversationReady ? 'ok' : 'blocked',
+            $calendarConversationReady
+                ? 'Alternativas, escolha do contato e pré-reserva aguardando aprovação estão disponíveis.'
+                : 'A estrutura para apresentar e reconhecer opções de horário ainda não foi aplicada.',
+            'Executar database/migrations/046_calendar_conversational_slot_selection.sql.'
         );
 
         $appKey = (string) Env::get('APP_KEY', '');

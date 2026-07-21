@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o HOTFIX 36.1.3.
+Pacote consolidado até o ZIP 36.2.
 
 ## Última etapa incluída
+
+ZIP 36.2 — agenda conversacional com alternativas reais, escolha do contato, pré-reserva e aprovação profissional.
 
 HOTFIX 36.1.3 — resposta crítica antes das integrações externas e cooldown por mensagem.
 
@@ -16,7 +18,10 @@ Execute as migrations em ordem. Para atualizar a base mais recente, mantenha as 
 database/migrations/043_ai_reprocess_schedule.sql
 database/migrations/044_ai_pending_failures_message_link.sql
 database/migrations/045_ai_webhook_ingestion_resilience.sql
+database/migrations/046_calendar_conversational_slot_selection.sql
 ```
+
+Consulte `README-ZIP-36.2.md` para instalar e validar a agenda conversacional.
 
 Consulte `docs/AI-REPROCESSAMENTO-AGENDADO.md` para configurar o horário, o cron ou o workflow n8n.
 

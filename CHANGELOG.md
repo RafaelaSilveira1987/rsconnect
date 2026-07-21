@@ -1,3 +1,16 @@
+# ZIP 36.2 — Agenda conversacional e pré-reserva com aprovação
+
+- Horário ocupado passa a gerar alternativas reais do Google Agenda pelo WhatsApp.
+- Contato pode escolher por número, ordinal, horário ou dia/horário.
+- Escolha é validada contra a busca atual antes de qualquer pré-reserva.
+- Horário livre solicitado pode ser pré-reservado automaticamente.
+- Evento VAGO é pré-reservado pelo n8n e permanece aguardando aprovação profissional.
+- Callbacks antigos e comunicações duplicadas são bloqueados.
+- Falha de concorrência remove o horário ocupado e reapresenta apenas opções restantes.
+- Mensagens da agenda podem ser personalizadas por empresa.
+- Tela de disponibilidade mostra opções enviadas, validade, posição e origem da escolha.
+- Migration `046_calendar_conversational_slot_selection.sql`.
+
 # HOTFIX 36.1.3 — Resposta imediata sem depender de reprocessamento
 
 - Nova mensagem recebida e persistida não é mais descartada pelo cooldown destinado a execuções repetidas.

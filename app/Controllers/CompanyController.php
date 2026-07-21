@@ -262,6 +262,10 @@ final class CompanyController
             'approved_message' => trim((string) ($_POST['pre_schedule_approved_message'] ?? '')),
             'rejected_message' => trim((string) ($_POST['pre_schedule_rejected_message'] ?? '')),
             'reschedule_message' => trim((string) ($_POST['pre_schedule_reschedule_message'] ?? '')),
+            'availability_options_message' => trim((string) ($_POST['pre_schedule_availability_options_message'] ?? '')),
+            'slot_selected_message' => trim((string) ($_POST['pre_schedule_slot_selected_message'] ?? '')),
+            'no_availability_message' => trim((string) ($_POST['pre_schedule_no_availability_message'] ?? '')),
+            'invalid_slot_message' => trim((string) ($_POST['pre_schedule_invalid_slot_message'] ?? '')),
         ]);
 
         if (isset($_POST['module_settings_submitted'])) {

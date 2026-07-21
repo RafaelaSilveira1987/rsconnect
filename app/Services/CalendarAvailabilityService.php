@@ -388,7 +388,14 @@ final class CalendarAvailabilityService
             $message = $slots === []
                 ? 'Nenhum horário livre encontrado pelo fallback interno.'
                 : 'O n8n não respondeu; horários gerados pelo fallback interno.';
-            return ['ok' => $slots !== [], 'request_id' => $requestId, 'message' => $message];
+            $request = $this->findRequest($requestId, $token) ?: [
+                'id' => $requestId,
+                'tenant_id' => $tenantId,
+                'appointment_id' => $appointmentId,
+                'origin' => $origin,
+            ];
+            $conversation = (new CalendarConversationService())->handleAvailabilityResult($request, $message);
+            return ['ok' => $slots !== [], 'request_id' => $requestId, 'message' => $message, 'conversation' => $conversation];
         }
 
         $error = mb_substr(implode(' | ', $errors) ?: (
@@ -695,6 +702,18 @@ final class CalendarAvailabilityService
             return ['ok' => false, 'message' => 'Solicitação de disponibilidade não encontrada ou token inválido.'];
         }
 
+        $currentAppointment = $this->appointment((int) $request['tenant_id'], (int) $request['appointment_id']);
+        $currentRequestId = (int) ($currentAppointment['availability_request_id'] ?? 0);
+        if ($currentRequestId > 0 && $currentRequestId !== (int) $request['id'] && $currentRequestId > (int) $request['id']) {
+            return [
+                'ok' => true,
+                'ignored' => 'stale_availability_callback',
+                'message' => 'Callback antigo ignorado porque já existe uma consulta mais recente para este pré-agendamento.',
+                'request_id' => (int) $request['id'],
+                'current_request_id' => $currentRequestId,
+            ];
+        }
+
         $slots = $payload['slots'] ?? $payload['available_slots'] ?? [];
         if (!is_array($slots)) {
             $slots = [];
@@ -776,10 +795,12 @@ final class CalendarAvailabilityService
             $diagnostic
         );
         $this->logGoogleSync((int) $request['tenant_id'], (int) $request['appointment_id'], (int) $request['id'], null, 'callback', 'success', [], null, $payload);
+        $conversation = (new CalendarConversationService())->handleAvailabilityResult($request, $diagnostic);
         return [
             'ok' => true,
             'message' => $diagnostic !== '' ? $diagnostic : 'Disponibilidade registrada no RS Connect.',
             'slots' => count($normalizedSlots),
+            'conversation' => $conversation,
         ];
     }
 

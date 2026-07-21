@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Core\Crypto;
 use App\Core\Database;
+use App\Core\Env;
 use DateInterval;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -257,6 +258,10 @@ final class PreSchedulingService
             'approved_message' => 'Seu agendamento foi confirmado para {{data}} às {{hora}}. {{local}}',
             'rejected_message' => 'No momento não conseguimos confirmar esse horário. Pode me enviar outra opção de dia ou período?',
             'reschedule_message' => 'Precisamos ajustar sua preferência de horário. Pode me enviar outra opção de dia ou período?',
+            'availability_options_message' => "O horário solicitado não está disponível. Encontrei estas opções:\n\n{{opcoes}}\n\nResponda com o número ou com o horário que prefere.",
+            'slot_selected_message' => 'Perfeito. Pré-reservei {{data}} às {{hora}}. O horário está aguardando validação da profissional. Você receberá a confirmação por aqui.',
+            'no_availability_message' => 'Não encontrei horários disponíveis para essa preferência. Pode me informar outro dia ou período?',
+            'invalid_slot_message' => 'Não consegui identificar uma dessas opções. Responda com o número ou com o horário desejado:',
         ];
         if ($tenantId < 1 || !$this->tableExists('tenant_pre_schedule_settings')) {
             return $defaults;
@@ -285,33 +290,16 @@ final class PreSchedulingService
             'approved_message' => 'Seu agendamento foi confirmado para {{data}} às {{hora}}. {{local}}',
             'rejected_message' => 'No momento não conseguimos confirmar esse horário. Pode me enviar outra opção de dia ou período?',
             'reschedule_message' => 'Precisamos ajustar sua preferência de horário. Pode me enviar outra opção de dia ou período?',
+            'availability_options_message' => "O horário solicitado não está disponível. Encontrei estas opções:\n\n{{opcoes}}\n\nResponda com o número ou com o horário que prefere.",
+            'slot_selected_message' => 'Perfeito. Pré-reservei {{data}} às {{hora}}. O horário está aguardando validação da profissional. Você receberá a confirmação por aqui.',
+            'no_availability_message' => 'Não encontrei horários disponíveis para essa preferência. Pode me informar outro dia ou período?',
+            'invalid_slot_message' => 'Não consegui identificar uma dessas opções. Responda com o número ou com o horário desejado:',
         ];
         foreach ($messages as $field => $fallback) {
             $messages[$field] = trim((string) ($data[$field] ?? '')) ?: $fallback;
         }
 
-        $statement = Database::connection()->prepare(
-            'INSERT INTO tenant_pre_schedule_settings
-                (tenant_id, enabled, require_human_approval, ai_can_suggest_slots, ai_can_confirm, send_approval_message,
-                 default_duration_minutes, default_message, collect_message, approved_message, rejected_message, reschedule_message)
-             VALUES
-                (:tenant_id, :enabled, :require_human_approval, :ai_can_suggest_slots, :ai_can_confirm, :send_approval_message,
-                 :default_duration_minutes, :default_message, :collect_message, :approved_message, :rejected_message, :reschedule_message)
-             ON DUPLICATE KEY UPDATE
-                enabled = VALUES(enabled),
-                require_human_approval = VALUES(require_human_approval),
-                ai_can_suggest_slots = VALUES(ai_can_suggest_slots),
-                ai_can_confirm = VALUES(ai_can_confirm),
-                send_approval_message = VALUES(send_approval_message),
-                default_duration_minutes = VALUES(default_duration_minutes),
-                default_message = VALUES(default_message),
-                collect_message = VALUES(collect_message),
-                approved_message = VALUES(approved_message),
-                rejected_message = VALUES(rejected_message),
-                reschedule_message = VALUES(reschedule_message),
-                updated_at = CURRENT_TIMESTAMP'
-        );
-        $statement->execute([
+        $params = [
             'tenant_id' => $tenantId,
             'enabled' => !empty($data['enabled']) ? 1 : 0,
             'require_human_approval' => !empty($data['require_human_approval']) ? 1 : 0,
@@ -324,7 +312,73 @@ final class PreSchedulingService
             'approved_message' => $messages['approved_message'],
             'rejected_message' => $messages['rejected_message'],
             'reschedule_message' => $messages['reschedule_message'],
-        ]);
+            'availability_options_message' => $messages['availability_options_message'],
+            'slot_selected_message' => $messages['slot_selected_message'],
+            'no_availability_message' => $messages['no_availability_message'],
+            'invalid_slot_message' => $messages['invalid_slot_message'],
+        ];
+
+        try {
+            $statement = Database::connection()->prepare(
+                'INSERT INTO tenant_pre_schedule_settings
+                    (tenant_id, enabled, require_human_approval, ai_can_suggest_slots, ai_can_confirm, send_approval_message,
+                     default_duration_minutes, default_message, collect_message, approved_message, rejected_message, reschedule_message,
+                     availability_options_message, slot_selected_message, no_availability_message, invalid_slot_message)
+                 VALUES
+                    (:tenant_id, :enabled, :require_human_approval, :ai_can_suggest_slots, :ai_can_confirm, :send_approval_message,
+                     :default_duration_minutes, :default_message, :collect_message, :approved_message, :rejected_message, :reschedule_message,
+                     :availability_options_message, :slot_selected_message, :no_availability_message, :invalid_slot_message)
+                 ON DUPLICATE KEY UPDATE
+                    enabled = VALUES(enabled),
+                    require_human_approval = VALUES(require_human_approval),
+                    ai_can_suggest_slots = VALUES(ai_can_suggest_slots),
+                    ai_can_confirm = VALUES(ai_can_confirm),
+                    send_approval_message = VALUES(send_approval_message),
+                    default_duration_minutes = VALUES(default_duration_minutes),
+                    default_message = VALUES(default_message),
+                    collect_message = VALUES(collect_message),
+                    approved_message = VALUES(approved_message),
+                    rejected_message = VALUES(rejected_message),
+                    reschedule_message = VALUES(reschedule_message),
+                    availability_options_message = VALUES(availability_options_message),
+                    slot_selected_message = VALUES(slot_selected_message),
+                    no_availability_message = VALUES(no_availability_message),
+                    invalid_slot_message = VALUES(invalid_slot_message),
+                    updated_at = CURRENT_TIMESTAMP'
+            );
+            $statement->execute($params);
+        } catch (Throwable $exception) {
+            // Compatibilidade durante o deploy anterior à migration 046.
+            $legacy = Database::connection()->prepare(
+                'INSERT INTO tenant_pre_schedule_settings
+                    (tenant_id, enabled, require_human_approval, ai_can_suggest_slots, ai_can_confirm, send_approval_message,
+                     default_duration_minutes, default_message, collect_message, approved_message, rejected_message, reschedule_message)
+                 VALUES
+                    (:tenant_id, :enabled, :require_human_approval, :ai_can_suggest_slots, :ai_can_confirm, :send_approval_message,
+                     :default_duration_minutes, :default_message, :collect_message, :approved_message, :rejected_message, :reschedule_message)
+                 ON DUPLICATE KEY UPDATE
+                    enabled = VALUES(enabled),
+                    require_human_approval = VALUES(require_human_approval),
+                    ai_can_suggest_slots = VALUES(ai_can_suggest_slots),
+                    ai_can_confirm = VALUES(ai_can_confirm),
+                    send_approval_message = VALUES(send_approval_message),
+                    default_duration_minutes = VALUES(default_duration_minutes),
+                    default_message = VALUES(default_message),
+                    collect_message = VALUES(collect_message),
+                    approved_message = VALUES(approved_message),
+                    rejected_message = VALUES(rejected_message),
+                    reschedule_message = VALUES(reschedule_message),
+                    updated_at = CURRENT_TIMESTAMP'
+            );
+            $legacyParams = $params;
+            unset(
+                $legacyParams['availability_options_message'],
+                $legacyParams['slot_selected_message'],
+                $legacyParams['no_availability_message'],
+                $legacyParams['invalid_slot_message']
+            );
+            $legacy->execute($legacyParams);
+        }
     }
 
     public function renderMessage(string $template, array $appointment): string

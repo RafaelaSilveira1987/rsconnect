@@ -1,0 +1,14 @@
+{
+  "feature": "calendar_conversational_slot_selection",
+  "version": "36.2",
+  "examples": [
+    {"message": "1", "expected": "option_1"},
+    {"message": "opção 2", "expected": "option_2"},
+    {"message": "o primeiro", "expected": "option_1"},
+    {"message": "o segundo", "expected": "option_2"},
+    {"message": "pode ser 14h", "expected": "unique_slot_at_14_00"},
+    {"message": "prefiro quinta às 17h", "expected": "matching_thursday_17_00"},
+    {"message": "quinta às 18h", "expected": "new_preference_and_new_search"},
+    {"message": "obrigada", "expected": "normal_ai_flow"}
+  ]
+}

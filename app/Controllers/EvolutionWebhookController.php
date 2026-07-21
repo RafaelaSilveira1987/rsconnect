@@ -10,6 +10,7 @@ use App\Services\AccessControlService;
 use App\Services\AiAutomationService;
 use App\Services\AutomationWebhookService;
 use App\Services\CrmAutoService;
+use App\Services\CalendarConversationService;
 use App\Services\ConversationFlowService;
 use App\Services\NotificationService;
 use App\Services\PreSchedulingService;
@@ -233,14 +234,23 @@ final class EvolutionWebhookController
                 }
 
                 try {
-                    $preScheduleResult = (new PreSchedulingService())->handleIncoming(
+                    $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
                         $pdo,
                         $instance,
                         $contactId,
                         $conversationId,
-                        $content,
-                        $flowContext
+                        $content
                     );
+                    $preScheduleResult = !empty($calendarSelection['handled'])
+                        ? $calendarSelection
+                        : (new PreSchedulingService())->handleIncoming(
+                            $pdo,
+                            $instance,
+                            $contactId,
+                            $conversationId,
+                            $content,
+                            $flowContext
+                        );
                 } catch (Throwable $exception) {
                     $processingWarnings[] = 'pre_schedule';
                     $this->logWebhookFailure($exception, [
