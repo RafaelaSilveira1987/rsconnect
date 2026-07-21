@@ -301,12 +301,60 @@ final class EvolutionWebhookController
                     ]);
                 }
 
+                // A resposta da conversa tem prioridade sobre integrações externas.
+                // n8n e Google Agenda podem levar vários segundos; antes do HOTFIX 36.1.3,
+                // essa espera podia encerrar o request antes de a IA ser chamada.
+                if ($automationAllowed && !((bool) ($preScheduleResult['skip_ai'] ?? false))) {
+                    $aiPayload = $payload;
+                    $aiPayload['stored_message_id'] = $storedMessageId;
+                    (new AiAutomationService())->handleIncoming($instance, $conversationId, $content, $aiPayload);
+                    $aiHandled = true;
+                }
+
                 if ($automationAllowed && !$isReaction) {
+                    $appointmentEventPayload = $preScheduleResult['appointment_event_payload'] ?? null;
+                    if (is_array($appointmentEventPayload) && $appointmentEventPayload !== []) {
+                        try {
+                            (new AutomationWebhookService())->dispatch(
+                                'appointment.pre_scheduled',
+                                $appointmentEventPayload,
+                                null,
+                                (int) $instance['tenant_id']
+                            );
+                        } catch (Throwable $exception) {
+                            $processingWarnings[] = 'appointment_n8n';
+                            $this->logWebhookFailure($exception, [
+                                'phase' => 'appointment_n8n_after_reply',
+                                'conversation_id' => $conversationId,
+                                'stored_message_id' => $storedMessageId,
+                            ]);
+                        }
+                    }
+
+                    if (!empty($preScheduleResult['availability_request_needed'])
+                        && (int) ($preScheduleResult['appointment_id'] ?? 0) > 0) {
+                        try {
+                            (new PreSchedulingService())->requestAvailabilityIfNeeded(
+                                (int) $instance['tenant_id'],
+                                (int) $preScheduleResult['appointment_id']
+                            );
+                        } catch (Throwable $exception) {
+                            $processingWarnings[] = 'calendar_availability';
+                            $this->logWebhookFailure($exception, [
+                                'phase' => 'calendar_availability_after_reply',
+                                'conversation_id' => $conversationId,
+                                'stored_message_id' => $storedMessageId,
+                                'appointment_id' => (int) ($preScheduleResult['appointment_id'] ?? 0),
+                            ]);
+                        }
+                    }
+
                     try {
                         (new AutomationWebhookService())->dispatch('message.received', [
                             'tenant_id' => (int) $instance['tenant_id'],
                             'instance_id' => (int) $instance['id'],
                             'conversation_id' => $conversationId,
+                            'incoming_message_id' => $storedMessageId,
                             'phone' => $phone,
                             'message_type' => $messageType,
                             'content' => $content,
@@ -314,18 +362,11 @@ final class EvolutionWebhookController
                     } catch (Throwable $exception) {
                         $processingWarnings[] = 'n8n';
                         $this->logWebhookFailure($exception, [
-                            'phase' => 'n8n',
+                            'phase' => 'n8n_after_reply',
                             'conversation_id' => $conversationId,
                             'stored_message_id' => $storedMessageId,
                         ]);
                     }
-                }
-
-                if ($automationAllowed && !((bool) ($preScheduleResult['skip_ai'] ?? false))) {
-                    $aiPayload = $payload;
-                    $aiPayload['stored_message_id'] = $storedMessageId;
-                    (new AiAutomationService())->handleIncoming($instance, $conversationId, $content, $aiPayload);
-                    $aiHandled = true;
                 }
             }
 

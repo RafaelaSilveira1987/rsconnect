@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'HOTFIX 36.1.2';
+    public const PACKAGE_LABEL = 'HOTFIX 36.1.3';
     public const REQUIRED_MIGRATION = '045_ai_webhook_ingestion_resilience.sql';
 
     private PDO $pdo;

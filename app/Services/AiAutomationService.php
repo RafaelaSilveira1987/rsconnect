@@ -103,13 +103,18 @@ final class AiAutomationService
                 FILTER_NULL_ON_FAILURE
             ) === true;
 
-            $storedMessageId = $bypassCooldown ? (int) ($this->currentIncomingMessageId ?? 0) : 0;
+            $storedMessageId = (int) ($this->currentIncomingMessageId ?? 0);
+            $isFreshPersistedIncoming = $storedMessageId > 0
+                && $this->isStoredIncomingMessage($pdo, $conversationId, $storedMessageId);
+
+            // A proteção contra duplicidade vale para toda execução, não apenas para o reprocessamento.
+            // Assim, um webhook repetido nunca gera uma segunda saída para a mesma mensagem recebida.
             if ($storedMessageId > 0 && $this->hasOutgoingAfterStoredMessage($pdo, $conversationId, $storedMessageId)) {
                 $this->log(
                     (int) $instance['tenant_id'],
                     $conversationId,
                     (int) $agent['id'],
-                    'ai.reprocess.skipped',
+                    $bypassCooldown ? 'ai.reprocess.skipped' : 'ai.duplicate.skipped',
                     'skipped',
                     'A mensagem já recebeu uma resposta posterior e não será reenviada.',
                     null,
@@ -121,7 +126,11 @@ final class AiAutomationService
             $cooldownSeconds = max(0, min(3600, (int) ($agent['cooldown_seconds'] ?? 15)));
             $remainingSeconds = $this->cooldownRemaining($pdo, $conversationId, $cooldownSeconds);
 
-            if (!$bypassCooldown && $remainingSeconds > 0) {
+            // O intervalo continua protegendo execuções legadas/sem vínculo e chamadas repetidas,
+            // mas não descarta uma nova mensagem legítima já persistida e identificada no banco.
+            // Essa mensagem passa pela trava da conversa e pela checagem de resposta posterior acima.
+            $cooldownApplies = !$bypassCooldown && !$isFreshPersistedIncoming;
+            if ($cooldownApplies && $remainingSeconds > 0) {
                 $this->log(
                     (int) $instance['tenant_id'],
                     $conversationId,
@@ -176,15 +185,37 @@ final class AiAutomationService
                 ],
             ]);
 
+            // A resposta principal já foi enviada. Libera a conversa antes de chamar integrações
+            // externas para que uma nova mensagem não fique aguardando n8n/HTTP.
+            if ($conversationLockAcquired) {
+                $this->releaseConversationLock($pdo, $conversationLockName);
+                $conversationLockAcquired = false;
+            }
+
             if ((int) ($agent['n8n_enabled'] ?? 0) === 1) {
-                $legacyUrl = trim((string) ($agent['n8n_webhook_url'] ?? ''));
-                $this->automationWebhook->dispatch('ai.replied', [
-                    'tenant_id' => (int) $instance['tenant_id'],
-                    'conversation_id' => $conversationId,
-                    'agent_id' => (int) $agent['id'],
-                    'reply' => $reply,
-                    'incoming' => $incomingContent,
-                ], $legacyUrl !== '' ? $legacyUrl : null, (int) $instance['tenant_id']);
+                try {
+                    $legacyUrl = trim((string) ($agent['n8n_webhook_url'] ?? ''));
+                    $this->automationWebhook->dispatch('ai.replied', [
+                        'tenant_id' => (int) $instance['tenant_id'],
+                        'conversation_id' => $conversationId,
+                        'agent_id' => (int) $agent['id'],
+                        'incoming_message_id' => $storedMessageId > 0 ? $storedMessageId : null,
+                        'reply' => $reply,
+                        'incoming' => $incomingContent,
+                    ], $legacyUrl !== '' ? $legacyUrl : null, (int) $instance['tenant_id']);
+                } catch (Throwable $integrationException) {
+                    // Uma falha do n8n depois da resposta não transforma a resposta enviada em ai.failed.
+                    $this->log(
+                        (int) $instance['tenant_id'],
+                        $conversationId,
+                        (int) $agent['id'],
+                        'ai.integration.failed',
+                        'error',
+                        $integrationException->getMessage(),
+                        null,
+                        ['integration' => 'n8n', 'reply_already_sent' => true]
+                    );
+                }
             }
         } catch (Throwable $exception) {
             if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
@@ -215,12 +246,7 @@ final class AiAutomationService
             );
         } finally {
             if ($conversationLockAcquired && $pdo instanceof PDO) {
-                try {
-                    $releaseStatement = $pdo->prepare('SELECT RELEASE_LOCK(:lock_name)');
-                    $releaseStatement->execute(['lock_name' => $conversationLockName]);
-                } catch (Throwable) {
-                    // O lock também é liberado quando a conexão é encerrada.
-                }
+                $this->releaseConversationLock($pdo, $conversationLockName);
             }
             $this->currentIncomingMessageId = null;
         }
@@ -764,6 +790,37 @@ final class AiAutomationService
         }
 
         return false;
+    }
+
+    private function isStoredIncomingMessage(PDO $pdo, int $conversationId, int $messageId): bool
+    {
+        try {
+            $statement = $pdo->prepare(
+                'SELECT 1
+                 FROM conversation_messages
+                 WHERE id = :message_id
+                   AND conversation_id = :conversation_id
+                   AND direction = "incoming"
+                 LIMIT 1'
+            );
+            $statement->execute([
+                'message_id' => $messageId,
+                'conversation_id' => $conversationId,
+            ]);
+            return (bool) $statement->fetchColumn();
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function releaseConversationLock(PDO $pdo, string $lockName): void
+    {
+        try {
+            $releaseStatement = $pdo->prepare('SELECT RELEASE_LOCK(:lock_name)');
+            $releaseStatement->execute(['lock_name' => $lockName]);
+        } catch (Throwable) {
+            // O lock também é liberado quando a conexão é encerrada.
+        }
     }
 
     private function hasOutgoingAfterStoredMessage(PDO $pdo, int $conversationId, int $messageId): bool

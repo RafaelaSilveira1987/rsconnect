@@ -65,11 +65,13 @@ final class PreSchedulingService
             ]);
 
             if ($update['has_full_preference']) {
-                $this->tryAutoRequestAvailability($tenantId, (int) ($existing['id'] ?? 0));
+                // Responde primeiro ao contato. A busca externa de disponibilidade será
+                // disparada pelo controller somente depois da resposta crítica da conversa.
                 $ack = $this->sendPreferenceAcknowledgement($pdo, $instance, $conversationId, $contactId, $update['appointment'], $intent);
                 $result['ack_sent'] = $ack['ok'];
                 $result['ack_error'] = $ack['error'];
                 $result['skip_ai'] = $ack['ok'];
+                $result['availability_request_needed'] = true;
             }
 
             $appointmentLabel = trim((string) ($existing['title'] ?? 'Pré-agendamento')) ?: 'Pré-agendamento';
@@ -144,7 +146,9 @@ final class PreSchedulingService
             'metadata_json' => json_encode(['appointment_id' => $appointmentId, 'intent' => $intent], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ]);
 
-        (new AutomationWebhookService())->dispatch('appointment.pre_scheduled', [
+        // O evento externo é devolvido ao controller para ser enviado somente depois
+        // que a conversa já recebeu a resposta crítica (IA ou confirmação de preferência).
+        $result['appointment_event_payload'] = [
             'tenant_id' => $tenantId,
             'conversation_id' => $conversationId,
             'contact' => $contact,
@@ -157,7 +161,7 @@ final class PreSchedulingService
             'contact_group' => (string) ($flowContext['contact_group'] ?? 'unclassified'),
             'demand_status' => (string) ($flowContext['demand_status'] ?? 'pending'),
             'demand_summary' => (string) ($flowContext['demand_summary'] ?? ''),
-        ], null, $tenantId);
+        ];
 
         $preferenceLabel = trim($this->displayDay($intent) . ' ' . $this->displayTime($intent));
         (new NotificationService())->createIfEnabled(
@@ -182,7 +186,6 @@ final class PreSchedulingService
         $result['appointment_id'] = $appointmentId;
 
         if ($this->hasFullPreference($intent)) {
-            $this->tryAutoRequestAvailability($tenantId, $appointmentId);
             $appointment = [
                 'id' => $appointmentId,
                 'tenant_id' => $tenantId,
@@ -200,6 +203,7 @@ final class PreSchedulingService
             $result['ack_sent'] = $ack['ok'];
             $result['ack_error'] = $ack['error'];
             $result['skip_ai'] = $ack['ok'];
+            $result['availability_request_needed'] = true;
         }
 
         return $result;
@@ -217,6 +221,8 @@ final class PreSchedulingService
             'ack_sent' => false,
             'ack_error' => null,
             'skip_ai' => false,
+            'availability_request_needed' => false,
+            'appointment_event_payload' => null,
         ];
     }
 
@@ -824,6 +830,11 @@ final class PreSchedulingService
         } catch (Throwable) {
             return false;
         }
+    }
+
+    public function requestAvailabilityIfNeeded(int $tenantId, int $appointmentId): void
+    {
+        $this->tryAutoRequestAvailability($tenantId, $appointmentId);
     }
 
     private function tryAutoRequestAvailability(int $tenantId, int $appointmentId): void

@@ -1,3 +1,13 @@
+# HOTFIX 36.1.3 — Resposta imediata sem depender de reprocessamento
+
+- Nova mensagem recebida e persistida não é mais descartada pelo cooldown destinado a execuções repetidas.
+- Proteção contra duplicidade passa a validar todas as mensagens pelo `incoming_message_id`.
+- IA/confirmação de preferência responde antes de chamadas lentas do n8n e Google Agenda.
+- Lock da conversa é liberado antes do evento `ai.replied` ser enviado ao n8n.
+- Falha do n8n após uma resposta enviada não cria mais um falso `ai.failed`.
+- Busca automática de disponibilidade e evento de pré-agendamento são disparados somente após a resposta crítica.
+- Não requer nova migration; mantém a migration 045 como estrutura mínima recomendada.
+
 # HOTFIX 36.1.2 — Persistência antes do processamento e fim do 422
 
 - Salva a mensagem antes de CRM, agenda, n8n e IA.

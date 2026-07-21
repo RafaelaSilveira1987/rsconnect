@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o HOTFIX 36.1.2.
+Pacote consolidado até o HOTFIX 36.1.3.
 
 ## Última etapa incluída
+
+HOTFIX 36.1.3 — resposta crítica antes das integrações externas e cooldown por mensagem.
 
 HOTFIX 36.1.2 — Persistência do webhook antes do processamento e fila resiliente.
 
