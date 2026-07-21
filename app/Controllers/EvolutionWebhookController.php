@@ -356,10 +356,19 @@ final class EvolutionWebhookController
                     if (!empty($preScheduleResult['availability_request_needed'])
                         && (int) ($preScheduleResult['appointment_id'] ?? 0) > 0) {
                         try {
-                            (new PreSchedulingService())->requestAvailabilityIfNeeded(
+                            $availabilityRequest = (new PreSchedulingService())->requestAvailabilityIfNeeded(
                                 (int) $instance['tenant_id'],
                                 (int) $preScheduleResult['appointment_id']
                             );
+                            if (empty($availabilityRequest['ok']) && empty($availabilityRequest['skipped'])) {
+                                $processingWarnings[] = 'calendar_availability_request_failed';
+                                $this->logWebhookFailure(new \RuntimeException((string) ($availabilityRequest['message'] ?? 'Falha ao enviar a consulta de disponibilidade ao n8n.')), [
+                                    'phase' => 'calendar_availability_result_after_reply',
+                                    'conversation_id' => $conversationId,
+                                    'stored_message_id' => $storedMessageId,
+                                    'appointment_id' => (int) ($preScheduleResult['appointment_id'] ?? 0),
+                                ]);
+                            }
                         } catch (Throwable $exception) {
                             $processingWarnings[] = 'calendar_availability';
                             $this->logWebhookFailure($exception, [

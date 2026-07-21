@@ -57,6 +57,36 @@ final class PreSchedulingService
         $this->markConversationIntent($pdo, $tenantId, $conversationId, $intent);
 
         if ($existing !== null) {
+            $transition = [
+                'ok' => true,
+                'changed' => false,
+                'request_needed' => false,
+                'message' => null,
+            ];
+            if ($this->hasFullPreference($intent)) {
+                $transition = $this->prepareExistingForNewPreference($pdo, $tenantId, $existing, $intent);
+                if (empty($transition['ok'])) {
+                    $result = array_merge($result, [
+                        'updated' => false,
+                        'appointment_id' => (int) ($existing['id'] ?? 0),
+                        'skip_ai' => true,
+                        'terminal_handled' => true,
+                        'availability_request_needed' => false,
+                        'calendar_error' => (string) ($transition['message'] ?? 'Não foi possível preparar uma nova consulta de agenda.'),
+                    ]);
+                    $this->notifyAvailabilityFailure(
+                        $tenantId,
+                        (int) ($existing['id'] ?? 0),
+                        $conversationId,
+                        (string) ($transition['message'] ?? 'Não foi possível reiniciar a disponibilidade antes da nova consulta.')
+                    );
+                    return $result;
+                }
+                if (!empty($transition['changed'])) {
+                    $existing = $this->appointmentById($pdo, $tenantId, (int) ($existing['id'] ?? 0)) ?: $existing;
+                }
+            }
+
             $update = $this->updatePendingPreSchedule($pdo, $tenantId, $existing, $intent, $content);
             $result = array_merge($result, [
                 'updated' => true,
@@ -66,13 +96,16 @@ final class PreSchedulingService
             ]);
 
             if ($update['has_full_preference']) {
-                // Responde primeiro ao contato. A busca externa de disponibilidade será
-                // disparada pelo controller somente depois da resposta crítica da conversa.
+                // Preferência completa é tratada pela agenda, mesmo se a mensagem de aviso falhar.
+                // Nunca deixa a IA reutilizar opções antigas do histórico como se fossem atuais.
                 $ack = $this->sendPreferenceAcknowledgement($pdo, $instance, $conversationId, $contactId, $update['appointment'], $intent);
                 $result['ack_sent'] = $ack['ok'];
                 $result['ack_error'] = $ack['error'];
-                $result['skip_ai'] = $ack['ok'];
-                $result['availability_request_needed'] = true;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['availability_request_needed'] = !empty($transition['request_needed'])
+                    || empty($existing['availability_request_id'])
+                    || !in_array((string) ($existing['availability_status'] ?? ''), ['requested', 'sent', 'received', 'options_sent', 'slot_selected'], true);
             }
 
             $appointmentLabel = trim((string) ($existing['title'] ?? 'Pré-agendamento')) ?: 'Pré-agendamento';
@@ -203,7 +236,8 @@ final class PreSchedulingService
             $ack = $this->sendPreferenceAcknowledgement($pdo, $instance, $conversationId, $contactId, $appointment, $intent);
             $result['ack_sent'] = $ack['ok'];
             $result['ack_error'] = $ack['error'];
-            $result['skip_ai'] = $ack['ok'];
+            $result['skip_ai'] = true;
+            $result['terminal_handled'] = true;
             $result['availability_request_needed'] = true;
         }
 
@@ -222,6 +256,7 @@ final class PreSchedulingService
             'ack_sent' => false,
             'ack_error' => null,
             'skip_ai' => false,
+            'terminal_handled' => false,
             'availability_request_needed' => false,
             'appointment_event_payload' => null,
         ];
@@ -472,6 +507,130 @@ final class PreSchedulingService
         }
 
         return null;
+    }
+
+    /** @return array{ok:bool,changed:bool,request_needed:bool,message:?string} */
+    private function prepareExistingForNewPreference(PDO $pdo, int $tenantId, array $appointment, array $intent): array
+    {
+        $appointmentId = (int) ($appointment['id'] ?? 0);
+        if ($appointmentId < 1) {
+            return ['ok' => false, 'changed' => false, 'request_needed' => false, 'message' => 'Pré-agendamento inválido.'];
+        }
+
+        $settings = $this->settings($tenantId);
+        $period = $this->periodFromIntent($intent, (int) ($settings['default_duration_minutes'] ?? 50));
+        $oldStart = trim((string) ($appointment['starts_at'] ?? ''));
+        $newStart = trim((string) ($period['starts_at'] ?? ''));
+        $preferenceChanged = $oldStart === '' || $newStart === ''
+            || date('Y-m-d H:i', strtotime($oldStart)) !== date('Y-m-d H:i', strtotime($newStart));
+
+        if (!$preferenceChanged) {
+            $status = (string) ($appointment['availability_status'] ?? '');
+            $requestNeeded = empty($appointment['availability_request_id'])
+                || !in_array($status, ['requested', 'sent', 'received', 'options_sent', 'slot_selected'], true);
+            return ['ok' => true, 'changed' => false, 'request_needed' => $requestNeeded, 'message' => null];
+        }
+
+        try {
+            $pdo->prepare(
+                'UPDATE calendar_availability_requests
+                 SET status = "cancelled",
+                     error_message = COALESCE(error_message, "Substituída por uma nova preferência do contato."),
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE tenant_id = :tenant_id
+                   AND appointment_id = :appointment_id
+                   AND status IN ("pending", "sent")'
+            )->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId]);
+        } catch (Throwable) {
+        }
+
+        try {
+            $pdo->prepare(
+                'UPDATE calendar_availability_slots
+                 SET event_state = CASE WHEN event_state = "available" THEN "expired" ELSE event_state END
+                 WHERE tenant_id = :tenant_id
+                   AND appointment_id = :appointment_id
+                   AND selected_at IS NULL'
+            )->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId]);
+        } catch (Throwable) {
+        }
+
+        try {
+            $pdo->prepare(
+                'UPDATE calendar_appointments
+                 SET availability_status = NULL,
+                     availability_request_id = NULL,
+                     availability_slot_count = 0,
+                     availability_error = NULL,
+                     availability_options_request_id = NULL,
+                     availability_options_sent_at = NULL,
+                     availability_options_message_id = NULL,
+                     availability_selection_expires_at = NULL,
+                     availability_selected_at = NULL,
+                     availability_selected_by = NULL,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :appointment_id AND tenant_id = :tenant_id'
+            )->execute(['appointment_id' => $appointmentId, 'tenant_id' => $tenantId]);
+        } catch (Throwable) {
+            // Compatibilidade defensiva: limpa ao menos os campos existentes desde o ZIP 27.
+            $pdo->prepare(
+                'UPDATE calendar_appointments
+                 SET availability_status = NULL,
+                     availability_request_id = NULL,
+                     availability_slot_count = 0,
+                     availability_error = NULL,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :appointment_id AND tenant_id = :tenant_id'
+            )->execute(['appointment_id' => $appointmentId, 'tenant_id' => $tenantId]);
+        }
+
+        try {
+            $pdo->prepare(
+                'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
+                 VALUES (:tenant_id, :conversation_id, "calendar.preference_changed", :description, :metadata_json)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => (int) ($appointment['conversation_id'] ?? 0),
+                'description' => 'Opções anteriores invalidadas e estado da disponibilidade reiniciado antes de uma nova consulta; uma pré-reserva ativa é preservada até a escolha do novo horário.',
+                'metadata_json' => json_encode([
+                    'appointment_id' => $appointmentId,
+                    'old_start' => $oldStart,
+                    'new_start' => $newStart,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+        } catch (Throwable) {
+        }
+
+        return ['ok' => true, 'changed' => true, 'request_needed' => true, 'message' => null];
+    }
+
+    private function appointmentById(PDO $pdo, int $tenantId, int $appointmentId): ?array
+    {
+        $statement = $pdo->prepare('SELECT * FROM calendar_appointments WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+        $statement->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    private function notifyAvailabilityFailure(int $tenantId, int $appointmentId, int $conversationId, string $message): void
+    {
+        try {
+            (new NotificationService())->createIfEnabled(
+                $tenantId,
+                'calendar',
+                'Falha ao atualizar preferência da agenda',
+                mb_substr($message, 0, 500),
+                'error',
+                '/calendar',
+                'calendar',
+                'calendar.preference_change.failed',
+                'appointment',
+                $appointmentId,
+                ['conversation_id' => $conversationId],
+                120
+            );
+        } catch (Throwable) {
+        }
     }
 
     private function updatePendingPreSchedule(PDO $pdo, int $tenantId, array $appointment, array $intent, string $content): array
@@ -886,25 +1045,50 @@ final class PreSchedulingService
         }
     }
 
-    public function requestAvailabilityIfNeeded(int $tenantId, int $appointmentId): void
+    /** @return array<string,mixed> */
+    public function requestAvailabilityIfNeeded(int $tenantId, int $appointmentId): array
     {
-        $this->tryAutoRequestAvailability($tenantId, $appointmentId);
+        return $this->tryAutoRequestAvailability($tenantId, $appointmentId);
     }
 
-    private function tryAutoRequestAvailability(int $tenantId, int $appointmentId): void
+    /** @return array<string,mixed> */
+    private function tryAutoRequestAvailability(int $tenantId, int $appointmentId): array
     {
         if ($tenantId < 1 || $appointmentId < 1) {
-            return;
+            return ['ok' => false, 'message' => 'Empresa ou pré-agendamento inválido.'];
         }
         try {
             $service = new CalendarAvailabilityService();
             $settings = $service->settings($tenantId);
             if (empty($settings['enabled']) || empty($settings['auto_request_on_pre_schedule'])) {
-                return;
+                return ['ok' => false, 'skipped' => true, 'message' => 'Consulta automática de disponibilidade desativada.'];
             }
-            $service->requestForAppointment($tenantId, $appointmentId, 'pre_schedule_ai');
-        } catch (Throwable) {
-            // Não bloqueia a conversa caso a integração de disponibilidade ainda não esteja configurada.
+            $result = $service->requestForAppointment($tenantId, $appointmentId, 'pre_schedule_ai');
+            if (empty($result['ok'])) {
+                $this->notifyAvailabilityFailure(
+                    $tenantId,
+                    $appointmentId,
+                    0,
+                    (string) ($result['message'] ?? 'O fluxo n8n não recebeu a nova consulta de disponibilidade.')
+                );
+            }
+            return $result;
+        } catch (Throwable $exception) {
+            $message = 'Falha ao iniciar a consulta de disponibilidade: ' . $exception->getMessage();
+            try {
+                Database::connection()->prepare(
+                    'UPDATE calendar_appointments
+                     SET availability_status = "failed", availability_error = :error, updated_at = CURRENT_TIMESTAMP
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute([
+                    'error' => mb_substr($message, 0, 700),
+                    'id' => $appointmentId,
+                    'tenant_id' => $tenantId,
+                ]);
+            } catch (Throwable) {
+            }
+            $this->notifyAvailabilityFailure($tenantId, $appointmentId, 0, $message);
+            return ['ok' => false, 'message' => $message];
         }
     }
 

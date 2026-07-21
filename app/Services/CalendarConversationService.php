@@ -442,7 +442,8 @@ final class CalendarConversationService
                   AND a.is_pre_schedule = 1
                   AND a.status IN ("pre_scheduled", "awaiting_approval", "rescheduled")
                   AND a.availability_status = "options_sent"
-                  AND a.chosen_availability_slot_id IS NULL
+                  AND a.availability_request_id IS NOT NULL
+                  AND a.availability_options_request_id = a.availability_request_id
                   AND (a.availability_selection_expires_at IS NULL OR a.availability_selection_expires_at >= NOW())
                   AND (a.conversation_id = :conversation_id OR a.contact_id = :contact_id)
                 ORDER BY (a.conversation_id = :conversation_id_order) DESC, a.updated_at DESC, a.id DESC
@@ -470,7 +471,8 @@ final class CalendarConversationService
                    AND a.is_pre_schedule = 1
                    AND a.status IN ("pre_scheduled", "awaiting_approval", "rescheduled")
                    AND a.availability_status = "options_sent"
-                   AND a.chosen_availability_slot_id IS NULL
+                   AND a.availability_request_id IS NOT NULL
+                   AND a.availability_options_request_id = a.availability_request_id
                    AND (a.conversation_id = :conversation_id OR a.contact_id = :contact_id)
                  ORDER BY (a.conversation_id = :conversation_id_order) DESC, a.updated_at DESC, a.id DESC
                  LIMIT 1'

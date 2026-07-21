@@ -1,3 +1,13 @@
+# HOTFIX 36.2.4 — Nova preferência sem reutilizar opções antigas
+
+- Reinicia a consulta de disponibilidade quando o contato informa outro dia/horário.
+- Invalida opções e callbacks antigos antes de criar a nova solicitação.
+- Preserva uma pré-reserva ativa até que o novo horário seja realmente escolhido.
+- Impede a IA de responder com horários antigos quando a consulta automática falha ou ainda não foi executada.
+- Só aceita respostas numéricas vinculadas à consulta atual do pré-agendamento.
+- Registra falhas de disparo ao n8n no log e nas notificações da Agenda.
+- Não altera o workflow n8n nem exige migration.
+
 # HOTFIX 36.2.3 — Callback da agenda sem falso timeout
 
 - Resposta HTTP do callback enviada antes das tarefas lentas de conversa.

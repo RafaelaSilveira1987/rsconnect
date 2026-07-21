@@ -787,6 +787,14 @@ final class CalendarAvailabilityService
         if (!$request) {
             return ['ok' => false, 'message' => 'Solicitação de disponibilidade não encontrada ou token inválido.'];
         }
+        if ((string) ($request['status'] ?? '') === 'cancelled') {
+            return [
+                'ok' => true,
+                'ignored' => 'cancelled_availability_request',
+                'message' => 'Callback ignorado porque a preferência foi substituída por uma consulta mais recente.',
+                'request_id' => (int) $request['id'],
+            ];
+        }
 
         $currentAppointment = $this->appointment((int) $request['tenant_id'], (int) $request['appointment_id']);
         $currentRequestId = (int) ($currentAppointment['availability_request_id'] ?? 0);
