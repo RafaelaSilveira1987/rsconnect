@@ -15,7 +15,7 @@ use Throwable;
 
 final class PreSchedulingService
 {
-    public function handleIncoming(PDO $pdo, array $instance, int $contactId, int $conversationId, string $content, array $flowContext = []): array
+    public function handleIncoming(PDO $pdo, array $instance, int $contactId, int $conversationId, string $content, array $flowContext = [], int $incomingMessageId = 0): array
     {
         $result = $this->defaultResult();
         $tenantId = (int) ($instance['tenant_id'] ?? 0);
@@ -44,11 +44,38 @@ final class PreSchedulingService
                 $flowContext
             );
             if (empty($decision['allowed'])) {
+                $blockedReason = (string) ($decision['code'] ?? 'flow_blocked');
+                $blockedMessage = $this->publicBlockedMessage($blockedReason);
+                $send = $this->sendAgendaGateMessage(
+                    $pdo,
+                    $instance,
+                    $conversationId,
+                    $contactId,
+                    $blockedMessage,
+                    $blockedReason,
+                    $incomingMessageId
+                );
+
                 $result['handled'] = true;
                 $result['blocked'] = true;
-                $result['blocked_reason'] = (string) ($decision['code'] ?? 'flow_blocked');
-                $result['blocked_message'] = (string) ($decision['message'] ?? 'Pré-agendamento aguardando a etapa anterior do atendimento.');
+                $result['blocked_reason'] = $blockedReason;
+                $result['blocked_message'] = $blockedMessage;
+                $result['blocked_message_sent'] = (bool) ($send['ok'] ?? false);
+                $result['blocked_message_error'] = $send['error'] ?? null;
                 $result['conversation_flow'] = $decision['flow'] ?? $flowContext;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['availability_request_needed'] = false;
+
+                if (empty($send['ok'])) {
+                    $this->notifyAvailabilityFailure(
+                        $tenantId,
+                        0,
+                        $conversationId,
+                        (string) ($send['error'] ?? 'Não foi possível enviar a mensagem da etapa anterior ao agendamento.')
+                    );
+                }
+
                 return $result;
             }
             $flowContext = is_array($decision['flow'] ?? null) ? $decision['flow'] : $flowContext;
@@ -811,6 +838,175 @@ final class PreSchedulingService
             return ['ok' => true, 'error' => null];
         } catch (Throwable $exception) {
             return ['ok' => false, 'error' => $exception->getMessage()];
+        }
+    }
+
+    private function publicBlockedMessage(string $reason): string
+    {
+        return match ($reason) {
+            'demand_required' => 'Antes de verificar os horários, preciso entender brevemente o motivo do atendimento. Você pode me contar o que está buscando ou qual é a principal queixa?',
+            'group_pre_schedule_blocked' => 'Não consigo iniciar o pré-agendamento automaticamente para este contato. Vou manter seu pedido registrado para revisão da equipe.',
+            default => 'Antes de continuar com o agendamento, preciso concluir uma etapa anterior do atendimento. Pode me contar um pouco mais sobre o que você precisa?',
+        };
+    }
+
+    /** @return array{ok:bool,error:?string,external_id:?string} */
+    private function sendAgendaGateMessage(
+        PDO $pdo,
+        array $instance,
+        int $conversationId,
+        int $contactId,
+        string $message,
+        string $reason,
+        int $incomingMessageId = 0
+    ): array {
+        try {
+            $tenantId = (int) ($instance['tenant_id'] ?? 0);
+            $contact = $this->findContact($pdo, $tenantId, $contactId);
+            $phone = preg_replace('/\D+/', '', (string) ($contact['phone'] ?? '')) ?: '';
+            if ($phone === '') {
+                $this->markIncomingHandledByAgendaGate($pdo, $instance, $conversationId, $incomingMessageId, $reason, false, 'Contato sem telefone.');
+                return ['ok' => false, 'error' => 'Contato sem telefone para continuar a etapa anterior ao agendamento.', 'external_id' => null];
+            }
+
+            if ($this->recentOutgoingSameMessage($pdo, $conversationId, $message)) {
+                $this->markIncomingHandledByAgendaGate($pdo, $instance, $conversationId, $incomingMessageId, $reason, true, null);
+                return ['ok' => true, 'error' => null, 'external_id' => null];
+            }
+
+            $service = new EvolutionService(
+                (string) $instance['base_url'],
+                Crypto::decrypt((string) $instance['api_key_encrypted']),
+                (string) $instance['instance_name'],
+                24,
+                filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL) !== false,
+                trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) !== '' ? trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) : null
+            );
+            $response = $service->sendText($phone, $message);
+            $externalId = $this->extractMessageId($response['body'] ?? []);
+            $sentAt = date('Y-m-d H:i:s');
+
+            $pdo->prepare(
+                'INSERT INTO conversation_messages
+                    (tenant_id, conversation_id, evolution_message_id, direction, sender_type, message_type, content, status, raw_payload_json, sent_at)
+                 VALUES
+                    (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", "text", :content, "sent", :raw_payload, :sent_at)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'external_id' => $externalId,
+                'content' => $message,
+                'raw_payload' => json_encode($response['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'sent_at' => $sentAt,
+            ]);
+
+            $pdo->prepare(
+                'UPDATE conversations
+                 SET last_message_at = :sent_at,
+                     last_message_preview = :preview,
+                     status = IF(status = "closed", "open", status)
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            )->execute([
+                'sent_at' => $sentAt,
+                'preview' => mb_substr($message, 0, 255),
+                'id' => $conversationId,
+                'tenant_id' => $tenantId,
+            ]);
+
+            $pdo->prepare(
+                'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
+                 VALUES (:tenant_id, :conversation_id, "calendar.pre_schedule_blocked", :description, :metadata_json)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'description' => 'Agendamento aguardando uma etapa anterior do atendimento; IA geral não acionada.',
+                'metadata_json' => json_encode([
+                    'reason' => $reason,
+                    'incoming_message_id' => $incomingMessageId > 0 ? $incomingMessageId : null,
+                    'message_sent' => true,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+
+            $this->markIncomingHandledByAgendaGate($pdo, $instance, $conversationId, $incomingMessageId, $reason, true, null);
+            return ['ok' => true, 'error' => null, 'external_id' => $externalId];
+        } catch (Throwable $exception) {
+            $this->markIncomingHandledByAgendaGate($pdo, $instance, $conversationId, $incomingMessageId, $reason, false, $exception->getMessage());
+            return ['ok' => false, 'error' => $exception->getMessage(), 'external_id' => null];
+        }
+    }
+
+    private function markIncomingHandledByAgendaGate(
+        PDO $pdo,
+        array $instance,
+        int $conversationId,
+        int $incomingMessageId,
+        string $reason,
+        bool $messageSent,
+        ?string $error
+    ): void {
+        if ($incomingMessageId < 1) {
+            return;
+        }
+
+        try {
+            $existing = $pdo->prepare(
+                'SELECT 1 FROM ai_automation_logs
+                 WHERE incoming_message_id = :incoming_message_id
+                   AND event = "ai.skipped"
+                 LIMIT 1'
+            );
+            $existing->execute(['incoming_message_id' => $incomingMessageId]);
+            if ($existing->fetchColumn()) {
+                return;
+            }
+
+            $tenantId = (int) ($instance['tenant_id'] ?? 0);
+            $instanceId = (int) ($instance['id'] ?? 0);
+            $agentId = null;
+            if ($tenantId > 0) {
+                $agentStatement = $pdo->prepare(
+                    'SELECT id
+                     FROM ai_agents
+                     WHERE tenant_id = :tenant_id
+                       AND status = "active"
+                       AND auto_reply_enabled = 1
+                       AND (instance_id = :instance_id OR instance_id IS NULL OR is_default = 1)
+                     ORDER BY (instance_id = :instance_id_order) DESC, is_default DESC, id DESC
+                     LIMIT 1'
+                );
+                $agentStatement->execute([
+                    'tenant_id' => $tenantId,
+                    'instance_id' => $instanceId,
+                    'instance_id_order' => $instanceId,
+                ]);
+                $value = $agentStatement->fetchColumn();
+                $agentId = $value !== false ? (int) $value : null;
+            }
+
+            $pdo->prepare(
+                'INSERT INTO ai_automation_logs
+                    (tenant_id, conversation_id, agent_id, incoming_message_id, event, status,
+                     response_preview, error_message, raw_json)
+                 VALUES
+                    (:tenant_id, :conversation_id, :agent_id, :incoming_message_id,
+                     "ai.skipped", "skipped", :response_preview, :error_message, :raw_json)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'agent_id' => $agentId,
+                'incoming_message_id' => $incomingMessageId,
+                'response_preview' => 'Mensagem de agenda bloqueada pela etapa anterior; IA geral não acionada.',
+                'error_message' => $error !== null ? mb_substr($error, 0, 500) : null,
+                'raw_json' => json_encode([
+                    'calendar_handled' => true,
+                    'calendar_gate' => true,
+                    'calendar_code' => $reason,
+                    'message_sent' => $messageSent,
+                    'skip_ai' => true,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+        } catch (Throwable) {
+            // O marcador evita reprocessamento indevido, mas nunca interrompe o webhook.
         }
     }
 

@@ -261,7 +261,8 @@ final class EvolutionWebhookController
                             $contactId,
                             $conversationId,
                             $content,
-                            $flowContext
+                            $flowContext,
+                            $storedMessageId
                         );
                 } catch (Throwable $exception) {
                     $processingWarnings[] = 'pre_schedule';

@@ -1,3 +1,14 @@
+# HOTFIX 36.2.5 — Validação da demanda isolada da IA e das opções antigas
+
+- Mantém a regra que exige entender a demanda antes do pré-agendamento.
+- Quando a agenda é bloqueada por essa validação, o RS Connect responde com uma pergunta objetiva sobre a demanda.
+- Impede que o assistente geral reutilize horários antigos do histórico enquanto a demanda está pendente.
+- Marca a mensagem como `ai.skipped` vinculada ao `incoming_message_id`, evitando reprocessamento indevido.
+- Registra `calendar.pre_schedule_blocked` na conversa para diagnóstico.
+- Depois que a demanda é informada, uma nova mensagem com dia e horário cria o pré-agendamento e consulta o n8n normalmente.
+- Não altera regras de tags, grupos, aprovação humana, disponibilidade, cooldown ou workflow n8n.
+- Não exige migration.
+
 # HOTFIX 36.2.4 — Nova preferência sem reutilizar opções antigas
 
 - Reinicia a consulta de disponibilidade quando o contato informa outro dia/horário.

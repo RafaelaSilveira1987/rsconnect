@@ -1,10 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o ZIP 36.2 com HOTFIX 36.2.4.
+Pacote consolidado até o ZIP 36.2 com HOTFIX 36.2.5.
 
 ## Última etapa incluída
 
-HOTFIX 36.2.4 — nova preferência reinicia a disponibilidade sem reutilizar opções antigas e sem acionar a IA.
+HOTFIX 36.2.5 — validação da demanda encerra o fluxo de agenda sem deixar a IA reutilizar opções antigas.
 
 HOTFIX 36.2.2 — exclusão sincronizada: remove o evento vinculado do Google Agenda antes de apagar o registro local.
 
@@ -25,7 +25,7 @@ database/migrations/045_ai_webhook_ingestion_resilience.sql
 database/migrations/046_calendar_conversational_slot_selection.sql
 ```
 
-Consulte `README-HOTFIX-36.2.4.md` para corrigir novas preferências e opções antigas sem alterar o workflow Eventos VAGO.
+Consulte `README-HOTFIX-36.2.5.md` para validar a etapa de demanda antes da agenda sem alterar o workflow Eventos VAGO.
 
 Consulte `README-ZIP-36.2.md` para instalar e validar a agenda conversacional.
 

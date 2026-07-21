@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'HOTFIX 36.2.4';
+    public const PACKAGE_LABEL = 'HOTFIX 36.2.5';
     public const REQUIRED_MIGRATION = '046_calendar_conversational_slot_selection.sql';
 
     private PDO $pdo;
