@@ -461,9 +461,9 @@ final class CalendarController
             $this->redirect($return !== '' && str_starts_with($return, '/') ? $return : '/calendar?tenant_id=' . $tenantId);
         }
 
-        $release = (new CalendarAvailabilityService())->releaseMarkedAppointment($tenantId, $appointmentId, true);
-        if (!empty($release['attempted']) && empty($release['ok'])) {
-            Flash::set('error', 'O agendamento não foi excluído porque o horário não pôde ser liberado no Google Agenda: ' . (string) ($release['message'] ?? 'falha não informada.'));
+        $markedSlotDelete = (new CalendarAvailabilityService())->deleteMarkedAppointment($tenantId, $appointmentId);
+        if (!empty($markedSlotDelete['attempted']) && empty($markedSlotDelete['ok'])) {
+            Flash::set('error', 'O agendamento não foi excluído porque o evento vinculado não pôde ser removido do Google Agenda: ' . (string) ($markedSlotDelete['message'] ?? 'falha não informada.'));
             $this->redirect($return !== '' && str_starts_with($return, '/') ? $return : '/calendar?tenant_id=' . $tenantId);
         }
         $freeSlotDelete = (new CalendarGoogleLifecycleService())->cancelAppointment($tenantId, $appointmentId, true);
@@ -487,7 +487,7 @@ final class CalendarController
                 'status' => (string) ($appointment['status'] ?? ''),
                 'message_sent' => false,
             ], $tenantId);
-            Flash::set('success', 'Agendamento excluído do RS Connect. Nenhuma mensagem foi enviada ao contato.');
+            Flash::set('success', 'Agendamento excluído do RS Connect e removido do Google Agenda quando havia evento vinculado. Nenhuma mensagem foi enviada ao contato.');
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível excluir o agendamento: ' . $exception->getMessage());
         }

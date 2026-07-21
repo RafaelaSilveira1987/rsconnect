@@ -1,3 +1,12 @@
+# HOTFIX 36.2.2 — Excluir remove evento do Google Agenda
+
+- A ação **Excluir** não restaura mais eventos VAGO como disponíveis.
+- Eventos vinculados a `google_marked_slots` recebem a ação `delete` antes da exclusão local.
+- O registro do RS Connect só é apagado depois que o callback do n8n confirma `state: deleted`.
+- Falhas no Google/n8n preservam o agendamento local e exibem o motivo no painel.
+- Workflow Eventos VAGO atualizado para aceitar `delete` e remover o evento do Google Calendar.
+- Nenhuma mensagem é enviada ao contato e não requer migration nova.
+
 # HOTFIX 36.2.1 — Seleção de horário não aciona IA
 
 - Eventos `SEND_MESSAGE` da Evolution agora são tratados como eco de saída e não entram no fluxo de mensagens recebidas.

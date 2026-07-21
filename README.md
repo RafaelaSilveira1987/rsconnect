@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o ZIP 36.2.
+Pacote consolidado até o ZIP 36.2 com HOTFIX 36.2.2.
 
 ## Última etapa incluída
+
+HOTFIX 36.2.2 — exclusão sincronizada: remove o evento vinculado do Google Agenda antes de apagar o registro local.
 
 ZIP 36.2 — agenda conversacional com alternativas reais, escolha do contato, pré-reserva e aprovação profissional.
 
@@ -20,6 +22,8 @@ database/migrations/044_ai_pending_failures_message_link.sql
 database/migrations/045_ai_webhook_ingestion_resilience.sql
 database/migrations/046_calendar_conversational_slot_selection.sql
 ```
+
+Consulte `README-HOTFIX-36.2.2.md` para atualizar a exclusão sincronizada e o workflow Eventos VAGO.
 
 Consulte `README-ZIP-36.2.md` para instalar e validar a agenda conversacional.
 

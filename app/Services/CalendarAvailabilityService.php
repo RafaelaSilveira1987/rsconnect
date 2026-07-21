@@ -560,6 +560,40 @@ final class CalendarAvailabilityService
         return ['attempted' => true, 'ok' => true, 'message' => 'Evento restaurado como VAGO no Google Agenda.'];
     }
 
+    /**
+     * Remove da visualização normal do Google Agenda um evento VAGO que foi
+     * pré-reservado ou confirmado. Diferente de releaseMarkedAppointment(), esta
+     * ação não restaura o título VAGO: confirma o estado deleted antes da exclusão local.
+     */
+    public function deleteMarkedAppointment(int $tenantId, int $appointmentId): array
+    {
+        $appointment = $this->appointment($tenantId, $appointmentId);
+        if (!$appointment) {
+            return ['attempted' => false, 'ok' => false, 'message' => 'Agendamento não encontrado.'];
+        }
+        if ((string) ($appointment['availability_source'] ?? '') !== 'google_marked_slots') {
+            return ['attempted' => false, 'ok' => true, 'message' => null];
+        }
+
+        $eventId = trim((string) ($appointment['google_event_id'] ?? ''));
+        $state = trim((string) ($appointment['google_event_state'] ?? ''));
+        if ($eventId === '' || $state === 'deleted') {
+            return ['attempted' => false, 'ok' => true, 'message' => null];
+        }
+
+        $slot = $this->findSelectedSlot($tenantId, $appointmentId);
+        $dispatch = $this->dispatchMarkedAction('delete', $tenantId, $appointment, $slot ?: []);
+        if (empty($dispatch['ok'])) {
+            return ['attempted' => true, 'ok' => false, 'message' => (string) ($dispatch['message'] ?? 'Não foi possível excluir o evento do Google Agenda.')];
+        }
+
+        $updated = $this->appointment($tenantId, $appointmentId);
+        if (($updated['google_event_state'] ?? '') !== 'deleted' || trim((string) ($updated['google_event_id'] ?? '')) !== '') {
+            return ['attempted' => true, 'ok' => false, 'message' => 'O callback do n8n não confirmou a exclusão do evento no Google Agenda.'];
+        }
+        return ['attempted' => true, 'ok' => true, 'message' => 'Evento removido do Google Agenda.'];
+    }
+
     public function canApprove(int $tenantId, array $appointment): array
     {
         $settings = $this->settings($tenantId);
@@ -818,7 +852,7 @@ final class CalendarAvailabilityService
         $googleEventId = trim((string) ($payload['google_event_id'] ?? ''));
         $state = trim((string) ($payload['state'] ?? ''));
         $action = trim((string) ($payload['action'] ?? ''));
-        if ($appointmentId < 1 || $googleEventId === '' || !in_array($state, ['held', 'confirmed', 'released'], true)) {
+        if ($appointmentId < 1 || $googleEventId === '' || !in_array($state, ['held', 'confirmed', 'released', 'deleted'], true)) {
             return ['ok' => false, 'message' => 'Callback de atualização do evento Google incompleto.'];
         }
 
@@ -906,6 +940,29 @@ final class CalendarAvailabilityService
                  WHERE id = :appointment_id AND tenant_id = :tenant_id'
             )->execute([
                 'google_event_summary' => $summary !== '' ? $summary : null,
+                'appointment_id' => $appointmentId,
+                'tenant_id' => $tenantId,
+            ]);
+        } elseif ($state === 'deleted') {
+            if ($slotId > 0) {
+                $pdo->prepare(
+                    'UPDATE calendar_availability_slots
+                     SET selected_at = NULL, event_state = "deleted", hold_expires_at = NULL,
+                         event_summary = NULL, event_transparency = NULL
+                     WHERE id = :id'
+                )->execute(['id' => $slotId]);
+            }
+            $pdo->prepare(
+                'UPDATE calendar_appointments
+                 SET chosen_availability_slot_id = NULL,
+                     google_event_id = NULL,
+                     google_event_state = "deleted",
+                     google_event_summary = NULL,
+                     google_hold_expires_at = NULL,
+                     availability_error = NULL,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :appointment_id AND tenant_id = :tenant_id'
+            )->execute([
                 'appointment_id' => $appointmentId,
                 'tenant_id' => $tenantId,
             ]);
@@ -1058,7 +1115,7 @@ final class CalendarAvailabilityService
 
     private function dispatchMarkedAction(string $action, int $tenantId, array $appointment, array $slot): array
     {
-        if (!in_array($action, ['hold', 'confirm', 'release'], true)) {
+        if (!in_array($action, ['hold', 'confirm', 'release', 'delete'], true)) {
             return ['ok' => false, 'message' => 'Ação de evento Google inválida.'];
         }
         $settings = $this->settings($tenantId);
