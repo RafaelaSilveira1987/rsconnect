@@ -9,6 +9,8 @@ use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Env;
 use App\Core\Router;
+use DateTimeImmutable;
+use DateTimeZone;
 use PDO;
 use Throwable;
 
@@ -16,16 +18,24 @@ final class BackupAutomationService
 {
     public function dashboard(): array
     {
+        $this->expireTimedOutJobs();
+        $routines = $this->routines();
+        $jobs = $this->jobs();
+        $primaryRoutine = $this->primaryRoutine($routines);
+
         return [
-            'summary' => $this->summary(),
-            'routines' => $this->routines(),
-            'jobs' => $this->jobs(),
+            'summary' => $this->summary($routines, $jobs, $primaryRoutine),
+            'routines' => $routines,
+            'primary_routine' => $primaryRoutine,
+            'jobs' => $jobs,
+            'backups' => $this->recentBackups(),
             'settings' => [
                 'callback_url' => Router::url('/webhooks/operations/backups'),
-                'callback_url_sample' => Router::url('/webhooks/operations/backups') . '?token=SEU_TOKEN',
+                'dispatch_url' => Router::url('/webhooks/operations/backups/dispatch'),
                 'backup_token_configured' => $this->backupToken() !== '',
                 'backup_token_source' => $this->backupTokenSource(),
                 'max_age_hours' => (int) Env::get('OPERATIONS_BACKUP_MAX_AGE_HOURS', 24),
+                'job_timeout_minutes' => $this->jobTimeoutMinutes(),
                 'n8n_base_url' => (string) Env::get('N8N_BASE_URL', ''),
                 'template_url' => Router::url('/n8n-templates/download?template=backup-rsconnect'),
             ],
@@ -35,7 +45,7 @@ final class BackupAutomationService
     public function saveRoutine(array $input): void
     {
         $id = max(0, (int) ($input['id'] ?? 0));
-        $name = trim((string) ($input['name'] ?? '')) ?: 'Backup automático RS Connect';
+        $name = trim((string) ($input['name'] ?? '')) ?: 'Backup diário RS Connect';
         $status = (string) ($input['status'] ?? 'active');
         $status = in_array($status, ['active', 'inactive'], true) ? $status : 'active';
         $webhookUrl = trim((string) ($input['n8n_webhook_url'] ?? ''));
@@ -46,13 +56,24 @@ final class BackupAutomationService
         $preferredTime = trim((string) ($input['preferred_time'] ?? '03:00'));
         $timezone = trim((string) ($input['timezone'] ?? 'America/Sao_Paulo')) ?: 'America/Sao_Paulo';
         $storageType = $this->normalizeStorageType((string) ($input['storage_type'] ?? 'server'));
-        $storagePath = trim((string) ($input['storage_path'] ?? ''));
-        $retentionDays = max(1, min(365, (int) ($input['retention_days'] ?? 14)));
+        $storagePath = trim((string) ($input['storage_path'] ?? '/backups/rs-connect'));
+        $retentionDays = max(1, min(365, (int) ($input['retention_days'] ?? 5)));
         $maxAgeHours = max(1, min(720, (int) ($input['max_age_hours'] ?? 24)));
         $notes = trim((string) ($input['notes'] ?? ''));
 
         if ($webhookUrl !== '' && !filter_var($webhookUrl, FILTER_VALIDATE_URL)) {
             throw new \InvalidArgumentException('Informe uma URL válida do webhook n8n.');
+        }
+        if ($preferredTime !== '' && !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $preferredTime)) {
+            throw new \InvalidArgumentException('Informe o horário no formato HH:MM.');
+        }
+        try {
+            new DateTimeZone($timezone);
+        } catch (Throwable) {
+            throw new \InvalidArgumentException('Informe um fuso horário válido, por exemplo America/Sao_Paulo.');
+        }
+        if ($storageType === 'server' && ($storagePath === '' || !str_starts_with($storagePath, '/'))) {
+            throw new \InvalidArgumentException('O caminho no servidor deve ser absoluto, por exemplo /backups/rs-connect.');
         }
 
         $pdo = Database::connection();
@@ -68,7 +89,8 @@ final class BackupAutomationService
                         storage_path = :storage_path,
                         retention_days = :retention_days,
                         max_age_hours = :max_age_hours,
-                        notes = :notes';
+                        notes = :notes,
+                        archived_at = NULL';
             $params = [
                 'name' => $name,
                 'status' => $status,
@@ -131,15 +153,32 @@ final class BackupAutomationService
             return;
         }
         $status = $status === 'inactive' ? 'inactive' : 'active';
-        Database::connection()->prepare('UPDATE operations_backup_routines SET status = :status WHERE id = :id')
-            ->execute(['status' => $status, 'id' => $id]);
+        Database::connection()->prepare(
+            'UPDATE operations_backup_routines SET status = :status, archived_at = NULL WHERE id = :id'
+        )->execute(['status' => $status, 'id' => $id]);
     }
 
     public function triggerRoutine(int $routineId, string $triggerType = 'manual'): array
     {
+        $this->expireTimedOutJobs();
         $routine = $this->routine($routineId);
-        if (!$routine) {
+        if (!$routine || !empty($routine['archived_at'])) {
             return ['ok' => false, 'message' => 'Rotina de backup não encontrada.'];
+        }
+        if (($routine['status'] ?? '') !== 'active') {
+            return ['ok' => false, 'message' => 'Ative a rotina antes de executar o backup.'];
+        }
+        if ($this->backupToken() === '') {
+            return ['ok' => false, 'message' => 'Configure OPERATIONS_BACKUP_TOKEN e faça o redeploy antes de executar.'];
+        }
+
+        $running = $this->activeJobForRoutine($routineId);
+        if ($running) {
+            return [
+                'ok' => false,
+                'message' => 'Já existe um backup em andamento para esta rotina (job #' . (int) $running['id'] . ').',
+                'job_id' => (int) $running['id'],
+            ];
         }
 
         $target = $this->decryptSafe((string) ($routine['n8n_webhook_url_encrypted'] ?? ''));
@@ -147,18 +186,275 @@ final class BackupAutomationService
             return ['ok' => false, 'message' => 'URL do webhook n8n inválida ou não configurada.'];
         }
 
-        $jobId = $this->createJob($routineId, $triggerType, ['routine' => $this->safeRoutine($routine)]);
-        $callbackToken = $this->backupToken();
+        $executionUuid = $this->uuidV4();
+        $jobId = $this->createJob($routineId, $triggerType, $executionUuid);
+        if ($jobId < 1) {
+            return ['ok' => false, 'message' => 'Não foi possível criar o job de backup. Confira a migration 047.'];
+        }
 
-        $payload = [
-            'event' => 'operations.backup.requested',
+        $payload = $this->requestPayload($routine, $jobId, $executionUuid, $triggerType);
+        $this->storeJobRequest($jobId, $payload);
+
+        $secret = !empty($routine['secret_token_encrypted']) ? $this->decryptSafe((string) $routine['secret_token_encrypted']) : '';
+        $result = $this->postJson($target, $payload, $secret);
+
+        if (!empty($result['ok'])) {
+            $this->markJobRunning($jobId, (string) ($result['preview'] ?? 'Solicitação aceita pelo n8n.'));
+            $this->markRoutineRequested($routineId);
+            return [
+                'ok' => true,
+                'message' => 'Backup iniciado. O painel atualizará quando o n8n enviar o resultado.',
+                'job_id' => $jobId,
+                'execution_uuid' => $executionUuid,
+            ];
+        }
+
+        $message = (string) ($result['message'] ?? 'Falha ao acionar n8n.');
+        $this->markJobTerminal($jobId, 'error', null, $message, null, []);
+        $this->markRoutineError($routineId, $message);
+        return ['ok' => false, 'message' => $message, 'job_id' => $jobId];
+    }
+
+    public function testConnection(int $routineId): array
+    {
+        $routine = $this->routine($routineId);
+        if (!$routine) {
+            return ['ok' => false, 'message' => 'Rotina de backup não encontrada.'];
+        }
+        $target = $this->decryptSafe((string) ($routine['n8n_webhook_url_encrypted'] ?? ''));
+        if (!filter_var($target, FILTER_VALIDATE_URL)) {
+            return ['ok' => false, 'message' => 'URL do webhook n8n inválida ou não configurada.'];
+        }
+
+        $secret = !empty($routine['secret_token_encrypted']) ? $this->decryptSafe((string) $routine['secret_token_encrypted']) : '';
+        $result = $this->postJson($target, [
+            'event' => 'operations.backup.ping',
             'source' => 'rs-connect',
             'routine_id' => $routineId,
-            'backup_routine_id' => $routineId,
+            'sent_at' => date('c'),
+        ], $secret);
+
+        if (!empty($result['ok'])) {
+            return ['ok' => true, 'message' => 'Conexão com o webhook n8n confirmada. Nenhum backup foi criado.'];
+        }
+        return ['ok' => false, 'message' => (string) ($result['message'] ?? 'O webhook n8n não respondeu corretamente.')];
+    }
+
+    public function dispatchDueRoutines(): array
+    {
+        $this->expireTimedOutJobs();
+        $results = [];
+        foreach ($this->activeRoutinesRaw() as $routine) {
+            if (!$this->isRoutineDue($routine)) {
+                continue;
+            }
+            $results[] = [
+                'routine_id' => (int) $routine['id'],
+                'result' => $this->triggerRoutine((int) $routine['id'], 'scheduled'),
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'checked_at' => date('c'),
+            'dispatched' => count(array_filter($results, static fn (array $row): bool => !empty($row['result']['ok']))),
+            'results' => $results,
+        ];
+    }
+
+    public function processCallback(array $payload): array
+    {
+        $jobId = (int) ($payload['backup_job_id'] ?? $payload['job_id'] ?? 0);
+        if ($jobId < 1) {
+            return ['ok' => false, 'error' => 'backup_job_id é obrigatório.', 'http_status' => 422];
+        }
+
+        $status = strtolower(trim((string) ($payload['status'] ?? 'error')));
+        $status = in_array($status, ['success', 'ok', 'completed'], true) ? 'success' : 'error';
+        $executionUuid = trim((string) ($payload['execution_uuid'] ?? ''));
+        $pdo = Database::connection();
+
+        try {
+            $pdo->beginTransaction();
+            $statement = $pdo->prepare(
+                'SELECT j.*, r.status AS routine_status
+                 FROM operations_backup_jobs j
+                 LEFT JOIN operations_backup_routines r ON r.id = j.routine_id
+                 WHERE j.id = :id
+                 FOR UPDATE'
+            );
+            $statement->execute(['id' => $jobId]);
+            $job = $statement->fetch(PDO::FETCH_ASSOC);
+            if (!$job) {
+                $pdo->rollBack();
+                return ['ok' => false, 'error' => 'Job de backup não encontrado.', 'http_status' => 404];
+            }
+
+            $routineId = (int) ($job['routine_id'] ?? 0);
+            $payloadRoutineId = (int) ($payload['routine_id'] ?? $payload['backup_routine_id'] ?? 0);
+            if ($payloadRoutineId > 0 && $payloadRoutineId !== $routineId) {
+                $pdo->rollBack();
+                return ['ok' => false, 'error' => 'O job não pertence à rotina informada.', 'http_status' => 409];
+            }
+            if ($executionUuid !== '' && !hash_equals((string) ($job['execution_uuid'] ?? ''), $executionUuid)) {
+                $pdo->rollBack();
+                return ['ok' => false, 'error' => 'Identificador da execução não confere.', 'http_status' => 409];
+            }
+
+            if (($job['status'] ?? '') === 'success' && (int) ($job['backup_id'] ?? 0) > 0) {
+                $pdo->commit();
+                return [
+                    'ok' => true,
+                    'idempotent' => true,
+                    'message' => 'Este callback já havia sido processado.',
+                    'backup_id' => (int) $job['backup_id'],
+                    'job_id' => $jobId,
+                ];
+            }
+
+            $message = mb_substr(trim((string) ($payload['notes'] ?? $payload['message'] ?? 'Resultado recebido do n8n.')), 0, 900);
+            if ($status !== 'success') {
+                $message = $message !== '' ? $message : 'O n8n informou falha durante o backup.';
+                $this->updateJobTerminalInTransaction($pdo, $jobId, 'error', null, $message, null, $payload);
+                if ($routineId > 0) {
+                    $pdo->prepare(
+                        'UPDATE operations_backup_routines SET last_error_at = NOW(), last_error = :error WHERE id = :id'
+                    )->execute(['error' => $message, 'id' => $routineId]);
+                }
+                $pdo->commit();
+                return ['ok' => true, 'message' => 'Falha do backup registrada.', 'job_id' => $jobId, 'status' => 'error'];
+            }
+
+            $validation = $this->validateSuccessPayload($payload);
+            if (!$validation['ok']) {
+                $pdo->rollBack();
+                return ['ok' => false, 'error' => $validation['error'], 'http_status' => 422];
+            }
+
+            $startedAt = $this->mysqlDate((string) ($payload['started_at'] ?? $job['started_at'] ?? $job['requested_at'] ?? ''));
+            $finishedAt = $this->mysqlDate((string) ($payload['finished_at'] ?? ''));
+            $finishedAt = $finishedAt ?: date('Y-m-d H:i:s');
+            $verified = filter_var($payload['verified'] ?? false, FILTER_VALIDATE_BOOL);
+
+            $insert = $pdo->prepare(
+                'INSERT INTO system_backups
+                    (backup_type, storage_type, status, routine_id, backup_job_id, execution_uuid, file_name, location,
+                     size_bytes, checksum, notes, verified_at, verified_by, started_at, finished_at, created_by)
+                 VALUES
+                    (:backup_type, :storage_type, "success", :routine_id, :backup_job_id, :execution_uuid, :file_name, :location,
+                     :size_bytes, :checksum, :notes, :verified_at, NULL, :started_at, :finished_at, NULL)'
+            );
+            $insert->execute([
+                'backup_type' => trim((string) ($payload['backup_type'] ?? 'automatic')) ?: 'automatic',
+                'storage_type' => $this->normalizeStorageType((string) ($payload['storage_type'] ?? 'server')),
+                'routine_id' => $routineId > 0 ? $routineId : null,
+                'backup_job_id' => $jobId,
+                'execution_uuid' => (string) ($job['execution_uuid'] ?? $executionUuid),
+                'file_name' => trim((string) $payload['file_name']),
+                'location' => trim((string) $payload['location']),
+                'size_bytes' => (int) $payload['size_bytes'],
+                'checksum' => strtolower(trim((string) $payload['checksum'])),
+                'notes' => $message !== '' ? $message : 'Backup automático concluído pelo n8n.',
+                'verified_at' => $verified ? $finishedAt : null,
+                'started_at' => $startedAt ?: (string) ($job['started_at'] ?? $job['requested_at'] ?? $finishedAt),
+                'finished_at' => $finishedAt,
+            ]);
+            $backupId = (int) $pdo->lastInsertId();
+
+            $this->updateJobTerminalInTransaction($pdo, $jobId, 'success', $message, null, $backupId, $payload);
+            if ($routineId > 0) {
+                $pdo->prepare(
+                    'UPDATE operations_backup_routines
+                     SET last_success_at = :finished_at,
+                         last_error_at = NULL,
+                         last_error = NULL
+                     WHERE id = :id'
+                )->execute(['finished_at' => $finishedAt, 'id' => $routineId]);
+            }
+            $pdo->commit();
+
+            return [
+                'ok' => true,
+                'message' => 'Backup registrado e job finalizado.',
+                'backup_id' => $backupId,
+                'job_id' => $jobId,
+                'status' => 'success',
+            ];
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            if ((string) $exception->getCode() === '23000') {
+                $existing = $this->job($jobId);
+                if ($existing && (int) ($existing['backup_id'] ?? 0) > 0) {
+                    return [
+                        'ok' => true,
+                        'idempotent' => true,
+                        'message' => 'Este callback já havia sido processado.',
+                        'backup_id' => (int) $existing['backup_id'],
+                        'job_id' => $jobId,
+                    ];
+                }
+            }
+            return ['ok' => false, 'error' => 'Não foi possível registrar o callback: ' . $exception->getMessage(), 'http_status' => 500];
+        }
+    }
+
+    public function expireTimedOutJobs(): int
+    {
+        $minutes = $this->jobTimeoutMinutes();
+        try {
+            $pdo = Database::connection();
+            $statement = $pdo->prepare(
+                'SELECT id, routine_id
+                 FROM operations_backup_jobs
+                 WHERE status IN ("requested", "running")
+                   AND COALESCE(started_at, requested_at) < DATE_SUB(NOW(), INTERVAL ' . $minutes . ' MINUTE)'
+            );
+            $statement->execute();
+            $jobs = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            if (!$jobs) {
+                return 0;
+            }
+
+            $message = 'Tempo limite excedido sem callback de resultado confirmado.';
+            $ids = array_map(static fn (array $row): int => (int) $row['id'], $jobs);
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $update = $pdo->prepare(
+                'UPDATE operations_backup_jobs
+                 SET status = "timeout",
+                     finished_at = COALESCE(finished_at, NOW()),
+                     error_message = ?,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id IN (' . $placeholders . ')'
+            );
+            $update->execute(array_merge([$message], $ids));
+
+            $routineIds = array_values(array_unique(array_filter(array_map(
+                static fn (array $row): int => (int) ($row['routine_id'] ?? 0),
+                $jobs
+            ))));
+            foreach ($routineIds as $routineId) {
+                $this->markRoutineError($routineId, $message);
+            }
+            return count($ids);
+        } catch (Throwable) {
+            return 0;
+        }
+    }
+
+    private function requestPayload(array $routine, int $jobId, string $executionUuid, string $triggerType): array
+    {
+        return [
+            'event' => 'operations.backup.requested',
+            'source' => 'rs-connect',
+            'routine_id' => (int) $routine['id'],
+            'backup_routine_id' => (int) $routine['id'],
             'backup_job_id' => $jobId,
+            'execution_uuid' => $executionUuid,
             'trigger_type' => $triggerType,
             'routine' => [
-                'id' => $routineId,
+                'id' => (int) $routine['id'],
                 'name' => (string) ($routine['name'] ?? ''),
                 'frequency' => (string) ($routine['frequency'] ?? 'daily'),
                 'schedule_label' => (string) ($routine['schedule_label'] ?? ''),
@@ -168,94 +464,132 @@ final class BackupAutomationService
             'backup' => [
                 'database' => (string) Env::get('DB_DATABASE', 'rs_connect'),
                 'storage_type' => (string) ($routine['storage_type'] ?? 'server'),
-                'storage_path' => (string) ($routine['storage_path'] ?? ''),
-                'retention_days' => (int) ($routine['retention_days'] ?? 14),
+                'storage_path' => (string) ($routine['storage_path'] ?? '/backups/rs-connect'),
+                'retention_days' => (int) ($routine['retention_days'] ?? 5),
                 'max_age_hours' => (int) ($routine['max_age_hours'] ?? 24),
             ],
             'callback' => [
                 'url' => Router::url('/webhooks/operations/backups'),
-                'token' => $callbackToken !== '' ? $callbackToken : null,
             ],
             'requested_at' => date('c'),
         ];
-
-        $secret = !empty($routine['secret_token_encrypted']) ? $this->decryptSafe((string) $routine['secret_token_encrypted']) : '';
-        $result = $this->postJson($target, $payload, $secret);
-
-        if (!empty($result['ok'])) {
-            $this->markJob($jobId, 'running', $result['preview'] ?? 'Solicitação recebida pelo n8n.', null, null);
-            $this->markRoutineRequested($routineId);
-            return ['ok' => true, 'message' => 'Solicitação enviada ao n8n. Aguarde o callback do backup.'];
-        }
-
-        $message = (string) ($result['message'] ?? 'Falha ao acionar n8n.');
-        $this->markJob($jobId, 'error', null, $message, null);
-        $this->markRoutineError($routineId, $message);
-        return ['ok' => false, 'message' => $message];
     }
 
-    public function markBackupCallback(array $payload, ?int $backupId = null, string $status = 'success'): void
+    private function validateSuccessPayload(array $payload): array
     {
-        $routineId = (int) ($payload['routine_id'] ?? $payload['backup_routine_id'] ?? 0);
-        $jobId = (int) ($payload['backup_job_id'] ?? $payload['job_id'] ?? 0);
-        if ($routineId < 1 && $jobId > 0) {
-            $routineId = $this->routineIdForJob($jobId);
-        }
-        $message = (string) ($payload['notes'] ?? $payload['message'] ?? 'Callback de backup recebido.');
+        $fileName = trim((string) ($payload['file_name'] ?? ''));
+        $location = trim((string) ($payload['location'] ?? ''));
+        $size = (int) ($payload['size_bytes'] ?? 0);
+        $checksum = strtolower(trim((string) ($payload['checksum'] ?? '')));
+        $verified = filter_var($payload['verified'] ?? false, FILTER_VALIDATE_BOOL);
 
-        try {
-            if ($routineId > 0 && $jobId < 1) {
-                $jobId = $this->createCallbackJob($routineId, $payload, $status, $backupId);
-            }
-
-            if ($jobId > 0) {
-                $this->markJob($jobId, $status === 'success' ? 'success' : 'error', $status === 'success' ? $message : null, $status !== 'success' ? $message : null, $backupId);
-            }
-            if ($routineId > 0) {
-                if ($status === 'success') {
-                    Database::connection()->prepare(
-                        'UPDATE operations_backup_routines
-                         SET last_requested_at = COALESCE(last_requested_at, NOW()),
-                             last_success_at = NOW(),
-                             last_error_at = NULL,
-                             last_error = NULL
-                         WHERE id = :id'
-                    )->execute(['id' => $routineId]);
-                } else {
-                    $this->markRoutineError($routineId, $message);
-                }
-            }
-        } catch (Throwable) {
-            // Não deve impedir o webhook de backup já existente.
+        if ($fileName === '' || basename($fileName) !== $fileName) {
+            return ['ok' => false, 'error' => 'file_name é obrigatório e deve conter apenas o nome do arquivo.'];
         }
+        if ($location === '') {
+            return ['ok' => false, 'error' => 'location é obrigatório.'];
+        }
+        if ($size < 1024) {
+            return ['ok' => false, 'error' => 'O arquivo informado é pequeno demais para ser considerado um backup válido.'];
+        }
+        if (!preg_match('/^[a-f0-9]{64}$/', $checksum)) {
+            return ['ok' => false, 'error' => 'checksum SHA-256 inválido.'];
+        }
+        if (!$verified) {
+            return ['ok' => false, 'error' => 'O callback de sucesso precisa confirmar verified=true.'];
+        }
+        return ['ok' => true];
     }
 
-    private function summary(): array
+    private function updateJobTerminalInTransaction(
+        PDO $pdo,
+        int $jobId,
+        string $status,
+        ?string $preview,
+        ?string $error,
+        ?int $backupId,
+        array $payload
+    ): void {
+        $startedAt = $this->mysqlDate((string) ($payload['started_at'] ?? ''));
+        $finishedAt = $this->mysqlDate((string) ($payload['finished_at'] ?? '')) ?: date('Y-m-d H:i:s');
+        $duration = null;
+        if ($startedAt) {
+            $duration = max(0, strtotime($finishedAt) - strtotime($startedAt));
+        }
+
+        $pdo->prepare(
+            'UPDATE operations_backup_jobs
+             SET status = :status,
+                 response_preview = :preview,
+                 error_message = :error,
+                 backup_id = :backup_id,
+                 started_at = COALESCE(started_at, :started_at, requested_at),
+                 finished_at = :finished_at,
+                 callback_received_at = NOW(),
+                 duration_seconds = :duration_seconds,
+                 file_name = :file_name,
+                 file_size_bytes = :file_size_bytes,
+                 verified = :verified,
+                 result_payload_json = :result_payload_json
+             WHERE id = :id'
+        )->execute([
+            'status' => $status,
+            'preview' => $preview !== null ? mb_substr($preview, 0, 1000) : null,
+            'error' => $error !== null ? mb_substr($error, 0, 900) : null,
+            'backup_id' => $backupId,
+            'started_at' => $startedAt,
+            'finished_at' => $finishedAt,
+            'duration_seconds' => $duration,
+            'file_name' => trim((string) ($payload['file_name'] ?? '')) ?: null,
+            'file_size_bytes' => isset($payload['size_bytes']) ? max(0, (int) $payload['size_bytes']) : null,
+            'verified' => filter_var($payload['verified'] ?? false, FILTER_VALIDATE_BOOL) ? 1 : 0,
+            'result_payload_json' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'id' => $jobId,
+        ]);
+    }
+
+    private function summary(array $routines, array $jobs, ?array $primaryRoutine): array
     {
-        $routines = $this->routines();
-        $jobs = $this->jobs(20);
+        $running = count(array_filter($jobs, static fn (array $row): bool => in_array((string) ($row['status'] ?? ''), ['requested', 'running'], true)));
+        $errors = count(array_filter($jobs, static fn (array $row): bool => in_array((string) ($row['status'] ?? ''), ['error', 'timeout'], true)));
+        $lastBackup = $this->lastValidBackup();
+
         return [
             'active' => count(array_filter($routines, static fn (array $row): bool => ($row['status'] ?? '') === 'active')),
             'inactive' => count(array_filter($routines, static fn (array $row): bool => ($row['status'] ?? '') !== 'active')),
-            'jobs_success' => count(array_filter($jobs, static fn (array $row): bool => ($row['status'] ?? '') === 'success')),
-            'jobs_error' => count(array_filter($jobs, static fn (array $row): bool => ($row['status'] ?? '') === 'error')),
+            'running' => $running,
+            'jobs_error' => $errors,
+            'last_valid_backup' => $lastBackup,
+            'next_execution' => $primaryRoutine['next_execution_at'] ?? null,
         ];
     }
 
     private function routines(): array
     {
         try {
-            $rows = Database::connection()->query('SELECT * FROM operations_backup_routines ORDER BY status, id DESC')->fetchAll(PDO::FETCH_ASSOC) ?: [];
-            foreach ($rows as &$row) {
-                $webhookUrl = $this->decryptSafe((string) ($row['n8n_webhook_url_encrypted'] ?? ''));
-                $row['webhook_url_masked'] = $webhookUrl !== '' ? $this->maskUrl($webhookUrl) : 'Webhook salvo, mas não foi possível exibir a URL mascarada';
-                unset($row['n8n_webhook_url_encrypted'], $row['secret_token_encrypted']);
-            }
-            unset($row);
-            return $rows;
+            $rows = Database::connection()->query(
+                'SELECT * FROM operations_backup_routines WHERE archived_at IS NULL ORDER BY status = "active" DESC, id DESC'
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
-            return [];
+            try {
+                $rows = Database::connection()->query(
+                    'SELECT * FROM operations_backup_routines ORDER BY status = "active" DESC, id DESC'
+                )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            } catch (Throwable) {
+                return [];
+            }
         }
+
+        foreach ($rows as &$row) {
+            $webhookUrl = $this->decryptSafe((string) ($row['n8n_webhook_url_encrypted'] ?? ''));
+            $row['n8n_webhook_url'] = $webhookUrl;
+            $row['webhook_url_masked'] = $webhookUrl !== '' ? $this->maskUrl($webhookUrl) : 'Webhook não configurado';
+            $row['secret_token_configured'] = !empty($row['secret_token_encrypted']);
+            $row['next_execution_at'] = $this->nextExecution($row);
+            unset($row['n8n_webhook_url_encrypted'], $row['secret_token_encrypted']);
+        }
+        unset($row);
+        return $rows;
     }
 
     private function jobs(int $limit = 60): array
@@ -263,9 +597,13 @@ final class BackupAutomationService
         try {
             $limit = max(1, min(200, $limit));
             return Database::connection()->query(
-                'SELECT j.*, r.name AS routine_name
+                'SELECT j.*, r.name AS routine_name, b.location AS backup_location, b.checksum AS backup_checksum,
+                        COALESCE(j.duration_seconds,
+                            CASE WHEN j.started_at IS NOT NULL AND j.finished_at IS NOT NULL
+                                 THEN TIMESTAMPDIFF(SECOND, j.started_at, j.finished_at) ELSE NULL END) AS duration_seconds_calculated
                  FROM operations_backup_jobs j
                  LEFT JOIN operations_backup_routines r ON r.id = j.routine_id
+                 LEFT JOIN system_backups b ON b.id = j.backup_id
                  ORDER BY j.id DESC LIMIT ' . $limit
             )->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
@@ -273,60 +611,107 @@ final class BackupAutomationService
         }
     }
 
+    private function recentBackups(int $limit = 20): array
+    {
+        try {
+            $limit = max(1, min(100, $limit));
+            return Database::connection()->query(
+                'SELECT * FROM system_backups ORDER BY id DESC LIMIT ' . $limit
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    private function lastValidBackup(): ?array
+    {
+        try {
+            $row = Database::connection()->query(
+                'SELECT * FROM system_backups
+                 WHERE status = "success" AND verified_at IS NOT NULL AND size_bytes >= 1024
+                 ORDER BY COALESCE(finished_at, created_at) DESC, id DESC LIMIT 1'
+            )->fetch(PDO::FETCH_ASSOC);
+            return $row ?: null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function primaryRoutine(array $routines): ?array
+    {
+        foreach ($routines as $routine) {
+            if (($routine['status'] ?? '') === 'active') {
+                return $routine;
+            }
+        }
+        return $routines[0] ?? null;
+    }
+
     private function routine(int $id): ?array
     {
-        $statement = Database::connection()->prepare('SELECT * FROM operations_backup_routines WHERE id = :id LIMIT 1');
-        $statement->execute(['id' => $id]);
-        $row = $statement->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
-    }
-
-    private function createJob(int $routineId, string $triggerType, array $payload): int
-    {
         try {
-            Database::connection()->prepare(
-                'INSERT INTO operations_backup_jobs (routine_id, status, trigger_type, request_payload_json, requested_at, created_by)
-                 VALUES (:routine_id, :status, :trigger_type, :payload, NOW(), :created_by)'
-            )->execute([
-                'routine_id' => $routineId,
-                'status' => 'requested',
-                'trigger_type' => in_array($triggerType, ['manual', 'scheduled', 'test', 'webhook'], true) ? $triggerType : 'manual',
-                'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'created_by' => Auth::id(),
-            ]);
-            return (int) Database::connection()->lastInsertId();
+            $statement = Database::connection()->prepare('SELECT * FROM operations_backup_routines WHERE id = :id LIMIT 1');
+            $statement->execute(['id' => $id]);
+            $row = $statement->fetch(PDO::FETCH_ASSOC);
+            return $row ?: null;
         } catch (Throwable) {
-            return 0;
+            return null;
         }
     }
 
-    private function routineIdForJob(int $jobId): int
+    private function activeRoutinesRaw(): array
     {
         try {
-            $statement = Database::connection()->prepare('SELECT routine_id FROM operations_backup_jobs WHERE id = :id LIMIT 1');
+            return Database::connection()->query(
+                'SELECT * FROM operations_backup_routines
+                 WHERE status = "active" AND archived_at IS NULL
+                 ORDER BY id ASC'
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    private function activeJobForRoutine(int $routineId): ?array
+    {
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT * FROM operations_backup_jobs
+                 WHERE routine_id = :routine_id AND status IN ("requested", "running")
+                 ORDER BY id DESC LIMIT 1'
+            );
+            $statement->execute(['routine_id' => $routineId]);
+            $row = $statement->fetch(PDO::FETCH_ASSOC);
+            return $row ?: null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function job(int $jobId): ?array
+    {
+        try {
+            $statement = Database::connection()->prepare('SELECT * FROM operations_backup_jobs WHERE id = :id LIMIT 1');
             $statement->execute(['id' => $jobId]);
-            return (int) ($statement->fetchColumn() ?: 0);
+            $row = $statement->fetch(PDO::FETCH_ASSOC);
+            return $row ?: null;
         } catch (Throwable) {
-            return 0;
+            return null;
         }
     }
 
-    private function createCallbackJob(int $routineId, array $payload, string $status, ?int $backupId): int
+    private function createJob(int $routineId, string $triggerType, string $executionUuid): int
     {
         try {
             Database::connection()->prepare(
                 'INSERT INTO operations_backup_jobs
-                    (routine_id, status, trigger_type, request_payload_json, response_preview, error_message, requested_at, started_at, finished_at, backup_id, created_by)
+                    (routine_id, execution_uuid, status, trigger_type, requested_at, created_by)
                  VALUES
-                    (:routine_id, :status, :trigger_type, :payload, :preview, :error, NOW(), NOW(), NOW(), :backup_id, :created_by)'
+                    (:routine_id, :execution_uuid, "requested", :trigger_type, NOW(), :created_by)'
             )->execute([
                 'routine_id' => $routineId,
-                'status' => $status === 'success' ? 'success' : 'error',
-                'trigger_type' => 'webhook',
-                'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'preview' => $status === 'success' ? mb_substr((string) ($payload['notes'] ?? $payload['message'] ?? 'Callback manual recebido.'), 0, 1000) : null,
-                'error' => $status !== 'success' ? mb_substr((string) ($payload['notes'] ?? $payload['message'] ?? 'Callback de erro recebido.'), 0, 900) : null,
-                'backup_id' => $backupId,
+                'execution_uuid' => $executionUuid,
+                'trigger_type' => in_array($triggerType, ['manual', 'scheduled', 'test', 'webhook'], true) ? $triggerType : 'manual',
                 'created_by' => Auth::id(),
             ]);
             return (int) Database::connection()->lastInsertId();
@@ -335,30 +720,40 @@ final class BackupAutomationService
         }
     }
 
-
-    private function markJob(int $jobId, string $status, ?string $preview, ?string $error, ?int $backupId): void
+    private function storeJobRequest(int $jobId, array $payload): void
     {
-        if ($jobId < 1) {
-            return;
+        try {
+            Database::connection()->prepare(
+                'UPDATE operations_backup_jobs SET request_payload_json = :payload WHERE id = :id'
+            )->execute([
+                'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'id' => $jobId,
+            ]);
+        } catch (Throwable) {
         }
+    }
+
+    private function markJobRunning(int $jobId, string $preview): void
+    {
         try {
             Database::connection()->prepare(
                 'UPDATE operations_backup_jobs
-                 SET status = :status,
+                 SET status = "running",
                      response_preview = :preview,
-                     error_message = :error,
-                     backup_id = COALESCE(:backup_id, backup_id),
+                     error_message = NULL,
+                     acknowledged_at = NOW(),
                      started_at = COALESCE(started_at, NOW()),
-                     finished_at = CASE WHEN :finished IN ("success", "error", "skipped") THEN NOW() ELSE finished_at END
-                 WHERE id = :id'
-            )->execute([
-                'status' => in_array($status, ['requested', 'running', 'success', 'error', 'skipped'], true) ? $status : 'running',
-                'preview' => $preview !== null ? mb_substr($preview, 0, 1000) : null,
-                'error' => $error !== null ? mb_substr($error, 0, 900) : null,
-                'backup_id' => $backupId,
-                'finished' => $status,
-                'id' => $jobId,
-            ]);
+                     finished_at = NULL
+                 WHERE id = :id AND status = "requested"'
+            )->execute(['preview' => mb_substr($preview, 0, 1000), 'id' => $jobId]);
+        } catch (Throwable) {
+        }
+    }
+
+    private function markJobTerminal(int $jobId, string $status, ?string $preview, ?string $error, ?int $backupId, array $payload): void
+    {
+        try {
+            $this->updateJobTerminalInTransaction(Database::connection(), $jobId, $status, $preview, $error, $backupId, $payload);
         } catch (Throwable) {
         }
     }
@@ -366,7 +761,9 @@ final class BackupAutomationService
     private function markRoutineRequested(int $routineId): void
     {
         try {
-            Database::connection()->prepare('UPDATE operations_backup_routines SET last_requested_at = NOW() WHERE id = :id')->execute(['id' => $routineId]);
+            Database::connection()->prepare(
+                'UPDATE operations_backup_routines SET last_requested_at = NOW() WHERE id = :id'
+            )->execute(['id' => $routineId]);
         } catch (Throwable) {
         }
     }
@@ -374,15 +771,101 @@ final class BackupAutomationService
     private function markRoutineError(int $routineId, string $message): void
     {
         try {
-            Database::connection()->prepare('UPDATE operations_backup_routines SET last_error_at = NOW(), last_error = :error WHERE id = :id')
-                ->execute(['id' => $routineId, 'error' => mb_substr($message, 0, 700)]);
+            Database::connection()->prepare(
+                'UPDATE operations_backup_routines SET last_error_at = NOW(), last_error = :error WHERE id = :id'
+            )->execute(['id' => $routineId, 'error' => mb_substr($message, 0, 700)]);
         } catch (Throwable) {
+        }
+    }
+
+    private function isRoutineDue(array $routine): bool
+    {
+        $frequency = (string) ($routine['frequency'] ?? 'daily');
+        if (in_array($frequency, ['manual', 'custom'], true)) {
+            return false;
+        }
+        if ($this->activeJobForRoutine((int) $routine['id'])) {
+            return false;
+        }
+
+        try {
+            $timezone = new DateTimeZone((string) ($routine['timezone'] ?? 'America/Sao_Paulo'));
+            $now = new DateTimeImmutable('now', $timezone);
+            $preferred = (string) ($routine['preferred_time'] ?? '03:00');
+            [$hour, $minute] = array_map('intval', explode(':', preg_match('/^\d{2}:\d{2}$/', $preferred) ? $preferred : '03:00'));
+            $todaySchedule = $now->setTime($hour, $minute, 0);
+            if ($now < $todaySchedule) {
+                return false;
+            }
+
+            $lastRequestedRaw = trim((string) ($routine['last_requested_at'] ?? ''));
+            if ($lastRequestedRaw === '') {
+                return true;
+            }
+            $last = new DateTimeImmutable($lastRequestedRaw, new DateTimeZone((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo')));
+            $last = $last->setTimezone($timezone);
+
+            return match ($frequency) {
+                'weekly' => $last <= $now->modify('-7 days'),
+                'monthly' => $last <= $now->modify('-1 month'),
+                default => $last->format('Y-m-d') < $now->format('Y-m-d'),
+            };
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function nextExecution(array $routine): ?string
+    {
+        if (($routine['status'] ?? '') !== 'active' || in_array((string) ($routine['frequency'] ?? ''), ['manual', 'custom'], true)) {
+            return null;
+        }
+        if ($this->activeJobForRoutine((int) ($routine['id'] ?? 0))) {
+            return 'Em execução';
+        }
+        if ($this->isRoutineDue($routine)) {
+            return 'Pendente agora';
+        }
+
+        try {
+            $timezone = new DateTimeZone((string) ($routine['timezone'] ?? 'America/Sao_Paulo'));
+            $now = new DateTimeImmutable('now', $timezone);
+            $preferred = (string) ($routine['preferred_time'] ?? '03:00');
+            [$hour, $minute] = array_map('intval', explode(':', preg_match('/^\d{2}:\d{2}$/', $preferred) ? $preferred : '03:00'));
+            $frequency = (string) ($routine['frequency'] ?? 'daily');
+            $lastRequestedRaw = trim((string) ($routine['last_requested_at'] ?? ''));
+
+            if ($lastRequestedRaw === '') {
+                $candidate = $now->setTime($hour, $minute, 0);
+                if ($candidate <= $now) {
+                    $candidate = $candidate->modify('+1 day');
+                }
+                return $candidate->format('Y-m-d H:i:s T');
+            }
+
+            $last = new DateTimeImmutable($lastRequestedRaw, new DateTimeZone((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo')));
+            $last = $last->setTimezone($timezone)->setTime($hour, $minute, 0);
+            $candidate = match ($frequency) {
+                'weekly' => $last->modify('+7 days'),
+                'monthly' => $last->modify('+1 month'),
+                default => $last->modify('+1 day'),
+            };
+            while ($candidate <= $now) {
+                $candidate = match ($frequency) {
+                    'weekly' => $candidate->modify('+7 days'),
+                    'monthly' => $candidate->modify('+1 month'),
+                    default => $candidate->modify('+1 day'),
+                };
+            }
+            return $candidate->format('Y-m-d H:i:s T');
+        } catch (Throwable) {
+            return null;
         }
     }
 
     private function postJson(string $url, array $payload, string $secret = ''): array
     {
-        $headers = ['Content-Type: application/json', 'Accept: application/json', 'X-RS-Connect-Event: operations.backup.requested'];
+        $headers = ['Content-Type: application/json', 'Accept: application/json', 'X-RS-Connect-Event: ' . (string) ($payload['event'] ?? 'operations.backup.requested')];
         if ($secret !== '') {
             $headers[] = 'Authorization: Bearer ' . $secret;
             $headers[] = 'X-RS-Connect-Token: ' . $secret;
@@ -415,7 +898,6 @@ final class BackupAutomationService
         }
     }
 
-
     private function backupToken(): string
     {
         foreach (['OPERATIONS_BACKUP_TOKEN', 'BACKUP_WEBHOOK_TOKEN'] as $key) {
@@ -423,7 +905,6 @@ final class BackupAutomationService
             if ($token !== '') {
                 return $token;
             }
-
             $serverValue = $_SERVER[$key] ?? $_ENV[$key] ?? getenv($key);
             if (is_string($serverValue) && trim($serverValue) !== '') {
                 return trim($serverValue);
@@ -447,6 +928,11 @@ final class BackupAutomationService
         return '';
     }
 
+    private function jobTimeoutMinutes(): int
+    {
+        return max(5, min(1440, (int) Env::get('OPERATIONS_BACKUP_JOB_TIMEOUT_MINUTES', 30)));
+    }
+
     private function decryptSafe(string $value): string
     {
         if (trim($value) === '') {
@@ -465,12 +951,6 @@ final class BackupAutomationService
         return in_array($storageType, $allowed, true) ? $storageType : 'server';
     }
 
-    private function safeRoutine(array $routine): array
-    {
-        unset($routine['n8n_webhook_url_encrypted'], $routine['secret_token_encrypted']);
-        return $routine;
-    }
-
     private function maskUrl(string $url): string
     {
         $parts = parse_url($url);
@@ -478,5 +958,26 @@ final class BackupAutomationService
             return mb_substr($url, 0, 500);
         }
         return mb_substr(($parts['scheme'] ?? 'https') . '://' . $parts['host'] . ($parts['path'] ?? ''), 0, 500);
+    }
+
+    private function uuidV4(): string
+    {
+        $data = random_bytes(16);
+        $data[6] = chr((ord($data[6]) & 0x0f) | 0x40);
+        $data[8] = chr((ord($data[8]) & 0x3f) | 0x80);
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+    }
+
+    private function mysqlDate(string $value): ?string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+        try {
+            return (new DateTimeImmutable($value))->format('Y-m-d H:i:s');
+        } catch (Throwable) {
+            return null;
+        }
     }
 }

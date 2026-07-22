@@ -53,6 +53,30 @@ final class BackupAutomationController
         $this->redirect($this->safeReturnPath((string) ($_POST['return_to'] ?? ''), '/backup-automatico'));
     }
 
+    public function testConnection(): void
+    {
+        if (!Csrf::validate($_POST['_token'] ?? null)) {
+            Flash::set('error', 'Sessão expirada. Atualize a página e tente novamente.');
+            $this->redirect('/backup-automatico');
+        }
+
+        $routineId = (int) ($_POST['routine_id'] ?? 0);
+        $result = (new BackupAutomationService())->testConnection($routineId);
+        Flash::set(!empty($result['ok']) ? 'success' : 'error', (string) ($result['message'] ?? 'Teste processado.'));
+        $this->redirect('/backup-automatico');
+    }
+
+    public function status(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate');
+        echo json_encode([
+            'ok' => true,
+            'data' => (new BackupAutomationService())->dashboard(),
+            'refreshed_at' => date('c'),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
     public function toggle(): void
     {
         if (!Csrf::validate($_POST['_token'] ?? null)) {

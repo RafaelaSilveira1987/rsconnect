@@ -6517,3 +6517,112 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
   .login-card-header h2 { font-size: 2rem; }
   .login-security { align-items: flex-start; }
 }
+
+/* RS Connect v36.3.0 — Backup operacional confiável */
+.backup-hero-v363 { align-items: center; }
+.backup-token-alert { margin-top: 16px; }
+.backup-kpis-v363 { margin-top: 16px; }
+.backup-layout-v363 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, .9fr);
+  gap: 16px;
+  margin-top: 16px;
+  align-items: start;
+}
+.backup-routine-card,
+.backup-config-card,
+.backup-history-card,
+.backup-advanced-card { min-width: 0; }
+.backup-routine-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.backup-routine-facts > div,
+.backup-routine-state > div,
+.backup-endpoint-grid > div {
+  border: 1px solid #e4e9f1;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 13px 14px;
+}
+.backup-routine-facts span,
+.backup-routine-state span,
+.backup-endpoint-grid span {
+  display: block;
+  color: #738095;
+  font-size: .76rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  margin-bottom: 5px;
+}
+.backup-routine-facts strong,
+.backup-routine-state strong { display: block; overflow-wrap: anywhere; }
+.backup-routine-state {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.backup-routine-state .is-error {
+  grid-column: 1 / -1;
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+.backup-routine-state .is-error strong { color: #b42318; }
+.backup-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  margin-top: 16px;
+}
+.backup-action-row form { margin: 0; }
+.backup-action-row .btn[disabled] { opacity: .55; cursor: not-allowed; }
+.backup-webhook-line { margin: 14px 0 0; overflow-wrap: anywhere; }
+.backup-history-card { margin-top: 16px; }
+.backup-jobs-table td strong,
+.backup-jobs-table td small { display: block; }
+.backup-jobs-table td small { margin-top: 4px; color: #738095; }
+.backup-jobs-table details { min-width: 190px; }
+.backup-jobs-table summary { color: #0f766e; font-weight: 700; cursor: pointer; }
+.backup-job-detail {
+  display: grid;
+  gap: 7px;
+  margin-top: 9px;
+  padding: 11px;
+  border: 1px solid #e4e9f1;
+  border-radius: 12px;
+  background: #fff;
+  max-width: 420px;
+}
+.backup-job-detail p { margin: 0; color: #596579; }
+.backup-job-detail code { white-space: normal; overflow-wrap: anywhere; }
+.backup-advanced-card { margin-top: 16px; }
+.backup-advanced-card > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  cursor: pointer;
+  list-style: none;
+}
+.backup-advanced-card > summary::-webkit-details-marker { display: none; }
+.backup-advanced-card > summary strong { display: block; margin-top: 4px; }
+.backup-advanced-content { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e4e9f1; }
+.backup-endpoint-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
+.backup-endpoint-grid code { display: block; white-space: normal; overflow-wrap: anywhere; }
+
+@media (max-width: 1050px) {
+  .backup-layout-v363 { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .backup-routine-facts,
+  .backup-routine-state,
+  .backup-endpoint-grid { grid-template-columns: 1fr; }
+  .backup-routine-state .is-error { grid-column: auto; }
+  .backup-action-row { align-items: stretch; }
+  .backup-action-row form,
+  .backup-action-row .btn { width: 100%; }
+}

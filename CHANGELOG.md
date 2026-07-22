@@ -1,3 +1,18 @@
+# RS Connect 36.3.0 — Backup operacional confiável
+
+- Separa solicitação aceita de backup realmente concluído.
+- Mantém jobs em execução até o callback final do n8n.
+- Exige arquivo real, tamanho mínimo, SHA-256 e `verified=true` para concluir.
+- Vincula `system_backups` ao job e à rotina.
+- Impede callbacks duplicados por job.
+- Marca jobs sem callback como `timeout`.
+- Arquiva rotinas inativas duplicadas na tela principal.
+- Adiciona teste de conexão com n8n sem criar backup.
+- Atualiza a tela de Backups com KPIs reais, histórico detalhado e atualização automática.
+- Adiciona script seguro para VPS/EasyPanel sem senha de banco gravada no workflow.
+- Atualiza o workflow n8n para resposta imediata, execução SSH, callback de sucesso/erro e despacho das rotinas vencidas.
+- Adiciona migration `047_backup_automation_reliability.sql`.
+
 # HOTFIX 36.2.5 — Validação da demanda isolada da IA e das opções antigas
 
 - Mantém a regra que exige entender a demanda antes do pré-agendamento.

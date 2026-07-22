@@ -118,13 +118,17 @@ return static function (Router $router): void {
     $router->get('/monitoramento/backups/automatico', [OperationsCenterController::class, 'backups'], ['auth', 'super_admin']);
     $router->post('/operations/backups/automation/save', [BackupAutomationController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/operations/backups/automation/trigger', [BackupAutomationController::class, 'trigger'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/operations/backups/automation/test', [BackupAutomationController::class, 'testConnection'], ['auth', 'super_admin', 'csrf']);
+    $router->get('/operations/backups/automation/status', [BackupAutomationController::class, 'status'], ['auth', 'super_admin']);
     $router->post('/operations/backups/automation/toggle', [BackupAutomationController::class, 'toggle'], ['auth', 'super_admin', 'csrf']);
     $router->post('/backup-automatico/save', [BackupAutomationController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/backup-automatico/trigger', [BackupAutomationController::class, 'trigger'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/backup-automatico/test', [BackupAutomationController::class, 'testConnection'], ['auth', 'super_admin', 'csrf']);
     $router->post('/backup-automatico/toggle', [BackupAutomationController::class, 'toggle'], ['auth', 'super_admin', 'csrf']);
     $router->get('/webhooks/ai-reprocess/run', [AiReprocessController::class, 'cron']);
     $router->post('/webhooks/ai-reprocess/run', [AiReprocessController::class, 'cron']);
     $router->post('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);
+    $router->post('/webhooks/operations/backups/dispatch', [OperationsController::class, 'runBackupDispatch']);
     $router->get('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);
 
     $router->get('/privacy/accept', [PrivacyController::class, 'accept'], ['auth']);

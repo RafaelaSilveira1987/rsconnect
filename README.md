@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o ZIP 36.2 com HOTFIX 36.2.5.
+Pacote consolidado até o RS Connect 36.3.0 — Backup operacional confiável.
 
 ## Última etapa incluída
+
+RS Connect 36.3.0 — rotina de backup com job real, callback idempotente, timeout, arquivo verificado e histórico operacional.
 
 HOTFIX 36.2.5 — validação da demanda encerra o fluxo de agenda sem deixar a IA reutilizar opções antigas.
 
@@ -23,7 +25,10 @@ database/migrations/043_ai_reprocess_schedule.sql
 database/migrations/044_ai_pending_failures_message_link.sql
 database/migrations/045_ai_webhook_ingestion_resilience.sql
 database/migrations/046_calendar_conversational_slot_selection.sql
+database/migrations/047_backup_automation_reliability.sql
 ```
+
+Consulte `README-RS-CONNECT-36.3.0.md` para instalar e validar a nova rotina de backup.
 
 Consulte `README-HOTFIX-36.2.5.md` para validar a etapa de demanda antes da agenda sem alterar o workflow Eventos VAGO.
 

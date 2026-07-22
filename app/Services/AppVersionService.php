@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'HOTFIX 36.2.5';
-    public const REQUIRED_MIGRATION = '046_calendar_conversational_slot_selection.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.3.0 — Backup operacional confiável';
+    public const REQUIRED_MIGRATION = '047_backup_automation_reliability.sql';
 
     private PDO $pdo;
 
@@ -86,8 +86,8 @@ final class AppVersionService
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
-            count($missingTables) === 0 ? 'Estrutura principal até o ZIP 34.5 encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 040, conforme o pacote implantado.'
+            count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
+            'Rodar as migrations pendentes até a 047, conforme o pacote implantado.'
         );
 
         $reactionPreferenceReady = $this->columnExists('ai_agents', 'reply_to_reactions');
@@ -163,12 +163,19 @@ final class AppVersionService
         );
 
         $backupToken = (string) (Env::get('OPERATIONS_BACKUP_TOKEN', '') ?: Env::get('BACKUP_WEBHOOK_TOKEN', ''));
-        $routineOk = $this->countWhere('operations_backup_routines', "status = 'active' AND last_success_at IS NOT NULL");
+        $backupReliabilityReady = $this->columnExists('operations_backup_jobs', 'execution_uuid')
+            && $this->columnExists('operations_backup_jobs', 'callback_received_at')
+            && $this->columnExists('system_backups', 'backup_job_id');
+        $verifiedBackups = $this->number(
+            "SELECT COUNT(*) FROM system_backups WHERE status = 'success' AND verified_at IS NOT NULL AND size_bytes >= 1024"
+        );
         $checks[] = $this->check(
             'Backup automático',
-            ($backupToken !== '' && $routineOk > 0) ? 'ok' : 'warning',
-            ($backupToken !== '' ? 'Token configurado; ' : 'Token pendente; ') . $routineOk . ' rotina(s) validada(s).',
-            'Manter OPERATIONS_BACKUP_TOKEN no EasyPanel e rotina n8n validada com callback.'
+            ($backupToken !== '' && $backupReliabilityReady && $verifiedBackups > 0) ? 'ok' : 'warning',
+            ($backupToken !== '' ? 'Token configurado; ' : 'Token pendente; ')
+                . ($backupReliabilityReady ? 'ciclo confiável disponível; ' : 'migration 047 pendente; ')
+                . $verifiedBackups . ' backup(s) real(is) verificado(s).',
+            'Aplicar a migration 047, importar o fluxo n8n v36.3.0 e concluir um backup com callback.'
         );
 
         $healthDown = $this->latestHealthCount(['down']);

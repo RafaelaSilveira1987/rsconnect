@@ -1,5 +1,5 @@
 {
-  "name": "RS Connect - Backup automatico via n8n",
+  "name": "RS Connect - Backup operacional confiavel v36.3.0",
   "nodes": [
     {
       "parameters": {
@@ -7,19 +7,47 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 3 * * *"
+              "expression": "*/15 * * * *"
             }
           ]
         }
       },
-      "id": "schedule-backup-diario",
-      "name": "Agenda diaria 03h",
+      "id": "schedule-dispatch-backups",
+      "name": "Verificar rotinas a cada 15 min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -760,
-        -180
+        -820,
+        -260
       ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RS_CONNECT_BACKUP_DISPATCH_URL || 'https://rsconnect.rsautomacaodigital.cloud/webhooks/operations/backups/dispatch' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-RS-Connect-Token",
+              "value": "={{ $env.RS_CONNECT_BACKUP_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "dispatch-due-routines",
+      "name": "Solicitar rotinas vencidas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -560,
+        -260
+      ],
+      "notesInFlow": true,
+      "notes": "O agendamento apenas pergunta ao RS Connect quais rotinas estão vencidas. O horário configurado no painel continua sendo a fonte de verdade."
     },
     {
       "parameters": {
@@ -33,120 +61,179 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -760,
-        0
-      ]
+        -820,
+        40
+      ],
+      "webhookId": "d5bada99-22e0-475f-b8c9-e5394c1d94c8"
     },
     {
       "parameters": {
-        "jsCode": "const body = $json.body || $json || {};\nconst routine = body.routine || {};\nconst backup = body.backup || {};\nconst now = new Date();\nconst stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);\nconst fileName = body.file_name || `rs-connect-${stamp}.sql.gz`;\nconst storagePath = backup.storage_path || $env.RS_CONNECT_BACKUP_PATH || '/tmp';\nconst callback = body.callback || { url: $env.RS_CONNECT_BACKUP_CALLBACK_URL, token: $env.RS_CONNECT_BACKUP_TOKEN };\nreturn [{ json: { ...body, callback, file_name: fileName, storage_path: storagePath, output_path: `${storagePath.replace(/\\/$/, '')}/${fileName}`, database: backup.database || $env.DB_DATABASE || 'rs_connect', started_at: now.toISOString(), backup: { ...backup, storage_path: storagePath } } }];"
+        "jsCode": "const raw = $json.body || $json || {};\nconst headers = $json.headers || {};\nconst event = String(raw.event || 'operations.backup.requested');\nconst expectedWebhookToken = String($env.RS_CONNECT_N8N_WEBHOOK_TOKEN || '').trim();\nconst headerToken = String(headers['x-rs-connect-token'] || headers['X-RS-Connect-Token'] || '').trim();\nconst bearer = String(headers.authorization || headers.Authorization || '').replace(/^Bearer\\s+/i, '').trim();\nif (expectedWebhookToken && headerToken !== expectedWebhookToken && bearer !== expectedWebhookToken) {\n  throw new Error('Token do webhook n8n invalido.');\n}\n\nif (event === 'operations.backup.ping') {\n  return [{ json: { event, is_ping: true, routine_id: raw.routine_id || null } }];\n}\n\nconst backup = raw.backup || {};\nconst callback = raw.callback || {};\nconst storagePath = String(backup.storage_path || '/backups/rs-connect').trim();\nconst database = String(backup.database || 'rs_connect').trim();\nconst retentionDays = Math.max(1, Math.min(365, Number(backup.retention_days || 5)));\nconst scriptPath = String($env.RS_CONNECT_BACKUP_SCRIPT || '/etc/easypanel/projects/sites/rsconnect/code/scripts/rsconnect-backup.sh').trim();\nif (!/^\\/[A-Za-z0-9._\\/-]+$/.test(storagePath)) throw new Error('Caminho de backup invalido.');\nif (!/^[A-Za-z0-9_]+$/.test(database)) throw new Error('Nome do banco invalido.');\nif (!/^\\/[A-Za-z0-9._\\/-]+$/.test(scriptPath)) throw new Error('Caminho do script invalido.');\nconst quote = (value) => `'${String(value).replace(/'/g, `'\\\"'\\\"'`)}'`;\nconst sshCommand = `${quote(scriptPath)} ${quote(storagePath)} ${retentionDays} ${quote(database)}`;\nreturn [{ json: {\n  ...raw,\n  event,\n  is_ping: false,\n  routine_id: Number(raw.routine_id || raw.backup_routine_id || 0),\n  backup_job_id: Number(raw.backup_job_id || 0),\n  execution_uuid: String(raw.execution_uuid || ''),\n  storage_type: String(backup.storage_type || 'server'),\n  storage_path: storagePath,\n  database,\n  retention_days: retentionDays,\n  ssh_command: sshCommand,\n  callback_url: String(callback.url || $env.RS_CONNECT_BACKUP_CALLBACK_URL || ''),\n  callback_token: String(callback.token || $env.RS_CONNECT_BACKUP_TOKEN || ''),\n  requested_at: raw.requested_at || new Date().toISOString()\n} }];"
       },
-      "id": "normalizar-backup",
-      "name": "Normalizar backup",
+      "id": "normalize-backup-request",
+      "name": "Validar e normalizar",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -540,
-        0
+        -580,
+        40
       ]
     },
     {
       "parameters": {
-        "command": "mkdir -p {{$json.storage_path}} && mysqldump -h {{$env.DB_HOST || 'mysql'}} -u {{$env.DB_USERNAME || 'rsconnect'}} -p{{$env.DB_PASSWORD || 'SUA_SENHA'}} {{$json.database}} | gzip > {{$json.output_path}} && sha256sum {{$json.output_path}} | awk '{print $1}'"
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, accepted: true, event: $json.event, message: $json.is_ping ? 'Conexao com n8n confirmada' : 'Solicitacao de backup aceita pelo n8n' } }}",
+        "options": {
+          "responseCode": 202
+        }
       },
-      "id": "gerar-dump",
-      "name": "Gerar dump MySQL",
-      "type": "n8n-nodes-base.executeCommand",
+      "id": "respond-accepted",
+      "name": "Responder recebimento",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -340,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "if ($json.is_ping) return [];\nif (!$json.backup_job_id || !$json.callback_url || !$json.callback_token) {\n  throw new Error('Job, callback URL e token sao obrigatorios.');\n}\nreturn items;"
+      },
+      "id": "ignore-ping",
+      "name": "Continuar somente backup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -340,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "command": "={{ $json.ssh_command }}"
+      },
+      "id": "execute-backup-script",
+      "name": "Executar backup na VPS",
+      "type": "n8n-nodes-base.ssh",
       "typeVersion": 1,
       "position": [
-        -300,
-        0
+        -80,
+        120
       ],
+      "onError": "continueRegularOutput",
       "notesInFlow": true,
-      "notes": "Ajuste DB_HOST, DB_USERNAME e DB_PASSWORD no ambiente do n8n ou substitua no comando. Em produção, prefira credenciais seguras e volume persistente para o caminho do backup."
+      "notes": "Selecione a credencial SSH da VPS. O script usa a senha interna do container MySQL e nao armazena credenciais no workflow."
     },
     {
       "parameters": {
-        "jsCode": "const source = $('Normalizar backup').first().json;\nconst checksum = ($json.stdout || '').trim().split(/\\s+/)[0] || '';\nreturn [{ json: { status: 'success', backup_type: 'automatic', storage_type: source.backup?.storage_type || 'server', routine_id: source.routine_id || source.backup_routine_id || null, backup_job_id: source.backup_job_id || null, file_name: source.file_name, location: source.output_path, checksum, verified: true, started_at: source.started_at, finished_at: new Date().toISOString(), notes: 'Backup automatico concluido pelo n8n' , callback: source.callback } }];"
+        "jsCode": "const source = $('Continuar somente backup').first().json;\nconst stdout = String($json.stdout || '').trim();\nconst stderr = String($json.stderr || $json.error || '').trim();\nlet result = null;\nfor (const line of stdout.split(/\\r?\\n/).reverse()) {\n  if (!line.trim().startsWith('{')) continue;\n  try { result = JSON.parse(line.trim()); break; } catch (_) {}\n}\nif (!result) {\n  result = { status: 'error', verified: false, message: stderr || 'O script SSH nao retornou um resultado JSON valido.' };\n}\nconst success = result.status === 'success' && result.verified === true;\nconst callbackPayload = {\n  status: success ? 'success' : 'error',\n  backup_type: 'automatic',\n  storage_type: source.storage_type || 'server',\n  routine_id: source.routine_id,\n  backup_job_id: source.backup_job_id,\n  execution_uuid: source.execution_uuid,\n  file_name: result.file_name || null,\n  location: result.location || null,\n  size_bytes: Number(result.size_bytes || 0),\n  checksum: result.checksum || '',\n  verified: success,\n  table_count: Number(result.table_count || 0),\n  database: result.database || source.database,\n  started_at: result.started_at || source.requested_at,\n  finished_at: result.finished_at || new Date().toISOString(),\n  notes: success ? `Backup concluido e validado (${Number(result.table_count || 0)} tabelas).` : String(result.message || stderr || 'Falha ao gerar backup.')\n};\nreturn [{ json: { callback_url: source.callback_url, callback_token: source.callback_token, callback_payload: callbackPayload } }];"
       },
-      "id": "montar-callback-sucesso",
-      "name": "Montar callback sucesso",
+      "id": "build-callback",
+      "name": "Montar callback final",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -60,
-        0
+        180,
+        120
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $json.callback?.url + '?token=' + ($json.callback?.token || '') }}",
+        "url": "={{ $json.callback_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-RS-Connect-Token",
+              "value": "={{ $json.callback_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json) }}",
-        "options": {}
+        "jsonBody": "={{ JSON.stringify($json.callback_payload) }}",
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "callback-rs-connect",
       "name": "Callback RS Connect",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        180,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { ok: true, message: 'Solicitacao de backup recebida pelo n8n' } }}",
-        "options": {}
-      },
-      "id": "responder-rs-connect",
-      "name": "Responder RS Connect",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        420,
-        0
+        440,
+        120
       ]
     }
   ],
   "connections": {
+    "Verificar rotinas a cada 15 min": {
+      "main": [
+        [
+          {
+            "node": "Solicitar rotinas vencidas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Webhook RS Connect": {
       "main": [
         [
           {
-            "node": "Normalizar backup",
+            "node": "Validar e normalizar",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Normalizar backup": {
+    "Validar e normalizar": {
       "main": [
         [
           {
-            "node": "Gerar dump MySQL",
+            "node": "Responder recebimento",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Continuar somente backup",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Gerar dump MySQL": {
+    "Continuar somente backup": {
       "main": [
         [
           {
-            "node": "Montar callback sucesso",
+            "node": "Executar backup na VPS",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Montar callback sucesso": {
+    "Executar backup na VPS": {
+      "main": [
+        [
+          {
+            "node": "Montar callback final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar callback final": {
       "main": [
         [
           {
@@ -156,33 +243,12 @@
           }
         ]
       ]
-    },
-    "Callback RS Connect": {
-      "main": [
-        [
-          {
-            "node": "Responder RS Connect",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Agenda diaria 03h": {
-      "main": [
-        [
-          {
-            "node": "Normalizar backup",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
     }
   },
   "pinData": {},
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
   },
   "staticData": null,
   "tags": [
@@ -193,7 +259,5 @@
       "name": "Backup"
     }
   ],
-  "triggerCount": 1,
-  "updatedAt": "2026-07-13T00:00:00.000Z",
-  "versionId": "rs-connect-backup-template"
+  "versionId": "rs-connect-backup-v36-3-0"
 }

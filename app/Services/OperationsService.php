@@ -100,37 +100,11 @@ final class OperationsService
 
     public function registerExternalBackup(array $payload): array
     {
-        $status = (string) ($payload['status'] ?? 'success');
-        if (!in_array($status, ['success', 'error', 'running'], true)) {
-            $status = 'success';
+        $result = (new BackupAutomationService())->processCallback($payload);
+        if (!empty($result['ok'])) {
+            $this->recordCheck('backup', 'Backup', $this->checkBackupAge());
         }
-
-        $storageType = $this->normalizeStorageType((string) ($payload['storage_type'] ?? $payload['storage'] ?? 'server'));
-        $verified = filter_var($payload['verified'] ?? ($status === 'success'), FILTER_VALIDATE_BOOL);
-
-        $backupId = $this->insertBackup([
-            'backup_type' => (string) ($payload['backup_type'] ?? $payload['type'] ?? 'automatic'),
-            'storage_type' => $storageType,
-            'status' => $status,
-            'file_name' => (string) ($payload['file_name'] ?? $payload['filename'] ?? 'backup-' . date('Ymd-His')),
-            'location' => (string) ($payload['location'] ?? $payload['path'] ?? $payload['url'] ?? ''),
-            'size_bytes' => isset($payload['size_bytes']) ? (int) $payload['size_bytes'] : null,
-            'checksum' => (string) ($payload['checksum'] ?? ''),
-            'notes' => (string) ($payload['notes'] ?? $payload['message'] ?? ''),
-            'verified_at' => $verified ? (string) ($payload['verified_at'] ?? date('Y-m-d H:i:s')) : null,
-            'verified_by' => null,
-            'started_at' => (string) ($payload['started_at'] ?? date('Y-m-d H:i:s')),
-            'finished_at' => (string) ($payload['finished_at'] ?? date('Y-m-d H:i:s')),
-        ]);
-
-        try {
-            (new BackupAutomationService())->markBackupCallback($payload, $backupId, $status);
-        } catch (Throwable) {
-            // Mantém compatibilidade se o ZIP 24 ainda não estiver com migration aplicada.
-        }
-
-        $this->recordCheck('backup', 'Backup', $this->checkBackupAge());
-        return ['ok' => true, 'message' => 'Backup registrado no RS Connect.'];
+        return $result;
     }
 
     public function resolveIncident(int $id): void
