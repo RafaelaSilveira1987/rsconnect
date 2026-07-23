@@ -139,9 +139,19 @@ final class N8nTemplateController
             return;
         }
 
+        $contents = (string) file_get_contents($path);
+        if ($key === 'billing-cron') {
+            $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+            $billingToken = trim((string) Env::get('BILLING_CRON_TOKEN', ''));
+            if ($appUrl !== '') {
+                $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
+            }
+            $contents = str_replace('SEU_BILLING_CRON_TOKEN', rawurlencode($billingToken), $contents);
+        }
+
         header('Content-Type: application/json; charset=UTF-8');
         header('Content-Disposition: attachment; filename="' . basename($path) . '"');
-        readfile($path);
+        echo $contents;
     }
 
     public function callback(): void

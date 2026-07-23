@@ -132,6 +132,7 @@ final class ContactController
         if (!array_key_exists($contactGroup, \App\Services\ConversationFlowService::GROUPS)) {
             $contactGroup = 'unclassified';
         }
+        $contactGroup = $this->normalizeGroupForStatus($status, $contactGroup);
         if ($instanceId > 0 && !$this->instanceBelongsToTenant($instanceId, $tenantId)) {
             Flash::set('error', 'A instância selecionada não pertence à empresa.');
             $this->redirect('/contacts');
@@ -198,6 +199,7 @@ final class ContactController
         if (!array_key_exists($contactGroup, \App\Services\ConversationFlowService::GROUPS)) {
             $contactGroup = 'unclassified';
         }
+        $contactGroup = $this->normalizeGroupForStatus($status, $contactGroup);
 
         try {
             $statement = Database::connection()->prepare(
@@ -274,6 +276,17 @@ final class ContactController
         );
         $statement->execute(['id' => $instanceId, 'tenant_id' => $tenantId]);
         return (int) $statement->fetchColumn() > 0;
+    }
+
+    private function normalizeGroupForStatus(string $status, string $group): string
+    {
+        if ($status === 'customer' && in_array($group, ['unclassified', 'interested'], true)) {
+            return 'customer';
+        }
+        if ($status !== 'customer' && $group === 'customer') {
+            return $status === 'lead' ? 'interested' : 'unclassified';
+        }
+        return $group;
     }
 
     private function normalizeTags(string $raw): array

@@ -85,7 +85,10 @@ final class EvolutionWebhookController
             }
 
             $key = is_array($data['key'] ?? null) ? $data['key'] : [];
-            $remoteJid = trim((string) ($key['remoteJid'] ?? $data['remoteJid'] ?? ''));
+            $remoteJid = $this->preferredRemoteJid(
+                trim((string) ($key['remoteJid'] ?? $data['remoteJid'] ?? '')),
+                trim((string) ($key['remoteJidAlt'] ?? $data['remoteJidAlt'] ?? ''))
+            );
             if ($remoteJid === '') {
                 throw new \RuntimeException('remoteJid não informado.');
             }
@@ -655,6 +658,9 @@ final class EvolutionWebhookController
 
     private function upsertContact(PDO $pdo, array $instance, string $remoteJid, string $phone, string $pushName): int
     {
+        $tenantId = (int) ($instance['tenant_id'] ?? 0);
+        $automaticName = $this->safeAutomaticContactName($pdo, $tenantId, $phone, $pushName);
+
         $statement = $pdo->prepare(
             'INSERT INTO contacts
                 (tenant_id, evolution_instance_id, remote_jid, phone, name)
@@ -664,16 +670,60 @@ final class EvolutionWebhookController
                 id = LAST_INSERT_ID(id),
                 evolution_instance_id = VALUES(evolution_instance_id),
                 remote_jid = VALUES(remote_jid),
-                name = IF(VALUES(name) IS NULL OR VALUES(name) = "", name, VALUES(name))'
+                name = IF(name IS NULL OR name = "", VALUES(name), name)'
         );
         $statement->execute([
-            'tenant_id' => $instance['tenant_id'],
+            'tenant_id' => $tenantId,
             'instance_id' => $instance['id'],
             'remote_jid' => $remoteJid,
             'phone' => $phone,
-            'name' => $pushName !== '' ? $pushName : null,
+            'name' => $automaticName,
         ]);
         return (int) $pdo->lastInsertId();
+    }
+
+    private function preferredRemoteJid(string $remoteJid, string $remoteJidAlt): string
+    {
+        $primary = trim($remoteJid);
+        $alternate = trim($remoteJidAlt);
+        if ($primary !== '' && str_ends_with(mb_strtolower($primary), '@lid') && $alternate !== '') {
+            return $alternate;
+        }
+        return $primary !== '' ? $primary : $alternate;
+    }
+
+    private function safeAutomaticContactName(PDO $pdo, int $tenantId, string $phone, string $pushName): ?string
+    {
+        $name = trim($pushName);
+        if ($tenantId < 1 || $name === '') {
+            return null;
+        }
+
+        try {
+            $existing = $pdo->prepare(
+                'SELECT name FROM contacts WHERE tenant_id = :tenant_id AND phone = :phone LIMIT 1'
+            );
+            $existing->execute(['tenant_id' => $tenantId, 'phone' => $phone]);
+            $currentName = trim((string) ($existing->fetchColumn() ?: ''));
+            if ($currentName !== '') {
+                return null;
+            }
+
+            // Evita que um pushName incorreto da conexão seja repetido como nome de vários contatos.
+            $duplicateName = $pdo->prepare(
+                'SELECT 1 FROM contacts
+                 WHERE tenant_id = :tenant_id AND phone <> :phone AND name = :name
+                 LIMIT 1'
+            );
+            $duplicateName->execute(['tenant_id' => $tenantId, 'phone' => $phone, 'name' => $name]);
+            if ($duplicateName->fetchColumn()) {
+                return null;
+            }
+        } catch (Throwable) {
+            // Em instalações antigas, mantém o comportamento básico sem interromper o webhook.
+        }
+
+        return mb_substr($name, 0, 150);
     }
 
     private function upsertConversation(

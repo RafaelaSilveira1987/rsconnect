@@ -77,6 +77,9 @@
     }
   },
   "pinData": {},
+  "settings": {
+    "timezone": "America/Sao_Paulo"
+  },
   "meta": {
     "templateCredsSetupCompleted": false,
     "instanceId": "rs-connect-template"

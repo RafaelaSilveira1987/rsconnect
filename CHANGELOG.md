@@ -1,5 +1,19 @@
 # Changelog
 
+## 36.5.6 — Homologação final e correções de produção
+
+- Faz a classificação **Cliente** prevalecer sobre o grupo conflitante **Novo interessado**, criando o contexto de **Cliente atual** e evitando reinício indevido da triagem/agenda.
+- Preserva nomes de contatos já corrigidos manualmente e evita reaproveitar automaticamente o mesmo `pushName` em telefones diferentes; também normaliza `remoteJidAlt` quando a Evolution envia identificadores `@lid`.
+- Revalida o modo da conversa imediatamente antes do envio da IA: ao **Assumir atendimento**, uma resposta que ainda estava sendo gerada é descartada e a IA permanece pausada.
+- Mantém o botão **Reprocessar IA** visível no diagnóstico RS mesmo quando não há erro pendente.
+- Corrige falso **Crítico** em fluxos n8n que já tiveram sucesso depois das falhas recentes.
+- Corrige o histórico de Automações para exibir etapas tratadas pela agenda como **Concluídas**, em vez de “não executadas”.
+- Separa execução manual da régua e execução real do cron no monitoramento. O template do cron passa a ser baixado com `APP_URL` e `BILLING_CRON_TOKEN` do ambiente e timezone `America/Sao_Paulo`.
+- Adiciona atalho **Baixar cron n8n** na Régua de cobrança.
+- Reforça responsividade em mobile: elimina overflow horizontal, usa `100dvh` nos drawers e mantém rodapé de salvar acessível.
+- Atualiza cache-busting de `app.css` e `app.js` para 36.5.6.
+- Não exige nova migration.
+
 ## 36.5.5 — Prontidão beta e endereço em Minha empresa
 
 - Atualiza o versionamento interno para refletir o pacote atual.

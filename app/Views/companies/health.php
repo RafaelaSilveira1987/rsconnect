@@ -143,12 +143,12 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
                             $componentKey = (string) ($check['component_key'] ?? '');
                             $pendingAgentId = str_starts_with($componentKey, 'agent.') ? (int) substr($componentKey, 6) : 0;
                             ?>
-                            <?php if ($pendingConversationCount > 0 && $pendingAgentId > 0): ?>
+                            <?php if ($pendingAgentId > 0): ?>
                                 <form method="post" action="<?= View::e(Router::url('/companies/health/reprocess-ai')) ?>">
                                     <?= Csrf::input() ?>
                                     <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
                                     <input type="hidden" name="agent_id" value="<?= $pendingAgentId ?>">
-                                    <button class="btn btn-primary" type="submit">Reprocessar agora</button>
+                                    <button class="btn <?= $pendingConversationCount > 0 ? 'btn-primary' : 'btn-outline' ?>" type="submit">Reprocessar IA</button>
                                 </form>
                             <?php endif; ?>
                             <?php if (!empty($check['details'])): ?>

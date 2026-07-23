@@ -469,15 +469,24 @@ final class TenantHealthService
             $errors = (int) $this->value('SELECT COUNT(*) FROM n8n_flow_logs WHERE flow_id = :id AND status = "error" AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)', ['id' => $id], 0);
             $status = ($flow['status'] ?? '') === 'active' ? 'ok' : 'info';
             $summary = $status === 'ok' ? 'Fluxo ativo e sem falhas recentes.' : 'Fluxo inativo.';
-            if ($errors >= 3) {
-                $status = 'critical';
-                $summary = $errors . ' falhas foram registradas nas últimas 24 horas.';
-            } elseif ($errors > 0) {
-                $status = 'warning';
-                $summary = $errors . ' falha(s) registrada(s) nas últimas 24 horas.';
-            } elseif (!empty($flow['last_error_at']) && (empty($flow['last_success_at']) || $flow['last_error_at'] > $flow['last_success_at'])) {
-                $status = 'warning';
-                $summary = 'A última execução registrada terminou com erro.';
+            $lastSuccessAt = !empty($flow['last_success_at']) ? strtotime((string) $flow['last_success_at']) : 0;
+            $lastErrorAt = !empty($flow['last_error_at']) ? strtotime((string) $flow['last_error_at']) : 0;
+            $recoveredAfterError = $lastSuccessAt > 0 && $lastErrorAt > 0 && $lastSuccessAt > $lastErrorAt;
+
+            if (($flow['status'] ?? '') === 'active') {
+                if ($errors > 0 && $recoveredAfterError) {
+                    $status = 'ok';
+                    $summary = 'Fluxo ativo e recuperado; a execução mais recente terminou com sucesso.';
+                } elseif ($errors >= 3) {
+                    $status = 'critical';
+                    $summary = $errors . ' falhas foram registradas nas últimas 24 horas e ainda não houve recuperação posterior.';
+                } elseif ($errors > 0) {
+                    $status = 'warning';
+                    $summary = $errors . ' falha(s) registrada(s) nas últimas 24 horas.';
+                } elseif ($lastErrorAt > 0 && ($lastSuccessAt === 0 || $lastErrorAt > $lastSuccessAt)) {
+                    $status = 'warning';
+                    $summary = 'A última execução registrada terminou com erro.';
+                }
             }
             $details = [
                 'Situação' => (string) ($flow['status'] ?? ''),

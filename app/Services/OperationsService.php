@@ -236,40 +236,41 @@ final class OperationsService
         );
 
         if ($heartbeat) {
-            $checkedAt = strtotime((string) ($heartbeat['checked_at'] ?? '')) ?: 0;
-            $status = (string) ($heartbeat['status'] ?? 'warning');
-            if ($checkedAt >= time() - 86400) {
+            $message = (string) ($heartbeat['message'] ?? '');
+            // A partir da 36.5.6 somente o endpoint de cron grava o marcador “Régua (cron)”.
+            // Heartbeats antigos também eram gravados por execução manual e não comprovam automação.
+            $trustedCronHeartbeat = str_contains($message, 'Régua (cron)');
+            if ($trustedCronHeartbeat) {
+                $checkedAt = strtotime((string) ($heartbeat['checked_at'] ?? '')) ?: 0;
+                $status = (string) ($heartbeat['status'] ?? 'warning');
+                if ($checkedAt >= time() - 86400) {
+                    return [
+                        'status' => $status === 'down' ? 'warning' : $status,
+                        'message' => $message !== '' ? $message : ('Régua executada em ' . ($heartbeat['checked_at'] ?? '')),
+                        'latency_ms' => null,
+                    ];
+                }
+
                 return [
-                    'status' => $status === 'down' ? 'warning' : $status,
-                    'message' => (string) (($heartbeat['message'] ?? '') ?: ('Régua executada em ' . ($heartbeat['checked_at'] ?? ''))),
+                    'status' => 'warning',
+                    'message' => 'A última execução automática da régua ocorreu há mais de 24 horas: ' . ($heartbeat['checked_at'] ?? ''),
                     'latency_ms' => null,
                 ];
             }
-
-            return [
-                'status' => 'warning',
-                'message' => 'A última execução completa da régua ocorreu há mais de 24 horas: ' . ($heartbeat['checked_at'] ?? ''),
-                'latency_ms' => null,
-            ];
         }
 
         $last = $this->fetchOne("SELECT created_at FROM billing_reminder_logs ORDER BY id DESC LIMIT 1");
         if (!$last) {
             return [
                 'status' => 'warning',
-                'message' => 'Nenhuma execução completa da régua foi registrada. Processe manualmente uma vez e configure o cron diário.',
+                'message' => 'Nenhuma execução automática do cron foi registrada. Importe e ative o template “Cron da régua de cobrança” no n8n e valide a URL do webhook.',
                 'latency_ms' => null,
             ];
         }
 
-        $createdAt = strtotime((string) ($last['created_at'] ?? '')) ?: 0;
-        if ($createdAt < time() - 86400) {
-            return ['status' => 'warning', 'message' => 'Último aviso da régua registrado há mais de 24 horas: ' . ($last['created_at'] ?? ''), 'latency_ms' => null];
-        }
-
         return [
-            'status' => 'ok',
-            'message' => 'Há atividade recente da régua: ' . ($last['created_at'] ?? '') . '. Execute o processamento atualizado para registrar o heartbeat completo.',
+            'status' => 'warning',
+            'message' => 'Há processamento da régua registrado em ' . ($last['created_at'] ?? '') . ', mas ainda não existe um heartbeat comprovando execução automática. Importe/ative o cron n8n e execute-o uma vez.',
             'latency_ms' => null,
         ];
     }

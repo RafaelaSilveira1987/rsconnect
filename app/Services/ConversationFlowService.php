@@ -13,6 +13,7 @@ final class ConversationFlowService
     public const GROUPS = [
         'unclassified' => 'Não identificado',
         'interested' => 'Novo interessado',
+        'customer' => 'Cliente atual',
         'patient' => 'Paciente atual',
         'family' => 'Familiar',
         'couple' => 'Casal',
@@ -365,6 +366,12 @@ final class ConversationFlowService
     private function defaultRule(string $group): array
     {
         return match ($group) {
+            'customer' => [
+                'allow_pre_schedule' => true,
+                'require_demand_before_pre_schedule' => false,
+                'allow_reschedule_without_demand' => true,
+                'instructions' => 'Cliente atual: use cadastro e histórico existentes e não reinicie a triagem como novo interessado. Pergunte somente o que for necessário para o pedido atual.',
+            ],
             'patient' => [
                 'allow_pre_schedule' => true,
                 'require_demand_before_pre_schedule' => true,
@@ -467,10 +474,26 @@ final class ConversationFlowService
     private function resolveGroup(array $contact): string
     {
         $explicit = trim((string) ($contact['contact_group'] ?? ''));
+        $status = trim((string) ($contact['status'] ?? $contact['contact_status'] ?? ''));
+        $tags = array_map([$this, 'normalize'], $this->tags($contact['tags_json'] ?? null));
+        $taggedCustomer = false;
+
+        foreach ($tags as $tag) {
+            if (in_array($tag, ['cliente', 'customer', 'client'], true)) {
+                $taggedCustomer = true;
+                break;
+            }
+        }
+
+        // Classificação de cliente é fonte de verdade quando o grupo ainda está como novo interessado.
+        if (($status === 'customer' || $taggedCustomer)
+            && in_array($explicit, ['', 'unclassified', 'interested', 'customer'], true)) {
+            return 'customer';
+        }
+
         if ($explicit !== '' && $explicit !== 'unclassified' && array_key_exists($explicit, self::GROUPS)) {
             return $explicit;
         }
-        $tags = array_map([$this, 'normalize'], $this->tags($contact['tags_json'] ?? null));
         foreach ($tags as $tag) {
             if (str_contains($tag, 'paciente')) return 'patient';
             if (str_contains($tag, 'interessad') || $tag === 'lead') return 'interested';
@@ -483,7 +506,7 @@ final class ConversationFlowService
     /** @param array<int, string> $tags */
     private function isExistingCustomer(string $status, string $group, array $tags): bool
     {
-        if ($status === 'customer' || $group === 'patient') {
+        if ($status === 'customer' || in_array($group, ['customer', 'patient'], true)) {
             return true;
         }
         foreach ($tags as $tag) {

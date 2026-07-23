@@ -7195,3 +7195,45 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
 
 /* RS Connect 36.5.5 — prontidão beta e melhor distribuição do endereço */
 .client-company-profile [data-company-address] .field > span { letter-spacing: .01em; }
+
+
+/* RS Connect 36.5.6 — homologação final: mobile, drawers e feedback operacional */
+html, body { max-width: 100%; overflow-x: hidden; }
+.main-content, .page-content { min-width: 0; max-width: 100%; }
+.instances-client-layout { width: 100%; max-width: 980px; }
+.instances-client-layout .instance-item,
+.instances-client-layout .instance-main,
+.instances-client-layout .instance-main > div { min-width: 0; max-width: 100%; }
+.conversation-details.conversation-drawer { height: 100dvh !important; }
+.contact-drawer-footer { position: sticky; bottom: 0; }
+
+@media (max-width: 820px) {
+  .app-shell, .main-content, .page-content { width: 100%; max-width: 100%; }
+  .page-content { padding: 20px 16px 36px; overflow-x: hidden; }
+}
+@media (max-width: 680px) {
+  .conversation-details.conversation-drawer,
+  .contact-form-drawer,
+  .client-user-drawer { height: 100dvh !important; max-height: 100dvh !important; }
+  .instances-client-layout { width: 100%; max-width: 100%; margin-inline: 0; }
+  .instances-client-layout .section-heading { align-items: flex-start; flex-wrap: wrap; }
+  .instances-client-layout .instance-item { width: 100%; overflow: hidden; }
+  .instances-client-layout .instance-main { width: 100%; }
+  .instances-client-layout .instance-main h3,
+  .instances-client-layout .instance-main p,
+  .instances-client-layout .instance-main small { white-space: normal; overflow-wrap: anywhere; }
+  .automation-log-card { padding: 14px; }
+  .automation-log-item { grid-template-columns: 7px minmax(0, 1fr); gap: 10px; padding: 12px; }
+  .log-status-marker { width: 7px; }
+  .automation-log-card .section-heading { align-items: flex-start; flex-wrap: wrap; }
+  .log-title-row { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .log-meta-row { gap: 6px; }
+  .log-meta-row span:not(:last-child)::after { margin-left: 6px; }
+}
+@media (max-width: 460px) {
+  .page-content { padding: 16px 12px 30px; }
+  .topbar { padding-inline: 14px; }
+  .topbar h1 { font-size: 1.28rem; }
+  .instances-client-layout.card { padding: 15px; }
+  .client-connection-note { padding: 12px; }
+}

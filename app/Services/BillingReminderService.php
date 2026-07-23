@@ -128,7 +128,7 @@ final class BillingReminderService
         ]);
     }
 
-    public function runDueReminders(): array
+    public function runDueReminders(string $origin = 'manual'): array
     {
         $rules = Database::connection()
             ->query('SELECT * FROM billing_reminder_rules WHERE status = "active" ORDER BY days_from_due ASC, id ASC')
@@ -188,17 +188,19 @@ final class BillingReminderService
             'ignored' => $ignored,
             'errors' => $errors,
         ];
-        $this->recordExecutionHeartbeat($result);
+        $this->recordExecutionHeartbeat($result, $origin);
         return $result;
     }
 
-    private function recordExecutionHeartbeat(array $result): void
+    private function recordExecutionHeartbeat(array $result, string $origin): void
     {
         try {
             $errors = is_array($result['errors'] ?? null) ? $result['errors'] : [];
             $status = $errors === [] ? 'ok' : 'warning';
+            $origin = $origin === 'cron' ? 'cron' : 'manual';
             $message = sprintf(
-                'Régua processada: %d aviso(s) criado(s), %d enviado(s), %d ignorado(s)%s',
+                'Régua (%s) processada: %d aviso(s) criado(s), %d enviado(s), %d ignorado(s)%s',
+                $origin,
                 (int) ($result['created'] ?? 0),
                 (int) ($result['dispatched'] ?? 0),
                 (int) ($result['ignored'] ?? 0),
@@ -208,8 +210,8 @@ final class BillingReminderService
                 'INSERT INTO system_health_checks (check_key, label, status, message, latency_ms, checked_at)
                  VALUES (:check_key, :label, :status, :message, NULL, NOW())'
             )->execute([
-                'check_key' => 'billing_cron_heartbeat',
-                'label' => 'Execução da régua de cobrança',
+                'check_key' => $origin === 'cron' ? 'billing_cron_heartbeat' : 'billing_reminder_manual_heartbeat',
+                'label' => $origin === 'cron' ? 'Cron da régua de cobrança' : 'Processamento manual da régua de cobrança',
                 'status' => $status,
                 'message' => $message,
             ]);

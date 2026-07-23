@@ -169,7 +169,7 @@ final class AiModelService
         $tagsText = $tags !== [] ? implode(', ', $tags) : 'nenhuma';
         $tagFacts = $this->tagFacts($tags);
         $isExistingCustomer = $contactStatus === 'customer'
-            || $group === 'patient'
+            || in_array($group, ['customer', 'patient'], true)
             || $this->hasAnyNormalizedTag($tags, ['cliente', 'customer', 'client', 'paciente', 'paciente atual']);
         $flowStage = trim((string) ($conversation['flow_stage'] ?? 'identifying_contact')) ?: 'identifying_contact';
         $demandStatus = trim((string) ($conversation['demand_status'] ?? 'pending')) ?: 'pending';
@@ -187,7 +187,7 @@ final class AiModelService
             'Não mencione que você é um modelo de linguagem.',
             'Se o lead pedir humano, atendente, suporte ou uma pessoa, sinalize transferência em vez de insistir no atendimento automático.',
             'Não inicie nem prometa pré-agendamento somente porque apareceram palavras como horário, agenda ou disponibilidade.',
-            'Antes de conduzir ao pré-agendamento, confirme que a demanda foi coletada ou que o contato preferiu não informá-la. Paciente atual em remarcação pode seguir sem repetir a queixa quando a regra do grupo permitir.',
+            'Antes de conduzir ao pré-agendamento, siga a regra do grupo de contato informada abaixo. Quando essa regra exigir demanda, confirme que ela foi coletada ou que o contato preferiu não informá-la. Quando a regra dispensar demanda, não obrigue o cliente a repetir queixa ou informações primárias.',
         ];
 
         $tenantId = (int) ($conversation['tenant_id'] ?? $contact['tenant_id'] ?? 0);
@@ -196,8 +196,8 @@ final class AiModelService
             $preScheduling = new PreSchedulingService();
             if ($preScheduling->isEnabled($tenantId)) {
                 $settings = $preScheduling->settings($tenantId);
-                $rules[] = 'Quando o contato estiver liberado pela etapa da demanda e demonstrar intenção real de agendar, colete dia/período/horário preferido e modalidade. Não confirme horário, não diga que está marcado e não prometa link.';
-                $rules[] = 'Se o contato ainda não informou dia ou horário depois de concluir a etapa da demanda, use a mensagem de coleta configurada pelo cliente, adaptando somente o nome se necessário.';
+                $rules[] = 'Quando o contato estiver liberado pelas regras do grupo e do fluxo e demonstrar intenção real de agendar, colete dia/período/horário preferido e modalidade. Não confirme horário, não diga que está marcado e não prometa link.';
+                $rules[] = 'Se o contato ainda não informou dia ou horário depois de estar liberado para agenda, use a mensagem de coleta configurada pelo cliente, adaptando somente o nome se necessário.';
                 $rules[] = 'Se o contato informou preferência de dia ou horário, use a mensagem de registro configurada pelo cliente e deixe claro que depende de confirmação humana.';
                 $preScheduleBlock = "Configurações de pré-agendamento do cliente:\n" .
                     '- Mensagem para coletar dia/horário: ' . (string) ($settings['collect_message'] ?? '') . "\n" .

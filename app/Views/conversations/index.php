@@ -236,7 +236,7 @@ $returnQuery = http_build_query($pollQuery);
                                 <button class="btn btn-primary btn-small" type="submit">Assumir atendimento</button>
                             </form>
                         <?php endif; ?>
-                        <?php if ($selected['attendance_mode'] !== 'paused'): ?>
+                        <?php if ($selected['attendance_mode'] === 'ai'): ?>
                             <form method="post" action="<?= View::e(Router::url('/conversations/mode')) ?>">
                                 <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="mode" value="paused">
                                 <button class="btn btn-outline btn-small" type="submit">Pausar IA</button>

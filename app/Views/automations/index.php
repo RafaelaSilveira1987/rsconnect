@@ -27,6 +27,15 @@ $formatDate = static function (?string $date): string {
     return $timestamp ? date('d/m/Y H:i:s', $timestamp) : $date;
 };
 $friendlyLog = static function (array $log): array {
+    $meta = json_decode((string) ($log['raw_json'] ?? ''), true);
+    $meta = is_array($meta) ? $meta : [];
+    if (!empty($meta['calendar_handled'])) {
+        if (array_key_exists('message_sent', $meta) && empty($meta['message_sent'])) {
+            return ['A agenda assumiu esta etapa, mas a mensagem ao contato não pôde ser enviada.', 'Revise a conexão WhatsApp e tente novamente.', 'error', 'Atendimento tratado pela agenda'];
+        }
+        return ['A mensagem foi tratada corretamente pela agenda conversacional.', 'A IA geral foi ignorada de propósito para evitar uma resposta duplicada.', 'success', 'Atendimento tratado pela agenda'];
+    }
+
     $raw = trim((string) ($log['error_message'] ?: ($log['response_preview'] ?: '')));
     $lower = mb_strtolower($raw);
     $status = (string) ($log['status'] ?? '');
@@ -89,13 +98,19 @@ $friendlyLog = static function (array $log): array {
         </div>
         <div class="automation-log-list">
             <?php foreach ($logs as $log): ?>
-                <?php [$message, $nextStep] = $friendlyLog($log); ?>
-                <article class="automation-log-item log-<?= View::e($log['status']) ?>">
+                <?php
+                $friendly = $friendlyLog($log);
+                $message = (string) ($friendly[0] ?? '');
+                $nextStep = (string) ($friendly[1] ?? '');
+                $displayStatus = (string) ($friendly[2] ?? $log['status']);
+                $displayEvent = (string) ($friendly[3] ?? ($eventLabel[$log['event']] ?? 'Atividade automática'));
+                ?>
+                <article class="automation-log-item log-<?= View::e($displayStatus) ?>">
                     <div class="log-status-marker"></div>
                     <div class="log-main">
                         <div class="log-title-row">
-                            <strong><?= View::e($eventLabel[$log['event']] ?? 'Atividade automática') ?></strong>
-                            <span class="badge badge-<?= View::e($log['status']) ?>"><?= View::e($statusLabel[$log['status']] ?? 'Informação') ?></span>
+                            <strong><?= View::e($displayEvent) ?></strong>
+                            <span class="badge badge-<?= View::e($displayStatus) ?>"><?= View::e($statusLabel[$displayStatus] ?? 'Informação') ?></span>
                         </div>
                         <p><?= View::e($message) ?></p>
                         <small class="automation-next-step"><?= View::e($nextStep) ?></small>

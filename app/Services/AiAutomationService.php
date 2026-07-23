@@ -186,6 +186,11 @@ final class AiAutomationService
             if (!$this->isInsideBusinessHours($agent)) {
                 $afterHoursMessage = trim((string) ($agent['after_hours_message'] ?? ''));
                 if ($afterHoursMessage !== '') {
+                    $conversation = $this->conversation($pdo, $conversationId);
+                    if (!$this->conversationAllowsAutomaticReply($conversation)) {
+                        $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.skipped', 'skipped', 'Atendimento assumido ou IA pausada antes do envio automático.', null, ['takeover_guard' => true]);
+                        return;
+                    }
                     $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $afterHoursMessage, 'ai.after_hours', 'Mensagem fora do horário enviada pela IA.');
                     $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.after_hours', 'success', null, $afterHoursMessage, null);
                     return;
@@ -197,6 +202,23 @@ final class AiAutomationService
 
             $messages = $this->recentMessages($pdo, $conversationId, (int) ($agent['max_context_messages'] ?? 12));
             $reply = $this->ai->generateReply($agent, $messages, $conversation, $conversation);
+
+            // O atendente pode assumir a conversa enquanto o provedor de IA está gerando a resposta.
+            // Revalida imediatamente antes do envio externo para que assumir atendimento pause a IA de fato.
+            $conversation = $this->conversation($pdo, $conversationId);
+            if (!$this->conversationAllowsAutomaticReply($conversation)) {
+                $this->log(
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    'ai.skipped',
+                    'skipped',
+                    'Atendimento assumido ou IA pausada antes do envio da resposta gerada.',
+                    null,
+                    ['takeover_guard' => true, 'reply_discarded' => true]
+                );
+                return;
+            }
 
             $result = $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $reply, 'ai.replied', 'Resposta automática enviada pela IA.');
 
@@ -697,6 +719,13 @@ final class AiAutomationService
             $conversation = $statement->fetch(PDO::FETCH_ASSOC);
             return $conversation ?: null;
         }
+    }
+
+    private function conversationAllowsAutomaticReply(?array $conversation): bool
+    {
+        return is_array($conversation)
+            && (string) ($conversation['attendance_mode'] ?? '') === 'ai'
+            && (string) ($conversation['status'] ?? '') !== 'closed';
     }
 
     private function agentFor(PDO $pdo, array $instance): ?array

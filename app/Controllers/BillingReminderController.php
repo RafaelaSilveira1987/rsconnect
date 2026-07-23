@@ -43,7 +43,7 @@ final class BillingReminderController
     public function run(): void
     {
         try {
-            $result = (new BillingReminderService())->runDueReminders();
+            $result = (new BillingReminderService())->runDueReminders('manual');
             Audit::log('billing.reminder_run', $result);
             $message = sprintf(
                 'Régua processada: %d aviso(s) criado(s), %d enviado(s), %d ignorado(s).',
@@ -79,7 +79,8 @@ final class BillingReminderController
         }
 
         try {
-            $result = (new BillingReminderService())->runDueReminders();
+            $result = (new BillingReminderService())->runDueReminders('cron');
+            (new OperationsService())->refreshBillingCronCheck();
             http_response_code(200);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['ok' => true] + $result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

@@ -186,6 +186,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                                         <?php
                                         $savedRule = $groupRules[(int) $agent['id']][$groupKey] ?? [];
                                         $defaults = match ($groupKey) {
+                                            'customer' => ['allow' => 1, 'require' => 0, 'reschedule' => 1, 'instructions' => 'Cliente atual: use cadastro e histórico existentes e não reinicie a triagem como novo interessado. Pergunte somente o que for necessário para o pedido atual.'],
                                             'patient' => ['allow' => 1, 'require' => 1, 'reschedule' => 1, 'instructions' => 'Paciente atual: não peça novamente a queixa quando ele estiver apenas remarcando um atendimento.'],
                                             'family' => ['allow' => 0, 'require' => 1, 'reschedule' => 0, 'instructions' => 'Siga a regra da empresa para familiares antes de oferecer atendimento ou agenda.'],
                                             'couple' => ['allow' => 0, 'require' => 1, 'reschedule' => 0, 'instructions' => 'Não abra pré-agendamento automático quando a empresa atende somente individualmente.'],
