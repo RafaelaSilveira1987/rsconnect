@@ -1163,3 +1163,71 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 })();
+
+/* RS Connect 36.5.4 — Equipe e acessos: cadastro e edição em drawer */
+document.addEventListener('DOMContentLoaded', () => {
+  const drawer = document.getElementById('client-user-drawer');
+  const form = drawer?.querySelector('[data-client-user-form]');
+  if (!drawer || !form) return;
+
+  const field = (name) => form.querySelector(`[data-client-user-field="${name}"]`);
+  const statusField = drawer.querySelector('[data-client-user-status-field]');
+  const selfNote = drawer.querySelector('[data-client-user-self-note]');
+  const eyebrow = drawer.querySelector('[data-client-user-eyebrow]');
+  const title = drawer.querySelector('[data-client-user-title]');
+  const description = drawer.querySelector('[data-client-user-description]');
+  const passwordTitle = drawer.querySelector('[data-client-user-password-title]');
+  const passwordLabel = drawer.querySelector('[data-client-user-password-label]');
+  const passwordHint = drawer.querySelector('[data-client-user-password-hint]');
+  const submit = drawer.querySelector('[data-client-user-submit]');
+
+  const resetForCreate = () => {
+    form.reset();
+    form.action = form.dataset.storeAction || form.action;
+    field('id').value = '0';
+    field('role').value = 'client_user';
+    field('status').value = 'active';
+    field('password').value = '';
+    field('password').required = true;
+    if (statusField) statusField.hidden = true;
+    if (selfNote) selfNote.hidden = true;
+    if (eyebrow) eyebrow.textContent = 'Novo usuário';
+    if (title) title.textContent = 'Adicionar acesso';
+    if (description) description.textContent = 'Preencha os dados essenciais para liberar o acesso à sua equipe.';
+    if (passwordTitle) passwordTitle.textContent = 'Senha inicial';
+    if (passwordLabel) passwordLabel.textContent = 'Senha inicial';
+    if (passwordHint) passwordHint.textContent = 'Obrigatória no primeiro cadastro.';
+    if (submit) submit.textContent = 'Cadastrar usuário';
+  };
+
+  document.querySelectorAll('[data-client-user-open]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const edit = button.dataset.clientUserOpen === 'edit';
+      resetForCreate();
+
+      if (edit) {
+        form.action = form.dataset.updateAction || form.action;
+        field('id').value = button.dataset.id || '0';
+        field('name').value = button.dataset.name || '';
+        field('email').value = button.dataset.email || '';
+        field('role').value = button.dataset.role || 'client_user';
+        field('status').value = button.dataset.status || 'active';
+        field('password').value = '';
+        field('password').required = false;
+        if (statusField) statusField.hidden = false;
+        if (selfNote) selfNote.hidden = button.dataset.isSelf !== '1';
+        if (eyebrow) eyebrow.textContent = 'Editar usuário';
+        if (title) title.textContent = button.dataset.name || 'Atualizar acesso';
+        if (description) description.textContent = 'Ajuste os dados do usuário sem abrir formulários dentro da lista.';
+        if (passwordTitle) passwordTitle.textContent = 'Alterar senha';
+        if (passwordLabel) passwordLabel.textContent = 'Nova senha';
+        if (passwordHint) passwordHint.textContent = 'Deixe em branco para manter a senha atual.';
+        if (submit) submit.textContent = 'Salvar alterações';
+      }
+
+      window.setTimeout(() => field('name')?.focus(), 80);
+    });
+  });
+
+  resetForCreate();
+});

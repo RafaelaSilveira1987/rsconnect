@@ -1,5 +1,14 @@
 # Changelog
 
+## 36.5.4 — Equipe e acessos em drawer
+
+- Remove o formulário de novo usuário que ficava permanentemente aberto ao lado da lista.
+- O cadastro passa a abrir somente ao clicar em “Novo usuário”, seguindo o padrão já usado em Contatos.
+- A edição deixa de abrir um formulário dentro da tabela e passa a usar a mesma gaveta lateral do cadastro.
+- Reorganiza a tela em resumo da equipe, lista responsiva e formulário com seções de acesso, identificação e segurança.
+- Mantém a proteção existente para alteração do próprio perfil e não exige migration.
+- Atualiza o cache-busting de `app.css` e `app.js` para 36.5.4.
+
 ## 36.5.3 — Cadastro mais limpo e endereço por CEP
 
 - Substitui os campos bloqueados de Razão social, CNPJ/CPF e Segmento por um resumo cadastral compacto, sem aparência de campo editável.
