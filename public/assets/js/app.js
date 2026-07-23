@@ -905,13 +905,36 @@ document.addEventListener('DOMContentLoaded', () => {
     toastTimer = window.setTimeout(() => element.classList.remove('is-visible'), 3200);
   };
 
+  const formatMoney = (value) => new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(Number(value || 0));
+
   const refreshStage = (stage) => {
     if (!stage) return;
-    const cards = stage.querySelectorAll(':scope [data-crm-dropzone] > [data-crm-card]');
+    const cards = Array.from(stage.querySelectorAll(':scope [data-crm-dropzone] > [data-crm-card]'));
     const counter = stage.querySelector('[data-stage-count]');
     const empty = stage.querySelector('[data-crm-empty]');
+    const value = stage.querySelector('[data-stage-value]');
     if (counter) counter.textContent = String(cards.length);
     if (empty) empty.hidden = cards.length > 0;
+    if (value) {
+      const total = cards.reduce((sum, card) => sum + Number(card.dataset.dealValue || 0), 0);
+      value.textContent = formatMoney(total);
+    }
+  };
+
+  const refreshMetrics = (metrics) => {
+    if (!metrics || typeof metrics !== 'object') return;
+    document.querySelectorAll('[data-crm-metric]').forEach((card) => {
+      const key = card.dataset.crmMetric || '';
+      const target = card.querySelector('[data-crm-metric-value]');
+      if (!key || !target || !(key in metrics)) return;
+      const raw = metrics[key];
+      target.textContent = card.dataset.crmMetricFormat === 'money'
+        ? formatMoney(raw)
+        : String(Number(raw || 0));
+    });
   };
 
   const moveRequest = async (board, card, stageId, rollback) => {
@@ -937,6 +960,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!response.ok || !data.ok) throw new Error(data.message || 'Não foi possível salvar a nova etapa.');
       card.dataset.currentStage = String(stageId);
       card.querySelectorAll('[data-crm-stage-select]').forEach((select) => { select.value = String(stageId); });
+      refreshMetrics(data.metrics);
       toast(data.message || 'Etapa atualizada.');
       return true;
     } catch (error) {

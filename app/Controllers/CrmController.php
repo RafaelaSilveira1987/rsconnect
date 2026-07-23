@@ -155,7 +155,7 @@ final class CrmController
         }
 
         View::render('crm.pipeline', [
-            'title' => 'CRM',
+            'title' => 'Comercial',
             'tenants' => $tenants,
             'pipelines' => $pipelines,
             'stages' => $stages,
@@ -322,6 +322,7 @@ final class CrmController
                 'stage_id' => $stageId,
                 'stage_name' => $stage['name'] ?? '',
                 'status' => $status,
+                'metrics' => $this->tenantMetrics($tenantId),
             ]);
         }
         Flash::set('success', 'Negócio movido para ' . ($stage['name'] ?? 'a nova etapa') . '.');
@@ -460,6 +461,30 @@ final class CrmController
         return '/crm?tenant_id=' . (int) $lead['tenant_id']
             . '&pipeline_id=' . (int) $lead['pipeline_id']
             . '&lead_id=' . (int) $lead['id'];
+    }
+
+    /**
+     * Métricas do Comercial usadas pelo painel e pelo retorno AJAX do Kanban.
+     * Mantém os cards superiores sincronizados imediatamente após mover uma oportunidade.
+     */
+    private function tenantMetrics(int $tenantId): array
+    {
+        $defaults = ['open_count' => 0, 'open_value' => 0, 'won_count' => 0, 'won_value' => 0];
+        if ($tenantId < 1) {
+            return $defaults;
+        }
+
+        $statement = Database::connection()->prepare(
+            'SELECT
+                COALESCE(SUM(status = "open"), 0) AS open_count,
+                COALESCE(SUM(IF(status = "open", value, 0)), 0) AS open_value,
+                COALESCE(SUM(status = "won"), 0) AS won_count,
+                COALESCE(SUM(IF(status = "won", value, 0)), 0) AS won_value
+             FROM crm_leads
+             WHERE tenant_id = :tenant_id'
+        );
+        $statement->execute(['tenant_id' => $tenantId]);
+        return $statement->fetch(PDO::FETCH_ASSOC) ?: $defaults;
     }
 
     private function wantsJson(): bool

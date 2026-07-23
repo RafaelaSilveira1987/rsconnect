@@ -29,7 +29,7 @@ final class AdminCrmController
             $stages = $pdo->query('SELECT * FROM admin_crm_stages ORDER BY position')->fetchAll(PDO::FETCH_ASSOC);
         } catch (Throwable) {
             View::render('crm.admin_setup', [
-                'title' => 'CRM comercial RS',
+                'title' => 'Comercial RS',
                 'migration' => 'database/migrations/037_admin_commercial_crm_reports.sql',
             ]);
             return;
@@ -119,7 +119,7 @@ final class AdminCrmController
         }
 
         View::render('crm.admin', [
-            'title' => 'CRM comercial RS',
+            'title' => 'Comercial RS',
             'stages' => $stages,
             'team' => $team,
             'opportunities' => $opportunities,

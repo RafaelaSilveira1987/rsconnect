@@ -114,7 +114,7 @@ $svgIcon = static function (string $name): string {
     <aside class="sidebar" id="sidebar">
         <a class="brand" href="<?= View::e(Router::url('/')) ?>">
             <span class="brand-mark">RS</span>
-            <span><strong>RS Connect</strong><small>Atendimento e CRM</small></span>
+            <span><strong>RS Connect</strong><small>Atendimento e Comercial</small></span>
         </a>
 
         <nav class="sidebar-nav" aria-label="Navegação principal">
@@ -239,6 +239,6 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=34.5')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.5.1')) ?>" defer></script>
 </body>
 </html>

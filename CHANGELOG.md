@@ -1,5 +1,13 @@
 ## 36.5.0 — Experiência do Cliente
 
+
+## 36.5.1 — Comercial em tempo real
+
+- Renomeia o título superior de CRM para Comercial no cliente e Comercial RS no Super Admin.
+- Atualiza em tempo real os cards de Negócios abertos, Valor em aberto, Ganhos e Receita ganha após mover oportunidades no Kanban.
+- Atualiza também quantidade e valor total exibidos em cada etapa sem recarregar a página.
+- Incrementa a versão do JavaScript principal para evitar cache do comportamento antigo.
+
 - Novo dashboard operacional do cliente.
 - CRM renomeado para Comercial.
 - Agenda com resultados no topo e configurações recolhíveis.

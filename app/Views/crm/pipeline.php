@@ -53,10 +53,10 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
 </div>
 
 <div class="metric-grid metric-grid-compact">
-    <article class="metric-card"><span>Negócios abertos</span><strong><?= (int) ($metrics['open_count'] ?? 0) ?></strong><small>oportunidades em andamento</small></article>
-    <article class="metric-card"><span>Valor em aberto</span><strong class="metric-money"><?= View::e($money($metrics['open_value'] ?? 0)) ?></strong><small>soma do pipeline ativo</small></article>
-    <article class="metric-card"><span>Ganhos</span><strong><?= (int) ($metrics['won_count'] ?? 0) ?></strong><small>negócios concluídos</small></article>
-    <article class="metric-card"><span>Receita ganha</span><strong class="metric-money"><?= View::e($money($metrics['won_value'] ?? 0)) ?></strong><small>valor dos ganhos</small></article>
+    <article class="metric-card" data-crm-metric="open_count"><span>Negócios abertos</span><strong data-crm-metric-value><?= (int) ($metrics['open_count'] ?? 0) ?></strong><small>oportunidades em andamento</small></article>
+    <article class="metric-card" data-crm-metric="open_value" data-crm-metric-format="money"><span>Valor em aberto</span><strong class="metric-money" data-crm-metric-value><?= View::e($money($metrics['open_value'] ?? 0)) ?></strong><small>soma do pipeline ativo</small></article>
+    <article class="metric-card" data-crm-metric="won_count"><span>Ganhos</span><strong data-crm-metric-value><?= (int) ($metrics['won_count'] ?? 0) ?></strong><small>negócios concluídos</small></article>
+    <article class="metric-card" data-crm-metric="won_value" data-crm-metric-format="money"><span>Receita ganha</span><strong class="metric-money" data-crm-metric-value><?= View::e($money($metrics['won_value'] ?? 0)) ?></strong><small>valor dos ganhos</small></article>
 </div>
 
 <form class="filter-bar" method="get" action="<?= View::e(Router::url('/crm')) ?>">
@@ -82,10 +82,10 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
                  data-tenant-id="<?= (int) $filters['tenant_id'] ?>">
             <?php foreach ($stages as $stage): ?>
                 <?php $stageLeads = $leadsByStage[(int) $stage['id']] ?? []; $stageValue = array_sum(array_map(static fn ($item) => (float) $item['value'], $stageLeads)); ?>
-                <section class="kanban-column stage-<?= View::e($stage['color_key']) ?>" data-crm-stage data-stage-id="<?= (int) $stage['id'] ?>">
+                <section class="kanban-column stage-<?= View::e($stage['color_key']) ?>" data-crm-stage data-stage-id="<?= (int) $stage['id'] ?>" data-stage-type="<?= View::e($stage['stage_type'] ?? 'open') ?>">
                     <header class="kanban-header">
                         <div><span class="stage-dot"></span><strong><?= View::e($stage['name']) ?></strong><span class="stage-count" data-stage-count><?= count($stageLeads) ?></span></div>
-                        <small><?= View::e($money($stageValue)) ?></small>
+                        <small data-stage-value><?= View::e($money($stageValue)) ?></small>
                     </header>
                     <div class="kanban-cards" data-crm-dropzone>
                         <?php foreach ($stageLeads as $lead): ?>
@@ -93,7 +93,7 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
                             <article class="deal-card<?= $selected && (int) $selected['id'] === (int) $lead['id'] ? ' is-selected' : '' ?>"
                                      draggable="<?= $canManage ? 'true' : 'false' ?>" data-crm-card
                                      data-item-id="<?= (int) $lead['id'] ?>"
-                                     data-current-stage="<?= (int) $lead['stage_id'] ?>">
+                                     data-current-stage="<?= (int) $lead['stage_id'] ?>" data-deal-value="<?= View::e(number_format((float) $lead['value'], 2, '.', '')) ?>">
                                 <a class="deal-main" href="<?= View::e(Router::url($leadUrl)) ?>">
                                     <span class="priority-marker priority-<?= View::e($lead['priority']) ?>"></span>
                                     <strong><?= View::e($lead['title']) ?></strong>
