@@ -87,21 +87,21 @@ $requestInsight = static function (array $request): string {
 <nav class="agenda-unified-tabs" aria-label="Áreas da agenda">
     <a class="agenda-unified-tab" href="<?= View::e(Router::url('/calendar' . ($tenantId > 0 ? '?tenant_id=' . (int) $tenantId : ''))) ?>">
         <span class="agenda-tab-icon" aria-hidden="true">1</span>
-        <span><strong>Compromissos</strong><small>Agendamentos e pré-agendamentos</small></span>
+        <span><strong>Agenda</strong><small>Compromissos e pré-agendamentos</small></span>
     </a>
     <a class="agenda-unified-tab is-active" href="<?= View::e(Router::url('/calendar?section=availability' . ($tenantId > 0 ? '&tenant_id=' . (int) $tenantId : ''))) ?>">
         <span class="agenda-tab-icon" aria-hidden="true">2</span>
-        <span><strong>Disponibilidade</strong><small>Dias, horários e regras</small></span>
+        <span><strong>Horários e regras</strong><small>Resultados e configurações</small></span>
     </a>
 </nav>
 
 <section class="hero-card operations-hero-clean calendar-smart-hero">
     <div>
-        <span class="eyebrow">Disponibilidade da agenda</span>
-        <h2>Defina quando sua equipe pode receber novos agendamentos.</h2>
+        <span class="eyebrow">Agenda</span>
+        <h2>Horários encontrados e regras de disponibilidade.</h2>
         <p><?= $isRsAdmin
             ? 'Configure a integração técnica do n8n separadamente das regras que o cliente utiliza no dia a dia.'
-            : 'Defina seus dias, horários, duração e o modo de disponibilidade sem precisar acessar configurações técnicas.' ?></p>
+            : 'Veja primeiro os horários encontrados e abra as configurações somente quando precisar alterar as regras.' ?></p>
     </div>
     <div class="hero-actions operations-hero-actions">
         <a class="btn btn-quiet" href="<?= View::e(Router::url('/calendar?tenant_id=' . (int) $tenantId)) ?>">Ver compromissos</a>
@@ -130,6 +130,63 @@ $requestInsight = static function (array $request): string {
     <article class="card report-kpi"><span>Escolhidos</span><strong><?= (int) ($metrics['selected'] ?? 0) ?></strong><small>Aplicados ao pré-agendamento</small></article>
     <article class="card report-kpi"><span>Modo atual</span><strong class="calendar-mode-kpi"><?= View::e($availabilityMode === 'marked_events' ? 'VAGO' : 'Livres') ?></strong><small><?= View::e($modeLabels[$availabilityMode]) ?></small></article>
 </div>
+
+<section class="card" id="horarios-disponiveis" style="margin-top:16px">
+    <div class="section-heading">
+        <div><span class="eyebrow">Resultado da última busca</span><h2>Horários disponíveis</h2></div>
+        <small class="muted-text">São exibidos apenas os horários da busca mais recente de cada pré-agendamento.</small>
+    </div>
+
+    <div class="calendar-slot-groups">
+        <?php foreach ($slotsByAppointment as $appointmentId => $appointmentSlots): ?>
+            <?php $firstSlot = $appointmentSlots[0] ?? []; ?>
+            <article class="calendar-slot-group" id="horarios-<?= (int) $appointmentId ?>">
+                <div class="calendar-slot-group-title">
+                    <div><strong><?= View::e(($firstSlot['contact_name'] ?? '') ?: ($firstSlot['appointment_title'] ?? 'Pré-agendamento')) ?></strong><small><?= count($appointmentSlots) ?> opção(ões) da última busca</small></div>
+                </div>
+                <div class="calendar-slot-list">
+                    <?php foreach ($appointmentSlots as $slot): ?>
+                        <?php
+                            $eventState = (string) ($slot['event_state'] ?? 'available');
+                            $isSelected = !empty($slot['selected_at']);
+                            $isMarkedSlot = ($slot['source'] ?? '') === 'google_marked_slots' || !empty($slot['google_event_id']);
+                        ?>
+                        <div class="calendar-slot-row <?= $isSelected ? 'is-selected' : '' ?>">
+                            <div>
+                                <strong><?= View::e($date($slot['starts_at'])) ?> até <?= View::e($date($slot['ends_at'], 'H:i')) ?></strong>
+                                <?php if (!empty($slot['suggestion_position'])): ?><span class="badge badge-info">Opção <?= (int) $slot['suggestion_position'] ?></span><?php endif; ?>
+                                <small><?= View::e($sourceLabels[$slot['source'] ?? ''] ?? ($slot['source'] ?? 'n8n')) ?><?= ($slot['modality'] ?? 'indefinida') !== 'indefinida' ? ' · ' . View::e(ucfirst((string) $slot['modality'])) : '' ?></small>
+                                <?php if ($isMarkedSlot): ?><small>Evento: <?= View::e($eventStateLabels[$eventState] ?? $eventState) ?><?= !empty($slot['event_summary']) ? ' · ' . View::e($slot['event_summary']) : '' ?></small><?php endif; ?>
+                            </div>
+                            <div>
+                                <?php if (!$isSelected && !in_array($eventState, ['held', 'confirmed'], true)): ?>
+                                    <form method="post" action="<?= View::e(Router::url('/calendar/availability/apply')) ?>">
+                                        <?= Csrf::input() ?>
+                                        <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
+                                        <input type="hidden" name="appointment_id" value="<?= (int) $slot['appointment_id'] ?>">
+                                        <input type="hidden" name="slot_id" value="<?= (int) $slot['id'] ?>">
+                                        <button class="btn btn-small btn-secondary" type="submit">Usar este horário</button>
+                                    </form>
+                                <?php elseif ($isMarkedSlot && in_array($eventState, ['held', 'confirmed'], true)): ?>
+                                    <form method="post" action="<?= View::e(Router::url('/calendar/availability/release')) ?>">
+                                        <?= Csrf::input() ?>
+                                        <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
+                                        <input type="hidden" name="appointment_id" value="<?= (int) $slot['appointment_id'] ?>">
+                                        <button class="btn btn-small btn-quiet" type="submit">Liberar horário</button>
+                                    </form>
+                                <?php else: ?>
+                                    <span class="badge badge-success">Escolhido</span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </article>
+        <?php endforeach; ?>
+        <?php if (!$slotsByAppointment): ?><div class="empty-state">Nenhum horário válido na busca atual. A mensagem do pré-agendamento informa o motivo encontrado.</div><?php endif; ?>
+    </div>
+</section>
+
 
 <section class="card" style="margin-top:16px">
     <div class="section-heading">
@@ -183,6 +240,11 @@ $requestInsight = static function (array $request): string {
     </div>
 </section>
 
+<details class="calendar-settings-disclosure" id="configuracoes-da-agenda">
+    <summary>
+        <span><span class="eyebrow">Configurações</span><strong>Regras da agenda</strong><small>Dias, horários, duração, modo VAGO e integração.</small></span>
+        <span class="calendar-settings-chevron" aria-hidden="true">⌄</span>
+    </summary>
 <form method="post" action="<?= View::e(Router::url('/calendar/availability/settings')) ?>" id="smart-calendar-settings" style="margin-top:16px">
     <?= Csrf::input() ?>
     <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
@@ -328,6 +390,7 @@ $requestInsight = static function (array $request): string {
         <?php if (!$isRsAdmin): ?><small class="muted-text">As URLs, credenciais e tokens são administrados pela equipe RS.</small><?php endif; ?>
     </div>
 </form>
+</details>
 
 <?php if ($isRsAdmin): ?>
 <section class="card calendar-maintenance-card" id="calendar-maintenance" style="margin-top:16px">
@@ -357,61 +420,6 @@ $requestInsight = static function (array $request): string {
 </section>
 <?php endif; ?>
 
-<section class="card" id="horarios-disponiveis" style="margin-top:16px">
-    <div class="section-heading">
-        <div><span class="eyebrow">Resultado atual</span><h2>Horários disponíveis</h2></div>
-        <small class="muted-text">São exibidos apenas os horários da busca mais recente de cada pré-agendamento.</small>
-    </div>
-
-    <div class="calendar-slot-groups">
-        <?php foreach ($slotsByAppointment as $appointmentId => $appointmentSlots): ?>
-            <?php $firstSlot = $appointmentSlots[0] ?? []; ?>
-            <article class="calendar-slot-group" id="horarios-<?= (int) $appointmentId ?>">
-                <div class="calendar-slot-group-title">
-                    <div><strong><?= View::e(($firstSlot['contact_name'] ?? '') ?: ($firstSlot['appointment_title'] ?? 'Pré-agendamento')) ?></strong><small><?= count($appointmentSlots) ?> opção(ões) da última busca</small></div>
-                </div>
-                <div class="calendar-slot-list">
-                    <?php foreach ($appointmentSlots as $slot): ?>
-                        <?php
-                            $eventState = (string) ($slot['event_state'] ?? 'available');
-                            $isSelected = !empty($slot['selected_at']);
-                            $isMarkedSlot = ($slot['source'] ?? '') === 'google_marked_slots' || !empty($slot['google_event_id']);
-                        ?>
-                        <div class="calendar-slot-row <?= $isSelected ? 'is-selected' : '' ?>">
-                            <div>
-                                <strong><?= View::e($date($slot['starts_at'])) ?> até <?= View::e($date($slot['ends_at'], 'H:i')) ?></strong>
-                                <?php if (!empty($slot['suggestion_position'])): ?><span class="badge badge-info">Opção <?= (int) $slot['suggestion_position'] ?></span><?php endif; ?>
-                                <small><?= View::e($sourceLabels[$slot['source'] ?? ''] ?? ($slot['source'] ?? 'n8n')) ?><?= ($slot['modality'] ?? 'indefinida') !== 'indefinida' ? ' · ' . View::e(ucfirst((string) $slot['modality'])) : '' ?></small>
-                                <?php if ($isMarkedSlot): ?><small>Evento: <?= View::e($eventStateLabels[$eventState] ?? $eventState) ?><?= !empty($slot['event_summary']) ? ' · ' . View::e($slot['event_summary']) : '' ?></small><?php endif; ?>
-                            </div>
-                            <div>
-                                <?php if (!$isSelected && !in_array($eventState, ['held', 'confirmed'], true)): ?>
-                                    <form method="post" action="<?= View::e(Router::url('/calendar/availability/apply')) ?>">
-                                        <?= Csrf::input() ?>
-                                        <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
-                                        <input type="hidden" name="appointment_id" value="<?= (int) $slot['appointment_id'] ?>">
-                                        <input type="hidden" name="slot_id" value="<?= (int) $slot['id'] ?>">
-                                        <button class="btn btn-small btn-secondary" type="submit">Usar este horário</button>
-                                    </form>
-                                <?php elseif ($isMarkedSlot && in_array($eventState, ['held', 'confirmed'], true)): ?>
-                                    <form method="post" action="<?= View::e(Router::url('/calendar/availability/release')) ?>">
-                                        <?= Csrf::input() ?>
-                                        <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
-                                        <input type="hidden" name="appointment_id" value="<?= (int) $slot['appointment_id'] ?>">
-                                        <button class="btn btn-small btn-quiet" type="submit">Liberar horário</button>
-                                    </form>
-                                <?php else: ?>
-                                    <span class="badge badge-success">Escolhido</span>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </article>
-        <?php endforeach; ?>
-        <?php if (!$slotsByAppointment): ?><div class="empty-state">Nenhum horário válido na busca atual. A mensagem do pré-agendamento informa o motivo encontrado.</div><?php endif; ?>
-    </div>
-</section>
 
 <?php if ($isRsAdmin): ?>
     <section class="card" style="margin-top:16px">

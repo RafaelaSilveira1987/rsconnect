@@ -25,13 +25,13 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
 
 <div class="page-heading">
     <div>
-        <span class="eyebrow">Pipeline comercial</span>
-        <h2>Funil de vendas</h2>
-        <p>Acompanhe cada oportunidade, registre o próximo passo e mantenha a equipe alinhada.</p>
+        <span class="eyebrow">Relacionamento comercial</span>
+        <h2>Comercial</h2>
+        <p>Acompanhe oportunidades, negociações e próximos passos da equipe.</p>
     </div>
     <?php if ($canManage && ($filters['tenant_id'] ?? 0) > 0 && $stages): ?>
         <details class="action-popover">
-            <summary class="btn btn-primary">+ Novo negócio</summary>
+            <summary class="btn btn-primary">+ Nova oportunidade</summary>
             <form class="popover-panel form-stack wide" method="post" action="<?= View::e(Router::url('/crm/leads')) ?>">
                 <?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="pipeline_id" value="<?= (int) $filters['pipeline_id'] ?>">
                 <strong>Adicionar oportunidade</strong>
@@ -46,7 +46,7 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
                     <label class="field"><span>Prioridade</span><select name="priority"><option value="low">Baixa</option><option value="medium" selected>Média</option><option value="high">Alta</option></select></label>
                     <label class="field"><span>Previsão</span><input type="date" name="expected_close_at"></label>
                 </div>
-                <button class="btn btn-primary" type="submit">Adicionar ao funil</button>
+                <button class="btn btn-primary" type="submit">Criar oportunidade</button>
             </form>
         </details>
     <?php endif; ?>
@@ -75,7 +75,7 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
     <div class="card empty-state">Nenhum funil foi encontrado. Execute a migration 004 para criar o funil padrão.</div>
 <?php else: ?>
 <div class="crm-shell<?= $selected ? ' has-detail' : '' ?>">
-    <section class="kanban-scroll" aria-label="Funil de vendas">
+    <section class="kanban-scroll" aria-label="Oportunidades comerciais">
         <div class="kanban-board" data-crm-board data-crm-kind="client"
                  data-move-url="<?= View::e(Router::url('/crm/leads/move')) ?>"
                  data-csrf="<?= View::e(Csrf::token()) ?>"

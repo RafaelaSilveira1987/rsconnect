@@ -37,8 +37,8 @@ final class TenantModuleService
                 'default_enabled' => true,
             ],
             'crm' => [
-                'label' => 'CRM',
-                'description' => 'Funil comercial, oportunidades e etapas de venda.',
+                'label' => 'Comercial',
+                'description' => 'Oportunidades, negociações e etapas comerciais.',
                 'paths' => ['/crm'],
                 'default_visible' => true,
                 'default_enabled' => true,

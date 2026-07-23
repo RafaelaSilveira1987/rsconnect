@@ -134,7 +134,7 @@ $svgIcon = static function (string $name): string {
                 <a class="nav-link<?= $isActive('/contacts') ?>" href="<?= View::e(Router::url('/contacts')) ?>"><?= $svgIcon('contacts') ?><span>Contatos</span></a>
             <?php endif; ?>
             <?php if (Auth::can('crm.view') && $moduleVisible('crm')): ?>
-                <a class="nav-link<?= $isActive('/crm') ?>" href="<?= View::e(Router::url('/crm')) ?>"><?= $svgIcon('crm') ?><span><?= Auth::isSuperAdmin() ? 'CRM comercial' : 'CRM' ?></span></a>
+                <a class="nav-link<?= $isActive('/crm') ?>" href="<?= View::e(Router::url('/crm')) ?>"><?= $svgIcon('crm') ?><span><?= Auth::isSuperAdmin() ? 'Comercial RS' : 'Comercial' ?></span></a>
             <?php endif; ?>
             <?php if (Auth::can('tasks.view') && $moduleVisible('tasks')): ?>
                 <a class="nav-link<?= $isActive('/tasks') ?>" href="<?= View::e(Router::url('/tasks')) ?>"><?= $svgIcon('tasks') ?><span>Atividades</span></a>

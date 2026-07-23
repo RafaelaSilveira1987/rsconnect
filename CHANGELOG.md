@@ -1,3 +1,9 @@
+## 36.5.0 — Experiência do Cliente
+
+- Novo dashboard operacional do cliente.
+- CRM renomeado para Comercial.
+- Agenda com resultados no topo e configurações recolhíveis.
+
 ## 36.4.7 - Relatórios com cor e preenchimento controlado
 
 - Restaura barras preenchidas nos funis de CRM, disponibilidade, agenda e comercial.
