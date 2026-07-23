@@ -1,3 +1,13 @@
+## v36.4.6 — Refinamento visual dos relatórios
+
+- Redesenha os relatórios do cliente e do Super Admin com a identidade clara do RS Connect.
+- Remove o preenchimento indevido dos gráficos de linha e reduz espessura, pontos e peso visual.
+- Adiciona tooltip discreto no gráfico diário e exibe pontos apenas onde existe movimento.
+- Deixa KPIs, filtros, seções, rankings, insights, funis, donut e heatmap mais leves e consistentes.
+- Reduz gradientes e sombras, priorizando fundo branco, bordas suaves e acentos em teal/azul/roxo.
+- Atualiza cache-busting de CSS/JS para `36.4.6` nas visões cliente e administrador.
+- Não exige migration nem novo backfill.
+
 ## v36.4.5 — Correção da série diária do relatório
 
 - Corrige erro SQL no carregamento da evolução diária: o alias `system` foi substituído por `system_messages`, pois `SYSTEM` é palavra reservada no MySQL.
