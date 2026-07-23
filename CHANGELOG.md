@@ -1,3 +1,11 @@
+## v36.4.5 — Correção da série diária do relatório
+
+- Corrige erro SQL no carregamento da evolução diária: o alias `system` foi substituído por `system_messages`, pois `SYSTEM` é palavra reservada no MySQL.
+- Corrige o mesmo alias na consulta de fallback sobre `conversation_messages`.
+- Mantém o gráfico com Total, Recebidas e IA usando os dados já agregados em `report_daily_metrics`.
+- Registra no log do PHP a exceção real do motor agregado para facilitar diagnósticos futuros.
+- Não exige nova migration nem novo backfill.
+
 ## v36.4.4 — Correção da evolução diária nos relatórios
 
 - Corrige o transporte da série diária dos gráficos do relatório do cliente.

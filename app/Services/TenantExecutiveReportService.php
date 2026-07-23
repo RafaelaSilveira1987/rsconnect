@@ -40,7 +40,8 @@ final class TenantExecutiveReportService
                 $byDay = $this->aggregation->dailySeries($tenantId, (string) $filters['start'], (string) $filters['end']);
                 $this->warnings = array_merge($this->warnings, $this->aggregation->warnings());
             } catch (Throwable $exception) {
-                $this->warnings[] = 'A camada agregada não pôde ser atualizada; o relatório usou as tabelas operacionais.';
+                error_log('[reports.client.aggregate] ' . preg_replace('/\s+/', ' ', $exception->getMessage()));
+                $this->warnings[] = 'A atualização dos dados diários encontrou uma inconsistência; o relatório usou dados operacionais.';
             }
         }
 
@@ -284,7 +285,7 @@ final class TenantExecutiveReportService
                         SUM(direction = "outgoing") AS outgoing,
                         SUM(direction = "outgoing" AND sender_type = "ai") AS ai,
                         SUM(direction = "outgoing" AND sender_type = "user") AS human,
-                        SUM(direction = "outgoing" AND sender_type NOT IN ("ai","user")) AS system
+                        SUM(direction = "outgoing" AND sender_type NOT IN ("ai","user")) AS system_messages
                  FROM conversation_messages
                  WHERE tenant_id = :tenant_id AND sent_at BETWEEN :start AND :end
                  GROUP BY DATE(sent_at)

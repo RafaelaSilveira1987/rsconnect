@@ -175,7 +175,7 @@ final class ReportingAggregationService
                     SUM(messages_outgoing) AS outgoing,
                     SUM(messages_ai) AS ai,
                     SUM(messages_human) AS human,
-                    GREATEST(CAST(SUM(messages_outgoing) AS SIGNED) - CAST(SUM(messages_ai) AS SIGNED) - CAST(SUM(messages_human) AS SIGNED), 0) AS system,
+                    GREATEST(CAST(SUM(messages_outgoing) AS SIGNED) - CAST(SUM(messages_ai) AS SIGNED) - CAST(SUM(messages_human) AS SIGNED), 0) AS system_messages,
                     SUM(contacts_new) AS contacts,
                     SUM(conversations_started) AS conversations,
                     SUM(appointments_total) AS appointments
