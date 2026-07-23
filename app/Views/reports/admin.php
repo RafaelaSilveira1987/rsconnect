@@ -55,7 +55,7 @@ $healthSeries = json_encode(array_map(static fn (array $row): array => [
     'value' => (int) ($row['total'] ?? 0),
 ], $healthDistribution), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.4.1')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.4.2')) ?>">
 <div class="executive-report-page executive-report-admin report-v3641">
 <section class="admin-executive-hero executive-report-hero">
     <div class="admin-executive-hero-copy">
@@ -145,5 +145,5 @@ $healthSeries = json_encode(array_map(static fn (array $row): array => [
         <div class="report-funnel is-admin"><?php $commercialMax=$max($commercialStages); foreach ($commercialStages as $row): $width=max(18,min(100,((int)$row['total']/$commercialMax)*100)); ?><article><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= (int)$row['total'] ?></strong><small><?= $money($row['value']) ?></small></div></article><?php endforeach; ?><?php if (!$commercialStages): ?><div class="empty-state">Aplique a migration 037 para carregar o CRM comercial.</div><?php endif; ?></div>
     </section>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.4.1')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.4.2')) ?>" defer></script>
 </div>

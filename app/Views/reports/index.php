@@ -22,7 +22,7 @@ $trend = static function (?float $value): array {
 };
 $statusLabels = [
     'scheduled' => 'Agendado', 'confirmed' => 'Confirmado', 'completed' => 'Concluído',
-    'cancelled' => 'Cancelado', 'no_show' => 'Não compareceu',
+    'cancelled' => 'Cancelado', 'no_show' => 'Não compareceu', 'rejected' => 'Rejeitado',
 ];
 $weekdayLabels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 $queryBase = array_filter([
@@ -31,7 +31,8 @@ $queryBase = array_filter([
 ], static fn ($value) => $value !== '');
 $comparisons = $comparisons ?? [];
 $heatmap = $heatmap ?? [];
-$agendaFunnel = $agendaFunnel ?? [];
+$agendaAvailability = $agendaAvailability ?? [];
+$agendaResults = $agendaResults ?? [];
 $insights = $insights ?? [];
 $warnings = $warnings ?? [];
 $heatmapLookup = [];
@@ -51,10 +52,11 @@ $lineSeries = json_encode(array_map(static fn (array $row): array => [
 $donutSeries = json_encode([
     ['label' => 'IA', 'value' => (int) ($metrics['ai_replies'] ?? 0)],
     ['label' => 'Equipe', 'value' => (int) ($metrics['human_replies'] ?? 0)],
+    ['label' => 'Automação/Sistema', 'value' => (int) ($metrics['system_replies'] ?? 0)],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.4.1')) ?>">
-<div class="executive-report-page client-manager-report report-v3641">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.4.2')) ?>">
+<div class="executive-report-page client-manager-report report-v3642">
     <section class="client-report-hero">
         <div>
             <span class="eyebrow">Relatório executivo</span>
@@ -85,8 +87,8 @@ $donutSeries = json_encode([
         <article class="client-report-score"><span>Tempo médio de 1ª resposta</span><strong><?= View::e($duration((int) ($metrics['avg_first_response_seconds'] ?? 0))) ?></strong><small><?= $number($metrics['unread'] ?? 0) ?> não lida(s) agora</small></article>
         <?php $t = $trend($comparisons['ai_replies'] ?? null); ?>
         <article class="client-report-score"><span>Atendimento pela IA</span><strong><?= $percent($metrics['ai_share'] ?? 0) ?></strong><small class="report-trend <?= $t['class'] ?>"><?= $number($metrics['ai_replies'] ?? 0) ?> respostas · <?= View::e($t['text']) ?></small></article>
-        <?php $t = $trend($comparisons['appointments_confirmed'] ?? null); ?>
-        <article class="client-report-score"><span>Agenda confirmada</span><strong><?= $number($metrics['appointments_confirmed'] ?? 0) ?></strong><small class="report-trend <?= $t['class'] ?>"><?= $percent($metrics['agenda_conversion'] ?? 0) ?> de conversão · <?= View::e($t['text']) ?></small></article>
+        <?php $t = $trend($comparisons['appointments_successful'] ?? null); ?>
+        <article class="client-report-score"><span>Confirmados/concluídos</span><strong><?= $number($metrics['appointments_successful'] ?? 0) ?></strong><small class="report-trend <?= $t['class'] ?>"><?= $percent($metrics['agenda_conversion'] ?? 0) ?> dos compromissos · <?= View::e($t['text']) ?></small></article>
     </section>
 
     <?php if ($insights): ?>
@@ -132,11 +134,11 @@ $donutSeries = json_encode([
         </section>
 
         <section class="card report-content-card client-report-panel" id="client-report-team">
-            <header class="report-content-card-header"><span class="report-section-number">03</span><div><span class="eyebrow">IA e equipe</span><h2>Quanto da operação está automatizada</h2><p>Compare a participação da IA com as respostas humanas e veja o desempenho da equipe.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
+            <header class="report-content-card-header"><span class="report-section-number">03</span><div><span class="eyebrow">IA, equipe e sistema</span><h2>Quem respondeu seus clientes</h2><p>Separe respostas da IA, respostas humanas e mensagens automáticas do sistema para enxergar a automação com precisão.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
             <div class="report-ai-layout">
-                <section class="report-donut-card"><div class="section-heading"><div><span class="eyebrow">Distribuição</span><h2>IA x equipe</h2></div></div><div class="report-donut" data-report-donut data-series="<?= View::e((string) $donutSeries) ?>" data-center="<?= View::e($percent($metrics['ai_share'] ?? 0)) ?>"></div><div class="report-donut-summary"><div><span>IA</span><strong><?= $number($metrics['ai_replies'] ?? 0) ?></strong></div><div><span>Equipe</span><strong><?= $number($metrics['human_replies'] ?? 0) ?></strong></div></div></section>
+                <section class="report-donut-card"><div class="section-heading"><div><span class="eyebrow">Distribuição</span><h2>IA x equipe x sistema</h2></div></div><div class="report-donut" data-report-donut data-series="<?= View::e((string) $donutSeries) ?>" data-center="<?= View::e($percent($metrics['ai_share'] ?? 0)) ?>"></div><div class="report-donut-summary"><div><span>IA</span><strong><?= $number($metrics['ai_replies'] ?? 0) ?></strong></div><div><span>Equipe</span><strong><?= $number($metrics['human_replies'] ?? 0) ?></strong></div><div><span>Automação/Sistema</span><strong><?= $number($metrics['system_replies'] ?? 0) ?></strong></div></div></section>
                 <section><div class="section-heading"><div><span class="eyebrow">Equipe</span><h2>Respostas por responsável</h2></div></div><div class="executive-bars client-team-bars"><?php $teamMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $teamPerformance ?: [['total'=>1]])); foreach ($teamPerformance as $row): ?><div><strong><?= View::e($row['label']) ?></strong><span><i style="width:<?= min(100,((int)$row['total']/$teamMax)*100) ?>%"></i></span><b><?= (int)$row['total'] ?></b><small><?= (int)$row['conversations'] ?> conversa(s)</small></div><?php endforeach; ?><?php if (!$teamPerformance): ?><div class="empty-state">Nenhuma resposta humana registrada no período.</div><?php endif; ?></div></section>
-                <aside class="client-report-summary-card"><span class="eyebrow">Assistente virtual</span><h3>Desempenho da IA</h3><dl><div><dt>Participação</dt><dd><?= $percent($metrics['ai_share'] ?? 0) ?></dd></div><div><dt>Execuções bem-sucedidas</dt><dd><?= $number($metrics['ai_success'] ?? 0) ?></dd></div><div><dt>Falhas registradas</dt><dd><?= $number($metrics['ai_errors'] ?? 0) ?></dd></div><div><dt>Google Agenda com erro</dt><dd><?= $number($metrics['google_sync_errors'] ?? 0) ?></dd></div></dl></aside>
+                <aside class="client-report-summary-card"><span class="eyebrow">Assistente virtual</span><h3>Desempenho da IA</h3><dl><div><dt>Participação da IA</dt><dd><?= $percent($metrics['ai_share'] ?? 0) ?></dd></div><div><dt>Automação/Sistema</dt><dd><?= $percent($metrics['system_share'] ?? 0) ?></dd></div><div><dt>Execuções bem-sucedidas</dt><dd><?= $number($metrics['ai_success'] ?? 0) ?></dd></div><div><dt>Falhas registradas</dt><dd><?= $number($metrics['ai_errors'] ?? 0) ?></dd></div><div><dt>Google Agenda com erro</dt><dd><?= $number($metrics['google_sync_errors'] ?? 0) ?></dd></div></dl></aside>
             </div>
         </section>
 
@@ -147,10 +149,14 @@ $donutSeries = json_encode([
                 <aside class="client-report-summary-card"><span class="eyebrow">CRM</span><h3>Resultado comercial</h3><dl><div><dt>Oportunidades criadas</dt><dd><?= $number($metrics['crm_leads'] ?? 0) ?></dd></div><div><dt>Ganhas</dt><dd><?= $number($metrics['crm_won'] ?? 0) ?></dd></div><div><dt>Perdidas</dt><dd><?= $number($metrics['crm_lost'] ?? 0) ?></dd></div><div><dt>Taxa de conversão</dt><dd><?= $percent($metrics['crm_conversion'] ?? 0) ?></dd></div></dl><a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/crm')) ?>">Abrir CRM</a></aside>
             </div>
             <div class="client-report-two-columns client-report-agenda-row">
-                <section><div class="section-heading"><div><span class="eyebrow">Agenda</span><h2>Funil de agendamento</h2></div></div><div class="report-funnel is-agenda"><?php $agendaFunnelMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $agendaFunnel ?: [['total'=>1]])); foreach ($agendaFunnel as $row): $width=max(18,min(100,((int)$row['total']/$agendaFunnelMax)*100)); ?><article><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= $number($row['total']) ?></strong></div></article><?php endforeach; ?></div></section>
-                <aside class="client-report-summary-card"><span class="eyebrow">Conversão</span><h3>Resultado da agenda</h3><dl><div><dt>Compromissos</dt><dd><?= $number($metrics['appointments'] ?? 0) ?></dd></div><div><dt>Confirmados/concluídos</dt><dd><?= $number($metrics['appointments_confirmed'] ?? 0) ?></dd></div><div><dt>Concluídos</dt><dd><?= $number($metrics['appointments_completed'] ?? 0) ?></dd></div><div><dt>Não compareceram</dt><dd><?= $number($metrics['appointments_no_show'] ?? 0) ?></dd></div><div><dt>Conversão</dt><dd><?= $percent($metrics['agenda_conversion'] ?? 0) ?></dd></div></dl><a class="btn btn-outline btn-block" href="<?= View::e(Router::url('/calendar')) ?>">Abrir agenda</a></aside>
+                <section><div class="section-heading"><div><span class="eyebrow">Disponibilidade</span><h2>Uso da busca de horários</h2><p>Consultas e opções podem se repetir; por isso estes números mostram uso do recurso e não formam um funil de conversão.</p></div></div><div class="report-funnel is-agenda"><?php $agendaAvailabilityMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $agendaAvailability ?: [['total'=>1]])); foreach ($agendaAvailability as $row): $width=max(18,min(100,((int)$row['total']/$agendaAvailabilityMax)*100)); ?><article><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= $number($row['total']) ?></strong></div></article><?php endforeach; ?></div></section>
+                <section><div class="section-heading"><div><span class="eyebrow">Agenda</span><h2>Resultado dos compromissos</h2><p>Status atual dos compromissos cuja data está dentro do período selecionado.</p></div></div><div class="report-funnel is-agenda"><?php $agendaResultsMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $agendaResults ?: [['total'=>1]])); foreach ($agendaResults as $row): $width=max(18,min(100,((int)$row['total']/$agendaResultsMax)*100)); ?><article class="is-<?= View::e((string)($row['tone'] ?? 'neutral')) ?>"><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= $number($row['total']) ?></strong></div></article><?php endforeach; ?></div></section>
+            </div>
+            <div class="client-report-two-columns client-report-agenda-row">
+                <aside class="client-report-summary-card"><span class="eyebrow">Resumo da agenda</span><h3>Resultado do período</h3><dl><div><dt>Compromissos</dt><dd><?= $number($metrics['appointments'] ?? 0) ?></dd></div><div><dt>Confirmados</dt><dd><?= $number($metrics['appointments_confirmed'] ?? 0) ?></dd></div><div><dt>Concluídos</dt><dd><?= $number($metrics['appointments_completed'] ?? 0) ?></dd></div><div><dt>Rejeitados</dt><dd><?= $number($metrics['appointments_rejected'] ?? 0) ?></dd></div><div><dt>Cancelados</dt><dd><?= $number($metrics['appointments_cancelled'] ?? 0) ?></dd></div><div><dt>Não compareceram</dt><dd><?= $number($metrics['appointments_no_show'] ?? 0) ?></dd></div><div><dt>Resultado positivo</dt><dd><?= $percent($metrics['agenda_conversion'] ?? 0) ?></dd></div></dl><a class="btn btn-outline btn-block" href="<?= View::e(Router::url('/calendar')) ?>">Abrir agenda</a></aside>
+                <aside class="client-report-summary-card"><span class="eyebrow">Leitura correta</span><h3>Como interpretar</h3><p class="muted-text">A busca de disponibilidade mede interações com o motor de horários. Já os compromissos são medidos pelo status atual e pela data marcada. Eles podem ter origens diferentes, inclusive cadastro manual e agendamentos anteriores ao fluxo conversacional.</p></aside>
             </div>
         </section>
     </div>
-<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.4.1')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.4.2')) ?>" defer></script>
 </div>

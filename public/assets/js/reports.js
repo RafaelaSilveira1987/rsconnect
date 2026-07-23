@@ -1,4 +1,4 @@
-/* RS Connect v36.4.1 — gráficos executivos sem dependências externas. */
+/* RS Connect v36.4.2 — gráficos executivos sem dependências externas. */
 (() => {
   'use strict';
 

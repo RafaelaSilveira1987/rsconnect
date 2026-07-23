@@ -1,3 +1,12 @@
+# RS Connect 36.4.2 — Correção semântica dos relatórios
+
+- separa respostas de IA, equipe e automação/sistema;
+- corrige a interpretação da Agenda, separando disponibilidade de resultado dos compromissos;
+- inclui status rejeitado no resumo da Agenda;
+- padroniza o CRM agregado pela coorte de leads criados no período;
+- sobe `metrics_version` para 2 e força reconstrução segura do cache legado;
+- mantém a migration 048 sem alteração de esquema.
+
 # RS Connect 36.4.1 — Relatórios executivos visuais e insights
 
 - Evolui os relatórios do cliente e do Super Admin para dashboards executivos com gráficos reais em SVG, sem dependência externa.

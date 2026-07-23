@@ -81,6 +81,20 @@ final class TenantExecutiveReportService
                 'SELECT COUNT(*) FROM conversation_messages WHERE tenant_id = :tenant_id AND direction = "outgoing" AND sender_type = "user" AND sent_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $date
             ),
+            'system_replies' => max(0,
+                (int) ($aggregateTotals['messages_outgoing'] ?? $this->scalar(
+                    'SELECT COUNT(*) FROM conversation_messages WHERE tenant_id = :tenant_id AND direction = "outgoing" AND sent_at BETWEEN :start AND :end',
+                    ['tenant_id' => $tenantId] + $date
+                ))
+                - (int) ($aggregateTotals['messages_ai'] ?? $this->scalar(
+                    'SELECT COUNT(*) FROM conversation_messages WHERE tenant_id = :tenant_id AND direction = "outgoing" AND sender_type = "ai" AND sent_at BETWEEN :start AND :end',
+                    ['tenant_id' => $tenantId] + $date
+                ))
+                - (int) ($aggregateTotals['messages_human'] ?? $this->scalar(
+                    'SELECT COUNT(*) FROM conversation_messages WHERE tenant_id = :tenant_id AND direction = "outgoing" AND sender_type = "user" AND sent_at BETWEEN :start AND :end',
+                    ['tenant_id' => $tenantId] + $date
+                ))
+            ),
             'failed_messages' => $this->metricOrScalar(
                 $aggregateTotals,
                 'messages_failed',
@@ -114,23 +128,27 @@ final class TenantExecutiveReportService
                 'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND starts_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $date
             ),
+            'appointments_scheduled' => $this->scalar(
+                'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status = "scheduled" AND starts_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $date
+            ),
             'appointments_confirmed' => $this->scalar(
-                'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status IN ("confirmed","completed") AND starts_at BETWEEN :start AND :end',
+                'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status = "confirmed" AND starts_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $date
             ),
-            'appointments_cancelled' => $this->scalar(
-                'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status IN ("cancelled","no_show") AND starts_at BETWEEN :start AND :end',
-                ['tenant_id' => $tenantId] + $date
-            ),
-            'appointments_completed' => $this->metricOrScalar(
-                $aggregateTotals,
-                'appointments_completed',
+            'appointments_completed' => $this->scalar(
                 'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status = "completed" AND starts_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $date
             ),
-            'appointments_no_show' => $this->metricOrScalar(
-                $aggregateTotals,
-                'appointments_no_show',
+            'appointments_rejected' => $this->scalar(
+                'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status = "rejected" AND starts_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $date
+            ),
+            'appointments_cancelled' => $this->scalar(
+                'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status = "cancelled" AND starts_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $date
+            ),
+            'appointments_no_show' => $this->scalar(
                 'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status = "no_show" AND starts_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $date
             ),
@@ -187,11 +205,15 @@ final class TenantExecutiveReportService
         $metrics['human_share'] = (int) $metrics['outgoing_messages'] > 0
             ? round(((int) $metrics['human_replies'] / (int) $metrics['outgoing_messages']) * 100, 1)
             : 0;
+        $metrics['system_share'] = (int) $metrics['outgoing_messages'] > 0
+            ? round(((int) $metrics['system_replies'] / (int) $metrics['outgoing_messages']) * 100, 1)
+            : 0;
         $metrics['crm_conversion'] = (int) $metrics['crm_leads'] > 0
             ? round(((int) $metrics['crm_won'] / (int) $metrics['crm_leads']) * 100, 1)
             : 0;
+        $metrics['appointments_successful'] = (int) $metrics['appointments_confirmed'] + (int) $metrics['appointments_completed'];
         $metrics['agenda_conversion'] = (int) $metrics['appointments'] > 0
-            ? round(((int) $metrics['appointments_confirmed'] / (int) $metrics['appointments']) * 100, 1)
+            ? round(((int) $metrics['appointments_successful'] / (int) $metrics['appointments']) * 100, 1)
             : 0;
         $metrics['avg_messages_per_conversation'] = (int) $metrics['conversations'] > 0
             ? round((int) $metrics['total_messages'] / (int) $metrics['conversations'], 1)
@@ -215,7 +237,7 @@ final class TenantExecutiveReportService
                 'SELECT COUNT(*) FROM conversation_messages WHERE tenant_id = :tenant_id AND direction = "outgoing" AND sender_type = "ai" AND sent_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $previousDate
             ),
-            'appointments_confirmed' => $this->scalar(
+            'appointments_successful' => $this->scalar(
                 'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status IN ("confirmed","completed") AND starts_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $previousDate
             ),
@@ -229,7 +251,7 @@ final class TenantExecutiveReportService
             'contacts' => $this->percentChange((int) $metrics['contacts'], (int) $previousMetrics['contacts']),
             'total_messages' => $this->percentChange((int) $metrics['total_messages'], (int) $previousMetrics['total_messages']),
             'ai_replies' => $this->percentChange((int) $metrics['ai_replies'], (int) $previousMetrics['ai_replies']),
-            'appointments_confirmed' => $this->percentChange((int) $metrics['appointments_confirmed'], (int) $previousMetrics['appointments_confirmed']),
+            'appointments_successful' => $this->percentChange((int) $metrics['appointments_successful'], (int) $previousMetrics['appointments_successful']),
             'crm_won' => $this->percentChange((int) $metrics['crm_won'], (int) $previousMetrics['crm_won']),
         ];
 
@@ -238,7 +260,9 @@ final class TenantExecutiveReportService
                 'SELECT DATE(sent_at) AS label, COUNT(*) AS total,
                         SUM(direction = "incoming") AS incoming,
                         SUM(direction = "outgoing") AS outgoing,
-                        SUM(direction = "outgoing" AND sender_type = "ai") AS ai
+                        SUM(direction = "outgoing" AND sender_type = "ai") AS ai,
+                        SUM(direction = "outgoing" AND sender_type = "user") AS human,
+                        SUM(direction = "outgoing" AND sender_type NOT IN ("ai","user")) AS system
                  FROM conversation_messages
                  WHERE tenant_id = :tenant_id AND sent_at BETWEEN :start AND :end
                  GROUP BY DATE(sent_at)
@@ -339,19 +363,24 @@ final class TenantExecutiveReportService
             ['tenant_id' => $tenantId]
         );
 
-        $agendaFunnel = [
-            ['label' => 'Solicitações', 'total' => (int) ($metrics['availability_requests'] ?? 0)],
-            ['label' => 'Horários oferecidos', 'total' => (int) ($metrics['availability_slots'] ?? 0)],
-            ['label' => 'Horários escolhidos', 'total' => (int) ($metrics['availability_selected_slots'] ?? 0)],
-            ['label' => 'Confirmados', 'total' => (int) ($metrics['appointments_confirmed'] ?? 0)],
-            ['label' => 'Concluídos', 'total' => (int) ($metrics['appointments_completed'] ?? 0)],
+        $agendaAvailability = [
+            ['label' => 'Consultas de disponibilidade', 'total' => (int) ($metrics['availability_requests'] ?? 0)],
+            ['label' => 'Opções apresentadas', 'total' => (int) ($metrics['availability_slots'] ?? 0)],
+            ['label' => 'Escolhas registradas', 'total' => (int) ($metrics['availability_selected_slots'] ?? 0)],
+        ];
+        $agendaResults = [
+            ['label' => 'Confirmados', 'total' => (int) ($metrics['appointments_confirmed'] ?? 0), 'tone' => 'positive'],
+            ['label' => 'Concluídos', 'total' => (int) ($metrics['appointments_completed'] ?? 0), 'tone' => 'positive'],
+            ['label' => 'Rejeitados', 'total' => (int) ($metrics['appointments_rejected'] ?? 0), 'tone' => 'attention'],
+            ['label' => 'Cancelados', 'total' => (int) ($metrics['appointments_cancelled'] ?? 0), 'tone' => 'attention'],
+            ['label' => 'Não compareceram', 'total' => (int) ($metrics['appointments_no_show'] ?? 0), 'tone' => 'attention'],
         ];
 
         $insights = $this->buildInsights($metrics, $comparisons, $heatmap);
 
         return compact(
             'metrics', 'comparisons', 'previousMetrics', 'byDay', 'byHour', 'heatmap', 'crmByStage', 'agendaByStatus',
-            'agendaFunnel', 'insights', 'teamPerformance', 'topContacts', 'byTenant', 'attention', 'recentInvoices'
+            'agendaAvailability', 'agendaResults', 'insights', 'teamPerformance', 'topContacts', 'byTenant', 'attention', 'recentInvoices'
         ) + ['warnings' => array_values(array_unique($this->warnings))];
     }
 
@@ -417,12 +446,20 @@ final class TenantExecutiveReportService
         }
 
         $selected = (int) ($metrics['availability_selected_slots'] ?? 0);
-        $confirmed = (int) ($metrics['appointments_confirmed'] ?? 0);
-        if ($selected > $confirmed) {
+        if ($selected > 0) {
+            $insights[] = [
+                'tone' => 'info',
+                'title' => 'Uso da disponibilidade automática',
+                'text' => $selected . ' escolha(s) de horário foram registradas pelo ciclo automático no período.',
+            ];
+        }
+
+        $rejected = (int) ($metrics['appointments_rejected'] ?? 0);
+        if ($rejected > 0) {
             $insights[] = [
                 'tone' => 'attention',
-                'title' => 'Oportunidade na agenda',
-                'text' => ($selected - $confirmed) . ' seleção(ões) de horário ainda não aparecem como compromisso confirmado ou concluído no período.',
+                'title' => 'Pedidos que não avançaram',
+                'text' => $rejected . ' compromisso(s) ficaram com status rejeitado no período e merecem revisão da equipe.',
             ];
         }
 

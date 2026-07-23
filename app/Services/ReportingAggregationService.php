@@ -20,6 +20,7 @@ use Throwable;
 final class ReportingAggregationService
 {
     private const MAX_RANGE_DAYS = 366;
+    private const METRICS_VERSION = 2;
 
     private PDO $pdo;
     private array $warnings = [];
@@ -174,6 +175,7 @@ final class ReportingAggregationService
                     SUM(messages_outgoing) AS outgoing,
                     SUM(messages_ai) AS ai,
                     SUM(messages_human) AS human,
+                    GREATEST(CAST(SUM(messages_outgoing) AS SIGNED) - CAST(SUM(messages_ai) AS SIGNED) - CAST(SUM(messages_human) AS SIGNED), 0) AS system,
                     SUM(contacts_new) AS contacts,
                     SUM(conversations_started) AS conversations,
                     SUM(appointments_total) AS appointments
@@ -362,14 +364,13 @@ final class ReportingAggregationService
         );
         $this->aggregate(
             'crm_leads',
-            'SELECT tenant_id, DATE(COALESCE(closed_at, updated_at)) AS metric_date,
+            'SELECT tenant_id, DATE(created_at) AS metric_date,
                     SUM(status = "won") AS crm_won,
                     SUM(status = "lost") AS crm_lost,
                     COALESCE(SUM(CASE WHEN status = "won" THEN value ELSE 0 END),0) AS crm_value_won
              FROM crm_leads
-             WHERE status IN ("won","lost")
-               AND COALESCE(closed_at, updated_at) BETWEEN :start AND :end' . $this->tenantWhere($tenantId) . '
-             GROUP BY tenant_id, DATE(COALESCE(closed_at, updated_at))',
+             WHERE created_at BETWEEN :start AND :end' . $this->tenantWhere($tenantId) . '
+             GROUP BY tenant_id, DATE(created_at)',
             $params,
             ['crm_won', 'crm_lost', 'crm_value_won']
         );
@@ -415,13 +416,14 @@ final class ReportingAggregationService
     {
         $insert = $this->pdo->prepare(
             'INSERT INTO report_daily_metrics (tenant_id, metric_date, metrics_version, refreshed_at)
-             VALUES (:tenant_id, :metric_date, 1, NOW())'
+             VALUES (:tenant_id, :metric_date, :metrics_version, NOW())'
         );
         foreach ($tenantIds as $tenantId) {
             foreach ($this->dates($start, $end) as $date) {
                 $insert->execute([
                     'tenant_id' => $tenantId,
                     'metric_date' => $date->format('Y-m-d'),
+                    'metrics_version' => self::METRICS_VERSION,
                 ]);
             }
         }
@@ -455,10 +457,11 @@ final class ReportingAggregationService
 
     private function countCachedRows(?int $tenantId, DateTimeImmutable $start, DateTimeImmutable $end): int
     {
-        $sql = 'SELECT COUNT(*) FROM report_daily_metrics WHERE metric_date BETWEEN :start_date AND :end_date';
+        $sql = 'SELECT COUNT(*) FROM report_daily_metrics WHERE metric_date BETWEEN :start_date AND :end_date AND metrics_version = :metrics_version';
         $params = [
             'start_date' => $start->format('Y-m-d'),
             'end_date' => $end->format('Y-m-d'),
+            'metrics_version' => self::METRICS_VERSION,
         ];
         if (($tenantId ?? 0) > 0) {
             $sql .= ' AND tenant_id = :tenant_id';
