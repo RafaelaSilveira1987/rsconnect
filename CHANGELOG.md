@@ -1,3 +1,10 @@
+## 36.4.3 - 2026-07-23
+
+- Corrige o cálculo do tempo médio da primeira resposta para ignorar mensagens `system` e considerar a primeira resposta de IA/equipe posterior à entrada do contato.
+- Renomeia “Atendimento pela IA” para “Respostas feitas pela IA”.
+- Renomeia o insight de agenda para “Pré-agendamentos rejeitados”.
+- Torna os avisos de indisponibilidade do relatório menos técnicos e registra o detalhe no log do servidor.
+
 # RS Connect 36.4.2 — Correção semântica dos relatórios
 
 - separa respostas de IA, equipe e automação/sistema;

@@ -23,6 +23,8 @@ final class TenantExecutiveReportService
 
     public function build(array $filters): array
     {
+        $this->warnings = [];
+
         $tenantId = (int) ($filters['tenant_id'] ?? 0);
         if ($tenantId < 1) {
             throw new \InvalidArgumentException('Empresa obrigatória para o relatório do cliente.');
@@ -184,18 +186,38 @@ final class TenantExecutiveReportService
             'google_sync_errors' => (int) ($aggregateTotals['google_sync_errors'] ?? 0),
         ];
 
+        // Primeira resposta real: primeira saída de IA ou equipe APÓS a primeira mensagem recebida.
+        // Mensagens de sistema não entram nessa métrica e uma automação anterior à entrada do contato
+        // não invalida a conversa inteira.
         $metrics['avg_first_response_seconds'] = $this->scalar(
-            'SELECT COALESCE(AVG(TIMESTAMPDIFF(SECOND, x.first_incoming, x.first_outgoing)), 0)
+            'SELECT COALESCE(AVG(TIMESTAMPDIFF(SECOND, x.first_incoming, x.first_response)), 0)
              FROM (
-                SELECT conversation_id,
-                       MIN(CASE WHEN direction = "incoming" THEN sent_at END) AS first_incoming,
-                       MIN(CASE WHEN direction = "outgoing" THEN sent_at END) AS first_outgoing
-                FROM conversation_messages
-                WHERE tenant_id = :tenant_id AND sent_at BETWEEN :start AND :end
-                GROUP BY conversation_id
-                HAVING first_incoming IS NOT NULL AND first_outgoing IS NOT NULL AND first_outgoing >= first_incoming
+                SELECT fi.conversation_id, fi.first_incoming, MIN(response.sent_at) AS first_response
+                FROM (
+                    SELECT conversation_id, MIN(sent_at) AS first_incoming
+                    FROM conversation_messages
+                    WHERE tenant_id = :tenant_id_in
+                      AND direction = "incoming"
+                      AND sent_at BETWEEN :start_in AND :end_in
+                    GROUP BY conversation_id
+                ) fi
+                INNER JOIN conversation_messages response
+                        ON response.conversation_id = fi.conversation_id
+                       AND response.tenant_id = :tenant_id_out
+                       AND response.direction = "outgoing"
+                       AND response.sender_type IN ("ai", "user")
+                       AND response.sent_at >= fi.first_incoming
+                       AND response.sent_at BETWEEN :start_out AND :end_out
+                GROUP BY fi.conversation_id, fi.first_incoming
              ) x',
-            ['tenant_id' => $tenantId] + $date
+            [
+                'tenant_id_in' => $tenantId,
+                'start_in' => $date['start'],
+                'end_in' => $date['end'],
+                'tenant_id_out' => $tenantId,
+                'start_out' => $date['start'],
+                'end_out' => $date['end'],
+            ]
         );
 
         $metrics['total_messages'] = (int) $metrics['incoming_messages'] + (int) $metrics['outgoing_messages'];
@@ -458,8 +480,8 @@ final class TenantExecutiveReportService
         if ($rejected > 0) {
             $insights[] = [
                 'tone' => 'attention',
-                'title' => 'Pedidos que não avançaram',
-                'text' => $rejected . ' compromisso(s) ficaram com status rejeitado no período e merecem revisão da equipe.',
+                'title' => 'Pré-agendamentos rejeitados',
+                'text' => $rejected . ' solicitação(ões) de agenda ficaram com status rejeitado no período.',
             ];
         }
 
@@ -529,9 +551,10 @@ final class TenantExecutiveReportService
     private function warning(Throwable $exception): string
     {
         $message = $exception->getMessage();
+        error_log('[reports.client] ' . preg_replace('/\s+/', ' ', $message));
         if (preg_match('/Table [^ ]+\.([^ ]+) doesn/', $message, $matches)) {
             return 'Tabela pendente: ' . trim($matches[1], "'`");
         }
-        return 'Uma consulta do relatório do cliente não pôde ser concluída.';
+        return 'Um indicador complementar está temporariamente indisponível.';
     }
 }

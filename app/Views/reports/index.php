@@ -55,8 +55,8 @@ $donutSeries = json_encode([
     ['label' => 'Automação/Sistema', 'value' => (int) ($metrics['system_replies'] ?? 0)],
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.4.2')) ?>">
-<div class="executive-report-page client-manager-report report-v3642">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.4.3')) ?>">
+<div class="executive-report-page client-manager-report report-v3643">
     <section class="client-report-hero">
         <div>
             <span class="eyebrow">Relatório executivo</span>
@@ -69,7 +69,7 @@ $donutSeries = json_encode([
         </div>
     </section>
 
-    <?php if ($warnings): ?><div class="flash warning executive-report-warning"><strong>Alguns indicadores usaram fallback.</strong><span><?= View::e(implode(' · ', $warnings)) ?></span></div><?php endif; ?>
+    <?php if ($warnings): ?><div class="flash warning executive-report-warning"><strong>Alguns indicadores estão sendo atualizados.</strong><span><?= View::e(implode(' · ', $warnings)) ?></span></div><?php endif; ?>
 
     <form class="card client-report-filters" method="get" action="<?= View::e(Router::url('/reports')) ?>">
         <label class="field"><span>Data inicial</span><input type="date" name="start" value="<?= View::e($filters['start']) ?>"></label>
@@ -86,7 +86,7 @@ $donutSeries = json_encode([
         <article class="client-report-score"><span>Mensagens processadas</span><strong><?= $number($metrics['total_messages'] ?? 0) ?></strong><small class="report-trend <?= $t['class'] ?>"><?= View::e($t['text']) ?></small></article>
         <article class="client-report-score"><span>Tempo médio de 1ª resposta</span><strong><?= View::e($duration((int) ($metrics['avg_first_response_seconds'] ?? 0))) ?></strong><small><?= $number($metrics['unread'] ?? 0) ?> não lida(s) agora</small></article>
         <?php $t = $trend($comparisons['ai_replies'] ?? null); ?>
-        <article class="client-report-score"><span>Atendimento pela IA</span><strong><?= $percent($metrics['ai_share'] ?? 0) ?></strong><small class="report-trend <?= $t['class'] ?>"><?= $number($metrics['ai_replies'] ?? 0) ?> respostas · <?= View::e($t['text']) ?></small></article>
+        <article class="client-report-score"><span>Respostas feitas pela IA</span><strong><?= $percent($metrics['ai_share'] ?? 0) ?></strong><small class="report-trend <?= $t['class'] ?>"><?= $number($metrics['ai_replies'] ?? 0) ?> respostas · <?= View::e($t['text']) ?></small></article>
         <?php $t = $trend($comparisons['appointments_successful'] ?? null); ?>
         <article class="client-report-score"><span>Confirmados/concluídos</span><strong><?= $number($metrics['appointments_successful'] ?? 0) ?></strong><small class="report-trend <?= $t['class'] ?>"><?= $percent($metrics['agenda_conversion'] ?? 0) ?> dos compromissos · <?= View::e($t['text']) ?></small></article>
     </section>
@@ -158,5 +158,5 @@ $donutSeries = json_encode([
             </div>
         </section>
     </div>
-<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.4.2')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.4.3')) ?>" defer></script>
 </div>
