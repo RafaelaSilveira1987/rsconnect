@@ -1,3 +1,18 @@
+# RS Connect 36.4.0 — Fundação dos Relatórios Executivos
+
+- Cria a tabela derivada `report_daily_metrics` para séries históricas por empresa e dia.
+- Adiciona o motor `ReportingAggregationService` com reconstrução segura e cache diário.
+- Mantém as tabelas operacionais como fonte de verdade; a camada de métricas pode ser recalculada.
+- Refatora o relatório do cliente para `TenantExecutiveReportService`, reduzindo consultas pesadas no controller.
+- Corrige o filtro de empresa no relatório administrativo: `tenants.id` deixa de ser tratado como `tenant_id`.
+- Corrige uso por empresa para contar conversas dentro do período selecionado.
+- Corrige atendimento humano para considerar respostas humanas no período, e não o modo atual da conversa.
+- Corrige a coorte de conversão do CRM do cliente: ganhos são comparados com oportunidades criadas no mesmo período.
+- Prepara métricas de disponibilidade, seleção de horário e sincronização Google Agenda para os próximos gráficos.
+- Adiciona script CLI de backfill e diagnóstico da camada de relatórios.
+- Adiciona migration `048_reporting_metrics_foundation.sql`.
+- Não altera o layout dos relatórios nesta etapa.
+
 # RS Connect 36.3.0 — Backup operacional confiável
 
 - Separa solicitação aceita de backup realmente concluído.
