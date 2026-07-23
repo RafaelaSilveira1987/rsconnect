@@ -1,3 +1,11 @@
+## v36.4.4 — Correção da evolução diária nos relatórios
+
+- Corrige o transporte da série diária dos gráficos do relatório do cliente.
+- As séries JSON passam a ser entregues ao JavaScript em Base64, evitando corrupção por escaping HTML.
+- Mantém fallback para o formato `data-series` anterior.
+- Atualiza o cache-busting de `reports.css` e `reports.js` para `36.4.4`.
+- Em caso de erro de parse, o navegador registra a causa no console em vez de falhar silenciosamente.
+
 ## 36.4.3 - 2026-07-23
 
 - Corrige o cálculo do tempo médio da primeira resposta para ignorar mensagens `system` e considerar a primeira resposta de IA/equipe posterior à entrada do contato.

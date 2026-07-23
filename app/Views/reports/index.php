@@ -48,15 +48,23 @@ $lineSeries = json_encode(array_map(static fn (array $row): array => [
     'total' => (int) ($row['total'] ?? 0),
     'incoming' => (int) ($row['incoming'] ?? 0),
     'ai' => (int) ($row['ai'] ?? 0),
-], $byDay ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+], $byDay ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+if (!is_string($lineSeries)) {
+    $lineSeries = '[]';
+}
+$lineSeriesB64 = base64_encode($lineSeries);
 $donutSeries = json_encode([
     ['label' => 'IA', 'value' => (int) ($metrics['ai_replies'] ?? 0)],
     ['label' => 'Equipe', 'value' => (int) ($metrics['human_replies'] ?? 0)],
     ['label' => 'Automação/Sistema', 'value' => (int) ($metrics['system_replies'] ?? 0)],
-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+if (!is_string($donutSeries)) {
+    $donutSeries = '[]';
+}
+$donutSeriesB64 = base64_encode($donutSeries);
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.4.3')) ?>">
-<div class="executive-report-page client-manager-report report-v3643">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.4.4')) ?>">
+<div class="executive-report-page client-manager-report report-v3644">
     <section class="client-report-hero">
         <div>
             <span class="eyebrow">Relatório executivo</span>
@@ -116,7 +124,7 @@ $donutSeries = json_encode([
         <section class="card report-content-card client-report-panel" id="client-report-overview">
             <header class="report-content-card-header"><span class="report-section-number">01</span><div><span class="eyebrow">Visão geral</span><h2>Evolução do atendimento</h2><p>Compare volume total, mensagens recebidas e participação da IA ao longo dos dias.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
             <div class="report-chart-layout">
-                <section class="report-chart-card"><div class="section-heading"><div><span class="eyebrow">Movimento diário</span><h2>Atendimento por dia</h2></div><span class="badge"><?= View::e(date('d/m', strtotime($filters['start']))) ?> → <?= View::e(date('d/m', strtotime($filters['end']))) ?></span></div><div class="report-svg-chart" data-report-line-chart data-series="<?= View::e((string) $lineSeries) ?>" aria-label="Gráfico de mensagens por dia"></div><div class="report-chart-legend"><span><i class="is-total"></i>Total</span><span><i class="is-incoming"></i>Recebidas</span><span><i class="is-ai"></i>IA</span></div></section>
+                <section class="report-chart-card"><div class="section-heading"><div><span class="eyebrow">Movimento diário</span><h2>Atendimento por dia</h2></div><span class="badge"><?= View::e(date('d/m', strtotime($filters['start']))) ?> → <?= View::e(date('d/m', strtotime($filters['end']))) ?></span></div><div class="report-svg-chart" data-report-line-chart data-series-b64="<?= View::e($lineSeriesB64) ?>" aria-label="Gráfico de mensagens por dia"></div><div class="report-chart-legend"><span><i class="is-total"></i>Total</span><span><i class="is-incoming"></i>Recebidas</span><span><i class="is-ai"></i>IA</span></div></section>
                 <aside class="client-report-summary-card"><span class="eyebrow">Resumo</span><h3>Leitura rápida</h3><dl><div><dt>Total de mensagens</dt><dd><?= $number($metrics['total_messages'] ?? 0) ?></dd></div><div><dt>Média por conversa</dt><dd><?= number_format((float) ($metrics['avg_messages_per_conversation'] ?? 0), 1, ',', '.') ?></dd></div><div><dt>Encerradas</dt><dd><?= $number($metrics['closed_conversations'] ?? 0) ?></dd></div><div><dt>Mensagens com falha</dt><dd><?= $number($metrics['failed_messages'] ?? 0) ?></dd></div></dl><a class="btn btn-outline btn-block" href="<?= View::e(Router::url('/conversations')) ?>">Abrir conversas</a></aside>
             </div>
             <div class="client-report-priority-grid">
@@ -136,7 +144,7 @@ $donutSeries = json_encode([
         <section class="card report-content-card client-report-panel" id="client-report-team">
             <header class="report-content-card-header"><span class="report-section-number">03</span><div><span class="eyebrow">IA, equipe e sistema</span><h2>Quem respondeu seus clientes</h2><p>Separe respostas da IA, respostas humanas e mensagens automáticas do sistema para enxergar a automação com precisão.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
             <div class="report-ai-layout">
-                <section class="report-donut-card"><div class="section-heading"><div><span class="eyebrow">Distribuição</span><h2>IA x equipe x sistema</h2></div></div><div class="report-donut" data-report-donut data-series="<?= View::e((string) $donutSeries) ?>" data-center="<?= View::e($percent($metrics['ai_share'] ?? 0)) ?>"></div><div class="report-donut-summary"><div><span>IA</span><strong><?= $number($metrics['ai_replies'] ?? 0) ?></strong></div><div><span>Equipe</span><strong><?= $number($metrics['human_replies'] ?? 0) ?></strong></div><div><span>Automação/Sistema</span><strong><?= $number($metrics['system_replies'] ?? 0) ?></strong></div></div></section>
+                <section class="report-donut-card"><div class="section-heading"><div><span class="eyebrow">Distribuição</span><h2>IA x equipe x sistema</h2></div></div><div class="report-donut" data-report-donut data-series-b64="<?= View::e($donutSeriesB64) ?>" data-center="<?= View::e($percent($metrics['ai_share'] ?? 0)) ?>"></div><div class="report-donut-summary"><div><span>IA</span><strong><?= $number($metrics['ai_replies'] ?? 0) ?></strong></div><div><span>Equipe</span><strong><?= $number($metrics['human_replies'] ?? 0) ?></strong></div><div><span>Automação/Sistema</span><strong><?= $number($metrics['system_replies'] ?? 0) ?></strong></div></div></section>
                 <section><div class="section-heading"><div><span class="eyebrow">Equipe</span><h2>Respostas por responsável</h2></div></div><div class="executive-bars client-team-bars"><?php $teamMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $teamPerformance ?: [['total'=>1]])); foreach ($teamPerformance as $row): ?><div><strong><?= View::e($row['label']) ?></strong><span><i style="width:<?= min(100,((int)$row['total']/$teamMax)*100) ?>%"></i></span><b><?= (int)$row['total'] ?></b><small><?= (int)$row['conversations'] ?> conversa(s)</small></div><?php endforeach; ?><?php if (!$teamPerformance): ?><div class="empty-state">Nenhuma resposta humana registrada no período.</div><?php endif; ?></div></section>
                 <aside class="client-report-summary-card"><span class="eyebrow">Assistente virtual</span><h3>Desempenho da IA</h3><dl><div><dt>Participação da IA</dt><dd><?= $percent($metrics['ai_share'] ?? 0) ?></dd></div><div><dt>Automação/Sistema</dt><dd><?= $percent($metrics['system_share'] ?? 0) ?></dd></div><div><dt>Execuções bem-sucedidas</dt><dd><?= $number($metrics['ai_success'] ?? 0) ?></dd></div><div><dt>Falhas registradas</dt><dd><?= $number($metrics['ai_errors'] ?? 0) ?></dd></div><div><dt>Google Agenda com erro</dt><dd><?= $number($metrics['google_sync_errors'] ?? 0) ?></dd></div></dl></aside>
             </div>
@@ -158,5 +166,5 @@ $donutSeries = json_encode([
             </div>
         </section>
     </div>
-<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.4.3')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.4.4')) ?>" defer></script>
 </div>

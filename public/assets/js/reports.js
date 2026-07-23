@@ -1,4 +1,4 @@
-/* RS Connect v36.4.2 — gráficos executivos sem dependências externas. */
+/* RS Connect v36.4.4 — gráficos executivos sem dependências externas. */
 (() => {
   'use strict';
 
@@ -6,10 +6,20 @@
 
   const parseSeries = (element) => {
     try {
-      const raw = element.dataset.series || '[]';
+      let raw = element.dataset.series || '[]';
+
+      // v36.4.4: séries maiores são transportadas em Base64 para impedir
+      // que escaping HTML ou caracteres especiais corrompam o JSON do gráfico.
+      if (element.dataset.seriesB64) {
+        const binary = atob(element.dataset.seriesB64);
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        raw = new TextDecoder('utf-8').decode(bytes);
+      }
+
       const value = JSON.parse(raw);
       return Array.isArray(value) ? value : [];
-    } catch (_) {
+    } catch (error) {
+      console.error('[RS Connect] Não foi possível interpretar os dados do gráfico.', error);
       return [];
     }
   };
