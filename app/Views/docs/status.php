@@ -29,7 +29,7 @@ $statusText = static fn (string $status): string => match ($status) {
         <p>Este painel confirma se a instalação está pronta para uso controlado com clientes reais, sem campanhas e sem disparos em massa.</p>
     </div>
     <div class="beta-score-card">
-        <span class="eyebrow"><?= View::e($dashboard['package'] ?? 'ZIP 26') ?></span>
+        <span class="eyebrow"><?= View::e($dashboard['package'] ?? 'RS Connect') ?></span>
         <strong><?= $score ?>%</strong>
         <span class="badge <?= $statusClass ?>"><?= View::e($statusLabel) ?></span>
     </div>

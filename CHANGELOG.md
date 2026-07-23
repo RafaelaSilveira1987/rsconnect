@@ -1,5 +1,14 @@
 # Changelog
 
+## 36.5.5 — Prontidão beta e endereço em Minha empresa
+
+- Atualiza o versionamento interno para refletir o pacote atual.
+- Faz o diagnóstico Beta reconhecer a migration `048_reporting_metrics_foundation.sql` e a fundação de relatórios.
+- Ajusta a grade do formulário de endereço em Minha empresa para exibir CEP, rua, número, complemento, bairro, cidade e estado com melhor distribuição visual.
+- Corrige o espaçamento da dica de CEP para evitar sobreposição e desalinhamento no card.
+- Atualiza o cache-busting de `app.css`, `app.js` e `company-settings.js` para 36.5.5.
+- Não exige nova migration.
+
 ## 36.5.4 — Equipe e acessos em drawer
 
 - Remove o formulário de novo usuário que ficava permanentemente aberto ao lado da lista.

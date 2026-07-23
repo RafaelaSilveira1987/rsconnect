@@ -1,4 +1,4 @@
-/* RS Connect v36.5.3 — preenchimento de endereço por CEP. */
+/* RS Connect v36.5.5 — preenchimento de endereço por CEP e layout revisado. */
 (() => {
   'use strict';
 

@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.3.0 — Backup operacional confiável';
-    public const REQUIRED_MIGRATION = '047_backup_automation_reliability.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.5.5 — Ajustes finais de prontidão';
+    public const REQUIRED_MIGRATION = '048_reporting_metrics_foundation.sql';
 
     private PDO $pdo;
 
@@ -81,13 +81,14 @@ final class AppVersionService
             'tenant_health_incident_events',
             'conversation_flow_states',
             'ai_agent_group_rules',
+            'report_daily_metrics',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 047, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 048, conforme o pacote implantado.'
         );
 
         $reactionPreferenceReady = $this->columnExists('ai_agents', 'reply_to_reactions');
@@ -118,6 +119,17 @@ final class AppVersionService
                 ? 'Alternativas, escolha do contato e pré-reserva aguardando aprovação estão disponíveis.'
                 : 'A estrutura para apresentar e reconhecer opções de horário ainda não foi aplicada.',
             'Executar database/migrations/046_calendar_conversational_slot_selection.sql.'
+        );
+
+        $reportingFoundationReady = $this->tableExists('report_daily_metrics')
+            && $this->indexExists('conversation_messages', 'idx_messages_tenant_sent_at');
+        $checks[] = $this->check(
+            'Relatórios executivos',
+            $reportingFoundationReady ? 'ok' : 'blocked',
+            $reportingFoundationReady
+                ? 'Fundação de métricas diária disponível para relatórios e comparativos.'
+                : 'A base agregada de relatórios ainda não foi aplicada completamente.',
+            'Executar database/migrations/048_reporting_metrics_foundation.sql.'
         );
 
         $appKey = (string) Env::get('APP_KEY', '');
@@ -175,7 +187,7 @@ final class AppVersionService
             ($backupToken !== '' ? 'Token configurado; ' : 'Token pendente; ')
                 . ($backupReliabilityReady ? 'ciclo confiável disponível; ' : 'migration 047 pendente; ')
                 . $verifiedBackups . ' backup(s) real(is) verificado(s).',
-            'Aplicar a migration 047, importar o fluxo n8n v36.3.0 e concluir um backup com callback.'
+            'Aplicar a migration 047, importar o fluxo n8n de backup e concluir um backup com callback.'
         );
 
         $healthDown = $this->latestHealthCount(['down']);
@@ -402,6 +414,20 @@ final class AppVersionService
                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
             );
             $statement->execute(['table' => $table, 'column' => $column]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function indexExists(string $table, string $index): bool
+    {
+        try {
+            $statement = $this->pdo->prepare(
+                'SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND INDEX_NAME = :index'
+            );
+            $statement->execute(['table' => $table, 'index' => $index]);
             return (int) $statement->fetchColumn() > 0;
         } catch (Throwable) {
             return false;

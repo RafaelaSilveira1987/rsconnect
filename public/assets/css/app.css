@@ -3963,12 +3963,26 @@ body.has-modal-open { overflow: hidden; }
 .client-profile-card textarea { width: 100%; min-width: 0; }
 .client-address-grid {
   display: grid;
-  grid-template-columns: 150px minmax(260px, 2fr) 120px minmax(180px, 1fr);
-  gap: 0 14px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
 }
-.client-address-grid .field { min-width: 0; }
-.client-address-grid .field:nth-child(5),
-.client-address-grid .field:nth-child(6) { grid-column: span 2; }
+.client-address-grid .field {
+  min-width: 0;
+  margin-bottom: 0;
+}
+.client-address-cep { grid-column: span 2; }
+.client-address-line { grid-column: span 5; }
+.client-address-number { grid-column: span 2; }
+.client-address-complement { grid-column: span 3; }
+.client-address-district { grid-column: span 4; }
+.client-address-city { grid-column: span 4; }
+.client-address-state { grid-column: span 2; }
+.client-address-grid .field-hint {
+  margin: 2px 0 0;
+  min-height: 2.4em;
+}
+.client-address-cep .postal-code-control { min-height: 48px; }
 .client-ai-profile-card {
   background:
     radial-gradient(circle at 100% 0, rgba(99,27,124,.06), transparent 32%),
@@ -4042,9 +4056,14 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
 @media (max-width: 1100px) {
   .client-company-grid { grid-template-columns: 1fr; }
   .client-profile-card-wide { grid-column: auto; }
-  .client-address-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .client-address-grid .field:nth-child(5),
-  .client-address-grid .field:nth-child(6) { grid-column: auto; }
+  .client-address-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .client-address-cep { grid-column: span 2; }
+  .client-address-line { grid-column: span 4; }
+  .client-address-number { grid-column: span 2; }
+  .client-address-complement { grid-column: span 4; }
+  .client-address-district { grid-column: span 3; }
+  .client-address-city { grid-column: span 2; }
+  .client-address-state { grid-column: span 1; }
 }
 
 @media (max-width: 760px) {
@@ -7172,3 +7191,7 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
     min-width: 0;
   }
 }
+
+
+/* RS Connect 36.5.5 — prontidão beta e melhor distribuição do endereço */
+.client-company-profile [data-company-address] .field > span { letter-spacing: .01em; }

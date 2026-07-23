@@ -229,11 +229,11 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
                     <small class="field-hint cep-lookup-status" data-cep-status>Digite o CEP para preencher o endereço automaticamente.</small>
                 </label>
                 <label class="field client-address-line"><span>Rua ou avenida</span><input name="address_line" value="<?= View::e($company['address_line'] ?? '') ?>" autocomplete="address-line1"></label>
-                <label class="field"><span>Número</span><input name="address_number" value="<?= View::e($company['address_number'] ?? '') ?>" autocomplete="address-line2"></label>
-                <label class="field"><span>Complemento</span><input name="address_complement" value="<?= View::e($company['address_complement'] ?? '') ?>"></label>
-                <label class="field"><span>Bairro</span><input name="district" value="<?= View::e($company['district'] ?? '') ?>"></label>
-                <label class="field"><span>Cidade</span><input name="city" value="<?= View::e($company['city'] ?? '') ?>" autocomplete="address-level2"></label>
-                <label class="field"><span>Estado</span><input name="state" value="<?= View::e($company['state'] ?? '') ?>" placeholder="Ex.: MG" maxlength="2" autocomplete="address-level1"></label>
+                <label class="field client-address-number"><span>Número</span><input name="address_number" value="<?= View::e($company['address_number'] ?? '') ?>" autocomplete="address-line2"></label>
+                <label class="field client-address-complement"><span>Complemento</span><input name="address_complement" value="<?= View::e($company['address_complement'] ?? '') ?>"></label>
+                <label class="field client-address-district"><span>Bairro</span><input name="district" value="<?= View::e($company['district'] ?? '') ?>"></label>
+                <label class="field client-address-city"><span>Cidade</span><input name="city" value="<?= View::e($company['city'] ?? '') ?>" autocomplete="address-level2"></label>
+                <label class="field client-address-state"><span>Estado</span><input name="state" value="<?= View::e($company['state'] ?? '') ?>" placeholder="Ex.: MG" maxlength="2" autocomplete="address-level1"></label>
             </div>
         </section>
 
@@ -324,5 +324,5 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
 </form>
 <?php endif; ?>
 <?php if (!Auth::isSuperAdmin()): ?>
-<script src="<?= View::e(Router::url('/assets/js/company-settings.js?v=36.5.3')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/company-settings.js?v=36.5.5')) ?>" defer></script>
 <?php endif; ?>

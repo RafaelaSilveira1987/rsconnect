@@ -160,13 +160,13 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
-            ['version' => 'ZIP 26', 'title' => 'Estabilização final e Beta 1.0', 'summary' => 'Status da versão instalada, diagnóstico técnico e critérios finais de operação.'],
-            ['version' => 'ZIP 25', 'title' => 'Central de ajuda e Beta comercial', 'summary' => 'Painel de maturidade comercial e documentação central.'],
-            ['version' => 'ZIP 24', 'title' => 'Backup automático via n8n', 'summary' => 'Rotina, callback e histórico de backup operacional.'],
-            ['version' => 'ZIP 23', 'title' => 'Onboarding guiado do cliente', 'summary' => 'Primeiros passos, bloqueios inteligentes e sincronização com implantação.'],
-            ['version' => 'ZIP 22', 'title' => 'Checklist comercial de implantação', 'summary' => 'Prontidão por empresa e ações rápidas para entrega.'],
-            ['version' => 'ZIP 21', 'title' => 'Monitoramento operacional', 'summary' => 'Saúde do sistema, backup, incidentes e planos de recuperação.'],
-            ['version' => 'ZIP 20', 'title' => 'LGPD e privacidade', 'summary' => 'Termos, aceite e solicitações de dados.'],
+            ['version' => '36.5.5', 'title' => 'Prontidão beta e Minha empresa', 'summary' => 'Alinha o diagnóstico à migration 048 e reorganiza melhor o bloco de endereço da empresa.'],
+            ['version' => '36.5.4', 'title' => 'Equipe e acessos em drawer', 'summary' => 'Cadastro e edição de usuários passam a abrir em gaveta lateral, no padrão de Contatos.'],
+            ['version' => '36.5.3', 'title' => 'Cadastro mais limpo e endereço por CEP', 'summary' => 'Dados mestres compactos e preenchimento automático de endereço ao informar o CEP.'],
+            ['version' => '36.5.2', 'title' => 'Minha empresa como central administrativa', 'summary' => 'Abas internas, proteção dos dados mestres e reorganização da área administrativa do cliente.'],
+            ['version' => '36.5.1', 'title' => 'Comercial em tempo real', 'summary' => 'Indicadores do Kanban atualizados instantaneamente após mover oportunidades.'],
+            ['version' => '36.4.7', 'title' => 'Relatórios refinados', 'summary' => 'Melhorias visuais, métricas e consistência dos relatórios do cliente e do Super Admin.'],
+            ['version' => '36.3.0', 'title' => 'Backup operacional confiável', 'summary' => 'Rotina de backup com job real, callback idempotente, timeout e histórico operacional.'],
         ];
     }
 

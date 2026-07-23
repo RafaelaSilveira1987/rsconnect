@@ -1,8 +1,14 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.3.0 — Backup operacional confiável.
+Pacote consolidado até o RS Connect 36.5.5 — Ajustes finais de prontidão.
 
 ## Última etapa incluída
+
+RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
+
+RS Connect 36.5.4 — Equipe e acessos em drawer, com cadastro e edição no padrão de Contatos.
+
+RS Connect 36.5.3 — dados mestres compactos e preenchimento automático de endereço por CEP em Minha empresa.
 
 RS Connect 36.3.0 — rotina de backup com job real, callback idempotente, timeout, arquivo verificado e histórico operacional.
 
@@ -26,9 +32,12 @@ database/migrations/044_ai_pending_failures_message_link.sql
 database/migrations/045_ai_webhook_ingestion_resilience.sql
 database/migrations/046_calendar_conversational_slot_selection.sql
 database/migrations/047_backup_automation_reliability.sql
+database/migrations/048_reporting_metrics_foundation.sql
 ```
 
-Consulte `README-RS-CONNECT-36.3.0.md` para instalar e validar a nova rotina de backup.
+Consulte `README-RS-CONNECT-36.3.0.md` para instalar e validar a rotina de backup.
+
+Consulte `MAPEAMENTO-RELATORIOS-RS-CONNECT-v36.3.0.md` e a migration `048_reporting_metrics_foundation.sql` para a base agregada dos relatórios executivos.
 
 Consulte `README-HOTFIX-36.2.5.md` para validar a etapa de demanda antes da agenda sem alterar o workflow Eventos VAGO.
 
