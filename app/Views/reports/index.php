@@ -12,31 +12,54 @@ $duration = static function (int $seconds): string {
     if ($seconds < 3600) return floor($seconds / 60) . ' min ' . ($seconds % 60) . ' seg';
     return floor($seconds / 3600) . 'h ' . floor(($seconds % 3600) / 60) . 'min';
 };
-$maxValue = static function (array $rows, string $key = 'total'): int {
-    $values = array_map(static fn (array $row): int => (int) ($row[$key] ?? 0), $rows);
-    return max(1, ...($values ?: [1]));
+$trend = static function (?float $value): array {
+    if ($value === null) return ['class' => 'is-neutral', 'text' => 'Sem base anterior'];
+    if (abs($value) < .05) return ['class' => 'is-neutral', 'text' => 'Estável vs. período anterior'];
+    return [
+        'class' => $value > 0 ? 'is-up' : 'is-down',
+        'text' => ($value > 0 ? '↑ ' : '↓ ') . number_format(abs($value), 1, ',', '.') . '% vs. período anterior',
+    ];
 };
 $statusLabels = [
     'scheduled' => 'Agendado', 'confirmed' => 'Confirmado', 'completed' => 'Concluído',
     'cancelled' => 'Cancelado', 'no_show' => 'Não compareceu',
 ];
+$weekdayLabels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 $queryBase = array_filter([
     'start' => $filters['start'] ?? '',
     'end' => $filters['end'] ?? '',
 ], static fn ($value) => $value !== '');
-$dayMax = $maxValue($byDay);
-$hourMax = $maxValue($byHour);
-$teamMax = $maxValue($teamPerformance);
-$crmMax = $maxValue($crmByStage);
-$agendaMax = $maxValue($agendaByStatus);
+$comparisons = $comparisons ?? [];
+$heatmap = $heatmap ?? [];
+$agendaFunnel = $agendaFunnel ?? [];
+$insights = $insights ?? [];
+$warnings = $warnings ?? [];
+$heatmapLookup = [];
+$heatmapMax = 1;
+foreach ($heatmap as $cell) {
+    $key = ((int) ($cell['weekday_index'] ?? 0)) . ':' . ((int) ($cell['hour_index'] ?? 0));
+    $heatmapLookup[$key] = (int) ($cell['total'] ?? 0);
+    $heatmapMax = max($heatmapMax, (int) ($cell['total'] ?? 0));
+}
+$hours = range(7, 22);
+$lineSeries = json_encode(array_map(static fn (array $row): array => [
+    'label' => date('d/m', strtotime((string) $row['label'])),
+    'total' => (int) ($row['total'] ?? 0),
+    'incoming' => (int) ($row['incoming'] ?? 0),
+    'ai' => (int) ($row['ai'] ?? 0),
+], $byDay ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+$donutSeries = json_encode([
+    ['label' => 'IA', 'value' => (int) ($metrics['ai_replies'] ?? 0)],
+    ['label' => 'Equipe', 'value' => (int) ($metrics['human_replies'] ?? 0)],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=34.2')) ?>">
-<div class="executive-report-page client-manager-report">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.4.1')) ?>">
+<div class="executive-report-page client-manager-report report-v3641">
     <section class="client-report-hero">
         <div>
-            <span class="eyebrow">Relatório gerencial</span>
+            <span class="eyebrow">Relatório executivo</span>
             <h2>Resultados do atendimento</h2>
-            <p>Entenda o volume de conversas, a atuação da equipe e da IA, oportunidades do CRM e resultados da agenda no período escolhido.</p>
+            <p>Veja o que realmente aconteceu no período: crescimento do atendimento, participação da IA, horários de maior procura, conversão do CRM e desempenho da agenda.</p>
         </div>
         <div class="client-report-hero-actions">
             <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'conversations']))) ?>">Exportar conversas</a>
@@ -44,65 +67,55 @@ $agendaMax = $maxValue($agendaByStatus);
         </div>
     </section>
 
+    <?php if ($warnings): ?><div class="flash warning executive-report-warning"><strong>Alguns indicadores usaram fallback.</strong><span><?= View::e(implode(' · ', $warnings)) ?></span></div><?php endif; ?>
+
     <form class="card client-report-filters" method="get" action="<?= View::e(Router::url('/reports')) ?>">
         <label class="field"><span>Data inicial</span><input type="date" name="start" value="<?= View::e($filters['start']) ?>"></label>
         <label class="field"><span>Data final</span><input type="date" name="end" value="<?= View::e($filters['end']) ?>"></label>
         <div class="client-report-filter-actions"><button class="btn btn-primary" type="submit">Atualizar período</button><a class="btn btn-quiet" href="<?= View::e(Router::url('/reports')) ?>">Limpar</a></div>
     </form>
 
-    <section class="client-report-score-grid" aria-label="Principais resultados">
-        <article class="client-report-score is-primary"><span>Conversas iniciadas</span><strong><?= $number($metrics['conversations'] ?? 0) ?></strong><small><?= $number($metrics['closed_conversations'] ?? 0) ?> encerrada(s) no período</small></article>
-        <article class="client-report-score"><span>Mensagens recebidas</span><strong><?= $number($metrics['incoming_messages'] ?? 0) ?></strong><small><?= $number($metrics['unread'] ?? 0) ?> pendente(s) de leitura agora</small></article>
-        <article class="client-report-score"><span>Tempo médio de 1ª resposta</span><strong><?= View::e($duration((int) ($metrics['avg_first_response_seconds'] ?? 0))) ?></strong><small>entre a primeira mensagem e a primeira resposta</small></article>
-        <article class="client-report-score"><span>Atendimentos pela IA</span><strong><?= $percent($metrics['ai_share'] ?? 0) ?></strong><small><?= $number($metrics['ai_replies'] ?? 0) ?> resposta(s) automática(s)</small></article>
-        <article class="client-report-score"><span>Conversão do CRM</span><strong><?= $percent($metrics['crm_conversion'] ?? 0) ?></strong><small><?= $number($metrics['crm_won'] ?? 0) ?> de <?= $number($metrics['crm_leads'] ?? 0) ?> oportunidade(s)</small></article>
-        <article class="client-report-score"><span>Conversão da agenda</span><strong><?= $percent($metrics['agenda_conversion'] ?? 0) ?></strong><small><?= $number($metrics['appointments_confirmed'] ?? 0) ?> confirmado(s) ou concluído(s)</small></article>
+    <section class="client-report-score-grid report-kpi-grid-v2" aria-label="Principais resultados">
+        <?php $t = $trend($comparisons['conversations'] ?? null); ?>
+        <article class="client-report-score is-primary"><span>Conversas iniciadas</span><strong><?= $number($metrics['conversations'] ?? 0) ?></strong><small class="report-trend <?= $t['class'] ?>"><?= View::e($t['text']) ?></small></article>
+        <?php $t = $trend($comparisons['contacts'] ?? null); ?>
+        <article class="client-report-score"><span>Novos contatos</span><strong><?= $number($metrics['contacts'] ?? 0) ?></strong><small class="report-trend <?= $t['class'] ?>"><?= View::e($t['text']) ?></small></article>
+        <?php $t = $trend($comparisons['total_messages'] ?? null); ?>
+        <article class="client-report-score"><span>Mensagens processadas</span><strong><?= $number($metrics['total_messages'] ?? 0) ?></strong><small class="report-trend <?= $t['class'] ?>"><?= View::e($t['text']) ?></small></article>
+        <article class="client-report-score"><span>Tempo médio de 1ª resposta</span><strong><?= View::e($duration((int) ($metrics['avg_first_response_seconds'] ?? 0))) ?></strong><small><?= $number($metrics['unread'] ?? 0) ?> não lida(s) agora</small></article>
+        <?php $t = $trend($comparisons['ai_replies'] ?? null); ?>
+        <article class="client-report-score"><span>Atendimento pela IA</span><strong><?= $percent($metrics['ai_share'] ?? 0) ?></strong><small class="report-trend <?= $t['class'] ?>"><?= $number($metrics['ai_replies'] ?? 0) ?> respostas · <?= View::e($t['text']) ?></small></article>
+        <?php $t = $trend($comparisons['appointments_confirmed'] ?? null); ?>
+        <article class="client-report-score"><span>Agenda confirmada</span><strong><?= $number($metrics['appointments_confirmed'] ?? 0) ?></strong><small class="report-trend <?= $t['class'] ?>"><?= $percent($metrics['agenda_conversion'] ?? 0) ?> de conversão · <?= View::e($t['text']) ?></small></article>
     </section>
 
-    <section class="card report-section-directory" id="client-report-directory" aria-label="Navegação do relatório gerencial">
-        <div class="section-heading report-directory-heading">
-            <div>
-                <span class="eyebrow">Leitura do período</span>
-                <h2>Explore os resultados por assunto</h2>
-                <p>Os quatro blocos ficam abertos na mesma página para facilitar a comparação e a impressão.</p>
-            </div>
+    <?php if ($insights): ?>
+    <section class="card report-insights-panel">
+        <div class="section-heading"><div><span class="eyebrow">Insights do período</span><h2>O que merece sua atenção</h2></div><span class="badge">Leitura automática</span></div>
+        <div class="report-insights-grid">
+            <?php foreach ($insights as $item): ?>
+                <article class="report-insight is-<?= View::e($item['tone'] ?? 'info') ?>"><span class="report-insight-dot"></span><div><strong><?= View::e($item['title'] ?? '') ?></strong><p><?= View::e($item['text'] ?? '') ?></p></div></article>
+            <?php endforeach; ?>
         </div>
+    </section>
+    <?php endif; ?>
+
+    <section class="card report-section-directory" id="client-report-directory" aria-label="Navegação do relatório gerencial">
+        <div class="section-heading report-directory-heading"><div><span class="eyebrow">Leitura do período</span><h2>Explore os resultados por assunto</h2><p>Os blocos ficam abertos na mesma página para facilitar comparação, impressão e tomada de decisão.</p></div></div>
         <nav class="report-section-card-grid report-section-card-grid-client">
-            <a class="report-section-link" href="#client-report-overview" data-report-section-link><span class="report-section-number">01</span><strong>Visão geral</strong><small>Volume, movimento diário e conversas prioritárias.</small></a>
-            <a class="report-section-link" href="#client-report-service" data-report-section-link><span class="report-section-number">02</span><strong>Atendimento</strong><small>Demanda por horário e eficiência da equipe.</small></a>
-            <a class="report-section-link" href="#client-report-team" data-report-section-link><span class="report-section-number">03</span><strong>IA e equipe</strong><small>Participação humana e desempenho do assistente.</small></a>
-            <a class="report-section-link" href="#client-report-results" data-report-section-link><span class="report-section-number">04</span><strong>CRM e agenda</strong><small>Conversão comercial e compromissos.</small></a>
+            <a class="report-section-link" href="#client-report-overview" data-report-section-link><span class="report-section-number">01</span><strong>Visão geral</strong><small>Volume diário e prioridades.</small></a>
+            <a class="report-section-link" href="#client-report-service" data-report-section-link><span class="report-section-number">02</span><strong>Horários de pico</strong><small>Mapa de calor da demanda.</small></a>
+            <a class="report-section-link" href="#client-report-team" data-report-section-link><span class="report-section-number">03</span><strong>IA e equipe</strong><small>Automação x atendimento humano.</small></a>
+            <a class="report-section-link" href="#client-report-results" data-report-section-link><span class="report-section-number">04</span><strong>CRM e agenda</strong><small>Funis e conversão.</small></a>
         </nav>
     </section>
 
     <div class="report-section-stack client-report-section-stack">
-
         <section class="card report-content-card client-report-panel" id="client-report-overview">
-            <header class="report-content-card-header">
-                <span class="report-section-number">01</span>
-                <div><span class="eyebrow">Visão geral</span><h2>Movimento e prioridades do atendimento</h2><p>Veja o volume diário, contatos mais ativos e conversas que exigem atenção.</p></div>
-                <a class="report-back-link" href="#client-report-directory">Voltar ao índice</a>
-            </header>
-            <div class="client-report-two-columns">
-                <section>
-                    <div class="section-heading"><div><span class="eyebrow">Movimento diário</span><h2>Mensagens por dia</h2></div><span class="badge"><?= View::e(date('d/m/Y', strtotime($filters['start']))) ?> a <?= View::e(date('d/m/Y', strtotime($filters['end']))) ?></span></div>
-                    <div class="client-report-days">
-                        <?php foreach ($byDay as $row): $pct = min(100, ((int) $row['total'] / $dayMax) * 100); ?>
-                            <article><time><?= View::e(date('d/m', strtotime($row['label']))) ?></time><span class="client-report-track"><i style="width:<?= (float) $pct ?>%"></i></span><strong><?= (int) $row['total'] ?></strong><small><?= (int) $row['incoming'] ?> recebidas · <?= (int) $row['outgoing'] ?> enviadas · <?= (int) $row['ai'] ?> pela IA</small></article>
-                        <?php endforeach; ?>
-                        <?php if (!$byDay): ?><div class="empty-state">Nenhuma mensagem no período selecionado.</div><?php endif; ?>
-                    </div>
-                </section>
-                <aside class="client-report-summary-card">
-                    <span class="eyebrow">Resumo do período</span><h3>Leitura rápida da operação</h3>
-                    <dl>
-                        <div><dt>Total de mensagens</dt><dd><?= $number($metrics['total_messages'] ?? 0) ?></dd></div>
-                        <div><dt>Média por conversa</dt><dd><?= number_format((float) ($metrics['avg_messages_per_conversation'] ?? 0), 1, ',', '.') ?></dd></div>
-                        <div><dt>Novos contatos</dt><dd><?= $number($metrics['contacts'] ?? 0) ?></dd></div>
-                        <div><dt>Mensagens com falha</dt><dd><?= $number($metrics['failed_messages'] ?? 0) ?></dd></div>
-                    </dl>
-                    <a class="btn btn-outline btn-block" href="<?= View::e(Router::url('/conversations')) ?>">Abrir conversas</a>
-                </aside>
+            <header class="report-content-card-header"><span class="report-section-number">01</span><div><span class="eyebrow">Visão geral</span><h2>Evolução do atendimento</h2><p>Compare volume total, mensagens recebidas e participação da IA ao longo dos dias.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
+            <div class="report-chart-layout">
+                <section class="report-chart-card"><div class="section-heading"><div><span class="eyebrow">Movimento diário</span><h2>Atendimento por dia</h2></div><span class="badge"><?= View::e(date('d/m', strtotime($filters['start']))) ?> → <?= View::e(date('d/m', strtotime($filters['end']))) ?></span></div><div class="report-svg-chart" data-report-line-chart data-series="<?= View::e((string) $lineSeries) ?>" aria-label="Gráfico de mensagens por dia"></div><div class="report-chart-legend"><span><i class="is-total"></i>Total</span><span><i class="is-incoming"></i>Recebidas</span><span><i class="is-ai"></i>IA</span></div></section>
+                <aside class="client-report-summary-card"><span class="eyebrow">Resumo</span><h3>Leitura rápida</h3><dl><div><dt>Total de mensagens</dt><dd><?= $number($metrics['total_messages'] ?? 0) ?></dd></div><div><dt>Média por conversa</dt><dd><?= number_format((float) ($metrics['avg_messages_per_conversation'] ?? 0), 1, ',', '.') ?></dd></div><div><dt>Encerradas</dt><dd><?= $number($metrics['closed_conversations'] ?? 0) ?></dd></div><div><dt>Mensagens com falha</dt><dd><?= $number($metrics['failed_messages'] ?? 0) ?></dd></div></dl><a class="btn btn-outline btn-block" href="<?= View::e(Router::url('/conversations')) ?>">Abrir conversas</a></aside>
             </div>
             <div class="client-report-priority-grid">
                 <section><div class="section-heading"><div><span class="eyebrow">Atenção</span><h2>Conversas prioritárias</h2></div></div><div class="client-report-list"><?php foreach ($attention as $item): ?><a href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) $item['id'])) ?>"><span><strong><?= View::e($item['contact_name'] ?: $item['phone']) ?></strong><small><?= View::e($item['attendance_mode']) ?> · <?= View::e($item['last_message_at'] ?? '') ?></small></span><b><?= (int) $item['unread_count'] ?></b></a><?php endforeach; ?><?php if (!$attention): ?><div class="empty-state">Nenhuma conversa pendente neste momento.</div><?php endif; ?></div></section>
@@ -111,45 +124,33 @@ $agendaMax = $maxValue($agendaByStatus);
         </section>
 
         <section class="card report-content-card client-report-panel" id="client-report-service">
-            <header class="report-content-card-header">
-                <span class="report-section-number">02</span>
-                <div><span class="eyebrow">Atendimento</span><h2>Demanda e eficiência operacional</h2><p>Entenda os horários mais movimentados e como a equipe está respondendo.</p></div>
-                <a class="report-back-link" href="#client-report-directory">Voltar ao índice</a>
-            </header>
-            <div class="client-report-two-columns">
-                <section><div class="section-heading"><div><span class="eyebrow">Demanda</span><h2>Horários com mais mensagens recebidas</h2></div></div><div class="client-hour-chart"><?php foreach ($byHour as $row): $pct=min(100,((int)$row['total']/$hourMax)*100); ?><article title="<?= (int)$row['total'] ?> mensagem(ns)"><span style="height:<?= max(6,(float)$pct) ?>%"></span><strong><?= str_pad((string)$row['label'],2,'0',STR_PAD_LEFT) ?>h</strong><small><?= (int)$row['total'] ?></small></article><?php endforeach; ?><?php if (!$byHour): ?><div class="empty-state">Sem mensagens recebidas no período.</div><?php endif; ?></div></section>
+            <header class="report-content-card-header"><span class="report-section-number">02</span><div><span class="eyebrow">Atendimento</span><h2>Quando seus clientes mais procuram você</h2><p>O mapa de calor mostra o volume de mensagens recebidas por dia da semana e horário.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
+            <div class="client-report-two-columns report-heatmap-layout">
+                <section class="report-heatmap-card"><div class="section-heading"><div><span class="eyebrow">Horários de pico</span><h2>Mapa de calor</h2></div></div><div class="report-heatmap-wrap"><div class="report-heatmap"><div class="report-heatmap-corner"></div><?php foreach ($hours as $hour): ?><div class="report-heatmap-hour"><?= str_pad((string) $hour, 2, '0', STR_PAD_LEFT) ?>h</div><?php endforeach; ?><?php foreach ($weekdayLabels as $dayIndex => $dayLabel): ?><div class="report-heatmap-day"><?= View::e($dayLabel) ?></div><?php foreach ($hours as $hour): $value = $heatmapLookup[$dayIndex . ':' . $hour] ?? 0; $level = $value > 0 ? max(.12, $value / $heatmapMax) : 0; ?><div class="report-heatmap-cell" style="--heat:<?= number_format($level, 3, '.', '') ?>" title="<?= View::e($dayLabel . ' ' . str_pad((string) $hour, 2, '0', STR_PAD_LEFT) . 'h: ' . $value . ' mensagem(ns)') ?>"><span><?= $value ?: '' ?></span></div><?php endforeach; ?><?php endforeach; ?></div></div><div class="report-heatmap-scale"><span>Menor demanda</span><i></i><span>Maior demanda</span></div></section>
                 <aside class="client-report-summary-card"><span class="eyebrow">Eficiência</span><h3>Indicadores de atendimento</h3><dl><div><dt>Respostas enviadas</dt><dd><?= $number($metrics['outgoing_messages'] ?? 0) ?></dd></div><div><dt>Respostas humanas</dt><dd><?= $number($metrics['human_replies'] ?? 0) ?></dd></div><div><dt>Participação humana</dt><dd><?= $percent($metrics['human_share'] ?? 0) ?></dd></div><div><dt>Conversas abertas agora</dt><dd><?= $number($metrics['open_conversations'] ?? 0) ?></dd></div></dl></aside>
             </div>
-            <div class="client-report-insight-banner"><strong>Como usar este relatório:</strong><span>concentre a equipe nos horários de maior demanda, revise conversas ainda abertas e acompanhe se o tempo de primeira resposta está melhorando.</span></div>
         </section>
 
         <section class="card report-content-card client-report-panel" id="client-report-team">
-            <header class="report-content-card-header">
-                <span class="report-section-number">03</span>
-                <div><span class="eyebrow">IA e equipe</span><h2>Participação humana e automática</h2><p>Compare respostas da equipe com o desempenho do assistente virtual.</p></div>
-                <a class="report-back-link" href="#client-report-directory">Voltar ao índice</a>
-            </header>
-            <div class="client-report-two-columns">
-                <section><div class="section-heading"><div><span class="eyebrow">Equipe</span><h2>Respostas humanas por responsável</h2></div></div><div class="executive-bars client-team-bars"><?php foreach ($teamPerformance as $row): ?><div><strong><?= View::e($row['label']) ?></strong><span><i style="width:<?= min(100,((int)$row['total']/$teamMax)*100) ?>%"></i></span><b><?= (int)$row['total'] ?></b><small><?= (int)$row['conversations'] ?> conversa(s)</small></div><?php endforeach; ?><?php if (!$teamPerformance): ?><div class="empty-state">Nenhuma resposta humana registrada no período.</div><?php endif; ?></div></section>
-                <aside class="client-report-summary-card"><span class="eyebrow">Assistente virtual</span><h3>Desempenho da IA</h3><dl><div><dt>Respostas automáticas</dt><dd><?= $number($metrics['ai_replies'] ?? 0) ?></dd></div><div><dt>Participação nas respostas</dt><dd><?= $percent($metrics['ai_share'] ?? 0) ?></dd></div><div><dt>Execuções bem-sucedidas</dt><dd><?= $number($metrics['ai_success'] ?? 0) ?></dd></div><div><dt>Falhas registradas</dt><dd><?= $number($metrics['ai_errors'] ?? 0) ?></dd></div></dl><a class="btn btn-outline btn-block" href="<?= View::e(Router::url('/automations')) ?>">Ver respostas e integrações</a></aside>
+            <header class="report-content-card-header"><span class="report-section-number">03</span><div><span class="eyebrow">IA e equipe</span><h2>Quanto da operação está automatizada</h2><p>Compare a participação da IA com as respostas humanas e veja o desempenho da equipe.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
+            <div class="report-ai-layout">
+                <section class="report-donut-card"><div class="section-heading"><div><span class="eyebrow">Distribuição</span><h2>IA x equipe</h2></div></div><div class="report-donut" data-report-donut data-series="<?= View::e((string) $donutSeries) ?>" data-center="<?= View::e($percent($metrics['ai_share'] ?? 0)) ?>"></div><div class="report-donut-summary"><div><span>IA</span><strong><?= $number($metrics['ai_replies'] ?? 0) ?></strong></div><div><span>Equipe</span><strong><?= $number($metrics['human_replies'] ?? 0) ?></strong></div></div></section>
+                <section><div class="section-heading"><div><span class="eyebrow">Equipe</span><h2>Respostas por responsável</h2></div></div><div class="executive-bars client-team-bars"><?php $teamMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $teamPerformance ?: [['total'=>1]])); foreach ($teamPerformance as $row): ?><div><strong><?= View::e($row['label']) ?></strong><span><i style="width:<?= min(100,((int)$row['total']/$teamMax)*100) ?>%"></i></span><b><?= (int)$row['total'] ?></b><small><?= (int)$row['conversations'] ?> conversa(s)</small></div><?php endforeach; ?><?php if (!$teamPerformance): ?><div class="empty-state">Nenhuma resposta humana registrada no período.</div><?php endif; ?></div></section>
+                <aside class="client-report-summary-card"><span class="eyebrow">Assistente virtual</span><h3>Desempenho da IA</h3><dl><div><dt>Participação</dt><dd><?= $percent($metrics['ai_share'] ?? 0) ?></dd></div><div><dt>Execuções bem-sucedidas</dt><dd><?= $number($metrics['ai_success'] ?? 0) ?></dd></div><div><dt>Falhas registradas</dt><dd><?= $number($metrics['ai_errors'] ?? 0) ?></dd></div><div><dt>Google Agenda com erro</dt><dd><?= $number($metrics['google_sync_errors'] ?? 0) ?></dd></div></dl></aside>
             </div>
         </section>
 
         <section class="card report-content-card client-report-panel" id="client-report-results">
-            <header class="report-content-card-header">
-                <span class="report-section-number">04</span>
-                <div><span class="eyebrow">CRM e agenda</span><h2>Conversão e resultados do período</h2><p>Acompanhe oportunidades, compromissos e taxas de conversão.</p></div>
-                <a class="report-back-link" href="#client-report-directory">Voltar ao índice</a>
-            </header>
+            <header class="report-content-card-header"><span class="report-section-number">04</span><div><span class="eyebrow">CRM e agenda</span><h2>Do interesse ao resultado</h2><p>Veja onde as oportunidades estão no funil e em qual etapa os agendamentos avançam ou param.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
             <div class="client-report-two-columns">
-                <section><div class="section-heading"><div><span class="eyebrow">Comercial</span><h2>Oportunidades por etapa</h2></div><a class="table-link" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'leads']))) ?>">Exportar CRM</a></div><div class="executive-bars"><?php foreach ($crmByStage as $row): ?><div><strong><?= View::e($row['label']) ?></strong><span><i style="width:<?= min(100,((int)$row['total']/$crmMax)*100) ?>%"></i></span><b><?= (int)$row['total'] ?></b><small><?= $money($row['value']) ?></small></div><?php endforeach; ?><?php if (!$crmByStage): ?><div class="empty-state">Nenhuma oportunidade cadastrada.</div><?php endif; ?></div></section>
-                <aside class="client-report-summary-card"><span class="eyebrow">CRM</span><h3>Resultado comercial</h3><dl><div><dt>Oportunidades criadas</dt><dd><?= $number($metrics['crm_leads'] ?? 0) ?></dd></div><div><dt>Oportunidades ganhas</dt><dd><?= $number($metrics['crm_won'] ?? 0) ?></dd></div><div><dt>Taxa de conversão</dt><dd><?= $percent($metrics['crm_conversion'] ?? 0) ?></dd></div></dl><a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/crm')) ?>">Abrir CRM</a></aside>
+                <section><div class="section-heading"><div><span class="eyebrow">Comercial</span><h2>Oportunidades por etapa</h2></div><a class="table-link" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'leads']))) ?>">Exportar CRM</a></div><div class="report-funnel"><?php $crmMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $crmByStage ?: [['total'=>1]])); foreach ($crmByStage as $row): $width = max(18, min(100, ((int) $row['total'] / $crmMax) * 100)); ?><article><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= (int)$row['total'] ?></strong><small><?= $money($row['value']) ?></small></div></article><?php endforeach; ?><?php if (!$crmByStage): ?><div class="empty-state">Nenhuma oportunidade cadastrada.</div><?php endif; ?></div></section>
+                <aside class="client-report-summary-card"><span class="eyebrow">CRM</span><h3>Resultado comercial</h3><dl><div><dt>Oportunidades criadas</dt><dd><?= $number($metrics['crm_leads'] ?? 0) ?></dd></div><div><dt>Ganhas</dt><dd><?= $number($metrics['crm_won'] ?? 0) ?></dd></div><div><dt>Perdidas</dt><dd><?= $number($metrics['crm_lost'] ?? 0) ?></dd></div><div><dt>Taxa de conversão</dt><dd><?= $percent($metrics['crm_conversion'] ?? 0) ?></dd></div></dl><a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/crm')) ?>">Abrir CRM</a></aside>
             </div>
             <div class="client-report-two-columns client-report-agenda-row">
-                <section><div class="section-heading"><div><span class="eyebrow">Agenda</span><h2>Compromissos por situação</h2></div></div><div class="executive-bars"><?php foreach ($agendaByStatus as $row): ?><div><strong><?= View::e($statusLabels[$row['label']] ?? $row['label']) ?></strong><span><i style="width:<?= min(100,((int)$row['total']/$agendaMax)*100) ?>%"></i></span><b><?= (int)$row['total'] ?></b></div><?php endforeach; ?><?php if (!$agendaByStatus): ?><div class="empty-state">Nenhum compromisso no período.</div><?php endif; ?></div></section>
-                <aside class="client-report-summary-card"><span class="eyebrow">Conversão</span><h3>Resultado da agenda</h3><dl><div><dt>Total de compromissos</dt><dd><?= $number($metrics['appointments'] ?? 0) ?></dd></div><div><dt>Confirmados/concluídos</dt><dd><?= $number($metrics['appointments_confirmed'] ?? 0) ?></dd></div><div><dt>Cancelados/não compareceu</dt><dd><?= $number($metrics['appointments_cancelled'] ?? 0) ?></dd></div><div><dt>Conversão</dt><dd><?= $percent($metrics['agenda_conversion'] ?? 0) ?></dd></div></dl><a class="btn btn-outline btn-block" href="<?= View::e(Router::url('/calendar')) ?>">Abrir agenda</a></aside>
+                <section><div class="section-heading"><div><span class="eyebrow">Agenda</span><h2>Funil de agendamento</h2></div></div><div class="report-funnel is-agenda"><?php $agendaFunnelMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $agendaFunnel ?: [['total'=>1]])); foreach ($agendaFunnel as $row): $width=max(18,min(100,((int)$row['total']/$agendaFunnelMax)*100)); ?><article><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= $number($row['total']) ?></strong></div></article><?php endforeach; ?></div></section>
+                <aside class="client-report-summary-card"><span class="eyebrow">Conversão</span><h3>Resultado da agenda</h3><dl><div><dt>Compromissos</dt><dd><?= $number($metrics['appointments'] ?? 0) ?></dd></div><div><dt>Confirmados/concluídos</dt><dd><?= $number($metrics['appointments_confirmed'] ?? 0) ?></dd></div><div><dt>Concluídos</dt><dd><?= $number($metrics['appointments_completed'] ?? 0) ?></dd></div><div><dt>Não compareceram</dt><dd><?= $number($metrics['appointments_no_show'] ?? 0) ?></dd></div><div><dt>Conversão</dt><dd><?= $percent($metrics['agenda_conversion'] ?? 0) ?></dd></div></dl><a class="btn btn-outline btn-block" href="<?= View::e(Router::url('/calendar')) ?>">Abrir agenda</a></aside>
             </div>
         </section>
     </div>
-<script src="<?= View::e(Router::url('/assets/js/reports.js?v=34.2')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.4.1')) ?>" defer></script>
 </div>

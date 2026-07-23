@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Core\Database;
+use DateTimeImmutable;
 use PDO;
 use Throwable;
 
@@ -159,6 +160,41 @@ final class AdminExecutiveReportService
             ? round(((int) $metrics['appointments_confirmed'] / (int) $metrics['appointments']) * 100, 1)
             : 0;
 
+        $previousDate = $this->previousDateParams($filters);
+        $previousParams = $previousDate + ($tenantId > 0 ? ['tenant_id' => $tenantId] : []);
+        $previousMetrics = [
+            'new_companies' => $this->scalar(
+                'SELECT COUNT(*) FROM tenants WHERE created_at BETWEEN :start AND :end' . $tenantTableScope,
+                $previousParams
+            ),
+            'messages' => $this->scalar(
+                'SELECT COUNT(*) FROM conversation_messages WHERE sent_at BETWEEN :start AND :end' . $scope,
+                $previousParams
+            ),
+            'ai_replies' => $this->scalar(
+                'SELECT COUNT(*) FROM conversation_messages WHERE direction = "outgoing" AND sender_type = "ai" AND sent_at BETWEEN :start AND :end' . $scope,
+                $previousParams
+            ),
+            'appointments_confirmed' => $this->scalar(
+                'SELECT COUNT(*) FROM calendar_appointments WHERE status IN ("confirmed","completed") AND starts_at BETWEEN :start AND :end' . $scope,
+                $previousParams
+            ),
+            'automation_failures' => $this->scalar(
+                'SELECT COUNT(*) FROM ai_automation_logs WHERE status = "error" AND created_at BETWEEN :start AND :end' . $scope,
+                $previousParams
+            ) + $this->scalar(
+                'SELECT COUNT(*) FROM n8n_flow_logs WHERE status = "error" AND created_at BETWEEN :start AND :end' . $scope,
+                $previousParams
+            ),
+        ];
+        $comparisons = [
+            'new_companies' => $this->percentChange((int) $metrics['new_companies'], (int) $previousMetrics['new_companies']),
+            'messages' => $this->percentChange((int) $metrics['messages'], (int) $previousMetrics['messages']),
+            'ai_replies' => $this->percentChange((int) $metrics['ai_replies'], (int) $previousMetrics['ai_replies']),
+            'appointments_confirmed' => $this->percentChange((int) $metrics['appointments_confirmed'], (int) $previousMetrics['appointments_confirmed']),
+            'automation_failures' => $this->percentChange((int) $metrics['automation_failures'], (int) $previousMetrics['automation_failures']),
+        ];
+
         $companyGrowth = $this->rows(
             'SELECT DATE_FORMAT(created_at, "%Y-%m") AS label, COUNT(*) AS total
              FROM tenants WHERE created_at BETWEEN :start AND :end' . $tenantTableScope . '
@@ -222,6 +258,8 @@ final class AdminExecutiveReportService
         usort($failures, static fn (array $a, array $b): int => (int) $b['total'] <=> (int) $a['total']);
         $failures = array_slice($failures, 0, 12);
 
+        $failureTrend = $this->failureTrend($tenantId, $date);
+
         $agendaStatus = $this->rows(
             'SELECT status AS label, COUNT(*) AS total
              FROM calendar_appointments WHERE starts_at BETWEEN :start AND :end' . $scope . '
@@ -245,10 +283,139 @@ final class AdminExecutiveReportService
 
         $tenants = $this->rows('SELECT id, name FROM tenants ORDER BY name');
 
+        $healthDistribution = [
+            ['label' => 'Saudáveis', 'total' => (int) ($metrics['healthy_companies'] ?? 0)],
+            ['label' => 'Atenção', 'total' => (int) ($metrics['attention_companies'] ?? 0)],
+            ['label' => 'Críticas', 'total' => (int) ($metrics['critical_companies'] ?? 0)],
+            ['label' => 'Sem uso', 'total' => (int) ($metrics['idle_companies'] ?? 0)],
+            ['label' => 'Bloqueadas', 'total' => (int) ($metrics['blocked_companies'] ?? 0)],
+        ];
+        $insights = $this->buildInsights($metrics, $comparisons, $usageByTenant);
+
         return compact(
-            'metrics', 'companyGrowth', 'messagesByDay', 'revenueByPlan', 'usageByTenant',
-            'lowUsage', 'failures', 'agendaStatus', 'commercialStages', 'recentInvoices', 'tenants'
+            'metrics', 'comparisons', 'previousMetrics', 'companyGrowth', 'messagesByDay', 'revenueByPlan', 'usageByTenant',
+            'lowUsage', 'failures', 'failureTrend', 'healthDistribution', 'insights', 'agendaStatus', 'commercialStages', 'recentInvoices', 'tenants'
         ) + ['warnings' => array_values(array_unique($this->warnings))];
+    }
+
+
+    private function previousDateParams(array $filters): array
+    {
+        $start = new DateTimeImmutable((string) $filters['start']);
+        $end = new DateTimeImmutable((string) $filters['end']);
+        $days = max(1, (int) $start->diff($end)->days + 1);
+        $previousEnd = $start->modify('-1 day');
+        $previousStart = $previousEnd->modify('-' . ($days - 1) . ' days');
+        return [
+            'start' => $previousStart->format('Y-m-d 00:00:00'),
+            'end' => $previousEnd->format('Y-m-d 23:59:59'),
+        ];
+    }
+
+    private function percentChange(int|float $current, int|float $previous): ?float
+    {
+        if ((float) $previous === 0.0) {
+            return (float) $current === 0.0 ? 0.0 : null;
+        }
+        return round((((float) $current - (float) $previous) / abs((float) $previous)) * 100, 1);
+    }
+
+    private function failureTrend(int $tenantId, array $date): array
+    {
+        if ($this->aggregation->isAvailable()) {
+            $scope = $tenantId > 0 ? ' AND tenant_id = :tenant_id' : '';
+            $params = [
+                'start_date' => substr((string) $date['start'], 0, 10),
+                'end_date' => substr((string) $date['end'], 0, 10),
+            ] + ($tenantId > 0 ? ['tenant_id' => $tenantId] : []);
+            return $this->rows(
+                'SELECT metric_date AS label, SUM(ai_errors + n8n_errors + google_sync_errors) AS total
+                 FROM report_daily_metrics
+                 WHERE metric_date BETWEEN :start_date AND :end_date' . $scope . '
+                 GROUP BY metric_date ORDER BY metric_date',
+                $params
+            );
+        }
+
+        $scope = $tenantId > 0 ? ' AND tenant_id = :tenant_id' : '';
+        $params = $date + ($tenantId > 0 ? ['tenant_id' => $tenantId] : []);
+        $sources = [
+            $this->rows(
+                'SELECT DATE(created_at) AS label, COUNT(*) AS total FROM ai_automation_logs WHERE status = "error" AND created_at BETWEEN :start AND :end' . $scope . ' GROUP BY DATE(created_at)',
+                $params
+            ),
+            $this->rows(
+                'SELECT DATE(created_at) AS label, COUNT(*) AS total FROM n8n_flow_logs WHERE status = "error" AND created_at BETWEEN :start AND :end' . $scope . ' GROUP BY DATE(created_at)',
+                $params
+            ),
+            $this->rows(
+                'SELECT DATE(created_at) AS label, COUNT(*) AS total FROM calendar_google_sync_logs WHERE status <> "success" AND created_at BETWEEN :start AND :end' . $scope . ' GROUP BY DATE(created_at)',
+                $params
+            ),
+        ];
+
+        $totals = [];
+        foreach ($sources as $rows) {
+            foreach ($rows as $row) {
+                $label = (string) ($row['label'] ?? '');
+                if ($label === '') continue;
+                $totals[$label] = ($totals[$label] ?? 0) + (int) ($row['total'] ?? 0);
+            }
+        }
+        ksort($totals);
+        return array_map(
+            static fn (string $label, int $total): array => ['label' => $label, 'total' => $total],
+            array_keys($totals),
+            array_values($totals)
+        );
+    }
+
+    private function buildInsights(array $metrics, array $comparisons, array $usageByTenant): array
+    {
+        $insights = [];
+        $messageChange = $comparisons['messages'] ?? null;
+        if ($messageChange !== null && abs((float) $messageChange) >= 5) {
+            $insights[] = [
+                'tone' => (float) $messageChange >= 0 ? 'positive' : 'attention',
+                'title' => 'Uso da plataforma',
+                'text' => 'O volume de mensagens ' . ((float) $messageChange >= 0 ? 'cresceu ' : 'caiu ') . number_format(abs((float) $messageChange), 1, ',', '.') . '% contra o período anterior.',
+            ];
+        }
+
+        if ($usageByTenant !== []) {
+            $top = $usageByTenant[0];
+            $insights[] = [
+                'tone' => 'info',
+                'title' => 'Empresa com maior uso',
+                'text' => (string) ($top['name'] ?? 'Empresa') . ' concentrou ' . number_format((int) ($top['messages'] ?? 0), 0, ',', '.') . ' mensagem(ns) no período.',
+            ];
+        }
+
+        $attention = (int) ($metrics['attention_companies'] ?? 0) + (int) ($metrics['critical_companies'] ?? 0);
+        if ($attention > 0) {
+            $insights[] = [
+                'tone' => 'attention',
+                'title' => 'Empresas que precisam de atenção',
+                'text' => $attention . ' empresa(s) estão classificadas como atenção ou crítica na última leitura de saúde.',
+            ];
+        }
+
+        if ((int) ($metrics['automation_failures'] ?? 0) > 0) {
+            $insights[] = [
+                'tone' => 'attention',
+                'title' => 'Falhas de automação',
+                'text' => (int) $metrics['automation_failures'] . ' falha(s) de IA/n8n foram registradas no período.',
+            ];
+        }
+
+        if ((int) ($metrics['appointments'] ?? 0) > 0) {
+            $insights[] = [
+                'tone' => (float) ($metrics['agenda_conversion'] ?? 0) >= 70 ? 'positive' : 'info',
+                'title' => 'Agenda',
+                'text' => 'A taxa de compromissos confirmados ou concluídos ficou em ' . number_format((float) ($metrics['agenda_conversion'] ?? 0), 1, ',', '.') . '%.',
+            ];
+        }
+        return array_slice($insights, 0, 5);
     }
 
     private function usageByTenant(int $tenantId, array $date, array $params, string $scopeJoin): array

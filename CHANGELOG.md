@@ -1,17 +1,13 @@
-# RS Connect 36.4.0 — Fundação dos Relatórios Executivos
+# RS Connect 36.4.1 — Relatórios executivos visuais e insights
 
-- Cria a tabela derivada `report_daily_metrics` para séries históricas por empresa e dia.
-- Adiciona o motor `ReportingAggregationService` com reconstrução segura e cache diário.
-- Mantém as tabelas operacionais como fonte de verdade; a camada de métricas pode ser recalculada.
-- Refatora o relatório do cliente para `TenantExecutiveReportService`, reduzindo consultas pesadas no controller.
-- Corrige o filtro de empresa no relatório administrativo: `tenants.id` deixa de ser tratado como `tenant_id`.
-- Corrige uso por empresa para contar conversas dentro do período selecionado.
-- Corrige atendimento humano para considerar respostas humanas no período, e não o modo atual da conversa.
-- Corrige a coorte de conversão do CRM do cliente: ganhos são comparados com oportunidades criadas no mesmo período.
-- Prepara métricas de disponibilidade, seleção de horário e sincronização Google Agenda para os próximos gráficos.
-- Adiciona script CLI de backfill e diagnóstico da camada de relatórios.
-- Adiciona migration `048_reporting_metrics_foundation.sql`.
-- Não altera o layout dos relatórios nesta etapa.
+- Evolui os relatórios do cliente e do Super Admin para dashboards executivos com gráficos reais em SVG, sem dependência externa.
+- Adiciona comparação automática com o período anterior nos KPIs principais.
+- Cliente: gráfico diário de atendimento, mapa de calor por dia/horário, IA x equipe, funil de CRM e funil de agenda.
+- Cliente: insights por regras sobre crescimento, participação da IA, horário de pico, falhas e oportunidades de confirmação.
+- Admin RS: saúde da base em gráfico de distribuição, ranking de uso, tendência diária de mensagens, tendência de falhas e insights executivos.
+- Mantém isolamento por tenant_id e não expõe conteúdo das conversas nos relatórios administrativos.
+- Reutiliza a fundação `report_daily_metrics` da migration 048; não exige nova migration.
+- Mantém fallback para tabelas operacionais quando a camada agregada não estiver disponível.
 
 # RS Connect 36.3.0 — Backup operacional confiável
 

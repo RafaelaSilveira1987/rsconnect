@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Core\Database;
+use DateTimeImmutable;
 use PDO;
 use Throwable;
 
@@ -121,6 +122,18 @@ final class TenantExecutiveReportService
                 'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status IN ("cancelled","no_show") AND starts_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $date
             ),
+            'appointments_completed' => $this->metricOrScalar(
+                $aggregateTotals,
+                'appointments_completed',
+                'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status = "completed" AND starts_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $date
+            ),
+            'appointments_no_show' => $this->metricOrScalar(
+                $aggregateTotals,
+                'appointments_no_show',
+                'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status = "no_show" AND starts_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $date
+            ),
             'overdue_invoices' => $this->scalar(
                 'SELECT COUNT(*) FROM tenant_invoices WHERE tenant_id = :tenant_id AND status = "overdue"',
                 ['tenant_id' => $tenantId]
@@ -184,6 +197,42 @@ final class TenantExecutiveReportService
             ? round((int) $metrics['total_messages'] / (int) $metrics['conversations'], 1)
             : 0;
 
+        $previousDate = $this->previousDateParams($filters);
+        $previousMetrics = [
+            'conversations' => $this->scalar(
+                'SELECT COUNT(*) FROM conversations WHERE tenant_id = :tenant_id AND created_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $previousDate
+            ),
+            'contacts' => $this->scalar(
+                'SELECT COUNT(*) FROM contacts WHERE tenant_id = :tenant_id AND created_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $previousDate
+            ),
+            'total_messages' => $this->scalar(
+                'SELECT COUNT(*) FROM conversation_messages WHERE tenant_id = :tenant_id AND sent_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $previousDate
+            ),
+            'ai_replies' => $this->scalar(
+                'SELECT COUNT(*) FROM conversation_messages WHERE tenant_id = :tenant_id AND direction = "outgoing" AND sender_type = "ai" AND sent_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $previousDate
+            ),
+            'appointments_confirmed' => $this->scalar(
+                'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status IN ("confirmed","completed") AND starts_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $previousDate
+            ),
+            'crm_won' => $this->scalar(
+                'SELECT COUNT(*) FROM crm_leads WHERE tenant_id = :tenant_id AND status = "won" AND created_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $previousDate
+            ),
+        ];
+        $comparisons = [
+            'conversations' => $this->percentChange((int) $metrics['conversations'], (int) $previousMetrics['conversations']),
+            'contacts' => $this->percentChange((int) $metrics['contacts'], (int) $previousMetrics['contacts']),
+            'total_messages' => $this->percentChange((int) $metrics['total_messages'], (int) $previousMetrics['total_messages']),
+            'ai_replies' => $this->percentChange((int) $metrics['ai_replies'], (int) $previousMetrics['ai_replies']),
+            'appointments_confirmed' => $this->percentChange((int) $metrics['appointments_confirmed'], (int) $previousMetrics['appointments_confirmed']),
+            'crm_won' => $this->percentChange((int) $metrics['crm_won'], (int) $previousMetrics['crm_won']),
+        ];
+
         if ($byDay === []) {
             $byDay = $this->rows(
                 'SELECT DATE(sent_at) AS label, COUNT(*) AS total,
@@ -204,6 +253,15 @@ final class TenantExecutiveReportService
              WHERE tenant_id = :tenant_id AND direction = "incoming" AND sent_at BETWEEN :start AND :end
              GROUP BY HOUR(sent_at)
              ORDER BY label ASC',
+            ['tenant_id' => $tenantId] + $date
+        );
+
+        $heatmap = $this->rows(
+            'SELECT WEEKDAY(sent_at) AS weekday_index, HOUR(sent_at) AS hour_index, COUNT(*) AS total
+             FROM conversation_messages
+             WHERE tenant_id = :tenant_id AND direction = "incoming" AND sent_at BETWEEN :start AND :end
+             GROUP BY WEEKDAY(sent_at), HOUR(sent_at)
+             ORDER BY weekday_index, hour_index',
             ['tenant_id' => $tenantId] + $date
         );
 
@@ -281,10 +339,102 @@ final class TenantExecutiveReportService
             ['tenant_id' => $tenantId]
         );
 
+        $agendaFunnel = [
+            ['label' => 'Solicitações', 'total' => (int) ($metrics['availability_requests'] ?? 0)],
+            ['label' => 'Horários oferecidos', 'total' => (int) ($metrics['availability_slots'] ?? 0)],
+            ['label' => 'Horários escolhidos', 'total' => (int) ($metrics['availability_selected_slots'] ?? 0)],
+            ['label' => 'Confirmados', 'total' => (int) ($metrics['appointments_confirmed'] ?? 0)],
+            ['label' => 'Concluídos', 'total' => (int) ($metrics['appointments_completed'] ?? 0)],
+        ];
+
+        $insights = $this->buildInsights($metrics, $comparisons, $heatmap);
+
         return compact(
-            'metrics', 'byDay', 'byHour', 'crmByStage', 'agendaByStatus',
-            'teamPerformance', 'topContacts', 'byTenant', 'attention', 'recentInvoices'
+            'metrics', 'comparisons', 'previousMetrics', 'byDay', 'byHour', 'heatmap', 'crmByStage', 'agendaByStatus',
+            'agendaFunnel', 'insights', 'teamPerformance', 'topContacts', 'byTenant', 'attention', 'recentInvoices'
         ) + ['warnings' => array_values(array_unique($this->warnings))];
+    }
+
+
+    private function previousDateParams(array $filters): array
+    {
+        $start = new DateTimeImmutable((string) $filters['start']);
+        $end = new DateTimeImmutable((string) $filters['end']);
+        $days = max(1, (int) $start->diff($end)->days + 1);
+        $previousEnd = $start->modify('-1 day');
+        $previousStart = $previousEnd->modify('-' . ($days - 1) . ' days');
+
+        return [
+            'start' => $previousStart->format('Y-m-d 00:00:00'),
+            'end' => $previousEnd->format('Y-m-d 23:59:59'),
+        ];
+    }
+
+    private function percentChange(int|float $current, int|float $previous): ?float
+    {
+        if ((float) $previous === 0.0) {
+            return (float) $current === 0.0 ? 0.0 : null;
+        }
+        return round((((float) $current - (float) $previous) / abs((float) $previous)) * 100, 1);
+    }
+
+    private function buildInsights(array $metrics, array $comparisons, array $heatmap): array
+    {
+        $insights = [];
+        $conversationChange = $comparisons['conversations'] ?? null;
+        if ($conversationChange !== null && abs((float) $conversationChange) >= 5) {
+            $direction = (float) $conversationChange >= 0 ? 'cresceu' : 'caiu';
+            $insights[] = [
+                'tone' => (float) $conversationChange >= 0 ? 'positive' : 'attention',
+                'title' => 'Movimento do atendimento',
+                'text' => 'O volume de conversas ' . $direction . ' ' . number_format(abs((float) $conversationChange), 1, ',', '.') . '% em relação ao período anterior.',
+            ];
+        }
+
+        if ((float) ($metrics['ai_share'] ?? 0) > 0) {
+            $insights[] = [
+                'tone' => (float) $metrics['ai_share'] >= 60 ? 'positive' : 'info',
+                'title' => 'Participação da IA',
+                'text' => number_format((float) $metrics['ai_share'], 1, ',', '.') . '% das respostas enviadas no período foram feitas pela IA.',
+            ];
+        }
+
+        $peak = null;
+        foreach ($heatmap as $row) {
+            if ($peak === null || (int) ($row['total'] ?? 0) > (int) ($peak['total'] ?? 0)) {
+                $peak = $row;
+            }
+        }
+        if ($peak && (int) ($peak['total'] ?? 0) > 0) {
+            $days = ['segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado', 'domingo'];
+            $day = $days[(int) ($peak['weekday_index'] ?? 0)] ?? 'dia não identificado';
+            $hour = str_pad((string) ((int) ($peak['hour_index'] ?? 0)), 2, '0', STR_PAD_LEFT) . 'h';
+            $insights[] = [
+                'tone' => 'info',
+                'title' => 'Horário de maior procura',
+                'text' => ucfirst($day) . ', por volta de ' . $hour . ', concentrou o maior volume de mensagens recebidas.',
+            ];
+        }
+
+        $selected = (int) ($metrics['availability_selected_slots'] ?? 0);
+        $confirmed = (int) ($metrics['appointments_confirmed'] ?? 0);
+        if ($selected > $confirmed) {
+            $insights[] = [
+                'tone' => 'attention',
+                'title' => 'Oportunidade na agenda',
+                'text' => ($selected - $confirmed) . ' seleção(ões) de horário ainda não aparecem como compromisso confirmado ou concluído no período.',
+            ];
+        }
+
+        if ((int) ($metrics['failed_messages'] ?? 0) > 0) {
+            $insights[] = [
+                'tone' => 'attention',
+                'title' => 'Mensagens com falha',
+                'text' => (int) $metrics['failed_messages'] . ' mensagem(ns) tiveram status de falha no período e merecem revisão.',
+            ];
+        }
+
+        return array_slice($insights, 0, 5);
     }
 
     private function metricOrScalar(array $totals, string $metric, string $sql, array $params): int
