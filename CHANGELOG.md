@@ -1,3 +1,12 @@
+## 36.4.7 - Relatórios com cor e preenchimento controlado
+
+- Restaura barras preenchidas nos funis de CRM, disponibilidade, agenda e comercial.
+- Usa cores semânticas e gradientes suaves para facilitar leitura de volume.
+- Evolução diária passa a usar linhas coloridas com áreas translúcidas independentes.
+- O preenchimento do gráfico não é aplicado ao path da linha, evitando a antiga mancha preta.
+- Mantém responsividade e o layout clean introduzido na 36.4.6.
+- Atualiza cache-busting de `reports.css` e `reports.js` para 36.4.7.
+
 ## v36.4.6 — Refinamento visual dos relatórios
 
 - Redesenha os relatórios do cliente e do Super Admin com a identidade clara do RS Connect.

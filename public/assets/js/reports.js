@@ -1,4 +1,4 @@
-/* RS Connect v36.4.6 — gráficos executivos clean, sem dependências externas. */
+/* RS Connect v36.4.7 — gráficos executivos coloridos com preenchimento seguro, sem dependências externas. */
 (() => {
   'use strict';
 
@@ -128,8 +128,44 @@
       svg.appendChild(label);
     });
 
+    // v36.4.7: o preenchimento é um path separado da linha. Isso evita o bug
+    // anterior em que a própria linha recebia fill e formava uma mancha sólida.
+    const gradientColors = {
+      'series-total': '#146498',
+      'series-incoming': '#02948e',
+      'series-ai': '#7658b3',
+    };
+    const chartId = `report-chart-${Math.random().toString(36).slice(2, 9)}`;
+    const defs = svgNode('defs');
+
+    series.forEach((item, seriesIndex) => {
+      const gradientId = `${chartId}-area-${seriesIndex}`;
+      const gradient = svgNode('linearGradient', {
+        id: gradientId,
+        x1: '0',
+        y1: '0',
+        x2: '0',
+        y2: '1',
+      });
+      const color = gradientColors[item.className] || '#146498';
+      gradient.appendChild(svgNode('stop', { offset: '0%', 'stop-color': color, 'stop-opacity': item.className === 'series-total' ? '.22' : '.14' }));
+      gradient.appendChild(svgNode('stop', { offset: '100%', 'stop-color': color, 'stop-opacity': '.015' }));
+      defs.appendChild(gradient);
+      item.gradientId = gradientId;
+    });
+    svg.appendChild(defs);
+
     series.forEach((item) => {
       const commands = data.map((row, index) => `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(row[item.key])}`).join(' ');
+      const baseline = y(0);
+      const areaCommands = `${commands} L ${x(data.length - 1)} ${baseline} L ${x(0)} ${baseline} Z`;
+      const area = svgNode('path', {
+        d: areaCommands,
+        class: `chart-area ${item.className}`,
+        fill: `url(#${item.gradientId})`,
+      });
+      svg.appendChild(area);
+
       const line = svgNode('path', {
         d: commands,
         class: `chart-line ${item.className}`,
@@ -143,7 +179,7 @@
         const dot = svgNode('circle', {
           cx: x(index),
           cy: y(value),
-          r: 3.25,
+          r: 3.5,
           class: `chart-dot ${item.className}`,
         });
         svg.appendChild(dot);

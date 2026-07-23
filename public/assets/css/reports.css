@@ -794,3 +794,131 @@ body:has(> .executive-report-page) {
 .report-v3646 .report-trend.is-up { color: #087f78 !important; }
 .report-v3646 .report-trend.is-down { color: #b54750 !important; }
 .report-v3646 .report-trend.is-neutral { color: #7a8798 !important; }
+
+
+/* RS Connect v36.4.7 — mais cor e leitura visual, preservando o layout clean */
+.report-v3647 {
+  --report-blue-bright: #1977ad;
+  --report-teal-bright: #05a39b;
+  --report-purple-bright: #7558bd;
+  --report-green: #15956f;
+  --report-amber: #cf8a2f;
+  --report-slate: #64748b;
+}
+
+/* Evolução diária: linhas coloridas + áreas suaves independentes. */
+.report-v3647 .report-svg-chart {
+  background:
+    linear-gradient(180deg, rgba(20,100,152,.025) 0%, rgba(255,255,255,0) 48%),
+    #fff;
+}
+.report-v3647 .chart-area {
+  stroke: none !important;
+  pointer-events: none;
+}
+.report-v3647 .chart-line {
+  fill: none !important;
+  stroke-width: 2.6;
+}
+.report-v3647 .chart-line.series-total { stroke: var(--report-blue-bright); }
+.report-v3647 .chart-line.series-incoming { stroke: var(--report-teal-bright); }
+.report-v3647 .chart-line.series-ai { stroke: var(--report-purple-bright); }
+.report-v3647 .chart-dot.series-total { fill: var(--report-blue-bright); }
+.report-v3647 .chart-dot.series-incoming { fill: var(--report-teal-bright); }
+.report-v3647 .chart-dot.series-ai { fill: var(--report-purple-bright); }
+.report-v3647 .report-chart-legend span {
+  border: 1px solid #e7edf2;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(17,24,39,.025);
+}
+.report-v3647 .report-chart-legend i { height: 4px; }
+.report-v3647 .report-chart-legend i.is-total { background: var(--report-blue-bright); }
+.report-v3647 .report-chart-legend i.is-incoming { background: var(--report-teal-bright); }
+.report-v3647 .report-chart-legend i.is-ai { background: var(--report-purple-bright); }
+
+/* Funis e barras: volta o preenchimento para leitura rápida, sem ficar pesado. */
+.report-v3647 .report-funnel article > div,
+.report-v3647 .report-funnel.is-admin article > div,
+.report-v3647 .report-funnel.is-agenda article > div,
+.report-v3647 .report-funnel.is-agenda article.is-positive > div {
+  min-height: 40px;
+  border: 0;
+  border-left: 0;
+  color: #fff;
+  box-shadow: 0 5px 13px rgba(20,100,152,.10);
+  text-shadow: 0 1px 1px rgba(0,0,0,.06);
+}
+
+/* CRM: variação por etapa para facilitar leitura sem depender só do tamanho. */
+.report-v3647 .report-funnel:not(.is-agenda):not(.is-admin) article:nth-child(6n+1) > div {
+  background: linear-gradient(90deg, #146498, #2a7caf);
+}
+.report-v3647 .report-funnel:not(.is-agenda):not(.is-admin) article:nth-child(6n+2) > div {
+  background: linear-gradient(90deg, #078f99, #20a4ab);
+}
+.report-v3647 .report-funnel:not(.is-agenda):not(.is-admin) article:nth-child(6n+3) > div {
+  background: linear-gradient(90deg, #7658b3, #9275c9);
+}
+.report-v3647 .report-funnel:not(.is-agenda):not(.is-admin) article:nth-child(6n+4) > div {
+  background: linear-gradient(90deg, #c8872e, #dfa34e);
+}
+.report-v3647 .report-funnel:not(.is-agenda):not(.is-admin) article:nth-child(6n+5) > div {
+  background: linear-gradient(90deg, #148963, #28a77e);
+}
+.report-v3647 .report-funnel:not(.is-agenda):not(.is-admin) article:nth-child(6n+6) > div {
+  background: linear-gradient(90deg, #64748b, #8290a2);
+}
+
+/* Busca de horários: identidade teal/azul. */
+.report-v3647 .report-funnel.is-agenda article > div {
+  background: linear-gradient(90deg, #02948e, #1679a7);
+}
+/* Resultado da agenda: semântica visual. */
+.report-v3647 .report-funnel.is-agenda article.is-positive > div {
+  background: linear-gradient(90deg, #148963, #2aa77f);
+}
+.report-v3647 .report-funnel.is-agenda article.is-attention > div {
+  border: 0;
+  background: linear-gradient(90deg, #c8872e, #dfa34e);
+  color: #fff;
+}
+.report-v3647 .report-funnel.is-agenda article.is-negative > div,
+.report-v3647 .report-funnel.is-agenda article.is-danger > div {
+  background: linear-gradient(90deg, #b54750, #d06469);
+}
+.report-v3647 .report-funnel small {
+  color: rgba(255,255,255,.9);
+  opacity: 1;
+}
+
+/* Funil do administrador: roxo + azul da marca. */
+.report-v3647 .report-funnel.is-admin article > div {
+  background: linear-gradient(90deg, #7658b3, #146498);
+}
+
+/* Barras menores usadas no admin/equipe também ganham volume e cor. */
+.report-v3647 .executive-bars > div > span {
+  height: 13px;
+  background: #e9eff4;
+  box-shadow: inset 0 0 0 1px rgba(20,100,152,.03);
+}
+.report-v3647 .executive-bars i {
+  background: linear-gradient(90deg, var(--report-teal-bright), var(--report-blue-bright));
+  box-shadow: 0 2px 7px rgba(2,148,142,.14);
+}
+.report-v3647 .executive-bars > div:nth-child(3n+2) i {
+  background: linear-gradient(90deg, var(--report-blue-bright), var(--report-purple-bright));
+}
+.report-v3647 .executive-bars > div:nth-child(3n) i {
+  background: linear-gradient(90deg, var(--report-purple-bright), #9b72cc);
+}
+
+/* Ranking continua preenchido, agora com degradê da marca. */
+.report-v3647 .report-ranking em {
+  background: linear-gradient(90deg, var(--report-teal-bright), var(--report-blue-bright));
+}
+
+@media (max-width: 520px) {
+  .report-v3647 .report-funnel article > div { min-height: 38px; }
+  .report-v3647 .chart-line { stroke-width: 2.35; }
+}
