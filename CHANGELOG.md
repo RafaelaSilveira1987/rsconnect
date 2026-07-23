@@ -1,5 +1,14 @@
 # Changelog
 
+## 36.5.3 — Cadastro mais limpo e endereço por CEP
+
+- Substitui os campos bloqueados de Razão social, CNPJ/CPF e Segmento por um resumo cadastral compacto, sem aparência de campo editável.
+- Aplica o mesmo padrão visual aos dados oficiais exibidos em Primeiros passos.
+- Adiciona preenchimento automático de rua, bairro, cidade e estado ao informar um CEP válido em Minha empresa.
+- Mantém número e complemento sob edição do cliente e preserva preenchimento manual caso o serviço de CEP esteja indisponível.
+- Adiciona máscara de CEP, estados visuais de consulta e mensagens amigáveis de sucesso/erro.
+- Não exige migration.
+
 ## 36.5.2 — Minha empresa e dados mestres
 
 - Enxuga o menu do cliente: Administração passa a exibir apenas Minha empresa e Central de ajuda.

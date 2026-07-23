@@ -6737,3 +6737,132 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
   .master-data-notice strong,
   .onboarding-company-prefill-note strong { white-space: normal; }
 }
+
+/* RS Connect 36.5.3 — dados mestres compactos + busca automática por CEP */
+.company-display-name-field {
+  max-width: 560px;
+  margin-bottom: 18px;
+}
+.master-data-panel {
+  margin-top: 8px;
+  padding: 17px;
+  border: 1px solid #dce7ee;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fbfdfe 0%, #f6fafc 100%);
+}
+.master-data-panel.is-compact { margin: 14px 0 18px; }
+.master-data-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 13px;
+}
+.master-data-panel-head > div { min-width: 0; }
+.master-data-panel-head strong {
+  display: block;
+  margin-top: 3px;
+  color: #223249;
+  font-size: .98rem;
+}
+.master-data-panel-head small {
+  display: block;
+  margin-top: 3px;
+  color: #718096;
+  font-size: .78rem;
+}
+.master-data-status {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid #dbe7ef;
+  border-radius: 999px;
+  background: #fff;
+  color: #60758a;
+  font-size: .66rem;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.master-data-summary {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr .9fr;
+  gap: 10px;
+}
+.master-data-item {
+  min-width: 0;
+  padding: 12px 13px;
+  border: 1px solid #e0e9ef;
+  border-left: 3px solid #7ab9ca;
+  border-radius: 13px;
+  background: #fff;
+}
+.master-data-item span {
+  display: block;
+  margin-bottom: 5px;
+  color: #718096;
+  font-size: .69rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.master-data-item strong {
+  display: block;
+  overflow: hidden;
+  color: #27364a;
+  font-size: .88rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.master-data-help {
+  margin: 11px 2px 0;
+  color: #718096;
+  font-size: .77rem;
+  line-height: 1.45;
+}
+.onboarding-company-editable-fields { margin-top: 4px; }
+
+.postal-code-control {
+  position: relative;
+}
+.postal-code-control input { padding-right: 36px !important; }
+.cep-lookup-indicator {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #cbd9e3;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+.cep-lookup-indicator.is-loading {
+  border-color: #c7d7e2;
+  border-top-color: #146498;
+  animation: rs-cep-spin .75s linear infinite;
+}
+.cep-lookup-indicator.is-success {
+  border-color: #0f9f8f;
+  background: #0f9f8f;
+  box-shadow: 0 0 0 3px rgba(15,159,143,.10);
+}
+.cep-lookup-indicator.is-error {
+  border-color: #c97828;
+  background: #c97828;
+  box-shadow: 0 0 0 3px rgba(201,120,40,.10);
+}
+.cep-lookup-status { transition: color .18s ease; }
+.cep-lookup-status.is-loading { color: #146498 !important; }
+.cep-lookup-status.is-success { color: #087f78 !important; }
+.cep-lookup-status.is-error { color: #9a5b19 !important; }
+@keyframes rs-cep-spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+@media (max-width: 900px) {
+  .master-data-summary { grid-template-columns: 1fr; }
+  .master-data-item strong { white-space: normal; }
+}
+@media (max-width: 600px) {
+  .company-display-name-field { max-width: none; }
+  .master-data-panel { padding: 14px; }
+  .master-data-panel-head { align-items: flex-start; flex-direction: column; gap: 9px; }
+}

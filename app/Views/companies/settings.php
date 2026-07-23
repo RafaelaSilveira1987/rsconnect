@@ -167,13 +167,37 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
                 <span class="client-profile-icon" aria-hidden="true">01</span>
                 <div><span class="eyebrow">Identificação</span><h2>Informações principais</h2><p>Dados usados para identificar sua empresa no sistema.</p></div>
             </div>
-            <div class="form-grid two">
-                <label class="field"><span>Nome de exibição</span><input name="name" value="<?= View::e($company['name']) ?>" required><small class="field-hint">Nome usado nas telas, relatórios e comunicações do RS Connect.</small></label>
-                <label class="field master-data-field"><span>Razão social <em>Cadastro RS</em></span><input value="<?= View::e($company['legal_name'] ?? '') ?>" readonly aria-readonly="true"></label>
-                <label class="field master-data-field"><span>CNPJ ou CPF <em>Cadastro RS</em></span><input value="<?= View::e($company['document'] ?? '') ?>" readonly aria-readonly="true"></label>
-                <label class="field master-data-field"><span>Segmento <em>Cadastro RS</em></span><input value="<?= View::e($company['segment'] ?? '') ?>" readonly aria-readonly="true"></label>
+            <label class="field company-display-name-field">
+                <span>Nome de exibição</span>
+                <input name="name" value="<?= View::e($company['name']) ?>" required>
+                <small class="field-hint">Nome usado nas telas, relatórios e comunicações do RS Connect.</small>
+            </label>
+
+            <div class="master-data-panel" aria-label="Dados cadastrais protegidos">
+                <div class="master-data-panel-head">
+                    <div>
+                        <span class="eyebrow">Cadastro RS</span>
+                        <strong>Dados cadastrais</strong>
+                        <small>Informações oficiais vinculadas à sua empresa.</small>
+                    </div>
+                    <span class="master-data-status">Somente leitura</span>
+                </div>
+                <div class="master-data-summary">
+                    <div class="master-data-item">
+                        <span>Razão social</span>
+                        <strong><?= View::e($company['legal_name'] ?? 'Não informado') ?></strong>
+                    </div>
+                    <div class="master-data-item">
+                        <span>CNPJ ou CPF</span>
+                        <strong><?= View::e($company['document'] ?? 'Não informado') ?></strong>
+                    </div>
+                    <div class="master-data-item">
+                        <span>Segmento</span>
+                        <strong><?= View::e($company['segment'] ?? 'Não informado') ?></strong>
+                    </div>
+                </div>
+                <p class="master-data-help">Para corrigir uma dessas informações, solicite a alteração à equipe RS.</p>
             </div>
-            <div class="master-data-notice"><strong>Dados cadastrais protegidos</strong><span>Razão social, CNPJ/CPF e segmento são definidos pela equipe RS. Para corrigir uma dessas informações, fale com o suporte.</span></div>
         </section>
 
         <section class="card client-profile-card">
@@ -195,14 +219,21 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
                 <span class="client-profile-icon" aria-hidden="true">03</span>
                 <div><span class="eyebrow">Localização</span><h2>Endereço da empresa</h2><p>Preencha quando o atendimento ou serviço depender de localização.</p></div>
             </div>
-            <div class="client-address-grid">
-                <label class="field client-address-cep"><span>CEP</span><input name="postal_code" value="<?= View::e($company['postal_code'] ?? '') ?>" placeholder="00000-000"></label>
-                <label class="field client-address-line"><span>Rua ou avenida</span><input name="address_line" value="<?= View::e($company['address_line'] ?? '') ?>"></label>
-                <label class="field"><span>Número</span><input name="address_number" value="<?= View::e($company['address_number'] ?? '') ?>"></label>
+            <div class="client-address-grid" data-company-address>
+                <label class="field client-address-cep">
+                    <span>CEP</span>
+                    <div class="postal-code-control">
+                        <input name="postal_code" value="<?= View::e($company['postal_code'] ?? '') ?>" placeholder="00000-000" inputmode="numeric" maxlength="9" autocomplete="postal-code" data-cep-input>
+                        <span class="cep-lookup-indicator" aria-hidden="true"></span>
+                    </div>
+                    <small class="field-hint cep-lookup-status" data-cep-status>Digite o CEP para preencher o endereço automaticamente.</small>
+                </label>
+                <label class="field client-address-line"><span>Rua ou avenida</span><input name="address_line" value="<?= View::e($company['address_line'] ?? '') ?>" autocomplete="address-line1"></label>
+                <label class="field"><span>Número</span><input name="address_number" value="<?= View::e($company['address_number'] ?? '') ?>" autocomplete="address-line2"></label>
                 <label class="field"><span>Complemento</span><input name="address_complement" value="<?= View::e($company['address_complement'] ?? '') ?>"></label>
                 <label class="field"><span>Bairro</span><input name="district" value="<?= View::e($company['district'] ?? '') ?>"></label>
-                <label class="field"><span>Cidade</span><input name="city" value="<?= View::e($company['city'] ?? '') ?>"></label>
-                <label class="field"><span>Estado</span><input name="state" value="<?= View::e($company['state'] ?? '') ?>" placeholder="Ex.: MG"></label>
+                <label class="field"><span>Cidade</span><input name="city" value="<?= View::e($company['city'] ?? '') ?>" autocomplete="address-level2"></label>
+                <label class="field"><span>Estado</span><input name="state" value="<?= View::e($company['state'] ?? '') ?>" placeholder="Ex.: MG" maxlength="2" autocomplete="address-level1"></label>
             </div>
         </section>
 
@@ -291,4 +322,7 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
         </div>
     <?php endif; ?>
 </form>
+<?php endif; ?>
+<?php if (!Auth::isSuperAdmin()): ?>
+<script src="<?= View::e(Router::url('/assets/js/company-settings.js?v=36.5.3')) ?>" defer></script>
 <?php endif; ?>
