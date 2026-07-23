@@ -67,16 +67,24 @@ final class OnboardingController
     public function saveCompany(): void
     {
         $tenantId = (int) Auth::tenantId();
-        $name = trim((string) ($_POST['name'] ?? ''));
-        $legalName = trim((string) ($_POST['legal_name'] ?? ''));
-        $document = trim((string) ($_POST['document'] ?? ''));
-        $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
-        $phone = trim((string) ($_POST['phone'] ?? ''));
-        $website = trim((string) ($_POST['website'] ?? ''));
-        $segment = trim((string) ($_POST['segment'] ?? ''));
+        $pdo = Database::connection();
+        $currentStatement = $pdo->prepare('SELECT name, legal_name, document, email, phone, website, segment FROM tenants WHERE id = :id LIMIT 1');
+        $currentStatement->execute(['id' => $tenantId]);
+        $current = $currentStatement->fetch(PDO::FETCH_ASSOC);
 
-        if ($name === '' || $segment === '' || ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))) {
-            Flash::set('error', 'Informe nome, segmento e um e-mail válido.');
+        if (!$current) {
+            Flash::set('error', 'Empresa não encontrada.');
+            $this->redirect('/onboarding');
+        }
+
+        $name = trim((string) ($_POST['name'] ?? ($current['name'] ?? '')));
+        $email = mb_strtolower(trim((string) ($_POST['email'] ?? ($current['email'] ?? ''))));
+        $phone = trim((string) ($_POST['phone'] ?? ($current['phone'] ?? '')));
+        $website = trim((string) ($_POST['website'] ?? ($current['website'] ?? '')));
+        $segment = trim((string) ($current['segment'] ?? ''));
+
+        if ($name === '' || ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))) {
+            Flash::set('error', 'Informe o nome da empresa e um e-mail válido.');
             $this->redirect('/onboarding');
         }
 
@@ -85,27 +93,30 @@ final class OnboardingController
             $this->redirect('/onboarding');
         }
 
-        $statement = Database::connection()->prepare(
+        if ($segment === '') {
+            Flash::set('warning', 'O segmento ainda não foi definido no cadastro da empresa. Fale com a equipe RS para concluir este dado cadastral.');
+            $this->redirect('/onboarding');
+        }
+
+        // O cliente completa apenas dados operacionais. Razão social, documento e
+        // segmento permanecem exatamente como foram cadastrados pela equipe RS.
+        $statement = $pdo->prepare(
             'UPDATE tenants
-             SET name = :name, legal_name = :legal_name, document = :document, email = :email,
-                 phone = :phone, website = :website, segment = :segment,
+             SET name = :name, email = :email, phone = :phone, website = :website,
                  onboarding_step = GREATEST(onboarding_step, 2)
              WHERE id = :id'
         );
         $statement->execute([
             'name' => $name,
-            'legal_name' => $legalName !== '' ? $legalName : null,
-            'document' => $document !== '' ? $document : null,
             'email' => $email !== '' ? $email : null,
             'phone' => $phone !== '' ? $phone : null,
             'website' => $website !== '' ? $website : null,
-            'segment' => $segment,
             'id' => $tenantId,
         ]);
 
         Auth::refreshUser();
         Audit::log('onboarding.company_completed', ['segment' => $segment], $tenantId);
-        (new OnboardingGuideService())->saveStep($tenantId, 'company_profile', 'complete', 'Dados da empresa revisados no onboarding guiado.', Auth::id());
+        (new OnboardingGuideService())->saveStep($tenantId, 'company_profile', 'complete', 'Dados operacionais da empresa revisados; dados mestres preservados.', Auth::id());
         Flash::set('success', 'Dados da empresa salvos. Continue para a próxima etapa.');
         $this->redirect('/onboarding');
     }

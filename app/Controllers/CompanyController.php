@@ -145,7 +145,7 @@ final class CompanyController
         $moduleService = new TenantModuleService();
 
         View::render('companies.settings', [
-            'title' => 'Configurações da empresa',
+            'title' => Auth::isSuperAdmin() ? 'Configurações da empresa' : 'Minha empresa',
             'company' => $company,
             'preScheduleSettings' => $preSchedulingService->settings($tenantId),
             'availableModules' => TenantModuleService::modules(),
@@ -181,12 +181,14 @@ final class CompanyController
         };
 
         $name = $posted('name', $current);
-        $legalName = $posted('legal_name', $current);
-        $document = $posted('document', $current);
+        // Dados mestres cadastrais são mantidos pela equipe RS. Mesmo que um cliente
+        // altere o HTML no navegador, o backend ignora legal_name/document/segment.
+        $legalName = Auth::isSuperAdmin() ? $posted('legal_name', $current) : trim((string) ($current['legal_name'] ?? ''));
+        $document = Auth::isSuperAdmin() ? $posted('document', $current) : trim((string) ($current['document'] ?? ''));
         $email = $posted('email', $current, true);
         $phone = $posted('phone', $current);
         $website = $posted('website', $current);
-        $segment = $posted('segment', $current);
+        $segment = Auth::isSuperAdmin() ? $posted('segment', $current) : trim((string) ($current['segment'] ?? ''));
         $commercialWhatsapp = $posted('commercial_whatsapp', $current);
         $instagram = $posted('instagram', $current);
         $postalCode = $posted('postal_code', $current);

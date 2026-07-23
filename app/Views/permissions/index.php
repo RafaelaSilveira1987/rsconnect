@@ -55,6 +55,7 @@ foreach ($permissions as $permission) {
 }
 $totalPermissions = count($permissions);
 ?>
+<?php $accountSection = 'team'; require __DIR__ . '/../companies/_account_tabs.php'; ?>
 
 <section class="client-permissions-hero card">
     <div>

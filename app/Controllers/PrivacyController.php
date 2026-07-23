@@ -23,7 +23,7 @@ final class PrivacyController
         $selectedTenantId = $this->requestedTenantId();
 
         View::render('privacy.index', [
-            'title' => 'Privacidade e LGPD',
+            'title' => Auth::isSuperAdmin() ? 'Privacidade e LGPD' : 'Privacidade',
             'metrics' => $service->dashboard(Auth::isSuperAdmin() ? null : $tenantId),
             'requests' => $service->requests(Auth::isSuperAdmin() ? ($selectedTenantId ?: null) : $tenantId),
             'companies' => Auth::isSuperAdmin() ? $service->tenantsOverview() : [],

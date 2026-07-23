@@ -283,7 +283,7 @@ final class OnboardingGuideService
                 'title' => 'Dados da empresa',
                 'short' => 'Empresa',
                 'subtitle' => 'Identidade, contato e segmento.',
-                'description' => 'Preencha nome, segmento, e-mail, telefone e dados básicos para contextualizar IA, CRM e atendimento.',
+                'description' => 'Confira os dados cadastrais preparados pela equipe RS e complete nome de exibição, e-mail, telefone e site quando necessário.',
                 'action_label' => 'Revisar dados',
                 'action_url' => '/company-settings',
                 'icon' => 'company',

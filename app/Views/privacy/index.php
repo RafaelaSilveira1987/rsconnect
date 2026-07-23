@@ -45,6 +45,7 @@ $acceptanceRequired = !empty($settings['require_company_acceptance']);
 $allowExport = !empty($settings['allow_export_requests']);
 $allowDelete = !empty($settings['allow_delete_requests']);
 ?>
+<?php $accountSection = 'privacy'; require __DIR__ . '/../companies/_account_tabs.php'; ?>
 
 <section class="client-privacy-hero card">
     <div class="client-privacy-hero-copy">

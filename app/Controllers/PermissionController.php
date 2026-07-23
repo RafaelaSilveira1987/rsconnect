@@ -37,7 +37,7 @@ final class PermissionController
         }
 
         View::render('permissions.index', [
-            'title' => Auth::isSuperAdmin() ? 'Permissões' : 'Acessos da equipe',
+            'title' => Auth::isSuperAdmin() ? 'Permissões' : 'Equipe e acessos',
             'permissions' => $permissions,
             'matrix' => $matrix,
             'canEdit' => Auth::isSuperAdmin(),

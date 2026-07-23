@@ -33,6 +33,7 @@ $whatsappNumber = '5532987073537';
 $whatsappMessage = rawurlencode('Olá! Gostaria de conhecer as opções para melhorar meu plano no RS Connect. Minha empresa é ' . (string) ($tenant['name'] ?? '') . '.');
 $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
 ?>
+<?php $accountSection = 'subscription'; require __DIR__ . '/../companies/_account_tabs.php'; ?>
 
 <section class="client-subscription-hero card">
     <div class="client-subscription-hero-main">

@@ -1,5 +1,14 @@
-## 36.5.0 — Experiência do Cliente
+# Changelog
 
+## 36.5.2 — Minha empresa e dados mestres
+
+- Enxuga o menu do cliente: Administração passa a exibir apenas Minha empresa e Central de ajuda.
+- Notificações permanecem acessíveis pelo sininho do topo.
+- Minha empresa ganha navegação interna por Dados da empresa, Equipe e acessos, Assinatura e Privacidade.
+- Razão social, CNPJ/CPF e segmento passam a ser dados mestres somente leitura para clientes.
+- Backend ignora tentativas de alteração desses dados mestres por contas cliente.
+- Primeiros passos reaproveita os dados cadastrados pelo Admin RS e bloqueia os campos mestres.
+- Usuários/Acessos passam a ser apresentados como Equipe e acessos dentro da central da empresa.
 
 ## 36.5.1 — Comercial em tempo real
 
@@ -7,6 +16,8 @@
 - Atualiza em tempo real os cards de Negócios abertos, Valor em aberto, Ganhos e Receita ganha após mover oportunidades no Kanban.
 - Atualiza também quantidade e valor total exibidos em cada etapa sem recarregar a página.
 - Incrementa a versão do JavaScript principal para evitar cache do comportamento antigo.
+
+## 36.5.0 — Experiência do Cliente
 
 - Novo dashboard operacional do cliente.
 - CRM renomeado para Comercial.

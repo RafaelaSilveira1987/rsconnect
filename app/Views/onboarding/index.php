@@ -107,15 +107,17 @@ $statusClass = static fn (string $status): string => match ($status) {
                 <?php if ($step['key'] === 'company_profile'): ?>
                     <form class="wizard-card onboarding-inline-form" method="post" action="<?= View::e(Router::url('/onboarding/company')) ?>">
                         <?= Csrf::input() ?>
+                        <div class="onboarding-company-prefill-note"><strong>Sua empresa já foi preparada pela equipe RS.</strong><span>Confira os dados cadastrais abaixo e complete apenas as informações de contato que faltarem.</span></div>
                         <div class="form-grid two">
                             <label class="field"><span>Nome de exibição</span><input name="name" value="<?= View::e($company['name'] ?? '') ?>" required></label>
-                            <label class="field"><span>Razão social</span><input name="legal_name" value="<?= View::e($company['legal_name'] ?? '') ?>"></label>
-                            <label class="field"><span>CNPJ/CPF</span><input name="document" value="<?= View::e($company['document'] ?? '') ?>"></label>
-                            <label class="field"><span>Segmento</span><input name="segment" value="<?= View::e($company['segment'] ?? '') ?>" placeholder="Ex.: psicologia, clínica, consultoria" required></label>
+                            <label class="field master-data-field"><span>Razão social <em>Cadastro RS</em></span><input value="<?= View::e($company['legal_name'] ?? '') ?>" readonly aria-readonly="true"></label>
+                            <label class="field master-data-field"><span>CNPJ/CPF <em>Cadastro RS</em></span><input value="<?= View::e($company['document'] ?? '') ?>" readonly aria-readonly="true"></label>
+                            <label class="field master-data-field"><span>Segmento <em>Cadastro RS</em></span><input value="<?= View::e($company['segment'] ?? '') ?>" readonly aria-readonly="true"></label>
                             <label class="field"><span>E-mail comercial</span><input type="email" name="email" value="<?= View::e($company['email'] ?? '') ?>"></label>
                             <label class="field"><span>Telefone</span><input name="phone" value="<?= View::e($company['phone'] ?? '') ?>"></label>
                         </div>
                         <label class="field"><span>Site</span><input type="url" name="website" value="<?= View::e($company['website'] ?? '') ?>" placeholder="https://empresa.com.br"></label>
+                        <div class="master-data-notice compact"><strong>Precisa corrigir um dado cadastral?</strong><span>Razão social, CNPJ/CPF e segmento são protegidos. Solicite a alteração à equipe RS.</span></div>
                         <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar empresa</button></div>
                     </form>
                 <?php elseif ($step['key'] === 'whatsapp_connection'): ?>

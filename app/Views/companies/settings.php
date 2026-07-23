@@ -140,6 +140,7 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
 </form>
 
 <?php else: ?>
+<?php $accountSection = 'company'; require __DIR__ . '/_account_tabs.php'; ?>
 <form class="client-company-profile" method="post" action="<?= View::e(Router::url('/company-settings')) ?>">
     <?= Csrf::input() ?>
     <input type="hidden" name="tenant_id" value="<?= (int) $company['id'] ?>">
@@ -167,11 +168,12 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
                 <div><span class="eyebrow">Identificação</span><h2>Informações principais</h2><p>Dados usados para identificar sua empresa no sistema.</p></div>
             </div>
             <div class="form-grid two">
-                <label class="field"><span>Nome que seus clientes veem</span><input name="name" value="<?= View::e($company['name']) ?>" required></label>
-                <label class="field"><span>Razão social</span><input name="legal_name" value="<?= View::e($company['legal_name'] ?? '') ?>"></label>
-                <label class="field"><span>CNPJ ou CPF</span><input name="document" value="<?= View::e($company['document'] ?? '') ?>"></label>
-                <label class="field"><span>Área de atuação</span><input name="segment" value="<?= View::e($company['segment'] ?? '') ?>" placeholder="Ex.: clínica, comércio, tecnologia"></label>
+                <label class="field"><span>Nome de exibição</span><input name="name" value="<?= View::e($company['name']) ?>" required><small class="field-hint">Nome usado nas telas, relatórios e comunicações do RS Connect.</small></label>
+                <label class="field master-data-field"><span>Razão social <em>Cadastro RS</em></span><input value="<?= View::e($company['legal_name'] ?? '') ?>" readonly aria-readonly="true"></label>
+                <label class="field master-data-field"><span>CNPJ ou CPF <em>Cadastro RS</em></span><input value="<?= View::e($company['document'] ?? '') ?>" readonly aria-readonly="true"></label>
+                <label class="field master-data-field"><span>Segmento <em>Cadastro RS</em></span><input value="<?= View::e($company['segment'] ?? '') ?>" readonly aria-readonly="true"></label>
             </div>
+            <div class="master-data-notice"><strong>Dados cadastrais protegidos</strong><span>Razão social, CNPJ/CPF e segmento são definidos pela equipe RS. Para corrigir uma dessas informações, fale com o suporte.</span></div>
         </section>
 
         <section class="card client-profile-card">
@@ -256,6 +258,7 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
             <div class="client-menu-preferences-grid">
                 <?php foreach (($availableModules ?? []) as $moduleKey => $module): ?>
                     <?php
+                    if (in_array($moduleKey, ['company_settings', 'users', 'permissions', 'subscription', 'privacy', 'notifications'], true)) { continue; }
                     $isVisible = (bool) (($moduleSettings[$moduleKey]['is_visible'] ?? null) ?? ($module['default_visible'] ?? true));
                     $isEnabled = (bool) (($moduleSettings[$moduleKey]['is_enabled'] ?? null) ?? ($module['default_enabled'] ?? true));
                     $locked = in_array($moduleKey, ['dashboard', 'company_settings'], true);

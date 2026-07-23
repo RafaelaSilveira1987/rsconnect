@@ -43,7 +43,7 @@ final class UserController
         }
 
         View::render('users.index', [
-            'title' => 'Usuários',
+            'title' => Auth::isSuperAdmin() ? 'Usuários' : 'Equipe e acessos',
             'users' => $users,
             'tenants' => $tenants,
         ]);
