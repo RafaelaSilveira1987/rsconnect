@@ -1,5 +1,15 @@
 # Changelog
 
+## 36.5.7 — Identificação de contatos, toque mobile e cron seguro
+
+- Corrige o caso em que novas conversas podiam receber automaticamente o nome de um usuário interno da empresa, como `Rafa Silveira`, quando a Evolution devolvia esse valor como `pushName`.
+- Nomes de usuários ativos do próprio tenant deixam de ser aceitos como nome automático de um novo contato; nesse caso a conversa fica identificada pelo telefone até existir um nome confiável ou edição manual.
+- Adiciona `touch-action: manipulation` e feedback tátil/visual aos principais controles para reduzir atraso percebido de clique em dispositivos móveis.
+- O endpoint do cron de cobrança passa a recusar execução quando `BILLING_CRON_TOKEN` não estiver configurado, evitando cron público por engano.
+- O download do template do cron exige `APP_URL` HTTPS e `BILLING_CRON_TOKEN` antes de gerar o JSON pronto para importar no n8n.
+- Atualiza cache-busting de `app.css` e `app.js` para 36.5.7.
+- Não exige nova migration.
+
 ## 36.5.6 — Homologação final e correções de produção
 
 - Faz a classificação **Cliente** prevalecer sobre o grupo conflitante **Novo interessado**, criando o contexto de **Cliente atual** e evitando reinício indevido da triagem/agenda.

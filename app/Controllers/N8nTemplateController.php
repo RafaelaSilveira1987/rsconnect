@@ -143,9 +143,17 @@ final class N8nTemplateController
         if ($key === 'billing-cron') {
             $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
             $billingToken = trim((string) Env::get('BILLING_CRON_TOKEN', ''));
-            if ($appUrl !== '') {
-                $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
+            if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+                http_response_code(409);
+                echo 'Configure APP_URL com a URL pública HTTPS do RS Connect antes de baixar o cron.';
+                return;
             }
+            if ($billingToken === '') {
+                http_response_code(409);
+                echo 'Configure BILLING_CRON_TOKEN no ambiente e reinicie o RS Connect antes de baixar o cron.';
+                return;
+            }
+            $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
             $contents = str_replace('SEU_BILLING_CRON_TOKEN', rawurlencode($billingToken), $contents);
         }
 

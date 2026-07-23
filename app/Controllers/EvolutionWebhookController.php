@@ -709,6 +709,20 @@ final class EvolutionWebhookController
                 return null;
             }
 
+            // Algumas instalações da Evolution podem devolver o pushName da própria conta conectada.
+            // Nunca usamos automaticamente como nome do contato um nome que pertença à equipe da empresa.
+            $internalUserName = $pdo->prepare(
+                'SELECT 1 FROM users
+                 WHERE tenant_id = :tenant_id
+                   AND status = "active"
+                   AND TRIM(name) = :name
+                 LIMIT 1'
+            );
+            $internalUserName->execute(['tenant_id' => $tenantId, 'name' => $name]);
+            if ($internalUserName->fetchColumn()) {
+                return null;
+            }
+
             // Evita que um pushName incorreto da conexão seja repetido como nome de vários contatos.
             $duplicateName = $pdo->prepare(
                 'SELECT 1 FROM contacts
@@ -720,7 +734,8 @@ final class EvolutionWebhookController
                 return null;
             }
         } catch (Throwable) {
-            // Em instalações antigas, mantém o comportamento básico sem interromper o webhook.
+            // Em instalações antigas, mantém o webhook operacional sem transformar falha de nome em falha de mensagem.
+            return null;
         }
 
         return mb_substr($name, 0, 150);

@@ -71,7 +71,13 @@ final class BillingReminderController
     {
         $expected = trim((string) Env::get('BILLING_CRON_TOKEN', ''));
         $received = trim((string) ($_GET['token'] ?? $_POST['token'] ?? ''));
-        if ($expected !== '' && !hash_equals($expected, $received)) {
+        if ($expected === '') {
+            http_response_code(503);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'error' => 'BILLING_CRON_TOKEN não configurado no ambiente.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        if ($received === '' || !hash_equals($expected, $received)) {
             http_response_code(401);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['ok' => false, 'error' => 'Token inválido.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

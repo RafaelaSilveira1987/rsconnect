@@ -7237,3 +7237,38 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .instances-client-layout.card { padding: 15px; }
   .client-connection-note { padding: 12px; }
 }
+
+
+/* RS Connect 36.5.7 — resposta tátil no mobile */
+a,
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+select,
+summary,
+[role="button"],
+[data-toggle-panel],
+[data-close-panel] {
+  touch-action: manipulation;
+}
+@media (hover: none) and (pointer: coarse) {
+  .btn,
+  .icon-button,
+  .nav-link,
+  .company-account-tab,
+  summary,
+  [role="button"],
+  [data-toggle-panel],
+  [data-close-panel] {
+    -webkit-tap-highlight-color: rgba(15, 143, 137, .12);
+  }
+  .btn:active,
+  .icon-button:active,
+  .nav-link:active,
+  [role="button"]:active,
+  [data-toggle-panel]:active,
+  [data-close-panel]:active {
+    transform: translateY(1px);
+  }
+}
