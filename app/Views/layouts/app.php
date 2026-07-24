@@ -107,7 +107,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.5.9')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.6.2')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -161,6 +161,7 @@ $svgIcon = static function (string $name): string {
 
                 <span class="nav-caption">Operação RS</span>
                 <a class="nav-link<?= $isActive('/implementation') ?>" href="<?= View::e(Router::url('/implementation')) ?>"><?= $svgIcon('implementation') ?><span>Implantação</span></a>
+                <a class="nav-link<?= $isAnyActive(['/painel-operacional', '/operacao-rs']) ?>" href="<?= View::e(Router::url('/painel-operacional')) ?>"><?= $svgIcon('operations') ?><span>Painel operacional</span></a>
                 <a class="nav-link<?= $isAnyActive(['/central-operacao', '/security', '/seguranca', '/operations', '/monitoramento', '/backup-automatico', '/operations/backups/automation', '/operations/ai-reprocess', '/beta-comercial', '/status-sistema']) ?>" href="<?= View::e(Router::url('/central-operacao')) ?>"><?= $svgIcon('operations') ?><span>Central de operação</span></a>
 
                 <span class="nav-caption">Administração RS</span>
@@ -240,6 +241,6 @@ $svgIcon = static function (string $name): string {
 <button class="back-to-top" type="button" data-back-to-top aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
 </button>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.5.9')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.6.2')) ?>" defer></script>
 </body>
 </html>

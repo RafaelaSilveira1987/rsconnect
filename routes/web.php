@@ -28,6 +28,7 @@ use App\Controllers\N8nTemplateController;
 use App\Controllers\NotificationsController;
 use App\Controllers\OperationsController;
 use App\Controllers\OperationsCenterController;
+use App\Controllers\OperationalPanelController;
 use App\Controllers\PaymentGatewayController;
 use App\Controllers\PrivacyController;
 use App\Controllers\ReportController;
@@ -51,6 +52,8 @@ return static function (Router $router): void {
     $router->get('/central-ajuda', [DocumentationController::class, 'index'], ['auth']);
     $router->get('/docs', [DocumentationController::class, 'index'], ['auth']);
     $router->get('/central-operacao', [OperationsCenterController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/painel-operacional', [OperationalPanelController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/operacao-rs', [OperationalPanelController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/beta-comercial', [OperationsCenterController::class, 'beta'], ['auth', 'super_admin']);
     $router->get('/versao-beta', [OperationsCenterController::class, 'beta'], ['auth', 'super_admin']);
     $router->get('/status-sistema', [OperationsCenterController::class, 'status'], ['auth', 'super_admin']);

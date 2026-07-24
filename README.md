@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.1 — Evolution ao vivo e backup n8n sem variáveis de ambiente internas.
+Pacote consolidado até o RS Connect 36.6.2 — Painel operacional paralelo à Central de operação.
 
 ## Última etapa incluída
+
+RS Connect 36.6.2 — Painel operacional paralelo à Central de operação, com leitura por exceção, ações recomendadas, rotinas essenciais e situação por empresa.
 
 RS Connect 36.6.1 — validação ao vivo da Evolution na fila da IA e workflow de backup sem `$env` no n8n.
 
@@ -16,7 +18,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.1.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.2.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 

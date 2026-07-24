@@ -1,5 +1,17 @@
 # Changelog
 
+## 36.6.2 — Painel operacional paralelo
+
+- Cria uma segunda visão de operação em `/painel-operacional`, sem alterar a Central de operação existente.
+- Adiciona o menu **Painel operacional** em Operação RS, mantendo **Central de operação** como ferramenta técnica e fallback.
+- Reaproveita os diagnósticos já existentes de monitoramento, Fila da IA e backups para apresentar uma leitura orientada à ação.
+- A nova tela destaca primeiro problemas críticos, atenções e bloqueios externos, deixando itens saudáveis compactos em segundo plano.
+- Mensagens presas por WhatsApp desconectado aparecem como dependência externa, com empresa afetada, impacto e ação direta para Conexões.
+- Adiciona resumo das rotinas essenciais: cobrança, Fila da IA, backup e relatórios.
+- Adiciona visão rápida por empresa de WhatsApp, IA, Agenda e cobrança, com empresas que precisam de revisão posicionadas primeiro.
+- Mantém acesso explícito à Central de operação para logs, históricos e detalhes técnicos.
+- Não exige migration.
+
 ## 36.6.1 — Evolution ao vivo e backup n8n sem `$env`
 
 - Corrige a causa do erro `access to env vars denied`: o template de backup deixa de ler `$env`/`process.env` em qualquer node do n8n.
