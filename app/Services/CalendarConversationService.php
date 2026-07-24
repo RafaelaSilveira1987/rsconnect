@@ -171,6 +171,10 @@ final class CalendarConversationService
             return $this->incomingResult(false, false, 'invalid_input');
         }
 
+        if (!$this->conversationAllowsAutomation($pdo, $tenantId, $conversationId)) {
+            return $this->incomingResult(false, true, 'automation_paused_by_human');
+        }
+
         // Idempotência por mensagem recebida: se esse comando já foi consumido pela agenda,
         // não deixa uma repetição do webhook ou um reprocessamento tardio cair na IA.
         if ($incomingMessageId > 0 && $this->incomingAlreadyHandledByCalendar($pdo, $incomingMessageId)) {
@@ -886,6 +890,11 @@ final class CalendarConversationService
             return ['ok' => false, 'error' => 'Contato, conversa ou mensagem inválida.', 'external_id' => null];
         }
 
+        $guardPdo = Database::connection();
+        if (!$this->conversationAllowsAutomation($guardPdo, $tenantId, $conversationId)) {
+            return ['ok' => false, 'error' => 'Automação de agenda pausada: conversa em atendimento humano ou fechada.', 'external_id' => null];
+        }
+
         if ($this->recentOutgoingSameMessage($conversationId, $message)) {
             return ['ok' => true, 'error' => null, 'external_id' => null];
         }
@@ -991,6 +1000,28 @@ final class CalendarConversationService
         $statement->execute(['tenant_id' => $tenantId]);
         $instance = $statement->fetch(PDO::FETCH_ASSOC);
         return $instance ?: null;
+    }
+
+    private function conversationAllowsAutomation(PDO $pdo, int $tenantId, int $conversationId): bool
+    {
+        try {
+            $statement = $pdo->prepare(
+                'SELECT attendance_mode, status
+                 FROM conversations
+                 WHERE id = :conversation_id AND tenant_id = :tenant_id
+                 LIMIT 1'
+            );
+            $statement->execute([
+                'conversation_id' => $conversationId,
+                'tenant_id' => $tenantId,
+            ]);
+            $conversation = $statement->fetch(PDO::FETCH_ASSOC);
+            return is_array($conversation)
+                && (string) ($conversation['attendance_mode'] ?? '') === 'ai'
+                && (string) ($conversation['status'] ?? '') !== 'closed';
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function recentOutgoingSameMessage(int $conversationId, string $message): bool

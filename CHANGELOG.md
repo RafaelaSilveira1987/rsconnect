@@ -1,5 +1,15 @@
 # Changelog
 
+## 36.6.6 — Takeover humano e continuidade de clientes
+
+- Corrige o bypass encontrado no pré-agendamento: conversas em **Humano** ou **Pausado** agora bloqueiam também mensagens automáticas da agenda, não apenas a resposta do provedor de IA.
+- Revalida o modo da conversa antes de confirmações, bloqueios e respostas assíncronas de agenda, evitando entrada tardia depois que a equipe assumiu o atendimento.
+- Ao enviar mensagem manual pelo painel, o RS Connect assume a conversa como **Humano antes** de chamar a Evolution, fechando a janela em que outra automação poderia responder durante o HTTP.
+- Classificação **Cliente** e grupos **Cliente atual/Paciente atual** passam a representar continuidade real: não exigem nova queixa/demanda para consultar, marcar ou remarcar horário.
+- Normaliza estados antigos de fluxo que ainda estavam em `pending/collecting_demand` para clientes/pacientes existentes.
+- O prompt reforça que cliente/paciente atual não deve voltar ao roteiro de novo lead nem receber novamente a pergunta de motivo/principal queixa.
+- Requer `database/migrations/050_human_takeover_customer_context.sql`.
+
 ## 36.6.5 — Resolução e comunicação operacional
 
 - O Painel operacional passa a abrir a Central de operação já contextualizada no problema detectado, por `diagnostico` e empresa afetada.

@@ -24,6 +24,14 @@ final class PreSchedulingService
             return $result;
         }
 
+        // Atendimento humano/IA pausada interrompe TODO o diálogo automático de agenda,
+        // não apenas a chamada ao provedor de IA.
+        if (!$this->conversationAllowsAutomation($pdo, $tenantId, $conversationId)) {
+            $result['skip_ai'] = true;
+            $result['automation_paused'] = true;
+            return $result;
+        }
+
         $intent = $this->detectIntent($content);
         if (!$intent['has_intent']) {
             return $result;
@@ -766,6 +774,9 @@ final class PreSchedulingService
     {
         try {
             $tenantId = (int) ($instance['tenant_id'] ?? 0);
+            if (!$this->conversationAllowsAutomation($pdo, $tenantId, $conversationId)) {
+                return ['ok' => false, 'error' => 'Automação de agenda pausada: conversa em atendimento humano ou fechada.'];
+            }
             $contact = $this->findContact($pdo, $tenantId, $contactId);
             $phone = preg_replace('/\D+/', '', (string) ($contact['phone'] ?? '')) ?: '';
             if ($phone === '') {
@@ -862,6 +873,9 @@ final class PreSchedulingService
     ): array {
         try {
             $tenantId = (int) ($instance['tenant_id'] ?? 0);
+            if (!$this->conversationAllowsAutomation($pdo, $tenantId, $conversationId)) {
+                return ['ok' => false, 'error' => 'Automação de agenda pausada: conversa em atendimento humano ou fechada.'];
+            }
             $contact = $this->findContact($pdo, $tenantId, $contactId);
             $phone = preg_replace('/\D+/', '', (string) ($contact['phone'] ?? '')) ?: '';
             if ($phone === '') {
@@ -1023,6 +1037,32 @@ final class PreSchedulingService
             $statement->execute(['conversation_id' => $conversationId, 'content' => $message]);
             return (int) $statement->fetchColumn() > 0;
         } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function conversationAllowsAutomation(PDO $pdo, int $tenantId, int $conversationId): bool
+    {
+        if ($tenantId < 1 || $conversationId < 1) {
+            return false;
+        }
+        try {
+            $statement = $pdo->prepare(
+                'SELECT attendance_mode, status
+                 FROM conversations
+                 WHERE id = :conversation_id AND tenant_id = :tenant_id
+                 LIMIT 1'
+            );
+            $statement->execute([
+                'conversation_id' => $conversationId,
+                'tenant_id' => $tenantId,
+            ]);
+            $conversation = $statement->fetch(PDO::FETCH_ASSOC);
+            return is_array($conversation)
+                && (string) ($conversation['attendance_mode'] ?? '') === 'ai'
+                && (string) ($conversation['status'] ?? '') !== 'closed';
+        } catch (Throwable) {
+            // Falha fechada: se não for possível confirmar que a IA está ativa, não envia automação.
             return false;
         }
     }

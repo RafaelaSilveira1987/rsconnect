@@ -328,11 +328,25 @@ final class ConversationController
         $sentAt = date('Y-m-d H:i:s');
 
         try {
+            // O clique humano precisa pausar a automação ANTES da chamada externa.
+            // Assim, mesmo que a Evolution demore ou falhe, a IA/agenda não entra no meio do atendimento.
+            $pdo = Database::connection();
+            $pdo->prepare(
+                'UPDATE conversations
+                 SET attendance_mode = "human",
+                     assigned_user_id = :user_id,
+                     status = IF(status = "closed", "open", status)
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            )->execute([
+                'user_id' => Auth::id(),
+                'id' => $conversationId,
+                'tenant_id' => (int) $conversation['tenant_id'],
+            ]);
+
             $service = $this->serviceFor($conversation);
             $result = $service->sendText((string) $conversation['phone'], $message);
             $externalId = $this->extractMessageId($result['body'] ?? []);
 
-            $pdo = Database::connection();
             $pdo->beginTransaction();
 
             $insert = $pdo->prepare(

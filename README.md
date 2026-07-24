@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.5 — Resolução e comunicação operacional.
+Pacote consolidado até o RS Connect 36.6.6 — Takeover humano e continuidade de clientes.
 
 ## Última etapa incluída
+
+RS Connect 36.6.6 — takeover humano passa a pausar também pré-agendamento/agenda, e Cliente/Paciente atual mantém continuidade sem repetir demanda ou triagem.
 
 RS Connect 36.6.5 — conecta o Painel operacional a playbooks de correção, cria alertas internos do Super Admin com recuperação e adiciona o módulo Comunicados para clientes.
 
@@ -24,7 +26,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.5.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.6.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 
@@ -56,6 +58,7 @@ database/migrations/046_calendar_conversational_slot_selection.sql
 database/migrations/047_backup_automation_reliability.sql
 database/migrations/048_reporting_metrics_foundation.sql
 database/migrations/049_operational_resolution_communications.sql
+database/migrations/050_human_takeover_customer_context.sql
 ```
 
 Consulte `README-RS-CONNECT-36.3.0.md` para instalar e validar a rotina de backup.

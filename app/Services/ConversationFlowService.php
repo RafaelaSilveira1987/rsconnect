@@ -60,10 +60,22 @@ final class ConversationFlowService
         $state = $this->state($pdo, $tenantId, $conversationId, $contactId);
         $group = $this->resolveGroup($contact);
         $existingPatient = $group === 'patient';
+        $contactStatus = (string) ($contact['status'] ?? '');
+        $contactTags = $this->tags($contact['tags_json'] ?? null);
+        $existingCustomer = $this->isExistingCustomer($contactStatus, $group, $contactTags);
         $text = $this->normalize($content);
         $intent = $this->intent($text);
         $demandStatus = (string) ($state['demand_status'] ?? 'pending');
         $demandSummary = trim((string) ($state['demand_summary'] ?? ''));
+
+        // Cliente/paciente já identificado não deve voltar para a triagem de novo interessado.
+        // Se ainda não existe uma demanda registrada, ela deixa de ser pré-requisito para agenda.
+        if ($existingCustomer && $demandStatus === 'pending') {
+            $demandStatus = 'not_required';
+            $demandSummary = $demandSummary !== ''
+                ? $demandSummary
+                : 'Contato já identificado como cliente/paciente; nova triagem de demanda dispensada.';
+        }
 
         if ($this->isDemandRefusal($text)) {
             $demandStatus = 'refused';
@@ -77,8 +89,6 @@ final class ConversationFlowService
         }
 
         $stage = $this->stageFor($intent, $demandStatus, $existingPatient);
-        $contactStatus = (string) ($contact['status'] ?? '');
-        $contactTags = $this->tags($contact['tags_json'] ?? null);
         $metadata = [
             'contact_group' => $group,
             'contact_status' => $contactStatus,
@@ -140,6 +150,20 @@ final class ConversationFlowService
                 'message' => 'O grupo deste contato não permite pré-agendamento automático.',
                 'flow' => $flow,
                 'rule' => $rule,
+            ];
+        }
+
+        // A classificação cadastral é fonte de verdade: cliente/paciente existente não precisa
+        // repetir motivo/queixa para simplesmente consultar, marcar ou remarcar horário.
+        if (!empty($flow['is_existing_customer']) && $demandStatus === 'pending') {
+            $this->markDemandNotRequired($pdo, $tenantId, $conversationId, 'Contato já identificado como cliente/paciente; demanda não exigida para agenda.');
+            $flow = $this->context($pdo, $tenantId, $conversationId, $contactId);
+            return [
+                'allowed' => true,
+                'code' => 'existing_customer_demand_not_required',
+                'message' => null,
+                'flow' => $flow,
+                'rule' => array_merge($rule, ['require_demand_before_pre_schedule' => false]),
             ];
         }
 
@@ -374,9 +398,9 @@ final class ConversationFlowService
             ],
             'patient' => [
                 'allow_pre_schedule' => true,
-                'require_demand_before_pre_schedule' => true,
+                'require_demand_before_pre_schedule' => false,
                 'allow_reschedule_without_demand' => true,
-                'instructions' => 'Paciente atual: não peça novamente a queixa quando ele estiver apenas remarcando um atendimento.',
+                'instructions' => 'Paciente atual: trate como relacionamento existente. Não reinicie triagem nem peça novamente motivo/queixa como condição para consultar, marcar ou remarcar horário.',
             ],
             'family' => [
                 'allow_pre_schedule' => false,
@@ -419,6 +443,22 @@ final class ConversationFlowService
             $update = $pdo->prepare(
                 'UPDATE conversation_flow_states
                  SET is_existing_patient = :is_existing_patient,
+                     demand_summary = CASE
+                         WHEN :is_existing_customer_summary = 1 AND demand_status = "pending" AND (demand_summary IS NULL OR demand_summary = "")
+                             THEN "Contato já identificado como cliente/paciente; nova triagem de demanda dispensada."
+                         ELSE demand_summary
+                     END,
+                     stage = CASE
+                         WHEN :is_existing_customer_stage = 1
+                              AND demand_status = "pending"
+                              AND stage IN ("identifying_contact", "understanding_demand", "collecting_demand")
+                             THEN "ready_for_scheduling"
+                         ELSE stage
+                     END,
+                     demand_status = CASE
+                         WHEN :is_existing_customer = 1 AND demand_status = "pending" THEN "not_required"
+                         ELSE demand_status
+                     END,
                      metadata_json = :metadata_json,
                      updated_at = CURRENT_TIMESTAMP
                  WHERE id = :id'
@@ -434,9 +474,13 @@ final class ConversationFlowService
                 $metadata['contact_status_label'] = self::STATUS_LABELS[$status] ?? ($status !== '' ? $status : 'Não informado');
                 $metadata['tags'] = $tags;
                 $metadata['is_existing_customer'] = $this->isExistingCustomer($status, $group, $tags);
+                $isExistingCustomer = !empty($metadata['is_existing_customer']) ? 1 : 0;
 
                 $update->execute([
                     'is_existing_patient' => $group === 'patient' ? 1 : 0,
+                    'is_existing_customer' => $isExistingCustomer,
+                    'is_existing_customer_summary' => $isExistingCustomer,
+                    'is_existing_customer_stage' => $isExistingCustomer,
                     'metadata_json' => json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     'id' => (int) $row['id'],
                 ]);
@@ -577,7 +621,8 @@ final class ConversationFlowService
         $pdo->prepare(
             'UPDATE conversation_flow_states
              SET demand_status = "not_required", demand_summary = :summary,
-                 stage = "scheduling", last_intent = "reschedule", updated_at = CURRENT_TIMESTAMP
+                 stage = CASE WHEN last_intent IN ("schedule", "reschedule") THEN "scheduling" ELSE "ready_for_scheduling" END,
+                 updated_at = CURRENT_TIMESTAMP
              WHERE tenant_id = :tenant_id AND conversation_id = :conversation_id'
         )->execute(['summary' => $summary, 'tenant_id' => $tenantId, 'conversation_id' => $conversationId]);
     }

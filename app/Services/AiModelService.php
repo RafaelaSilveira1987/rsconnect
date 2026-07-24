@@ -188,6 +188,7 @@ final class AiModelService
             'Se o lead pedir humano, atendente, suporte ou uma pessoa, sinalize transferência em vez de insistir no atendimento automático.',
             'Não inicie nem prometa pré-agendamento somente porque apareceram palavras como horário, agenda ou disponibilidade.',
             'Antes de conduzir ao pré-agendamento, siga a regra do grupo de contato informada abaixo. Quando essa regra exigir demanda, confirme que ela foi coletada ou que o contato preferiu não informá-la. Quando a regra dispensar demanda, não obrigue o cliente a repetir queixa ou informações primárias.',
+            'Cliente ou paciente já identificado deve ter continuidade de atendimento: não reabra triagem, não peça novamente motivo/queixa e não trate como novo lead apenas porque iniciou uma nova conversa ou perguntou por horário.',
         ];
 
         $tenantId = (int) ($conversation['tenant_id'] ?? $contact['tenant_id'] ?? 0);
@@ -217,6 +218,11 @@ final class AiModelService
             );
         } catch (Throwable) {
             $groupRule = [];
+        }
+        if ($isExistingCustomer) {
+            // Cadastro de cliente/paciente prevalece sobre regra antiga gravada no banco.
+            // Evita que uma configuração histórica reabra qualificação de quem já é cliente.
+            $groupRule['require_demand_before_pre_schedule'] = false;
         }
         $groupInstructions = trim((string) ($groupRule['instructions'] ?? ''));
         $groupRuleBlock = "Regras do grupo de contato:\n" .
@@ -257,7 +263,9 @@ final class AiModelService
 " .
             "- Não pergunte novamente se a pessoa é cliente, paciente, interessada ou pertence a um grupo quando isso já estiver indicado acima.
 " .
-            "- Se a classificação for Cliente, fale com ela como relacionamento já existente, sem reiniciar o fluxo de novo interessado.
+            "- Se a classificação for Cliente ou o grupo indicar Cliente/Paciente atual, fale com a pessoa como relacionamento já existente, sem reiniciar o fluxo de novo interessado.
+" .
+            "- Para cliente/paciente atual, NÃO peça motivo do atendimento, principal queixa ou nova qualificação como pré-condição para responder uma dúvida, consultar agenda, marcar ou remarcar horário. Responda diretamente ao pedido atual usando cadastro e histórico.
 " .
             "- Use as tags para personalizar a resposta e respeitar segmentações, mas não invente significado além do texto da tag.
 " .

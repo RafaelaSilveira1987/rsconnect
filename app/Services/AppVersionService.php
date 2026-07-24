@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.5 — Resolução e comunicação operacional';
-    public const REQUIRED_MIGRATION = '049_operational_resolution_communications.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.6 — Takeover humano e continuidade de clientes';
+    public const REQUIRED_MIGRATION = '050_human_takeover_customer_context.sql';
 
     private PDO $pdo;
 
@@ -93,7 +93,7 @@ final class AppVersionService
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 049, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 050, conforme o pacote implantado.'
         );
 
         $reactionPreferenceReady = $this->columnExists('ai_agents', 'reply_to_reactions');
@@ -112,6 +112,24 @@ final class AppVersionService
             $conversationFlowReady ? 'ok' : 'blocked',
             $conversationFlowReady ? 'Etapas, demanda e regras por grupo disponíveis para a IA e o pré-agendamento.' : 'A estrutura de fluxo e grupos ainda não foi aplicada.',
             'Executar database/migrations/040_conversation_flow_contact_groups.sql.'
+        );
+
+        $legacyCustomerDemandRules = $conversationFlowReady
+            ? $this->number("SELECT COUNT(*) FROM ai_agent_group_rules WHERE contact_group IN ('customer','patient') AND require_demand_before_pre_schedule = 1")
+            : 0;
+        $legacyCustomerDemandStates = $conversationFlowReady
+            ? $this->number("SELECT COUNT(*) FROM conversation_flow_states fs INNER JOIN contacts ct ON ct.id = fs.contact_id AND ct.tenant_id = fs.tenant_id WHERE fs.demand_status = 'pending' AND (ct.status = 'customer' OR ct.contact_group IN ('customer','patient'))")
+            : 0;
+        $customerContinuityReady = $conversationFlowReady && $legacyCustomerDemandRules === 0 && $legacyCustomerDemandStates === 0;
+        $checks[] = $this->check(
+            'Continuidade de Cliente/Paciente',
+            $customerContinuityReady ? 'ok' : ($conversationFlowReady ? 'warning' : 'blocked'),
+            $customerContinuityReady
+                ? 'Clientes e pacientes atuais não voltam para a coleta obrigatória de demanda.'
+                : ($conversationFlowReady
+                    ? ($legacyCustomerDemandRules . ' regra(s) e ' . $legacyCustomerDemandStates . ' estado(s) antigos ainda exigem normalização.')
+                    : 'A estrutura de fluxo ainda não está disponível.'),
+            'Executar database/migrations/050_human_takeover_customer_context.sql.'
         );
 
         $calendarConversationReady = $this->columnExists('calendar_appointments', 'availability_options_request_id')
