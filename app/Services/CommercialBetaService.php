@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.4', 'title' => 'Dados operacionais corrigidos', 'summary' => 'Corrige o transporte do payload das views para o Painel operacional e demais telas que recebem o conjunto data.'],
             ['version' => '36.6.3', 'title' => 'Saúde operacional por evidência', 'summary' => 'Cria uma fonte única de saúde com validade da evidência, problemas ativos, matriz de serviços, rotinas e empresas sem falsos verdes.'],
             ['version' => '36.6.2', 'title' => 'Painel operacional paralelo', 'summary' => 'Cria uma nova visão simplificada de operação sem substituir a Central técnica existente.'],
             ['version' => '36.6.1', 'title' => 'Evolution ao vivo e backup n8n', 'summary' => 'Valida a Evolution ao vivo na fila da IA e remove dependência de $env no workflow de backup.'],

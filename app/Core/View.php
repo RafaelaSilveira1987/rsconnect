@@ -8,7 +8,7 @@ use RuntimeException;
 
 final class View
 {
-    public static function render(string $view, array $data = [], string $layout = 'app'): void
+    public static function render(string $view, array $variables = [], string $layout = 'app'): void
     {
         $base = dirname(__DIR__) . '/Views';
         $viewFile = $base . '/' . str_replace('.', '/', $view) . '.php';
@@ -18,7 +18,7 @@ final class View
             throw new RuntimeException('View não encontrada: ' . $view);
         }
 
-        extract($data, EXTR_SKIP);
+        extract($variables, EXTR_SKIP);
         ob_start();
         require $viewFile;
         $content = (string) ob_get_clean();

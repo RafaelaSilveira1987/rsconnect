@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.3 — Saúde operacional por evidência.
+Pacote consolidado até o RS Connect 36.6.4 — Dados operacionais corrigidos.
 
 ## Última etapa incluída
+
+RS Connect 36.6.4 — corrige o transporte dos dados das views para que o Painel operacional carregue a fonte única de saúde, serviços, problemas, rotinas e empresas corretamente.
 
 RS Connect 36.6.3 — Painel operacional confiável por evidência: estados com validade, problemas ativos, saúde dos serviços, rotinas e situação por empresa sem falsos verdes.
 
@@ -20,7 +22,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.3.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.4.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 36.6.4 — Dados operacionais corrigidos
+
+- Corrige uma colisão no `View::render`: a variável interna do renderer se chamava `$data` e, com `EXTR_SKIP`, impedia que controllers entregassem uma variável de view também chamada `$data`.
+- O Painel operacional passa a receber de fato o resultado de `OperationalHealthService`, incluindo verificação, KPIs, problemas ativos, serviços, rotinas, empresas e histórico.
+- A correção também normaliza telas diretas que já utilizavam o contrato `data => ...`, como Monitoramento, Backup automático, Status/Beta e Implantação, sem alterar a Central de operação baseada em partials.
+- Mantém a regra conservadora do painel: evidência ausente continua sendo `Sem evidência`, nunca um falso verde.
+- Não exige migration.
+
 ## 36.6.3 — Saúde operacional por evidência
 
 - Mantém a Central de operação antiga intacta e evolui somente o Painel operacional paralelo.
