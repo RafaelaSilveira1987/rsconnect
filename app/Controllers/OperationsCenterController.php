@@ -10,15 +10,26 @@ use App\Services\AppVersionService;
 use App\Services\BackupAutomationService;
 use App\Services\CommercialBetaService;
 use App\Services\OperationsService;
+use App\Services\OperationalPlaybookService;
 use App\Services\SecurityService;
 
 final class OperationsCenterController
 {
     public function index(): void
     {
-        $tab = (string) ($_GET['tab'] ?? 'monitoring');
+        $diagnosticKey = trim((string) ($_GET['diagnostico'] ?? ''));
+        $tab = (string) ($_GET['tab'] ?? '');
+        if ($tab === '' && $diagnosticKey !== '') {
+            $tab = match ($diagnosticKey) {
+                'backup' => 'backups',
+                'ai_reprocess', 'openai', 'evolution' => 'ai_reprocess',
+                'database', 'migrations' => 'status',
+                default => 'monitoring',
+            };
+        }
+        if ($tab === '') $tab = 'monitoring';
         $allowed = ['monitoring', 'ai_reprocess', 'security', 'backups', 'beta', 'status'];
-        $this->render(in_array($tab, $allowed, true) ? $tab : 'monitoring');
+        $this->render(in_array($tab, $allowed, true) ? $tab : 'monitoring', $diagnosticKey);
     }
     public function monitoring(): void { $this->render('monitoring'); }
     public function aiReprocess(): void { $this->render('ai_reprocess'); }
@@ -27,7 +38,7 @@ final class OperationsCenterController
     public function beta(): void { $this->render('beta'); }
     public function status(): void { $this->render('status'); }
 
-    private function render(string $selectedTab): void
+    private function render(string $selectedTab, string $diagnosticKey = ''): void
     {
         View::render('operations.center', [
             'title' => 'Central de operação',
@@ -38,6 +49,7 @@ final class OperationsCenterController
             'backupData' => (new BackupAutomationService())->dashboard(),
             'betaData' => (new CommercialBetaService())->dashboard(),
             'versionData' => (new AppVersionService())->dashboard(),
+            'diagnosticData' => $diagnosticKey !== '' ? (new OperationalPlaybookService())->diagnose($diagnosticKey, (int) ($_GET['tenant'] ?? 0)) : null,
         ]);
     }
 }

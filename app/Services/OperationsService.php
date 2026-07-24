@@ -87,6 +87,7 @@ final class OperationsService
         $this->recordCheck('ai_reprocess', 'Rotina da fila da IA', $this->checkAiReprocess());
         $this->recordCheck('reporting', 'Agregação de relatórios', $this->checkReporting());
         $this->recordCheck('backup', 'Backup', $this->checkBackupAge());
+        $this->syncBlockedEvolutionIncidents();
     }
 
     public function refreshBillingCronCheck(): void
@@ -131,6 +132,7 @@ final class OperationsService
             'verified' => $verified,
         ]);
         $this->recordCheck('backup', 'Backup', $this->checkBackupAge());
+        $this->syncBlockedEvolutionIncidents();
     }
 
     public function registerExternalBackup(array $payload): array
@@ -151,6 +153,9 @@ final class OperationsService
         try {
             $statement = Database::connection()->prepare('UPDATE system_incidents SET resolved_at = NOW() WHERE id = :id AND resolved_at IS NULL');
             $statement->execute(['id' => $id]);
+            if ($statement->rowCount() > 0) {
+                (new OperationalAlertService())->dispatchRecovered($id);
+            }
         } catch (Throwable) {
             // Mantém fluxo da tela mesmo se a migration ainda não foi aplicada.
         }
@@ -163,6 +168,15 @@ final class OperationsService
             return false;
         }
         return hash_equals($expected, $token);
+    }
+
+    public function validMonitorToken(string $token): bool
+    {
+        $expected = trim((string) Env::get('OPERATIONS_MONITOR_TOKEN', ''));
+        if ($expected === '') {
+            $expected = $this->backupToken();
+        }
+        return $expected !== '' && $token !== '' && hash_equals($expected, $token);
     }
 
     private function checkDatabase(): array
@@ -584,25 +598,91 @@ final class OperationsService
         $event = 'operations.alert.' . $key;
 
         try {
+            $active = $this->fetchOne("SELECT id FROM system_incidents WHERE event = '" . str_replace("'", "''", $event) . "' AND resolved_at IS NULL LIMIT 1");
+
             if ($status === 'ok') {
-                $statement = Database::connection()->prepare('UPDATE system_incidents SET resolved_at = NOW() WHERE event = :event AND resolved_at IS NULL');
-                $statement->execute(['event' => $event]);
+                if ($active && (int) ($active['id'] ?? 0) > 0) {
+                    $incidentId = (int) $active['id'];
+                    $statement = Database::connection()->prepare('UPDATE system_incidents SET resolved_at = NOW(), last_seen_at = NOW() WHERE id = :id AND resolved_at IS NULL');
+                    $statement->execute(['id' => $incidentId]);
+                    if ($statement->rowCount() > 0) {
+                        (new OperationalAlertService())->dispatchRecovered($incidentId);
+                    }
+                }
                 return;
             }
 
             $severity = $status === 'down' ? 'critical' : 'warning';
-            $exists = $this->fetchOne("SELECT id FROM system_incidents WHERE event = '" . str_replace("'", "''", $event) . "' AND resolved_at IS NULL LIMIT 1");
-            if ($exists) {
+            if ($active && (int) ($active['id'] ?? 0) > 0) {
+                $incidentId = (int) $active['id'];
+                $statement = Database::connection()->prepare('UPDATE system_incidents SET severity = :severity, message = :message, last_seen_at = NOW() WHERE id = :id');
+                $statement->execute(['severity' => $severity, 'message' => $label . ': ' . $message, 'id' => $incidentId]);
+                (new OperationalAlertService())->dispatchReminderIfDue($incidentId);
                 return;
             }
 
-            $this->recordIncident($event, $severity, $label . ': ' . $message, [
+            $incidentId = $this->recordIncident($event, $severity, $label . ': ' . $message, [
                 'check_key' => $key,
                 'status' => $status,
                 'source' => 'health_check',
             ]);
+            if ($incidentId) {
+                (new OperationalAlertService())->dispatchOpened($incidentId);
+            }
         } catch (Throwable) {
             // Não impede os checks.
+        }
+    }
+
+    private function syncBlockedEvolutionIncidents(): void
+    {
+        try {
+            $ai = (new AiReprocessService())->dashboard();
+            $activeEvents = [];
+            foreach (($ai['pending_instances'] ?? []) as $item) {
+                $pending = (int) ($item['pending_count'] ?? 0);
+                if ($pending < 1) continue;
+                $state = strtolower(trim((string) (($item['connection_state'] ?? '') ?: ($item['instance_status'] ?? ''))));
+                if (in_array($state, ['open', 'connected', 'active', 'online'], true)) continue;
+
+                $tenantId = (int) ($item['tenant_id'] ?? 0);
+                $instanceId = (int) ($item['instance_id'] ?? 0);
+                if ($tenantId < 1 || $instanceId < 1) continue;
+                $event = 'operations.alert.evolution.tenant.' . $tenantId . '.instance.' . $instanceId;
+                $activeEvents[] = $event;
+                $tenantName = trim((string) ($item['tenant_name'] ?? 'Empresa')) ?: 'Empresa';
+                $instanceName = trim((string) (($item['instance_label'] ?? '') ?: ($item['instance_name'] ?? 'WhatsApp')));
+                $message = 'WhatsApp de ' . $tenantName . ' desconectado: ' . $pending . ' conversa(s) preservadas aguardando reconexão. Instância: ' . $instanceName . '.';
+
+                $existing = $this->fetchOne("SELECT id FROM system_incidents WHERE event = '" . str_replace("'", "''", $event) . "' AND resolved_at IS NULL LIMIT 1");
+                if ($existing) {
+                    $id = (int) ($existing['id'] ?? 0);
+                    Database::connection()->prepare('UPDATE system_incidents SET severity = "warning", message = :message, last_seen_at = NOW(), tenant_id = :tenant_id WHERE id = :id')
+                        ->execute(['message' => $message, 'tenant_id' => $tenantId, 'id' => $id]);
+                    (new OperationalAlertService())->dispatchReminderIfDue($id);
+                    continue;
+                }
+
+                $id = $this->recordIncident($event, 'warning', $message, [
+                    'check_key' => 'evolution',
+                    'source' => 'ai_pending_instance',
+                    'instance_id' => $instanceId,
+                    'pending_count' => $pending,
+                ], $tenantId);
+                if ($id) (new OperationalAlertService())->dispatchOpened($id);
+            }
+
+            $rows = Database::connection()->query("SELECT id, event FROM system_incidents WHERE event LIKE 'operations.alert.evolution.tenant.%' AND resolved_at IS NULL")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($rows as $row) {
+                $event = (string) ($row['event'] ?? '');
+                if (in_array($event, $activeEvents, true)) continue;
+                $id = (int) ($row['id'] ?? 0);
+                if ($id < 1) continue;
+                Database::connection()->prepare('UPDATE system_incidents SET resolved_at = NOW(), last_seen_at = NOW() WHERE id = :id')->execute(['id' => $id]);
+                (new OperationalAlertService())->dispatchRecovered($id);
+            }
+        } catch (Throwable) {
+            // A leitura por empresa não pode derrubar o ciclo principal de monitoramento.
         }
     }
 
@@ -657,22 +737,40 @@ final class OperationsService
         return null;
     }
 
-    private function recordIncident(string $event, string $severity, string $message, array $context = []): void
+    private function recordIncident(string $event, string $severity, string $message, array $context = [], ?int $tenantId = null): ?int
     {
         try {
             $statement = Database::connection()->prepare(
-                'INSERT INTO system_incidents (event, severity, message, context_json, created_by)
-                 VALUES (:event, :severity, :message, :context_json, :created_by)'
+                'INSERT INTO system_incidents (event, tenant_id, severity, message, context_json, last_seen_at, created_by)
+                 VALUES (:event, :tenant_id, :severity, :message, :context_json, NOW(), :created_by)'
             );
             $statement->execute([
                 'event' => $event,
+                'tenant_id' => $tenantId && $tenantId > 0 ? $tenantId : null,
                 'severity' => $severity,
                 'message' => $message,
                 'context_json' => $context === [] ? null : json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 'created_by' => Auth::id(),
             ]);
+            return (int) Database::connection()->lastInsertId();
         } catch (Throwable) {
-            // Ignora se a migration ainda não foi aplicada.
+            // Fallback para bancos antes da migration 049.
+            try {
+                $statement = Database::connection()->prepare(
+                    'INSERT INTO system_incidents (event, severity, message, context_json, created_by)
+                     VALUES (:event, :severity, :message, :context_json, :created_by)'
+                );
+                $statement->execute([
+                    'event' => $event,
+                    'severity' => $severity,
+                    'message' => $message,
+                    'context_json' => $context === [] ? null : json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'created_by' => Auth::id(),
+                ]);
+                return (int) Database::connection()->lastInsertId();
+            } catch (Throwable) {
+                return null;
+            }
         }
     }
 
@@ -943,6 +1041,9 @@ final class OperationsService
 
     private function friendlyIncidentTitle(string $event): string
     {
+        if (str_starts_with($event, 'operations.alert.evolution.tenant.')) {
+            return 'Alerta: WhatsApp / Evolution';
+        }
         if (str_starts_with($event, 'operations.alert.')) {
             return 'Alerta: ' . str_replace('_', ' ', substr($event, strlen('operations.alert.')));
         }

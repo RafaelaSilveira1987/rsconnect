@@ -298,10 +298,11 @@ final class OperationalHealthService
                 'recommended_action' => 'Reconectar a instância ' . ($instance !== '' ? $instance : 'WhatsApp') . '.',
                 'meta' => trim(($instance !== '' ? 'Instância: ' . $instance : '') . ($agent !== '' ? ($instance !== '' ? ' · ' : '') . 'Assistente: ' . $agent : '')),
                 'evidence_at' => $checkedAt,
-                'action_label' => 'Abrir WhatsApp',
-                'action_url' => '/instances',
-                'secondary_label' => 'Ver fila da IA',
-                'secondary_url' => '/central-operacao?tab=ai_reprocess',
+                'action_label' => 'Resolver problema',
+                'action_url' => '/central-operacao?diagnostico=evolution&tenant=' . $tenantId,
+                'secondary_label' => 'Abrir WhatsApp',
+                'secondary_url' => '/instances',
+                'communication_url' => $tenantId > 0 ? '/comunicados?tenant_id=' . $tenantId . '&type=incident' : '',
             ];
         }
         return $blocks;
@@ -374,10 +375,11 @@ final class OperationalHealthService
                     ? 'Última evidência: ' . $service['checked_at'] . ' · ' . $service['age_label']
                     : 'Nenhuma evidência registrada.',
                 'technical_details' => (string) ($service['technical_details'] ?? ''),
-                'action_label' => 'Abrir ferramenta',
-                'action_url' => (string) ($service['route'] ?? '/central-operacao'),
-                'secondary_label' => 'Central técnica',
-                'secondary_url' => '/central-operacao',
+                'action_label' => 'Resolver problema',
+                'action_url' => '/central-operacao?diagnostico=' . rawurlencode($key),
+                'secondary_label' => 'Abrir ferramenta',
+                'secondary_url' => (string) ($service['route'] ?? '/central-operacao'),
+                'communication_url' => '',
             ];
         }
 

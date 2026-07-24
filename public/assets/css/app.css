@@ -7892,3 +7892,64 @@ body.sidebar-open #sidebarToggle.global-sidebar-toggle { left: 298px; }
   .health-command-title-row h1 { font-size:1.45rem; }
   .health-issue-actions .btn { width:100%; }
 }
+
+/* =========================================================
+   36.6.5 — Resolução e comunicação operacional
+   ========================================================= */
+.operations-diagnostic-card { margin: 0 0 18px; padding: 22px; border-radius: 22px; border: 1px solid #dbe5f0; background: linear-gradient(180deg,#fff,#f8fbff); }
+.operations-diagnostic-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
+.operations-diagnostic-head h2 { margin:4px 0 8px; color:#203047; }
+.operations-diagnostic-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-bottom:14px; }
+.operations-diagnostic-grid > div, .operations-playbook { border:1px solid #e3eaf2; background:#fff; border-radius:16px; padding:15px; }
+.operations-diagnostic-grid strong, .operations-playbook > strong { color:#25364c; }
+.operations-diagnostic-grid p { margin:6px 0 0; color:#627389; line-height:1.55; }
+.operations-playbook ol { margin:10px 0 0 20px; padding:0; color:#53657a; }
+.operations-playbook li + li { margin-top:8px; }
+.operations-diagnostic-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+
+.operations-alert-layout, .communications-layout { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(320px,.65fr); gap:18px; align-items:start; margin-bottom:18px; }
+.operations-alert-settings, .operations-alert-feed, .communication-compose, .communication-guidance { min-width:0; }
+.operations-alert-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:22px; }
+.ops-check, .ops-channel { display:flex; gap:11px; align-items:flex-start; border:1px solid #e0e8f1; border-radius:15px; padding:13px; background:#fff; cursor:pointer; }
+.ops-check input, .ops-channel > input[type="checkbox"] { margin-top:3px; flex:0 0 auto; }
+.ops-check span, .ops-channel span { display:block; min-width:0; }
+.ops-check strong, .ops-channel strong { display:block; color:#26364c; }
+.ops-check small, .ops-channel small { display:block; color:#718096; line-height:1.4; margin-top:3px; }
+.operations-channel-grid { display:grid; gap:10px; margin-bottom:18px; }
+.ops-channel { display:grid; grid-template-columns:auto minmax(0,1fr) minmax(180px,.7fr); align-items:center; }
+.ops-channel:first-child { grid-template-columns:auto minmax(0,1fr); }
+.operations-alert-feed .notification-list { max-height:760px; overflow:auto; padding-right:2px; }
+
+.communication-compose form { display:grid; gap:14px; }
+.communication-compose label { display:grid; gap:6px; color:#36465a; font-size:.88rem; }
+.communication-tenant-picker { border:1px solid #e0e8f1; border-radius:16px; padding:14px; }
+.communication-tenant-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; max-height:280px; overflow:auto; margin-top:10px; }
+.communication-tenant-list label { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:9px; padding:10px; border:1px solid #edf1f5; border-radius:12px; background:#fafcff; }
+.communication-tenant-list label input { margin-top:3px; }
+.communication-tenant-list strong, .communication-tenant-list small { display:block; }
+.communication-tenant-list small { margin-top:2px; color:#78879a; }
+.communication-channels { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.communication-channels label { display:grid; grid-template-columns:auto minmax(0,1fr); gap:9px; border:1px solid #e0e8f1; border-radius:14px; padding:12px; background:#fff; }
+.communication-channels label.is-fixed { background:#f3f8ff; border-color:#cfe0f3; }
+.communication-channels strong, .communication-channels small { display:block; }
+.communication-channels small { margin-top:3px; color:#748399; line-height:1.4; }
+.communication-guidance { position:sticky; top:18px; }
+.communication-guidance h2 { margin:5px 0 8px; color:#25364b; }
+.communication-guidance > p { color:#68798d; line-height:1.55; }
+.communication-template { margin-top:12px; padding:14px; border-radius:14px; background:#f7f9fc; border:1px solid #e5ebf2; }
+.communication-template strong { color:#2b3c52; }
+.communication-template p { margin:6px 0 0; color:#63758a; line-height:1.5; }
+.health-issue-actions { min-width:150px; }
+.health-issue-actions .btn { width:100%; justify-content:center; }
+
+@media (max-width: 980px) {
+  .operations-alert-layout, .communications-layout { grid-template-columns:1fr; }
+  .communication-guidance { position:static; }
+  .communication-channels { grid-template-columns:1fr; }
+}
+@media (max-width: 720px) {
+  .operations-diagnostic-head { flex-direction:column; }
+  .operations-diagnostic-grid, .operations-alert-grid, .communication-tenant-list { grid-template-columns:1fr; }
+  .ops-channel, .ops-channel:first-child { grid-template-columns:auto minmax(0,1fr); }
+  .ops-channel .input { grid-column:2; width:100%; }
+}

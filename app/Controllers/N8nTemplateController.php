@@ -56,6 +56,13 @@ final class N8nTemplateController
             'events' => ['operations.backup.requested', 'cron.daily'],
             'description' => 'Gera backup do banco via bash/SSH, salva o arquivo no destino configurado, registra o callback e sinaliza falha real também no n8n.',
         ],
+        'monitor-operacional' => [
+            'title' => 'Monitor operacional RS Connect',
+            'segment' => 'Operação',
+            'file' => 'template-monitor-operacional.json',
+            'events' => ['operations.health.check', 'cron.every_15_minutes'],
+            'description' => 'Executa a verificação operacional a cada 15 minutos para abrir, atualizar e encerrar incidentes, incluindo alertas e recuperação sem duplicar notificações.',
+        ],
         'ai-reprocessamento-agendado' => [
             'title' => 'Verificação agendada da fila da IA',
             'segment' => 'Operação',
@@ -155,6 +162,24 @@ final class N8nTemplateController
             }
             $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
             $contents = str_replace('SEU_BILLING_CRON_TOKEN', rawurlencode($billingToken), $contents);
+        }
+
+        if ($key === 'monitor-operacional') {
+            $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+            $monitorToken = $this->monitorToken();
+            if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+                http_response_code(409);
+                echo 'Configure APP_URL com a URL pública HTTPS do RS Connect antes de baixar o monitor operacional.';
+                return;
+            }
+            if ($monitorToken === '') {
+                http_response_code(409);
+                echo 'Configure OPERATIONS_MONITOR_TOKEN (ou OPERATIONS_BACKUP_TOKEN) e reinicie o RS Connect antes de baixar o monitor operacional.';
+                return;
+            }
+
+            $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
+            $contents = str_replace('SEU_OPERATIONS_MONITOR_TOKEN', $monitorToken, $contents);
         }
 
         if ($key === 'backup-rsconnect') {
@@ -262,6 +287,21 @@ final class N8nTemplateController
         }
 
         $this->json(['ok' => true, 'logged' => true]);
+    }
+
+    private function monitorToken(): string
+    {
+        foreach (['OPERATIONS_MONITOR_TOKEN', 'OPERATIONS_BACKUP_TOKEN', 'BACKUP_WEBHOOK_TOKEN'] as $key) {
+            $value = trim((string) Env::get($key, ''));
+            if ($value !== '') {
+                return $value;
+            }
+            $serverValue = $_SERVER[$key] ?? $_ENV[$key] ?? getenv($key);
+            if (is_string($serverValue) && trim($serverValue) !== '') {
+                return trim($serverValue);
+            }
+        }
+        return '';
     }
 
     /** @return array<string,mixed> */

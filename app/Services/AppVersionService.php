@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.4 — Dados operacionais corrigidos';
-    public const REQUIRED_MIGRATION = '048_reporting_metrics_foundation.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.5 — Resolução e comunicação operacional';
+    public const REQUIRED_MIGRATION = '049_operational_resolution_communications.sql';
 
     private PDO $pdo;
 
@@ -82,13 +82,18 @@ final class AppVersionService
             'conversation_flow_states',
             'ai_agent_group_rules',
             'report_daily_metrics',
+            'operational_alert_preferences',
+            'admin_operational_notifications',
+            'operational_alert_deliveries',
+            'client_communications',
+            'client_communication_recipients',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 048, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 049, conforme o pacote implantado.'
         );
 
         $reactionPreferenceReady = $this->columnExists('ai_agents', 'reply_to_reactions');
@@ -130,6 +135,18 @@ final class AppVersionService
                 ? 'Fundação de métricas diária disponível para relatórios e comparativos.'
                 : 'A base agregada de relatórios ainda não foi aplicada completamente.',
             'Executar database/migrations/048_reporting_metrics_foundation.sql.'
+        );
+
+        $operationalCommunicationReady = $this->tableExists('operational_alert_preferences')
+            && $this->tableExists('admin_operational_notifications')
+            && $this->tableExists('client_communications');
+        $checks[] = $this->check(
+            'Resolução e comunicação operacional',
+            $operationalCommunicationReady ? 'ok' : 'blocked',
+            $operationalCommunicationReady
+                ? 'Alertas internos, playbooks e comunicados estão disponíveis.'
+                : 'A estrutura da versão 36.6.5 ainda não foi aplicada.',
+            'Executar database/migrations/049_operational_resolution_communications.sql.'
         );
 
         $appKey = (string) Env::get('APP_KEY', '');

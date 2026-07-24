@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.4 — Dados operacionais corrigidos.
+Pacote consolidado até o RS Connect 36.6.5 — Resolução e comunicação operacional.
 
 ## Última etapa incluída
+
+RS Connect 36.6.5 — conecta o Painel operacional a playbooks de correção, cria alertas internos do Super Admin com recuperação e adiciona o módulo Comunicados para clientes.
 
 RS Connect 36.6.4 — corrige o transporte dos dados das views para que o Painel operacional carregue a fonte única de saúde, serviços, problemas, rotinas e empresas corretamente.
 
@@ -22,7 +24,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.4.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.5.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 
@@ -53,6 +55,7 @@ database/migrations/045_ai_webhook_ingestion_resilience.sql
 database/migrations/046_calendar_conversational_slot_selection.sql
 database/migrations/047_backup_automation_reliability.sql
 database/migrations/048_reporting_metrics_foundation.sql
+database/migrations/049_operational_resolution_communications.sql
 ```
 
 Consulte `README-RS-CONNECT-36.3.0.md` para instalar e validar a rotina de backup.
@@ -64,6 +67,8 @@ Consulte `README-HOTFIX-36.2.5.md` para validar a etapa de demanda antes da agen
 Consulte `README-ZIP-36.2.md` para instalar e validar a agenda conversacional.
 
 Consulte `docs/AI-REPROCESSAMENTO-AGENDADO.md` para configurar o horário, o cron ou o workflow n8n.
+
+Para a saúde operacional automática, configure `OPERATIONS_MONITOR_TOKEN` e baixe **Monitor operacional RS Connect** em **n8n → Templates**; o workflow distribuído consulta `/webhooks/operations/checks/run` a cada 15 minutos.
 
 ## Módulos principais
 

@@ -66,6 +66,23 @@ final class OperationsController
         exit;
     }
 
+    public function runHealthChecksCron(): void
+    {
+        $service = new OperationsService();
+        if (!$service->validMonitorToken($this->backupRequestToken())) {
+            $this->json(['ok' => false, 'error' => 'Token inválido.'], 403);
+            return;
+        }
+
+        $service->runChecks();
+        $this->json([
+            'ok' => true,
+            'message' => 'Monitoramento operacional executado.',
+            'checked_at' => date('Y-m-d H:i:s'),
+            'summary' => $service->dashboard()['summary'] ?? [],
+        ]);
+    }
+
     public function registerBackup(): void
     {
         if (!Csrf::validate($_POST['_token'] ?? null)) {

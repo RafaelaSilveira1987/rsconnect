@@ -7,6 +7,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\NotificationService;
+use App\Services\OperationalAlertService;
 use App\Services\TenantModuleService;
 
 $user = Auth::user();
@@ -30,7 +31,9 @@ $isAnyActive = static function (array $paths) use ($isActive): string {
 };
 
 $notificationUnread = 0;
-if (!Auth::isSuperAdmin() && Auth::tenantId()) {
+if (Auth::isSuperAdmin()) {
+    $notificationUnread = (new OperationalAlertService())->unreadCount((int) Auth::id());
+} elseif (Auth::tenantId()) {
     $notificationUnread = (new NotificationService())->unreadCount((int) Auth::tenantId());
 }
 $notificationBadge = static fn (int $count): string => $count > 0 ? '<span class="nav-badge">' . min(99, $count) . '</span>' : '';
@@ -107,7 +110,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.6.3')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.6.5')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -160,9 +163,11 @@ $svgIcon = static function (string $name): string {
                 <a class="nav-link<?= $isActive('/billing-reminders') ?>" href="<?= View::e(Router::url('/billing-reminders')) ?>"><?= $svgIcon('bell') ?><span>Régua de cobrança</span></a>
 
                 <span class="nav-caption">Operação RS</span>
-                <a class="nav-link<?= $isActive('/implementation') ?>" href="<?= View::e(Router::url('/implementation')) ?>"><?= $svgIcon('implementation') ?><span>Implantação</span></a>
                 <a class="nav-link<?= $isAnyActive(['/painel-operacional', '/operacao-rs']) ?>" href="<?= View::e(Router::url('/painel-operacional')) ?>"><?= $svgIcon('operations') ?><span>Painel operacional</span></a>
                 <a class="nav-link<?= $isAnyActive(['/central-operacao', '/security', '/seguranca', '/operations', '/monitoramento', '/backup-automatico', '/operations/backups/automation', '/operations/ai-reprocess', '/beta-comercial', '/status-sistema']) ?>" href="<?= View::e(Router::url('/central-operacao')) ?>"><?= $svgIcon('operations') ?><span>Central de operação</span></a>
+                <a class="nav-link<?= $isActive('/operacao-alertas') ?>" href="<?= View::e(Router::url('/operacao-alertas')) ?>"><?= $svgIcon('bell') ?><span>Alertas operacionais</span><?= $notificationBadge($notificationUnread) ?></a>
+                <a class="nav-link<?= $isActive('/comunicados') ?>" href="<?= View::e(Router::url('/comunicados')) ?>"><?= $svgIcon('chat') ?><span>Comunicados</span></a>
+                <a class="nav-link<?= $isActive('/implementation') ?>" href="<?= View::e(Router::url('/implementation')) ?>"><?= $svgIcon('implementation') ?><span>Implantação</span></a>
 
                 <span class="nav-caption">Administração RS</span>
                 <a class="nav-link<?= $isAnyActive(['/companies', '/companies/overview', '/companies/health', '/company-settings']) ?>" href="<?= View::e(Router::url('/companies')) ?>"><?= $svgIcon('company') ?><span>Empresas</span></a>
@@ -215,7 +220,12 @@ $svgIcon = static function (string $name): string {
                 <span class="eyebrow"><?= Auth::isSuperAdmin() ? 'Operação RS' : View::e($user['tenant_name'] ?? 'Cliente') ?></span>
                 <h1><?= View::e($title ?? 'RS Connect') ?></h1>
             </div>
-            <?php if (!Auth::isSuperAdmin() && Auth::can('notifications.view') && $moduleVisible('notifications')): ?>
+            <?php if (Auth::isSuperAdmin()): ?>
+                <a class="topbar-notification" href="<?= View::e(Router::url('/operacao-alertas')) ?>" aria-label="Alertas operacionais" data-notification-link data-count-url="<?= View::e(Router::url('/operacao-alertas/count')) ?>">
+                    <?= $svgIcon('bell') ?>
+                    <?= $notificationLiveBadge($notificationUnread) ?>
+                </a>
+            <?php elseif (Auth::can('notifications.view') && $moduleVisible('notifications')): ?>
                 <a class="topbar-notification" href="<?= View::e(Router::url('/notifications')) ?>" aria-label="Notificações" data-notification-link data-count-url="<?= View::e(Router::url('/notifications/count')) ?>">
                     <?= $svgIcon('bell') ?>
                     <?= $notificationLiveBadge($notificationUnread) ?>
@@ -241,6 +251,6 @@ $svgIcon = static function (string $name): string {
 <button class="back-to-top" type="button" data-back-to-top aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
 </button>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.6.3')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.6.5')) ?>" defer></script>
 </body>
 </html>

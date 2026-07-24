@@ -1,5 +1,20 @@
 # Changelog
 
+## 36.6.5 — Resolução e comunicação operacional
+
+- O Painel operacional passa a abrir a Central de operação já contextualizada no problema detectado, por `diagnostico` e empresa afetada.
+- Adiciona playbooks específicos para Evolution, n8n/callback, OpenAI 401/403/429/quota, backup (permissão, espaço, mysqldump e callback), banco, migrations, agenda, pagamentos, cron, fila da IA e relatórios.
+- Cria Alertas operacionais do Super Admin com preferências por categoria, canal interno, cooldown de lembrete e aviso de recuperação.
+- Adiciona `POST /webhooks/operations/checks/run` protegido por `OPERATIONS_MONITOR_TOKEN`, permitindo que n8n/cron faça a verificação sem depender de clique manual.
+- Inclui o template n8n **Monitor operacional RS Connect**, com agenda de 15 minutos e injeção segura de `APP_URL` + `OPERATIONS_MONITOR_TOKEN` no download.
+- Converte instâncias Evolution desconectadas com mensagens pendentes em incidentes por empresa, com alerta, cooldown e recuperação.
+- O sino do Super Admin passa a exibir alertas operacionais e direcionar para a nova central de alertas.
+- WhatsApp e e-mail entram no mesmo motor de alertas como canais preparados, sem registrar falso envio enquanto não existir provedor administrativo configurado.
+- Cria o módulo Comunicados para uma, várias ou todas as empresas, com entrega imediata no sininho do cliente, associação opcional a incidente e histórico de leitura.
+- WhatsApp administrativo e e-mail do cliente ficam registrados no mesmo comunicado como canais preparados para a etapa de integração externa.
+- Problemas com empresa identificada ganham ação direta “Avisar cliente”, sem expor detalhes técnicos internos.
+- Requer `database/migrations/049_operational_resolution_communications.sql`.
+
 ## 36.6.4 — Dados operacionais corrigidos
 
 - Corrige uma colisão no `View::render`: a variável interna do renderer se chamava `$data` e, com `EXTR_SKIP`, impedia que controllers entregassem uma variável de view também chamada `$data`.

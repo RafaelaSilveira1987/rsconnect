@@ -1,5 +1,6 @@
 <?php
 
+use App\Core\Router;
 use App\Core\View;
 
 $selectedTab = in_array(($selectedTab ?? 'monitoring'), ['monitoring', 'ai_reprocess', 'security', 'backups', 'beta', 'status'], true)
@@ -18,6 +19,34 @@ $viewBase = dirname(__DIR__);
         <p>Segurança, monitoramento, backups e informações da versão reunidos em um único módulo.</p>
     </div>
 </section>
+
+<?php if (!empty($diagnosticData) && is_array($diagnosticData)): ?>
+<section class="card operations-diagnostic-card">
+    <div class="operations-diagnostic-head">
+        <div>
+            <span class="eyebrow">Assistente de correção</span>
+            <h2><?= View::e((string) ($diagnosticData['title'] ?? 'Diagnóstico operacional')) ?></h2>
+            <?php if (!empty($diagnosticData['tenant']['name'])): ?><span class="badge badge-info">Empresa: <?= View::e((string) $diagnosticData['tenant']['name']) ?></span><?php endif; ?>
+        </div>
+        <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/painel-operacional')) ?>">Voltar ao painel</a>
+    </div>
+    <div class="operations-diagnostic-grid">
+        <div><strong>O que encontramos</strong><p><?= View::e((string) ($diagnosticData['cause'] ?? '')) ?></p></div>
+        <div><strong>Impacto</strong><p><?= View::e((string) ($diagnosticData['impact'] ?? '')) ?></p></div>
+    </div>
+    <div class="operations-playbook">
+        <strong>Como corrigir</strong>
+        <ol><?php foreach (($diagnosticData['steps'] ?? []) as $step): ?><li><?= View::e((string) $step) ?></li><?php endforeach; ?></ol>
+    </div>
+    <?php if (!empty($diagnosticData['evidence']['message'])): ?>
+        <details class="health-technical-details"><summary>Ver evidência técnica</summary><pre><?= View::e((string) $diagnosticData['evidence']['message']) ?></pre></details>
+    <?php endif; ?>
+    <div class="operations-diagnostic-actions">
+        <?php foreach (($diagnosticData['actions'] ?? []) as $action): ?><a class="btn btn-small btn-outline" href="<?= View::e(Router::url((string) ($action['url'] ?? '/central-operacao'))) ?>"><?= View::e((string) ($action['label'] ?? 'Abrir')) ?></a><?php endforeach; ?>
+        <?php if (!empty($diagnosticData['tenant_id'])): ?><a class="btn btn-small btn-primary" href="<?= View::e(Router::url('/comunicados?tenant_id=' . (int) $diagnosticData['tenant_id'] . '&type=incident')) ?>">Avisar empresa</a><?php endif; ?>
+    </div>
+</section>
+<?php endif; ?>
 
 <div class="admin-tab-shell operations-center-shell" data-tabs-shell>
     <div class="admin-tab-bar operations-center-tabs" data-tabs>

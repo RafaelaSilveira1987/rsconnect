@@ -107,6 +107,7 @@ $historySummary = $history['summary'] ?? ['ok' => 0, 'warning' => 0, 'down' => 0
                     <div class="health-issue-actions">
                         <?php if (!empty($issue['action_url'])): ?><a class="btn btn-small btn-primary" href="<?= View::e(Router::url((string) $issue['action_url'])) ?>"><?= View::e((string) ($issue['action_label'] ?? 'Abrir')) ?></a><?php endif; ?>
                         <?php if (!empty($issue['secondary_url'])): ?><a class="btn btn-small btn-quiet" href="<?= View::e(Router::url((string) $issue['secondary_url'])) ?>"><?= View::e((string) ($issue['secondary_label'] ?? 'Detalhes')) ?></a><?php endif; ?>
+                        <?php if (!empty($issue['communication_url'])): ?><a class="btn btn-small btn-outline" href="<?= View::e(Router::url((string) $issue['communication_url'])) ?>">Avisar cliente</a><?php endif; ?>
                     </div>
                 </article>
             <?php endforeach; ?>
