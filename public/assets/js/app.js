@@ -3,10 +3,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggle = document.getElementById('sidebarToggle');
   const backdrop = document.getElementById('sidebarBackdrop');
 
-  const closeSidebar = () => sidebar?.classList.remove('is-open');
-  toggle?.addEventListener('click', () => sidebar?.classList.toggle('is-open'));
+  const closeSidebar = () => {
+    sidebar?.classList.remove('is-open');
+    document.body.classList.remove('sidebar-open');
+  };
+  toggle?.addEventListener('click', () => {
+    const open = !sidebar?.classList.contains('is-open');
+    sidebar?.classList.toggle('is-open', Boolean(open));
+    document.body.classList.toggle('sidebar-open', Boolean(open));
+  });
   backdrop?.addEventListener('click', closeSidebar);
   sidebar?.querySelectorAll('.nav-link').forEach((link) => link.addEventListener('click', closeSidebar));
+
+  const backToTop = document.querySelector('[data-back-to-top]');
+  const refreshBackToTop = () => backToTop?.classList.toggle('is-visible', window.scrollY > 520);
+  window.addEventListener('scroll', refreshBackToTop, { passive: true });
+  backToTop?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  refreshBackToTop();
 
   document.querySelectorAll('[data-dismiss-flash]').forEach((button) => {
     button.addEventListener('click', () => button.closest('.flash')?.remove());

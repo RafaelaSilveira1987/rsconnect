@@ -12,6 +12,7 @@ $formatDate = static function (?string $date): string {
 };
 $statusLabel = ['success' => 'Sucesso', 'error' => 'Erro', 'info' => 'Info'];
 ?>
+<?php require dirname(__DIR__) . '/n8n_flows/_nav.php'; ?>
 
 <div class="content-grid management-layout n8n-template-page">
     <section class="card">

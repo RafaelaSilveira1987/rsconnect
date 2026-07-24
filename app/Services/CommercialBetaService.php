@@ -151,7 +151,7 @@ final class CommercialBetaService
             ['label' => 'Ver implantação', 'url' => '/implantacao', 'scope' => 'super_admin'],
             ['label' => 'Abrir monitoramento', 'url' => '/monitoramento', 'scope' => 'super_admin'],
             ['label' => 'Backup automático', 'url' => '/backup-automatico', 'scope' => 'super_admin'],
-            ['label' => 'Fluxos n8n', 'url' => '/n8n-flows', 'scope' => 'super_admin'],
+            ['label' => 'n8n', 'url' => '/n8n', 'scope' => 'super_admin'],
             ['label' => 'Primeiros passos', 'url' => '/primeiros-passos', 'scope' => 'client'],
             ['label' => 'Privacidade/LGPD', 'url' => '/privacy', 'scope' => 'all'],
         ];
@@ -160,6 +160,9 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.5.8', 'title' => 'Administração RS e monitoramento', 'summary' => 'Reorganiza o menu, agrupa n8n e amplia a Central de operação com evidências, busca e filtros.'],
+            ['version' => '36.5.7', 'title' => 'Identificação e cron seguro', 'summary' => 'Corrige nome automático de contatos, melhora toque mobile e endurece a ativação do cron de cobrança.'],
+            ['version' => '36.5.6', 'title' => 'Homologação final', 'summary' => 'Corrige contexto de clientes, takeover humano da IA, reprocessamento, cron e responsividade.'],
             ['version' => '36.5.5', 'title' => 'Prontidão beta e Minha empresa', 'summary' => 'Alinha o diagnóstico à migration 048 e reorganiza melhor o bloco de endereço da empresa.'],
             ['version' => '36.5.4', 'title' => 'Equipe e acessos em drawer', 'summary' => 'Cadastro e edição de usuários passam a abrir em gaveta lateral, no padrão de Contatos.'],
             ['version' => '36.5.3', 'title' => 'Cadastro mais limpo e endereço por CEP', 'summary' => 'Dados mestres compactos e preenchimento automático de endereço ao informar o CEP.'],

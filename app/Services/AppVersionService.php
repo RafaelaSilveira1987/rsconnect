@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.5.7 — Homologação final';
+    public const PACKAGE_LABEL = 'RS Connect 36.5.8 — Administração RS e monitoramento';
     public const REQUIRED_MIGRATION = '048_reporting_metrics_foundation.sql';
 
     private PDO $pdo;
@@ -255,7 +255,7 @@ final class AppVersionService
             ['name' => 'Empresas', 'count' => $this->countWhere('tenants', "status = 'active'"), 'url' => '/companies'],
             ['name' => 'Conversas 24h', 'count' => $this->number("SELECT COUNT(*) FROM conversation_messages WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)"), 'url' => '/conversations'],
             ['name' => 'Assistentes IA', 'count' => $this->countWhere('ai_agents', "status = 'active'"), 'url' => '/agents'],
-            ['name' => 'Fluxos n8n', 'count' => $this->countWhere('n8n_tenant_flows', "status = 'active'") + $this->countWhere('n8n_flows', "status = 'active'"), 'url' => '/n8n-flows'],
+            ['name' => 'n8n', 'count' => $this->countWhere('n8n_tenant_flows', "status = 'active'") + $this->countWhere('n8n_flows', "status = 'active'"), 'url' => '/n8n'],
             ['name' => 'Backups automáticos', 'count' => $this->number("SELECT COUNT(*) FROM system_backups WHERE backup_type = 'automatic' AND status = 'success'"), 'url' => '/backup-automatico'],
             ['name' => 'Alertas ativos', 'count' => $this->activeIncidentCount(), 'url' => '/monitoramento'],
         ];

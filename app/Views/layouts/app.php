@@ -107,7 +107,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.5.7')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.5.8')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -146,41 +146,48 @@ $svgIcon = static function (string $name): string {
                 <a class="nav-link<?= $isActive('/reports') ?>" href="<?= View::e(Router::url('/reports')) ?>"><?= $svgIcon('reports') ?><span><?= Auth::isSuperAdmin() ? 'Relatórios executivos' : 'Relatórios' ?></span></a>
             <?php endif; ?>
 
-            <?php if ((Auth::can('instances.view') && $moduleVisible('instances')) || (!Auth::isSuperAdmin() && ((Auth::can('agents.view') && $moduleVisible('agents')) || (Auth::can('automations.view') && $moduleVisible('automations'))))): ?>
-                <span class="nav-caption">Automação</span>
-            <?php endif; ?>
-            <?php if (Auth::can('instances.view') && $moduleVisible('instances')): ?>
-                <a class="nav-link<?= $isActive('/instances') ?>" href="<?= View::e(Router::url('/instances')) ?>"><?= $svgIcon('instance') ?><span>WhatsApp</span></a>
-            <?php endif; ?>
             <?php if (Auth::isSuperAdmin()): ?>
-                <a class="nav-link<?= $isActive('/ai-credentials') ?>" href="<?= View::e(Router::url('/ai-credentials')) ?>"><?= $svgIcon('lock') ?><span>Credenciais de IA</span></a>
-                <a class="nav-link<?= $isActive('/n8n-flows') ?>" href="<?= View::e(Router::url('/n8n-flows')) ?>"><?= $svgIcon('flow') ?><span>Fluxos n8n</span></a>
-                <a class="nav-link<?= $isActive('/n8n-templates') ?>" href="<?= View::e(Router::url('/n8n-templates')) ?>"><?= $svgIcon('template') ?><span>Templates n8n</span></a>
+                <span class="nav-caption">Automação e integrações</span>
+                <?php if (Auth::can('instances.view')): ?>
+                    <a class="nav-link<?= $isActive('/instances') ?>" href="<?= View::e(Router::url('/instances')) ?>"><?= $svgIcon('instance') ?><span>WhatsApp</span></a>
+                <?php endif; ?>
+                <a class="nav-link<?= $isActive('/ai-credentials') ?>" href="<?= View::e(Router::url('/ai-credentials')) ?>"><?= $svgIcon('lock') ?><span>IA e credenciais</span></a>
+                <a class="nav-link<?= $isAnyActive(['/n8n', '/n8n-flows', '/n8n-templates']) ?>" href="<?= View::e(Router::url('/n8n')) ?>"><?= $svgIcon('flow') ?><span>n8n</span></a>
+
+                <span class="nav-caption">Financeiro</span>
                 <a class="nav-link<?= $isActive('/billing') ?>" href="<?= View::e(Router::url('/billing')) ?>"><?= $svgIcon('billing') ?><span>Planos e cobrança</span></a>
                 <a class="nav-link<?= $isActive('/payment-gateways') ?>" href="<?= View::e(Router::url('/payment-gateways')) ?>"><?= $svgIcon('card') ?><span>Gateways de pagamento</span></a>
                 <a class="nav-link<?= $isActive('/billing-reminders') ?>" href="<?= View::e(Router::url('/billing-reminders')) ?>"><?= $svgIcon('bell') ?><span>Régua de cobrança</span></a>
+
+                <span class="nav-caption">Operação RS</span>
                 <a class="nav-link<?= $isActive('/implementation') ?>" href="<?= View::e(Router::url('/implementation')) ?>"><?= $svgIcon('implementation') ?><span>Implantação</span></a>
                 <a class="nav-link<?= $isAnyActive(['/central-operacao', '/security', '/seguranca', '/operations', '/monitoramento', '/backup-automatico', '/operations/backups/automation', '/operations/ai-reprocess', '/beta-comercial', '/status-sistema']) ?>" href="<?= View::e(Router::url('/central-operacao')) ?>"><?= $svgIcon('operations') ?><span>Central de operação</span></a>
-                <a class="nav-link<?= $isActive('/ajuda') ?>" href="<?= View::e(Router::url('/ajuda')) ?>"><?= $svgIcon('help') ?><span>Central de ajuda</span></a>
-                <a class="nav-link<?= $isActive('/privacy') ?>" href="<?= View::e(Router::url('/privacy')) ?>"><?= $svgIcon('privacy') ?><span>Privacidade/LGPD</span></a>
-            <?php endif; ?>
-            <?php if (!Auth::isSuperAdmin() && Auth::can('agents.view') && $moduleVisible('agents')): ?>
-                <a class="nav-link<?= $isActive('/agents') ?>" href="<?= View::e(Router::url('/agents')) ?>"><?= $svgIcon('agent') ?><span>Assistentes de IA</span></a>
-            <?php endif; ?>
-            <?php if (!Auth::isSuperAdmin() && Auth::can('automations.view') && $moduleVisible('automations')): ?>
-                <a class="nav-link<?= $isActive('/automations') ?>" href="<?= View::e(Router::url('/automations')) ?>"><?= $svgIcon('automation') ?><span>Automações</span></a>
-            <?php endif; ?>
 
-            <span class="nav-caption"><?= Auth::isSuperAdmin() ? 'Administração RS' : 'Administração' ?></span>
-            <?php if (Auth::isSuperAdmin()): ?>
+                <span class="nav-caption">Administração RS</span>
                 <a class="nav-link<?= $isAnyActive(['/companies', '/companies/overview', '/companies/health', '/company-settings']) ?>" href="<?= View::e(Router::url('/companies')) ?>"><?= $svgIcon('company') ?><span>Empresas</span></a>
-                <?php if (Auth::can('users.view') && $moduleVisible('users')): ?>
+                <?php if (Auth::can('users.view')): ?>
                     <a class="nav-link<?= $isActive('/users') ?>" href="<?= View::e(Router::url('/users')) ?>"><?= $svgIcon('users') ?><span>Usuários</span></a>
                 <?php endif; ?>
-                <?php if (Auth::can('permissions.view') && $moduleVisible('permissions')): ?>
+                <?php if (Auth::can('permissions.view')): ?>
                     <a class="nav-link<?= $isActive('/permissions') ?>" href="<?= View::e(Router::url('/permissions')) ?>"><?= $svgIcon('permissions') ?><span>Permissões</span></a>
                 <?php endif; ?>
+                <a class="nav-link<?= $isActive('/privacy') ?>" href="<?= View::e(Router::url('/privacy')) ?>"><?= $svgIcon('privacy') ?><span>Privacidade/LGPD</span></a>
+                <a class="nav-link<?= $isActive('/ajuda') ?>" href="<?= View::e(Router::url('/ajuda')) ?>"><?= $svgIcon('help') ?><span>Central de ajuda</span></a>
             <?php else: ?>
+                <?php if ((Auth::can('instances.view') && $moduleVisible('instances')) || (Auth::can('agents.view') && $moduleVisible('agents')) || (Auth::can('automations.view') && $moduleVisible('automations'))): ?>
+                    <span class="nav-caption">Automação</span>
+                <?php endif; ?>
+                <?php if (Auth::can('instances.view') && $moduleVisible('instances')): ?>
+                    <a class="nav-link<?= $isActive('/instances') ?>" href="<?= View::e(Router::url('/instances')) ?>"><?= $svgIcon('instance') ?><span>WhatsApp</span></a>
+                <?php endif; ?>
+                <?php if (Auth::can('agents.view') && $moduleVisible('agents')): ?>
+                    <a class="nav-link<?= $isActive('/agents') ?>" href="<?= View::e(Router::url('/agents')) ?>"><?= $svgIcon('agent') ?><span>Assistentes de IA</span></a>
+                <?php endif; ?>
+                <?php if (Auth::can('automations.view') && $moduleVisible('automations')): ?>
+                    <a class="nav-link<?= $isActive('/automations') ?>" href="<?= View::e(Router::url('/automations')) ?>"><?= $svgIcon('automation') ?><span>Automações</span></a>
+                <?php endif; ?>
+
+                <span class="nav-caption">Administração</span>
                 <?php if (Auth::can('company.view') && $moduleVisible('company_settings')): ?>
                     <a class="nav-link<?= $isAnyActive(['/company-settings', '/users', '/permissions', '/subscription', '/privacy']) ?>" href="<?= View::e(Router::url('/company-settings')) ?>"><?= $svgIcon('company') ?><span>Minha empresa</span></a>
                 <?php endif; ?>
@@ -230,6 +237,9 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.5.7')) ?>" defer></script>
+<button class="back-to-top" type="button" data-back-to-top aria-label="Voltar ao topo" title="Voltar ao topo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
+</button>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.5.8')) ?>" defer></script>
 </body>
 </html>

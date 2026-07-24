@@ -37,6 +37,7 @@ final class AiReprocessService
                 'pending' => $this->pendingByTenant(),
                 'pending_total' => $this->pendingTotal(),
                 'history' => $this->history(),
+                'recent_failures' => $this->recentFailures(),
                 'cron_url' => Router::url('/webhooks/ai-reprocess/run'),
                 'cron_token_configured' => trim((string) Env::get('AI_REPROCESS_CRON_TOKEN', '')) !== '',
             ];
@@ -49,6 +50,7 @@ final class AiReprocessService
                 'pending' => [],
                 'pending_total' => 0,
                 'history' => [],
+                'recent_failures' => [],
                 'cron_url' => Router::url('/webhooks/ai-reprocess/run'),
                 'cron_token_configured' => trim((string) Env::get('AI_REPROCESS_CRON_TOKEN', '')) !== '',
             ];
@@ -520,6 +522,41 @@ final class AiReprocessService
         );
 
         return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    private function recentFailures(): array
+    {
+        try {
+            $rows = Database::connection()->query(
+                "SELECT al.id, al.tenant_id, al.conversation_id, al.agent_id, al.event, al.status,
+                        al.error_message, al.created_at, t.name AS tenant_name, aa.name AS agent_name,
+                        c.contact_id, ct.name AS contact_name, ct.phone AS contact_phone
+                 FROM ai_automation_logs al
+                 INNER JOIN tenants t ON t.id = al.tenant_id
+                 LEFT JOIN ai_agents aa ON aa.id = al.agent_id
+                 LEFT JOIN conversations c ON c.id = al.conversation_id
+                 LEFT JOIN contacts ct ON ct.id = c.contact_id
+                 WHERE al.event = 'ai.failed' OR al.status = 'error'
+                 ORDER BY al.id DESC
+                 LIMIT 20"
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+            foreach ($rows as &$row) {
+                $error = mb_strtolower((string) ($row['error_message'] ?? ''));
+                $row['phase_label'] = 'Processamento da IA';
+                if (str_contains($error, 'evolution') || str_contains($error, 'sendtext') || str_contains($error, 'whatsapp') || str_contains($error, 'http 4')) {
+                    $row['phase_label'] = 'Envio pelo WhatsApp / Evolution';
+                } elseif (str_contains($error, 'openai') || str_contains($error, 'model') || str_contains($error, 'api key') || str_contains($error, 'token')) {
+                    $row['phase_label'] = 'Geração da resposta pela IA';
+                } elseif (str_contains($error, 'n8n') || str_contains($error, 'webhook')) {
+                    $row['phase_label'] = 'Integração n8n / webhook';
+                }
+            }
+            unset($row);
+            return $rows;
+        } catch (Throwable) {
+            return [];
+        }
     }
 
     private function history(): array

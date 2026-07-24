@@ -8,6 +8,7 @@ $data = $aiReprocessData ?? [];
 $settings = $data['settings'] ?? [];
 $pending = $data['pending'] ?? [];
 $history = $data['history'] ?? [];
+$recentFailures = $data['recent_failures'] ?? [];
 $lastSummary = $settings['last_summary'] ?? [];
 $formatDate = static function (?string $value): string {
     if (!$value || !($timestamp = strtotime($value))) return 'Ainda não executado';
@@ -112,6 +113,35 @@ $statusLabel = static function (string $status): string {
         </div>
     </section>
 </div>
+
+<section class="card ai-reprocess-failures" style="margin-top:16px">
+    <div class="section-heading">
+        <div><span class="eyebrow">Diagnóstico da falha</span><h2>Erros recentes da IA e do envio</h2><p>Mostra onde a tentativa parou para diferenciar geração de resposta, Evolution e integrações externas.</p></div>
+        <span class="badge <?= $recentFailures ? 'badge-warning' : 'badge-success' ?>"><?= count($recentFailures) ?> registro(s)</span>
+    </div>
+    <div class="ai-reprocess-failure-list">
+        <?php foreach ($recentFailures as $failure): ?>
+            <article class="ai-reprocess-failure-card">
+                <div class="ai-reprocess-failure-main">
+                    <span class="badge badge-danger"><?= View::e((string) ($failure['phase_label'] ?? 'Falha')) ?></span>
+                    <strong><?= View::e((string) ($failure['tenant_name'] ?? 'Empresa')) ?></strong>
+                    <p><?= View::e((string) ($failure['error_message'] ?? 'Falha sem detalhe registrado.')) ?></p>
+                    <small>
+                        <?= View::e($formatDate($failure['created_at'] ?? null)) ?>
+                        · Assistente: <?= View::e((string) ($failure['agent_name'] ?? 'não identificado')) ?>
+                        · Contato: <?= View::e((string) (($failure['contact_name'] ?? '') ?: ($failure['contact_phone'] ?? 'não identificado'))) ?>
+                    </small>
+                </div>
+                <div class="ai-reprocess-failure-actions">
+                    <?php if (!empty($failure['conversation_id'])): ?><a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) $failure['conversation_id'])) ?>">Abrir conversa</a><?php endif; ?>
+                    <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/instances')) ?>">Evolution</a>
+                    <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/ai-credentials')) ?>">Credenciais IA</a>
+                </div>
+            </article>
+        <?php endforeach; ?>
+        <?php if (!$recentFailures): ?><div class="empty-state">Nenhuma falha recente registrada na automação da IA.</div><?php endif; ?>
+    </div>
+</section>
 
 <section class="card" style="margin-top:16px">
     <div class="section-heading">

@@ -576,7 +576,7 @@ final class ImplementationChecklistService
             ['label' => 'Conexões WhatsApp', 'url' => '/instances?tenant_id=' . $tenantId],
             ['label' => 'Agentes IA', 'url' => '/agents?tenant_id=' . $tenantId],
             ['label' => 'Conversas', 'url' => '/conversations?tenant_id=' . $tenantId],
-            ['label' => 'Fluxos n8n', 'url' => '/n8n-flows?tenant_id=' . $tenantId],
+            ['label' => 'n8n', 'url' => '/n8n'],
             ['label' => 'Planos e cobrança', 'url' => '/billing?tenant_id=' . $tenantId],
             ['label' => 'Privacidade/LGPD', 'url' => '/privacy?tenant_id=' . $tenantId],
             ['label' => 'Monitoramento', 'url' => '/monitoramento'],

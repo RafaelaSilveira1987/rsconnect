@@ -1,5 +1,18 @@
 # Changelog
 
+## 36.5.8 — Administração RS, monitoramento e navegação
+
+- Reorganiza o menu do Super Admin em **Automação e integrações**, **Financeiro**, **Operação RS** e **Administração RS**.
+- Agrupa **Fluxos n8n** e **Templates n8n** sob um único item **n8n**, com nova visão geral e navegação interna por Visão geral, Fluxos e Templates.
+- Redesenha o Monitoramento da Central de operação com saúde geral, evidência da última validação, busca, filtros por status/categoria e histórico recente de cada ferramenta.
+- Amplia as verificações para Evolution, n8n, OpenAI/IA, Google Agenda, pagamentos, cron de cobrança, fila da IA, relatórios, backup, banco e migrations.
+- Diferencia **Operando**, **Atenção**, **Crítico** e **Sem evidência**, evitando considerar uma ferramenta saudável sem registro que comprove seu funcionamento.
+- A Fila da IA passa a mostrar erros recentes com empresa, assistente, contato, etapa provável da falha e atalhos para conversa, Evolution e credenciais.
+- Mantém o botão hamburger fixo durante a rolagem em todas as telas autenticadas.
+- Adiciona botão global **Voltar ao topo** para cliente e Super Admin, com comportamento responsivo.
+- Mantém URLs antigas de Fluxos n8n e Templates n8n funcionando.
+- Não exige nova migration.
+
 ## 36.5.7 — Identificação de contatos, toque mobile e cron seguro
 
 - Corrige o caso em que novas conversas podiam receber automaticamente o nome de um usuário interno da empresa, como `Rafa Silveira`, quando a Evolution devolvia esse valor como `pushName`.

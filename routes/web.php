@@ -241,6 +241,7 @@ return static function (Router $router): void {
     $router->post('/webhooks/billing/reminders/run', [BillingReminderController::class, 'cron']);
     $router->get('/webhooks/billing/reminders/run', [BillingReminderController::class, 'cron']);
 
+    $router->get('/n8n', [N8nFlowController::class, 'hub'], ['auth', 'super_admin']);
     $router->get('/n8n-flows', [N8nFlowController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/n8n-templates', [N8nTemplateController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/n8n-templates/download', [N8nTemplateController::class, 'download'], ['auth', 'super_admin']);

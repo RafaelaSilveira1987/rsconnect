@@ -14,7 +14,12 @@ use App\Services\SecurityService;
 
 final class OperationsCenterController
 {
-    public function index(): void { $this->render('monitoring'); }
+    public function index(): void
+    {
+        $tab = (string) ($_GET['tab'] ?? 'monitoring');
+        $allowed = ['monitoring', 'ai_reprocess', 'security', 'backups', 'beta', 'status'];
+        $this->render(in_array($tab, $allowed, true) ? $tab : 'monitoring');
+    }
     public function monitoring(): void { $this->render('monitoring'); }
     public function aiReprocess(): void { $this->render('ai_reprocess'); }
     public function security(): void { $this->render('security'); }
