@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.7', 'title' => 'Severidade operacional e diagnóstico da IA', 'summary' => 'Distingue desativação manual de falha técnica, reduz falsos alertas de tokens e trata ausência de eventos financeiros como falta de evidência.'],
             ['version' => '36.6.6', 'title' => 'Takeover humano e continuidade de clientes', 'summary' => 'Bloqueia toda automação quando a equipe assume a conversa e evita nova triagem de clientes/pacientes já identificados.'],
             ['version' => '36.6.5', 'title' => 'Resolução e comunicação operacional', 'summary' => 'Conecta problemas a playbooks de correção, cria alertas do Super Admin com recuperação e adiciona comunicados para clientes.'],
             ['version' => '36.6.4', 'title' => 'Dados operacionais corrigidos', 'summary' => 'Corrige o transporte do payload das views para o Painel operacional e demais telas que recebem o conjunto data.'],

@@ -532,12 +532,12 @@ final class SecurityService
         $review[] = [
             'key' => 'N8N_CALLBACK_TOKEN',
             'label' => 'Callback global do n8n',
-            'status' => $n8nToken ? 'ok' : ($activeN8nFlows > 0 ? 'warning' : 'optional'),
+            'status' => $n8nToken ? 'ok' : ($activeN8nFlows > 0 ? 'recommended' : 'optional'),
             'detail' => $n8nToken
                 ? 'Token global configurado para autenticar retornos do n8n ao RS Connect.'
                 : ($activeN8nFlows > 0
-                    ? 'Há fluxos n8n ativos e o callback global está sem token. Configure-o antes da produção.'
-                    : 'Nenhum fluxo n8n ativo depende do callback global neste momento.'),
+                    ? $activeN8nFlows . ' fluxo(s) n8n ativo(s). O callback continua disponível, mas sem autenticação global; configure o token como reforço de segurança para validar os retornos.'
+                    : 'Nenhum fluxo n8n ativo utiliza o callback global neste momento. O token é opcional até esse recurso ser usado.'),
             'action' => '/n8n',
         ];
 
@@ -579,10 +579,12 @@ final class SecurityService
         $review[] = [
             'key' => 'AI_REPROCESS_CRON_TOKEN',
             'label' => 'Cron da fila da IA',
-            'status' => $aiCronToken ? 'ok' : ($aiCronEnabled ? 'warning' : 'optional'),
+            'status' => $aiCronToken ? 'ok' : ($aiCronEnabled ? 'recommended' : 'optional'),
             'detail' => $aiCronToken
                 ? 'Token configurado para o reprocessamento automático da fila da IA.'
-                : ($aiCronEnabled ? 'A rotina da fila está ativa, mas o endpoint externo não pode ser acionado com segurança sem este token.' : 'Rotina automática desativada; token opcional.'),
+                : ($aiCronEnabled
+                    ? 'A rotina de reprocessamento está habilitada. A execução manual continua disponível; configure o token apenas para permitir acionamento externo seguro por cron/n8n.'
+                    : 'Rotina automática desativada; o token é opcional enquanto não houver acionamento externo.'),
             'action' => '/central-operacao?tab=ai_reprocess',
         ];
 

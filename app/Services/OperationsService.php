@@ -413,7 +413,7 @@ final class OperationsService
             return ['status' => 'warning', 'message' => 'Nenhum gateway de pagamento ativo foi encontrado.', 'latency_ms' => null];
         }
         if ($events < 1) {
-            return ['status' => 'warning', 'message' => $gateways . ' gateway(s) ativo(s), mas não há evento de pagamento nos últimos 7 dias para comprovar o fluxo.', 'latency_ms' => null];
+            return ['status' => 'unknown', 'message' => $gateways . ' gateway(s) ativo(s). Não foram identificados eventos de pagamento nos últimos 7 dias para validar o fluxo automaticamente; isso não indica falha por si só.', 'latency_ms' => null];
         }
         return ['status' => 'ok', 'message' => $gateways . ' gateway(s) ativo(s); ' . $events . ' evento(s) de pagamento nos últimos 7 dias sem falha registrada.', 'latency_ms' => null];
     }
@@ -600,12 +600,13 @@ final class OperationsService
         try {
             $active = $this->fetchOne("SELECT id FROM system_incidents WHERE event = '" . str_replace("'", "''", $event) . "' AND resolved_at IS NULL LIMIT 1");
 
-            if ($status === 'ok') {
+            if (in_array($status, ['ok', 'unknown'], true)) {
                 if ($active && (int) ($active['id'] ?? 0) > 0) {
                     $incidentId = (int) $active['id'];
                     $statement = Database::connection()->prepare('UPDATE system_incidents SET resolved_at = NOW(), last_seen_at = NOW() WHERE id = :id AND resolved_at IS NULL');
                     $statement->execute(['id' => $incidentId]);
-                    if ($statement->rowCount() > 0) {
+                    // 'unknown' significa ausência de evidência, não recuperação confirmada.
+                    if ($status === 'ok' && $statement->rowCount() > 0) {
                         (new OperationalAlertService())->dispatchRecovered($incidentId);
                     }
                 }

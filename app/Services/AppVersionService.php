@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.6 — Takeover humano e continuidade de clientes';
-    public const REQUIRED_MIGRATION = '050_human_takeover_customer_context.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.7 — Severidade operacional e diagnóstico da IA';
+    public const REQUIRED_MIGRATION = '051_operational_evidence_status.sql';
 
     private PDO $pdo;
 

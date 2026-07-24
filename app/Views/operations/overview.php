@@ -31,7 +31,7 @@ $companyStatusLabel = static fn (string $status): string => match ($status) {
 };
 $summaryState = (string) ($summary['state'] ?? 'unknown');
 $verificationState = (string) ($verification['state'] ?? 'unverified');
-$historySummary = $history['summary'] ?? ['ok' => 0, 'warning' => 0, 'down' => 0];
+$historySummary = $history['summary'] ?? ['ok' => 0, 'warning' => 0, 'down' => 0, 'unknown' => 0];
 ?>
 
 <section class="health-command-center is-<?= View::e($summaryState) ?>">
@@ -207,10 +207,11 @@ $historySummary = $history['summary'] ?? ['ok' => 0, 'warning' => 0, 'down' => 0
             <div class="is-operational"><strong><?= (int) ($historySummary['ok'] ?? 0) ?></strong><span>OK</span></div>
             <div class="is-attention"><strong><?= (int) ($historySummary['warning'] ?? 0) ?></strong><span>Atenções</span></div>
             <div class="is-critical"><strong><?= (int) ($historySummary['down'] ?? 0) ?></strong><span>Críticos</span></div>
+            <div class="is-unknown"><strong><?= (int) ($historySummary['unknown'] ?? 0) ?></strong><span>Sem evidência</span></div>
         </div>
         <div class="health-history-list" data-collapsible-list="3">
             <?php foreach (($history['events'] ?? []) as $event): ?>
-                <?php $eventStatus = match ((string) ($event['status'] ?? 'warning')) { 'ok' => 'operational', 'down' => 'critical', default => 'attention' }; ?>
+                <?php $eventStatus = match ((string) ($event['status'] ?? 'warning')) { 'ok' => 'operational', 'down' => 'critical', 'unknown' => 'unknown', default => 'attention' }; ?>
                 <div class="health-history-event">
                     <span class="health-routine-dot is-<?= View::e($eventStatus) ?>"></span>
                     <div><strong><?= View::e((string) ($event['label'] ?? $event['check_key'] ?? 'Verificação')) ?></strong><small><?= View::e((string) ($event['checked_at'] ?? '')) ?></small></div>

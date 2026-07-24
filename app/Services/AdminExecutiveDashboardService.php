@@ -323,7 +323,7 @@ final class AdminExecutiveDashboardService
                 FROM system_health_checks
                 GROUP BY check_key
              ) latest ON latest.max_id = h.id
-             ORDER BY FIELD(h.status, "down", "warning", "ok"), h.label'
+             ORDER BY FIELD(h.status, "down", "warning", "unknown", "ok"), h.label'
         );
     }
 

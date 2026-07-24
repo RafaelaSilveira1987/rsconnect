@@ -276,6 +276,8 @@ final class AgentController
             Audit::log('agent.status_updated', [
                 'agent_id' => $agentId,
                 'status' => $status,
+                'auto_reply_enabled' => $autoReplyEnabled,
+                'n8n_enabled' => $n8nEnabled,
                 'cooldown_seconds' => $business['cooldown_seconds'],
             ], $tenantId);
 

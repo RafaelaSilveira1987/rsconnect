@@ -688,14 +688,14 @@ final class OperationalHealthService
     private function recentHealthHistory(): array
     {
         if (!$this->tableExists('system_health_checks')) {
-            return ['events' => [], 'summary' => ['ok' => 0, 'warning' => 0, 'down' => 0]];
+            return ['events' => [], 'summary' => ['ok' => 0, 'warning' => 0, 'down' => 0, 'unknown' => 0]];
         }
         try {
             $statement = Database::connection()->query(
                 "SELECT check_key, label, status, message, checked_at\n                 FROM system_health_checks\n                 WHERE checked_at >= (NOW() - INTERVAL 24 HOUR)\n                   AND check_key <> 'billing_cron_heartbeat'\n                 ORDER BY id DESC LIMIT 180"
             );
             $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
-            $summary = ['ok' => 0, 'warning' => 0, 'down' => 0];
+            $summary = ['ok' => 0, 'warning' => 0, 'down' => 0, 'unknown' => 0];
             foreach ($rows as $row) {
                 $status = (string) ($row['status'] ?? 'warning');
                 if (isset($summary[$status])) {
@@ -704,7 +704,7 @@ final class OperationalHealthService
             }
             return ['events' => array_slice($rows, 0, 12), 'summary' => $summary];
         } catch (Throwable) {
-            return ['events' => [], 'summary' => ['ok' => 0, 'warning' => 0, 'down' => 0]];
+            return ['events' => [], 'summary' => ['ok' => 0, 'warning' => 0, 'down' => 0, 'unknown' => 0]];
         }
     }
 

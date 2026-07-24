@@ -37,6 +37,7 @@ $statusLabel = static fn (string $status): string => match ($status) {
     'ok' => 'Operacional',
     'warning' => 'Atenção',
     'down' => 'Indisponível',
+    'unknown' => 'Sem evidência',
     default => ucfirst($status),
 };
 ?>

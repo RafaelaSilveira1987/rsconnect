@@ -390,34 +390,17 @@ final class TenantHealthService
         $checks = [];
         foreach ($agents as $agent) {
             $id = (int) $agent['id'];
-            $status = 'ok';
-            $problems = [];
-            if (($agent['status'] ?? '') !== 'active') {
-                $status = 'warning';
-                $problems[] = 'assistente inativo';
-            }
-            if ((int) ($agent['auto_reply_enabled'] ?? 0) !== 1) {
-                $status = 'warning';
-                $problems[] = 'respostas automáticas desligadas';
-            }
-            if (empty($agent['instance_id'])
-                && ((int) ($agent['is_default'] ?? 0) !== 1 || (int) ($agent['tenant_instance_count'] ?? 0) < 1)
-            ) {
-                $status = 'critical';
-                $problems[] = 'sem conexão WhatsApp disponível';
-            }
-            if ((int) ($agent['credential_count'] ?? 0) < 1) {
-                $status = 'critical';
-                $problems[] = 'sem credencial de IA ativa';
-            }
+            $agentActive = (string) ($agent['status'] ?? '') === 'active';
+            $autoReplyEnabled = (int) ($agent['auto_reply_enabled'] ?? 0) === 1;
+            $manualDisabled = !$agentActive || !$autoReplyEnabled;
+            $manualChange = $manualDisabled ? $this->lastAgentManualChange($tenantId, $id) : null;
+            $manualSource = $manualDisabled ? $this->manualAgentStateLabel($manualChange, $agentActive) : null;
+
             $consecutive = $this->consecutiveAiErrors($id);
-            if ($consecutive >= 3) {
-                $status = 'critical';
-                $problems[] = $consecutive . ' falhas consecutivas';
-            } elseif ((int) ($agent['errors_24h'] ?? 0) > 0 && $status === 'ok') {
-                $status = 'warning';
-                $problems[] = (int) $agent['errors_24h'] . ' falha(s) nas últimas 24h';
-            }
+            $errors24h = (int) ($agent['errors_24h'] ?? 0);
+            $hasWhatsapp = !empty($agent['instance_id'])
+                || ((int) ($agent['is_default'] ?? 0) === 1 && (int) ($agent['tenant_instance_count'] ?? 0) > 0);
+            $hasCredential = (int) ($agent['credential_count'] ?? 0) > 0;
 
             $pending = $this->pendingAiResponses(
                 $tenantId,
@@ -427,29 +410,88 @@ final class TenantHealthService
             $pendingConversations = (int) ($pending['conversation_count'] ?? 0);
             $pendingMessages = (int) ($pending['message_count'] ?? 0);
 
-            if ($pendingConversations > 0) {
-                if ($status === 'ok') {
-                    $status = 'warning';
+            $status = 'ok';
+            $operationalState = 'Ativo';
+            $stateReason = 'Assistente habilitado, com respostas automáticas ativas e sem falhas recentes.';
+            $problems = [];
+
+            if ($manualDisabled) {
+                // Desligamento manual é uma decisão operacional, não uma falha técnica.
+                $status = 'info';
+                $operationalState = $manualSource['state'];
+                $stateReason = $manualSource['reason'];
+            } else {
+                if (!$hasWhatsapp) {
+                    $status = 'critical';
+                    $operationalState = 'Indisponível por configuração';
+                    $problems[] = 'sem conexão WhatsApp disponível';
                 }
-                $problems[] = $pendingConversations . ' conversa(s) aguardando resposta da IA';
+                if (!$hasCredential) {
+                    $status = 'critical';
+                    $operationalState = 'Indisponível por configuração';
+                    $problems[] = 'sem credencial de IA ativa';
+                }
+                if ($consecutive >= 3) {
+                    $status = 'critical';
+                    $operationalState = 'Indisponível por erro';
+                    $problems[] = $consecutive . ' falhas consecutivas';
+                } elseif ($errors24h > 0 && $status === 'ok') {
+                    $status = 'warning';
+                    $operationalState = 'Degradado';
+                    $problems[] = $errors24h . ' falha(s) nas últimas 24h';
+                }
+
+                if ($pendingConversations > 0) {
+                    if ($status === 'ok') {
+                        $status = 'warning';
+                        $operationalState = 'Aguardando processamento';
+                    }
+                    $problems[] = $pendingConversations . ' conversa(s) aguardando resposta da IA';
+                }
+
+                if ($problems) {
+                    $stateReason = implode('; ', $problems) . '.';
+                }
             }
 
-            $summary = $problems ? 'Revisar: ' . implode('; ', $problems) . '.' : 'Assistente configurado e sem falhas recentes.';
+            if ($manualDisabled) {
+                $summary = $operationalState . '. ' . $stateReason;
+                if ($consecutive > 0 || $errors24h > 0) {
+                    $summary .= ' Há falhas históricas registradas, mas elas não tornam o assistente crítico enquanto ele permanecer desligado manualmente.';
+                }
+            } else {
+                $summary = $problems
+                    ? $operationalState . ': ' . implode('; ', $problems) . '.'
+                    : 'Assistente ativo, configurado e sem falhas recentes.';
+            }
+
             $details = [
-                'Status' => (string) ($agent['status'] ?? ''),
-                'Respostas automáticas' => (int) ($agent['auto_reply_enabled'] ?? 0) === 1 ? 'Ativas' : 'Desligadas',
+                'Estado operacional' => $operationalState,
+                'Motivo do estado' => $stateReason,
+                'Status configurado' => $agentActive ? 'Ativo' : 'Inativo',
+                'Respostas automáticas' => $autoReplyEnabled ? 'Ativas' : 'Desligadas',
+            ];
+            if ($manualDisabled) {
+                $details['Origem da desativação'] = $manualSource['origin'];
+                $details['Alterado por'] = $manualSource['actor'];
+                $details['Alterado em'] = $manualSource['changed_at'];
+            }
+            $details += [
                 'Conexão vinculada' => (string) ($agent['instance_label'] ?? 'Não vinculada'),
-                'Credencial ativa encontrada' => (int) ($agent['credential_count'] ?? 0) > 0 ? 'Sim' : 'Não',
+                'Credencial ativa encontrada' => $hasCredential ? 'Sim' : 'Não',
                 'Modelo' => (string) ($agent['model_name'] ?? ''),
                 'Última resposta bem-sucedida' => $this->formatDatabaseDate($agent['last_success'] ?? null, 'Nenhuma'),
                 'Última falha' => $this->formatDatabaseDate($agent['last_error'] ?? null, 'Nenhuma'),
                 'Falhas consecutivas' => (string) $consecutive,
+                'Falhas nas últimas 24h' => (string) $errors24h,
                 'Conversas aguardando resposta' => (string) $pendingConversations,
                 'Mensagens acumuladas nessas conversas' => (string) $pendingMessages,
                 'Aguardando desde' => $this->formatDatabaseDate($pending['oldest_pending_at'] ?? null, 'Nenhuma'),
-                'O que significa' => $pendingConversations > 0
-                    ? 'A conversa recebeu mensagem durante o intervalo mínimo e ainda não possui resposta posterior. Use Reprocessar agora ou abra a conversa.'
-                    : 'Não há conversa sem resposta causada pelo intervalo mínimo.',
+                'O que significa' => $manualDisabled
+                    ? 'O assistente foi desligado por configuração. Falhas anteriores continuam disponíveis no histórico, mas não representam indisponibilidade atual enquanto a automação estiver intencionalmente pausada.'
+                    : ($pendingConversations > 0
+                        ? 'A conversa recebeu mensagem durante o intervalo mínimo e ainda não possui resposta posterior. Use Reprocessar agora ou abra a conversa.'
+                        : 'Não há conversa sem resposta causada pelo intervalo mínimo.'),
                 'Intervalo configurado' => (string) ($agent['cooldown_seconds'] ?? 0) . ' segundo(s)',
             ];
             $checks[] = $this->check('Assistente de IA', 'agent.' . $id, 'Assistente — ' . (string) $agent['name'], $status, $summary, $details, '/agents?tenant_id=' . $tenantId, 40 + $id);
@@ -1665,6 +1707,64 @@ final class TenantHealthService
             'note' => $note !== '' ? mb_substr($note, 0, 1000) : null,
             'user_id' => $userId,
         ]);
+    }
+
+    /** @return array<string,mixed>|null */
+    private function lastAgentManualChange(int $tenantId, int $agentId): ?array
+    {
+        try {
+            $rows = $this->all(
+                'SELECT al.action, al.context_json, al.created_at, u.name AS user_name, u.role AS user_role
+                 FROM audit_logs al
+                 LEFT JOIN users u ON u.id = al.user_id
+                 WHERE al.tenant_id = :tenant_id
+                   AND al.action IN ("agent.status_updated", "agent.technical_updated")
+                 ORDER BY al.id DESC
+                 LIMIT 30',
+                ['tenant_id' => $tenantId]
+            );
+            foreach ($rows as $row) {
+                $context = json_decode((string) ($row['context_json'] ?? ''), true);
+                if (!is_array($context) || (int) ($context['agent_id'] ?? 0) !== $agentId) {
+                    continue;
+                }
+                return $row + ['context' => $context];
+            }
+        } catch (Throwable) {
+        }
+        return null;
+    }
+
+    /** @return array{state:string,reason:string,origin:string,actor:string,changed_at:string} */
+    private function manualAgentStateLabel(?array $change, bool $agentActive): array
+    {
+        $role = strtolower(trim((string) ($change['user_role'] ?? '')));
+        $name = trim((string) ($change['user_name'] ?? ''));
+        $origin = match ($role) {
+            'super_admin' => 'Equipe RS',
+            'client_admin', 'client_user' => 'Cliente',
+            default => 'Configuração manual',
+        };
+        $actor = $name !== '' ? $name . ($origin !== 'Configuração manual' ? ' · ' . $origin : '') : $origin;
+        $changedAt = $this->formatDatabaseDate($change['created_at'] ?? null, 'Não disponível');
+
+        if (!$agentActive) {
+            $state = $origin === 'Cliente' ? 'Desativado pelo cliente'
+                : ($origin === 'Equipe RS' ? 'Desativado pela equipe RS' : 'Desativado manualmente');
+            $reason = 'O status do assistente está Inativo por configuração; isso não é tratado como falha técnica.';
+        } else {
+            $state = $origin === 'Cliente' ? 'Automação desativada pelo cliente'
+                : ($origin === 'Equipe RS' ? 'Automação desativada pela equipe RS' : 'Automação desativada manualmente');
+            $reason = 'O assistente está ativo, porém as respostas automáticas foram desligadas por configuração; isso não é tratado como falha técnica.';
+        }
+
+        return [
+            'state' => $state,
+            'reason' => $reason,
+            'origin' => $origin,
+            'actor' => $actor,
+            'changed_at' => $changedAt,
+        ];
     }
 
     private function consecutiveAiErrors(int $agentId): int

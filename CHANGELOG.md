@@ -1,5 +1,16 @@
 # Changelog
 
+## 36.6.7 — Severidade operacional e diagnóstico da IA
+
+- Diferencia assistente **desativado manualmente** de assistente **indisponível por erro**, evitando falso crítico quando cliente/equipe RS opta por desligar a automação.
+- Usa auditoria para indicar, quando disponível, se a alteração veio do cliente ou da equipe RS, com autor e horário.
+- Mantém falhas históricas visíveis sem tratá-las como indisponibilidade atual enquanto o assistente estiver desligado por configuração.
+- Assistentes habilitados continuam críticos para ausência de credencial/WhatsApp ou falhas consecutivas, agora com estado operacional e motivo explícitos.
+- `N8N_CALLBACK_TOKEN` e `AI_REPROCESS_CRON_TOKEN` passam de **Revisar** para **Recomendado** nos cenários em que representam endurecimento/acionamento externo, sem afirmar falha do serviço.
+- Gateway ativo sem eventos recentes passa a **Sem evidência**, pois ausência de transação não comprova falha.
+- Adiciona `unknown` ao status persistido de `system_health_checks` pela migration 051.
+- Requer `database/migrations/051_operational_evidence_status.sql`.
+
 ## 36.6.6 — Takeover humano e continuidade de clientes
 
 - Corrige o bypass encontrado no pré-agendamento: conversas em **Humano** ou **Pausado** agora bloqueiam também mensagens automáticas da agenda, não apenas a resposta do provedor de IA.

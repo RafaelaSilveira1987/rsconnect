@@ -134,7 +134,17 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
                                 <p><?= View::e((string) ($check['summary'] ?? '')) ?></p>
                                 <small>Verificado <?= View::e($relative((string) ($check['checked_at'] ?? ''))) ?></small>
                             </div>
-                            <span class="health-check-label is-<?= View::e((string) ($check['status'] ?? 'info')) ?>"><?= View::e($checkLabels[(string) ($check['status'] ?? 'info')] ?? 'Informação') ?></span>
+                            <?php
+                            $itemStatus = (string) ($check['status'] ?? 'info');
+                            $itemKey = (string) ($check['component_key'] ?? '');
+                            $operationalStateLabel = str_starts_with($itemKey, 'agent.')
+                                ? trim((string) ($check['details']['Estado operacional'] ?? ''))
+                                : '';
+                            $itemStatusLabel = ($itemStatus === 'info' && $operationalStateLabel !== '')
+                                ? $operationalStateLabel
+                                : ($checkLabels[$itemStatus] ?? 'Informação');
+                            ?>
+                            <span class="health-check-label is-<?= View::e($itemStatus) ?>"><?= View::e($itemStatusLabel) ?></span>
                         </div>
                         <div class="tenant-health-check-actions">
                             <?php if (!empty($check['action_url'])): ?><a class="btn btn-quiet" href="<?= View::e(Router::url((string) $check['action_url'])) ?>">Abrir configuração</a><?php endif; ?>
