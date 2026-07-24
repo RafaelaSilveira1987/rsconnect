@@ -560,7 +560,7 @@ final class AiAutomationService
             }
 
             $instanceStatement = $pdo->prepare(
-                'SELECT id, tenant_id, base_url, api_key_encrypted, instance_name
+                'SELECT id, tenant_id, base_url, api_key_encrypted, instance_name, name, status, connection_state
                  FROM evolution_instances
                  WHERE id = :instance_id
                    AND tenant_id = :tenant_id
@@ -573,6 +573,18 @@ final class AiAutomationService
             $instance = $instanceStatement->fetch(PDO::FETCH_ASSOC);
             if (!$instance) {
                 return ['status' => 'error', 'error' => 'A conexão WhatsApp vinculada à conversa não foi encontrada.'];
+            }
+
+            $instanceState = strtolower(trim((string) (($instance['connection_state'] ?? '') ?: ($instance['status'] ?? ''))));
+            if (!in_array($instanceState, ['open', 'connected', 'active', 'online'], true)) {
+                $instanceLabel = trim((string) (($instance['name'] ?? '') ?: ($instance['instance_name'] ?? '')));
+                return [
+                    'status' => 'blocked',
+                    'conversation_id' => (int) $candidate['conversation_id'],
+                    'message_id' => (int) $candidate['message_id'],
+                    'event' => 'ai.blocked.instance_disconnected',
+                    'error' => 'A instância Evolution ' . ($instanceLabel !== '' ? $instanceLabel : '#' . (int) $instance['id']) . ' está desconectada. A pendência foi preservada até a reconexão.',
+                ];
             }
 
             $this->handleIncoming(

@@ -52,7 +52,9 @@ final class AiReprocessController
                     : '';
                 Flash::set('success', (int) $result['replied'] . ' conversa(s) presa(s) receberam resposta. Nenhuma mensagem já respondida foi reenviada.' . $attention);
             } elseif ((int) ($result['errors'] ?? 0) > 0) {
-                Flash::set('error', 'A fila encontrou mensagem sem resposta, mas a IA ou a Evolution voltou a falhar. A pendência foi mantida para nova tentativa; consulte os logs do assistente.');
+                Flash::set('error', 'A fila encontrou mensagem sem resposta e ocorreu uma falha real durante o processamento. A pendência foi mantida; consulte o diagnóstico da fila.');
+            } elseif ((int) ($result['blocked'] ?? 0) > 0) {
+                Flash::set('warning', (int) ($result['blocked'] ?? 0) . ' grupo(s) de pendência aguardam reconexão do WhatsApp/Evolution. Nenhuma nova tentativa foi enviada enquanto a instância estiver desconectada.');
             } elseif ((int) ($result['attempted'] ?? 0) > 0) {
                 Flash::set('warning', 'As mensagens pendentes foram reavaliadas, mas regras do atendimento impediram novos envios.');
             } else {

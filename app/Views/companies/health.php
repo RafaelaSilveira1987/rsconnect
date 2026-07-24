@@ -226,7 +226,7 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
                         <code><?= View::e((string) ($occurrence['event'] ?? '')) ?></code>
                     </div>
                     <div class="tenant-health-occurrence-actions">
-                        <?php if (!empty($occurrence['related_url'])): ?><a class="btn btn-small btn-primary" href="<?= View::e(Router::url((string) $occurrence['related_url'])) ?>"><?= ($occurrence['source'] ?? '') === 'ai' ? 'Abrir conversa' : 'Abrir integração' ?></a><?php endif; ?>
+                        <?php if (!empty($occurrence['related_url'])): ?><a class="btn btn-small btn-primary" href="<?= View::e(Router::url((string) $occurrence['related_url'])) ?>"><?= View::e((string) ($occurrence['related_label'] ?? (($occurrence['source'] ?? '') === 'ai' ? 'Abrir conversa' : 'Abrir integração'))) ?></a><?php endif; ?>
                         <?php if (!empty($occurrence['secondary_url'])): ?><a class="btn btn-small btn-outline" href="<?= View::e(Router::url((string) $occurrence['secondary_url'])) ?>">Abrir assistente</a><?php endif; ?>
                         <?php if (!empty($occurrence['details'])): ?>
                             <details>

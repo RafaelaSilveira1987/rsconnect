@@ -11,6 +11,8 @@ $history = $data['history'] ?? [];
 $recentFailures = $data['recent_failures'] ?? [];
 $pendingInstances = $data['pending_instances'] ?? [];
 $lastSummary = $settings['last_summary'] ?? [];
+$blockedLast = (int) ($lastSummary['blocked'] ?? 0);
+$pendingBlocked = (int) ($data['pending_blocked_total'] ?? 0);
 $formatDate = static function (?string $value): string {
     if (!$value || !($timestamp = strtotime($value))) return 'Ainda não executado';
     return date('d/m/Y H:i', $timestamp);
@@ -42,7 +44,7 @@ $statusLabel = static function (string $status): string {
     <article class="<?= (int) ($data['pending_total'] ?? 0) > 0 ? 'is-warning' : 'is-success' ?>">
         <span>Mensagens presas</span>
         <strong><?= (int) ($data['pending_total'] ?? 0) ?></strong>
-        <small>intervalo, falha ou execução interrompida</small>
+        <small><?= $pendingBlocked > 0 ? $pendingBlocked . ' aguardando reconexão do WhatsApp' : 'intervalo, falha ou execução interrompida' ?></small>
     </article>
     <article class="<?= !empty($settings['enabled']) ? 'is-success' : 'is-warning' ?>">
         <span>Rotina automática</span>
@@ -51,13 +53,13 @@ $statusLabel = static function (string $status): string {
     </article>
     <article class="is-blue">
         <span>Última execução</span>
-        <strong><?= View::e($statusLabel((string) ($settings['last_run_status'] ?? ''))) ?></strong>
+        <strong><?= View::e($blockedLast > 0 && (string) ($settings['last_run_status'] ?? '') === 'skipped' ? 'Aguardando conexão' : $statusLabel((string) ($settings['last_run_status'] ?? ''))) ?></strong>
         <small><?= View::e($formatDate($settings['last_run_at'] ?? null)) ?></small>
     </article>
     <article>
         <span>Último resultado</span>
         <strong><?= (int) ($lastSummary['replied'] ?? 0) ?> resposta(s)</strong>
-        <small><?= (int) ($lastSummary['attempted'] ?? 0) ?> item(ns) reavaliado(s)</small>
+        <small><?= (int) ($lastSummary['attempted'] ?? 0) ?> item(ns) reavaliado(s)<?= $blockedLast > 0 ? ' · ' . $blockedLast . ' bloqueado(s) por conexão' : '' ?></small>
     </article>
 </section>
 
@@ -126,7 +128,7 @@ $statusLabel = static function (string $status): string {
                 <div class="ai-reprocess-failure-main">
                     <span class="badge badge-danger"><?= View::e((string) ($failure['phase_label'] ?? 'Falha')) ?></span>
                     <strong><?= View::e((string) ($failure['tenant_name'] ?? 'Empresa')) ?></strong>
-                    <p><?= View::e((string) ($failure['error_message'] ?? 'Falha sem detalhe registrado.')) ?></p>
+                    <p><?= View::e((string) ($failure['diagnostic_message'] ?? $failure['error_message'] ?? 'Falha sem detalhe registrado.')) ?></p>
                     <small>
                         <?= View::e($formatDate($failure['created_at'] ?? null)) ?>
                         · Assistente: <?= View::e((string) ($failure['agent_name'] ?? 'não identificado')) ?>
@@ -164,6 +166,7 @@ $statusLabel = static function (string $status): string {
                     </div>
                     <h3><?= View::e((string) ($item['instance_label'] ?? 'Instância não identificada')) ?></h3>
                     <p>Assistente: <strong><?= View::e((string) ($item['agent_name'] ?? 'não identificado')) ?></strong> · <?= (int) ($item['pending_count'] ?? 0) ?> conversa(s) pendente(s)</p>
+                    <?php if (!$instanceOk): ?><div class="ai-pending-instance-error"><strong>Aguardando reconexão</strong><span>As mensagens permanecem na fila, mas o RS Connect não repetirá tentativas de envio enquanto esta instância Evolution estiver desconectada.</span></div><?php endif; ?>
                     <small>Mais antiga: <?= View::e($formatDate($item['oldest_pending_at'] ?? null)) ?> · Mais recente: <?= View::e($formatDate($item['latest_pending_at'] ?? null)) ?><?= !empty($item['last_status_check_at']) ? ' · Evolution verificada em ' . View::e($formatDate($item['last_status_check_at'])) : '' ?></small>
                     <?php if (!empty($item['last_error_message'])): ?>
                         <div class="ai-pending-instance-error"><strong>Última falha</strong><span><?= View::e((string) $item['last_error_message']) ?></span><?php if (!empty($item['last_error_at'])): ?><small><?= View::e($formatDate($item['last_error_at'])) ?></small><?php endif; ?></div>

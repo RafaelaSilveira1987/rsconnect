@@ -14,7 +14,7 @@ use Throwable;
 
 final class TenantHealthService
 {
-    public const VERSION = '34.5.3-health-stable';
+    public const VERSION = '36.6.0-health-stable';
 
     private PDO $pdo;
     private ?int $databaseOffsetMinutes = null;
@@ -271,6 +271,7 @@ final class TenantHealthService
             'tenant_id' => $tenantId,
         ]);
         $this->recordIncidentEvent($incidentId, $tenantId, $event, $note, $userId);
+        $this->syncOperationalOccurrenceReview($tenantId, $status, $userId);
     }
 
     /** @return array<int,array<string,mixed>> */
@@ -1382,11 +1383,15 @@ final class TenantHealthService
             'SELECT l.id, l.created_at, l.event, l.error_message, l.response_preview,
                     l.conversation_id, l.agent_id,
                     a.name AS agent_name,
-                    ct.name AS contact_name, ct.phone AS contact_phone
+                    ct.name AS contact_name, ct.phone AS contact_phone,
+                    c.evolution_instance_id,
+                    i.name AS instance_label, i.instance_name,
+                    i.status AS instance_status, i.connection_state
              FROM ai_automation_logs l
              LEFT JOIN ai_agents a ON a.id = l.agent_id
              LEFT JOIN conversations c ON c.id = l.conversation_id
              LEFT JOIN contacts ct ON ct.id = c.contact_id
+             LEFT JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = l.tenant_id
              WHERE l.tenant_id = :tenant_id
                AND l.status = "error"
                AND l.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
@@ -1399,25 +1404,39 @@ final class TenantHealthService
             $event = trim((string) ($row['event'] ?? 'ai.failed'));
             $conversationId = (int) ($row['conversation_id'] ?? 0);
             $agentId = (int) ($row['agent_id'] ?? 0);
+            $instanceId = (int) ($row['evolution_instance_id'] ?? 0);
+            $instanceState = strtolower(trim((string) (($row['connection_state'] ?? '') ?: ($row['instance_status'] ?? ''))));
+            $instanceConnected = in_array($instanceState, ['open', 'connected', 'active', 'online'], true);
+            $blockedByEvolution = $instanceId > 0 && !$instanceConnected;
+            $instanceName = trim((string) (($row['instance_label'] ?? '') ?: ($row['instance_name'] ?? '')));
+            $rawMessage = $this->valueOr($row['error_message'] ?? null, 'A execução da IA terminou com erro.');
+
             $items[] = [
                 'source' => 'ai',
-                'source_label' => 'Assistente de IA',
+                'source_label' => $blockedByEvolution ? 'WhatsApp / Evolution' : 'Assistente de IA',
                 'id' => (int) ($row['id'] ?? 0),
                 'event' => $event,
-                'title' => $this->friendlyOccurrenceTitle('ai', $event),
-                'message' => $this->valueOr($row['error_message'] ?? null, 'A execução da IA terminou com erro.'),
+                'title' => $blockedByEvolution ? 'Envio bloqueado: WhatsApp desconectado' : $this->friendlyOccurrenceTitle('ai', $event),
+                'message' => $blockedByEvolution
+                    ? 'A pendência foi preservada porque a instância ' . ($instanceName !== '' ? $instanceName : '#' . $instanceId) . ' está desconectada. Reconecte o WhatsApp para liberar o reprocessamento. Último retorno: ' . $rawMessage
+                    : $rawMessage,
                 'created_at' => $createdAt,
                 'created_at_display' => $this->formatDatabaseDate($createdAt),
                 'reviewed' => $this->occurrenceWasReviewed($createdAt, $acknowledgedAt),
-                'related_url' => $conversationId > 0
-                    ? '/conversations?conversation_id=' . $conversationId
-                    : ($agentId > 0 ? '/agents?tenant_id=' . $tenantId : '/automations'),
+                'related_url' => $blockedByEvolution
+                    ? '/instances'
+                    : ($conversationId > 0
+                        ? '/conversations?conversation_id=' . $conversationId
+                        : ($agentId > 0 ? '/agents?tenant_id=' . $tenantId : '/automations')),
+                'related_label' => $blockedByEvolution ? 'Abrir WhatsApp' : 'Abrir conversa',
                 'secondary_url' => $agentId > 0 ? '/agents?tenant_id=' . $tenantId : null,
                 'details' => array_filter([
                     'Evento' => $event,
                     'Assistente' => trim((string) ($row['agent_name'] ?? '')) ?: 'Não identificado',
                     'Contato' => trim((string) ($row['contact_name'] ?? '')) ?: (trim((string) ($row['contact_phone'] ?? '')) ?: 'Não identificado'),
                     'Conversa' => $conversationId > 0 ? '#' . $conversationId : 'Não vinculada',
+                    'Instância Evolution' => $instanceName !== '' ? $instanceName : ($instanceId > 0 ? '#' . $instanceId : 'Não identificada'),
+                    'Estado da instância' => $instanceState !== '' ? $instanceState : 'Sem evidência',
                     'Prévia da resposta' => trim((string) ($row['response_preview'] ?? '')) ?: null,
                 ], static fn (mixed $value): bool => $value !== null && $value !== ''),
             ];
@@ -1464,6 +1483,62 @@ final class TenantHealthService
 
         usort($items, static fn (array $left, array $right): int => strcmp((string) ($right['created_at'] ?? ''), (string) ($left['created_at'] ?? '')));
         return array_slice($items, 0, $limit);
+    }
+
+    private function syncOperationalOccurrenceReview(int $tenantId, string $incidentStatus, ?int $userId): void
+    {
+        if (!in_array($incidentStatus, ['acknowledged', 'monitoring', 'resolved'], true)) {
+            return;
+        }
+
+        try {
+            $tracking = $this->row(
+                'SELECT tracking_status, priority, note FROM tenant_admin_tracking WHERE tenant_id = :tenant_id LIMIT 1',
+                ['tenant_id' => $tenantId]
+            ) ?? [];
+            $openRow = $this->row(
+                'SELECT COUNT(*) AS total FROM tenant_health_incidents WHERE tenant_id = :tenant_id AND status <> "resolved"',
+                ['tenant_id' => $tenantId]
+            ) ?? [];
+            $openIncidents = (int) ($openRow['total'] ?? 0);
+
+            $currentStatus = (string) ($tracking['tracking_status'] ?? 'automatic');
+            $nextStatus = $currentStatus;
+            if ($incidentStatus === 'resolved' && $openIncidents === 0) {
+                $nextStatus = 'resolved';
+            } elseif (in_array($currentStatus, ['automatic', 'attention', 'resolved'], true)) {
+                $nextStatus = 'reviewed';
+            }
+
+            $priority = (string) ($tracking['priority'] ?? 'attention');
+            if (!in_array($priority, ['attention', 'critical', 'implantation'], true)) {
+                $priority = 'attention';
+            }
+            $resolvedAt = $nextStatus === 'resolved' ? date('Y-m-d H:i:s') : null;
+
+            $statement = $this->pdo->prepare(
+                'INSERT INTO tenant_admin_tracking
+                    (tenant_id, tracking_status, priority, note, acknowledged_at, resolved_at, updated_by)
+                 VALUES
+                    (:tenant_id, :tracking_status, :priority, :note, NOW(), :resolved_at, :updated_by)
+                 ON DUPLICATE KEY UPDATE
+                    tracking_status = VALUES(tracking_status),
+                    priority = VALUES(priority),
+                    acknowledged_at = NOW(),
+                    resolved_at = VALUES(resolved_at),
+                    updated_by = VALUES(updated_by)'
+            );
+            $statement->execute([
+                'tenant_id' => $tenantId,
+                'tracking_status' => $nextStatus,
+                'priority' => $priority,
+                'note' => trim((string) ($tracking['note'] ?? '')) ?: null,
+                'resolved_at' => $resolvedAt,
+                'updated_by' => $userId,
+            ]);
+        } catch (Throwable) {
+            // O incidente continua sendo atualizado mesmo se o acompanhamento comercial estiver indisponível.
+        }
     }
 
     private function occurrenceWasReviewed(string $createdAt, ?string $acknowledgedAt): bool

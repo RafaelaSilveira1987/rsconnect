@@ -54,7 +54,7 @@ final class N8nTemplateController
             'segment' => 'Operação',
             'file' => 'template-backup-rsconnect.json',
             'events' => ['operations.backup.requested', 'cron.daily'],
-            'description' => 'Gera backup do banco, salva o arquivo no destino configurado e registra o resultado no Monitoramento do RS Connect.',
+            'description' => 'Gera backup do banco via bash/SSH, salva o arquivo no destino configurado, registra o callback e sinaliza falha real também no n8n.',
         ],
         'ai-reprocessamento-agendado' => [
             'title' => 'Verificação agendada da fila da IA',

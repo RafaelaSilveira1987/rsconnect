@@ -1,5 +1,15 @@
 # Changelog
 
+## 36.6.0 — Estabilização operacional
+
+- Corrige `Permission denied` do backup: o script `scripts/rsconnect-backup.sh` passa a ser distribuído com permissão executável e o template n8n chama explicitamente `bash`, sem depender do chmod preservado pelo deploy.
+- O workflow de backup passa a registrar o callback no RS Connect e depois marcar a execução do n8n como falha quando o backup realmente falhar, evitando falso “Succeeded”.
+- Ao revisar/acompanhar/resolver um incidente de saúde da empresa, as ocorrências operacionais anteriores também passam a ser reconhecidas como revisadas; o badge “Não revisada” é atualizado após o reload.
+- Falhas de IA cuja causa real é uma instância Evolution desconectada passam a ser identificadas como bloqueio de WhatsApp, com atalho para Conexões.
+- O reprocessamento da IA deixa de insistir em uma instância desconectada: preserva a pendência, contabiliza como bloqueada e aguarda reconexão sem gerar um novo `ai.failed`/HTTP 400 a cada execução.
+- Monitoramento da fila diferencia falha real de pendência aguardando reconexão.
+- Não exige migration.
+
 ## 36.5.9 — Central de operação e diagnóstico da fila
 
 - Move o botão hamburger para fora do cabeçalho filtrado e o fixa diretamente ao viewport, evitando que desapareça durante a rolagem.

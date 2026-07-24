@@ -354,7 +354,7 @@ final class OperationsService
 
     private function checkAiReprocess(): array
     {
-        $settings = $this->fetchOne('SELECT enabled, run_time, timezone, last_run_at, last_run_status, last_error FROM ai_reprocess_settings WHERE id = 1 LIMIT 1');
+        $settings = $this->fetchOne('SELECT enabled, run_time, timezone, last_run_at, last_run_status, last_summary_json, last_error FROM ai_reprocess_settings WHERE id = 1 LIMIT 1');
         if (!$settings) {
             return ['status' => 'warning', 'message' => 'A rotina de reprocessamento da IA ainda não foi configurada.', 'latency_ms' => null];
         }
@@ -367,8 +367,14 @@ final class OperationsService
         if ($lastAt === 0) {
             return ['status' => 'warning', 'message' => 'Rotina ativa para ' . substr((string) ($settings['run_time'] ?? '03:00'), 0, 5) . ', mas nenhuma execução foi registrada.', 'latency_ms' => null];
         }
+        $lastSummary = json_decode((string) ($settings['last_summary_json'] ?? ''), true);
+        $lastSummary = is_array($lastSummary) ? $lastSummary : [];
+        $blocked = (int) ($lastSummary['blocked'] ?? 0);
         if ($lastStatus === 'error') {
             return ['status' => 'warning', 'message' => 'A última execução da fila da IA falhou em ' . ($settings['last_run_at'] ?? '') . ': ' . trim((string) ($settings['last_error'] ?? 'consulte os detalhes da fila')), 'latency_ms' => null];
+        }
+        if ($lastStatus === 'skipped' && $blocked > 0) {
+            return ['status' => 'warning', 'message' => $blocked . ' grupo(s) de pendência aguardam reconexão do WhatsApp/Evolution. A fila foi preservada sem repetir tentativas enquanto a instância estiver desconectada.', 'latency_ms' => null];
         }
         if ($lastAt < time() - 129600) {
             return ['status' => 'warning', 'message' => 'Rotina ativa, porém a última execução registrada ocorreu há mais de 36 horas: ' . ($settings['last_run_at'] ?? '') . '.', 'latency_ms' => null];

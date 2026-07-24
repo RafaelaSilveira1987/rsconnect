@@ -28,6 +28,15 @@ final class AiReprocessService
             $settings = $this->settings();
             $messageLinkEnabled = $this->hasIncomingMessageLink(Database::connection());
 
+            $pendingInstances = $this->pendingByInstance();
+            $blockedPending = 0;
+            foreach ($pendingInstances as $item) {
+                $state = strtolower(trim((string) (($item['connection_state'] ?? '') ?: ($item['instance_status'] ?? ''))));
+                if (!in_array($state, ['open', 'connected', 'active', 'online'], true)) {
+                    $blockedPending += (int) ($item['pending_count'] ?? 0);
+                }
+            }
+
             return [
                 'migration_required' => false,
                 'migration_recommended' => !$messageLinkEnabled,
@@ -35,8 +44,9 @@ final class AiReprocessService
                 'queue_mode' => $messageLinkEnabled ? 'linked' : 'compatibility',
                 'settings' => $settings,
                 'pending' => $this->pendingByTenant(),
-                'pending_instances' => $this->pendingByInstance(),
+                'pending_instances' => $pendingInstances,
                 'pending_total' => $this->pendingTotal(),
+                'pending_blocked_total' => $blockedPending,
                 'history' => $this->history(),
                 'recent_failures' => $this->recentFailures(),
                 'cron_url' => Router::url('/webhooks/ai-reprocess/run'),
@@ -141,6 +151,7 @@ final class AiReprocessService
                 'replied' => 0,
                 'evaluated' => 0,
                 'errors' => 0,
+                'blocked' => 0,
                 'pending_after' => $this->safePendingTotal(),
             ];
         }
@@ -154,6 +165,7 @@ final class AiReprocessService
             'replied' => 0,
             'evaluated' => 0,
             'errors' => 0,
+            'blocked' => 0,
             'agents_checked' => 0,
             'companies_checked' => 0,
             'limit' => 0,
@@ -207,6 +219,9 @@ final class AiReprocessService
                         $summary['replied']++;
                     } elseif ($status === 'evaluated') {
                         $summary['evaluated']++;
+                    } elseif ($status === 'blocked') {
+                        $summary['blocked']++;
+                        $blockedAgents[$agentId] = true;
                     } else {
                         $summary['errors']++;
                         $blockedAgents[$agentId] = true;
@@ -218,6 +233,8 @@ final class AiReprocessService
             $summary['status'] = 'success';
             if ($summary['errors'] > 0) {
                 $summary['status'] = $summary['replied'] > 0 || $summary['evaluated'] > 0 ? 'partial' : 'error';
+            } elseif ($summary['blocked'] > 0) {
+                $summary['status'] = $summary['replied'] > 0 || $summary['evaluated'] > 0 ? 'partial' : 'skipped';
             } elseif ($summary['attempted'] >= $limit && $summary['pending_after'] > 0) {
                 $summary['status'] = 'partial';
             }
@@ -608,8 +625,14 @@ final class AiReprocessService
 
             foreach ($rows as &$row) {
                 $error = mb_strtolower((string) ($row['error_message'] ?? ''));
+                $instanceState = mb_strtolower(trim((string) (($row['connection_state'] ?? '') ?: ($row['instance_status'] ?? ''))));
+                $instanceConnected = in_array($instanceState, ['open', 'connected', 'active', 'online'], true);
                 $row['phase_label'] = 'Processamento da IA';
-                if (str_contains($error, 'evolution') || str_contains($error, 'sendtext') || str_contains($error, 'whatsapp') || str_contains($error, 'http 4')) {
+                $row['diagnostic_message'] = (string) ($row['error_message'] ?? 'Falha sem detalhe registrado.');
+                if (!empty($row['instance_id']) && !$instanceConnected) {
+                    $row['phase_label'] = 'WhatsApp / Evolution desconectada';
+                    $row['diagnostic_message'] = 'A mensagem permanece na fila porque a instância Evolution vinculada está desconectada. Reconecte a instância para liberar o reprocessamento. Último retorno: ' . (string) ($row['error_message'] ?? 'sem detalhe');
+                } elseif (str_contains($error, 'evolution') || str_contains($error, 'sendtext') || str_contains($error, 'whatsapp')) {
                     $row['phase_label'] = 'Envio pelo WhatsApp / Evolution';
                 } elseif (str_contains($error, 'openai') || str_contains($error, 'model') || str_contains($error, 'api key') || str_contains($error, 'token')) {
                     $row['phase_label'] = 'Geração da resposta pela IA';
