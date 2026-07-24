@@ -1,5 +1,16 @@
 # Changelog
 
+## 36.5.9 — Central de operação e diagnóstico da fila
+
+- Move o botão hamburger para fora do cabeçalho filtrado e o fixa diretamente ao viewport, evitando que desapareça durante a rolagem.
+- Reorganiza o Monitoramento para manter backups detalhados na aba Backups e deixar a visão geral mais focada em saúde, alertas e incidentes.
+- Limita históricos e relações extensas às 3 entradas mais recentes, com botão “Ver mais” para expandir quando necessário.
+- A Segurança passa a explicar individualmente OPENAI_API_KEY, N8N_CALLBACK_TOKEN, CALENDAR_MAINTENANCE_TOKEN, BILLING_CRON_TOKEN, AI_REPROCESS_CRON_TOKEN e credenciais da Evolution, distinguindo itens obrigatórios, opcionais e já atendidos por configuração por empresa.
+- A Fila da IA passa a agrupar pendências por empresa, instância Evolution e assistente, mostrando estado da conexão, quantidade de conversas presas e última falha.
+- Documenta no próprio diagnóstico que, após a primeira falha do mesmo assistente, novas tentativas daquele grupo são interrompidas na execução atual para evitar repetição em massa do mesmo erro.
+- Histórico de cada verificação do Monitoramento passa a exibir as 3 evidências mais recentes.
+- Não exige migration.
+
 ## 36.5.8 — Administração RS, monitoramento e navegação
 
 - Reorganiza o menu do Super Admin em **Automação e integrações**, **Financeiro**, **Operação RS** e **Administração RS**.

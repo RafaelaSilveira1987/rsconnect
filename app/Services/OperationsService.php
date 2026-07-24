@@ -603,8 +603,8 @@ final class OperationsService
     private function checkDefinitions(): array
     {
         return [
-            'database' => ['label' => 'Banco de dados', 'category' => 'infrastructure', 'category_label' => 'Infraestrutura e aplicação', 'route' => '/status-sistema'],
-            'migrations' => ['label' => 'Estrutura e migrations', 'category' => 'infrastructure', 'category_label' => 'Infraestrutura e aplicação', 'route' => '/status-sistema'],
+            'database' => ['label' => 'Banco de dados', 'category' => 'infrastructure', 'category_label' => 'Infraestrutura e aplicação', 'route' => '/central-operacao?tab=status'],
+            'migrations' => ['label' => 'Estrutura e migrations', 'category' => 'infrastructure', 'category_label' => 'Infraestrutura e aplicação', 'route' => '/central-operacao?tab=status'],
             'evolution' => ['label' => 'WhatsApp / Evolution', 'category' => 'integration', 'category_label' => 'Integrações', 'route' => '/instances'],
             'n8n' => ['label' => 'n8n', 'category' => 'integration', 'category_label' => 'Integrações', 'route' => '/n8n'],
             'openai' => ['label' => 'OpenAI / IA', 'category' => 'integration', 'category_label' => 'Integrações', 'route' => '/ai-credentials'],
@@ -666,7 +666,7 @@ final class OperationsService
             )->fetchAll(PDO::FETCH_ASSOC) ?: [];
             foreach ($rows as $row) {
                 $key = (string) ($row['check_key'] ?? '');
-                if ($key === '' || count($history[$key] ?? []) >= 5) continue;
+                if ($key === '' || count($history[$key] ?? []) >= 3) continue;
                 $history[$key][] = $row;
             }
         } catch (Throwable) {

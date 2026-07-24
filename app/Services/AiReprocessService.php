@@ -35,6 +35,7 @@ final class AiReprocessService
                 'queue_mode' => $messageLinkEnabled ? 'linked' : 'compatibility',
                 'settings' => $settings,
                 'pending' => $this->pendingByTenant(),
+                'pending_instances' => $this->pendingByInstance(),
                 'pending_total' => $this->pendingTotal(),
                 'history' => $this->history(),
                 'recent_failures' => $this->recentFailures(),
@@ -48,6 +49,7 @@ final class AiReprocessService
                 'error' => $exception->getMessage(),
                 'settings' => $this->defaultSettings(),
                 'pending' => [],
+                'pending_instances' => [],
                 'pending_total' => 0,
                 'history' => [],
                 'recent_failures' => [],
@@ -347,6 +349,63 @@ final class AiReprocessService
         return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
+    private function pendingByInstance(): array
+    {
+        $pdo = Database::connection();
+        $statement = $pdo->query(
+            'SELECT t.id AS tenant_id,
+                    t.name AS tenant_name,
+                    c.evolution_instance_id AS instance_id,
+                    COALESCE(NULLIF(i.name, ""), NULLIF(i.instance_name, ""), CONCAT("Instância #", c.evolution_instance_id)) AS instance_label,
+                    i.instance_name,
+                    i.status AS instance_status,
+                    i.connection_state,
+                    i.last_status_check_at,
+                    a.id AS agent_id,
+                    a.name AS agent_name,
+                    COUNT(DISTINCT cm.conversation_id) AS pending_count,
+                    MIN(cm.sent_at) AS oldest_pending_at,
+                    MAX(cm.sent_at) AS latest_pending_at,
+                    (
+                        SELECT al.error_message
+                        FROM ai_automation_logs al
+                        WHERE al.tenant_id = t.id
+                          AND al.agent_id = a.id
+                          AND (al.event = "ai.failed" OR al.status = "error")
+                          AND EXISTS (
+                                SELECT 1
+                                FROM conversations err_c
+                                WHERE err_c.id = al.conversation_id
+                                  AND err_c.tenant_id = t.id
+                                  AND err_c.evolution_instance_id = c.evolution_instance_id
+                          )
+                        ORDER BY al.id DESC
+                        LIMIT 1
+                    ) AS last_error_message,
+                    (
+                        SELECT al.created_at
+                        FROM ai_automation_logs al
+                        WHERE al.tenant_id = t.id
+                          AND al.agent_id = a.id
+                          AND (al.event = "ai.failed" OR al.status = "error")
+                          AND EXISTS (
+                                SELECT 1
+                                FROM conversations err_c
+                                WHERE err_c.id = al.conversation_id
+                                  AND err_c.tenant_id = t.id
+                                  AND err_c.evolution_instance_id = c.evolution_instance_id
+                          )
+                        ORDER BY al.id DESC
+                        LIMIT 1
+                    ) AS last_error_at ' .
+            $this->pendingBaseSql($this->hasIncomingMessageLink($pdo)) .
+            ' GROUP BY t.id, t.name, c.evolution_instance_id, i.name, i.instance_name, i.status, i.connection_state, i.last_status_check_at, a.id, a.name
+              ORDER BY pending_count DESC, t.name, instance_label'
+        );
+
+        return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
     private function pendingBaseSql(bool $hasMessageLink): string
     {
         $pendingCondition = $hasMessageLink
@@ -459,6 +518,9 @@ final class AiReprocessService
                              aa.id DESC
                     LIMIT 1
                 )
+             LEFT JOIN evolution_instances i
+                ON i.id = c.evolution_instance_id
+               AND i.tenant_id = cm.tenant_id
              WHERE c.attendance_mode = "ai"
                AND c.status <> "closed"
                AND cm.direction = "incoming"
@@ -530,12 +592,15 @@ final class AiReprocessService
             $rows = Database::connection()->query(
                 "SELECT al.id, al.tenant_id, al.conversation_id, al.agent_id, al.event, al.status,
                         al.error_message, al.created_at, t.name AS tenant_name, aa.name AS agent_name,
-                        c.contact_id, ct.name AS contact_name, ct.phone AS contact_phone
+                        c.contact_id, ct.name AS contact_name, ct.phone AS contact_phone,
+                        c.evolution_instance_id AS instance_id, i.name AS instance_label, i.instance_name,
+                        i.status AS instance_status, i.connection_state
                  FROM ai_automation_logs al
                  INNER JOIN tenants t ON t.id = al.tenant_id
                  LEFT JOIN ai_agents aa ON aa.id = al.agent_id
                  LEFT JOIN conversations c ON c.id = al.conversation_id
                  LEFT JOIN contacts ct ON ct.id = c.contact_id
+                 LEFT JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = al.tenant_id
                  WHERE al.event = 'ai.failed' OR al.status = 'error'
                  ORDER BY al.id DESC
                  LIMIT 20"

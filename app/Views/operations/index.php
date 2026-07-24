@@ -163,83 +163,29 @@ $formatBytes = static function ($bytes): string {
         </div>
     </section>
 
-    <aside class="card">
+    <aside class="card operations-quick-panel">
         <div class="section-heading">
-            <div><span class="eyebrow">Backup</span><h2>Último backup</h2></div>
+            <div><span class="eyebrow">Atalho operacional</span><h2>Backup</h2><p>O histórico, configuração, disparo e detalhes técnicos ficam concentrados na aba Backups.</p></div>
         </div>
         <?php if ($lastBackup): ?>
             <div class="operations-backup-card">
                 <span class="badge <?= $statusBadge((string) ($lastBackup['status'] ?? 'warning')) ?>"><?= $statusLabel((string) ($lastBackup['status'] ?? 'warning')) ?></span>
                 <?php if (!empty($lastBackup['verified_at'])): ?><span class="badge badge-success">Verificado</span><?php endif; ?>
                 <strong><?= View::e($lastBackup['file_name'] ?? 'Backup registrado') ?></strong>
-                <p><strong>Armazenamento:</strong> <?= View::e($storageLabel((string) ($lastBackup['storage_type'] ?? 'manual_local'))) ?></p>
-                <p><strong>Caminho/URL:</strong> <?= View::e($lastBackup['location'] ?? '-') ?></p>
-                <small>Finalizado em <?= View::e($lastBackup['finished_at'] ?? $lastBackup['created_at'] ?? '') ?><?= !empty($lastBackup['size_bytes']) ? ' · ' . $formatBytes($lastBackup['size_bytes']) : '' ?></small>
+                <p><?= View::e($storageLabel((string) ($lastBackup['storage_type'] ?? 'manual_local'))) ?><?= !empty($lastBackup['size_bytes']) ? ' · ' . View::e($formatBytes($lastBackup['size_bytes'])) : '' ?></p>
+                <small>Último registro: <?= View::e($lastBackup['finished_at'] ?? $lastBackup['created_at'] ?? '') ?></small>
             </div>
         <?php else: ?>
-            <div class="operations-backup-card pending">
-                <span class="badge badge-warning">Pendente</span>
-                <strong>Nenhum backup registrado</strong>
-                <p>Registre manualmente ou configure uma rotina externa para chamar o webhook de backup.</p>
-            </div>
+            <div class="operations-backup-card pending"><span class="badge badge-warning">Sem evidência</span><strong>Nenhum backup registrado</strong><p>Abra a aba Backups para configurar e validar a rotina.</p></div>
         <?php endif; ?>
-
-        <form class="operations-form" method="post" action="<?= View::e(Router::url('/operations/backups/register')) ?>">
-            <?= Csrf::input() ?>
-            <div class="field">
-                <label>Tipo</label>
-                <select name="backup_type">
-                    <option value="manual">Manual</option>
-                    <option value="automatic">Automático</option>
-                    <option value="provider">Provedor/VPS</option>
-                </select>
-            </div>
-            <div class="field">
-                <label>Armazenamento</label>
-                <select name="storage_type">
-                    <option value="manual_local">Local da minha máquina</option>
-                    <option value="server">Servidor/VPS</option>
-                    <option value="easypanel">EasyPanel/Provedor</option>
-                    <option value="google_drive">Google Drive</option>
-                    <option value="s3_minio">S3/MinIO</option>
-                    <option value="dropbox">Dropbox</option>
-                    <option value="other">Outro</option>
-                </select>
-                <small class="muted-text">Se for “Local da minha máquina”, o sistema registra o caminho, mas não acessa seu computador.</small>
-            </div>
-            <div class="field">
-                <label>Nome do arquivo</label>
-                <input type="text" name="file_name" placeholder="Ex: rs-connect-2026-07-13.sql.gz">
-            </div>
-            <div class="field">
-                <label>Caminho/URL do arquivo</label>
-                <input type="text" name="location" placeholder="Ex: C:\\Backups\\rs-connect.sql.gz ou s3://bucket/arquivo.sql.gz">
-            </div>
-            <div class="field">
-                <label>Tamanho em bytes</label>
-                <input type="number" min="0" step="1" name="size_bytes" placeholder="Opcional">
-            </div>
-            <div class="field">
-                <label>Checksum</label>
-                <input type="text" name="checksum" placeholder="Opcional: sha256...">
-            </div>
-            <div class="field">
-                <label>Observações</label>
-                <textarea name="notes" rows="3" placeholder="Ex: backup realizado antes do deploy"></textarea>
-            </div>
-            <label class="field" style="display:flex;align-items:center;gap:10px">
-                <input type="checkbox" name="verified" value="1">
-                <span>Marcar como conferido/verificado</span>
-            </label>
-            <button class="btn btn-primary btn-block" type="submit">Registrar backup</button>
-        </form>
+        <a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/central-operacao?tab=backups')) ?>">Abrir Backups</a>
     </aside>
 </div>
 
 <div class="operations-grid" style="margin-top:16px">
     <section class="card">
         <div class="section-heading"><div><span class="eyebrow">Alertas ativos</span><h2>O que precisa de atenção</h2></div></div>
-        <div class="operations-alert-list">
+        <div class="operations-alert-list" data-collapsible-list="3">
             <?php foreach ($alerts as $alert): ?>
                 <article class="operations-alert is-<?= View::e($alert['type'] ?? 'warning') ?>">
                     <div>
@@ -277,34 +223,10 @@ $formatBytes = static function ($bytes): string {
     </section>
 </div>
 
-<div class="operations-grid" style="margin-top:16px">
-    <section class="card">
-        <div class="section-heading"><div><span class="eyebrow">Histórico</span><h2>Backups registrados</h2></div></div>
-        <div class="table-wrap">
-            <table>
-                <thead><tr><th>Data</th><th>Tipo</th><th>Armazenamento</th><th>Arquivo</th><th>Caminho/URL</th><th>Status</th><th>Verificado</th><th>Observação</th></tr></thead>
-                <tbody>
-                    <?php foreach ($backups as $backup): ?>
-                        <tr>
-                            <td><?= View::e($backup['finished_at'] ?? $backup['created_at'] ?? '') ?></td>
-                            <td><?= View::e($backup['backup_type'] ?? '') ?></td>
-                            <td><?= View::e($storageLabel((string) ($backup['storage_type'] ?? 'manual_local'))) ?></td>
-                            <td><?= View::e($backup['file_name'] ?? '') ?><?= !empty($backup['size_bytes']) ? '<br><small>' . View::e($formatBytes($backup['size_bytes'])) . '</small>' : '' ?></td>
-                            <td><?= View::e($backup['location'] ?? '') ?></td>
-                            <td><span class="badge <?= $statusBadge((string) ($backup['status'] ?? 'warning')) ?>"><?= $statusLabel((string) ($backup['status'] ?? 'warning')) ?></span></td>
-                            <td><?= !empty($backup['verified_at']) ? '<span class="badge badge-success">Sim</span>' : '<span class="badge badge-warning">Não</span>' ?></td>
-                            <td><?= View::e($backup['notes'] ?? '') ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    <?php if (!$backups): ?><tr><td colspan="8"><div class="empty-state">Nenhum backup registrado ainda.</div></td></tr><?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
+<div style="margin-top:16px">
     <section class="card">
         <div class="section-heading"><div><span class="eyebrow">Incidentes</span><h2>Eventos operacionais</h2></div></div>
-        <div class="security-timeline">
+        <div class="security-timeline" data-collapsible-list="3">
             <?php foreach ($incidents as $incident): ?>
                 <article class="security-event">
                     <span class="badge <?= $statusBadge((string) ($incident['severity'] ?? 'warning')) ?>"><?= View::e($incident['severity'] ?? '') ?></span>
@@ -326,23 +248,6 @@ $formatBytes = static function ($bytes): string {
         </div>
     </section>
 </div>
-
-<section class="card" style="margin-top:16px">
-    <div class="section-heading"><div><span class="eyebrow">Webhook de backup externo</span><h2>Integração opcional com cron/n8n</h2></div></div>
-    <p class="muted-text">Configure um cron externo ou fluxo n8n para registrar o resultado do backup usando:</p>
-    <pre class="codebox">POST <?= View::e(Router::url('/webhooks/operations/backups?token=SEU_TOKEN')) ?>
-{
-  "status": "success",
-  "backup_type": "automatic",
-  "storage_type": "s3_minio",
-  "file_name": "rs-connect-2026-07-13.sql.gz",
-  "location": "s3://bucket/rs-connect-2026-07-13.sql.gz",
-  "size_bytes": 1234567,
-  "checksum": "sha256...",
-  "verified": true,
-  "notes": "Backup diário concluído"
-}</pre>
-</section>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {

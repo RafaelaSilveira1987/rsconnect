@@ -274,7 +274,7 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
             <thead>
                 <tr><th>Solicitado em</th><th>Gatilho</th><th>Status</th><th>Duração</th><th>Arquivo</th><th>Validação</th><th>Detalhes</th></tr>
             </thead>
-            <tbody id="backup-jobs-body">
+            <tbody id="backup-jobs-body" data-collapsible-list="3">
             <?php foreach ($jobs as $job): ?>
                 <?php $duration = $job['duration_seconds_calculated'] ?? $job['duration_seconds'] ?? null; ?>
                 <tr data-backup-job-id="<?= (int) ($job['id'] ?? 0) ?>">

@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.5.8 — Administração RS e monitoramento';
+    public const PACKAGE_LABEL = 'RS Connect 36.5.9 — Administração RS e monitoramento';
     public const REQUIRED_MIGRATION = '048_reporting_metrics_foundation.sql';
 
     private PDO $pdo;
@@ -245,7 +245,11 @@ final class AppVersionService
             ['label' => 'OpenAI base URL', 'value' => (string) Env::get('OPENAI_API_BASE_URL', 'não informado'), 'secret' => false],
             ['label' => 'n8n base URL', 'value' => (string) Env::get('N8N_BASE_URL', 'não informado'), 'secret' => false],
             ['label' => 'Backup token', 'value' => $this->masked((string) (Env::get('OPERATIONS_BACKUP_TOKEN', '') ?: Env::get('BACKUP_WEBHOOK_TOKEN', ''))), 'secret' => true],
-            ['label' => 'OpenAI key', 'value' => $this->masked((string) Env::get('OPENAI_API_KEY', '')), 'secret' => true],
+            ['label' => 'OpenAI global', 'value' => $this->masked((string) Env::get('OPENAI_API_KEY', '')), 'secret' => true],
+            ['label' => 'Callback n8n', 'value' => $this->masked((string) Env::get('N8N_CALLBACK_TOKEN', '')), 'secret' => true],
+            ['label' => 'Cron de cobrança', 'value' => $this->masked((string) Env::get('BILLING_CRON_TOKEN', '')), 'secret' => true],
+            ['label' => 'Cron fila IA', 'value' => $this->masked((string) Env::get('AI_REPROCESS_CRON_TOKEN', '')), 'secret' => true],
+            ['label' => 'Manutenção agenda', 'value' => $this->masked((string) Env::get('CALENDAR_MAINTENANCE_TOKEN', '')), 'secret' => true],
         ];
     }
 

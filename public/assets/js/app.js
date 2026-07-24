@@ -6,11 +6,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeSidebar = () => {
     sidebar?.classList.remove('is-open');
     document.body.classList.remove('sidebar-open');
+    toggle?.setAttribute('aria-expanded', 'false');
+    toggle?.setAttribute('aria-label', 'Abrir menu');
   };
   toggle?.addEventListener('click', () => {
     const open = !sidebar?.classList.contains('is-open');
     sidebar?.classList.toggle('is-open', Boolean(open));
     document.body.classList.toggle('sidebar-open', Boolean(open));
+    toggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    toggle?.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu');
   });
   backdrop?.addEventListener('click', closeSidebar);
   sidebar?.querySelectorAll('.nav-link').forEach((link) => link.addEventListener('click', closeSidebar));
@@ -20,6 +24,40 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('scroll', refreshBackToTop, { passive: true });
   backToTop?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
   refreshBackToTop();
+
+  const initCollapsibleLists = () => {
+    document.querySelectorAll('[data-collapsible-list]').forEach((list) => {
+      if (list.dataset.collapsibleReady === '1') return;
+      list.dataset.collapsibleReady = '1';
+      const limit = Math.max(1, Number(list.dataset.collapsibleList || 3));
+      const getItems = () => Array.from(list.children).filter((item) => !item.classList.contains('empty-state'));
+      let expanded = false;
+      const anchor = list.closest('.table-wrap') || list;
+      const controls = document.createElement('div');
+      controls.className = 'collapsible-list-controls';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-small btn-quiet collapsible-list-toggle';
+      controls.appendChild(button);
+      anchor.insertAdjacentElement('afterend', controls);
+
+      const render = () => {
+        const items = getItems();
+        items.forEach((item, index) => {
+          item.hidden = !expanded && index >= limit;
+        });
+        const remaining = Math.max(0, items.length - limit);
+        controls.hidden = remaining === 0;
+        button.textContent = expanded ? 'Mostrar menos' : `Ver mais (${remaining})`;
+        button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      };
+      button.addEventListener('click', () => { expanded = !expanded; render(); });
+      const observer = new MutationObserver(render);
+      observer.observe(list, { childList: true });
+      render();
+    });
+  };
+  initCollapsibleLists();
 
   document.querySelectorAll('[data-dismiss-flash]').forEach((button) => {
     button.addEventListener('click', () => button.closest('.flash')?.remove());

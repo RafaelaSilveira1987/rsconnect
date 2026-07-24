@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.5.9', 'title' => 'Central de operação e diagnóstico da fila', 'summary' => 'Fixa o hamburger no viewport, contextualiza tokens e identifica pendências da IA por instância Evolution.'],
             ['version' => '36.5.8', 'title' => 'Administração RS e monitoramento', 'summary' => 'Reorganiza o menu, agrupa n8n e amplia a Central de operação com evidências, busca e filtros.'],
             ['version' => '36.5.7', 'title' => 'Identificação e cron seguro', 'summary' => 'Corrige nome automático de contatos, melhora toque mobile e endurece a ativação do cron de cobrança.'],
             ['version' => '36.5.6', 'title' => 'Homologação final', 'summary' => 'Corrige contexto de clientes, takeover humano da IA, reprocessamento, cron e responsividade.'],

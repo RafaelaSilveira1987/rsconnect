@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.5.8 — Administração RS e monitoramento.
+Pacote consolidado até o RS Connect 36.5.9 — Central de operação e diagnóstico da fila.
 
 ## Última etapa incluída
+
+RS Connect 36.5.9 — hamburger fixado diretamente ao viewport, Central de operação reorganizada, listas extensas compactadas e diagnóstico da fila por instância Evolution.
 
 RS Connect 36.5.8 — reorganização da Administração RS, módulo n8n agrupado, Central de operação aprimorada e navegação global em páginas longas.
 
@@ -10,7 +12,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.5.8.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.5.9.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 

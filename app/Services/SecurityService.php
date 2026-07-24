@@ -359,6 +359,7 @@ final class SecurityService
     {
         $idleMinutes = max(5, (int) Env::get('SECURITY_SESSION_IDLE_MINUTES', Env::get('SESSION_LIFETIME', 120)));
         $access = (new AccessControlService())->securitySummary();
+        $credentialReview = $this->credentialReview();
 
         return [
             'failed_logins_24h' => $this->count('SELECT COUNT(*) FROM login_attempts WHERE success = 0 AND created_at >= (NOW() - INTERVAL 1 DAY)'),
@@ -377,7 +378,11 @@ final class SecurityService
             ),
             'critical_events_7d' => $this->count("SELECT COUNT(*) FROM security_events WHERE severity IN ('critical','error') AND created_at >= (NOW() - INTERVAL 7 DAY)"),
             'webhook_events_24h' => $this->count("SELECT COUNT(*) FROM security_events WHERE event LIKE 'webhook.%' AND created_at >= (NOW() - INTERVAL 1 DAY)"),
-            'api_key_warnings' => $this->apiKeyWarnings(),
+            'api_key_warnings' => array_values(array_map(
+                static fn (array $item): string => (string) ($item['key'] ?? ''),
+                array_filter($credentialReview, static fn (array $item): bool => in_array((string) ($item['status'] ?? ''), ['warning', 'critical'], true))
+            )),
+            'credential_review' => $credentialReview,
             'login_attempts' => $this->fetchAll(
                 'SELECT la.*, u.locked_until, u.failed_login_count
                  FROM login_attempts la
@@ -501,16 +506,127 @@ final class SecurityService
         }
     }
 
-    private function apiKeyWarnings(): array
+    private function credentialReview(): array
     {
-        $warnings = [];
-        foreach (['EVOLUTION_DEFAULT_API_KEY', 'OPENAI_API_KEY', 'N8N_CALLBACK_TOKEN', 'BILLING_CRON_TOKEN', 'CALENDAR_MAINTENANCE_TOKEN'] as $key) {
-            $value = (string) Env::get($key, '');
-            if ($value === '' || str_contains($value, 'troque') || str_contains($value, 'SUA_CHAVE') || strlen($value) < 12) {
-                $warnings[] = $key;
+        $review = [];
+
+        $openAiGlobal = $this->secretConfigured('OPENAI_API_KEY');
+        $activeAiCredentials = $this->tableExists('ai_provider_credentials')
+            ? $this->count("SELECT COUNT(*) FROM ai_provider_credentials WHERE status = 'active' AND api_key_encrypted IS NOT NULL AND api_key_encrypted <> ''")
+            : 0;
+        $review[] = [
+            'key' => 'OPENAI_API_KEY',
+            'label' => 'OpenAI / IA',
+            'status' => ($openAiGlobal || $activeAiCredentials > 0) ? 'ok' : 'warning',
+            'detail' => $openAiGlobal
+                ? 'Chave global configurada no ambiente.'
+                : ($activeAiCredentials > 0
+                    ? $activeAiCredentials . ' credencial(is) ativa(s) por empresa/assistente. A chave global é opcional.'
+                    : 'Nenhuma chave global nem credencial ativa por empresa foi encontrada.'),
+            'action' => '/ai-credentials',
+        ];
+
+        $n8nToken = $this->secretConfigured('N8N_CALLBACK_TOKEN');
+        $activeN8nFlows = ($this->tableExists('n8n_tenant_flows') ? $this->count("SELECT COUNT(*) FROM n8n_tenant_flows WHERE status = 'active'") : 0)
+            + ($this->tableExists('n8n_flows') ? $this->count("SELECT COUNT(*) FROM n8n_flows WHERE status = 'active'") : 0);
+        $review[] = [
+            'key' => 'N8N_CALLBACK_TOKEN',
+            'label' => 'Callback global do n8n',
+            'status' => $n8nToken ? 'ok' : ($activeN8nFlows > 0 ? 'warning' : 'optional'),
+            'detail' => $n8nToken
+                ? 'Token global configurado para autenticar retornos do n8n ao RS Connect.'
+                : ($activeN8nFlows > 0
+                    ? 'Há fluxos n8n ativos e o callback global está sem token. Configure-o antes da produção.'
+                    : 'Nenhum fluxo n8n ativo depende do callback global neste momento.'),
+            'action' => '/n8n',
+        ];
+
+        $calendarToken = $this->secretConfigured('CALENDAR_MAINTENANCE_TOKEN');
+        $calendarEnabled = $this->tableExists('tenant_calendar_availability_settings')
+            ? $this->count('SELECT COUNT(*) FROM tenant_calendar_availability_settings WHERE enabled = 1')
+            : 0;
+        $review[] = [
+            'key' => 'CALENDAR_MAINTENANCE_TOKEN',
+            'label' => 'Manutenção automática da agenda',
+            'status' => $calendarToken ? 'ok' : ($calendarEnabled > 0 ? 'recommended' : 'optional'),
+            'detail' => $calendarToken
+                ? 'Token configurado para o endpoint de manutenção automática da agenda.'
+                : ($calendarEnabled > 0
+                    ? 'A agenda está ativa. O token só é necessário para manutenção via cron; a manutenção manual continua protegida pelo login.'
+                    : 'Token opcional enquanto não houver manutenção automática da agenda por cron.'),
+            'action' => '/calendar/availability',
+        ];
+
+        $billingToken = $this->secretConfigured('BILLING_CRON_TOKEN');
+        $activeBillingRules = $this->tableExists('billing_reminder_rules')
+            ? $this->count("SELECT COUNT(*) FROM billing_reminder_rules WHERE status = 'active'")
+            : 0;
+        $review[] = [
+            'key' => 'BILLING_CRON_TOKEN',
+            'label' => 'Cron da régua de cobrança',
+            'status' => $billingToken ? 'ok' : ($activeBillingRules > 0 ? 'warning' : 'optional'),
+            'detail' => $billingToken
+                ? 'Token configurado para o acionamento automático da régua de cobrança.'
+                : ($activeBillingRules > 0 ? 'Há regras de cobrança ativas, mas o cron externo não pode executar sem este token.' : 'Sem regras ativas; token opcional neste momento.'),
+            'action' => '/billing-reminders',
+        ];
+
+        $aiCronToken = $this->secretConfigured('AI_REPROCESS_CRON_TOKEN');
+        $aiCronEnabled = false;
+        if ($this->tableExists('ai_reprocess_settings')) {
+            $aiCronEnabled = $this->count('SELECT COUNT(*) FROM ai_reprocess_settings WHERE id = 1 AND enabled = 1') > 0;
+        }
+        $review[] = [
+            'key' => 'AI_REPROCESS_CRON_TOKEN',
+            'label' => 'Cron da fila da IA',
+            'status' => $aiCronToken ? 'ok' : ($aiCronEnabled ? 'warning' : 'optional'),
+            'detail' => $aiCronToken
+                ? 'Token configurado para o reprocessamento automático da fila da IA.'
+                : ($aiCronEnabled ? 'A rotina da fila está ativa, mas o endpoint externo não pode ser acionado com segurança sem este token.' : 'Rotina automática desativada; token opcional.'),
+            'action' => '/central-operacao?tab=ai_reprocess',
+        ];
+
+        $globalEvolution = $this->secretConfigured('EVOLUTION_DEFAULT_API_KEY');
+        $instanceCount = $this->tableExists('evolution_instances') ? $this->count('SELECT COUNT(*) FROM evolution_instances') : 0;
+        $instancesWithKey = $this->tableExists('evolution_instances')
+            ? $this->count("SELECT COUNT(*) FROM evolution_instances WHERE api_key_encrypted IS NOT NULL AND api_key_encrypted <> ''")
+            : 0;
+        $review[] = [
+            'key' => 'EVOLUTION_DEFAULT_API_KEY',
+            'label' => 'Evolution / WhatsApp',
+            'status' => ($globalEvolution || ($instanceCount > 0 && $instancesWithKey >= $instanceCount)) ? 'ok' : ($instanceCount > 0 ? 'warning' : 'optional'),
+            'detail' => $globalEvolution
+                ? 'Chave padrão da Evolution configurada no ambiente.'
+                : ($instanceCount > 0 && $instancesWithKey >= $instanceCount
+                    ? 'Todas as instâncias possuem chave própria protegida; a chave global é opcional.'
+                    : ($instanceCount > 0 ? 'Existem instâncias sem chave própria e não há chave global de fallback.' : 'Nenhuma instância cadastrada; chave global opcional.')),
+            'action' => '/instances',
+        ];
+
+        return $review;
+    }
+
+    private function secretConfigured(string $key): bool
+    {
+        $value = trim((string) Env::get($key, ''));
+        if ($value === '') {
+            return false;
+        }
+        $normalized = mb_strtolower($value);
+        foreach (['troque', 'sua_chave', 'seu_token', 'cole_aqui', 'change_me'] as $placeholder) {
+            if (str_contains($normalized, $placeholder)) {
+                return false;
             }
         }
-        return $warnings;
+        return mb_strlen($value) >= 12;
+    }
+
+    private function apiKeyWarnings(): array
+    {
+        return array_values(array_map(
+            static fn (array $item): string => (string) ($item['key'] ?? ''),
+            array_filter($this->credentialReview(), static fn (array $item): bool => in_array((string) ($item['status'] ?? ''), ['warning', 'critical'], true))
+        ));
     }
 
     private function sanitizeContext(array $context): array

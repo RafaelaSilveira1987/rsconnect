@@ -105,7 +105,7 @@ $statusText = static fn (string $status): string => match ($status) {
 
 <section class="card" style="margin-top:16px">
     <div class="section-heading"><div><span class="eyebrow">Próximas ações</span><h2>Fechamento da beta</h2></div></div>
-    <div class="security-list">
+    <div class="security-list" data-collapsible-list="3">
         <?php foreach (($dashboard['next_actions'] ?? []) as $action): ?>
             <div class="security-row">
                 <div>

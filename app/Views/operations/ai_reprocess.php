@@ -9,6 +9,7 @@ $settings = $data['settings'] ?? [];
 $pending = $data['pending'] ?? [];
 $history = $data['history'] ?? [];
 $recentFailures = $data['recent_failures'] ?? [];
+$pendingInstances = $data['pending_instances'] ?? [];
 $lastSummary = $settings['last_summary'] ?? [];
 $formatDate = static function (?string $value): string {
     if (!$value || !($timestamp = strtotime($value))) return 'Ainda não executado';
@@ -119,7 +120,7 @@ $statusLabel = static function (string $status): string {
         <div><span class="eyebrow">Diagnóstico da falha</span><h2>Erros recentes da IA e do envio</h2><p>Mostra onde a tentativa parou para diferenciar geração de resposta, Evolution e integrações externas.</p></div>
         <span class="badge <?= $recentFailures ? 'badge-warning' : 'badge-success' ?>"><?= count($recentFailures) ?> registro(s)</span>
     </div>
-    <div class="ai-reprocess-failure-list">
+    <div class="ai-reprocess-failure-list" data-collapsible-list="3">
         <?php foreach ($recentFailures as $failure): ?>
             <article class="ai-reprocess-failure-card">
                 <div class="ai-reprocess-failure-main">
@@ -129,6 +130,7 @@ $statusLabel = static function (string $status): string {
                     <small>
                         <?= View::e($formatDate($failure['created_at'] ?? null)) ?>
                         · Assistente: <?= View::e((string) ($failure['agent_name'] ?? 'não identificado')) ?>
+                        · Instância: <?= View::e((string) (($failure['instance_label'] ?? '') ?: ($failure['instance_name'] ?? 'não identificada'))) ?><?= !empty($failure['connection_state']) ? ' (' . View::e((string) $failure['connection_state']) . ')' : '' ?>
                         · Contato: <?= View::e((string) (($failure['contact_name'] ?? '') ?: ($failure['contact_phone'] ?? 'não identificado'))) ?>
                     </small>
                 </div>
@@ -143,25 +145,37 @@ $statusLabel = static function (string $status): string {
     </div>
 </section>
 
-<section class="card" style="margin-top:16px">
+<section class="card ai-pending-instance-card" style="margin-top:16px">
     <div class="section-heading">
-        <div><span class="eyebrow">Situação atual</span><h2>Empresas com mensagem presa</h2></div>
+        <div><span class="eyebrow">Situação atual</span><h2>Instâncias com mensagens presas</h2><p>As pendências são agrupadas pela conexão WhatsApp e pelo assistente responsável. Quando a primeira tentativa de um mesmo assistente falha, a execução pausa novas tentativas daquele grupo para não disparar várias falhas iguais.</p></div>
+        <span class="badge <?= $pendingInstances ? 'badge-warning' : 'badge-success' ?>"><?= count($pendingInstances) ?> grupo(s)</span>
     </div>
-    <div class="table-wrap">
-        <table>
-            <thead><tr><th>Empresa</th><th>Pendências</th><th>Mensagem mais recente</th><th>Ação</th></tr></thead>
-            <tbody>
-                <?php foreach ($pending as $item): ?>
-                    <tr>
-                        <td><strong><?= View::e((string) ($item['tenant_name'] ?? 'Empresa')) ?></strong></td>
-                        <td><span class="badge badge-warning"><?= (int) ($item['pending_count'] ?? 0) ?></span></td>
-                        <td><?= View::e($formatDate($item['oldest_or_latest_pending_at'] ?? null)) ?></td>
-                        <td><a class="btn btn-quiet" href="<?= View::e(Router::url('/companies/health?tenant_id=' . (int) ($item['tenant_id'] ?? 0))) ?>">Abrir diagnóstico</a></td>
-                    </tr>
-                <?php endforeach; ?>
-                <?php if (!$pending): ?><tr><td colspan="4"><div class="empty-state">Nenhuma mensagem presa na fila da IA.</div></td></tr><?php endif; ?>
-            </tbody>
-        </table>
+    <div class="ai-pending-instance-list" data-collapsible-list="3">
+        <?php foreach ($pendingInstances as $item): ?>
+            <?php
+                $instanceState = strtolower((string) (($item['connection_state'] ?? '') ?: ($item['instance_status'] ?? '')));
+                $instanceOk = in_array($instanceState, ['open','connected','active','online'], true);
+            ?>
+            <article class="ai-pending-instance-item <?= $instanceOk ? 'is-connected' : 'is-warning' ?>">
+                <div class="ai-pending-instance-main">
+                    <div class="ai-pending-instance-title">
+                        <span class="badge <?= $instanceOk ? 'badge-success' : 'badge-warning' ?>"><?= $instanceOk ? 'Conectada' : 'Revisar conexão' ?></span>
+                        <strong><?= View::e((string) ($item['tenant_name'] ?? 'Empresa')) ?></strong>
+                    </div>
+                    <h3><?= View::e((string) ($item['instance_label'] ?? 'Instância não identificada')) ?></h3>
+                    <p>Assistente: <strong><?= View::e((string) ($item['agent_name'] ?? 'não identificado')) ?></strong> · <?= (int) ($item['pending_count'] ?? 0) ?> conversa(s) pendente(s)</p>
+                    <small>Mais antiga: <?= View::e($formatDate($item['oldest_pending_at'] ?? null)) ?> · Mais recente: <?= View::e($formatDate($item['latest_pending_at'] ?? null)) ?><?= !empty($item['last_status_check_at']) ? ' · Evolution verificada em ' . View::e($formatDate($item['last_status_check_at'])) : '' ?></small>
+                    <?php if (!empty($item['last_error_message'])): ?>
+                        <div class="ai-pending-instance-error"><strong>Última falha</strong><span><?= View::e((string) $item['last_error_message']) ?></span><?php if (!empty($item['last_error_at'])): ?><small><?= View::e($formatDate($item['last_error_at'])) ?></small><?php endif; ?></div>
+                    <?php endif; ?>
+                </div>
+                <div class="ai-pending-instance-actions">
+                    <a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/instances')) ?>">Abrir WhatsApp</a>
+                    <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/companies/health?tenant_id=' . (int) ($item['tenant_id'] ?? 0))) ?>">Diagnóstico da empresa</a>
+                </div>
+            </article>
+        <?php endforeach; ?>
+        <?php if (!$pendingInstances): ?><div class="empty-state">Nenhuma mensagem presa na fila da IA.</div><?php endif; ?>
     </div>
 </section>
 
@@ -172,7 +186,7 @@ $statusLabel = static function (string $status): string {
     <div class="table-wrap">
         <table>
             <thead><tr><th>Início</th><th>Origem</th><th>Status</th><th>Reavaliadas</th><th>Respondidas</th><th>Pendentes após</th><th>Responsável</th></tr></thead>
-            <tbody>
+            <tbody data-collapsible-list="3">
                 <?php foreach ($history as $run): ?>
                     <tr>
                         <td><?= View::e($formatDate($run['started_at'] ?? null)) ?></td>

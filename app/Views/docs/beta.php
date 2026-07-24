@@ -88,7 +88,7 @@ $metrics = $dashboard['metrics'] ?? [];
     </section>
     <section class="card">
         <div class="section-heading"><div><span class="eyebrow">Release notes</span><h2>Últimas entregas</h2></div></div>
-        <div class="security-list">
+        <div class="security-list" data-collapsible-list="3">
             <?php foreach (($dashboard['release_notes'] ?? []) as $release): ?>
                 <div class="security-row">
                     <div><strong><?= View::e($release['version'] . ' — ' . $release['title']) ?></strong><small><?= View::e($release['summary']) ?></small></div>

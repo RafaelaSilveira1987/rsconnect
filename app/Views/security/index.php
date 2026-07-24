@@ -10,6 +10,7 @@ $events = $metrics['events'] ?? [];
 $sessions = $metrics['sessions'] ?? [];
 $attempts = $metrics['login_attempts'] ?? [];
 $warnings = $metrics['api_key_warnings'] ?? [];
+$credentialReview = $metrics['credential_review'] ?? [];
 $checks = $metrics['checks'] ?? [];
 $lockedUsers = $metrics['locked_users'] ?? [];
 $access = $metrics['access'] ?? [];
@@ -84,9 +85,25 @@ $eventLabel = static function (string $event): string {
             <div><span>Tolerância financeira</span><strong><?= (int) ($settings['invoice_grace_days'] ?? 5) ?> dias após o vencimento</strong></div>
             <div><span>Timezone</span><strong><?= View::e($settings['timezone'] ?? '-') ?></strong></div>
         </div>
-        <?php if ($warnings): ?>
-            <div class="security-alert warning"><strong>Chaves ou tokens para revisar</strong><p><?= View::e(implode(', ', $warnings)) ?></p></div>
-        <?php endif; ?>
+        <div class="security-credentials-block">
+            <div class="security-credentials-heading">
+                <div><span class="eyebrow">Integrações</span><strong>Credenciais e tokens</strong><small>O painel diferencia o que é obrigatório, opcional e atendido por credenciais próprias de cada empresa.</small></div>
+            </div>
+            <div class="security-credential-list" data-collapsible-list="3">
+                <?php foreach ($credentialReview as $credential): ?>
+                    <?php $credentialStatus = (string) ($credential['status'] ?? 'optional'); ?>
+                    <article class="security-credential-item is-<?= View::e($credentialStatus) ?>">
+                        <div>
+                            <span class="badge <?= in_array($credentialStatus, ['ok'], true) ? 'badge-success' : (in_array($credentialStatus, ['warning','critical'], true) ? 'badge-warning' : 'badge-neutral') ?>"><?= View::e(match ($credentialStatus) { 'ok' => 'Configurado', 'warning' => 'Revisar', 'critical' => 'Crítico', 'recommended' => 'Recomendado', default => 'Opcional' }) ?></span>
+                            <strong><?= View::e((string) ($credential['label'] ?? $credential['key'] ?? 'Credencial')) ?></strong>
+                            <code><?= View::e((string) ($credential['key'] ?? '')) ?></code>
+                            <p><?= View::e((string) ($credential['detail'] ?? '')) ?></p>
+                        </div>
+                        <?php if (!empty($credential['action'])): ?><a class="btn btn-small btn-quiet" href="<?= View::e(Router::url((string) $credential['action'])) ?>">Abrir configuração</a><?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
     </section>
 
     <section class="card">
@@ -130,7 +147,7 @@ $eventLabel = static function (string $event): string {
 <div class="admin-dashboard-grid" style="margin-top:16px">
     <section class="card">
         <div class="section-heading"><div><span class="eyebrow">Sessões</span><h2>Sessões recentes</h2><p>Revogue acessos que não reconhece.</p></div></div>
-        <div class="security-list">
+        <div class="security-list" data-collapsible-list="3">
             <?php foreach ($sessions as $session): ?>
                 <?php $sessionStatus = (string) ($session['session_status'] ?? 'active'); ?>
                 <div class="security-row">
@@ -149,7 +166,7 @@ $eventLabel = static function (string $event): string {
 
     <section class="card">
         <div class="section-heading"><div><span class="eyebrow">Tentativas de acesso</span><h2>Logins recentes</h2><p>Histórico real das últimas tentativas.</p></div></div>
-        <div class="security-login-list">
+        <div class="security-login-list" data-collapsible-list="3">
             <?php foreach ($attempts as $attempt): ?>
                 <article class="security-login-item">
                     <span class="badge <?= (int) ($attempt['success'] ?? 0) === 1 ? 'badge-success' : 'badge-warning' ?>"><?= (int) ($attempt['success'] ?? 0) === 1 ? 'Sucesso' : 'Falha' ?></span>
@@ -163,7 +180,7 @@ $eventLabel = static function (string $event): string {
 
 <section class="card" style="margin-top:16px">
     <div class="section-heading"><div><span class="eyebrow">Auditoria</span><h2>Eventos de segurança</h2><p>Últimos eventos relevantes registrados pelo sistema.</p></div></div>
-    <div class="security-timeline">
+    <div class="security-timeline" data-collapsible-list="3">
         <?php foreach ($events as $event): ?>
             <article class="security-event">
                 <span class="badge <?= $severityClass((string) ($event['severity'] ?? 'info')) ?>"><?= View::e($event['severity'] ?? 'info') ?></span>
