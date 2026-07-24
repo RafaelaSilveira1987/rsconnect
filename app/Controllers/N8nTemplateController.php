@@ -157,6 +157,51 @@ final class N8nTemplateController
             $contents = str_replace('SEU_BILLING_CRON_TOKEN', rawurlencode($billingToken), $contents);
         }
 
+        if ($key === 'backup-rsconnect') {
+            $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+            $backupToken = $this->backupToken();
+            if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+                http_response_code(409);
+                echo 'Configure APP_URL com a URL pública HTTPS do RS Connect antes de baixar o template de backup.';
+                return;
+            }
+            if ($backupToken === '') {
+                http_response_code(409);
+                echo 'Configure OPERATIONS_BACKUP_TOKEN (ou BACKUP_WEBHOOK_TOKEN) e reinicie o RS Connect antes de baixar o template de backup.';
+                return;
+            }
+
+            $decoded = json_decode($contents, true);
+            if (!is_array($decoded)) {
+                http_response_code(500);
+                echo 'O template de backup está inválido.';
+                return;
+            }
+
+            foreach (($decoded['nodes'] ?? []) as &$node) {
+                $name = (string) ($node['name'] ?? '');
+                if ($name === 'Solicitar rotinas vencidas') {
+                    $node['parameters']['url'] = $appUrl . '/webhooks/operations/backups/dispatch';
+                    if (isset($node['parameters']['headerParameters']['parameters'][0])) {
+                        $node['parameters']['headerParameters']['parameters'][0]['value'] = $backupToken;
+                    }
+                }
+                if ($name === 'Validar e normalizar') {
+                    $js = (string) ($node['parameters']['jsCode'] ?? '');
+                    $node['parameters']['jsCode'] = str_replace('__RS_BACKUP_TOKEN__', addslashes($backupToken), $js);
+                }
+            }
+            unset($node);
+
+            $prepared = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (!is_string($prepared)) {
+                http_response_code(500);
+                echo 'Não foi possível preparar o template de backup.';
+                return;
+            }
+            $contents = $prepared;
+        }
+
         header('Content-Type: application/json; charset=UTF-8');
         header('Content-Disposition: attachment; filename="' . basename($path) . '"');
         echo $contents;
@@ -220,6 +265,21 @@ final class N8nTemplateController
     }
 
     /** @return array<string,mixed> */
+    private function backupToken(): string
+    {
+        foreach (['OPERATIONS_BACKUP_TOKEN', 'BACKUP_WEBHOOK_TOKEN'] as $key) {
+            $value = trim((string) Env::get($key, ''));
+            if ($value !== '') {
+                return $value;
+            }
+            $serverValue = $_SERVER[$key] ?? $_ENV[$key] ?? getenv($key);
+            if (is_string($serverValue) && trim($serverValue) !== '') {
+                return trim($serverValue);
+            }
+        }
+        return '';
+    }
+
     private function samplePayloads(): array
     {
         return [

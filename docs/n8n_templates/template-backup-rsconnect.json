@@ -1,5 +1,5 @@
 {
-  "name": "RS Connect - Backup operacional confiável v36.6.0",
+  "name": "RS Connect - Backup operacional confiável v36.6.1",
   "nodes": [
     {
       "parameters": {
@@ -24,13 +24,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.RS_CONNECT_BACKUP_DISPATCH_URL || 'https://rsconnect.rsautomacaodigital.cloud/webhooks/operations/backups/dispatch' }}",
+        "url": "https://SEU_DOMINIO_RS_CONNECT/webhooks/operations/backups/dispatch",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-RS-Connect-Token",
-              "value": "={{ $env.RS_CONNECT_BACKUP_TOKEN }}"
+              "value": "SEU_OPERATIONS_BACKUP_TOKEN"
             }
           ]
         },
@@ -47,7 +47,7 @@
         -260
       ],
       "notesInFlow": true,
-      "notes": "O agendamento apenas pergunta ao RS Connect quais rotinas estão vencidas. O horário configurado no painel continua sendo a fonte de verdade."
+      "notes": "URL e token são preenchidos pelo RS Connect no download. Este workflow não depende de variáveis internas do n8n."
     },
     {
       "parameters": {
@@ -68,7 +68,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const raw = $json.body || $json || {};\nconst headers = $json.headers || {};\nconst event = String(raw.event || 'operations.backup.requested');\nconst expectedWebhookToken = String($env.RS_CONNECT_N8N_WEBHOOK_TOKEN || '').trim();\nconst headerToken = String(headers['x-rs-connect-token'] || headers['X-RS-Connect-Token'] || '').trim();\nconst bearer = String(headers.authorization || headers.Authorization || '').replace(/^Bearer\\s+/i, '').trim();\nif (expectedWebhookToken && headerToken !== expectedWebhookToken && bearer !== expectedWebhookToken) {\n  throw new Error('Token do webhook n8n invalido.');\n}\n\nif (event === 'operations.backup.ping') {\n  return [{ json: { event, is_ping: true, routine_id: raw.routine_id || null } }];\n}\n\nconst backup = raw.backup || {};\nconst callback = raw.callback || {};\nconst storagePath = String(backup.storage_path || '/backups/rs-connect').trim();\nconst database = String(backup.database || 'rs_connect').trim();\nconst retentionDays = Math.max(1, Math.min(365, Number(backup.retention_days || 5)));\nconst scriptPath = String($env.RS_CONNECT_BACKUP_SCRIPT || '/etc/easypanel/projects/sites/rsconnect/code/scripts/rsconnect-backup.sh').trim();\nif (!/^\\/[A-Za-z0-9._\\/-]+$/.test(storagePath)) throw new Error('Caminho de backup invalido.');\nif (!/^[A-Za-z0-9_]+$/.test(database)) throw new Error('Nome do banco invalido.');\nif (!/^\\/[A-Za-z0-9._\\/-]+$/.test(scriptPath)) throw new Error('Caminho do script invalido.');\nconst quote = (value) => `'${String(value).replace(/'/g, `'\\\"'\\\"'`)}'`;\nconst sshCommand = `bash ${quote(scriptPath)} ${quote(storagePath)} ${retentionDays} ${quote(database)}`;\nreturn [{ json: {\n  ...raw,\n  event,\n  is_ping: false,\n  routine_id: Number(raw.routine_id || raw.backup_routine_id || 0),\n  backup_job_id: Number(raw.backup_job_id || 0),\n  execution_uuid: String(raw.execution_uuid || ''),\n  storage_type: String(backup.storage_type || 'server'),\n  storage_path: storagePath,\n  database,\n  retention_days: retentionDays,\n  ssh_command: sshCommand,\n  callback_url: String(callback.url || $env.RS_CONNECT_BACKUP_CALLBACK_URL || ''),\n  callback_token: String(callback.token || $env.RS_CONNECT_BACKUP_TOKEN || ''),\n  requested_at: raw.requested_at || new Date().toISOString()\n} }];"
+        "jsCode": "const raw = $json.body || $json || {};\nconst headers = $json.headers || {};\nconst event = String(raw.event || 'operations.backup.requested');\nconst expectedWebhookToken = '__RS_BACKUP_TOKEN__';\nconst headerToken = String(headers['x-rs-connect-token'] || headers['X-RS-Connect-Token'] || '').trim();\nconst bearer = String(headers.authorization || headers.Authorization || '').replace(/^Bearer\\s+/i, '').trim();\nif (!expectedWebhookToken || (headerToken !== expectedWebhookToken && bearer !== expectedWebhookToken)) {\n  throw new Error('Token do webhook n8n invalido.');\n}\n\nif (event === 'operations.backup.ping') {\n  return [{ json: { event, is_ping: true, routine_id: raw.routine_id || null } }];\n}\n\nconst backup = raw.backup || {};\nconst callback = raw.callback || {};\nconst storagePath = String(backup.storage_path || '/backups/rs-connect').trim();\nconst database = String(backup.database || 'rs_connect').trim();\nconst retentionDays = Math.max(1, Math.min(365, Number(backup.retention_days || 5)));\nconst scriptPath = String(backup.script_path || '/etc/easypanel/projects/sites/rsconnect/code/scripts/rsconnect-backup.sh').trim();\nif (!/^\\/[A-Za-z0-9._\\/-]+$/.test(storagePath)) throw new Error('Caminho de backup invalido.');\nif (!/^[A-Za-z0-9_]+$/.test(database)) throw new Error('Nome do banco invalido.');\nif (!/^\\/[A-Za-z0-9._\\/-]+$/.test(scriptPath)) throw new Error('Caminho do script invalido.');\nconst quote = (value) => `'${String(value).replace(/'/g, `'\"'\"'`)}'`;\nconst sshCommand = `bash ${quote(scriptPath)} ${quote(storagePath)} ${retentionDays} ${quote(database)}`;\nreturn [{ json: {\n  ...raw,\n  event,\n  is_ping: false,\n  routine_id: Number(raw.routine_id || raw.backup_routine_id || 0),\n  backup_job_id: Number(raw.backup_job_id || 0),\n  execution_uuid: String(raw.execution_uuid || ''),\n  storage_type: String(backup.storage_type || 'server'),\n  storage_path: storagePath,\n  database,\n  retention_days: retentionDays,\n  ssh_command: sshCommand,\n  callback_url: String(callback.url || ''),\n  callback_token: String(callback.token || ''),\n  requested_at: raw.requested_at || new Date().toISOString()\n} }];"
       },
       "id": "normalize-backup-request",
       "name": "Validar e normalizar",
@@ -79,7 +79,7 @@
         40
       ],
       "notesInFlow": true,
-      "notes": "Executa o script explicitamente com bash para não depender do bit executável do arquivo após deploy/extração."
+      "notes": "Não usa variáveis internas do n8n. O token esperado é injetado no download e callback/caminho vêm no payload do RS Connect."
     },
     {
       "parameters": {

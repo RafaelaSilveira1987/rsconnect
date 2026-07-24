@@ -157,16 +157,24 @@ $statusLabel = static function (string $status): string {
             <?php
                 $instanceState = strtolower((string) (($item['connection_state'] ?? '') ?: ($item['instance_status'] ?? '')));
                 $instanceOk = in_array($instanceState, ['open','connected','active','online'], true);
+                $liveCheckError = trim((string) ($item['live_check_error'] ?? ''));
+                $instanceBadge = $instanceOk ? 'Conectada ao vivo' : ($instanceState === 'unverified' ? 'Estado não confirmado' : 'Revisar conexão');
             ?>
             <article class="ai-pending-instance-item <?= $instanceOk ? 'is-connected' : 'is-warning' ?>">
                 <div class="ai-pending-instance-main">
                     <div class="ai-pending-instance-title">
-                        <span class="badge <?= $instanceOk ? 'badge-success' : 'badge-warning' ?>"><?= $instanceOk ? 'Conectada' : 'Revisar conexão' ?></span>
+                        <span class="badge <?= $instanceOk ? 'badge-success' : 'badge-warning' ?>"><?= View::e($instanceBadge) ?></span>
                         <strong><?= View::e((string) ($item['tenant_name'] ?? 'Empresa')) ?></strong>
                     </div>
                     <h3><?= View::e((string) ($item['instance_label'] ?? 'Instância não identificada')) ?></h3>
                     <p>Assistente: <strong><?= View::e((string) ($item['agent_name'] ?? 'não identificado')) ?></strong> · <?= (int) ($item['pending_count'] ?? 0) ?> conversa(s) pendente(s)</p>
-                    <?php if (!$instanceOk): ?><div class="ai-pending-instance-error"><strong>Aguardando reconexão</strong><span>As mensagens permanecem na fila, mas o RS Connect não repetirá tentativas de envio enquanto esta instância Evolution estiver desconectada.</span></div><?php endif; ?>
+                    <?php if (!$instanceOk): ?>
+                        <div class="ai-pending-instance-error">
+                            <strong><?= $instanceState === 'unverified' ? 'Não foi possível validar a conexão' : 'Aguardando reconexão' ?></strong>
+                            <span><?= $instanceState === 'unverified' ? 'O RS Connect não liberará o reprocessamento até conseguir confirmar o estado diretamente na Evolution.' : 'As mensagens permanecem na fila, mas o RS Connect não repetirá tentativas enquanto a Evolution informar a instância como desconectada.' ?></span>
+                            <?php if ($liveCheckError !== ''): ?><small><?= View::e($liveCheckError) ?></small><?php endif; ?>
+                        </div>
+                    <?php endif; ?>
                     <small>Mais antiga: <?= View::e($formatDate($item['oldest_pending_at'] ?? null)) ?> · Mais recente: <?= View::e($formatDate($item['latest_pending_at'] ?? null)) ?><?= !empty($item['last_status_check_at']) ? ' · Evolution verificada em ' . View::e($formatDate($item['last_status_check_at'])) : '' ?></small>
                     <?php if (!empty($item['last_error_message'])): ?>
                         <div class="ai-pending-instance-error"><strong>Última falha</strong><span><?= View::e((string) $item['last_error_message']) ?></span><?php if (!empty($item['last_error_at'])): ?><small><?= View::e($formatDate($item['last_error_at'])) ?></small><?php endif; ?></div>

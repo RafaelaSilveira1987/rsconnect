@@ -195,7 +195,8 @@ final class BackupAutomationService
         $payload = $this->requestPayload($routine, $jobId, $executionUuid, $triggerType);
         $this->storeJobRequest($jobId, $payload);
 
-        $secret = !empty($routine['secret_token_encrypted']) ? $this->decryptSafe((string) $routine['secret_token_encrypted']) : '';
+        // Usa o token global de backup ponta a ponta para que o workflow n8n não dependa de $env.
+        $secret = $this->backupToken();
         $result = $this->postJson($target, $payload, $secret);
 
         if (!empty($result['ok'])) {
@@ -226,7 +227,7 @@ final class BackupAutomationService
             return ['ok' => false, 'message' => 'URL do webhook n8n inválida ou não configurada.'];
         }
 
-        $secret = !empty($routine['secret_token_encrypted']) ? $this->decryptSafe((string) $routine['secret_token_encrypted']) : '';
+        $secret = $this->backupToken();
         $result = $this->postJson($target, [
             'event' => 'operations.backup.ping',
             'source' => 'rs-connect',
@@ -467,9 +468,11 @@ final class BackupAutomationService
                 'storage_path' => (string) ($routine['storage_path'] ?? '/backups/rs-connect'),
                 'retention_days' => (int) ($routine['retention_days'] ?? 5),
                 'max_age_hours' => (int) ($routine['max_age_hours'] ?? 24),
+                'script_path' => trim((string) Env::get('OPERATIONS_BACKUP_SCRIPT_PATH', '/etc/easypanel/projects/sites/rsconnect/code/scripts/rsconnect-backup.sh')),
             ],
             'callback' => [
                 'url' => Router::url('/webhooks/operations/backups'),
+                'token' => $this->backupToken(),
             ],
             'requested_at' => date('c'),
         ];

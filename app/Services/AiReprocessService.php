@@ -28,7 +28,7 @@ final class AiReprocessService
             $settings = $this->settings();
             $messageLinkEnabled = $this->hasIncomingMessageLink(Database::connection());
 
-            $pendingInstances = $this->pendingByInstance();
+            $pendingInstances = $this->refreshPendingInstanceStates($this->pendingByInstance());
             $blockedPending = 0;
             foreach ($pendingInstances as $item) {
                 $state = strtolower(trim((string) (($item['connection_state'] ?? '') ?: ($item['instance_status'] ?? ''))));
@@ -423,6 +423,69 @@ final class AiReprocessService
         return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
+    private function refreshPendingInstanceStates(array $items): array
+    {
+        $cache = [];
+        foreach ($items as &$item) {
+            $instanceId = (int) ($item['instance_id'] ?? 0);
+            if ($instanceId < 1) {
+                continue;
+            }
+
+            if (!array_key_exists($instanceId, $cache)) {
+                $cache[$instanceId] = null;
+                try {
+                    $statement = Database::connection()->prepare(
+                        'SELECT id, tenant_id, base_url, api_key_encrypted, instance_name, name, status, connection_state
+                         FROM evolution_instances WHERE id = :id LIMIT 1'
+                    );
+                    $statement->execute(['id' => $instanceId]);
+                    $instance = $statement->fetch(PDO::FETCH_ASSOC);
+                    if ($instance) {
+                        $verifySsl = filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+                        $caBundle = trim((string) Env::get('EVOLUTION_CA_BUNDLE', ''));
+                        $service = new EvolutionService(
+                            (string) $instance['base_url'],
+                            \App\Core\Crypto::decrypt((string) $instance['api_key_encrypted']),
+                            (string) $instance['instance_name'],
+                            8,
+                            $verifySsl ?? true,
+                            $caBundle !== '' ? $caBundle : null
+                        );
+                        $live = $service->connectionState();
+                        $state = strtolower(trim((string) ($live['state'] ?? '')));
+                        if ($state !== '') {
+                            $connected = in_array($state, ['open', 'connected', 'active', 'online'], true);
+                            try {
+                                Database::connection()->prepare(
+                                    'UPDATE evolution_instances SET connection_state = :state, status = :status, last_status_check_at = NOW() WHERE id = :id'
+                                )->execute([
+                                    'state' => $state,
+                                    'status' => $connected ? 'connected' : 'disconnected',
+                                    'id' => $instanceId,
+                                ]);
+                            } catch (Throwable) {
+                            }
+                            $cache[$instanceId] = $state;
+                        }
+                    }
+                } catch (Throwable $exception) {
+                    $cache[$instanceId] = 'unverified';
+                    $item['live_check_error'] = $exception->getMessage();
+                }
+            }
+
+            if (is_string($cache[$instanceId]) && $cache[$instanceId] !== '') {
+                $item['connection_state'] = $cache[$instanceId];
+                $item['instance_status'] = in_array($cache[$instanceId], ['open', 'connected', 'active', 'online'], true) ? 'connected' : 'disconnected';
+                $item['live_state_checked'] = true;
+                $item['last_status_check_at'] = date('Y-m-d H:i:s');
+            }
+        }
+        unset($item);
+        return $items;
+    }
+
     private function pendingBaseSql(bool $hasMessageLink): string
     {
         $pendingCondition = $hasMessageLink
@@ -608,7 +671,7 @@ final class AiReprocessService
         try {
             $rows = Database::connection()->query(
                 "SELECT al.id, al.tenant_id, al.conversation_id, al.agent_id, al.event, al.status,
-                        al.error_message, al.created_at, t.name AS tenant_name, aa.name AS agent_name,
+                        al.error_message, al.raw_json, al.created_at, t.name AS tenant_name, aa.name AS agent_name,
                         c.contact_id, ct.name AS contact_name, ct.phone AS contact_phone,
                         c.evolution_instance_id AS instance_id, i.name AS instance_label, i.instance_name,
                         i.status AS instance_status, i.connection_state
@@ -624,17 +687,33 @@ final class AiReprocessService
             )->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
             foreach ($rows as &$row) {
-                $error = mb_strtolower((string) ($row['error_message'] ?? ''));
+                $errorOriginal = trim((string) ($row['error_message'] ?? ''));
+                $error = mb_strtolower($errorOriginal);
+                $raw = json_decode((string) ($row['raw_json'] ?? ''), true);
+                $failurePhase = is_array($raw) ? strtolower(trim((string) ($raw['failure_phase'] ?? ''))) : '';
                 $instanceState = mb_strtolower(trim((string) (($row['connection_state'] ?? '') ?: ($row['instance_status'] ?? ''))));
                 $instanceConnected = in_array($instanceState, ['open', 'connected', 'active', 'online'], true);
+                $looksEvolution = str_starts_with($error, 'evolution ')
+                    || preg_match('/^http\s+\d+/i', $errorOriginal) === 1
+                    || str_contains($error, 'sendtext')
+                    || str_contains($error, 'whatsapp')
+                    || str_starts_with($failurePhase, 'evolution.');
+                $looksAi = str_starts_with($error, 'ia http')
+                    || str_contains($error, 'openai')
+                    || str_contains($error, 'gemini')
+                    || str_contains($error, 'model')
+                    || str_contains($error, 'api key')
+                    || str_starts_with($failurePhase, 'ai.');
+
+                $row['failure_phase'] = $failurePhase;
                 $row['phase_label'] = 'Processamento da IA';
-                $row['diagnostic_message'] = (string) ($row['error_message'] ?? 'Falha sem detalhe registrado.');
+                $row['diagnostic_message'] = $errorOriginal !== '' ? $errorOriginal : 'Falha sem detalhe registrado.';
                 if (!empty($row['instance_id']) && !$instanceConnected) {
                     $row['phase_label'] = 'WhatsApp / Evolution desconectada';
-                    $row['diagnostic_message'] = 'A mensagem permanece na fila porque a instância Evolution vinculada está desconectada. Reconecte a instância para liberar o reprocessamento. Último retorno: ' . (string) ($row['error_message'] ?? 'sem detalhe');
-                } elseif (str_contains($error, 'evolution') || str_contains($error, 'sendtext') || str_contains($error, 'whatsapp')) {
+                    $row['diagnostic_message'] = 'A mensagem permanece na fila porque a instância Evolution vinculada não está operacional. Reconecte a instância para liberar o reprocessamento. Último retorno: ' . ($errorOriginal !== '' ? $errorOriginal : 'sem detalhe');
+                } elseif ($looksEvolution) {
                     $row['phase_label'] = 'Envio pelo WhatsApp / Evolution';
-                } elseif (str_contains($error, 'openai') || str_contains($error, 'model') || str_contains($error, 'api key') || str_contains($error, 'token')) {
+                } elseif ($looksAi) {
                     $row['phase_label'] = 'Geração da resposta pela IA';
                 } elseif (str_contains($error, 'n8n') || str_contains($error, 'webhook')) {
                     $row['phase_label'] = 'Integração n8n / webhook';

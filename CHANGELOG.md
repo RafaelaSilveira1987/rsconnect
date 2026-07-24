@@ -1,5 +1,17 @@
 # Changelog
 
+## 36.6.1 — Evolution ao vivo e backup n8n sem `$env`
+
+- Corrige a causa do erro `access to env vars denied`: o template de backup deixa de ler `$env`/`process.env` em qualquer node do n8n.
+- O download do template injeta a URL pública e o `OPERATIONS_BACKUP_TOKEN`; callback, token e caminho do script seguem dentro do payload enviado pelo próprio RS Connect.
+- O backup passa a usar o token global ponta a ponta, inclusive no teste do webhook e no callback.
+- Antes de reprocessar uma mensagem, o RS Connect consulta `/instance/connectionState/{instancia}` diretamente na Evolution e atualiza o estado salvo, evitando confiar em status `open/connected` desatualizado.
+- A Fila da IA também atualiza ao vivo o estado das instâncias que possuem mensagens presas.
+- Falhas de envio passam a registrar `Evolution sendText HTTP ...` e a fase exata da falha; isso separa erro de WhatsApp de erro OpenAI/Gemini.
+- O envio pela Evolution normaliza números brasileiros de 10/11 dígitos com DDI 55 antes do `sendText`, reduzindo `HTTP 400` causado por telefone local sem código do país.
+- Falhas históricas no formato genérico `HTTP 400: ...`, produzidas pelo antigo `EvolutionService`, deixam de alimentar falsamente o card OpenAI/IA e são direcionadas ao diagnóstico da Evolution.
+- Não exige migration.
+
 ## 36.6.0 — Estabilização operacional
 
 - Corrige `Permission denied` do backup: o script `scripts/rsconnect-backup.sh` passa a ser distribuído com permissão executável e o template n8n chama explicitamente `bash`, sem depender do chmod preservado pelo deploy.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Core\Env;
 use RuntimeException;
 
 final class EvolutionService
@@ -22,20 +23,49 @@ final class EvolutionService
     {
         $endpoint = rtrim($this->baseUrl, '/') . '/message/sendText/' . rawurlencode($this->instanceName);
         $payload = [
-            'number' => preg_replace('/\D+/', '', $phone),
+            'number' => $this->normalizePhone($phone),
             'text' => $message,
         ];
 
-        return $this->request('POST', $endpoint, $payload);
+        return $this->request('POST', $endpoint, $payload, 'sendText');
+    }
+
+    private function normalizePhone(string $phone): string
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?: '';
+        if (str_starts_with($digits, '00')) {
+            $digits = substr($digits, 2);
+        }
+
+        $countryCode = preg_replace('/\D+/', '', (string) Env::get('DEFAULT_COUNTRY_CODE', '55')) ?: '55';
+        if ($countryCode === '55' && in_array(strlen($digits), [10, 11], true)) {
+            $digits = '55' . $digits;
+        }
+
+        return $digits;
     }
 
     public function connectQrCode(): array
     {
         $endpoint = rtrim($this->baseUrl, '/') . '/instance/connect/' . rawurlencode($this->instanceName);
-        return $this->request('GET', $endpoint);
+        return $this->request('GET', $endpoint, null, 'connect');
     }
 
-    private function request(string $method, string $url, ?array $payload = null): array
+    public function connectionState(): array
+    {
+        $endpoint = rtrim($this->baseUrl, '/') . '/instance/connectionState/' . rawurlencode($this->instanceName);
+        $result = $this->request('GET', $endpoint, null, 'connectionState');
+        $body = is_array($result['body'] ?? null) ? $result['body'] : [];
+        $state = strtolower(trim((string) ($body['instance']['state'] ?? $body['state'] ?? '')));
+
+        return [
+            'status' => (int) ($result['status'] ?? 0),
+            'state' => $state,
+            'body' => $body,
+        ];
+    }
+
+    private function request(string $method, string $url, ?array $payload = null, string $operation = 'request'): array
     {
         $curl = curl_init($url);
         if ($curl === false) {
@@ -101,11 +131,18 @@ final class EvolutionService
         $body = is_array($decoded) ? $decoded : ['raw' => $response];
 
         if ($status < 200 || $status >= 300) {
-            $detail = $body['message'] ?? $body['error'] ?? 'Resposta não aceita pela Evolution API.';
+            $detail = $body['message'] ?? $body['error'] ?? $body['response']['message'] ?? $body['raw'] ?? 'Resposta não aceita pela Evolution API.';
             if (is_array($detail)) {
-                $detail = json_encode($detail, JSON_UNESCAPED_UNICODE);
+                $detail = json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             }
-            throw new RuntimeException('HTTP ' . $status . ': ' . $detail);
+            $detailText = trim((string) $detail);
+            if ($detailText === '' || strtolower($detailText) === 'bad request') {
+                $rawPreview = trim((string) ($body['raw'] ?? $response));
+                if ($rawPreview !== '' && strtolower($rawPreview) !== 'bad request') {
+                    $detailText .= ($detailText !== '' ? ' — ' : '') . mb_substr($rawPreview, 0, 450);
+                }
+            }
+            throw new RuntimeException('Evolution ' . $operation . ' HTTP ' . $status . ': ' . ($detailText !== '' ? $detailText : 'requisição recusada.'));
         }
 
         return ['status' => $status, 'body' => $body];

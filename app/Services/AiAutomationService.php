@@ -10,6 +10,7 @@ use App\Core\Env;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
+use RuntimeException;
 use Throwable;
 
 final class AiAutomationService
@@ -31,6 +32,7 @@ final class AiAutomationService
 
         $pdo = null;
         $agent = null;
+        $failurePhase = 'bootstrap';
 
         // Defesa adicional contra eco de mensagens enviadas pela própria Evolution.
         // Mesmo que outro chamador encaminhe SEND_MESSAGE ou fromMe=true por engano,
@@ -201,6 +203,7 @@ final class AiAutomationService
             }
 
             $messages = $this->recentMessages($pdo, $conversationId, (int) ($agent['max_context_messages'] ?? 12));
+            $failurePhase = 'ai.generate';
             $reply = $this->ai->generateReply($agent, $messages, $conversation, $conversation);
 
             // O atendente pode assumir a conversa enquanto o provedor de IA está gerando a resposta.
@@ -220,6 +223,7 @@ final class AiAutomationService
                 return;
             }
 
+            $failurePhase = 'evolution.send';
             $result = $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $reply, 'ai.replied', 'Resposta automática enviada pela IA.');
 
             $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.replied', 'success', null, $reply, [
@@ -276,6 +280,9 @@ final class AiAutomationService
             $agentId = isset($agent['id']) ? (int) $agent['id'] : null;
             $this->log($tenantId, $conversationId, $agentId, 'ai.failed', 'error', $exception->getMessage(), null, [
                 'payload_event' => $payload['event'] ?? null,
+                'failure_phase' => $failurePhase,
+                'instance_id' => (int) ($instance['id'] ?? 0),
+                'instance_name' => (string) ($instance['instance_name'] ?? ''),
             ]);
 
             (new NotificationService())->createIfEnabled(
@@ -575,15 +582,28 @@ final class AiAutomationService
                 return ['status' => 'error', 'error' => 'A conexão WhatsApp vinculada à conversa não foi encontrada.'];
             }
 
-            $instanceState = strtolower(trim((string) (($instance['connection_state'] ?? '') ?: ($instance['status'] ?? ''))));
+            $instanceLabel = trim((string) (($instance['name'] ?? '') ?: ($instance['instance_name'] ?? '')));
+            try {
+                $live = $this->evolutionService($instance)->connectionState();
+                $instanceState = strtolower(trim((string) ($live['state'] ?? '')));
+                $this->updateEvolutionConnectionState($pdo, (int) $instance['id'], $instanceState);
+            } catch (Throwable $stateException) {
+                return [
+                    'status' => 'blocked',
+                    'conversation_id' => (int) $candidate['conversation_id'],
+                    'message_id' => (int) $candidate['message_id'],
+                    'event' => 'ai.blocked.instance_unverified',
+                    'error' => 'Não foi possível confirmar o estado da Evolution ' . ($instanceLabel !== '' ? $instanceLabel : '#' . (int) $instance['id']) . ': ' . $stateException->getMessage(),
+                ];
+            }
+
             if (!in_array($instanceState, ['open', 'connected', 'active', 'online'], true)) {
-                $instanceLabel = trim((string) (($instance['name'] ?? '') ?: ($instance['instance_name'] ?? '')));
                 return [
                     'status' => 'blocked',
                     'conversation_id' => (int) $candidate['conversation_id'],
                     'message_id' => (int) $candidate['message_id'],
                     'event' => 'ai.blocked.instance_disconnected',
-                    'error' => 'A instância Evolution ' . ($instanceLabel !== '' ? $instanceLabel : '#' . (int) $instance['id']) . ' está desconectada. A pendência foi preservada até a reconexão.',
+                    'error' => 'A Evolution informou estado “' . ($instanceState !== '' ? $instanceState : 'desconhecido') . '” para ' . ($instanceLabel !== '' ? $instanceLabel : '#' . (int) $instance['id']) . '. A pendência foi preservada até a conexão voltar.',
                 ];
             }
 
@@ -980,7 +1000,19 @@ final class AiAutomationService
     private function sendAutomatedMessage(PDO $pdo, array $instance, array $conversation, int $conversationId, string $reply, string $eventType, string $eventDescription): array
     {
         $service = $this->evolutionService($instance);
-        $result = $service->sendText((string) $conversation['phone'], $reply);
+        $phone = preg_replace('/\D+/', '', (string) ($conversation['phone'] ?? '')) ?: '';
+        if (strlen($phone) < 10) {
+            throw new RuntimeException('Evolution sendText bloqueado: telefone do contato inválido ou incompleto.');
+        }
+        try {
+            $result = $service->sendText($phone, $reply);
+        } catch (Throwable $exception) {
+            $message = $exception->getMessage();
+            if (!str_starts_with($message, 'Evolution ')) {
+                $message = 'Evolution sendText: ' . $message;
+            }
+            throw new RuntimeException($message, 0, $exception);
+        }
         $externalId = $this->extractMessageId($result['body'] ?? []);
         $sentAt = date('Y-m-d H:i:s');
 
@@ -1018,6 +1050,43 @@ final class AiAutomationService
         $pdo->commit();
 
         return $result;
+    }
+
+    private function updateEvolutionConnectionState(PDO $pdo, int $instanceId, string $state): void
+    {
+        if ($instanceId < 1) {
+            return;
+        }
+        $state = strtolower(trim($state));
+        $connected = in_array($state, ['open', 'connected', 'active', 'online'], true);
+        try {
+            $pdo->prepare(
+                'UPDATE evolution_instances
+                 SET connection_state = :connection_state,
+                     last_status_check_at = NOW(),
+                     status = :status,
+                     connected_at = CASE WHEN :is_connected = 1 THEN COALESCE(connected_at, NOW()) ELSE connected_at END,
+                     disconnected_at = CASE WHEN :is_connected = 0 THEN NOW() ELSE disconnected_at END
+                 WHERE id = :id'
+            )->execute([
+                'connection_state' => $state !== '' ? $state : 'unknown',
+                'status' => $connected ? 'connected' : 'disconnected',
+                'is_connected' => $connected ? 1 : 0,
+                'id' => $instanceId,
+            ]);
+        } catch (Throwable) {
+            try {
+                $pdo->prepare(
+                    'UPDATE evolution_instances SET connection_state = :connection_state, last_status_check_at = NOW(), status = :status WHERE id = :id'
+                )->execute([
+                    'connection_state' => $state !== '' ? $state : 'unknown',
+                    'status' => $connected ? 'connected' : 'disconnected',
+                    'id' => $instanceId,
+                ]);
+            } catch (Throwable) {
+                // Mantém o diagnóstico em memória mesmo em bases legadas.
+            }
+        }
     }
 
     private function evolutionService(array $instance): EvolutionService

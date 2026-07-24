@@ -221,6 +221,17 @@ final class OperationsService
         $incoming24 = $this->count("SELECT COUNT(*) FROM conversation_messages WHERE direction = 'incoming' AND created_at >= (NOW() - INTERVAL 24 HOUR)");
 
         if ($connected > 0) {
+            $lastEvolutionFailure = $this->latestEvolutionFailure();
+            $lastSuccess = $this->fetchOne("SELECT created_at FROM ai_automation_logs WHERE event = 'ai.replied' AND status = 'success' ORDER BY id DESC LIMIT 1");
+            $failureAt = strtotime((string) ($lastEvolutionFailure['created_at'] ?? '')) ?: 0;
+            $successAt = strtotime((string) ($lastSuccess['created_at'] ?? '')) ?: 0;
+            if ($failureAt > $successAt && $failureAt >= time() - 86400) {
+                return [
+                    'status' => 'warning',
+                    'message' => $connected . '/' . max($instances, $connected) . ' instância(s) marcadas como conectadas, porém o envio mais recente falhou: ' . trim((string) ($lastEvolutionFailure['error_message'] ?? 'erro sem detalhe')) . '. Abra Fila da IA/WhatsApp para validar o estado ao vivo.',
+                    'latency_ms' => null,
+                ];
+            }
             return [
                 'status' => 'ok',
                 'message' => $connected . '/' . max($instances, $connected) . ' instância(s) conectada(s); ' . $incoming24 . ' mensagem(ns) recebida(s) nas últimas 24h.',
@@ -288,7 +299,7 @@ final class OperationsService
         }
 
         $lastSuccess = $this->fetchOne("SELECT created_at FROM ai_automation_logs WHERE event = 'ai.replied' AND status = 'success' ORDER BY id DESC LIMIT 1");
-        $lastError = $this->fetchOne("SELECT created_at, error_message FROM ai_automation_logs WHERE (event = 'ai.failed' OR status = 'error') ORDER BY id DESC LIMIT 1");
+        $lastError = $this->latestAiProviderFailure();
         $successAt = strtotime((string) ($lastSuccess['created_at'] ?? '')) ?: 0;
         $errorAt = strtotime((string) ($lastError['created_at'] ?? '')) ?: 0;
         $credentialText = $activeCredentials > 0 ? $activeCredentials . ' credencial(is) por empresa/assistente' : 'chave global configurada';
@@ -305,6 +316,65 @@ final class OperationsService
         }
 
         return ['status' => 'warning', 'message' => ucfirst($credentialText) . ', mas ainda não há resposta bem-sucedida registrada para comprovar o funcionamento.', 'latency_ms' => null];
+    }
+
+    private function latestAiProviderFailure(): ?array
+    {
+        try {
+            $rows = Database::connection()->query(
+                "SELECT created_at, error_message, raw_json FROM ai_automation_logs WHERE (event = 'ai.failed' OR status = 'error') ORDER BY id DESC LIMIT 40"
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($rows as $row) {
+                $error = trim((string) ($row['error_message'] ?? ''));
+                $normalized = mb_strtolower($error);
+                $raw = json_decode((string) ($row['raw_json'] ?? ''), true);
+                $phase = is_array($raw) ? strtolower(trim((string) ($raw['failure_phase'] ?? ''))) : '';
+                $isEvolution = str_starts_with($normalized, 'evolution ')
+                    || preg_match('/^http\s+\d+/i', $error) === 1
+                    || str_contains($normalized, 'sendtext')
+                    || str_contains($normalized, 'whatsapp')
+                    || str_starts_with($phase, 'evolution.');
+                if ($isEvolution) {
+                    continue;
+                }
+                $isAi = str_starts_with($normalized, 'ia http')
+                    || str_contains($normalized, 'openai')
+                    || str_contains($normalized, 'gemini')
+                    || str_contains($normalized, 'model')
+                    || str_contains($normalized, 'api key')
+                    || str_contains($normalized, 'credencial')
+                    || str_starts_with($phase, 'ai.');
+                if ($isAi || $phase === '') {
+                    return $row;
+                }
+            }
+        } catch (Throwable) {
+        }
+        return null;
+    }
+
+    private function latestEvolutionFailure(): ?array
+    {
+        try {
+            $rows = Database::connection()->query(
+                "SELECT created_at, error_message, raw_json FROM ai_automation_logs WHERE (event = 'ai.failed' OR status = 'error') ORDER BY id DESC LIMIT 40"
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($rows as $row) {
+                $error = trim((string) ($row['error_message'] ?? ''));
+                $normalized = mb_strtolower($error);
+                $raw = json_decode((string) ($row['raw_json'] ?? ''), true);
+                $phase = is_array($raw) ? strtolower(trim((string) ($raw['failure_phase'] ?? ''))) : '';
+                if (str_starts_with($normalized, 'evolution ')
+                    || preg_match('/^http\s+\d+/i', $error) === 1
+                    || str_contains($normalized, 'sendtext')
+                    || str_contains($normalized, 'whatsapp')
+                    || str_starts_with($phase, 'evolution.')) {
+                    return $row;
+                }
+            }
+        } catch (Throwable) {
+        }
+        return null;
     }
 
     private function checkWebhooks(): array
