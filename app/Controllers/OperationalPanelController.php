@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\View;
-use App\Services\OperationalOverviewService;
+use App\Services\OperationalHealthService;
 
 final class OperationalPanelController
 {
@@ -13,7 +13,7 @@ final class OperationalPanelController
     {
         View::render('operations.overview', [
             'title' => 'Painel operacional',
-            'data' => (new OperationalOverviewService())->dashboard(),
+            'data' => (new OperationalHealthService())->dashboard(),
         ]);
     }
 }

@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.2 — Painel operacional';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.3 — Saúde operacional por evidência';
     public const REQUIRED_MIGRATION = '048_reporting_metrics_foundation.sql';
 
     private PDO $pdo;

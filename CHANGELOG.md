@@ -1,5 +1,22 @@
 # Changelog
 
+## 36.6.3 — Saúde operacional por evidência
+
+- Mantém a Central de operação antiga intacta e evolui somente o Painel operacional paralelo.
+- Cria `OperationalHealthService` como fonte única da nova visão, normalizando serviço, estado, evidência, validade, impacto, ação recomendada e detalhes técnicos.
+- Um serviço só aparece como **Operando** quando existe evidência positiva ainda válida; ausência de erro ou evidência antiga deixa de gerar falso verde.
+- Adiciona estado explícito **Sem evidência** e diferencia **Crítico**, **Atenção**, **Bloqueio externo**, **Operando** e **Não configurado**.
+- O topo passa a informar a conclusão em linguagem direta e a situação da verificação: completa, parcial ou ainda não verificada.
+- Adiciona KPIs compactos de serviços disponíveis, críticos, atenções, bloqueios externos, itens sem evidência e empresas afetadas.
+- Reestrutura **Problemas ativos** para responder o que aconteceu, impacto, ação recomendada, evidência e atalhos; detalhes HTTP/HTML ficam recolhidos.
+- Adiciona matriz de **Saúde dos serviços** com estado, evidência, idade da validação e acesso à ferramenta correspondente.
+- Adiciona painel de **Rotinas automáticas** com última execução, resultado e próxima execução esperada para cobrança, Fila da IA, backup e relatórios.
+- Adiciona histórico compacto das evidências das últimas 24 horas.
+- A visão por empresa deixa de tratar configuração como funcionamento: WhatsApp, IA e Agenda exigem evidência recente para aparecerem como operacionais.
+- Mensagens preservadas por Evolution desconectada continuam classificadas como bloqueio externo, sem transformar a Fila da IA em falsa falha interna.
+- Mantém `OperationalOverviewService` apenas como fachada de compatibilidade para evitar duas lógicas concorrentes.
+- Não exige migration.
+
 ## 36.6.2 — Painel operacional paralelo
 
 - Cria uma segunda visão de operação em `/painel-operacional`, sem alterar a Central de operação existente.

@@ -160,6 +160,9 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.3', 'title' => 'Saúde operacional por evidência', 'summary' => 'Cria uma fonte única de saúde com validade da evidência, problemas ativos, matriz de serviços, rotinas e empresas sem falsos verdes.'],
+            ['version' => '36.6.2', 'title' => 'Painel operacional paralelo', 'summary' => 'Cria uma nova visão simplificada de operação sem substituir a Central técnica existente.'],
+            ['version' => '36.6.1', 'title' => 'Evolution ao vivo e backup n8n', 'summary' => 'Valida a Evolution ao vivo na fila da IA e remove dependência de $env no workflow de backup.'],
             ['version' => '36.6.0', 'title' => 'Estabilização operacional', 'summary' => 'Corrige execução do backup via SSH, sincroniza revisão de incidentes e trata fila bloqueada por Evolution desconectada sem gerar novas falhas.'],
             ['version' => '36.5.9', 'title' => 'Central de operação e diagnóstico da fila', 'summary' => 'Fixa o hamburger no viewport, contextualiza tokens e identifica pendências da IA por instância Evolution.'],
             ['version' => '36.5.8', 'title' => 'Administração RS e monitoramento', 'summary' => 'Reorganiza o menu, agrupa n8n e amplia a Central de operação com evidências, busca e filtros.'],
