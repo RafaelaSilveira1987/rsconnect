@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.8 — Consumo de IA e recuperação pós-horário';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.9 — Intervalo real e conversa contínua';
     public const REQUIRED_MIGRATION = '052_ai_usage_and_after_hours_recovery.sql';
 
     private PDO $pdo;

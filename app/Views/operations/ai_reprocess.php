@@ -70,6 +70,16 @@ $statusLabel = static function (string $status): string {
     </article>
 </section>
 
+<section class="card" style="margin-bottom:16px">
+    <div class="section-heading"><div><span class="eyebrow">Recursos 36.6.8+</span><h2>Onde validar consumo e continuidade</h2><p>Atalhos para os pontos de franquia, custeio da credencial e recuperação pós-horário.</p></div></div>
+    <div class="action-row">
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/billing')) ?>">Franquia e consumo de IA</a>
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/ai-credentials')) ?>">Custeio RS × cliente</a>
+        <a class="btn btn-outline" href="#after-hours-recovery">Recuperação pós-horário</a>
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/operacao-alertas')) ?>">Alertas operacionais</a>
+    </div>
+</section>
+
 <div class="operations-grid">
     <section class="card">
         <div class="section-heading">
@@ -117,14 +127,15 @@ $statusLabel = static function (string $status): string {
         </form>
 
         <div class="operations-alert <?= !empty($data['cron_token_configured']) ? 'is-ok' : 'is-warning' ?>" style="margin-top:16px">
-            <strong>Acionamento externo</strong>
-            <p><?= !empty($data['cron_token_configured']) ? 'Token configurado no ambiente.' : 'Configure AI_REPROCESS_CRON_TOKEN no .env antes de ativar o cron.' ?></p>
-            <small>Endpoint: <code><?= View::e((string) ($data['cron_url'] ?? '')) ?>?token=SEU_TOKEN</code></small>
+            <strong>Fila rápida — intervalo entre respostas</strong>
+            <p><?= !empty($data['cron_token_configured']) ? 'Token configurado. Mantenha o template n8n “Fila rápida da IA” ativo a cada 1 minuto para retomar mensagens assim que o intervalo configurado terminar.' : 'Configure AI_REPROCESS_CRON_TOKEN no ambiente antes de ativar a fila rápida no n8n.' ?></p>
+            <small>Endpoint da fila: <code><?= View::e((string) ($data['queue_url'] ?? '')) ?></code></small><br>
+            <small>Rotina diária de contingência: <code><?= View::e((string) ($data['cron_url'] ?? '')) ?></code></small>
         </div>
     </section>
 </div>
 
-<section class="card" style="margin-top:16px">
+<section class="card" id="after-hours-recovery" style="margin-top:16px">
     <div class="section-heading">
         <div>
             <span class="eyebrow">Continuidade do atendimento</span>

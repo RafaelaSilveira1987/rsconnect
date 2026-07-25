@@ -142,8 +142,6 @@ final class AiAutomationService
             ) === true;
 
             $storedMessageId = (int) ($this->currentIncomingMessageId ?? 0);
-            $isFreshPersistedIncoming = $storedMessageId > 0
-                && $this->isStoredIncomingMessage($pdo, $conversationId, $storedMessageId);
 
             // A proteção contra duplicidade vale para toda execução, não apenas para o reprocessamento.
             // Assim, um webhook repetido nunca gera uma segunda saída para a mesma mensagem recebida.
@@ -164,10 +162,10 @@ final class AiAutomationService
             $cooldownSeconds = max(0, min(3600, (int) ($agent['cooldown_seconds'] ?? 15)));
             $remainingSeconds = $this->cooldownRemaining($pdo, $conversationId, $cooldownSeconds);
 
-            // O intervalo continua protegendo execuções legadas/sem vínculo e chamadas repetidas,
-            // mas não descarta uma nova mensagem legítima já persistida e identificada no banco.
-            // Essa mensagem passa pela trava da conversa e pela checagem de resposta posterior acima.
-            $cooldownApplies = !$bypassCooldown && !$isFreshPersistedIncoming;
+            // 36.6.9: o intervalo mínimo volta a valer também para mensagens novas persistidas.
+            // A mensagem nunca é descartada: ela recebe ai.cooldown e a fila rápida a reavalia
+            // depois do prazo. Somente ações manuais explícitas podem ignorar essa espera.
+            $cooldownApplies = !$bypassCooldown;
             if ($cooldownApplies && $remainingSeconds > 0) {
                 $this->log(
                     (int) $instance['tenant_id'],
@@ -684,7 +682,7 @@ final class AiAutomationService
                 (string) $candidate['content'],
                 [
                     'event' => 'ai.queue.reprocess.' . preg_replace('/[^a-z0-9_.-]+/i', '_', $source),
-                    'bypass_cooldown' => true,
+                    'bypass_cooldown' => $source === 'manual',
                     'message_id' => (int) $candidate['message_id'],
                     'stored_message_id' => (int) $candidate['message_id'],
                 ]

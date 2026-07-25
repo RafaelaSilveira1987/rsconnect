@@ -267,6 +267,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const list = document.querySelector('[data-conversation-list]');
   const status = document.querySelector('[data-realtime-status]');
   const toast = document.querySelector('[data-realtime-toast]');
+  const composerForm = document.querySelector('[data-chat-composer]');
+  const composerInput = composerForm?.querySelector('textarea[name="message"]') || null;
+  const composerButton = composerForm?.querySelector('button[type="submit"]') || null;
 
   function escapeHtml(value) {
     return String(value || '')
@@ -315,12 +318,39 @@ document.addEventListener('DOMContentLoaded', () => {
     return source ? source.charAt(0).toUpperCase() : 'C';
   }
 
+  function modeText(mode) {
+    return mode === 'human' ? 'Humano' : (mode === 'paused' ? 'IA pausada' : 'IA ativa');
+  }
+
+  function setConversationMode(mode) {
+    const normalized = ['ai', 'human', 'paused'].includes(mode) ? mode : 'ai';
+    const stateBadge = document.querySelector('.chat-state-bar .mini-badge');
+    if (stateBadge) {
+      stateBadge.className = `mini-badge mode-${normalized}`;
+      stateBadge.textContent = modeText(normalized);
+    }
+
+    document.querySelectorAll('[data-mode-action]').forEach((form) => {
+      const action = form.dataset.modeAction || '';
+      form.hidden = normalized === 'human'
+        ? action !== 'ai'
+        : (normalized === 'ai' ? action === 'ai' : action === 'paused');
+    });
+
+    const selectedItem = list?.querySelector(`[data-conversation-item][data-conversation-id="${selectedConversationId}"]`);
+    const selectedMode = selectedItem?.querySelector('.mini-badge');
+    if (selectedMode) {
+      selectedMode.className = `mini-badge mode-${normalized}`;
+      selectedMode.textContent = modeText(normalized);
+    }
+  }
+
   function renderConversationItem(item) {
     const unread = Number(item.unread_count || 0);
     const selectedClass = item.is_selected ? ' is-selected' : '';
     const unreadHidden = unread > 0 ? '' : ' hidden';
     const modeClass = escapeHtml(item.mode || 'ai');
-    const modeLabel = item.mode === 'human' ? 'Humano' : (item.mode === 'paused' ? 'IA pausada' : 'IA ativa');
+    const modeLabel = modeText(item.mode);
     return `<div class="conversation-list-row${unread > 0 ? ' has-unread' : ''}" data-conversation-row data-conversation-id="${Number(item.id)}">
       <label class="conversation-select-control" title="Selecionar ${escapeHtml(item.name || item.phone || 'conversa')}">
         <input type="checkbox" name="conversation_ids[]" value="${Number(item.id)}" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de ${escapeHtml(item.name || item.phone || 'contato')}">
@@ -363,9 +393,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const time = node.querySelector('[data-conversation-time]');
       const preview = node.querySelector('[data-conversation-preview]');
       const unread = node.querySelector('[data-unread-count]');
+      const modeBadge = node.querySelector('.mini-badge');
       if (name) name.textContent = item.name || item.phone || 'Contato';
       if (time) time.textContent = item.last_message_label || '';
       if (preview) preview.textContent = item.preview || 'Sem mensagens';
+      if (modeBadge) {
+        const itemMode = ['ai', 'human', 'paused'].includes(item.mode) ? item.mode : 'ai';
+        modeBadge.className = `mini-badge mode-${itemMode}`;
+        modeBadge.textContent = modeText(itemMode);
+      }
       if (unread) {
         unread.textContent = Number(item.unread_count || 0);
         unread.hidden = Number(item.unread_count || 0) < 1;
@@ -444,6 +480,54 @@ document.addEventListener('DOMContentLoaded', () => {
     window.clearTimeout(timer);
     const delay = document.hidden ? 12000 : 3500;
     timer = window.setTimeout(poll, delay);
+  }
+
+  if (composerForm && composerInput) {
+    composerForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const text = composerInput.value.trim();
+      if (!text || composerForm.dataset.sending === '1') return;
+
+      composerForm.dataset.sending = '1';
+      if (composerButton) {
+        composerButton.disabled = true;
+        composerButton.dataset.originalLabel = composerButton.textContent || 'Enviar';
+        composerButton.textContent = 'Enviando...';
+      }
+
+      try {
+        const response = await fetch(composerForm.action, {
+          method: 'POST',
+          body: new FormData(composerForm),
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          credentials: 'same-origin',
+          cache: 'no-store'
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.ok === false) {
+          throw new Error(payload.message || `HTTP ${response.status}`);
+        }
+
+        composerInput.value = '';
+        setConversationMode(payload.attendance_mode || 'human');
+        await poll();
+        if (thread) thread.scrollTop = thread.scrollHeight;
+        composerInput.focus({ preventScroll: true });
+        showToast(payload.message || 'Mensagem enviada.');
+      } catch (error) {
+        showToast(error?.message || 'Não foi possível enviar a mensagem.');
+        composerInput.focus({ preventScroll: true });
+      } finally {
+        composerForm.dataset.sending = '0';
+        if (composerButton) {
+          composerButton.disabled = false;
+          composerButton.textContent = composerButton.dataset.originalLabel || 'Enviar';
+        }
+      }
+    });
   }
 
   document.addEventListener('visibilitychange', () => {

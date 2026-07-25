@@ -1,5 +1,17 @@
 # Changelog
 
+## 36.6.9 — Intervalo real e conversa contínua
+
+- Corrige a exceção criada no 36.1.3 que fazia mensagens novas persistidas ignorarem `cooldown_seconds`; o intervalo mínimo volta a valer para toda resposta automática, exceto reprocessamento manual explícito.
+- Mensagens recebidas durante o intervalo continuam salvas e vinculadas a `ai.cooldown`; a fila escolhe a demanda mais recente e o contexto inclui as mensagens acumuladas, evitando respostas duplicadas.
+- Adiciona `GET/POST /webhooks/ai-reprocess/queue`, protegido por `AI_REPROCESS_CRON_TOKEN`, para reavaliar a fila rápida sem depender da execução diária de contingência.
+- Atualiza o template n8n **Fila rápida da IA** para rodar a cada 1 minuto e baixa-lo já com `APP_URL` e `AI_REPROCESS_CRON_TOKEN` injetados pelo RS Connect.
+- A Central de operação passa a mostrar separadamente o endpoint da fila rápida e a rotina diária, além de atalhos para franquia, custeio RS × cliente, pós-horário e alertas.
+- O menu do cliente ganha **Assinatura e uso**, deixando visível o consumo da franquia de IA.
+- O envio humano em Conversas passa a ocorrer por requisição assíncrona: a página não volta ao topo, o campo é limpo e mantém o foco, e a conversa continua posicionada nas mensagens mais recentes.
+- Como fallback sem JavaScript, o redirecionamento volta diretamente ao `#conversation-composer`.
+- Não requer migration nova; mantém a migration 052 como estrutura mínima desta linha.
+
 ## 36.6.8 — Consumo de IA e recuperação pós-horário
 
 - Converte o antigo limite comercial `messages_month` em `ai_interactions_month`: no Starter, por exemplo, as 1.500 unidades passam a significar **1.500 respostas automáticas de IA** por mês.

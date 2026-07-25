@@ -230,24 +230,18 @@ $returnQuery = http_build_query($pollQuery);
                 <?php if ($canManage): ?>
                     <div class="chat-actions">
                         <button class="btn btn-outline btn-small" type="button" data-toggle-panel="conversation-details">Dados do lead</button>
-                        <?php if ($selected['attendance_mode'] !== 'human'): ?>
-                            <form method="post" action="<?= View::e(Router::url('/conversations/mode')) ?>">
-                                <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="mode" value="human">
-                                <button class="btn btn-primary btn-small" type="submit">Assumir atendimento</button>
-                            </form>
-                        <?php endif; ?>
-                        <?php if ($selected['attendance_mode'] === 'ai'): ?>
-                            <form method="post" action="<?= View::e(Router::url('/conversations/mode')) ?>">
-                                <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="mode" value="paused">
-                                <button class="btn btn-outline btn-small" type="submit">Pausar IA</button>
-                            </form>
-                        <?php endif; ?>
-                        <?php if ($selected['attendance_mode'] !== 'ai'): ?>
-                            <form method="post" action="<?= View::e(Router::url('/conversations/mode')) ?>">
-                                <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="mode" value="ai">
-                                <button class="btn btn-outline btn-small" type="submit">Devolver para IA</button>
-                            </form>
-                        <?php endif; ?>
+                        <form method="post" action="<?= View::e(Router::url('/conversations/mode')) ?>" data-mode-action="human" <?= $selected['attendance_mode'] === 'human' ? 'hidden' : '' ?>>
+                            <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="mode" value="human">
+                            <button class="btn btn-primary btn-small" type="submit">Assumir atendimento</button>
+                        </form>
+                        <form method="post" action="<?= View::e(Router::url('/conversations/mode')) ?>" data-mode-action="paused" <?= $selected['attendance_mode'] === 'ai' ? '' : 'hidden' ?>>
+                            <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="mode" value="paused">
+                            <button class="btn btn-outline btn-small" type="submit">Pausar IA</button>
+                        </form>
+                        <form method="post" action="<?= View::e(Router::url('/conversations/mode')) ?>" data-mode-action="ai" <?= $selected['attendance_mode'] !== 'ai' ? '' : 'hidden' ?>>
+                            <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="mode" value="ai">
+                            <button class="btn btn-outline btn-small" type="submit">Devolver para IA</button>
+                        </form>
                         <form method="post" action="<?= View::e(Router::url('/conversations/suggest')) ?>">
                             <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
                             <button class="btn btn-outline btn-small" type="submit">Gerar sugestão</button>
@@ -310,7 +304,7 @@ $returnQuery = http_build_query($pollQuery);
             </div>
 
             <?php if ($canManage): ?>
-                <form class="chat-composer" method="post" action="<?= View::e(Router::url('/conversations/send')) ?>">
+                <form class="chat-composer" id="conversation-composer" data-chat-composer method="post" action="<?= View::e(Router::url('/conversations/send')) ?>">
                     <?= Csrf::input() ?>
                     <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
                     <textarea name="message" rows="2" maxlength="4000" placeholder="Digite uma mensagem..." required></textarea>

@@ -56,6 +56,7 @@ final class AiReprocessService
                 'history' => $this->history(),
                 'recent_failures' => $this->recentFailures(),
                 'cron_url' => Router::url('/webhooks/ai-reprocess/run'),
+                'queue_url' => Router::url('/webhooks/ai-reprocess/queue'),
                 'cron_token_configured' => trim((string) Env::get('AI_REPROCESS_CRON_TOKEN', '')) !== '',
             ];
         } catch (Throwable $exception) {
@@ -72,6 +73,7 @@ final class AiReprocessService
                 'history' => [],
                 'recent_failures' => [],
                 'cron_url' => Router::url('/webhooks/ai-reprocess/run'),
+                'queue_url' => Router::url('/webhooks/ai-reprocess/queue'),
                 'cron_token_configured' => trim((string) Env::get('AI_REPROCESS_CRON_TOKEN', '')) !== '',
             ];
         }

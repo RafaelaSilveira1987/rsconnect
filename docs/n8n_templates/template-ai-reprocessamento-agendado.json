@@ -1,5 +1,5 @@
 {
-  "name": "RS Connect - Verificar fila da IA",
+  "name": "RS Connect - Fila rápida da IA",
   "nodes": [
     {
       "parameters": {
@@ -7,26 +7,29 @@
           "interval": [
             {
               "field": "minutes",
-              "minutesInterval": 5
+              "minutesInterval": 1
             }
           ]
         }
       },
       "id": "ScheduleAiQueue",
-      "name": "A cada 5 minutos",
+      "name": "A cada 1 minuto",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
-        "url": "https://SEU_DOMINIO/webhooks/ai-reprocess/run",
+        "url": "https://SEU_DOMINIO_RS_CONNECT/webhooks/ai-reprocess/queue",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-RS-AI-Reprocess-Token",
-              "value": "COLE_AQUI_O_AI_REPROCESS_CRON_TOKEN"
+              "value": "SEU_AI_REPROCESS_CRON_TOKEN"
             }
           ]
         },
@@ -38,11 +41,14 @@
       "name": "Verificar fila no RS Connect",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [300, 0]
+      "position": [
+        300,
+        0
+      ]
     }
   ],
   "connections": {
-    "A cada 5 minutos": {
+    "A cada 1 minuto": {
       "main": [
         [
           {

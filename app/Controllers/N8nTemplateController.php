@@ -64,11 +64,11 @@ final class N8nTemplateController
             'description' => 'Executa a verificação operacional a cada 15 minutos para abrir/encerrar incidentes e também retomar, no próximo horário válido, conversas preservadas fora do expediente sem duplicar respostas.',
         ],
         'ai-reprocessamento-agendado' => [
-            'title' => 'Verificação agendada da fila da IA',
+            'title' => 'Fila rápida da IA',
             'segment' => 'Operação',
             'file' => 'template-ai-reprocessamento-agendado.json',
-            'events' => ['ai.queue.check', 'cron.every_5_minutes'],
-            'description' => 'Consulta a rotina segura da fila da IA a cada cinco minutos. O RS Connect decide pelo horário salvo e só responde mensagens realmente presas.',
+            'events' => ['ai.queue.check', 'cron.every_minute'],
+            'description' => 'Reavalia a fila da IA a cada minuto para respeitar o intervalo mínimo entre respostas sem perder mensagens. A rotina diária permanece como contingência para falhas e pendências antigas.',
         ],
         'agenda-disponibilidade' => [
             'title' => 'Agenda inteligente — simulação/fallback',
@@ -162,6 +162,23 @@ final class N8nTemplateController
             }
             $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
             $contents = str_replace('SEU_BILLING_CRON_TOKEN', rawurlencode($billingToken), $contents);
+        }
+
+        if ($key === 'ai-reprocessamento-agendado') {
+            $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+            $aiToken = trim((string) Env::get('AI_REPROCESS_CRON_TOKEN', ''));
+            if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+                http_response_code(409);
+                echo 'Configure APP_URL com a URL pública HTTPS do RS Connect antes de baixar a fila rápida da IA.';
+                return;
+            }
+            if ($aiToken === '') {
+                http_response_code(409);
+                echo 'Configure AI_REPROCESS_CRON_TOKEN no ambiente e reinicie o RS Connect antes de baixar a fila rápida da IA.';
+                return;
+            }
+            $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
+            $contents = str_replace('SEU_AI_REPROCESS_CRON_TOKEN', $aiToken, $contents);
         }
 
         if ($key === 'monitor-operacional') {

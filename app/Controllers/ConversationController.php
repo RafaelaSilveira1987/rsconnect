@@ -311,21 +311,31 @@ final class ConversationController
 
     public function send(): void
     {
+        $wantsJson = str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json')
+            || strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
         $conversationId = (int) ($_POST['conversation_id'] ?? 0);
         $message = trim((string) ($_POST['message'] ?? ''));
 
         if ($conversationId < 1 || $message === '') {
+            if ($wantsJson) {
+                $this->json(['ok' => false, 'message' => 'Informe a conversa e a mensagem.'], 422);
+            }
             Flash::set('error', 'Informe a conversa e a mensagem.');
             $this->redirect('/conversations');
         }
 
         $conversation = $this->findConversation($conversationId);
         if ($conversation === null) {
+            if ($wantsJson) {
+                $this->json(['ok' => false, 'message' => 'Conversa não encontrada para sua empresa.'], 404);
+            }
             Flash::set('error', 'Conversa não encontrada para sua empresa.');
             $this->redirect('/conversations');
         }
 
         $sentAt = date('Y-m-d H:i:s');
+        $sendSucceeded = false;
+        $sendError = '';
 
         try {
             // O clique humano precisa pausar a automação ANTES da chamada externa.
@@ -398,7 +408,10 @@ final class ConversationController
                 'conversation_id' => $conversationId,
                 'http_status' => $result['status'] ?? null,
             ], (int) $conversation['tenant_id']);
-            Flash::set('success', 'Mensagem enviada pela Evolution API.');
+            $sendSucceeded = true;
+            if (!$wantsJson) {
+                Flash::set('success', 'Mensagem enviada pela Evolution API.');
+            }
         } catch (Throwable $exception) {
             if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -409,10 +422,22 @@ final class ConversationController
                 'conversation_id' => $conversationId,
                 'error' => $exception->getMessage(),
             ], (int) $conversation['tenant_id']);
-            Flash::set('error', 'Falha no envio: ' . $exception->getMessage());
+            $sendError = $exception->getMessage();
+            if (!$wantsJson) {
+                Flash::set('error', 'Falha no envio: ' . $sendError);
+            }
         }
 
-        $this->redirect('/conversations?conversation_id=' . $conversationId);
+        if ($wantsJson) {
+            $this->json([
+                'ok' => $sendSucceeded,
+                'message' => $sendSucceeded ? 'Mensagem enviada.' : ('Falha no envio: ' . $sendError),
+                'conversation_id' => $conversationId,
+                'attendance_mode' => 'human',
+            ], $sendSucceeded ? 200 : 422);
+        }
+
+        $this->redirect('/conversations?conversation_id=' . $conversationId . '#conversation-composer');
     }
 
     public function markRead(): void

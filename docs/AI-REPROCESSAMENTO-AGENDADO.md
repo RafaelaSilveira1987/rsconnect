@@ -1,67 +1,63 @@
-# Reprocessamento agendado da fila da IA
+# Fila da IA — reprocessamento rápido e contingência diária
 
 ## Onde fica no painel
-
 Acesse **Central de operação > Fila da IA**.
 
-Para uma empresa específica, acesse **Empresas > Saúde e IA**. O botão **Reprocessar agora** também aparece no diagnóstico quando há uma mensagem realmente pendente.
+Para uma empresa específica, acesse **Empresas > Saúde e IA**. O botão **Reprocessar agora** também aparece quando existe uma mensagem realmente pendente.
 
-## Regra de segurança
+## Duas rotinas diferentes
 
-A rotina não dispara mensagens em massa e não reinicia conversas já respondidas. Uma mensagem só é elegível quando:
+### 1. Fila rápida — a cada 1 minuto
+É a rotina usada para respeitar `cooldown_seconds` sem perder mensagens.
 
-1. a empresa, o assistente e a resposta automática estão ativos;
-2. a conversa está em modo IA e não está encerrada;
-3. a tentativa está em `ai.cooldown`, `ai.failed`, teve entrega marcada como `failed` pela Evolution ou ficou sem registro porque a execução foi interrompida;
-4. a tentativa está vinculada à mensagem recebida correspondente;
-5. não existe mensagem de saída posterior à mensagem recebida;
-6. reações são ignoradas quando o assistente está configurado para não respondê-las.
+Quando uma mensagem chega antes de terminar o intervalo mínimo:
+- ela é armazenada;
+- recebe `ai.cooldown`;
+- a fila rápida reavalia periodicamente;
+- somente responde depois que o intervalo já terminou.
 
-Execuções simultâneas são bloqueadas no MySQL para evitar duplicidade. Uma falha continua na fila, mas é tentada apenas uma vez por execução geral.
-
-## Banco de dados
-
-Execute:
-
-```sql
-SOURCE database/migrations/043_ai_reprocess_schedule.sql;
-SOURCE database/migrations/044_ai_pending_failures_message_link.sql;
-```
-
-Ou importe o arquivo pelo gerenciador MySQL usado no ambiente.
-
-## Variável de ambiente
-
-Adicione ao `.env`:
-
-```env
-AI_REPROCESS_CRON_TOKEN=COLOQUE_UM_TOKEN_FORTE_E_ALEATORIO
-```
-
-Depois faça o redeploy/restart da aplicação.
-
-## Opção 1: cron executando o PHP
-
-Configure o servidor para chamar o comando a cada 5 minutos. O sistema verifica o horário salvo no painel e só executa uma vez por dia.
-
-```cron
-*/5 * * * * cd /caminho/do/rs-connect && php bin/ai-reprocess.php >> storage/logs/ai-reprocess-cron.log 2>&1
-```
-
-## Opção 2: n8n ou cron por URL
-
-Também está incluído o arquivo importável `docs/n8n_templates/template-ai-reprocessamento-agendado.json`.
-
-Faça uma requisição GET a cada 5 minutos:
+Endpoint:
 
 ```text
-https://SEU_DOMINIO/webhooks/ai-reprocess/run?token=SEU_TOKEN
-```
-
-Também é aceito o cabeçalho:
-
-```text
+GET /webhooks/ai-reprocess/queue
 X-RS-AI-Reprocess-Token: SEU_TOKEN
 ```
 
-Mesmo sendo consultado várias vezes, o endpoint só executa depois do horário configurado e no máximo uma vez por dia.
+Use o template n8n **Fila rápida da IA**. Ao baixá-lo pelo RS Connect, `APP_URL` e `AI_REPROCESS_CRON_TOKEN` são injetados automaticamente.
+
+### 2. Contingência diária
+Mantém a rotina histórica de varredura para falhas antigas, execuções interrompidas e recuperação geral.
+
+Endpoint:
+
+```text
+GET /webhooks/ai-reprocess/run
+X-RS-AI-Reprocess-Token: SEU_TOKEN
+```
+
+O endpoint diário só executa depois do horário configurado no painel e no máximo uma vez por dia.
+
+## Regra de segurança
+A fila não dispara mensagens em massa e não reinicia conversas já respondidas. Uma mensagem só é elegível quando:
+
+1. empresa, assistente e resposta automática estão ativos;
+2. conversa está em modo IA e não está encerrada;
+3. existe `ai.cooldown`, `ai.failed`, `ai.quota.blocked`, falha de entrega ou execução interrompida;
+4. não existe mensagem de saída posterior à mensagem recebida;
+5. takeover Humano/Pausado continua bloqueando automação;
+6. reações são ignoradas quando configurado;
+7. no caso do cooldown, a execução automática **não ignora** o intervalo. Somente a ação manual explícita pode fazer bypass.
+
+Execuções simultâneas são protegidas por locks MySQL.
+
+## Banco de dados
+A fila rápida da 36.6.9 não exige migration nova. Para instalações antigas, mantenha aplicadas as migrations da fila e a 052 da linha atual.
+
+## Variáveis de ambiente
+
+```env
+AI_REPROCESS_CRON_TOKEN=COLOQUE_UM_TOKEN_FORTE_E_ALEATORIO
+AI_REPROCESS_QUEUE_LIMIT=50
+```
+
+Depois faça redeploy/restart da aplicação.

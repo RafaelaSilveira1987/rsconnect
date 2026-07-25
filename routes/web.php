@@ -139,6 +139,8 @@ return static function (Router $router): void {
     $router->post('/backup-automatico/toggle', [BackupAutomationController::class, 'toggle'], ['auth', 'super_admin', 'csrf']);
     $router->get('/webhooks/ai-reprocess/run', [AiReprocessController::class, 'cron']);
     $router->post('/webhooks/ai-reprocess/run', [AiReprocessController::class, 'cron']);
+    $router->get('/webhooks/ai-reprocess/queue', [AiReprocessController::class, 'queueCron']);
+    $router->post('/webhooks/ai-reprocess/queue', [AiReprocessController::class, 'queueCron']);
     $router->post('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);
     $router->post('/webhooks/operations/backups/dispatch', [OperationsController::class, 'runBackupDispatch']);
     $router->get('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);

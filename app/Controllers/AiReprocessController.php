@@ -92,6 +92,32 @@ final class AiReprocessController
         }
     }
 
+    public function queueCron(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        $token = trim((string) ($_GET['token'] ?? $_POST['token'] ?? ($_SERVER['HTTP_X_RS_AI_REPROCESS_TOKEN'] ?? '')));
+        $service = new AiReprocessService();
+
+        if (!$service->validCronToken($token)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'message' => 'Token inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        try {
+            $limit = max(1, min(250, (int) Env::get('AI_REPROCESS_QUEUE_LIMIT', 50)));
+            $result = $service->runAll('queue_cron', null, $limit);
+            echo json_encode(['ok' => true, 'result' => $result], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        } catch (Throwable $exception) {
+            http_response_code(500);
+            echo json_encode([
+                'ok' => false,
+                'message' => 'Falha ao verificar a fila rápida da IA.',
+                'error' => Env::get('APP_DEBUG', false) ? $exception->getMessage() : null,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+    }
+
     private function redirect(string $path): never
     {
         header('Location: ' . Router::url($path));

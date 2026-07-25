@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.8 — Consumo de IA e recuperação pós-horário.
+Pacote consolidado até o RS Connect 36.6.9 — Intervalo real e conversa contínua.
 
 ## Última etapa incluída
+
+RS Connect 36.6.9 — restaura o intervalo mínimo real entre respostas automáticas, cria uma fila rápida de reavaliação a cada minuto e evita recarregar/voltar ao topo da tela de Conversas ao enviar mensagem humana.
 
 RS Connect 36.6.8 — transforma o limite comercial em interações automáticas de IA, diferencia custeio RS/cliente e recupera no próximo horário válido as conversas recebidas fora do expediente.
 
@@ -30,7 +32,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.8.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.9.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 

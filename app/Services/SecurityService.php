@@ -576,15 +576,20 @@ final class SecurityService
         if ($this->tableExists('ai_reprocess_settings')) {
             $aiCronEnabled = $this->count('SELECT COUNT(*) FROM ai_reprocess_settings WHERE id = 1 AND enabled = 1') > 0;
         }
+        $agentsWithCooldown = $this->tableExists('ai_agents')
+            ? $this->count('SELECT COUNT(*) FROM ai_agents WHERE status = "active" AND auto_reply_enabled = 1 AND COALESCE(cooldown_seconds, 0) > 0')
+            : 0;
         $review[] = [
             'key' => 'AI_REPROCESS_CRON_TOKEN',
-            'label' => 'Cron da fila da IA',
-            'status' => $aiCronToken ? 'ok' : ($aiCronEnabled ? 'recommended' : 'optional'),
+            'label' => 'Fila rápida da IA',
+            'status' => $aiCronToken ? 'ok' : ($agentsWithCooldown > 0 ? 'warning' : ($aiCronEnabled ? 'recommended' : 'optional')),
             'detail' => $aiCronToken
-                ? 'Token configurado para o reprocessamento automático da fila da IA.'
-                : ($aiCronEnabled
-                    ? 'A rotina de reprocessamento está habilitada. A execução manual continua disponível; configure o token apenas para permitir acionamento externo seguro por cron/n8n.'
-                    : 'Rotina automática desativada; o token é opcional enquanto não houver acionamento externo.'),
+                ? 'Token configurado para a fila rápida e para a contingência agendada da IA.'
+                : ($agentsWithCooldown > 0
+                    ? $agentsWithCooldown . ' assistente(s) ativo(s) usam intervalo mínimo. Sem este token o n8n não consegue reavaliar automaticamente as mensagens quando a espera termina.'
+                    : ($aiCronEnabled
+                        ? 'A contingência diária está habilitada. Configure o token para permitir acionamento externo seguro pelo n8n.'
+                        : 'Nenhum assistente ativo depende de fila rápida neste momento; token opcional até habilitar cooldown/acionamento externo.')),
             'action' => '/central-operacao?tab=ai_reprocess',
         ];
 
