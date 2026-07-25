@@ -105,7 +105,12 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
 
 <section class="card client-subscription-usage">
     <div class="section-heading client-section-heading">
-        <div><span class="eyebrow">Uso do plano</span><h2>Acompanhe seus limites</h2><p>Veja quanto já foi utilizado e identifique quando pode ser necessário ampliar o plano.</p></div>
+        <div><span class="eyebrow">Uso do plano</span><h2>Acompanhe seus limites</h2><p>A franquia de IA conta somente respostas automáticas custeadas pela RS Connect. Mensagens recebidas e respostas humanas não consomem esse limite.</p></div>
+    </div>
+    <div class="ai-usage-origin-summary">
+        <div><span>IA da RS Connect</span><strong><?= (int) ($aiUsage['rs_connect'] ?? 0) ?></strong><small>consome a franquia do plano</small></div>
+        <div><span>Credencial própria</span><strong><?= (int) ($aiUsage['tenant'] ?? 0) ?></strong><small>registrada, sem reduzir a franquia RS</small></div>
+        <div><span>Mês de consumo</span><strong><?= View::e($date($aiUsage['period']['start_date'] ?? null)) ?> – <?= View::e($date($aiUsage['period']['end_date'] ?? null)) ?></strong><small>a franquia de IA reinicia no próximo mês</small></div>
     </div>
     <div class="client-usage-grid">
         <?php foreach ($limitRows as $row): ?>

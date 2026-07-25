@@ -17,8 +17,7 @@ final class SubscriptionService
         'n8n_flows' => 'Fluxos n8n',
         'contacts_month' => 'Novos contatos/mês',
         'conversations_month' => 'Novas conversas/mês',
-        'messages_month' => 'Mensagens/mês',
-        'ai_replies_month' => 'Respostas IA/mês',
+        'ai_interactions_month' => 'Interações de IA/mês',
         'appointments_month' => 'Agendamentos/mês',
         'crm_leads_month' => 'Oportunidades/mês',
     ];
@@ -75,7 +74,7 @@ final class SubscriptionService
 
     public function usageForTenant(int $tenantId): array
     {
-        $period = [date('Y-m-01 00:00:00'), date('Y-m-t 23:59:59')];
+        $period = $this->usagePeriodForTenant($tenantId);
         $queries = [
             'users' => ['SELECT COUNT(*) FROM users WHERE tenant_id = :tenant_id AND status = "active"', false],
             'instances' => ['SELECT COUNT(*) FROM evolution_instances WHERE tenant_id = :tenant_id', false],
@@ -83,8 +82,7 @@ final class SubscriptionService
             'n8n_flows' => ['SELECT COUNT(*) FROM n8n_tenant_flows WHERE tenant_id = :tenant_id AND status = "active"', false],
             'contacts_month' => ['SELECT COUNT(*) FROM contacts WHERE tenant_id = :tenant_id AND created_at BETWEEN :start_at AND :end_at', true],
             'conversations_month' => ['SELECT COUNT(*) FROM conversations WHERE tenant_id = :tenant_id AND created_at BETWEEN :start_at AND :end_at', true],
-            'messages_month' => ['SELECT COUNT(*) FROM conversation_messages WHERE tenant_id = :tenant_id AND created_at BETWEEN :start_at AND :end_at', true],
-            'ai_replies_month' => ['SELECT COUNT(*) FROM conversation_messages WHERE tenant_id = :tenant_id AND sender_type = "ai" AND direction = "outgoing" AND created_at BETWEEN :start_at AND :end_at', true],
+            'ai_interactions_month' => ['SELECT COUNT(*) FROM ai_usage_events WHERE tenant_id = :tenant_id AND usage_type = "auto_reply" AND plan_billable = 1 AND status = "success" AND created_at BETWEEN :start_at AND :end_at', true],
             'appointments_month' => ['SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND created_at BETWEEN :start_at AND :end_at', true],
             'crm_leads_month' => ['SELECT COUNT(*) FROM crm_leads WHERE tenant_id = :tenant_id AND created_at BETWEEN :start_at AND :end_at', true],
         ];
@@ -96,17 +94,85 @@ final class SubscriptionService
                 $statement = $pdo->prepare($sql);
                 $params = ['tenant_id' => $tenantId];
                 if ($usesPeriod) {
-                    $params['start_at'] = $period[0];
-                    $params['end_at'] = $period[1];
+                    $params['start_at'] = $period['start_at'];
+                    $params['end_at'] = $period['end_at'];
                 }
                 $statement->execute($params);
                 $usage[$key] = (int) $statement->fetchColumn();
             } catch (Throwable) {
+                // Compatibilidade temporária antes da migration 052: conta apenas saídas da IA.
+                if ($key === 'ai_interactions_month') {
+                    try {
+                        $fallback = $pdo->prepare('SELECT COUNT(*) FROM conversation_messages WHERE tenant_id = :tenant_id AND sender_type = "ai" AND direction = "outgoing" AND created_at BETWEEN :start_at AND :end_at');
+                        $fallback->execute(['tenant_id' => $tenantId, 'start_at' => $period['start_at'], 'end_at' => $period['end_at']]);
+                        $usage[$key] = (int) $fallback->fetchColumn();
+                        continue;
+                    } catch (Throwable) {
+                    }
+                }
                 $usage[$key] = 0;
             }
         }
 
         return $usage;
+    }
+
+    /** @return array{start_at:string,end_at:string,start_date:string,end_date:string} */
+    public function usagePeriodForTenant(int $tenantId): array
+    {
+        // Os limites comerciais terminados em _month continuam mensais, independentemente
+        // de a assinatura ser cobrada mensal, trimestral ou anualmente. Preserva a regra
+        // já existente no RS Connect e evita transformar uma cobrança anual em franquia anual.
+        $startDate = date('Y-m-01');
+        $endDate = date('Y-m-t');
+
+        return [
+            'start_at' => $startDate . ' 00:00:00',
+            'end_at' => $endDate . ' 23:59:59',
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ];
+    }
+
+    /** @return array{rs_connect:int,tenant:int,total:int,billable_limit:?int,period:array<string,string>} */
+    public function aiUsageBreakdownForTenant(int $tenantId): array
+    {
+        $period = $this->usagePeriodForTenant($tenantId);
+        $plan = $this->currentPlanForTenant($tenantId);
+        $result = ['rs_connect' => 0, 'tenant' => 0];
+
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT credential_owner, COUNT(*) AS total
+                 FROM ai_usage_events
+                 WHERE tenant_id = :tenant_id
+                   AND usage_type = "auto_reply"
+                   AND status = "success"
+                   AND created_at BETWEEN :start_at AND :end_at
+                 GROUP BY credential_owner'
+            );
+            $statement->execute([
+                'tenant_id' => $tenantId,
+                'start_at' => $period['start_at'],
+                'end_at' => $period['end_at'],
+            ]);
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+                $owner = (string) ($row['credential_owner'] ?? '');
+                if (array_key_exists($owner, $result)) {
+                    $result[$owner] = (int) ($row['total'] ?? 0);
+                }
+            }
+        } catch (Throwable) {
+            $result['rs_connect'] = $this->usageForTenant($tenantId)['ai_interactions_month'] ?? 0;
+        }
+
+        return [
+            'rs_connect' => $result['rs_connect'],
+            'tenant' => $result['tenant'],
+            'total' => $result['rs_connect'] + $result['tenant'],
+            'billable_limit' => $plan['limits']['ai_interactions_month'] ?? $plan['limits']['messages_month'] ?? $plan['limits']['ai_replies_month'] ?? null,
+            'period' => $period,
+        ];
     }
 
     public function limitRows(int $tenantId): array
@@ -122,7 +188,7 @@ final class SubscriptionService
                 'label' => $label,
                 'used' => $used,
                 'limit' => $limit,
-                'percent' => $limit ? min(100, (int) round(($used / max(1, (int) $limit)) * 100)) : 0,
+                'percent' => $limit !== null ? ((int) $limit > 0 ? min(100, (int) round(($used / (int) $limit) * 100)) : 100) : 0,
                 'blocked' => $limit !== null && $used >= (int) $limit,
             ];
         }

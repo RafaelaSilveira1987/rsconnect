@@ -1,5 +1,20 @@
 # Changelog
 
+## 36.6.8 — Consumo de IA e recuperação pós-horário
+
+- Converte o antigo limite comercial `messages_month` em `ai_interactions_month`: no Starter, por exemplo, as 1.500 unidades passam a significar **1.500 respostas automáticas de IA** por mês.
+- Mensagens recebidas, mensagens fixas de automação e respostas enviadas por atendentes humanos não consomem a franquia de IA.
+- Cada resposta automática efetivamente enviada reserva/conclui um evento de consumo, com proteção de concorrência e liberação de reservas interrompidas.
+- Quando o provedor informa usage, o evento guarda tokens de entrada e saída para auditoria interna; sugestões manuais também são registradas, mas não reduzem a franquia comercial.
+- Diferencia `Custeio RS Connect` de `Custeio cliente` nas credenciais de IA. Credencial RS/global consome a franquia; chave própria é registrada separadamente e não reduz o limite RS.
+- O painel da assinatura passa a separar uso faturável da RS Connect e uso com credencial própria, com renovação mensal da franquia, independentemente do ciclo financeiro da assinatura.
+- Adiciona alertas deduplicados em 80%, 95% e 100% da franquia para cliente e Super Admin. Ao atingir 100%, somente novas respostas automáticas custeadas pela RS são pausadas; WhatsApp e atendimento humano continuam funcionando.
+- Mensagens recebidas fora do horário passam a formar uma pendência por conversa. Várias mensagens na mesma janela são preservadas juntas e a mensagem de ausência é enviada no máximo uma vez.
+- O Monitor operacional tenta recuperar essas conversas a cada execução, somente dentro do próximo horário válido, respeitando modo Humano/Pausado, resposta manual já realizada, assistente ativo, conexão WhatsApp e franquia disponível.
+- Pendências bloqueadas por franquia permanecem armazenadas e voltam a ser elegíveis após renovação/aumento do plano; pendências já tratadas por humano são encerradas sem intervenção da IA.
+- A Fila da IA mostra quantidade e detalhes das pendências pós-horário, com situação, próxima tentativa e atalho para a conversa.
+- Requer `database/migrations/052_ai_usage_and_after_hours_recovery.sql`.
+
 ## 36.6.7 — Severidade operacional e diagnóstico da IA
 
 - Diferencia assistente **desativado manualmente** de assistente **indisponível por erro**, evitando falso crítico quando cliente/equipe RS opta por desligar a automação.

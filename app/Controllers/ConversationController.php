@@ -785,7 +785,9 @@ final class ConversationController
             }
 
             $messages = $this->recentMessages($pdo, (int) $conversation['tenant_id'], $conversationId, 14);
-            $suggestion = (new AiModelService())->generateReply($agent, $messages, $conversation, $conversation);
+            $modelService = new AiModelService();
+            $suggestion = $modelService->generateReply($agent, $messages, $conversation, $conversation);
+            (new \App\Services\AiUsageService())->recordSuggestion((int) $conversation['tenant_id'], $agent, $conversationId, $modelService->lastUsage());
 
             if ($this->hasColumn($pdo, 'conversations', 'last_ai_suggestion')) {
                 $pdo->prepare(

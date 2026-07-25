@@ -61,7 +61,7 @@ final class N8nTemplateController
             'segment' => 'Operação',
             'file' => 'template-monitor-operacional.json',
             'events' => ['operations.health.check', 'cron.every_15_minutes'],
-            'description' => 'Executa a verificação operacional a cada 15 minutos para abrir, atualizar e encerrar incidentes, incluindo alertas e recuperação sem duplicar notificações.',
+            'description' => 'Executa a verificação operacional a cada 15 minutos para abrir/encerrar incidentes e também retomar, no próximo horário válido, conversas preservadas fora do expediente sem duplicar respostas.',
         ],
         'ai-reprocessamento-agendado' => [
             'title' => 'Verificação agendada da fila da IA',

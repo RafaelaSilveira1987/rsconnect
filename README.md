@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.7 — Severidade operacional e diagnóstico da IA.
+Pacote consolidado até o RS Connect 36.6.8 — Consumo de IA e recuperação pós-horário.
 
 ## Última etapa incluída
+
+RS Connect 36.6.8 — transforma o limite comercial em interações automáticas de IA, diferencia custeio RS/cliente e recupera no próximo horário válido as conversas recebidas fora do expediente.
 
 RS Connect 36.6.7 — refina severidades operacionais: desativação manual da IA deixa de ser crítico, tokens opcionais/recomendados ganham contexto e gateway sem transações recentes passa a Sem evidência.
 
@@ -28,7 +30,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.7.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.8.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 

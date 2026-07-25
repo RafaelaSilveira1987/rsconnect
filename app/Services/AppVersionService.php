@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.7 — Severidade operacional e diagnóstico da IA';
-    public const REQUIRED_MIGRATION = '051_operational_evidence_status.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.8 — Consumo de IA e recuperação pós-horário';
+    public const REQUIRED_MIGRATION = '052_ai_usage_and_after_hours_recovery.sql';
 
     private PDO $pdo;
 
@@ -87,13 +87,16 @@ final class AppVersionService
             'operational_alert_deliveries',
             'client_communications',
             'client_communication_recipients',
+            'ai_usage_events',
+            'ai_usage_threshold_events',
+            'ai_after_hours_pending',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 050, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 052, conforme o pacote implantado.'
         );
 
         $reactionPreferenceReady = $this->columnExists('ai_agents', 'reply_to_reactions');
@@ -165,6 +168,19 @@ final class AppVersionService
                 ? 'Alertas internos, playbooks e comunicados estão disponíveis.'
                 : 'A estrutura da versão 36.6.5 ainda não foi aplicada.',
             'Executar database/migrations/049_operational_resolution_communications.sql.'
+        );
+
+        $aiUsageReady = $this->tableExists('ai_usage_events')
+            && $this->tableExists('ai_usage_threshold_events')
+            && $this->tableExists('ai_after_hours_pending')
+            && $this->columnExists('ai_provider_credentials', 'credential_owner');
+        $checks[] = $this->check(
+            'Franquia de IA e recuperação pós-horário',
+            $aiUsageReady ? 'ok' : 'blocked',
+            $aiUsageReady
+                ? 'Uso faturável por origem da credencial e fila pós-horário estão disponíveis.'
+                : 'A estrutura de consumo de IA/recuperação pós-horário ainda não foi aplicada.',
+            'Executar database/migrations/052_ai_usage_and_after_hours_recovery.sql.'
         );
 
         $appKey = (string) Env::get('APP_KEY', '');

@@ -102,6 +102,14 @@ final class OperationalHealthService
             'impact' => 'Mensagens pendentes podem ficar sem nova tentativa automática.',
             'action' => 'Abrir a fila e identificar se há falha interna ou dependência externa.',
         ],
+        'after_hours_recovery' => [
+            'label' => 'Recuperação pós-horário',
+            'category' => 'Rotinas',
+            'route' => '/central-operacao?tab=ai_reprocess',
+            'fresh_minutes' => 30,
+            'impact' => 'Demandas recebidas fora do expediente podem aguardar a próxima janela de atendimento.',
+            'action' => 'Abrir a fila e revisar horário, takeover humano, franquia e dependências da conversa.',
+        ],
         'reporting' => [
             'label' => 'Relatórios',
             'category' => 'Rotinas',
@@ -459,7 +467,7 @@ final class OperationalHealthService
     private function routineOverview(array $services, array $ai, array $backup): array
     {
         $items = [];
-        foreach (['billing_cron', 'ai_reprocess', 'backup', 'reporting'] as $key) {
+        foreach (['billing_cron', 'ai_reprocess', 'after_hours_recovery', 'backup', 'reporting'] as $key) {
             $service = $services[$key] ?? null;
             if (!$service) {
                 continue;
@@ -483,6 +491,9 @@ final class OperationalHealthService
             $raw = trim((string) ($ai['settings']['last_run_at'] ?? ''));
             return $raw !== '' ? $raw : 'Nenhuma execução registrada';
         }
+        if ($key === 'after_hours_recovery') {
+            return trim((string) ($service['checked_at'] ?? '')) ?: 'Nenhuma verificação registrada';
+        }
         if ($key === 'backup') {
             $last = $backup['summary']['last_valid_backup'] ?? [];
             $raw = trim((string) ($last['finished_at'] ?? $last['created_at'] ?? ''));
@@ -505,6 +516,9 @@ final class OperationalHealthService
             $runTime = substr((string) ($ai['settings']['run_time'] ?? '03:00'), 0, 5);
             $timezone = (string) ($ai['settings']['timezone'] ?? 'America/Sao_Paulo');
             return $this->nextDailyOccurrence($runTime, $timezone);
+        }
+        if ($key === 'after_hours_recovery') {
+            return 'Próxima execução do monitor (até 15 min); resposta somente no horário válido';
         }
         if ($key === 'backup') {
             return trim((string) ($backup['summary']['next_execution'] ?? '')) ?: 'Conforme rotina configurada';

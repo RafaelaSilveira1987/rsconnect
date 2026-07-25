@@ -60,6 +60,7 @@ final class AiCredentialController
         $agentId = (int) ($_POST['agent_id'] ?? 0);
         $label = trim((string) ($_POST['label'] ?? ''));
         $provider = strtolower(trim((string) ($_POST['provider'] ?? 'openai')));
+        $credentialOwner = strtolower(trim((string) ($_POST['credential_owner'] ?? 'tenant')));
         $baseUrl = rtrim(trim((string) ($_POST['base_url'] ?? '')), '/');
         $defaultModel = trim((string) ($_POST['default_model'] ?? ''));
         $apiKey = trim((string) ($_POST['api_key'] ?? ''));
@@ -73,6 +74,9 @@ final class AiCredentialController
 
         if (!in_array($status, ['active', 'inactive'], true)) {
             $status = 'active';
+        }
+        if (!in_array($credentialOwner, ['rs_connect', 'tenant'], true)) {
+            $credentialOwner = 'tenant';
         }
 
         $pdo = Database::connection();
@@ -120,6 +124,7 @@ final class AiCredentialController
                             agent_id = :agent_id,
                             label = :label,
                             provider = :provider,
+                            credential_owner = :credential_owner,
                             base_url = :base_url,
                             default_model = :default_model,
                             status = :status,
@@ -129,6 +134,7 @@ final class AiCredentialController
                     'agent_id' => $agentId > 0 ? $agentId : null,
                     'label' => $label,
                     'provider' => $provider,
+                    'credential_owner' => $credentialOwner,
                     'base_url' => $baseUrl !== '' ? $baseUrl : null,
                     'default_model' => $defaultModel !== '' ? $defaultModel : null,
                     'status' => $status,
@@ -144,26 +150,27 @@ final class AiCredentialController
                 $sql .= ' WHERE id = :id';
                 $statement = $pdo->prepare($sql);
                 $statement->execute($params);
-                Audit::log('ai_credential.updated', ['credential_id' => $id, 'provider' => $provider], $tenantId);
+                Audit::log('ai_credential.updated', ['credential_id' => $id, 'provider' => $provider, 'credential_owner' => $credentialOwner], $tenantId);
             } else {
                 $statement = $pdo->prepare(
                     'INSERT INTO ai_provider_credentials
-                        (tenant_id, agent_id, label, provider, api_key_encrypted, base_url, default_model, status, is_default)
+                        (tenant_id, agent_id, label, provider, credential_owner, api_key_encrypted, base_url, default_model, status, is_default)
                      VALUES
-                        (:tenant_id, :agent_id, :label, :provider, :api_key, :base_url, :default_model, :status, :is_default)'
+                        (:tenant_id, :agent_id, :label, :provider, :credential_owner, :api_key, :base_url, :default_model, :status, :is_default)'
                 );
                 $statement->execute([
                     'tenant_id' => $tenantId,
                     'agent_id' => $agentId > 0 ? $agentId : null,
                     'label' => $label,
                     'provider' => $provider,
+                    'credential_owner' => $credentialOwner,
                     'api_key' => Crypto::encrypt($apiKey),
                     'base_url' => $baseUrl !== '' ? $baseUrl : null,
                     'default_model' => $defaultModel !== '' ? $defaultModel : null,
                     'status' => $status,
                     'is_default' => $isDefault ? 1 : 0,
                 ]);
-                Audit::log('ai_credential.created', ['credential_id' => (int) $pdo->lastInsertId(), 'provider' => $provider], $tenantId);
+                Audit::log('ai_credential.created', ['credential_id' => (int) $pdo->lastInsertId(), 'provider' => $provider, 'credential_owner' => $credentialOwner], $tenantId);
             }
 
             $pdo->commit();

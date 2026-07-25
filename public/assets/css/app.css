@@ -7957,3 +7957,12 @@ body.sidebar-open #sidebarToggle.global-sidebar-toggle { left: 298px; }
   .ops-channel, .ops-channel:first-child { grid-template-columns:auto minmax(0,1fr); }
   .ops-channel .input { grid-column:2; width:100%; }
 }
+
+
+/* 36.6.8 — origem do consumo de IA */
+.ai-usage-origin-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:0 0 14px; }
+.ai-usage-origin-summary > div { display:grid; gap:4px; padding:14px 16px; border:1px solid var(--rs-border); border-radius:16px; background:rgba(255,255,255,.72); }
+.ai-usage-origin-summary span { font-size:12px; color:var(--rs-muted); font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+.ai-usage-origin-summary strong { font-size:20px; line-height:1.2; }
+.ai-usage-origin-summary small { color:var(--rs-muted); line-height:1.35; }
+@media (max-width: 820px) { .ai-usage-origin-summary { grid-template-columns:1fr; } }

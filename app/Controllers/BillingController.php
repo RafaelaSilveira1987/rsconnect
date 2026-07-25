@@ -62,8 +62,10 @@ final class BillingController
         ));
 
         $accessService = new AccessControlService();
+        $subscriptionService = new SubscriptionService();
         foreach ($tenants as &$tenant) {
             $tenant['access_status'] = $accessService->statusForTenant((int) $tenant['id']);
+            $tenant['ai_usage'] = $subscriptionService->aiUsageBreakdownForTenant((int) $tenant['id']);
         }
         unset($tenant);
 
@@ -100,6 +102,7 @@ final class BillingController
         $service = new SubscriptionService();
         $plan = $service->currentPlanForTenant($tenantId);
         $limitRows = $service->limitRows($tenantId);
+        $aiUsage = $service->aiUsageBreakdownForTenant($tenantId);
 
         $invoicesStatement = $pdo->prepare('SELECT * FROM tenant_invoices WHERE tenant_id = :tenant_id ORDER BY created_at DESC LIMIT 24');
         $invoicesStatement->execute(['tenant_id' => $tenantId]);
@@ -109,6 +112,7 @@ final class BillingController
             'tenant' => $tenant,
             'plan' => $plan,
             'limitRows' => $limitRows,
+            'aiUsage' => $aiUsage,
             'invoices' => $invoicesStatement->fetchAll(PDO::FETCH_ASSOC),
         ]);
     }

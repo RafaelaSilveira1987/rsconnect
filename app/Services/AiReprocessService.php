@@ -37,6 +37,10 @@ final class AiReprocessService
                 }
             }
 
+            $afterHoursService = new AiAfterHoursRecoveryService();
+            $afterHours = $afterHoursService->pendingCounts();
+            $afterHoursItems = $afterHoursService->pendingItems();
+
             return [
                 'migration_required' => false,
                 'migration_recommended' => !$messageLinkEnabled,
@@ -47,6 +51,8 @@ final class AiReprocessService
                 'pending_instances' => $pendingInstances,
                 'pending_total' => $this->pendingTotal(),
                 'pending_blocked_total' => $blockedPending,
+                'after_hours' => $afterHours,
+                'after_hours_items' => $afterHoursItems,
                 'history' => $this->history(),
                 'recent_failures' => $this->recentFailures(),
                 'cron_url' => Router::url('/webhooks/ai-reprocess/run'),
@@ -61,6 +67,8 @@ final class AiReprocessService
                 'pending' => [],
                 'pending_instances' => [],
                 'pending_total' => 0,
+                'after_hours' => ['total' => 0, 'blocked_plan' => 0, 'blocked_human' => 0, 'errors' => 0],
+                'after_hours_items' => [],
                 'history' => [],
                 'recent_failures' => [],
                 'cron_url' => Router::url('/webhooks/ai-reprocess/run'),
@@ -230,6 +238,12 @@ final class AiReprocessService
             } while ($progress && $summary['attempted'] < $limit);
 
             $summary['pending_after'] = $this->pendingTotal();
+            // A mesma ação manual também tenta retomar conversas preservadas fora do horário.
+            // A rotina respeita janela comercial, takeover humano e franquia da IA antes de enviar qualquer resposta.
+            $summary['after_hours'] = (new AiAfterHoursRecoveryService())->recoverDue(
+                max(1, min(200, (int) Env::get('OPERATIONS_AFTER_HOURS_RECOVERY_LIMIT', 25))),
+                $source === 'manual' ? 'manual_ai_reprocess' : 'ai_reprocess_' . $source
+            );
             $summary['status'] = 'success';
             if ($summary['errors'] > 0) {
                 $summary['status'] = $summary['replied'] > 0 || $summary['evaluated'] > 0 ? 'partial' : 'error';
@@ -496,7 +510,7 @@ final class AiReprocessService
                         WHERE al.incoming_message_id = cm.id
                         ORDER BY al.id DESC
                         LIMIT 1
-                    ), "") IN ("ai.cooldown", "ai.failed")
+                    ), "") IN ("ai.cooldown", "ai.failed", "ai.quota.blocked")
                     OR (
                         NOT EXISTS (
                             SELECT 1
@@ -514,7 +528,7 @@ final class AiReprocessService
                                   AND al_legacy.created_at >= cm.sent_at
                                 ORDER BY al_legacy.id DESC
                                 LIMIT 1
-                            ), "") IN ("ai.cooldown", "ai.failed")
+                            ), "") IN ("ai.cooldown", "ai.failed", "ai.quota.blocked")
                             OR NOT EXISTS (
                                 SELECT 1
                                 FROM ai_automation_logs al_missing
@@ -548,7 +562,7 @@ final class AiReprocessService
                           AND al.created_at >= cm.sent_at
                         ORDER BY al.id DESC
                         LIMIT 1
-                    ), "") IN ("ai.cooldown", "ai.failed")
+                    ), "") IN ("ai.cooldown", "ai.failed", "ai.quota.blocked")
                     OR (
                         NOT EXISTS (
                             SELECT 1

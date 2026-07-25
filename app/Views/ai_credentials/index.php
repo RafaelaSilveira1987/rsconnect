@@ -7,7 +7,8 @@ use App\Core\View;
 $totalCredentials = count($credentials);
 $activeCredentials = count(array_filter($credentials, static fn (array $credential): bool => ($credential['status'] ?? '') === 'active'));
 $coveredTenants = count(array_unique(array_map(static fn (array $credential): int => (int) ($credential['tenant_id'] ?? 0), $credentials)));
-$agentCredentials = count(array_filter($credentials, static fn (array $credential): bool => (int) ($credential['agent_id'] ?? 0) > 0));
+$tenantOwnedCredentials = count(array_filter($credentials, static fn (array $credential): bool => ($credential['credential_owner'] ?? 'tenant') === 'tenant'));
+$rsOwnedCredentials = count(array_filter($credentials, static fn (array $credential): bool => ($credential['credential_owner'] ?? 'tenant') === 'rs_connect'));
 ?>
 
 <section class="ai-credentials-hero">
@@ -33,16 +34,21 @@ $agentCredentials = count(array_filter($credentials, static fn (array $credentia
         <small>disponíveis para uso</small>
     </article>
     <article class="is-blue">
-        <span>Empresas atendidas</span>
-        <strong><?= $coveredTenants ?></strong>
-        <small>com credencial própria</small>
+        <span>Credenciais do cliente</span>
+        <strong><?= $tenantOwnedCredentials ?></strong>
+        <small>não consomem franquia RS</small>
     </article>
     <article class="is-purple">
-        <span>Uso individual</span>
-        <strong><?= $agentCredentials ?></strong>
-        <small>vinculada(s) a um assistente</small>
+        <span>Custeadas pela RS</span>
+        <strong><?= $rsOwnedCredentials ?></strong>
+        <small>consomem a franquia do plano</small>
     </article>
 </section>
+
+<div class="operations-alert is-info" style="margin-bottom:16px">
+    <strong>Revise o custeio das chaves existentes</strong>
+    <p>Na atualização 36.6.8, credenciais já cadastradas são classificadas conservadoramente como <strong>Cliente</strong>. Marque como <strong>RS Connect</strong> as chaves que são pagas pela RS para que o consumo da franquia seja contabilizado corretamente. A chave global do ambiente é considerada RS automaticamente.</p>
+</div>
 
 <section class="card ai-credentials-panel">
     <div class="section-heading ai-credentials-heading">
@@ -76,6 +82,14 @@ $agentCredentials = count(array_filter($credentials, static fn (array $credentia
                 <option value="inactive">Inativas</option>
             </select>
         </label>
+        <label class="field">
+            <span>Custeio</span>
+            <select data-ai-credential-owner-filter>
+                <option value="">Todos</option>
+                <option value="rs_connect">RS Connect</option>
+                <option value="tenant">Cliente</option>
+            </select>
+        </label>
         <button class="btn btn-quiet" type="button" data-ai-credential-clear>Limpar</button>
     </div>
 
@@ -94,6 +108,8 @@ $agentCredentials = count(array_filter($credentials, static fn (array $credentia
                 'google' => 'Google Gemini',
                 default => 'Personalizado',
             };
+            $credentialOwner = (string) ($credential['credential_owner'] ?? 'tenant');
+            $ownerLabel = $credentialOwner === 'rs_connect' ? 'RS Connect' : 'Cliente';
             $scopeLabel = $credential['agent_name']
                 ? 'Assistente: ' . (string) $credential['agent_name']
                 : 'Toda a empresa';
@@ -104,6 +120,7 @@ $agentCredentials = count(array_filter($credentials, static fn (array $credentia
                 data-search="<?= View::e($searchText) ?>"
                 data-provider="<?= View::e((string) $credential['provider']) ?>"
                 data-status="<?= View::e((string) $credential['status']) ?>"
+                data-owner="<?= View::e($credentialOwner) ?>"
             >
                 <div class="ai-credential-card-main">
                     <span class="ai-credential-company-mark" aria-hidden="true">
@@ -119,6 +136,7 @@ $agentCredentials = count(array_filter($credentials, static fn (array $credentia
                                 <span class="badge badge-<?= View::e((string) $credential['status']) ?>">
                                     <?= $credential['status'] === 'active' ? 'Ativa' : 'Inativa' ?>
                                 </span>
+                                <span class="badge"><?= View::e($ownerLabel === 'RS Connect' ? 'Custeio RS' : 'Custeio cliente') ?></span>
                                 <?php if ((int) $credential['is_default'] === 1): ?>
                                     <span class="badge">Padrão</span>
                                 <?php endif; ?>
@@ -133,6 +151,7 @@ $agentCredentials = count(array_filter($credentials, static fn (array $credentia
 
                 <dl class="ai-credential-details">
                     <div><dt>Provedor</dt><dd><?= View::e($providerLabel) ?></dd></div>
+                    <div><dt>Custeio</dt><dd><?= View::e($ownerLabel) ?></dd></div>
                     <div><dt>Modelo</dt><dd><?= View::e((string) ($credential['default_model'] ?: 'Definido no assistente')) ?></dd></div>
                     <div><dt>Chave</dt><dd><?= View::e((string) $credential['api_key_masked']) ?></dd></div>
                     <div><dt>Endereço da API</dt><dd><?= View::e((string) ($credential['base_url'] ?: 'Padrão do provedor')) ?></dd></div>
@@ -149,6 +168,7 @@ $agentCredentials = count(array_filter($credentials, static fn (array $credentia
                         data-agent-id="<?= (int) ($credential['agent_id'] ?? 0) ?>"
                         data-label="<?= View::e((string) $credential['label']) ?>"
                         data-provider="<?= View::e((string) $credential['provider']) ?>"
+                        data-credential-owner="<?= View::e($credentialOwner) ?>"
                         data-base-url="<?= View::e((string) ($credential['base_url'] ?? '')) ?>"
                         data-default-model="<?= View::e((string) ($credential['default_model'] ?? '')) ?>"
                         data-status="<?= View::e((string) $credential['status']) ?>"
@@ -253,6 +273,14 @@ $agentCredentials = count(array_filter($credentials, static fn (array $credentia
                             <option value="google">Google Gemini</option>
                             <option value="custom">Outro provedor</option>
                         </select>
+                    </label>
+                    <label class="field">
+                        <span>Quem custeia esta IA?</span>
+                        <select name="credential_owner" data-ai-field="credential_owner">
+                            <option value="tenant">Cliente — chave/conta própria</option>
+                            <option value="rs_connect">RS Connect — consome franquia do plano</option>
+                        </select>
+                        <small class="field-hint">Credencial do cliente é registrada para auditoria, mas não reduz as interações incluídas pela RS Connect.</small>
                     </label>
                     <label class="field">
                         <span>Situação</span>

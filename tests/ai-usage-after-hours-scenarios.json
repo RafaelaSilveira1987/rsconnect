@@ -1,0 +1,56 @@
+{
+  "version": "36.6.8",
+  "feature": "Consumo de IA e recuperacao pos-horario",
+  "scenarios": [
+    {
+      "id": "inbound-does-not-consume",
+      "given": "O contato envia uma mensagem e nenhum processamento automatico de IA conclui uma resposta.",
+      "expected": "Nenhum evento faturavel e criado; a franquia permanece inalterada."
+    },
+    {
+      "id": "human-does-not-consume",
+      "given": "Um usuario responde manualmente pela caixa de entrada.",
+      "expected": "A resposta humana nao cria consumo de IA."
+    },
+    {
+      "id": "rs-auto-reply-consumes-one",
+      "given": "O assistente usa a chave global da RS Connect ou uma credencial marcada como Custeio RS e envia uma resposta automatica com sucesso.",
+      "expected": "Exatamente 1 interacao faturavel e contabilizada no ciclo."
+    },
+    {
+      "id": "tenant-auto-reply-nonbillable",
+      "given": "O assistente usa uma credencial marcada como Custeio cliente e envia uma resposta automatica.",
+      "expected": "A interacao e registrada como uso da credencial propria, mas nao reduz a franquia RS."
+    },
+    {
+      "id": "quota-100-blocks-only-rs-ai",
+      "given": "A empresa ja consumiu o limite ai_interactions_month e tenta uma nova resposta com credencial RS.",
+      "expected": "O provedor nao e chamado; a mensagem fica elegivel para reprocessamento. Recebimento e atendimento humano continuam funcionando."
+    },
+    {
+      "id": "quota-does-not-block-own-key",
+      "given": "A franquia RS acabou, mas o assistente usa uma credencial propria do cliente.",
+      "expected": "A resposta automatica continua permitida e e registrada como nao faturavel."
+    },
+    {
+      "id": "after-hours-one-ack",
+      "given": "O contato envia varias mensagens na mesma conversa fora do horario.",
+      "expected": "A conversa fica em uma unica pendencia; a mensagem fixa de ausencia e enviada no maximo uma vez naquela janela."
+    },
+    {
+      "id": "after-hours-next-window",
+      "given": "A conversa permanece em modo IA e chega o proximo periodo comercial valido.",
+      "expected": "O monitor retoma a demanda usando o historico completo e envia uma unica resposta automatica elegivel."
+    },
+    {
+      "id": "after-hours-human-takeover",
+      "given": "A equipe assume a conversa antes da recuperacao.",
+      "expected": "Nenhuma IA responde. Se a equipe ja respondeu, a pendencia e encerrada como tratada manualmente."
+    },
+    {
+      "id": "after-hours-quota-blocked",
+      "given": "Chega o horario comercial, mas a franquia RS esta esgotada.",
+      "expected": "A pendencia muda para blocked_plan e continua preservada para nova tentativa apos renovacao ou ampliacao do plano."
+    }
+  ]
+}

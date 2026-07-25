@@ -74,7 +74,7 @@ final class OperationsController
             return;
         }
 
-        $service->runChecks();
+        $service->runChecks(true);
         $this->json([
             'ok' => true,
             'message' => 'Monitoramento operacional executado.',

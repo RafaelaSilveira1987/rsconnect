@@ -33,6 +33,8 @@ final class AiAutomationService
         $pdo = null;
         $agent = null;
         $failurePhase = 'bootstrap';
+        $usageReservationId = 0;
+        $usageService = new AiUsageService();
 
         // Defesa adicional contra eco de mensagens enviadas pela própria Evolution.
         // Mesmo que outro chamador encaminhe SEND_MESSAGE ou fromMe=true por engano,
@@ -133,6 +135,11 @@ final class AiAutomationService
                 FILTER_VALIDATE_BOOL,
                 FILTER_NULL_ON_FAILURE
             ) === true;
+            $afterHoursRecovery = filter_var(
+                $payload['after_hours_recovery'] ?? false,
+                FILTER_VALIDATE_BOOL,
+                FILTER_NULL_ON_FAILURE
+            ) === true;
 
             $storedMessageId = (int) ($this->currentIncomingMessageId ?? 0);
             $isFreshPersistedIncoming = $storedMessageId > 0
@@ -140,7 +147,7 @@ final class AiAutomationService
 
             // A proteção contra duplicidade vale para toda execução, não apenas para o reprocessamento.
             // Assim, um webhook repetido nunca gera uma segunda saída para a mesma mensagem recebida.
-            if ($storedMessageId > 0 && $this->hasOutgoingAfterStoredMessage($pdo, $conversationId, $storedMessageId)) {
+            if ($storedMessageId > 0 && !$afterHoursRecovery && $this->hasOutgoingAfterStoredMessage($pdo, $conversationId, $storedMessageId)) {
                 $this->log(
                     (int) $instance['tenant_id'],
                     $conversationId,
@@ -186,23 +193,79 @@ final class AiAutomationService
             }
 
             if (!$this->isInsideBusinessHours($agent)) {
+                $afterHoursRecoveryService = new AiAfterHoursRecoveryService();
+                $pending = $afterHoursRecoveryService->markPending(
+                    $pdo,
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    $storedMessageId > 0 ? $storedMessageId : null
+                );
+
                 $afterHoursMessage = trim((string) ($agent['after_hours_message'] ?? ''));
-                if ($afterHoursMessage !== '') {
+                if ($afterHoursMessage !== '' && !empty($pending['should_ack'])) {
                     $conversation = $this->conversation($pdo, $conversationId);
                     if (!$this->conversationAllowsAutomaticReply($conversation)) {
-                        $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.skipped', 'skipped', 'Atendimento assumido ou IA pausada antes do envio automático.', null, ['takeover_guard' => true]);
+                        $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.skipped', 'skipped', 'Atendimento assumido ou IA pausada antes do envio automático.', null, ['takeover_guard' => true, 'after_hours_pending' => true]);
                         return;
                     }
-                    $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $afterHoursMessage, 'ai.after_hours', 'Mensagem fora do horário enviada pela IA.');
-                    $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.after_hours', 'success', null, $afterHoursMessage, null);
+                    $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $afterHoursMessage, 'ai.after_hours', 'Mensagem de ausência fora do horário enviada pela automação.');
+                    $afterHoursRecoveryService->markAcknowledged((int) ($pending['pending_id'] ?? 0));
+                    $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.after_hours', 'success', null, $afterHoursMessage, ['pending_recovery' => true, 'acknowledgement' => true]);
                     return;
                 }
 
-                $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.after_hours', 'skipped', 'Fora do horário de atendimento e sem mensagem configurada.', null, null);
+                $this->log(
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    'ai.after_hours',
+                    'skipped',
+                    $afterHoursMessage === '' ? 'Fora do horário; demanda preservada para recuperação automática.' : 'Demanda adicionada à recuperação pós-horário; mensagem de ausência já enviada nesta janela.',
+                    null,
+                    ['pending_recovery' => true, 'acknowledgement_already_sent' => !empty($pending['pending_id']) && empty($pending['should_ack'])]
+                );
                 return;
             }
 
+            $quota = $usageService->reserveAutoReply(
+                (int) $instance['tenant_id'],
+                $agent,
+                $conversationId,
+                $storedMessageId > 0 ? $storedMessageId : null
+            );
+            if (empty($quota['allowed'])) {
+                $this->log(
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    'ai.quota.blocked',
+                    'skipped',
+                    (string) ($quota['message'] ?? 'Franquia de IA atingida.'),
+                    null,
+                    [
+                        'pending_reprocess' => true,
+                        'credential_owner' => $quota['owner'] ?? null,
+                        'used' => $quota['used'] ?? null,
+                        'limit' => $quota['limit'] ?? null,
+                    ]
+                );
+                return;
+            }
+            $usageReservationId = (int) ($quota['event_id'] ?? 0);
+
             $messages = $this->recentMessages($pdo, $conversationId, (int) ($agent['max_context_messages'] ?? 12));
+            if ($afterHoursRecovery) {
+                // A mensagem de ausência é uma saída automática e pode ser o último item do histórico.
+                // Acrescenta somente em memória uma instrução de retomada para que o modelo responda
+                // à demanda pendente, em vez de interpretar a ausência como encerramento do assunto.
+                $messages[] = [
+                    'direction' => 'incoming',
+                    'sender_type' => 'contact',
+                    'content' => 'INSTRUÇÃO INTERNA DE RETOMADA: o horário de atendimento foi reaberto. Responda agora à demanda pendente nas mensagens anteriores do cliente. Não reinicie a conversa, não repita a mensagem de ausência e não peça informações que já estejam no cadastro ou no histórico.',
+                    'sent_at' => date('Y-m-d H:i:s'),
+                ];
+            }
             $failurePhase = 'ai.generate';
             $reply = $this->ai->generateReply($agent, $messages, $conversation, $conversation);
 
@@ -210,6 +273,8 @@ final class AiAutomationService
             // Revalida imediatamente antes do envio externo para que assumir atendimento pause a IA de fato.
             $conversation = $this->conversation($pdo, $conversationId);
             if (!$this->conversationAllowsAutomaticReply($conversation)) {
+                $usageService->cancelReservation($usageReservationId, 'Resposta descartada porque o atendimento foi assumido ou a IA foi pausada.');
+                $usageReservationId = 0;
                 $this->log(
                     (int) $instance['tenant_id'],
                     $conversationId,
@@ -225,6 +290,8 @@ final class AiAutomationService
 
             $failurePhase = 'evolution.send';
             $result = $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $reply, 'ai.replied', 'Resposta automática enviada pela IA.');
+            $usageService->completeAutoReply($usageReservationId, (int) ($result['_stored_message_id'] ?? 0), $this->ai->lastUsage());
+            $usageReservationId = 0;
 
             $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.replied', 'success', null, $reply, [
                 'http_status' => $result['status'] ?? null,
@@ -273,6 +340,10 @@ final class AiAutomationService
                 }
             }
         } catch (Throwable $exception) {
+            if ($usageReservationId > 0) {
+                $usageService->cancelReservation($usageReservationId, $exception->getMessage(), true);
+                $usageReservationId = 0;
+            }
             if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
@@ -416,7 +487,7 @@ final class AiAutomationService
                             WHERE al.incoming_message_id = cm.id
                             ORDER BY al.id DESC
                             LIMIT 1
-                        ), "") IN ("ai.cooldown", "ai.failed")
+                        ), "") IN ("ai.cooldown", "ai.failed", "ai.quota.blocked")
                         OR (
                             NOT EXISTS (
                                 SELECT 1
@@ -434,7 +505,7 @@ final class AiAutomationService
                                       AND al_legacy.created_at >= cm.sent_at
                                     ORDER BY al_legacy.id DESC
                                     LIMIT 1
-                                ), "") IN ("ai.cooldown", "ai.failed")
+                                ), "") IN ("ai.cooldown", "ai.failed", "ai.quota.blocked")
                                 OR NOT EXISTS (
                                     SELECT 1
                                     FROM ai_automation_logs al_missing
@@ -519,7 +590,7 @@ final class AiAutomationService
                               AND al.created_at >= cm.sent_at
                             ORDER BY al.id DESC
                             LIMIT 1
-                        ), "") IN ("ai.cooldown", "ai.failed")
+                        ), "") IN ("ai.cooldown", "ai.failed", "ai.quota.blocked")
                         OR (
                             NOT EXISTS (
                                 SELECT 1
@@ -1033,6 +1104,7 @@ final class AiAutomationService
             'raw_payload' => json_encode($result['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'sent_at' => $sentAt,
         ]);
+        $storedMessageId = (int) $pdo->lastInsertId();
 
         $pdo->prepare(
             'UPDATE conversations
@@ -1049,6 +1121,7 @@ final class AiAutomationService
         $this->insertEvent($pdo, (int) $instance['tenant_id'], $conversationId, $eventType, $eventDescription);
         $pdo->commit();
 
+        $result['_stored_message_id'] = $storedMessageId;
         return $result;
     }
 

@@ -73,7 +73,7 @@ final class OperationsService
         ];
     }
 
-    public function runChecks(): void
+    public function runChecks(bool $processAfterHoursRecovery = false): void
     {
         $this->recordCheck('database', 'Banco de dados', $this->checkDatabase());
         $this->recordCheck('migrations', 'Estrutura e migrations', $this->checkMigrations());
@@ -85,6 +85,7 @@ final class OperationsService
         $this->recordCheck('payments', 'Gateways e pagamentos', $this->checkPayments());
         $this->refreshBillingCronCheck();
         $this->recordCheck('ai_reprocess', 'Rotina da fila da IA', $this->checkAiReprocess());
+        $this->recordCheck('after_hours_recovery', 'Recuperação pós-horário', $this->checkAfterHoursRecovery($processAfterHoursRecovery));
         $this->recordCheck('reporting', 'Agregação de relatórios', $this->checkReporting());
         $this->recordCheck('backup', 'Backup', $this->checkBackupAge());
         $this->syncBlockedEvolutionIncidents();
@@ -467,6 +468,64 @@ final class OperationsService
         return ['status' => 'ok', 'message' => 'Rotina ativa; última execução ' . ($lastStatus !== '' ? $lastStatus : 'concluída') . ' em ' . ($settings['last_run_at'] ?? '') . '.', 'latency_ms' => null];
     }
 
+    private function checkAfterHoursRecovery(bool $executeRecovery = false): array
+    {
+        try {
+            $limit = max(1, min(200, (int) Env::get('OPERATIONS_AFTER_HOURS_RECOVERY_LIMIT', 25)));
+            $service = new AiAfterHoursRecoveryService();
+            $summary = $executeRecovery
+                ? $service->recoverDue($limit, 'operations_monitor')
+                : ['recovered' => 0, 'waiting_hours' => 0, 'errors' => 0];
+            $counts = $service->pendingCounts();
+
+            $errors = (int) ($summary['errors'] ?? 0) + (int) ($counts['errors'] ?? 0);
+            if ($errors > 0) {
+                return [
+                    'status' => 'warning',
+                    'message' => 'A recuperação pós-horário encontrou ' . $errors . ' pendência(s) com erro. '
+                        . (int) ($counts['total'] ?? 0) . ' conversa(s) continuam preservadas para nova tentativa.',
+                    'latency_ms' => null,
+                ];
+            }
+
+            $parts = [];
+            $recovered = (int) ($summary['recovered'] ?? 0);
+            if ($recovered > 0) {
+                $parts[] = $recovered . ' conversa(s) recuperada(s) nesta verificação';
+            }
+            $total = (int) ($counts['total'] ?? 0);
+            if ($total > 0) {
+                $parts[] = $total . ' pendência(s) preservada(s)';
+            }
+            $blockedPlan = (int) ($counts['blocked_plan'] ?? 0);
+            if ($blockedPlan > 0) {
+                $parts[] = $blockedPlan . ' aguardando franquia de IA';
+            }
+            $blockedHuman = (int) ($counts['blocked_human'] ?? 0);
+            if ($blockedHuman > 0) {
+                $parts[] = $blockedHuman . ' respeitando atendimento humano/assistente pausado';
+            }
+            $waiting = (int) ($summary['waiting_hours'] ?? 0);
+            if ($waiting > 0) {
+                $parts[] = $waiting . ' ainda fora do horário válido';
+            }
+
+            return [
+                'status' => 'ok',
+                'message' => $parts ? implode('; ', $parts) . '.' : ($executeRecovery
+                    ? 'Nenhuma conversa pós-horário pendente; rotina pronta para a próxima janela de atendimento.'
+                    : 'Nenhuma conversa pós-horário pendente. O processamento automático ocorre pelo Monitor operacional ou pela ação de reprocessar a fila.'),
+                'latency_ms' => null,
+            ];
+        } catch (Throwable $exception) {
+            return [
+                'status' => 'warning',
+                'message' => 'Não foi possível executar a recuperação pós-horário: ' . $exception->getMessage(),
+                'latency_ms' => null,
+            ];
+        }
+    }
+
     private function checkReporting(): array
     {
         $tableReady = $this->count("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'report_daily_metrics'") > 0;
@@ -487,7 +546,7 @@ final class OperationsService
 
     private function checkMigrations(): array
     {
-        $requiredTables = ['conversation_flow_states', 'calendar_google_sync_logs', 'operations_backup_jobs', 'report_daily_metrics'];
+        $requiredTables = ['conversation_flow_states', 'calendar_google_sync_logs', 'operations_backup_jobs', 'report_daily_metrics', 'ai_usage_events', 'ai_usage_threshold_events', 'ai_after_hours_pending'];
         $missing = [];
         foreach ($requiredTables as $table) {
             if ($this->count("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . str_replace("'", "''", $table) . "'") < 1) {
@@ -497,7 +556,7 @@ final class OperationsService
         if ($missing !== []) {
             return ['status' => 'down', 'message' => 'Estruturas obrigatórias ausentes: ' . implode(', ', $missing) . '.', 'latency_ms' => null];
         }
-        return ['status' => 'ok', 'message' => 'Estruturas principais até a fundação de relatórios foram localizadas no banco.', 'latency_ms' => null];
+        return ['status' => 'ok', 'message' => 'Estruturas principais, incluindo consumo de IA e recuperação pós-horário, foram localizadas no banco.', 'latency_ms' => null];
     }
 
     private function checkBillingCron(): array
@@ -788,6 +847,7 @@ final class OperationsService
             'payments' => ['label' => 'Gateways e pagamentos', 'category' => 'integration', 'category_label' => 'Integrações', 'route' => '/payment-gateways'],
             'billing_cron' => ['label' => 'Cron de cobrança', 'category' => 'routine', 'category_label' => 'Rotinas automáticas', 'route' => '/billing-reminders'],
             'ai_reprocess' => ['label' => 'Rotina da fila da IA', 'category' => 'routine', 'category_label' => 'Rotinas automáticas', 'route' => '/central-operacao?tab=ai_reprocess'],
+            'after_hours_recovery' => ['label' => 'Recuperação pós-horário', 'category' => 'routine', 'category_label' => 'Rotinas automáticas', 'route' => '/central-operacao?tab=ai_reprocess'],
             'reporting' => ['label' => 'Agregação de relatórios', 'category' => 'routine', 'category_label' => 'Rotinas automáticas', 'route' => '/reports'],
             'backup' => ['label' => 'Backup', 'category' => 'routine', 'category_label' => 'Rotinas automáticas', 'route' => '/central-operacao?tab=backups'],
         ];

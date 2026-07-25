@@ -46,7 +46,12 @@ $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['extern
 </section>
 
 <section class="card table-card subscription-usage-card">
-    <div class="section-heading"><div><span class="eyebrow">Uso do mês</span><h2>Limites do plano</h2></div></div>
+    <div class="section-heading"><div><span class="eyebrow">Uso do ciclo</span><h2>Limites do plano</h2><p>Interações faturáveis são apenas respostas automáticas enviadas com credencial custeada pela RS Connect.</p></div></div>
+    <div class="ai-usage-origin-summary">
+        <div><span>Franquia RS consumida</span><strong><?= (int) ($aiUsage['rs_connect'] ?? 0) ?></strong><small>respostas automáticas faturáveis</small></div>
+        <div><span>Uso com chave do cliente</span><strong><?= (int) ($aiUsage['tenant'] ?? 0) ?></strong><small>não consome franquia RS</small></div>
+        <div><span>Total automático observado</span><strong><?= (int) ($aiUsage['total'] ?? 0) ?></strong><small>somando as duas origens de credencial</small></div>
+    </div>
     <div class="usage-grid">
     <?php foreach ($limitRows as $row): ?>
         <article class="usage-tile <?= $row['blocked'] ? 'is-blocked' : '' ?>">

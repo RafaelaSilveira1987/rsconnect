@@ -12,9 +12,25 @@ use Throwable;
 
 final class AiModelService
 {
+    /** @var array{input_tokens:?int,output_tokens:?int,total_tokens:?int,provider:?string,model:?string} */
+    private array $lastUsage = [
+        'input_tokens' => null,
+        'output_tokens' => null,
+        'total_tokens' => null,
+        'provider' => null,
+        'model' => null,
+    ];
+
     public function generateReply(array $agent, array $messages, array $contact, array $conversation): string
     {
         $provider = $this->provider($agent);
+        $this->lastUsage = [
+            'input_tokens' => null,
+            'output_tokens' => null,
+            'total_tokens' => null,
+            'provider' => $provider,
+            'model' => null,
+        ];
 
         return match ($provider) {
             'openai' => $this->generateWithOpenAi($agent, $messages, $contact, $conversation),
@@ -52,6 +68,14 @@ final class AiModelService
         $response = $this->postJson($url, $payload, [
             'Authorization: Bearer ' . $apiKey,
         ]);
+        $usage = is_array($response['usage'] ?? null) ? $response['usage'] : [];
+        $this->lastUsage = [
+            'input_tokens' => isset($usage['input_tokens']) ? max(0, (int) $usage['input_tokens']) : null,
+            'output_tokens' => isset($usage['output_tokens']) ? max(0, (int) $usage['output_tokens']) : null,
+            'total_tokens' => isset($usage['total_tokens']) ? max(0, (int) $usage['total_tokens']) : null,
+            'provider' => 'openai',
+            'model' => $model,
+        ];
 
         $text = $this->extractOpenAiText($response);
         if ($text === '') {
@@ -93,6 +117,17 @@ final class AiModelService
         ];
 
         $response = $this->postJson($url, $payload, []);
+        $usage = is_array($response['usageMetadata'] ?? null) ? $response['usageMetadata'] : [];
+        $inputTokens = isset($usage['promptTokenCount']) ? max(0, (int) $usage['promptTokenCount']) : null;
+        $outputTokens = isset($usage['candidatesTokenCount']) ? max(0, (int) $usage['candidatesTokenCount']) : null;
+        $totalTokens = isset($usage['totalTokenCount']) ? max(0, (int) $usage['totalTokenCount']) : null;
+        $this->lastUsage = [
+            'input_tokens' => $inputTokens,
+            'output_tokens' => $outputTokens,
+            'total_tokens' => $totalTokens,
+            'provider' => 'google',
+            'model' => $model,
+        ];
         $text = $response['candidates'][0]['content']['parts'][0]['text'] ?? '';
         $text = trim((string) $text);
 
@@ -101,6 +136,12 @@ final class AiModelService
         }
 
         return mb_substr($text, 0, (int) Env::get('AI_MAX_REPLY_CHARS', 1400));
+    }
+
+    /** @return array{input_tokens:?int,output_tokens:?int,total_tokens:?int,provider:?string,model:?string} */
+    public function lastUsage(): array
+    {
+        return $this->lastUsage;
     }
 
     private function provider(array $agent): string

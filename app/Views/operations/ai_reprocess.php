@@ -13,6 +13,8 @@ $pendingInstances = $data['pending_instances'] ?? [];
 $lastSummary = $settings['last_summary'] ?? [];
 $blockedLast = (int) ($lastSummary['blocked'] ?? 0);
 $pendingBlocked = (int) ($data['pending_blocked_total'] ?? 0);
+$afterHours = $data['after_hours'] ?? ['total' => 0, 'blocked_plan' => 0, 'blocked_human' => 0, 'errors' => 0];
+$afterHoursItems = $data['after_hours_items'] ?? [];
 $formatDate = static function (?string $value): string {
     if (!$value || !($timestamp = strtotime($value))) return 'Ainda não executado';
     return date('d/m/Y H:i', $timestamp);
@@ -60,6 +62,11 @@ $statusLabel = static function (string $status): string {
         <span>Último resultado</span>
         <strong><?= (int) ($lastSummary['replied'] ?? 0) ?> resposta(s)</strong>
         <small><?= (int) ($lastSummary['attempted'] ?? 0) ?> item(ns) reavaliado(s)<?= $blockedLast > 0 ? ' · ' . $blockedLast . ' bloqueado(s) por conexão' : '' ?></small>
+    </article>
+    <article class="<?= (int) ($afterHours['errors'] ?? 0) > 0 ? 'is-warning' : ((int) ($afterHours['total'] ?? 0) > 0 ? 'is-blue' : 'is-success') ?>">
+        <span>Pós-horário</span>
+        <strong><?= (int) ($afterHours['total'] ?? 0) ?> pendência(s)</strong>
+        <small><?php if ((int) ($afterHours['blocked_plan'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_plan'] ?> aguardando franquia · <?php endif; ?><?php if ((int) ($afterHours['blocked_human'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_human'] ?> respeitando humano · <?php endif; ?><?= (int) ($afterHours['errors'] ?? 0) ?> erro(s)</small>
     </article>
 </section>
 
@@ -116,6 +123,44 @@ $statusLabel = static function (string $status): string {
         </div>
     </section>
 </div>
+
+<section class="card" style="margin-top:16px">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Continuidade do atendimento</span>
+            <h2>Recuperação pós-horário</h2>
+            <p>Mensagens recebidas fora do expediente ficam preservadas e voltam a ser avaliadas no próximo período válido. Várias mensagens da mesma conversa são tratadas como uma única demanda, sem consumir franquia enquanto aguardam.</p>
+        </div>
+        <span class="badge <?= (int) ($afterHours['errors'] ?? 0) > 0 ? 'badge-warning' : ((int) ($afterHours['total'] ?? 0) > 0 ? 'badge-info' : 'badge-success') ?>"><?= (int) ($afterHours['total'] ?? 0) ?> pendente(s)</span>
+    </div>
+    <div class="operations-alert <?= (int) ($afterHours['errors'] ?? 0) > 0 ? 'is-warning' : 'is-ok' ?>">
+        <strong>Proteções ativas</strong>
+        <p>A retomada só responde quando a empresa já está no horário de atendimento, a conversa continua em modo IA, ninguém da equipe respondeu manualmente, o WhatsApp está disponível e — quando a credencial é custeada pela RS Connect — ainda existe franquia no plano.</p>
+        <?php if ((int) ($afterHours['blocked_plan'] ?? 0) > 0): ?><small><?= (int) $afterHours['blocked_plan'] ?> conversa(s) estão preservadas aguardando renovação/aumento da franquia.</small><?php endif; ?>
+        <?php if ((int) ($afterHours['blocked_human'] ?? 0) > 0): ?><small><?= (int) $afterHours['blocked_human'] ?> conversa(s) não serão automatizadas enquanto estiverem sob atendimento humano ou assistente pausado.</small><?php endif; ?>
+    </div>
+    <?php if ($afterHoursItems): ?>
+    <div class="table-wrap" style="margin-top:16px"><table class="clean-table">
+        <thead><tr><th>Empresa / contato</th><th>Recebida</th><th>Situação</th><th>Próxima tentativa</th><th>Ação</th></tr></thead>
+        <tbody data-collapsible-list="5">
+        <?php foreach ($afterHoursItems as $item): ?>
+            <?php
+                $pendingStatus = (string) ($item['status'] ?? 'pending');
+                $pendingLabel = ['pending'=>'Aguardando horário','processing'=>'Processando','blocked_plan'=>'Aguardando franquia','blocked_human'=>'Atendimento humano/IA pausada','error'=>'Tentará novamente'][$pendingStatus] ?? ucfirst($pendingStatus);
+                $pendingBadge = $pendingStatus === 'error' ? 'badge-warning' : ($pendingStatus === 'blocked_plan' ? 'badge-overdue' : ($pendingStatus === 'blocked_human' ? 'badge-info' : 'badge-active'));
+            ?>
+            <tr>
+                <td><strong><?= View::e((string) ($item['tenant_name'] ?? 'Empresa')) ?></strong><br><small><?= View::e((string) (($item['contact_name'] ?? '') ?: ($item['contact_phone'] ?? 'Contato'))) ?> · <?= View::e((string) ($item['agent_name'] ?? 'Assistente')) ?></small></td>
+                <td><?= View::e($formatDate($item['first_received_at'] ?? null)) ?><br><small>última: <?= View::e($formatDate($item['last_received_at'] ?? null)) ?></small></td>
+                <td><span class="badge <?= $pendingBadge ?>"><?= View::e($pendingLabel) ?></span><?php if (!empty($item['last_error'])): ?><br><small><?= View::e((string) $item['last_error']) ?></small><?php endif; ?></td>
+                <td><?= View::e($formatDate($item['next_attempt_at'] ?? null)) ?><br><small><?= (int) ($item['recovery_attempts'] ?? 0) ?> tentativa(s)</small></td>
+                <td><a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) ($item['conversation_id'] ?? 0))) ?>">Abrir conversa</a></td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table></div>
+    <?php endif; ?>
+</section>
 
 <section class="card ai-reprocess-failures" style="margin-top:16px">
     <div class="section-heading">

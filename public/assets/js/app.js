@@ -731,6 +731,7 @@ document.addEventListener('DOMContentLoaded', () => {
     scopeSelect.value = 'company';
     agentSelect.value = '0';
     field('provider').value = 'openai';
+    field('credential_owner').value = 'tenant';
     field('status').value = 'active';
     field('is_default').checked = true;
     field('default_model').value = 'gpt-4o-mini';
@@ -753,6 +754,7 @@ document.addEventListener('DOMContentLoaded', () => {
     scopeSelect.value = agentId !== '0' ? 'agent' : 'company';
     field('label').value = button.dataset.label || '';
     field('provider').value = button.dataset.provider || 'openai';
+    field('credential_owner').value = button.dataset.credentialOwner || 'tenant';
     field('base_url').value = button.dataset.baseUrl || '';
     field('default_model').value = button.dataset.defaultModel || '';
     field('status').value = button.dataset.status || 'active';
@@ -782,6 +784,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.querySelector('[data-ai-credential-search]');
   const providerFilter = document.querySelector('[data-ai-credential-provider-filter]');
   const statusFilter = document.querySelector('[data-ai-credential-status-filter]');
+  const ownerFilter = document.querySelector('[data-ai-credential-owner-filter]');
   const clearButton = document.querySelector('[data-ai-credential-clear]');
   const visibleCount = document.querySelector('[data-ai-credential-visible-count]');
   const filterEmpty = document.querySelector('[data-ai-credential-filter-empty]');
@@ -792,11 +795,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const query = normalize(searchInput?.value);
     const provider = providerFilter?.value || '';
     const status = statusFilter?.value || '';
+    const owner = ownerFilter?.value || '';
     let shown = 0;
     cards.forEach((card) => {
       const matches = (!query || normalize(card.dataset.search).includes(query))
         && (!provider || card.dataset.provider === provider)
-        && (!status || card.dataset.status === status);
+        && (!status || card.dataset.status === status)
+        && (!owner || card.dataset.owner === owner);
       card.hidden = !matches;
       if (matches) shown += 1;
     });
@@ -807,10 +812,12 @@ document.addEventListener('DOMContentLoaded', () => {
   searchInput?.addEventListener('input', applyFilters);
   providerFilter?.addEventListener('change', applyFilters);
   statusFilter?.addEventListener('change', applyFilters);
+  ownerFilter?.addEventListener('change', applyFilters);
   clearButton?.addEventListener('click', () => {
     if (searchInput) searchInput.value = '';
     if (providerFilter) providerFilter.value = '';
     if (statusFilter) statusFilter.value = '';
+    if (ownerFilter) ownerFilter.value = '';
     applyFilters();
     searchInput?.focus();
   });
