@@ -139,7 +139,7 @@ final class ConversationFlowService
         }
 
         $group = (string) ($flow['contact_group'] ?? 'unclassified');
-        $rule = $this->ruleForInstance($pdo, $tenantId, (int) ($instance['id'] ?? 0), $group);
+        $rule = $this->ruleForInstance($pdo, $tenantId, (int) ($instance['id'] ?? 0), $group, $conversationId);
         $demandStatus = (string) ($flow['demand_status'] ?? 'pending');
         $isReschedule = $this->isReschedule($this->normalize($content));
 
@@ -364,25 +364,34 @@ final class ConversationFlowService
         }
     }
 
-    private function ruleForInstance(PDO $pdo, int $tenantId, int $instanceId, string $group): array
+    private function ruleForInstance(PDO $pdo, int $tenantId, int $instanceId, string $group, int $conversationId = 0): array
     {
         $agentId = 0;
         try {
-            $statement = $pdo->prepare(
-                'SELECT id FROM ai_agents
-                 WHERE tenant_id = :tenant_id AND status = "active"
-                   AND (instance_id = :instance_id OR instance_id IS NULL OR is_default = 1)
-                 ORDER BY (instance_id = :instance_order) DESC, is_default DESC, id DESC
-                 LIMIT 1'
-            );
-            $statement->execute([
-                'tenant_id' => $tenantId,
-                'instance_id' => $instanceId,
-                'instance_order' => $instanceId,
-            ]);
-            $agentId = (int) ($statement->fetchColumn() ?: 0);
+            if ($conversationId > 0) {
+                $pinned = $pdo->prepare('SELECT ai_agent_id FROM conversations WHERE id = :conversation_id AND tenant_id = :tenant_id LIMIT 1');
+                $pinned->execute(['conversation_id' => $conversationId, 'tenant_id' => $tenantId]);
+                $agentId = (int) ($pinned->fetchColumn() ?: 0);
+            }
         } catch (Throwable) {
             $agentId = 0;
+        }
+
+        if ($agentId < 1) {
+            try {
+                $bindings = (new AgentRoutingService())->agentsForInstance($pdo, $tenantId, $instanceId, true);
+                foreach ($bindings as $binding) {
+                    if ((int) ($binding['is_primary'] ?? 0) === 1) {
+                        $agentId = (int) ($binding['agent_id'] ?? 0);
+                        break;
+                    }
+                }
+                if ($agentId < 1 && $bindings !== []) {
+                    $agentId = (int) ($bindings[0]['agent_id'] ?? 0);
+                }
+            } catch (Throwable) {
+                $agentId = 0;
+            }
         }
         return $this->ruleForAgent($pdo, $tenantId, $agentId, $group);
     }

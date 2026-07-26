@@ -8,6 +8,7 @@ use App\Core\Database;
 use App\Core\Env;
 use App\Services\AccessControlService;
 use App\Services\AiAutomationService;
+use App\Services\AgentRoutingService;
 use App\Services\AutomationWebhookService;
 use App\Services\CrmAutoService;
 use App\Services\CalendarConversationService;
@@ -209,6 +210,21 @@ final class EvolutionWebhookController
             $processingWarnings = [];
 
             if (!$fromMe && $inserted && $automationAllowed && !$isReaction) {
+                try {
+                    // 36.6.13: decide o agente do canal antes das regras de fluxo/agenda.
+                    // A conversa fica fixada no agente escolhido para manter contexto e personalidade.
+                    (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, $content, true);
+                } catch (Throwable $exception) {
+                    $processingWarnings[] = 'agent_routing';
+                    $this->logWebhookFailure($exception, [
+                        'phase' => 'agent_routing',
+                        'event' => $event,
+                        'instance_id' => (int) ($instance['id'] ?? 0),
+                        'conversation_id' => $conversationId,
+                        'stored_message_id' => $storedMessageId,
+                    ]);
+                }
+
                 try {
                     $flowContext = (new ConversationFlowService())->ingestIncoming(
                         $pdo,
@@ -485,26 +501,14 @@ final class EvolutionWebhookController
     ): void {
         try {
             $pdo = Database::connection();
-            $agentStatement = $pdo->prepare(
-                'SELECT id
-                 FROM ai_agents
-                 WHERE tenant_id = :tenant_id
-                   AND status = "active"
-                   AND auto_reply_enabled = 1
-                   AND (
-                        instance_id = :instance_id_filter
-                        OR instance_id IS NULL
-                        OR is_default = 1
-                   )
-                 ORDER BY (instance_id = :instance_id_order) DESC, is_default DESC, id DESC
-                 LIMIT 1'
+            $resolvedAgent = (new AgentRoutingService())->resolve(
+                $pdo,
+                $instance,
+                $conversationId,
+                '',
+                true
             );
-            $agentStatement->execute([
-                'tenant_id' => (int) ($instance['tenant_id'] ?? 0),
-                'instance_id_filter' => (int) ($instance['id'] ?? 0),
-                'instance_id_order' => (int) ($instance['id'] ?? 0),
-            ]);
-            $agentId = (int) ($agentStatement->fetchColumn() ?: 0);
+            $agentId = (int) ($resolvedAgent['id'] ?? 0);
             $error = mb_substr('Falha após salvar a mensagem recebida: ' . $exception->getMessage(), 0, 500);
             $rawJson = json_encode([
                 'payload_event' => $payload['event'] ?? null,
@@ -946,28 +950,17 @@ final class EvolutionWebhookController
                 return;
             }
 
-            $agentStatement = $pdo->prepare(
-                'SELECT a.id
-                 FROM ai_agents a
-                 WHERE a.tenant_id = :tenant_id
-                   AND a.status = "active"
-                   AND a.auto_reply_enabled = 1
-                   AND (
-                        a.instance_id = :instance_id_filter
-                        OR a.instance_id IS NULL
-                        OR a.is_default = 1
-                   )
-                 ORDER BY (a.instance_id = :instance_id_order) DESC,
-                          a.is_default DESC,
-                          a.id DESC
-                 LIMIT 1'
+            $resolvedAgent = (new AgentRoutingService())->resolve(
+                $pdo,
+                [
+                    'id' => (int) $outgoing['evolution_instance_id'],
+                    'tenant_id' => (int) $instance['tenant_id'],
+                ],
+                (int) $outgoing['conversation_id'],
+                '',
+                true
             );
-            $agentStatement->execute([
-                'tenant_id' => (int) $instance['tenant_id'],
-                'instance_id_filter' => (int) $outgoing['evolution_instance_id'],
-                'instance_id_order' => (int) $outgoing['evolution_instance_id'],
-            ]);
-            $agentId = (int) ($agentStatement->fetchColumn() ?: 0);
+            $agentId = (int) ($resolvedAgent['id'] ?? 0);
 
             $alreadyStatement = $pdo->prepare(
                 'SELECT 1

@@ -360,7 +360,7 @@ final class AiReprocessService
     {
         $pdo = Database::connection();
         $statement = $pdo->query(
-            'SELECT COUNT(DISTINCT cm.conversation_id) ' . $this->pendingBaseSql($this->hasIncomingMessageLink($pdo))
+            'SELECT COUNT(DISTINCT cm.conversation_id) ' . $this->pendingBaseSql($this->hasIncomingMessageLink($pdo), (new AgentRoutingService())->supportsRouting($pdo))
         );
 
         return (int) $statement->fetchColumn();
@@ -374,7 +374,7 @@ final class AiReprocessService
                     t.name AS tenant_name,
                     COUNT(DISTINCT cm.conversation_id) AS pending_count,
                     MAX(cm.sent_at) AS oldest_or_latest_pending_at ' .
-            $this->pendingBaseSql($this->hasIncomingMessageLink($pdo)) .
+            $this->pendingBaseSql($this->hasIncomingMessageLink($pdo), (new AgentRoutingService())->supportsRouting($pdo)) .
             ' GROUP BY t.id, t.name
               ORDER BY pending_count DESC, t.name'
         );
@@ -431,7 +431,7 @@ final class AiReprocessService
                         ORDER BY al.id DESC
                         LIMIT 1
                     ) AS last_error_at ' .
-            $this->pendingBaseSql($this->hasIncomingMessageLink($pdo)) .
+            $this->pendingBaseSql($this->hasIncomingMessageLink($pdo), (new AgentRoutingService())->supportsRouting($pdo)) .
             ' GROUP BY t.id, t.name, c.evolution_instance_id, i.name, i.instance_name, i.status, i.connection_state, i.last_status_check_at, a.id, a.name
               ORDER BY pending_count DESC, t.name, instance_label'
         );
@@ -502,7 +502,7 @@ final class AiReprocessService
         return $items;
     }
 
-    private function pendingBaseSql(bool $hasMessageLink): string
+    private function pendingBaseSql(bool $hasMessageLink, bool $hasRouting = false): string
     {
         $pendingCondition = $hasMessageLink
             ? '(
@@ -590,15 +590,7 @@ final class AiReprocessService
                     )
                )';
 
-        return 'FROM conversation_messages cm
-             INNER JOIN conversations c
-                ON c.id = cm.conversation_id
-               AND c.tenant_id = cm.tenant_id
-             INNER JOIN tenants t
-                ON t.id = cm.tenant_id
-               AND t.status = "active"
-             INNER JOIN ai_agents a
-                ON a.id = (
+        $legacyAgentSelector = '(
                     SELECT aa.id
                     FROM ai_agents aa
                     WHERE aa.tenant_id = cm.tenant_id
@@ -613,7 +605,32 @@ final class AiReprocessService
                              aa.is_default DESC,
                              aa.id DESC
                     LIMIT 1
-                )
+                )';
+        $bindingAgentSelector = '(
+                    SELECT b.agent_id
+                    FROM ai_agent_instance_bindings b
+                    INNER JOIN ai_agents ba ON ba.id = b.agent_id AND ba.tenant_id = b.tenant_id
+                    WHERE b.tenant_id = cm.tenant_id
+                      AND b.instance_id = c.evolution_instance_id
+                      AND b.status = "active"
+                      AND ba.status = "active"
+                      AND ba.auto_reply_enabled = 1
+                    ORDER BY b.is_primary DESC, b.priority DESC, b.id ASC
+                    LIMIT 1
+                )';
+        $agentSelector = $hasRouting
+            ? 'COALESCE(c.ai_agent_id, ' . $bindingAgentSelector . ', ' . $legacyAgentSelector . ')'
+            : $legacyAgentSelector;
+
+        return 'FROM conversation_messages cm
+             INNER JOIN conversations c
+                ON c.id = cm.conversation_id
+               AND c.tenant_id = cm.tenant_id
+             INNER JOIN tenants t
+                ON t.id = cm.tenant_id
+               AND t.status = "active"
+             INNER JOIN ai_agents a
+                ON a.id = ' . $agentSelector . '
              LEFT JOIN evolution_instances i
                 ON i.id = c.evolution_instance_id
                AND i.tenant_id = cm.tenant_id

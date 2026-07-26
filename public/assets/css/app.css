@@ -7987,3 +7987,80 @@ body.sidebar-open #sidebarToggle.global-sidebar-toggle { left: 298px; }
 .ai-cost-groups > div { display:grid; gap:6px; }
 .ai-cost-groups > div > span { color:var(--rs-muted); font-size:.75rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
 @media (max-width: 720px) { .ai-cost-groups { grid-template-columns:1fr; } }
+
+/* RS Connect 36.6.13 — canais WhatsApp e roteamento de agentes */
+.channel-page-hero { display:flex; justify-content:space-between; gap:24px; align-items:flex-start; margin:0 0 16px; padding:20px 22px; border:1px solid var(--rs-border); border-radius:20px; background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(244,249,252,.9)); }
+.channel-page-hero h2 { margin:4px 0 6px; }
+.channel-page-hero p { max-width:760px; margin:0; color:var(--rs-muted); line-height:1.55; }
+.channel-plan-usage { min-width:210px; display:grid; gap:3px; padding:14px 16px; border-radius:16px; background:#fff; border:1px solid var(--rs-border); }
+.channel-plan-usage span { font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--rs-muted); }
+.channel-plan-usage strong { font-size:1.45rem; }
+.channel-plan-usage small { color:var(--rs-muted); line-height:1.35; }
+.channel-explainer-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:0 0 16px; }
+.channel-explainer-grid article { display:grid; gap:5px; padding:14px 16px; border-radius:16px; border:1px solid var(--rs-border); background:rgba(255,255,255,.78); }
+.channel-explainer-grid strong { font-size:.9rem; }
+.channel-explainer-grid span { color:var(--rs-muted); font-size:.8rem; line-height:1.45; }
+.channels-client-layout { overflow:visible; }
+.channel-card-grid { display:grid; gap:16px; margin-top:16px; }
+.channel-card { display:grid; gap:14px; padding:18px; border:1px solid var(--rs-border); border-radius:20px; background:#fff; box-shadow:0 10px 28px rgba(46,61,82,.04); }
+.channel-card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+.channel-identity { display:flex; align-items:center; gap:12px; min-width:0; }
+.channel-identity h3 { margin:0 0 3px; }
+.channel-identity p { margin:0; color:var(--rs-muted); font-size:.8rem; }
+.channel-icon { width:44px; height:44px; display:grid; place-items:center; border-radius:14px; background:linear-gradient(135deg,#5b55b9,#2495a8); color:#fff; font-size:.72rem; font-weight:900; letter-spacing:.05em; flex:0 0 auto; }
+.channel-status-stack { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; }
+.channel-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.channel-metrics > div { display:grid; gap:3px; padding:12px 13px; border-radius:14px; background:#f8fafc; border:1px solid #edf1f5; }
+.channel-metrics span { color:var(--rs-muted); font-size:.7rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+.channel-metrics strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.channel-metrics small { color:var(--rs-muted); font-size:.72rem; line-height:1.35; }
+.channel-agent-chips { display:flex; flex-wrap:wrap; gap:7px; }
+.channel-agent-chip { display:inline-grid; gap:1px; padding:7px 10px; border:1px solid var(--rs-border); border-radius:999px; background:#fbfcfe; }
+.channel-agent-chip strong { font-size:.78rem; }
+.channel-agent-chip small { color:var(--rs-muted); font-size:.65rem; }
+.channel-agent-chip.is-primary { border-color:#bcdedb; background:#effaf7; }
+.channel-routing-empty { margin:0; color:var(--rs-muted); font-size:.82rem; }
+.channel-routing-editor { border:1px solid var(--rs-border); border-radius:16px; background:#fbfcfe; overflow:hidden; }
+.channel-routing-editor > summary { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 14px; cursor:pointer; list-style:none; }
+.channel-routing-editor > summary::-webkit-details-marker { display:none; }
+.channel-routing-editor > summary > span:first-child { display:grid; gap:2px; }
+.channel-routing-editor > summary small { color:var(--rs-muted); font-size:.75rem; font-weight:500; }
+.channel-routing-form { display:grid; gap:12px; padding:0 14px 14px; border-top:1px solid var(--rs-border); }
+.channel-routing-help { display:grid; gap:3px; margin-top:12px; padding:11px 12px; border-radius:12px; background:#eef6fb; color:#45586d; font-size:.78rem; line-height:1.45; }
+.channel-routing-help strong { color:var(--rs-text); }
+.channel-routing-agents { display:grid; gap:9px; }
+.channel-routing-agent { display:grid; gap:9px; padding:11px 12px; border:1px solid #e8edf3; border-radius:13px; background:#fff; }
+.channel-routing-agent.is-linked { border-color:#cfe1e4; }
+.channel-routing-agent-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.channel-routing-agent-head .check-field span { display:grid; gap:1px; }
+.channel-routing-agent-head .check-field small { color:var(--rs-muted); font-weight:500; }
+.channel-primary-radio { display:flex; align-items:center; gap:6px; font-size:.72rem; font-weight:800; color:#52657a; }
+.channel-routing-agent-fields { display:grid; grid-template-columns:minmax(0,1fr) 110px; gap:10px; }
+.channel-priority-field input { min-width:0; }
+.channel-routing-actions { display:flex; justify-content:flex-end; gap:8px; }
+.channel-card-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; }
+.channel-connected-note { margin-right:auto; color:#29836d; font-size:.78rem; font-weight:800; }
+.conversation-agent-route-card { background:linear-gradient(180deg,#fbfdff,#f7fafc); }
+.conversation-agent-route-form { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:10px; }
+.admin-record-card .channel-routing-editor { grid-column:1/-1; width:100%; margin-top:2px; }
+.admin-record-card .channel-routing-summary { grid-column:1/-1; }
+@media (max-width: 900px) {
+  .channel-page-hero { flex-direction:column; }
+  .channel-plan-usage { width:100%; min-width:0; }
+  .channel-explainer-grid, .channel-metrics { grid-template-columns:1fr; }
+}
+@media (max-width: 620px) {
+  .channel-card-head, .channel-routing-agent-head { flex-direction:column; align-items:stretch; }
+  .channel-status-stack { justify-content:flex-start; }
+  .channel-routing-agent-fields, .conversation-agent-route-form { grid-template-columns:1fr; }
+  .channel-routing-actions, .channel-card-actions { justify-content:stretch; }
+  .channel-routing-actions .btn, .channel-card-actions .btn { flex:1; justify-content:center; }
+}
+
+/* 36.6.13 — linguagem comercial dos planos */
+.plan-capability-explainer{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line,#e5e7eb)}
+.plan-capability-explainer>div{display:flex;flex-direction:column;gap:5px;padding:12px 14px;border:1px solid var(--line,#e5e7eb);border-radius:14px;background:var(--surface-soft,#f8fafc)}
+.plan-capability-explainer strong{font-size:.83rem;color:var(--ink,#172033)}
+.plan-capability-explainer span{font-size:.76rem;line-height:1.45;color:var(--muted,#667085)}
+@media(max-width:980px){.plan-capability-explainer{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.plan-capability-explainer{grid-template-columns:1fr}}

@@ -95,7 +95,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                         <div><h3><?= View::e($agent['name']) ?></h3><p><?= View::e($agent['segment']) ?></p></div>
                     </div>
                     <div class="agent-data">
-                        <div><span>Conexão WhatsApp</span><strong><?= View::e($agent['instance_name'] ?? 'Não vinculada') ?></strong></div>
+                        <div><span>Canais WhatsApp</span><strong><?= View::e(($agent['channel_names'] ?? '') !== '' ? $agent['channel_names'] : ($agent['instance_name'] ?? 'Não vinculado')) ?></strong><small><?= (int) ($agent['channel_count'] ?? 0) ?> canal(is) vinculado(s)</small></div>
                         <div><span>Modelo de IA</span><strong><?= View::e($agent['credential_model'] ?: $agent['model_name']) ?></strong></div>
                         <div><span>Acesso à IA</span><strong><?= View::e($agent['credential_label'] ?: 'Configuração da RS Connect') ?></strong></div>
                         <div><span>Memória da conversa</span><strong><?= (int) ($agent['max_context_messages'] ?? 12) ?> mensagens</strong></div>
@@ -103,7 +103,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                     <div class="badge-row">
                         <span class="badge badge-<?= View::e($agent['status']) ?>"><?= $agent['status'] === 'active' ? 'Ativo' : 'Inativo' ?></span>
                         <span class="badge <?= (int) ($agent['auto_reply_enabled'] ?? 0) === 1 ? 'badge-success' : 'badge-muted' ?>"><?= (int) ($agent['auto_reply_enabled'] ?? 0) === 1 ? 'Respostas automáticas' : 'Resposta manual' ?></span>
-                        <?php if ((int) $agent['is_default'] === 1): ?><span class="badge">Assistente principal</span><?php endif; ?>
+                        <?php if ((int) $agent['is_default'] === 1): ?><span class="badge">Fallback geral</span><?php endif; ?>
                         <?php if ((int) ($agent['business_hours_enabled'] ?? 0) === 1): ?><span class="badge">Segue horário</span><?php endif; ?>
                     </div>
 
@@ -167,7 +167,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                                 <label class="check-field compact-check"><input type="checkbox" name="business_hours_enabled" value="1" <?= (int) ($agent['business_hours_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Seguir horário de atendimento</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="n8n_enabled" value="1" <?= (int) ($agent['n8n_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Usar integração externa</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="reply_to_reactions" value="1" <?= (int) ($agent['reply_to_reactions'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder a reações em mensagens</span></label>
-                                <label class="check-field compact-check"><input type="checkbox" name="is_default" value="1" <?= (int) $agent['is_default'] === 1 ? 'checked' : '' ?>><span>Assistente principal</span></label>
+                                <label class="check-field compact-check"><input type="checkbox" name="is_default" value="1" <?= (int) $agent['is_default'] === 1 ? 'checked' : '' ?>><span>Fallback geral</span></label>
                             </div>
                             <button class="btn btn-outline" type="submit">Salvar configurações</button>
                         </form>
@@ -244,7 +244,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                     <div><span class="eyebrow">Etapa 1</span><h3>Quem vai atender?</h3><p>Escolha o WhatsApp e dê uma identidade simples ao assistente.</p></div>
                 </div>
                 <div class="drawer-form-grid">
-                    <label class="field drawer-span"><span>Conexão WhatsApp</span><select name="instance_id" required><option value="">Selecione o WhatsApp</option><?php foreach ($instances as $instance): ?><option value="<?= (int) $instance['id'] ?>"><?= View::e($instance['name']) ?></option><?php endforeach; ?></select><small class="field-hint">É o número em que ele responderá os contatos.</small></label>
+                    <label class="field drawer-span"><span>Canal inicial</span><select name="instance_id" required><option value="">Selecione o WhatsApp</option><?php foreach ($instances as $instance): ?><option value="<?= (int) $instance['id'] ?>"><?= View::e($instance['name']) ?></option><?php endforeach; ?></select><small class="field-hint">É o primeiro número em que ele atuará. Outros canais podem ser adicionados depois.</small></label>
                     <label class="field"><span>Nome do assistente</span><input name="name" placeholder="Ex.: Digi" required></label>
                     <label class="field"><span>Área de atendimento</span><input name="segment" placeholder="Ex.: vendas e agendamentos" required></label>
                     <label class="field drawer-span"><span>Objetivo do atendimento</span><textarea name="service_objective" rows="4" placeholder="Ex.: responder dúvidas, identificar a necessidade do cliente, apresentar os serviços e encaminhar oportunidades para a equipe." required></textarea><small class="field-hint">Explique em palavras simples o resultado esperado de cada conversa.</small></label>
@@ -262,7 +262,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                 </div>
                 <div class="agent-create-behavior agent-friendly-toggles">
                     <label class="switch-card"><input type="checkbox" name="auto_reply_enabled" value="1" checked><span><strong>Responder automaticamente</strong><small>O assistente responde quando a conversa estiver no modo IA ativa.</small></span></label>
-                    <label class="switch-card"><input type="checkbox" name="is_default" value="1"><span><strong>Assistente principal</strong><small>Use este assistente como padrão para a empresa.</small></span></label>
+                    <label class="switch-card"><input type="checkbox" name="is_default" value="1"><span><strong>Fallback geral</strong><small>Usado somente quando um canal ainda não tem roteamento próprio. O principal de cada WhatsApp é definido em Canais WhatsApp.</small></span></label>
                 </div>
             </section>
 
@@ -328,7 +328,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
 
             <section class="drawer-section">
                 <div class="drawer-section-title"><div><span class="eyebrow">1. Identificação</span><h3>Quem vai atender?</h3></div></div>
-                <label class="field"><span>Conexão WhatsApp</span><select name="instance_id" required><option value="">Selecione o WhatsApp</option><?php foreach ($instances as $instance): ?><option value="<?= (int) $instance['id'] ?>"><?= View::e($instance['name']) ?></option><?php endforeach; ?></select><small class="field-hint">Escolha em qual WhatsApp este assistente responderá.</small></label>
+                <label class="field"><span>Canal inicial</span><select name="instance_id" required><option value="">Selecione o WhatsApp</option><?php foreach ($instances as $instance): ?><option value="<?= (int) $instance['id'] ?>"><?= View::e($instance['name']) ?></option><?php endforeach; ?></select><small class="field-hint">Escolha o primeiro WhatsApp deste assistente. Depois você pode vinculá-lo a outros canais na tela WhatsApp.</small></label>
                 <label class="field"><span>Nome do assistente</span><input name="name" placeholder="Ex.: Digi, Assistente Comercial" required></label>
                 <label class="field"><span>Área de atendimento</span><input name="segment" placeholder="Ex.: vendas, suporte, agendamentos" required><small class="field-hint">Ajuda a identificar a função principal do assistente.</small></label>
             </section>
@@ -342,7 +342,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
             <section class="drawer-section agent-create-behavior">
                 <div class="drawer-section-title"><div><span class="eyebrow">3. Funcionamento</span><h3>Comportamento inicial</h3></div></div>
                 <label class="check-field"><input type="checkbox" name="auto_reply_enabled" value="1" checked><span>Responder automaticamente quando a conversa estiver com IA ativa</span></label>
-                <label class="check-field"><input type="checkbox" name="is_default" value="1"><span>Usar como assistente principal desta empresa</span></label>
+                <label class="check-field"><input type="checkbox" name="is_default" value="1"><span>Usar como fallback geral da empresa</span></label>
             </section>
 
             <details class="drawer-section drawer-collapsed-card agent-advanced-settings">

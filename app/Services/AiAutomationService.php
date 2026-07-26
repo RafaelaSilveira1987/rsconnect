@@ -81,7 +81,7 @@ final class AiAutomationService
                 return;
             }
 
-            $agent = $this->agentFor($pdo, $instance);
+            $agent = $this->agentFor($pdo, $instance, $conversationId, $incomingContent);
             if (!$agent) {
                 $tenantId = (int) $instance['tenant_id'];
                 $this->log($tenantId, $conversationId, null, 'ai.skipped', 'skipped', 'Nenhum agente ativo com resposta automática.', null, null);
@@ -434,6 +434,25 @@ final class AiAutomationService
             }
 
             $hasMessageLink = $this->hasColumn($pdo, 'ai_automation_logs', 'incoming_message_id');
+            $legacyAgentSelectorSql = '(
+                        SELECT aa.id
+                        FROM ai_agents aa
+                        WHERE aa.tenant_id = cm.tenant_id
+                          AND aa.status = "active"
+                          AND aa.auto_reply_enabled = 1
+                          AND (
+                                aa.instance_id = c.evolution_instance_id
+                                OR aa.instance_id IS NULL
+                                OR aa.is_default = 1
+                          )
+                        ORDER BY (aa.instance_id = c.evolution_instance_id) DESC,
+                                 aa.is_default DESC,
+                                 aa.id DESC
+                        LIMIT 1
+                   )';
+            $agentSelectorSql = $this->hasColumn($pdo, 'conversations', 'ai_agent_id')
+                ? 'COALESCE(c.ai_agent_id, ' . $legacyAgentSelectorSql . ')'
+                : $legacyAgentSelectorSql;
 
             $candidateSql = $hasMessageLink
                 ? 'SELECT cm.id AS message_id,
@@ -451,22 +470,7 @@ final class AiAutomationService
                    AND c.status <> "closed"
                    AND cm.direction = "incoming"
                    AND (:reply_to_reactions = 1 OR cm.message_type <> "reaction")
-                   AND (
-                        SELECT aa.id
-                        FROM ai_agents aa
-                        WHERE aa.tenant_id = cm.tenant_id
-                          AND aa.status = "active"
-                          AND aa.auto_reply_enabled = 1
-                          AND (
-                                aa.instance_id = c.evolution_instance_id
-                                OR aa.instance_id IS NULL
-                                OR aa.is_default = 1
-                          )
-                        ORDER BY (aa.instance_id = c.evolution_instance_id) DESC,
-                                 aa.is_default DESC,
-                                 aa.id DESC
-                        LIMIT 1
-                   ) = :selected_agent_id
+                   AND ' . $agentSelectorSql . ' = :selected_agent_id
                    AND NOT EXISTS (
                         SELECT 1
                         FROM conversation_messages outgoing
@@ -551,22 +555,7 @@ final class AiAutomationService
                    AND c.status <> "closed"
                    AND cm.direction = "incoming"
                    AND (:reply_to_reactions = 1 OR cm.message_type <> "reaction")
-                   AND (
-                        SELECT aa.id
-                        FROM ai_agents aa
-                        WHERE aa.tenant_id = cm.tenant_id
-                          AND aa.status = "active"
-                          AND aa.auto_reply_enabled = 1
-                          AND (
-                                aa.instance_id = c.evolution_instance_id
-                                OR aa.instance_id IS NULL
-                                OR aa.is_default = 1
-                          )
-                        ORDER BY (aa.instance_id = c.evolution_instance_id) DESC,
-                                 aa.is_default DESC,
-                                 aa.id DESC
-                        LIMIT 1
-                   ) = :selected_agent_id
+                   AND ' . $agentSelectorSql . ' = :selected_agent_id
                    AND NOT EXISTS (
                         SELECT 1
                         FROM conversation_messages outgoing
@@ -829,45 +818,9 @@ final class AiAutomationService
             && (string) ($conversation['status'] ?? '') !== 'closed';
     }
 
-    private function agentFor(PDO $pdo, array $instance): ?array
+    private function agentFor(PDO $pdo, array $instance, int $conversationId = 0, string $incomingContent = ''): ?array
     {
-        $statement = $pdo->prepare(
-            'SELECT a.*,
-                    COALESCE(ac_agent.id, ac_tenant.id) AS credential_id,
-                    COALESCE(ac_agent.label, ac_tenant.label) AS credential_label,
-                    COALESCE(ac_agent.provider, ac_tenant.provider) AS credential_provider,
-                    COALESCE(ac_agent.api_key_encrypted, ac_tenant.api_key_encrypted) AS credential_api_key_encrypted,
-                    COALESCE(ac_agent.base_url, ac_tenant.base_url) AS credential_base_url,
-                    COALESCE(ac_agent.default_model, ac_tenant.default_model) AS credential_default_model
-             FROM ai_agents a
-             LEFT JOIN ai_provider_credentials ac_agent ON ac_agent.id = (
-                SELECT x.id
-                FROM ai_provider_credentials x
-                WHERE x.agent_id = a.id AND x.status = "active"
-                ORDER BY x.is_default DESC, x.id DESC
-                LIMIT 1
-             )
-             LEFT JOIN ai_provider_credentials ac_tenant ON ac_tenant.id = (
-                SELECT y.id
-                FROM ai_provider_credentials y
-                WHERE y.tenant_id = a.tenant_id AND y.agent_id IS NULL AND y.status = "active"
-                ORDER BY y.is_default DESC, y.id DESC
-                LIMIT 1
-             )
-             WHERE a.tenant_id = :tenant_id
-               AND a.status = "active"
-               AND a.auto_reply_enabled = 1
-               AND (a.instance_id = :instance_id_filter OR a.instance_id IS NULL OR a.is_default = 1)
-             ORDER BY (a.instance_id = :instance_id_order) DESC, a.is_default DESC, a.id DESC
-             LIMIT 1'
-        );
-        $statement->execute([
-            'tenant_id' => $instance['tenant_id'],
-            'instance_id_filter' => $instance['id'],
-            'instance_id_order' => $instance['id'],
-        ]);
-        $agent = $statement->fetch(PDO::FETCH_ASSOC);
-        return $agent ?: null;
+        return (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, $incomingContent, true);
     }
 
     private function recentMessages(PDO $pdo, int $conversationId, int $limit): array

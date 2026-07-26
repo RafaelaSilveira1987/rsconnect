@@ -11,6 +11,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AiAutomationService;
+use App\Services\AgentRoutingService;
 use App\Services\ConversationFlowService;
 use App\Services\SubscriptionService;
 use PDO;
@@ -82,6 +83,32 @@ final class AgentController
                 $tenantId,
                 array_column($agents, 'id')
             );
+
+            try {
+                $bindings = (new AgentRoutingService())->bindingsForTenant($pdo, $tenantId);
+                $channelsByAgent = [];
+                foreach ($bindings as $binding) {
+                    $agentKey = (int) ($binding['agent_id'] ?? 0);
+                    $channelsByAgent[$agentKey][] = $binding;
+                }
+                foreach ($agents as &$agentRow) {
+                    $agentBindings = $channelsByAgent[(int) $agentRow['id']] ?? [];
+                    $agentRow['channels'] = $agentBindings;
+                    $agentRow['channel_count'] = count($agentBindings);
+                    $agentRow['channel_names'] = implode(', ', array_values(array_filter(array_map(
+                        static fn (array $binding): string => trim((string) ($binding['instance_name'] ?? '')),
+                        $agentBindings
+                    ))));
+                }
+                unset($agentRow);
+            } catch (Throwable) {
+                foreach ($agents as &$agentRow) {
+                    $agentRow['channels'] = [];
+                    $agentRow['channel_count'] = !empty($agentRow['instance_id']) ? 1 : 0;
+                    $agentRow['channel_names'] = (string) ($agentRow['instance_name'] ?? '');
+                }
+                unset($agentRow);
+            }
         }
 
         View::render('agents.index', [
@@ -185,9 +212,38 @@ final class AgentController
                 'cooldown_seconds' => $business['cooldown_seconds'],
                 'reply_to_reactions' => $replyToReactions ? 1 : 0,
             ]);
+            $agentId = (int) $pdo->lastInsertId();
+
+            try {
+                $binding = $pdo->prepare(
+                    'INSERT INTO ai_agent_instance_bindings
+                        (tenant_id, agent_id, instance_id, is_primary, priority, status)
+                     VALUES (:tenant_id, :agent_id, :instance_id, :is_primary, :priority, "active")
+                     ON DUPLICATE KEY UPDATE status = "active", priority = VALUES(priority)'
+                );
+                $existingPrimary = $pdo->prepare(
+                    'SELECT COUNT(*) FROM ai_agent_instance_bindings
+                     WHERE tenant_id = :tenant_id AND instance_id = :instance_id AND status = "active" AND is_primary = 1'
+                );
+                $existingPrimary->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId]);
+                $makePrimary = $isDefault || (int) $existingPrimary->fetchColumn() === 0;
+                if ($makePrimary) {
+                    $pdo->prepare('UPDATE ai_agent_instance_bindings SET is_primary = 0 WHERE tenant_id = :tenant_id AND instance_id = :instance_id')
+                        ->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId]);
+                }
+                $binding->execute([
+                    'tenant_id' => $tenantId,
+                    'agent_id' => $agentId,
+                    'instance_id' => $instanceId,
+                    'is_primary' => $makePrimary ? 1 : 0,
+                    'priority' => $makePrimary ? 200 : 100,
+                ]);
+            } catch (Throwable) {
+                // Compatibilidade antes da migration 055: o vínculo legado instance_id continua válido.
+            }
 
             $pdo->commit();
-            Audit::log('agent.created', ['agent_id' => (int) $pdo->lastInsertId(), 'name' => $name], $tenantId);
+            Audit::log('agent.created', ['agent_id' => $agentId, 'name' => $name], $tenantId);
             Flash::set('success', 'Assistente criado. Revise as instruções e faça uma conversa de teste antes de liberar o atendimento.');
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {

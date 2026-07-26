@@ -6,6 +6,7 @@ use App\Core\Router;
 use App\Core\View;
 
 $canManage = Auth::can('conversations.manage');
+$conversationAgents = is_array($conversationAgents ?? null) ? $conversationAgents : [];
 $formatDate = static function (?string $date, string $format = 'd/m/Y H:i'): string {
     if (!$date) {
         return '—';
@@ -352,6 +353,48 @@ $returnQuery = http_build_query($pollQuery);
                         </div>
                     </section>
                 <?php endif; ?>
+
+                <section class="drawer-section conversation-agent-route-card">
+                    <div class="drawer-section-title">
+                        <div>
+                            <span class="eyebrow">Roteamento da IA</span>
+                            <h3>Assistente desta conversa</h3>
+                            <small>O agente escolhido permanece responsável por esta conversa até uma troca manual.</small>
+                        </div>
+                    </div>
+                    <?php if ($conversationAgents): ?>
+                        <?php if ($canManage): ?>
+                            <form method="post" action="<?= View::e(Router::url('/conversations/agent')) ?>" class="conversation-agent-route-form">
+                                <?= Csrf::input() ?>
+                                <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
+                                <label class="field">
+                                    <span>Agente vinculado</span>
+                                    <select name="agent_id" required>
+                                        <?php foreach ($conversationAgents as $routeAgent): ?>
+                                            <option value="<?= (int) $routeAgent['agent_id'] ?>" <?= (int) ($selected['ai_agent_id'] ?? 0) === (int) $routeAgent['agent_id'] ? 'selected' : '' ?>>
+                                                <?= View::e((string) $routeAgent['name']) ?> · <?= View::e((string) $routeAgent['segment']) ?><?= (int) ($routeAgent['is_primary'] ?? 0) === 1 ? ' · Principal' : '' ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </label>
+                                <button class="btn btn-outline btn-small" type="submit">Trocar assistente</button>
+                            </form>
+                        <?php else: ?>
+                            <?php
+                            $currentAgentLabel = 'Não definido';
+                            foreach ($conversationAgents as $routeAgent) {
+                                if ((int) ($selected['ai_agent_id'] ?? 0) === (int) $routeAgent['agent_id']) {
+                                    $currentAgentLabel = (string) $routeAgent['name'];
+                                    break;
+                                }
+                            }
+                            ?>
+                            <strong><?= View::e($currentAgentLabel) ?></strong>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <div class="message-warning">Nenhum assistente está vinculado a este WhatsApp. Configure em WhatsApp → Agentes e roteamento.</div>
+                    <?php endif; ?>
+                </section>
 
                 <form class="lead-form drawer-form" method="post" action="<?= View::e(Router::url('/conversations/contact')) ?>">
                     <?= Csrf::input() ?>

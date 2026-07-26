@@ -975,27 +975,10 @@ final class PreSchedulingService
             }
 
             $tenantId = (int) ($instance['tenant_id'] ?? 0);
-            $instanceId = (int) ($instance['id'] ?? 0);
-            $agentId = null;
-            if ($tenantId > 0) {
-                $agentStatement = $pdo->prepare(
-                    'SELECT id
-                     FROM ai_agents
-                     WHERE tenant_id = :tenant_id
-                       AND status = "active"
-                       AND auto_reply_enabled = 1
-                       AND (instance_id = :instance_id OR instance_id IS NULL OR is_default = 1)
-                     ORDER BY (instance_id = :instance_id_order) DESC, is_default DESC, id DESC
-                     LIMIT 1'
-                );
-                $agentStatement->execute([
-                    'tenant_id' => $tenantId,
-                    'instance_id' => $instanceId,
-                    'instance_id_order' => $instanceId,
-                ]);
-                $value = $agentStatement->fetchColumn();
-                $agentId = $value !== false ? (int) $value : null;
-            }
+            $resolvedAgent = $tenantId > 0
+                ? (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, '', true)
+                : null;
+            $agentId = !empty($resolvedAgent['id']) ? (int) $resolvedAgent['id'] : null;
 
             $pdo->prepare(
                 'INSERT INTO ai_automation_logs

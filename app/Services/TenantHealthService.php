@@ -370,8 +370,13 @@ final class TenantHealthService
     /** @return array<int,array<string,mixed>> */
     private function aiChecks(int $tenantId): array
     {
+        $routingAvailable = $this->tableExists('ai_agent_instance_bindings');
+        $bindingCountSql = $routingAvailable
+            ? '(SELECT COUNT(*) FROM ai_agent_instance_bindings b WHERE b.agent_id = a.id AND b.status = "active")'
+            : '0';
         $agents = $this->all(
             'SELECT a.*, i.name AS instance_label, i.status AS instance_status,
+                    ' . $bindingCountSql . ' AS binding_count,
                     (SELECT COUNT(*) FROM evolution_instances ii WHERE ii.tenant_id = a.tenant_id) AS tenant_instance_count,
                     (SELECT COUNT(*) FROM ai_provider_credentials c WHERE c.tenant_id = a.tenant_id AND c.status = "active" AND (c.agent_id = a.id OR c.agent_id IS NULL)) AS credential_count,
                     (SELECT MAX(created_at) FROM ai_automation_logs l WHERE l.agent_id = a.id AND l.status = "success") AS last_success,
@@ -398,7 +403,8 @@ final class TenantHealthService
 
             $consecutive = $this->consecutiveAiErrors($id);
             $errors24h = (int) ($agent['errors_24h'] ?? 0);
-            $hasWhatsapp = !empty($agent['instance_id'])
+            $hasWhatsapp = (int) ($agent['binding_count'] ?? 0) > 0
+                || !empty($agent['instance_id'])
                 || ((int) ($agent['is_default'] ?? 0) === 1 && (int) ($agent['tenant_instance_count'] ?? 0) > 0);
             $hasCredential = (int) ($agent['credential_count'] ?? 0) > 0;
 
@@ -477,7 +483,8 @@ final class TenantHealthService
                 $details['Alterado em'] = $manualSource['changed_at'];
             }
             $details += [
-                'Conexão vinculada' => (string) ($agent['instance_label'] ?? 'Não vinculada'),
+                'Canal legado/principal' => (string) ($agent['instance_label'] ?? 'Não vinculado'),
+                'Canais vinculados' => (string) ((int) ($agent['binding_count'] ?? 0)),
                 'Credencial ativa encontrada' => $hasCredential ? 'Sim' : 'Não',
                 'Modelo' => (string) ($agent['model_name'] ?? ''),
                 'Última resposta bem-sucedida' => $this->formatDatabaseDate($agent['last_success'] ?? null, 'Nenhuma'),
@@ -756,9 +763,11 @@ final class TenantHealthService
             ],
         ]];
 
+        $linkedAgentCountSql = $this->tableExists('ai_agent_instance_bindings')
+            ? '(SELECT COUNT(*) FROM ai_agent_instance_bindings b WHERE b.instance_id = i.id AND b.status = "active")'
+            : '(SELECT COUNT(*) FROM ai_agents a WHERE a.instance_id = i.id)';
         $instances = $this->all(
-            'SELECT i.*,
-                    (SELECT COUNT(*) FROM ai_agents a WHERE a.instance_id = i.id) AS linked_agents
+            'SELECT i.*, ' . $linkedAgentCountSql . ' AS linked_agents
              FROM evolution_instances i WHERE i.tenant_id = :tenant_id
              ORDER BY i.is_default DESC, i.id',
             ['tenant_id' => $tenantId]
@@ -1122,17 +1131,7 @@ final class TenantHealthService
      */
     private function pendingAiResponses(int $tenantId, int $agentId, bool $replyToReactions): array
     {
-        $row = $this->row(
-            'SELECT
-                COUNT(DISTINCT c.id) AS conversation_count,
-                COUNT(cm.id) AS message_count,
-                MIN(cm.sent_at) AS oldest_pending_at
-             FROM conversations c
-             INNER JOIN conversation_messages cm
-                ON cm.conversation_id = c.id
-               AND cm.tenant_id = c.tenant_id
-             WHERE c.tenant_id = :tenant_id
-               AND (
+        $legacySelector = '(
                     SELECT aa.id
                     FROM ai_agents aa
                     WHERE aa.tenant_id = c.tenant_id
@@ -1147,7 +1146,37 @@ final class TenantHealthService
                              aa.is_default DESC,
                              aa.id DESC
                     LIMIT 1
-               ) = :selected_agent_id
+               )';
+        $bindingSelector = $this->tableExists('ai_agent_instance_bindings')
+            ? '(SELECT b.agent_id
+                FROM ai_agent_instance_bindings b
+                INNER JOIN ai_agents ba ON ba.id = b.agent_id AND ba.tenant_id = b.tenant_id
+                WHERE b.tenant_id = c.tenant_id
+                  AND b.instance_id = c.evolution_instance_id
+                  AND b.status = "active"
+                  AND ba.status = "active"
+                  AND ba.auto_reply_enabled = 1
+                ORDER BY b.is_primary DESC, b.priority DESC, b.id ASC
+                LIMIT 1)'
+            : null;
+        if ($this->columnExists('conversations', 'ai_agent_id')) {
+            $selector = $bindingSelector !== null
+                ? 'COALESCE(c.ai_agent_id, ' . $bindingSelector . ', ' . $legacySelector . ')'
+                : 'COALESCE(c.ai_agent_id, ' . $legacySelector . ')';
+        } else {
+            $selector = $legacySelector;
+        }
+        $row = $this->row(
+            'SELECT
+                COUNT(DISTINCT c.id) AS conversation_count,
+                COUNT(cm.id) AS message_count,
+                MIN(cm.sent_at) AS oldest_pending_at
+             FROM conversations c
+             INNER JOIN conversation_messages cm
+                ON cm.conversation_id = c.id
+               AND cm.tenant_id = c.tenant_id
+             WHERE c.tenant_id = :tenant_id
+               AND ' . $selector . ' = :selected_agent_id
                AND c.attendance_mode = "ai"
                AND c.status <> "closed"
                AND cm.direction = "incoming"
@@ -1842,6 +1871,20 @@ final class TenantHealthService
             return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
             return [];
+        }
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        try {
+            $statement = $this->pdo->prepare(
+                'SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name'
+            );
+            $statement->execute(['table_name' => $table, 'column_name' => $column]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
         }
     }
 

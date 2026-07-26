@@ -11,6 +11,7 @@ $isSuperAdmin = Auth::isSuperAdmin();
 $canGenerateQr = $canManage;
 $adminAgents = $adminAgents ?? [];
 $instancesByTenant = $instancesByTenant ?? [];
+$routingByInstance = $routingByInstance ?? [];
 
 if (!$isSuperAdmin) {
     require __DIR__ . '/_client.php';
@@ -28,8 +29,8 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
 <section class="admin-module-hero">
     <div>
         <span class="eyebrow">Operação WhatsApp</span>
-        <h2>Conexões WhatsApp</h2>
-        <p>Cadastre, teste e recupere conexões da Evolution sem perder os vínculos com assistentes, contatos e conversas.</p>
+        <h2>Canais WhatsApp</h2>
+        <p>Gerencie todos os números em uma única tela, conecte assistentes especializados e preserve os vínculos com contatos e conversas.</p>
     </div>
     <div class="admin-module-hero-actions">
         <button class="btn btn-outline" type="button" data-toggle-panel="instance-test-drawer">Enviar teste</button>
@@ -46,7 +47,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
 
 <section class="card admin-module-panel">
     <div class="section-heading admin-module-heading">
-        <div><span class="eyebrow">Conexões cadastradas</span><h2>WhatsApps por empresa</h2><p>Localize uma empresa e abra somente a ação que precisa executar.</p></div>
+        <div><span class="eyebrow">Canais cadastrados</span><h2>WhatsApps por empresa</h2><p>Cada número é um canal. Configure conexão, agente principal e especialistas no mesmo registro.</p></div>
         <span class="badge" data-admin-visible-count><?= $total ?> registro(s)</span>
     </div>
     <div class="admin-module-filters" data-admin-filter-root>
@@ -79,6 +80,12 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
                     <div><dt>Campanhas</dt><dd><?= (int) $instance['campaigns_count'] ?></dd></div>
                 </dl>
                 <details class="admin-inline-details"><summary>Webhook e informações técnicas</summary><div class="admin-technical-copy"><strong>Webhook para mensagens</strong><code><?= View::e($webhookUrl) ?></code><small><?= $webhookToken === '' ? 'Defina EVOLUTION_WEBHOOK_TOKEN antes de utilizar.' : 'Use este endereço no evento MESSAGES_UPSERT da Evolution.' ?></small></div></details>
+                <?php
+                $bindings = $routingByInstance[(int) $instance['id']] ?? [];
+                $allAgents = array_values(array_filter($adminAgents, static fn (array $agent): bool => (int) ($agent['tenant_id'] ?? 0) === (int) $instance['tenant_id']));
+                $canRoute = Auth::can('agents.manage');
+                require __DIR__ . '/_routing.php';
+                ?>
                 <div class="admin-record-actions">
                     <?php if ($instance['status'] !== 'connected'): ?>
                         <form method="post" action="<?= View::e(Router::url('/instances/qr')) ?>" data-qr-code-form><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><button class="btn btn-small btn-outline" type="submit" data-qr-code-button>Gerar QR Code</button></form>
@@ -96,7 +103,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
 </section>
 
 <section class="card admin-agent-recovery admin-secondary-panel">
-    <div class="section-heading"><div><span class="eyebrow">Recuperação</span><h2>Assistentes e conexões</h2><p>Reassocie um assistente quando uma conexão for recriada.</p></div><span class="badge"><?= count($adminAgents) ?> assistente(s)</span></div>
+    <div class="section-heading"><div><span class="eyebrow">Recuperação técnica (legado)</span><h2>Compatibilidade de assistentes e conexões</h2><p>Use apenas para recuperar associações antigas após recriar uma conexão. O roteamento normal agora é feito em cada Canal WhatsApp.</p></div><span class="badge"><?= count($adminAgents) ?> assistente(s)</span></div>
     <div class="admin-agent-list">
         <?php foreach ($adminAgents as $agent): ?>
             <?php $tenantInstances = $instancesByTenant[(int) $agent['tenant_id']] ?? []; ?>

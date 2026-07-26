@@ -13,6 +13,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AiAutomationService;
+use App\Services\AgentRoutingService;
 use App\Services\AiModelService;
 use App\Services\ConversationFlowService;
 use App\Services\EvolutionService;
@@ -109,6 +110,7 @@ final class ConversationController
         $selected = null;
         $messages = [];
         $team = [];
+        $conversationAgents = [];
 
         if ($selectedId > 0) {
             $selected = $this->findConversation($selectedId, $tenantId > 0 ? $tenantId : null);
@@ -150,6 +152,17 @@ final class ConversationController
                 );
                 $teamStatement->execute(['tenant_id' => $selected['tenant_id']]);
                 $team = $teamStatement->fetchAll(PDO::FETCH_ASSOC);
+
+                try {
+                    $conversationAgents = (new AgentRoutingService())->agentsForInstance(
+                        $pdo,
+                        (int) $selected['tenant_id'],
+                        (int) $selected['evolution_instance_id'],
+                        true
+                    );
+                } catch (Throwable) {
+                    $conversationAgents = [];
+                }
             }
         }
 
@@ -176,6 +189,7 @@ final class ConversationController
             'selected' => $selected,
             'messages' => $messages,
             'team' => $team,
+            'conversationAgents' => $conversationAgents,
             'instances' => $instances,
             'tenants' => $tenants,
             'filters' => $filters,
@@ -672,6 +686,23 @@ final class ConversationController
             'id' => $conversationId,
         ]);
 
+        if ($mode === 'ai' && empty($conversation['ai_agent_id'])) {
+            try {
+                (new AgentRoutingService())->resolve(
+                    Database::connection(),
+                    [
+                        'id' => (int) $conversation['evolution_instance_id'],
+                        'tenant_id' => (int) $conversation['tenant_id'],
+                    ],
+                    $conversationId,
+                    '',
+                    true
+                );
+            } catch (Throwable) {
+                // Se ainda não houver roteamento, o fluxo legado resolve na próxima mensagem.
+            }
+        }
+
         $descriptions = [
             'ai' => 'Atendimento devolvido para a IA.',
             'human' => 'Atendimento assumido por ' . (Auth::user()['name'] ?? 'usuário') . '.',
@@ -681,6 +712,47 @@ final class ConversationController
         Audit::log('conversation.mode_changed', ['conversation_id' => $conversationId, 'mode' => $mode], (int) $conversation['tenant_id']);
 
         Flash::set('success', $descriptions[$mode]);
+        $this->redirect('/conversations?conversation_id=' . $conversationId);
+    }
+
+    public function setAgent(): void
+    {
+        $conversationId = (int) ($_POST['conversation_id'] ?? 0);
+        $agentId = (int) ($_POST['agent_id'] ?? 0);
+        $conversation = $this->findConversation($conversationId);
+        if ($conversation === null) {
+            Flash::set('error', 'Conversa não encontrada.');
+            $this->redirect('/conversations');
+        }
+        if ($agentId < 1) {
+            Flash::set('error', 'Escolha um assistente vinculado a este WhatsApp.');
+            $this->redirect('/conversations?conversation_id=' . $conversationId);
+        }
+
+        $pdo = Database::connection();
+        $routing = new AgentRoutingService();
+        if (!$routing->pin(
+            $pdo,
+            (int) $conversation['tenant_id'],
+            (int) $conversation['evolution_instance_id'],
+            $conversationId,
+            $agentId,
+            true
+        )) {
+            Flash::set('error', 'Esse assistente não está ativo ou não está vinculado ao canal da conversa.');
+            $this->redirect('/conversations?conversation_id=' . $conversationId);
+        }
+
+        $agentNameStatement = $pdo->prepare('SELECT name FROM ai_agents WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+        $agentNameStatement->execute(['id' => $agentId, 'tenant_id' => (int) $conversation['tenant_id']]);
+        $agentName = (string) ($agentNameStatement->fetchColumn() ?: 'Assistente');
+        $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'agent.assigned', 'Conversa direcionada para o assistente ' . $agentName . '.');
+        Audit::log('conversation.agent_changed', [
+            'conversation_id' => $conversationId,
+            'agent_id' => $agentId,
+            'agent_name' => $agentName,
+        ], (int) $conversation['tenant_id']);
+        Flash::set('success', 'Assistente da conversa alterado para ' . $agentName . '.');
         $this->redirect('/conversations?conversation_id=' . $conversationId);
     }
 
@@ -1063,38 +1135,20 @@ final class ConversationController
 
     private function agentForConversation(PDO $pdo, array $conversation): ?array
     {
-        $statement = $pdo->prepare(
-            'SELECT a.*,
-                    COALESCE(ac_agent.id, ac_tenant.id) AS credential_id,
-                    COALESCE(ac_agent.label, ac_tenant.label) AS credential_label,
-                    COALESCE(ac_agent.provider, ac_tenant.provider) AS credential_provider,
-                    COALESCE(ac_agent.api_key_encrypted, ac_tenant.api_key_encrypted) AS credential_api_key_encrypted,
-                    COALESCE(ac_agent.base_url, ac_tenant.base_url) AS credential_base_url,
-                    COALESCE(ac_agent.default_model, ac_tenant.default_model) AS credential_default_model
-             FROM ai_agents a
-             LEFT JOIN ai_provider_credentials ac_agent ON ac_agent.id = (
-                SELECT x.id FROM ai_provider_credentials x
-                WHERE x.agent_id = a.id AND x.status = "active"
-                ORDER BY x.is_default DESC, x.id DESC LIMIT 1
-             )
-             LEFT JOIN ai_provider_credentials ac_tenant ON ac_tenant.id = (
-                SELECT y.id FROM ai_provider_credentials y
-                WHERE y.tenant_id = a.tenant_id AND y.agent_id IS NULL AND y.status = "active"
-                ORDER BY y.is_default DESC, y.id DESC LIMIT 1
-             )
-             WHERE a.tenant_id = :tenant_id
-               AND a.status = "active"
-               AND (a.instance_id = :instance_id_filter OR a.instance_id IS NULL OR a.is_default = 1)
-             ORDER BY (a.instance_id = :instance_id_order) DESC, a.is_default DESC, a.id DESC
-             LIMIT 1'
+        $instanceId = (int) ($conversation['evolution_instance_id'] ?? 0);
+        $conversationId = (int) ($conversation['id'] ?? 0);
+        $tenantId = (int) ($conversation['tenant_id'] ?? 0);
+        if ($instanceId < 1 || $tenantId < 1) {
+            return null;
+        }
+
+        return (new AgentRoutingService())->resolve(
+            $pdo,
+            ['id' => $instanceId, 'tenant_id' => $tenantId],
+            $conversationId,
+            '',
+            true
         );
-        $statement->execute([
-            'tenant_id' => $conversation['tenant_id'],
-            'instance_id_filter' => $conversation['evolution_instance_id'],
-            'instance_id_order' => $conversation['evolution_instance_id'],
-        ]);
-        $agent = $statement->fetch(PDO::FETCH_ASSOC);
-        return $agent ?: null;
     }
 
     private function recentMessages(PDO $pdo, int $tenantId, int $conversationId, int $limit): array

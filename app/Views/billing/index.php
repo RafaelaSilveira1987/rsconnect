@@ -123,15 +123,32 @@ $payableInvoices = array_values(array_filter($invoices, static fn (array $invoic
         <div class="section-heading"><div><span class="eyebrow">Produtos comerciais</span><h2>Planos cadastrados</h2><p>Defina recursos, limites e valores apresentados ao cliente.</p></div><button class="btn btn-primary" type="button" data-plan-open="new" data-toggle-panel="plan-drawer">Novo plano</button></div>
         <div class="admin-module-card-list compact-cards">
             <?php foreach ($plans as $plan): ?>
+                <?php
+                $isCustomQuote = strtolower((string) ($plan['plan_key'] ?? '')) === 'custom' && (float) ($plan['monthly_price'] ?? 0) <= 0;
+                $displayFeatures = [];
+                foreach (($plan['features'] ?? []) as $feature) {
+                    $featureText = trim((string) $feature);
+                    if ($featureText === '') { continue; }
+                    if (preg_match('/\b(inst[aâ]ncia|whatsapps?|agentes?\s+ia|assistentes?\s+ia)\b/iu', $featureText)) { continue; }
+                    $featureText = preg_replace('/(\d+)\s+fluxos?\s+n8n/iu', '$1 automações integradas', $featureText) ?? $featureText;
+                    $displayFeatures[] = $featureText;
+                }
+                ?>
                 <article class="admin-record-card">
-                    <div class="admin-record-main"><span class="admin-record-mark is-plan">R$</span><div class="admin-record-copy"><div class="admin-record-title-row"><div><h3><?= View::e($plan['name']) ?></h3><p><?= View::e($plan['plan_key']) ?></p></div><div class="admin-record-badges"><span class="badge badge-<?= View::e($plan['status']) ?>"><?= View::e($statusLabel[$plan['status']] ?? $plan['status']) ?></span></div></div><strong class="admin-record-price"><?= View::e($money($plan['monthly_price'])) ?><small>/mês</small></strong><?php if (!empty($plan['description'])): ?><small class="admin-record-muted"><?= View::e($plan['description']) ?></small><?php endif; ?></div></div>
-                    <dl class="admin-record-metrics"><div><dt>Usuários</dt><dd><?= View::e((string) ($plan['limits']['users'] ?? '∞')) ?></dd></div><div><dt>WhatsApps</dt><dd><?= View::e((string) ($plan['limits']['instances'] ?? '∞')) ?></dd></div><div><dt>Assistentes</dt><dd><?= View::e((string) ($plan['limits']['agents'] ?? '∞')) ?></dd></div><div><dt>Franquia IA RS</dt><dd><?= View::e((string) ($plan['limits']['ai_interactions_month'] ?? $plan['limits']['messages_month'] ?? '∞')) ?></dd></div></dl>
-                    <div class="admin-feature-tags"><?php foreach (array_slice($plan['features'] ?? [], 0, 6) as $feature): ?><span><?= View::e($feature) ?></span><?php endforeach; ?><?php if (empty($plan['features'])): ?><small>Sem recursos descritos.</small><?php endif; ?></div>
+                    <div class="admin-record-main"><span class="admin-record-mark is-plan">R$</span><div class="admin-record-copy"><div class="admin-record-title-row"><div><h3><?= View::e($plan['name']) ?></h3><p><?= View::e($plan['plan_key']) ?></p></div><div class="admin-record-badges"><span class="badge badge-<?= View::e($plan['status']) ?>"><?= View::e($statusLabel[$plan['status']] ?? $plan['status']) ?></span></div></div><strong class="admin-record-price"><?= $isCustomQuote ? 'Sob consulta' : View::e($money($plan['monthly_price'])) ?><?php if (!$isCustomQuote): ?><small>/mês</small><?php endif; ?></strong><?php if (!empty($plan['description'])): ?><small class="admin-record-muted"><?= View::e($plan['description']) ?></small><?php endif; ?></div></div>
+                    <dl class="admin-record-metrics"><div><dt>Usuários</dt><dd><?= View::e((string) ($plan['limits']['users'] ?? '∞')) ?></dd></div><div><dt>Canais WhatsApp</dt><dd><?= View::e((string) ($plan['limits']['instances'] ?? '∞')) ?></dd></div><div><dt>Agentes de IA</dt><dd><?= View::e((string) ($plan['limits']['agents'] ?? '∞')) ?></dd></div><div><dt>Franquia IA RS</dt><dd><?= View::e((string) ($plan['limits']['ai_interactions_month'] ?? $plan['limits']['messages_month'] ?? '∞')) ?></dd></div></dl>
+                    <div class="admin-feature-tags"><?php foreach (array_slice($displayFeatures, 0, 6) as $feature): ?><span><?= View::e($feature) ?></span><?php endforeach; ?><?php if (!$displayFeatures): ?><small>Recursos detalhados pelos limites acima.</small><?php endif; ?></div>
                     <div class="admin-record-actions"><button class="btn btn-small btn-outline" type="button" data-toggle-panel="plan-drawer" data-plan-open="edit" data-id="<?= (int) $plan['id'] ?>" data-plan-key="<?= View::e($plan['plan_key']) ?>" data-name="<?= View::e($plan['name']) ?>" data-description="<?= View::e($plan['description'] ?? '') ?>" data-price="<?= View::e(number_format((float) $plan['monthly_price'], 2, ',', '.')) ?>" data-status="<?= View::e($plan['status']) ?>" data-sort-order="<?= (int) $plan['sort_order'] ?>" data-limits="<?= View::e(rawurlencode(json_encode($plan['limits'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))) ?>" data-features="<?= View::e(rawurlencode(implode("
 ", $plan['features'] ?? []))) ?>">Editar plano</button></div>
                 </article>
             <?php endforeach; ?>
             <?php if (!$plans): ?><div class="empty-state">Nenhum plano cadastrado.</div><?php endif; ?>
+        </div>
+        <div class="plan-capability-explainer">
+            <div><strong>Canal WhatsApp</strong><span>Cada número conectado conta como um canal. Todos os números da empresa são administrados em uma única tela.</span></div>
+            <div><strong>Agente de IA</strong><span>É uma função especializada. Vários agentes podem compartilhar o mesmo canal e um agente pode atuar em mais de um canal.</span></div>
+            <div><strong>Franquia IA RS</strong><span>Conta somente respostas automáticas efetivamente entregues usando IA custeada pela RS Connect.</span></div>
+            <div><strong>Automações</strong><span>Os fluxos n8n são a capacidade técnica por trás de integrações e rotinas automatizadas.</span></div>
         </div>
     </section>
 </div>

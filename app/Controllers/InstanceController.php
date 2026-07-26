@@ -12,6 +12,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\EvolutionService;
+use App\Services\AgentRoutingService;
 use App\Services\SubscriptionService;
 use PDO;
 use Throwable;
@@ -22,6 +23,11 @@ final class InstanceController
     {
         $pdo = Database::connection();
 
+        $routingAvailable = $this->tableExists($pdo, 'ai_agent_instance_bindings');
+        $agentCountSql = $routingAvailable
+            ? '(SELECT COUNT(*) FROM ai_agent_instance_bindings b WHERE b.instance_id = i.id AND b.status = "active")'
+            : '(SELECT COUNT(*) FROM ai_agents a WHERE a.instance_id = i.id)';
+
         if (Auth::isSuperAdmin()) {
             $campaignCountSql = $this->tableExists($pdo, 'message_campaigns')
                 ? '(SELECT COUNT(*) FROM message_campaigns mc WHERE mc.evolution_instance_id = i.id)'
@@ -29,7 +35,7 @@ final class InstanceController
 
             $statement = $pdo->query(
                 'SELECT i.*, t.name AS tenant_name,
-                        (SELECT COUNT(*) FROM ai_agents a WHERE a.instance_id = i.id) AS agents_count,
+                        ' . $agentCountSql . ' AS agents_count,
                         (SELECT COUNT(*) FROM contacts ct WHERE ct.evolution_instance_id = i.id) AS contacts_count,
                         (SELECT COUNT(*) FROM conversations c WHERE c.evolution_instance_id = i.id) AS conversations_count,
                         ' . $campaignCountSql . ' AS campaigns_count
@@ -40,7 +46,10 @@ final class InstanceController
         } else {
             $statement = $pdo->prepare(
                 'SELECT i.*, t.name AS tenant_name,
-                        0 AS agents_count, 0 AS contacts_count, 0 AS conversations_count, 0 AS campaigns_count
+                        ' . $agentCountSql . ' AS agents_count,
+                        (SELECT COUNT(*) FROM contacts ct WHERE ct.evolution_instance_id = i.id) AS contacts_count,
+                        (SELECT COUNT(*) FROM conversations c WHERE c.evolution_instance_id = i.id) AS conversations_count,
+                        0 AS campaigns_count
                  FROM evolution_instances i
                  INNER JOIN tenants t ON t.id = i.tenant_id
                  WHERE i.tenant_id = :tenant_id
@@ -75,6 +84,32 @@ final class InstanceController
                  LEFT JOIN evolution_instances i ON i.id = a.instance_id
                  ORDER BY t.name, a.is_default DESC, a.name'
             )->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            $agentStatement = $pdo->prepare(
+                'SELECT id, tenant_id, instance_id, name, segment, status, is_default, auto_reply_enabled
+                 FROM ai_agents WHERE tenant_id = :tenant_id ORDER BY status = "active" DESC, is_default DESC, name'
+            );
+            $agentStatement->execute(['tenant_id' => (int) Auth::tenantId()]);
+            $adminAgents = $agentStatement->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        $routingByInstance = [];
+        $routingService = new AgentRoutingService();
+        foreach ($instances as $instance) {
+            $routingByInstance[(int) $instance['id']] = $routingService->agentsForInstance(
+                $pdo,
+                (int) $instance['tenant_id'],
+                (int) $instance['id'],
+                false
+            );
+        }
+
+        $channelPlan = null;
+        $channelUsage = null;
+        if (!Auth::isSuperAdmin() && Auth::tenantId()) {
+            $subscription = new SubscriptionService();
+            $channelPlan = $subscription->currentPlanForTenant((int) Auth::tenantId());
+            $channelUsage = $subscription->usageForTenant((int) Auth::tenantId());
         }
 
         View::render('instances.index', [
@@ -84,6 +119,9 @@ final class InstanceController
             'adminAgents' => $adminAgents,
             'instancesByTenant' => $instancesByTenant,
             'defaultUrl' => (string) Env::get('EVOLUTION_DEFAULT_URL', ''),
+            'routingByInstance' => $routingByInstance,
+            'channelPlan' => $channelPlan,
+            'channelUsage' => $channelUsage,
         ]);
     }
 
@@ -276,6 +314,121 @@ final class InstanceController
         $this->redirect('/instances');
     }
 
+    /** Configura quais assistentes atuam em um canal e quem recebe novas conversas por padrão. */
+    public function updateRouting(): void
+    {
+        $instanceId = (int) ($_POST['instance_id'] ?? 0);
+        $rawAgentIds = $_POST['agent_ids'] ?? [];
+        $primaryAgentId = (int) ($_POST['primary_agent_id'] ?? 0);
+        $rawKeywords = is_array($_POST['routing_keywords'] ?? null) ? $_POST['routing_keywords'] : [];
+        $rawPriorities = is_array($_POST['priority'] ?? null) ? $_POST['priority'] : [];
+
+        if (!is_array($rawAgentIds)) {
+            $rawAgentIds = [$rawAgentIds];
+        }
+        $agentIds = array_values(array_unique(array_filter(array_map('intval', $rawAgentIds), static fn (int $id): bool => $id > 0)));
+
+        $pdo = Database::connection();
+        $instance = $this->findInstance($pdo, $instanceId);
+        if (!$instance) {
+            Flash::set('error', 'Canal WhatsApp não encontrado.');
+            $this->redirect('/instances');
+        }
+        $tenantId = (int) $instance['tenant_id'];
+        if (!Auth::isSuperAdmin() && $tenantId !== (int) Auth::tenantId()) {
+            Flash::set('error', 'Este canal não pertence à sua empresa.');
+            $this->redirect('/instances');
+        }
+        if (!$this->tableExists($pdo, 'ai_agent_instance_bindings')) {
+            Flash::set('error', 'A migration 055 precisa ser aplicada antes de configurar múltiplos agentes por canal.');
+            $this->redirect('/instances');
+        }
+        if ($agentIds !== [] && !in_array($primaryAgentId, $agentIds, true)) {
+            $primaryAgentId = $agentIds[0];
+        }
+        if ($agentIds === []) {
+            $primaryAgentId = 0;
+        }
+
+        if ($agentIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($agentIds), '?'));
+            $validate = $pdo->prepare('SELECT id FROM ai_agents WHERE tenant_id = ? AND id IN (' . $placeholders . ')');
+            $validate->execute(array_merge([$tenantId], $agentIds));
+            $validIds = array_map('intval', $validate->fetchAll(PDO::FETCH_COLUMN) ?: []);
+            sort($validIds);
+            $expected = $agentIds; sort($expected);
+            if ($validIds !== $expected) {
+                Flash::set('error', 'Um dos assistentes selecionados não pertence a esta empresa.');
+                $this->redirect('/instances');
+            }
+        }
+
+        try {
+            $pdo->beginTransaction();
+            $pdo->prepare('DELETE FROM ai_agent_instance_bindings WHERE tenant_id = :tenant_id AND instance_id = :instance_id')
+                ->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId]);
+
+            $insert = $pdo->prepare(
+                'INSERT INTO ai_agent_instance_bindings
+                    (tenant_id, agent_id, instance_id, is_primary, priority, routing_keywords, status)
+                 VALUES
+                    (:tenant_id, :agent_id, :instance_id, :is_primary, :priority, :routing_keywords, "active")'
+            );
+            foreach ($agentIds as $agentId) {
+                $keywords = trim((string) ($rawKeywords[$agentId] ?? ''));
+                $priority = max(1, min(999, (int) ($rawPriorities[$agentId] ?? ($agentId === $primaryAgentId ? 200 : 100))));
+                $insert->execute([
+                    'tenant_id' => $tenantId,
+                    'agent_id' => $agentId,
+                    'instance_id' => $instanceId,
+                    'is_primary' => $agentId === $primaryAgentId ? 1 : 0,
+                    'priority' => $priority,
+                    'routing_keywords' => $keywords !== '' ? mb_substr($keywords, 0, 1000) : null,
+                ]);
+            }
+
+            // Conversas permanecem com o agente atual enquanto ele continuar no canal.
+            // Se o vínculo foi removido, limpa a fixação para a próxima mensagem ser roteada novamente.
+            if ($agentIds === []) {
+                $pdo->prepare(
+                    'UPDATE conversations SET ai_agent_id = NULL
+                     WHERE tenant_id = :tenant_id AND evolution_instance_id = :instance_id'
+                )->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId]);
+            } else {
+                $conversationPlaceholders = implode(',', array_fill(0, count($agentIds), '?'));
+                $clearPinned = $pdo->prepare(
+                    'UPDATE conversations
+                     SET ai_agent_id = NULL
+                     WHERE tenant_id = ? AND evolution_instance_id = ?
+                       AND ai_agent_id IS NOT NULL
+                       AND ai_agent_id NOT IN (' . $conversationPlaceholders . ')'
+                );
+                $clearPinned->execute(array_merge([$tenantId, $instanceId], $agentIds));
+            }
+
+            // Compatibilidade: mantém o vínculo legado apontando para um dos canais do agente.
+            foreach ($agentIds as $agentId) {
+                $pdo->prepare('UPDATE ai_agents SET instance_id = COALESCE(instance_id, :instance_id) WHERE id = :agent_id AND tenant_id = :tenant_id')
+                    ->execute(['instance_id' => $instanceId, 'agent_id' => $agentId, 'tenant_id' => $tenantId]);
+            }
+
+            $pdo->commit();
+            $this->audit($tenantId, 'evolution.channel_routing_updated', [
+                'instance_id' => $instanceId,
+                'agent_ids' => $agentIds,
+                'primary_agent_id' => $primaryAgentId,
+            ]);
+            Flash::set('success', $agentIds === [] ? 'Canal salvo sem automação de IA. Ele continuará disponível para atendimento humano.' : 'Roteamento do canal atualizado. Novas conversas usarão o agente principal ou um especialista quando houver palavra de roteamento.');
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            Flash::set('error', 'Não foi possível salvar o roteamento do canal: ' . $exception->getMessage());
+        }
+
+        $this->redirect('/instances');
+    }
+
     /** Recupera ou altera a associação técnica do agente com a instância. */
     public function updateAgent(): void
     {
@@ -349,6 +502,25 @@ final class InstanceController
                 'max_context_messages' => $maxContext,
                 'id' => $agentId,
             ]);
+
+            if ($this->tableExists($pdo, 'ai_agent_instance_bindings')) {
+                if ($isDefault) {
+                    $pdo->prepare('UPDATE ai_agent_instance_bindings SET is_primary = 0 WHERE tenant_id = :tenant_id AND instance_id = :instance_id')
+                        ->execute(['tenant_id' => (int) $agent['tenant_id'], 'instance_id' => $instanceId]);
+                }
+                $pdo->prepare(
+                    'INSERT INTO ai_agent_instance_bindings
+                        (tenant_id, agent_id, instance_id, is_primary, priority, status)
+                     VALUES (:tenant_id, :agent_id, :instance_id, :is_primary, :priority, "active")
+                     ON DUPLICATE KEY UPDATE status = "active", is_primary = VALUES(is_primary), priority = VALUES(priority)'
+                )->execute([
+                    'tenant_id' => (int) $agent['tenant_id'],
+                    'agent_id' => $agentId,
+                    'instance_id' => $instanceId,
+                    'is_primary' => $isDefault ? 1 : 0,
+                    'priority' => $isDefault ? 200 : 100,
+                ]);
+            }
             $pdo->commit();
 
             $this->audit((int) $agent['tenant_id'], 'agent.technical_updated', [
@@ -408,10 +580,18 @@ final class InstanceController
             }
 
             $pdo->beginTransaction();
-            $migrationStats = ['agents' => 0, 'contacts' => 0, 'conversations' => 0, 'merged_conversations' => 0, 'campaigns' => 0];
+            $migrationStats = ['agents' => 0, 'agent_bindings' => 0, 'contacts' => 0, 'conversations' => 0, 'merged_conversations' => 0, 'campaigns' => 0];
 
             if ($replacement) {
                 $migrationStats['agents'] = $this->updateReference($pdo, 'ai_agents', 'instance_id', $instanceId, $replacementId);
+                if ($this->tableExists($pdo, 'ai_agent_instance_bindings')) {
+                    $migrationStats['agent_bindings'] = $this->migrateAgentBindings(
+                        $pdo,
+                        $instanceId,
+                        $replacementId,
+                        (int) $source['tenant_id']
+                    );
+                }
                 $migrationStats['contacts'] = $this->updateReference($pdo, 'contacts', 'evolution_instance_id', $instanceId, $replacementId);
                 if ($this->tableExists($pdo, 'message_campaigns')) {
                     $migrationStats['campaigns'] = $this->updateReference($pdo, 'message_campaigns', 'evolution_instance_id', $instanceId, $replacementId);
@@ -603,6 +783,69 @@ final class InstanceController
         $this->redirect('/instances');
     }
 
+    private function migrateAgentBindings(PDO $pdo, int $sourceInstanceId, int $replacementInstanceId, int $tenantId): int
+    {
+        $rows = $pdo->prepare(
+            'SELECT agent_id, is_primary, priority, routing_keywords, status
+             FROM ai_agent_instance_bindings
+             WHERE tenant_id = :tenant_id AND instance_id = :instance_id'
+        );
+        $rows->execute(['tenant_id' => $tenantId, 'instance_id' => $sourceInstanceId]);
+        $bindings = $rows->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        if ($bindings === []) {
+            return 0;
+        }
+
+        $insert = $pdo->prepare(
+            'INSERT INTO ai_agent_instance_bindings
+                (tenant_id, agent_id, instance_id, is_primary, priority, routing_keywords, status)
+             VALUES
+                (:tenant_id, :agent_id, :instance_id, :is_primary, :priority, :routing_keywords, :status)
+             ON DUPLICATE KEY UPDATE
+                priority = GREATEST(priority, VALUES(priority)),
+                routing_keywords = COALESCE(routing_keywords, VALUES(routing_keywords)),
+                status = "active"'
+        );
+        foreach ($bindings as $binding) {
+            $insert->execute([
+                'tenant_id' => $tenantId,
+                'agent_id' => (int) $binding['agent_id'],
+                'instance_id' => $replacementInstanceId,
+                'is_primary' => (int) ($binding['is_primary'] ?? 0),
+                'priority' => (int) ($binding['priority'] ?? 100),
+                'routing_keywords' => $binding['routing_keywords'] ?? null,
+                'status' => 'active',
+            ]);
+        }
+
+        // Mantém apenas um agente principal no canal substituto.
+        $primary = $pdo->prepare(
+            'SELECT id FROM ai_agent_instance_bindings
+             WHERE tenant_id = :tenant_id AND instance_id = :instance_id AND status = "active"
+             ORDER BY is_primary DESC, priority DESC, id ASC LIMIT 1'
+        );
+        $primary->execute(['tenant_id' => $tenantId, 'instance_id' => $replacementInstanceId]);
+        $primaryId = (int) ($primary->fetchColumn() ?: 0);
+        if ($primaryId > 0) {
+            $pdo->prepare(
+                'UPDATE ai_agent_instance_bindings
+                 SET is_primary = CASE WHEN id = :primary_id THEN 1 ELSE 0 END
+                 WHERE tenant_id = :tenant_id AND instance_id = :instance_id'
+            )->execute([
+                'primary_id' => $primaryId,
+                'tenant_id' => $tenantId,
+                'instance_id' => $replacementInstanceId,
+            ]);
+        }
+
+        $pdo->prepare(
+            'DELETE FROM ai_agent_instance_bindings
+             WHERE tenant_id = :tenant_id AND instance_id = :instance_id'
+        )->execute(['tenant_id' => $tenantId, 'instance_id' => $sourceInstanceId]);
+
+        return count($bindings);
+    }
+
     private function migrateConversations(PDO $pdo, int $sourceInstanceId, int $replacementInstanceId, int $tenantId): array
     {
         $statement = $pdo->prepare(
@@ -695,6 +938,9 @@ final class InstanceController
     {
         $counts = [
             'agents' => $this->referenceCount($pdo, 'ai_agents', 'instance_id', $instanceId),
+            'agent_bindings' => $this->tableExists($pdo, 'ai_agent_instance_bindings')
+                ? $this->referenceCount($pdo, 'ai_agent_instance_bindings', 'instance_id', $instanceId)
+                : 0,
             'contacts' => $this->referenceCount($pdo, 'contacts', 'evolution_instance_id', $instanceId),
             'conversations' => $this->referenceCount($pdo, 'conversations', 'evolution_instance_id', $instanceId),
             'campaigns' => $this->tableExists($pdo, 'message_campaigns')
@@ -707,8 +953,9 @@ final class InstanceController
     private function dependencySummary(array $counts): string
     {
         return sprintf(
-            '%d agente(s), %d contato(s), %d conversa(s), %d campanha(s)',
+            '%d agente(s) legado, %d vínculo(s) de canal, %d contato(s), %d conversa(s), %d campanha(s)',
             (int) ($counts['agents'] ?? 0),
+            (int) ($counts['agent_bindings'] ?? 0),
             (int) ($counts['contacts'] ?? 0),
             (int) ($counts['conversations'] ?? 0),
             (int) ($counts['campaigns'] ?? 0)

@@ -12,9 +12,9 @@ final class SubscriptionService
 {
     public const LIMIT_LABELS = [
         'users' => 'Usuários ativos',
-        'instances' => 'Conexões WhatsApp',
-        'agents' => 'Agentes de IA',
-        'n8n_flows' => 'Fluxos n8n',
+        'instances' => 'Canais WhatsApp',
+        'agents' => 'Agentes especializados de IA',
+        'n8n_flows' => 'Automações integradas',
         'contacts_month' => 'Novos contatos/mês',
         'conversations_month' => 'Novas conversas/mês',
         'ai_interactions_month' => 'Franquia de IA RS/mês',
@@ -24,9 +24,9 @@ final class SubscriptionService
 
     public const LIMIT_DESCRIPTIONS = [
         'users' => 'Pessoas da equipe com acesso ativo ao RS Connect.',
-        'instances' => 'Conexões WhatsApp cadastradas para esta empresa.',
-        'agents' => 'Assistentes de IA cadastrados para operar na empresa.',
-        'n8n_flows' => 'Fluxos n8n ativos vinculados à empresa.',
+        'instances' => 'Números WhatsApp conectados. Cada número conta como um canal de atendimento da empresa.',
+        'agents' => 'Funções especializadas de IA. Um agente pode atuar em vários canais e vários agentes podem compartilhar o mesmo WhatsApp.',
+        'n8n_flows' => 'Integrações e rotinas automatizadas executadas pela camada n8n da operação.',
         'contacts_month' => 'Contatos criados durante o mês atual.',
         'conversations_month' => 'Novas conversas abertas durante o mês atual.',
         'ai_interactions_month' => 'Respostas automáticas enviadas usando IA custeada pela RS Connect. Uso com credencial própria é contado separadamente e não reduz esta franquia.',

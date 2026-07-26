@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.12 — Métricas completas de IA e franquia RS.
+Pacote consolidado até o RS Connect 36.6.13 — Canais WhatsApp e roteamento de agentes.
 
 ## Última etapa incluída
+
+RS Connect 36.6.13 — centraliza múltiplos números em Canais WhatsApp, permite vários agentes por canal e vários canais por agente, com principal, especialistas, palavras de roteamento e continuidade por conversa.
 
 RS Connect 36.6.12 — separa mensagens, interações entregues, chamadas ao provedor, tokens e franquia RS; mede também credencial própria sem descontar do plano e adiciona telemetria técnica por assistente para o Super Admin.
 
@@ -38,7 +40,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.12.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.13.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 

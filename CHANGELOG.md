@@ -1,5 +1,20 @@
 # Changelog
 
+## 36.6.13 — Canais WhatsApp e roteamento de agentes
+
+- Centraliza todos os números WhatsApp da empresa em uma única tela **Canais WhatsApp**.
+- Cada número passa a ser tratado comercialmente como um canal do plano.
+- Cria vínculo N:N: vários agentes podem atuar no mesmo canal e o mesmo agente pode atuar em vários canais.
+- Cada canal pode definir um agente principal e especialistas com palavras de roteamento e prioridade.
+- A primeira mensagem de uma conversa ainda sem agente pode escolher um especialista por assunto; sem regra específica, usa o principal.
+- Depois da escolha, `conversations.ai_agent_id` mantém a conversa no mesmo agente para evitar troca de personalidade/contexto.
+- O operador pode trocar manualmente o agente no drawer da conversa.
+- Um canal pode ficar sem IA e continuar funcionando para atendimento humano.
+- Agenda, pré-agendamento, falhas de entrega, saúde operacional e fila de reprocessamento passam a considerar o agente roteado da conversa.
+- Mantém `ai_agents.instance_id` apenas como compatibilidade legada; a configuração normal passa a usar `ai_agent_instance_bindings`.
+- Ajusta a linguagem dos planos: **Canais WhatsApp**, **Agentes especializados de IA** e **Automações integradas**, sem alterar preços ou limites atuais.
+- Requer `database/migrations/055_multi_whatsapp_agent_routing.sql`.
+
 ## 36.6.12 — Métricas completas de IA e franquia RS
 
 - Separa definitivamente cinco conceitos: mensagens trafegadas, interações automáticas entregues, chamadas ao provedor, tokens e franquia comercial da RS Connect.

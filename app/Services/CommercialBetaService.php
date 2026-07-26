@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.13', 'title' => 'Canais WhatsApp e roteamento de agentes', 'summary' => 'Centraliza múltiplos números em uma única tela, permite vários agentes por canal e vários canais por agente, com principal, especialistas, palavras de roteamento e fixação por conversa.'],
             ['version' => '36.6.12', 'title' => 'Métricas completas de IA e franquia RS', 'summary' => 'Separa mensagens, interações entregues, chamadas ao provedor, tokens e custo técnico; a franquia continua consumida apenas por respostas entregues com IA custeada pela RS.'],
             ['version' => '36.6.11', 'title' => 'Uso total de IA e menus consistentes', 'summary' => 'Conta também o uso de IA com credencial própria sem consumir franquia RS, reorganiza notificações e faz as marcações de menu do Admin refletirem na navegação do cliente.'],
             ['version' => '36.6.10', 'title' => 'Fila rápida validada e franquia reparada', 'summary' => 'Renomeia o template da fila rápida, reforça o POST/token e corrige planos que apareciam com interações de IA sem limite definido.'],

@@ -77,6 +77,7 @@ return static function (Router $router): void {
     $router->post('/conversations/start', [ConversationController::class, 'start'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/send', [ConversationController::class, 'send'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/mode', [ConversationController::class, 'setMode'], ['auth', 'permission:conversations.manage', 'csrf']);
+    $router->post('/conversations/agent', [ConversationController::class, 'setAgent'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/status', [ConversationController::class, 'updateStatus'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/contact', [ConversationController::class, 'updateContact'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/suggest', [ConversationController::class, 'suggest'], ['auth', 'permission:conversations.manage', 'csrf']);
@@ -219,6 +220,7 @@ return static function (Router $router): void {
     $router->post('/instances/qr', [InstanceController::class, 'qrCode'], ['auth', 'permission:instances.manage', 'csrf']);
     $router->post('/instances/test', [InstanceController::class, 'sendTest'], ['auth', 'super_admin', 'csrf']);
     $router->post('/instances/update', [InstanceController::class, 'update'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/instances/routing', [InstanceController::class, 'updateRouting'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->post('/instances/agent-update', [InstanceController::class, 'updateAgent'], ['auth', 'super_admin', 'csrf']);
     $router->post('/instances/delete', [InstanceController::class, 'delete'], ['auth', 'super_admin', 'csrf']);
 

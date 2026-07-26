@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.12 — Métricas completas de IA e franquia RS';
-    public const REQUIRED_MIGRATION = '054_ai_metrics_and_delivery_telemetry.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.13 — Canais WhatsApp e roteamento de agentes';
+    public const REQUIRED_MIGRATION = '055_multi_whatsapp_agent_routing.sql';
 
     private PDO $pdo;
 
@@ -90,13 +90,14 @@ final class AppVersionService
             'ai_usage_events',
             'ai_usage_threshold_events',
             'ai_after_hours_pending',
+            'ai_agent_instance_bindings',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 054, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 055, conforme o pacote implantado.'
         );
 
         $aiQuotaLimits = $this->standardAiQuotaLimits();
@@ -121,6 +122,17 @@ final class AppVersionService
                 ? 'Interações entregues, chamadas ao provedor, tokens e custo estimado podem ser auditados separadamente.'
                 : 'A estrutura de telemetria detalhada da IA ainda não foi aplicada.',
             'Executar database/migrations/054_ai_metrics_and_delivery_telemetry.sql.'
+        );
+
+        $multiChannelReady = $this->tableExists('ai_agent_instance_bindings')
+            && $this->columnExists('conversations', 'ai_agent_id');
+        $checks[] = $this->check(
+            'Canais WhatsApp e agentes',
+            $multiChannelReady ? 'ok' : 'blocked',
+            $multiChannelReady
+                ? 'Múltiplos canais por empresa, múltiplos agentes por canal e continuidade por conversa estão disponíveis.'
+                : 'O vínculo N:N entre canais WhatsApp e agentes ainda não foi aplicado.',
+            'Executar database/migrations/055_multi_whatsapp_agent_routing.sql.'
         );
 
         $reactionPreferenceReady = $this->columnExists('ai_agents', 'reply_to_reactions');
