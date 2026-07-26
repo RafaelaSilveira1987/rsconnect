@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.16', 'title' => 'Conversas compactas, aviso diário e tempo de interação', 'summary' => 'Mantém lista e histórico com scroll independente, permite novo aviso de ausência em um novo dia e faz IA/agenda aguardarem o tempo configurado após a última mensagem recebida.'],
             ['version' => '36.6.15', 'title' => 'Confiabilidade das regras do agente', 'summary' => 'Centraliza a política de horário, impede agenda e callbacks fora do expediente, reduz falsos gatilhos de agendamento e torna classificação, grupo, tags e contexto efetivo visíveis na conversa.'],
             ['version' => '36.6.14', 'title' => 'Planos comerciais claros', 'summary' => 'Reorganiza a apresentação comercial dos planos, diferencia canais, agentes, usuários, automações e franquia de IA, e apresenta o Custom como sob consulta.'],
             ['version' => '36.6.13', 'title' => 'Canais WhatsApp e roteamento de agentes', 'summary' => 'Centraliza múltiplos números em uma única tela, permite vários agentes por canal e vários canais por agente, com principal, especialistas, palavras de roteamento e fixação por conversa.'],

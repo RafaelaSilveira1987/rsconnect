@@ -113,6 +113,7 @@ final class ConversationController
         $team = [];
         $conversationAgents = [];
         $selectedRuleSnapshot = null;
+        $selectedAfterHoursPending = null;
 
         if ($selectedId > 0) {
             $selected = $this->findConversation($selectedId, $tenantId > 0 ? $tenantId : null);
@@ -177,9 +178,13 @@ final class ConversationController
                         '',
                         false
                     );
+                    $policyService = new AgentOperatingPolicyService();
                     $hours = is_array($effectiveAgent)
-                        ? (new AgentOperatingPolicyService())->status($effectiveAgent)
+                        ? $policyService->status($effectiveAgent)
                         : ['enforced' => false, 'inside' => true, 'reason' => 'agent_not_resolved'];
+                    $nextOpeningAt = is_array($effectiveAgent) && !empty($hours['enforced']) && empty($hours['inside'])
+                        ? $policyService->nextOpeningAt($effectiveAgent)
+                        : null;
                     $tags = json_decode((string) ($selected['tags_json'] ?? ''), true);
                     $tags = is_array($tags) ? array_values(array_filter(array_map('strval', $tags))) : [];
                     $selectedRuleSnapshot = [
@@ -193,7 +198,22 @@ final class ConversationController
                         'flow_stage' => (string) ($selected['flow_stage'] ?? 'identifying_contact'),
                         'agenda_context' => in_array((string) ($selected['last_intent'] ?? ''), ['schedule', 'reschedule'], true)
                             && in_array((string) ($selected['flow_stage'] ?? ''), ['scheduling', 'awaiting_approval'], true),
+                        'next_opening_at' => $nextOpeningAt?->format('Y-m-d H:i:s'),
                     ];
+
+                    try {
+                        $pendingStatement = $pdo->prepare(
+                            'SELECT status, last_received_at, ack_sent_at, recovery_attempts, last_attempt_at, next_attempt_at, last_error
+                             FROM ai_after_hours_pending
+                             WHERE conversation_id = :conversation_id
+                               AND status IN ("pending","processing","blocked_plan","blocked_human","error")
+                             LIMIT 1'
+                        );
+                        $pendingStatement->execute(['conversation_id' => (int) $selected['id']]);
+                        $selectedAfterHoursPending = $pendingStatement->fetch(PDO::FETCH_ASSOC) ?: null;
+                    } catch (Throwable) {
+                        $selectedAfterHoursPending = null;
+                    }
                 } catch (Throwable) {
                     $selectedRuleSnapshot = null;
                 }
@@ -225,6 +245,7 @@ final class ConversationController
             'team' => $team,
             'conversationAgents' => $conversationAgents,
             'selectedRuleSnapshot' => $selectedRuleSnapshot,
+            'selectedAfterHoursPending' => $selectedAfterHoursPending,
             'instances' => $instances,
             'tenants' => $tenants,
             'filters' => $filters,

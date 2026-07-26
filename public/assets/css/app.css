@@ -8077,3 +8077,81 @@ body.sidebar-open #sidebarToggle.global-sidebar-toggle { left: 298px; }
 .commercial-capability-guide{margin-top:22px;padding-top:20px;border-top:1px solid var(--rs-border)}.commercial-capability-guide-title h3{margin:5px 0 5px;font-size:1.05rem}.commercial-capability-guide-title p{max-width:850px;margin:0;color:var(--rs-muted);font-size:.78rem;line-height:1.5}.commercial-capability-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}.commercial-capability-grid article{display:grid;grid-template-columns:42px minmax(0,1fr);gap:11px;padding:14px;border:1px solid var(--rs-border);border-radius:15px;background:#f9fbfc}.commercial-capability-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:#e9f4f5;color:#176d72;font-size:.68rem;font-weight:900}.commercial-capability-grid strong{font-size:.76rem}.commercial-capability-grid p{margin:4px 0 0;color:var(--rs-muted);font-size:.7rem;line-height:1.45}
 @media(max-width:1240px){.commercial-plan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.commercial-plan-grid,.commercial-capability-grid{grid-template-columns:1fr}.commercial-plan-audience{min-height:0}.commercial-plans-heading{align-items:flex-start;flex-direction:column}.commercial-plans-heading .btn{width:100%}}
+
+/* 36.6.16 — Conversas em viewport fixa + estado pós-horário visível */
+.after-hours-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 420px;
+  padding: 5px 9px;
+  border: 1px solid #f3d08a;
+  border-radius: 999px;
+  color: #8a4b08;
+  background: #fff8e8;
+  font-size: .68rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.after-hours-state.is-neutral {
+  border-color: #d9e2ec;
+  color: #526277;
+  background: #f7f9fc;
+}
+
+@media (min-width: 1181px) {
+  .conversation-workspace {
+    height: calc(100dvh - 190px) !important;
+    min-height: 560px !important;
+    max-height: calc(100dvh - 190px) !important;
+    overflow: hidden;
+  }
+  .conversation-workspace > .card,
+  .conversation-inbox,
+  .conversation-chat {
+    min-height: 0 !important;
+    height: 100%;
+  }
+  .conversation-inbox {
+    max-height: none !important;
+    overflow: hidden !important;
+  }
+  .conversation-inbox .conversation-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+  .conversation-chat.card {
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+  .chat-header,
+  .chat-state-bar,
+  .ai-suggestion-card,
+  .chat-composer {
+    flex: 0 0 auto;
+  }
+  .chat-thread {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+  .chat-composer {
+    position: relative !important;
+    bottom: auto !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .after-hours-state {
+    max-width: 100%;
+    white-space: normal;
+  }
+}

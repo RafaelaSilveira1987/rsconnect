@@ -142,9 +142,9 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                                 <label class="field compact-field"><span>Disponibilidade do assistente</span><select name="status"><option value="active" <?= $agent['status'] === 'active' ? 'selected' : '' ?>>Ativo</option><option value="inactive" <?= $agent['status'] === 'inactive' ? 'selected' : '' ?>>Inativo</option></select></label>
                                 <label class="field compact-field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="<?= (int) ($agent['max_context_messages'] ?? 12) ?>" min="4" max="30"></label>
                                 <label class="field compact-field">
-                                    <span>Intervalo mínimo entre respostas (seg.)</span>
+                                    <span>Tempo de espera da IA (seg.)</span>
                                     <input type="number" name="cooldown_seconds" value="<?= (int) ($agent['cooldown_seconds'] ?? 15) ?>" min="0" max="3600">
-                                    <small class="field-hint">Se uma mensagem chegar durante o intervalo, ela fica pendente. Ao salvar, a última pendência é reavaliada automaticamente.</small>
+                                    <small class="field-hint">A IA aguarda este tempo após a última mensagem recebida. Se outra chegar durante a espera, o relógio reinicia e as mensagens são agrupadas no contexto.</small>
                                 </label>
                             </div>
                             <label class="field compact-field"><span>Palavras que pedem atendimento humano</span><input name="handoff_keywords" value="<?= View::e($agent['handoff_keywords'] ?? '') ?>" placeholder="humano, atendente, pessoa"></label>
@@ -294,7 +294,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                     <label class="field"><span>Mensagem fora do horário</span><input name="after_hours_message" value="Estamos fora do horário de atendimento agora. Assim que retornarmos, nossa equipe responde por aqui."></label>
                     <div class="form-grid two">
                         <label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label>
-                        <label class="field"><span>Intervalo mínimo entre respostas (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">Evita respostas seguidas demais. Mensagens dentro do intervalo podem ser reprocessadas após salvar.</small></label>
+                        <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se o cliente enviar outra mensagem, a contagem reinicia.</small></label>
                     </div>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
@@ -367,7 +367,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                     <label class="field"><span>Mensagem fora do horário</span><input name="after_hours_message" value="Estamos fora do horário de atendimento agora. Assim que retornarmos, nossa equipe responde por aqui."></label>
                     <div class="form-grid two">
                         <label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label>
-                        <label class="field"><span>Intervalo mínimo entre respostas (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">Evita respostas seguidas demais. Mensagens dentro do intervalo podem ser reprocessadas após salvar.</small></label>
+                        <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se o cliente enviar outra mensagem, a contagem reinicia.</small></label>
                     </div>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>

@@ -8,6 +8,7 @@ use App\Core\Database;
 use App\Core\Env;
 use App\Services\AccessControlService;
 use App\Services\AiAutomationService;
+use App\Services\AiReplyTimingService;
 use App\Services\AgentRoutingService;
 use App\Services\AgentOperatingPolicyService;
 use App\Services\AutomationWebhookService;
@@ -212,6 +213,8 @@ final class EvolutionWebhookController
             $resolvedAgent = null;
             $operatingPolicy = ['enforced' => false, 'inside' => true, 'reason' => 'agent_not_resolved'];
             $outsideBusinessHours = false;
+            $replyWaitRemaining = 0;
+            $waitingReplyWindow = false;
 
             if (!$fromMe && $inserted && $automationAllowed && !$isReaction) {
                 try {
@@ -221,6 +224,14 @@ final class EvolutionWebhookController
                     if (is_array($resolvedAgent)) {
                         $operatingPolicy = (new AgentOperatingPolicyService())->status($resolvedAgent);
                         $outsideBusinessHours = !empty($operatingPolicy['enforced']) && empty($operatingPolicy['inside']);
+                        if (!$outsideBusinessHours) {
+                            $replyWaitRemaining = (new AiReplyTimingService())->remainingForConversation(
+                                $pdo,
+                                $conversationId,
+                                (int) ($resolvedAgent['cooldown_seconds'] ?? 15)
+                            );
+                            $waitingReplyWindow = $replyWaitRemaining > 0;
+                        }
                     }
                 } catch (Throwable $exception) {
                     $processingWarnings[] = 'agent_routing';
@@ -274,12 +285,21 @@ final class EvolutionWebhookController
                 try {
                     if ($outsideBusinessHours) {
                         // A IA principal ainda será chamada abaixo para registrar a pendência e,
-                        // quando configurado, enviar UMA mensagem de ausência. Agenda/seleção não atua.
+                        // quando configurado, enviar a mensagem diária de ausência. Agenda/seleção não atua.
                         $preScheduleResult = [
                             'skip_ai' => false,
                             'handled' => false,
                             'outside_business_hours' => true,
                             'operating_policy' => $operatingPolicy,
+                        ];
+                    } elseif ($waitingReplyWindow) {
+                        // A mensagem já está persistida. Agenda e respostas fixas esperam o mesmo
+                        // tempo configurado da IA; a Fila rápida reexecuta a camada de agenda depois.
+                        $preScheduleResult = [
+                            'skip_ai' => false,
+                            'handled' => false,
+                            'reply_wait_deferred' => true,
+                            'reply_wait_remaining' => $replyWaitRemaining,
                         ];
                     } else {
                         $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
@@ -459,6 +479,8 @@ final class EvolutionWebhookController
                 'access_reason' => $automationAllowed ? null : ($tenantAccess['code'] ?? 'blocked'),
                 'operating_policy' => $operatingPolicy,
                 'outside_business_hours' => $outsideBusinessHours,
+                'reply_wait_remaining' => $replyWaitRemaining,
+                'waiting_reply_window' => $waitingReplyWindow,
             ]);
         } catch (Throwable $exception) {
             if ($pdo instanceof PDO && $pdo->inTransaction()) {

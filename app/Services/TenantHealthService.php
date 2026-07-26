@@ -497,9 +497,9 @@ final class TenantHealthService
                 'O que significa' => $manualDisabled
                     ? 'O assistente foi desligado por configuração. Falhas anteriores continuam disponíveis no histórico, mas não representam indisponibilidade atual enquanto a automação estiver intencionalmente pausada.'
                     : ($pendingConversations > 0
-                        ? 'A conversa recebeu mensagem durante o intervalo mínimo e ainda não possui resposta posterior. Use Reprocessar agora ou abra a conversa.'
-                        : 'Não há conversa sem resposta causada pelo intervalo mínimo.'),
-                'Intervalo configurado' => (string) ($agent['cooldown_seconds'] ?? 0) . ' segundo(s)',
+                        ? 'A conversa recebeu mensagem durante o tempo de espera da IA e ainda não possui resposta posterior. Use Reprocessar agora ou abra a conversa.'
+                        : 'Não há conversa sem resposta causada pelo tempo de espera da IA.'),
+                'Tempo de espera configurado' => (string) ($agent['cooldown_seconds'] ?? 0) . ' segundo(s)',
             ];
             $checks[] = $this->check('Assistente de IA', 'agent.' . $id, 'Assistente — ' . (string) $agent['name'], $status, $summary, $details, '/agents?tenant_id=' . $tenantId, 40 + $id);
         }
@@ -877,7 +877,7 @@ final class TenantHealthService
                 'Modelo' => $this->valueOr($agent['model_name'] ?? null),
                 'Criatividade' => isset($agent['temperature']) ? (string) $agent['temperature'] : 'Não informada',
                 'Mensagens lembradas' => (string) ($agent['max_context_messages'] ?? 12),
-                'Intervalo mínimo' => (string) ($agent['cooldown_seconds'] ?? 0) . ' segundo(s)',
+                'Tempo de espera da IA' => (string) ($agent['cooldown_seconds'] ?? 0) . ' segundo(s)',
                 'Responder a reações' => $this->yesNo($agent['reply_to_reactions'] ?? 0),
                 'Palavras de atendimento humano' => $this->valueOr($agent['handoff_keywords'] ?? null),
                 'Ação ao chamar uma pessoa' => $this->valueOr($agent['handoff_action'] ?? null),

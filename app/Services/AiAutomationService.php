@@ -159,37 +159,9 @@ final class AiAutomationService
                 return;
             }
 
-            $cooldownSeconds = max(0, min(3600, (int) ($agent['cooldown_seconds'] ?? 15)));
-            $remainingSeconds = $this->cooldownRemaining($pdo, $conversationId, $cooldownSeconds);
-
-            // 36.6.9: o intervalo mínimo volta a valer também para mensagens novas persistidas.
-            // A mensagem nunca é descartada: ela recebe ai.cooldown e a fila rápida a reavalia
-            // depois do prazo. Somente ações manuais explícitas podem ignorar essa espera.
-            $cooldownApplies = !$bypassCooldown;
-            if ($cooldownApplies && $remainingSeconds > 0) {
-                $this->log(
-                    (int) $instance['tenant_id'],
-                    $conversationId,
-                    (int) $agent['id'],
-                    'ai.cooldown',
-                    'skipped',
-                    'Mensagem aguardando o intervalo mínimo configurado antes da próxima resposta.',
-                    null,
-                    [
-                        'pending_reprocess' => true,
-                        'cooldown_seconds' => $cooldownSeconds,
-                        'remaining_seconds' => $remainingSeconds,
-                        'incoming_message_id' => $this->payloadMessageId($payload),
-                    ]
-                );
-                return;
-            }
-
-            if ($this->shouldHandoff($incomingContent, (string) ($agent['handoff_keywords'] ?? ''))) {
-                $this->handoff($pdo, $instance, $conversation, $agent, $conversationId);
-                return;
-            }
-
+            // A política de horário vem antes da espera da IA. A mensagem fixa de
+            // ausência é operacional (não é resposta gerada pela IA) e deve poder
+            // ser enviada imediatamente, no máximo uma vez por dia local.
             if (!$this->isInsideBusinessHours($agent)) {
                 $afterHoursRecoveryService = new AiAfterHoursRecoveryService();
                 $pending = $afterHoursRecoveryService->markPending(
@@ -219,12 +191,46 @@ final class AiAutomationService
                     (int) $agent['id'],
                     'ai.after_hours',
                     'skipped',
-                    $afterHoursMessage === '' ? 'Fora do horário; demanda preservada para recuperação automática.' : 'Demanda adicionada à recuperação pós-horário; mensagem de ausência já enviada nesta janela.',
+                    $afterHoursMessage === '' ? 'Fora do horário; demanda preservada para recuperação automática.' : 'Demanda adicionada à recuperação pós-horário; mensagem de ausência já enviada hoje.',
                     null,
                     ['pending_recovery' => true, 'acknowledgement_already_sent' => !empty($pending['pending_id']) && empty($pending['should_ack'])]
                 );
                 return;
             }
+
+            $cooldownSeconds = max(0, min(3600, (int) ($agent['cooldown_seconds'] ?? 15)));
+            $remainingSeconds = $this->cooldownRemaining($pdo, $conversationId, $cooldownSeconds);
+
+            // 36.6.16: cooldown_seconds passa a representar o tempo mínimo de espera
+            // após a ÚLTIMA mensagem recebida. Se o cliente enviar outra mensagem
+            // dentro desse período, a contagem reinicia. Isso funciona também na
+            // primeira interação e agrupa mensagens antes de chamar a IA.
+            $cooldownApplies = !$bypassCooldown;
+            if ($cooldownApplies && $remainingSeconds > 0) {
+                $this->log(
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    'ai.cooldown',
+                    'skipped',
+                    'Mensagem aguardando o tempo configurado após a última interação antes da resposta da IA.',
+                    null,
+                    [
+                        'pending_reprocess' => true,
+                        'cooldown_seconds' => $cooldownSeconds,
+                        'reply_wait_seconds' => $cooldownSeconds,
+                        'remaining_seconds' => $remainingSeconds,
+                        'incoming_message_id' => $this->payloadMessageId($payload),
+                    ]
+                );
+                return;
+            }
+
+            if ($this->shouldHandoff($incomingContent, (string) ($agent['handoff_keywords'] ?? ''))) {
+                $this->handoff($pdo, $instance, $conversation, $agent, $conversationId);
+                return;
+            }
+
 
             $quota = $usageService->reserveAutoReply(
                 (int) $instance['tenant_id'],
@@ -401,7 +407,7 @@ final class AiAutomationService
             }
 
             $agentStatement = $pdo->prepare(
-                'SELECT a.id, a.tenant_id, a.status, a.auto_reply_enabled,
+                'SELECT a.id, a.tenant_id, a.status, a.auto_reply_enabled, a.cooldown_seconds,
                         COALESCE(a.reply_to_reactions, 0) AS reply_to_reactions
                  FROM ai_agents a
                  INNER JOIN tenants t
@@ -460,6 +466,7 @@ final class AiAutomationService
                         cm.content,
                         cm.message_type,
                         cm.sent_at,
+                        c.contact_id,
                         c.evolution_instance_id
                  FROM conversation_messages cm
                  INNER JOIN conversations c
@@ -545,6 +552,7 @@ final class AiAutomationService
                         cm.content,
                         cm.message_type,
                         cm.sent_at,
+                        c.contact_id,
                         c.evolution_instance_id
                  FROM conversation_messages cm
                  INNER JOIN conversations c
@@ -665,17 +673,31 @@ final class AiAutomationService
                 ];
             }
 
-            $this->handleIncoming(
-                $instance,
+            $bypassReplyWait = $source === 'manual';
+            $replyWaitRemaining = (new AiReplyTimingService())->remainingForConversation(
+                $pdo,
                 (int) $candidate['conversation_id'],
-                (string) $candidate['content'],
-                [
-                    'event' => 'ai.queue.reprocess.' . preg_replace('/[^a-z0-9_.-]+/i', '_', $source),
-                    'bypass_cooldown' => $source === 'manual',
-                    'message_id' => (int) $candidate['message_id'],
-                    'stored_message_id' => (int) $candidate['message_id'],
-                ]
+                (int) ($agent['cooldown_seconds'] ?? 15)
             );
+
+            $preScheduleResult = ['skip_ai' => false, 'handled' => false];
+            if ($bypassReplyWait || $replyWaitRemaining <= 0) {
+                $preScheduleResult = $this->processSchedulingDuringReprocess($pdo, $instance, $candidate);
+            }
+
+            if (!((bool) ($preScheduleResult['skip_ai'] ?? false))) {
+                $this->handleIncoming(
+                    $instance,
+                    (int) $candidate['conversation_id'],
+                    (string) $candidate['content'],
+                    [
+                        'event' => 'ai.queue.reprocess.' . preg_replace('/[^a-z0-9_.-]+/i', '_', $source),
+                        'bypass_cooldown' => $bypassReplyWait,
+                        'message_id' => (int) $candidate['message_id'],
+                        'stored_message_id' => (int) $candidate['message_id'],
+                    ]
+                );
+            }
 
             $replyCheck = $pdo->prepare(
                 'SELECT id
@@ -946,31 +968,84 @@ final class AiAutomationService
         return (bool) $check->fetchColumn();
     }
 
+    /**
+     * Reexecuta a camada de agenda somente quando a janela de interação já venceu.
+     * Isso evita que mensagens como "quero agendar" recebam resposta fixa imediata
+     * enquanto a IA geral ainda está aguardando os 60s configurados.
+     */
+    private function processSchedulingDuringReprocess(PDO $pdo, array $instance, array $candidate): array
+    {
+        $contactId = (int) ($candidate['contact_id'] ?? 0);
+        $conversationId = (int) ($candidate['conversation_id'] ?? 0);
+        $messageId = (int) ($candidate['message_id'] ?? 0);
+        $content = trim((string) ($candidate['content'] ?? ''));
+        if ($contactId < 1 || $conversationId < 1 || $content === '') {
+            return ['skip_ai' => false, 'handled' => false];
+        }
+
+        try {
+            $flowContext = (new ConversationFlowService())->ingestIncoming(
+                $pdo,
+                $instance,
+                $contactId,
+                $conversationId,
+                $content
+            );
+
+            $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
+                $pdo,
+                $instance,
+                $contactId,
+                $conversationId,
+                $content,
+                $messageId
+            );
+            $result = !empty($calendarSelection['handled'])
+                ? $calendarSelection
+                : (new PreSchedulingService())->handleIncoming(
+                    $pdo,
+                    $instance,
+                    $contactId,
+                    $conversationId,
+                    $content,
+                    $flowContext,
+                    $messageId
+                );
+
+            $appointmentEventPayload = $result['appointment_event_payload'] ?? null;
+            if (is_array($appointmentEventPayload) && $appointmentEventPayload !== []) {
+                try {
+                    $this->automationWebhook->dispatch(
+                        'appointment.pre_scheduled',
+                        $appointmentEventPayload,
+                        null,
+                        (int) ($instance['tenant_id'] ?? 0)
+                    );
+                } catch (Throwable) {
+                    // A resposta crítica já foi processada; integração externa fica observável pelos logs normais.
+                }
+            }
+
+            if (!empty($result['availability_request_needed']) && (int) ($result['appointment_id'] ?? 0) > 0) {
+                try {
+                    (new PreSchedulingService())->requestAvailabilityIfNeeded(
+                        (int) ($instance['tenant_id'] ?? 0),
+                        (int) $result['appointment_id']
+                    );
+                } catch (Throwable) {
+                    // Mantém a pendência de agenda para nova tentativa/diagnóstico.
+                }
+            }
+
+            return $result;
+        } catch (Throwable) {
+            return ['skip_ai' => false, 'handled' => false];
+        }
+    }
+
     private function cooldownRemaining(PDO $pdo, int $conversationId, int $seconds): int
     {
-        $seconds = max(0, min(3600, $seconds));
-        if ($seconds === 0) {
-            return 0;
-        }
-
-        $statement = $pdo->prepare(
-            'SELECT sent_at
-             FROM conversation_messages
-             WHERE conversation_id = :conversation_id
-               AND direction = "outgoing"
-               AND sender_type = "ai"
-               AND status IN ("sent", "delivered", "read")
-             ORDER BY sent_at DESC, id DESC
-             LIMIT 1'
-        );
-        $statement->execute(['conversation_id' => $conversationId]);
-        $last = $statement->fetchColumn();
-        if (!$last) {
-            return 0;
-        }
-
-        $elapsed = max(0, time() - strtotime((string) $last));
-        return max(0, $seconds - $elapsed);
+        return (new AiReplyTimingService())->remainingForConversation($pdo, $conversationId, $seconds);
     }
 
     private function payloadMessageId(array $payload): ?string

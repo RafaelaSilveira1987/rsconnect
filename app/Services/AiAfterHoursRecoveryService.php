@@ -35,6 +35,17 @@ final class AiAfterHoursRecoveryService
 
             $resolvedMessageId = (int) ($message['id'] ?? 0) ?: null;
             $receivedAt = (string) ($message['sent_at'] ?? date('Y-m-d H:i:s'));
+            $businessTimezone = (string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo');
+            try {
+                $timezoneStatement = $pdo->prepare('SELECT business_timezone FROM ai_agents WHERE id = :agent_id AND tenant_id = :tenant_id LIMIT 1');
+                $timezoneStatement->execute(['agent_id' => $agentId, 'tenant_id' => $tenantId]);
+                $configuredTimezone = trim((string) $timezoneStatement->fetchColumn());
+                if ($configuredTimezone !== '') {
+                    $businessTimezone = $configuredTimezone;
+                }
+            } catch (Throwable) {
+                // Mantém o fuso padrão do app.
+            }
             $existing = $pdo->prepare('SELECT * FROM ai_after_hours_pending WHERE conversation_id = :conversation_id LIMIT 1');
             $existing->execute(['conversation_id' => $conversationId]);
             $row = $existing->fetch(PDO::FETCH_ASSOC) ?: null;
@@ -62,7 +73,15 @@ final class AiAfterHoursRecoveryService
 
             $status = (string) ($row['status'] ?? 'pending');
             $newWindow = in_array($status, ['recovered', 'cancelled'], true);
-            $shouldAck = $newWindow || empty($row['ack_sent_at']);
+            $newLocalDay = (new AfterHoursAcknowledgementPolicyService())->shouldSend(
+                isset($row['ack_sent_at']) ? (string) $row['ack_sent_at'] : null,
+                $receivedAt,
+                $businessTimezone
+            );
+            // 36.6.16: o aviso de ausência é deduplicado por DIA local do agente,
+            // não por toda a janela fechada. Ex.: sábado e domingo podem receber
+            // um aviso cada, mas várias mensagens no mesmo dia recebem só um.
+            $shouldAck = $newWindow || $newLocalDay;
 
             $update = $pdo->prepare(
                 'UPDATE ai_after_hours_pending
@@ -87,7 +106,7 @@ final class AiAfterHoursRecoveryService
                 'last_message_id' => $resolvedMessageId,
                 'first_received_at' => $newWindow ? $receivedAt : (string) ($row['first_received_at'] ?? $receivedAt),
                 'last_received_at' => $receivedAt,
-                'ack_sent_at' => $newWindow ? null : ($row['ack_sent_at'] ?? null),
+                'ack_sent_at' => ($newWindow || $newLocalDay) ? null : ($row['ack_sent_at'] ?? null),
                 'id' => (int) $row['id'],
             ]);
 
@@ -104,7 +123,10 @@ final class AiAfterHoursRecoveryService
             return;
         }
         try {
-            Database::connection()->prepare('UPDATE ai_after_hours_pending SET ack_sent_at = COALESCE(ack_sent_at, NOW()) WHERE id = :id')->execute(['id' => $pendingId]);
+            Database::connection()->prepare('UPDATE ai_after_hours_pending SET ack_sent_at = COALESCE(ack_sent_at, :ack_sent_at) WHERE id = :id')->execute([
+                'ack_sent_at' => date('Y-m-d H:i:s'),
+                'id' => $pendingId,
+            ]);
         } catch (Throwable) {
         }
     }
@@ -228,7 +250,9 @@ final class AiAfterHoursRecoveryService
                     $content,
                     [
                         'event' => 'ai.after_hours.recovery.' . preg_replace('/[^a-z0-9_.-]+/i', '_', $source),
-                        'bypass_cooldown' => true,
+                        // Recuperação automática respeita o tempo de espera do agente.
+                        // Apenas uma ação manual explícita pode ignorar essa espera.
+                        'bypass_cooldown' => false,
                         'after_hours_recovery' => true,
                         'message_id' => $lastMessageId,
                         'stored_message_id' => $lastMessageId,
@@ -248,6 +272,12 @@ final class AiAfterHoursRecoveryService
                 if ($event === 'ai.handoff') {
                     $this->finish($id, 'recovered', 'A demanda foi encaminhada para atendimento humano pela regra de transferência.', null, $source);
                     $summary['recovered']++;
+                    continue;
+                }
+                if ($event === 'ai.cooldown') {
+                    // Se a última mensagem chegou segundos antes da abertura, espera a
+                    // janela de interação terminar e tenta novamente no próximo minuto.
+                    $this->defer($id, 'pending', $error !== '' ? $error : 'Aguardando o tempo de espera configurado para a IA.', '+1 minute');
                     continue;
                 }
                 if ($event === 'ai.quota.blocked') {

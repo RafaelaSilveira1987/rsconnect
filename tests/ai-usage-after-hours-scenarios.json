@@ -1,5 +1,5 @@
 {
-  "version": "36.6.8",
+  "version": "36.6.16",
   "feature": "Consumo de IA e recuperacao pos-horario",
   "scenarios": [
     {
@@ -34,13 +34,18 @@
     },
     {
       "id": "after-hours-one-ack",
-      "given": "O contato envia varias mensagens na mesma conversa fora do horario.",
-      "expected": "A conversa fica em uma unica pendencia; a mensagem fixa de ausencia e enviada no maximo uma vez naquela janela."
+      "given": "O contato envia várias mensagens na mesma conversa fora do horário no mesmo dia.",
+      "expected": "A conversa fica em uma única pendência; a mensagem fixa de ausência é enviada no máximo uma vez naquele dia local do agente."
+    },
+    {
+      "id": "after-hours-new-day-new-ack",
+      "given": "A conversa recebeu aviso de ausência em 25/07 e recebe nova mensagem fora do horário em 26/07.",
+      "expected": "O RS Connect pode enviar um novo aviso de ausência em 26/07, sem repetir mais de uma vez no mesmo dia."
     },
     {
       "id": "after-hours-next-window",
       "given": "A conversa permanece em modo IA e chega o proximo periodo comercial valido.",
-      "expected": "O monitor retoma a demanda usando o historico completo e envia uma unica resposta automatica elegivel."
+      "expected": "O monitor retoma a demanda usando o histórico completo e envia uma única resposta automática elegível, respeitando o tempo de espera configurado."
     },
     {
       "id": "after-hours-human-takeover",

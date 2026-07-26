@@ -261,6 +261,19 @@ $returnQuery = http_build_query($pollQuery);
                 <?php if ($selected['assigned_user_name']): ?><small>Responsável: <strong><?= View::e($selected['assigned_user_name']) ?></strong></small><?php endif; ?>
                 <?php if (Auth::isSuperAdmin()): ?><small>Empresa: <strong><?= View::e($selected['tenant_name']) ?></strong></small><?php endif; ?>
                 <span class="realtime-status" data-realtime-status>Atualização automática ativa</span>
+                <?php
+                $ruleHoursState = is_array($selectedRuleSnapshot['hours'] ?? null) ? $selectedRuleSnapshot['hours'] : [];
+                $isOutsideConfiguredHours = !empty($ruleHoursState['enforced']) && empty($ruleHoursState['inside']);
+                $hasAfterHoursPending = is_array($selectedAfterHoursPending ?? null);
+                $nextOpeningRaw = trim((string) ($selectedRuleSnapshot['next_opening_at'] ?? ''));
+                ?>
+                <?php if ($isOutsideConfiguredHours && $hasAfterHoursPending): ?>
+                    <span class="after-hours-state" title="A demanda está preservada para recuperação automática no próximo período válido.">
+                        Fora do horário · mensagem preservada<?php if ($nextOpeningRaw !== ''): ?> · retoma a partir de <?= View::e($formatDate($nextOpeningRaw, 'd/m H:i')) ?><?php endif; ?>
+                    </span>
+                <?php elseif ($isOutsideConfiguredHours): ?>
+                    <span class="after-hours-state is-neutral">Fora do horário configurado</span>
+                <?php endif; ?>
                 <?php $refreshQuery = $currentQuery; $refreshQuery['conversation_id'] = (int) $selected['id']; ?>
                 <a class="refresh-chat" href="<?= View::e(Router::url('/conversations?' . http_build_query($refreshQuery))) ?>">Atualizar</a>
             </div>
@@ -417,7 +430,7 @@ $returnQuery = http_build_query($pollQuery);
                         <div class="drawer-form-grid">
                             <div class="field"><span>Agente</span><strong><?= View::e((string) ($selectedRuleSnapshot['agent_name'] ?? 'Não definido')) ?></strong></div>
                             <div class="field"><span>Modo da conversa</span><strong><?= View::e($ruleModeLabels[(string) ($selectedRuleSnapshot['attendance_mode'] ?? '')] ?? (string) ($selectedRuleSnapshot['attendance_mode'] ?? '—')) ?></strong></div>
-                            <div class="field"><span>Horário operacional</span><strong><?= !$hoursEnforced ? 'Livre / 24h' : ($insideHours ? 'Dentro do expediente' : 'Fora do expediente') ?></strong><?php if ($hoursEnforced && !empty($ruleHours['current'])): ?><small class="field-hint"><?= View::e((string) $ruleHours['current']) ?> · <?= View::e((string) ($ruleHours['timezone'] ?? '')) ?></small><?php endif; ?></div>
+                            <div class="field"><span>Horário operacional</span><strong><?= !$hoursEnforced ? 'Livre / 24h' : ($insideHours ? 'Dentro do expediente' : 'Fora do expediente') ?></strong><?php if ($hoursEnforced && !empty($ruleHours['current'])): ?><small class="field-hint"><?= View::e((string) $ruleHours['current']) ?> · <?= View::e((string) ($ruleHours['timezone'] ?? '')) ?></small><?php endif; ?><?php if ($hoursEnforced && !$insideHours && !empty($selectedRuleSnapshot['next_opening_at'])): ?><small class="field-hint">Próxima janela: <?= View::e($formatDate((string) $selectedRuleSnapshot['next_opening_at'], 'd/m H:i')) ?></small><?php endif; ?></div>
                             <div class="field"><span>Classificação</span><strong><?= View::e($ruleStatusLabels[(string) ($selectedRuleSnapshot['contact_status'] ?? '')] ?? (string) ($selectedRuleSnapshot['contact_status'] ?? 'Não informada')) ?></strong></div>
                             <div class="field"><span>Grupo</span><strong><?= View::e($contactGroupLabels[$ruleGroup] ?? $ruleGroup) ?></strong></div>
                             <div class="field"><span>Última intenção</span><strong><?= View::e((string) ($selectedRuleSnapshot['last_intent'] ?? 'conversation')) ?></strong></div>

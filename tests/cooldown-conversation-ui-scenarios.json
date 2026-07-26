@@ -1,15 +1,22 @@
 {
-  "version": "36.6.10",
+  "version": "36.6.16",
+  "semantics": "cooldown_seconds = tempo mínimo após a última mensagem recebida antes de resposta automática; nova mensagem reinicia o relógio",
   "scenarios": [
     {
-      "name": "cooldown_fresh_incoming",
-      "given": "assistant active, conversation ai, cooldown_seconds=60, last AI reply 20 seconds ago",
-      "when": "new persisted incoming message is received",
-      "expect": ["message remains stored", "ai.cooldown is logged", "no automatic reply before the remaining 40 seconds"]
+      "name": "first_interaction_waits",
+      "given": "assistant active, conversation ai, cooldown_seconds=60, first incoming message arrived 10 seconds ago and there is no previous AI reply",
+      "when": "webhook tries automatic reply",
+      "expect": ["message remains stored", "ai.cooldown is logged", "no automatic reply before 60 seconds from the latest incoming message"]
+    },
+    {
+      "name": "new_message_resets_wait",
+      "given": "cooldown_seconds=60 and 50 seconds elapsed, then the customer sends another message",
+      "when": "the new message is persisted",
+      "expect": ["the 60 second wait restarts from the newest message", "both messages stay in context", "one consolidated reply is produced after the wait"]
     },
     {
       "name": "cooldown_queue_after_due",
-      "given": "pending ai.cooldown and at least 60 seconds elapsed since last AI reply",
+      "given": "pending ai.cooldown and at least 60 seconds elapsed since the latest incoming message and last AI reply",
       "when": "queue cron calls /webhooks/ai-reprocess/queue",
       "expect": ["pending message is reevaluated", "only one reply is sent", "automatic cron does not bypass cooldown"]
     },

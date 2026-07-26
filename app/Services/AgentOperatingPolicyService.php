@@ -107,6 +107,58 @@ final class AgentOperatingPolicyService
         return !$status['enforced'] || $status['inside'];
     }
 
+    /** Retorna a próxima abertura configurada para o agente no fuso dele. */
+    public function nextOpeningAt(array $agent, ?DateTimeImmutable $now = null): ?DateTimeImmutable
+    {
+        if ((int) ($agent['business_hours_enabled'] ?? 0) !== 1) {
+            return null;
+        }
+
+        $timezone = trim((string) ($agent['business_timezone'] ?? Env::get('APP_TIMEZONE', 'America/Sao_Paulo')))
+            ?: 'America/Sao_Paulo';
+        try {
+            $tz = new DateTimeZone($timezone);
+        } catch (Throwable) {
+            try {
+                $tz = new DateTimeZone((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo'));
+            } catch (Throwable) {
+                $tz = new DateTimeZone('UTC');
+            }
+        }
+
+        $now = $now === null ? new DateTimeImmutable('now', $tz) : $now->setTimezone($tz);
+        $rules = json_decode((string) ($agent['business_hours_json'] ?? ''), true);
+        if (!is_array($rules)) {
+            return null;
+        }
+
+        $days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        for ($offset = 0; $offset <= 7; $offset++) {
+            $date = $now->modify('+' . $offset . ' day');
+            $dayKey = $days[(int) $date->format('w')] ?? 'mon';
+            $ranges = $rules[$dayKey] ?? [];
+            if (!is_array($ranges) || $ranges === []) {
+                continue;
+            }
+            usort($ranges, static fn($a, $b) => strcmp((string) ($a[0] ?? ''), (string) ($b[0] ?? '')));
+            foreach ($ranges as $range) {
+                if (!is_array($range) || count($range) < 2) {
+                    continue;
+                }
+                $start = trim((string) ($range[0] ?? ''));
+                if (!$this->validTime($start)) {
+                    continue;
+                }
+                $candidate = new DateTimeImmutable($date->format('Y-m-d') . ' ' . $start . ':00', $tz);
+                if ($candidate >= $now) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return null;
+    }
+
     private function validTime(string $value): bool
     {
         return (bool) preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $value);

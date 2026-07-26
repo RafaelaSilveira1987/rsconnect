@@ -1,3 +1,16 @@
+## 36.6.16 — Conversas compactas, aviso diário e tempo de interação
+
+- mantém a lista de conversas e o histórico em painéis com scroll próprio no desktop;
+- mantém cabeçalho, estado e campo de digitação visíveis enquanto o histórico rola;
+- exibe quando uma demanda foi preservada fora do horário e a próxima abertura do agente;
+- corrige a deduplicação da mensagem de ausência: agora é no máximo uma vez por **dia local**, permitindo novo aviso em 26/07 mesmo que tenha havido aviso em 25/07;
+- redefine `cooldown_seconds` na interface como **Tempo de espera da IA**: conta a partir da última mensagem recebida, inclusive na primeira interação;
+- nova mensagem durante a espera reinicia o relógio, agrupando o contexto antes de responder;
+- a camada de Agenda/Pré-agendamento é adiada durante a espera e reavaliada pela Fila rápida depois do prazo;
+- recuperação automática pós-horário deixa de usar `bypass_cooldown` e passa a respeitar o mesmo tempo;
+- adiciona `AiReplyTimingService`, `AfterHoursAcknowledgementPolicyService` e smoke test específico;
+- sem migration nova; mantém a 055 como última migration obrigatória.
+
 ## 36.6.15 — Confiabilidade das regras do agente
 
 - Cria `AgentOperatingPolicyService` como fonte única para a restrição de horário dos agentes.
