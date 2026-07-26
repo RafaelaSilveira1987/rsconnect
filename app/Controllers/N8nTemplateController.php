@@ -66,7 +66,7 @@ final class N8nTemplateController
         'ai-reprocessamento-agendado' => [
             'title' => 'Fila rápida da IA',
             'segment' => 'Operação',
-            'file' => 'template-ai-reprocessamento-agendado.json',
+            'file' => 'template-fila-rapida-ia.json',
             'events' => ['ai.queue.check', 'cron.every_minute'],
             'description' => 'Reavalia a fila da IA a cada minuto para respeitar o intervalo mínimo entre respostas sem perder mensagens. A rotina diária permanece como contingência para falhas e pendências antigas.',
         ],

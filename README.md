@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.9 — Intervalo real e conversa contínua.
+Pacote consolidado até o RS Connect 36.6.10 — Validação da fila rápida e reparo da franquia.
 
 ## Última etapa incluída
+
+RS Connect 36.6.10 — valida a fila rápida de 1 minuto, renomeia o template para um arquivo identificável e repara franquias de IA que ficaram sem limite após a conversão do plano.
 
 RS Connect 36.6.9 — restaura o intervalo mínimo real entre respostas automáticas, cria uma fila rápida de reavaliação a cada minuto e evita recarregar/voltar ao topo da tela de Conversas ao enviar mensagem humana.
 
@@ -32,7 +34,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.9.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.10.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 
@@ -65,6 +67,9 @@ database/migrations/047_backup_automation_reliability.sql
 database/migrations/048_reporting_metrics_foundation.sql
 database/migrations/049_operational_resolution_communications.sql
 database/migrations/050_human_takeover_customer_context.sql
+database/migrations/051_operational_evidence_status.sql
+database/migrations/052_ai_usage_and_after_hours_recovery.sql
+database/migrations/053_ai_quota_limit_repair.sql
 ```
 
 Consulte `README-RS-CONNECT-36.3.0.md` para instalar e validar a rotina de backup.

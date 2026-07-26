@@ -19,11 +19,11 @@ Quando uma mensagem chega antes de terminar o intervalo mínimo:
 Endpoint:
 
 ```text
-GET /webhooks/ai-reprocess/queue
+POST /webhooks/ai-reprocess/queue
 X-RS-AI-Reprocess-Token: SEU_TOKEN
 ```
 
-Use o template n8n **Fila rápida da IA**. Ao baixá-lo pelo RS Connect, `APP_URL` e `AI_REPROCESS_CRON_TOKEN` são injetados automaticamente.
+Use o template n8n **Fila rápida da IA**. O arquivo baixado é `template-fila-rapida-ia.json`. Ao baixá-lo pelo RS Connect, `APP_URL` e `AI_REPROCESS_CRON_TOKEN` são injetados automaticamente.
 
 ### 2. Contingência diária
 Mantém a rotina histórica de varredura para falhas antigas, execuções interrompidas e recuperação geral.
@@ -51,7 +51,7 @@ A fila não dispara mensagens em massa e não reinicia conversas já respondidas
 Execuções simultâneas são protegidas por locks MySQL.
 
 ## Banco de dados
-A fila rápida da 36.6.9 não exige migration nova. Para instalações antigas, mantenha aplicadas as migrations da fila e a 052 da linha atual.
+A fila rápida usa a estrutura da 052. Na 36.6.10, aplique também a 053 para reparar planos que tenham ficado sem `ai_interactions_month` após a conversão da franquia.
 
 ## Variáveis de ambiente
 

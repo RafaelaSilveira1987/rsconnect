@@ -182,6 +182,12 @@ final class SubscriptionService
         $rows = [];
         foreach (self::LIMIT_LABELS as $key => $label) {
             $limit = $plan['limits'][$key] ?? null;
+            if ($key === 'ai_interactions_month' && $limit === null) {
+                // Compatibilidade/recuperação: instalações que ainda não aplicaram a 052,
+                // ou cuja conversão do JSON legado falhou, continuam respeitando o antigo
+                // volume comercial de mensagens como franquia de interações de IA.
+                $limit = $plan['limits']['messages_month'] ?? $plan['limits']['ai_replies_month'] ?? null;
+            }
             $used = $usage[$key] ?? 0;
             $rows[] = [
                 'key' => $key,
@@ -200,6 +206,9 @@ final class SubscriptionService
         $plan = $this->currentPlanForTenant($tenantId);
         $usage = $this->usageForTenant($tenantId);
         $limit = $plan['limits'][$limitKey] ?? null;
+        if ($limitKey === 'ai_interactions_month' && $limit === null) {
+            $limit = $plan['limits']['messages_month'] ?? $plan['limits']['ai_replies_month'] ?? null;
+        }
         $used = $usage[$limitKey] ?? 0;
         if ($limit === null || $used < (int) $limit) {
             return ['ok' => true, 'message' => 'Liberado.'];

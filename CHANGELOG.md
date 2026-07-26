@@ -1,5 +1,14 @@
 # Changelog
 
+## 36.6.10 — Validação da fila rápida e reparo da franquia
+
+- Renomeia o workflow n8n para `template-fila-rapida-ia.json`, mantendo o título **Fila rápida da IA**.
+- Define explicitamente `POST /webhooks/ai-reprocess/queue` no template e mantém o token em `X-RS-AI-Reprocess-Token`.
+- Corrige a tela de uso para recuperar o limite legado de IA quando `ai_interactions_month` ainda não existir.
+- Adiciona a migration 053 para reparar planos cujo limite ficou nulo após a migration 052.
+- Revalida que o cron automático não usa `bypass_cooldown`; somente reprocessamento manual pode ignorar o intervalo.
+- Mantém o envio humano assíncrono na tela de Conversas, sem reload e com foco no campo de digitação.
+
 ## 36.6.9 — Intervalo real e conversa contínua
 
 - Corrige a exceção criada no 36.1.3 que fazia mensagens novas persistidas ignorarem `cooldown_seconds`; o intervalo mínimo volta a valer para toda resposta automática, exceto reprocessamento manual explícito.

@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.9 — Intervalo real e conversa contínua';
-    public const REQUIRED_MIGRATION = '052_ai_usage_and_after_hours_recovery.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.10 — Validação da fila rápida e reparo da franquia';
+    public const REQUIRED_MIGRATION = '053_ai_quota_limit_repair.sql';
 
     private PDO $pdo;
 
@@ -96,7 +96,17 @@ final class AppVersionService
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 052, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 053, conforme o pacote implantado.'
+        );
+
+        $aiQuotaLimits = $this->standardAiQuotaLimits();
+        $checks[] = $this->check(
+            'Franquia de IA nos planos',
+            empty($aiQuotaLimits['missing']) ? 'ok' : 'blocked',
+            empty($aiQuotaLimits['missing'])
+                ? 'Planos padrão possuem franquia mensal de interações de IA definida.'
+                : 'Planos sem franquia válida: ' . implode(', ', $aiQuotaLimits['missing']) . '.',
+            'Executar database/migrations/053_ai_quota_limit_repair.sql e revisar os limites em Planos e cobrança.'
         );
 
         $reactionPreferenceReady = $this->columnExists('ai_agents', 'reply_to_reactions');
@@ -486,6 +496,40 @@ final class AppVersionService
             return (int) $statement->fetchColumn() > 0;
         } catch (Throwable) {
             return false;
+        }
+    }
+
+    /** @return array{missing:list<string>} */
+    private function standardAiQuotaLimits(): array
+    {
+        if (!$this->tableExists('saas_plans')) {
+            return ['missing' => ['Starter', 'Profissional', 'Business']];
+        }
+
+        try {
+            $statement = $this->pdo->query(
+                'SELECT plan_key, name, JSON_UNQUOTE(JSON_EXTRACT(limits_json, "$.ai_interactions_month")) AS ai_limit '
+                . 'FROM saas_plans WHERE plan_key IN ("starter", "pro", "business")'
+            );
+            $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $found = [];
+            $missing = [];
+            foreach ($rows as $row) {
+                $key = (string) ($row['plan_key'] ?? '');
+                $found[$key] = true;
+                $value = trim((string) ($row['ai_limit'] ?? ''));
+                if ($value === '' || !ctype_digit($value) || (int) $value < 1) {
+                    $missing[] = (string) (($row['name'] ?? '') ?: $key);
+                }
+            }
+            foreach (['starter' => 'Starter', 'pro' => 'Profissional', 'business' => 'Business'] as $key => $label) {
+                if (empty($found[$key])) {
+                    $missing[] = $label;
+                }
+            }
+            return ['missing' => array_values(array_unique($missing))];
+        } catch (Throwable) {
+            return ['missing' => ['Starter', 'Profissional', 'Business']];
         }
     }
 
