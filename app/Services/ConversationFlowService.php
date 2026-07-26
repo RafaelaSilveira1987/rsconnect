@@ -39,6 +39,7 @@ final class ConversationFlowService
         'understanding_demand' => 'Entendendo a demanda',
         'collecting_demand' => 'Aguardando a demanda',
         'ready_for_scheduling' => 'Pronto para pré-agendamento',
+        'qualified' => 'Contexto identificado',
         'scheduling' => 'Coletando data e horário',
         'awaiting_approval' => 'Aguardando aprovação',
         'human_handoff' => 'Encaminhado para atendimento humano',
@@ -65,6 +66,12 @@ final class ConversationFlowService
         $existingCustomer = $this->isExistingCustomer($contactStatus, $group, $contactTags);
         $text = $this->normalize($content);
         $intent = $this->intent($text);
+        if ($intent === 'conversation'
+            && in_array((string) ($state['last_intent'] ?? ''), ['schedule', 'reschedule'], true)
+            && in_array((string) ($state['stage'] ?? ''), ['scheduling', 'awaiting_approval'], true)
+            && $this->looksLikeSchedulingPreference($text)) {
+            $intent = 'schedule';
+        }
         $demandStatus = (string) ($state['demand_status'] ?? 'pending');
         $demandSummary = trim((string) ($state['demand_summary'] ?? ''));
 
@@ -461,7 +468,7 @@ final class ConversationFlowService
                          WHEN :is_existing_customer_stage = 1
                               AND demand_status = "pending"
                               AND stage IN ("identifying_contact", "understanding_demand", "collecting_demand")
-                             THEN "ready_for_scheduling"
+                             THEN "qualified"
                          ELSE stage
                      END,
                      demand_status = CASE
@@ -581,18 +588,35 @@ final class ConversationFlowService
     private function stageFor(string $intent, string $demandStatus, bool $existingPatient): string
     {
         if (in_array($demandStatus, ['collected', 'refused', 'not_required'], true)) {
-            return in_array($intent, ['schedule', 'reschedule'], true) ? 'scheduling' : 'ready_for_scheduling';
+            return in_array($intent, ['schedule', 'reschedule'], true) ? 'scheduling' : 'qualified';
         }
         if (in_array($intent, ['schedule', 'reschedule'], true)) return 'collecting_demand';
-        return $existingPatient ? 'understanding_demand' : 'understanding_demand';
+        return 'understanding_demand';
     }
 
     private function intent(string $text): string
     {
         if ($this->isReschedule($text)) return 'reschedule';
-        if ((bool) preg_match('/\b(agendar|agenda|horario|hora|marcar|consulta|sessao|disponibilidade|encaixe)\b/u', $text)) return 'schedule';
+
+        $asksOpeningHours = (bool) preg_match(
+            '/\b(horario|horarios)\s+de\s+(atendimento|funcionamento|abertura|fechamento)\b|\b(qual|quais|que)\b.{0,20}\b(horario|horarios)\b.{0,20}\b(atendem|atendimento|funcionam|funcionamento)\b|\bque horas\b.{0,15}\b(abre|fecha|funciona|atende)\b/u',
+            $text
+        );
+        $explicitSchedule = (bool) preg_match(
+            '/\b(agendar|reagendar|desmarcar|encaixe)\b|\bmarcar\b.{0,30}\b(consulta|sessao|reuniao|horario)\b|\b(tem|ha|ver|consultar|confirma|confirmar|qual|quais)\b.{0,25}\b(horario|horarios|disponibilidade)\b|\b(quero|gostaria|preciso)\b.{0,20}\b(horario|horarios|agendar|marcar)\b|\b(horario|horarios)\s+(disponivel|disponiveis)\b/u',
+            $text
+        );
+        if ($explicitSchedule && !$asksOpeningHours) return 'schedule';
         if ((bool) preg_match('/\b(humano|atendente|pessoa|equipe|suporte)\b/u', $text)) return 'human_handoff';
         return 'conversation';
+    }
+
+    private function looksLikeSchedulingPreference(string $text): bool
+    {
+        return (bool) preg_match(
+            '/\b(hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo|manha|tarde|noite)\b|\b\d{1,2}(?::\d{2})?\s*h?\b|\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/u',
+            $text
+        );
     }
 
     private function isReschedule(string $text): bool
@@ -630,7 +654,7 @@ final class ConversationFlowService
         $pdo->prepare(
             'UPDATE conversation_flow_states
              SET demand_status = "not_required", demand_summary = :summary,
-                 stage = CASE WHEN last_intent IN ("schedule", "reschedule") THEN "scheduling" ELSE "ready_for_scheduling" END,
+                 stage = CASE WHEN last_intent IN ("schedule", "reschedule") THEN "scheduling" ELSE "qualified" END,
                  updated_at = CURRENT_TIMESTAMP
              WHERE tenant_id = :tenant_id AND conversation_id = :conversation_id'
         )->execute(['summary' => $summary, 'tenant_id' => $tenantId, 'conversation_id' => $conversationId]);

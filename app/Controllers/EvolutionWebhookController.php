@@ -9,6 +9,7 @@ use App\Core\Env;
 use App\Services\AccessControlService;
 use App\Services\AiAutomationService;
 use App\Services\AgentRoutingService;
+use App\Services\AgentOperatingPolicyService;
 use App\Services\AutomationWebhookService;
 use App\Services\CrmAutoService;
 use App\Services\CalendarConversationService;
@@ -208,12 +209,19 @@ final class EvolutionWebhookController
             $flowContext = [];
             $preScheduleResult = ['skip_ai' => false, 'handled' => false];
             $processingWarnings = [];
+            $resolvedAgent = null;
+            $operatingPolicy = ['enforced' => false, 'inside' => true, 'reason' => 'agent_not_resolved'];
+            $outsideBusinessHours = false;
 
             if (!$fromMe && $inserted && $automationAllowed && !$isReaction) {
                 try {
-                    // 36.6.13: decide o agente do canal antes das regras de fluxo/agenda.
-                    // A conversa fica fixada no agente escolhido para manter contexto e personalidade.
-                    (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, $content, true);
+                    // 36.6.15: o agente é resolvido antes de qualquer automação conversacional.
+                    // A política de horário passa a ser fonte única e prevalece sobre prompt, agenda e n8n.
+                    $resolvedAgent = (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, $content, true);
+                    if (is_array($resolvedAgent)) {
+                        $operatingPolicy = (new AgentOperatingPolicyService())->status($resolvedAgent);
+                        $outsideBusinessHours = !empty($operatingPolicy['enforced']) && empty($operatingPolicy['inside']);
+                    }
                 } catch (Throwable $exception) {
                     $processingWarnings[] = 'agent_routing';
                     $this->logWebhookFailure($exception, [
@@ -264,25 +272,36 @@ final class EvolutionWebhookController
                 }
 
                 try {
-                    $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
-                        $pdo,
-                        $instance,
-                        $contactId,
-                        $conversationId,
-                        $content,
-                        $storedMessageId
-                    );
-                    $preScheduleResult = !empty($calendarSelection['handled'])
-                        ? $calendarSelection
-                        : (new PreSchedulingService())->handleIncoming(
+                    if ($outsideBusinessHours) {
+                        // A IA principal ainda será chamada abaixo para registrar a pendência e,
+                        // quando configurado, enviar UMA mensagem de ausência. Agenda/seleção não atua.
+                        $preScheduleResult = [
+                            'skip_ai' => false,
+                            'handled' => false,
+                            'outside_business_hours' => true,
+                            'operating_policy' => $operatingPolicy,
+                        ];
+                    } else {
+                        $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
                             $pdo,
                             $instance,
                             $contactId,
                             $conversationId,
                             $content,
-                            $flowContext,
                             $storedMessageId
                         );
+                        $preScheduleResult = !empty($calendarSelection['handled'])
+                            ? $calendarSelection
+                            : (new PreSchedulingService())->handleIncoming(
+                                $pdo,
+                                $instance,
+                                $contactId,
+                                $conversationId,
+                                $content,
+                                $flowContext,
+                                $storedMessageId
+                            );
+                    }
                 } catch (Throwable $exception) {
                     $processingWarnings[] = 'pre_schedule';
                     $this->logWebhookFailure($exception, [
@@ -403,7 +422,7 @@ final class EvolutionWebhookController
                     // Uma resposta consumida pela agenda (ex.: "1", "o primeiro", "14h")
                     // termina aqui. Não encaminha o mesmo comando para fluxos genéricos do n8n,
                     // evitando que ele volte como uma nova tentativa de IA.
-                    if (empty($preScheduleResult['terminal_handled'])) {
+                    if (empty($preScheduleResult['terminal_handled']) && !$outsideBusinessHours) {
                         try {
                             (new AutomationWebhookService())->dispatch('message.received', [
                                 'tenant_id' => (int) $instance['tenant_id'],
@@ -438,6 +457,8 @@ final class EvolutionWebhookController
                 'processing_warnings' => array_values(array_unique($processingWarnings)),
                 'access_allowed' => $automationAllowed,
                 'access_reason' => $automationAllowed ? null : ($tenantAccess['code'] ?? 'blocked'),
+                'operating_policy' => $operatingPolicy,
+                'outside_business_hours' => $outsideBusinessHours,
             ]);
         } catch (Throwable $exception) {
             if ($pdo instanceof PDO && $pdo->inTransaction()) {

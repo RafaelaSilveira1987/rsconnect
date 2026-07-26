@@ -273,9 +273,9 @@ final class AgentController
             $this->redirectToAgents($tenantId ?? 0);
         }
 
-        $business = $this->businessHoursFromPost();
         $pdo = Database::connection();
         try {
+            $business = $this->businessHoursFromPost();
             $pdo->beginTransaction();
             if ($isDefault) {
                 $reset = $pdo->prepare('UPDATE ai_agents SET is_default = 0 WHERE tenant_id = :tenant_id');
@@ -514,6 +514,22 @@ final class AgentController
         $days = $_POST['business_days'] ?? ['mon', 'tue', 'wed', 'thu', 'fri'];
         $days = is_array($days) ? $days : [];
         $validDays = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+        if (!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $start)
+            || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $end)) {
+            throw new \RuntimeException('Informe horários válidos no formato HH:MM.');
+        }
+        if ($enabled === 1 && $start >= $end) {
+            throw new \RuntimeException('O horário inicial deve ser anterior ao horário final.');
+        }
+        if ($enabled === 1 && array_intersect($validDays, $days) === []) {
+            throw new \RuntimeException('Selecione pelo menos um dia de atendimento quando a restrição de horário estiver ativa.');
+        }
+        try {
+            new \DateTimeZone($timezone);
+        } catch (\Throwable) {
+            throw new \RuntimeException('Fuso horário inválido. Exemplo: America/Sao_Paulo.');
+        }
 
         $rules = [];
         foreach ($validDays as $day) {

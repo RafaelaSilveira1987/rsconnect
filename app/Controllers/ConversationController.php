@@ -14,6 +14,7 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\AiAutomationService;
 use App\Services\AgentRoutingService;
+use App\Services\AgentOperatingPolicyService;
 use App\Services\AiModelService;
 use App\Services\ConversationFlowService;
 use App\Services\EvolutionService;
@@ -111,6 +112,7 @@ final class ConversationController
         $messages = [];
         $team = [];
         $conversationAgents = [];
+        $selectedRuleSnapshot = null;
 
         if ($selectedId > 0) {
             $selected = $this->findConversation($selectedId, $tenantId > 0 ? $tenantId : null);
@@ -163,6 +165,38 @@ final class ConversationController
                 } catch (Throwable) {
                     $conversationAgents = [];
                 }
+
+                try {
+                    $effectiveAgent = (new AgentRoutingService())->resolve(
+                        $pdo,
+                        [
+                            'id' => (int) $selected['evolution_instance_id'],
+                            'tenant_id' => (int) $selected['tenant_id'],
+                        ],
+                        (int) $selected['id'],
+                        '',
+                        false
+                    );
+                    $hours = is_array($effectiveAgent)
+                        ? (new AgentOperatingPolicyService())->status($effectiveAgent)
+                        : ['enforced' => false, 'inside' => true, 'reason' => 'agent_not_resolved'];
+                    $tags = json_decode((string) ($selected['tags_json'] ?? ''), true);
+                    $tags = is_array($tags) ? array_values(array_filter(array_map('strval', $tags))) : [];
+                    $selectedRuleSnapshot = [
+                        'agent_name' => (string) ($effectiveAgent['name'] ?? 'Não definido'),
+                        'attendance_mode' => (string) ($selected['attendance_mode'] ?? ''),
+                        'hours' => $hours,
+                        'contact_status' => (string) ($selected['contact_status'] ?? ''),
+                        'contact_group' => (string) ($selected['contact_group'] ?? 'unclassified'),
+                        'tags' => $tags,
+                        'last_intent' => (string) ($selected['last_intent'] ?? 'conversation'),
+                        'flow_stage' => (string) ($selected['flow_stage'] ?? 'identifying_contact'),
+                        'agenda_context' => in_array((string) ($selected['last_intent'] ?? ''), ['schedule', 'reschedule'], true)
+                            && in_array((string) ($selected['flow_stage'] ?? ''), ['scheduling', 'awaiting_approval'], true),
+                    ];
+                } catch (Throwable) {
+                    $selectedRuleSnapshot = null;
+                }
             }
         }
 
@@ -190,6 +224,7 @@ final class ConversationController
             'messages' => $messages,
             'team' => $team,
             'conversationAgents' => $conversationAgents,
+            'selectedRuleSnapshot' => $selectedRuleSnapshot,
             'instances' => $instances,
             'tenants' => $tenants,
             'filters' => $filters,

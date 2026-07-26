@@ -1,3 +1,19 @@
+## 36.6.15 — Confiabilidade das regras do agente
+
+- Cria `AgentOperatingPolicyService` como fonte única para a restrição de horário dos agentes.
+- Quando **Responder somente no horário configurado** estiver ativo, a regra técnica prevalece sobre prompt livre, pré-agendamento, seleção de horários, callbacks de agenda e n8n conversacional.
+- Corrige o pipeline do webhook: a política de horário é avaliada antes da Agenda/Pré-agendamento.
+- Callbacks tardios de disponibilidade revalidam o expediente antes de oferecer ou pré-reservar horários; fora do horário, a demanda é devolvida à recuperação pós-horário.
+- Reduz falsos gatilhos de agenda: palavras casuais como hoje, tarde, noite, hora ou atendimento não iniciam agendamento sem intenção explícita ou contexto recente real de agenda.
+- Perguntas sobre horário de funcionamento deixam de ser confundidas com pedido de agendamento.
+- Estados antigos de pré-agendamento deixam de sequestrar conversas gerais indefinidamente.
+- Contexto de agenda só é injetado no prompt quando a conversa realmente está em intenção/etapa de agenda.
+- Classificação Cliente/Paciente, grupo, tags e cadastro passam a ser reforçados como fonte de verdade e não devem reabrir triagem já concluída.
+- O drawer de Conversas ganha **Validação efetiva / Regras aplicadas agora**, mostrando agente, modo, horário, classificação, grupo, tags e intenção atual.
+- Validação do cadastro do agente impede horário inválido, período invertido, restrição sem dias selecionados e timezone inválido.
+- Adiciona smoke test e cenários de homologação para horário, agenda, cliente/paciente, takeover humano e callback tardio.
+- Sem migration nova; mantém a 055 como última migration obrigatória.
+
 ## 36.6.14 — Planos comerciais claros
 
 - Reformulada visualmente a aba Planos em Planos e cobrança.

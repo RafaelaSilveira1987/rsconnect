@@ -231,6 +231,11 @@ final class AiModelService
         $flowStage = trim((string) ($conversation['flow_stage'] ?? 'identifying_contact')) ?: 'identifying_contact';
         $demandStatus = trim((string) ($conversation['demand_status'] ?? 'pending')) ?: 'pending';
         $demandSummary = trim((string) ($conversation['demand_summary'] ?? ''));
+        $lastIntent = trim((string) ($conversation['last_intent'] ?? ''));
+        $agendaContextActive = in_array($lastIntent, ['schedule', 'reschedule'], true)
+            || in_array($flowStage, ['scheduling', 'awaiting_approval'], true);
+        $contactCompany = trim((string) ($contact['company'] ?? $conversation['company'] ?? ''));
+        $contactNotes = trim((string) ($contact['notes'] ?? $conversation['notes'] ?? ''));
         $flowStageLabel = ConversationFlowService::STAGES[$flowStage] ?? $flowStage;
         $demandStatusLabel = ConversationFlowService::DEMAND_STATUSES[$demandStatus] ?? $demandStatus;
 
@@ -243,17 +248,18 @@ final class AiModelService
             'Se a pergunta exigir decisão humana, peça uma confirmação e diga que encaminhará para atendimento.',
             'Não mencione que você é um modelo de linguagem.',
             'Se o lead pedir humano, atendente, suporte ou uma pessoa, sinalize transferência em vez de insistir no atendimento automático.',
-            'Não inicie nem prometa pré-agendamento somente porque apareceram palavras como horário, agenda ou disponibilidade.',
-            'Antes de conduzir ao pré-agendamento, siga a regra do grupo de contato informada abaixo. Quando essa regra exigir demanda, confirme que ela foi coletada ou que o contato preferiu não informá-la. Quando a regra dispensar demanda, não obrigue o cliente a repetir queixa ou informações primárias.',
-            'Cliente ou paciente já identificado deve ter continuidade de atendimento: não reabra triagem, não peça novamente motivo/queixa e não trate como novo lead apenas porque iniciou uma nova conversa ou perguntou por horário.',
+            'Não transforme menções casuais de data, hora, hoje, amanhã, tarde ou noite em pedido de agendamento. Agenda só deve ser conduzida quando houver intenção real e explícita de marcar, remarcar, consultar disponibilidade ou quando a conversa já estiver em um fluxo recente de agenda.',
+            'Cliente ou paciente já identificado deve ter continuidade de atendimento: não reabra triagem, não peça novamente motivo/queixa e não trate como novo lead apenas porque iniciou uma nova conversa.',
+            'O contexto operacional fornecido pelo RS Connect (modo da conversa, horário, classificação, grupo e tags) tem prioridade sobre instruções conflitantes do prompt livre.',
         ];
 
         $tenantId = (int) ($conversation['tenant_id'] ?? $contact['tenant_id'] ?? 0);
         $preScheduleBlock = '';
         if ($tenantId > 0) {
             $preScheduling = new PreSchedulingService();
-            if ($preScheduling->isEnabled($tenantId)) {
+            if ($agendaContextActive && $preScheduling->isEnabled($tenantId)) {
                 $settings = $preScheduling->settings($tenantId);
+                $rules[] = 'A conversa está em contexto real de agenda. Antes de conduzir ao pré-agendamento, siga a regra do grupo informada abaixo; quando ela exigir demanda, confirme que foi coletada ou recusada.';
                 $rules[] = 'Quando o contato estiver liberado pelas regras do grupo e do fluxo e demonstrar intenção real de agendar, colete dia/período/horário preferido e modalidade. Não confirme horário, não diga que está marcado e não prometa link.';
                 $rules[] = 'Se o contato ainda não informou dia ou horário depois de estar liberado para agenda, use a mensagem de coleta configurada pelo cliente, adaptando somente o nome se necessário.';
                 $rules[] = 'Se o contato informou preferência de dia ou horário, use a mensagem de registro configurada pelo cliente e deixe claro que depende de confirmação humana.';
@@ -282,18 +288,23 @@ final class AiModelService
             $groupRule['require_demand_before_pre_schedule'] = false;
         }
         $groupInstructions = trim((string) ($groupRule['instructions'] ?? ''));
-        $groupRuleBlock = "Regras do grupo de contato:\n" .
-            '- Grupo: ' . $groupLabel . "\n" .
-            '- Pré-agendamento permitido: ' . (!empty($groupRule['allow_pre_schedule']) ? 'sim' : 'não') . "\n" .
-            '- Exigir demanda antes do pré-agendamento: ' . (!empty($groupRule['require_demand_before_pre_schedule']) ? 'sim' : 'não') . "\n" .
-            '- Remarcação sem repetir a demanda: ' . (!empty($groupRule['allow_reschedule_without_demand']) ? 'sim' : 'não') . "\n" .
-            ($groupInstructions !== '' ? '- Orientação específica: ' . $groupInstructions . "\n" : '') . "\n";
+        $groupRuleBlock = '';
+        if ($agendaContextActive) {
+            $groupRuleBlock = "Regras do grupo de contato para agenda:\n" .
+                '- Grupo: ' . $groupLabel . "\n" .
+                '- Pré-agendamento permitido: ' . (!empty($groupRule['allow_pre_schedule']) ? 'sim' : 'não') . "\n" .
+                '- Exigir demanda antes do pré-agendamento: ' . (!empty($groupRule['require_demand_before_pre_schedule']) ? 'sim' : 'não') . "\n" .
+                '- Remarcação sem repetir a demanda: ' . (!empty($groupRule['allow_reschedule_without_demand']) ? 'sim' : 'não') . "\n" .
+                ($groupInstructions !== '' ? '- Orientação específica: ' . $groupInstructions . "\n" : '') . "\n";
+        }
 
         $structuredContext = "CONTEXTO CADASTRAL PRIORITÁRIO DO RS CONNECT (fonte de verdade):
 " .
             '- Nome: ' . ($contactName !== '' ? $contactName : 'não informado') . "
 " .
             '- Telefone: ' . ($contactPhone !== '' ? $contactPhone : 'não informado') . "
+" .
+            '- Empresa/atividade: ' . ($contactCompany !== '' ? $contactCompany : 'não informada') . "
 " .
             '- Classificação: ' . $contactStatusLabel . ($contactStatus !== '' ? ' (código: ' . $contactStatus . ')' : '') . "
 " .
@@ -311,6 +322,10 @@ final class AiModelService
 " .
             '- Resumo da demanda: ' . ($demandSummary !== '' ? $demandSummary : 'ainda não registrado') . "
 " .
+            '- Última intenção detectada: ' . ($lastIntent !== '' ? $lastIntent : 'conversa geral') . "
+" .
+            ($contactNotes !== '' ? '- Observações cadastradas: ' . mb_substr($contactNotes, 0, 1200) . "
+" : '') .
             '- Fuso de atendimento: ' . ($timezone !== '' ? $timezone : 'não informado') . "
 
 " .
@@ -326,9 +341,9 @@ final class AiModelService
 " .
             "- Use as tags para personalizar a resposta e respeitar segmentações, mas não invente significado além do texto da tag.
 " .
-            "- As regras do Grupo de atendimento têm prioridade para agenda e pré-agendamento. Tags não liberam agenda quando a regra do grupo bloquear.
-
-";
+            ($agendaContextActive
+                ? "- Esta conversa está em contexto de agenda. As regras do Grupo de atendimento têm prioridade para agenda e pré-agendamento; tags não liberam agenda quando a regra do grupo bloquear.\n\n"
+                : "- Esta conversa NÃO está em contexto de agenda. Não conduza o atendimento para agenda por iniciativa própria; siga o objetivo e o fluxo descritos no prompt do agente.\n\n");
 
         return trim($base . "
 

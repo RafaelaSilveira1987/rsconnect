@@ -32,7 +32,22 @@ final class PreSchedulingService
             return $result;
         }
 
-        $intent = $this->detectIntent($content);
+        // Defesa em profundidade: horário do agente é regra operacional e vale também
+        // quando este serviço for chamado fora do webhook principal.
+        try {
+            $agent = (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, $content, false);
+            if (is_array($agent) && !(new AgentOperatingPolicyService())->allowsConversationalAutomation($agent)) {
+                $result['outside_business_hours'] = true;
+                $result['skip_ai'] = false; // deixa a IA principal enviar/registrar a ausência.
+                return $result;
+            }
+        } catch (Throwable) {
+            // Falha ao avaliar a política não libera agenda por atalho; o webhook principal ainda valida.
+        }
+
+        $existing = $this->pendingPreSchedule($pdo, $tenantId, $conversationId, $contactId);
+        $continuationContext = $this->isAgendaContinuationContext($existing, $flowContext);
+        $intent = $this->detectIntent($content, $continuationContext);
         if (!$intent['has_intent']) {
             return $result;
         }
@@ -40,8 +55,6 @@ final class PreSchedulingService
         $result['handled'] = true;
         $result['has_preference'] = $this->hasAnyPreference($intent);
         $result['has_full_preference'] = $this->hasFullPreference($intent);
-
-        $existing = $this->pendingPreSchedule($pdo, $tenantId, $conversationId, $contactId);
         if ($existing === null) {
             $decision = (new ConversationFlowService())->schedulingDecision(
                 $pdo,
@@ -474,19 +487,29 @@ final class PreSchedulingService
         return trim(strtr($template, $replacements));
     }
 
-    public function detectIntent(string $content): array
+    public function detectIntent(string $content, bool $continuationContext = false): array
     {
         $text = $this->normalizeText($content);
         $preferredDate = $this->extractDateText($text);
         $preferredDay = $this->extractDayText($text);
         $preferredTime = $this->extractTimeText($text);
-        $directAgenda = (bool) preg_match('/\b(agenda|agendar|marcar|marca|marcamos|horario|hora|disponibilidade|encaixe|retorno|consulta|sessao|atendimento)\b/u', $text);
-        $serviceInterest = (bool) preg_match('/\b(consulta|atendimento|sessao|terapia|avaliacao|psicologa|psicologo)\b/u', $text);
+
+        // 36.6.15: data/período sozinhos NÃO iniciam agenda.
+        // Ex.: "vou configurar hoje à tarde/noite" é conversa comum, não agendamento.
+        $asksOpeningHours = (bool) preg_match(
+            '/\b(horario|horarios)\s+de\s+(atendimento|funcionamento|abertura|fechamento)\b|\b(qual|quais|que)\b.{0,20}\b(horario|horarios)\b.{0,20}\b(atendem|atendimento|funcionam|funcionamento)\b|\bque horas\b.{0,15}\b(abre|fecha|funciona|atende)\b/u',
+            $text
+        );
+        $directAgenda = !$asksOpeningHours && (bool) preg_match(
+            '/\b(agendar|reagendar|remarcar|desmarcar|encaixe)\b|\bmarcar\b.{0,30}\b(consulta|sessao|reuniao|horario)\b|\b(tem|ha|ver|consultar|confirma|confirmar|qual|quais)\b.{0,25}\b(horario|horarios|disponibilidade)\b|\b(quero|gostaria|preciso)\b.{0,20}\b(horario|horarios|agendar|marcar)\b|\b(horario|horarios)\s+(disponivel|disponiveis)\b/u',
+            $text
+        );
+        $serviceInterest = (bool) preg_match('/\b(consulta|sessao|terapia|avaliacao|reuniao)\b/u', $text);
         $hasPreference = $preferredDate !== '' || $preferredDay !== '' || $preferredTime !== '';
-        // Quando o pré-agendamento está ativo, mensagens curtas como "terça às 15h"
-        // normalmente são a continuação da conversa de agenda. Antes elas não atualizavam
-        // o compromisso porque não traziam a palavra "agendar".
-        $hasIntent = $directAgenda || ($serviceInterest && $hasPreference) || $hasPreference;
+
+        // Preferências curtas ("terça às 15h") só são continuação quando já existe
+        // contexto recente e legítimo de agenda. Nunca abrem agenda do zero.
+        $hasIntent = $directAgenda || ($serviceInterest && $hasPreference) || ($continuationContext && $hasPreference);
         $modality = $this->extractModality($text);
 
         return [
@@ -497,6 +520,35 @@ final class PreSchedulingService
             'modality' => $modality,
             'location_type' => $modality === 'Presencial' ? 'presencial' : ($modality === 'Telefone' ? 'telefone' : 'online'),
         ];
+    }
+
+    private function isAgendaContinuationContext(?array $appointment, array $flowContext): bool
+    {
+        $lastIntent = (string) ($flowContext['last_intent'] ?? '');
+        $stage = (string) ($flowContext['stage'] ?? '');
+        if (in_array($lastIntent, ['schedule', 'reschedule'], true)
+            && in_array($stage, ['scheduling', 'awaiting_approval'], true)) {
+            return true;
+        }
+
+        // Quando o fluxo já foi ingerido e concluiu que a mensagem é conversa comum,
+        // um compromisso antigo não pode reabrir agenda sozinho. O fallback abaixo existe
+        // apenas para chamadas legadas que não receberam flowContext.
+        if ($flowContext !== []) {
+            return false;
+        }
+
+        if (!is_array($appointment) || $appointment === []) {
+            return false;
+        }
+        $reference = (string) ($appointment['updated_at'] ?? $appointment['created_at'] ?? '');
+        $timestamp = $reference !== '' ? strtotime($reference) : false;
+        if ($timestamp === false) {
+            return false;
+        }
+
+        // Evita que um pré-agendamento antigo deixe a conversa "presa" em agenda por dias.
+        return (time() - $timestamp) <= (36 * 3600);
     }
 
     private function pendingPreSchedule(PDO $pdo, int $tenantId, int $conversationId, int $contactId = 0): ?array
@@ -511,6 +563,7 @@ final class PreSchedulingService
                AND conversation_id = :conversation_id
                AND is_pre_schedule = 1
                AND status IN ("pre_scheduled", "awaiting_approval", "rescheduled")
+               AND updated_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
              ORDER BY id DESC
              LIMIT 1'
         );
@@ -530,7 +583,7 @@ final class PreSchedulingService
                    AND contact_id = :contact_id
                    AND is_pre_schedule = 1
                    AND status IN ("pre_scheduled", "awaiting_approval", "rescheduled")
-                   AND created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+                   AND updated_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
                  ORDER BY id DESC
                  LIMIT 1'
             );
@@ -777,6 +830,10 @@ final class PreSchedulingService
             if (!$this->conversationAllowsAutomation($pdo, $tenantId, $conversationId)) {
                 return ['ok' => false, 'error' => 'Automação de agenda pausada: conversa em atendimento humano ou fechada.'];
             }
+            $agent = (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, '', false);
+            if (is_array($agent) && !(new AgentOperatingPolicyService())->allowsConversationalAutomation($agent)) {
+                return ['ok' => false, 'error' => 'Automação de agenda aguardando o próximo horário de atendimento.'];
+            }
             $contact = $this->findContact($pdo, $tenantId, $contactId);
             $phone = preg_replace('/\D+/', '', (string) ($contact['phone'] ?? '')) ?: '';
             if ($phone === '') {
@@ -875,6 +932,10 @@ final class PreSchedulingService
             $tenantId = (int) ($instance['tenant_id'] ?? 0);
             if (!$this->conversationAllowsAutomation($pdo, $tenantId, $conversationId)) {
                 return ['ok' => false, 'error' => 'Automação de agenda pausada: conversa em atendimento humano ou fechada.'];
+            }
+            $agent = (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, '', false);
+            if (is_array($agent) && !(new AgentOperatingPolicyService())->allowsConversationalAutomation($agent)) {
+                return ['ok' => false, 'error' => 'Automação de agenda aguardando o próximo horário de atendimento.'];
             }
             $contact = $this->findContact($pdo, $tenantId, $contactId);
             $phone = preg_replace('/\D+/', '', (string) ($contact['phone'] ?? '')) ?: '';

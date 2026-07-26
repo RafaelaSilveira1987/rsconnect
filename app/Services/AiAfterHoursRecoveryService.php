@@ -7,7 +7,6 @@ namespace App\Services;
 use App\Core\Database;
 use App\Core\Env;
 use DateTimeImmutable;
-use DateTimeZone;
 use PDO;
 use Throwable;
 
@@ -346,28 +345,9 @@ final class AiAfterHoursRecoveryService
 
     private function insideBusinessHours(array $agent): bool
     {
-        if ((int) ($agent['business_hours_enabled'] ?? 0) !== 1) {
-            return true;
-        }
-        $timezone = trim((string) ($agent['business_timezone'] ?? Env::get('APP_TIMEZONE', 'America/Sao_Paulo'))) ?: 'America/Sao_Paulo';
-        try {
-            $now = new DateTimeImmutable('now', new DateTimeZone($timezone));
-        } catch (Throwable) {
-            $now = new DateTimeImmutable('now');
-        }
-        $days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-        $dayKey = $days[(int) $now->format('w')] ?? 'mon';
-        $rules = json_decode((string) ($agent['business_hours_json'] ?? ''), true);
-        if (!is_array($rules) || !isset($rules[$dayKey]) || !is_array($rules[$dayKey])) {
-            return false;
-        }
-        $current = $now->format('H:i');
-        foreach ($rules[$dayKey] as $range) {
-            if (is_array($range) && count($range) >= 2 && (string) $range[0] <= $current && $current <= (string) $range[1]) {
-                return true;
-            }
-        }
-        return false;
+        // Usa a mesma fonte de verdade do webhook, IA e agenda. Assim a
+        // recuperação nunca interpreta dias/horários de forma diferente.
+        return (new AgentOperatingPolicyService())->allowsConversationalAutomation($agent);
     }
 
     private function latestAttempt(PDO $pdo, int $messageId, int $conversationId, int $agentId, string $fallbackAfter): array

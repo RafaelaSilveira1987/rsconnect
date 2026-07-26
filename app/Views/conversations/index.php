@@ -396,6 +396,43 @@ $returnQuery = http_build_query($pollQuery);
                     <?php endif; ?>
                 </section>
 
+                <?php if (is_array($selectedRuleSnapshot ?? null)): ?>
+                    <?php
+                    $ruleStatusLabels = ['lead' => 'Lead', 'customer' => 'Cliente', 'inactive' => 'Inativo'];
+                    $ruleModeLabels = ['ai' => 'IA', 'human' => 'Humano', 'paused' => 'IA pausada'];
+                    $ruleHours = is_array($selectedRuleSnapshot['hours'] ?? null) ? $selectedRuleSnapshot['hours'] : [];
+                    $hoursEnforced = !empty($ruleHours['enforced']);
+                    $insideHours = !empty($ruleHours['inside']);
+                    $ruleGroup = (string) ($selectedRuleSnapshot['contact_group'] ?? 'unclassified');
+                    $ruleStage = (string) ($selectedRuleSnapshot['flow_stage'] ?? 'identifying_contact');
+                    ?>
+                    <section class="drawer-section conversation-flow-card">
+                        <div class="drawer-section-title">
+                            <div>
+                                <span class="eyebrow">Validação efetiva</span>
+                                <h3>Regras aplicadas agora</h3>
+                                <small>Este resumo mostra o contexto técnico que prevalece sobre o prompt livre do assistente.</small>
+                            </div>
+                        </div>
+                        <div class="drawer-form-grid">
+                            <div class="field"><span>Agente</span><strong><?= View::e((string) ($selectedRuleSnapshot['agent_name'] ?? 'Não definido')) ?></strong></div>
+                            <div class="field"><span>Modo da conversa</span><strong><?= View::e($ruleModeLabels[(string) ($selectedRuleSnapshot['attendance_mode'] ?? '')] ?? (string) ($selectedRuleSnapshot['attendance_mode'] ?? '—')) ?></strong></div>
+                            <div class="field"><span>Horário operacional</span><strong><?= !$hoursEnforced ? 'Livre / 24h' : ($insideHours ? 'Dentro do expediente' : 'Fora do expediente') ?></strong><?php if ($hoursEnforced && !empty($ruleHours['current'])): ?><small class="field-hint"><?= View::e((string) $ruleHours['current']) ?> · <?= View::e((string) ($ruleHours['timezone'] ?? '')) ?></small><?php endif; ?></div>
+                            <div class="field"><span>Classificação</span><strong><?= View::e($ruleStatusLabels[(string) ($selectedRuleSnapshot['contact_status'] ?? '')] ?? (string) ($selectedRuleSnapshot['contact_status'] ?? 'Não informada')) ?></strong></div>
+                            <div class="field"><span>Grupo</span><strong><?= View::e($contactGroupLabels[$ruleGroup] ?? $ruleGroup) ?></strong></div>
+                            <div class="field"><span>Última intenção</span><strong><?= View::e((string) ($selectedRuleSnapshot['last_intent'] ?? 'conversation')) ?></strong></div>
+                        </div>
+                        <div class="<?= !empty($selectedRuleSnapshot['agenda_context']) ? 'message-warning' : 'message-success' ?>">
+                            <?= !empty($selectedRuleSnapshot['agenda_context'])
+                                ? 'Contexto de agenda ativo: somente agora as regras específicas de pré-agendamento entram no contexto da IA.'
+                                : 'Conversa geral: a agenda não deve ser iniciada apenas por menções casuais de data ou horário.' ?>
+                        </div>
+                        <?php if (!empty($selectedRuleSnapshot['tags'])): ?>
+                            <p class="field-hint"><strong>Tags consideradas:</strong> <?= View::e(implode(', ', $selectedRuleSnapshot['tags'])) ?></p>
+                        <?php endif; ?>
+                    </section>
+                <?php endif; ?>
+
                 <form class="lead-form drawer-form" method="post" action="<?= View::e(Router::url('/conversations/contact')) ?>">
                     <?= Csrf::input() ?>
                     <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">

@@ -164,11 +164,12 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                             <label class="field compact-field"><span>Integração externa deste assistente</span><input name="n8n_webhook_url" value="<?= View::e($agent['n8n_webhook_url'] ?? '') ?>" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                             <div class="agent-toggle-grid">
                                 <label class="check-field compact-check"><input type="checkbox" name="auto_reply_enabled" value="1" <?= (int) ($agent['auto_reply_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder automaticamente</span></label>
-                                <label class="check-field compact-check"><input type="checkbox" name="business_hours_enabled" value="1" <?= (int) ($agent['business_hours_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Seguir horário de atendimento</span></label>
+                                <label class="check-field compact-check"><input type="checkbox" name="business_hours_enabled" value="1" <?= (int) ($agent['business_hours_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder somente no horário configurado</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="n8n_enabled" value="1" <?= (int) ($agent['n8n_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Usar integração externa</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="reply_to_reactions" value="1" <?= (int) ($agent['reply_to_reactions'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder a reações em mensagens</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="is_default" value="1" <?= (int) $agent['is_default'] === 1 ? 'checked' : '' ?>><span>Fallback geral</span></label>
                             </div>
+                            <p class="field-hint"><strong>Horário é uma regra técnica.</strong> Quando “Responder somente no horário configurado” estiver ativo, IA, agenda, seleção de horários e automações conversacionais ficam bloqueadas fora do expediente, mesmo que o prompt diga para atender 24h.</p>
                             <button class="btn btn-outline" type="submit">Salvar configurações</button>
                         </form>
 
@@ -297,6 +298,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                     </div>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
+                    <p class="field-hint">Quando ativado, este horário prevalece sobre o prompt e bloqueia IA, agenda e automações conversacionais fora do expediente.</p>
                     <label class="check-field"><input type="checkbox" name="n8n_enabled" value="1"><span>Usar integração externa neste assistente</span></label>
                     <label class="check-field"><input type="checkbox" name="reply_to_reactions" value="1"><span>Responder quando o contato reagir a uma mensagem</span><small class="field-hint">Desativado por padrão. Curtidas e emojis de reação não geram resposta automática.</small></label>
                 </div>
@@ -369,6 +371,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                     </div>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
+                    <p class="field-hint">Quando ativado, este horário prevalece sobre o prompt e bloqueia IA, agenda e automações conversacionais fora do expediente.</p>
                     <label class="check-field"><input type="checkbox" name="n8n_enabled" value="1"><span>Usar integração externa neste assistente</span></label>
                     <label class="check-field"><input type="checkbox" name="reply_to_reactions" value="1"><span>Responder quando o contato reagir a uma mensagem</span><small class="field-hint">Desativado por padrão. Curtidas e emojis de reação não geram resposta automática.</small></label>
                 </div>

@@ -55,6 +55,28 @@ final class CalendarConversationService
             return $this->result(false, 'already_communicated');
         }
 
+        // O callback do Google/n8n pode chegar alguns segundos ou minutos depois da
+        // mensagem original. Revalida o expediente ANTES de selecionar/reservar um
+        // horário ou enviar qualquer texto, para que nenhum callback tardio fure a
+        // regra operacional do agente.
+        $policy = $this->appointmentAutomationPolicy($appointment);
+        if (!empty($policy['outside_business_hours'])) {
+            $agentId = (int) ($policy['agent_id'] ?? 0);
+            if ($agentId > 0) {
+                (new AiAfterHoursRecoveryService())->markPending(
+                    Database::connection(),
+                    $tenantId,
+                    (int) ($appointment['conversation_id'] ?? 0),
+                    $agentId,
+                    null
+                );
+            }
+            return array_merge($this->result(false, 'outside_business_hours_deferred'), [
+                'deferred' => true,
+                'agent_id' => $agentId,
+            ]);
+        }
+
         $slots = $this->slotsForRequest($tenantId, $appointmentId, $requestId);
         $this->assignSuggestionPositions($requestId, $slots);
         $slots = $this->slotsForRequest($tenantId, $appointmentId, $requestId);
@@ -173,6 +195,17 @@ final class CalendarConversationService
 
         if (!$this->conversationAllowsAutomation($pdo, $tenantId, $conversationId)) {
             return $this->incomingResult(false, true, 'automation_paused_by_human');
+        }
+
+        // Horário do agente é trava operacional global. A seleção de agenda não pode
+        // responder fora do expediente quando o assistente está configurado como restrito.
+        try {
+            $agent = (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, $content, false);
+            if (is_array($agent) && !(new AgentOperatingPolicyService())->allowsConversationalAutomation($agent)) {
+                return $this->incomingResult(false, false, 'outside_business_hours');
+            }
+        } catch (Throwable) {
+            // O webhook principal também aplica a política; mantém compatibilidade em chamadas legadas.
         }
 
         // Idempotência por mensagem recebida: se esse comando já foi consumido pela agenda,
@@ -888,6 +921,17 @@ final class CalendarConversationService
                 throw new \RuntimeException('Nenhuma instância Evolution disponível para enviar a mensagem de agenda.');
             }
 
+            // Segunda trava defensiva. Mesmo que um novo caminho de código chame este
+            // helper no futuro, mensagem automática de agenda nunca sai fora do
+            // expediente quando a política do agente estiver ativa.
+            $agent = (new AgentRoutingService())->resolve($guardPdo, $instance, $conversationId, '', false);
+            if ($agent) {
+                $policy = (new AgentOperatingPolicyService())->status($agent);
+                if (!empty($policy['enforced']) && empty($policy['inside'])) {
+                    return ['ok' => false, 'error' => 'Automação de agenda aguardando o próximo horário de atendimento.', 'external_id' => null];
+                }
+            }
+
             $verifySsl = filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
             $caBundle = trim((string) Env::get('EVOLUTION_CA_BUNDLE', ''));
             $service = new EvolutionService(
@@ -957,6 +1001,36 @@ final class CalendarConversationService
             } catch (Throwable) {
             }
             return ['ok' => false, 'error' => $exception->getMessage(), 'external_id' => null];
+        }
+    }
+
+    /** @return array{outside_business_hours:bool,agent_id:int,status:array<string,mixed>} */
+    private function appointmentAutomationPolicy(array $appointment): array
+    {
+        $fallback = ['outside_business_hours' => false, 'agent_id' => 0, 'status' => []];
+        try {
+            $tenantId = (int) ($appointment['tenant_id'] ?? 0);
+            $conversationId = (int) ($appointment['conversation_id'] ?? 0);
+            if ($tenantId < 1 || $conversationId < 1) {
+                return $fallback;
+            }
+            $instance = $this->instanceForMessaging($appointment, $tenantId);
+            if (!$instance) {
+                return $fallback;
+            }
+            $pdo = Database::connection();
+            $agent = (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, '', false);
+            if (!$agent) {
+                return $fallback;
+            }
+            $status = (new AgentOperatingPolicyService())->status($agent);
+            return [
+                'outside_business_hours' => !empty($status['enforced']) && empty($status['inside']),
+                'agent_id' => (int) ($agent['id'] ?? 0),
+                'status' => $status,
+            ];
+        } catch (Throwable) {
+            return $fallback;
         }
     }
 

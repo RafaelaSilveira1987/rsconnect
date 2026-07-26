@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.14 — Planos comerciais claros';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.15 — Confiabilidade das regras do agente';
     public const REQUIRED_MIGRATION = '055_multi_whatsapp_agent_routing.sql';
 
     private PDO $pdo;
