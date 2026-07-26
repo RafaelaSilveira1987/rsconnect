@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.11 — Uso total de IA, notificações contínuas e menus do cliente.
+Pacote consolidado até o RS Connect 36.6.12 — Métricas completas de IA e franquia RS.
 
 ## Última etapa incluída
+
+RS Connect 36.6.12 — separa mensagens, interações entregues, chamadas ao provedor, tokens e franquia RS; mede também credencial própria sem descontar do plano e adiciona telemetria técnica por assistente para o Super Admin.
 
 RS Connect 36.6.11 — contabiliza o uso total de IA inclusive com credencial própria sem consumir franquia RS, explica os cards de uso, move as preferências de notificações para o fim da página e corrige a navegação dos módulos marcados pelo Admin RS (incluindo LGPD).
 
@@ -36,7 +38,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.11.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.12.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 
@@ -72,6 +74,7 @@ database/migrations/050_human_takeover_customer_context.sql
 database/migrations/051_operational_evidence_status.sql
 database/migrations/052_ai_usage_and_after_hours_recovery.sql
 database/migrations/053_ai_quota_limit_repair.sql
+database/migrations/054_ai_metrics_and_delivery_telemetry.sql
 ```
 
 Consulte `README-RS-CONNECT-36.3.0.md` para instalar e validar a rotina de backup.

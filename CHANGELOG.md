@@ -1,5 +1,19 @@
 # Changelog
 
+## 36.6.12 — Métricas completas de IA e franquia RS
+
+- Separa definitivamente cinco conceitos: mensagens trafegadas, interações automáticas entregues, chamadas ao provedor, tokens e franquia comercial da RS Connect.
+- Mensagens recebidas e enviadas passam a aparecer como métrica de volume operacional, sem consumir franquia de IA.
+- Uma interação comercial só é confirmada quando a resposta automática da IA é efetivamente entregue ao cliente. Falha de provedor, timeout, takeover humano ou falha na Evolution não consomem a interação comercial.
+- Credencial própria do cliente continua contabilizando interações e telemetria técnica, mas não reduz a franquia RS.
+- Registra chamadas ao provedor, tokens de entrada, saída, total e cache quando o provedor disponibiliza esses dados.
+- Falhas e respostas descartadas passam a preservar a telemetria técnica já consumida, sem transformar custo técnico em cobrança comercial.
+- O painel do cliente mostra mensagens movimentadas, interações de IA, franquia RS e uso com credencial própria em blocos separados.
+- O Super Admin ganha telemetria por empresa e por assistente, com chamadas, tokens, falhas e custo estimado opcional.
+- O custo estimado não usa preço hardcoded: só é calculado quando `AI_COST_RATES_JSON` estiver configurado, evitando preços de provedor desatualizados no código.
+- Adiciona `delivery_status`, `provider_calls`, `total_tokens`, `cached_tokens` e moeda do custo estimado em `ai_usage_events`.
+- Requer `database/migrations/054_ai_metrics_and_delivery_telemetry.sql`.
+
 ## 36.6.11 — Uso total de IA, notificações contínuas e menus do cliente
 
 - O painel passa a destacar o total de respostas automáticas de IA no mês, somando credencial RS Connect e credencial própria do cliente.

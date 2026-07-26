@@ -271,7 +271,7 @@ final class AiAutomationService
             // Revalida imediatamente antes do envio externo para que assumir atendimento pause a IA de fato.
             $conversation = $this->conversation($pdo, $conversationId);
             if (!$this->conversationAllowsAutomaticReply($conversation)) {
-                $usageService->cancelReservation($usageReservationId, 'Resposta descartada porque o atendimento foi assumido ou a IA foi pausada.');
+                $usageService->cancelReservation($usageReservationId, 'Resposta descartada porque o atendimento foi assumido ou a IA foi pausada.', false, $this->ai->lastUsage());
                 $usageReservationId = 0;
                 $this->log(
                     (int) $instance['tenant_id'],
@@ -339,7 +339,7 @@ final class AiAutomationService
             }
         } catch (Throwable $exception) {
             if ($usageReservationId > 0) {
-                $usageService->cancelReservation($usageReservationId, $exception->getMessage(), true);
+                $usageService->cancelReservation($usageReservationId, $exception->getMessage(), true, $this->ai->lastUsage());
                 $usageReservationId = 0;
             }
             if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {

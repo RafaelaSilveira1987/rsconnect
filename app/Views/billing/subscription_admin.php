@@ -12,6 +12,14 @@ $date = static function (?string $value): string {
 };
 $cycleLabel = ['monthly' => 'Mensal', 'yearly' => 'Anual', 'custom' => 'Personalizado'];
 $statusLabel = ['trialing' => 'Em teste', 'active' => 'Ativa', 'overdue' => 'Em atraso', 'suspended' => 'Suspensa', 'canceled' => 'Cancelada', 'open' => 'Aberta', 'paid' => 'Paga', 'cancelled' => 'Cancelada'];
+$count = static fn (mixed $value): string => number_format((int) $value, 0, ',', '.');
+$costLabel = static function (string $currency, float $value): string {
+    $currency = strtoupper(trim($currency));
+    if ($currency === 'BRL') {
+        return 'R$ ' . number_format($value, 6, ',', '.');
+    }
+    return ($currency !== '' ? $currency . ' ' : '') . number_format($value, 6, ',', '.');
+};
 $nextInvoice = $invoices[0] ?? null;
 $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['external_invoice_url'] ?? '';
 ?>
@@ -46,12 +54,18 @@ $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['extern
 </section>
 
 <section class="card table-card subscription-usage-card">
-    <div class="section-heading"><div><span class="eyebrow">Uso do ciclo</span><h2>Limites do plano</h2><p>Interações faturáveis são apenas respostas automáticas enviadas com credencial custeada pela RS Connect.</p></div></div>
+    <div class="section-heading"><div><span class="eyebrow">Uso do ciclo</span><h2>Uso da plataforma e franquia</h2><p>Mensagem, interação e chamada ao provedor são métricas diferentes. A franquia comercial só considera respostas automáticas entregues com IA custeada pela RS Connect.</p></div></div>
     <div class="ai-usage-origin-summary">
-        <div><span>Interações automáticas no mês</span><strong><?= (int) ($aiUsage['total'] ?? 0) ?></strong><small>volume total de respostas de IA observado na empresa</small></div>
-        <div><span>Franquia RS consumida</span><strong><?= (int) ($aiUsage['rs_connect'] ?? 0) ?><?= ($aiUsage['billable_limit'] ?? null) !== null ? ' / ' . (int) $aiUsage['billable_limit'] : '' ?></strong><small>respostas automáticas geradas com credencial custeada pela RS Connect</small></div>
-        <div><span>Uso com chave do cliente</span><strong><?= (int) ($aiUsage['tenant'] ?? 0) ?></strong><small>é contabilizado para volume e auditoria, sem reduzir a franquia RS</small></div>
-        <div><span>Regra comercial</span><strong>1 resposta = 1 interação</strong><small>mensagens recebidas e respostas humanas não entram na contagem de IA</small></div>
+        <div><span>Mensagens movimentadas</span><strong><?= $count($aiUsage['messages']['total'] ?? 0) ?></strong><small>recebidas + enviadas; mede volume operacional e não reduz franquia de IA</small></div>
+        <div><span>Interações automáticas</span><strong><?= $count($aiUsage['total'] ?? 0) ?></strong><small>respostas automáticas de IA efetivamente entregues aos clientes</small></div>
+        <div><span>Franquia IA RS</span><strong><?= $count($aiUsage['rs_connect'] ?? 0) ?><?= ($aiUsage['billable_limit'] ?? null) !== null ? ' / ' . $count($aiUsage['billable_limit']) : '' ?></strong><small>somente interações custeadas pela RS Connect consomem o limite comercial</small></div>
+        <div><span>Credencial própria</span><strong><?= $count($aiUsage['tenant'] ?? 0) ?></strong><small>uso medido normalmente, sem reduzir a franquia de IA fornecida pela RS</small></div>
+    </div>
+    <div class="ai-usage-explainer">
+        <span><strong>Recebidas:</strong> <?= $count($aiUsage['messages']['incoming'] ?? 0) ?></span>
+        <span><strong>Equipe:</strong> <?= $count($aiUsage['messages']['human_outgoing'] ?? 0) ?></span>
+        <span><strong>Saídas automáticas:</strong> <?= $count($aiUsage['messages']['automatic_outgoing'] ?? 0) ?></span>
+        <span><strong>Regra comercial:</strong> 1 resposta automática entregue = 1 interação</span>
     </div>
     <div class="usage-grid">
     <?php foreach ($limitRows as $row): ?>
@@ -62,6 +76,55 @@ $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['extern
             <span class="badge <?= $row['blocked'] ? 'badge-overdue' : 'badge-active' ?>"><?= $row['blocked'] ? 'Limite atingido' : 'OK' ?></span>
         </article>
     <?php endforeach; ?>
+    </div>
+</section>
+
+<section class="card table-card ai-technical-usage-card">
+    <div class="section-heading">
+        <div><span class="eyebrow">Operação RS</span><h2>Telemetria técnica da IA</h2><p>Visão administrativa de chamadas, tokens, falhas e custo estimado. Estes números não são a unidade comercial do plano.</p></div>
+        <span class="badge"><?= $count($aiUsage['technical']['provider_calls'] ?? 0) ?> chamada(s)</span>
+    </div>
+    <div class="ai-technical-summary">
+        <div><span>Chamadas ao provedor</span><strong><?= $count($aiUsage['technical']['provider_calls'] ?? 0) ?></strong><small>inclui respostas, sugestões e tentativas que chegaram ao provedor</small></div>
+        <div><span>Tokens de entrada</span><strong><?= $count($aiUsage['technical']['input_tokens'] ?? 0) ?></strong><small>contexto e instruções processados pelos modelos</small></div>
+        <div><span>Tokens de saída</span><strong><?= $count($aiUsage['technical']['output_tokens'] ?? 0) ?></strong><small>conteúdo produzido pelos modelos</small></div>
+        <div><span>Tokens em cache</span><strong><?= $count($aiUsage['technical']['cached_tokens'] ?? 0) ?></strong><small>informados pelo provedor quando disponíveis</small></div>
+        <div><span>Total de tokens</span><strong><?= $count($aiUsage['technical']['total_tokens'] ?? 0) ?></strong><small>soma técnica registrada no período</small></div>
+        <div><span>Falhas técnicas</span><strong><?= $count($aiUsage['technical']['failed_events'] ?? 0) ?></strong><small>não consomem interação comercial se a resposta não foi entregue</small></div>
+    </div>
+
+    <div class="ai-cost-summary">
+        <strong>Custo estimado do provedor</strong>
+        <?php if (!empty($aiUsage['costs']['rs_connect']) || !empty($aiUsage['costs']['tenant'])): ?>
+            <div class="ai-cost-groups">
+                <div><span>Pago pela RS Connect</span><div class="pill-list"><?php if (!empty($aiUsage['costs']['rs_connect'])): ?><?php foreach ($aiUsage['costs']['rs_connect'] as $currency => $value): ?><span class="tag-pill"><?= View::e($costLabel((string) $currency, (float) $value)) ?></span><?php endforeach; ?><?php else: ?><small>Sem custo estimado registrado.</small><?php endif; ?></div></div>
+                <div><span>Credencial própria do cliente</span><div class="pill-list"><?php if (!empty($aiUsage['costs']['tenant'])): ?><?php foreach ($aiUsage['costs']['tenant'] as $currency => $value): ?><span class="tag-pill"><?= View::e($costLabel((string) $currency, (float) $value)) ?></span><?php endforeach; ?><?php else: ?><small>Sem custo estimado registrado.</small><?php endif; ?></div></div>
+            </div>
+            <small>O primeiro grupo representa o custo de provedor potencialmente suportado pela RS. O segundo é apenas referência de uso, pois a conta do provedor pertence ao cliente. Valores dependem das tarifas configuradas em <code>AI_COST_RATES_JSON</code>.</small>
+        <?php else: ?>
+            <small>Sem estimativa configurada. Tokens e chamadas continuam sendo registrados normalmente.</small>
+        <?php endif; ?>
+    </div>
+
+    <div class="table-wrap">
+        <table class="clean-table">
+            <thead><tr><th>Assistente</th><th>Origem</th><th>Provedor / modelo</th><th>Interações</th><th>Chamadas</th><th>Tokens</th><th>Falhas</th><th>Custo estimado</th></tr></thead>
+            <tbody>
+            <?php foreach (($aiUsage['agents'] ?? []) as $agentUsage): ?>
+                <tr>
+                    <td><strong><?= View::e((string) ($agentUsage['agent_name'] ?? 'Assistente')) ?></strong></td>
+                    <td><?= ($agentUsage['credential_owner'] ?? '') === 'rs_connect' ? 'RS Connect' : 'Cliente' ?></td>
+                    <td><strong><?= View::e(strtoupper((string) ($agentUsage['provider'] ?? ''))) ?></strong><br><small><?= View::e((string) ($agentUsage['model'] ?? '—')) ?></small></td>
+                    <td><?= $count($agentUsage['interactions'] ?? 0) ?></td>
+                    <td><?= $count($agentUsage['provider_calls'] ?? 0) ?></td>
+                    <td><?= $count($agentUsage['total_tokens'] ?? 0) ?><br><small>entrada <?= $count($agentUsage['input_tokens'] ?? 0) ?> · saída <?= $count($agentUsage['output_tokens'] ?? 0) ?></small></td>
+                    <td><?= $count($agentUsage['failed_events'] ?? 0) ?></td>
+                    <td><?php if (!empty($agentUsage['costs'])): ?><?php foreach ($agentUsage['costs'] as $currency => $value): ?><span class="usage-cost-line"><?= View::e($costLabel((string) $currency, (float) $value)) ?></span><?php endforeach; ?><?php else: ?>—<?php endif; ?></td>
+                </tr>
+            <?php endforeach; ?>
+            <?php if (empty($aiUsage['agents'])): ?><tr><td colspan="8"><div class="empty-state">Ainda não há telemetria técnica detalhada neste ciclo.</div></td></tr><?php endif; ?>
+            </tbody>
+        </table>
     </div>
 </section>
 

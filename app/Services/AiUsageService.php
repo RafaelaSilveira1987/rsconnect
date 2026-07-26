@@ -5,17 +5,21 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Core\Database;
+use App\Core\Env;
 use PDO;
 use Throwable;
 
 /**
- * Fonte de verdade do consumo comercial de IA.
+ * Fonte de verdade do uso técnico e do consumo comercial de IA.
  *
- * Regra 36.6.8:
- * - somente resposta automática efetivamente enviada conta como interação do plano;
- * - credencial custeada pela RS Connect consome franquia;
- * - credencial própria do cliente é registrada, mas não consome franquia RS;
- * - mensagens recebidas, respostas humanas e mensagens fixas de automação não contam.
+ * Regra 36.6.12:
+ * - mensagem trafegada é métrica de plataforma, não franquia de IA;
+ * - uma resposta automática entregue ao cliente = uma interação comercial;
+ * - somente interação entregue com credencial custeada pela RS Connect reduz a franquia;
+ * - credencial própria é medida integralmente, sem reduzir a franquia RS;
+ * - chamadas ao provedor, tokens e custo estimado são telemetria técnica e podem existir
+ *   mesmo quando a resposta falha ou é descartada antes da entrega;
+ * - falha/timeout/entrega não concluída nunca confirma uma interação comercial.
  */
 final class AiUsageService
 {
@@ -59,8 +63,7 @@ final class AiUsageService
                     ?? null;
                 $limit = $limit === null ? null : max(0, (int) $limit);
 
-                // Uma execução interrompida não pode consumir franquia para sempre.
-                // Reservas antigas são liberadas antes de calcular a disponibilidade do ciclo.
+                // Reserva interrompida não pode consumir disponibilidade para sempre.
                 $pdo->prepare(
                     'UPDATE ai_usage_events
                      SET status = "failed", completed_at = NOW(), error_message = COALESCE(error_message, "Reserva expirada antes da confirmação do envio.")
@@ -130,7 +133,7 @@ final class AiUsageService
                 'message' => 'Interação reservada.',
             ];
         } catch (Throwable) {
-            // Durante uma implantação sem a migration 052, não interrompe o atendimento.
+            // Durante implantação sem as migrations de telemetria, não interrompe atendimento.
             return ['allowed' => true, 'event_id' => 0, 'owner' => $owner, 'billable' => $billable, 'used' => 0, 'limit' => null, 'message' => 'Controle de consumo ainda não disponível.'];
         } finally {
             if ($locked) {
@@ -152,50 +155,113 @@ final class AiUsageService
 
         try {
             $pdo = Database::connection();
-            $pdo->prepare(
-                'UPDATE ai_usage_events
-                 SET status = "success",
-                     outgoing_message_id = :outgoing_message_id,
-                     input_tokens = :input_tokens,
-                     output_tokens = :output_tokens,
-                     completed_at = NOW(),
-                     error_message = NULL
-                 WHERE id = :id AND status = "reserved"'
-            )->execute([
-                'outgoing_message_id' => $outgoingMessageId && $outgoingMessageId > 0 ? $outgoingMessageId : null,
-                'input_tokens' => isset($usage['input_tokens']) && $usage['input_tokens'] !== null ? max(0, (int) $usage['input_tokens']) : null,
-                'output_tokens' => isset($usage['output_tokens']) && $usage['output_tokens'] !== null ? max(0, (int) $usage['output_tokens']) : null,
-                'id' => $eventId,
-            ]);
+            $event = $this->eventIdentity($eventId);
+            $telemetry = $this->telemetry($usage, (string) ($event['provider'] ?? ''), (string) ($event['model'] ?? ''));
 
-            $statement = $pdo->prepare('SELECT tenant_id, plan_billable FROM ai_usage_events WHERE id = :id LIMIT 1');
-            $statement->execute(['id' => $eventId]);
-            $event = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+            try {
+                $pdo->prepare(
+                    'UPDATE ai_usage_events
+                     SET status = "success",
+                         delivery_status = "delivered",
+                         outgoing_message_id = :outgoing_message_id,
+                         provider_calls = :provider_calls,
+                         input_tokens = :input_tokens,
+                         output_tokens = :output_tokens,
+                         total_tokens = :total_tokens,
+                         cached_tokens = :cached_tokens,
+                         estimated_cost = :estimated_cost,
+                         estimated_cost_currency = :estimated_cost_currency,
+                         completed_at = NOW(),
+                         error_message = NULL
+                     WHERE id = :id AND status = "reserved"'
+                )->execute([
+                    'outgoing_message_id' => $outgoingMessageId && $outgoingMessageId > 0 ? $outgoingMessageId : null,
+                    'provider_calls' => $telemetry['provider_calls'],
+                    'input_tokens' => $telemetry['input_tokens'],
+                    'output_tokens' => $telemetry['output_tokens'],
+                    'total_tokens' => $telemetry['total_tokens'],
+                    'cached_tokens' => $telemetry['cached_tokens'],
+                    'estimated_cost' => $telemetry['estimated_cost'],
+                    'estimated_cost_currency' => $telemetry['estimated_cost_currency'],
+                    'id' => $eventId,
+                ]);
+            } catch (Throwable) {
+                // Compatibilidade durante a janela de deploy antes da migration 054.
+                $pdo->prepare(
+                    'UPDATE ai_usage_events
+                     SET status = "success",
+                         outgoing_message_id = :outgoing_message_id,
+                         input_tokens = :input_tokens,
+                         output_tokens = :output_tokens,
+                         completed_at = NOW(),
+                         error_message = NULL
+                     WHERE id = :id AND status = "reserved"'
+                )->execute([
+                    'outgoing_message_id' => $outgoingMessageId && $outgoingMessageId > 0 ? $outgoingMessageId : null,
+                    'input_tokens' => $telemetry['input_tokens'],
+                    'output_tokens' => $telemetry['output_tokens'],
+                    'id' => $eventId,
+                ]);
+            }
+
             if ((int) ($event['plan_billable'] ?? 0) === 1) {
                 $this->evaluateThresholds((int) ($event['tenant_id'] ?? 0));
             }
         } catch (Throwable) {
-            // O envio ao cliente já aconteceu; uma falha de telemetria não pode gerar mensagem duplicada.
+            // O envio ao cliente já aconteceu; falha de telemetria não pode duplicar mensagem.
         }
     }
 
-    public function cancelReservation(int $eventId, string $reason = '', bool $failed = false): void
+    /** @param array<string,mixed> $usage */
+    public function cancelReservation(int $eventId, string $reason = '', bool $failed = false, array $usage = []): void
     {
         if ($eventId < 1) {
             return;
         }
         try {
-            Database::connection()->prepare(
-                'UPDATE ai_usage_events
-                 SET status = :status,
-                     error_message = :error_message,
-                     completed_at = NOW()
-                 WHERE id = :id AND status = "reserved"'
-            )->execute([
-                'status' => $failed ? 'failed' : 'cancelled',
-                'error_message' => $reason !== '' ? mb_substr($reason, 0, 500) : null,
-                'id' => $eventId,
-            ]);
+            $pdo = Database::connection();
+            $event = $this->eventIdentity($eventId);
+            $telemetry = $this->telemetry($usage, (string) ($event['provider'] ?? ''), (string) ($event['model'] ?? ''));
+            try {
+                $pdo->prepare(
+                    'UPDATE ai_usage_events
+                     SET status = :status,
+                         delivery_status = "not_delivered",
+                         provider_calls = :provider_calls,
+                         input_tokens = :input_tokens,
+                         output_tokens = :output_tokens,
+                         total_tokens = :total_tokens,
+                         cached_tokens = :cached_tokens,
+                         estimated_cost = :estimated_cost,
+                         estimated_cost_currency = :estimated_cost_currency,
+                         error_message = :error_message,
+                         completed_at = NOW()
+                     WHERE id = :id AND status = "reserved"'
+                )->execute([
+                    'status' => $failed ? 'failed' : 'cancelled',
+                    'provider_calls' => $telemetry['provider_calls'],
+                    'input_tokens' => $telemetry['input_tokens'],
+                    'output_tokens' => $telemetry['output_tokens'],
+                    'total_tokens' => $telemetry['total_tokens'],
+                    'cached_tokens' => $telemetry['cached_tokens'],
+                    'estimated_cost' => $telemetry['estimated_cost'],
+                    'estimated_cost_currency' => $telemetry['estimated_cost_currency'],
+                    'error_message' => $reason !== '' ? mb_substr($reason, 0, 500) : null,
+                    'id' => $eventId,
+                ]);
+            } catch (Throwable) {
+                $pdo->prepare(
+                    'UPDATE ai_usage_events
+                     SET status = :status,
+                         error_message = :error_message,
+                         completed_at = NOW()
+                     WHERE id = :id AND status = "reserved"'
+                )->execute([
+                    'status' => $failed ? 'failed' : 'cancelled',
+                    'error_message' => $reason !== '' ? mb_substr($reason, 0, 500) : null,
+                    'id' => $eventId,
+                ]);
+            }
         } catch (Throwable) {
         }
     }
@@ -208,25 +274,122 @@ final class AiUsageService
         }
         try {
             $owner = $this->credentialOwner($agent);
+            $provider = $this->provider($agent);
+            $model = $this->model($agent);
+            $telemetry = $this->telemetry($usage, $provider, $model);
+            $pdo = Database::connection();
+            try {
+                $pdo->prepare(
+                    'INSERT INTO ai_usage_events
+                        (tenant_id, agent_id, conversation_id, credential_id, credential_owner,
+                         provider, model, usage_type, status, delivery_status, plan_billable,
+                         provider_calls, input_tokens, output_tokens, total_tokens, cached_tokens,
+                         estimated_cost, estimated_cost_currency, completed_at)
+                     VALUES
+                        (:tenant_id, :agent_id, :conversation_id, :credential_id, :credential_owner,
+                         :provider, :model, "suggestion", "success", "not_applicable", 0,
+                         :provider_calls, :input_tokens, :output_tokens, :total_tokens, :cached_tokens,
+                         :estimated_cost, :estimated_cost_currency, NOW())'
+                )->execute([
+                    'tenant_id' => $tenantId,
+                    'agent_id' => (int) ($agent['id'] ?? 0) ?: null,
+                    'conversation_id' => $conversationId > 0 ? $conversationId : null,
+                    'credential_id' => (int) ($agent['credential_id'] ?? 0) ?: null,
+                    'credential_owner' => $owner,
+                    'provider' => $provider,
+                    'model' => $model ?: null,
+                    'provider_calls' => $telemetry['provider_calls'],
+                    'input_tokens' => $telemetry['input_tokens'],
+                    'output_tokens' => $telemetry['output_tokens'],
+                    'total_tokens' => $telemetry['total_tokens'],
+                    'cached_tokens' => $telemetry['cached_tokens'],
+                    'estimated_cost' => $telemetry['estimated_cost'],
+                    'estimated_cost_currency' => $telemetry['estimated_cost_currency'],
+                ]);
+            } catch (Throwable) {
+                $pdo->prepare(
+                    'INSERT INTO ai_usage_events
+                        (tenant_id, agent_id, conversation_id, credential_id, credential_owner,
+                         provider, model, usage_type, status, plan_billable, input_tokens, output_tokens, completed_at)
+                     VALUES
+                        (:tenant_id, :agent_id, :conversation_id, :credential_id, :credential_owner,
+                         :provider, :model, "suggestion", "success", 0, :input_tokens, :output_tokens, NOW())'
+                )->execute([
+                    'tenant_id' => $tenantId,
+                    'agent_id' => (int) ($agent['id'] ?? 0) ?: null,
+                    'conversation_id' => $conversationId > 0 ? $conversationId : null,
+                    'credential_id' => (int) ($agent['credential_id'] ?? 0) ?: null,
+                    'credential_owner' => $owner,
+                    'provider' => $provider,
+                    'model' => $model ?: null,
+                    'input_tokens' => $telemetry['input_tokens'],
+                    'output_tokens' => $telemetry['output_tokens'],
+                ]);
+            }
+        } catch (Throwable) {
+        }
+    }
+
+    /**
+     * Registra uso auxiliar/técnico que não representa uma resposta automática entregue.
+     * Útil para sugestões, classificações e falhas de chamadas auxiliares.
+     *
+     * @param array<string,mixed> $usage
+     */
+    public function recordTechnicalEvent(
+        int $tenantId,
+        array $agent,
+        int $conversationId,
+        string $usageType,
+        string $status,
+        array $usage = [],
+        string $errorMessage = ''
+    ): void {
+        if ($tenantId < 1) {
+            return;
+        }
+        $usageType = in_array($usageType, ['suggestion','summary','classification','extraction','intent_detection','scheduling','other'], true)
+            ? $usageType
+            : 'other';
+        $status = in_array($status, ['success','failed','cancelled'], true) ? $status : 'failed';
+
+        try {
+            $owner = $this->credentialOwner($agent);
+            $provider = $this->provider($agent);
+            $model = $this->model($agent);
+            $telemetry = $this->telemetry($usage, $provider, $model);
             Database::connection()->prepare(
                 'INSERT INTO ai_usage_events
                     (tenant_id, agent_id, conversation_id, credential_id, credential_owner,
-                     provider, model, usage_type, status, plan_billable, input_tokens, output_tokens, completed_at)
+                     provider, model, usage_type, status, delivery_status, plan_billable,
+                     provider_calls, input_tokens, output_tokens, total_tokens, cached_tokens,
+                     estimated_cost, estimated_cost_currency, error_message, completed_at)
                  VALUES
                     (:tenant_id, :agent_id, :conversation_id, :credential_id, :credential_owner,
-                     :provider, :model, "suggestion", "success", 0, :input_tokens, :output_tokens, NOW())'
+                     :provider, :model, :usage_type, :status, "not_applicable", 0,
+                     :provider_calls, :input_tokens, :output_tokens, :total_tokens, :cached_tokens,
+                     :estimated_cost, :estimated_cost_currency, :error_message, NOW())'
             )->execute([
                 'tenant_id' => $tenantId,
                 'agent_id' => (int) ($agent['id'] ?? 0) ?: null,
                 'conversation_id' => $conversationId > 0 ? $conversationId : null,
                 'credential_id' => (int) ($agent['credential_id'] ?? 0) ?: null,
                 'credential_owner' => $owner,
-                'provider' => $this->provider($agent),
-                'model' => $this->model($agent) ?: null,
-                'input_tokens' => isset($usage['input_tokens']) && $usage['input_tokens'] !== null ? max(0, (int) $usage['input_tokens']) : null,
-                'output_tokens' => isset($usage['output_tokens']) && $usage['output_tokens'] !== null ? max(0, (int) $usage['output_tokens']) : null,
+                'provider' => $provider,
+                'model' => $model ?: null,
+                'usage_type' => $usageType,
+                'status' => $status,
+                'provider_calls' => $telemetry['provider_calls'],
+                'input_tokens' => $telemetry['input_tokens'],
+                'output_tokens' => $telemetry['output_tokens'],
+                'total_tokens' => $telemetry['total_tokens'],
+                'cached_tokens' => $telemetry['cached_tokens'],
+                'estimated_cost' => $telemetry['estimated_cost'],
+                'estimated_cost_currency' => $telemetry['estimated_cost_currency'],
+                'error_message' => $errorMessage !== '' ? mb_substr($errorMessage, 0, 500) : null,
             ]);
         } catch (Throwable) {
+            // Telemetria nunca deve impedir o fluxo principal.
         }
     }
 
@@ -254,6 +417,93 @@ final class AiUsageService
 
         // Sem credencial cadastrada, o AiModelService usa a chave global do ambiente da RS Connect.
         return 'rs_connect';
+    }
+
+    /** @return array<string,mixed> */
+    private function eventIdentity(int $eventId): array
+    {
+        try {
+            $statement = Database::connection()->prepare('SELECT tenant_id, plan_billable, provider, model FROM ai_usage_events WHERE id = :id LIMIT 1');
+            $statement->execute(['id' => $eventId]);
+            return $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $usage
+     * @return array{provider_calls:int,input_tokens:?int,output_tokens:?int,total_tokens:?int,cached_tokens:?int,estimated_cost:?float,estimated_cost_currency:?string}
+     */
+    private function telemetry(array $usage, string $fallbackProvider, string $fallbackModel): array
+    {
+        $input = isset($usage['input_tokens']) && $usage['input_tokens'] !== null ? max(0, (int) $usage['input_tokens']) : null;
+        $output = isset($usage['output_tokens']) && $usage['output_tokens'] !== null ? max(0, (int) $usage['output_tokens']) : null;
+        $total = isset($usage['total_tokens']) && $usage['total_tokens'] !== null ? max(0, (int) $usage['total_tokens']) : null;
+        if ($total === null && ($input !== null || $output !== null)) {
+            $total = (int) ($input ?? 0) + (int) ($output ?? 0);
+        }
+        $cached = isset($usage['cached_tokens']) && $usage['cached_tokens'] !== null ? max(0, (int) $usage['cached_tokens']) : null;
+        $calls = isset($usage['provider_calls']) ? max(0, (int) $usage['provider_calls']) : 0;
+        $provider = strtolower(trim((string) ($usage['provider'] ?? $fallbackProvider)));
+        $model = trim((string) ($usage['model'] ?? $fallbackModel));
+        $cost = $this->estimateCost($provider, $model, $input, $output, $cached);
+
+        return [
+            'provider_calls' => $calls,
+            'input_tokens' => $input,
+            'output_tokens' => $output,
+            'total_tokens' => $total,
+            'cached_tokens' => $cached,
+            'estimated_cost' => $cost['cost'],
+            'estimated_cost_currency' => $cost['currency'],
+        ];
+    }
+
+    /** @return array{cost:?float,currency:?string} */
+    private function estimateCost(string $provider, string $model, ?int $input, ?int $output, ?int $cached): array
+    {
+        if ($provider === '' || $model === '' || ($input === null && $output === null)) {
+            return ['cost' => null, 'currency' => null];
+        }
+
+        $raw = trim((string) Env::get('AI_COST_RATES_JSON', ''));
+        if ($raw === '') {
+            return ['cost' => null, 'currency' => null];
+        }
+
+        $rates = json_decode($raw, true);
+        if (!is_array($rates)) {
+            return ['cost' => null, 'currency' => null];
+        }
+
+        $providerRates = $rates[strtolower($provider)] ?? null;
+        if (!is_array($providerRates)) {
+            return ['cost' => null, 'currency' => null];
+        }
+
+        $rate = $providerRates[$model] ?? $providerRates['*'] ?? null;
+        if (!is_array($rate)) {
+            return ['cost' => null, 'currency' => null];
+        }
+
+        $inputRate = max(0.0, (float) ($rate['input_per_million'] ?? 0));
+        $outputRate = max(0.0, (float) ($rate['output_per_million'] ?? 0));
+        $cachedRate = array_key_exists('cached_input_per_million', $rate)
+            ? max(0.0, (float) $rate['cached_input_per_million'])
+            : $inputRate;
+        $currency = strtoupper(trim((string) ($rate['currency'] ?? 'USD')));
+        $currency = preg_match('/^[A-Z]{3}$/', $currency) ? $currency : 'USD';
+
+        $inputTokens = max(0, (int) ($input ?? 0));
+        $cachedTokens = min($inputTokens, max(0, (int) ($cached ?? 0)));
+        $nonCachedInput = max(0, $inputTokens - $cachedTokens);
+        $outputTokens = max(0, (int) ($output ?? 0));
+        $estimated = (($nonCachedInput / 1_000_000) * $inputRate)
+            + (($cachedTokens / 1_000_000) * $cachedRate)
+            + (($outputTokens / 1_000_000) * $outputRate);
+
+        return ['cost' => round($estimated, 8), 'currency' => $currency];
     }
 
     private function evaluateThresholds(int $tenantId): void

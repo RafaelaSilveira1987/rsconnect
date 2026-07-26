@@ -801,6 +801,9 @@ final class ConversationController
             $this->redirect('/conversations');
         }
 
+        $agent = null;
+        $modelService = null;
+        $suggestionUsageRecorded = false;
         try {
             $pdo = Database::connection();
             $agent = $this->agentForConversation($pdo, $conversation);
@@ -813,6 +816,7 @@ final class ConversationController
             $modelService = new AiModelService();
             $suggestion = $modelService->generateReply($agent, $messages, $conversation, $conversation);
             (new \App\Services\AiUsageService())->recordSuggestion((int) $conversation['tenant_id'], $agent, $conversationId, $modelService->lastUsage());
+            $suggestionUsageRecorded = true;
 
             if ($this->hasColumn($pdo, 'conversations', 'last_ai_suggestion')) {
                 $pdo->prepare(
@@ -830,6 +834,17 @@ final class ConversationController
             Audit::log('conversation.ai_suggestion', ['conversation_id' => $conversationId], (int) $conversation['tenant_id']);
             Flash::set('success', 'Sugestão de resposta gerada pela IA.');
         } catch (Throwable $exception) {
+            if (!$suggestionUsageRecorded && is_array($agent) && $modelService instanceof AiModelService) {
+                (new \App\Services\AiUsageService())->recordTechnicalEvent(
+                    (int) $conversation['tenant_id'],
+                    $agent,
+                    $conversationId,
+                    'suggestion',
+                    'failed',
+                    $modelService->lastUsage(),
+                    $exception->getMessage()
+                );
+            }
             Audit::log('conversation.ai_suggestion_failed', [
                 'conversation_id' => $conversationId,
                 'error' => $exception->getMessage(),

@@ -105,13 +105,19 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
 
 <section class="card client-subscription-usage">
     <div class="section-heading client-section-heading">
-        <div><span class="eyebrow">Uso do plano</span><h2>Acompanhe seus limites</h2><p>A franquia de IA conta somente respostas automáticas custeadas pela RS Connect. Mensagens recebidas e respostas humanas não consomem esse limite.</p></div>
+        <div><span class="eyebrow">Uso do plano</span><h2>Uso da plataforma e da IA</h2><p>Mensagens mostram o movimento real do atendimento. A franquia comercial é separada: somente respostas automáticas entregues com IA custeada pela RS Connect reduzem o limite do plano.</p></div>
     </div>
     <div class="ai-usage-origin-summary">
-        <div><span>Interações automáticas no mês</span><strong><?= (int) ($aiUsage['total'] ?? 0) ?></strong><small>todas as respostas automáticas de IA, independentemente de quem fornece a credencial</small></div>
-        <div><span>Franquia RS utilizada</span><strong><?= (int) ($aiUsage['rs_connect'] ?? 0) ?><?= ($aiUsage['billable_limit'] ?? null) !== null ? ' / ' . (int) $aiUsage['billable_limit'] : '' ?></strong><small>somente respostas geradas com IA custeada pela RS Connect reduzem a franquia</small></div>
-        <div><span>IA com credencial própria</span><strong><?= (int) ($aiUsage['tenant'] ?? 0) ?></strong><small>entra no volume total para acompanhamento, mas não reduz a franquia RS</small></div>
-        <div><span>Mês de consumo</span><strong><?= View::e($date($aiUsage['period']['start_date'] ?? null)) ?> – <?= View::e($date($aiUsage['period']['end_date'] ?? null)) ?></strong><small>o acompanhamento e a franquia mensal reiniciam no próximo mês</small></div>
+        <div><span>Mensagens movimentadas</span><strong><?= number_format((int) ($aiUsage['messages']['total'] ?? 0), 0, ',', '.') ?></strong><small>mensagens recebidas e enviadas no WhatsApp; esta métrica não consome franquia de IA</small></div>
+        <div><span>Interações automáticas de IA</span><strong><?= number_format((int) ($aiUsage['total'] ?? 0), 0, ',', '.') ?></strong><small>respostas automáticas de IA efetivamente entregues aos clientes, usando qualquer origem de credencial</small></div>
+        <div><span>Franquia de IA RS</span><strong><?= number_format((int) ($aiUsage['rs_connect'] ?? 0), 0, ',', '.') ?><?= ($aiUsage['billable_limit'] ?? null) !== null ? ' / ' . number_format((int) $aiUsage['billable_limit'], 0, ',', '.') : '' ?></strong><small>somente interações cuja IA é custeada pela RS Connect reduzem este limite</small></div>
+        <div><span>IA com credencial própria</span><strong><?= number_format((int) ($aiUsage['tenant'] ?? 0), 0, ',', '.') ?></strong><small>é contabilizada para acompanhamento de uso, mas não reduz a franquia fornecida pela RS</small></div>
+    </div>
+    <div class="ai-usage-explainer">
+        <span><strong>Recebidas:</strong> <?= number_format((int) ($aiUsage['messages']['incoming'] ?? 0), 0, ',', '.') ?></span>
+        <span><strong>Enviadas pela equipe:</strong> <?= number_format((int) ($aiUsage['messages']['human_outgoing'] ?? 0), 0, ',', '.') ?></span>
+        <span><strong>Saídas automáticas:</strong> <?= number_format((int) ($aiUsage['messages']['automatic_outgoing'] ?? 0), 0, ',', '.') ?></span>
+        <span><strong>Período:</strong> <?= View::e($date($aiUsage['period']['start_date'] ?? null)) ?> a <?= View::e($date($aiUsage['period']['end_date'] ?? null)) ?></span>
     </div>
     <div class="client-usage-grid">
         <?php foreach ($limitRows as $row): ?>

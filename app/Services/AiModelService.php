@@ -12,11 +12,13 @@ use Throwable;
 
 final class AiModelService
 {
-    /** @var array{input_tokens:?int,output_tokens:?int,total_tokens:?int,provider:?string,model:?string} */
+    /** @var array{input_tokens:?int,output_tokens:?int,total_tokens:?int,cached_tokens:?int,provider_calls:int,provider:?string,model:?string} */
     private array $lastUsage = [
         'input_tokens' => null,
         'output_tokens' => null,
         'total_tokens' => null,
+        'cached_tokens' => null,
+        'provider_calls' => 0,
         'provider' => null,
         'model' => null,
     ];
@@ -28,6 +30,8 @@ final class AiModelService
             'input_tokens' => null,
             'output_tokens' => null,
             'total_tokens' => null,
+            'cached_tokens' => null,
+            'provider_calls' => 0,
             'provider' => $provider,
             'model' => null,
         ];
@@ -65,14 +69,21 @@ final class AiModelService
             'max_output_tokens' => (int) Env::get('AI_MAX_OUTPUT_TOKENS', 420),
         ];
 
+        // A chamada é contabilizada tecnicamente mesmo que o provedor responda com erro.
+        // Isso não consome franquia comercial: a franquia só é confirmada após a entrega ao cliente.
+        $this->lastUsage['provider_calls'] = 1;
+        $this->lastUsage['model'] = $model;
         $response = $this->postJson($url, $payload, [
             'Authorization: Bearer ' . $apiKey,
         ]);
         $usage = is_array($response['usage'] ?? null) ? $response['usage'] : [];
+        $inputDetails = is_array($usage['input_tokens_details'] ?? null) ? $usage['input_tokens_details'] : [];
         $this->lastUsage = [
             'input_tokens' => isset($usage['input_tokens']) ? max(0, (int) $usage['input_tokens']) : null,
             'output_tokens' => isset($usage['output_tokens']) ? max(0, (int) $usage['output_tokens']) : null,
             'total_tokens' => isset($usage['total_tokens']) ? max(0, (int) $usage['total_tokens']) : null,
+            'cached_tokens' => isset($inputDetails['cached_tokens']) ? max(0, (int) $inputDetails['cached_tokens']) : null,
+            'provider_calls' => 1,
             'provider' => 'openai',
             'model' => $model,
         ];
@@ -116,15 +127,20 @@ final class AiModelService
             ],
         ];
 
+        $this->lastUsage['provider_calls'] = 1;
+        $this->lastUsage['model'] = $model;
         $response = $this->postJson($url, $payload, []);
         $usage = is_array($response['usageMetadata'] ?? null) ? $response['usageMetadata'] : [];
         $inputTokens = isset($usage['promptTokenCount']) ? max(0, (int) $usage['promptTokenCount']) : null;
         $outputTokens = isset($usage['candidatesTokenCount']) ? max(0, (int) $usage['candidatesTokenCount']) : null;
         $totalTokens = isset($usage['totalTokenCount']) ? max(0, (int) $usage['totalTokenCount']) : null;
+        $cachedTokens = isset($usage['cachedContentTokenCount']) ? max(0, (int) $usage['cachedContentTokenCount']) : null;
         $this->lastUsage = [
             'input_tokens' => $inputTokens,
             'output_tokens' => $outputTokens,
             'total_tokens' => $totalTokens,
+            'cached_tokens' => $cachedTokens,
+            'provider_calls' => 1,
             'provider' => 'google',
             'model' => $model,
         ];
@@ -138,7 +154,7 @@ final class AiModelService
         return mb_substr($text, 0, (int) Env::get('AI_MAX_REPLY_CHARS', 1400));
     }
 
-    /** @return array{input_tokens:?int,output_tokens:?int,total_tokens:?int,provider:?string,model:?string} */
+    /** @return array{input_tokens:?int,output_tokens:?int,total_tokens:?int,cached_tokens:?int,provider_calls:int,provider:?string,model:?string} */
     public function lastUsage(): array
     {
         return $this->lastUsage;
