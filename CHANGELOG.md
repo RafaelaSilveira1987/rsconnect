@@ -1,3 +1,14 @@
+## 36.6.14 — Planos comerciais claros
+
+- Reformulada visualmente a aba Planos em Planos e cobrança.
+- Starter passa a ser apresentado comercialmente como Essencial sem alterar a chave interna.
+- Profissional ganha destaque de plano recomendado e Business posicionamento para escala.
+- Custom com valor zero agora aparece como Sob consulta.
+- Cards explicam Canais WhatsApp, Agentes de IA, Usuários e Franquia IA RS sem duplicidades.
+- Recursos n8n são comunicados como automações integradas.
+- Incluída seção explicativa dos limites e descrições no formulário de edição.
+- Sem migration nova.
+
 # Changelog
 
 ## 36.6.13 — Canais WhatsApp e roteamento de agentes

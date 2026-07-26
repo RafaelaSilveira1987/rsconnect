@@ -119,41 +119,149 @@ $payableInvoices = array_values(array_filter($invoices, static fn (array $invoic
         </div>
     </section>
 
-    <section class="card admin-module-panel" data-tab-panel="plans" hidden>
-        <div class="section-heading"><div><span class="eyebrow">Produtos comerciais</span><h2>Planos cadastrados</h2><p>Defina recursos, limites e valores apresentados ao cliente.</p></div><button class="btn btn-primary" type="button" data-plan-open="new" data-toggle-panel="plan-drawer">Novo plano</button></div>
-        <div class="admin-module-card-list compact-cards">
+    <section class="card admin-module-panel commercial-plans-panel" data-tab-panel="plans" hidden>
+        <?php
+        $commercialProfiles = [
+            'starter' => [
+                'market_name' => 'Essencial',
+                'kicker' => 'Para começar',
+                'summary' => 'Para profissionais e pequenas operações que querem automatizar um canal de atendimento com simplicidade.',
+                'tone' => 'starter',
+            ],
+            'pro' => [
+                'market_name' => 'Profissional',
+                'kicker' => 'Mais indicado',
+                'summary' => 'Para equipes que precisam dividir funções entre atendimento, agenda e comercial em mais de um canal.',
+                'tone' => 'pro',
+            ],
+            'business' => [
+                'market_name' => 'Business',
+                'kicker' => 'Para escalar',
+                'summary' => 'Para operações com vários números, áreas e agentes especializados trabalhando de forma coordenada.',
+                'tone' => 'business',
+            ],
+            'custom' => [
+                'market_name' => 'Custom',
+                'kicker' => 'Sob medida',
+                'summary' => 'Para múltiplas unidades, volumes maiores, integrações próprias ou necessidades comerciais específicas.',
+                'tone' => 'custom',
+            ],
+        ];
+        $normalizeCommercialFeature = static function (string $feature): string {
+            $feature = trim($feature);
+            $feature = preg_replace('/(\d+)\s+fluxos?\s+n8n/iu', '$1 automações integradas', $feature) ?? $feature;
+            $feature = preg_replace('/CRM\s+b[aá]sico/iu', 'CRM essencial', $feature) ?? $feature;
+            $feature = preg_replace('/Agenda\s*\+\s*Google Calendar\s+via\s+n8n/iu', 'Agenda + Google Calendar', $feature) ?? $feature;
+            $feature = preg_replace('/inst[aâ]ncias?\s+WhatsApp/iu', 'canais WhatsApp', $feature) ?? $feature;
+            $feature = preg_replace('/agentes?\s+IA/iu', 'agentes de IA', $feature) ?? $feature;
+            return trim($feature);
+        };
+        ?>
+        <div class="section-heading commercial-plans-heading">
+            <div>
+                <span class="eyebrow">Produtos comerciais</span>
+                <h2>Planos RS Connect</h2>
+                <p>Os planos evoluem pela complexidade da operação: canais de atendimento, agentes especializados, automações e franquia de IA fornecida pela RS Connect.</p>
+            </div>
+            <button class="btn btn-primary" type="button" data-plan-open="new" data-toggle-panel="plan-drawer">Novo plano</button>
+        </div>
+
+        <div class="commercial-plan-grid">
             <?php foreach ($plans as $plan): ?>
                 <?php
-                $isCustomQuote = strtolower((string) ($plan['plan_key'] ?? '')) === 'custom' && (float) ($plan['monthly_price'] ?? 0) <= 0;
+                $planKey = strtolower((string) ($plan['plan_key'] ?? ''));
+                $profile = $commercialProfiles[$planKey] ?? [
+                    'market_name' => (string) ($plan['name'] ?? 'Plano'),
+                    'kicker' => 'Plano personalizado',
+                    'summary' => (string) ($plan['description'] ?? 'Capacidade e recursos definidos para esta oferta.'),
+                    'tone' => 'custom',
+                ];
+                $isCustomQuote = $planKey === 'custom' && (float) ($plan['monthly_price'] ?? 0) <= 0;
+                $limits = $plan['limits'] ?? [];
+                $usersLimit = $limits['users'] ?? null;
+                $channelLimit = $limits['instances'] ?? null;
+                $agentLimit = $limits['agents'] ?? null;
+                $automationLimit = $limits['n8n_flows'] ?? null;
+                $aiLimit = $limits['ai_interactions_month'] ?? $limits['messages_month'] ?? null;
                 $displayFeatures = [];
                 foreach (($plan['features'] ?? []) as $feature) {
-                    $featureText = trim((string) $feature);
+                    $featureText = $normalizeCommercialFeature((string) $feature);
                     if ($featureText === '') { continue; }
-                    if (preg_match('/\b(inst[aâ]ncia|whatsapps?|agentes?\s+ia|assistentes?\s+ia)\b/iu', $featureText)) { continue; }
-                    $featureText = preg_replace('/(\d+)\s+fluxos?\s+n8n/iu', '$1 automações integradas', $featureText) ?? $featureText;
-                    $displayFeatures[] = $featureText;
+                    if (preg_match('/\b(inst[aâ]ncia|whatsapps?|canais?\s+WhatsApp|agentes?\s+(?:de\s+)?IA|assistentes?\s+IA|automa[cç][oõ]es?\s+integradas?)\b/iu', $featureText)) { continue; }
+                    if (!in_array($featureText, $displayFeatures, true)) { $displayFeatures[] = $featureText; }
                 }
+                $limitText = static fn (mixed $value): string => $value === null || $value === '' ? 'Ilimitado' : number_format((int) $value, 0, ',', '.');
                 ?>
-                <article class="admin-record-card">
-                    <div class="admin-record-main"><span class="admin-record-mark is-plan">R$</span><div class="admin-record-copy"><div class="admin-record-title-row"><div><h3><?= View::e($plan['name']) ?></h3><p><?= View::e($plan['plan_key']) ?></p></div><div class="admin-record-badges"><span class="badge badge-<?= View::e($plan['status']) ?>"><?= View::e($statusLabel[$plan['status']] ?? $plan['status']) ?></span></div></div><strong class="admin-record-price"><?= $isCustomQuote ? 'Sob consulta' : View::e($money($plan['monthly_price'])) ?><?php if (!$isCustomQuote): ?><small>/mês</small><?php endif; ?></strong><?php if (!empty($plan['description'])): ?><small class="admin-record-muted"><?= View::e($plan['description']) ?></small><?php endif; ?></div></div>
-                    <dl class="admin-record-metrics"><div><dt>Usuários</dt><dd><?= View::e((string) ($plan['limits']['users'] ?? '∞')) ?></dd></div><div><dt>Canais WhatsApp</dt><dd><?= View::e((string) ($plan['limits']['instances'] ?? '∞')) ?></dd></div><div><dt>Agentes de IA</dt><dd><?= View::e((string) ($plan['limits']['agents'] ?? '∞')) ?></dd></div><div><dt>Franquia IA RS</dt><dd><?= View::e((string) ($plan['limits']['ai_interactions_month'] ?? $plan['limits']['messages_month'] ?? '∞')) ?></dd></div></dl>
-                    <div class="admin-feature-tags"><?php foreach (array_slice($displayFeatures, 0, 6) as $feature): ?><span><?= View::e($feature) ?></span><?php endforeach; ?><?php if (!$displayFeatures): ?><small>Recursos detalhados pelos limites acima.</small><?php endif; ?></div>
-                    <div class="admin-record-actions"><button class="btn btn-small btn-outline" type="button" data-toggle-panel="plan-drawer" data-plan-open="edit" data-id="<?= (int) $plan['id'] ?>" data-plan-key="<?= View::e($plan['plan_key']) ?>" data-name="<?= View::e($plan['name']) ?>" data-description="<?= View::e($plan['description'] ?? '') ?>" data-price="<?= View::e(number_format((float) $plan['monthly_price'], 2, ',', '.')) ?>" data-status="<?= View::e($plan['status']) ?>" data-sort-order="<?= (int) $plan['sort_order'] ?>" data-limits="<?= View::e(rawurlencode(json_encode($plan['limits'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))) ?>" data-features="<?= View::e(rawurlencode(implode("
-", $plan['features'] ?? []))) ?>">Editar plano</button></div>
+                <article class="commercial-plan-card is-<?= View::e($profile['tone']) ?><?= $planKey === 'pro' ? ' is-featured' : '' ?>">
+                    <header class="commercial-plan-card-header">
+                        <div class="commercial-plan-kicker-row">
+                            <span class="commercial-plan-kicker"><?= View::e($profile['kicker']) ?></span>
+                            <?php if ($planKey === 'pro'): ?><span class="commercial-plan-recommended">Recomendado</span><?php endif; ?>
+                            <span class="badge badge-<?= View::e($plan['status']) ?>"><?= View::e($statusLabel[$plan['status']] ?? $plan['status']) ?></span>
+                        </div>
+                        <div class="commercial-plan-title-row">
+                            <span class="admin-record-mark is-plan" aria-hidden="true">R$</span>
+                            <div>
+                                <h3><?= View::e($profile['market_name']) ?></h3>
+                                <small>Plano interno: <?= View::e((string) ($plan['name'] ?? $planKey)) ?></small>
+                            </div>
+                        </div>
+                        <p class="commercial-plan-audience"><?= View::e($profile['summary']) ?></p>
+                        <div class="commercial-plan-price">
+                            <?php if ($isCustomQuote): ?>
+                                <strong>Sob consulta</strong><span>capacidade definida por proposta</span>
+                            <?php else: ?>
+                                <strong><?= View::e($money($plan['monthly_price'])) ?></strong><span>/mês</span>
+                            <?php endif; ?>
+                        </div>
+                    </header>
+
+                    <div class="commercial-plan-capacity">
+                        <div><span>Canais WhatsApp</span><strong><?= View::e($limitText($channelLimit)) ?></strong><small>números conectados</small></div>
+                        <div><span>Agentes de IA</span><strong><?= View::e($limitText($agentLimit)) ?></strong><small>funções especializadas</small></div>
+                        <div><span>Usuários</span><strong><?= View::e($limitText($usersLimit)) ?></strong><small>pessoas da equipe</small></div>
+                        <div><span>Franquia IA RS</span><strong><?= View::e($limitText($aiLimit)) ?></strong><small>respostas automáticas/mês</small></div>
+                    </div>
+
+                    <div class="commercial-plan-included">
+                        <strong>O que este plano viabiliza</strong>
+                        <ul>
+                            <li><span>✓</span><b><?= View::e($limitText($automationLimit)) ?></b> automações integradas</li>
+                            <?php foreach (array_slice($displayFeatures, 0, 5) as $feature): ?><li><span>✓</span><?= View::e($feature) ?></li><?php endforeach; ?>
+                            <?php if (!$displayFeatures): ?><li><span>✓</span>Recursos definidos conforme a capacidade acima</li><?php endif; ?>
+                        </ul>
+                    </div>
+
+                    <div class="commercial-plan-ai-note">
+                        <strong>IA própria do cliente</strong>
+                        <span>É monitorada no uso total, mas não reduz a franquia de IA custeada pela RS Connect.</span>
+                    </div>
+
+                    <footer class="commercial-plan-actions">
+                        <button class="btn btn-small btn-outline" type="button" data-toggle-panel="plan-drawer" data-plan-open="edit" data-id="<?= (int) $plan['id'] ?>" data-plan-key="<?= View::e($plan['plan_key']) ?>" data-name="<?= View::e($plan['name']) ?>" data-description="<?= View::e($plan['description'] ?? '') ?>" data-price="<?= View::e(number_format((float) $plan['monthly_price'], 2, ',', '.')) ?>" data-status="<?= View::e($plan['status']) ?>" data-sort-order="<?= (int) $plan['sort_order'] ?>" data-limits="<?= View::e(rawurlencode(json_encode($plan['limits'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))) ?>" data-features="<?= View::e(rawurlencode(implode("\n", $plan['features'] ?? []))) ?>">Editar plano</button>
+                    </footer>
                 </article>
             <?php endforeach; ?>
             <?php if (!$plans): ?><div class="empty-state">Nenhum plano cadastrado.</div><?php endif; ?>
         </div>
-        <div class="plan-capability-explainer">
-            <div><strong>Canal WhatsApp</strong><span>Cada número conectado conta como um canal. Todos os números da empresa são administrados em uma única tela.</span></div>
-            <div><strong>Agente de IA</strong><span>É uma função especializada. Vários agentes podem compartilhar o mesmo canal e um agente pode atuar em mais de um canal.</span></div>
-            <div><strong>Franquia IA RS</strong><span>Conta somente respostas automáticas efetivamente entregues usando IA custeada pela RS Connect.</span></div>
-            <div><strong>Automações</strong><span>Os fluxos n8n são a capacidade técnica por trás de integrações e rotinas automatizadas.</span></div>
-        </div>
+
+        <section class="commercial-capability-guide">
+            <div class="commercial-capability-guide-title">
+                <span class="eyebrow">Como interpretar os limites</span>
+                <h3>O que cada capacidade representa na prática</h3>
+                <p>Esses conceitos também orientam as telas de Canais e Agentes, evitando que limite comercial e configuração técnica sejam coisas diferentes.</p>
+            </div>
+            <div class="commercial-capability-grid">
+                <article><span class="commercial-capability-icon">WA</span><div><strong>Canal WhatsApp</strong><p>Cada número conectado conta como 1 canal. Todos os números da empresa ficam em uma única tela de Canais WhatsApp.</p></div></article>
+                <article><span class="commercial-capability-icon">IA</span><div><strong>Agente especializado</strong><p>É uma função de atendimento. Vários agentes podem compartilhar um WhatsApp e o mesmo agente pode atuar em vários canais.</p></div></article>
+                <article><span class="commercial-capability-icon">RS</span><div><strong>Franquia IA RS</strong><p>Conta somente respostas automáticas entregues utilizando IA custeada pela RS Connect. Mensagens humanas não consomem esta franquia.</p></div></article>
+                <article><span class="commercial-capability-icon">↻</span><div><strong>Automação integrada</strong><p>É uma rotina ativa de integração ou operação, como agenda, follow-up, cobrança ou sincronização. n8n continua sendo a tecnologia por trás dela.</p></div></article>
+            </div>
+        </section>
     </section>
 </div>
 
-<aside class="conversation-details conversation-drawer admin-form-drawer" id="plan-drawer" aria-label="Configurar plano" aria-modal="true" role="dialog"><div class="conversation-drawer-header"><div><span class="eyebrow" data-plan-eyebrow>Novo plano</span><h2 data-plan-title>Criar pacote comercial</h2><p>Defina valor, limites e recursos apresentados ao cliente.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="plan-drawer">×</button></div><div class="conversation-drawer-body"><form class="drawer-form" method="post" action="<?= View::e(Router::url('/billing/plans/save')) ?>" data-plan-form><?= Csrf::input() ?><input type="hidden" name="id" value="0" data-plan-field="id"><section class="drawer-section"><div class="drawer-form-grid"><label class="field"><span>Identificador</span><input name="plan_key" data-plan-field="plan_key" placeholder="custom-clinica" required></label><label class="field"><span>Situação</span><select name="status" data-plan-field="status"><option value="active">Ativo</option><option value="inactive">Inativo</option></select></label><label class="field drawer-span"><span>Nome</span><input name="name" data-plan-field="name" placeholder="Plano Clínica" required></label><label class="field drawer-span"><span>Descrição</span><input name="description" data-plan-field="description" placeholder="Pacote específico para clínicas"></label><label class="field"><span>Valor mensal</span><input name="monthly_price" data-plan-field="monthly_price" placeholder="497,00"></label><label class="field"><span>Ordem de exibição</span><input name="sort_order" type="number" value="50" data-plan-field="sort_order"></label></div></section><section class="drawer-section"><div class="drawer-section-title"><div><span class="eyebrow">Limites</span><h3>Capacidade do plano</h3></div></div><div class="drawer-form-grid"><?php foreach ($limitLabels as $key => $label): ?><label class="field"><span><?= View::e($label) ?></span><input name="limits[<?= View::e($key) ?>]" type="number" min="0" placeholder="Ilimitado" data-plan-limit="<?= View::e($key) ?>"></label><?php endforeach; ?></div></section><section class="drawer-section"><label class="field"><span>Recursos inclusos, um por linha</span><textarea name="features" rows="7" data-plan-field="features" placeholder="CRM
+<aside class="conversation-details conversation-drawer admin-form-drawer" id="plan-drawer" aria-label="Configurar plano" aria-modal="true" role="dialog"><div class="conversation-drawer-header"><div><span class="eyebrow" data-plan-eyebrow>Novo plano</span><h2 data-plan-title>Criar pacote comercial</h2><p>Defina valor, limites e recursos apresentados ao cliente.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="plan-drawer">×</button></div><div class="conversation-drawer-body"><form class="drawer-form" method="post" action="<?= View::e(Router::url('/billing/plans/save')) ?>" data-plan-form><?= Csrf::input() ?><input type="hidden" name="id" value="0" data-plan-field="id"><section class="drawer-section"><div class="drawer-form-grid"><label class="field"><span>Identificador</span><input name="plan_key" data-plan-field="plan_key" placeholder="custom-clinica" required></label><label class="field"><span>Situação</span><select name="status" data-plan-field="status"><option value="active">Ativo</option><option value="inactive">Inativo</option></select></label><label class="field drawer-span"><span>Nome</span><input name="name" data-plan-field="name" placeholder="Plano Clínica" required></label><label class="field drawer-span"><span>Descrição</span><input name="description" data-plan-field="description" placeholder="Pacote específico para clínicas"></label><label class="field"><span>Valor mensal</span><input name="monthly_price" data-plan-field="monthly_price" placeholder="497,00"></label><label class="field"><span>Ordem de exibição</span><input name="sort_order" type="number" value="50" data-plan-field="sort_order"></label></div></section><section class="drawer-section"><div class="drawer-section-title"><div><span class="eyebrow">Limites</span><h3>Capacidade do plano</h3></div></div><div class="drawer-form-grid"><?php foreach ($limitLabels as $key => $label): ?><label class="field"><span><?= View::e($label) ?></span><input name="limits[<?= View::e($key) ?>]" type="number" min="0" placeholder="Ilimitado" data-plan-limit="<?= View::e($key) ?>"><?php if (!empty($limitDescriptions[$key])): ?><small class="field-hint"><?= View::e($limitDescriptions[$key]) ?></small><?php endif; ?></label><?php endforeach; ?></div></section><section class="drawer-section"><label class="field"><span>Recursos inclusos, um por linha</span><textarea name="features" rows="7" data-plan-field="features" placeholder="CRM
 Agenda
 Assistente virtual"></textarea></label></section><div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="plan-drawer">Cancelar</button><button class="btn btn-primary" type="submit" data-plan-submit>Salvar plano</button></div></form></div></aside>
 

@@ -75,6 +75,7 @@ final class BillingController
             'tenants' => $tenants,
             'invoices' => $invoices,
             'limitLabels' => SubscriptionService::LIMIT_LABELS,
+            'limitDescriptions' => SubscriptionService::LIMIT_DESCRIPTIONS,
             'selectedTenantId' => (int) ($_GET['tenant_id'] ?? 0),
             'autoEditSubscription' => isset($_GET['edit_subscription']),
             'paymentGateways' => $paymentGateways,
