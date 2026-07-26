@@ -4685,6 +4685,7 @@ body.sidebar-collapsed .client-company-savebar { left: 92px; }
 .client-usage-card-head > div { display: grid; gap: 3px; min-width: 0; }
 .client-usage-card-head strong { overflow-wrap: anywhere; }
 .client-usage-card-head small { color: var(--rs-muted); }
+.client-usage-card-head small + small { margin-top: 3px; color: var(--rs-text); font-size: .75rem; }
 .client-usage-card-head > span { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; font-size: .68rem; font-weight: 850; }
 .client-usage-card.is-ok .client-usage-card-head > span { color: #166534; background: #dcfce7; }
 .client-usage-card.is-attention .client-usage-card-head > span { color: #92400e; background: #fef3c7; }
@@ -7960,7 +7961,7 @@ body.sidebar-open #sidebarToggle.global-sidebar-toggle { left: 298px; }
 
 
 /* 36.6.8 — origem do consumo de IA */
-.ai-usage-origin-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:0 0 14px; }
+.ai-usage-origin-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:0 0 14px; }
 .ai-usage-origin-summary > div { display:grid; gap:4px; padding:14px 16px; border:1px solid var(--rs-border); border-radius:16px; background:rgba(255,255,255,.72); }
 .ai-usage-origin-summary span { font-size:12px; color:var(--rs-muted); font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
 .ai-usage-origin-summary strong { font-size:20px; line-height:1.2; }

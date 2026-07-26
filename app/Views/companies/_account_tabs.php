@@ -14,21 +14,22 @@ $tabs = [];
 $tenantId = (int) (Auth::tenantId() ?? 0);
 $moduleService = new TenantModuleService();
 $moduleEnabled = static fn (string $key): bool => $tenantId > 0 ? $moduleService->enabled($tenantId, $key) : false;
+$moduleVisible = static fn (string $key): bool => $tenantId > 0 ? $moduleService->visible($tenantId, $key) : false;
 
-if (Auth::can('company.view')) {
+if (Auth::can('company.view') && $moduleVisible('company_settings')) {
     $tabs[] = ['key' => 'company', 'label' => 'Dados da empresa', 'url' => '/company-settings'];
 }
-if ((Auth::can('users.view') && $moduleEnabled('users')) || (Auth::can('permissions.view') && $moduleEnabled('permissions'))) {
+if ((Auth::can('users.view') && $moduleEnabled('users') && $moduleVisible('users')) || (Auth::can('permissions.view') && $moduleEnabled('permissions') && $moduleVisible('permissions'))) {
     $tabs[] = [
         'key' => 'team',
         'label' => 'Equipe e acessos',
-        'url' => Auth::can('users.view') && $moduleEnabled('users') ? '/users' : '/permissions',
+        'url' => Auth::can('users.view') && $moduleEnabled('users') && $moduleVisible('users') ? '/users' : '/permissions',
     ];
 }
-if (Auth::can('billing.view') && $moduleEnabled('subscription')) {
+if (Auth::can('billing.view') && $moduleEnabled('subscription') && $moduleVisible('subscription')) {
     $tabs[] = ['key' => 'subscription', 'label' => 'Assinatura', 'url' => '/subscription'];
 }
-if (Auth::can('privacy.view') && $moduleEnabled('privacy')) {
+if (Auth::can('privacy.view') && $moduleEnabled('privacy') && $moduleVisible('privacy')) {
     $tabs[] = ['key' => 'privacy', 'label' => 'Privacidade', 'url' => '/privacy'];
 }
 ?>

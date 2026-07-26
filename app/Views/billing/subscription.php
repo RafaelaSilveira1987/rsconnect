@@ -108,9 +108,10 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
         <div><span class="eyebrow">Uso do plano</span><h2>Acompanhe seus limites</h2><p>A franquia de IA conta somente respostas automáticas custeadas pela RS Connect. Mensagens recebidas e respostas humanas não consomem esse limite.</p></div>
     </div>
     <div class="ai-usage-origin-summary">
-        <div><span>IA da RS Connect</span><strong><?= (int) ($aiUsage['rs_connect'] ?? 0) ?></strong><small>consome a franquia do plano</small></div>
-        <div><span>Credencial própria</span><strong><?= (int) ($aiUsage['tenant'] ?? 0) ?></strong><small>registrada, sem reduzir a franquia RS</small></div>
-        <div><span>Mês de consumo</span><strong><?= View::e($date($aiUsage['period']['start_date'] ?? null)) ?> – <?= View::e($date($aiUsage['period']['end_date'] ?? null)) ?></strong><small>a franquia de IA reinicia no próximo mês</small></div>
+        <div><span>Interações automáticas no mês</span><strong><?= (int) ($aiUsage['total'] ?? 0) ?></strong><small>todas as respostas automáticas de IA, independentemente de quem fornece a credencial</small></div>
+        <div><span>Franquia RS utilizada</span><strong><?= (int) ($aiUsage['rs_connect'] ?? 0) ?><?= ($aiUsage['billable_limit'] ?? null) !== null ? ' / ' . (int) $aiUsage['billable_limit'] : '' ?></strong><small>somente respostas geradas com IA custeada pela RS Connect reduzem a franquia</small></div>
+        <div><span>IA com credencial própria</span><strong><?= (int) ($aiUsage['tenant'] ?? 0) ?></strong><small>entra no volume total para acompanhamento, mas não reduz a franquia RS</small></div>
+        <div><span>Mês de consumo</span><strong><?= View::e($date($aiUsage['period']['start_date'] ?? null)) ?> – <?= View::e($date($aiUsage['period']['end_date'] ?? null)) ?></strong><small>o acompanhamento e a franquia mensal reiniciam no próximo mês</small></div>
     </div>
     <div class="client-usage-grid">
         <?php foreach ($limitRows as $row): ?>
@@ -123,7 +124,7 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
             ?>
             <article class="client-usage-card <?= $statusClass ?>">
                 <div class="client-usage-card-head">
-                    <div><strong><?= View::e($row['label']) ?></strong><small><?= (int) $row['used'] ?> de <?= $row['limit'] === null ? 'uso ilimitado' : (int) $row['limit'] ?></small></div>
+                    <div><strong><?= View::e($row['label']) ?></strong><small><?= View::e((string) ($row['description'] ?? '')) ?></small><small><b><?= (int) $row['used'] ?></b> de <?= $row['limit'] === null ? 'uso ilimitado' : (int) $row['limit'] ?></small></div>
                     <span><?= View::e($statusText) ?></span>
                 </div>
                 <div class="client-usage-progress"><span style="width: <?= $percent ?>%"></span></div>

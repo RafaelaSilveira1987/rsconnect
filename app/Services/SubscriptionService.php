@@ -17,9 +17,21 @@ final class SubscriptionService
         'n8n_flows' => 'Fluxos n8n',
         'contacts_month' => 'Novos contatos/mês',
         'conversations_month' => 'Novas conversas/mês',
-        'ai_interactions_month' => 'Interações de IA/mês',
+        'ai_interactions_month' => 'Franquia de IA RS/mês',
         'appointments_month' => 'Agendamentos/mês',
         'crm_leads_month' => 'Oportunidades/mês',
+    ];
+
+    public const LIMIT_DESCRIPTIONS = [
+        'users' => 'Pessoas da equipe com acesso ativo ao RS Connect.',
+        'instances' => 'Conexões WhatsApp cadastradas para esta empresa.',
+        'agents' => 'Assistentes de IA cadastrados para operar na empresa.',
+        'n8n_flows' => 'Fluxos n8n ativos vinculados à empresa.',
+        'contacts_month' => 'Contatos criados durante o mês atual.',
+        'conversations_month' => 'Novas conversas abertas durante o mês atual.',
+        'ai_interactions_month' => 'Respostas automáticas enviadas usando IA custeada pela RS Connect. Uso com credencial própria é contado separadamente e não reduz esta franquia.',
+        'appointments_month' => 'Agendamentos criados durante o mês atual.',
+        'crm_leads_month' => 'Oportunidades comerciais criadas durante o mês atual.',
     ];
 
     public function currentPlanForTenant(int $tenantId): array
@@ -192,6 +204,7 @@ final class SubscriptionService
             $rows[] = [
                 'key' => $key,
                 'label' => $label,
+                'description' => self::LIMIT_DESCRIPTIONS[$key] ?? '',
                 'used' => $used,
                 'limit' => $limit,
                 'percent' => $limit !== null ? ((int) $limit > 0 ? min(100, (int) round(($used / (int) $limit) * 100)) : 100) : 0,

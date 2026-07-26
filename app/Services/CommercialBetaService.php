@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.11', 'title' => 'Uso total de IA e menus consistentes', 'summary' => 'Conta também o uso de IA com credencial própria sem consumir franquia RS, reorganiza notificações e faz as marcações de menu do Admin refletirem na navegação do cliente.'],
             ['version' => '36.6.10', 'title' => 'Fila rápida validada e franquia reparada', 'summary' => 'Renomeia o template da fila rápida, reforça o POST/token e corrige planos que apareciam com interações de IA sem limite definido.'],
             ['version' => '36.6.9', 'title' => 'Intervalo real e conversa contínua', 'summary' => 'Faz o intervalo mínimo valer novamente para mensagens novas, adiciona fila rápida de 1 minuto e mantém a conversa no campo de digitação após envio humano.'],
             ['version' => '36.6.8', 'title' => 'Consumo de IA e recuperação pós-horário', 'summary' => 'Conta apenas respostas automáticas de IA custeadas pela RS Connect, separa credencial própria e retoma conversas recebidas fora do expediente com segurança.'],

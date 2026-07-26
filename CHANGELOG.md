@@ -1,5 +1,16 @@
 # Changelog
 
+## 36.6.11 — Uso total de IA, notificações contínuas e menus do cliente
+
+- O painel passa a destacar o total de respostas automáticas de IA no mês, somando credencial RS Connect e credencial própria do cliente.
+- A franquia comercial continua consumida somente por respostas automáticas custeadas pela RS Connect.
+- Os cards de limites deixam de expor chaves técnicas e passam a explicar o que cada indicador contabiliza.
+- A Central de notificações mostra o histórico antes das preferências; as configurações ficam no final da página.
+- Corrige a navegação do cliente para respeitar as marcações de Menu feitas pelo Admin RS em Privacidade/LGPD, Notificações, Assinatura, Usuários e Permissões.
+- As abas internas de Minha empresa também passam a respeitar a visibilidade configurada.
+- Sem migration nova; mantém 053 como última migration obrigatória.
+
+
 ## 36.6.10 — Validação da fila rápida e reparo da franquia
 
 - Renomeia o workflow n8n para `template-fila-rapida-ia.json`, mantendo o título **Fila rápida da IA**.

@@ -48,14 +48,15 @@ $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['extern
 <section class="card table-card subscription-usage-card">
     <div class="section-heading"><div><span class="eyebrow">Uso do ciclo</span><h2>Limites do plano</h2><p>Interações faturáveis são apenas respostas automáticas enviadas com credencial custeada pela RS Connect.</p></div></div>
     <div class="ai-usage-origin-summary">
-        <div><span>Franquia RS consumida</span><strong><?= (int) ($aiUsage['rs_connect'] ?? 0) ?></strong><small>respostas automáticas faturáveis</small></div>
-        <div><span>Uso com chave do cliente</span><strong><?= (int) ($aiUsage['tenant'] ?? 0) ?></strong><small>não consome franquia RS</small></div>
-        <div><span>Total automático observado</span><strong><?= (int) ($aiUsage['total'] ?? 0) ?></strong><small>somando as duas origens de credencial</small></div>
+        <div><span>Interações automáticas no mês</span><strong><?= (int) ($aiUsage['total'] ?? 0) ?></strong><small>volume total de respostas de IA observado na empresa</small></div>
+        <div><span>Franquia RS consumida</span><strong><?= (int) ($aiUsage['rs_connect'] ?? 0) ?><?= ($aiUsage['billable_limit'] ?? null) !== null ? ' / ' . (int) $aiUsage['billable_limit'] : '' ?></strong><small>respostas automáticas geradas com credencial custeada pela RS Connect</small></div>
+        <div><span>Uso com chave do cliente</span><strong><?= (int) ($aiUsage['tenant'] ?? 0) ?></strong><small>é contabilizado para volume e auditoria, sem reduzir a franquia RS</small></div>
+        <div><span>Regra comercial</span><strong>1 resposta = 1 interação</strong><small>mensagens recebidas e respostas humanas não entram na contagem de IA</small></div>
     </div>
     <div class="usage-grid">
     <?php foreach ($limitRows as $row): ?>
         <article class="usage-tile <?= $row['blocked'] ? 'is-blocked' : '' ?>">
-            <div><strong><?= View::e($row['label']) ?></strong><small><?= View::e($row['key']) ?></small></div>
+            <div><strong><?= View::e($row['label']) ?></strong><small><?= View::e((string) ($row['description'] ?? '')) ?></small></div>
             <div class="usage-values"><span><?= (int) $row['used'] ?></span><small>de <?= $row['limit'] === null ? 'ilimitado' : (int) $row['limit'] ?></small></div>
             <div><div class="usage-bar"><span style="width: <?= (int) $row['percent'] ?>%"></span></div><small><?= (int) $row['percent'] ?>% utilizado</small></div>
             <span class="badge <?= $row['blocked'] ? 'badge-overdue' : 'badge-active' ?>"><?= $row['blocked'] ? 'Limite atingido' : 'OK' ?></span>

@@ -110,7 +110,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.6.10')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.6.11')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -193,12 +193,31 @@ $svgIcon = static function (string $name): string {
                     <a class="nav-link<?= $isActive('/automations') ?>" href="<?= View::e(Router::url('/automations')) ?>"><?= $svgIcon('automation') ?><span>Automações</span></a>
                 <?php endif; ?>
 
-                <span class="nav-caption">Administração</span>
-                <?php if (Auth::can('company.view') && $moduleVisible('company_settings')): ?>
-                    <a class="nav-link<?= $isAnyActive(['/company-settings', '/users', '/permissions', '/privacy']) ?>" href="<?= View::e(Router::url('/company-settings')) ?>"><?= $svgIcon('company') ?><span>Minha empresa</span></a>
+                <?php if ((Auth::can('company.view') && $moduleVisible('company_settings'))
+                    || (Auth::can('users.view') && $moduleVisible('users'))
+                    || (Auth::can('permissions.view') && $moduleVisible('permissions'))
+                    || (Auth::can('privacy.view') && $moduleVisible('privacy'))
+                    || (Auth::can('billing.view') && $moduleVisible('subscription'))
+                    || (Auth::can('notifications.view') && $moduleVisible('notifications'))): ?>
+                    <span class="nav-caption">Administração</span>
                 <?php endif; ?>
-                <?php if (Auth::can('billing.view')): ?>
+                <?php if (Auth::can('company.view') && $moduleVisible('company_settings')): ?>
+                    <a class="nav-link<?= $isActive('/company-settings') ?>" href="<?= View::e(Router::url('/company-settings')) ?>"><?= $svgIcon('company') ?><span>Minha empresa</span></a>
+                <?php endif; ?>
+                <?php if (Auth::can('users.view') && $moduleVisible('users')): ?>
+                    <a class="nav-link<?= $isActive('/users') ?>" href="<?= View::e(Router::url('/users')) ?>"><?= $svgIcon('users') ?><span>Usuários</span></a>
+                <?php endif; ?>
+                <?php if (Auth::can('permissions.view') && $moduleVisible('permissions')): ?>
+                    <a class="nav-link<?= $isActive('/permissions') ?>" href="<?= View::e(Router::url('/permissions')) ?>"><?= $svgIcon('permissions') ?><span>Permissões</span></a>
+                <?php endif; ?>
+                <?php if (Auth::can('privacy.view') && $moduleVisible('privacy')): ?>
+                    <a class="nav-link<?= $isAnyActive(['/privacy', '/lgpd']) ?>" href="<?= View::e(Router::url('/privacy')) ?>"><?= $svgIcon('privacy') ?><span>Privacidade/LGPD</span></a>
+                <?php endif; ?>
+                <?php if (Auth::can('billing.view') && $moduleVisible('subscription')): ?>
                     <a class="nav-link<?= $isActive('/subscription') ?>" href="<?= View::e(Router::url('/subscription')) ?>"><?= $svgIcon('billing') ?><span>Assinatura e uso</span></a>
+                <?php endif; ?>
+                <?php if (Auth::can('notifications.view') && $moduleVisible('notifications')): ?>
+                    <a class="nav-link<?= $isActive('/notifications') ?>" href="<?= View::e(Router::url('/notifications')) ?>"><?= $svgIcon('bell') ?><span>Notificações</span><?= $notificationBadge($notificationUnread) ?></a>
                 <?php endif; ?>
                 <a class="nav-link<?= $isActive('/ajuda') ?>" href="<?= View::e(Router::url('/ajuda')) ?>"><?= $svgIcon('help') ?><span>Central de ajuda</span></a>
             <?php endif; ?>
@@ -254,6 +273,6 @@ $svgIcon = static function (string $name): string {
 <button class="back-to-top" type="button" data-back-to-top aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
 </button>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.6.10')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.6.11')) ?>" defer></script>
 </body>
 </html>

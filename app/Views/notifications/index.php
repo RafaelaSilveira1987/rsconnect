@@ -58,8 +58,8 @@ $preferenceCards = [
 <section class="card hero-card notification-hero notification-hero-configurable">
     <div>
         <span class="eyebrow light">Central de notificações</span>
-        <h2>Escolha o que deseja acompanhar</h2>
-        <p>Ative os avisos que fazem sentido para sua rotina. As notificações aparecem no sininho e ficam registradas no histórico abaixo.</p>
+        <h2>Seus avisos em um só lugar</h2>
+        <p>Consulte primeiro o que aconteceu. As preferências de quais alertas receber ficam no final da página.</p>
     </div>
     <div class="hero-actions">
         <span class="badge <?= (int) $unreadCount > 0 ? 'badge-overdue' : 'badge-active' ?>"><?= (int) $unreadCount ?> nova(s)</span>
@@ -68,6 +68,36 @@ $preferenceCards = [
                 <?= Csrf::input() ?>
                 <button class="btn btn-outline" type="submit">Marcar todas como lidas</button>
             </form>
+        <?php endif; ?>
+    </div>
+</section>
+
+<section class="card">
+    <div class="section-heading">
+        <div><span class="eyebrow">Histórico</span><h2>Últimos avisos</h2></div>
+        <span class="badge"><?= count($notifications) ?> registro(s)</span>
+    </div>
+
+    <div class="notification-list">
+        <?php foreach ($notifications as $notification): ?>
+            <?php $actionUrl = (string) ($notification['action_url'] ?? ''); ?>
+            <article class="notification-item notification-<?= View::e($notification['severity'] ?? 'info') ?> <?= ($notification['status'] ?? '') === 'unread' ? 'is-unread' : '' ?>">
+                <div class="notification-marker"></div>
+                <div class="notification-main">
+                    <div class="notification-title-row">
+                        <strong><?= View::e($notification['title'] ?? '') ?></strong>
+                        <span class="badge badge-<?= View::e($notification['severity'] ?? 'info') ?>"><?= View::e($severityLabel[$notification['severity'] ?? 'info'] ?? 'Informação') ?></span>
+                    </div>
+                    <p><?= nl2br(View::e($notification['message'] ?? '')) ?></p>
+                    <small><?= View::e($formatDate($notification['created_at'] ?? null)) ?> · <?= View::e($statusLabel[$notification['status'] ?? 'read'] ?? ($notification['status'] ?? '')) ?></small>
+                </div>
+                <?php if ($actionUrl !== ''): ?>
+                    <a class="btn btn-small btn-outline" href="<?= View::e(str_starts_with($actionUrl, 'http') ? $actionUrl : Router::url($actionUrl)) ?>">Ver detalhes</a>
+                <?php endif; ?>
+            </article>
+        <?php endforeach; ?>
+        <?php if (!$notifications): ?>
+            <div class="empty-state">Nenhuma notificação encontrada.</div>
         <?php endif; ?>
     </div>
 </section>
@@ -119,34 +149,4 @@ $preferenceCards = [
             </div>
         <?php endif; ?>
     </form>
-</section>
-
-<section class="card">
-    <div class="section-heading">
-        <div><span class="eyebrow">Histórico</span><h2>Últimos avisos</h2></div>
-        <span class="badge"><?= count($notifications) ?> registro(s)</span>
-    </div>
-
-    <div class="notification-list">
-        <?php foreach ($notifications as $notification): ?>
-            <?php $actionUrl = (string) ($notification['action_url'] ?? ''); ?>
-            <article class="notification-item notification-<?= View::e($notification['severity'] ?? 'info') ?> <?= ($notification['status'] ?? '') === 'unread' ? 'is-unread' : '' ?>">
-                <div class="notification-marker"></div>
-                <div class="notification-main">
-                    <div class="notification-title-row">
-                        <strong><?= View::e($notification['title'] ?? '') ?></strong>
-                        <span class="badge badge-<?= View::e($notification['severity'] ?? 'info') ?>"><?= View::e($severityLabel[$notification['severity'] ?? 'info'] ?? 'Informação') ?></span>
-                    </div>
-                    <p><?= nl2br(View::e($notification['message'] ?? '')) ?></p>
-                    <small><?= View::e($formatDate($notification['created_at'] ?? null)) ?> · <?= View::e($statusLabel[$notification['status'] ?? 'read'] ?? ($notification['status'] ?? '')) ?></small>
-                </div>
-                <?php if ($actionUrl !== ''): ?>
-                    <a class="btn btn-small btn-outline" href="<?= View::e(str_starts_with($actionUrl, 'http') ? $actionUrl : Router::url($actionUrl)) ?>">Ver detalhes</a>
-                <?php endif; ?>
-            </article>
-        <?php endforeach; ?>
-        <?php if (!$notifications): ?>
-            <div class="empty-state">Nenhuma notificação encontrada.</div>
-        <?php endif; ?>
-    </div>
 </section>

@@ -106,7 +106,7 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
             <div>
                 <span class="eyebrow">Menus do cliente</span>
                 <h2>Escolha o que a empresa verá e poderá acessar</h2>
-                <p><strong>Mostrar no menu</strong> controla a navegação. <strong>Permitir acesso</strong> também bloqueia a abertura direta do módulo.</p>
+                <p><strong>Menu</strong> define se o atalho aparece na navegação da empresa. <strong>Acesso</strong> define se a rota pode ser aberta. O usuário ainda precisa ter a permissão do seu perfil para visualizar o item.</p>
             </div>
         </div>
         <div class="module-settings-grid">

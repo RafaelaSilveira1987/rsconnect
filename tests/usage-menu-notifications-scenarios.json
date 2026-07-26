@@ -1,0 +1,30 @@
+{
+  "version": "36.6.11",
+  "scenarios": [
+    {
+      "name": "Uso total com credencial propria",
+      "given": "Uma empresa envia 3 respostas automaticas com credencial RS e 7 com credencial propria no mesmo mes.",
+      "expect": ["total=10", "rs_connect=3", "tenant=7", "franquia RS consumida=3"]
+    },
+    {
+      "name": "Mensagem humana nao entra em uso de IA",
+      "given": "Cliente e atendente humano trocam mensagens sem geracao automatica.",
+      "expect": ["nenhum ai_usage_events auto_reply success novo", "franquia inalterada"]
+    },
+    {
+      "name": "LGPD marcado pelo Admin aparece no cliente",
+      "given": "privacy is_visible=1, is_enabled=1 e perfil possui privacy.view.",
+      "expect": ["sidebar exibe Privacidade/LGPD", "rota /privacy acessivel"]
+    },
+    {
+      "name": "LGPD oculto pelo Admin some da navegacao",
+      "given": "privacy is_visible=0 e is_enabled=1.",
+      "expect": ["sidebar nao exibe Privacidade/LGPD", "aba Privacidade nao aparece", "acesso direto continua permitido"]
+    },
+    {
+      "name": "Notificacoes primeiro historico",
+      "given": "Usuario abre /notifications.",
+      "expect": ["historico aparece antes de preferencias", "preferencias permanecem salvaveis no fim da pagina"]
+    }
+  ]
+}

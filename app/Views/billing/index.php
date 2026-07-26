@@ -82,7 +82,7 @@ $payableInvoices = array_values(array_filter($invoices, static fn (array $invoic
                             $tenantAiLimit = $tenantAiUsage['billable_limit'] ?? null;
                             $tenantAiPercent = $tenantAiLimit !== null && (int) $tenantAiLimit > 0 ? min(100, (int) round(($tenantAiUsed / (int) $tenantAiLimit) * 100)) : 0;
                         ?>
-                        <div><span>IA da RS</span><strong><?= $tenantAiUsed ?> / <?= $tenantAiLimit === null ? '∞' : (int) $tenantAiLimit ?></strong><small><?= $tenantAiLimit === null ? 'franquia ilimitada' : $tenantAiPercent . '% usado' ?> · <?= (int) ($tenantAiUsage['tenant'] ?? 0) ?> com chave própria</small></div>
+                        <div><span>Uso de IA no mês</span><strong><?= (int) ($tenantAiUsage['total'] ?? 0) ?> interação(ões)</strong><small>RS: <?= $tenantAiUsed ?> / <?= $tenantAiLimit === null ? '∞' : (int) $tenantAiLimit ?><?= $tenantAiLimit === null ? '' : ' (' . $tenantAiPercent . '%)' ?> · própria: <?= (int) ($tenantAiUsage['tenant'] ?? 0) ?></small></div>
                     </div>
                     <?php if ($isBlocked): ?><div class="billing-access-alert"><strong>Motivo do bloqueio</strong><span><?= View::e((string) ($access['message'] ?? 'Revise a vigência ou as cobranças.')) ?></span></div><?php endif; ?>
                     <footer>

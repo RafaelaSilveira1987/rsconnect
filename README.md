@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.10 — Validação da fila rápida e reparo da franquia.
+Pacote consolidado até o RS Connect 36.6.11 — Uso total de IA, notificações contínuas e menus do cliente.
 
 ## Última etapa incluída
+
+RS Connect 36.6.11 — contabiliza o uso total de IA inclusive com credencial própria sem consumir franquia RS, explica os cards de uso, move as preferências de notificações para o fim da página e corrige a navegação dos módulos marcados pelo Admin RS (incluindo LGPD).
 
 RS Connect 36.6.10 — valida a fila rápida de 1 minuto, renomeia o template para um arquivo identificável e repara franquias de IA que ficaram sem limite após a conversão do plano.
 
@@ -34,7 +36,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.10.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.11.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 

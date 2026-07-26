@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.10 — Validação da fila rápida e reparo da franquia';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.11 — Uso total de IA, notificações contínuas e menus do cliente';
     public const REQUIRED_MIGRATION = '053_ai_quota_limit_repair.sql';
 
     private PDO $pdo;
