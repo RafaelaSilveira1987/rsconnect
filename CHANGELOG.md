@@ -1,3 +1,13 @@
+## 36.6.18 — Manutenção da agenda auditável
+
+- deixa explícito que **Executar manutenção agora** roda diretamente no RS Connect e não depende do n8n;
+- mantém o n8n apenas como agendador automático da manutenção, autenticado por header;
+- corrige o card de callbacks para contar somente requisições realmente pendentes (`responded_at IS NULL`) há mais de 30 minutos, usando o mesmo critério da rotina que as encerra;
+- execuções automáticas globais passam a registrar também um resultado por empresa, evitando que o painel de um tenant mostre uma execução global que não o processou;
+- mostra origem, status e resultados do último ciclo no painel;
+- o template n8n identifica a origem como `n8n`;
+- sem migration nova; mantém a 055 como última migration obrigatória.
+
 ## 36.6.17 — Manutenção automática da agenda
 
 - adiciona o template n8n `template-calendar-maintenance.json`, ausente nas versões anteriores;

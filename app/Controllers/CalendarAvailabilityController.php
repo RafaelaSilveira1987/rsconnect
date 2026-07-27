@@ -149,7 +149,9 @@ final class CalendarAvailabilityController
         }
 
         $tenantId = (int) ($_GET['tenant_id'] ?? $_POST['tenant_id'] ?? 0);
-        $result = (new CalendarGoogleLifecycleService())->runMaintenance($tenantId > 0 ? $tenantId : null, 'cron');
+        $originHeader = strtolower(trim((string) ($_SERVER['HTTP_X_RS_AUTOMATION_ORIGIN'] ?? 'webhook')));
+        $origin = in_array($originHeader, ['n8n', 'cron', 'webhook'], true) ? $originHeader : 'webhook';
+        $result = (new CalendarGoogleLifecycleService())->runMaintenance($tenantId > 0 ? $tenantId : null, $origin);
         http_response_code(!empty($result['ok']) ? 200 : 500);
         header('Content-Type: application/json; charset=UTF-8');
         echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

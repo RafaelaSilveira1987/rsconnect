@@ -396,26 +396,50 @@ $requestInsight = static function (array $request): string {
 <section class="card calendar-maintenance-card" id="calendar-maintenance" style="margin-top:16px">
     <div class="section-heading">
         <div><span class="eyebrow">Automação da agenda</span><h2>Manutenção e ciclo do Google</h2></div>
-        <form method="post" action="<?= View::e(Router::url('/calendar/maintenance/run')) ?>">
-            <?= Csrf::input() ?>
-            <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
-            <button class="btn btn-secondary" type="submit">Executar manutenção agora</button>
-        </form>
+        <div style="text-align:right">
+            <form method="post" action="<?= View::e(Router::url('/calendar/maintenance/run')) ?>">
+                <?= Csrf::input() ?>
+                <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
+                <button class="btn btn-secondary" type="submit">Executar manutenção agora</button>
+            </form>
+            <small class="muted-text">Execução manual direta no RS Connect — não chama o n8n.</small>
+        </div>
     </div>
     <div class="calendar-maintenance-grid">
         <div><span>Pré-reservas vencidas</span><strong><?= (int) ($maintenance['expired_holds'] ?? 0) ?></strong><small>eventos VAGO aguardando liberação</small></div>
         <div><span>Confirmados sem evento</span><strong><?= (int) ($maintenance['confirmed_without_event'] ?? 0) ?></strong><small>sincronização pendente</small></div>
         <div><span>Sincronizações com falha</span><strong><?= (int) ($maintenance['failed_syncs'] ?? 0) ?></strong><small>novas tentativas limitadas</small></div>
-        <div><span>Callbacks vencidos</span><strong><?= (int) ($maintenance['stale_requests'] ?? 0) ?></strong><small>mais de 30 minutos</small></div>
+        <div><span>Callbacks pendentes vencidos</span><strong><?= (int) ($maintenance['stale_requests'] ?? 0) ?></strong><small>sem resposta há mais de 30 minutos</small></div>
     </div>
-    <?php $lastRun = $maintenance['last_run'] ?? null; ?>
-    <div class="calendar-maintenance-footer">
-        <span class="badge <?= !empty($maintenance['enabled']) ? 'badge-success' : 'badge-warning' ?>"><?= !empty($maintenance['enabled']) ? 'Manutenção ativa' : 'Manutenção desativada' ?></span>
-        <span><?= $lastRun ? 'Última execução: ' . View::e($date($lastRun['finished_at'] ?? $lastRun['started_at'] ?? null)) . ' · ' . View::e((string) ($lastRun['status'] ?? '')) : 'Nenhuma execução registrada.' ?></span>
+    <?php
+        $lastRun = $maintenance['last_run'] ?? null;
+        $lastOrigin = (string) ($lastRun['origin'] ?? '');
+        $originLabels = ['manual' => 'Manual', 'n8n' => 'n8n', 'cron' => 'Cron', 'webhook' => 'Automação externa'];
+        $statusLabelsMaintenance = ['running' => 'Em execução', 'success' => 'Sucesso', 'partial' => 'Com avisos', 'failed' => 'Falhou'];
+    ?>
+    <div class="calendar-maintenance-footer" style="align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <span class="badge <?= !empty($maintenance['enabled']) ? 'badge-success' : 'badge-warning' ?>"><?= !empty($maintenance['enabled']) ? 'Rotina habilitada' : 'Rotina desativada' ?></span>
+        <?php if ($lastRun): ?>
+            <span>
+                Última execução: <strong><?= View::e($date($lastRun['finished_at'] ?? $lastRun['started_at'] ?? null)) ?></strong>
+                · <?= View::e($originLabels[$lastOrigin] ?? ($lastOrigin !== '' ? $lastOrigin : 'Origem não informada')) ?>
+                · <?= View::e($statusLabelsMaintenance[(string) ($lastRun['status'] ?? '')] ?? (string) ($lastRun['status'] ?? '')) ?>
+            </span>
+        <?php else: ?>
+            <span>Nenhuma execução registrada para esta empresa.</span>
+        <?php endif; ?>
     </div>
+    <?php if ($lastRun): ?>
+        <div class="calendar-maintenance-grid" style="margin-top:10px">
+            <div><span>Liberadas no último ciclo</span><strong><?= (int) ($lastRun['expired_holds_released'] ?? 0) ?></strong><small>pré-reservas vencidas</small></div>
+            <div><span>Callbacks encerrados</span><strong><?= (int) ($lastRun['stale_requests_closed'] ?? 0) ?></strong><small>somente pendentes vencidos</small></div>
+            <div><span>Sincronizações tentadas</span><strong><?= (int) ($lastRun['syncs_retried'] ?? 0) ?></strong><small>novas tentativas no ciclo</small></div>
+            <div><span>Erros no último ciclo</span><strong><?= (int) ($lastRun['errors_count'] ?? 0) ?></strong><small><?= (int) ($lastRun['errors_count'] ?? 0) === 0 ? 'execução sem erro' : 'requer revisão' ?></small></div>
+        </div>
+    <?php endif; ?>
     <div class="calendar-admin-note">
-        <strong>Execução automática</strong>
-        <p>Agende no n8n a chamada <code>POST /webhooks/calendar/maintenance/run</code> e envie <code>CALENDAR_MAINTENANCE_TOKEN</code> no header <code>X-RS-Calendar-Maintenance-Token</code>. A rotina libera pré-reservas vencidas, encerra callbacks antigos e tenta sincronizar eventos confirmados.</p>
+        <strong>Automático via n8n</strong>
+        <p>O workflow agenda a chamada <code>POST /webhooks/calendar/maintenance/run</code> a cada 10 minutos e autentica pelo header <code>X-RS-Calendar-Maintenance-Token</code>. O botão acima é independente: executa a manutenção imediatamente no próprio RS Connect.</p>
     </div>
 </section>
 <?php endif; ?>

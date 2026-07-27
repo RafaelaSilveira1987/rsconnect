@@ -258,8 +258,59 @@ final class CalendarGoogleLifecycleService
         if (!$this->hasColumn('calendar_appointments', 'google_sync_key')) {
             return ['ok' => false, 'status' => 'failed', 'message' => 'Execute a migration 041 antes de rodar a manutenção da agenda.'];
         }
-        $runId = $this->startRun($tenantId, $origin);
-        $result = [
+
+        $globalRunId = $this->startRun($tenantId, $origin);
+        $result = $this->emptyMaintenanceResult();
+
+        try {
+            $tenantIds = $this->maintenanceTenantIds($tenantId);
+            foreach ($tenantIds as $currentTenantId) {
+                $tenantRunId = $tenantId === null ? $this->startRun($currentTenantId, $origin) : 0;
+                $tenantResult = $this->emptyMaintenanceResult();
+
+                try {
+                    $this->closeStaleRequests($currentTenantId, $tenantResult);
+                    $this->releaseExpiredMarkedHolds($currentTenantId, $tenantResult);
+                    $this->retryMissingGoogleEvents($currentTenantId, $tenantResult);
+                    $this->deleteCancelledGoogleEvents($currentTenantId, $tenantResult);
+                    $this->touchMaintenance($currentTenantId);
+                    $tenantStatus = $tenantResult['errors'] === [] ? 'success' : 'partial';
+                } catch (Throwable $exception) {
+                    $tenantResult['errors'][] = $exception->getMessage();
+                    $tenantStatus = 'failed';
+                }
+
+                if ($tenantRunId > 0) {
+                    $lastTenantError = null;
+                    if ($tenantStatus === 'failed' && $tenantResult['errors'] !== []) {
+                        $lastErrorKey = array_key_last($tenantResult['errors']);
+                        $lastTenantError = $lastErrorKey !== null ? (string) $tenantResult['errors'][$lastErrorKey] : null;
+                    }
+                    $this->finishRun($tenantRunId, $tenantStatus, $tenantResult, $lastTenantError);
+                }
+                $this->mergeMaintenanceResult($result, $tenantResult);
+            }
+
+            $status = $result['errors'] === [] ? 'success' : 'partial';
+            $this->finishRun($globalRunId, $status, $result, null);
+            return [
+                'ok' => true,
+                'run_id' => $globalRunId,
+                'status' => $status,
+                'tenants_processed' => count($tenantIds),
+                'result' => $result,
+            ];
+        } catch (Throwable $exception) {
+            $result['errors'][] = $exception->getMessage();
+            $this->finishRun($globalRunId, 'failed', $result, $exception->getMessage());
+            return ['ok' => false, 'run_id' => $globalRunId, 'status' => 'failed', 'result' => $result, 'message' => $exception->getMessage()];
+        }
+    }
+
+    /** @return array<string,mixed> */
+    private function emptyMaintenanceResult(): array
+    {
+        return [
             'expired_holds_found' => 0,
             'expired_holds_released' => 0,
             'syncs_retried' => 0,
@@ -269,25 +320,23 @@ final class CalendarGoogleLifecycleService
             'stale_requests_closed' => 0,
             'errors' => [],
         ];
+    }
 
-        try {
-            $tenantIds = $this->maintenanceTenantIds($tenantId);
-            foreach ($tenantIds as $currentTenantId) {
-                $this->closeStaleRequests($currentTenantId, $result);
-                $this->releaseExpiredMarkedHolds($currentTenantId, $result);
-                $this->retryMissingGoogleEvents($currentTenantId, $result);
-                $this->deleteCancelledGoogleEvents($currentTenantId, $result);
-                $this->touchMaintenance($currentTenantId);
-            }
-
-            $status = $result['errors'] === [] ? 'success' : 'partial';
-            $this->finishRun($runId, $status, $result, null);
-            return ['ok' => $status !== 'failed', 'run_id' => $runId, 'status' => $status, 'result' => $result];
-        } catch (Throwable $exception) {
-            $result['errors'][] = $exception->getMessage();
-            $this->finishRun($runId, 'failed', $result, $exception->getMessage());
-            return ['ok' => false, 'run_id' => $runId, 'status' => 'failed', 'result' => $result, 'message' => $exception->getMessage()];
+    /** @param array<string,mixed> $target @param array<string,mixed> $source */
+    private function mergeMaintenanceResult(array &$target, array $source): void
+    {
+        foreach ([
+            'expired_holds_found',
+            'expired_holds_released',
+            'syncs_retried',
+            'google_events_created',
+            'google_events_updated',
+            'google_events_deleted',
+            'stale_requests_closed',
+        ] as $key) {
+            $target[$key] = (int) ($target[$key] ?? 0) + (int) ($source[$key] ?? 0);
         }
+        $target['errors'] = array_values(array_merge((array) ($target['errors'] ?? []), (array) ($source['errors'] ?? [])));
     }
 
     public function maintenanceSummary(int $tenantId): array
@@ -328,6 +377,7 @@ final class CalendarGoogleLifecycleService
                 $stale = $pdo->prepare(
                     'SELECT COUNT(*) FROM calendar_availability_requests
                      WHERE tenant_id = :tenant_id AND status IN ("pending", "sent")
+                       AND responded_at IS NULL
                        AND COALESCE(sent_at, requested_at, created_at) < DATE_SUB(NOW(), INTERVAL 30 MINUTE)'
                 );
                 $stale->execute(['tenant_id' => $tenantId]);
@@ -335,9 +385,13 @@ final class CalendarGoogleLifecycleService
             }
 
             if ($this->tableExists('calendar_maintenance_runs')) {
-                $last = $pdo->prepare('SELECT * FROM calendar_maintenance_runs WHERE tenant_id = :tenant_id OR tenant_id IS NULL ORDER BY id DESC LIMIT 1');
+                $last = $pdo->prepare('SELECT * FROM calendar_maintenance_runs WHERE tenant_id = :tenant_id ORDER BY id DESC LIMIT 1');
                 $last->execute(['tenant_id' => $tenantId]);
                 $summary['last_run'] = $last->fetch(PDO::FETCH_ASSOC) ?: null;
+                if ($summary['last_run'] === null) {
+                    $fallback = $pdo->query('SELECT * FROM calendar_maintenance_runs WHERE tenant_id IS NULL ORDER BY id DESC LIMIT 1');
+                    $summary['last_run'] = $fallback->fetch(PDO::FETCH_ASSOC) ?: null;
+                }
             }
         } catch (Throwable) {
         }
