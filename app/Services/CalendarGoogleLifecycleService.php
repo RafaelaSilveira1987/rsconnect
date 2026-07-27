@@ -21,7 +21,7 @@ use Throwable;
  */
 final class CalendarGoogleLifecycleService
 {
-    public function syncConfirmedAppointment(int $tenantId, int $appointmentId, bool $force = false): array
+    public function syncConfirmedAppointment(int $tenantId, int $appointmentId, bool $force = false, bool $confirmationTransition = false): array
     {
         $appointment = $this->appointment($tenantId, $appointmentId);
         if (!$appointment) {
@@ -29,6 +29,41 @@ final class CalendarGoogleLifecycleService
         }
         if (!$this->hasColumn('calendar_appointments', 'google_sync_key')) {
             return ['attempted' => true, 'ok' => false, 'message' => 'Execute a migration 041 para ativar o ciclo completo do Google Agenda.'];
+        }
+
+        // 36.6.23: criação/atualização no Google é uma consequência de confirmação real,
+        // nunca de conversa, pré-agendamento, manutenção de item apenas "scheduled" ou
+        // simples existência de data/hora. A única exceção é a transição explícita para
+        // confirmado iniciada pelo usuário no CalendarController; nesse ponto o banco
+        // ainda conserva o status anterior para podermos exigir a sincronização antes
+        // de concluir a aprovação local.
+        $appointmentStatus = trim((string) ($appointment['status'] ?? ''));
+        if (!$confirmationTransition && $appointmentStatus !== 'confirmed') {
+            return [
+                'attempted' => false,
+                'ok' => true,
+                'blocked' => true,
+                'message' => 'Evento Google não criado: o compromisso ainda não está confirmado.',
+            ];
+        }
+        if ($confirmationTransition && !in_array($appointmentStatus, ['pre_scheduled', 'awaiting_approval', 'scheduled', 'rescheduled', 'confirmed'], true)) {
+            return [
+                'attempted' => false,
+                'ok' => false,
+                'blocked' => true,
+                'message' => 'O compromisso não está em um estado válido para confirmação.',
+            ];
+        }
+        if (!$confirmationTransition
+            && (int) ($appointment['is_pre_schedule'] ?? 0) === 1
+            && $this->hasColumn('calendar_appointments', 'approval_status')
+            && trim((string) ($appointment['approval_status'] ?? '')) !== 'approved') {
+            return [
+                'attempted' => false,
+                'ok' => true,
+                'blocked' => true,
+                'message' => 'Evento Google não criado: o pré-agendamento ainda não foi aprovado.',
+            ];
         }
 
         $source = trim((string) ($appointment['availability_source'] ?? ''));
@@ -360,7 +395,7 @@ final class CalendarGoogleLifecycleService
             $statement = $pdo->prepare(
                 'SELECT
                     COALESCE(SUM(availability_source = "google_marked_slots" AND google_event_state = "held" AND google_hold_expires_at IS NOT NULL AND google_hold_expires_at <= NOW()), 0) AS expired_holds,
-                    COALESCE(SUM(availability_source IN ("google_free_slots", "internal_fallback") AND status IN ("scheduled", "confirmed") AND (google_event_id IS NULL OR google_event_id = "") AND starts_at >= NOW()), 0) AS confirmed_without_event,
+                    COALESCE(SUM(availability_source IN ("google_free_slots", "internal_fallback") AND status = "confirmed" AND (is_pre_schedule = 0 OR approval_status = "approved") AND (google_event_id IS NULL OR google_event_id = "") AND starts_at >= NOW()), 0) AS confirmed_without_event,
                     COALESCE(SUM(sync_status = "failed" OR google_event_state = "error"), 0) AS failed_syncs
                  FROM calendar_appointments
                  WHERE tenant_id = :tenant_id'
@@ -426,6 +461,14 @@ final class CalendarGoogleLifecycleService
                 'name' => trim((string) ($appointment['contact_name'] ?? 'Cliente')) ?: 'Cliente',
                 'phone' => trim((string) ($appointment['phone'] ?? '')),
                 'email' => trim((string) ($appointment['email'] ?? '')),
+            ],
+            'contract' => [
+                'type' => 'calendar_confirmed_sync_v1',
+                'appointment_id' => (int) $appointment['id'],
+                'action' => $operation,
+                'target_status' => $operation === 'delete' ? 'cancelled' : 'confirmed',
+                'confirmation_transition' => $confirmationTransition,
+                'source_status' => trim((string) ($appointment['status'] ?? '')),
             ],
             'rules' => [
                 'revalidate_before_create' => true,
@@ -655,7 +698,8 @@ final class CalendarGoogleLifecycleService
             'SELECT id FROM calendar_appointments
              WHERE tenant_id = :tenant_id
                AND availability_source IN ("google_free_slots", "internal_fallback")
-               AND status IN ("scheduled", "confirmed")
+               AND status = "confirmed"
+               AND (is_pre_schedule = 0 OR approval_status = "approved")
                AND starts_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
                AND (google_event_id IS NULL OR google_event_id = "" OR google_event_state = "error")
                AND google_sync_attempts < :max_attempts

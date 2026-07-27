@@ -1,3 +1,12 @@
+## 36.6.23 — Google Agenda somente após confirmação real
+
+- Corrige a fonte paralela da Agenda Google: integrações do calendário usam URLs próprias em `tenant_calendar_availability_settings`, independentemente de `n8n_tenant_flows`.
+- `CalendarGoogleLifecycleService` deixa de criar/atualizar evento para registros apenas `scheduled`, `pre_scheduled` ou `awaiting_approval`.
+- A manutenção automática passa a tentar eventos somente para `status=confirmed` e pré-agendamento aprovado.
+- O ciclo completo n8n exige contrato `calendar_confirmed_sync_v1`, appointment_id, título, início e fim; remove fallback de título.
+- O writer genérico também exige `appointment.status=confirmed` e aprovação quando aplicável.
+- Mantém a migration base 056; não há SQL novo.
+
 ## 36.6.22 — Homologação alinhada à migration 056
 
 - Atualiza `AppVersionService::REQUIRED_MIGRATION` para `056_n8n_agenda_event_contract.sql`.

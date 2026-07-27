@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.22 — Homologação alinhada à migration 056.
+Pacote consolidado até o RS Connect 36.6.23 — Google Agenda somente após confirmação real.
 
 ## Última etapa incluída
+
+RS Connect 36.6.23 — impede qualquer criação/atualização de evento Google para compromissos que ainda não estejam realmente confirmados; manutenção deixa de sincronizar registros apenas scheduled e o ciclo direto exige contrato confirmado.
 
 RS Connect 36.6.21 — impede falso “fora do horário” quando outro agente do canal está disponível, revalida o expediente antes do envio e fecha o caminho legado que podia disparar o Google Calendar a partir de respostas comuns.
 

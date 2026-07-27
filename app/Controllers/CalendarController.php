@@ -332,7 +332,7 @@ final class CalendarController
         }
 
         if ($status === 'confirmed') {
-            $freeSlotSync = $googleLifecycleService->syncConfirmedAppointment($tenantId, $appointmentId);
+            $freeSlotSync = $googleLifecycleService->syncConfirmedAppointment($tenantId, $appointmentId, false, true);
             if (!empty($freeSlotSync['attempted']) && empty($freeSlotSync['ok'])) {
                 $settings = $availabilityService->settings($tenantId);
                 if (!empty($settings['require_google_sync_on_confirm'])) {
