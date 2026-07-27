@@ -162,7 +162,8 @@ final class AiAutomationService
             // A política de horário vem antes da espera da IA. A mensagem fixa de
             // ausência é operacional (não é resposta gerada pela IA) e deve poder
             // ser enviada imediatamente, no máximo uma vez por dia local.
-            if (!$this->isInsideBusinessHours($agent)) {
+            $operatingPolicy = (new AgentOperatingPolicyService())->status($agent);
+            if (!empty($operatingPolicy['enforced']) && empty($operatingPolicy['inside'])) {
                 $afterHoursRecoveryService = new AiAfterHoursRecoveryService();
                 $pending = $afterHoursRecoveryService->markPending(
                     $pdo,
@@ -181,7 +182,7 @@ final class AiAutomationService
                     }
                     $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $afterHoursMessage, 'ai.after_hours', 'Mensagem de ausência fora do horário enviada pela automação.');
                     $afterHoursRecoveryService->markAcknowledged((int) ($pending['pending_id'] ?? 0));
-                    $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.after_hours', 'success', null, $afterHoursMessage, ['pending_recovery' => true, 'acknowledgement' => true]);
+                    $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.after_hours', 'success', null, $afterHoursMessage, ['pending_recovery' => true, 'acknowledgement' => true, 'operating_policy' => $operatingPolicy, 'agent_name' => (string) ($agent['name'] ?? '')]);
                     return;
                 }
 
@@ -193,7 +194,7 @@ final class AiAutomationService
                     'skipped',
                     $afterHoursMessage === '' ? 'Fora do horário; demanda preservada para recuperação automática.' : 'Demanda adicionada à recuperação pós-horário; mensagem de ausência já enviada hoje.',
                     null,
-                    ['pending_recovery' => true, 'acknowledgement_already_sent' => !empty($pending['pending_id']) && empty($pending['should_ack'])]
+                    ['pending_recovery' => true, 'acknowledgement_already_sent' => !empty($pending['pending_id']) && empty($pending['should_ack']), 'operating_policy' => $operatingPolicy, 'agent_name' => (string) ($agent['name'] ?? '')]
                 );
                 return;
             }
@@ -272,6 +273,33 @@ final class AiAutomationService
             }
             $failurePhase = 'ai.generate';
             $reply = $this->ai->generateReply($agent, $messages, $conversation, $conversation);
+
+            // O horário também é revalidado imediatamente antes do envio. Assim uma
+            // resposta que começou dentro do expediente não é entregue depois do fechamento,
+            // e nenhuma integração/prompt consegue ultrapassar a regra operacional.
+            $sendPolicy = (new AgentOperatingPolicyService())->status($agent);
+            if (!empty($sendPolicy['enforced']) && empty($sendPolicy['inside'])) {
+                $usageService->cancelReservation($usageReservationId, 'Resposta descartada porque o expediente encerrou antes do envio.', false, $this->ai->lastUsage());
+                $usageReservationId = 0;
+                (new AiAfterHoursRecoveryService())->markPending(
+                    $pdo,
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    $storedMessageId > 0 ? $storedMessageId : null
+                );
+                $this->log(
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    'ai.after_hours',
+                    'skipped',
+                    'O expediente encerrou antes do envio da resposta gerada; demanda preservada para recuperação.',
+                    null,
+                    ['send_time_guard' => true, 'operating_policy' => $sendPolicy, 'agent_name' => (string) ($agent['name'] ?? '')]
+                );
+                return;
+            }
 
             // O atendente pode assumir a conversa enquanto o provedor de IA está gerando a resposta.
             // Revalida imediatamente antes do envio externo para que assumir atendimento pause a IA de fato.
@@ -842,7 +870,7 @@ final class AiAutomationService
 
     private function agentFor(PDO $pdo, array $instance, int $conversationId = 0, string $incomingContent = ''): ?array
     {
-        return (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, $incomingContent, true);
+        return (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, $incomingContent, true);
     }
 
     private function recentMessages(PDO $pdo, int $conversationId, int $limit): array

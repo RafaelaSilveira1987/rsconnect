@@ -35,7 +35,7 @@ final class PreSchedulingService
         // Defesa em profundidade: horário do agente é regra operacional e vale também
         // quando este serviço for chamado fora do webhook principal.
         try {
-            $agent = (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, $content, false);
+            $agent = (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, $content, false);
             if (is_array($agent) && !(new AgentOperatingPolicyService())->allowsConversationalAutomation($agent)) {
                 $result['outside_business_hours'] = true;
                 $result['skip_ai'] = false; // deixa a IA principal enviar/registrar a ausência.
@@ -831,7 +831,7 @@ final class PreSchedulingService
             if (!$this->conversationAllowsAutomation($pdo, $tenantId, $conversationId)) {
                 return ['ok' => false, 'error' => 'Automação de agenda pausada: conversa em atendimento humano ou fechada.'];
             }
-            $agent = (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, '', false);
+            $agent = (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, '', false);
             if (is_array($agent) && !(new AgentOperatingPolicyService())->allowsConversationalAutomation($agent)) {
                 return ['ok' => false, 'error' => 'Automação de agenda aguardando o próximo horário de atendimento.'];
             }
@@ -934,7 +934,7 @@ final class PreSchedulingService
             if (!$this->conversationAllowsAutomation($pdo, $tenantId, $conversationId)) {
                 return ['ok' => false, 'error' => 'Automação de agenda pausada: conversa em atendimento humano ou fechada.'];
             }
-            $agent = (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, '', false);
+            $agent = (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, '', false);
             if (is_array($agent) && !(new AgentOperatingPolicyService())->allowsConversationalAutomation($agent)) {
                 return ['ok' => false, 'error' => 'Automação de agenda aguardando o próximo horário de atendimento.'];
             }
@@ -1038,7 +1038,7 @@ final class PreSchedulingService
 
             $tenantId = (int) ($instance['tenant_id'] ?? 0);
             $resolvedAgent = $tenantId > 0
-                ? (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, '', true)
+                ? (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, '', true)
                 : null;
             $agentId = !empty($resolvedAgent['id']) ? (int) $resolvedAgent['id'] : null;
 

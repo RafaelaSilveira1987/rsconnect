@@ -200,7 +200,7 @@ final class CalendarConversationService
         // Horário do agente é trava operacional global. A seleção de agenda não pode
         // responder fora do expediente quando o assistente está configurado como restrito.
         try {
-            $agent = (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, $content, false);
+            $agent = (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, $content, false);
             if (is_array($agent) && !(new AgentOperatingPolicyService())->allowsConversationalAutomation($agent)) {
                 return $this->incomingResult(false, false, 'outside_business_hours');
             }
@@ -399,7 +399,7 @@ final class CalendarConversationService
 
             $tenantId = (int) ($instance['tenant_id'] ?? 0);
             $resolvedAgent = $tenantId > 0
-                ? (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, '', true)
+                ? (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, '', true)
                 : null;
             $agentId = !empty($resolvedAgent['id']) ? (int) $resolvedAgent['id'] : null;
 
@@ -924,7 +924,7 @@ final class CalendarConversationService
             // Segunda trava defensiva. Mesmo que um novo caminho de código chame este
             // helper no futuro, mensagem automática de agenda nunca sai fora do
             // expediente quando a política do agente estiver ativa.
-            $agent = (new AgentRoutingService())->resolve($guardPdo, $instance, $conversationId, '', false);
+            $agent = (new AgentRoutingService())->resolveForAutomation($guardPdo, $instance, $conversationId, '', false);
             if ($agent) {
                 $policy = (new AgentOperatingPolicyService())->status($agent);
                 if (!empty($policy['enforced']) && empty($policy['inside'])) {
@@ -1019,7 +1019,7 @@ final class CalendarConversationService
                 return $fallback;
             }
             $pdo = Database::connection();
-            $agent = (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, '', false);
+            $agent = (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, '', false);
             if (!$agent) {
                 return $fallback;
             }

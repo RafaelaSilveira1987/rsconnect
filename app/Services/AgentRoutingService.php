@@ -52,6 +52,93 @@ final class AgentRoutingService
         return $this->legacyAgent($pdo, $tenantId, $instanceId);
     }
 
+    /**
+     * Resolve o agente para uma automação que vai responder agora.
+     *
+     * Se o agente fixado/especialista estiver fora do próprio expediente, mas houver
+     * outro agente ativo e disponível no mesmo canal, usa o agente disponível em vez
+     * de declarar o WhatsApp inteiro fora do horário. Só retorna um agente fechado
+     * quando nenhum agente elegível do canal estiver disponível.
+     */
+    public function resolveForAutomation(PDO $pdo, array $instance, int $conversationId = 0, string $incomingContent = '', bool $pin = true): ?array
+    {
+        $tenantId = (int) ($instance['tenant_id'] ?? 0);
+        $instanceId = (int) ($instance['id'] ?? 0);
+        if ($tenantId < 1 || $instanceId < 1) {
+            return null;
+        }
+
+        if (!$this->supportsRouting($pdo)) {
+            return $this->legacyAgent($pdo, $tenantId, $instanceId);
+        }
+
+        $policy = new AgentOperatingPolicyService();
+        $closedFallback = null;
+
+        $pinnedId = $conversationId > 0 ? $this->pinnedAgentId($pdo, $tenantId, $instanceId, $conversationId) : 0;
+        if ($pinnedId > 0) {
+            $pinned = $this->agentById($pdo, $tenantId, $pinnedId);
+            if (is_array($pinned)) {
+                if ($policy->allowsConversationalAutomation($pinned)) {
+                    return $pinned;
+                }
+                $closedFallback = $pinned;
+            }
+        }
+
+        $bindings = $this->activeBindings($pdo, $tenantId, $instanceId);
+        $availableBindings = [];
+        $availableAgents = [];
+        foreach ($bindings as $binding) {
+            $agentId = (int) ($binding['agent_id'] ?? 0);
+            if ($agentId < 1) {
+                continue;
+            }
+            $agent = $this->agentById($pdo, $tenantId, $agentId);
+            if (!is_array($agent)) {
+                continue;
+            }
+            if ($closedFallback === null) {
+                $closedFallback = $agent;
+            }
+            if (!$policy->allowsConversationalAutomation($agent)) {
+                continue;
+            }
+            $availableBindings[] = $binding;
+            $availableAgents[$agentId] = $agent;
+        }
+
+        if ($availableBindings !== []) {
+            $agentId = $this->keywordMatch($availableBindings, $incomingContent);
+            if ($agentId < 1) {
+                foreach ($availableBindings as $binding) {
+                    if ((int) ($binding['is_primary'] ?? 0) === 1) {
+                        $agentId = (int) ($binding['agent_id'] ?? 0);
+                        break;
+                    }
+                }
+            }
+            if ($agentId < 1) {
+                $agentId = (int) ($availableBindings[0]['agent_id'] ?? 0);
+            }
+            if ($agentId > 0 && isset($availableAgents[$agentId])) {
+                if ($pin && $conversationId > 0) {
+                    $this->pin($pdo, $tenantId, $instanceId, $conversationId, $agentId, true);
+                }
+                return $availableAgents[$agentId];
+            }
+        }
+
+        // Todos os agentes vinculados estão fora do expediente. Mantém o agente
+        // originalmente resolvido para que a mensagem de ausência e a recuperação
+        // pós-horário fiquem associadas à configuração correta.
+        if (is_array($closedFallback)) {
+            return $closedFallback;
+        }
+
+        return $this->resolve($pdo, $instance, $conversationId, $incomingContent, $pin);
+    }
+
     /** @return array<int,array<string,mixed>> */
     public function agentsForInstance(PDO $pdo, int $tenantId, int $instanceId, bool $onlyAutoReply = false): array
     {

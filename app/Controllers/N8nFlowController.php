@@ -121,6 +121,13 @@ final class N8nFlowController
         $events = $_POST['events'] ?? [];
         $events = is_array($events) ? array_values(array_filter(array_map('strval', $events))) : [];
 
+        // Contrato forte: o writer do Google Calendar nunca pode ser salvo como wildcard
+        // nem assinar message.received/ai.replied. Mesmo uma edição manual no Admin fica
+        // limitada ao evento que representa um compromisso real persistido no RS Connect.
+        if ($this->isGoogleAppointmentWriter($flowKey, $name)) {
+            $events = ['calendar.appointment.created'];
+        }
+
         if ($tenantId < 1 || $flowKey === '' || $name === '') {
             Flash::set('error', 'Informe empresa, identificador do fluxo e nome.');
             $this->redirect('/n8n-flows');
@@ -252,6 +259,17 @@ final class N8nFlowController
             $labels[] = self::EVENT_OPTIONS[(string) $event] ?? (string) $event;
         }
         return implode(', ', $labels);
+    }
+
+    private function isGoogleAppointmentWriter(string $flowKey, string $name): bool
+    {
+        $identity = mb_strtolower(trim($flowKey . ' ' . $name));
+        $identity = strtr($identity, [
+            'á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a',
+            'é' => 'e', 'ê' => 'e', 'í' => 'i', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ú' => 'u', 'ç' => 'c',
+        ]);
+        return str_contains($identity, 'agenda-google-calendar')
+            || str_contains($identity, 'agenda google calendar por empresa');
     }
 
     private function slug(string $value): string

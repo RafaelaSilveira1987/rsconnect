@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.20 — Agenda por intenção real e callback de backup resiliente.
+Pacote consolidado até o RS Connect 36.6.21 — Horário confiável e Agenda com contrato forte.
 
 ## Última etapa incluída
+
+RS Connect 36.6.21 — impede falso “fora do horário” quando outro agente do canal está disponível, revalida o expediente antes do envio e fecha o caminho legado que podia disparar o Google Calendar a partir de respostas comuns.
 
 RS Connect 36.6.20 — bloqueia a criação de eventos Google a partir de conversas comuns/status, endurece a intenção de agenda e torna o callback do backup resiliente a rotação de token.
 
@@ -44,7 +46,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.19.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.21.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 

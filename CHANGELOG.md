@@ -1,3 +1,13 @@
+## 36.6.21 — Horário confiável e Agenda com contrato forte
+
+- Roteamento conversacional passa a preferir agente vinculado que esteja dentro do próprio expediente; um especialista fechado não declara o canal inteiro fora do horário quando o agente principal está disponível.
+- Horário é revalidado imediatamente antes do envio da resposta da IA.
+- Validação efetiva da conversa mostra agente realmente aplicado, hora local e faixa de expediente usada.
+- URLs legadas configuradas diretamente no agente passam a respeitar o contrato do fluxo cadastrado; `ai.replied`/`message.received` não podem atingir o writer do Google Calendar.
+- Cadastro do writer `Agenda Google Calendar por Empresa` força `calendar.appointment.created`, mesmo se alguém tentar marcar wildcard no Admin.
+- Template de Agenda exige contrato `calendar_appointment_v1`, `appointment_id`, título, início e fim; remove o fallback perigoso `Compromisso RS Connect`.
+- Campo de integração externa do agente passa a orientar explicitamente que o webhook de Agenda não deve ser cadastrado ali.
+
 ## 36.6.20 — Agenda por intenção real e callback de backup resiliente
 
 - impede o fluxo **Agenda Google Calendar por Empresa** de receber `message.received`, `appointment.pre_scheduled` sem contrato válido ou mudanças de status que antes podiam criar eventos duplicados;

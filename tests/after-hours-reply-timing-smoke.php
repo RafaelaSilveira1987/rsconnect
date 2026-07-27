@@ -30,7 +30,7 @@ $assert($timing->remainingSeconds(60, '2026-07-27 09:58:30', '2026-07-27 09:58:4
 $assert($timing->remainingSeconds(60, '2026-07-27 09:59:55', '2026-07-27 09:58:00', $now) === 55, 'nova mensagem durante espera deve reiniciar o relogio');
 
 $automationSource = file_get_contents(__DIR__ . '/../app/Services/AiAutomationService.php') ?: '';
-$afterHoursPos = strpos($automationSource, 'if (!$this->isInsideBusinessHours($agent))');
+$afterHoursPos = strpos($automationSource, '$operatingPolicy = (new AgentOperatingPolicyService())->status($agent);');
 $cooldownPos = strpos($automationSource, '$cooldownSeconds =');
 $assert($afterHoursPos !== false && $cooldownPos !== false && $afterHoursPos < $cooldownPos, 'fora do horario deve ser validado antes do tempo de espera da IA');
 

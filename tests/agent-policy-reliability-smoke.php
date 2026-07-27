@@ -36,7 +36,7 @@ $agent = [
     'business_hours_enabled' => 1,
     'business_timezone' => 'America/Sao_Paulo',
     'business_hours_json' => json_encode([
-        'mon' => [['08:00', '18:00']],
+        'mon' => [['08:00', '17:00']],
         'tue' => [['08:00', '18:00']],
         'wed' => [['08:00', '18:00']],
         'thu' => [['08:00', '18:00']],
@@ -45,7 +45,10 @@ $agent = [
 ];
 $policy = new AgentOperatingPolicyService();
 $assert(!$policy->allowsConversationalAutomation($agent, new DateTimeImmutable('2026-07-26 13:14:00', new DateTimeZone('America/Sao_Paulo'))), 'domingo deve bloquear automacao');
-$assert($policy->allowsConversationalAutomation($agent, new DateTimeImmutable('2026-07-27 10:00:00', new DateTimeZone('America/Sao_Paulo'))), 'segunda 10h deve liberar automacao');
+$monday = $policy->status($agent, new DateTimeImmutable('2026-07-27 10:46:00', new DateTimeZone('America/Sao_Paulo')));
+$assert(!empty($monday['inside']), 'segunda 10:46 dentro de 08:00-17:00 deve liberar automacao');
+$assert(($monday['current'] ?? '') === '10:46', 'politica deve usar hora local America/Sao_Paulo');
+$assert(($monday['ranges'][0][0] ?? '') === '08:00' && ($monday['ranges'][0][1] ?? '') === '17:00', 'politica deve expor a faixa realmente aplicada');
 $agent['business_hours_enabled'] = 0;
 $assert($policy->allowsConversationalAutomation($agent, new DateTimeImmutable('2026-07-26 13:14:00', new DateTimeZone('America/Sao_Paulo'))), 'horario desativado deve permitir 24h');
 
@@ -88,6 +91,13 @@ $prompt = (string) $buildPrompt->invoke($model,
 $assert(!str_contains($prompt, 'Configurações de pré-agendamento do cliente:'), 'prompt geral nao deve receber bloco de agenda');
 $assert(str_contains($prompt, 'NÃO está em contexto de agenda'), 'prompt geral deve conter trava anti-agenda');
 $assert(str_contains($prompt, 'já é cliente/paciente da empresa'), 'classificacao Cliente deve chegar ao prompt como fonte de verdade');
+
+$routingSource = (string) file_get_contents(__DIR__ . '/../app/Services/AgentRoutingService.php');
+$webhookSource = (string) file_get_contents(__DIR__ . '/../app/Controllers/EvolutionWebhookController.php');
+$aiSource = (string) file_get_contents(__DIR__ . '/../app/Services/AiAutomationService.php');
+$assert(str_contains($routingSource, 'resolveForAutomation'), 'roteador deve possuir resolução operacional por horário');
+$assert(str_contains($webhookSource, 'resolveForAutomation'), 'webhook Evolution deve usar agente operacional disponível');
+$assert(str_contains($aiSource, 'send_time_guard'), 'IA deve revalidar horário imediatamente antes do envio');
 
 if ($failures !== []) {
     fwrite(STDERR, "FALHAS:\n- " . implode("\n- ", $failures) . "\n");

@@ -160,6 +160,8 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.21', 'title' => 'Horário confiável e Agenda com contrato forte', 'summary' => 'Prefere agente realmente disponível no canal, revalida o expediente antes do envio e impede que integrações legadas transformem respostas comuns em eventos do Google Calendar.'],
+            ['version' => '36.6.20', 'title' => 'Agenda por intenção real e callback de backup resiliente', 'summary' => 'Exige pedido explícito para agenda, protege o writer do Google Calendar contra eventos genéricos e torna o callback de backup resiliente a redeploy/rotação de token.'],
             ['version' => '36.6.19', 'title' => 'Retry confiável de backup', 'summary' => 'Alinha o dispatcher ao último sucesso real, permite nova tentativa no mesmo dia após falha/timeout e explica o motivo de cada rotina elegível ou ignorada.'],
             ['version' => '36.6.18', 'title' => 'Manutenção da agenda auditável', 'summary' => 'Separa execução manual da automática via n8n, alinha callbacks vencidos com a regra real da manutenção e registra resultado/origem por empresa.'],
             ['version' => '36.6.17', 'title' => 'Manutenção automática da agenda', 'summary' => 'Adiciona o template n8n ausente para manutenção da agenda, injeta domínio/token no download e autentica a rotina por header seguro.'],

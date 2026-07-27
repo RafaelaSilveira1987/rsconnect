@@ -220,7 +220,7 @@ final class EvolutionWebhookController
                 try {
                     // 36.6.15: o agente é resolvido antes de qualquer automação conversacional.
                     // A política de horário passa a ser fonte única e prevalece sobre prompt, agenda e n8n.
-                    $resolvedAgent = (new AgentRoutingService())->resolve($pdo, $instance, $conversationId, $content, true);
+                    $resolvedAgent = (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, $content, true);
                     if (is_array($resolvedAgent)) {
                         $operatingPolicy = (new AgentOperatingPolicyService())->status($resolvedAgent);
                         $outsideBusinessHours = !empty($operatingPolicy['enforced']) && empty($operatingPolicy['inside']);

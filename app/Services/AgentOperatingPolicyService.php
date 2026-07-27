@@ -17,7 +17,7 @@ use Throwable;
 final class AgentOperatingPolicyService
 {
     /**
-     * @return array{enforced:bool,inside:bool,reason:string,timezone:string,day:string,current:string}
+     * @return array{enforced:bool,inside:bool,reason:string,timezone:string,day:string,current:string,current_at:string,ranges:array}
      */
     public function status(array $agent, ?DateTimeImmutable $now = null): array
     {
@@ -33,6 +33,8 @@ final class AgentOperatingPolicyService
                 'timezone' => $timezone,
                 'day' => '',
                 'current' => '',
+                'current_at' => '',
+                'ranges' => [],
             ];
         }
 
@@ -57,9 +59,11 @@ final class AgentOperatingPolicyService
         $days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
         $dayKey = $days[(int) $now->format('w')] ?? 'mon';
         $current = $now->format('H:i');
+        $currentAt = $now->format('Y-m-d H:i:sP');
         $rules = json_decode((string) ($agent['business_hours_json'] ?? ''), true);
+        $dayRanges = is_array($rules) && isset($rules[$dayKey]) && is_array($rules[$dayKey]) ? $rules[$dayKey] : [];
 
-        if (!is_array($rules) || !isset($rules[$dayKey]) || !is_array($rules[$dayKey]) || $rules[$dayKey] === []) {
+        if (!is_array($rules) || $dayRanges === []) {
             return [
                 'enforced' => true,
                 'inside' => false,
@@ -67,10 +71,12 @@ final class AgentOperatingPolicyService
                 'timezone' => $timezone,
                 'day' => $dayKey,
                 'current' => $current,
+                'current_at' => $currentAt,
+                'ranges' => $dayRanges,
             ];
         }
 
-        foreach ($rules[$dayKey] as $range) {
+        foreach ($dayRanges as $range) {
             if (!is_array($range) || count($range) < 2) {
                 continue;
             }
@@ -87,6 +93,8 @@ final class AgentOperatingPolicyService
                     'timezone' => $timezone,
                     'day' => $dayKey,
                     'current' => $current,
+                    'current_at' => $currentAt,
+                    'ranges' => $dayRanges,
                 ];
             }
         }
@@ -98,6 +106,8 @@ final class AgentOperatingPolicyService
             'timezone' => $timezone,
             'day' => $dayKey,
             'current' => $current,
+            'current_at' => $currentAt,
+            'ranges' => $dayRanges,
         ];
     }
 

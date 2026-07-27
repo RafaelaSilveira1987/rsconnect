@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.19 — Retry confiável de backup';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.21 — Horário confiável e Agenda com contrato forte';
     public const REQUIRED_MIGRATION = '055_multi_whatsapp_agent_routing.sql';
 
     private PDO $pdo;

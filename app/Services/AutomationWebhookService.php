@@ -31,7 +31,20 @@ final class AutomationWebhookService
 
         $explicitUrl = trim((string) ($url ?? ''));
         if ($explicitUrl !== '') {
-            $results[] = $this->sendToUrl($explicitUrl, $event, $payload, $tenantId, null, $secretToken);
+            // URLs legadas configuradas diretamente no agente não podem burlar o contrato
+            // dos fluxos cadastrados. Se essa URL pertencer ao writer do Google Calendar,
+            // somente calendar.appointment.created pode chegar até ela.
+            $guard = $this->explicitTargetGuard($tenantId, $explicitUrl, $event);
+            if (!empty($guard['blocked'])) {
+                $this->log($tenantId > 0 ? $tenantId : null, $guard['flow_id'] ?? null, $event, 'skipped', null, $this->maskUrl($explicitUrl), (string) ($guard['reason'] ?? 'Evento bloqueado pelo contrato do fluxo.'), $payload);
+                return [[
+                    'ok' => true,
+                    'skipped' => true,
+                    'reason' => $guard['reason'] ?? 'protected_flow_contract',
+                    'flow_id' => $guard['flow_id'] ?? null,
+                ]];
+            }
+            $results[] = $this->sendToUrl($explicitUrl, $event, $payload, $tenantId, $guard['flow_id'] ?? null, $secretToken, $guard['flow_name'] ?? null);
             return $results;
         }
 
@@ -52,7 +65,17 @@ final class AutomationWebhookService
 
         $fallback = trim((string) Env::get('N8N_WEBHOOK_URL', ''));
         if ($fallback !== '') {
-            $results[] = $this->sendToUrl($fallback, $event, $payload, $tenantId > 0 ? $tenantId : null, null, null, 'Fallback .env');
+            $guard = $this->explicitTargetGuard($tenantId, $fallback, $event);
+            if (!empty($guard['blocked'])) {
+                $this->log($tenantId > 0 ? $tenantId : null, $guard['flow_id'] ?? null, $event, 'skipped', null, $this->maskUrl($fallback), (string) ($guard['reason'] ?? 'Fallback bloqueado pelo contrato do fluxo.'), $payload);
+                return [[
+                    'ok' => true,
+                    'skipped' => true,
+                    'reason' => $guard['reason'] ?? 'protected_flow_contract',
+                    'flow_id' => $guard['flow_id'] ?? null,
+                ]];
+            }
+            $results[] = $this->sendToUrl($fallback, $event, $payload, $tenantId > 0 ? $tenantId : null, $guard['flow_id'] ?? null, null, $guard['flow_name'] ?? 'Fallback .env');
         }
 
         return $results;
@@ -114,6 +137,66 @@ final class AutomationWebhookService
         }
 
         return true;
+    }
+
+    /**
+     * Descobre se uma URL explícita aponta para um fluxo cadastrado de efeito colateral
+     * forte. Isso fecha o caminho legado agent.n8n_webhook_url, que antes ignorava
+     * events_json/flowAllowsEvent e podia enviar ai.replied/message.received direto
+     * para o workflow de criação do Google Calendar.
+     *
+     * @return array{blocked:bool,flow_id:?int,flow_name:?string,reason:?string}
+     */
+    private function explicitTargetGuard(int $tenantId, string $target, string $event): array
+    {
+        $result = ['blocked' => false, 'flow_id' => null, 'flow_name' => null, 'reason' => null];
+        if ($tenantId < 1 || trim($target) === '') {
+            return $result;
+        }
+
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT id, flow_key, template_key, name, events_json, webhook_url_encrypted
+                 FROM n8n_tenant_flows
+                 WHERE tenant_id = :tenant_id AND status = "active"'
+            );
+            $statement->execute(['tenant_id' => $tenantId]);
+            $normalizedTarget = $this->normalizeComparableUrl($target);
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) ?: [] as $flow) {
+                $registered = Crypto::decrypt((string) ($flow['webhook_url_encrypted'] ?? ''));
+                if ($registered === '' || $this->normalizeComparableUrl($registered) !== $normalizedTarget) {
+                    continue;
+                }
+                $result['flow_id'] = (int) ($flow['id'] ?? 0) ?: null;
+                $result['flow_name'] = (string) ($flow['name'] ?? '');
+                if (!$this->flowAllowsEvent($flow, $event)) {
+                    $result['blocked'] = true;
+                    $result['reason'] = 'Evento ' . $event . ' bloqueado: a URL pertence a um fluxo com contrato restrito.';
+                }
+                return $result;
+            }
+        } catch (Throwable) {
+            // Em deploys antigos, mantém compatibilidade; o gate do workflow continua sendo a segunda defesa.
+        }
+
+        return $result;
+    }
+
+    private function normalizeComparableUrl(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return '';
+        }
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return rtrim(mb_strtolower($url), '/');
+        }
+        $scheme = mb_strtolower((string) ($parts['scheme'] ?? 'https'));
+        $host = mb_strtolower((string) $parts['host']);
+        $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
+        $path = rtrim((string) ($parts['path'] ?? ''), '/');
+        return $scheme . '://' . $host . $port . $path;
     }
 
     private function matchesEvent(?string $eventsJson, string $event): bool

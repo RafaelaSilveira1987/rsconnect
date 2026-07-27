@@ -168,7 +168,7 @@ final class ConversationController
                 }
 
                 try {
-                    $effectiveAgent = (new AgentRoutingService())->resolve(
+                    $effectiveAgent = (new AgentRoutingService())->resolveForAutomation(
                         $pdo,
                         [
                             'id' => (int) $selected['evolution_instance_id'],
@@ -188,6 +188,7 @@ final class ConversationController
                     $tags = json_decode((string) ($selected['tags_json'] ?? ''), true);
                     $tags = is_array($tags) ? array_values(array_filter(array_map('strval', $tags))) : [];
                     $selectedRuleSnapshot = [
+                        'agent_id' => (int) ($effectiveAgent['id'] ?? 0),
                         'agent_name' => (string) ($effectiveAgent['name'] ?? 'Não definido'),
                         'attendance_mode' => (string) ($selected['attendance_mode'] ?? ''),
                         'hours' => $hours,

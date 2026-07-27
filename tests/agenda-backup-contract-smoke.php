@@ -67,6 +67,20 @@ $assert(is_array($agendaTemplate), 'template agenda JSON valido');
 $nodeNames = array_map(static fn(array $node): string => (string) ($node['name'] ?? ''), $agendaTemplate['nodes'] ?? []);
 $assert(in_array('É compromisso real?', $nodeNames, true), 'template agenda possui gate de compromisso');
 $assert(in_array('Ignorar evento sem agenda', $nodeNames, true), 'template agenda responde eventos ignorados');
+$normalizerCode = '';
+foreach (($agendaTemplate['nodes'] ?? []) as $node) {
+    if (($node['name'] ?? '') === 'Normalizar Agenda') { $normalizerCode = (string) ($node['parameters']['jsCode'] ?? ''); break; }
+}
+$assert(str_contains($normalizerCode, 'calendar_appointment_v1'), 'template agenda exige contrato assinado pelo RS Connect');
+$assert(str_contains($normalizerCode, 'appointmentId > 0'), 'template agenda exige appointment_id real');
+$assert(!str_contains($normalizerCode, "title: appointment.title || 'Compromisso RS Connect'"), 'template nao pode inventar titulo generico para mensagem comum');
+
+$automationSource = (string) file_get_contents(__DIR__ . '/../app/Services/AutomationWebhookService.php');
+$assert(str_contains($automationSource, 'explicitTargetGuard'), 'URL legada direta deve respeitar contrato do fluxo cadastrado');
+$assert(str_contains($automationSource, 'Evento '), 'bloqueio de contrato deve ser auditavel');
+
+$flowControllerSource = (string) file_get_contents(__DIR__ . '/../app/Controllers/N8nFlowController.php');
+$assert(str_contains($flowControllerSource, "['calendar.appointment.created']"), 'Admin deve forçar contrato do writer de Google Calendar ao salvar fluxo');
 
 $backupTemplate = json_decode((string) file_get_contents(__DIR__ . '/../docs/n8n_templates/template-backup-rsconnect.json'), true);
 $assert(is_array($backupTemplate), 'template backup JSON valido');

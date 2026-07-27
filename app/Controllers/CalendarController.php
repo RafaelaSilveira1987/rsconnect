@@ -619,8 +619,14 @@ final class CalendarController
             return;
         }
 
-        $results = (new AutomationWebhookService())->dispatch('calendar.appointment.' . $event, [
+        $eventName = 'calendar.appointment.' . $event;
+        $results = (new AutomationWebhookService())->dispatch($eventName, [
             'tenant_id' => $tenantId,
+            'contract' => [
+                'type' => 'calendar_appointment_v1',
+                'appointment_id' => $appointmentId,
+                'event' => $eventName,
+            ],
             'appointment' => $appointment,
         ], null, $tenantId);
 

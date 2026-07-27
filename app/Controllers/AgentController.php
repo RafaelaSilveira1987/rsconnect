@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Core\Audit;
 use App\Core\Auth;
 use App\Core\Database;
+use App\Core\Crypto;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
@@ -67,6 +68,12 @@ final class AgentController
             );
             $agentsStatement->execute(['tenant_id' => $tenantId]);
             $agents = $agentsStatement->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($agents as &$agentRow) {
+                $legacyUrl = trim((string) ($agentRow['n8n_webhook_url'] ?? ''));
+                $agentRow['n8n_calendar_conflict'] = $legacyUrl !== ''
+                    && $this->isProtectedCalendarWriterUrl((int) $tenantId, $legacyUrl);
+            }
+            unset($agentRow);
 
             $instancesStatement = $pdo->prepare(
                 'SELECT id, name FROM evolution_instances WHERE tenant_id = :tenant_id ORDER BY is_default DESC, name'
@@ -147,6 +154,10 @@ final class AgentController
 
         if ($instanceId < 1 || $name === '' || $segment === '' || $prompt === '') {
             Flash::set('error', 'Escolha a conexão WhatsApp e informe o nome, a área de atendimento e as instruções do assistente.');
+            $this->redirectToAgents($tenantId ?? 0);
+        }
+        if ($n8nWebhookUrl !== '' && $this->isProtectedCalendarWriterUrl((int) $tenantId, $n8nWebhookUrl)) {
+            Flash::set('error', 'Não vincule o workflow “Agenda Google Calendar por Empresa” diretamente ao assistente. Configure-o em n8n → Fluxos por empresa; o RS Connect só o acionará quando existir um compromisso real.');
             $this->redirectToAgents($tenantId ?? 0);
         }
 
@@ -270,6 +281,10 @@ final class AgentController
 
         if ($agentId < 1 || !in_array($status, ['active', 'inactive'], true)) {
             Flash::set('error', 'Não foi possível identificar o assistente ou a opção escolhida.');
+            $this->redirectToAgents($tenantId ?? 0);
+        }
+        if ($n8nWebhookUrl !== '' && $this->isProtectedCalendarWriterUrl((int) $tenantId, $n8nWebhookUrl)) {
+            Flash::set('error', 'Esse workflow de Agenda não deve ficar na integração externa do assistente. Remova a URL daqui e mantenha o fluxo cadastrado em n8n → Fluxos por empresa.');
             $this->redirectToAgents($tenantId ?? 0);
         }
 
@@ -503,6 +518,52 @@ final class AgentController
             'evaluated' => 'Instruções atualizadas. A última mensagem pendente foi reavaliada automaticamente; confira a conversa e os logs.',
             default => 'Instruções e informações atualizadas. As mudanças valem nas próximas respostas.',
         };
+    }
+
+    private function isProtectedCalendarWriterUrl(int $tenantId, string $url): bool
+    {
+        if ($tenantId < 1 || trim($url) === '') {
+            return false;
+        }
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT flow_key, name, webhook_url_encrypted
+                 FROM n8n_tenant_flows
+                 WHERE tenant_id = :tenant_id AND status = "active"'
+            );
+            $statement->execute(['tenant_id' => $tenantId]);
+            $target = $this->normalizeWebhookUrl($url);
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) ?: [] as $flow) {
+                $identity = mb_strtolower(trim((string) ($flow['flow_key'] ?? '') . ' ' . (string) ($flow['name'] ?? '')));
+                $identity = strtr($identity, [
+                    'á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a',
+                    'é' => 'e', 'ê' => 'e', 'í' => 'i', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ú' => 'u', 'ç' => 'c',
+                ]);
+                if (!str_contains($identity, 'agenda-google-calendar') && !str_contains($identity, 'agenda google calendar por empresa')) {
+                    continue;
+                }
+                $registered = Crypto::decrypt((string) ($flow['webhook_url_encrypted'] ?? ''));
+                if ($registered !== '' && $this->normalizeWebhookUrl($registered) === $target) {
+                    return true;
+                }
+            }
+        } catch (Throwable) {
+            return false;
+        }
+        return false;
+    }
+
+    private function normalizeWebhookUrl(string $url): string
+    {
+        $parts = parse_url(trim($url));
+        if (!is_array($parts) || empty($parts['host'])) {
+            return rtrim(mb_strtolower(trim($url)), '/');
+        }
+        $scheme = mb_strtolower((string) ($parts['scheme'] ?? 'https'));
+        $host = mb_strtolower((string) $parts['host']);
+        $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
+        $path = rtrim((string) ($parts['path'] ?? ''), '/');
+        return $scheme . '://' . $host . $port . $path;
     }
 
     private function businessHoursFromPost(): array
