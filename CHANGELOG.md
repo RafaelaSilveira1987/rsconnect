@@ -1,3 +1,14 @@
+## 36.6.25 — Central de comunicação in-app
+
+- Evolui Comunicados para uma central administrativa RS e empresa cliente.
+- Adiciona caixa flutuante somente para mensagens não lidas e drawer com histórico.
+- Fechar/minimizar não marca leitura; a leitura ocorre somente ao abrir.
+- Adiciona prioridade, validade opcional, confirmação de leitura e resposta do cliente.
+- Respostas do cliente alertam o Super Admin; respostas da RS tornam o tópico não lido novamente.
+- Mantém WhatsApp administrativo/e-mail preparados, sem falso status de entrega.
+- Nova migration `058_client_communication_center.sql`.
+- Interface nova usa ícones vetoriais, sem emojis.
+
 ## 36.6.24 — Modalidade antes da disponibilidade
 
 - O pré-agendamento pergunta **Online ou Presencial** antes de consultar a Agenda Google quando a modalidade ainda não estiver definida.

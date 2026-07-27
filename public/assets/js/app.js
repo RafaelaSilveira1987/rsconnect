@@ -660,6 +660,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showNotificationToast(notification) {
     if (!notification || !notification.title) return;
+    if (notification.type === 'communication') return;
 
     let toast = document.querySelector('[data-notification-live-toast]');
     if (!toast) {
@@ -1373,3 +1374,271 @@ document.addEventListener('DOMContentLoaded', () => {
 
   resetForCreate();
 });
+
+/* =========================================================
+   36.6.25 — Central de comunicação in-app
+   ========================================================= */
+(function () {
+  const form = document.querySelector('[data-communication-compose]');
+  const preview = document.querySelector('[data-communication-preview]');
+  if (!form || !preview) return;
+
+  const field = (name) => form.querySelector(`[data-communication-field="${name}"]`);
+  const typeLabels = {
+    information: 'Informação', maintenance: 'Manutenção', attention: 'Atenção', incident: 'Incidente', resolved: 'Resolvido'
+  };
+  const actionLabels = {
+    none: 'Abrir mensagem', acknowledge: 'Confirmar leitura', reply: 'Abrir e responder'
+  };
+  function refreshPreview() {
+    const type = field('type')?.value || 'information';
+    const priority = field('priority')?.value || 'normal';
+    const responseMode = field('response_mode')?.value || 'none';
+    preview.dataset.priority = priority;
+    const typeNode = preview.querySelector('[data-preview-type]');
+    const titleNode = preview.querySelector('[data-preview-title]');
+    const messageNode = preview.querySelector('[data-preview-message]');
+    const actionNode = preview.querySelector('[data-preview-action]');
+    if (typeNode) typeNode.textContent = `${typeLabels[type] || 'Informação'} · ${priority === 'critical' ? 'Prioridade crítica' : priority === 'important' ? 'Importante' : 'Normal'}`;
+    if (titleNode) titleNode.textContent = field('title')?.value.trim() || 'Seu comunicado aparecerá aqui';
+    if (messageNode) messageNode.textContent = field('message')?.value.trim() || 'Preencha título e mensagem para visualizar a experiência do cliente.';
+    if (actionNode) actionNode.textContent = actionLabels[responseMode] || 'Abrir mensagem';
+  }
+  form.querySelectorAll('input,select,textarea').forEach((input) => input.addEventListener('input', refreshPreview));
+  form.querySelectorAll('select').forEach((input) => input.addEventListener('change', refreshPreview));
+  refreshPreview();
+})();
+
+(function () {
+  const root = document.querySelector('[data-rs-communication-hub]');
+  if (!root) return;
+
+  const inboxUrl = root.dataset.inboxUrl || '';
+  const readUrl = root.dataset.readUrl || '';
+  const ackUrl = root.dataset.ackUrl || '';
+  const respondUrl = root.dataset.respondUrl || '';
+  const csrf = root.dataset.csrf || '';
+  const floatBox = root.querySelector('[data-communication-float]');
+  const bubble = root.querySelector('[data-communication-bubble]');
+  const bubbleCount = root.querySelector('[data-communication-bubble-count]');
+  const drawer = root.querySelector('[data-communication-drawer]');
+  const backdrop = root.querySelector('[data-communication-drawer-backdrop]');
+  const list = root.querySelector('[data-communication-list]');
+  const thread = root.querySelector('[data-communication-thread]');
+  const floatTitle = root.querySelector('[data-communication-float-title]');
+  const floatMessage = root.querySelector('[data-communication-float-message]');
+  const minimizedKey = 'rs-connect-communication-minimized';
+  const latestSignalKey = 'rs-connect-communication-latest-signal';
+  let currentPayload = { unread: 0, items: [], latest: null };
+  let selectedId = 0;
+  let polling = false;
+
+  const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  const formatDate = (value) => {
+    if (!value) return '';
+    const parsed = new Date(String(value).replace(' ', 'T'));
+    return Number.isNaN(parsed.getTime()) ? String(value) : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(parsed);
+  };
+  const typeLabel = (type) => ({ information: 'Informação', maintenance: 'Manutenção', attention: 'Atenção', incident: 'Incidente', resolved: 'Resolvido' }[type] || 'Informação');
+  const priorityLabel = (priority) => ({ normal: 'Normal', important: 'Importante', critical: 'Crítica' }[priority] || 'Normal');
+
+  async function apiPost(url, fields) {
+    const body = new FormData();
+    body.append('_token', csrf);
+    Object.entries(fields || {}).forEach(([key, value]) => body.append(key, value));
+    const response = await fetch(url, {
+      method: 'POST', body, credentials: 'same-origin',
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-store'
+    });
+    const payload = await response.json().catch(() => ({ ok: false, message: 'Resposta inválida do servidor.' }));
+    if (!response.ok || !payload.ok) throw new Error(payload.message || 'Não foi possível concluir a ação.');
+    return payload;
+  }
+
+  function updateFloating() {
+    const unread = Number(currentPayload.unread || 0);
+    root.hidden = unread < 1 && drawer?.hidden !== false;
+    if (unread < 1) {
+      if (floatBox) floatBox.hidden = true;
+      if (bubble) bubble.hidden = true;
+      return;
+    }
+    const latest = currentPayload.latest || currentPayload.items?.find((item) => Number(item.is_unread || 0) === 1) || null;
+    if (bubbleCount) bubbleCount.textContent = String(Math.min(99, unread));
+    if (floatTitle) floatTitle.textContent = latest?.title || 'Nova mensagem da RS Connect';
+    if (floatMessage) floatMessage.textContent = latest?.message || 'Abra para ver os detalhes.';
+    if (floatBox) {
+      floatBox.classList.toggle('is-important', latest?.priority === 'important');
+      floatBox.classList.toggle('is-critical', latest?.priority === 'critical');
+    }
+    const minimized = window.sessionStorage.getItem(minimizedKey) === '1';
+    if (floatBox) floatBox.hidden = minimized;
+    if (bubble) bubble.hidden = !minimized;
+  }
+
+  function renderList() {
+    if (!list) return;
+    const items = currentPayload.items || [];
+    if (!items.length) {
+      list.innerHTML = '<div class="empty-state-inline">Nenhuma mensagem ativa.</div>';
+      return;
+    }
+    list.innerHTML = items.map((item) => `
+      <button type="button" class="rs-communication-inbox-item${Number(item.is_unread || 0) === 1 ? ' is-unread' : ''}${Number(item.id) === Number(selectedId) ? ' is-active' : ''}" data-communication-item="${Number(item.id)}">
+        <small>${escapeHtml(typeLabel(item.communication_type))} · ${escapeHtml(priorityLabel(item.priority))}</small>
+        <strong>${escapeHtml(item.title)}</strong>
+        <span>${escapeHtml(item.message)}</span>
+        <small>${escapeHtml(formatDate(item.sent_at))}</small>
+      </button>`).join('');
+    list.querySelectorAll('[data-communication-item]').forEach((button) => {
+      button.addEventListener('click', () => openThread(Number(button.dataset.communicationItem || 0)));
+    });
+  }
+
+  function renderThread(data) {
+    if (!thread) return;
+    if (!data) {
+      thread.innerHTML = '<div class="rs-communication-thread-empty">Selecione uma mensagem para ler os detalhes.</div>';
+      return;
+    }
+    const replies = Array.isArray(data.replies) ? data.replies : [];
+    const messages = [`
+      <article class="rs-communication-thread-message is-rs">
+        <strong>RS Connect</strong>
+        <p>${escapeHtml(data.message).replace(/\n/g, '<br>')}</p>
+        <small>${escapeHtml(formatDate(data.sent_at))}</small>
+      </article>`, ...replies.map((reply) => `
+      <article class="rs-communication-thread-message ${reply.direction === 'tenant_to_rs' ? 'is-client' : 'is-rs'}">
+        <strong>${reply.direction === 'tenant_to_rs' ? escapeHtml(reply.user_name || 'Sua empresa') : 'Equipe RS'}</strong>
+        <p>${escapeHtml(reply.message).replace(/\n/g, '<br>')}</p>
+        <small>${escapeHtml(formatDate(reply.created_at))}</small>
+      </article>`)].join('');
+
+    let action = '<div class="rs-communication-action-status">Este comunicado é somente informativo.</div>';
+    if (data.response_mode === 'acknowledge') {
+      action = data.acknowledged_at
+        ? '<div class="rs-communication-action-status is-success">Leitura confirmada.</div>'
+        : '<button class="btn btn-primary" type="button" data-communication-ack>Confirmar leitura</button><div class="rs-communication-action-status" data-communication-action-status></div>';
+    } else if (data.response_mode === 'reply') {
+      action = `<form data-communication-reply-form>
+        <textarea class="input" name="message" maxlength="3000" required placeholder="Escreva sua resposta para a equipe RS."></textarea>
+        <button class="btn btn-primary" type="submit">Enviar resposta</button>
+        <div class="rs-communication-action-status" data-communication-action-status></div>
+      </form>`;
+    }
+
+    thread.innerHTML = `
+      <div class="rs-communication-thread-head">
+        <div class="rs-communication-thread-meta"><span class="badge">${escapeHtml(typeLabel(data.communication_type))}</span><span class="badge">Prioridade ${escapeHtml(priorityLabel(data.priority).toLowerCase())}</span></div>
+        <h3>${escapeHtml(data.title)}</h3>
+        <p>${data.expires_at ? `Disponível até ${escapeHtml(formatDate(data.expires_at))}.` : 'Esta mensagem permanece no histórico de notificações.'}</p>
+      </div>
+      <div class="rs-communication-thread-messages">${messages}</div>
+      <div class="rs-communication-thread-actions">${action}</div>`;
+
+    thread.querySelector('[data-communication-ack]')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      const status = thread.querySelector('[data-communication-action-status]');
+      button.disabled = true;
+      try {
+        await apiPost(ackUrl, { communication_id: data.id });
+        if (status) { status.textContent = 'Leitura confirmada.'; status.classList.add('is-success'); }
+        await poll(true);
+        await loadThread(data.id, false);
+      } catch (error) {
+        if (status) { status.textContent = error.message; status.classList.add('is-error'); }
+      } finally { button.disabled = false; }
+    });
+
+    thread.querySelector('[data-communication-reply-form]')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const replyForm = event.currentTarget;
+      const textarea = replyForm.querySelector('textarea');
+      const button = replyForm.querySelector('button[type="submit"]');
+      const status = replyForm.querySelector('[data-communication-action-status]');
+      button.disabled = true;
+      try {
+        const result = await apiPost(respondUrl, { communication_id: data.id, message: textarea.value });
+        textarea.value = '';
+        if (status) { status.textContent = result.message || 'Resposta enviada.'; status.classList.add('is-success'); }
+        await poll(true);
+        renderThread(result.thread || data);
+      } catch (error) {
+        if (status) { status.textContent = error.message; status.classList.add('is-error'); }
+      } finally { button.disabled = false; }
+    });
+  }
+
+  async function loadThread(id, markRead = true) {
+    if (!id) return;
+    selectedId = id;
+    try {
+      if (markRead) await apiPost(readUrl, { communication_id: id });
+      const response = await fetch(`${inboxUrl}?communication_id=${encodeURIComponent(id)}`, {
+        credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-store'
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.message || 'Não foi possível abrir a mensagem.');
+      currentPayload = payload;
+      renderList();
+      renderThread(payload.thread || null);
+      updateFloating();
+    } catch (error) {
+      if (thread) thread.innerHTML = `<div class="rs-communication-thread-empty">${escapeHtml(error.message || 'Não foi possível abrir a mensagem.')}</div>`;
+    }
+  }
+
+  function openDrawer(id) {
+    root.hidden = false;
+    if (drawer) drawer.hidden = false;
+    if (backdrop) backdrop.hidden = false;
+    document.body.classList.add('has-communication-drawer');
+    renderList();
+    const target = Number(id || currentPayload.latest?.id || currentPayload.items?.[0]?.id || 0);
+    if (target > 0) loadThread(target, true);
+  }
+  function closeDrawer() {
+    if (drawer) drawer.hidden = true;
+    if (backdrop) backdrop.hidden = true;
+    document.body.classList.remove('has-communication-drawer');
+    updateFloating();
+  }
+
+  async function poll(force = false) {
+    if (polling && !force) return;
+    polling = true;
+    try {
+      const response = await fetch(inboxUrl, {
+        credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-store'
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      if (!payload?.ok) return;
+      currentPayload = payload;
+      const latest = payload.latest || null;
+      const signal = latest ? `${latest.id}:${latest.last_reply_at || latest.sent_at || ''}` : '';
+      const previousSignal = window.sessionStorage.getItem(latestSignalKey) || '';
+      if (signal && signal !== previousSignal) {
+        window.sessionStorage.setItem(latestSignalKey, signal);
+        window.sessionStorage.removeItem(minimizedKey);
+      }
+      renderList();
+      updateFloating();
+    } catch (error) {
+      // A Central continua disponível pelo histórico de notificações se o polling falhar.
+    } finally { polling = false; }
+  }
+
+  root.querySelector('[data-communication-open]')?.addEventListener('click', () => openDrawer(currentPayload.latest?.id));
+  root.querySelector('[data-communication-bubble]')?.addEventListener('click', () => { window.sessionStorage.removeItem(minimizedKey); openDrawer(currentPayload.latest?.id); });
+  root.querySelector('[data-communication-minimize]')?.addEventListener('click', () => { window.sessionStorage.setItem(minimizedKey, '1'); updateFloating(); });
+  root.querySelector('[data-communication-close]')?.addEventListener('click', closeDrawer);
+  backdrop?.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && drawer && !drawer.hidden) closeDrawer(); });
+
+  poll();
+  window.setInterval(() => { if (document.visibilityState === 'visible') poll(); }, 10000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') poll(true); });
+})();

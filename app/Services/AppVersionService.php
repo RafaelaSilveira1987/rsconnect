@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.24 — Modalidade antes da disponibilidade';
-    public const REQUIRED_MIGRATION = '057_calendar_modality_before_availability.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.25 — Central de comunicação in-app';
+    public const REQUIRED_MIGRATION = '058_client_communication_center.sql';
 
     private PDO $pdo;
 
@@ -92,13 +92,14 @@ final class AppVersionService
             'ai_usage_threshold_events',
             'ai_after_hours_pending',
             'ai_agent_instance_bindings',
+            'client_communication_replies',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 057, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 058, conforme o pacote implantado.'
         );
 
         $aiQuotaLimits = $this->standardAiQuotaLimits();
@@ -226,6 +227,21 @@ final class AppVersionService
                 ? 'Alertas internos, playbooks e comunicados estão disponíveis.'
                 : 'A estrutura da versão 36.6.5 ainda não foi aplicada.',
             'Executar database/migrations/049_operational_resolution_communications.sql.'
+        );
+
+        $communicationCenterReady = $this->tableExists('client_communication_replies')
+            && $this->columnExists('client_communications', 'priority')
+            && $this->columnExists('client_communications', 'response_mode')
+            && $this->columnExists('client_communications', 'expires_at')
+            && $this->columnExists('client_communication_recipients', 'tenant_last_seen_at')
+            && $this->columnExists('client_communication_recipients', 'acknowledged_at');
+        $checks[] = $this->check(
+            'Central de comunicação in-app',
+            $communicationCenterReady ? 'ok' : 'blocked',
+            $communicationCenterReady
+                ? 'Caixa de mensagens, leitura, confirmação e respostas RS e empresa estão disponíveis.'
+                : 'A estrutura de mensagens interativas do cliente ainda não foi aplicada.',
+            'Executar database/migrations/058_client_communication_center.sql.'
         );
 
         $aiUsageReady = $this->tableExists('ai_usage_events')

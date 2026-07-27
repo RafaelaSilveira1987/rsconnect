@@ -1,8 +1,10 @@
 # RS Connect — pacote VPS
 
-Pacote consolidado até o RS Connect 36.6.24 — Modalidade antes da disponibilidade.
+Pacote consolidado até o RS Connect 36.6.25 — Central de comunicação in-app.
 
 ## Última etapa incluída
+
+RS Connect 36.6.25 — transforma Comunicados em uma central in-app com caixa de mensagens não lidas, leitura real, confirmação e respostas entre a RS e a empresa cliente.
 
 RS Connect 36.6.24 — exige que o atendimento seja definido como Online ou Presencial antes de consultar disponibilidade, filtra os eventos VAGO pela modalidade escolhida e reinicia a busca quando a modalidade muda.
 

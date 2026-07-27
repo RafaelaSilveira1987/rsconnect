@@ -91,11 +91,30 @@ final class NotificationService
 
     public function markAllRead(int $tenantId): void
     {
-        Database::connection()->prepare(
-            'UPDATE client_notifications
-             SET status = "read", read_at = COALESCE(read_at, NOW())
-             WHERE tenant_id = :tenant_id AND status = "unread"'
-        )->execute(['tenant_id' => $tenantId]);
+        $pdo = Database::connection();
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare(
+                'UPDATE client_notifications
+                 SET status = "read", read_at = COALESCE(read_at, NOW())
+                 WHERE tenant_id = :tenant_id AND status = "unread"'
+            )->execute(['tenant_id' => $tenantId]);
+            try {
+                $pdo->prepare(
+                    'UPDATE client_communication_recipients
+                     SET read_at = COALESCE(read_at, NOW()), tenant_last_seen_at = NOW()
+                     WHERE tenant_id = :tenant_id'
+                )->execute(['tenant_id' => $tenantId]);
+            } catch (Throwable) {
+                // Compatibilidade com instalações que ainda não aplicaram a migration da Central de comunicação.
+            }
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
     }
 
     /** @return array<string,int> */

@@ -110,7 +110,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.6.24')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.6.25')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -270,9 +270,52 @@ $svgIcon = static function (string $name): string {
     </main>
 </div>
 <button class="icon-button global-sidebar-toggle" id="sidebarToggle" type="button" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false"><?= $svgIcon('menu') ?></button>
+<?php if (!Auth::isSuperAdmin() && Auth::tenantId() && Auth::can('notifications.view') && $moduleVisible('notifications')): ?>
+<div class="rs-communication-hub"
+     data-rs-communication-hub
+     data-inbox-url="<?= View::e(Router::url('/communications/inbox')) ?>"
+     data-read-url="<?= View::e(Router::url('/communications/read')) ?>"
+     data-ack-url="<?= View::e(Router::url('/communications/acknowledge')) ?>"
+     data-respond-url="<?= View::e(Router::url('/communications/respond')) ?>"
+     data-csrf="<?= View::e(Csrf::token()) ?>" hidden>
+    <section class="rs-communication-float" data-communication-float hidden aria-live="polite">
+        <button class="rs-communication-float-close" type="button" data-communication-minimize aria-label="Minimizar mensagem">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 12h12"/></svg>
+        </button>
+        <span class="rs-communication-float-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14v9H8l-3 3V6Z"/></svg>
+        </span>
+        <div class="rs-communication-float-copy">
+            <small>Mensagem da RS Connect</small>
+            <strong data-communication-float-title>Nova mensagem</strong>
+            <span data-communication-float-message>Abra para ver os detalhes.</span>
+        </div>
+        <button class="btn btn-small" type="button" data-communication-open>Ver mensagem</button>
+    </section>
+    <button class="rs-communication-bubble" type="button" data-communication-bubble hidden aria-label="Abrir mensagens da RS Connect">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6h14v9H8l-3 3V6Z"/></svg>
+        <span data-communication-bubble-count>0</span>
+    </button>
+    <div class="rs-communication-drawer-backdrop" data-communication-drawer-backdrop hidden></div>
+    <aside class="rs-communication-drawer" data-communication-drawer hidden aria-label="Mensagens da RS Connect" aria-modal="true" role="dialog">
+        <header>
+            <div><small>Central de comunicação</small><h2>Mensagens da RS Connect</h2></div>
+            <button class="icon-button" type="button" data-communication-close aria-label="Fechar mensagens">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            </button>
+        </header>
+        <div class="rs-communication-drawer-body">
+            <nav class="rs-communication-inbox-list" data-communication-list aria-label="Lista de mensagens"></nav>
+            <section class="rs-communication-thread" data-communication-thread>
+                <div class="rs-communication-thread-empty">Selecione uma mensagem para ler os detalhes.</div>
+            </section>
+        </div>
+    </aside>
+</div>
+<?php endif; ?>
 <button class="back-to-top" type="button" data-back-to-top aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
 </button>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.6.24')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.6.25')) ?>" defer></script>
 </body>
 </html>
