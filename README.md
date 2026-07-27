@@ -1,8 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.19 — Retry confiável de backup.
+Pacote consolidado até o RS Connect 36.6.20 — Agenda por intenção real e callback de backup resiliente.
 
 ## Última etapa incluída
+
+RS Connect 36.6.20 — bloqueia a criação de eventos Google a partir de conversas comuns/status, endurece a intenção de agenda e torna o callback do backup resiliente a rotação de token.
 
 RS Connect 36.6.19 — corrige o despacho automático de backup para usar sucesso real como fonte de verdade, repetir tentativas no mesmo dia após erro/timeout e expor o motivo de cada decisão do dispatcher.
 

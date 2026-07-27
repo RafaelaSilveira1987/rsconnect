@@ -1,5 +1,5 @@
 {
-  "name": "RS Connect - Backup operacional confiável v36.6.1",
+  "name": "RS Connect - Backup operacional confiável v36.6.20",
   "nodes": [
     {
       "parameters": {
@@ -148,6 +148,10 @@
         "headerParameters": {
           "parameters": [
             {
+              "name": "X-RS-Backup-Token",
+              "value": "={{ $json.callback_token }}"
+            },
+            {
               "name": "X-RS-Connect-Token",
               "value": "={{ $json.callback_token }}"
             },
@@ -171,7 +175,9 @@
       "position": [
         440,
         120
-      ]
+      ],
+      "notesInFlow": true,
+      "notes": "O callback usa token dedicado e também a identidade job+execution_uuid. Isso mantém a confirmação válida mesmo durante rotação/redeploy do token."
     },
     {
       "parameters": {
@@ -287,5 +293,5 @@
       "name": "Backup"
     }
   ],
-  "versionId": "rs-connect-backup-v36-6-0"
+  "versionId": "rs-connect-backup-v36-6-20"
 }

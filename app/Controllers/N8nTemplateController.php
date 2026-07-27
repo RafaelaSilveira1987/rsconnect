@@ -18,8 +18,8 @@ final class N8nTemplateController
             'title' => 'Agenda Google Calendar',
             'segment' => 'Agenda',
             'file' => 'template-agenda-google-calendar.json',
-            'events' => ['calendar.appointment.created', 'calendar.appointment.status_updated'],
-            'description' => 'Recebe compromissos do RS Connect, cria evento no Google Calendar do cliente e retorna o resultado ao callback do SaaS.',
+            'events' => ['calendar.appointment.created'],
+            'description' => 'Cria evento no Google somente para compromissos reais do RS Connect com início e fim definidos. Mensagens, consultas de disponibilidade e mudanças de status não criam novos eventos.',
         ],
         'crm-google-sheets' => [
             'title' => 'CRM para Google Sheets',

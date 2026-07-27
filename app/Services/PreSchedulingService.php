@@ -504,12 +504,13 @@ final class PreSchedulingService
             '/\b(agendar|reagendar|remarcar|desmarcar|encaixe)\b|\bmarcar\b.{0,30}\b(consulta|sessao|reuniao|horario)\b|\b(tem|ha|ver|consultar|confirma|confirmar|qual|quais)\b.{0,25}\b(horario|horarios|disponibilidade)\b|\b(quero|gostaria|preciso)\b.{0,20}\b(horario|horarios|agendar|marcar)\b|\b(horario|horarios)\s+(disponivel|disponiveis)\b/u',
             $text
         );
-        $serviceInterest = (bool) preg_match('/\b(consulta|sessao|terapia|avaliacao|reuniao)\b/u', $text);
         $hasPreference = $preferredDate !== '' || $preferredDay !== '' || $preferredTime !== '';
 
-        // Preferências curtas ("terça às 15h") só são continuação quando já existe
-        // contexto recente e legítimo de agenda. Nunca abrem agenda do zero.
-        $hasIntent = $directAgenda || ($serviceInterest && $hasPreference) || ($continuationContext && $hasPreference);
+        // 36.6.20: mencionar serviço + data/horário não basta para abrir agenda.
+        // Só existe um NOVO pedido quando há verbo/intenção explícita (agendar, remarcar,
+        // quero/preciso de horário, consultar disponibilidade etc.). Preferências curtas
+        // ("terça às 15h") continuam válidas apenas dentro de contexto de agenda já aberto.
+        $hasIntent = $directAgenda || ($continuationContext && $hasPreference);
         $modality = $this->extractModality($text);
 
         return [

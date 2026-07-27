@@ -279,6 +279,38 @@ final class BackupAutomationService
         ];
     }
 
+    /**
+     * Confirma a identidade de um callback usando o job + execution_uuid.
+     * É uma segunda camada segura para callbacks já em voo durante rotação/redeploy
+     * de tokens. O processCallback ainda valida novamente o UUID sob lock.
+     */
+    public function validCallbackIdentity(array $payload): bool
+    {
+        $jobId = (int) ($payload['backup_job_id'] ?? $payload['job_id'] ?? 0);
+        $executionUuid = trim((string) ($payload['execution_uuid'] ?? ''));
+        if ($jobId < 1 || $executionUuid === '') {
+            return false;
+        }
+
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT execution_uuid, status FROM operations_backup_jobs WHERE id = :id LIMIT 1'
+            );
+            $statement->execute(['id' => $jobId]);
+            $job = $statement->fetch(PDO::FETCH_ASSOC);
+            if (!$job) {
+                return false;
+            }
+            if (!in_array((string) ($job['status'] ?? ''), ['requested', 'running', 'success', 'error'], true)) {
+                return false;
+            }
+            $expected = trim((string) ($job['execution_uuid'] ?? ''));
+            return $expected !== '' && hash_equals($expected, $executionUuid);
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
     public function processCallback(array $payload): array
     {
         $jobId = (int) ($payload['backup_job_id'] ?? $payload['job_id'] ?? 0);

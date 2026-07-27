@@ -124,15 +124,17 @@ final class OperationsController
 
     public function runBackupHook(): void
     {
-        $service = new OperationsService();
-        if (!$service->validBackupToken($this->backupRequestToken())) {
-            $this->json(['ok' => false, 'error' => 'Token inválido.'], 403);
-            return;
-        }
-
         $payload = json_decode((string) file_get_contents('php://input'), true);
         if (!is_array($payload)) {
             $payload = $_POST;
+        }
+
+        $service = new OperationsService();
+        $tokenValid = $service->validBackupToken($this->backupRequestToken());
+        $jobIdentityValid = (new BackupAutomationService())->validCallbackIdentity($payload);
+        if (!$tokenValid && !$jobIdentityValid) {
+            $this->json(['ok' => false, 'error' => 'Token ou identidade da execução inválidos.'], 403);
+            return;
         }
 
         $result = $service->registerExternalBackup($payload);
@@ -159,7 +161,7 @@ final class OperationsController
             return $queryToken;
         }
 
-        $headerToken = trim((string) ($_SERVER['HTTP_X_RS_CONNECT_TOKEN'] ?? ''));
+        $headerToken = trim((string) ($_SERVER['HTTP_X_RS_BACKUP_TOKEN'] ?? $_SERVER['HTTP_X_RS_CONNECT_TOKEN'] ?? ''));
         if ($headerToken !== '') {
             return $headerToken;
         }

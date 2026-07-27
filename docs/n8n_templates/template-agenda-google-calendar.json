@@ -1,5 +1,5 @@
 {
-  "name": "RS Connect - Agenda Google Calendar por Empresa",
+  "name": "RS Connect - Agenda Google Calendar por Empresa v36.6.20",
   "nodes": [
     {
       "parameters": {
@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $json.body || $json;\nconst payload = body.payload || {};\nconst appointment = payload.appointment || payload;\nreturn [{ json: {\n  event: body.event, tenant_id: body.tenant_id || payload.tenant_id, flow_id: body.flow_id,\n  callback_url: body.callback?.url, callback_token: body.callback?.token,\n  title: appointment.title || 'Compromisso RS Connect',\n  description: appointment.description || appointment.notes || '',\n  start: appointment.start_time || appointment.start || appointment.starts_at,\n  end: appointment.end_time || appointment.end || appointment.ends_at,\n  location: appointment.meeting_url || appointment.location || '',\n  contact_name: appointment.contact?.name || payload.contact?.name || '',\n  contact_phone: appointment.contact?.phone || payload.contact?.phone || ''\n}}];"
+        "jsCode": "const body = $json.body || $json;\nconst payload = body.payload || {};\nconst appointment = payload.appointment || payload;\nconst event = String(body.event || '').trim();\nconst start = appointment.start_time || appointment.start || appointment.starts_at || '';\nconst end = appointment.end_time || appointment.end || appointment.ends_at || '';\nconst should_create = event === 'calendar.appointment.created' && Boolean(start) && Boolean(end);\nreturn [{ json: {\n  event, tenant_id: body.tenant_id || payload.tenant_id, flow_id: body.flow_id,\n  callback_url: body.callback?.url, callback_token: body.callback?.token,\n  should_create,\n  ignored_reason: should_create ? '' : (event !== 'calendar.appointment.created' ? 'evento_nao_cria_compromisso' : 'inicio_ou_fim_ausente'),\n  title: appointment.title || 'Compromisso RS Connect',\n  description: appointment.description || appointment.notes || '',\n  start, end,\n  location: appointment.meeting_url || appointment.location || '',\n  contact_name: appointment.contact?.name || payload.contact?.name || '',\n  contact_phone: appointment.contact?.phone || payload.contact?.phone || ''\n}}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -49,8 +49,8 @@
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.3,
       "position": [
-        -120,
-        0
+        20,
+        -80
       ],
       "id": "google_calendar_create",
       "name": "Criar evento Google Calendar"
@@ -80,8 +80,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        140,
-        0
+        280,
+        -80
       ],
       "id": "callback_success",
       "name": "Callback RS Connect"
@@ -95,11 +95,60 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        380,
-        0
+        520,
+        -80
       ],
       "id": "respond",
       "name": "Responder Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e2b152bd-7bf5-4bb0-b2d3-cf5dbaa4facd",
+              "leftValue": "={{ $json.should_create }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "if_real_appointment",
+      "name": "É compromisso real?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, ignored: true, reason: $json.ignored_reason, event: $json.event } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        20,
+        160
+      ],
+      "id": "respond_ignored",
+      "name": "Ignorar evento sem agenda"
     }
   ],
   "connections": {
@@ -118,7 +167,7 @@
       "main": [
         [
           {
-            "node": "Criar evento Google Calendar",
+            "node": "É compromisso real?",
             "type": "main",
             "index": 0
           }
@@ -141,6 +190,24 @@
         [
           {
             "node": "Responder Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É compromisso real?": {
+      "main": [
+        [
+          {
+            "node": "Criar evento Google Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar evento sem agenda",
             "type": "main",
             "index": 0
           }

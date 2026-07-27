@@ -72,7 +72,7 @@ final class AutomationWebhookService
             $statement->execute(['tenant_id' => $tenantId]);
             $flows = [];
             foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $flow) {
-                if ($this->matchesEvent((string) ($flow['events_json'] ?? ''), $event)) {
+                if ($this->flowAllowsEvent($flow, $event)) {
                     $flows[] = $flow;
                 }
             }
@@ -81,6 +81,39 @@ final class AutomationWebhookService
             // Permite deploy antes da migration 010 sem quebrar webhooks existentes.
             return [];
         }
+    }
+
+    /**
+     * Defesa de contrato para fluxos que possuem efeito colateral forte.
+     *
+     * Um cadastro legado com events_json="*" nunca pode transformar message.received
+     * em compromisso no Google. O fluxo "Agenda Google Calendar por Empresa" cria
+     * evento externo e, por isso, só recebe criação real de compromisso.
+     */
+    private function flowAllowsEvent(array $flow, string $event): bool
+    {
+        if (!$this->matchesEvent((string) ($flow['events_json'] ?? ''), $event)) {
+            return false;
+        }
+
+        $identity = mb_strtolower(trim(
+            (string) ($flow['flow_key'] ?? '') . ' ' .
+            (string) ($flow['template_key'] ?? '') . ' ' .
+            (string) ($flow['name'] ?? '')
+        ));
+        $normalized = strtr($identity, [
+            'á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a',
+            'é' => 'e', 'ê' => 'e', 'í' => 'i', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ú' => 'u', 'ç' => 'c',
+        ]);
+
+        $isGoogleAppointmentWriter = str_contains($normalized, 'agenda-google-calendar')
+            || str_contains($normalized, 'agenda google calendar por empresa');
+
+        if ($isGoogleAppointmentWriter) {
+            return $event === 'calendar.appointment.created';
+        }
+
+        return true;
     }
 
     private function matchesEvent(?string $eventsJson, string $event): bool

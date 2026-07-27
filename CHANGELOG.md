@@ -1,3 +1,15 @@
+## 36.6.20 — Agenda por intenção real e callback de backup resiliente
+
+- impede o fluxo **Agenda Google Calendar por Empresa** de receber `message.received`, `appointment.pre_scheduled` sem contrato válido ou mudanças de status que antes podiam criar eventos duplicados;
+- adiciona gate no próprio workflow: só `calendar.appointment.created` com início e fim definidos chega ao node que cria evento no Google;
+- remove o fallback perigoso em que uma conversa comum podia virar `Compromisso RS Connect`;
+- nova intenção de agenda exige pedido explícito; apenas mencionar reunião/consulta + data/horário não abre pré-agendamento;
+- preferências curtas continuam válidas quando a conversa já está em contexto real de agenda;
+- migration 056 corrige cadastros legados do fluxo Google Calendar que estavam inscritos em `*`;
+- callback do backup passa a aceitar `X-RS-Backup-Token` e qualquer alias de token de backup configurado;
+- callbacks já em voo sobrevivem a rotação/redeploy de token quando `backup_job_id + execution_uuid` conferem;
+- template do backup envia header dedicado sem remover a compatibilidade com `X-RS-Connect-Token`.
+
 ## 36.6.19 — Retry confiável de backup
 
 - Corrige o dispatcher automático que usava `last_requested_at` como se fosse sucesso do ciclo.

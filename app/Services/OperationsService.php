@@ -164,11 +164,26 @@ final class OperationsService
 
     public function validBackupToken(string $token): bool
     {
-        $expected = $this->backupToken();
-        if ($expected === '') {
+        $token = trim($token);
+        if ($token === '') {
             return false;
         }
-        return hash_equals($expected, $token);
+
+        // 36.6.20: aceita qualquer alias de token de backup explicitamente configurado.
+        // Isso evita quebrar um callback já em voo quando OPERATIONS_BACKUP_TOKEN é
+        // rotacionado mas BACKUP_WEBHOOK_TOKEN ainda mantém o valor anterior.
+        foreach (['OPERATIONS_BACKUP_TOKEN', 'BACKUP_WEBHOOK_TOKEN', 'RS_CONNECT_BACKUP_TOKEN'] as $key) {
+            $expected = trim((string) Env::get($key, ''));
+            if ($expected === '') {
+                $serverValue = $_SERVER[$key] ?? $_ENV[$key] ?? getenv($key);
+                $expected = is_string($serverValue) ? trim($serverValue) : '';
+            }
+            if ($expected !== '' && hash_equals($expected, $token)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function validMonitorToken(string $token): bool

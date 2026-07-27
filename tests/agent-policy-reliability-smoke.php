@@ -61,6 +61,8 @@ $cases = [
     ['Pode ser terca as 15h', true, true],
     ['Me confirma o horario de hoje?', false, true],
     ['Preciso das 10 maiores empresas em Cuiaba', false, false],
+    ['Reuniao amanha as 10h', false, false],
+    ['Consulta sexta a tarde', false, false],
 ];
 foreach ($cases as [$text, $continuation, $expected]) {
     $result = $detect->invoke($pre, $text, $continuation);
