@@ -111,7 +111,7 @@ final class PreSchedulingService
                 'request_needed' => false,
                 'message' => null,
             ];
-            if ($this->hasFullPreference($intent)) {
+            if ($this->hasFullPreference($intent) || $this->isAvailabilityModality($this->intentSchedulingModality($intent))) {
                 $transition = $this->prepareExistingForNewPreference($pdo, $tenantId, $existing, $intent);
                 if (empty($transition['ok'])) {
                     $result = array_merge($result, [
@@ -143,8 +143,30 @@ final class PreSchedulingService
                 'has_full_preference' => $update['has_full_preference'],
             ]);
 
-            if ($update['has_full_preference']) {
-                // Preferência completa é tratada pela agenda, mesmo se a mensagem de aviso falhar.
+            if (empty($update['has_scheduling_modality'])) {
+                $question = $this->sendModalityQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
+                $result['modality_required'] = true;
+                $result['modality_question_sent'] = (bool) ($question['ok'] ?? false);
+                $result['modality_question_error'] = $question['error'] ?? null;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['availability_request_needed'] = false;
+                return $result;
+            }
+
+            if (empty($update['has_full_preference'])) {
+                $question = $this->sendDateTimeQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
+                $result['date_time_required'] = true;
+                $result['date_time_question_sent'] = (bool) ($question['ok'] ?? false);
+                $result['date_time_question_error'] = $question['error'] ?? null;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['availability_request_needed'] = false;
+                return $result;
+            }
+
+            if (!empty($update['ready_for_availability'])) {
+                // Preferência completa + modalidade válida são tratadas pela agenda.
                 // Nunca deixa a IA reutilizar opções antigas do histórico como se fossem atuais.
                 $ack = $this->sendPreferenceAcknowledgement($pdo, $instance, $conversationId, $contactId, $update['appointment'], $intent);
                 $result['ack_sent'] = $ack['ok'];
@@ -186,16 +208,18 @@ final class PreSchedulingService
         $titleName = trim((string) ($contact['name'] ?? '')) ?: trim((string) ($contact['phone'] ?? 'Paciente'));
         $title = 'Pré-agendamento - ' . mb_substr($titleName, 0, 90);
         $description = $this->buildDescription($content, $intent, $flowContext);
-        $status = $this->hasFullPreference($intent) ? 'awaiting_approval' : 'pre_scheduled';
+        $intentModality = $this->intentSchedulingModality($intent);
+        $readyForAvailability = $this->hasFullPreference($intent) && $this->isAvailabilityModality($intentModality);
+        $status = $readyForAvailability ? 'awaiting_approval' : 'pre_scheduled';
 
         $statement = $pdo->prepare(
             'INSERT INTO calendar_appointments
                 (tenant_id, contact_id, conversation_id, title, description, starts_at, ends_at, timezone, status,
-                 location_type, location, reminder_minutes, sync_status, is_pre_schedule, pre_schedule_source,
+                 location_type, location, reminder_minutes, sync_status, is_pre_schedule, pre_schedule_source, appointment_modality,
                  preferred_day_text, preferred_time_text, approval_status, approval_notes)
              VALUES
                 (:tenant_id, :contact_id, :conversation_id, :title, :description, :starts_at, :ends_at, :timezone, :status,
-                 :location_type, :location, 60, "pending", 1, "ai_whatsapp",
+                 :location_type, :location, 60, "pending", 1, "ai_whatsapp", :appointment_modality,
                  :preferred_day_text, :preferred_time_text, "pending", :approval_notes)'
         );
         $statement->execute([
@@ -208,8 +232,9 @@ final class PreSchedulingService
             'ends_at' => $period['ends_at'],
             'timezone' => 'America/Sao_Paulo',
             'status' => $status,
-            'location_type' => $intent['location_type'],
-            'location' => $intent['modality'] !== '' ? $intent['modality'] : null,
+            'location_type' => $this->isAvailabilityModality($intentModality) ? $intentModality : 'indefinida',
+            'location' => $this->isAvailabilityModality($intentModality) ? ucfirst($intentModality) : null,
+            'appointment_modality' => $intentModality,
             'preferred_day_text' => $this->displayDay($intent) ?: null,
             'preferred_time_text' => $this->displayTime($intent) ?: null,
             'approval_notes' => 'Criado automaticamente a partir da intenção de agenda detectada na conversa #' . $conversationId,
@@ -238,7 +263,7 @@ final class PreSchedulingService
             'preferred_day' => $this->displayDay($intent),
             'preferred_time' => $this->displayTime($intent),
             'preferred_date' => $intent['preferred_date'],
-            'modality' => $intent['modality'],
+            'modality' => $intentModality,
             'message' => $content,
             'contact_group' => (string) ($flowContext['contact_group'] ?? 'unclassified'),
             'demand_status' => (string) ($flowContext['demand_status'] ?? 'pending'),
@@ -260,12 +285,34 @@ final class PreSchedulingService
             [
                 'conversation_id' => $conversationId,
                 'contact_id' => $contactId,
-                'modality' => $intent['modality'],
+                'modality' => $intentModality,
             ]
         );
 
         $result['created'] = true;
         $result['appointment_id'] = $appointmentId;
+
+        if (!$this->isAvailabilityModality($intentModality)) {
+            $question = $this->sendModalityQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
+            $result['modality_required'] = true;
+            $result['modality_question_sent'] = (bool) ($question['ok'] ?? false);
+            $result['modality_question_error'] = $question['error'] ?? null;
+            $result['skip_ai'] = true;
+            $result['terminal_handled'] = true;
+            $result['availability_request_needed'] = false;
+            return $result;
+        }
+
+        if (!$this->hasFullPreference($intent)) {
+            $question = $this->sendDateTimeQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
+            $result['date_time_required'] = true;
+            $result['date_time_question_sent'] = (bool) ($question['ok'] ?? false);
+            $result['date_time_question_error'] = $question['error'] ?? null;
+            $result['skip_ai'] = true;
+            $result['terminal_handled'] = true;
+            $result['availability_request_needed'] = false;
+            return $result;
+        }
 
         if ($this->hasFullPreference($intent)) {
             $appointment = [
@@ -278,8 +325,9 @@ final class PreSchedulingService
                 'ends_at' => $period['ends_at'],
                 'preferred_day_text' => $this->displayDay($intent),
                 'preferred_time_text' => $this->displayTime($intent),
-                'location_type' => $intent['location_type'],
-                'location' => $intent['modality'] !== '' ? $intent['modality'] : null,
+                'location_type' => $this->isAvailabilityModality($intentModality) ? $intentModality : 'indefinida',
+                'appointment_modality' => $intentModality,
+                'location' => $this->isAvailabilityModality($intentModality) ? ucfirst($intentModality) : null,
             ];
             $ack = $this->sendPreferenceAcknowledgement($pdo, $instance, $conversationId, $contactId, $appointment, $intent);
             $result['ack_sent'] = $ack['ok'];
@@ -306,6 +354,12 @@ final class PreSchedulingService
             'skip_ai' => false,
             'terminal_handled' => false,
             'availability_request_needed' => false,
+            'modality_required' => false,
+            'modality_question_sent' => false,
+            'modality_question_error' => null,
+            'date_time_required' => false,
+            'date_time_question_sent' => false,
+            'date_time_question_error' => null,
             'appointment_event_payload' => null,
         ];
     }
@@ -338,6 +392,7 @@ final class PreSchedulingService
             'default_duration_minutes' => 50,
             'default_message' => 'Vou registrar sua preferência e encaminhar para confirmação da profissional.',
             'collect_message' => 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.',
+            'modality_message' => 'Antes de consultar os horários, você prefere atendimento online ou presencial?',
             'approved_message' => 'Seu agendamento foi confirmado para {{data}} às {{hora}}. {{local}}',
             'rejected_message' => 'No momento não conseguimos confirmar esse horário. Pode me enviar outra opção de dia ou período?',
             'reschedule_message' => 'Precisamos ajustar sua preferência de horário. Pode me enviar outra opção de dia ou período?',
@@ -370,6 +425,7 @@ final class PreSchedulingService
         $messages = [
             'default_message' => 'Vou registrar sua preferência e encaminhar para confirmação da profissional.',
             'collect_message' => 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.',
+            'modality_message' => 'Antes de consultar os horários, você prefere atendimento online ou presencial?',
             'approved_message' => 'Seu agendamento foi confirmado para {{data}} às {{hora}}. {{local}}',
             'rejected_message' => 'No momento não conseguimos confirmar esse horário. Pode me enviar outra opção de dia ou período?',
             'reschedule_message' => 'Precisamos ajustar sua preferência de horário. Pode me enviar outra opção de dia ou período?',
@@ -392,6 +448,7 @@ final class PreSchedulingService
             'default_duration_minutes' => $duration,
             'default_message' => $messages['default_message'],
             'collect_message' => $messages['collect_message'],
+            'modality_message' => $messages['modality_message'],
             'approved_message' => $messages['approved_message'],
             'rejected_message' => $messages['rejected_message'],
             'reschedule_message' => $messages['reschedule_message'],
@@ -405,11 +462,11 @@ final class PreSchedulingService
             $statement = Database::connection()->prepare(
                 'INSERT INTO tenant_pre_schedule_settings
                     (tenant_id, enabled, require_human_approval, ai_can_suggest_slots, ai_can_confirm, send_approval_message,
-                     default_duration_minutes, default_message, collect_message, approved_message, rejected_message, reschedule_message,
+                     default_duration_minutes, default_message, collect_message, modality_message, approved_message, rejected_message, reschedule_message,
                      availability_options_message, slot_selected_message, no_availability_message, invalid_slot_message)
                  VALUES
                     (:tenant_id, :enabled, :require_human_approval, :ai_can_suggest_slots, :ai_can_confirm, :send_approval_message,
-                     :default_duration_minutes, :default_message, :collect_message, :approved_message, :rejected_message, :reschedule_message,
+                     :default_duration_minutes, :default_message, :collect_message, :modality_message, :approved_message, :rejected_message, :reschedule_message,
                      :availability_options_message, :slot_selected_message, :no_availability_message, :invalid_slot_message)
                  ON DUPLICATE KEY UPDATE
                     enabled = VALUES(enabled),
@@ -420,6 +477,7 @@ final class PreSchedulingService
                     default_duration_minutes = VALUES(default_duration_minutes),
                     default_message = VALUES(default_message),
                     collect_message = VALUES(collect_message),
+                    modality_message = VALUES(modality_message),
                     approved_message = VALUES(approved_message),
                     rejected_message = VALUES(rejected_message),
                     reschedule_message = VALUES(reschedule_message),
@@ -455,6 +513,7 @@ final class PreSchedulingService
             );
             $legacyParams = $params;
             unset(
+                $legacyParams['modality_message'],
                 $legacyParams['availability_options_message'],
                 $legacyParams['slot_selected_message'],
                 $legacyParams['no_availability_message'],
@@ -505,13 +564,12 @@ final class PreSchedulingService
             $text
         );
         $hasPreference = $preferredDate !== '' || $preferredDay !== '' || $preferredTime !== '';
-
-        // 36.6.20: mencionar serviço + data/horário não basta para abrir agenda.
-        // Só existe um NOVO pedido quando há verbo/intenção explícita (agendar, remarcar,
-        // quero/preciso de horário, consultar disponibilidade etc.). Preferências curtas
-        // ("terça às 15h") continuam válidas apenas dentro de contexto de agenda já aberto.
-        $hasIntent = $directAgenda || ($continuationContext && $hasPreference);
         $modality = $this->extractModality($text);
+
+        // 36.6.24: dentro de um fluxo de agenda já aberto, responder apenas
+        // "online" ou "presencial" também é uma continuação válida. A modalidade
+        // precisa ser conhecida ANTES de consultar a disponibilidade do Google.
+        $hasIntent = $directAgenda || ($continuationContext && ($hasPreference || $modality !== ''));
 
         return [
             'has_intent' => $hasIntent,
@@ -519,7 +577,9 @@ final class PreSchedulingService
             'preferred_day' => $preferredDay,
             'preferred_time' => $preferredTime,
             'modality' => $modality,
-            'location_type' => $modality === 'Presencial' ? 'presencial' : ($modality === 'Telefone' ? 'telefone' : 'online'),
+            'location_type' => $modality === 'Presencial'
+                ? 'presencial'
+                : ($modality === 'Online' ? 'online' : ($modality === 'Telefone' ? 'telefone' : 'indefinida')),
         ];
     }
 
@@ -607,17 +667,32 @@ final class PreSchedulingService
         }
 
         $settings = $this->settings($tenantId);
-        $period = $this->periodFromIntent($intent, (int) ($settings['default_duration_minutes'] ?? 50));
+        $hasDateTimeUpdate = $this->hasAnyPreference($intent);
+        $period = $hasDateTimeUpdate
+            ? $this->periodFromIntent($intent, (int) ($settings['default_duration_minutes'] ?? 50))
+            : ['starts_at' => (string) ($appointment['starts_at'] ?? ''), 'ends_at' => (string) ($appointment['ends_at'] ?? '')];
         $oldStart = trim((string) ($appointment['starts_at'] ?? ''));
         $newStart = trim((string) ($period['starts_at'] ?? ''));
-        $preferenceChanged = $oldStart === '' || $newStart === ''
-            || date('Y-m-d H:i', strtotime($oldStart)) !== date('Y-m-d H:i', strtotime($newStart));
+        $timeChanged = $hasDateTimeUpdate && ($oldStart === '' || $newStart === ''
+            || date('Y-m-d H:i', strtotime($oldStart)) !== date('Y-m-d H:i', strtotime($newStart)));
+        $oldModality = $this->appointmentSchedulingModality($appointment);
+        $incomingModality = $this->intentSchedulingModality($intent);
+        $modalityChanged = $this->isAvailabilityModality($incomingModality) && $incomingModality !== $oldModality;
+        $preferenceChanged = $timeChanged || $modalityChanged;
 
         if (!$preferenceChanged) {
             $status = (string) ($appointment['availability_status'] ?? '');
             $requestNeeded = empty($appointment['availability_request_id'])
                 || !in_array($status, ['requested', 'sent', 'received', 'options_sent', 'slot_selected'], true);
             return ['ok' => true, 'changed' => false, 'request_needed' => $requestNeeded, 'message' => null];
+        }
+
+        if ($modalityChanged && in_array((string) ($appointment['google_event_state'] ?? ''), ['held', 'confirmed'], true)) {
+            try {
+                (new CalendarAvailabilityService())->releaseSelectedSlot($tenantId, $appointmentId);
+            } catch (Throwable) {
+                // A limpeza abaixo invalida a consulta; a manutenção poderá reconciliar o hold se necessário.
+            }
         }
 
         try {
@@ -685,6 +760,8 @@ final class PreSchedulingService
                     'appointment_id' => $appointmentId,
                     'old_start' => $oldStart,
                     'new_start' => $newStart,
+                    'old_modality' => $oldModality,
+                    'new_modality' => $this->isAvailabilityModality($incomingModality) ? $incomingModality : $oldModality,
                 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ]);
         } catch (Throwable) {
@@ -728,13 +805,16 @@ final class PreSchedulingService
         $day = $this->displayDay($intent);
         $time = $this->displayTime($intent);
         $hasPreference = $this->hasAnyPreference($intent);
-        $hasFullPreference = $this->hasFullPreference($intent);
+        $incomingModality = $this->intentSchedulingModality($intent);
+        $currentModality = $this->appointmentSchedulingModality($appointment);
+        $effectiveModality = $this->isAvailabilityModality($incomingModality) ? $incomingModality : $currentModality;
 
-        $description = $hasPreference
+        $hasMeaningfulUpdate = $hasPreference || $this->isAvailabilityModality($incomingModality);
+        $description = $hasMeaningfulUpdate
             ? $this->buildDescription($content, $intent)
             : (string) ($appointment['description'] ?? '');
 
-        if (!$hasPreference) {
+        if (!$hasMeaningfulUpdate) {
             $newLine = 'Nova informação do lead: ' . mb_substr($content, 0, 300);
             if (!str_contains($description, $newLine)) {
                 $description = trim($description . "\n" . $newLine);
@@ -747,8 +827,9 @@ final class PreSchedulingService
             'description' => mb_substr($description, 0, 2000),
             'preferred_day_text' => $day !== '' ? $day : ($appointment['preferred_day_text'] ?? null),
             'preferred_time_text' => $time !== '' ? $time : ($appointment['preferred_time_text'] ?? null),
-            'location_type' => $intent['location_type'] ?: ($appointment['location_type'] ?? 'online'),
-            'location' => $intent['modality'] !== '' ? $intent['modality'] : ($appointment['location'] ?? null),
+            'location_type' => $this->isAvailabilityModality($effectiveModality) ? $effectiveModality : 'indefinida',
+            'appointment_modality' => $effectiveModality,
+            'location' => $this->isAvailabilityModality($effectiveModality) ? ucfirst($effectiveModality) : null,
         ];
 
         $setPeriod = '';
@@ -764,10 +845,10 @@ final class PreSchedulingService
             ];
         }
 
-        $statusSet = '';
-        if ($hasFullPreference) {
-            $statusSet = ', status = "awaiting_approval"';
-        }
+        $mergedHasFullPreference = trim((string) ($params['preferred_day_text'] ?? '')) !== ''
+            && trim((string) ($params['preferred_time_text'] ?? '')) !== '';
+        $readyForAvailability = $mergedHasFullPreference && $this->isAvailabilityModality($effectiveModality);
+        $statusSet = $readyForAvailability ? ', status = "awaiting_approval"' : '';
 
         $pdo->prepare(
             'UPDATE calendar_appointments
@@ -775,6 +856,7 @@ final class PreSchedulingService
                  preferred_day_text = :preferred_day_text,
                  preferred_time_text = :preferred_time_text,
                  location_type = :location_type,
+                 appointment_modality = :appointment_modality,
                  location = :location,
                  updated_at = CURRENT_TIMESTAMP
              WHERE id = :id AND tenant_id = :tenant_id'
@@ -785,10 +867,11 @@ final class PreSchedulingService
             'preferred_day_text' => $params['preferred_day_text'],
             'preferred_time_text' => $params['preferred_time_text'],
             'location_type' => $params['location_type'],
+            'appointment_modality' => $params['appointment_modality'],
             'location' => $params['location'],
             'starts_at' => $period['starts_at'],
             'ends_at' => $period['ends_at'],
-            'status' => $hasFullPreference ? 'awaiting_approval' : ($appointment['status'] ?? 'pre_scheduled'),
+            'status' => $readyForAvailability ? 'awaiting_approval' : ($appointment['status'] ?? 'pre_scheduled'),
         ]);
 
         $pdo->prepare(
@@ -797,16 +880,18 @@ final class PreSchedulingService
         )->execute([
             'tenant_id' => $tenantId,
             'conversation_id' => (int) ($updatedAppointment['conversation_id'] ?? 0),
-            'description' => $hasFullPreference
-                ? 'Preferência de dia/horário recebida e pré-agendamento enviado para aprovação.'
-                : 'Pré-agendamento atualizado com nova informação do lead.',
+            'description' => $readyForAvailability
+                ? 'Preferência de dia/horário e modalidade recebidas; pré-agendamento pronto para consultar disponibilidade.'
+                : ($mergedHasFullPreference ? 'Dia/horário recebidos; aguardando modalidade antes de consultar disponibilidade.' : 'Pré-agendamento atualizado com nova informação do lead.'),
             'metadata_json' => json_encode(['appointment_id' => (int) $appointment['id'], 'intent' => $intent], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ]);
 
         return [
             'appointment' => $updatedAppointment,
             'has_preference' => $hasPreference,
-            'has_full_preference' => $hasFullPreference,
+            'has_full_preference' => $mergedHasFullPreference,
+            'has_scheduling_modality' => $this->isAvailabilityModality($effectiveModality),
+            'ready_for_availability' => $readyForAvailability,
         ];
     }
 
@@ -995,7 +1080,11 @@ final class PreSchedulingService
             )->execute([
                 'tenant_id' => $tenantId,
                 'conversation_id' => $conversationId,
-                'description' => 'Agendamento aguardando uma etapa anterior do atendimento; IA geral não acionada.',
+                'description' => match ($reason) {
+                    'modality_required' => 'Pré-agendamento aguardando definição de modalidade (Online ou Presencial) antes da consulta de disponibilidade.',
+                    'date_time_required' => 'Pré-agendamento aguardando dia e horário antes da consulta de disponibilidade.',
+                    default => 'Agendamento aguardando uma etapa anterior do atendimento; IA geral não acionada.',
+                },
                 'metadata_json' => json_encode([
                     'reason' => $reason,
                     'incoming_message_id' => $incomingMessageId > 0 ? $incomingMessageId : null,
@@ -1054,7 +1143,11 @@ final class PreSchedulingService
                 'conversation_id' => $conversationId,
                 'agent_id' => $agentId,
                 'incoming_message_id' => $incomingMessageId,
-                'response_preview' => 'Mensagem de agenda bloqueada pela etapa anterior; IA geral não acionada.',
+                'response_preview' => match ($reason) {
+                    'modality_required' => 'Agenda aguardando modalidade antes de consultar disponibilidade.',
+                    'date_time_required' => 'Agenda aguardando dia/horário antes de consultar disponibilidade.',
+                    default => 'Mensagem de agenda bloqueada pela etapa anterior; IA geral não acionada.',
+                },
                 'error_message' => $error !== null ? mb_substr($error, 0, 500) : null,
                 'raw_json' => json_encode([
                     'calendar_handled' => true,
@@ -1207,6 +1300,75 @@ final class PreSchedulingService
         return '';
     }
 
+    private function intentSchedulingModality(array $intent): string
+    {
+        return $this->normalizeSchedulingModality((string) ($intent['location_type'] ?? $intent['modality'] ?? ''));
+    }
+
+    private function appointmentSchedulingModality(array $appointment): string
+    {
+        // Desde a migration 030, appointment_modality é a fonte de verdade. Se ela existe
+        // e está `indefinida`, não usamos o antigo default `location_type=online` como
+        // evidência, pois isso poderia pular a pergunta Online/Presencial.
+        if (array_key_exists('appointment_modality', $appointment)) {
+            return $this->normalizeSchedulingModality((string) ($appointment['appointment_modality'] ?? ''));
+        }
+        return $this->normalizeSchedulingModality((string) ($appointment['location_type'] ?? ''));
+    }
+
+    private function normalizeSchedulingModality(string $value): string
+    {
+        $normalized = $this->normalizeText($value);
+        if (in_array($normalized, ['online', 'virtual', 'remoto', 'video', 'meet'], true)) {
+            return 'online';
+        }
+        if (in_array($normalized, ['presencial', 'consultorio', 'in person', 'in-person', 'in_person'], true)) {
+            return 'presencial';
+        }
+        return 'indefinida';
+    }
+
+    private function isAvailabilityModality(string $modality): bool
+    {
+        return in_array($modality, ['online', 'presencial'], true);
+    }
+
+    /** @return array{ok:bool,error:?string,external_id?:?string} */
+    private function sendModalityQuestion(PDO $pdo, array $instance, int $conversationId, int $contactId, int $incomingMessageId = 0): array
+    {
+        $settings = $this->settings((int) ($instance['tenant_id'] ?? 0));
+        $message = trim((string) ($settings['modality_message'] ?? ''))
+            ?: 'Antes de consultar os horários, você prefere atendimento online ou presencial?';
+
+        return $this->sendAgendaGateMessage(
+            $pdo,
+            $instance,
+            $conversationId,
+            $contactId,
+            $message,
+            'modality_required',
+            $incomingMessageId
+        );
+    }
+
+    /** @return array{ok:bool,error:?string,external_id?:?string} */
+    private function sendDateTimeQuestion(PDO $pdo, array $instance, int $conversationId, int $contactId, int $incomingMessageId = 0): array
+    {
+        $settings = $this->settings((int) ($instance['tenant_id'] ?? 0));
+        $message = trim((string) ($settings['collect_message'] ?? ''))
+            ?: 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.';
+
+        return $this->sendAgendaGateMessage(
+            $pdo,
+            $instance,
+            $conversationId,
+            $contactId,
+            $message,
+            'date_time_required',
+            $incomingMessageId
+        );
+    }
+
     private function periodFromIntent(array $intent, int $durationMinutes = 50): array
     {
         $durationMinutes = max(15, min(240, $durationMinutes));
@@ -1343,6 +1505,16 @@ final class PreSchedulingService
             $settings = $service->settings($tenantId);
             if (empty($settings['enabled']) || empty($settings['auto_request_on_pre_schedule'])) {
                 return ['ok' => false, 'skipped' => true, 'message' => 'Consulta automática de disponibilidade desativada.'];
+            }
+            $appointment = $this->appointmentById(Database::connection(), $tenantId, $appointmentId);
+            $modality = is_array($appointment) ? $this->appointmentSchedulingModality($appointment) : 'indefinida';
+            if (!$this->isAvailabilityModality($modality)) {
+                return [
+                    'ok' => false,
+                    'skipped' => true,
+                    'code' => 'modality_required',
+                    'message' => 'Defina se o atendimento é online ou presencial antes de consultar disponibilidade.',
+                ];
             }
             $result = $service->requestForAppointment($tenantId, $appointmentId, 'pre_schedule_ai');
             if (empty($result['ok'])) {

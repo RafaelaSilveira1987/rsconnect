@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.23 — Google Agenda somente após confirmação real';
-    public const REQUIRED_MIGRATION = '056_n8n_agenda_event_contract.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.24 — Modalidade antes da disponibilidade';
+    public const REQUIRED_MIGRATION = '057_calendar_modality_before_availability.sql';
 
     private PDO $pdo;
 
@@ -98,7 +98,7 @@ final class AppVersionService
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 056, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 057, conforme o pacote implantado.'
         );
 
         $aiQuotaLimits = $this->standardAiQuotaLimits();
@@ -144,6 +144,17 @@ final class AppVersionService
                 ? 'O writer do Google Calendar está restrito a compromissos reais (calendar.appointment.created).'
                 : $agendaWriterMisconfigured . ' fluxo(s) ativo(s) da Agenda Google ainda aceitam eventos genéricos e podem criar compromissos indevidos.',
             'Executar database/migrations/056_n8n_agenda_event_contract.sql e revalidar n8n → Fluxos por empresa.'
+        );
+
+        $calendarModalityReady = $this->columnExists('tenant_pre_schedule_settings', 'modality_message')
+            && $this->columnExists('calendar_appointments', 'appointment_modality');
+        $checks[] = $this->check(
+            'Modalidade antes da disponibilidade',
+            $calendarModalityReady ? 'ok' : 'blocked',
+            $calendarModalityReady
+                ? 'Online/Presencial é coletado antes da consulta e enviado como filtro obrigatório para a Agenda Google.'
+                : 'A agenda ainda não possui a estrutura da modalidade obrigatória antes da busca de horários.',
+            'Executar database/migrations/057_calendar_modality_before_availability.sql.'
         );
 
         $reactionPreferenceReady = $this->columnExists('ai_agents', 'reply_to_reactions');

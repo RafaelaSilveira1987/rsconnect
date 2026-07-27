@@ -16,7 +16,7 @@ $statusLabels = [
     'rescheduled' => 'Remarcado',
     'no_show' => 'Não compareceu',
 ];
-$locationLabels = ['online' => 'Online', 'presencial' => 'Presencial', 'telefone' => 'Telefone'];
+$locationLabels = ['indefinida' => 'A definir', 'online' => 'Online', 'presencial' => 'Presencial', 'telefone' => 'Telefone'];
 $date = static function (?string $value, string $format = 'd/m/Y H:i'): string {
     if (!$value) return '—';
     try { return (new DateTime($value))->format($format); } catch (Throwable) { return $value; }

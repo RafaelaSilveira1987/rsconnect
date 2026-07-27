@@ -261,6 +261,7 @@ final class CompanyController
             'default_duration_minutes' => (int) ($_POST['pre_schedule_default_duration_minutes'] ?? 50),
             'default_message' => trim((string) ($_POST['pre_schedule_default_message'] ?? '')),
             'collect_message' => trim((string) ($_POST['pre_schedule_collect_message'] ?? '')),
+            'modality_message' => trim((string) ($_POST['pre_schedule_modality_message'] ?? '')),
             'approved_message' => trim((string) ($_POST['pre_schedule_approved_message'] ?? '')),
             'rejected_message' => trim((string) ($_POST['pre_schedule_rejected_message'] ?? '')),
             'reschedule_message' => trim((string) ($_POST['pre_schedule_reschedule_message'] ?? '')),

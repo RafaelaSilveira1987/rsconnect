@@ -310,6 +310,10 @@ $requestInsight = static function (array $request): string {
                     <strong>Você pode informar mais de um título.</strong>
                     <span>Separe por vírgula, ponto e vírgula ou quebra de linha. Ex.: <b>Vago, Disponível</b>. Quando os mesmos títulos estiverem nos dois campos, a modalidade vem da conversa ou do pré-agendamento.</span>
                 </div>
+                <div class="calendar-inline-info">
+                    <strong>Modalidade obrigatória antes da busca.</strong>
+                    <span>O RS Connect pergunta <b>Online ou Presencial?</b> antes de consultar o Google. Online consulta somente títulos configurados para online; Presencial consulta somente os títulos presenciais. Sem modalidade definida, nenhuma busca é enviada ao n8n.</span>
+                </div>
                 <div class="field-grid two">
                     <div class="field"><label>Título ao pré-reservar</label><input type="text" name="marked_hold_prefix" value="<?= View::e($settings['marked_hold_prefix'] ?? 'PRÉ-RESERVADO') ?>"></div>
                     <div class="field"><label>Título ao confirmar</label><input type="text" name="marked_confirmed_prefix" value="<?= View::e($settings['marked_confirmed_prefix'] ?? 'AGENDADO') ?>"></div>

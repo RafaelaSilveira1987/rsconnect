@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.24', 'title' => 'Modalidade antes da disponibilidade', 'summary' => 'Pergunta Online ou Presencial antes de consultar a agenda, filtra eventos VAGO pela modalidade escolhida e reinicia a busca quando a modalidade muda.'],
             ['version' => '36.6.23', 'title' => 'Google Agenda somente após confirmação real', 'summary' => 'Impede manutenção e ciclos diretos de criarem eventos para registros apenas agendados/pré-agendados e exige confirmação real no contrato do Google.'],
             ['version' => '36.6.22', 'title' => 'Homologação alinhada à migration 056', 'summary' => 'Atualiza o painel técnico para refletir a migration 056 e valida se o writer da Agenda Google está restrito a compromissos reais.'],
             ['version' => '36.6.21', 'title' => 'Horário confiável e Agenda com contrato forte', 'summary' => 'Prefere agente realmente disponível no canal, revalida o expediente antes do envio e impede que integrações legadas transformem respostas comuns em eventos do Google Calendar.'],

@@ -1,3 +1,14 @@
+## 36.6.24 — Modalidade antes da disponibilidade
+
+- O pré-agendamento pergunta **Online ou Presencial** antes de consultar a Agenda Google quando a modalidade ainda não estiver definida.
+- Respostas curtas como `online` e `presencial` passam a continuar corretamente um fluxo de agenda já aberto.
+- A consulta automática não é enviada ao n8n enquanto a modalidade estiver indefinida.
+- O payload de disponibilidade passa a usar `appointment_modality` como fonte de verdade.
+- O callback do Google é filtrado novamente no backend: horários de outra modalidade são descartados.
+- Alterar a modalidade invalida a consulta anterior e força nova busca; um hold anterior é liberado quando possível.
+- O template **Eventos VAGO** recusa buscas sem modalidade e usa a modalidade como filtro obrigatório.
+- Adiciona mensagem configurável para perguntar a modalidade e a migration `057_calendar_modality_before_availability.sql`.
+
 ## 36.6.23 — Google Agenda somente após confirmação real
 
 - Corrige a fonte paralela da Agenda Google: integrações do calendário usam URLs próprias em `tenant_calendar_availability_settings`, independentemente de `n8n_tenant_flows`.

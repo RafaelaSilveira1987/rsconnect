@@ -310,6 +310,16 @@ final class CalendarAvailabilityService
             return ['ok' => false, 'message' => 'A busca automática de horários ainda não está ativada para esta empresa.'];
         }
 
+        $requestedModality = $this->normalizeModality((string) ($appointment['appointment_modality'] ?? $appointment['location_type'] ?? 'indefinida'));
+        if (!in_array($requestedModality, ['online', 'presencial'], true)) {
+            return [
+                'ok' => false,
+                'skipped' => true,
+                'code' => 'modality_required',
+                'message' => 'Defina se o atendimento é online ou presencial antes de consultar a disponibilidade.',
+            ];
+        }
+
         $mode = $this->normalizeMode((string) ($settings['availability_mode'] ?? 'free_slots'));
         $token = bin2hex(random_bytes(16));
         $window = $this->searchWindow($settings, $appointment);
@@ -797,6 +807,15 @@ final class CalendarAvailabilityService
         }
 
         $currentAppointment = $this->appointment((int) $request['tenant_id'], (int) $request['appointment_id']);
+        $requestedModality = $this->normalizeModality((string) ($currentAppointment['appointment_modality'] ?? $currentAppointment['location_type'] ?? 'indefinida'));
+        if (!in_array($requestedModality, ['online', 'presencial'], true)) {
+            return [
+                'ok' => true,
+                'ignored' => 'modality_not_defined',
+                'message' => 'Callback ignorado porque a modalidade ainda não foi definida como Online ou Presencial.',
+                'request_id' => (int) $request['id'],
+            ];
+        }
         $currentRequestId = (int) ($currentAppointment['availability_request_id'] ?? 0);
         if ($currentRequestId > 0 && $currentRequestId !== (int) $request['id'] && $currentRequestId > (int) $request['id']) {
             return [
@@ -853,6 +872,12 @@ final class CalendarAvailabilityService
             }
 
             $modality = $this->normalizeModality((string) ($slot['modality'] ?? 'indefinida'));
+            if ($modality === 'indefinida') {
+                $modality = $requestedModality;
+            }
+            if ($modality !== $requestedModality) {
+                continue;
+            }
             $dedupeKey = $googleEventId !== ''
                 ? 'google:' . $googleEventId
                 : implode('|', [$startSql, $endSql, $modality]);
@@ -1158,7 +1183,7 @@ final class CalendarAvailabilityService
                 'time_text' => $appointment['preferred_time_text'] ?? null,
                 'starts_at' => $appointment['starts_at'] ?? null,
                 'ends_at' => $appointment['ends_at'] ?? null,
-                'modality' => $this->normalizeModality((string) ($appointment['location_type'] ?? 'indefinida')),
+                'modality' => $this->normalizeModality((string) ($appointment['appointment_modality'] ?? $appointment['location_type'] ?? 'indefinida')),
             ],
             'search' => [
                 'start_at' => $window['start'],

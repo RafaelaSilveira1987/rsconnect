@@ -96,7 +96,7 @@ final class N8nTemplateController
             'segment' => 'Agenda',
             'file' => 'template-agenda-google-eventos-vago.json',
             'events' => ['calendar.availability.requested', 'calendar.marked_slot.*'],
-            'description' => 'Localiza VAGO — ONLINE/PRESENCIAL e atualiza o mesmo evento ao pré-reservar, confirmar ou liberar o horário.',
+            'description' => 'Exige modalidade definida na conversa, localiza somente VAGO — ONLINE ou VAGO — PRESENCIAL correspondente e atualiza o mesmo evento ao pré-reservar, confirmar ou liberar o horário.',
         ],
         'agenda-google-ciclo-completo' => [
             'title' => 'Agenda Google — ciclo completo',
