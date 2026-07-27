@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.21 — Horário confiável e Agenda com contrato forte';
-    public const REQUIRED_MIGRATION = '055_multi_whatsapp_agent_routing.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.22 — Homologação alinhada à migration 056';
+    public const REQUIRED_MIGRATION = '056_n8n_agenda_event_contract.sql';
 
     private PDO $pdo;
 
@@ -34,6 +34,7 @@ final class AppVersionService
             'version' => self::VERSION_LABEL,
             'package' => self::PACKAGE_LABEL,
             'required_migration' => self::REQUIRED_MIGRATION,
+            'required_migration_number' => $this->requiredMigrationNumber(),
             'status_label' => $this->statusLabel($score, $blocked),
             'score' => $score,
             'ok' => $ok,
@@ -97,7 +98,7 @@ final class AppVersionService
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 055, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 056, conforme o pacote implantado.'
         );
 
         $aiQuotaLimits = $this->standardAiQuotaLimits();
@@ -133,6 +134,16 @@ final class AppVersionService
                 ? 'Múltiplos canais por empresa, múltiplos agentes por canal e continuidade por conversa estão disponíveis.'
                 : 'O vínculo N:N entre canais WhatsApp e agentes ainda não foi aplicado.',
             'Executar database/migrations/055_multi_whatsapp_agent_routing.sql.'
+        );
+
+        $agendaWriterMisconfigured = $this->agendaWriterMisconfiguredCount();
+        $checks[] = $this->check(
+            'Contrato da Agenda Google',
+            $agendaWriterMisconfigured === 0 ? 'ok' : 'blocked',
+            $agendaWriterMisconfigured === 0
+                ? 'O writer do Google Calendar está restrito a compromissos reais (calendar.appointment.created).'
+                : $agendaWriterMisconfigured . ' fluxo(s) ativo(s) da Agenda Google ainda aceitam eventos genéricos e podem criar compromissos indevidos.',
+            'Executar database/migrations/056_n8n_agenda_event_contract.sql e revalidar n8n → Fluxos por empresa.'
         );
 
         $reactionPreferenceReady = $this->columnExists('ai_agents', 'reply_to_reactions');
@@ -416,6 +427,41 @@ final class AppVersionService
     private function check(string $label, string $status, string $message, string $action): array
     {
         return compact('label', 'status', 'message', 'action');
+    }
+
+    private function requiredMigrationNumber(): string
+    {
+        if (preg_match('/^(\d+)_/', self::REQUIRED_MIGRATION, $matches) === 1) {
+            return str_pad((string) ((int) $matches[1]), 3, '0', STR_PAD_LEFT);
+        }
+        return '—';
+    }
+
+    private function agendaWriterMisconfiguredCount(): int
+    {
+        if (!$this->tableExists('n8n_tenant_flows')) {
+            return 0;
+        }
+
+        try {
+            $sql = <<<'SQL'
+SELECT COUNT(*)
+FROM n8n_tenant_flows
+WHERE status = 'active'
+  AND (
+    flow_key IN ('agenda-google-calendar', 'agenda-google-calendar-por-empresa')
+    OR LOWER(name) LIKE 'rs connect - agenda google calendar por empresa%'
+  )
+  AND NOT (
+    COALESCE(JSON_VALID(events_json), 0) = 1
+    AND JSON_LENGTH(events_json) = 1
+    AND JSON_UNQUOTE(JSON_EXTRACT(events_json, '$[0]')) = 'calendar.appointment.created'
+  )
+SQL;
+            return $this->number($sql);
+        } catch (Throwable) {
+            return 0;
+        }
     }
 
     private function masked(string $value): string

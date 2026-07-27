@@ -1,3 +1,11 @@
+## 36.6.22 — Homologação alinhada à migration 056
+
+- Atualiza `AppVersionService::REQUIRED_MIGRATION` para `056_n8n_agenda_event_contract.sql`.
+- Remove o número `028` hardcoded do card "Migration base"; o número passa a ser derivado do arquivo exigido pelo pacote.
+- Checklist "Migrations centrais" passa a orientar aplicação até a 056.
+- Adiciona check "Contrato da Agenda Google" para detectar fluxos ativos do writer ainda inscritos em eventos genéricos.
+- Atualiza cache-busting e metadados do pacote para 36.6.22.
+
 ## 36.6.21 — Horário confiável e Agenda com contrato forte
 
 - Roteamento conversacional passa a preferir agente vinculado que esteja dentro do próprio expediente; um especialista fechado não declara o canal inteiro fora do horário quando o agente principal está disponível.

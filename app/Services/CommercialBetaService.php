@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.22', 'title' => 'Homologação alinhada à migration 056', 'summary' => 'Atualiza o painel técnico para refletir a migration 056 e valida se o writer da Agenda Google está restrito a compromissos reais.'],
             ['version' => '36.6.21', 'title' => 'Horário confiável e Agenda com contrato forte', 'summary' => 'Prefere agente realmente disponível no canal, revalida o expediente antes do envio e impede que integrações legadas transformem respostas comuns em eventos do Google Calendar.'],
             ['version' => '36.6.20', 'title' => 'Agenda por intenção real e callback de backup resiliente', 'summary' => 'Exige pedido explícito para agenda, protege o writer do Google Calendar contra eventos genéricos e torna o callback de backup resiliente a redeploy/rotação de token.'],
             ['version' => '36.6.19', 'title' => 'Retry confiável de backup', 'summary' => 'Alinha o dispatcher ao último sucesso real, permite nova tentativa no mesmo dia após falha/timeout e explica o motivo de cada rotina elegível ou ignorada.'],

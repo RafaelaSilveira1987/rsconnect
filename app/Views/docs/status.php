@@ -39,7 +39,7 @@ $statusText = static fn (string $status): string => match ($status) {
     <article class="card report-kpi"><span>Checks OK</span><strong><?= (int) ($dashboard['ok'] ?? 0) ?></strong><small>Critérios aprovados</small></article>
     <article class="card report-kpi"><span>Atenções</span><strong><?= (int) ($dashboard['warning'] ?? 0) ?></strong><small>Não bloqueiam venda controlada</small></article>
     <article class="card report-kpi"><span>Bloqueios</span><strong><?= (int) ($dashboard['blocked'] ?? 0) ?></strong><small>Resolver antes de entregar</small></article>
-    <article class="card report-kpi"><span>Migration base</span><strong>028</strong><small><?= View::e($dashboard['required_migration'] ?? '') ?></small></article>
+    <article class="card report-kpi"><span>Migration base</span><strong><?= View::e($dashboard['required_migration_number'] ?? '—') ?></strong><small><?= View::e($dashboard['required_migration'] ?? '') ?></small></article>
 </div>
 
 <div class="operations-grid" style="margin-top:16px">
