@@ -70,16 +70,17 @@ $priorityLabel = static fn (string $priority): string => [
 
 <?php if ($tab === 'compose'): ?>
 <div class="communications-compose-shell">
-    <section class="card communication-compose-v3">
-        <div class="communication-card-heading">
+    <section class="card communication-compose-v3 communication-compose-v4">
+        <div class="communication-card-heading communication-card-heading-v4">
             <span class="communication-heading-icon"><?= $icon('mail') ?></span>
             <div><span class="eyebrow">Novo comunicado</span><h2>Mensagem para empresas</h2><p>A entrega interna é imediata. Configure o conteúdo, o público e como o cliente poderá interagir.</p></div>
         </div>
 
         <form method="post" action="<?= View::e(Router::url('/comunicados/send')) ?>" data-communication-compose>
             <?= Csrf::input() ?>
-            <fieldset class="communication-form-section">
+            <fieldset class="communication-form-section communication-form-section-v4" data-step="01">
                 <legend>Conteúdo</legend>
+                <p class="communication-section-help">Escreva um aviso claro, curto e adequado ao impacto para a empresa cliente.</p>
                 <div class="form-grid two">
                     <label>Tipo
                         <select class="input" name="communication_type" data-communication-field="type">
@@ -89,6 +90,7 @@ $priorityLabel = static fn (string $priority): string => [
                             <option value="incident" <?= $prefillType === 'incident' ? 'selected' : '' ?>>Incidente</option>
                             <option value="resolved" <?= $prefillType === 'resolved' ? 'selected' : '' ?>>Resolvido</option>
                         </select>
+                        <small class="communication-control-help">Define o contexto visual e a categoria do aviso.</small>
                     </label>
                     <label>Prioridade
                         <select class="input" name="priority" data-communication-field="priority">
@@ -96,6 +98,7 @@ $priorityLabel = static fn (string $priority): string => [
                             <option value="important">Importante</option>
                             <option value="critical">Crítica</option>
                         </select>
+                        <small class="communication-control-help">Use destaque maior somente quando houver impacto real.</small>
                     </label>
                 </div>
                 <label>Título
@@ -106,8 +109,9 @@ $priorityLabel = static fn (string $priority): string => [
                 </label>
             </fieldset>
 
-            <fieldset class="communication-form-section">
+            <fieldset class="communication-form-section communication-form-section-v4" data-step="02">
                 <legend>Destino e interação</legend>
+                <p class="communication-section-help">Defina quem recebe e o nível de retorno esperado, sem misturar este canal com o atendimento dos clientes finais.</p>
                 <div class="form-grid two">
                     <label>Público
                         <select class="input" name="audience_type">
@@ -115,6 +119,7 @@ $priorityLabel = static fn (string $priority): string => [
                             <option value="all">Todas as empresas</option>
                             <?php if ($prefillIncident > 0): ?><option value="incident" selected>Empresa afetada pelo incidente</option><?php endif; ?>
                         </select>
+                        <small class="communication-control-help">Escolha uma empresa, várias empresas ou toda a base.</small>
                     </label>
                     <label>Resposta do cliente
                         <select class="input" name="response_mode" data-communication-field="response_mode">
@@ -122,6 +127,7 @@ $priorityLabel = static fn (string $priority): string => [
                             <option value="acknowledge">Solicitar confirmação</option>
                             <option value="reply">Permitir resposta</option>
                         </select>
+                        <small class="communication-control-help">Controle se a empresa apenas lê, confirma ou responde.</small>
                     </label>
                 </div>
                 <input type="hidden" name="incident_id" value="<?= $prefillIncident ?>">
@@ -138,8 +144,9 @@ $priorityLabel = static fn (string $priority): string => [
                 </div>
             </fieldset>
 
-            <fieldset class="communication-form-section">
+            <fieldset class="communication-form-section communication-form-section-v4" data-step="03">
                 <legend>Entrega</legend>
+                <p class="communication-section-help">A entrega dentro do RS Connect é imediata. Canais externos permanecem preparados para integração.</p>
                 <div class="communication-channels communication-channels-v3">
                     <label class="is-fixed"><input type="checkbox" checked disabled><span><?= $icon('inbox') ?><span><strong>RS Connect</strong><small>Caixa de mensagens, contador e histórico.</small></span></span></label>
                     <label><input type="checkbox" name="channel_whatsapp" value="1"><span><?= $icon('mail') ?><span><strong>WhatsApp administrativo</strong><small>Aguardará configuração do provedor externo.</small></span></span></label>
@@ -162,7 +169,7 @@ $priorityLabel = static fn (string $priority): string => [
 
     <aside class="communication-preview-column">
         <section class="card communication-preview-card communication-preview-card-v3">
-            <span class="eyebrow">Pré-visualização</span>
+            <div class="communication-preview-title-row"><span class="eyebrow">Pré-visualização</span><span class="communication-live-pill">Visualização em tempo real</span></div>
             <h2>Experiência do cliente</h2>
             <p class="muted-text">Esta é a aparência aproximada da notificação interna. Fechar a caixa não registra leitura.</p>
             <div class="communication-preview-stage">
@@ -178,7 +185,8 @@ $priorityLabel = static fn (string $priority): string => [
             </div>
         </section>
         <section class="card communication-guidance-card">
-            <span class="eyebrow">Boas práticas</span>
+            <span class="eyebrow">Antes de enviar</span>
+            <h3 class="communication-guidance-title">Comunicação clara e acionável</h3>
             <div class="communication-guidance-list">
                 <div><?= $icon('alert') ?><span><strong>Fale sobre impacto</strong><small>Evite tokens, nomes de serviços internos e mensagens técnicas.</small></span></div>
                 <div><?= $icon('eye') ?><span><strong>Leitura é explícita</strong><small>Minimizar a caixa não transforma o comunicado em lido.</small></span></div>

@@ -8196,3 +8196,173 @@ body.has-communication-drawer{overflow:hidden}
 .rs-communication-float{right:26px;bottom:28px;width:min(400px,calc(100vw - 32px));border-radius:18px;box-shadow:0 20px 48px rgba(31,49,69,.22)}.rs-communication-bubble{right:26px;bottom:28px}.rs-communication-drawer>header{background:linear-gradient(180deg,#fff,#fbfcfe)}
 @media (max-width:1080px){.communications-compose-shell{grid-template-columns:1fr}.communication-preview-column{position:static;grid-template-columns:repeat(2,minmax(0,1fr))}.communication-channels-v3{grid-template-columns:1fr}.communication-history-item-v3{grid-template-columns:1fr}.communication-history-metrics-v3{justify-content:flex-start}.communications-hero-v3{align-items:flex-start}}
 @media (max-width:720px){.communication-tabs{width:100%}.communication-tab{flex:1;justify-content:center}.communication-tab span{display:none}.communication-preview-column{grid-template-columns:1fr}.communication-summary-v3{min-width:0}.communication-submit-bar,.communication-section-toolbar{align-items:stretch;flex-direction:column}.communication-history-metrics-v3{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.communication-history-metrics-v3 span{min-width:0}.communication-reply-meta{justify-items:start}.communication-admin-reply-head{display:grid}.rs-communication-float{right:12px;bottom:18px}.rs-communication-bubble{right:14px;bottom:18px}}
+
+/* =========================================================
+   36.6.28 — polimento visual da Central de comunicação
+   ========================================================= */
+.communications-hero-v3{
+  position:relative;
+  overflow:hidden;
+  padding:28px 30px;
+  border:1px solid #dce8ef;
+  border-radius:26px;
+  background:
+    radial-gradient(circle at 92% 8%,rgba(1,197,182,.12),transparent 29%),
+    linear-gradient(135deg,#ffffff 0%,#fbfdff 58%,#f2f8fb 100%);
+  box-shadow:0 18px 48px rgba(28,51,73,.07);
+}
+.communications-hero-v3:after{
+  content:"";
+  position:absolute;
+  width:190px;height:190px;right:-92px;bottom:-122px;
+  border:34px solid rgba(99,27,124,.035);border-radius:50%;pointer-events:none;
+}
+.communications-hero-copy h2{margin:5px 0 9px;font-size:clamp(1.7rem,2.6vw,2.3rem);letter-spacing:-.045em;color:#19293c}
+.communications-hero-copy p{margin:0;color:#687b8e;font-size:.88rem}
+.communication-summary-v3{position:relative;z-index:1;gap:9px}
+.communication-summary-v3>span{
+  min-height:78px;padding:14px 15px;border-color:#dfe9f0;border-radius:17px;
+  background:rgba(255,255,255,.88);box-shadow:0 8px 22px rgba(35,61,82,.045);
+}
+.communication-summary-v3>span:hover{border-color:#c9dce7;transform:translateY(-1px)}
+.communication-summary-v3 .ui-line-icon{width:22px;height:22px;padding:3px;border-radius:8px;background:#eef7fa;color:#176f84}
+.communication-summary-v3 strong{font-size:1.35rem;letter-spacing:-.03em;color:#1d3148}
+.communication-summary-v3 small{font-size:.62rem;font-weight:850;color:#7b8b9b}
+
+.communication-tabs{
+  width:100%;margin:18px 0 20px;padding:7px;border-radius:18px;background:#f7fafc;
+  box-shadow:none;border-color:#e3eaf0;
+}
+.communication-tab{min-height:45px;justify-content:center;flex:0 0 auto;padding:0 18px;border:1px solid transparent}
+.communication-tab:hover{border-color:#dce7ed;background:#fff}
+.communication-tab.is-active{border-color:#cfe4e7;background:#fff;color:#126d75;box-shadow:0 6px 18px rgba(31,74,88,.08)}
+.communication-tab .ui-line-icon{width:17px;height:17px}
+
+.communications-compose-shell{grid-template-columns:minmax(0,1.55fr) minmax(350px,.65fr);gap:22px}
+.communication-compose-v4{
+  padding:0;border:1px solid #dfe7ee;border-radius:24px;background:#f8fafc;
+  box-shadow:0 18px 44px rgba(29,49,69,.07);overflow:hidden;
+}
+.communication-card-heading-v4{
+  position:relative;padding:25px 28px 23px;border-bottom:1px solid #e1e9ef;
+  background:linear-gradient(135deg,#fff,#f7fbfd);
+}
+.communication-card-heading-v4:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,#01a99e,#2878a5)}
+.communication-card-heading-v4 .communication-heading-icon{width:48px;height:48px;border-radius:15px;background:linear-gradient(145deg,#e8f7f6,#edf4fb);border-color:#cfe5e6;color:#15777e;box-shadow:inset 0 0 0 1px rgba(255,255,255,.7)}
+.communication-card-heading-v4 h2{font-size:1.25rem;letter-spacing:-.025em;color:#213247}
+.communication-card-heading-v4 p{max-width:690px;font-size:.8rem}
+
+.communication-compose-v4 form{padding:18px;gap:14px;background:#f7fafc}
+.communication-form-section-v4{
+  position:relative;margin:0!important;padding:22px 22px 24px!important;border:1px solid #e1e8ef!important;
+  border-radius:20px;background:#fff;box-shadow:0 8px 24px rgba(31,50,69,.035);
+}
+.communication-form-section-v4:before{
+  content:attr(data-step);position:absolute;top:19px;right:20px;display:grid;place-items:center;
+  width:30px;height:30px;border-radius:10px;background:#eef6f8;color:#247384;font-size:.66rem;font-weight:900;letter-spacing:.04em;
+}
+.communication-form-section-v4 legend{
+  margin:0;padding:0 46px 0 0;color:#23374d;font-size:.92rem;font-weight:900;letter-spacing:-.01em;text-transform:none;
+}
+.communication-section-help{margin:-4px 46px 3px 0;color:#7b8999;font-size:.73rem;line-height:1.5}
+.communication-form-section-v4>.form-grid,.communication-form-section-v4>label,.communication-form-section-v4>.communication-tenant-picker,.communication-form-section-v4>.communication-channels,.communication-form-section-v4>.communication-validity-row{margin-top:2px}
+.communication-form-section-v4>label,.communication-form-section-v4 .form-grid>label{
+  display:grid;gap:7px;color:#33485d;font-size:.72rem;font-weight:850;letter-spacing:.012em;
+}
+.communication-form-section-v4 .input{
+  width:100%;min-height:48px;padding:11px 13px;border:1px solid #d8e2ea;border-radius:13px;
+  outline:none;background:#fbfdfe;color:#23364b;font-size:.84rem;font-weight:550;
+  transition:border-color .18s ease,box-shadow .18s ease,background .18s ease,transform .18s ease;
+}
+.communication-form-section-v4 select.input{
+  appearance:none;padding-right:42px;background-color:#fbfdfe;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23667b8e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 13px center;background-size:16px;
+}
+.communication-form-section-v4 .input:hover{border-color:#bfcfd9;background:#fff}
+.communication-form-section-v4 .input:focus{border-color:#56aaa8;background:#fff;box-shadow:0 0 0 4px rgba(1,148,142,.09)}
+.communication-form-section-v4 textarea.input{min-height:148px;padding:14px;line-height:1.55;resize:vertical}
+.communication-form-section-v4 input[type="datetime-local"]{font-variant-numeric:tabular-nums}
+.communication-control-help{margin-top:-2px;color:#8a98a7;font-size:.65rem;font-weight:500;line-height:1.42;letter-spacing:0}
+
+.communication-tenant-picker-v3{overflow:hidden;margin-top:5px!important;border:1px solid #dfe7ee;border-radius:16px;background:#fbfcfe}
+.communication-picker-heading{padding:13px 15px;border-bottom:1px solid #e6ecf1;background:#f6f9fb}
+.communication-picker-heading strong{color:#30465b;font-size:.75rem}.communication-picker-heading small{font-size:.65rem}
+.communication-tenant-picker-v3 .communication-tenant-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:250px;padding:10px;background:#fff}
+.communication-tenant-picker-v3 .communication-tenant-list>label{
+  display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px;min-width:0;padding:11px 12px;
+  border:1px solid #e3e9ef;border-radius:13px;background:#fbfdfe;cursor:pointer;transition:.16s ease;
+}
+.communication-tenant-picker-v3 .communication-tenant-list>label:hover{border-color:#bcd6dc;background:#f4fbfb;transform:translateY(-1px)}
+.communication-tenant-picker-v3 input[type="checkbox"]{width:17px;height:17px;accent-color:#168d87}
+.communication-tenant-picker-v3 .communication-tenant-list strong{display:block;overflow:hidden;color:#2a3e53;font-size:.76rem;text-overflow:ellipsis;white-space:nowrap}
+.communication-tenant-picker-v3 .communication-tenant-list small{display:block;margin-top:3px;overflow:hidden;color:#8190a0;font-size:.64rem;font-weight:500;text-overflow:ellipsis;white-space:nowrap}
+
+.communication-channels-v3{gap:10px}
+.communication-channels-v3 label{
+  min-height:88px;padding:14px;border:1px solid #dfe7ed;border-radius:15px;background:#fbfdfe;cursor:pointer;transition:.17s ease;
+}
+.communication-channels-v3 label:hover{border-color:#bdd4dc;background:#f7fbfc;transform:translateY(-1px)}
+.communication-channels-v3 label:has(input:checked){border-color:#a9d5d1;background:linear-gradient(145deg,#f3fbfa,#f7fbff);box-shadow:0 7px 18px rgba(29,99,103,.06)}
+.communication-channels-v3 label.is-fixed{cursor:default;border-color:#b8ded8;background:#f2fbf9}
+.communication-channels-v3 input{width:17px;height:17px;margin-top:2px;accent-color:#168d87}
+.communication-channels-v3 strong{display:block;color:#30455a;font-size:.75rem}.communication-channels-v3 small{display:block;margin-top:4px;color:#7a8b9d;font-size:.65rem;line-height:1.42}
+.communication-channels-v3 .ui-line-icon{width:20px;height:20px}
+.communication-field-note{min-height:48px;border-color:#dce7ed;background:linear-gradient(135deg,#f6fafc,#fbfdfe)}
+.communication-field-note strong{font-size:.72rem}.communication-field-note small{font-size:.64rem}
+.communication-validity-row .field-hint{display:inline;margin:0 0 0 5px;padding:2px 6px;border-radius:999px;background:#eef3f6;color:#7a8998;font-size:.58rem;font-weight:700}
+
+.communication-submit-bar{
+  position:sticky;bottom:0;z-index:3;margin:0 -18px -18px;padding:15px 20px;border-top:1px solid #dfe8ef;
+  background:rgba(255,255,255,.94);box-shadow:0 -10px 30px rgba(30,49,69,.06);backdrop-filter:blur(14px);
+}
+.communication-submit-bar>span{padding-left:2px;color:#667c8f;font-size:.7rem}
+.communication-submit-bar .btn-primary{min-height:45px;padding:0 20px;border-radius:13px;box-shadow:0 9px 20px rgba(20,100,152,.18)}
+.communication-submit-bar .btn-primary:hover{transform:translateY(-1px)}
+
+.communication-preview-column{gap:16px;top:20px}
+.communication-preview-card-v3{padding:20px;border:1px solid #dfe7ee;border-radius:22px;background:linear-gradient(180deg,#fff,#fbfdff);box-shadow:0 16px 40px rgba(27,48,68,.065)}
+.communication-preview-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.communication-live-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border-radius:999px;background:#edf8f5;color:#237c67;font-size:.59rem;font-weight:850;text-transform:uppercase;letter-spacing:.035em}
+.communication-live-pill:before{content:"";width:6px;height:6px;border-radius:50%;background:#2fa078;box-shadow:0 0 0 3px rgba(47,160,120,.12)}
+.communication-preview-card-v3 h2{margin:7px 0 6px;font-size:1.12rem}.communication-preview-card-v3>.muted-text{margin:0;color:#79899a;font-size:.71rem;line-height:1.5}
+.communication-preview-stage{
+  margin-top:15px;padding:20px 16px 68px;border:1px solid #e0e8ee;border-radius:19px;
+  background:radial-gradient(circle at 15% 15%,rgba(1,197,182,.065),transparent 28%),linear-gradient(145deg,#f4f8fb,#eef4f7);
+}
+.communication-preview{margin:0;border-radius:17px;box-shadow:0 14px 30px rgba(29,51,72,.09)}
+.communication-preview-head strong{font-size:.83rem}.communication-preview>p{font-size:.75rem}.communication-preview-actions span{font-size:.7rem}
+.communication-preview-bubble{right:18px;bottom:13px;width:52px;height:52px;border-radius:17px;background:linear-gradient(145deg,#fff,#f6fafc)}
+.communication-guidance-card{padding:19px;border:1px solid #e1e8ee;border-radius:20px;background:#fff;box-shadow:0 10px 28px rgba(29,49,69,.045)}
+.communication-guidance-title{margin:6px 0 13px;font-size:.88rem;color:#2e4257}
+.communication-guidance-list{display:grid;gap:8px}
+.communication-guidance-list>div{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;padding:10px 11px;border:1px solid #e7edf2;border-radius:13px;background:#fafcfd}
+.communication-guidance-list>div>.ui-line-icon{width:17px;height:17px;margin-top:1px;color:#317a90}
+.communication-guidance-list strong{font-size:.69rem}.communication-guidance-list small{display:block;margin-top:3px;color:#8290a0;font-size:.62rem;line-height:1.42}
+
+.communication-section-card{border-radius:22px;border-color:#dfe7ee;box-shadow:0 14px 36px rgba(30,49,69,.055)}
+.communication-section-toolbar{background:linear-gradient(180deg,#fff,#fbfcfe)}
+.communication-history-item-v3{transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+.communication-history-item-v3:hover{transform:translateY(-1px);border-color:#cedee7;box-shadow:0 10px 25px rgba(31,52,72,.055)}
+
+@media(max-width:1180px){
+  .communications-compose-shell{grid-template-columns:minmax(0,1.35fr) minmax(320px,.65fr)}
+  .communication-tenant-picker-v3 .communication-tenant-list{grid-template-columns:1fr}
+}
+@media(max-width:1080px){
+  .communications-compose-shell{grid-template-columns:1fr}
+  .communication-preview-column{position:static;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .communication-preview-card-v3,.communication-guidance-card{height:100%}
+}
+@media(max-width:760px){
+  .communications-hero-v3{padding:22px 20px}
+  .communication-summary-v3{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .communication-compose-v4 form{padding:10px}
+  .communication-form-section-v4{padding:18px 16px 20px!important}
+  .communication-form-section-v4:before{top:15px;right:14px}
+  .communication-section-help{margin-right:38px}
+  .communication-form-section-v4 .form-grid.two{grid-template-columns:1fr}
+  .communication-preview-column{grid-template-columns:1fr}
+  .communication-submit-bar{margin:0 -10px -10px;align-items:stretch}
+  .communication-submit-bar .btn-primary{width:100%}
+}

@@ -14,6 +14,7 @@ $controller = (string) file_get_contents(__DIR__ . '/../app/Controllers/Communic
 $layout = (string) file_get_contents(__DIR__ . '/../app/Views/layouts/app.php');
 $view = (string) file_get_contents(__DIR__ . '/../app/Views/communications/index.php');
 $js = (string) file_get_contents(__DIR__ . '/../public/assets/js/app.js');
+$css = (string) file_get_contents(__DIR__ . '/../public/assets/css/app.css');
 $migration = (string) file_get_contents(__DIR__ . '/../database/migrations/058_client_communication_center.sql');
 $routes = (string) file_get_contents(__DIR__ . '/../routes/web.php');
 
@@ -42,6 +43,10 @@ $assert(str_contains($view, 'communication-tabs'), 'admin deve separar novo comu
 $assert(str_contains($view, 'Experiência do cliente'), 'admin deve ter preview da experiencia do cliente');
 $assert(str_contains($view, 'Resposta do cliente'), 'admin deve definir modo de resposta');
 $assert(str_contains($view, 'Exibir até'), 'admin deve definir validade opcional');
+$assert(str_contains($view, 'communication-form-section-v4'), 'admin deve usar formulario visual em etapas');
+$assert(str_contains($view, 'communication-live-pill'), 'preview deve indicar visualizacao em tempo real');
+$assert(str_contains($css, '36.6.28 — polimento visual da Central de comunicação'), 'css deve conter o polimento visual 36.6.28');
+$assert(str_contains($css, '.communication-form-section-v4 .input'), 'inputs da Central devem ter estilo proprio');
 $assert(!preg_match('/[\x{1F300}-\x{1FAFF}]/u', $view . $layout), 'novas telas nao devem usar emojis');
 
 if ($failures !== []) {

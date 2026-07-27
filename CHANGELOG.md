@@ -1,3 +1,14 @@
+## 36.6.28 — Polimento visual da Central de comunicação
+
+- Mantém intacta a lógica funcional da Central de comunicação da 36.6.27.
+- Redesenha o formulário do Super Admin em três etapas visuais: Conteúdo, Destino e interação, Entrega.
+- Estiliza inputs, selects, textarea, validade e estados de foco no padrão visual do RS Connect.
+- Apresenta empresas destinatárias em cards selecionáveis e canais de entrega em cartões com estado visual.
+- Reforça a hierarquia do cabeçalho, indicadores e abas do módulo.
+- Refina o preview em tempo real e o bloco de boas práticas.
+- Atualiza o cache-busting de CSS/JS para 36.6.28.
+- Não adiciona migration nem altera regras de envio, leitura ou resposta.
+
 ## 36.6.27 — Central de comunicação refinada
 
 - Comunicados institucionais deixam de depender da permissão/visibilidade do módulo Notificações.
