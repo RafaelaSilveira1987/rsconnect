@@ -190,6 +190,13 @@ final class AiReprocessService
             $summary['pending_before'] = $this->pendingTotal();
             $runId = $this->startRun($source, $userId);
 
+            // A Fila rápida também fecha o ciclo da Agenda. O callback do n8n pode
+            // ter salvo horários com sucesso e a execução HTTP terminar antes da
+            // mensagem de retorno chegar ao contato; esse recovery torna o ciclo idempotente.
+            $summary['calendar_availability'] = (new CalendarAvailabilityService())->recoverConversationalAvailability(
+                max(1, min(100, (int) Env::get('CALENDAR_AVAILABILITY_RECOVERY_LIMIT', 25)))
+            );
+
             $agents = $this->activeAgents();
             $summary['agents_checked'] = count($agents);
             $summary['companies_checked'] = count(array_unique(array_map(

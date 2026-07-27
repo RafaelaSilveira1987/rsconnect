@@ -487,6 +487,144 @@ final class CalendarAvailabilityService
         return (new CalendarConversationService())->handleAvailabilityResult($request, $diagnostic);
     }
 
+    /**
+     * Recupera consultas conversacionais cujo callback já chegou, mas cuja mensagem
+     * de retorno não foi enviada, e reenvia solicitações que ficaram aguardando callback.
+     * É chamada pela Fila rápida da IA para tornar a agenda resiliente a encerramentos
+     * prematuros do request HTTP do callback.
+     *
+     * @return array<string,int>
+     */
+    public function recoverConversationalAvailability(int $limit = 25): array
+    {
+        $limit = max(1, min(200, $limit));
+        $summary = [
+            'retried_requests' => 0,
+            'retry_errors' => 0,
+            'results_processed' => 0,
+            'messages_completed' => 0,
+            'processing_errors' => 0,
+        ];
+        if (!$this->tableExists('calendar_availability_requests') || !$this->tableExists('calendar_appointments')) {
+            return $summary;
+        }
+
+        $pdo = Database::connection();
+        $retryMinutes = max(1, min(30, (int) \App\Core\Env::get('CALENDAR_AVAILABILITY_RETRY_MINUTES', 2)));
+
+        // 1) Se o n8n recebeu a busca, mas o callback não voltou, reenvia o MESMO request/token.
+        // sent_at vira cooldown; não cria outra solicitação nem duplica o pré-agendamento.
+        try {
+            $retrySql = 'SELECT r.*, a.availability_request_id, a.status AS appointment_status,
+                                a.appointment_modality, a.location_type
+                         FROM calendar_availability_requests r
+                         INNER JOIN calendar_appointments a
+                            ON a.id = r.appointment_id AND a.tenant_id = r.tenant_id
+                         WHERE r.origin IN ("pre_schedule_ai","conversation","whatsapp_ai")
+                           AND r.status IN ("pending","sent")
+                           AND r.responded_at IS NULL
+                           AND a.is_pre_schedule = 1
+                           AND a.status IN ("pre_scheduled","awaiting_approval","rescheduled")
+                           AND a.availability_request_id = r.id
+                           AND COALESCE(r.sent_at, r.requested_at, r.created_at) <= DATE_SUB(NOW(), INTERVAL ' . $retryMinutes . ' MINUTE)
+                           AND r.created_at >= DATE_SUB(NOW(), INTERVAL 2 HOUR)
+                         ORDER BY COALESCE(r.sent_at, r.requested_at, r.created_at) ASC
+                         LIMIT ' . $limit;
+            $requests = $pdo->query($retrySql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($requests as $request) {
+                $payload = json_decode((string) ($request['requested_payload_json'] ?? ''), true);
+                if (!is_array($payload) || $payload === []) {
+                    $summary['retry_errors']++;
+                    continue;
+                }
+                $tenantId = (int) ($request['tenant_id'] ?? 0);
+                $settings = $this->settings($tenantId);
+                $mode = $this->normalizeMode((string) ($request['availability_mode'] ?? $settings['availability_mode'] ?? 'free_slots'));
+                $explicitUrl = $this->webhookUrlForMode($settings, $mode);
+                if (empty($settings['enabled']) || empty($settings['use_n8n']) || $explicitUrl === '') {
+                    $summary['retry_errors']++;
+                    continue;
+                }
+
+                $results = (new AutomationWebhookService())->dispatch(
+                    'calendar.availability.requested',
+                    $payload,
+                    $explicitUrl,
+                    $tenantId,
+                    trim((string) ($settings['secret_token'] ?? '')) ?: null
+                );
+                $sent = false;
+                foreach ($results as $result) {
+                    if (!empty($result['ok'])) {
+                        $sent = true;
+                        break;
+                    }
+                }
+                if ($sent) {
+                    $summary['retried_requests']++;
+                    $pdo->prepare(
+                        'UPDATE calendar_availability_requests
+                         SET status = CASE WHEN responded_at IS NULL THEN "sent" ELSE status END,
+                             sent_at = CASE WHEN responded_at IS NULL THEN NOW() ELSE sent_at END,
+                             error_message = CASE WHEN responded_at IS NULL THEN NULL ELSE error_message END
+                         WHERE id = :id'
+                    )->execute(['id' => (int) $request['id']]);
+                    Audit::log('calendar.availability_request_retried', [
+                        'request_id' => (int) $request['id'],
+                        'appointment_id' => (int) $request['appointment_id'],
+                    ], $tenantId);
+                } else {
+                    $summary['retry_errors']++;
+                }
+            }
+        } catch (Throwable) {
+            $summary['retry_errors']++;
+        }
+
+        // 2) O callback pode ter gravado os horários mas o PHP/Apache encerrar a execução
+        // antes de handleAvailabilityResult enviar a resposta ao WhatsApp. Reprocessa aqui.
+        try {
+            $completedSql = 'SELECT r.*
+                             FROM calendar_availability_requests r
+                             INNER JOIN calendar_appointments a
+                                ON a.id = r.appointment_id AND a.tenant_id = r.tenant_id
+                             WHERE r.origin IN ("pre_schedule_ai","conversation","whatsapp_ai")
+                               AND r.status IN ("received","empty")
+                               AND r.responded_at IS NOT NULL
+                               AND a.is_pre_schedule = 1
+                               AND a.status IN ("pre_scheduled","awaiting_approval","rescheduled")
+                               AND a.availability_request_id = r.id
+                               AND (
+                                    a.availability_options_request_id IS NULL
+                                    OR a.availability_options_request_id <> r.id
+                                    OR a.availability_options_sent_at IS NULL
+                               )
+                               AND r.responded_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+                             ORDER BY r.responded_at ASC
+                             LIMIT ' . $limit;
+            $completed = $pdo->query($completedSql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($completed as $request) {
+                try {
+                    $result = (new CalendarConversationService())->handleAvailabilityResult($request, 'Recuperado automaticamente pela fila rápida.');
+                    $summary['results_processed']++;
+                    if (!empty($result['handled'])) {
+                        $summary['messages_completed']++;
+                    }
+                } catch (Throwable $exception) {
+                    $summary['processing_errors']++;
+                    Audit::log('calendar.availability_conversation_recovery_failed', [
+                        'request_id' => (int) ($request['id'] ?? 0),
+                        'error' => mb_substr($exception->getMessage(), 0, 700),
+                    ], (int) ($request['tenant_id'] ?? 0));
+                }
+            }
+        } catch (Throwable) {
+            $summary['processing_errors']++;
+        }
+
+        return $summary;
+    }
+
     public function applySlot(int $tenantId, int $appointmentId, int $slotId): array
     {
         $slot = $this->findSlot($tenantId, $appointmentId, $slotId);

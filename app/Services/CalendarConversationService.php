@@ -46,6 +46,11 @@ final class CalendarConversationService
             return $this->result(false, 'appointment_not_found');
         }
 
+        $currentRequestId = (int) ($appointment['availability_request_id'] ?? 0);
+        if ($currentRequestId > 0 && $currentRequestId !== $requestId) {
+            return $this->result(false, 'stale_request');
+        }
+
         $settings = (new PreSchedulingService())->settings($tenantId);
         if (empty($settings['enabled']) || empty($settings['ai_can_suggest_slots'])) {
             return $this->result(false, 'suggestions_disabled');

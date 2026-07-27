@@ -133,6 +133,9 @@ CREATE TABLE contacts (
     remote_jid VARCHAR(190) NULL,
     phone VARCHAR(30) NOT NULL,
     name VARCHAR(150) NULL,
+    name_source VARCHAR(24) NOT NULL DEFAULT 'legacy',
+    whatsapp_name_candidate VARCHAR(150) NULL,
+    whatsapp_name_seen_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     email VARCHAR(190) NULL,
     company VARCHAR(150) NULL,
     notes TEXT NULL,
@@ -146,6 +149,7 @@ CREATE TABLE contacts (
     CONSTRAINT fk_contacts_instance FOREIGN KEY (evolution_instance_id) REFERENCES evolution_instances(id) ON DELETE SET NULL,
     UNIQUE KEY uq_contacts_tenant_phone (tenant_id, phone),
     INDEX idx_contacts_tenant_name (tenant_id, name),
+    INDEX idx_contacts_whatsapp_candidate (tenant_id, whatsapp_name_candidate),
     INDEX idx_contacts_instance (evolution_instance_id)
 ) ENGINE=InnoDB;
 

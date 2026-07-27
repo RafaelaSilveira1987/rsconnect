@@ -1,3 +1,13 @@
+## 36.6.26 — Agenda resiliente e identidade confiável
+
+- Fila rápida recupera callbacks de disponibilidade já salvos que ficaram sem resposta ao cliente.
+- Solicitações de disponibilidade sem callback são reenviadas com o mesmo request/token após cooldown configurável.
+- Resultado antigo de disponibilidade não pode sobrescrever a consulta atual da conversa.
+- Novo nome automático do WhatsApp exige duas observações consistentes antes de substituir o fallback por telefone.
+- Colisão do mesmo pushName entre números diferentes impede promoção automática e limpa nomes automáticos contaminados.
+- Nomes manuais nunca são sobrescritos pelo webhook.
+- Migration 059 adiciona rastreio de origem/candidato de nome.
+
 ## 36.6.25 — Central de comunicação in-app
 
 - Evolui Comunicados para uma central administrativa RS e empresa cliente.

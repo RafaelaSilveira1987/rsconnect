@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.25 — Central de comunicação in-app';
-    public const REQUIRED_MIGRATION = '058_client_communication_center.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.26 — Agenda resiliente e identidade confiável';
+    public const REQUIRED_MIGRATION = '059_contact_identity_confidence.sql';
 
     private PDO $pdo;
 
@@ -99,7 +99,7 @@ final class AppVersionService
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 058, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 059, conforme o pacote implantado.'
         );
 
         $aiQuotaLimits = $this->standardAiQuotaLimits();
@@ -156,6 +156,18 @@ final class AppVersionService
                 ? 'Online/Presencial é coletado antes da consulta e enviado como filtro obrigatório para a Agenda Google.'
                 : 'A agenda ainda não possui a estrutura da modalidade obrigatória antes da busca de horários.',
             'Executar database/migrations/057_calendar_modality_before_availability.sql.'
+        );
+
+        $contactIdentityReady = $this->columnExists('contacts', 'name_source')
+            && $this->columnExists('contacts', 'whatsapp_name_candidate')
+            && $this->columnExists('contacts', 'whatsapp_name_seen_count');
+        $checks[] = $this->check(
+            'Identidade confiável do contato',
+            $contactIdentityReady ? 'ok' : 'blocked',
+            $contactIdentityReady
+                ? 'Nome do WhatsApp só é promovido após observação consistente; telefone permanece como fallback seguro.'
+                : 'O webhook ainda não possui a estrutura para validar nomes automáticos antes de exibi-los.',
+            'Executar database/migrations/059_contact_identity_confidence.sql.'
         );
 
         $reactionPreferenceReady = $this->columnExists('ai_agents', 'reply_to_reactions');

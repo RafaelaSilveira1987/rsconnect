@@ -159,7 +159,13 @@ final class EvolutionWebhookController
             // A mensagem é persistida antes de CRM, agenda, n8n ou IA.
             // Assim, qualquer falha posterior continua recuperável pela fila.
             $pdo->beginTransaction();
-            $contactId = $this->upsertContact($pdo, $instance, $remoteJid, $phone, $pushName);
+            $contactId = $this->upsertContact(
+                $pdo,
+                $instance,
+                $remoteJid,
+                $phone,
+                $fromMe ? '' : $pushName
+            );
             $conversationId = $this->upsertConversation(
                 $pdo,
                 $instance,
@@ -706,27 +712,186 @@ final class EvolutionWebhookController
     private function upsertContact(PDO $pdo, array $instance, string $remoteJid, string $phone, string $pushName): int
     {
         $tenantId = (int) ($instance['tenant_id'] ?? 0);
-        $automaticName = $this->safeAutomaticContactName($pdo, $tenantId, $phone, $pushName);
+        $identityReady = $this->contactIdentityColumnsAvailable($pdo);
 
-        $statement = $pdo->prepare(
-            'INSERT INTO contacts
-                (tenant_id, evolution_instance_id, remote_jid, phone, name)
-             VALUES
-                (:tenant_id, :instance_id, :remote_jid, :phone, :name)
-             ON DUPLICATE KEY UPDATE
-                id = LAST_INSERT_ID(id),
-                evolution_instance_id = VALUES(evolution_instance_id),
-                remote_jid = VALUES(remote_jid),
-                name = IF(name IS NULL OR name = "", VALUES(name), name)'
-        );
+        if ($identityReady) {
+            $statement = $pdo->prepare(
+                'INSERT INTO contacts
+                    (tenant_id, evolution_instance_id, remote_jid, phone, name, name_source,
+                     whatsapp_name_candidate, whatsapp_name_seen_count)
+                 VALUES
+                    (:tenant_id, :instance_id, :remote_jid, :phone, NULL, "unknown", NULL, 0)
+                 ON DUPLICATE KEY UPDATE
+                    id = LAST_INSERT_ID(id),
+                    evolution_instance_id = VALUES(evolution_instance_id),
+                    remote_jid = VALUES(remote_jid)'
+            );
+        } else {
+            // Compatibilidade segura antes da migration 059: nunca confia em um único pushName.
+            // A interface já usa o telefone como fallback quando contacts.name é nulo.
+            $statement = $pdo->prepare(
+                'INSERT INTO contacts
+                    (tenant_id, evolution_instance_id, remote_jid, phone, name)
+                 VALUES
+                    (:tenant_id, :instance_id, :remote_jid, :phone, NULL)
+                 ON DUPLICATE KEY UPDATE
+                    id = LAST_INSERT_ID(id),
+                    evolution_instance_id = VALUES(evolution_instance_id),
+                    remote_jid = VALUES(remote_jid)'
+            );
+        }
         $statement->execute([
             'tenant_id' => $tenantId,
             'instance_id' => $instance['id'],
             'remote_jid' => $remoteJid,
             'phone' => $phone,
-            'name' => $automaticName,
         ]);
-        return (int) $pdo->lastInsertId();
+        $contactId = (int) $pdo->lastInsertId();
+
+        if ($identityReady && $contactId > 0) {
+            $this->observeWhatsappContactName($pdo, $instance, $contactId, $phone, $pushName);
+        }
+        return $contactId;
+    }
+
+    private function contactIdentityColumnsAvailable(PDO $pdo): bool
+    {
+        static $ready = null;
+        if (is_bool($ready)) {
+            return $ready;
+        }
+        try {
+            $statement = $pdo->query(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'contacts'
+                   AND COLUMN_NAME IN ('name_source','whatsapp_name_candidate','whatsapp_name_seen_count')"
+            );
+            $ready = (int) $statement->fetchColumn() === 3;
+        } catch (Throwable) {
+            $ready = false;
+        }
+        return $ready;
+    }
+
+    private function observeWhatsappContactName(PDO $pdo, array $instance, int $contactId, string $phone, string $pushName): void
+    {
+        $tenantId = (int) ($instance['tenant_id'] ?? 0);
+        $candidate = trim(preg_replace('/\\s+/u', ' ', $pushName) ?? $pushName);
+        if ($tenantId < 1 || $contactId < 1 || $candidate === '' || $this->automaticContactNameIsSuspicious($pdo, $instance, $phone, $candidate)) {
+            return;
+        }
+        $candidate = mb_substr($candidate, 0, 150);
+
+        $currentStmt = $pdo->prepare(
+            'SELECT name, name_source, whatsapp_name_candidate, whatsapp_name_seen_count
+             FROM contacts WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+        );
+        $currentStmt->execute(['id' => $contactId, 'tenant_id' => $tenantId]);
+        $current = $currentStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $source = trim((string) ($current['name_source'] ?? 'legacy'));
+        $currentName = trim((string) ($current['name'] ?? ''));
+
+        // Nome digitado pela equipe/cliente nunca é substituído pelo WhatsApp.
+        if (in_array($source, ['manual', 'legacy'], true) && $currentName !== '') {
+            return;
+        }
+
+        // Um mesmo pushName observado para números diferentes é tratado como dado contaminado
+        // (caso clássico: nome do proprietário da conta conectado vindo no lugar do remetente).
+        $collisionStmt = $pdo->prepare(
+            'SELECT id FROM contacts
+             WHERE tenant_id = :tenant_id
+               AND id <> :contact_id
+               AND phone <> :phone
+               AND (whatsapp_name_candidate = :candidate OR (name_source = "whatsapp" AND name = :candidate))
+             LIMIT 1'
+        );
+        $collisionStmt->execute([
+            'tenant_id' => $tenantId,
+            'contact_id' => $contactId,
+            'phone' => $phone,
+            'candidate' => $candidate,
+        ]);
+        if ($collisionStmt->fetchColumn()) {
+            $pdo->prepare(
+                'UPDATE contacts
+                 SET name = NULL, name_source = "unknown", whatsapp_name_seen_count = 0
+                 WHERE tenant_id = :tenant_id AND name_source = "whatsapp" AND name = :candidate'
+            )->execute(['tenant_id' => $tenantId, 'candidate' => $candidate]);
+            $pdo->prepare(
+                'UPDATE contacts
+                 SET whatsapp_name_candidate = :candidate, whatsapp_name_seen_count = 0
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            )->execute(['candidate' => $candidate, 'id' => $contactId, 'tenant_id' => $tenantId]);
+            return;
+        }
+
+        $previousCandidate = trim((string) ($current['whatsapp_name_candidate'] ?? ''));
+        $seen = (int) ($current['whatsapp_name_seen_count'] ?? 0);
+        $seen = $previousCandidate === $candidate ? $seen + 1 : 1;
+
+        if ($source === 'whatsapp' && $currentName !== '' && $currentName !== $candidate) {
+            $currentName = '';
+            $source = 'unknown';
+        }
+
+        // Só promove depois de duas observações consistentes do mesmo número.
+        // Até lá, a lista de conversas exibe o telefone.
+        $promote = $seen >= 2;
+        $pdo->prepare(
+            'UPDATE contacts
+             SET whatsapp_name_candidate = :candidate,
+                 whatsapp_name_seen_count = :seen,
+                 name = CASE WHEN :promote = 1 THEN :candidate_name WHEN name_source = "whatsapp" THEN NULL ELSE name END,
+                 name_source = CASE WHEN :promote_source = 1 THEN "whatsapp" WHEN name_source = "whatsapp" THEN "unknown" ELSE name_source END
+             WHERE id = :id AND tenant_id = :tenant_id'
+        )->execute([
+            'candidate' => $candidate,
+            'seen' => $seen,
+            'promote' => $promote ? 1 : 0,
+            'candidate_name' => $candidate,
+            'promote_source' => $promote ? 1 : 0,
+            'id' => $contactId,
+            'tenant_id' => $tenantId,
+        ]);
+    }
+
+    private function automaticContactNameIsSuspicious(PDO $pdo, array $instance, string $phone, string $name): bool
+    {
+        $tenantId = (int) ($instance['tenant_id'] ?? 0);
+        $normalized = mb_strtolower(trim($name));
+        $digits = preg_replace('/\\D+/', '', $name) ?: '';
+        if ($normalized === '' || ($digits !== '' && $digits === (preg_replace('/\\D+/', '', $phone) ?: ''))
+            || in_array($normalized, ['unknown', 'desconhecido', 'sem nome', 'whatsapp'], true)) {
+            return true;
+        }
+        try {
+            $internal = $pdo->prepare(
+                'SELECT 1 FROM users WHERE tenant_id = :tenant_id AND status = "active" AND LOWER(TRIM(name)) = :name
+                 UNION ALL
+                 SELECT 1 FROM tenants WHERE id = :tenant_id_2 AND (LOWER(TRIM(name)) = :name_2 OR LOWER(TRIM(COALESCE(legal_name, ""))) = :name_3)
+                 LIMIT 1'
+            );
+            $internal->execute([
+                'tenant_id' => $tenantId,
+                'name' => $normalized,
+                'tenant_id_2' => $tenantId,
+                'name_2' => $normalized,
+                'name_3' => $normalized,
+            ]);
+            if ($internal->fetchColumn()) {
+                return true;
+            }
+            foreach ([(string) ($instance['name'] ?? ''), (string) ($instance['instance_name'] ?? '')] as $instanceName) {
+                if ($instanceName !== '' && mb_strtolower(trim($instanceName)) === $normalized) {
+                    return true;
+                }
+            }
+        } catch (Throwable) {
+            return true;
+        }
+        return false;
     }
 
     private function preferredRemoteJid(string $remoteJid, string $remoteJidAlt): string
@@ -737,55 +902,6 @@ final class EvolutionWebhookController
             return $alternate;
         }
         return $primary !== '' ? $primary : $alternate;
-    }
-
-    private function safeAutomaticContactName(PDO $pdo, int $tenantId, string $phone, string $pushName): ?string
-    {
-        $name = trim($pushName);
-        if ($tenantId < 1 || $name === '') {
-            return null;
-        }
-
-        try {
-            $existing = $pdo->prepare(
-                'SELECT name FROM contacts WHERE tenant_id = :tenant_id AND phone = :phone LIMIT 1'
-            );
-            $existing->execute(['tenant_id' => $tenantId, 'phone' => $phone]);
-            $currentName = trim((string) ($existing->fetchColumn() ?: ''));
-            if ($currentName !== '') {
-                return null;
-            }
-
-            // Algumas instalações da Evolution podem devolver o pushName da própria conta conectada.
-            // Nunca usamos automaticamente como nome do contato um nome que pertença à equipe da empresa.
-            $internalUserName = $pdo->prepare(
-                'SELECT 1 FROM users
-                 WHERE tenant_id = :tenant_id
-                   AND status = "active"
-                   AND TRIM(name) = :name
-                 LIMIT 1'
-            );
-            $internalUserName->execute(['tenant_id' => $tenantId, 'name' => $name]);
-            if ($internalUserName->fetchColumn()) {
-                return null;
-            }
-
-            // Evita que um pushName incorreto da conexão seja repetido como nome de vários contatos.
-            $duplicateName = $pdo->prepare(
-                'SELECT 1 FROM contacts
-                 WHERE tenant_id = :tenant_id AND phone <> :phone AND name = :name
-                 LIMIT 1'
-            );
-            $duplicateName->execute(['tenant_id' => $tenantId, 'phone' => $phone, 'name' => $name]);
-            if ($duplicateName->fetchColumn()) {
-                return null;
-            }
-        } catch (Throwable) {
-            // Em instalações antigas, mantém o webhook operacional sem transformar falha de nome em falha de mensagem.
-            return null;
-        }
-
-        return mb_substr($name, 0, 150);
     }
 
     private function upsertConversation(

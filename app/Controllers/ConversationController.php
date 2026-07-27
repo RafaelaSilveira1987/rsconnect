@@ -284,14 +284,17 @@ final class ConversationController
 
             $contactStatement = $pdo->prepare(
                 'INSERT INTO contacts
-                    (tenant_id, evolution_instance_id, remote_jid, phone, name)
+                    (tenant_id, evolution_instance_id, remote_jid, phone, name, name_source, whatsapp_name_candidate, whatsapp_name_seen_count)
                  VALUES
-                    (:tenant_id, :instance_id, :remote_jid, :phone, :name)
+                    (:tenant_id, :instance_id, :remote_jid, :phone, :name, :name_source, NULL, 0)
                  ON DUPLICATE KEY UPDATE
                     id = LAST_INSERT_ID(id),
                     evolution_instance_id = VALUES(evolution_instance_id),
                     remote_jid = VALUES(remote_jid),
-                    name = IF(VALUES(name) IS NULL OR VALUES(name) = "", name, VALUES(name))'
+                    name = IF(VALUES(name) IS NULL OR VALUES(name) = "", name, VALUES(name)),
+                    name_source = IF(VALUES(name) IS NULL OR VALUES(name) = "", name_source, "manual"),
+                    whatsapp_name_candidate = IF(VALUES(name) IS NULL OR VALUES(name) = "", whatsapp_name_candidate, NULL),
+                    whatsapp_name_seen_count = IF(VALUES(name) IS NULL OR VALUES(name) = "", whatsapp_name_seen_count, 0)'
             );
             $contactStatement->execute([
                 'tenant_id' => $instance['tenant_id'],
@@ -299,6 +302,7 @@ final class ConversationController
                 'remote_jid' => $remoteJid,
                 'phone' => $phone,
                 'name' => $name !== '' ? $name : null,
+                'name_source' => $name !== '' ? 'manual' : 'unknown',
             ]);
             $contactId = (int) $pdo->lastInsertId();
 
@@ -879,12 +883,17 @@ final class ConversationController
         $pdo = Database::connection();
         $statement = $pdo->prepare(
             'UPDATE contacts
-             SET name = :name, email = :email, company = :company, notes = :notes,
+             SET name = :name,
+                 name_source = :name_source,
+                 whatsapp_name_candidate = NULL,
+                 whatsapp_name_seen_count = 0,
+                 email = :email, company = :company, notes = :notes,
                  tags_json = :tags_json, status = :status, contact_group = :contact_group
              WHERE id = :contact_id AND tenant_id = :tenant_id'
         );
         $statement->execute([
             'name' => $name !== '' ? $name : null,
+            'name_source' => $name !== '' ? 'manual' : 'unknown',
             'email' => $email !== '' ? $email : null,
             'company' => $company !== '' ? $company : null,
             'notes' => $notes !== '' ? $notes : null,

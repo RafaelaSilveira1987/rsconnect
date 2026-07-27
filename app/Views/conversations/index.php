@@ -341,7 +341,7 @@ $returnQuery = http_build_query($pollQuery);
                 <div>
                     <span class="eyebrow">Atendimento</span>
                     <h2>Dados da conversa</h2>
-                    <p><?= View::e($selected['contact_name'] ?: 'Contato sem nome') ?> · <?= View::e($selected['phone']) ?></p>
+                    <p><?= View::e($contactLabel($selected)) ?></p>
                 </div>
                 <button class="icon-button drawer-close" type="button" data-close-panel="conversation-details" aria-label="Fechar painel">×</button>
             </div>
