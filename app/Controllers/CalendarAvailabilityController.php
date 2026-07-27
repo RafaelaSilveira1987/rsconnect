@@ -130,7 +130,16 @@ final class CalendarAvailabilityController
 
     public function maintenanceCron(): void
     {
-        $token = trim((string) ($_GET['token'] ?? $_POST['token'] ?? ''));
+        $bearer = trim((string) ($_SERVER['HTTP_AUTHORIZATION'] ?? ''));
+        $bearerToken = str_starts_with($bearer, 'Bearer ') ? trim(substr($bearer, 7)) : '';
+        $token = trim((string) (
+            $_SERVER['HTTP_X_RS_CALENDAR_MAINTENANCE_TOKEN']
+            ?? $_SERVER['HTTP_X_RS_CONNECT_TOKEN']
+            ?? $_GET['token']
+            ?? $_POST['token']
+            ?? $bearerToken
+            ?? ''
+        ));
         $expected = trim((string) Env::get('CALENDAR_MAINTENANCE_TOKEN', ''));
         if ($expected === '' || !hash_equals($expected, $token)) {
             http_response_code(403);

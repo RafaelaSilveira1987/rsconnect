@@ -1,3 +1,13 @@
+## 36.6.17 — Manutenção automática da agenda
+
+- adiciona o template n8n `template-calendar-maintenance.json`, ausente nas versões anteriores;
+- o workflow roda a cada 10 minutos e chama `POST /webhooks/calendar/maintenance/run`;
+- o download pelo RS Connect injeta `APP_URL` e `CALENDAR_MAINTENANCE_TOKEN` automaticamente;
+- o token passa a ser enviado no header `X-RS-Calendar-Maintenance-Token`, evitando segredo na URL;
+- o endpoint mantém compatibilidade com token em query/body e passa a aceitar também header e Bearer;
+- a tela da agenda passa a orientar o uso do header seguro;
+- sem migration nova; mantém a 055 como última migration obrigatória.
+
 ## 36.6.16 — Conversas compactas, aviso diário e tempo de interação
 
 - mantém a lista de conversas e o histórico em painéis com scroll próprio no desktop;

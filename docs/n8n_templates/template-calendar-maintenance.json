@@ -1,0 +1,100 @@
+{
+  "name": "RS Connect - Manutenção automática da agenda",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "ScheduleCalendarMaintenance",
+      "name": "A cada 10 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://SEU_DOMINIO_RS_CONNECT/webhooks/calendar/maintenance/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-RS-Calendar-Maintenance-Token",
+              "value": "SEU_CALENDAR_MAINTENANCE_TOKEN"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "CallCalendarMaintenance",
+      "name": "Executar manutenção da agenda",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json;\nreturn [{ json: { ok: !!result.ok, status: result.status || (result.ok ? 'success' : 'error'), released: result.released || result.released_slots || 0, callbacks_closed: result.callbacks_closed || result.expired_callbacks || 0, synced: result.synced || result.synchronized || 0, warnings: result.warnings || [], processed_at: new Date().toISOString(), raw: result } }];"
+      },
+      "id": "CalendarMaintenanceSummary",
+      "name": "Resumo da manutenção",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "A cada 10 minutos": {
+      "main": [
+        [
+          {
+            "node": "Executar manutenção da agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Executar manutenção da agenda": {
+      "main": [
+        [
+          {
+            "node": "Resumo da manutenção",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "timezone": "America/Sao_Paulo"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "rs-connect-calendar-maintenance-template"
+  }
+}

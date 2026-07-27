@@ -415,7 +415,7 @@ $requestInsight = static function (array $request): string {
     </div>
     <div class="calendar-admin-note">
         <strong>Execução automática</strong>
-        <p>Agende no n8n ou no cron a chamada <code>/webhooks/calendar/maintenance/run?token=SEU_TOKEN</code>. A rotina libera pré-reservas vencidas, encerra callbacks antigos e tenta sincronizar eventos confirmados.</p>
+        <p>Agende no n8n a chamada <code>POST /webhooks/calendar/maintenance/run</code> e envie <code>CALENDAR_MAINTENANCE_TOKEN</code> no header <code>X-RS-Calendar-Maintenance-Token</code>. A rotina libera pré-reservas vencidas, encerra callbacks antigos e tenta sincronizar eventos confirmados.</p>
     </div>
 </section>
 <?php endif; ?>

@@ -1,10 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.16 — Conversas compactas, aviso diário e tempo de interação.
+Pacote consolidado até o RS Connect 36.6.17 — Manutenção automática da agenda.
 
 ## Última etapa incluída
 
-RS Connect 36.6.16 — mantém conversas e histórico em painéis com scroll independente, envia o aviso de ausência no máximo uma vez por dia e faz a IA respeitar o tempo configurado após a última mensagem recebida antes de responder.
+RS Connect 36.6.17 — mantém todas as correções da 36.6.16 e adiciona o workflow n8n de manutenção automática da agenda, com download parametrizado por APP_URL e CALENDAR_MAINTENANCE_TOKEN.
 
 RS Connect 36.6.14 — mantém a arquitetura de múltiplos Canais WhatsApp da 36.6.13 e reformula a tela de Planos para uma apresentação comercial clara de canais, agentes, usuários, automações e franquia IA RS.
 
@@ -42,7 +42,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.16.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.17.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 

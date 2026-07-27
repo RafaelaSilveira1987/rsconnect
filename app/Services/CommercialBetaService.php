@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.17', 'title' => 'Manutenção automática da agenda', 'summary' => 'Adiciona o template n8n ausente para manutenção da agenda, injeta domínio/token no download e autentica a rotina por header seguro.'],
             ['version' => '36.6.16', 'title' => 'Conversas compactas, aviso diário e tempo de interação', 'summary' => 'Mantém lista e histórico com scroll independente, permite novo aviso de ausência em um novo dia e faz IA/agenda aguardarem o tempo configurado após a última mensagem recebida.'],
             ['version' => '36.6.15', 'title' => 'Confiabilidade das regras do agente', 'summary' => 'Centraliza a política de horário, impede agenda e callbacks fora do expediente, reduz falsos gatilhos de agendamento e torna classificação, grupo, tags e contexto efetivo visíveis na conversa.'],
             ['version' => '36.6.14', 'title' => 'Planos comerciais claros', 'summary' => 'Reorganiza a apresentação comercial dos planos, diferencia canais, agentes, usuários, automações e franquia de IA, e apresenta o Custom como sob consulta.'],

@@ -70,6 +70,13 @@ final class N8nTemplateController
             'events' => ['ai.queue.check', 'cron.every_minute'],
             'description' => 'Reavalia a fila da IA a cada minuto para respeitar o intervalo mínimo entre respostas sem perder mensagens. A rotina diária permanece como contingência para falhas e pendências antigas.',
         ],
+        'calendar-maintenance' => [
+            'title' => 'Manutenção automática da agenda',
+            'segment' => 'Agenda',
+            'file' => 'template-calendar-maintenance.json',
+            'events' => ['calendar.maintenance.run', 'cron.every_10_minutes'],
+            'description' => 'Executa a manutenção técnica da agenda a cada 10 minutos: libera pré-reservas vencidas, encerra callbacks antigos e tenta sincronizações pendentes sem depender de ação manual.',
+        ],
         'agenda-disponibilidade' => [
             'title' => 'Agenda inteligente — simulação/fallback',
             'segment' => 'Agenda',
@@ -179,6 +186,23 @@ final class N8nTemplateController
             }
             $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
             $contents = str_replace('SEU_AI_REPROCESS_CRON_TOKEN', $aiToken, $contents);
+        }
+
+        if ($key === 'calendar-maintenance') {
+            $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+            $calendarToken = trim((string) Env::get('CALENDAR_MAINTENANCE_TOKEN', ''));
+            if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+                http_response_code(409);
+                echo 'Configure APP_URL com a URL pública HTTPS do RS Connect antes de baixar a manutenção automática da agenda.';
+                return;
+            }
+            if ($calendarToken === '') {
+                http_response_code(409);
+                echo 'Configure CALENDAR_MAINTENANCE_TOKEN no ambiente e reinicie o RS Connect antes de baixar a manutenção automática da agenda.';
+                return;
+            }
+            $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
+            $contents = str_replace('SEU_CALENDAR_MAINTENANCE_TOKEN', $calendarToken, $contents);
         }
 
         if ($key === 'monitor-operacional') {
