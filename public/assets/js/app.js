@@ -1429,7 +1429,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const floatMessage = root.querySelector('[data-communication-float-message]');
   const minimizedKey = 'rs-connect-communication-minimized';
   const latestSignalKey = 'rs-connect-communication-latest-signal';
+  const requestedCommunicationId = Number(new URLSearchParams(window.location.search).get('communication_id') || 0);
+  let requestedCommunicationOpened = false;
   let currentPayload = { unread: 0, items: [], latest: null };
+  const initialPayloadNode = root.querySelector('[data-communication-initial]');
+  if (initialPayloadNode) {
+    try {
+      const parsedInitial = JSON.parse(initialPayloadNode.textContent || '{}');
+      if (parsedInitial && typeof parsedInitial === 'object') currentPayload = parsedInitial;
+    } catch (error) {
+      currentPayload = { unread: 0, items: [], latest: null };
+    }
+  }
   let selectedId = 0;
   let polling = false;
 
@@ -1638,6 +1649,12 @@ document.addEventListener('DOMContentLoaded', () => {
   backdrop?.addEventListener('click', closeDrawer);
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && drawer && !drawer.hidden) closeDrawer(); });
 
+  renderList();
+  updateFloating();
+  if (requestedCommunicationId > 0 && !requestedCommunicationOpened) {
+    requestedCommunicationOpened = true;
+    openDrawer(requestedCommunicationId);
+  }
   poll();
   window.setInterval(() => { if (document.visibilityState === 'visible') poll(); }, 10000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') poll(true); });

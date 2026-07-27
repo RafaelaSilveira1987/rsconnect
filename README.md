@@ -1,8 +1,10 @@
 # RS Connect — pacote VPS
 
-Pacote consolidado até o RS Connect 36.6.26 — Agenda resiliente e identidade confiável.
+Pacote consolidado até o RS Connect 36.6.27 — Central de comunicação refinada.
 
 ## Última etapa incluída
+
+RS Connect 36.6.27 — torna o inbox institucional independente do menu de Notificações, renderiza a mensagem não lida já no servidor e reorganiza a Central de comunicação do Admin em abas mais claras.
 
 RS Connect 36.6.26 — fecha o retorno da disponibilidade pela Fila rápida e impede que um único pushName da Evolution vire nome definitivo do contato.
 

@@ -9,6 +9,7 @@ use App\Core\View;
 use App\Services\NotificationService;
 use App\Services\OperationalAlertService;
 use App\Services\TenantModuleService;
+use App\Services\ClientCommunicationService;
 
 $user = Auth::user();
 $flashes = Flash::all();
@@ -47,6 +48,17 @@ $moduleVisible = static function (string $moduleKey) use ($moduleService): bool 
     $tenantId = Auth::tenantId();
     return $tenantId ? $moduleService->visible((int) $tenantId, $moduleKey) : true;
 };
+$communicationInbox = ['unread' => 0, 'items' => [], 'latest' => null];
+if (Auth::check() && !Auth::isSuperAdmin() && Auth::tenantId()) {
+    try {
+        $communicationInbox = (new ClientCommunicationService())->inbox((int) Auth::tenantId(), 30);
+    } catch (Throwable) {
+        $communicationInbox = ['unread' => 0, 'items' => [], 'latest' => null];
+    }
+}
+$communicationUnread = (int) ($communicationInbox['unread'] ?? 0);
+$communicationLatest = is_array($communicationInbox['latest'] ?? null) ? $communicationInbox['latest'] : null;
+
 $conversationUnread = 0;
 if (Auth::check() && Auth::can('conversations.view')) {
     try {
@@ -110,7 +122,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.6.26')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.6.27')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -270,15 +282,16 @@ $svgIcon = static function (string $name): string {
     </main>
 </div>
 <button class="icon-button global-sidebar-toggle" id="sidebarToggle" type="button" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false"><?= $svgIcon('menu') ?></button>
-<?php if (!Auth::isSuperAdmin() && Auth::tenantId() && Auth::can('notifications.view') && $moduleVisible('notifications')): ?>
+<?php if (!Auth::isSuperAdmin() && Auth::tenantId()): ?>
 <div class="rs-communication-hub"
      data-rs-communication-hub
      data-inbox-url="<?= View::e(Router::url('/communications/inbox')) ?>"
      data-read-url="<?= View::e(Router::url('/communications/read')) ?>"
      data-ack-url="<?= View::e(Router::url('/communications/acknowledge')) ?>"
      data-respond-url="<?= View::e(Router::url('/communications/respond')) ?>"
-     data-csrf="<?= View::e(Csrf::token()) ?>" hidden>
-    <section class="rs-communication-float" data-communication-float hidden aria-live="polite">
+     data-csrf="<?= View::e(Csrf::token()) ?>"<?= $communicationUnread > 0 ? '' : ' hidden' ?>>
+    <script type="application/json" data-communication-initial><?= json_encode($communicationInbox, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+    <section class="rs-communication-float<?= (($communicationLatest['priority'] ?? '') === 'important') ? ' is-important' : ((($communicationLatest['priority'] ?? '') === 'critical') ? ' is-critical' : '') ?>" data-communication-float<?= $communicationUnread > 0 ? '' : ' hidden' ?> aria-live="polite">
         <button class="rs-communication-float-close" type="button" data-communication-minimize aria-label="Minimizar mensagem">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 12h12"/></svg>
         </button>
@@ -287,14 +300,14 @@ $svgIcon = static function (string $name): string {
         </span>
         <div class="rs-communication-float-copy">
             <small>Mensagem da RS Connect</small>
-            <strong data-communication-float-title>Nova mensagem</strong>
-            <span data-communication-float-message>Abra para ver os detalhes.</span>
+            <strong data-communication-float-title><?= View::e((string) ($communicationLatest['title'] ?? 'Nova mensagem')) ?></strong>
+            <span data-communication-float-message><?= View::e((string) ($communicationLatest['message'] ?? 'Abra para ver os detalhes.')) ?></span>
         </div>
         <button class="btn btn-small" type="button" data-communication-open>Ver mensagem</button>
     </section>
     <button class="rs-communication-bubble" type="button" data-communication-bubble hidden aria-label="Abrir mensagens da RS Connect">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6h14v9H8l-3 3V6Z"/></svg>
-        <span data-communication-bubble-count>0</span>
+        <span data-communication-bubble-count><?= min(99, $communicationUnread) ?></span>
     </button>
     <div class="rs-communication-drawer-backdrop" data-communication-drawer-backdrop hidden></div>
     <aside class="rs-communication-drawer" data-communication-drawer hidden aria-label="Mensagens da RS Connect" aria-modal="true" role="dialog">
@@ -316,6 +329,6 @@ $svgIcon = static function (string $name): string {
 <button class="back-to-top" type="button" data-back-to-top aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
 </button>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.6.26')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.6.27')) ?>" defer></script>
 </body>
 </html>

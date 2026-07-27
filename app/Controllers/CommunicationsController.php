@@ -17,7 +17,7 @@ final class CommunicationsController
     public function index(): void
     {
         View::render('communications.index', [
-            'title' => 'Comunicados',
+            'title' => 'Central de comunicação',
             'data' => (new ClientCommunicationService())->dashboard(),
             'prefillTenant' => (int) ($_GET['tenant_id'] ?? 0),
             'prefillIncident' => (int) ($_GET['incident_id'] ?? 0),
@@ -32,7 +32,7 @@ final class CommunicationsController
         }
         try {
             (new ClientCommunicationService())->send($_POST);
-            $this->go('success', 'Comunicado enviado pela Central de comunicação.');
+            $this->go('success', 'Comunicado enviado pela Central de comunicação.', 'history');
         } catch (Throwable $exception) {
             $this->go('error', $exception->getMessage());
         }
@@ -101,7 +101,7 @@ final class CommunicationsController
                 Auth::id(),
                 (string) ($_POST['message'] ?? '')
             );
-            $this->go('success', 'Resposta enviada para a empresa.');
+            $this->go('success', 'Resposta enviada para a empresa.', 'replies');
         } catch (Throwable $exception) {
             $this->go('error', $exception->getMessage());
         }
@@ -137,10 +137,11 @@ final class CommunicationsController
         exit;
     }
 
-    private function go(string $type, string $message): never
+    private function go(string $type, string $message, string $tab = 'compose'): never
     {
         Flash::set($type, $message);
-        header('Location: ' . Router::url('/comunicados'));
+        $tab = in_array($tab, ['compose', 'history', 'replies'], true) ? $tab : 'compose';
+        header('Location: ' . Router::url('/comunicados?tab=' . $tab));
         exit;
     }
 }

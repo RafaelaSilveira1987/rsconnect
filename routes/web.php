@@ -63,10 +63,10 @@ return static function (Router $router): void {
     $router->get('/comunicados', [CommunicationsController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/comunicados/send', [CommunicationsController::class, 'send'], ['auth', 'super_admin', 'csrf']);
     $router->post('/comunicados/reply', [CommunicationsController::class, 'adminReply'], ['auth', 'super_admin', 'csrf']);
-    $router->get('/communications/inbox', [CommunicationsController::class, 'inbox'], ['auth', 'permission:notifications.view']);
-    $router->post('/communications/read', [CommunicationsController::class, 'read'], ['auth', 'permission:notifications.view', 'csrf']);
-    $router->post('/communications/acknowledge', [CommunicationsController::class, 'acknowledge'], ['auth', 'permission:notifications.view', 'csrf']);
-    $router->post('/communications/respond', [CommunicationsController::class, 'respond'], ['auth', 'permission:notifications.view', 'csrf']);
+    $router->get('/communications/inbox', [CommunicationsController::class, 'inbox'], ['auth']);
+    $router->post('/communications/read', [CommunicationsController::class, 'read'], ['auth', 'csrf']);
+    $router->post('/communications/acknowledge', [CommunicationsController::class, 'acknowledge'], ['auth', 'csrf']);
+    $router->post('/communications/respond', [CommunicationsController::class, 'respond'], ['auth', 'csrf']);
     $router->get('/beta-comercial', [OperationsCenterController::class, 'beta'], ['auth', 'super_admin']);
     $router->get('/versao-beta', [OperationsCenterController::class, 'beta'], ['auth', 'super_admin']);
     $router->get('/status-sistema', [OperationsCenterController::class, 'status'], ['auth', 'super_admin']);

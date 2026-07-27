@@ -1,3 +1,16 @@
+## 36.6.27 — Central de comunicação refinada
+
+- Comunicados institucionais deixam de depender da permissão/visibilidade do módulo Notificações.
+- Caixa de mensagem do cliente passa a ser renderizada pelo servidor quando já existe comunicado não lido.
+- JavaScript hidrata o inbox a partir do payload inicial e mantém polling como atualização, não como única forma de exibição.
+- Links do sininho com `communication_id` abrem diretamente o drawer correto.
+- Admin reorganizado em abas: Novo comunicado, Histórico e Respostas.
+- Formulário dividido por Conteúdo, Destino e interação e Entrega.
+- Histórico substitui tabela densa por cartões operacionais com leitura, respostas e canais.
+- Respostas administrativas ganham visão mais clara e resposta contextual.
+- Mantido padrão visual sem emojis, apenas ícones vetoriais.
+- Sem migration nova; a base continua na 059.
+
 ## 36.6.26 — Agenda resiliente e identidade confiável
 
 - Fila rápida recupera callbacks de disponibilidade já salvos que ficaram sem resposta ao cliente.
