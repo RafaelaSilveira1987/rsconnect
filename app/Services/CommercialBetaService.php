@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.19', 'title' => 'Retry confiável de backup', 'summary' => 'Alinha o dispatcher ao último sucesso real, permite nova tentativa no mesmo dia após falha/timeout e explica o motivo de cada rotina elegível ou ignorada.'],
             ['version' => '36.6.18', 'title' => 'Manutenção da agenda auditável', 'summary' => 'Separa execução manual da automática via n8n, alinha callbacks vencidos com a regra real da manutenção e registra resultado/origem por empresa.'],
             ['version' => '36.6.17', 'title' => 'Manutenção automática da agenda', 'summary' => 'Adiciona o template n8n ausente para manutenção da agenda, injeta domínio/token no download e autentica a rotina por header seguro.'],
             ['version' => '36.6.16', 'title' => 'Conversas compactas, aviso diário e tempo de interação', 'summary' => 'Mantém lista e histórico com scroll independente, permite novo aviso de ausência em um novo dia e faz IA/agenda aguardarem o tempo configurado após a última mensagem recebida.'],

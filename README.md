@@ -1,10 +1,10 @@
 # RS Connect
 
-Pacote consolidado até o RS Connect 36.6.18 — Manutenção da agenda auditável.
+Pacote consolidado até o RS Connect 36.6.19 — Retry confiável de backup.
 
 ## Última etapa incluída
 
-RS Connect 36.6.18 — mantém a automação da 36.6.17 e alinha o painel da agenda ao comportamento real: botão manual direto no RS Connect, automático via n8n, callbacks pendentes pelo mesmo critério da manutenção e histórico por empresa.
+RS Connect 36.6.19 — corrige o despacho automático de backup para usar sucesso real como fonte de verdade, repetir tentativas no mesmo dia após erro/timeout e expor o motivo de cada decisão do dispatcher.
 
 RS Connect 36.6.14 — mantém a arquitetura de múltiplos Canais WhatsApp da 36.6.13 e reformula a tela de Planos para uma apresentação comercial clara de canais, agentes, usuários, automações e franquia IA RS.
 
@@ -42,7 +42,7 @@ RS Connect 36.5.7 — reforço da identificação de novos contatos, resposta t�
 
 RS Connect 36.5.6 — correções encontradas na homologação final: classificação de clientes, takeover humano da IA, reprocessamento, cron de cobrança e mobile.
 
-Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.18.md`.
+Checkpoint de homologação: `docs/HOMOLOGACAO-FINAL-v36.6.19.md`.
 
 RS Connect 36.5.5 — alinhamento do diagnóstico Beta com a migration 048 e refinamento visual do formulário de endereço em Minha empresa.
 

@@ -138,6 +138,7 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
                 <div><span>Retenção</span><strong><?= (int) ($primaryRoutine['retention_days'] ?? 5) ?> dias</strong></div>
                 <div><span>Destino</span><strong><?= View::e($primaryRoutine['storage_path'] ?? '/backups/rs-connect') ?></strong></div>
                 <div><span>Tempo limite</span><strong><?= (int) ($settings['job_timeout_minutes'] ?? 30) ?> min</strong></div>
+                <div><span>Nova tentativa após falha</span><strong><?= (int) ($settings['retry_minutes'] ?? 30) ?> min</strong></div>
             </div>
 
             <div class="backup-routine-state">
@@ -178,6 +179,7 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
                 </form>
             </div>
             <p class="muted-text backup-webhook-line">Webhook n8n: <?= View::e($primaryRoutine['webhook_url_masked'] ?? 'Não configurado') ?></p>
+            <p class="muted-text">Uma tentativa com erro/timeout não encerra o ciclo. Enquanto não houver sucesso real, a rotina vencida volta a ficar elegível após a janela de nova tentativa.</p>
         <?php else: ?>
             <div class="empty-state">Preencha a configuração ao lado para criar a primeira rotina.</div>
         <?php endif; ?>

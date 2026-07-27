@@ -36,6 +36,7 @@ final class BackupAutomationService
                 'backup_token_source' => $this->backupTokenSource(),
                 'max_age_hours' => (int) Env::get('OPERATIONS_BACKUP_MAX_AGE_HOURS', 24),
                 'job_timeout_minutes' => $this->jobTimeoutMinutes(),
+                'retry_minutes' => max(5, min(240, (int) Env::get('OPERATIONS_BACKUP_RETRY_MINUTES', 30))),
                 'n8n_base_url' => (string) Env::get('N8N_BASE_URL', ''),
                 'template_url' => Router::url('/n8n-templates/download?template=backup-rsconnect'),
             ],
@@ -245,8 +246,20 @@ final class BackupAutomationService
     {
         $this->expireTimedOutJobs();
         $results = [];
+        $evaluated = [];
         foreach ($this->activeRoutinesRaw() as $routine) {
-            if (!$this->isRoutineDue($routine)) {
+            $decision = $this->routineDueDecision($routine);
+            $evaluated[] = [
+                'routine_id' => (int) ($routine['id'] ?? 0),
+                'name' => (string) ($routine['name'] ?? ''),
+                'due' => (bool) ($decision['due'] ?? false),
+                'reason' => (string) ($decision['reason'] ?? 'unknown'),
+                'message' => (string) ($decision['message'] ?? ''),
+                'next_retry_at' => $decision['next_retry_at'] ?? null,
+                'last_success_at' => $routine['last_success_at'] ?? null,
+                'last_requested_at' => $routine['last_requested_at'] ?? null,
+            ];
+            if (empty($decision['due'])) {
                 continue;
             }
             $results[] = [
@@ -258,7 +271,10 @@ final class BackupAutomationService
         return [
             'ok' => true,
             'checked_at' => date('c'),
+            'routines_checked' => count($evaluated),
+            'eligible' => count(array_filter($evaluated, static fn (array $row): bool => !empty($row['due']))),
             'dispatched' => count(array_filter($results, static fn (array $row): bool => !empty($row['result']['ok']))),
+            'evaluated' => $evaluated,
             'results' => $results,
         ];
     }
@@ -781,41 +797,25 @@ final class BackupAutomationService
         }
     }
 
+    private function routineDueDecision(array $routine): array
+    {
+        if ($this->activeJobForRoutine((int) ($routine['id'] ?? 0))) {
+            return [
+                'due' => false,
+                'reason' => 'active_job',
+                'message' => 'Já existe um job de backup solicitado ou em execução.',
+                'next_retry_at' => null,
+                'stale' => false,
+                'schedule_due' => false,
+            ];
+        }
+
+        return (new BackupSchedulePolicyService())->evaluate($routine);
+    }
+
     private function isRoutineDue(array $routine): bool
     {
-        $frequency = (string) ($routine['frequency'] ?? 'daily');
-        if (in_array($frequency, ['manual', 'custom'], true)) {
-            return false;
-        }
-        if ($this->activeJobForRoutine((int) $routine['id'])) {
-            return false;
-        }
-
-        try {
-            $timezone = new DateTimeZone((string) ($routine['timezone'] ?? 'America/Sao_Paulo'));
-            $now = new DateTimeImmutable('now', $timezone);
-            $preferred = (string) ($routine['preferred_time'] ?? '03:00');
-            [$hour, $minute] = array_map('intval', explode(':', preg_match('/^\d{2}:\d{2}$/', $preferred) ? $preferred : '03:00'));
-            $todaySchedule = $now->setTime($hour, $minute, 0);
-            if ($now < $todaySchedule) {
-                return false;
-            }
-
-            $lastRequestedRaw = trim((string) ($routine['last_requested_at'] ?? ''));
-            if ($lastRequestedRaw === '') {
-                return true;
-            }
-            $last = new DateTimeImmutable($lastRequestedRaw, new DateTimeZone((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo')));
-            $last = $last->setTimezone($timezone);
-
-            return match ($frequency) {
-                'weekly' => $last <= $now->modify('-7 days'),
-                'monthly' => $last <= $now->modify('-1 month'),
-                default => $last->format('Y-m-d') < $now->format('Y-m-d'),
-            };
-        } catch (Throwable) {
-            return false;
-        }
+        return !empty($this->routineDueDecision($routine)['due']);
     }
 
     private function nextExecution(array $routine): ?string
@@ -826,8 +826,16 @@ final class BackupAutomationService
         if ($this->activeJobForRoutine((int) ($routine['id'] ?? 0))) {
             return 'Em execução';
         }
-        if ($this->isRoutineDue($routine)) {
+        $decision = $this->routineDueDecision($routine);
+        if (!empty($decision['due'])) {
             return 'Pendente agora';
+        }
+        if (($decision['reason'] ?? '') === 'retry_cooldown' && !empty($decision['next_retry_at'])) {
+            try {
+                return 'Nova tentativa ' . (new DateTimeImmutable((string) $decision['next_retry_at']))->format('Y-m-d H:i:s T');
+            } catch (Throwable) {
+                return 'Aguardando nova tentativa';
+            }
         }
 
         try {
@@ -836,9 +844,9 @@ final class BackupAutomationService
             $preferred = (string) ($routine['preferred_time'] ?? '03:00');
             [$hour, $minute] = array_map('intval', explode(':', preg_match('/^\d{2}:\d{2}$/', $preferred) ? $preferred : '03:00'));
             $frequency = (string) ($routine['frequency'] ?? 'daily');
-            $lastRequestedRaw = trim((string) ($routine['last_requested_at'] ?? ''));
+            $lastSuccessRaw = trim((string) ($routine['last_success_at'] ?? ''));
 
-            if ($lastRequestedRaw === '') {
+            if ($lastSuccessRaw === '') {
                 $candidate = $now->setTime($hour, $minute, 0);
                 if ($candidate <= $now) {
                     $candidate = $candidate->modify('+1 day');
@@ -846,7 +854,7 @@ final class BackupAutomationService
                 return $candidate->format('Y-m-d H:i:s T');
             }
 
-            $last = new DateTimeImmutable($lastRequestedRaw, new DateTimeZone((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo')));
+            $last = new DateTimeImmutable($lastSuccessRaw, new DateTimeZone((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo')));
             $last = $last->setTimezone($timezone)->setTime($hour, $minute, 0);
             $candidate = match ($frequency) {
                 'weekly' => $last->modify('+7 days'),

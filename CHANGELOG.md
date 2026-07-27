@@ -1,3 +1,13 @@
+## 36.6.19 — Retry confiável de backup
+
+- Corrige o dispatcher automático que usava `last_requested_at` como se fosse sucesso do ciclo.
+- O vencimento passa a considerar `last_success_at` e a idade máxima do backup real/verificado.
+- Falhas e timeouts não bloqueiam novas tentativas até o dia seguinte.
+- `last_requested_at` passa a servir somente como cooldown de retry (30 min por padrão).
+- Adiciona `OPERATIONS_BACKUP_RETRY_MINUTES` opcional (5–240 min; padrão 30).
+- `/webhooks/operations/backups/dispatch` passa a retornar `evaluated`, `reason`, `eligible` e `next_retry_at`.
+- Tela de Backup informa a janela de nova tentativa e esclarece que erro/timeout não encerra o ciclo.
+
 ## 36.6.18 — Manutenção da agenda auditável
 
 - deixa explícito que **Executar manutenção agora** roda diretamente no RS Connect e não depende do n8n;
