@@ -1,3 +1,12 @@
+## 36.6.31 — Novo atendimento em drawer
+
+- Corrige o recorte do formulário `+ Nova` em telas de Conversas com coluna estreita.
+- O novo atendimento passa a abrir em drawer próprio sobre a interface, sem alterar a largura da Caixa de Entrada.
+- Mantém busca preventiva de contato, detecção de conversa existente, seleção de instância e primeiro envio.
+- Fechar/cancelar preserva a posição da lista de conversas; o drawer também fecha com Esc.
+- Layout responsivo ocupa a tela inteira em dispositivos estreitos e usa painel lateral em desktop.
+- Sem migration e sem alteração nas regras de IA, Agenda, CRM ou atendimento.
+
 ## 36.6.30 — Busca inicial, horários por dia e telemetria clara
 
 - Nova conversa pesquisa contatos existentes antes do primeiro envio e sinaliza conversa já existente.

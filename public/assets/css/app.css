@@ -8465,3 +8465,29 @@ body.has-communication-drawer{overflow:hidden}
   .client-ai-telemetry-grid { grid-template-columns:1fr; }
   .new-conversation-existing { align-items:stretch; flex-direction:column; }
 }
+
+/* 36.6.31 — Novo atendimento em drawer, sem recorte da Caixa de Entrada */
+.new-conversation-shell { position:fixed; inset:0; z-index:1400; }
+.new-conversation-backdrop { position:absolute; inset:0; width:100%; height:100%; padding:0; border:0; background:rgba(20,30,44,.34); backdrop-filter:blur(2px); cursor:default; }
+.new-conversation-drawer { position:absolute; top:0; right:0; width:min(540px, 96vw); height:100dvh; padding:18px; background:#f7f9fc; border-left:1px solid rgba(197,210,222,.9); box-shadow:-22px 0 54px rgba(20,35,52,.18); overflow:auto; }
+.new-conversation-form { position:static; display:grid; grid-template-rows:auto minmax(0,1fr) auto; gap:0; width:100%; min-height:calc(100dvh - 36px); padding:0; border:1px solid var(--rs-border); border-radius:22px; background:#fff; box-shadow:0 16px 42px rgba(28,41,61,.08); transform:none; overflow:hidden; }
+.new-conversation-form-head { display:grid; gap:8px; padding:22px 22px 18px; border-bottom:1px solid var(--rs-border); background:linear-gradient(135deg,#fff 55%,#f1fbfc); }
+.new-conversation-form-head > div { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.new-conversation-form-head > div > span { display:grid; gap:4px; }
+.new-conversation-form-head > div strong { font-size:1.2rem; letter-spacing:-.02em; }
+.new-conversation-form-head > small { max-width:430px; color:var(--rs-muted); line-height:1.5; }
+.new-conversation-close { flex:0 0 40px; width:40px; height:40px; display:grid; place-items:center; padding:0; border:1px solid var(--rs-border); border-radius:12px; background:#fff; color:#46556a; cursor:pointer; }
+.new-conversation-close svg { width:18px; height:18px; }
+.new-conversation-close:hover { color:var(--rs-blue); border-color:#c7d9e7; background:#f5faff; }
+.new-conversation-form-body { display:grid; align-content:start; gap:14px; padding:20px 22px; overflow:auto; }
+.new-conversation-form-body .field { margin:0; min-width:0; }
+.new-conversation-form-body input,.new-conversation-form-body select,.new-conversation-form-body textarea { width:100%; box-sizing:border-box; }
+.new-conversation-field-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.new-conversation-actions { position:sticky; bottom:0; display:flex; justify-content:flex-end; gap:10px; padding:15px 22px; border-top:1px solid var(--rs-border); background:rgba(255,255,255,.96); backdrop-filter:blur(8px); }
+body.has-new-conversation-drawer { overflow:hidden; }
+@media (max-width:620px) {
+  .new-conversation-drawer { width:100vw; padding:0; background:#fff; }
+  .new-conversation-form { min-height:100dvh; border:0; border-radius:0; }
+  .new-conversation-field-grid { grid-template-columns:1fr; }
+  .new-conversation-actions { padding-bottom:max(15px, env(safe-area-inset-bottom)); }
+}

@@ -100,6 +100,51 @@ $returnQuery = http_build_query($pollQuery);
 
 <div class="conversation-workspace" data-conversation-realtime data-poll-url="<?= View::e(Router::url('/conversations/poll')) ?>" data-avatar-url="<?= View::e(Router::url('/conversations/avatar')) ?>" data-current-query="<?= View::e(http_build_query($pollQuery)) ?>" data-conversation-id="<?= (int) ($selected['id'] ?? 0) ?>" data-last-message-id="<?= (int) $lastMessageId ?>" data-base-title="<?= View::e($title ?? 'Conversas') ?>">
     <div class="realtime-toast" data-realtime-toast hidden></div>
+    <?php if ($canManage): ?>
+        <div class="new-conversation-shell" data-new-conversation-shell hidden>
+            <button class="new-conversation-backdrop" type="button" data-new-conversation-close aria-label="Fechar novo atendimento"></button>
+            <section class="new-conversation-drawer" id="new-conversation-drawer" role="dialog" aria-modal="true" aria-labelledby="new-conversation-title">
+                <form class="new-conversation-form" method="post" action="<?= View::e(Router::url('/conversations/start')) ?>" data-new-conversation-form data-contact-lookup-url="<?= View::e(Router::url('/conversations/contact-lookup')) ?>">
+                    <?= Csrf::input() ?>
+                    <div class="new-conversation-form-head">
+                        <div>
+                            <span><span class="eyebrow">Novo atendimento</span><strong id="new-conversation-title">Iniciar conversa</strong></span>
+                            <button class="drawer-close new-conversation-close" type="button" data-new-conversation-close aria-label="Fechar novo atendimento" title="Fechar">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                            </button>
+                        </div>
+                        <small>Pesquise um contato já cadastrado ou informe um novo número. A Caixa de Entrada permanece no mesmo ponto enquanto você inicia o atendimento.</small>
+                    </div>
+                    <div class="new-conversation-form-body">
+                        <label class="field"><span>Instância</span>
+                            <select name="instance_id" required data-new-conversation-instance>
+                                <option value="">Selecione</option>
+                                <?php foreach ($instances as $instance): ?>
+                                    <?php
+                                    if (Auth::isSuperAdmin() && (int) ($filters['tenant_id'] ?? 0) < 1) continue;
+                                    if (Auth::isSuperAdmin() && (int) $instance['tenant_id'] !== (int) ($filters['tenant_id'] ?? 0)) continue;
+                                    ?>
+                                    <option value="<?= (int) $instance['id'] ?>"><?= View::e((Auth::isSuperAdmin() ? ($instance['tenant_name'] ?? '') . ' — ' : '') . $instance['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <label class="field new-conversation-contact-search"><span>Buscar contato</span><input type="search" autocomplete="off" placeholder="Nome ou telefone" data-new-conversation-search><small class="field-hint-inline">A busca consulta os contatos da empresa antes de iniciar um novo atendimento.</small></label>
+                        <div class="new-conversation-search-results" data-new-conversation-results hidden></div>
+                        <div class="new-conversation-field-grid">
+                            <label class="field"><span>Telefone com DDI</span><input name="phone" inputmode="tel" autocomplete="off" placeholder="5511999999999" required data-new-conversation-phone></label>
+                            <label class="field"><span>Nome do contato</span><input name="name" autocomplete="off" placeholder="Opcional" data-new-conversation-name></label>
+                        </div>
+                        <div class="new-conversation-existing" data-new-conversation-existing hidden></div>
+                        <label class="field"><span>Primeira mensagem</span><textarea name="message" rows="4" required>Olá! Como podemos ajudar?</textarea></label>
+                    </div>
+                    <div class="new-conversation-actions">
+                        <button class="btn btn-outline" type="button" data-new-conversation-close>Cancelar</button>
+                        <button class="btn btn-primary" type="submit" <?= !$instances ? 'disabled' : '' ?>>Enviar e abrir conversa</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    <?php endif; ?>
     <aside class="conversation-inbox card">
         <div class="conversation-panel-heading">
             <div>
@@ -115,35 +160,7 @@ $returnQuery = http_build_query($pollQuery);
                     </button>
                 <?php endif; ?>
                 <?php if ($canManage): ?>
-                    <details class="new-conversation-details">
-                        <summary class="btn btn-primary btn-small">+ Nova</summary>
-                        <form class="new-conversation-form" method="post" action="<?= View::e(Router::url('/conversations/start')) ?>" data-new-conversation-form data-contact-lookup-url="<?= View::e(Router::url('/conversations/contact-lookup')) ?>">
-                            <?= Csrf::input() ?>
-                            <div class="new-conversation-form-head">
-                                <div><span class="eyebrow">Novo atendimento</span><strong>Iniciar conversa</strong></div>
-                                <small>Pesquise um contato já cadastrado ou informe um novo número.</small>
-                            </div>
-                            <label class="field"><span>Instância</span>
-                                <select name="instance_id" required data-new-conversation-instance>
-                                    <option value="">Selecione</option>
-                                    <?php foreach ($instances as $instance): ?>
-                                        <?php
-                                        if (Auth::isSuperAdmin() && (int) ($filters['tenant_id'] ?? 0) < 1) continue;
-                                        if (Auth::isSuperAdmin() && (int) $instance['tenant_id'] !== (int) ($filters['tenant_id'] ?? 0)) continue;
-                                        ?>
-                                        <option value="<?= (int) $instance['id'] ?>"><?= View::e((Auth::isSuperAdmin() ? ($instance['tenant_name'] ?? '') . ' — ' : '') . $instance['name']) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </label>
-                            <label class="field new-conversation-contact-search"><span>Buscar contato</span><input type="search" autocomplete="off" placeholder="Nome ou telefone" data-new-conversation-search><small class="field-hint-inline">A busca consulta os contatos da empresa antes de iniciar um novo atendimento.</small></label>
-                            <div class="new-conversation-search-results" data-new-conversation-results hidden></div>
-                            <label class="field"><span>Telefone com DDI</span><input name="phone" inputmode="tel" autocomplete="off" placeholder="5511999999999" required data-new-conversation-phone></label>
-                            <label class="field"><span>Nome do contato</span><input name="name" autocomplete="off" placeholder="Opcional" data-new-conversation-name></label>
-                            <div class="new-conversation-existing" data-new-conversation-existing hidden></div>
-                            <label class="field"><span>Primeira mensagem</span><textarea name="message" rows="3" required>Olá! Como podemos ajudar?</textarea></label>
-                            <button class="btn btn-primary btn-block" type="submit" <?= !$instances ? 'disabled' : '' ?>>Enviar e abrir conversa</button>
-                        </form>
-                    </details>
+                    <button class="btn btn-primary btn-small" type="button" data-new-conversation-open aria-haspopup="dialog" aria-controls="new-conversation-drawer">+ Nova</button>
                 <?php endif; ?>
             </div>
         </div>

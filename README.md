@@ -1,10 +1,10 @@
 # RS Connect — pacote VPS
 
-Pacote consolidado até o RS Connect 36.6.30 — Busca inicial, horários por dia e telemetria clara.
+Pacote consolidado até o RS Connect 36.6.31 — Novo atendimento em drawer.
 
 ## Última etapa incluída
 
-RS Connect 36.6.30 — adiciona busca de contato antes da primeira conversa, permite horários diferentes por dia, refina LGPD/contatos/consumo e corrige a franquia para contar somente respostas de IA realmente entregues.
+RS Connect 36.6.31 — corrige o formulário de nova conversa para abrir em drawer próprio, sem recorte pela coluna da Caixa de Entrada, mantendo a busca preventiva e todas as regras anteriores.
 
 RS Connect 36.6.28 — preserva a lógica da Central de comunicação e eleva o acabamento do Admin com formulário em etapas, controles estilizados, seleção de empresas em cards e preview mais fiel ao produto.
 

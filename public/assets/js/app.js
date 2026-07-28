@@ -255,6 +255,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const form = document.querySelector('[data-new-conversation-form]');
   if (!form) return;
 
+  const shell = document.querySelector('[data-new-conversation-shell]');
+  const openButton = document.querySelector('[data-new-conversation-open]');
+  const closeButtons = document.querySelectorAll('[data-new-conversation-close]');
   const lookupUrl = form.dataset.contactLookupUrl || '';
   const instance = form.querySelector('[data-new-conversation-instance]');
   const search = form.querySelector('[data-new-conversation-search]');
@@ -265,6 +268,30 @@ document.addEventListener('DOMContentLoaded', () => {
   let lookupTimer = null;
   let lastQuery = '';
   let requestSeq = 0;
+
+  function openNewConversation() {
+    if (!shell) return;
+    shell.hidden = false;
+    document.body.classList.add('has-new-conversation-drawer');
+    window.requestAnimationFrame(() => {
+      const target = instance?.value ? search : instance;
+      target?.focus();
+    });
+  }
+
+  function closeNewConversation() {
+    if (!shell) return;
+    shell.hidden = true;
+    document.body.classList.remove('has-new-conversation-drawer');
+    clearResults();
+    openButton?.focus();
+  }
+
+  openButton?.addEventListener('click', openNewConversation);
+  closeButtons.forEach((button) => button.addEventListener('click', closeNewConversation));
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && shell && !shell.hidden) closeNewConversation();
+  });
 
   const escape = (value) => String(value || '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

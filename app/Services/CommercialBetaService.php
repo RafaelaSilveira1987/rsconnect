@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.31', 'title' => 'Novo atendimento em drawer', 'summary' => 'Move o formulário de nova conversa para um drawer independente da Caixa de Entrada, eliminando recortes em telas estreitas e preservando busca preventiva e posição da lista.' ],
             ['version' => '36.6.30', 'title' => 'Busca inicial, horários por dia e telemetria clara', 'summary' => 'Adiciona busca de contato antes da primeira conversa, permite faixas de atendimento diferentes por dia, refina telas de LGPD/contato/consumo e alinha a franquia de IA somente a respostas efetivamente entregues.'],
             ['version' => '36.6.29', 'title' => 'Busca confiável e avatar do contato', 'summary' => 'Corrige a pesquisa da Caixa de Entrada com busca por nome, telefone normalizado e histórico de mensagens, adiciona busca instantânea e exibe foto de perfil do WhatsApp quando disponível pela Evolution.'],
             ['version' => '36.6.28', 'title' => 'Polimento visual da Central de comunicação', 'summary' => 'Refina a experiência do Admin com formulário em etapas, campos estilizados, destinatários e canais em cards, preview em tempo real e hierarquia visual alinhada ao RS Connect.'],
