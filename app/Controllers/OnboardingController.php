@@ -14,6 +14,7 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\AiAutomationService;
 use App\Services\OnboardingGuideService;
+use App\Services\PromptStudioService;
 use PDO;
 use Throwable;
 
@@ -270,6 +271,7 @@ final class OnboardingController
             $complete->execute(['id' => $tenantId]);
 
             $pdo->commit();
+            (new PromptStudioService())->createVersion($tenantId, $agentId, $prompt, 'onboarding', Auth::id(), null, null, 'Prompt criado no onboarding');
             $guideService = new OnboardingGuideService();
             $guideService->applyStoredAttendanceToAgent($tenantId, $agentId);
             Audit::log('onboarding.agent_completed', ['agent_id' => $agentId], $tenantId);

@@ -28,6 +28,7 @@ $selectedTenantId = (int) ($selectedTenantId ?? 0);
 $tenants = is_array($tenants ?? null) ? $tenants : [];
 $groupRules = is_array($groupRules ?? null) ? $groupRules : [];
 $contactGroups = is_array($contactGroups ?? null) ? $contactGroups : [];
+$promptVersions = is_array($promptVersions ?? null) ? $promptVersions : [];
 $profile = is_array($companyProfile ?? null) ? $companyProfile : [];
 $companyKnowledge = [];
 foreach ([
@@ -129,6 +130,29 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                                     <button class="btn btn-primary" type="submit">Salvar instruções</button>
                                 </div>
                             </form>
+                        </details>
+                        <?php $agentPromptVersions = $promptVersions[(int) $agent['id']] ?? []; ?>
+                        <details class="agent-prompt prompt-version-history">
+                            <summary>Histórico do prompt <span class="badge"><?= count($agentPromptVersions) ?> versão(ões)</span></summary>
+                            <div class="prompt-version-list">
+                                <?php foreach ($agentPromptVersions as $version): ?>
+                                    <article class="prompt-version-item">
+                                        <div>
+                                            <strong>Versão <?= (int) ($version['version_number'] ?? 0) ?></strong>
+                                            <span><?= View::e($version['title'] ?? 'Prompt salvo') ?></span>
+                                            <small><?= View::e($version['created_by_name'] ?? 'Sistema') ?> · <?= View::e($version['created_at'] ?? '') ?> · <?= View::e($version['source'] ?? 'manual') ?></small>
+                                        </div>
+                                        <form method="post" action="<?= View::e(Router::url('/prompt-studio/restore')) ?>" onsubmit="return confirm('Restaurar esta versão do prompt?');">
+                                            <?= Csrf::input() ?>
+                                            <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
+                                            <input type="hidden" name="agent_id" value="<?= (int) $agent['id'] ?>">
+                                            <input type="hidden" name="version_id" value="<?= (int) ($version['id'] ?? 0) ?>">
+                                            <button class="btn btn-quiet btn-sm" type="submit">Restaurar</button>
+                                        </form>
+                                    </article>
+                                <?php endforeach; ?>
+                                <?php if (!$agentPromptVersions): ?><div class="empty-state compact-empty">O histórico será criado após aplicar a migration 062 ou salvar uma nova versão.</div><?php endif; ?>
+                            </div>
                         </details>
                     <?php else: ?>
                         <details class="agent-prompt"><summary>Ver instruções e informações</summary><pre><?= View::e($agent['system_prompt']) ?></pre><?php if (!empty($agent['knowledge_base'])): ?><pre><?= View::e($agent['knowledge_base']) ?></pre><?php endif; ?></details>
@@ -233,13 +257,14 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
         <button class="icon-button drawer-close" type="button" data-close-panel="agent-create-drawer" aria-label="Fechar painel">×</button>
     </div>
 
-    <form class="drawer-form agent-create-form agent-guided-form" method="post" action="<?= View::e(Router::url('/agents')) ?>">
+    <form class="drawer-form agent-create-form agent-guided-form" method="post" action="<?= View::e(Router::url('/agents')) ?>" data-prompt-studio data-prompt-endpoint="<?= View::e(Router::url('/prompt-studio/generate')) ?>">
         <?= Csrf::input() ?>
         <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
         <div class="agent-drawer-progress" aria-label="Etapas do cadastro">
             <span><b>1</b> Identificação</span>
             <span><b>2</b> Atendimento</span>
             <span><b>3</b> Empresa</span>
+            <span><b>4</b> Prompt</span>
         </div>
 
         <div class="conversation-drawer-body agent-client-drawer-body">
@@ -263,6 +288,19 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                     <label class="field"><span>Tom de voz</span><select name="tone_of_voice"><option value="claro, cordial e profissional">Claro e profissional</option><option value="acolhedor, paciente e próximo">Acolhedor e próximo</option><option value="objetivo, direto e consultivo">Objetivo e consultivo</option><option value="descontraído, simpático e respeitoso">Descontraído e simpático</option></select></label>
                     <label class="field"><span>Mensagem de boas-vindas</span><input name="welcome_message" placeholder="Ex.: Olá! Como posso ajudar você hoje?"></label>
                     <label class="field drawer-span"><span>Regras principais</span><textarea name="assistant_rules" rows="7" placeholder="Ex.: faça uma pergunta por vez; não informe preços sem confirmar; encaminhe para uma pessoa quando o cliente pedir; nunca invente informações." required></textarea></label>
+                    <label class="field drawer-span"><span>Público principal</span><textarea name="audience" rows="3" placeholder="Ex.: clientes atuais, novos interessados, pacientes, responsáveis ou empresas parceiras."></textarea></label>
+                    <label class="field drawer-span"><span>Produtos e serviços</span><textarea name="services" rows="5" placeholder="Liste os serviços e explique brevemente o que pode ser apresentado ao contato."></textarea></label>
+                    <label class="field drawer-span"><span>Informações autorizadas</span><textarea name="allowed_information" rows="4" placeholder="Preços confirmados, prazos, links, políticas e informações que o agente pode informar com segurança."></textarea></label>
+                    <label class="field drawer-span"><span>Perguntas essenciais</span><textarea name="required_questions" rows="4" placeholder="Quais dados são realmente necessários? Ex.: nome, serviço desejado e melhor período."></textarea></label>
+                    <div class="form-grid two drawer-span">
+                        <label class="field"><span>Como tratar novos interessados</span><textarea name="lead_rules" rows="4" placeholder="Ex.: entender a demanda e apresentar o próximo passo sem pressionar."></textarea></label>
+                        <label class="field"><span>Como tratar clientes atuais</span><textarea name="customer_rules" rows="4" placeholder="Ex.: usar cadastro e histórico, sem reiniciar a triagem."></textarea></label>
+                    </div>
+                    <label class="field drawer-span"><span>Regras de agenda</span><textarea name="agenda_rules" rows="4" placeholder="Ex.: perguntar modalidade, nunca inventar disponibilidade e aguardar aprovação quando exigida."></textarea></label>
+                    <label class="field drawer-span"><span>Quando encaminhar para uma pessoa</span><textarea name="handoff_rules" rows="4" placeholder="Ex.: quando o cliente pedir humano, houver reclamação sensível ou faltar autorização."></textarea></label>
+                    <label class="field drawer-span"><span>O que o agente nunca deve fazer</span><textarea name="forbidden_information" rows="4" placeholder="Ex.: inventar preço, prometer prazo, confirmar agenda sem retorno ou expor dados internos."></textarea></label>
+                    <label class="field drawer-span"><span>Exemplos de bom comportamento</span><textarea name="examples" rows="5" placeholder="Ex.: Cliente: quero remarcar. Assistente: claro, vou verificar seu agendamento atual e as opções disponíveis."></textarea></label>
+                    <input type="hidden" name="response_style" value="mensagens curtas, naturais e com uma pergunta por vez">
                 </div>
                 <div class="agent-create-behavior agent-friendly-toggles">
                     <label class="switch-card"><input type="checkbox" name="auto_reply_enabled" value="1" checked><span><strong>Responder automaticamente</strong><small>O assistente responde quando a conversa estiver no modo IA ativa.</small></span></label>
@@ -275,6 +313,21 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                     <div><span class="eyebrow">Etapa 3</span><h3>O que ele precisa saber sobre a empresa?</h3><p>Revise as informações que poderão ser usadas nas respostas.</p></div>
                 </div>
                 <label class="field"><span>Informações da empresa</span><textarea name="knowledge_base" rows="11" placeholder="Serviços, horários, links, políticas, perguntas frequentes e outras informações importantes."><?= View::e($defaultCompanyKnowledge) ?></textarea><small class="field-hint">O conteúdo foi preenchido com os dados do Perfil da empresa. Você pode complementar antes de criar.</small></label>
+            </section>
+
+            <section class="drawer-section agent-step-card prompt-studio-output">
+                <div class="drawer-section-title">
+                    <div><span class="eyebrow">Etapa 4</span><h3>Gerar e revisar o prompt</h3><p>O RS Connect organiza suas respostas em instruções estruturadas e verifica conflitos com horário, agenda e regras operacionais.</p></div>
+                </div>
+                <div class="prompt-studio-toolbar">
+                    <button class="btn btn-outline" type="button" data-prompt-generate>Gerar prompt estruturado</button>
+                    <span class="muted-text" data-prompt-status>Preencha as etapas anteriores e gere a primeira versão.</span>
+                </div>
+                <div class="prompt-studio-warnings" data-prompt-warnings hidden></div>
+                <label class="field"><span>Prompt final do assistente</span><textarea class="agent-prompt-textarea" name="system_prompt" rows="18" maxlength="60000" placeholder="O prompt estruturado aparecerá aqui. Você poderá revisar antes de criar o assistente." required></textarea><small class="field-hint">Você continua no controle: edite qualquer trecho antes de salvar.</small></label>
+                <input type="hidden" name="prompt_studio_generated" value="0" data-prompt-generated>
+                <input type="hidden" name="prompt_studio_answers_json" value="" data-prompt-answers>
+                <input type="hidden" name="prompt_studio_warnings_json" value="" data-prompt-warnings-json>
             </section>
 
             <details class="drawer-section drawer-collapsed-card agent-advanced-settings">
@@ -335,7 +388,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
     </div>
 
     <div class="conversation-drawer-body">
-        <form class="drawer-form agent-create-form" method="post" action="<?= View::e(Router::url('/agents')) ?>">
+        <form class="drawer-form agent-create-form" method="post" action="<?= View::e(Router::url('/agents')) ?>" data-prompt-studio data-prompt-endpoint="<?= View::e(Router::url('/prompt-studio/generate')) ?>">
             <?= Csrf::input() ?>
             <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
 
@@ -346,9 +399,29 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                 <label class="field"><span>Área de atendimento</span><input name="segment" placeholder="Ex.: vendas, suporte, agendamentos" required><small class="field-hint">Ajuda a identificar a função principal do assistente.</small></label>
             </section>
 
-            <section class="drawer-section">
-                <div class="drawer-section-title"><div><span class="eyebrow">2. Atendimento</span><h3>O que ele deve saber e fazer?</h3></div></div>
-                <label class="field"><span>Como o assistente deve atender</span><textarea name="system_prompt" rows="9" placeholder="Explique o tom de voz, as etapas do atendimento, o que ele pode fazer e quando deve chamar uma pessoa da equipe." required></textarea></label>
+            <section class="drawer-section prompt-studio-output">
+                <div class="drawer-section-title"><div><span class="eyebrow">2. Prompt Studio</span><h3>O que ele deve saber e fazer?</h3><p>Responda ao questionário e gere uma estrutura consistente antes de salvar.</p></div></div>
+                <label class="field"><span>Objetivo do atendimento</span><textarea name="service_objective" rows="4" placeholder="Resultado esperado de cada conversa." required></textarea></label>
+                <div class="form-grid two">
+                    <label class="field"><span>Tom de voz</span><select name="tone_of_voice"><option value="claro, cordial e profissional">Claro e profissional</option><option value="acolhedor, paciente e próximo">Acolhedor e próximo</option><option value="objetivo, direto e consultivo">Objetivo e consultivo</option></select></label>
+                    <label class="field"><span>Público principal</span><input name="audience" placeholder="Clientes, leads, pacientes..."></label>
+                </div>
+                <label class="field"><span>Produtos e serviços</span><textarea name="services" rows="4"></textarea></label>
+                <label class="field"><span>Regras principais</span><textarea name="assistant_rules" rows="5" placeholder="Uma pergunta por vez, regras comerciais e limites."></textarea></label>
+                <div class="form-grid two">
+                    <label class="field"><span>Novos interessados</span><textarea name="lead_rules" rows="4"></textarea></label>
+                    <label class="field"><span>Clientes atuais</span><textarea name="customer_rules" rows="4"></textarea></label>
+                </div>
+                <label class="field"><span>Agenda</span><textarea name="agenda_rules" rows="4"></textarea></label>
+                <label class="field"><span>Transferência humana</span><textarea name="handoff_rules" rows="4"></textarea></label>
+                <label class="field"><span>Restrições</span><textarea name="forbidden_information" rows="4"></textarea></label>
+                <input type="hidden" name="response_style" value="mensagens curtas, naturais e com uma pergunta por vez">
+                <div class="prompt-studio-toolbar"><button class="btn btn-outline" type="button" data-prompt-generate>Gerar prompt estruturado</button><span class="muted-text" data-prompt-status>O prompt será validado contra as regras operacionais.</span></div>
+                <div class="prompt-studio-warnings" data-prompt-warnings hidden></div>
+                <label class="field"><span>Prompt final</span><textarea name="system_prompt" rows="16" maxlength="60000" required></textarea></label>
+                <input type="hidden" name="prompt_studio_generated" value="0" data-prompt-generated>
+                <input type="hidden" name="prompt_studio_answers_json" value="" data-prompt-answers>
+                <input type="hidden" name="prompt_studio_warnings_json" value="" data-prompt-warnings-json>
                 <label class="field"><span>Informações da empresa</span><textarea name="knowledge_base" rows="7" placeholder="Inclua serviços, horários, perguntas frequentes, regras, links e informações que podem ser usadas nas respostas."></textarea></label>
             </section>
 

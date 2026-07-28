@@ -1,3 +1,14 @@
+## 36.6.35 — Prompt Studio e versionamento de instruções
+
+- questionário guiado para criação do primeiro prompt;
+- geração determinística sem consumo obrigatório de API;
+- validação de conflitos com horário, agenda e confirmação humana;
+- preview editável antes de criar o assistente;
+- rascunho por empresa/usuário;
+- histórico de versões por assistente;
+- restauração segura de versões anteriores;
+- auditoria de geração, edição e restauração.
+
 ## 36.6.34.2 — Agenda interna e liberação da Agenda inteligente
 
 - Etapa 4 do onboarding passa a exigir a escolha entre Sem agenda, Agenda interna e Agenda inteligente integrada.

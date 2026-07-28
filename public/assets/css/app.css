@@ -8723,3 +8723,21 @@ body.has-new-conversation-drawer { overflow:hidden; }
   .internal-calendar-day { grid-template-columns: 1fr 1fr; }
   .internal-day-toggle { grid-column: 1 / -1; }
 }
+
+/* Prompt Studio 36.6.35 */
+.agent-drawer-progress{grid-template-columns:repeat(4,minmax(0,1fr))}
+.prompt-studio-output{background:linear-gradient(145deg,rgba(15,139,141,.045),rgba(78,91,181,.045));border-color:rgba(47,124,163,.2)}
+.prompt-studio-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px;padding:14px;border:1px solid var(--border,#dce5ed);border-radius:16px;background:rgba(255,255,255,.72)}
+.prompt-studio-warnings{display:grid;gap:10px;margin:0 0 14px}
+.prompt-studio-alert{display:grid;gap:3px;padding:12px 14px;border-radius:14px;border:1px solid rgba(47,124,163,.18);background:#f7fbfd}
+.prompt-studio-alert strong{font-size:.82rem;text-transform:uppercase;letter-spacing:.05em}
+.prompt-studio-alert span{font-size:.9rem;line-height:1.45}
+.prompt-studio-alert.is-warning,.prompt-studio-alert.is-attention{background:#fffaf0;border-color:#f0d9a5}
+.prompt-studio-alert.is-success{background:#effbf4;border-color:#bfe8cf}
+.prompt-version-history summary{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.prompt-version-list{display:grid;gap:10px;padding-top:12px}
+.prompt-version-item{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:12px 14px;border:1px solid var(--border,#dce5ed);border-radius:14px;background:rgba(255,255,255,.75)}
+.prompt-version-item>div{display:grid;gap:2px;min-width:0}
+.prompt-version-item span,.prompt-version-item small{color:var(--muted,#667085)}
+.btn-sm{padding:8px 12px;min-height:auto}
+@media (max-width:760px){.agent-drawer-progress{grid-template-columns:repeat(2,minmax(0,1fr))}.prompt-version-item{align-items:flex-start;flex-direction:column}.prompt-studio-toolbar{align-items:flex-start;flex-direction:column}}

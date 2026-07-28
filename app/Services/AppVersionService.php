@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.34.2 — Agenda interna e liberação da Agenda inteligente';
-    public const REQUIRED_MIGRATION = '061_onboarding_calendar_modes.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.35 — Prompt Studio e versionamento de instruções';
+    public const REQUIRED_MIGRATION = '062_prompt_studio_and_versions.sql';
 
     private PDO $pdo;
 
@@ -94,13 +94,15 @@ final class AppVersionService
             'ai_after_hours_pending',
             'ai_agent_instance_bindings',
             'client_communication_replies',
+            'ai_prompt_studio_drafts',
+            'ai_agent_prompt_versions',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 061, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 062, conforme o pacote implantado.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')
@@ -114,6 +116,17 @@ final class AppVersionService
                 ? 'Teste por quantidade de dias, transição pós-teste e implantação guiada estão disponíveis.'
                 : 'A estrutura do teste gratuito ou do primeiro acesso guiado ainda não foi aplicada.',
             'Executar database/migrations/060_free_trial_guided_first_access.sql.'
+        );
+
+        $promptStudioReady = $this->tableExists('ai_prompt_studio_drafts')
+            && $this->tableExists('ai_agent_prompt_versions');
+        $checks[] = $this->check(
+            'Prompt Studio e versões',
+            $promptStudioReady ? 'ok' : 'blocked',
+            $promptStudioReady
+                ? 'Criação guiada, validação de conflitos e histórico restaurável de prompts estão disponíveis.'
+                : 'A estrutura do Prompt Studio e do versionamento de prompts ainda não foi aplicada.',
+            'Executar database/migrations/062_prompt_studio_and_versions.sql.'
         );
 
         $calendarOnboardingReady = $this->columnExists('tenant_onboarding_settings', 'calendar_mode')

@@ -16,6 +16,7 @@ use App\Services\AgentRoutingService;
 use App\Services\ConversationFlowService;
 use App\Services\SubscriptionService;
 use App\Services\OnboardingGuideService;
+use App\Services\PromptStudioService;
 use PDO;
 use Throwable;
 
@@ -44,6 +45,7 @@ final class AgentController
         $instances = [];
         $companyProfile = [];
         $groupRules = [];
+        $promptVersions = [];
 
         if ($tenantId > 0) {
             $agentsStatement = $pdo->prepare(
@@ -92,6 +94,8 @@ final class AgentController
                 array_column($agents, 'id')
             );
 
+            $promptVersions = (new PromptStudioService())->versionsForAgents($tenantId, array_column($agents, 'id'));
+
             try {
                 $bindings = (new AgentRoutingService())->bindingsForTenant($pdo, $tenantId);
                 $channelsByAgent = [];
@@ -128,6 +132,7 @@ final class AgentController
             'selectedTenantId' => $tenantId,
             'groupRules' => $groupRules,
             'contactGroups' => ConversationFlowService::GROUPS,
+            'promptVersions' => $promptVersions,
         ]);
     }
 
@@ -255,6 +260,18 @@ final class AgentController
             }
 
             $pdo->commit();
+            $promptSource = trim((string) ($_POST['prompt_studio_generated'] ?? '')) === '1' ? 'prompt_studio' : 'manual';
+            $answers = null;
+            $warnings = null;
+            if (!empty($_POST['prompt_studio_answers_json'])) {
+                $decodedAnswers = json_decode((string) $_POST['prompt_studio_answers_json'], true);
+                $answers = is_array($decodedAnswers) ? $decodedAnswers : null;
+            }
+            if (!empty($_POST['prompt_studio_warnings_json'])) {
+                $decodedWarnings = json_decode((string) $_POST['prompt_studio_warnings_json'], true);
+                $warnings = is_array($decodedWarnings) ? $decodedWarnings : null;
+            }
+            (new PromptStudioService())->createVersion($tenantId, $agentId, $prompt, $promptSource, Auth::id(), $answers, $warnings, 'Criação do assistente');
             $guideService = new OnboardingGuideService();
             if ($guideService->requiresGuidedAccess($tenantId)) {
                 $guideService->applyStoredAttendanceToAgent($tenantId, $agentId);
@@ -417,6 +434,8 @@ final class AgentController
                 'id' => $agentId,
                 'tenant_id' => $tenantId,
             ]);
+
+            (new PromptStudioService())->createVersion($tenantId, $agentId, $prompt, 'manual', Auth::id(), null, null, 'Edição manual');
 
             Audit::log('agent.prompt_updated', [
                 'agent_id' => $agentId,

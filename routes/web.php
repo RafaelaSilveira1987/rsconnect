@@ -37,6 +37,7 @@ use App\Controllers\ReportController;
 use App\Controllers\SecurityController;
 use App\Controllers\BillingReminderController;
 use App\Controllers\PermissionController;
+use App\Controllers\PromptStudioController;
 use App\Controllers\TaskController;
 use App\Controllers\TenantHealthController;
 use App\Controllers\UserController;
@@ -238,6 +239,8 @@ return static function (Router $router): void {
     $router->post('/agents/status', [AgentController::class, 'updateStatus'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->post('/agents/prompt', [AgentController::class, 'updatePrompt'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->post('/agents/group-rules', [AgentController::class, 'updateGroupRules'], ['auth', 'permission:agents.manage', 'csrf']);
+    $router->post('/prompt-studio/generate', [PromptStudioController::class, 'generate'], ['auth', 'permission:agents.manage', 'csrf']);
+    $router->post('/prompt-studio/restore', [PromptStudioController::class, 'restore'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->get('/automations', [AutomationController::class, 'index'], ['auth', 'permission:automations.view']);
 
     $router->get('/billing', [BillingController::class, 'index'], ['auth', 'super_admin']);

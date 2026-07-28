@@ -131,7 +131,7 @@ final class OnboardingGuideService
         return match ($step) {
             'lgpd_acceptance' => in_array($path, ['/privacy/accept'], true),
             'whatsapp_connection' => str_starts_with($path, '/instances'),
-            'ai_agent' => str_starts_with($path, '/agents'),
+            'ai_agent' => str_starts_with($path, '/agents') || str_starts_with($path, '/prompt-studio'),
             'final_test' => str_starts_with($path, '/conversations') || str_starts_with($path, '/calendar'),
             default => false,
         };
@@ -424,7 +424,7 @@ final class OnboardingGuideService
             ['key' => 'attendance_rules', 'title' => 'Como será o atendimento', 'short' => 'Atendimento', 'subtitle' => 'Etapa 3', 'description' => 'Defina horários, tempo de espera, mensagem fora do expediente e transferência para humano antes de criar o agente.', 'action_label' => 'Configurar atendimento', 'action_url' => '#attendance-rules', 'icon' => 'support'],
             ['key' => 'agenda_setup', 'title' => 'Agenda', 'short' => 'Agenda', 'subtitle' => 'Etapa 4', 'description' => 'Escolha se a empresa usará agenda interna, integração configurada ou se esta etapa não se aplica.', 'action_label' => 'Configurar agenda', 'action_url' => '#agenda-setup', 'icon' => 'calendar'],
             ['key' => 'whatsapp_connection', 'title' => 'Conectar WhatsApp', 'short' => 'WhatsApp', 'subtitle' => 'Etapa 5', 'description' => 'Conecte o canal de atendimento e valide o status da instância antes de criar o agente.', 'action_label' => 'Abrir instâncias', 'action_url' => '/instances', 'icon' => 'whatsapp'],
-            ['key' => 'ai_agent', 'title' => 'Criar agente de IA', 'short' => 'Agente', 'subtitle' => 'Etapa 6', 'description' => 'Crie o agente, vincule o WhatsApp e aplique as regras operacionais configuradas nas etapas anteriores.', 'action_label' => 'Abrir agentes', 'action_url' => '/agents', 'icon' => 'ai'],
+            ['key' => 'ai_agent', 'title' => 'Criar agente de IA', 'short' => 'Agente', 'subtitle' => 'Etapa 6', 'description' => 'Use o Prompt Studio para criar instruções consistentes, vincule o WhatsApp e aplique as regras operacionais configuradas nas etapas anteriores.', 'action_label' => 'Abrir agentes', 'action_url' => '/agents', 'icon' => 'ai'],
             ['key' => 'final_test', 'title' => 'Teste final', 'short' => 'Teste', 'subtitle' => 'Etapa 7', 'description' => 'Valide uma conversa real, pausa humana, horário e agenda quando aplicável antes de liberar o painel completo.', 'action_label' => 'Executar teste', 'action_url' => '/conversations', 'icon' => 'check'],
         ];
     }

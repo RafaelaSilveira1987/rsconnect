@@ -1,8 +1,10 @@
 # RS Connect — pacote VPS
 
-Pacote consolidado até o RS Connect 36.6.34.2 — Agenda interna e liberação da Agenda inteligente.
+Pacote consolidado até o RS Connect 36.6.35 — Prompt Studio e versionamento de instruções.
 
 ## Última etapa incluída
+
+RS Connect 36.6.35 — adiciona criação guiada de prompt, validação de conflitos operacionais e histórico restaurável por assistente.
 
 RS Connect 36.6.34.2 — adiciona a escolha explícita entre Agenda interna, Agenda inteligente homologada pela RS e operação sem agenda.
 

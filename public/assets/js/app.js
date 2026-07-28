@@ -2068,3 +2068,85 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 })();
+
+// Prompt Studio 36.6.35 — geração determinística e revisão antes de criar o agente.
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-prompt-studio]').forEach(function (form) {
+        var button = form.querySelector('[data-prompt-generate]');
+        var status = form.querySelector('[data-prompt-status]');
+        var output = form.querySelector('textarea[name="system_prompt"]');
+        var warningsBox = form.querySelector('[data-prompt-warnings]');
+        var generated = form.querySelector('[data-prompt-generated]');
+        var answersField = form.querySelector('[data-prompt-answers]');
+        var warningsField = form.querySelector('[data-prompt-warnings-json]');
+        if (!button || !output) return;
+
+        var value = function (name) {
+            var field = form.querySelector('[name="' + name + '"]');
+            return field ? String(field.value || '').trim() : '';
+        };
+        var renderWarnings = function (warnings) {
+            if (!warningsBox) return;
+            warningsBox.innerHTML = '';
+            if (!Array.isArray(warnings) || warnings.length === 0) {
+                warningsBox.hidden = false;
+                warningsBox.innerHTML = '<div class="prompt-studio-alert is-success"><strong>Estrutura validada</strong><span>Nenhum conflito operacional foi encontrado.</span></div>';
+                return;
+            }
+            warnings.forEach(function (warning) {
+                var item = document.createElement('div');
+                item.className = 'prompt-studio-alert is-' + (warning.level || 'info');
+                var strong = document.createElement('strong');
+                strong.textContent = warning.level === 'warning' ? 'Atenção' : (warning.level === 'attention' ? 'Revisar' : 'Informação');
+                var span = document.createElement('span');
+                span.textContent = warning.message || '';
+                item.appendChild(strong);
+                item.appendChild(span);
+                warningsBox.appendChild(item);
+            });
+            warningsBox.hidden = false;
+        };
+
+        button.addEventListener('click', async function () {
+            var endpoint = form.getAttribute('data-prompt-endpoint');
+            if (!endpoint) return;
+            var agentName = value('name');
+            var role = value('segment');
+            var objective = value('service_objective');
+            if (!agentName || !role || !objective) {
+                if (status) status.textContent = 'Preencha nome, área e objetivo antes de gerar.';
+                return;
+            }
+
+            button.disabled = true;
+            if (status) status.textContent = 'Organizando instruções e validando conflitos...';
+            try {
+                var data = new FormData(form);
+                data.set('agent_name', agentName);
+                data.set('role', role);
+                data.set('objective', objective);
+                data.set('tone', value('tone_of_voice'));
+                data.set('custom_rules', value('assistant_rules'));
+                var response = await fetch(endpoint, {
+                    method: 'POST',
+                    body: data,
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' }
+                });
+                var payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.message || 'Falha ao gerar o prompt.');
+                output.value = payload.prompt || '';
+                if (generated) generated.value = '1';
+                if (answersField) answersField.value = JSON.stringify(payload.answers || {});
+                if (warningsField) warningsField.value = JSON.stringify(payload.warnings || []);
+                renderWarnings(payload.warnings || []);
+                if (status) status.textContent = 'Prompt gerado. Revise o conteúdo antes de criar o assistente.';
+                output.dispatchEvent(new Event('input', { bubbles: true }));
+            } catch (error) {
+                if (status) status.textContent = error && error.message ? error.message : 'Não foi possível gerar o prompt.';
+            } finally {
+                button.disabled = false;
+            }
+        });
+    });
+});

@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.35', 'title' => 'Prompt Studio', 'summary' => 'Cria prompts guiados, valida conflitos operacionais e preserva versões restauráveis por assistente.'],
             ['version' => '36.6.34.2', 'title' => 'Agenda interna no onboarding', 'summary' => 'Torna explícita a escolha entre Agenda interna, Agenda inteligente homologada pela RS e operação sem agenda, sem expor n8n ou Google Calendar ao cliente.'],
             ['version' => '36.6.34.1', 'title' => 'Hotfix de login e sessão', 'summary' => 'Corrige o redirecionamento de CSRF expirado no login, impede duplicação de APP_URL e recupera URLs antigas malformadas com segurança.'],
             ['version' => '36.6.34', 'title' => 'Teste gratuito e primeiro acesso guiado', 'summary' => 'Transforma o fim do teste em regra efetiva de acesso e cobrança e conduz a implantação em sequência: cadastro, LGPD, operação, agenda, WhatsApp, agente e teste final.'],
