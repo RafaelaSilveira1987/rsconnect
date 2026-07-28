@@ -14,6 +14,7 @@ use App\Services\AdminDashboardService;
 use App\Services\PreSchedulingService;
 use App\Services\TenantModuleService;
 use App\Services\OnboardingGuideService;
+use App\Services\MessageGovernanceService;
 use PDO;
 use Throwable;
 
@@ -152,6 +153,7 @@ final class CompanyController
             'availableModules' => TenantModuleService::modules(),
             'moduleSettings' => $moduleService->settingsForTenant($tenantId),
             'calendarAccessSettings' => (new OnboardingGuideService())->calendarAccessSettings($tenantId),
+            'messageGovernanceSettings' => (new MessageGovernanceService())->settingsForTenant($tenantId),
         ]);
     }
 
@@ -205,6 +207,20 @@ final class CompanyController
         $companyDifferentials = $posted('company_differentials', $current);
         $companyBusinessHours = $posted('company_business_hours', $current);
         $companyNotes = $posted('company_notes', $current);
+        $humanSignatureEnabled = array_key_exists('whatsapp_human_signature_enabled', $_POST)
+            ? (isset($_POST['whatsapp_human_signature_enabled']) ? 1 : 0)
+            : (int) ($current['whatsapp_human_signature_enabled'] ?? 0);
+        $humanSignatureFormat = trim((string) ($_POST['whatsapp_human_signature_format'] ?? ($current['whatsapp_human_signature_format'] ?? 'name_role')));
+        if (!in_array($humanSignatureFormat, ['name', 'name_role', 'name_company'], true)) {
+            $humanSignatureFormat = 'name_role';
+        }
+        $retentionMode = trim((string) ($_POST['message_retention_mode'] ?? ($current['message_retention_mode'] ?? 'reduced')));
+        if (!in_array($retentionMode, ['complete', 'reduced', 'ephemeral'], true)) {
+            $retentionMode = 'reduced';
+        }
+        $retentionDays = max(1, min(3650, (int) ($_POST['message_retention_days'] ?? ($current['message_retention_days'] ?? 90))));
+        $rawPayloadDays = max(1, min(3650, (int) ($_POST['message_raw_payload_days'] ?? ($current['message_raw_payload_days'] ?? 30))));
+        $ephemeralHours = max(1, min(720, (int) ($_POST['message_ephemeral_hours'] ?? ($current['message_ephemeral_hours'] ?? 24))));
 
         if ($name === '' || ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))) {
             Flash::set('error', 'Informe o nome da empresa e um e-mail válido.');
@@ -226,6 +242,12 @@ final class CompanyController
                  company_about = :company_about, company_services = :company_services,
                  company_differentials = :company_differentials,
                  company_business_hours = :company_business_hours, company_notes = :company_notes,
+                 whatsapp_human_signature_enabled = :whatsapp_human_signature_enabled,
+                 whatsapp_human_signature_format = :whatsapp_human_signature_format,
+                 message_retention_mode = :message_retention_mode,
+                 message_retention_days = :message_retention_days,
+                 message_raw_payload_days = :message_raw_payload_days,
+                 message_ephemeral_hours = :message_ephemeral_hours,
                  onboarding_step = GREATEST(onboarding_step, 2)
              WHERE id = :id'
         );
@@ -251,6 +273,12 @@ final class CompanyController
             'company_differentials' => $companyDifferentials !== '' ? $companyDifferentials : null,
             'company_business_hours' => $companyBusinessHours !== '' ? $companyBusinessHours : null,
             'company_notes' => $companyNotes !== '' ? $companyNotes : null,
+            'whatsapp_human_signature_enabled' => $humanSignatureEnabled,
+            'whatsapp_human_signature_format' => $humanSignatureFormat,
+            'message_retention_mode' => $retentionMode,
+            'message_retention_days' => $retentionDays,
+            'message_raw_payload_days' => $rawPayloadDays,
+            'message_ephemeral_hours' => $ephemeralHours,
             'id' => $tenantId,
         ]);
 

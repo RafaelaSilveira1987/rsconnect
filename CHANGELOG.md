@@ -1,3 +1,16 @@
+## 36.6.36 — Governança de mensagens e Evolution em tempo real
+
+- adiciona nome público, função pública e controle de assinatura por usuário;
+- permite assinar mensagens humanas com nome, nome e função ou nome e empresa;
+- preserva o texto original no RS Connect e registra separadamente o conteúdo entregue ao WhatsApp;
+- adiciona políticas de retenção completa, reduzida e efêmera por empresa;
+- remove automaticamente conteúdo e payloads antigos sem apagar métricas, remetente, horário e status;
+- inclui execução manual e template n8n diário para a política de retenção;
+- registra eventos de conexão da Evolution e atualiza QR Code, conexão, perfil e motivo de desconexão por webhook;
+- acompanha o status na tela sem recarregar, com polling leve e reconciliação direta quando o webhook estiver atrasado;
+- configura automaticamente os eventos `MESSAGES_UPSERT`, `MESSAGES_UPDATE`, `CONNECTION_UPDATE`, `QRCODE_UPDATED` e `CONTACTS_UPSERT` ao criar/reconectar a instância;
+- adiciona a migration `063_message_governance_evolution_realtime.sql`.
+
 ## 36.6.35 — Prompt Studio e versionamento de instruções
 
 - questionário guiado para criação do primeiro prompt;

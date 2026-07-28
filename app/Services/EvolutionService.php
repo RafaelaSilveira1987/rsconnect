@@ -65,6 +65,24 @@ final class EvolutionService
         ];
     }
 
+    /** @param list<string> $events */
+    public function setWebhook(string $url, array $events): array
+    {
+        $endpoint = rtrim($this->baseUrl, '/') . '/webhook/set/' . rawurlencode($this->instanceName);
+        $payload = [
+            'webhook' => [
+                'enabled' => true,
+                'url' => $url,
+                'webhookByEvents' => false,
+                'webhookBase64' => false,
+                'base64' => false,
+                'events' => array_values(array_unique($events)),
+            ],
+        ];
+
+        return $this->request('POST', $endpoint, $payload, 'setWebhook');
+    }
+
     public function fetchProfilePictureUrl(string $phone): ?string
     {
         $endpoint = rtrim($this->baseUrl, '/') . '/chat/fetchProfilePictureUrl/' . rawurlencode($this->instanceName);

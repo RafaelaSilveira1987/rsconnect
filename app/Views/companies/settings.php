@@ -15,6 +15,7 @@ $profileFields = [
 ];
 $filledProfile = count(array_filter($profileFields, static fn ($value): bool => trim((string) $value) !== ''));
 $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) * 100);
+$messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $messageGovernanceSettings : [];
 ?>
 <?php if (Auth::isSuperAdmin()): ?>
 
@@ -74,6 +75,38 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
             </div>
         </div>
         <div class="message-info"><strong>Responsabilidade da RS</strong><span>Antes de liberar, configure e valide n8n, Google Calendar, callbacks, tokens, eventos VAGO e manutenção. O cliente não recebe acesso a esses dados técnicos.</span></div>
+    </section>
+
+
+    <section class="settings-block message-governance-settings">
+        <div class="section-heading compact">
+            <div>
+                <span class="eyebrow">Conversas e privacidade</span>
+                <h2>Identificação da equipe e retenção</h2>
+                <p>Defina como atendentes humanos aparecem no WhatsApp e por quanto tempo o conteúdo das mensagens permanece armazenado.</p>
+            </div>
+            <span class="badge <?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'badge-active' : 'badge-pending' ?>"><?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'Assinatura ativa' : 'Assinatura desativada' ?></span>
+        </div>
+        <div class="settings-toggle-grid">
+            <label class="switch-card"><input type="checkbox" name="whatsapp_human_signature_enabled" value="1" <?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'checked' : '' ?>><span><strong>Identificar atendente no WhatsApp</strong><small>Mensagens manuais passam a incluir o nome público do usuário logado.</small></span></label>
+        </div>
+        <div class="form-grid two">
+            <label class="field"><span>Formato da assinatura</span><select name="whatsapp_human_signature_format">
+                <option value="name" <?= ($messageGovernanceSettings['whatsapp_human_signature_format'] ?? 'name_role') === 'name' ? 'selected' : '' ?>>Nome</option>
+                <option value="name_role" <?= ($messageGovernanceSettings['whatsapp_human_signature_format'] ?? 'name_role') === 'name_role' ? 'selected' : '' ?>>Nome + função</option>
+                <option value="name_company" <?= ($messageGovernanceSettings['whatsapp_human_signature_format'] ?? 'name_role') === 'name_company' ? 'selected' : '' ?>>Nome + empresa</option>
+            </select><small>O nome público e a função são configurados em Equipe e acessos.</small></label>
+            <label class="field"><span>Política de retenção</span><select name="message_retention_mode">
+                <option value="complete" <?= ($messageGovernanceSettings['message_retention_mode'] ?? 'reduced') === 'complete' ? 'selected' : '' ?>>Completa</option>
+                <option value="reduced" <?= ($messageGovernanceSettings['message_retention_mode'] ?? 'reduced') === 'reduced' ? 'selected' : '' ?>>Reduzida</option>
+                <option value="ephemeral" <?= ($messageGovernanceSettings['message_retention_mode'] ?? 'reduced') === 'ephemeral' ? 'selected' : '' ?>>Efêmera</option>
+            </select><small>Metadados de auditoria permanecem; o conteúdo textual é removido conforme a regra.</small></label>
+            <label class="field"><span>Conteúdo no modo reduzido</span><div class="input-with-suffix"><input type="number" min="1" max="3650" name="message_retention_days" value="<?= (int) ($messageGovernanceSettings['message_retention_days'] ?? 90) ?>"><span>dias</span></div></label>
+            <label class="field"><span>Payload técnico</span><div class="input-with-suffix"><input type="number" min="1" max="3650" name="message_raw_payload_days" value="<?= (int) ($messageGovernanceSettings['message_raw_payload_days'] ?? 30) ?>"><span>dias</span></div></label>
+            <label class="field"><span>Conteúdo no modo efêmero</span><div class="input-with-suffix"><input type="number" min="1" max="720" name="message_ephemeral_hours" value="<?= (int) ($messageGovernanceSettings['message_ephemeral_hours'] ?? 24) ?>"><span>horas</span></div></label>
+            <div class="readonly-grid compact-readonly-grid"><div><span>Última limpeza</span><strong><?= View::e((string) ($messageGovernanceSettings['message_retention_last_run_at'] ?? 'Ainda não executada')) ?></strong></div></div>
+        </div>
+        <div class="message-info"><strong>Modo efêmero</strong><span>Preserva mensagens enquanto a conversa está ativa. Depois da janela configurada, remove conteúdo e payload, mantendo data, remetente, status e métricas.</span></div>
     </section>
 
     <section class="settings-block">
@@ -163,6 +196,17 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
         <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar alterações</button></div>
     <?php endif; ?>
 </form>
+
+<section class="card retention-manual-card">
+    <div class="section-heading compact">
+        <div><span class="eyebrow">Execução manual</span><h2>Aplicar retenção agora</h2><p>Use para homologar a política desta empresa. A automação diária deve ser feita pelo template de retenção no n8n.</p></div>
+        <form method="post" action="<?= View::e(Router::url('/messages/retention/run')) ?>" onsubmit="return confirm('Executar agora a política de retenção desta empresa? Conteúdos vencidos serão removidos.');">
+            <?= Csrf::input() ?>
+            <input type="hidden" name="tenant_id" value="<?= (int) $company['id'] ?>">
+            <button class="btn btn-outline" type="submit">Executar retenção</button>
+        </form>
+    </div>
+</section>
 
 <?php else: ?>
 <?php $accountSection = 'company'; require __DIR__ . '/_account_tabs.php'; ?>
@@ -277,6 +321,38 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
             <div class="client-ai-profile-note"><strong>Como isso ajuda?</strong><span>Ao criar um novo assistente, estas informações serão usadas como base inicial e poderão ser revisadas antes da ativação.</span></div>
         </section>
     </div>
+
+
+    <section class="card client-settings-card message-governance-settings">
+        <div class="section-heading compact">
+            <div>
+                <span class="eyebrow">Conversas e privacidade</span>
+                <h2>Identificação da equipe e retenção</h2>
+                <p>Defina como atendentes humanos aparecem no WhatsApp e por quanto tempo o conteúdo das mensagens permanece armazenado.</p>
+            </div>
+            <span class="badge <?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'badge-active' : 'badge-pending' ?>"><?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'Assinatura ativa' : 'Assinatura desativada' ?></span>
+        </div>
+        <div class="settings-toggle-grid">
+            <label class="switch-card"><input type="checkbox" name="whatsapp_human_signature_enabled" value="1" <?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'checked' : '' ?>><span><strong>Identificar atendente no WhatsApp</strong><small>Mensagens manuais passam a incluir o nome público do usuário logado.</small></span></label>
+        </div>
+        <div class="form-grid two">
+            <label class="field"><span>Formato da assinatura</span><select name="whatsapp_human_signature_format">
+                <option value="name" <?= ($messageGovernanceSettings['whatsapp_human_signature_format'] ?? 'name_role') === 'name' ? 'selected' : '' ?>>Nome</option>
+                <option value="name_role" <?= ($messageGovernanceSettings['whatsapp_human_signature_format'] ?? 'name_role') === 'name_role' ? 'selected' : '' ?>>Nome + função</option>
+                <option value="name_company" <?= ($messageGovernanceSettings['whatsapp_human_signature_format'] ?? 'name_role') === 'name_company' ? 'selected' : '' ?>>Nome + empresa</option>
+            </select><small>O nome público e a função são configurados em Equipe e acessos.</small></label>
+            <label class="field"><span>Política de retenção</span><select name="message_retention_mode">
+                <option value="complete" <?= ($messageGovernanceSettings['message_retention_mode'] ?? 'reduced') === 'complete' ? 'selected' : '' ?>>Completa</option>
+                <option value="reduced" <?= ($messageGovernanceSettings['message_retention_mode'] ?? 'reduced') === 'reduced' ? 'selected' : '' ?>>Reduzida</option>
+                <option value="ephemeral" <?= ($messageGovernanceSettings['message_retention_mode'] ?? 'reduced') === 'ephemeral' ? 'selected' : '' ?>>Efêmera</option>
+            </select><small>Metadados de auditoria permanecem; o conteúdo textual é removido conforme a regra.</small></label>
+            <label class="field"><span>Conteúdo no modo reduzido</span><div class="input-with-suffix"><input type="number" min="1" max="3650" name="message_retention_days" value="<?= (int) ($messageGovernanceSettings['message_retention_days'] ?? 90) ?>"><span>dias</span></div></label>
+            <label class="field"><span>Payload técnico</span><div class="input-with-suffix"><input type="number" min="1" max="3650" name="message_raw_payload_days" value="<?= (int) ($messageGovernanceSettings['message_raw_payload_days'] ?? 30) ?>"><span>dias</span></div></label>
+            <label class="field"><span>Conteúdo no modo efêmero</span><div class="input-with-suffix"><input type="number" min="1" max="720" name="message_ephemeral_hours" value="<?= (int) ($messageGovernanceSettings['message_ephemeral_hours'] ?? 24) ?>"><span>horas</span></div></label>
+            <div class="readonly-grid compact-readonly-grid"><div><span>Última limpeza</span><strong><?= View::e((string) ($messageGovernanceSettings['message_retention_last_run_at'] ?? 'Ainda não executada')) ?></strong></div></div>
+        </div>
+        <div class="message-info"><strong>Modo efêmero</strong><span>Preserva mensagens enquanto a conversa está ativa. Depois da janela configurada, remove conteúdo e payload, mantendo data, remetente, status e métricas.</span></div>
+    </section>
 
     <details class="card client-settings-accordion">
         <summary><span><span class="eyebrow">Agenda</span><strong>Pré-agendamento e mensagens</strong><small>Regras para registrar, aprovar e comunicar horários.</small></span><span class="drawer-chevron"></span></summary>

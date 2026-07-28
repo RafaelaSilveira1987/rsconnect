@@ -22,6 +22,7 @@ use App\Controllers\DashboardController;
 use App\Controllers\DocumentationController;
 use App\Controllers\InstanceController;
 use App\Controllers\ImplementationController;
+use App\Controllers\MessageGovernanceController;
 use App\Controllers\OnboardingController;
 use App\Controllers\N8nFlowController;
 use App\Controllers\N8nTemplateController;
@@ -76,6 +77,8 @@ return static function (Router $router): void {
     $router->get('/beta-1', [OperationsCenterController::class, 'status'], ['auth', 'super_admin']);
 
     $router->post('/webhooks/evolution', [EvolutionWebhookController::class, 'handle']);
+    $router->get('/webhooks/messages/retention/run', [MessageGovernanceController::class, 'cron']);
+    $router->post('/webhooks/messages/retention/run', [MessageGovernanceController::class, 'cron']);
     $router->post('/webhooks/n8n/callback', [N8nTemplateController::class, 'callback']);
 
     $router->get('/conversations', [ConversationController::class, 'index'], ['auth', 'permission:conversations.view']);
@@ -205,6 +208,7 @@ return static function (Router $router): void {
     $router->post('/companies/tracking', [CompanyController::class, 'updateTracking'], ['auth', 'super_admin', 'csrf']);
     $router->get('/company-settings', [CompanyController::class, 'settings'], ['auth', 'permission:company.view']);
     $router->post('/company-settings', [CompanyController::class, 'updateSettings'], ['auth', 'permission:company.manage', 'csrf']);
+    $router->post('/messages/retention/run', [MessageGovernanceController::class, 'runManual'], ['auth', 'super_admin', 'csrf']);
 
     $router->get('/users', [UserController::class, 'index'], ['auth', 'permission:users.view']);
     $router->post('/users', [UserController::class, 'store'], ['auth', 'permission:users.manage', 'csrf']);
@@ -224,6 +228,7 @@ return static function (Router $router): void {
     $router->post('/onboarding/final-test', [OnboardingController::class, 'finish'], ['auth', 'permission:onboarding.manage', 'csrf']);
 
     $router->get('/instances', [InstanceController::class, 'index'], ['auth', 'permission:instances.view']);
+    $router->get('/instances/status-feed', [InstanceController::class, 'statusFeed'], ['auth', 'permission:instances.view']);
     $router->post('/instances', [InstanceController::class, 'store'], ['auth', 'super_admin', 'csrf']);
     $router->post('/instances/qr', [InstanceController::class, 'qrCode'], ['auth', 'permission:instances.manage', 'csrf']);
     $router->post('/instances/test', [InstanceController::class, 'sendTest'], ['auth', 'super_admin', 'csrf']);

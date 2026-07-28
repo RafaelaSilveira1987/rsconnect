@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.35 — Prompt Studio e versionamento de instruções';
-    public const REQUIRED_MIGRATION = '062_prompt_studio_and_versions.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.36 — Governança de mensagens e Evolution em tempo real';
+    public const REQUIRED_MIGRATION = '063_message_governance_evolution_realtime.sql';
 
     private PDO $pdo;
 
@@ -96,13 +96,15 @@ final class AppVersionService
             'client_communication_replies',
             'ai_prompt_studio_drafts',
             'ai_agent_prompt_versions',
+            'evolution_connection_events',
+            'message_retention_runs',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 062, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 063, conforme o pacote implantado.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')
@@ -127,6 +129,24 @@ final class AppVersionService
                 ? 'Criação guiada, validação de conflitos e histórico restaurável de prompts estão disponíveis.'
                 : 'A estrutura do Prompt Studio e do versionamento de prompts ainda não foi aplicada.',
             'Executar database/migrations/062_prompt_studio_and_versions.sql.'
+        );
+
+        $messageGovernanceReady = $this->columnExists('users', 'whatsapp_display_name')
+            && $this->columnExists('users', 'whatsapp_role_label')
+            && $this->columnExists('tenants', 'message_retention_mode')
+            && $this->columnExists('conversation_messages', 'delivered_content')
+            && $this->columnExists('conversation_messages', 'content_purged_at')
+            && $this->columnExists('evolution_instances', 'connection_updated_at')
+            && $this->columnExists('evolution_instances', 'qrcode_updated_at')
+            && $this->tableExists('evolution_connection_events')
+            && $this->tableExists('message_retention_runs');
+        $checks[] = $this->check(
+            'Governança de mensagens e Evolution em tempo real',
+            $messageGovernanceReady ? 'ok' : 'blocked',
+            $messageGovernanceReady
+                ? 'Assinatura do atendente, políticas de retenção e histórico de conexão da Evolution estão disponíveis.'
+                : 'A estrutura de identificação humana, retenção e atualização de conexão ainda não foi aplicada.',
+            'Executar database/migrations/063_message_governance_evolution_realtime.sql.'
         );
 
         $calendarOnboardingReady = $this->columnExists('tenant_onboarding_settings', 'calendar_mode')
@@ -324,12 +344,18 @@ final class AppVersionService
         );
 
         $evolutionUrl = (string) Env::get('EVOLUTION_DEFAULT_URL', '');
+        $evolutionWebhookToken = (string) Env::get('EVOLUTION_WEBHOOK_TOKEN', '');
         $instances = $this->countWhere('evolution_instances', "status IN ('connected','open','active','online')");
+        $evolutionRealtimeReady = $this->columnExists('evolution_instances', 'connection_updated_at')
+            && $this->columnExists('evolution_instances', 'last_webhook_at')
+            && $this->tableExists('evolution_connection_events');
         $checks[] = $this->check(
-            'Evolution/WhatsApp',
-            ($evolutionUrl !== '' || $instances > 0) ? 'ok' : 'warning',
-            $instances . ' instância(s) conectada(s); URL padrão ' . ($evolutionUrl !== '' ? 'configurada.' : 'não configurada.'),
-            'Manter pelo menos uma instância conectada e webhook apontando para o RS Connect.'
+            'Evolution/WhatsApp em tempo real',
+            ($evolutionUrl !== '' && $evolutionRealtimeReady) ? 'ok' : 'warning',
+            $instances . ' instância(s) conectada(s); URL padrão ' . ($evolutionUrl !== '' ? 'configurada' : 'não configurada')
+                . '; webhook ' . ($evolutionWebhookToken !== '' ? 'protegido' : 'sem token')
+                . '; atualização em tempo real ' . ($evolutionRealtimeReady ? 'disponível.' : 'pendente.'),
+            'Configurar EVOLUTION_WEBHOOK_TOKEN, aplicar a migration 063 e gerar/reconectar o QR para registrar os eventos em tempo real.'
         );
 
         $openAiKey = (string) Env::get('OPENAI_API_KEY', '');
@@ -417,6 +443,7 @@ final class AppVersionService
             ['label' => 'APP_URL', 'value' => (string) Env::get('APP_URL', 'não informado'), 'secret' => false],
             ['label' => 'Timezone', 'value' => (string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo'), 'secret' => false],
             ['label' => 'Evolution URL', 'value' => (string) Env::get('EVOLUTION_DEFAULT_URL', 'não informado'), 'secret' => false],
+            ['label' => 'Evolution webhook', 'value' => $this->masked((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', '')), 'secret' => true],
             ['label' => 'OpenAI base URL', 'value' => (string) Env::get('OPENAI_API_BASE_URL', 'não informado'), 'secret' => false],
             ['label' => 'n8n base URL', 'value' => (string) Env::get('N8N_BASE_URL', 'não informado'), 'secret' => false],
             ['label' => 'Backup token', 'value' => $this->masked((string) (Env::get('OPERATIONS_BACKUP_TOKEN', '') ?: Env::get('BACKUP_WEBHOOK_TOKEN', ''))), 'secret' => true],
@@ -425,6 +452,7 @@ final class AppVersionService
             ['label' => 'Cron de cobrança', 'value' => $this->masked((string) Env::get('BILLING_CRON_TOKEN', '')), 'secret' => true],
             ['label' => 'Cron fila IA', 'value' => $this->masked((string) Env::get('AI_REPROCESS_CRON_TOKEN', '')), 'secret' => true],
             ['label' => 'Manutenção agenda', 'value' => $this->masked((string) Env::get('CALENDAR_MAINTENANCE_TOKEN', '')), 'secret' => true],
+            ['label' => 'Retenção de mensagens', 'value' => $this->masked((string) Env::get('MESSAGE_RETENTION_TOKEN', '')), 'secret' => true],
         ];
     }
 

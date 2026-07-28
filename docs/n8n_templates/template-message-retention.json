@@ -1,0 +1,76 @@
+{
+  "name": "RS Connect - Retenção diária de mensagens",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 2,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "id": "ScheduleMessageRetention",
+      "name": "Todos os dias 02:30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://SEU_DOMINIO_RS_CONNECT/webhooks/messages/retention/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-RS-Message-Retention-Token",
+              "value": "SEU_MESSAGE_RETENTION_TOKEN"
+            },
+            {
+              "name": "X-RS-Automation-Origin",
+              "value": "n8n"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "RunMessageRetention",
+      "name": "Executar política de retenção",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [320, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json || {};\nreturn [{ json: {\n  ok: !!r.ok,\n  tenants_checked: Number(r.tenants_checked || 0),\n  messages_purged: Number(r.messages_purged || 0),\n  payloads_purged: Number(r.payloads_purged || 0),\n  previews_purged: Number(r.previews_purged || 0),\n  finished_at: r.finished_at || new Date().toISOString(),\n  raw: r\n} }];"
+      },
+      "id": "MessageRetentionSummary",
+      "name": "Resumo da retenção",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 0]
+    }
+  ],
+  "connections": {
+    "Todos os dias 02:30": {
+      "main": [[{"node":"Executar política de retenção","type":"main","index":0}]]
+    },
+    "Executar política de retenção": {
+      "main": [[{"node":"Resumo da retenção","type":"main","index":0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {"timezone":"America/Sao_Paulo"},
+  "meta": {"templateCredsSetupCompleted":false,"instanceId":"rs-connect-message-retention-template"}
+}

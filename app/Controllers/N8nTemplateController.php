@@ -70,6 +70,13 @@ final class N8nTemplateController
             'events' => ['ai.queue.check', 'cron.every_minute'],
             'description' => 'Reavalia a fila da IA a cada minuto para respeitar o intervalo mínimo entre respostas sem perder mensagens. A rotina diária permanece como contingência para falhas e pendências antigas.',
         ],
+        'message-retention' => [
+            'title' => 'Retenção diária de mensagens',
+            'segment' => 'Privacidade',
+            'file' => 'template-message-retention.json',
+            'events' => ['messages.retention.run', 'cron.daily'],
+            'description' => 'Executa diariamente a política de retenção de cada empresa, removendo conteúdo e payloads vencidos sem apagar métricas de auditoria.',
+        ],
         'calendar-maintenance' => [
             'title' => 'Manutenção automática da agenda',
             'segment' => 'Agenda',
@@ -186,6 +193,23 @@ final class N8nTemplateController
             }
             $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
             $contents = str_replace('SEU_AI_REPROCESS_CRON_TOKEN', $aiToken, $contents);
+        }
+
+        if ($key === 'message-retention') {
+            $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+            $retentionToken = trim((string) Env::get('MESSAGE_RETENTION_TOKEN', ''));
+            if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+                http_response_code(409);
+                echo 'Configure APP_URL com a URL pública HTTPS do RS Connect antes de baixar a retenção de mensagens.';
+                return;
+            }
+            if ($retentionToken === '') {
+                http_response_code(409);
+                echo 'Configure MESSAGE_RETENTION_TOKEN no ambiente e reinicie o RS Connect antes de baixar a retenção de mensagens.';
+                return;
+            }
+            $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
+            $contents = str_replace('SEU_MESSAGE_RETENTION_TOKEN', $retentionToken, $contents);
         }
 
         if ($key === 'calendar-maintenance') {

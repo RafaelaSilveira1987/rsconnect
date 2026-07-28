@@ -57,6 +57,22 @@ final class EvolutionWebhookController
             }
 
             $instance = $this->resolveInstance($payload);
+            try {
+                Database::connection()->prepare('UPDATE evolution_instances SET last_webhook_at = NOW() WHERE id = :id')
+                    ->execute(['id' => (int) $instance['id']]);
+            } catch (Throwable) {
+                // Compatibilidade antes da migration 063.
+            }
+
+            if (str_contains($event, 'qrcode.updated') || str_contains($event, 'qrcode.update')) {
+                $result = $this->applyQrCodeUpdate($instance, $payload, $event);
+                $this->respond(200, ['ok' => true, 'event' => $event, 'connection' => $result]);
+            }
+
+            if (str_contains($event, 'connection.update')) {
+                $result = $this->applyConnectionUpdate($instance, $payload, $event);
+                $this->respond(200, ['ok' => true, 'event' => $event, 'connection' => $result]);
+            }
 
             if (str_contains($event, 'contacts.upsert')) {
                 $updated = $this->applyContactsUpsert($instance, $payload);
@@ -718,6 +734,125 @@ final class EvolutionWebhookController
             throw new \RuntimeException('A instância não foi encontrada de forma única. Use instance_id na URL do webhook.');
         }
         return $matches[0];
+    }
+
+    /** @return array<string,mixed> */
+    private function applyQrCodeUpdate(array $instance, array $payload, string $event): array
+    {
+        $data = $payload['data'] ?? $payload;
+        if (isset($data[0]) && is_array($data[0])) {
+            $data = $data[0];
+        }
+        $data = is_array($data) ? $data : [];
+        $qr = trim((string) ($data['qrcode']['base64'] ?? $data['base64'] ?? $data['qrcode'] ?? $data['qrCode'] ?? ''));
+        if ($qr !== '' && !str_starts_with($qr, 'data:image/')) {
+            $qr = '';
+        }
+
+        $pdo = Database::connection();
+        $pdo->prepare(
+            'UPDATE evolution_instances
+             SET status = IF(status = "connected", status, "pending"),
+                 connection_state = IF(status = "connected", connection_state, "qrcode"),
+                 connection_reason = NULL,
+                 qrcode_base64 = :qrcode,
+                 qrcode_updated_at = NOW(),
+                 qrcode_expires_at = DATE_ADD(NOW(), INTERVAL 2 MINUTE),
+                 connection_updated_at = NOW(),
+                 last_webhook_at = NOW()
+             WHERE id = :id'
+        )->execute(['qrcode' => $qr !== '' ? $qr : null, 'id' => (int) $instance['id']]);
+
+        $this->recordConnectionEvent($pdo, $instance, $event, 'qrcode', null, null, null, $payload);
+        return ['state' => 'qrcode', 'status' => 'pending', 'qr_ready' => $qr !== ''];
+    }
+
+    /** @return array<string,mixed> */
+    private function applyConnectionUpdate(array $instance, array $payload, string $event): array
+    {
+        $data = $payload['data'] ?? $payload;
+        if (isset($data[0]) && is_array($data[0])) {
+            $data = $data[0];
+        }
+        $data = is_array($data) ? $data : [];
+        $instanceData = is_array($data['instance'] ?? null) ? $data['instance'] : [];
+        $state = mb_strtolower(trim((string) (
+            $data['state'] ?? $data['status'] ?? $data['connection'] ??
+            $instanceData['state'] ?? $instanceData['status'] ?? 'unknown'
+        )));
+        $state = str_replace([' ', '-'], '_', $state);
+        $reasonValue = $data['reason'] ?? $data['statusReason'] ?? $data['message'] ?? $data['error'] ?? '';
+        if (is_array($reasonValue)) {
+            $reasonValue = json_encode($reasonValue, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+        $reason = trim((string) $reasonValue);
+        $profileName = trim((string) ($data['profileName'] ?? $data['name'] ?? $instanceData['profileName'] ?? $instanceData['name'] ?? ''));
+        $profilePhone = preg_replace('/\D+/', '', (string) ($data['ownerJid'] ?? $data['number'] ?? $instanceData['ownerJid'] ?? $instanceData['number'] ?? '')) ?: '';
+        $profilePicture = trim((string) ($data['profilePictureUrl'] ?? $data['profilePicUrl'] ?? $instanceData['profilePictureUrl'] ?? ''));
+        if ($profilePicture !== '' && !preg_match('#^https?://#i', $profilePicture)) {
+            $profilePicture = '';
+        }
+
+        $connectedStates = ['open', 'connected', 'online', 'active'];
+        $pendingStates = ['connecting', 'qrcode', 'qr', 'pending', 'created'];
+        $status = in_array($state, $connectedStates, true)
+            ? 'connected'
+            : (in_array($state, $pendingStates, true) ? 'pending' : 'disconnected');
+
+        $pdo = Database::connection();
+        $pdo->prepare(
+            'UPDATE evolution_instances
+             SET status = :status,
+                 connection_state = :state,
+                 connection_reason = :reason,
+                 connection_updated_at = NOW(),
+                 last_status_check_at = NOW(),
+                 last_webhook_at = NOW(),
+                 profile_name = COALESCE(NULLIF(:profile_name, ""), profile_name),
+                 profile_phone = COALESCE(NULLIF(:profile_phone, ""), profile_phone),
+                 profile_picture_url = COALESCE(NULLIF(:profile_picture, ""), profile_picture_url),
+                 qrcode_base64 = IF(:status_connected = 1, NULL, qrcode_base64),
+                 qrcode_expires_at = IF(:status_connected = 1, NULL, qrcode_expires_at)
+             WHERE id = :id'
+        )->execute([
+            'status' => $status,
+            'state' => $state !== '' ? $state : 'unknown',
+            'reason' => $reason !== '' ? mb_substr($reason, 0, 255) : null,
+            'profile_name' => mb_substr($profileName, 0, 150),
+            'profile_phone' => mb_substr($profilePhone, 0, 40),
+            'profile_picture' => mb_substr($profilePicture, 0, 500),
+            'status_connected' => $status === 'connected' ? 1 : 0,
+            'id' => (int) $instance['id'],
+        ]);
+
+        $this->recordConnectionEvent($pdo, $instance, $event, $state, $reason, $profileName, $profilePhone, $payload);
+        return ['state' => $state, 'status' => $status, 'reason' => $reason, 'profile_name' => $profileName, 'profile_phone' => $profilePhone];
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function recordConnectionEvent(PDO $pdo, array $instance, string $event, string $state, ?string $reason, ?string $profileName, ?string $profilePhone, array $payload): void
+    {
+        try {
+            $pdo->prepare(
+                'INSERT INTO evolution_connection_events
+                    (tenant_id, evolution_instance_id, event_name, connection_state, connection_reason,
+                     profile_name, profile_phone, metadata_json, occurred_at)
+                 VALUES
+                    (:tenant_id, :instance_id, :event_name, :connection_state, :connection_reason,
+                     :profile_name, :profile_phone, :metadata_json, NOW())'
+            )->execute([
+                'tenant_id' => (int) $instance['tenant_id'],
+                'instance_id' => (int) $instance['id'],
+                'event_name' => mb_substr($event, 0, 80),
+                'connection_state' => mb_substr($state, 0, 60),
+                'connection_reason' => $reason !== null && $reason !== '' ? mb_substr($reason, 0, 255) : null,
+                'profile_name' => $profileName !== null && $profileName !== '' ? mb_substr($profileName, 0, 150) : null,
+                'profile_phone' => $profilePhone !== null && $profilePhone !== '' ? mb_substr($profilePhone, 0, 40) : null,
+                'metadata_json' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+        } catch (Throwable) {
+            // O status principal já foi atualizado; o histórico é auxiliar.
+        }
     }
 
     private function applyContactsUpsert(array $instance, array $payload): int

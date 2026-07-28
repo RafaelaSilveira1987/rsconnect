@@ -49,7 +49,7 @@ $used = (int) ($channelUsage['instances'] ?? count($instances));
                 }
             }
             ?>
-            <article class="channel-card">
+            <article class="channel-card" data-instance-status-card data-instance-id="<?= (int) $instance['id'] ?>">
                 <div class="channel-card-head">
                     <div class="channel-identity">
                         <span class="channel-icon" aria-hidden="true">WA</span>
@@ -59,8 +59,9 @@ $used = (int) ($channelUsage['instances'] ?? count($instances));
                         </div>
                     </div>
                     <div class="channel-status-stack">
-                        <span class="badge badge-<?= View::e($instance['status']) ?>"><?= $instance['status'] === 'connected' ? 'Conectado' : ($instance['status'] === 'pending' ? 'Pendente' : 'Desconectado') ?></span>
+                        <span class="badge badge-<?= View::e($instance['status']) ?>" data-instance-status-badge><?= $instance['status'] === 'connected' ? 'Conectado' : ($instance['status'] === 'pending' ? 'Pendente' : 'Desconectado') ?></span>
                         <?php if ((int) $instance['is_default'] === 1): ?><span class="badge">Canal padrão</span><?php endif; ?>
+                        <small class="channel-live-status" data-instance-status-detail><?= View::e((string) (($instance['connection_state'] ?? '') ?: 'Aguardando atualização')) ?></small>
                     </div>
                 </div>
 
@@ -76,14 +77,13 @@ $used = (int) ($channelUsage['instances'] ?? count($instances));
 
                 <div class="channel-card-actions">
                     <a class="btn btn-outline" href="<?= View::e(Router::url('/conversations?instance_id=' . (int) $instance['id'])) ?>">Ver conversas</a>
-                    <?php if ($canGenerateQr && $instance['status'] !== 'connected'): ?>
-                        <form method="post" action="<?= View::e(Router::url('/instances/qr')) ?>" data-qr-code-form>
+                    <?php if ($canGenerateQr): ?>
+                        <form method="post" action="<?= View::e(Router::url('/instances/qr')) ?>" data-qr-code-form <?= $instance['status'] === 'connected' ? 'hidden' : '' ?>>
                             <?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>">
                             <button class="btn btn-primary" type="submit" data-qr-code-button>Conectar QR Code</button>
                         </form>
-                    <?php else: ?>
-                        <span class="channel-connected-note">✓ WhatsApp pronto para atendimento</span>
                     <?php endif; ?>
+                    <span class="channel-connected-note" <?= $instance['status'] === 'connected' ? '' : 'hidden' ?>>WhatsApp pronto para atendimento</span>
                 </div>
             </article>
         <?php endforeach; ?>

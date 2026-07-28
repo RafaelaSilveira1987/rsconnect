@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.36', 'title' => 'Governança de mensagens e Evolution em tempo real', 'summary' => 'Identifica o atendente nas respostas humanas, aplica retenção configurável e acompanha QR/conexão da Evolution por webhook com reconciliação automática.'],
             ['version' => '36.6.35', 'title' => 'Prompt Studio', 'summary' => 'Cria prompts guiados, valida conflitos operacionais e preserva versões restauráveis por assistente.'],
             ['version' => '36.6.34.2', 'title' => 'Agenda interna no onboarding', 'summary' => 'Torna explícita a escolha entre Agenda interna, Agenda inteligente homologada pela RS e operação sem agenda, sem expor n8n ou Google Calendar ao cliente.'],
             ['version' => '36.6.34.1', 'title' => 'Hotfix de login e sessão', 'summary' => 'Corrige o redirecionamento de CSRF expirado no login, impede duplicação de APP_URL e recupera URLs antigas malformadas com segurança.'],

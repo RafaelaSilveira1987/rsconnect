@@ -111,6 +111,9 @@ $canManageUsers = Auth::can('users.manage');
                             data-email="<?= View::e($userItem['email']) ?>"
                             data-role="<?= View::e($userItem['role']) ?>"
                             data-status="<?= View::e($userItem['status']) ?>"
+                            data-whatsapp-display-name="<?= View::e($userItem['whatsapp_display_name'] ?? '') ?>"
+                            data-whatsapp-role-label="<?= View::e($userItem['whatsapp_role_label'] ?? '') ?>"
+                            data-whatsapp-signature-enabled="<?= !empty($userItem['whatsapp_signature_enabled']) ? '1' : '0' ?>"
                             data-is-self="<?= $isCurrentUser ? '1' : '0' ?>"
                         >Editar</button>
                     </div>
@@ -195,6 +198,15 @@ $canManageUsers = Auth::can('users.manage');
                         <span>E-mail</span>
                         <input type="email" name="email" data-client-user-field="email" placeholder="usuario@empresa.com" autocomplete="email" required>
                     </label>
+                </div>
+            </section>
+
+            <section class="drawer-section client-user-drawer-section">
+                <div class="drawer-section-title"><div><span class="eyebrow">WhatsApp</span><h3>Identificação pública</h3></div></div>
+                <div class="drawer-form-grid client-user-drawer-grid">
+                    <label class="field drawer-span"><span>Nome exibido ao cliente</span><input name="whatsapp_display_name" data-client-user-field="whatsapp_display_name" placeholder="Ex.: Rafaela"><small class="field-hint">Quando vazio, o nome do usuário será utilizado.</small></label>
+                    <label class="field drawer-span"><span>Função exibida</span><input name="whatsapp_role_label" data-client-user-field="whatsapp_role_label" placeholder="Ex.: Atendimento, Suporte, Comercial"></label>
+                    <label class="switch-card drawer-span"><input type="checkbox" name="whatsapp_signature_enabled" value="1" data-client-user-field="whatsapp_signature_enabled" checked><span><strong>Permitir assinatura no WhatsApp</strong><small>A empresa ainda precisa habilitar a assinatura geral nas configurações.</small></span></label>
                 </div>
             </section>
 

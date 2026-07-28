@@ -11,7 +11,7 @@ use Throwable;
 
 final class AccessControlService
 {
-    public const VERSION = '36.6.35-prompt-studio';
+    public const VERSION = '36.6.36-message-governance-evolution';
 
     public function statusForTenant(int $tenantId): array
     {

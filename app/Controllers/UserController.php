@@ -55,6 +55,9 @@ final class UserController
         $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
         $password = (string) ($_POST['password'] ?? '');
         $role = (string) ($_POST['role'] ?? 'client_user');
+        $whatsappDisplayName = trim((string) ($_POST['whatsapp_display_name'] ?? ''));
+        $whatsappRoleLabel = trim((string) ($_POST['whatsapp_role_label'] ?? ''));
+        $whatsappSignatureEnabled = isset($_POST['whatsapp_signature_enabled']) ? 1 : 0;
         $tenantId = Auth::isSuperAdmin()
             ? $this->normalizeTenantId($_POST['tenant_id'] ?? null)
             : Auth::tenantId();
@@ -71,12 +74,19 @@ final class UserController
 
         try {
             $statement = Database::connection()->prepare(
-                'INSERT INTO users (tenant_id, name, email, password_hash, role, status)
-                 VALUES (:tenant_id, :name, :email, :password_hash, :role, "active")'
+                'INSERT INTO users
+                    (tenant_id, name, whatsapp_display_name, whatsapp_role_label, whatsapp_signature_enabled,
+                     email, password_hash, role, status)
+                 VALUES
+                    (:tenant_id, :name, :whatsapp_display_name, :whatsapp_role_label, :whatsapp_signature_enabled,
+                     :email, :password_hash, :role, "active")'
             );
             $statement->execute([
                 'tenant_id' => $tenantId,
                 'name' => $name,
+                'whatsapp_display_name' => $whatsappDisplayName !== '' ? mb_substr($whatsappDisplayName, 0, 100) : null,
+                'whatsapp_role_label' => $whatsappRoleLabel !== '' ? mb_substr($whatsappRoleLabel, 0, 100) : null,
+                'whatsapp_signature_enabled' => $tenantId !== null ? $whatsappSignatureEnabled : 0,
                 'email' => $email,
                 'password_hash' => password_hash($password, PASSWORD_DEFAULT),
                 'role' => $role,
@@ -96,6 +106,9 @@ final class UserController
         $name = trim((string) ($_POST['name'] ?? ''));
         $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
         $role = (string) ($_POST['role'] ?? 'client_user');
+        $whatsappDisplayName = trim((string) ($_POST['whatsapp_display_name'] ?? ''));
+        $whatsappRoleLabel = trim((string) ($_POST['whatsapp_role_label'] ?? ''));
+        $whatsappSignatureEnabled = isset($_POST['whatsapp_signature_enabled']) ? 1 : 0;
         $status = (string) ($_POST['status'] ?? 'active');
         $password = (string) ($_POST['password'] ?? '');
 
@@ -132,9 +145,12 @@ final class UserController
         }
 
         try {
-            $sql = 'UPDATE users SET name = :name, email = :email, role = :role, status = :status';
+            $sql = 'UPDATE users SET name = :name, whatsapp_display_name = :whatsapp_display_name, whatsapp_role_label = :whatsapp_role_label, whatsapp_signature_enabled = :whatsapp_signature_enabled, email = :email, role = :role, status = :status';
             $params = [
                 'name' => $name,
+                'whatsapp_display_name' => $whatsappDisplayName !== '' ? mb_substr($whatsappDisplayName, 0, 100) : null,
+                'whatsapp_role_label' => $whatsappRoleLabel !== '' ? mb_substr($whatsappRoleLabel, 0, 100) : null,
+                'whatsapp_signature_enabled' => $tenantId !== null ? $whatsappSignatureEnabled : 0,
                 'email' => $email,
                 'role' => $role,
                 'status' => $status,

@@ -28,6 +28,13 @@ CREATE TABLE tenants (
     company_differentials TEXT NULL,
     company_business_hours VARCHAR(255) NULL,
     company_notes TEXT NULL,
+    whatsapp_human_signature_enabled TINYINT(1) NOT NULL DEFAULT 0,
+    whatsapp_human_signature_format ENUM('name','name_role','name_company') NOT NULL DEFAULT 'name_role',
+    message_retention_mode ENUM('complete','reduced','ephemeral') NOT NULL DEFAULT 'reduced',
+    message_retention_days SMALLINT UNSIGNED NOT NULL DEFAULT 90,
+    message_raw_payload_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+    message_ephemeral_hours SMALLINT UNSIGNED NOT NULL DEFAULT 24,
+    message_retention_last_run_at DATETIME NULL,
     plan ENUM('starter', 'pro', 'business', 'custom') NOT NULL DEFAULT 'starter',
     status ENUM('active', 'inactive', 'suspended') NOT NULL DEFAULT 'active',
     onboarding_step TINYINT UNSIGNED NOT NULL DEFAULT 1,
@@ -41,6 +48,9 @@ CREATE TABLE users (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     tenant_id BIGINT UNSIGNED NULL,
     name VARCHAR(150) NOT NULL,
+    whatsapp_display_name VARCHAR(100) NULL,
+    whatsapp_role_label VARCHAR(100) NULL,
+    whatsapp_signature_enabled TINYINT(1) NOT NULL DEFAULT 1,
     email VARCHAR(190) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     role ENUM('super_admin', 'client_admin', 'client_user') NOT NULL DEFAULT 'client_user',
@@ -61,6 +71,16 @@ CREATE TABLE evolution_instances (
     base_url VARCHAR(255) NOT NULL,
     api_key_encrypted TEXT NOT NULL,
     status ENUM('connected', 'disconnected', 'pending') NOT NULL DEFAULT 'disconnected',
+    connection_state VARCHAR(60) NULL,
+    connection_reason VARCHAR(255) NULL,
+    connection_updated_at DATETIME NULL,
+    last_webhook_at DATETIME NULL,
+    profile_name VARCHAR(150) NULL,
+    profile_phone VARCHAR(40) NULL,
+    profile_picture_url VARCHAR(500) NULL,
+    qrcode_base64 MEDIUMTEXT NULL,
+    qrcode_updated_at DATETIME NULL,
+    qrcode_expires_at DATETIME NULL,
     is_default TINYINT(1) NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -185,11 +205,16 @@ CREATE TABLE conversation_messages (
     direction ENUM('incoming', 'outgoing') NOT NULL,
     sender_type ENUM('contact', 'user', 'ai', 'system') NOT NULL,
     sender_user_id BIGINT UNSIGNED NULL,
+    sender_display_name VARCHAR(100) NULL,
+    sender_role_label VARCHAR(100) NULL,
     message_type VARCHAR(40) NOT NULL DEFAULT 'text',
     content TEXT NULL,
+    delivered_content TEXT NULL,
     status ENUM('pending', 'sent', 'delivered', 'read', 'failed', 'received') NOT NULL DEFAULT 'received',
     error_message VARCHAR(500) NULL,
     raw_payload_json JSON NULL,
+    content_purged_at DATETIME NULL,
+    raw_payload_purged_at DATETIME NULL,
     sent_at DATETIME NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_messages_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
@@ -197,7 +222,9 @@ CREATE TABLE conversation_messages (
     CONSTRAINT fk_messages_user FOREIGN KEY (sender_user_id) REFERENCES users(id) ON DELETE SET NULL,
     UNIQUE KEY uq_messages_tenant_external (tenant_id, evolution_message_id),
     INDEX idx_messages_conversation_date (conversation_id, sent_at),
-    INDEX idx_messages_tenant_direction (tenant_id, direction, sent_at)
+    INDEX idx_messages_tenant_direction (tenant_id, direction, sent_at),
+    INDEX idx_messages_retention (tenant_id, sent_at, content_purged_at),
+    INDEX idx_messages_raw_retention (tenant_id, sent_at, raw_payload_purged_at)
 ) ENGINE=InnoDB;
 
 CREATE TABLE conversation_events (
@@ -472,3 +499,39 @@ WHERE TRIM(COALESCE(a.system_prompt, '')) <> ''
   AND NOT EXISTS (
       SELECT 1 FROM ai_agent_prompt_versions v WHERE v.agent_id = a.id
   );
+
+
+CREATE TABLE IF NOT EXISTS evolution_connection_events (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL,
+    evolution_instance_id BIGINT UNSIGNED NOT NULL,
+    event_name VARCHAR(80) NOT NULL,
+    connection_state VARCHAR(60) NULL,
+    connection_reason VARCHAR(255) NULL,
+    profile_name VARCHAR(150) NULL,
+    profile_phone VARCHAR(40) NULL,
+    metadata_json JSON NULL,
+    occurred_at DATETIME NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_evolution_events_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    CONSTRAINT fk_evolution_events_instance FOREIGN KEY (evolution_instance_id) REFERENCES evolution_instances(id) ON DELETE CASCADE,
+    INDEX idx_evolution_events_instance_date (evolution_instance_id, occurred_at),
+    INDEX idx_evolution_events_tenant_date (tenant_id, occurred_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS message_retention_runs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NULL,
+    source ENUM('manual','cron','n8n','system') NOT NULL DEFAULT 'system',
+    status ENUM('success','warning','error') NOT NULL DEFAULT 'success',
+    messages_purged INT UNSIGNED NOT NULL DEFAULT 0,
+    payloads_purged INT UNSIGNED NOT NULL DEFAULT 0,
+    previews_purged INT UNSIGNED NOT NULL DEFAULT 0,
+    details_json JSON NULL,
+    error_message VARCHAR(500) NULL,
+    started_at DATETIME NOT NULL,
+    finished_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_retention_runs_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE SET NULL,
+    INDEX idx_retention_runs_tenant_date (tenant_id, started_at)
+) ENGINE=InnoDB;

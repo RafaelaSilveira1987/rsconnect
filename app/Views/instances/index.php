@@ -62,15 +62,15 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
             $webhookUrl = Router::url('/webhooks/evolution?instance_id=' . (int) $instance['id'] . ($webhookToken !== '' ? '&token=' . rawurlencode($webhookToken) : ''));
             $searchText = mb_strtolower(trim(implode(' ', [$instance['name'], $instance['instance_name'], $instance['tenant_name'], $instance['base_url']])));
             ?>
-            <article class="admin-record-card" data-admin-card data-search="<?= View::e($searchText) ?>" data-status="<?= View::e((string) $instance['status']) ?>">
+            <article class="admin-record-card" data-admin-card data-instance-status-card data-instance-id="<?= (int) $instance['id'] ?>" data-search="<?= View::e($searchText) ?>" data-status="<?= View::e((string) $instance['status']) ?>">
                 <div class="admin-record-main">
                     <span class="admin-record-mark is-whatsapp" aria-hidden="true">WA</span>
                     <div class="admin-record-copy">
                         <div class="admin-record-title-row">
                             <div><h3><?= View::e($instance['name']) ?></h3><p><?= View::e($instance['tenant_name']) ?> · <?= View::e($instance['instance_name']) ?></p></div>
-                            <div class="admin-record-badges"><span class="badge badge-<?= View::e($instance['status']) ?>"><?= View::e($statusLabels[$instance['status']] ?? ucfirst((string) $instance['status'])) ?></span><?php if ((int) $instance['is_default'] === 1): ?><span class="badge">Padrão</span><?php endif; ?></div>
+                            <div class="admin-record-badges"><span class="badge badge-<?= View::e($instance['status']) ?>" data-instance-status-badge><?= View::e($statusLabels[$instance['status']] ?? ucfirst((string) $instance['status'])) ?></span><?php if ((int) $instance['is_default'] === 1): ?><span class="badge">Padrão</span><?php endif; ?></div>
                         </div>
-                        <small class="admin-record-muted"><?= View::e($instance['base_url']) ?></small>
+                        <small class="admin-record-muted"><?= View::e($instance['base_url']) ?></small><small class="admin-record-muted" data-instance-status-detail><?= View::e((string) (($instance['connection_state'] ?? '') ?: 'Aguardando atualização')) ?></small>
                     </div>
                 </div>
                 <dl class="admin-record-metrics">
@@ -79,7 +79,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
                     <div><dt>Conversas</dt><dd><?= (int) $instance['conversations_count'] ?></dd></div>
                     <div><dt>Campanhas</dt><dd><?= (int) $instance['campaigns_count'] ?></dd></div>
                 </dl>
-                <details class="admin-inline-details"><summary>Webhook e informações técnicas</summary><div class="admin-technical-copy"><strong>Webhook para mensagens</strong><code><?= View::e($webhookUrl) ?></code><small><?= $webhookToken === '' ? 'Defina EVOLUTION_WEBHOOK_TOKEN antes de utilizar.' : 'Use este endereço no evento MESSAGES_UPSERT da Evolution.' ?></small></div></details>
+                <details class="admin-inline-details"><summary>Webhook e informações técnicas</summary><div class="admin-technical-copy"><strong>Webhook para mensagens</strong><code><?= View::e($webhookUrl) ?></code><small><?= $webhookToken === '' ? 'Defina EVOLUTION_WEBHOOK_TOKEN antes de utilizar.' : 'Use este endereço nos eventos MESSAGES_UPSERT, MESSAGES_UPDATE, QRCODE_UPDATED e CONNECTION_UPDATE da Evolution.' ?></small></div></details>
                 <?php
                 $bindings = $routingByInstance[(int) $instance['id']] ?? [];
                 $allAgents = array_values(array_filter($adminAgents, static fn (array $agent): bool => (int) ($agent['tenant_id'] ?? 0) === (int) $instance['tenant_id']));
@@ -87,9 +87,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
                 require __DIR__ . '/_routing.php';
                 ?>
                 <div class="admin-record-actions">
-                    <?php if ($instance['status'] !== 'connected'): ?>
-                        <form method="post" action="<?= View::e(Router::url('/instances/qr')) ?>" data-qr-code-form><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><button class="btn btn-small btn-outline" type="submit" data-qr-code-button>Gerar QR Code</button></form>
-                    <?php endif; ?>
+                    <form method="post" action="<?= View::e(Router::url('/instances/qr')) ?>" data-qr-code-form <?= $instance['status'] === 'connected' ? 'hidden' : '' ?>><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><button class="btn btn-small btn-outline" type="submit" data-qr-code-button>Gerar QR Code</button></form>
                     <button class="btn btn-small btn-outline" type="button" data-toggle-panel="instance-drawer" data-instance-open="edit"
                         data-id="<?= (int) $instance['id'] ?>" data-name="<?= View::e($instance['name']) ?>" data-instance-name="<?= View::e($instance['instance_name']) ?>" data-base-url="<?= View::e($instance['base_url']) ?>" data-status="<?= View::e($instance['status']) ?>" data-is-default="<?= (int) $instance['is_default'] ?>">Editar conexão</button>
                     <button class="btn btn-small btn-danger-soft" type="button" data-toggle-panel="instance-delete-drawer" data-instance-delete

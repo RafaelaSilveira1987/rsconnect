@@ -337,10 +337,15 @@ $returnQuery = http_build_query($pollQuery);
                     <article class="message-row <?= $outgoing ? 'is-outgoing' : 'is-incoming' ?>" data-message-id="<?= (int) $message['id'] ?>">
                         <div class="message-bubble <?= $message['status'] === 'failed' ? 'has-error' : '' ?>" data-sender="<?= View::e($message['sender_type']) ?>">
                             <?php if ($message['message_type'] !== 'text'): ?><span class="message-type"><?= View::e(ucfirst($message['message_type'])) ?></span><?php endif; ?>
-                            <p><?= nl2br(View::e($message['content'] ?: '[Sem conteúdo]')) ?></p>
+                            <?php $messageContent = !empty($message['content_purged_at']) ? 'Conteúdo removido pela política de retenção.' : ($message['content'] ?: '[Sem conteúdo]'); ?>
+                            <p><?= nl2br(View::e($messageContent)) ?></p>
                             <?php if (!empty($message['error_message'])): ?><small class="message-error"><?= View::e($message['error_message']) ?></small><?php endif; ?>
                             <footer>
-                                <?php if ($outgoing): ?><span><?= View::e($message['sender_type'] === 'ai' ? 'IA' : ($message['sender_user_name'] ?: 'Equipe')) ?></span><?php endif; ?>
+                                <?php if ($outgoing): ?>
+                                    <?php $senderLabel = $message['sender_type'] === 'ai' ? 'IA' : ($message['sender_user_name'] ?: 'Equipe'); ?>
+                                    <?php if ($message['sender_type'] === 'user' && !empty($message['sender_user_role_label'])): $senderLabel .= ' — ' . $message['sender_user_role_label']; endif; ?>
+                                    <span><?= View::e($senderLabel) ?></span>
+                                <?php endif; ?>
                                 <time><?= View::e($formatDate($message['sent_at'], 'd/m H:i')) ?></time>
                                 <?php if ($outgoing): ?><span class="message-status"><?= View::e($message['status']) ?></span><?php endif; ?>
                             </footer>

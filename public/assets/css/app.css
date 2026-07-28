@@ -8741,3 +8741,62 @@ body.has-new-conversation-drawer { overflow:hidden; }
 .prompt-version-item span,.prompt-version-item small{color:var(--muted,#667085)}
 .btn-sm{padding:8px 12px;min-height:auto}
 @media (max-width:760px){.agent-drawer-progress{grid-template-columns:repeat(2,minmax(0,1fr))}.prompt-version-item{align-items:flex-start;flex-direction:column}.prompt-studio-toolbar{align-items:flex-start;flex-direction:column}}
+
+/* =========================================================
+   RS Connect 36.6.36 — governança de mensagens e Evolution
+   ========================================================= */
+.message-governance-settings {
+  border: 1px solid var(--border, #dfe7ee);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+}
+.message-governance-settings .input-with-suffix {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .65rem;
+}
+.message-governance-settings .input-with-suffix > span {
+  color: var(--text-muted, #607180);
+  font-size: .82rem;
+  font-weight: 700;
+}
+.retention-manual-card {
+  margin-top: 1rem;
+  border-style: dashed;
+}
+.channel-live-status {
+  max-width: 260px;
+  color: var(--text-muted, #607180);
+  font-size: .75rem;
+  line-height: 1.35;
+  text-align: right;
+}
+.channel-connected-note {
+  color: #177a55;
+  font-size: .85rem;
+  font-weight: 750;
+}
+[data-instance-status-card] [data-instance-status-detail] {
+  transition: color .2s ease;
+}
+[data-instance-status-card][data-status="connected"] [data-instance-status-detail] {
+  color: #177a55;
+}
+[data-instance-status-card][data-status="pending"] [data-instance-status-detail] {
+  color: #9a6700;
+}
+[data-instance-status-card][data-status="disconnected"] [data-instance-status-detail] {
+  color: #a43d3d;
+}
+.message-bubble p:has(+ .message-error) {
+  margin-bottom: .35rem;
+}
+@media (max-width: 760px) {
+  .channel-live-status {
+    max-width: 100%;
+    text-align: left;
+  }
+  .message-governance-settings .form-grid.two {
+    grid-template-columns: 1fr;
+  }
+}

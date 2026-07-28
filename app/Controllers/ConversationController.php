@@ -17,6 +17,7 @@ use App\Services\AgentRoutingService;
 use App\Services\AgentOperatingPolicyService;
 use App\Services\AiModelService;
 use App\Services\ConversationFlowService;
+use App\Services\MessageGovernanceService;
 use App\Services\EvolutionService;
 use PDO;
 use Throwable;
@@ -278,11 +279,17 @@ final class ConversationController
         $remoteJid = $phone . '@s.whatsapp.net';
 
         try {
+            $pdo = Database::connection();
+            $preparedMessage = (new MessageGovernanceService())->prepareHumanMessage(
+                $pdo,
+                (int) $instance['tenant_id'],
+                (int) Auth::id(),
+                $message
+            );
             $service = $this->serviceFor($instance);
-            $result = $service->sendText($phone, $message);
+            $result = $service->sendText($phone, $preparedMessage['delivered']);
             $externalId = $this->extractMessageId($result['body'] ?? []);
 
-            $pdo = Database::connection();
             $pdo->beginTransaction();
 
             $contactStatement = $pdo->prepare(
@@ -339,15 +346,20 @@ final class ConversationController
             $messageStatement = $pdo->prepare(
                 'INSERT INTO conversation_messages
                     (tenant_id, conversation_id, evolution_message_id, direction, sender_type,
-                     sender_user_id, message_type, content, status, raw_payload_json, sent_at)
+                     sender_user_id, sender_display_name, sender_role_label, message_type,
+                     content, delivered_content, status, raw_payload_json, sent_at)
                  VALUES
                     (:tenant_id, :conversation_id, :external_id, "outgoing", "user",
-                     :user_id, "text", :content, "sent", :raw_payload, :sent_at)
+                     :user_id, :sender_display_name, :sender_role_label, "text",
+                     :content, :delivered_content, "sent", :raw_payload, :sent_at)
                  ON DUPLICATE KEY UPDATE
                     conversation_id = VALUES(conversation_id),
                     sender_type = "user",
                     sender_user_id = VALUES(sender_user_id),
+                    sender_display_name = VALUES(sender_display_name),
+                    sender_role_label = VALUES(sender_role_label),
                     content = VALUES(content),
+                    delivered_content = VALUES(delivered_content),
                     status = "sent",
                     raw_payload_json = VALUES(raw_payload_json),
                     sent_at = VALUES(sent_at)'
@@ -357,7 +369,10 @@ final class ConversationController
                 'conversation_id' => $conversationId,
                 'external_id' => $externalId,
                 'user_id' => Auth::id(),
-                'content' => $message,
+                'sender_display_name' => $preparedMessage['display_name'],
+                'sender_role_label' => $preparedMessage['role_label'],
+                'content' => $preparedMessage['original'],
+                'delivered_content' => $preparedMessage['delivered'],
                 'raw_payload' => json_encode($result['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 'sent_at' => $sentAt,
             ]);
@@ -419,6 +434,12 @@ final class ConversationController
             // O clique humano precisa pausar a automação ANTES da chamada externa.
             // Assim, mesmo que a Evolution demore ou falhe, a IA/agenda não entra no meio do atendimento.
             $pdo = Database::connection();
+            $preparedMessage = (new MessageGovernanceService())->prepareHumanMessage(
+                $pdo,
+                (int) $conversation['tenant_id'],
+                (int) Auth::id(),
+                $message
+            );
             $pdo->prepare(
                 'UPDATE conversations
                  SET attendance_mode = "human",
@@ -432,7 +453,7 @@ final class ConversationController
             ]);
 
             $service = $this->serviceFor($conversation);
-            $result = $service->sendText((string) $conversation['phone'], $message);
+            $result = $service->sendText((string) $conversation['phone'], $preparedMessage['delivered']);
             $externalId = $this->extractMessageId($result['body'] ?? []);
 
             $pdo->beginTransaction();
@@ -440,15 +461,20 @@ final class ConversationController
             $insert = $pdo->prepare(
                 'INSERT INTO conversation_messages
                     (tenant_id, conversation_id, evolution_message_id, direction, sender_type,
-                     sender_user_id, message_type, content, status, raw_payload_json, sent_at)
+                     sender_user_id, sender_display_name, sender_role_label, message_type,
+                     content, delivered_content, status, raw_payload_json, sent_at)
                  VALUES
                     (:tenant_id, :conversation_id, :external_id, "outgoing", "user",
-                     :sender_user_id, "text", :content, "sent", :raw_payload, :sent_at)
+                     :sender_user_id, :sender_display_name, :sender_role_label, "text",
+                     :content, :delivered_content, "sent", :raw_payload, :sent_at)
                  ON DUPLICATE KEY UPDATE
                     conversation_id = VALUES(conversation_id),
                     sender_type = "user",
                     sender_user_id = VALUES(sender_user_id),
+                    sender_display_name = VALUES(sender_display_name),
+                    sender_role_label = VALUES(sender_role_label),
                     content = VALUES(content),
+                    delivered_content = VALUES(delivered_content),
                     status = "sent",
                     raw_payload_json = VALUES(raw_payload_json),
                     sent_at = VALUES(sent_at)'
@@ -458,7 +484,10 @@ final class ConversationController
                 'conversation_id' => $conversationId,
                 'external_id' => $externalId,
                 'sender_user_id' => Auth::id(),
-                'content' => $message,
+                'sender_display_name' => $preparedMessage['display_name'],
+                'sender_role_label' => $preparedMessage['role_label'],
+                'content' => $preparedMessage['original'],
+                'delivered_content' => $preparedMessage['delivered'],
                 'raw_payload' => json_encode($result['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 'sent_at' => $sentAt,
             ]);
@@ -1304,7 +1333,8 @@ final class ConversationController
 
         $placeholders = implode(', ', array_fill(0, count($ids), '?'));
         $statement = $pdo->prepare(
-            'SELECT m.*, u.name AS sender_user_name
+            'SELECT m.*, COALESCE(m.sender_display_name, u.whatsapp_display_name, u.name) AS sender_user_name,
+                    COALESCE(m.sender_role_label, u.whatsapp_role_label) AS sender_user_role_label
              FROM conversation_messages m
              LEFT JOIN users u ON u.id = m.sender_user_id AND u.tenant_id = m.tenant_id
              WHERE m.tenant_id = ?
@@ -1711,8 +1741,11 @@ final class ConversationController
             'direction' => (string) $message['direction'],
             'sender_type' => (string) $message['sender_type'],
             'sender_name' => (string) ($message['sender_user_name'] ?? ''),
+            'sender_role_label' => (string) ($message['sender_user_role_label'] ?? ''),
             'message_type' => (string) ($message['message_type'] ?? 'text'),
-            'content' => (string) ($message['content'] ?? ''),
+            'content' => !empty($message['content_purged_at'])
+                ? 'Conteúdo removido pela política de retenção.'
+                : (string) ($message['content'] ?? ''),
             'status' => (string) ($message['status'] ?? ''),
             'sent_at' => (string) $message['sent_at'],
             'time_label' => $this->formatTimeLabel((string) $message['sent_at']),

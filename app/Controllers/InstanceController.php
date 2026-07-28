@@ -125,6 +125,123 @@ final class InstanceController
         ]);
     }
 
+
+    public function statusFeed(): void
+    {
+        header('Content-Type: application/json; charset=UTF-8');
+        $tenantId = Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) (Auth::tenantId() ?? 0);
+        $instanceId = (int) ($_GET['instance_id'] ?? 0);
+
+        $conditions = [];
+        $params = [];
+        if (!Auth::isSuperAdmin()) {
+            $conditions[] = 'tenant_id = :tenant_id';
+            $params['tenant_id'] = $tenantId;
+        } elseif ($tenantId > 0) {
+            $conditions[] = 'tenant_id = :tenant_id';
+            $params['tenant_id'] = $tenantId;
+        }
+        if ($instanceId > 0) {
+            $conditions[] = 'id = :instance_id';
+            $params['instance_id'] = $instanceId;
+        }
+
+        $sql = 'SELECT id, tenant_id, name, instance_name, base_url, api_key_encrypted,
+                       status, connection_state, connection_reason,
+                       connection_updated_at, last_status_check_at, last_webhook_at,
+                       profile_name, profile_phone, profile_picture_url,
+                       qrcode_base64, qrcode_updated_at, qrcode_expires_at
+                FROM evolution_instances';
+        if ($conditions !== []) {
+            $sql .= ' WHERE ' . implode(' AND ', $conditions);
+        }
+        $sql .= ' ORDER BY id';
+
+        try {
+            $statement = Database::connection()->prepare($sql);
+            $statement->execute($params);
+            $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $now = time();
+            $liveChecks = 0;
+            foreach ($rows as &$row) {
+                $lastCheck = !empty($row['last_status_check_at']) ? strtotime((string) $row['last_status_check_at']) : false;
+                if ($liveChecks >= 8 || ($lastCheck !== false && ($now - $lastCheck) < 60)) {
+                    continue;
+                }
+                try {
+                    $verifySsl = filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+                    $caBundle = trim((string) Env::get('EVOLUTION_CA_BUNDLE', ''));
+                    $service = new EvolutionService(
+                        (string) $row['base_url'],
+                        Crypto::decrypt((string) $row['api_key_encrypted']),
+                        (string) $row['instance_name'],
+                        8,
+                        $verifySsl ?? true,
+                        $caBundle !== '' ? $caBundle : null
+                    );
+                    $live = $service->connectionState();
+                    $state = mb_strtolower(trim((string) ($live['state'] ?? '')));
+                    if ($state !== '') {
+                        $connected = in_array($state, ['open', 'connected', 'online', 'active'], true);
+                        $pending = in_array($state, ['connecting', 'qrcode', 'qr', 'pending', 'created'], true);
+                        $mappedStatus = $connected ? 'connected' : ($pending ? 'pending' : 'disconnected');
+                        Database::connection()->prepare(
+                            'UPDATE evolution_instances
+                             SET connection_state = :state, status = :status,
+                                 last_status_check_at = NOW(), connection_updated_at = NOW(),
+                                 qrcode_base64 = IF(:connected = 1, NULL, qrcode_base64),
+                                 qrcode_expires_at = IF(:connected = 1, NULL, qrcode_expires_at)
+                             WHERE id = :id'
+                        )->execute([
+                            'state' => $state,
+                            'status' => $mappedStatus,
+                            'connected' => $connected ? 1 : 0,
+                            'id' => (int) $row['id'],
+                        ]);
+                        $row['connection_state'] = $state;
+                        $row['status'] = $mappedStatus;
+                        $row['last_status_check_at'] = date('Y-m-d H:i:s');
+                    }
+                } catch (Throwable) {
+                    try {
+                        Database::connection()->prepare('UPDATE evolution_instances SET last_status_check_at = NOW() WHERE id = :id')
+                            ->execute(['id' => (int) $row['id']]);
+                    } catch (Throwable) {
+                    }
+                }
+                $liveChecks++;
+            }
+            unset($row);
+
+            $items = [];
+            foreach ($rows as $row) {
+                $expiresAt = !empty($row['qrcode_expires_at']) ? strtotime((string) $row['qrcode_expires_at']) : false;
+                $qrValid = !empty($row['qrcode_base64']) && $expiresAt !== false && $expiresAt >= $now;
+                $state = trim((string) (($row['connection_state'] ?? '') ?: ($row['status'] ?? 'unknown')));
+                $items[] = [
+                    'id' => (int) $row['id'],
+                    'tenant_id' => (int) $row['tenant_id'],
+                    'name' => (string) $row['name'],
+                    'instance_name' => (string) $row['instance_name'],
+                    'status' => (string) $row['status'],
+                    'connection_state' => $state,
+                    'status_label' => $this->connectionLabel($state, (string) $row['status']),
+                    'reason' => (string) ($row['connection_reason'] ?? ''),
+                    'updated_at' => (string) (($row['connection_updated_at'] ?? '') ?: ($row['last_status_check_at'] ?? '') ?: ($row['last_webhook_at'] ?? '')),
+                    'profile_name' => (string) ($row['profile_name'] ?? ''),
+                    'profile_phone' => (string) ($row['profile_phone'] ?? ''),
+                    'profile_picture_url' => (string) ($row['profile_picture_url'] ?? ''),
+                    'qr_ready' => $qrValid,
+                    'qr_code' => $instanceId > 0 && $qrValid ? (string) $row['qrcode_base64'] : null,
+                ];
+            }
+            echo json_encode(['ok' => true, 'items' => $items, 'checked_at' => date(DATE_ATOM)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        } catch (Throwable $exception) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'message' => 'Não foi possível atualizar o status das conexões.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+    }
+
     public function store(): void
     {
         $tenantId = Auth::isSuperAdmin()
@@ -201,6 +318,25 @@ final class InstanceController
             ]);
             $instanceId = (int) $pdo->lastInsertId();
             $pdo->commit();
+
+            try {
+                $verifySsl = filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+                $caBundle = trim((string) Env::get('EVOLUTION_CA_BUNDLE', ''));
+                $service = new EvolutionService(
+                    $baseUrl,
+                    $apiKey,
+                    $instanceName,
+                    20,
+                    $verifySsl ?? true,
+                    $caBundle !== '' ? $caBundle : null
+                );
+                $this->configureRealtimeWebhook($service, $instanceId);
+            } catch (Throwable $webhookException) {
+                $this->audit($tenantId, 'evolution.webhook_config_warning', [
+                    'instance_id' => $instanceId,
+                    'error' => $webhookException->getMessage(),
+                ]);
+            }
 
             $this->audit($tenantId, 'evolution.instance_created', [
                 'instance_id' => $instanceId,
@@ -676,6 +812,13 @@ final class InstanceController
                 $verifySsl ?? true,
                 $caBundle !== '' ? $caBundle : null
             );
+            $webhookWarning = null;
+            try {
+                $this->configureRealtimeWebhook($service, $instanceId);
+            } catch (Throwable $webhookException) {
+                $webhookWarning = $webhookException->getMessage();
+            }
+
             $result = $service->connectQrCode();
             $body = is_array($result['body'] ?? null) ? $result['body'] : [];
             $base64 = trim((string) ($body['base64'] ?? $body['qrcode'] ?? $body['qrCode'] ?? ''));
@@ -690,9 +833,17 @@ final class InstanceController
             }
 
             $update = $pdo->prepare(
-                'UPDATE evolution_instances SET status = "pending" WHERE id = :id AND status <> "connected"'
+                'UPDATE evolution_instances
+                 SET status = IF(status = "connected", status, "pending"),
+                     connection_state = IF(status = "connected", connection_state, "qrcode"),
+                     connection_reason = NULL,
+                     qrcode_base64 = :qrcode,
+                     qrcode_updated_at = NOW(),
+                     qrcode_expires_at = DATE_ADD(NOW(), INTERVAL 2 MINUTE),
+                     connection_updated_at = NOW()
+                 WHERE id = :id'
             );
-            $update->execute(['id' => $instanceId]);
+            $update->execute(['id' => $instanceId, 'qrcode' => $base64]);
 
             $this->audit((int) $instance['tenant_id'], 'evolution.qrcode_generated', [
                 'instance_id' => $instanceId,
@@ -703,7 +854,10 @@ final class InstanceController
                 'ok' => true,
                 'qr_code' => $base64,
                 'connection_name' => (string) $instance['name'],
-                'message' => 'QR Code gerado. Escaneie pelo WhatsApp em Dispositivos conectados.',
+                'message' => $webhookWarning === null
+                    ? 'QR Code gerado. O status será atualizado automaticamente após a leitura.'
+                    : 'QR Code gerado. A atualização automática do status precisa ser revisada: ' . $webhookWarning,
+                'webhook_warning' => $webhookWarning,
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         } catch (Throwable $exception) {
             $this->audit((int) $instance['tenant_id'], 'evolution.qrcode_failed', [
@@ -781,6 +935,42 @@ final class InstanceController
         }
 
         $this->redirect('/instances');
+    }
+
+    private function configureRealtimeWebhook(EvolutionService $service, int $instanceId): void
+    {
+        $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+        if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+            throw new \RuntimeException('APP_URL HTTPS não configurada.');
+        }
+        $token = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
+        $webhookUrl = $appUrl . '/webhooks/evolution?instance_id=' . $instanceId;
+        if ($token !== '') {
+            $webhookUrl .= '&token=' . rawurlencode($token);
+        }
+        $service->setWebhook($webhookUrl, [
+            'MESSAGES_UPSERT',
+            'MESSAGES_UPDATE',
+            'CONNECTION_UPDATE',
+            'QRCODE_UPDATED',
+            'CONTACTS_UPSERT',
+        ]);
+    }
+
+    private function connectionLabel(string $state, string $status): string
+    {
+        $value = mb_strtolower(trim($state !== '' ? $state : $status));
+        return match ($value) {
+            'open', 'connected', 'online', 'active' => 'Conectado',
+            'qrcode', 'qr', 'qrcode_updated' => 'Aguardando leitura do QR Code',
+            'connecting' => 'Conectando',
+            'created' => 'Instância criada',
+            'pending' => 'Pendente',
+            'refused' => 'Conexão recusada',
+            'logged_out', 'logout', 'loggedout' => 'Sessão encerrada',
+            'error', 'failed' => 'Falha na conexão',
+            default => 'Desconectado',
+        };
     }
 
     private function migrateAgentBindings(PDO $pdo, int $sourceInstanceId, int $replacementInstanceId, int $tenantId): int

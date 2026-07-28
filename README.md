@@ -1,8 +1,10 @@
 # RS Connect — pacote VPS
 
-Pacote consolidado até o RS Connect 36.6.35 — Prompt Studio e versionamento de instruções.
+Pacote consolidado até o RS Connect 36.6.36 — Governança de mensagens e Evolution em tempo real.
 
 ## Última etapa incluída
+
+RS Connect 36.6.36 — identifica o atendente nas mensagens humanas, aplica políticas configuráveis de retenção e atualiza QR/conexão da Evolution por webhook com reconciliação automática.
 
 RS Connect 36.6.35 — adiciona criação guiada de prompt, validação de conflitos operacionais e histórico restaurável por assistente.
 
@@ -100,6 +102,14 @@ database/migrations/052_ai_usage_and_after_hours_recovery.sql
 database/migrations/053_ai_quota_limit_repair.sql
 database/migrations/054_ai_metrics_and_delivery_telemetry.sql
 database/migrations/055_multi_whatsapp_agent_routing.sql
+database/migrations/056_n8n_agenda_event_contract.sql
+database/migrations/057_calendar_modality_before_availability.sql
+database/migrations/058_client_communication_center.sql
+database/migrations/059_contact_identity_confidence.sql
+database/migrations/060_free_trial_guided_first_access.sql
+database/migrations/061_onboarding_calendar_modes.sql
+database/migrations/062_prompt_studio_and_versions.sql
+database/migrations/063_message_governance_evolution_realtime.sql
 ```
 
 Consulte `README-RS-CONNECT-36.3.0.md` para instalar e validar a rotina de backup.
@@ -126,7 +136,9 @@ Para a saúde operacional automática, configure `OPERATIONS_MONITOR_TOKEN` e ba
 - Régua de cobrança.
 - Notificações.
 - Relatórios e conversas com atualização automática.
-- QR Code da Evolution nas instâncias.
+- QR Code e status da Evolution atualizados por webhook e reconciliação.
+- Assinatura pública do atendente nas mensagens humanas.
+- Políticas de retenção completa, reduzida ou efêmera.
 - Onboarding e prompt guiado.
 - Checklist de implantação RS.
 - Fila de atendimento e distribuição por equipe.

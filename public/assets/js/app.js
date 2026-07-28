@@ -703,7 +703,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderMessage(message) {
     const outgoing = message.direction === 'outgoing';
     const failed = message.status === 'failed';
-    const sender = outgoing ? (message.sender_type === 'ai' ? 'IA' : (message.sender_name || 'Equipe')) : '';
+    const baseSender = message.sender_type === 'ai' ? 'IA' : (message.sender_name || 'Equipe');
+    const sender = outgoing && message.sender_type === 'user' && message.sender_role_label
+      ? `${baseSender} — ${message.sender_role_label}`
+      : (outgoing ? baseSender : '');
     const content = escapeHtml(message.content || '[Sem conteúdo]').replace(/\n/g, '<br>');
     const type = message.message_type && message.message_type !== 'text' ? `<span class="message-type">${escapeHtml(message.message_type)}</span>` : '';
     const statusText = outgoing ? `<span class="message-status">${escapeHtml(message.status || '')}</span>` : '';
@@ -900,6 +903,8 @@ document.addEventListener('DOMContentLoaded', () => {
       event.preventDefault();
       resetModal();
       openModal();
+      const instanceField = form.querySelector('input[name="instance_id"]');
+      modal.dataset.instanceId = instanceField?.value || '';
       const button = form.querySelector('[data-qr-code-button]');
       const originalText = button?.textContent || 'Gerar QR Code';
       if (button) {
@@ -927,6 +932,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (loading) loading.hidden = true;
+        if (message && payload.message) {
+          message.textContent = payload.message;
+          message.hidden = false;
+        }
         if (image) {
           image.src = payload.qr_code;
           image.hidden = false;
@@ -1365,7 +1374,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-copy-value]').forEach((button)=>button.addEventListener('click',async()=>{const value=button.dataset.copyValue||'';if(!value)return;try{await navigator.clipboard.writeText(value);const original=button.textContent;button.textContent='Link copiado';window.setTimeout(()=>button.textContent=original,1800);}catch(error){window.prompt('Copie o link:',value);}}));
   setupSimpleDrawer({drawer:'gateway-drawer',form:'[data-gateway-form]',buttons:'[data-gateway-open]',attr:'data-gateway-field',fill:({button,drawer,form,field})=>{form.reset();field('id').value='0';field('environment').value='production';field('status').value='active';field('is_default').checked=true;const edit=button.dataset.gatewayOpen==='edit';if(edit){field('id').value=button.dataset.id||'0';field('label').value=button.dataset.label||'';field('provider').value=button.dataset.provider||'manual';field('environment').value=button.dataset.environment||'production';field('status').value=button.dataset.status||'active';field('api_base_url').value=button.dataset.apiBaseUrl||'';field('public_key').value=button.dataset.publicKey||'';field('method').value=button.dataset.method||'UNDEFINED';field('is_default').checked=button.dataset.isDefault==='1';field('notes').value=decodeURIComponent(button.dataset.notes||'');field('api_key').value='';field('webhook_secret').value='';drawer.querySelector('[data-gateway-eyebrow]').textContent='Editar gateway';drawer.querySelector('[data-gateway-title]').textContent=button.dataset.label||'Atualizar gateway';drawer.querySelector('[data-gateway-key-hint]').textContent='Deixe em branco para manter a chave atual.';drawer.querySelector('[data-gateway-submit]').textContent='Salvar alterações';}else{drawer.querySelector('[data-gateway-eyebrow]').textContent='Novo gateway';drawer.querySelector('[data-gateway-title]').textContent='Configurar pagamento';drawer.querySelector('[data-gateway-key-hint]').textContent='Informe a chave do provedor.';drawer.querySelector('[data-gateway-submit]').textContent='Salvar gateway';}}});
   setupSimpleDrawer({drawer:'reminder-drawer',form:'[data-reminder-form]',buttons:'[data-reminder-open]',attr:'data-reminder-field',fill:({button,drawer,form,field})=>{form.reset();field('id').value='0';field('days_from_due').value='-3';field('status').value='active';field('message_template').value='Olá, {{empresa}}. Sua cobrança {{invoice_number}} no valor de {{valor}} vence em {{vencimento}}. Link: {{link_pagamento}}';const edit=button.dataset.reminderOpen==='edit';if(edit){field('id').value=button.dataset.id||'0';field('label').value=button.dataset.label||'';field('days_from_due').value=button.dataset.days||'0';field('status').value=button.dataset.status||'active';field('event_key').value=button.dataset.eventKey||'';field('channel').value=button.dataset.channel||'';field('auto_mark_overdue').checked=button.dataset.autoOverdue==='1';field('auto_suspend').checked=button.dataset.autoSuspend==='1';field('message_template').value=decodeURIComponent(button.dataset.message||'');drawer.querySelector('[data-reminder-eyebrow]').textContent='Editar regra';drawer.querySelector('[data-reminder-title]').textContent=button.dataset.label||'Atualizar aviso';drawer.querySelector('[data-reminder-submit]').textContent='Salvar alterações';}else{drawer.querySelector('[data-reminder-eyebrow]').textContent='Nova regra';drawer.querySelector('[data-reminder-title]').textContent='Criar aviso automático';drawer.querySelector('[data-reminder-submit]').textContent='Salvar regra';}}});
-  setupSimpleDrawer({drawer:'user-drawer',form:'[data-user-form]',buttons:'[data-user-open]',attr:'data-user-field',fill:({button,drawer,form,field})=>{form.reset();form.action=`${window.location.origin}/users`;field('id').value='0';field('tenant_id').value='global';field('role').value='super_admin';field('password').required=true;drawer.querySelector('[data-user-status-field]').hidden=true;const edit=button.dataset.userOpen==='edit';if(edit){form.action=`${window.location.origin}/users/update`;field('id').value=button.dataset.id||'0';field('tenant_id').value=button.dataset.tenantId||'global';field('name').value=button.dataset.name||'';field('email').value=button.dataset.email||'';field('role').value=button.dataset.role||'client_user';field('status').value=button.dataset.status||'active';field('password').value='';field('password').required=false;drawer.querySelector('[data-user-status-field]').hidden=false;drawer.querySelector('[data-user-eyebrow]').textContent='Editar usuário';drawer.querySelector('[data-user-title]').textContent=button.dataset.name||'Atualizar acesso';drawer.querySelector('[data-user-description]').textContent='Altere perfil, situação ou senha sem recriar o usuário.';drawer.querySelector('[data-user-password-hint]').textContent='Deixe em branco para manter a senha atual.';drawer.querySelector('[data-user-submit]').textContent='Salvar alterações';}else{drawer.querySelector('[data-user-eyebrow]').textContent='Novo usuário';drawer.querySelector('[data-user-title]').textContent='Criar acesso';drawer.querySelector('[data-user-description]').textContent='Defina a empresa, o perfil e os dados de entrada.';drawer.querySelector('[data-user-password-hint]').textContent='Obrigatória no primeiro cadastro.';drawer.querySelector('[data-user-submit]').textContent='Salvar usuário';}}});
+  setupSimpleDrawer({drawer:'user-drawer',form:'[data-user-form]',buttons:'[data-user-open]',attr:'data-user-field',fill:({button,drawer,form,field})=>{form.reset();form.action=`${window.location.origin}/users`;field('id').value='0';field('tenant_id').value='global';field('role').value='super_admin';field('password').required=true;if(field('whatsapp_signature_enabled'))field('whatsapp_signature_enabled').checked=true;drawer.querySelector('[data-user-status-field]').hidden=true;const edit=button.dataset.userOpen==='edit';if(edit){form.action=`${window.location.origin}/users/update`;field('id').value=button.dataset.id||'0';field('tenant_id').value=button.dataset.tenantId||'global';field('name').value=button.dataset.name||'';field('email').value=button.dataset.email||'';field('whatsapp_display_name').value=button.dataset.whatsappDisplayName||'';field('whatsapp_role_label').value=button.dataset.whatsappRoleLabel||'';field('whatsapp_signature_enabled').checked=button.dataset.whatsappSignatureEnabled==='1';field('role').value=button.dataset.role||'client_user';field('status').value=button.dataset.status||'active';field('password').value='';field('password').required=false;drawer.querySelector('[data-user-status-field]').hidden=false;drawer.querySelector('[data-user-eyebrow]').textContent='Editar usuário';drawer.querySelector('[data-user-title]').textContent=button.dataset.name||'Atualizar acesso';drawer.querySelector('[data-user-description]').textContent='Altere perfil, situação ou senha sem recriar o usuário.';drawer.querySelector('[data-user-password-hint]').textContent='Deixe em branco para manter a senha atual.';drawer.querySelector('[data-user-submit]').textContent='Salvar alterações';}else{drawer.querySelector('[data-user-eyebrow]').textContent='Novo usuário';drawer.querySelector('[data-user-title]').textContent='Criar acesso';drawer.querySelector('[data-user-description]').textContent='Defina a empresa, o perfil e os dados de entrada.';drawer.querySelector('[data-user-password-hint]').textContent='Obrigatória no primeiro cadastro.';drawer.querySelector('[data-user-submit]').textContent='Salvar usuário';}}});
 
   const permissionSearch=document.querySelector('[data-permission-search]');
   if(permissionSearch){const groups=Array.from(document.querySelectorAll('[data-permission-group]'));const apply=()=>{const q=normalize(permissionSearch.value);groups.forEach((group)=>{let shown=0;group.querySelectorAll('[data-permission-row]').forEach((row)=>{const visible=!q||normalize(row.dataset.search).includes(q);row.hidden=!visible;if(visible)shown++;});group.hidden=shown===0&&!normalize(group.dataset.search).includes(q);if(q&&shown>0)group.open=true;});};permissionSearch.addEventListener('input',apply);}
@@ -1686,6 +1695,9 @@ document.addEventListener('DOMContentLoaded', () => {
     field('status').value = 'active';
     field('password').value = '';
     field('password').required = true;
+    if (field('whatsapp_display_name')) field('whatsapp_display_name').value = '';
+    if (field('whatsapp_role_label')) field('whatsapp_role_label').value = '';
+    if (field('whatsapp_signature_enabled')) field('whatsapp_signature_enabled').checked = true;
     if (statusField) statusField.hidden = true;
     if (selfNote) selfNote.hidden = true;
     if (eyebrow) eyebrow.textContent = 'Novo usuário';
@@ -1709,6 +1721,9 @@ document.addEventListener('DOMContentLoaded', () => {
         field('email').value = button.dataset.email || '';
         field('role').value = button.dataset.role || 'client_user';
         field('status').value = button.dataset.status || 'active';
+        if (field('whatsapp_display_name')) field('whatsapp_display_name').value = button.dataset.whatsappDisplayName || '';
+        if (field('whatsapp_role_label')) field('whatsapp_role_label').value = button.dataset.whatsappRoleLabel || '';
+        if (field('whatsapp_signature_enabled')) field('whatsapp_signature_enabled').checked = button.dataset.whatsappSignatureEnabled === '1';
         field('password').value = '';
         field('password').required = false;
         if (statusField) statusField.hidden = false;
@@ -2150,3 +2165,106 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 });
+
+/* =========================================================
+   36.6.36 — Evolution: status refletido na tela por webhook + polling curto
+   ========================================================= */
+(function () {
+  const cards = Array.from(document.querySelectorAll('[data-instance-status-card]'));
+  if (cards.length === 0) return;
+
+  let running = false;
+  let timer = 0;
+
+  function classForStatus(status) {
+    if (status === 'connected') return 'connected';
+    if (status === 'pending') return 'pending';
+    return 'disconnected';
+  }
+
+  function formatDetail(item) {
+    const parts = [];
+    if (item.connection_state) parts.push(item.connection_state);
+    if (item.profile_name) parts.push(item.profile_name);
+    if (item.profile_phone) parts.push(item.profile_phone);
+    if (item.reason) parts.push(item.reason);
+    return parts.join(' · ') || 'Aguardando atualização da Evolution';
+  }
+
+  function applyItem(item) {
+    const card = cards.find((candidate) => Number(candidate.dataset.instanceId || 0) === Number(item.id || 0));
+    if (!card) return;
+
+    card.dataset.status = item.status || 'disconnected';
+    const badge = card.querySelector('[data-instance-status-badge]');
+    if (badge) {
+      badge.textContent = item.status_label || 'Desconectado';
+      badge.classList.remove('badge-connected', 'badge-pending', 'badge-disconnected');
+      badge.classList.add('badge-' + classForStatus(item.status));
+    }
+    const detail = card.querySelector('[data-instance-status-detail]');
+    if (detail) detail.textContent = formatDetail(item);
+
+    const qrForm = card.querySelector('[data-qr-code-form]');
+    const connectedNote = card.querySelector('.channel-connected-note');
+    if (item.status === 'connected') {
+      if (qrForm) qrForm.hidden = true;
+      if (connectedNote) connectedNote.hidden = false;
+    } else {
+      if (qrForm) qrForm.hidden = false;
+      if (connectedNote) connectedNote.hidden = true;
+    }
+
+    const modal = document.querySelector('[data-qr-code-modal]');
+    if (modal && !modal.hidden && Number(modal.dataset.instanceId || 0) === Number(item.id || 0)) {
+      if (item.status === 'connected') {
+        modal.hidden = true;
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('has-modal-open');
+        if (typeof window.showToast === 'function') window.showToast('WhatsApp conectado com sucesso.');
+        else document.dispatchEvent(new CustomEvent('rs:toast', { detail: { message: 'WhatsApp conectado com sucesso.' } }));
+      } else if (item.qr_ready && item.qr_code) {
+        const image = modal.querySelector('[data-qr-image]');
+        const loading = modal.querySelector('[data-qr-loading]');
+        if (loading) loading.hidden = true;
+        if (image) {
+          image.src = item.qr_code;
+          image.hidden = false;
+        }
+      }
+    }
+  }
+
+  async function poll() {
+    if (running || document.hidden) return;
+    running = true;
+    try {
+      const response = await fetch('/instances/status-feed', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.ok === false) return;
+      (payload.items || []).forEach(applyItem);
+    } catch (_) {
+      // A tela mantém o último estado conhecido e tenta novamente.
+    } finally {
+      running = false;
+    }
+  }
+
+  function schedule() {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(async () => {
+      await poll();
+      schedule();
+    }, 3500);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) poll();
+  });
+  poll();
+  schedule();
+})();
