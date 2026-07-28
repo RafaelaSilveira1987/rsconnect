@@ -11,7 +11,7 @@ use Throwable;
 
 final class AccessControlService
 {
-    public const VERSION = '36.6.34-trial-access';
+    public const VERSION = '36.6.34.2-guided-calendar-mode';
 
     public function statusForTenant(int $tenantId): array
     {

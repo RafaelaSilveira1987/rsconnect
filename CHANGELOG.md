@@ -1,3 +1,21 @@
+## 36.6.34.2 — Agenda interna e liberação da Agenda inteligente
+
+- Etapa 4 do onboarding passa a exigir a escolha entre Sem agenda, Agenda interna e Agenda inteligente integrada.
+- Agenda interna configura disponibilidade no próprio RS Connect, com horários por dia e sem n8n/Google Calendar.
+- Agenda inteligente só fica selecionável após liberação e homologação pelo Super Admin.
+- Super Admin controla o status técnico na tela da empresa.
+- Mantém integralmente o teste gratuito e o hotfix de login da 36.6.34.1.
+
+## 36.6.34.1 — Hotfix de login e sessão
+
+- corrige o redirecionamento após CSRF expirado no formulário de login;
+- impede gerar URLs como `/https://dominio/login` quando o referer já é absoluto;
+- redireciona o login expirado diretamente para `/login`, com novo token de formulário;
+- aceita URL absoluta apenas quando pertence ao mesmo domínio configurado em `APP_URL`;
+- bloqueia redirecionamento externo e URLs iniciadas por `//`;
+- recupera automaticamente URLs antigas malformadas que ainda estejam abertas no navegador;
+- sem migration e sem alteração nas regras de teste gratuito ou onboarding.
+
 ## 36.6.34 — Teste gratuito e primeiro acesso guiado
 
 - adiciona teste gratuito por quantidade de dias, com último dia e primeira cobrança calculados automaticamente;

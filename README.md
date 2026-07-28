@@ -1,8 +1,12 @@
 # RS Connect — pacote VPS
 
-Pacote consolidado até o RS Connect 36.6.34 — Teste gratuito e primeiro acesso guiado.
+Pacote consolidado até o RS Connect 36.6.34.2 — Agenda interna e liberação da Agenda inteligente.
 
 ## Última etapa incluída
+
+RS Connect 36.6.34.2 — adiciona a escolha explícita entre Agenda interna, Agenda inteligente homologada pela RS e operação sem agenda.
+
+RS Connect 36.6.34.1 — corrige o redirecionamento após expiração do formulário de login, sem alterar o teste gratuito nem o onboarding.
 
 RS Connect 36.6.34 — transforma o período de teste em regra efetiva de acesso/cobrança e conduz o primeiro acesso em sete etapas sequenciais, preservando empresas que já operavam.
 

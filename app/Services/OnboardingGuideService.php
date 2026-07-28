@@ -99,6 +99,8 @@ final class OnboardingGuideService
             'agents' => $this->agents($tenantId),
             'default_agent' => $this->defaultAgent($tenantId),
             'attendance_settings' => $this->onboardingSettings($tenantId),
+            'calendar_access' => $this->calendarAccessSettings($tenantId),
+            'calendar_availability' => (new CalendarAvailabilityService())->settings($tenantId),
             'pre_schedule' => $this->preScheduleSettings($tenantId),
             'privacy' => $this->privacyStatus($tenantId, $userId),
             'events' => $this->events($tenantId),
@@ -263,11 +265,21 @@ final class OnboardingGuideService
     /** @param array<string, mixed> $data */
     public function saveAgenda(int $tenantId, array $data, ?int $userId): void
     {
-        $enabled = (string) ($data['enabled'] ?? '') === '1' ? 1 : 0;
+        $mode = strtolower(trim((string) ($data['calendar_mode'] ?? 'none')));
+        if (!in_array($mode, ['none', 'internal', 'smart'], true)) {
+            throw new \RuntimeException('Selecione uma modalidade de agenda válida.');
+        }
+
+        $access = $this->calendarAccessSettings($tenantId);
+        if ($mode === 'smart' && (string) ($access['smart_calendar_status'] ?? 'locked') !== 'ready') {
+            throw new \RuntimeException('A Agenda inteligente ainda não foi liberada e homologada pela equipe RS Connect.');
+        }
+
+        $enabled = $mode === 'none' ? 0 : 1;
         $humanApproval = (string) ($data['require_human_approval'] ?? '') === '1' ? 1 : 0;
         $suggest = (string) ($data['ai_can_suggest_slots'] ?? '') === '1' ? 1 : 0;
         $confirm = (string) ($data['ai_can_confirm'] ?? '') === '1' ? 1 : 0;
-        $duration = max(15, min(240, (int) ($data['default_duration_minutes'] ?? 50)));
+        $duration = max(15, min(240, (int) ($data['default_duration_minutes'] ?? 60)));
         $collect = mb_substr(trim((string) ($data['collect_message'] ?? 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.')), 0, 800);
         $registered = mb_substr(trim((string) ($data['default_message'] ?? 'Vou registrar sua preferência e encaminhar para confirmação.')), 0, 500);
 
@@ -298,8 +310,83 @@ final class OnboardingGuideService
             'collect_message' => $collect !== '' ? $collect : null,
         ]);
 
-        $this->saveStep($tenantId, 'agenda_setup', $enabled ? 'complete' : 'skipped', $enabled ? 'Agenda e pré-agendamento configurados.' : 'Agenda dispensada para esta operação.', $userId);
-        $this->recordEvent($tenantId, $userId, 'onboarding.agenda_saved', 'Configuração de agenda revisada.', ['enabled' => $enabled]);
+        $this->ensureOnboardingSettingsTable();
+        $this->pdo->prepare(
+            'INSERT INTO tenant_onboarding_settings (tenant_id, calendar_mode)
+             VALUES (:tenant_id, :calendar_mode)
+             ON DUPLICATE KEY UPDATE calendar_mode = VALUES(calendar_mode), updated_at = NOW()'
+        )->execute(['tenant_id' => $tenantId, 'calendar_mode' => $mode]);
+
+        $calendar = new CalendarAvailabilityService();
+        if ($mode === 'internal') {
+            $calendar->configureInternalMode($tenantId, $data + ['default_duration_minutes' => $duration]);
+        } elseif ($mode === 'smart') {
+            $calendar->configureSmartMode($tenantId);
+        } else {
+            $calendar->disableAvailability($tenantId);
+        }
+
+        $status = $mode === 'none' ? 'skipped' : 'complete';
+        $message = match ($mode) {
+            'internal' => 'Agenda interna do RS Connect configurada, sem n8n ou Google Calendar.',
+            'smart' => 'Agenda inteligente liberada pela RS Connect e selecionada para esta empresa.',
+            default => 'Agenda dispensada para esta operação.',
+        };
+        $this->saveStep($tenantId, 'agenda_setup', $status, $message, $userId);
+        $this->recordEvent($tenantId, $userId, 'onboarding.agenda_saved', $message, ['calendar_mode' => $mode, 'enabled' => $enabled]);
+    }
+
+    /** @return array<string, mixed> */
+    public function calendarAccessSettings(int $tenantId): array
+    {
+        $settings = $this->onboardingSettings($tenantId) ?: [];
+        return [
+            'calendar_mode' => (string) ($settings['calendar_mode'] ?? 'none'),
+            'smart_calendar_status' => (string) ($settings['smart_calendar_status'] ?? 'locked'),
+            'smart_calendar_released_by' => $settings['smart_calendar_released_by'] ?? null,
+            'smart_calendar_released_at' => $settings['smart_calendar_released_at'] ?? null,
+        ];
+    }
+
+    public function saveSmartCalendarAccess(int $tenantId, string $status, ?int $userId): void
+    {
+        if (!in_array($status, ['locked', 'configuring', 'ready'], true)) {
+            throw new \RuntimeException('Situação da Agenda inteligente inválida.');
+        }
+        $this->ensureOnboardingSettingsTable();
+        $releasedAt = $status === 'ready' ? date('Y-m-d H:i:s') : null;
+        $this->pdo->prepare(
+            'INSERT INTO tenant_onboarding_settings
+                (tenant_id, smart_calendar_status, smart_calendar_released_by, smart_calendar_released_at)
+             VALUES
+                (:tenant_id, :status, :released_by, :released_at)
+             ON DUPLICATE KEY UPDATE
+                smart_calendar_status = VALUES(smart_calendar_status),
+                smart_calendar_released_by = VALUES(smart_calendar_released_by),
+                smart_calendar_released_at = VALUES(smart_calendar_released_at),
+                updated_at = NOW()'
+        )->execute([
+            'tenant_id' => $tenantId,
+            'status' => $status,
+            'released_by' => $status === 'ready' ? $userId : null,
+            'released_at' => $releasedAt,
+        ]);
+
+        if ($status !== 'ready') {
+            $current = $this->calendarAccessSettings($tenantId);
+            if (($current['calendar_mode'] ?? 'none') === 'smart') {
+                $fallback = ((int) (($this->preScheduleSettings($tenantId)['enabled'] ?? 0)) === 1) ? 'internal' : 'none';
+                $this->pdo->prepare('UPDATE tenant_onboarding_settings SET calendar_mode = :mode WHERE tenant_id = :tenant_id')
+                    ->execute(['mode' => $fallback, 'tenant_id' => $tenantId]);
+                if ($fallback === 'internal') {
+                    (new CalendarAvailabilityService())->configureInternalMode($tenantId, []);
+                } else {
+                    (new CalendarAvailabilityService())->disableAvailability($tenantId);
+                }
+            }
+        }
+
+        $this->recordEvent($tenantId, $userId, 'calendar.smart_access_updated', 'Agenda inteligente: ' . $status . '.', ['status' => $status]);
     }
 
     public function finish(int $tenantId, string $notes, ?int $userId): void
@@ -464,11 +551,30 @@ final class OnboardingGuideService
         if (!$this->moduleEnabled($tenantId, 'calendar')) {
             return ['status' => 'skipped', 'message' => 'Agenda desativada para esta empresa.'];
         }
-        $settings = $this->preScheduleSettings($tenantId);
-        if ($settings && (int) ($settings['enabled'] ?? 0) === 1) {
-            return ['status' => 'complete', 'message' => 'Agenda ativa com pré-agendamento configurado.'];
+        $access = $this->calendarAccessSettings($tenantId);
+        $mode = (string) ($access['calendar_mode'] ?? 'none');
+        $preSchedule = $this->preScheduleSettings($tenantId);
+        $availability = (new CalendarAvailabilityService())->settings($tenantId);
+
+        if ($mode === 'none') {
+            if ($preSchedule && (int) ($preSchedule['enabled'] ?? 0) === 1) {
+                return ['status' => 'pending', 'message' => 'Escolha Agenda interna, Agenda inteligente ou dispense a etapa.'];
+            }
+            return ['status' => 'pending', 'message' => 'Escolha como a empresa administrará os agendamentos.'];
         }
-        return ['status' => 'pending', 'message' => 'Agenda disponível. Configure pré-agendamento ou dispense a etapa.'];
+        if ($mode === 'internal') {
+            $ready = !empty($availability['enabled']) && empty($availability['use_n8n']) && !empty($availability['use_internal_fallback']);
+            return $ready
+                ? ['status' => 'complete', 'message' => 'Agenda interna ativa. Nenhum fluxo n8n ou Google Calendar será usado.']
+                : ['status' => 'attention', 'message' => 'A Agenda interna foi selecionada, mas a disponibilidade ainda precisa ser salva.'];
+        }
+        if ((string) ($access['smart_calendar_status'] ?? 'locked') !== 'ready') {
+            return ['status' => 'attention', 'message' => 'Agenda inteligente selecionada, mas ainda não foi homologada pela equipe RS Connect.'];
+        }
+        $ready = !empty($availability['enabled']) && !empty($availability['use_n8n']);
+        return $ready
+            ? ['status' => 'complete', 'message' => 'Agenda inteligente homologada e liberada pela equipe RS Connect.']
+            : ['status' => 'attention', 'message' => 'A liberação existe, mas a integração técnica da Agenda inteligente ainda está desativada.'];
     }
 
     /** @return array<string, mixed> */
@@ -762,11 +868,19 @@ final class OnboardingGuideService
                     after_hours_message VARCHAR(500) COLLATE utf8mb4_unicode_ci NULL,
                     human_handoff_message VARCHAR(500) COLLATE utf8mb4_unicode_ci NULL,
                     cooldown_seconds SMALLINT UNSIGNED NOT NULL DEFAULT 60,
+                    calendar_mode ENUM("none","internal","smart") NOT NULL DEFAULT "none",
+                    smart_calendar_status ENUM("locked","configuring","ready") NOT NULL DEFAULT "locked",
+                    smart_calendar_released_by BIGINT UNSIGNED NULL,
+                    smart_calendar_released_at DATETIME NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
             );
         }
+        $this->addColumnIfMissing('tenant_onboarding_settings', 'calendar_mode', 'ENUM("none","internal","smart") NOT NULL DEFAULT "none"');
+        $this->addColumnIfMissing('tenant_onboarding_settings', 'smart_calendar_status', 'ENUM("locked","configuring","ready") NOT NULL DEFAULT "locked"');
+        $this->addColumnIfMissing('tenant_onboarding_settings', 'smart_calendar_released_by', 'BIGINT UNSIGNED NULL');
+        $this->addColumnIfMissing('tenant_onboarding_settings', 'smart_calendar_released_at', 'DATETIME NULL');
     }
 
     private function ensurePreScheduleTable(): void

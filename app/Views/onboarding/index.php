@@ -13,6 +13,8 @@ $agents = $guide['agents'] ?? ($agents ?? []);
 $defaultAgent = $guide['default_agent'] ?? ($agents[0] ?? []);
 $attendanceSettings = $guide['attendance_settings'] ?? [];
 $preSchedule = $guide['pre_schedule'] ?? [];
+$calendarAccess = $guide['calendar_access'] ?? [];
+$calendarAvailability = $guide['calendar_availability'] ?? [];
 $events = $guide['events'] ?? [];
 $company = $guide['tenant'] ?? ($company ?? []);
 $percent = max(0, min(100, (int) ($summary['percent'] ?? 0)));
@@ -27,6 +29,21 @@ if (!empty($hoursSource)) {
     }
 }
 $dayLabels = ['mon' => 'Seg', 'tue' => 'Ter', 'wed' => 'Qua', 'thu' => 'Qui', 'fri' => 'Sex', 'sat' => 'Sáb', 'sun' => 'Dom'];
+$calendarMode = (string) ($calendarAccess['calendar_mode'] ?? 'none');
+$smartCalendarStatus = (string) ($calendarAccess['smart_calendar_status'] ?? 'locked');
+$smartCalendarReady = $smartCalendarStatus === 'ready';
+$calendarDayLabels = [1 => 'Segunda', 2 => 'Terça', 3 => 'Quarta', 4 => 'Quinta', 5 => 'Sexta', 6 => 'Sábado', 0 => 'Domingo'];
+$internalHoursRaw = json_decode((string) ($calendarAvailability['working_hours_json'] ?? '{}'), true);
+$internalHoursByDay = is_array($internalHoursRaw) && isset($internalHoursRaw['by_day']) && is_array($internalHoursRaw['by_day']) ? $internalHoursRaw['by_day'] : [];
+foreach ($calendarDayLabels as $dayNumber => $_dayLabel) {
+    if (!isset($internalHoursByDay[(string) $dayNumber])) {
+        $internalHoursByDay[(string) $dayNumber] = [
+            'enabled' => in_array($dayNumber, [1, 2, 3, 4, 5], true) ? 1 : 0,
+            'start' => '08:00',
+            'end' => $dayNumber === 6 ? '12:00' : '18:00',
+        ];
+    }
+}
 $statusIcon = static fn (string $status): string => match ($status) {
     'complete' => '✓',
     'skipped' => '–',
@@ -178,19 +195,91 @@ $statusClass = static fn (string $status): string => match ($status) {
                         <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar e continuar</button></div>
                     </form>
                 <?php elseif ($step['key'] === 'agenda_setup'): ?>
-                    <form class="wizard-card onboarding-inline-form" method="post" action="<?= View::e(Router::url('/onboarding/agenda')) ?>">
+                    <form class="wizard-card onboarding-inline-form onboarding-calendar-form" method="post" action="<?= View::e(Router::url('/onboarding/agenda')) ?>" data-calendar-onboarding>
                         <?= Csrf::input() ?>
-                        <div class="inline-checks stacked-checks">
-                            <label><input type="checkbox" name="enabled" value="1" <?= (int) ($preSchedule['enabled'] ?? 0) === 1 ? 'checked' : '' ?>> Usar agenda/pré-agendamento nesta empresa</label>
-                            <label><input type="checkbox" name="require_human_approval" value="1" <?= (int) ($preSchedule['require_human_approval'] ?? 1) === 1 ? 'checked' : '' ?>> Exigir aprovação humana</label>
-                            <label><input type="checkbox" name="ai_can_suggest_slots" value="1" <?= (int) ($preSchedule['ai_can_suggest_slots'] ?? 1) === 1 ? 'checked' : '' ?>> IA pode sugerir disponibilidade</label>
-                            <label><input type="checkbox" name="ai_can_confirm" value="1" <?= (int) ($preSchedule['ai_can_confirm'] ?? 0) === 1 ? 'checked' : '' ?>> IA pode confirmar sozinha</label>
+                        <div class="onboarding-pre-agent-note"><strong>Escolha a origem da disponibilidade</strong><span>Essa decisão define se os horários serão controlados pelo próprio RS Connect, por uma integração homologada pela RS ou se a empresa não utilizará agenda.</span></div>
+
+                        <div class="calendar-mode-grid" role="radiogroup" aria-label="Tipo de agenda">
+                            <label class="calendar-mode-card <?= $calendarMode === 'none' ? 'is-selected' : '' ?>">
+                                <input type="radio" name="calendar_mode" value="none" <?= $calendarMode === 'none' ? 'checked' : '' ?>>
+                                <span class="calendar-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z"/><path d="m8 13 8 8M16 13l-8 8"/></svg></span>
+                                <span><strong>Não utilizar agenda</strong><small>A IA atende normalmente, mas não consulta nem registra horários.</small></span>
+                            </label>
+                            <label class="calendar-mode-card <?= $calendarMode === 'internal' ? 'is-selected' : '' ?>">
+                                <input type="radio" name="calendar_mode" value="internal" <?= $calendarMode === 'internal' ? 'checked' : '' ?>>
+                                <span class="calendar-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z"/><path d="m8 14 2 2 5-5"/></svg></span>
+                                <span><strong>Agenda interna do RS Connect</strong><small>Disponibilidade, bloqueios e compromissos ficam no banco da plataforma, sem n8n e sem Google Calendar.</small></span>
+                            </label>
+                            <label class="calendar-mode-card <?= $calendarMode === 'smart' ? 'is-selected' : '' ?> <?= !$smartCalendarReady ? 'is-locked' : '' ?>">
+                                <input type="radio" name="calendar_mode" value="smart" <?= $calendarMode === 'smart' ? 'checked' : '' ?> <?= !$smartCalendarReady ? 'disabled' : '' ?>>
+                                <span class="calendar-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z"/><path d="M12 11v6M9 14h6"/></svg></span>
+                                <span><strong>Agenda inteligente integrada</strong><small><?= $smartCalendarReady ? 'Integração técnica homologada e liberada pela equipe RS Connect.' : ($smartCalendarStatus === 'configuring' ? 'A integração está sendo preparada pela equipe RS Connect.' : 'Disponível somente após liberação e homologação do Super Admin.') ?></small></span>
+                                <?php if (!$smartCalendarReady): ?><em class="badge badge-warning"><?= $smartCalendarStatus === 'configuring' ? 'Em configuração' : 'Não liberada' ?></em><?php endif; ?>
+                            </label>
                         </div>
-                        <label class="field"><span>Duração padrão em minutos</span><input type="number" name="default_duration_minutes" min="15" max="240" value="<?= (int) ($preSchedule['default_duration_minutes'] ?? 50) ?>"></label>
-                        <label class="field"><span>Mensagem para coletar dia/horário</span><textarea name="collect_message" rows="3"><?= View::e($preSchedule['collect_message'] ?? 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.') ?></textarea></label>
-                        <label class="field"><span>Mensagem após registrar preferência</span><textarea name="default_message" rows="3"><?= View::e($preSchedule['default_message'] ?? 'Vou registrar sua preferência e encaminhar para confirmação.') ?></textarea></label>
-                        <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar agenda</button><button class="btn btn-secondary" name="enabled" value="0" type="submit">Dispensar agenda</button></div>
+
+                        <section class="calendar-mode-panel" data-calendar-mode-panel="internal" <?= $calendarMode === 'internal' ? '' : 'hidden' ?>>
+                            <div class="section-heading compact"><div><span class="eyebrow">Agenda interna</span><h3>Disponibilidade da empresa</h3><p>Defina quando existem horários para atendimento. Esta agenda não chama workflows, webhooks ou Google Calendar.</p></div><span class="badge badge-success">Sem integração externa</span></div>
+                            <div class="internal-calendar-days">
+                                <?php foreach ($calendarDayLabels as $dayNumber => $dayLabel): ?>
+                                    <?php $dayConfig = $internalHoursByDay[(string) $dayNumber]; ?>
+                                    <div class="internal-calendar-day">
+                                        <label class="internal-day-toggle"><input type="checkbox" name="internal_days[]" value="<?= $dayNumber ?>" <?= !empty($dayConfig['enabled']) ? 'checked' : '' ?>><span><?= View::e($dayLabel) ?></span></label>
+                                        <label class="field"><span>Início</span><input type="time" name="internal_start[<?= $dayNumber ?>]" value="<?= View::e((string) ($dayConfig['start'] ?? '08:00')) ?>"></label>
+                                        <label class="field"><span>Fim</span><input type="time" name="internal_end[<?= $dayNumber ?>]" value="<?= View::e((string) ($dayConfig['end'] ?? ($dayNumber === 6 ? '12:00' : '18:00'))) ?>"></label>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="form-grid three">
+                                <label class="field"><span>Intervalo entre opções</span><input type="number" name="slot_interval_minutes" min="5" max="240" value="<?= (int) ($calendarAvailability['slot_interval_minutes'] ?? 30) ?>"><small>Ex.: opções a cada 30 minutos.</small></label>
+                                <label class="field"><span>Intervalo de segurança</span><input type="number" name="buffer_minutes" min="0" max="180" value="<?= (int) ($calendarAvailability['buffer_minutes'] ?? 0) ?>"><small>Margem antes/depois de compromissos.</small></label>
+                                <label class="field"><span>Antecedência mínima</span><input type="number" name="min_notice_hours" min="0" max="720" value="<?= (int) ($calendarAvailability['min_notice_hours'] ?? 2) ?>"><small>Horas mínimas para agendar.</small></label>
+                                <label class="field"><span>Dias para pesquisar</span><input type="number" name="search_days_ahead" min="1" max="90" value="<?= (int) ($calendarAvailability['search_days_ahead'] ?? 30) ?>"><small>Janela futura da busca.</small></label>
+                                <label class="field"><span>Máximo de sugestões</span><input type="number" name="max_suggestions" min="1" max="20" value="<?= (int) ($calendarAvailability['max_suggestions'] ?? 5) ?>"><small>Quantidade enviada ao cliente.</small></label>
+                            </div>
+                        </section>
+
+                        <section class="calendar-mode-panel" data-calendar-mode-panel="smart" <?= $calendarMode === 'smart' ? '' : 'hidden' ?>>
+                            <div class="message-info"><strong>Integração administrada pela RS Connect</strong><span>Credenciais, Google Calendar, n8n, callbacks, eventos VAGO e manutenção são configurados e homologados pelo Super Admin. O cliente define apenas as regras comerciais abaixo.</span></div>
+                        </section>
+
+                        <section class="calendar-commercial-rules" data-calendar-commercial-rules <?= $calendarMode === 'none' ? 'hidden' : '' ?>>
+                            <div class="section-heading compact"><div><span class="eyebrow">Regras comerciais</span><h3>Pré-agendamento e confirmação</h3></div></div>
+                            <div class="form-grid two">
+                                <label class="field"><span>Duração padrão em minutos</span><input type="number" name="default_duration_minutes" min="15" max="240" value="<?= (int) ($calendarAvailability['default_duration_minutes'] ?? $preSchedule['default_duration_minutes'] ?? 60) ?>"><small>Usada no pré-agendamento e na busca de conflitos.</small></label>
+                            </div>
+                            <div class="inline-checks stacked-checks">
+                                <label><input type="checkbox" name="require_human_approval" value="1" <?= (int) ($preSchedule['require_human_approval'] ?? 1) === 1 ? 'checked' : '' ?>> Exigir aprovação humana</label>
+                                <label><input type="checkbox" name="ai_can_suggest_slots" value="1" <?= (int) ($preSchedule['ai_can_suggest_slots'] ?? 1) === 1 ? 'checked' : '' ?>> IA pode sugerir disponibilidade</label>
+                                <label><input type="checkbox" name="ai_can_confirm" value="1" <?= (int) ($preSchedule['ai_can_confirm'] ?? 0) === 1 ? 'checked' : '' ?>> IA pode confirmar sozinha</label>
+                            </div>
+                            <label class="field"><span>Mensagem para coletar dia/horário</span><textarea name="collect_message" rows="3"><?= View::e($preSchedule['collect_message'] ?? 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.') ?></textarea></label>
+                            <label class="field"><span>Mensagem após registrar preferência</span><textarea name="default_message" rows="3"><?= View::e($preSchedule['default_message'] ?? 'Vou registrar sua preferência e encaminhar para confirmação.') ?></textarea></label>
+                        </section>
+
+                        <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar e continuar</button></div>
                     </form>
+                    <script>
+                    document.addEventListener('DOMContentLoaded', function () {
+                        var form = document.querySelector('[data-calendar-onboarding]');
+                        if (!form) return;
+                        var refresh = function () {
+                            var selected = form.querySelector('input[name="calendar_mode"]:checked');
+                            var mode = selected ? selected.value : 'none';
+                            form.querySelectorAll('.calendar-mode-card').forEach(function (card) {
+                                var input = card.querySelector('input[name="calendar_mode"]');
+                                card.classList.toggle('is-selected', !!input && input.checked);
+                            });
+                            form.querySelectorAll('[data-calendar-mode-panel]').forEach(function (panel) {
+                                panel.hidden = panel.getAttribute('data-calendar-mode-panel') !== mode;
+                            });
+                            var rules = form.querySelector('[data-calendar-commercial-rules]');
+                            if (rules) rules.hidden = mode === 'none';
+                        };
+                        form.querySelectorAll('input[name="calendar_mode"]').forEach(function (input) { input.addEventListener('change', refresh); });
+                        refresh();
+                    });
+                    </script>
                 <?php elseif ($step['key'] === 'lgpd_acceptance'): ?>
                     <div class="onboarding-action-grid">
                         <div>

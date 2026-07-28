@@ -93,6 +93,116 @@ final class CalendarAvailabilityService
         }
     }
 
+    /** @param array<string, mixed> $data */
+    public function configureInternalMode(int $tenantId, array $data): void
+    {
+        $current = $this->settings($tenantId);
+        $existingHours = json_decode((string) ($current['working_hours_json'] ?? '{}'), true);
+        $existingByDay = is_array($existingHours) && isset($existingHours['by_day']) && is_array($existingHours['by_day'])
+            ? $existingHours['by_day']
+            : [];
+
+        $postedDays = array_values(array_unique(array_filter(array_map('intval', (array) ($data['internal_days'] ?? [])), static fn (int $day): bool => $day >= 0 && $day <= 6)));
+        if ($postedDays === []) {
+            if ($existingByDay !== []) {
+                foreach ($existingByDay as $day => $row) {
+                    if (!empty($row['enabled'])) {
+                        $postedDays[] = (int) $day;
+                    }
+                }
+            }
+            if ($postedDays === []) {
+                $postedDays = [1, 2, 3, 4, 5];
+            }
+        }
+        sort($postedDays);
+
+        $starts = is_array($data['internal_start'] ?? null) ? $data['internal_start'] : [];
+        $ends = is_array($data['internal_end'] ?? null) ? $data['internal_end'] : [];
+        $byDay = [];
+        foreach (range(0, 6) as $day) {
+            $fallbackStart = (string) ($existingByDay[(string) $day]['start'] ?? $existingByDay[$day]['start'] ?? ($day === 6 ? '08:00' : '08:00'));
+            $fallbackEnd = (string) ($existingByDay[(string) $day]['end'] ?? $existingByDay[$day]['end'] ?? ($day === 6 ? '12:00' : '18:00'));
+            $start = $this->normalizeHour((string) ($starts[$day] ?? $starts[(string) $day] ?? $fallbackStart), $fallbackStart);
+            $end = $this->normalizeHour((string) ($ends[$day] ?? $ends[(string) $day] ?? $fallbackEnd), $fallbackEnd);
+            $enabled = in_array($day, $postedDays, true);
+            if ($enabled && $end <= $start) {
+                throw new \RuntimeException('O horário final deve ser posterior ao inicial em todos os dias ativos da Agenda interna.');
+            }
+            $byDay[(string) $day] = ['enabled' => $enabled ? 1 : 0, 'start' => $start, 'end' => $end];
+        }
+
+        $firstDay = $postedDays[0];
+        $payload = array_merge($current, [
+            'enabled' => 1,
+            'availability_mode' => 'free_slots',
+            'require_before_approval' => 1,
+            'auto_request_on_pre_schedule' => 1,
+            'use_n8n' => 0,
+            'use_internal_fallback' => 1,
+            'create_google_event_on_confirm' => 0,
+            'require_google_sync_on_confirm' => 0,
+            'update_google_event_on_reschedule' => 0,
+            'delete_google_event_on_cancel' => 0,
+            'maintenance_enabled' => 0,
+            'default_duration_minutes' => max(15, min(240, (int) ($data['default_duration_minutes'] ?? $current['default_duration_minutes'] ?? 60))),
+            'slot_interval_minutes' => max(5, min(240, (int) ($data['slot_interval_minutes'] ?? $current['slot_interval_minutes'] ?? 30))),
+            'buffer_minutes' => max(0, min(180, (int) ($data['buffer_minutes'] ?? $current['buffer_minutes'] ?? 0))),
+            'search_days_ahead' => max(1, min(90, (int) ($data['search_days_ahead'] ?? $current['search_days_ahead'] ?? 30))),
+            'min_notice_hours' => max(0, min(720, (int) ($data['min_notice_hours'] ?? $current['min_notice_hours'] ?? 2))),
+            'max_suggestions' => max(1, min(20, (int) ($data['max_suggestions'] ?? $current['max_suggestions'] ?? 5))),
+            'workdays' => $postedDays,
+            'working_start' => $byDay[(string) $firstDay]['start'],
+            'working_end' => $byDay[(string) $firstDay]['end'],
+        ]);
+        $this->saveSettings($tenantId, $payload, true);
+
+        Database::connection()->prepare(
+            'UPDATE tenant_calendar_availability_settings
+             SET working_hours_json = :hours,
+                 use_n8n = 0,
+                 use_internal_fallback = 1,
+                 create_google_event_on_confirm = 0,
+                 require_google_sync_on_confirm = 0,
+                 update_google_event_on_reschedule = 0,
+                 delete_google_event_on_cancel = 0,
+                 maintenance_enabled = 0,
+                 updated_at = NOW()
+             WHERE tenant_id = :tenant_id'
+        )->execute([
+            'hours' => json_encode(['by_day' => $byDay], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'tenant_id' => $tenantId,
+        ]);
+    }
+
+    public function configureSmartMode(int $tenantId): void
+    {
+        $current = $this->settings($tenantId);
+        $payload = array_merge($current, [
+            'enabled' => 1,
+            'use_n8n' => 1,
+            'workdays' => array_map('intval', (array) (json_decode((string) ($current['workdays_json'] ?? '[]'), true) ?: [1, 2, 3, 4, 5])),
+            'working_start' => '08:00',
+            'working_end' => '18:00',
+        ]);
+        $hours = json_decode((string) ($current['working_hours_json'] ?? '{}'), true);
+        if (is_array($hours) && empty($hours['by_day'])) {
+            $payload['working_start'] = (string) ($hours['start'] ?? '08:00');
+            $payload['working_end'] = (string) ($hours['end'] ?? '18:00');
+        }
+        $this->saveSettings($tenantId, $payload, true);
+    }
+
+    public function disableAvailability(int $tenantId): void
+    {
+        if ($tenantId < 1 || !$this->tableExists('tenant_calendar_availability_settings')) {
+            return;
+        }
+        Database::connection()->prepare(
+            'UPDATE tenant_calendar_availability_settings SET enabled = 0, updated_at = NOW() WHERE tenant_id = :tenant_id'
+        )->execute(['tenant_id' => $tenantId]);
+    }
+
     public function saveSettings(int $tenantId, array $data, bool $canManageIntegration = true): void
     {
         if ($tenantId < 1 || !$this->tableExists('tenant_calendar_availability_settings')) {
@@ -433,9 +543,10 @@ final class CalendarAvailabilityService
         if ($mode === 'free_slots' && !empty($settings['use_internal_fallback'])) {
             $slots = $this->generateInternalSlots($tenantId, $window, $settings);
             $this->storeSlots($requestId, $tenantId, $appointmentId, $slots, 'internal_fallback');
+            $internalOnly = empty($settings['use_n8n']);
             $message = $slots === []
-                ? 'Nenhum horário livre encontrado pelo fallback interno.'
-                : 'O n8n não respondeu; horários gerados pelo fallback interno.';
+                ? ($internalOnly ? 'Nenhum horário livre encontrado na Agenda interna.' : 'Nenhum horário livre encontrado pelo fallback interno.')
+                : ($internalOnly ? 'Horários disponíveis gerados pela Agenda interna do RS Connect.' : 'O n8n não respondeu; horários gerados pelo fallback interno.');
             $request = $this->findRequest($requestId, $token) ?: [
                 'id' => $requestId,
                 'tenant_id' => $tenantId,
@@ -1540,14 +1651,20 @@ final class CalendarAvailabilityService
         if (!is_array($hours)) {
             $hours = ['start' => '08:00', 'end' => '18:00'];
         }
-        $dayStart = $this->normalizeHour((string) ($hours['start'] ?? '08:00'), '08:00');
-        $dayEnd = $this->normalizeHour((string) ($hours['end'] ?? '18:00'), '18:00');
+        $byDay = isset($hours['by_day']) && is_array($hours['by_day']) ? $hours['by_day'] : [];
+        $defaultDayStart = $this->normalizeHour((string) ($hours['start'] ?? '08:00'), '08:00');
+        $defaultDayEnd = $this->normalizeHour((string) ($hours['end'] ?? '18:00'), '18:00');
         $busy = $this->busyPeriods($tenantId, $window['start'], $window['end']);
 
         $slots = [];
         $day = $globalStart->setTime(0, 0, 0);
         while ($day < $globalEnd && count($slots) < $max) {
-            if (in_array((int) $day->format('w'), $workdays, true)) {
+            $weekday = (int) $day->format('w');
+            $dayConfig = $byDay[(string) $weekday] ?? $byDay[$weekday] ?? null;
+            $dayEnabled = is_array($dayConfig) ? !empty($dayConfig['enabled']) : in_array($weekday, $workdays, true);
+            if ($dayEnabled) {
+                $dayStart = $this->normalizeHour((string) (is_array($dayConfig) ? ($dayConfig['start'] ?? $defaultDayStart) : $defaultDayStart), $defaultDayStart);
+                $dayEnd = $this->normalizeHour((string) (is_array($dayConfig) ? ($dayConfig['end'] ?? $defaultDayEnd) : $defaultDayEnd), $defaultDayEnd);
                 $businessStart = new DateTimeImmutable($day->format('Y-m-d') . ' ' . $dayStart, $timezone);
                 $businessEnd = new DateTimeImmutable($day->format('Y-m-d') . ' ' . $dayEnd, $timezone);
                 $cursor = $businessStart;

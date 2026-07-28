@@ -13,6 +13,7 @@ use App\Core\View;
 use App\Services\AdminDashboardService;
 use App\Services\PreSchedulingService;
 use App\Services\TenantModuleService;
+use App\Services\OnboardingGuideService;
 use PDO;
 use Throwable;
 
@@ -150,6 +151,7 @@ final class CompanyController
             'preScheduleSettings' => $preSchedulingService->settings($tenantId),
             'availableModules' => TenantModuleService::modules(),
             'moduleSettings' => $moduleService->settingsForTenant($tenantId),
+            'calendarAccessSettings' => (new OnboardingGuideService())->calendarAccessSettings($tenantId),
         ]);
     }
 
@@ -270,6 +272,19 @@ final class CompanyController
             'no_availability_message' => trim((string) ($_POST['pre_schedule_no_availability_message'] ?? '')),
             'invalid_slot_message' => trim((string) ($_POST['pre_schedule_invalid_slot_message'] ?? '')),
         ]);
+
+        if (Auth::isSuperAdmin() && array_key_exists('smart_calendar_status', $_POST)) {
+            try {
+                (new OnboardingGuideService())->saveSmartCalendarAccess(
+                    $tenantId,
+                    trim((string) $_POST['smart_calendar_status']),
+                    Auth::id()
+                );
+            } catch (Throwable $exception) {
+                Flash::set('error', $exception->getMessage());
+                $this->redirect('/company-settings?id=' . $tenantId);
+            }
+        }
 
         if (isset($_POST['module_settings_submitted'])) {
             $visibleModules = array_values(array_filter(array_map('strval', (array) ($_POST['module_visible'] ?? []))));

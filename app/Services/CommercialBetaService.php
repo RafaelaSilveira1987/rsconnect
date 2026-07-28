@@ -160,6 +160,8 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.34.2', 'title' => 'Agenda interna no onboarding', 'summary' => 'Torna explícita a escolha entre Agenda interna, Agenda inteligente homologada pela RS e operação sem agenda, sem expor n8n ou Google Calendar ao cliente.'],
+            ['version' => '36.6.34.1', 'title' => 'Hotfix de login e sessão', 'summary' => 'Corrige o redirecionamento de CSRF expirado no login, impede duplicação de APP_URL e recupera URLs antigas malformadas com segurança.'],
             ['version' => '36.6.34', 'title' => 'Teste gratuito e primeiro acesso guiado', 'summary' => 'Transforma o fim do teste em regra efetiva de acesso e cobrança e conduz a implantação em sequência: cadastro, LGPD, operação, agenda, WhatsApp, agente e teste final.'],
             ['version' => '36.6.33', 'title' => 'Busca funcional na Base de contatos', 'summary' => 'Corrige parâmetros repetidos da consulta com PDO nativo, normaliza telefone, pesquisa nome/e-mail/empresa/tags e aplica o filtro automaticamente durante a digitação.'],
             ['version' => '36.6.32', 'title' => 'Recuperação pós-horário da Agenda', 'summary' => 'Retoma pedidos de agenda pela máquina determinística antes de chamar a IA, reúne mensagens fragmentadas e bloqueia ai.replied no writer do Google Calendar mesmo sem cadastro de fluxo.'],

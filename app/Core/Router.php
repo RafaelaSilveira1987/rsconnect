@@ -37,6 +37,11 @@ final class Router
             $path = substr($path, strlen($scriptDirectory)) ?: '/';
         }
 
+        if (preg_match('~^/https?://~i', $path) === 1) {
+            $embeddedUrl = rawurldecode(substr($path, 1));
+            $this->redirect(self::safeInternalPath($embeddedUrl, '/login'));
+        }
+
         $route = $this->routes[strtoupper($method)][$this->normalize($path)] ?? null;
         if ($route === null) {
             http_response_code(404);
@@ -155,8 +160,15 @@ final class Router
 
         if ($middleware === 'csrf' && !Csrf::validate($_POST['_token'] ?? null)) {
             http_response_code(419);
+            $currentPath = $this->normalize(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
+            if ($currentPath === '/login') {
+                Flash::set('warning', 'A página de login expirou após uma atualização. Digite seus dados novamente.');
+                $this->redirect('/login');
+                return false;
+            }
+
             Flash::set('error', 'Sessão expirada. Atualize a página e tente novamente.');
-            $this->redirect($_SERVER['HTTP_REFERER'] ?? '/');
+            $this->redirect(self::safeInternalPath((string) ($_SERVER['HTTP_REFERER'] ?? ''), '/'));
             return false;
         }
 
@@ -181,6 +193,72 @@ final class Router
     public static function url(string $path = '/'): string
     {
         $base = rtrim((string) Env::get('APP_URL', ''), '/');
+        $path = trim($path);
+        if ($path === '') {
+            $path = '/';
+        }
+
+        if (preg_match('~^https?://~i', $path) === 1 || str_starts_with($path, '//')) {
+            $path = self::safeInternalPath($path, '/');
+        }
+
+        if ($base === '') {
+            return '/' . ltrim($path, '/');
+        }
+
         return $base . '/' . ltrim($path, '/');
+    }
+
+    private static function safeInternalPath(string $candidate, string $fallback = '/'): string
+    {
+        $candidate = trim($candidate);
+        if ($candidate === '' || str_starts_with($candidate, '//')) {
+            return $fallback;
+        }
+
+        $parts = parse_url($candidate);
+        if ($parts === false) {
+            return $fallback;
+        }
+
+        $isAbsolute = isset($parts['scheme']) || isset($parts['host']);
+        $baseParts = parse_url((string) Env::get('APP_URL', ''));
+        if ($isAbsolute) {
+            if (!is_array($baseParts) || empty($baseParts['host'])) {
+                return $fallback;
+            }
+
+            $candidateScheme = strtolower((string) ($parts['scheme'] ?? 'http'));
+            $baseScheme = strtolower((string) ($baseParts['scheme'] ?? 'http'));
+            $candidateHost = strtolower((string) ($parts['host'] ?? ''));
+            $baseHost = strtolower((string) ($baseParts['host'] ?? ''));
+            $candidatePort = (int) ($parts['port'] ?? ($candidateScheme === 'https' ? 443 : 80));
+            $basePort = (int) ($baseParts['port'] ?? ($baseScheme === 'https' ? 443 : 80));
+
+            if ($candidateScheme !== $baseScheme || $candidateHost !== $baseHost || $candidatePort !== $basePort) {
+                return $fallback;
+            }
+        }
+
+        $path = (string) ($parts['path'] ?? '/');
+        if ($path === '') {
+            $path = '/';
+        }
+        if (!str_starts_with($path, '/')) {
+            $path = '/' . ltrim($path, '/');
+        }
+        if (str_starts_with($path, '//')) {
+            return $fallback;
+        }
+
+        if ($isAbsolute && is_array($baseParts)) {
+            $basePath = rtrim((string) ($baseParts['path'] ?? ''), '/');
+            if ($basePath !== '' && ($path === $basePath || str_starts_with($path, $basePath . '/'))) {
+                $path = substr($path, strlen($basePath)) ?: '/';
+            }
+        }
+
+        $query = isset($parts['query']) && $parts['query'] !== '' ? '?' . $parts['query'] : '';
+        return $path . $query;
     }
 }

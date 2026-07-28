@@ -48,9 +48,33 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
     <div class="readonly-grid">
         <div><span>Slug</span><strong><?= View::e($company['slug']) ?></strong></div>
         <div><span>Plano</span><strong><?= View::e(ucfirst($company['plan'])) ?></strong></div>
-        <div><span>Onboarding</span><strong><?= $company['onboarding_completed_at'] ? 'Concluído' : 'Etapa ' . (int) $company['onboarding_step'] . '/3' ?></strong></div>
+        <div><span>Onboarding</span><strong><?= $company['onboarding_completed_at'] ? 'Concluído' : 'Etapa ' . (int) $company['onboarding_step'] . '/7' ?></strong></div>
     </div>
 
+
+    <section class="settings-block smart-calendar-admin-control">
+        <div class="section-heading compact">
+            <div>
+                <span class="eyebrow">Agenda inteligente</span>
+                <h2>Liberação técnica pela RS Connect</h2>
+                <p>Controle se esta empresa poderá escolher a integração com Google Calendar/n8n durante o onboarding. Credenciais e workflows continuam restritos ao Super Admin.</p>
+            </div>
+            <?php $smartStatus = (string) (($calendarAccessSettings['smart_calendar_status'] ?? 'locked')); ?>
+            <span class="badge <?= $smartStatus === 'ready' ? 'badge-active' : ($smartStatus === 'configuring' ? 'badge-warning' : 'badge-pending') ?>"><?= $smartStatus === 'ready' ? 'Liberada' : ($smartStatus === 'configuring' ? 'Em configuração' : 'Não liberada') ?></span>
+        </div>
+        <div class="form-grid two">
+            <label class="field"><span>Situação da Agenda inteligente</span><select name="smart_calendar_status">
+                <option value="locked" <?= $smartStatus === 'locked' ? 'selected' : '' ?>>Não liberada</option>
+                <option value="configuring" <?= $smartStatus === 'configuring' ? 'selected' : '' ?>>Em configuração pela RS</option>
+                <option value="ready" <?= $smartStatus === 'ready' ? 'selected' : '' ?>>Liberada e homologada</option>
+            </select><small>Somente “Liberada e homologada” torna essa opção selecionável pelo cliente.</small></label>
+            <div class="readonly-grid compact-readonly-grid">
+                <div><span>Modo escolhido no onboarding</span><strong><?= View::e(match ((string) ($calendarAccessSettings['calendar_mode'] ?? 'none')) { 'internal' => 'Agenda interna', 'smart' => 'Agenda inteligente', default => 'Sem agenda' }) ?></strong></div>
+                <div><span>Última liberação</span><strong><?= View::e((string) ($calendarAccessSettings['smart_calendar_released_at'] ?? 'Não liberada')) ?></strong></div>
+            </div>
+        </div>
+        <div class="message-info"><strong>Responsabilidade da RS</strong><span>Antes de liberar, configure e valide n8n, Google Calendar, callbacks, tokens, eventos VAGO e manutenção. O cliente não recebe acesso a esses dados técnicos.</span></div>
+    </section>
 
     <section class="settings-block">
         <div class="section-heading compact">
@@ -313,7 +337,7 @@ $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) *
         <div class="client-settings-accordion-body readonly-grid">
             <div><span>Identificador</span><strong><?= View::e($company['slug']) ?></strong></div>
             <div><span>Plano</span><strong><?= View::e(ucfirst($company['plan'])) ?></strong></div>
-            <div><span>Primeiros passos</span><strong><?= $company['onboarding_completed_at'] ? 'Concluídos' : 'Etapa ' . (int) $company['onboarding_step'] . '/3' ?></strong></div>
+            <div><span>Primeiros passos</span><strong><?= $company['onboarding_completed_at'] ? 'Concluídos' : 'Etapa ' . (int) $company['onboarding_step'] . '/7' ?></strong></div>
         </div>
     </details>
 
