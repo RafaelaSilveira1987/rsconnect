@@ -150,7 +150,25 @@ final class AutomationWebhookService
     private function explicitTargetGuard(int $tenantId, string $target, string $event): array
     {
         $result = ['blocked' => false, 'flow_id' => null, 'flow_name' => null, 'reason' => null];
-        if ($tenantId < 1 || trim($target) === '') {
+        if (trim($target) === '') {
+            return $result;
+        }
+
+        // Proteção independente do cadastro em n8n_tenant_flows. O writer oficial
+        // usa /webhook/rsconnect-agenda-cliente e pode existir apenas no campo legado
+        // do assistente. Mesmo sem registro no banco, ai.replied/message.received nunca
+        // podem chegar a esse endpoint de efeito colateral forte.
+        $path = mb_strtolower((string) (parse_url($target, PHP_URL_PATH) ?? ''));
+        if (str_contains($path, 'rsconnect-agenda-cliente')) {
+            $result['flow_name'] = 'Agenda Google Calendar por Empresa';
+            if ($event !== 'calendar.appointment.created') {
+                $result['blocked'] = true;
+                $result['reason'] = 'Evento ' . $event . ' bloqueado: o endpoint rsconnect-agenda-cliente aceita somente calendar.appointment.created.';
+            }
+            return $result;
+        }
+
+        if ($tenantId < 1) {
             return $result;
         }
 

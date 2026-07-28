@@ -499,6 +499,8 @@ final class CalendarAvailabilityService
     {
         $limit = max(1, min(200, $limit));
         $summary = [
+            'missing_requests_started' => 0,
+            'missing_request_errors' => 0,
             'retried_requests' => 0,
             'retry_errors' => 0,
             'results_processed' => 0,
@@ -511,6 +513,70 @@ final class CalendarAvailabilityService
 
         $pdo = Database::connection();
         $retryMinutes = max(1, min(30, (int) \App\Core\Env::get('CALENDAR_AVAILABILITY_RETRY_MINUTES', 2)));
+
+        // 0) Repara pré-agendamentos conversacionais que já prometeram consultar
+        // disponibilidade, mas ficaram sem request atual. Esse cenário ocorria quando a
+        // recuperação pós-horário chamava a IA geral e ela respondia "vou verificar"
+        // sem passar pela máquina de Agenda. Também reinicia requests que terminaram em falha.
+        try {
+            $missingSql = 'SELECT a.id, a.tenant_id, a.conversation_id, a.availability_request_id,
+                                  a.availability_status, a.appointment_modality, a.location_type
+                           FROM calendar_appointments a
+                           INNER JOIN conversations c
+                              ON c.id = a.conversation_id AND c.tenant_id = a.tenant_id
+                           LEFT JOIN calendar_availability_requests current_request
+                              ON current_request.id = a.availability_request_id
+                             AND current_request.tenant_id = a.tenant_id
+                           WHERE a.is_pre_schedule = 1
+                             AND a.status IN ("pre_scheduled","awaiting_approval","rescheduled")
+                             AND c.attendance_mode = "ai"
+                             AND c.status <> "closed"
+                             AND COALESCE(NULLIF(a.appointment_modality, ""), NULLIF(a.location_type, ""), "indefinida") IN ("online","presencial")
+                             AND a.starts_at IS NOT NULL
+                             AND a.ends_at IS NOT NULL
+                             AND a.chosen_availability_slot_id IS NULL
+                             AND a.availability_options_sent_at IS NULL
+                             AND (
+                                  a.availability_request_id IS NULL
+                                  OR current_request.id IS NULL
+                                  OR current_request.status = "failed"
+                                  OR a.availability_status = "failed"
+                             )
+                             AND a.updated_at <= DATE_SUB(NOW(), INTERVAL ' . $retryMinutes . ' MINUTE)
+                             AND a.updated_at >= DATE_SUB(NOW(), INTERVAL 48 HOUR)
+                           ORDER BY a.updated_at ASC, a.id ASC
+                           LIMIT ' . $limit;
+            $missing = $pdo->query($missingSql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($missing as $appointment) {
+                $tenantId = (int) ($appointment['tenant_id'] ?? 0);
+                $appointmentId = (int) ($appointment['id'] ?? 0);
+                $settings = $this->settings($tenantId);
+                if (empty($settings['enabled']) || empty($settings['auto_request_on_pre_schedule'])) {
+                    continue;
+                }
+                try {
+                    $result = $this->requestForAppointment($tenantId, $appointmentId, 'conversation_recovery');
+                    if (!empty($result['ok'])) {
+                        $summary['missing_requests_started']++;
+                        Audit::log('calendar.availability_missing_request_recovered', [
+                            'appointment_id' => $appointmentId,
+                            'previous_request_id' => (int) ($appointment['availability_request_id'] ?? 0),
+                            'new_request_id' => (int) ($result['request_id'] ?? 0),
+                        ], $tenantId);
+                    } else {
+                        $summary['missing_request_errors']++;
+                    }
+                } catch (Throwable $exception) {
+                    $summary['missing_request_errors']++;
+                    Audit::log('calendar.availability_missing_request_recovery_failed', [
+                        'appointment_id' => $appointmentId,
+                        'error' => mb_substr($exception->getMessage(), 0, 700),
+                    ], $tenantId);
+                }
+            }
+        } catch (Throwable) {
+            $summary['missing_request_errors']++;
+        }
 
         // 1) Se o n8n recebeu a busca, mas o callback não voltou, reenvia o MESMO request/token.
         // sent_at vira cooldown; não cria outra solicitação nem duplica o pré-agendamento.

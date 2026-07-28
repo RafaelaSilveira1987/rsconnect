@@ -522,7 +522,19 @@ final class AgentController
 
     private function isProtectedCalendarWriterUrl(int $tenantId, string $url): bool
     {
-        if ($tenantId < 1 || trim($url) === '') {
+        if (trim($url) === '') {
+            return false;
+        }
+
+        // O endpoint oficial do writer é protegido mesmo quando a empresa ainda não
+        // possui registro em n8n_tenant_flows. Isso impede salvar o webhook de criação
+        // de evento como "integração externa do assistente".
+        $path = mb_strtolower((string) (parse_url($url, PHP_URL_PATH) ?? ''));
+        if (str_contains($path, 'rsconnect-agenda-cliente')) {
+            return true;
+        }
+
+        if ($tenantId < 1) {
             return false;
         }
         try {

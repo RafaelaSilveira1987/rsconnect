@@ -1,10 +1,10 @@
 # RS Connect — pacote VPS
 
-Pacote consolidado até o RS Connect 36.6.31 — Novo atendimento em drawer.
+Pacote consolidado até o RS Connect 36.6.32 — Recuperação pós-horário da Agenda.
 
 ## Última etapa incluída
 
-RS Connect 36.6.31 — corrige o formulário de nova conversa para abrir em drawer próprio, sem recorte pela coluna da Caixa de Entrada, mantendo a busca preventiva e todas as regras anteriores.
+RS Connect 36.6.32 — corrige a retomada de pedidos de agenda fora do horário, processando modalidade/data/disponibilidade antes da IA geral e bloqueando o writer do Google Calendar como integração conversacional.
 
 RS Connect 36.6.28 — preserva a lógica da Central de comunicação e eleva o acabamento do Admin com formulário em etapas, controles estilizados, seleção de empresas em cards e preview mais fiel ao produto.
 

@@ -232,6 +232,50 @@ final class AiAutomationService
                 return;
             }
 
+            // Recuperação pós-horário precisa reentrar primeiro na máquina determinística
+            // da Agenda. Antes da 36.6.32, a retomada chamava diretamente o modelo de IA;
+            // ele podia responder "vou verificar a disponibilidade" sem criar/enviar a
+            // solicitação calendar.availability.requested. O resultado era uma conversa
+            // aparentemente em andamento, mas sem request de disponibilidade para concluir.
+            if ($afterHoursRecovery && $storedMessageId > 0) {
+                $calendarRecovery = $this->processSchedulingDuringReprocess($pdo, $instance, [
+                    'contact_id' => (int) ($conversation['contact_id'] ?? 0),
+                    'conversation_id' => $conversationId,
+                    'message_id' => $storedMessageId,
+                    'content' => $incomingContent,
+                ]);
+
+                if (!empty($calendarRecovery['handled']) && !empty($calendarRecovery['skip_ai'])) {
+                    $availabilityResult = is_array($calendarRecovery['availability_request_result'] ?? null)
+                        ? $calendarRecovery['availability_request_result']
+                        : null;
+                    $availabilityFailed = is_array($availabilityResult)
+                        && empty($availabilityResult['ok'])
+                        && empty($availabilityResult['skipped']);
+                    $calendarError = trim((string) (
+                        $calendarRecovery['calendar_error']
+                        ?? ($availabilityResult['message'] ?? '')
+                    ));
+
+                    $this->log(
+                        (int) $instance['tenant_id'],
+                        $conversationId,
+                        (int) $agent['id'],
+                        $availabilityFailed ? 'calendar.recovery.failed' : 'calendar.recovery.handled',
+                        $availabilityFailed ? 'error' : 'success',
+                        $availabilityFailed ? ($calendarError !== '' ? $calendarError : 'A consulta de disponibilidade não pôde ser iniciada.') : null,
+                        null,
+                        [
+                            'after_hours_recovery' => true,
+                            'calendar_handled' => true,
+                            'appointment_id' => (int) ($calendarRecovery['appointment_id'] ?? 0),
+                            'availability_request_needed' => !empty($calendarRecovery['availability_request_needed']),
+                            'availability_request' => $availabilityResult,
+                        ]
+                    );
+                    return;
+                }
+            }
 
             $quota = $usageService->reserveAutoReply(
                 (int) $instance['tenant_id'],
@@ -1056,18 +1100,31 @@ final class AiAutomationService
 
             if (!empty($result['availability_request_needed']) && (int) ($result['appointment_id'] ?? 0) > 0) {
                 try {
-                    (new PreSchedulingService())->requestAvailabilityIfNeeded(
+                    $availabilityRequest = (new PreSchedulingService())->requestAvailabilityIfNeeded(
                         (int) ($instance['tenant_id'] ?? 0),
                         (int) $result['appointment_id']
                     );
-                } catch (Throwable) {
+                    $result['availability_request_result'] = $availabilityRequest;
+                    if (empty($availabilityRequest['ok']) && empty($availabilityRequest['skipped'])) {
+                        $result['calendar_error'] = (string) ($availabilityRequest['message'] ?? 'Falha ao iniciar a consulta de disponibilidade.');
+                    }
+                } catch (Throwable $exception) {
                     // Mantém a pendência de agenda para nova tentativa/diagnóstico.
+                    $result['availability_request_result'] = [
+                        'ok' => false,
+                        'message' => $exception->getMessage(),
+                    ];
+                    $result['calendar_error'] = $exception->getMessage();
                 }
             }
 
             return $result;
-        } catch (Throwable) {
-            return ['skip_ai' => false, 'handled' => false];
+        } catch (Throwable $exception) {
+            return [
+                'skip_ai' => false,
+                'handled' => false,
+                'calendar_error' => $exception->getMessage(),
+            ];
         }
     }
 

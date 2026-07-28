@@ -1,3 +1,14 @@
+## 36.6.32 — Recuperação pós-horário da Agenda
+
+- A retomada pós-horário reentra na máquina determinística de Agenda antes de chamar o provedor de IA.
+- Pedidos como “quero agendar” + “quarta 13h” + “online” são reunidos na mesma janela pendente.
+- Quando a Agenda assume a retomada, a IA geral não gera uma promessa solta de consulta.
+- O resultado de `requestAvailabilityIfNeeded` passa a ficar observável nos logs da recuperação.
+- A pendência pós-horário é concluída quando a Agenda envia a pergunta/ack ou inicia corretamente a disponibilidade.
+- O endpoint conhecido `rsconnect-agenda-cliente` bloqueia `ai.replied` e `message.received` mesmo sem registro em `n8n_tenant_flows`.
+- O formulário do assistente também impede salvar esse writer como integração externa legada.
+- Sem migration nova.
+
 ## 36.6.31 — Novo atendimento em drawer
 
 - Corrige o recorte do formulário `+ Nova` em telas de Conversas com coluna estreita.

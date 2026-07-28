@@ -218,11 +218,9 @@ final class AiAfterHoursRecoveryService
                     continue;
                 }
 
-                $messageStatement = $pdo->prepare('SELECT content FROM conversation_messages WHERE id = :id AND conversation_id = :conversation_id AND direction = "incoming" LIMIT 1');
-                $messageStatement->execute(['id' => $lastMessageId, 'conversation_id' => (int) $row['conversation_id']]);
-                $content = trim((string) $messageStatement->fetchColumn());
+                $content = $this->pendingConversationContent($pdo, $row);
                 if ($content === '') {
-                    $this->finish($id, 'error', 'A última mensagem pendente está vazia ou indisponível.', '+30 minutes', $source);
+                    $this->finish($id, 'error', 'As mensagens pendentes estão vazias ou indisponíveis.', '+30 minutes', $source);
                     $summary['errors']++;
                     continue;
                 }
@@ -264,8 +262,16 @@ final class AiAfterHoursRecoveryService
                 $status = (string) ($attempt['status'] ?? '');
                 $error = trim((string) ($attempt['error_message'] ?? ''));
 
-                if ($event === 'ai.replied' && $status === 'success') {
-                    $this->finish($id, 'recovered', null, null, $source);
+                if (($event === 'ai.replied' || $event === 'calendar.recovery.handled') && $status === 'success') {
+                    $this->finish(
+                        $id,
+                        'recovered',
+                        $event === 'calendar.recovery.handled'
+                            ? 'A demanda pós-horário foi retomada pela Agenda e seguirá pelo ciclo de disponibilidade.'
+                            : null,
+                        null,
+                        $source
+                    );
                     $summary['recovered']++;
                     continue;
                 }
@@ -355,6 +361,63 @@ final class AiAfterHoursRecoveryService
             ];
         } catch (Throwable) {
             return ['total' => 0, 'blocked_plan' => 0, 'blocked_human' => 0, 'errors' => 0];
+        }
+    }
+
+    /**
+     * Reúne todas as mensagens recebidas na mesma janela fora do horário.
+     * Isso preserva pedidos fragmentados como "quero agendar" + "quarta 13h" + "online"
+     * para que a máquina de Agenda reconstrua a intenção antes de chamar a IA geral.
+     */
+    private function pendingConversationContent(PDO $pdo, array $row): string
+    {
+        $conversationId = (int) ($row['conversation_id'] ?? 0);
+        $firstMessageId = (int) ($row['first_message_id'] ?? 0);
+        $lastMessageId = (int) ($row['last_message_id'] ?? 0);
+        if ($conversationId < 1 || $lastMessageId < 1) {
+            return '';
+        }
+
+        try {
+            if ($firstMessageId > 0 && $firstMessageId <= $lastMessageId) {
+                $statement = $pdo->prepare(
+                    'SELECT content
+                     FROM conversation_messages
+                     WHERE conversation_id = :conversation_id
+                       AND direction = "incoming"
+                       AND id BETWEEN :first_message_id AND :last_message_id
+                     ORDER BY sent_at ASC, id ASC
+                     LIMIT 30'
+                );
+                $statement->execute([
+                    'conversation_id' => $conversationId,
+                    'first_message_id' => $firstMessageId,
+                    'last_message_id' => $lastMessageId,
+                ]);
+                $parts = [];
+                foreach ($statement->fetchAll(PDO::FETCH_COLUMN) ?: [] as $message) {
+                    $message = trim((string) $message);
+                    if ($message !== '') {
+                        $parts[] = $message;
+                    }
+                }
+                if ($parts !== []) {
+                    return implode("\n", $parts);
+                }
+            }
+
+            $statement = $pdo->prepare(
+                'SELECT content
+                 FROM conversation_messages
+                 WHERE id = :id
+                   AND conversation_id = :conversation_id
+                   AND direction = "incoming"
+                 LIMIT 1'
+            );
+            $statement->execute(['id' => $lastMessageId, 'conversation_id' => $conversationId]);
+            return trim((string) $statement->fetchColumn());
+        } catch (Throwable) {
+            return '';
         }
     }
 
