@@ -252,6 +252,142 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 
 (function () {
+  const form = document.querySelector('[data-new-conversation-form]');
+  if (!form) return;
+
+  const lookupUrl = form.dataset.contactLookupUrl || '';
+  const instance = form.querySelector('[data-new-conversation-instance]');
+  const search = form.querySelector('[data-new-conversation-search]');
+  const phone = form.querySelector('[data-new-conversation-phone]');
+  const name = form.querySelector('[data-new-conversation-name]');
+  const results = form.querySelector('[data-new-conversation-results]');
+  const existing = form.querySelector('[data-new-conversation-existing]');
+  let lookupTimer = null;
+  let lastQuery = '';
+  let requestSeq = 0;
+
+  const escape = (value) => String(value || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+
+  function clearResults() {
+    if (!results) return;
+    results.hidden = true;
+    results.innerHTML = '';
+  }
+
+  function clearExisting() {
+    if (!existing) return;
+    existing.hidden = true;
+    existing.innerHTML = '';
+  }
+
+  function conversationUrl(id) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('conversation_id', String(id));
+    return url.pathname + url.search;
+  }
+
+  function showExisting(item) {
+    if (!existing) return;
+    if (!item?.conversation_id) {
+      clearExisting();
+      return;
+    }
+    existing.innerHTML = `<div><strong>Conversa já existente</strong><small>Este contato já possui atendimento neste canal. Ao enviar, a conversa existente será reaberta e usada.</small></div><a class="btn btn-outline btn-small" href="${escape(conversationUrl(item.conversation_id))}">Abrir conversa</a>`;
+    existing.hidden = false;
+  }
+
+  function choose(item) {
+    if (!item) return;
+    if (phone) phone.value = item.phone || '';
+    if (name && !name.value.trim()) name.value = item.name || '';
+    if (search) search.value = item.name || item.phone || '';
+    showExisting(item);
+    clearResults();
+  }
+
+  function render(items) {
+    if (!results) return;
+    if (!Array.isArray(items) || items.length === 0) {
+      results.innerHTML = '<div class="new-conversation-search-empty"><strong>Nenhum contato encontrado</strong><small>Informe o telefone completo para iniciar um novo atendimento.</small></div>';
+      results.hidden = false;
+      return;
+    }
+    results.innerHTML = items.map((item, index) => {
+      const label = item.name || item.phone || 'Contato';
+      const secondary = [item.phone, item.company].filter(Boolean).join(' · ');
+      const badge = item.conversation_id ? '<span>Conversa existente</span>' : '<span>Contato cadastrado</span>';
+      return `<button type="button" class="new-conversation-search-item" data-new-contact-result="${index}"><span class="new-conversation-search-avatar">${escape(String(label).charAt(0).toUpperCase())}</span><span class="new-conversation-search-copy"><strong>${escape(label)}</strong><small>${escape(secondary)}</small></span>${badge}</button>`;
+    }).join('');
+    results.hidden = false;
+    results.querySelectorAll('[data-new-contact-result]').forEach((button) => {
+      button.addEventListener('click', () => choose(items[Number(button.dataset.newContactResult || 0)]));
+    });
+  }
+
+  async function lookup(value, preferExact = false) {
+    const instanceId = Number(instance?.value || 0);
+    const query = String(value || '').trim();
+    if (!lookupUrl || !instanceId || query.length < 2) {
+      clearResults();
+      if (!query) clearExisting();
+      return;
+    }
+    const seq = ++requestSeq;
+    lastQuery = query;
+    try {
+      const params = new URLSearchParams({ instance_id: String(instanceId), q: query });
+      const response = await fetch(`${lookupUrl}?${params.toString()}`, { headers: { Accept: 'application/json' }, credentials: 'same-origin', cache: 'no-store' });
+      if (!response.ok) return;
+      const payload = await response.json();
+      if (seq !== requestSeq || lastQuery !== query) return;
+      const items = Array.isArray(payload.results) ? payload.results : [];
+      if (preferExact) {
+        const digits = query.replace(/\D+/g, '');
+        const exact = items.find((item) => String(item.phone || '').replace(/\D+/g, '') === digits);
+        if (exact) {
+          if (name && !name.value.trim()) name.value = exact.name || '';
+          showExisting(exact);
+        } else {
+          clearExisting();
+        }
+      } else {
+        render(items);
+      }
+    } catch (_) {
+      // A busca é auxiliar e nunca deve bloquear o início da conversa.
+    }
+  }
+
+  search?.addEventListener('input', () => {
+    window.clearTimeout(lookupTimer);
+    lookupTimer = window.setTimeout(() => lookup(search.value, false), 220);
+  });
+  search?.addEventListener('focus', () => {
+    if (search.value.trim().length >= 2) lookup(search.value, false);
+  });
+  phone?.addEventListener('input', () => {
+    window.clearTimeout(lookupTimer);
+    const digits = phone.value.replace(/\D+/g, '');
+    if (digits.length < 8) {
+      clearExisting();
+      return;
+    }
+    lookupTimer = window.setTimeout(() => lookup(digits, true), 260);
+  });
+  instance?.addEventListener('change', () => {
+    clearResults();
+    clearExisting();
+    if (search?.value.trim().length >= 2) lookup(search.value, false);
+    else if ((phone?.value || '').replace(/\D+/g, '').length >= 8) lookup(phone.value, true);
+  });
+  document.addEventListener('click', (event) => {
+    if (!form.contains(event.target)) clearResults();
+  });
+})();
+
+(function () {
   const workspace = document.querySelector('[data-conversation-realtime]');
   if (!workspace) return;
 
@@ -1810,4 +1946,23 @@ document.addEventListener('DOMContentLoaded', () => {
   poll();
   window.setInterval(() => { if (document.visibilityState === 'visible') poll(); }, 10000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') poll(true); });
+})();
+
+(function () {
+  function refreshDay(row) {
+    const toggle = row.querySelector('[data-business-day-toggle]');
+    const enabled = Boolean(toggle?.checked);
+    row.classList.toggle('is-enabled', enabled);
+    row.querySelectorAll('[data-business-day-time]').forEach((input) => {
+      input.disabled = !enabled;
+      input.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+    });
+  }
+
+  document.querySelectorAll('[data-business-hours-editor]').forEach((editor) => {
+    editor.querySelectorAll('[data-business-hours-day]').forEach((row) => {
+      refreshDay(row);
+      row.querySelector('[data-business-day-toggle]')?.addEventListener('change', () => refreshDay(row));
+    });
+  });
 })();

@@ -570,22 +570,9 @@ final class AgentController
     {
         $enabled = isset($_POST['business_hours_enabled']) ? 1 : 0;
         $timezone = trim((string) ($_POST['business_timezone'] ?? 'America/Sao_Paulo')) ?: 'America/Sao_Paulo';
-        $start = trim((string) ($_POST['business_start'] ?? '08:00')) ?: '08:00';
-        $end = trim((string) ($_POST['business_end'] ?? '18:00')) ?: '18:00';
-        $days = $_POST['business_days'] ?? ['mon', 'tue', 'wed', 'thu', 'fri'];
-        $days = is_array($days) ? $days : [];
         $validDays = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        $dayLabels = ['sun' => 'Dom', 'mon' => 'Seg', 'tue' => 'Ter', 'wed' => 'Qua', 'thu' => 'Qui', 'fri' => 'Sex', 'sat' => 'Sáb'];
 
-        if (!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $start)
-            || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $end)) {
-            throw new \RuntimeException('Informe horários válidos no formato HH:MM.');
-        }
-        if ($enabled === 1 && $start >= $end) {
-            throw new \RuntimeException('O horário inicial deve ser anterior ao horário final.');
-        }
-        if ($enabled === 1 && array_intersect($validDays, $days) === []) {
-            throw new \RuntimeException('Selecione pelo menos um dia de atendimento quando a restrição de horário estiver ativa.');
-        }
         try {
             new \DateTimeZone($timezone);
         } catch (\Throwable) {
@@ -593,10 +580,51 @@ final class AgentController
         }
 
         $rules = [];
-        foreach ($validDays as $day) {
-            if (in_array($day, $days, true)) {
+        $dayEnabled = $_POST['business_day_enabled'] ?? null;
+        $dayStarts = $_POST['business_day_start'] ?? null;
+        $dayEnds = $_POST['business_day_end'] ?? null;
+
+        if (is_array($dayEnabled) || is_array($dayStarts) || is_array($dayEnds)) {
+            $dayEnabled = is_array($dayEnabled) ? $dayEnabled : [];
+            $dayStarts = is_array($dayStarts) ? $dayStarts : [];
+            $dayEnds = is_array($dayEnds) ? $dayEnds : [];
+            foreach ($validDays as $day) {
+                if (!isset($dayEnabled[$day])) {
+                    continue;
+                }
+                $start = trim((string) ($dayStarts[$day] ?? ''));
+                $end = trim((string) ($dayEnds[$day] ?? ''));
+                if (!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $start)
+                    || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $end)) {
+                    throw new \RuntimeException('Informe horários válidos para ' . ($dayLabels[$day] ?? $day) . '.');
+                }
+                if ($start >= $end) {
+                    throw new \RuntimeException('Em ' . ($dayLabels[$day] ?? $day) . ', o horário inicial deve ser anterior ao horário final.');
+                }
                 $rules[$day] = [[$start, $end]];
             }
+        } else {
+            // Compatibilidade com formulários anteriores à 36.6.30.
+            $start = trim((string) ($_POST['business_start'] ?? '08:00')) ?: '08:00';
+            $end = trim((string) ($_POST['business_end'] ?? '18:00')) ?: '18:00';
+            $days = $_POST['business_days'] ?? ['mon', 'tue', 'wed', 'thu', 'fri'];
+            $days = is_array($days) ? $days : [];
+            if (!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $start)
+                || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $end)) {
+                throw new \RuntimeException('Informe horários válidos no formato HH:MM.');
+            }
+            if ($start >= $end) {
+                throw new \RuntimeException('O horário inicial deve ser anterior ao horário final.');
+            }
+            foreach ($validDays as $day) {
+                if (in_array($day, $days, true)) {
+                    $rules[$day] = [[$start, $end]];
+                }
+            }
+        }
+
+        if ($enabled === 1 && $rules === []) {
+            throw new \RuntimeException('Selecione pelo menos um dia de atendimento quando a restrição de horário estiver ativa.');
         }
 
         $handoffAction = (string) ($_POST['handoff_action'] ?? 'paused');

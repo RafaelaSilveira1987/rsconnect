@@ -128,17 +128,41 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
                 $statusText = $blocked ? 'Limite atingido' : ($attention ? 'Próximo do limite' : 'Disponível');
                 $statusClass = $blocked ? 'is-blocked' : ($attention ? 'is-attention' : 'is-ok');
             ?>
-            <article class="client-usage-card <?= $statusClass ?>">
+            <?php $remaining = $row['limit'] === null ? null : max(0, (int) $row['limit'] - (int) $row['used']); ?>
+            <article class="client-usage-card <?= $statusClass ?>" data-usage-key="<?= View::e((string) ($row['key'] ?? '')) ?>">
                 <div class="client-usage-card-head">
-                    <div><strong><?= View::e($row['label']) ?></strong><small><?= View::e((string) ($row['description'] ?? '')) ?></small><small><b><?= (int) $row['used'] ?></b> de <?= $row['limit'] === null ? 'uso ilimitado' : (int) $row['limit'] ?></small></div>
+                    <div><strong><?= View::e($row['label']) ?></strong><small><?= View::e((string) ($row['description'] ?? '')) ?></small></div>
                     <span><?= View::e($statusText) ?></span>
                 </div>
-                <div class="client-usage-progress"><span style="width: <?= $percent ?>%"></span></div>
-                <div class="client-usage-card-foot"><small><?= $row['limit'] === null ? 'Sem limite definido' : $percent . '% utilizado' ?></small><strong><?= (int) $row['used'] ?></strong></div>
+                <div class="client-usage-value-line">
+                    <strong><?= number_format((int) $row['used'], 0, ',', '.') ?></strong>
+                    <span><?= $row['limit'] === null ? 'uso sem limite definido' : 'de ' . number_format((int) $row['limit'], 0, ',', '.') ?></span>
+                </div>
+                <div class="client-usage-progress" aria-label="<?= $percent ?>% utilizado"><span style="width: <?= $percent ?>%"></span></div>
+                <div class="client-usage-card-foot">
+                    <small><?= $row['limit'] === null ? 'Acompanhamento de volume' : $percent . '% utilizado' ?></small>
+                    <small><?= $remaining === null ? 'Sem bloqueio por quantidade' : number_format($remaining, 0, ',', '.') . ' restante(s)' ?></small>
+                </div>
             </article>
         <?php endforeach; ?>
         <?php if (!$limitRows): ?><div class="empty-state">Nenhum limite de uso foi configurado para este plano.</div><?php endif; ?>
     </div>
+
+    <details class="client-ai-telemetry-details">
+        <summary>
+            <span><strong>Como a IA está sendo contabilizada</strong><small>Interação comercial, chamadas ao provedor e tokens são métricas diferentes.</small></span>
+            <span class="drawer-chevron" aria-hidden="true"></span>
+        </summary>
+        <div class="client-ai-telemetry-grid">
+            <div><span>Interações entregues</span><strong><?= number_format((int) ($aiUsage['total'] ?? 0), 0, ',', '.') ?></strong><small>respostas automáticas efetivamente entregues</small></div>
+            <div><span>Chamadas ao provedor</span><strong><?= number_format((int) ($aiUsage['technical']['provider_calls'] ?? 0), 0, ',', '.') ?></strong><small>inclui chamadas técnicas, falhas e outros usos de IA</small></div>
+            <div><span>Tokens de entrada</span><strong><?= number_format((int) ($aiUsage['technical']['input_tokens'] ?? 0), 0, ',', '.') ?></strong><small>contexto e instruções enviados ao modelo</small></div>
+            <div><span>Tokens de saída</span><strong><?= number_format((int) ($aiUsage['technical']['output_tokens'] ?? 0), 0, ',', '.') ?></strong><small>conteúdo produzido pelo modelo</small></div>
+            <div><span>Total de tokens</span><strong><?= number_format((int) ($aiUsage['technical']['total_tokens'] ?? 0), 0, ',', '.') ?></strong><small>telemetria registrada pela RS Connect no período</small></div>
+            <div><span>Falhas técnicas</span><strong><?= number_format((int) ($aiUsage['technical']['failed_events'] ?? 0), 0, ',', '.') ?></strong><small>não reduzem franquia quando não há entrega</small></div>
+        </div>
+        <p class="client-ai-telemetry-note">A franquia considera somente respostas automáticas entregues com IA custeada pela RS Connect. O número de requisições exibido pelo provedor pode ser maior porque inclui chamadas técnicas, testes, falhas e outros usos.</p>
+    </details>
 </section>
 
 <section class="card client-invoice-section">

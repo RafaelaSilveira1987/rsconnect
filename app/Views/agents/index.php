@@ -6,20 +6,21 @@ use App\Core\Router;
 use App\Core\View;
 
 $dayLabels = ['mon' => 'Seg', 'tue' => 'Ter', 'wed' => 'Qua', 'thu' => 'Qui', 'fri' => 'Sex', 'sat' => 'Sáb', 'sun' => 'Dom'];
-$selectedDays = static function (?string $json): array {
+$businessHoursByDay = static function (?string $json): array {
     $decoded = json_decode((string) $json, true);
-    return is_array($decoded) ? array_keys($decoded) : ['mon', 'tue', 'wed', 'thu', 'fri'];
-};
-$firstHours = static function (?string $json): array {
-    $decoded = json_decode((string) $json, true);
-    if (is_array($decoded)) {
-        foreach ($decoded as $ranges) {
-            if (isset($ranges[0][0], $ranges[0][1])) {
-                return [(string) $ranges[0][0], (string) $ranges[0][1]];
-            }
-        }
+    $result = [];
+    foreach (['mon','tue','wed','thu','fri','sat','sun'] as $day) {
+        $range = is_array($decoded) && isset($decoded[$day][0]) && is_array($decoded[$day][0]) ? $decoded[$day][0] : null;
+        $result[$day] = [
+            'enabled' => $range !== null && isset($range[0], $range[1]),
+            'start' => $range !== null && isset($range[0]) ? (string) $range[0] : '08:00',
+            'end' => $range !== null && isset($range[1]) ? (string) $range[1] : ($day === 'sat' ? '12:00' : '18:00'),
+        ];
     }
-    return ['08:00', '18:00'];
+    if (!is_array($decoded)) {
+        foreach (['mon','tue','wed','thu','fri'] as $day) $result[$day]['enabled'] = true;
+    }
+    return $result;
 };
 $canManage = Auth::can('agents.manage');
 $isClientExperience = !Auth::isSuperAdmin();
@@ -88,7 +89,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
 
         <div class="agent-grid">
             <?php foreach ($agents as $agent): ?>
-                <?php [$start, $end] = $firstHours($agent['business_hours_json'] ?? null); $days = $selectedDays($agent['business_hours_json'] ?? null); ?>
+                <?php $dayHours = $businessHoursByDay($agent['business_hours_json'] ?? null); ?>
                 <article class="agent-card">
                     <div class="agent-card-head">
                         <span class="agent-icon agent-icon-bot" aria-hidden="true"></span>
@@ -150,14 +151,15 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                             <label class="field compact-field"><span>Palavras que pedem atendimento humano</span><input name="handoff_keywords" value="<?= View::e($agent['handoff_keywords'] ?? '') ?>" placeholder="humano, atendente, pessoa"></label>
                             <label class="field compact-field"><span>Ao chamar uma pessoa</span><select name="handoff_action"><option value="paused" <?= ($agent['handoff_action'] ?? 'paused') === 'paused' ? 'selected' : '' ?>>Pausar respostas automáticas</option><option value="human" <?= ($agent['handoff_action'] ?? '') === 'human' ? 'selected' : '' ?>>Marcar atendimento humano</option></select></label>
                             <label class="field compact-field"><span>Mensagem ao encaminhar para a equipe</span><input name="human_handoff_message" value="<?= View::e($agent['human_handoff_message'] ?? '') ?>" placeholder="Vou encaminhar você para uma pessoa da equipe."></label>
-                            <div class="form-grid two">
-                                <label class="field compact-field"><span>Atendimento começa</span><input type="time" name="business_start" value="<?= View::e($start) ?>"></label>
-                                <label class="field compact-field"><span>Atendimento termina</span><input type="time" name="business_end" value="<?= View::e($end) ?>"></label>
-                            </div>
                             <label class="field compact-field"><span>Fuso horário</span><input name="business_timezone" value="<?= View::e($agent['business_timezone'] ?? 'America/Sao_Paulo') ?>"></label>
-                            <div class="weekday-row">
-                                <?php foreach ($dayLabels as $dayKey => $label): ?>
-                                    <label class="check-field compact-check"><input type="checkbox" name="business_days[]" value="<?= View::e($dayKey) ?>" <?= in_array($dayKey, $days, true) ? 'checked' : '' ?>><span><?= View::e($label) ?></span></label>
+                            <div class="business-hours-editor" data-business-hours-editor>
+                                <div class="business-hours-editor-head"><strong>Horário por dia</strong><small>Ative somente os dias de atendimento e defina a faixa de cada um.</small></div>
+                                <?php foreach ($dayLabels as $dayKey => $label): $dayHour = $dayHours[$dayKey] ?? ['enabled' => false, 'start' => '08:00', 'end' => ($dayKey === 'sat' ? '12:00' : '18:00')]; ?>
+                                    <div class="business-hours-day <?= !empty($dayHour['enabled']) ? 'is-enabled' : '' ?>" data-business-hours-day>
+                                        <label class="business-hours-day-toggle"><input type="checkbox" name="business_day_enabled[<?= View::e($dayKey) ?>]" value="1" <?= !empty($dayHour['enabled']) ? 'checked' : '' ?> data-business-day-toggle><span><?= View::e($label) ?></span></label>
+                                        <label class="field compact-field"><span>Início</span><input type="time" name="business_day_start[<?= View::e($dayKey) ?>]" value="<?= View::e((string) $dayHour['start']) ?>" data-business-day-time></label>
+                                        <label class="field compact-field"><span>Fim</span><input type="time" name="business_day_end[<?= View::e($dayKey) ?>]" value="<?= View::e((string) $dayHour['end']) ?>" data-business-day-time></label>
+                                    </div>
                                 <?php endforeach; ?>
                             </div>
                             <label class="field compact-field"><span>Mensagem fora do horário</span><input name="after_hours_message" value="<?= View::e($agent['after_hours_message'] ?? '') ?>" placeholder="Estamos fora do horário. Retornaremos em breve."></label>
@@ -289,9 +291,17 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                     <label class="field"><span>Palavras para chamar uma pessoa</span><input name="handoff_keywords" value="humano, atendente, pessoa, suporte"></label>
                     <label class="field"><span>Mensagem ao encaminhar para a equipe</span><input name="human_handoff_message" value="Vou encaminhar você para uma pessoa da nossa equipe. Aguarde um momento, por favor."></label>
                     <input type="hidden" name="handoff_action" value="paused">
-                    <div class="form-grid two"><label class="field"><span>Atendimento começa</span><input type="time" name="business_start" value="08:00"></label><label class="field"><span>Atendimento termina</span><input type="time" name="business_end" value="18:00"></label></div>
                     <label class="field"><span>Fuso horário</span><input name="business_timezone" value="America/Sao_Paulo"></label>
-                    <div class="weekday-row"><?php foreach ($dayLabels as $dayKey => $label): ?><label class="check-field compact-check"><input type="checkbox" name="business_days[]" value="<?= View::e($dayKey) ?>" <?= in_array($dayKey, ['mon', 'tue', 'wed', 'thu', 'fri'], true) ? 'checked' : '' ?>><span><?= View::e($label) ?></span></label><?php endforeach; ?></div>
+                    <div class="business-hours-editor" data-business-hours-editor>
+                        <div class="business-hours-editor-head"><strong>Horário por dia</strong><small>Você pode, por exemplo, usar Seg–Sex 08:00–17:00 e Sáb 08:00–12:00.</small></div>
+                        <?php foreach ($dayLabels as $dayKey => $label): $enabledByDefault = in_array($dayKey, ['mon','tue','wed','thu','fri'], true); ?>
+                            <div class="business-hours-day <?= $enabledByDefault ? 'is-enabled' : '' ?>" data-business-hours-day>
+                                <label class="business-hours-day-toggle"><input type="checkbox" name="business_day_enabled[<?= View::e($dayKey) ?>]" value="1" <?= $enabledByDefault ? 'checked' : '' ?> data-business-day-toggle><span><?= View::e($label) ?></span></label>
+                                <label class="field"><span>Início</span><input type="time" name="business_day_start[<?= View::e($dayKey) ?>]" value="08:00" data-business-day-time></label>
+                                <label class="field"><span>Fim</span><input type="time" name="business_day_end[<?= View::e($dayKey) ?>]" value="<?= $dayKey === 'sat' ? '12:00' : '18:00' ?>" data-business-day-time></label>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
                     <label class="field"><span>Mensagem fora do horário</span><input name="after_hours_message" value="Estamos fora do horário de atendimento agora. Assim que retornarmos, nossa equipe responde por aqui."></label>
                     <div class="form-grid two">
                         <label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label>
@@ -362,9 +372,17 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                     <label class="field"><span>Palavras que pedem atendimento humano</span><input name="handoff_keywords" value="humano, atendente, pessoa, suporte" placeholder="humano, atendente, pessoa"></label>
                     <label class="field"><span>Mensagem ao encaminhar para a equipe</span><input name="human_handoff_message" value="Vou encaminhar você para uma pessoa da nossa equipe. Aguarde um momento, por favor."></label>
                     <input type="hidden" name="handoff_action" value="paused">
-                    <div class="form-grid two"><label class="field"><span>Atendimento começa</span><input type="time" name="business_start" value="08:00"></label><label class="field"><span>Atendimento termina</span><input type="time" name="business_end" value="18:00"></label></div>
                     <label class="field"><span>Fuso horário</span><input name="business_timezone" value="America/Sao_Paulo"></label>
-                    <div class="weekday-row"><?php foreach ($dayLabels as $dayKey => $label): ?><label class="check-field compact-check"><input type="checkbox" name="business_days[]" value="<?= View::e($dayKey) ?>" <?= in_array($dayKey, ['mon', 'tue', 'wed', 'thu', 'fri'], true) ? 'checked' : '' ?>><span><?= View::e($label) ?></span></label><?php endforeach; ?></div>
+                    <div class="business-hours-editor" data-business-hours-editor>
+                        <div class="business-hours-editor-head"><strong>Horário por dia</strong><small>Você pode, por exemplo, usar Seg–Sex 08:00–17:00 e Sáb 08:00–12:00.</small></div>
+                        <?php foreach ($dayLabels as $dayKey => $label): $enabledByDefault = in_array($dayKey, ['mon','tue','wed','thu','fri'], true); ?>
+                            <div class="business-hours-day <?= $enabledByDefault ? 'is-enabled' : '' ?>" data-business-hours-day>
+                                <label class="business-hours-day-toggle"><input type="checkbox" name="business_day_enabled[<?= View::e($dayKey) ?>]" value="1" <?= $enabledByDefault ? 'checked' : '' ?> data-business-day-toggle><span><?= View::e($label) ?></span></label>
+                                <label class="field"><span>Início</span><input type="time" name="business_day_start[<?= View::e($dayKey) ?>]" value="08:00" data-business-day-time></label>
+                                <label class="field"><span>Fim</span><input type="time" name="business_day_end[<?= View::e($dayKey) ?>]" value="<?= $dayKey === 'sat' ? '12:00' : '18:00' ?>" data-business-day-time></label>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
                     <label class="field"><span>Mensagem fora do horário</span><input name="after_hours_message" value="Estamos fora do horário de atendimento agora. Assim que retornarmos, nossa equipe responde por aqui."></label>
                     <div class="form-grid two">
                         <label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label>

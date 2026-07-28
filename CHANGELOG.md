@@ -1,3 +1,11 @@
+## 36.6.30 — Busca inicial, horários por dia e telemetria clara
+
+- Nova conversa pesquisa contatos existentes antes do primeiro envio e sinaliza conversa já existente.
+- Horário operacional do agente passa a permitir uma faixa diferente para cada dia, incluindo sábado reduzido.
+- Refino visual de aceite LGPD, drawer de contato e cards de consumo.
+- Franquia de IA passa a exigir `delivery_status=delivered`, alinhando o limite comercial à entrega real.
+- Tela da assinatura passa a explicar chamadas ao provedor e exibir tokens registrados, sem confundir requests com interações comerciais.
+
 ## 36.6.29 — Busca confiável e avatar do contato
 
 - Corrige a busca da tela Conversas e centraliza a mesma regra no carregamento inicial e no polling.

@@ -117,11 +117,14 @@ $returnQuery = http_build_query($pollQuery);
                 <?php if ($canManage): ?>
                     <details class="new-conversation-details">
                         <summary class="btn btn-primary btn-small">+ Nova</summary>
-                        <form class="new-conversation-form" method="post" action="<?= View::e(Router::url('/conversations/start')) ?>">
+                        <form class="new-conversation-form" method="post" action="<?= View::e(Router::url('/conversations/start')) ?>" data-new-conversation-form data-contact-lookup-url="<?= View::e(Router::url('/conversations/contact-lookup')) ?>">
                             <?= Csrf::input() ?>
-                            <strong>Iniciar conversa</strong>
+                            <div class="new-conversation-form-head">
+                                <div><span class="eyebrow">Novo atendimento</span><strong>Iniciar conversa</strong></div>
+                                <small>Pesquise um contato já cadastrado ou informe um novo número.</small>
+                            </div>
                             <label class="field"><span>Instância</span>
-                                <select name="instance_id" required>
+                                <select name="instance_id" required data-new-conversation-instance>
                                     <option value="">Selecione</option>
                                     <?php foreach ($instances as $instance): ?>
                                         <?php
@@ -132,8 +135,11 @@ $returnQuery = http_build_query($pollQuery);
                                     <?php endforeach; ?>
                                 </select>
                             </label>
-                            <label class="field"><span>Telefone com DDI</span><input name="phone" inputmode="numeric" placeholder="5511999999999" required></label>
-                            <label class="field"><span>Nome do contato</span><input name="name" placeholder="Opcional"></label>
+                            <label class="field new-conversation-contact-search"><span>Buscar contato</span><input type="search" autocomplete="off" placeholder="Nome ou telefone" data-new-conversation-search><small class="field-hint-inline">A busca consulta os contatos da empresa antes de iniciar um novo atendimento.</small></label>
+                            <div class="new-conversation-search-results" data-new-conversation-results hidden></div>
+                            <label class="field"><span>Telefone com DDI</span><input name="phone" inputmode="tel" autocomplete="off" placeholder="5511999999999" required data-new-conversation-phone></label>
+                            <label class="field"><span>Nome do contato</span><input name="name" autocomplete="off" placeholder="Opcional" data-new-conversation-name></label>
+                            <div class="new-conversation-existing" data-new-conversation-existing hidden></div>
                             <label class="field"><span>Primeira mensagem</span><textarea name="message" rows="3" required>Olá! Como podemos ajudar?</textarea></label>
                             <button class="btn btn-primary btn-block" type="submit" <?= !$instances ? 'disabled' : '' ?>>Enviar e abrir conversa</button>
                         </form>

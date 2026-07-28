@@ -1380,6 +1380,88 @@ final class ConversationController
     }
 
 
+    public function contactLookup(): void
+    {
+        $instanceId = (int) ($_GET['instance_id'] ?? 0);
+        $query = trim((string) ($_GET['q'] ?? ''));
+        if ($instanceId < 1 || mb_strlen($query) < 2) {
+            $this->json(['ok' => true, 'results' => []]);
+        }
+
+        $instance = $this->findInstance($instanceId);
+        if ($instance === null) {
+            $this->json(['ok' => false, 'message' => 'Instância não encontrada para esta empresa.'], 404);
+        }
+
+        $tenantId = (int) ($instance['tenant_id'] ?? 0);
+        $digits = preg_replace('/\D+/', '', $query) ?: '';
+        $likeText = '%' . $query . '%';
+        $likeDigits = $digits !== '' ? '%' . $digits . '%' : '';
+
+        try {
+            $pdo = Database::connection();
+            $sql = 'SELECT c.id, c.name, c.phone, c.email, c.company, c.avatar_url,
+                           cv.id AS conversation_id, cv.status AS conversation_status,
+                           cv.last_message_at, cv.last_message_preview
+                    FROM contacts c
+                    LEFT JOIN conversations cv
+                      ON cv.contact_id = c.id
+                     AND cv.evolution_instance_id = :instance_id
+                    WHERE c.tenant_id = :tenant_id
+                      AND (
+                           c.name LIKE :like_name
+                           OR c.email LIKE :like_email
+                           OR c.company LIKE :like_company';
+            if ($digits !== '') {
+                $sql .= ' OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(c.phone, "+", ""), "(", ""), ")", ""), "-", ""), " ", "") LIKE :like_digits';
+            }
+            $sql .= ')
+                    ORDER BY
+                      CASE WHEN c.phone = :exact_phone THEN 0 ELSE 1 END,
+                      CASE WHEN cv.id IS NULL THEN 1 ELSE 0 END,
+                      COALESCE(cv.last_message_at, c.updated_at) DESC
+                    LIMIT 8';
+
+            $statement = $pdo->prepare($sql);
+            $params = [
+                'instance_id' => $instanceId,
+                'tenant_id' => $tenantId,
+                'like_name' => $likeText,
+                'like_email' => $likeText,
+                'like_company' => $likeText,
+                'exact_phone' => $digits,
+            ];
+            if ($digits !== '') {
+                $params['like_digits'] = $likeDigits;
+            }
+            $statement->execute($params);
+
+            $results = [];
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+                $results[] = [
+                    'contact_id' => (int) ($row['id'] ?? 0),
+                    'name' => trim((string) ($row['name'] ?? '')),
+                    'phone' => trim((string) ($row['phone'] ?? '')),
+                    'email' => trim((string) ($row['email'] ?? '')),
+                    'company' => trim((string) ($row['company'] ?? '')),
+                    'avatar_url' => $this->safeAvatarUrl((string) ($row['avatar_url'] ?? '')),
+                    'conversation_id' => !empty($row['conversation_id']) ? (int) $row['conversation_id'] : null,
+                    'conversation_status' => (string) ($row['conversation_status'] ?? ''),
+                    'last_message_preview' => (string) ($row['last_message_preview'] ?? ''),
+                ];
+            }
+
+            $this->json(['ok' => true, 'results' => $results]);
+        } catch (Throwable $exception) {
+            Audit::log('conversation.contact_lookup_failed', [
+                'instance_id' => $instanceId,
+                'error' => $exception->getMessage(),
+            ], $tenantId);
+            $this->json(['ok' => false, 'message' => 'Não foi possível consultar os contatos agora.'], 500);
+        }
+    }
+
+
     public function avatar(): void
     {
         $conversationId = (int) ($_GET['conversation_id'] ?? 0);

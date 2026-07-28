@@ -94,7 +94,7 @@ final class SubscriptionService
             'n8n_flows' => ['SELECT COUNT(*) FROM n8n_tenant_flows WHERE tenant_id = :tenant_id AND status = "active"', false],
             'contacts_month' => ['SELECT COUNT(*) FROM contacts WHERE tenant_id = :tenant_id AND created_at BETWEEN :start_at AND :end_at', true],
             'conversations_month' => ['SELECT COUNT(*) FROM conversations WHERE tenant_id = :tenant_id AND created_at BETWEEN :start_at AND :end_at', true],
-            'ai_interactions_month' => ['SELECT COUNT(*) FROM ai_usage_events WHERE tenant_id = :tenant_id AND usage_type = "auto_reply" AND plan_billable = 1 AND status = "success" AND created_at BETWEEN :start_at AND :end_at', true],
+            'ai_interactions_month' => ['SELECT COUNT(*) FROM ai_usage_events WHERE tenant_id = :tenant_id AND usage_type = "auto_reply" AND plan_billable = 1 AND status = "success" AND delivery_status = "delivered" AND created_at BETWEEN :start_at AND :end_at', true],
             'appointments_month' => ['SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND created_at BETWEEN :start_at AND :end_at', true],
             'crm_leads_month' => ['SELECT COUNT(*) FROM crm_leads WHERE tenant_id = :tenant_id AND created_at BETWEEN :start_at AND :end_at', true],
         ];

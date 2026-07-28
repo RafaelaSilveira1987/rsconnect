@@ -177,7 +177,7 @@ $contactsBaseUrl = Router::url('/contacts' . ($queryBase ? '?' . http_build_quer
                 <span class="soft-avatar large"><?= View::e(mb_strtoupper(mb_substr($selected['name'] ?: $selected['phone'], 0, 1))) ?></span>
                 <span><span class="eyebrow">Contato</span><h2><?= View::e($selected['name'] ?: 'Contato sem nome') ?></h2><small><?= View::e($selected['phone']) ?></small></span>
             </div>
-            <a class="icon-button drawer-close" href="<?= View::e($contactsBaseUrl) ?>" aria-label="Fechar">×</a>
+            <a class="icon-button drawer-close" href="<?= View::e($contactsBaseUrl) ?>" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
         </div>
 
         <form class="contact-drawer-form" method="post" action="<?= View::e(Router::url('/contacts/update')) ?>">
