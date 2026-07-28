@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.33 — Busca funcional na Base de contatos';
-    public const REQUIRED_MIGRATION = '059_contact_identity_confidence.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.34 — Teste gratuito e primeiro acesso guiado';
+    public const REQUIRED_MIGRATION = '060_free_trial_guided_first_access.sql';
 
     private PDO $pdo;
 
@@ -63,6 +63,7 @@ final class AppVersionService
             'tenant_implementation_status',
             'tenant_implementation_checklist',
             'tenant_onboarding_progress',
+            'tenant_onboarding_settings',
             'operations_backup_routines',
             'operations_backup_jobs',
             'system_backups',
@@ -99,7 +100,20 @@ final class AppVersionService
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 059, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 060, conforme o pacote implantado.'
+        );
+
+        $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')
+            && $this->columnExists('tenant_subscriptions', 'trial_end_behavior')
+            && $this->columnExists('tenant_subscriptions', 'trial_grace_days')
+            && $this->tableExists('tenant_onboarding_settings');
+        $checks[] = $this->check(
+            'Teste gratuito e primeiro acesso',
+            $trialStructureReady ? 'ok' : 'blocked',
+            $trialStructureReady
+                ? 'Teste por quantidade de dias, transição pós-teste e implantação guiada estão disponíveis.'
+                : 'A estrutura do teste gratuito ou do primeiro acesso guiado ainda não foi aplicada.',
+            'Executar database/migrations/060_free_trial_guided_first_access.sql.'
         );
 
         $aiQuotaLimits = $this->standardAiQuotaLimits();

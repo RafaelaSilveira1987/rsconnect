@@ -270,9 +270,11 @@ final class OnboardingController
             $complete->execute(['id' => $tenantId]);
 
             $pdo->commit();
+            $guideService = new OnboardingGuideService();
+            $guideService->applyStoredAttendanceToAgent($tenantId, $agentId);
             Audit::log('onboarding.agent_completed', ['agent_id' => $agentId], $tenantId);
-            (new OnboardingGuideService())->saveStep($tenantId, 'ai_agent', 'complete', 'Agente IA criado/revisado no onboarding guiado.', Auth::id());
-            Flash::set('success', 'Agente IA salvo. Continue configurando atendimento, agenda e LGPD.');
+            $guideService->saveStep($tenantId, 'ai_agent', 'complete', 'Agente IA criado/revisado e regras operacionais aplicadas.', Auth::id());
+            Flash::set('success', 'Agente IA salvo com as regras de atendimento. Agora execute o teste final.');
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -305,16 +307,7 @@ final class OnboardingController
         $tenantId = (int) Auth::tenantId();
         try {
             (new OnboardingGuideService())->saveAttendance($tenantId, $_POST, Auth::id());
-            $agentId = (int) ($_POST['agent_id'] ?? 0);
-            $reprocess = $agentId > 0
-                ? (new AiAutomationService())->reprocessLatestPendingForAgent($tenantId, $agentId)
-                : ['status' => 'none'];
-            Flash::set(
-                'success',
-                ($reprocess['status'] ?? 'none') === 'replied'
-                    ? 'Atendimento configurado. A última mensagem pendente foi reprocessada e respondida.'
-                    : 'Atendimento configurado.'
-            );
+            Flash::set('success', 'Regras de atendimento salvas. Elas serão aplicadas automaticamente ao agente criado nas próximas etapas.');
         } catch (Throwable $exception) {
             Flash::set('error', $exception->getMessage());
         }
@@ -344,7 +337,7 @@ final class OnboardingController
         } catch (Throwable $exception) {
             Flash::set('error', $exception->getMessage());
         }
-        $this->redirect('/onboarding#final_test');
+        $this->redirect('/');
     }
 
     private function redirect(string $path): never

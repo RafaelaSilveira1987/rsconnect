@@ -65,8 +65,8 @@ final class PrivacyController
 
         (new PrivacyService())->acceptCurrentPolicy((int) $tenantId, (int) $userId);
         Audit::log('privacy.terms_accepted', ['user_id' => $userId], (int) $tenantId);
-        Flash::set('success', 'Aceite registrado. Você já pode continuar usando o painel.');
-        $this->redirect('/');
+        Flash::set('success', 'Aceite registrado. Continue a configuração guiada da empresa.');
+        $this->redirect('/onboarding');
     }
 
     public function saveSettings(): void

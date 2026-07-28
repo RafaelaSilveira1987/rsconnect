@@ -1,3 +1,15 @@
+## 36.6.34 — Teste gratuito e primeiro acesso guiado
+
+- adiciona teste gratuito por quantidade de dias, com último dia e primeira cobrança calculados automaticamente;
+- impede criação manual de cobrança enquanto o teste estiver ativo;
+- permite definir a transição pós-teste: aguardar contratação com tolerância, ativar ou suspender;
+- exibe dias restantes e regra de transição dentro da conta do cliente;
+- reorganiza o primeiro acesso em Cadastro, LGPD, Atendimento, Agenda, WhatsApp, Agente e Teste final;
+- libera as telas progressivamente e retoma sempre na etapa pendente;
+- guarda as regras de atendimento antes da criação do agente e as aplica quando ele for criado;
+- preserva o acesso de empresas que já possuíam operação ativa antes da atualização;
+- adiciona a migration `060_free_trial_guided_first_access.sql`.
+
 ## 36.6.33 — Busca funcional na Base de contatos
 
 - Corrige o uso repetido do mesmo placeholder SQL em uma conexão PDO com prepares nativos.

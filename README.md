@@ -1,10 +1,10 @@
 # RS Connect — pacote VPS
 
-Pacote consolidado até o RS Connect 36.6.33 — Busca funcional na Base de contatos.
+Pacote consolidado até o RS Connect 36.6.34 — Teste gratuito e primeiro acesso guiado.
 
 ## Última etapa incluída
 
-RS Connect 36.6.33 — corrige a busca da Base de contatos com parâmetros SQL únicos, telefone normalizado, pesquisa instantânea e estado vazio claro.
+RS Connect 36.6.34 — transforma o período de teste em regra efetiva de acesso/cobrança e conduz o primeiro acesso em sete etapas sequenciais, preservando empresas que já operavam.
 
 RS Connect 36.6.32 — corrige a retomada de pedidos de agenda fora do horário, processando modalidade/data/disponibilidade antes da IA geral e bloqueando o writer do Google Calendar como integração conversacional.
 

@@ -8518,3 +8518,122 @@ body.has-new-conversation-drawer { overflow:hidden; }
   from { transform: translateX(-90px); }
   to { transform: translateX(30px); }
 }
+
+/* RS Connect 36.6.34 — teste gratuito e primeiro acesso guiado */
+.subscription-trial-settings {
+    border: 1px solid rgba(14, 148, 136, .2);
+    border-radius: 20px;
+    padding: 18px;
+    background: linear-gradient(145deg, rgba(236, 253, 245, .78), rgba(239, 246, 255, .72));
+}
+.subscription-trial-settings-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.subscription-trial-settings-head strong { display: block; color: var(--ink); font-size: 1rem; }
+.subscription-trial-summary {
+    margin-top: 14px;
+    padding: 13px 15px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .78);
+    border: 1px solid rgba(15, 118, 110, .14);
+    color: var(--muted);
+    line-height: 1.55;
+}
+.trial-access-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin: 0 24px 18px;
+    padding: 14px 18px;
+    border: 1px solid rgba(37, 99, 235, .16);
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(239, 246, 255, .94), rgba(236, 253, 245, .88));
+    box-shadow: 0 12px 34px rgba(42, 70, 110, .08);
+}
+.trial-access-banner.is-grace {
+    border-color: rgba(217, 119, 6, .2);
+    background: linear-gradient(135deg, rgba(255, 251, 235, .96), rgba(255, 247, 237, .92));
+}
+.trial-access-banner-main { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.trial-access-banner-icon {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    background: rgba(255,255,255,.8);
+    color: #2563eb;
+}
+.trial-access-banner-icon svg { width: 21px; height: 21px; }
+.trial-access-banner strong { display: block; color: var(--ink); }
+.trial-access-banner p { margin: 3px 0 0; color: var(--muted); font-size: .9rem; }
+.onboarding-step-panel.is-current {
+    border-color: rgba(15, 148, 136, .38);
+    box-shadow: 0 18px 46px rgba(18, 91, 112, .12);
+}
+.onboarding-step-panel.is-current .step-number {
+    background: linear-gradient(135deg, #0f9b8e, #227bb4);
+    color: #fff;
+}
+.onboarding-step-panel.is-locked {
+    opacity: .7;
+    background: rgba(248, 250, 252, .82);
+}
+.onboarding-step-panel.is-locked .onboarding-step-actions,
+.onboarding-step-panel.is-locked form { display: none; }
+.onboarding-locked-message,
+.onboarding-pre-agent-note {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 13px 15px;
+    border: 1px solid rgba(100, 116, 139, .16);
+    border-radius: 14px;
+    background: rgba(248, 250, 252, .92);
+    color: var(--muted);
+    line-height: 1.5;
+}
+.onboarding-pre-agent-note {
+    border-color: rgba(14, 148, 136, .18);
+    background: rgba(240, 253, 250, .7);
+}
+.client-trial-card {
+    margin-top: 18px;
+    padding: 18px;
+    border-radius: 20px;
+    border: 1px solid rgba(37, 99, 235, .16);
+    background: linear-gradient(145deg, rgba(239,246,255,.94), rgba(240,253,250,.9));
+}
+.client-trial-card-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.client-trial-card h3 { margin: 4px 0; }
+.client-trial-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin-top: 16px; }
+.client-trial-card-grid > div { padding: 13px; border-radius: 14px; background: rgba(255,255,255,.78); }
+.client-trial-card-grid span, .client-trial-card-grid small { display: block; color: var(--muted); }
+.client-trial-card-grid strong { display: block; margin: 4px 0; color: var(--ink); }
+@media (max-width: 760px) {
+    .subscription-trial-settings-head,
+    .trial-access-banner { align-items: flex-start; flex-direction: column; }
+    .trial-access-banner { margin-inline: 12px; }
+    .client-trial-card-grid { grid-template-columns: 1fr; }
+}
+.trial-access-icon {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    background: rgba(255,255,255,.82);
+    color: #2563eb;
+}
+.trial-access-icon svg { width: 21px; height: 21px; }
+.trial-access-banner > div { flex: 1; min-width: 0; }
+.trial-access-banner > div strong,
+.trial-access-banner > div span { display: block; }
+.trial-access-banner > div span { margin-top: 3px; color: var(--muted); font-size: .9rem; }

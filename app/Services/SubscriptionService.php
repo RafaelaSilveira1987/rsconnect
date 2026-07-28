@@ -41,7 +41,7 @@ final class SubscriptionService
             $statement = $pdo->prepare(
                 'SELECT sp.*, ts.id AS subscription_id, ts.billing_status, ts.current_period_starts_at,
                         ts.current_period_ends_at, ts.next_billing_at, ts.amount AS subscription_amount,
-                        ts.billing_cycle, ts.trial_ends_at
+                        ts.billing_cycle, ts.trial_ends_at, ts.trial_days, ts.trial_end_behavior, ts.trial_grace_days
                  FROM tenant_subscriptions ts
                  INNER JOIN saas_plans sp ON sp.id = ts.plan_id
                  WHERE ts.tenant_id = :tenant_id
@@ -456,6 +456,9 @@ final class SubscriptionService
             'current_period_ends_at' => $plan['current_period_ends_at'] ?? null,
             'next_billing_at' => $plan['next_billing_at'] ?? null,
             'trial_ends_at' => $plan['trial_ends_at'] ?? null,
+            'trial_days' => isset($plan['trial_days']) ? (int) $plan['trial_days'] : null,
+            'trial_end_behavior' => $plan['trial_end_behavior'] ?? 'await_payment',
+            'trial_grace_days' => isset($plan['trial_grace_days']) ? (int) $plan['trial_grace_days'] : 3,
             'limits' => $limits,
             'features' => is_array($features) ? $features : [],
         ];

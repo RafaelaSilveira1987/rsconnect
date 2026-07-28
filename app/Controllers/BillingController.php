@@ -31,8 +31,8 @@ final class BillingController
         $tenants = $pdo->query(
             'SELECT t.id, t.name, t.plan, t.status,
                     ts.id AS subscription_id, ts.plan_id, ts.billing_cycle, ts.billing_status,
-                    ts.starts_at, ts.trial_ends_at, ts.current_period_starts_at,
-                    ts.current_period_ends_at, ts.next_billing_at, ts.amount, ts.notes,
+                    ts.starts_at, ts.trial_ends_at, ts.trial_days, ts.trial_end_behavior, ts.trial_grace_days,
+                    ts.current_period_starts_at, ts.current_period_ends_at, ts.next_billing_at, ts.amount, ts.notes,
                     sp.name AS plan_name, sp.plan_key
              FROM tenants t
              LEFT JOIN tenant_subscriptions ts ON ts.id = (
@@ -190,6 +190,9 @@ final class BillingController
         $currentPeriodEndsAt = $this->dateOrNull((string) ($_POST['current_period_ends_at'] ?? '')) ?: date('Y-m-t');
         $nextBillingAt = $this->dateOrNull((string) ($_POST['next_billing_at'] ?? ''));
         $trialEndsAt = $this->dateOrNull((string) ($_POST['trial_ends_at'] ?? ''));
+        $trialDays = max(1, min(365, (int) ($_POST['trial_days'] ?? 7)));
+        $trialEndBehavior = (string) ($_POST['trial_end_behavior'] ?? 'await_payment');
+        $trialGraceDays = max(0, min(30, (int) ($_POST['trial_grace_days'] ?? 3)));
         $notes = trim((string) ($_POST['notes'] ?? ''));
 
         if ($tenantId < 1 || $planId < 1 || !in_array($billingStatus, ['trialing', 'active', 'overdue', 'suspended', 'canceled'], true)) {
@@ -198,6 +201,20 @@ final class BillingController
         }
         if (!in_array($billingCycle, ['monthly', 'quarterly', 'semiannual', 'annual'], true)) {
             $billingCycle = 'monthly';
+        }
+        if (!in_array($trialEndBehavior, ['await_payment', 'activate', 'suspend'], true)) {
+            $trialEndBehavior = 'await_payment';
+        }
+        if ($billingStatus === 'trialing') {
+            $trialStart = new \DateTimeImmutable($currentPeriodStartsAt);
+            $trialEndsAt = $trialStart->modify('+' . ($trialDays - 1) . ' days')->format('Y-m-d');
+            $currentPeriodEndsAt = $trialEndsAt;
+            $nextBillingAt = (new \DateTimeImmutable($trialEndsAt))->modify('+1 day')->format('Y-m-d');
+        } else {
+            $trialDays = 0;
+            $trialEndsAt = null;
+            $trialEndBehavior = 'await_payment';
+            $trialGraceDays = 0;
         }
         if ($currentPeriodEndsAt < $currentPeriodStartsAt) {
             Flash::set('error', 'O fim da vigência não pode ser anterior ao início do período.');
@@ -228,6 +245,11 @@ final class BillingController
                          billing_status = :billing_status,
                          starts_at = :starts_at,
                          trial_ends_at = :trial_ends_at,
+                         trial_days = :trial_days,
+                         trial_end_behavior = :trial_end_behavior,
+                         trial_grace_days = :trial_grace_days,
+                         trial_converted_at = CASE WHEN :is_trial_converted = 1 THEN NULL ELSE trial_converted_at END,
+                         trial_expired_at = CASE WHEN :is_trial_expired = 1 THEN NULL ELSE trial_expired_at END,
                          current_period_starts_at = :current_period_starts_at,
                          current_period_ends_at = :current_period_ends_at,
                          next_billing_at = :next_billing_at,
@@ -242,6 +264,11 @@ final class BillingController
                     'billing_status' => $billingStatus,
                     'starts_at' => $currentPeriodStartsAt,
                     'trial_ends_at' => $trialEndsAt,
+                    'trial_days' => $trialDays ?: null,
+                    'trial_end_behavior' => $trialEndBehavior,
+                    'trial_grace_days' => $trialGraceDays,
+                    'is_trial_converted' => $billingStatus === 'trialing' ? 1 : 0,
+                    'is_trial_expired' => $billingStatus === 'trialing' ? 1 : 0,
                     'current_period_starts_at' => $currentPeriodStartsAt,
                     'current_period_ends_at' => $currentPeriodEndsAt,
                     'next_billing_at' => $nextBillingAt,
@@ -258,9 +285,11 @@ final class BillingController
                 $statement = $pdo->prepare(
                     'INSERT INTO tenant_subscriptions
                         (tenant_id, plan_id, billing_cycle, billing_status, starts_at, trial_ends_at,
+                         trial_days, trial_end_behavior, trial_grace_days,
                          current_period_starts_at, current_period_ends_at, next_billing_at, amount, notes)
                      VALUES
                         (:tenant_id, :plan_id, :billing_cycle, :billing_status, :starts_at, :trial_ends_at,
+                         :trial_days, :trial_end_behavior, :trial_grace_days,
                          :current_period_starts_at, :current_period_ends_at, :next_billing_at, :amount, :notes)'
                 );
                 $statement->execute([
@@ -270,6 +299,9 @@ final class BillingController
                     'billing_status' => $billingStatus,
                     'starts_at' => $currentPeriodStartsAt,
                     'trial_ends_at' => $trialEndsAt,
+                    'trial_days' => $trialDays ?: null,
+                    'trial_end_behavior' => $trialEndBehavior,
+                    'trial_grace_days' => $trialGraceDays,
                     'current_period_starts_at' => $currentPeriodStartsAt,
                     'current_period_ends_at' => $currentPeriodEndsAt,
                     'next_billing_at' => $nextBillingAt,
@@ -292,6 +324,8 @@ final class BillingController
                 'plan_id' => $planId,
                 'billing_status' => $billingStatus,
                 'current_period_ends_at' => $currentPeriodEndsAt,
+                'trial_days' => $trialDays,
+                'trial_end_behavior' => $trialEndBehavior,
             ], $tenantId);
 
             $accessStatus = (new AccessControlService())->statusForTenant($tenantId);
@@ -325,6 +359,13 @@ final class BillingController
         }
 
         try {
+            $trialCheck = Database::connection()->prepare('SELECT billing_status, trial_ends_at FROM tenant_subscriptions WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+            $trialCheck->execute(['id' => $subscriptionId, 'tenant_id' => $tenantId]);
+            $subscription = $trialCheck->fetch(PDO::FETCH_ASSOC) ?: null;
+            if ($subscription && ($subscription['billing_status'] ?? '') === 'trialing' && !empty($subscription['trial_ends_at']) && date('Y-m-d') <= (string) $subscription['trial_ends_at']) {
+                Flash::set('warning', 'A empresa ainda está no período de teste gratuito. A cobrança só pode ser criada após ' . date('d/m/Y', strtotime((string) $subscription['trial_ends_at'] . ' +1 day')) . '.');
+                $this->redirect('/billing?tenant_id=' . $tenantId);
+            }
             $invoiceNumber = 'RS-' . date('Ym') . '-' . str_pad((string) random_int(1, 99999), 5, '0', STR_PAD_LEFT);
             $statement = Database::connection()->prepare(
                 'INSERT INTO tenant_invoices

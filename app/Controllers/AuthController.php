@@ -10,6 +10,7 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\AccessControlService;
 use App\Services\SecurityService;
+use App\Services\OnboardingGuideService;
 
 final class AuthController
 {
@@ -73,6 +74,10 @@ final class AuthController
         }
 
         Flash::set('success', 'Bem-vinda ao RS Connect!');
+        if (!Auth::isSuperAdmin() && Auth::tenantId() && (new OnboardingGuideService())->requiresGuidedAccess((int) Auth::tenantId())) {
+            header('Location: ' . Router::url('/onboarding'));
+            exit;
+        }
         header('Location: ' . Router::url('/'));
         exit;
     }

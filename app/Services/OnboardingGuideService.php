@@ -98,11 +98,41 @@ final class OnboardingGuideService
             'instances' => $this->instances($tenantId),
             'agents' => $this->agents($tenantId),
             'default_agent' => $this->defaultAgent($tenantId),
+            'attendance_settings' => $this->onboardingSettings($tenantId),
             'pre_schedule' => $this->preScheduleSettings($tenantId),
             'privacy' => $this->privacyStatus($tenantId, $userId),
             'events' => $this->events($tenantId),
             'quick_links' => $this->quickLinks(),
         ];
+    }
+
+    public function requiresGuidedAccess(int $tenantId): bool
+    {
+        $tenant = $this->tenant($tenantId);
+        return $tenantId > 0 && empty($tenant['onboarding_completed_at']);
+    }
+
+    public function currentStepKey(int $tenantId, ?int $userId = null): ?string
+    {
+        $next = $this->dashboard($tenantId, $userId)['next'] ?? null;
+        return is_array($next) ? (string) ($next['key'] ?? '') : null;
+    }
+
+    public function pathAllowedDuringOnboarding(int $tenantId, string $path, ?int $userId = null): bool
+    {
+        $path = '/' . trim($path, '/');
+        $always = ['/onboarding', '/primeiros-passos', '/logout', '/subscription', '/access-restricted'];
+        if (in_array($path, $always, true) || str_starts_with($path, '/onboarding/')) {
+            return true;
+        }
+        $step = $this->currentStepKey($tenantId, $userId);
+        return match ($step) {
+            'lgpd_acceptance' => in_array($path, ['/privacy/accept'], true),
+            'whatsapp_connection' => str_starts_with($path, '/instances'),
+            'ai_agent' => str_starts_with($path, '/agents'),
+            'final_test' => str_starts_with($path, '/conversations') || str_starts_with($path, '/calendar'),
+            default => false,
+        };
     }
 
     public function saveStep(int $tenantId, string $stepKey, string $status, string $notes, ?int $userId): void
@@ -151,15 +181,6 @@ final class OnboardingGuideService
     /** @param array<string, mixed> $data */
     public function saveAttendance(int $tenantId, array $data, ?int $userId): void
     {
-        $agentId = (int) ($data['agent_id'] ?? 0);
-        if ($agentId <= 0) {
-            $agent = $this->defaultAgent($tenantId);
-            $agentId = (int) ($agent['id'] ?? 0);
-        }
-        if ($agentId <= 0) {
-            throw new \RuntimeException('Crie um agente IA antes de configurar o atendimento.');
-        }
-
         $start = trim((string) ($data['start_time'] ?? '08:00')) ?: '08:00';
         $end = trim((string) ($data['end_time'] ?? '18:00')) ?: '18:00';
         $days = $data['days'] ?? ['mon', 'tue', 'wed', 'thu', 'fri'];
@@ -169,41 +190,74 @@ final class OnboardingGuideService
         $allowedDays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
         $days = array_values(array_intersect($allowedDays, array_map('strval', $days)));
         if (!$days) {
-            $days = ['mon', 'tue', 'wed', 'thu', 'fri'];
+            throw new \RuntimeException('Selecione pelo menos um dia de atendimento.');
+        }
+        if ($end <= $start) {
+            throw new \RuntimeException('O fim do atendimento deve ser posterior ao início.');
         }
 
-        $hoursJson = json_encode([
-            'days' => $days,
-            'start' => $start,
-            'end' => $end,
-        ], JSON_UNESCAPED_UNICODE);
-
+        $hoursJson = json_encode(['days' => $days, 'start' => $start, 'end' => $end], JSON_UNESCAPED_UNICODE);
+        $timezone = trim((string) ($data['business_timezone'] ?? 'America/Sao_Paulo')) ?: 'America/Sao_Paulo';
         $afterHours = mb_substr(trim((string) ($data['after_hours_message'] ?? 'No momento estamos fora do horário de atendimento. Assim que possível, nossa equipe retorna o contato.')), 0, 500);
         $handoff = mb_substr(trim((string) ($data['human_handoff_message'] ?? 'Vou encaminhar sua solicitação para uma pessoa da equipe continuar o atendimento.')), 0, 500);
-        $cooldown = max(0, min(3600, (int) ($data['cooldown_seconds'] ?? 10)));
+        $cooldown = max(0, min(3600, (int) ($data['cooldown_seconds'] ?? 60)));
 
+        $this->ensureOnboardingSettingsTable();
         $statement = $this->pdo->prepare(
-            'UPDATE ai_agents
-             SET business_hours_enabled = 1,
-                 business_timezone = "America/Sao_Paulo",
-                 business_hours_json = :hours_json,
-                 after_hours_message = :after_hours_message,
-                 human_handoff_message = :human_handoff_message,
-                 handoff_action = "pause_ai",
-                 cooldown_seconds = :cooldown_seconds
-             WHERE id = :id AND tenant_id = :tenant_id'
+            'INSERT INTO tenant_onboarding_settings
+                (tenant_id, business_timezone, business_hours_json, after_hours_message, human_handoff_message, cooldown_seconds)
+             VALUES
+                (:tenant_id, :business_timezone, :business_hours_json, :after_hours_message, :human_handoff_message, :cooldown_seconds)
+             ON DUPLICATE KEY UPDATE
+                business_timezone = VALUES(business_timezone),
+                business_hours_json = VALUES(business_hours_json),
+                after_hours_message = VALUES(after_hours_message),
+                human_handoff_message = VALUES(human_handoff_message),
+                cooldown_seconds = VALUES(cooldown_seconds),
+                updated_at = NOW()'
         );
         $statement->execute([
-            'hours_json' => $hoursJson,
+            'tenant_id' => $tenantId,
+            'business_timezone' => $timezone,
+            'business_hours_json' => $hoursJson,
             'after_hours_message' => $afterHours !== '' ? $afterHours : null,
             'human_handoff_message' => $handoff !== '' ? $handoff : null,
             'cooldown_seconds' => $cooldown,
-            'id' => $agentId,
-            'tenant_id' => $tenantId,
         ]);
 
-        $this->saveStep($tenantId, 'attendance_rules', 'complete', 'Horários, mensagem fora de horário e encaminhamento humano configurados.', $userId);
-        $this->recordEvent($tenantId, $userId, 'onboarding.attendance_saved', 'Regras de atendimento configuradas.', ['agent_id' => $agentId]);
+        $this->applyStoredAttendanceToAgent($tenantId, null);
+        $this->saveStep($tenantId, 'attendance_rules', 'complete', 'Horários, mensagem fora de horário e encaminhamento humano definidos para a operação.', $userId);
+        $this->recordEvent($tenantId, $userId, 'onboarding.attendance_saved', 'Regras de atendimento preparadas para os agentes da empresa.', []);
+    }
+
+    public function applyStoredAttendanceToAgent(int $tenantId, ?int $agentId = null): void
+    {
+        $settings = $this->onboardingSettings($tenantId);
+        if (!$settings || empty($settings['business_hours_json']) || !$this->tableExists('ai_agents')) {
+            return;
+        }
+        $sql = 'UPDATE ai_agents
+                SET business_hours_enabled = 1,
+                    business_timezone = :business_timezone,
+                    business_hours_json = :business_hours_json,
+                    after_hours_message = :after_hours_message,
+                    human_handoff_message = :human_handoff_message,
+                    handoff_action = "pause_ai",
+                    cooldown_seconds = :cooldown_seconds
+                WHERE tenant_id = :tenant_id';
+        $params = [
+            'business_timezone' => (string) ($settings['business_timezone'] ?? 'America/Sao_Paulo'),
+            'business_hours_json' => (string) $settings['business_hours_json'],
+            'after_hours_message' => $settings['after_hours_message'] ?? null,
+            'human_handoff_message' => $settings['human_handoff_message'] ?? null,
+            'cooldown_seconds' => (int) ($settings['cooldown_seconds'] ?? 60),
+            'tenant_id' => $tenantId,
+        ];
+        if ($agentId !== null && $agentId > 0) {
+            $sql .= ' AND id = :agent_id';
+            $params['agent_id'] = $agentId;
+        }
+        $this->pdo->prepare($sql)->execute($params);
     }
 
     /** @param array<string, mixed> $data */
@@ -278,76 +332,13 @@ final class OnboardingGuideService
     public function definitions(): array
     {
         return [
-            [
-                'key' => 'company_profile',
-                'title' => 'Dados da empresa',
-                'short' => 'Empresa',
-                'subtitle' => 'Identidade, contato e segmento.',
-                'description' => 'Confira os dados cadastrais preparados pela equipe RS e complete nome de exibição, e-mail, telefone e site quando necessário.',
-                'action_label' => 'Revisar dados',
-                'action_url' => '/company-settings',
-                'icon' => 'company',
-            ],
-            [
-                'key' => 'whatsapp_connection',
-                'title' => 'Conectar WhatsApp',
-                'short' => 'WhatsApp',
-                'subtitle' => 'Instância Evolution e envio de teste.',
-                'description' => 'Cadastre ou valide a instância Evolution, conecte o WhatsApp e confirme que o envio funciona.',
-                'action_label' => 'Abrir instâncias',
-                'action_url' => '/instances',
-                'icon' => 'whatsapp',
-            ],
-            [
-                'key' => 'ai_agent',
-                'title' => 'Agente IA',
-                'short' => 'IA',
-                'subtitle' => 'Assistente, prompt e credencial.',
-                'description' => 'Crie ou revise o agente IA da empresa, prompt, modelo e status de resposta automática.',
-                'action_label' => 'Abrir agentes',
-                'action_url' => '/agents',
-                'icon' => 'ai',
-            ],
-            [
-                'key' => 'attendance_rules',
-                'title' => 'Atendimento',
-                'short' => 'Atendimento',
-                'subtitle' => 'Horários, mensagens e passagem para humano.',
-                'description' => 'Defina horário de atendimento, mensagem fora de horário, ação de transferência para humano e pausa da IA.',
-                'action_label' => 'Configurar atendimento',
-                'action_url' => '#attendance-rules',
-                'icon' => 'support',
-            ],
-            [
-                'key' => 'agenda_setup',
-                'title' => 'Agenda',
-                'short' => 'Agenda',
-                'subtitle' => 'Agenda e pré-agendamento opcional.',
-                'description' => 'Ative ou dispense a agenda. Quando ativo, configure pré-agendamento com aprovação humana.',
-                'action_label' => 'Configurar agenda',
-                'action_url' => '#agenda-setup',
-                'icon' => 'calendar',
-            ],
-            [
-                'key' => 'lgpd_acceptance',
-                'title' => 'LGPD e termos',
-                'short' => 'LGPD',
-                'subtitle' => 'Política, termo e aceite.',
-                'description' => 'Revise a política da empresa e registre o aceite obrigatório antes da operação.',
-                'action_label' => 'Abrir LGPD',
-                'action_url' => '/privacy',
-                'icon' => 'privacy',
-            ],
-            [
-                'key' => 'final_test',
-                'title' => 'Teste final',
-                'short' => 'Teste',
-                'subtitle' => 'Validação comercial antes de operar.',
-                'description' => 'Confirme envio/recebimento, IA, agenda quando aplicável e pendências principais.',
-                'action_label' => 'Abrir conversas',
-                'action_url' => '/conversations',
-                'icon' => 'check',
-            ],
+            ['key' => 'company_profile', 'title' => 'Cadastro da empresa', 'short' => 'Cadastro', 'subtitle' => 'Etapa 1', 'description' => 'Confira a identificação da empresa e complete os dados operacionais de contato.', 'action_label' => 'Revisar dados', 'action_url' => '/onboarding', 'icon' => 'company'],
+            ['key' => 'lgpd_acceptance', 'title' => 'LGPD e termos', 'short' => 'LGPD', 'subtitle' => 'Etapa 2', 'description' => 'Leia os termos e registre o aceite vinculado ao usuário e à versão vigente da política.', 'action_label' => 'Ler e aceitar', 'action_url' => '/privacy/accept', 'icon' => 'privacy'],
+            ['key' => 'attendance_rules', 'title' => 'Como será o atendimento', 'short' => 'Atendimento', 'subtitle' => 'Etapa 3', 'description' => 'Defina horários, tempo de espera, mensagem fora do expediente e transferência para humano antes de criar o agente.', 'action_label' => 'Configurar atendimento', 'action_url' => '#attendance-rules', 'icon' => 'support'],
+            ['key' => 'agenda_setup', 'title' => 'Agenda', 'short' => 'Agenda', 'subtitle' => 'Etapa 4', 'description' => 'Escolha se a empresa usará agenda interna, integração configurada ou se esta etapa não se aplica.', 'action_label' => 'Configurar agenda', 'action_url' => '#agenda-setup', 'icon' => 'calendar'],
+            ['key' => 'whatsapp_connection', 'title' => 'Conectar WhatsApp', 'short' => 'WhatsApp', 'subtitle' => 'Etapa 5', 'description' => 'Conecte o canal de atendimento e valide o status da instância antes de criar o agente.', 'action_label' => 'Abrir instâncias', 'action_url' => '/instances', 'icon' => 'whatsapp'],
+            ['key' => 'ai_agent', 'title' => 'Criar agente de IA', 'short' => 'Agente', 'subtitle' => 'Etapa 6', 'description' => 'Crie o agente, vincule o WhatsApp e aplique as regras operacionais configuradas nas etapas anteriores.', 'action_label' => 'Abrir agentes', 'action_url' => '/agents', 'icon' => 'ai'],
+            ['key' => 'final_test', 'title' => 'Teste final', 'short' => 'Teste', 'subtitle' => 'Etapa 7', 'description' => 'Valide uma conversa real, pausa humana, horário e agenda quando aplicável antes de liberar o painel completo.', 'action_label' => 'Executar teste', 'action_url' => '/conversations', 'icon' => 'check'],
         ];
     }
 
@@ -381,12 +372,12 @@ final class OnboardingGuideService
     private function blockedBy(string $key, array $previousSteps): ?string
     {
         $requirements = [
-            'whatsapp_connection' => ['company_profile'],
-            'ai_agent' => ['company_profile', 'whatsapp_connection'],
-            'attendance_rules' => ['ai_agent'],
-            'agenda_setup' => ['ai_agent'],
             'lgpd_acceptance' => ['company_profile'],
-            'final_test' => ['whatsapp_connection', 'ai_agent', 'lgpd_acceptance'],
+            'attendance_rules' => ['lgpd_acceptance'],
+            'agenda_setup' => ['attendance_rules'],
+            'whatsapp_connection' => ['agenda_setup'],
+            'ai_agent' => ['whatsapp_connection'],
+            'final_test' => ['ai_agent'],
         ];
         foreach ($requirements[$key] ?? [] as $requiredKey) {
             foreach ($previousSteps as $step) {
@@ -412,7 +403,10 @@ final class OnboardingGuideService
             $missing[] = 'e-mail ou telefone';
         }
         if (!$missing) {
-            return ['status' => 'complete', 'message' => 'Dados principais preenchidos.'];
+            if ((int) ($tenant['onboarding_step'] ?? 1) <= 1) {
+                return ['status' => 'pending', 'message' => 'Confira os dados preparados pela RS e clique em Salvar empresa para confirmar o cadastro.'];
+            }
+            return ['status' => 'complete', 'message' => 'Dados principais revisados e confirmados.'];
         }
         return ['status' => 'pending', 'message' => 'Falta preencher: ' . implode(', ', $missing) . '.'];
     }
@@ -453,14 +447,15 @@ final class OnboardingGuideService
     /** @return array<string, mixed> */
     private function attendanceStatus(int $tenantId): array
     {
-        $agent = $this->defaultAgent($tenantId);
-        if (!$agent) {
-            return ['status' => 'pending', 'message' => 'Crie o agente IA antes de configurar atendimento.'];
+        $settings = $this->onboardingSettings($tenantId);
+        if ($settings && !empty($settings['business_hours_json'])) {
+            return ['status' => 'complete', 'message' => 'Regras operacionais preparadas para o agente que será criado.'];
         }
-        if ((int) ($agent['business_hours_enabled'] ?? 0) === 1 || trim((string) ($agent['human_handoff_message'] ?? '')) !== '') {
+        $agent = $this->defaultAgent($tenantId);
+        if ($agent && ((int) ($agent['business_hours_enabled'] ?? 0) === 1 || trim((string) ($agent['human_handoff_message'] ?? '')) !== '')) {
             return ['status' => 'complete', 'message' => 'Regras de horário e encaminhamento revisadas.'];
         }
-        return ['status' => 'pending', 'message' => 'Defina horário, mensagem fora de horário e passagem para humano.'];
+        return ['status' => 'pending', 'message' => 'Defina horário, mensagem fora do expediente e passagem para humano.'];
     }
 
     /** @return array<string, mixed> */
@@ -545,6 +540,15 @@ final class OnboardingGuideService
     {
         $agents = $this->agents($tenantId);
         return $agents[0] ?? null;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function onboardingSettings(int $tenantId): ?array
+    {
+        $this->ensureOnboardingSettingsTable();
+        $statement = $this->pdo->prepare('SELECT * FROM tenant_onboarding_settings WHERE tenant_id = :tenant_id LIMIT 1');
+        $statement->execute(['tenant_id' => $tenantId]);
+        return $statement->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
     /** @return array<string, mixed>|null */
@@ -745,6 +749,24 @@ final class OnboardingGuideService
                 KEY idx_tenant_onboarding_event (event)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
         );
+    }
+
+    private function ensureOnboardingSettingsTable(): void
+    {
+        if (!$this->tableExists('tenant_onboarding_settings')) {
+            $this->pdo->exec(
+                'CREATE TABLE IF NOT EXISTS tenant_onboarding_settings (
+                    tenant_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+                    business_timezone VARCHAR(80) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT "America/Sao_Paulo",
+                    business_hours_json JSON NULL,
+                    after_hours_message VARCHAR(500) COLLATE utf8mb4_unicode_ci NULL,
+                    human_handoff_message VARCHAR(500) COLLATE utf8mb4_unicode_ci NULL,
+                    cooldown_seconds SMALLINT UNSIGNED NOT NULL DEFAULT 60,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+            );
+        }
     }
 
     private function ensurePreScheduleTable(): void

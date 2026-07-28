@@ -11,6 +11,7 @@ $next = $guide['next'] ?? null;
 $instances = $guide['instances'] ?? ($instances ?? []);
 $agents = $guide['agents'] ?? ($agents ?? []);
 $defaultAgent = $guide['default_agent'] ?? ($agents[0] ?? []);
+$attendanceSettings = $guide['attendance_settings'] ?? [];
 $preSchedule = $guide['pre_schedule'] ?? [];
 $events = $guide['events'] ?? [];
 $company = $guide['tenant'] ?? ($company ?? []);
@@ -18,8 +19,9 @@ $percent = max(0, min(100, (int) ($summary['percent'] ?? 0)));
 $statusText = $summary['is_complete'] ?? false ? 'Configuração concluída' : ($next ? 'Próxima etapa: ' . ($next['short'] ?? $next['title']) : 'Em andamento');
 
 $hours = ['start' => '08:00', 'end' => '18:00', 'days' => ['mon', 'tue', 'wed', 'thu', 'fri']];
-if (!empty($defaultAgent['business_hours_json'])) {
-    $decoded = json_decode((string) $defaultAgent['business_hours_json'], true);
+$hoursSource = $attendanceSettings['business_hours_json'] ?? ($defaultAgent['business_hours_json'] ?? null);
+if (!empty($hoursSource)) {
+    $decoded = json_decode((string) $hoursSource, true);
     if (is_array($decoded)) {
         $hours = array_merge($hours, $decoded);
     }
@@ -45,7 +47,7 @@ $statusClass = static fn (string $status): string => match ($status) {
     <div>
         <span class="eyebrow">Primeiros passos</span>
         <h2><?= ($summary['is_complete'] ?? false) ? 'Sua operação está pronta para uso.' : 'Configure sua operação com orientação.' ?></h2>
-        <p>Complete as etapas centrais: empresa, WhatsApp, IA, atendimento, agenda, LGPD e teste final. O painel RS acompanha esse progresso pela implantação.</p>
+        <p>Siga a sequência de implantação: cadastro, LGPD, regras de atendimento, agenda, WhatsApp, agente de IA e teste final. As demais telas são liberadas conforme o avanço.</p>
     </div>
     <div class="onboarding-score-card">
         <strong><?= $percent ?>%</strong>
@@ -90,7 +92,12 @@ $statusClass = static fn (string $status): string => match ($status) {
 
     <main class="onboarding-main-flow">
         <?php foreach ($steps as $step): ?>
-            <section class="card onboarding-step-panel <?= View::e($statusClass((string) $step['status'])) ?>" id="<?= View::e($step['key']) ?>">
+            <?php
+            $stepDone = in_array((string) ($step['status'] ?? ''), ['complete', 'skipped'], true);
+            $stepCurrent = $next && (($next['key'] ?? '') === ($step['key'] ?? ''));
+            $stepAccessible = $stepDone || $stepCurrent || !empty($summary['is_complete']);
+            ?>
+            <section class="card onboarding-step-panel <?= View::e($statusClass((string) $step['status'])) ?><?= $stepCurrent ? ' is-current' : '' ?><?= !$stepAccessible ? ' is-locked' : '' ?>" id="<?= View::e($step['key']) ?>">
                 <div class="onboarding-step-head">
                     <div class="step-number"><?= (int) $step['index'] ?></div>
                     <div>
@@ -104,7 +111,9 @@ $statusClass = static fn (string $status): string => match ($status) {
                     <strong>Status atual:</strong> <?= View::e($step['message'] ?? '') ?>
                 </div>
 
-                <?php if ($step['key'] === 'company_profile'): ?>
+                <?php if (!$stepAccessible): ?>
+                    <div class="onboarding-locked-message"><strong>Etapa ainda bloqueada</strong><span>Conclua a etapa anterior para liberar esta configuração.</span></div>
+                <?php elseif ($step['key'] === 'company_profile'): ?>
                     <form class="wizard-card onboarding-inline-form" method="post" action="<?= View::e(Router::url('/onboarding/company')) ?>">
                         <?= Csrf::input() ?>
                         <div class="onboarding-company-prefill-note"><strong>Sua empresa já foi preparada pela equipe RS.</strong><span>Confira os dados oficiais e complete apenas as informações de contato que faltarem.</span></div>
@@ -138,11 +147,6 @@ $statusClass = static fn (string $status): string => match ($status) {
                         </div>
                         <div class="onboarding-actions-box">
                             <a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/instances')) ?>">Abrir instâncias</a>
-                            <form method="post" action="<?= View::e(Router::url('/onboarding/step')) ?>">
-                                <?= Csrf::input() ?><input type="hidden" name="step_key" value="whatsapp_connection"><input type="hidden" name="status" value="complete">
-                                <input type="hidden" name="notes" value="WhatsApp validado manualmente no onboarding.">
-                                <button class="btn btn-secondary btn-block" type="submit">Marcar WhatsApp validado</button>
-                            </form>
                         </div>
                     </div>
                 <?php elseif ($step['key'] === 'ai_agent'): ?>
@@ -156,26 +160,22 @@ $statusClass = static fn (string $status): string => match ($status) {
                         </div>
                         <div class="onboarding-actions-box">
                             <a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/agents')) ?>">Abrir agentes IA</a>
-                            <form method="post" action="<?= View::e(Router::url('/onboarding/step')) ?>">
-                                <?= Csrf::input() ?><input type="hidden" name="step_key" value="ai_agent"><input type="hidden" name="status" value="complete">
-                                <input type="hidden" name="notes" value="Agente IA validado manualmente no onboarding.">
-                                <button class="btn btn-secondary btn-block" type="submit">Marcar IA validada</button>
-                            </form>
                         </div>
                     </div>
                 <?php elseif ($step['key'] === 'attendance_rules'): ?>
                     <form class="wizard-card onboarding-inline-form" method="post" action="<?= View::e(Router::url('/onboarding/attendance')) ?>">
                         <?= Csrf::input() ?>
-                        <label class="field"><span>Agente principal</span><select name="agent_id" <?= !$agents ? 'disabled' : '' ?>><?php foreach ($agents as $agent): ?><option value="<?= (int) $agent['id'] ?>" <?= (int) ($defaultAgent['id'] ?? 0) === (int) $agent['id'] ? 'selected' : '' ?>><?= View::e($agent['name'] ?? 'Agente IA') ?></option><?php endforeach; ?></select></label>
+                        <div class="onboarding-pre-agent-note"><strong>Configuração da operação</strong><span>Estas regras serão aplicadas automaticamente ao agente criado na etapa 6.</span></div>
                         <div class="form-grid two">
                             <label class="field"><span>Início do atendimento</span><input type="time" name="start_time" value="<?= View::e($hours['start'] ?? '08:00') ?>"></label>
                             <label class="field"><span>Fim do atendimento</span><input type="time" name="end_time" value="<?= View::e($hours['end'] ?? '18:00') ?>"></label>
                         </div>
                         <div class="field"><span>Dias de atendimento</span><div class="inline-checks"><?php foreach ($dayLabels as $key => $label): ?><label><input type="checkbox" name="days[]" value="<?= View::e($key) ?>" <?= in_array($key, (array) ($hours['days'] ?? []), true) ? 'checked' : '' ?>> <?= View::e($label) ?></label><?php endforeach; ?></div></div>
-                        <label class="field"><span>Mensagem fora de horário</span><textarea name="after_hours_message" rows="3"><?= View::e($defaultAgent['after_hours_message'] ?? 'No momento estamos fora do horário de atendimento. Assim que possível, nossa equipe retorna o contato.') ?></textarea></label>
-                        <label class="field"><span>Mensagem de encaminhamento humano</span><textarea name="human_handoff_message" rows="3"><?= View::e($defaultAgent['human_handoff_message'] ?? 'Vou encaminhar sua solicitação para uma pessoa da equipe continuar o atendimento.') ?></textarea></label>
-                        <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" min="0" max="3600" value="<?= (int) ($defaultAgent['cooldown_seconds'] ?? 10) ?>"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se outra mensagem chegar durante a espera, a contagem reinicia para agrupar o contexto.</small></label>
-                        <div class="form-actions"><button class="btn btn-primary" type="submit" <?= !$agents ? 'disabled' : '' ?>>Salvar atendimento</button></div>
+                        <label class="field"><span>Fuso horário</span><input name="business_timezone" value="<?= View::e($attendanceSettings['business_timezone'] ?? ($defaultAgent['business_timezone'] ?? 'America/Sao_Paulo')) ?>"></label>
+                        <label class="field"><span>Mensagem fora de horário</span><textarea name="after_hours_message" rows="3"><?= View::e($attendanceSettings['after_hours_message'] ?? ($defaultAgent['after_hours_message'] ?? 'No momento estamos fora do horário de atendimento. Assim que possível, nossa equipe retorna o contato.')) ?></textarea></label>
+                        <label class="field"><span>Mensagem de encaminhamento humano</span><textarea name="human_handoff_message" rows="3"><?= View::e($attendanceSettings['human_handoff_message'] ?? ($defaultAgent['human_handoff_message'] ?? 'Vou encaminhar sua solicitação para uma pessoa da equipe continuar o atendimento.')) ?></textarea></label>
+                        <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" min="0" max="3600" value="<?= (int) ($attendanceSettings['cooldown_seconds'] ?? ($defaultAgent['cooldown_seconds'] ?? 60)) ?>"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se outra mensagem chegar durante a espera, a contagem reinicia para agrupar o contexto.</small></label>
+                        <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar e continuar</button></div>
                     </form>
                 <?php elseif ($step['key'] === 'agenda_setup'): ?>
                     <form class="wizard-card onboarding-inline-form" method="post" action="<?= View::e(Router::url('/onboarding/agenda')) ?>">
@@ -198,19 +198,15 @@ $statusClass = static fn (string $status): string => match ($status) {
                             <p class="muted-text">Acesse a central LGPD para revisar política, termo e aceite obrigatório da empresa.</p>
                         </div>
                         <div class="onboarding-actions-box">
-                            <a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/privacy')) ?>">Abrir Privacidade/LGPD</a>
-                            <form method="post" action="<?= View::e(Router::url('/onboarding/step')) ?>">
-                                <?= Csrf::input() ?><input type="hidden" name="step_key" value="lgpd_acceptance"><input type="hidden" name="status" value="complete">
-                                <input type="hidden" name="notes" value="LGPD e termos revisados manualmente no onboarding.">
-                                <button class="btn btn-secondary btn-block" type="submit">Marcar LGPD revisada</button>
-                            </form>
+                            <a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/privacy/accept')) ?>">Ler e aceitar os termos</a>
+                            <small class="field-hint">O aceite será registrado com usuário, data, versão da política e informações de auditoria.</small>
                         </div>
                     </div>
                 <?php elseif ($step['key'] === 'final_test'): ?>
                     <div class="onboarding-action-grid">
                         <div>
                             <h3>Teste operacional final</h3>
-                            <p class="muted-text">Faça um teste de conversa no WhatsApp, confirme IA, pausa humana, agenda quando aplicável e aceite LGPD.</p>
+                            <p class="muted-text">Envie uma mensagem real, confirme a resposta da IA, teste a passagem para humano e valide a agenda quando estiver habilitada.</p>
                             <div class="onboarding-final-links"><a href="<?= View::e(Router::url('/conversations')) ?>">Conversas</a><a href="<?= View::e(Router::url('/calendar')) ?>">Agenda</a><a href="<?= View::e(Router::url('/subscription')) ?>">Assinatura</a></div>
                         </div>
                         <form class="onboarding-actions-box" method="post" action="<?= View::e(Router::url('/onboarding/final-test')) ?>">
@@ -221,16 +217,7 @@ $statusClass = static fn (string $status): string => match ($status) {
                     </div>
                 <?php endif; ?>
 
-                <details class="onboarding-manual-details">
-                    <summary>Ajuste manual desta etapa</summary>
-                    <form method="post" action="<?= View::e(Router::url('/onboarding/step')) ?>" class="manual-step-form">
-                        <?= Csrf::input() ?>
-                        <input type="hidden" name="step_key" value="<?= View::e($step['key']) ?>">
-                        <label class="field"><span>Status manual</span><select name="status"><option value="auto" <?= ($step['manual_status'] ?? 'auto') === 'auto' ? 'selected' : '' ?>>Automático</option><option value="pending">Pendente</option><option value="complete">Concluído</option><option value="skipped">Dispensado</option><option value="attention">Atenção</option></select></label>
-                        <label class="field"><span>Notas</span><textarea name="notes" rows="2"><?= View::e($step['notes'] ?? '') ?></textarea></label>
-                        <button class="btn btn-secondary" type="submit">Salvar ajuste</button>
-                    </form>
-                </details>
+
             </section>
         <?php endforeach; ?>
 

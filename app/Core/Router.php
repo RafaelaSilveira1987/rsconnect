@@ -8,6 +8,7 @@ use App\Services\TenantModuleService;
 use App\Services\AccessControlService;
 use App\Services\SecurityService;
 use App\Services\PrivacyService;
+use App\Services\OnboardingGuideService;
 
 final class Router
 {
@@ -94,7 +95,20 @@ final class Router
                 }
             }
 
-            $privacyExempt = in_array($this->normalize($path), ['/privacy/accept', '/logout', '/access-restricted', '/subscription', '/webhooks/evolution', '/webhooks/n8n/callback'], true);
+            if (!Auth::isSuperAdmin() && Auth::tenantId()) {
+                $normalizedPath = $this->normalize($path);
+                $guideService = new OnboardingGuideService();
+                if ($guideService->requiresGuidedAccess((int) Auth::tenantId())
+                    && !$guideService->pathAllowedDuringOnboarding((int) Auth::tenantId(), $normalizedPath, Auth::id())) {
+                    Flash::set('warning', 'Conclua a etapa atual dos Primeiros passos para liberar as demais telas.');
+                    $this->redirect('/onboarding');
+                    return false;
+                }
+            }
+
+            $normalizedPrivacyPath = $this->normalize($path);
+            $privacyExempt = in_array($normalizedPrivacyPath, ['/privacy/accept', '/logout', '/access-restricted', '/subscription', '/webhooks/evolution', '/webhooks/n8n/callback', '/onboarding', '/primeiros-passos'], true)
+                || str_starts_with($normalizedPrivacyPath, '/onboarding/');
             if (!$privacyExempt && !Auth::isSuperAdmin() && (new PrivacyService())->requiresAcceptance(Auth::tenantId(), Auth::id())) {
                 Flash::set('warning', 'Leia e aceite os termos de privacidade/LGPD da sua empresa para continuar.');
                 $this->redirect('/privacy/accept');

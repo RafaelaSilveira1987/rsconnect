@@ -11,7 +11,7 @@ use Throwable;
 
 final class AccessControlService
 {
-    public const VERSION = '33.1-access-enforcement';
+    public const VERSION = '36.6.34-trial-access';
 
     public function statusForTenant(int $tenantId): array
     {
@@ -64,6 +64,9 @@ final class AccessControlService
             );
             $subscriptionStatement->execute(['tenant_id' => $tenantId]);
             $subscription = $subscriptionStatement->fetch(PDO::FETCH_ASSOC) ?: null;
+            if ($subscription) {
+                $subscription = (new FreeTrialService())->reconcile($subscription);
+            }
             $base['subscription'] = $subscription;
 
             if (!$subscription) {
@@ -85,8 +88,37 @@ final class AccessControlService
                 );
             }
 
-            $effectiveEnd = $billingStatus === 'trialing' && !empty($subscription['trial_ends_at'])
-                ? (string) $subscription['trial_ends_at']
+            if ($billingStatus === 'trialing' && !empty($subscription['trial_ends_at'])) {
+                $base['trial'] = [
+                    'active' => !empty($subscription['trial_active']),
+                    'in_grace' => !empty($subscription['trial_in_grace']),
+                    'days_remaining' => $subscription['trial_days_remaining'] ?? null,
+                    'ends_at' => (string) $subscription['trial_ends_at'],
+                    'grace_ends_at' => $subscription['trial_grace_ends_at'] ?? null,
+                    'behavior' => (string) ($subscription['trial_end_behavior'] ?? 'await_payment'),
+                ];
+                if (!empty($subscription['trial_in_grace'])) {
+                    $base['code'] = 'trial_grace';
+                    $base['title'] = 'Teste gratuito encerrado';
+                    $base['message'] = 'O período gratuito terminou em ' . $this->formatDate((string) $subscription['trial_ends_at']) . '. O acesso permanece liberado durante a tolerância comercial até ' . $this->formatDate((string) ($subscription['trial_grace_ends_at'] ?? '')) . '.';
+                } elseif (empty($subscription['trial_active'])) {
+                    return $this->blocked(
+                        $base,
+                        'trial_expired',
+                        'Teste gratuito encerrado',
+                        'O período de teste terminou em ' . $this->formatDate((string) $subscription['trial_ends_at']) . '. Fale com a equipe RS Connect para contratar ou reativar o plano.'
+                    );
+                }
+
+                // Durante o teste e a tolerância comercial, cobranças anteriores
+                // não podem bloquear o acesso nem reduzir o período gratuito.
+                if (!empty($subscription['trial_active']) || !empty($subscription['trial_in_grace'])) {
+                    return $base;
+                }
+            }
+
+            $effectiveEnd = $billingStatus === 'trialing'
+                ? ''
                 : (string) ($subscription['current_period_ends_at'] ?? '');
 
             if ($effectiveEnd !== '' && date('Y-m-d') > $effectiveEnd) {

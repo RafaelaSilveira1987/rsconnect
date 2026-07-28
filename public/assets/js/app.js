@@ -1280,6 +1280,9 @@ document.addEventListener('DOMContentLoaded', () => {
     field('subscription_id').value='0';
     field('billing_status').value='active';
     field('billing_cycle').value='monthly';
+    field('trial_days').value='7';
+    field('trial_end_behavior').value='await_payment';
+    field('trial_grace_days').value='3';
     const now=new Date();
     const pad=(value)=>String(value).padStart(2,'0');
     const first=`${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
@@ -1301,6 +1304,9 @@ document.addEventListener('DOMContentLoaded', () => {
       field('current_period_ends_at').value=button.dataset.periodEnd||last;
       field('next_billing_at').value=button.dataset.nextBilling||'';
       field('trial_ends_at').value=button.dataset.trialEnd||'';
+      field('trial_days').value=button.dataset.trialDays||'7';
+      field('trial_end_behavior').value=button.dataset.trialEndBehavior||'await_payment';
+      field('trial_grace_days').value=button.dataset.trialGraceDays||'3';
       field('notes').value=decodeURIComponent(button.dataset.notes||'');
       drawer.querySelector('[data-subscription-eyebrow]').textContent='Editar vigência';
       drawer.querySelector('[data-subscription-title]').textContent=button.dataset.tenantName||'Atualizar assinatura';
@@ -1315,6 +1321,39 @@ document.addEventListener('DOMContentLoaded', () => {
       drawer.querySelector('[data-subscription-submit]').textContent='Salvar assinatura';
     }
   }});
+  const subscriptionForm=document.querySelector('[data-subscription-form]');
+  if(subscriptionForm){
+    const subField=(name)=>subscriptionForm.querySelector(`[data-subscription-field="${name}"]`);
+    const trialSettings=subscriptionForm.querySelector('[data-trial-settings]');
+    const trialSummary=subscriptionForm.querySelector('[data-trial-summary]');
+    const addDays=(iso,days)=>{if(!iso)return'';const [y,m,d]=iso.split('-').map(Number);const date=new Date(y,m-1,d);date.setDate(date.getDate()+days);return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;};
+    const formatDate=(iso)=>{if(!iso)return'—';const [y,m,d]=iso.split('-');return `${d}/${m}/${y}`;};
+    const refreshTrial=()=>{
+      const isTrial=subField('billing_status')?.value==='trialing';
+      if(trialSettings)trialSettings.hidden=!isTrial;
+      if(!isTrial)return;
+      const start=subField('current_period_starts_at')?.value||'';
+      const days=Math.max(1,Math.min(365,Number(subField('trial_days')?.value||7)));
+      const end=addDays(start,days-1);
+      const billing=addDays(end,1);
+      if(subField('trial_ends_at'))subField('trial_ends_at').value=end;
+      if(subField('current_period_ends_at'))subField('current_period_ends_at').value=end;
+      if(subField('next_billing_at'))subField('next_billing_at').value=billing;
+      const behavior=subField('trial_end_behavior')?.value||'await_payment';
+      const grace=Math.max(0,Number(subField('trial_grace_days')?.value||0));
+      if(trialSummary){
+        const behaviorText=behavior==='activate'?'converter automaticamente para assinatura ativa':behavior==='suspend'?'suspender o acesso':'aguardar contratação/pagamento';
+        trialSummary.textContent=`Teste de ${days} dia(s): ${formatDate(start)} a ${formatDate(end)}. Primeira cobrança em ${formatDate(billing)}. Depois: ${behaviorText}${behavior==='await_payment'&&grace>0?` com ${grace} dia(s) de tolerância`:''}.`;
+      }
+    };
+    ['billing_status','current_period_starts_at','trial_days','trial_end_behavior','trial_grace_days'].forEach((name)=>{
+      subField(name)?.addEventListener('input',refreshTrial);
+      subField(name)?.addEventListener('change',refreshTrial);
+    });
+    document.querySelectorAll('[data-subscription-open]').forEach((button)=>button.addEventListener('click',()=>window.setTimeout(refreshTrial,0)));
+    refreshTrial();
+  }
+
   const autoSubscription=document.querySelector('[data-subscription-auto-open="1"]');
   if(autoSubscription){
     document.querySelector('[data-tab-target="subscriptions"]')?.click();

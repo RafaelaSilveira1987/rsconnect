@@ -29,6 +29,20 @@ $statusLabel = [
 $nextInvoice = $invoices[0] ?? null;
 $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['external_invoice_url'] ?? '';
 $billingStatus = (string) ($plan['billing_status'] ?? 'active');
+$trialEndsAt = (string) ($plan['trial_ends_at'] ?? '');
+$trialBehavior = (string) ($plan['trial_end_behavior'] ?? 'await_payment');
+$trialGraceDays = max(0, (int) ($plan['trial_grace_days'] ?? 0));
+$trialDaysRemaining = null;
+if ($billingStatus === 'trialing' && $trialEndsAt !== '') {
+    $today = new DateTimeImmutable('today');
+    $trialEndDate = new DateTimeImmutable($trialEndsAt);
+    $trialDaysRemaining = max(0, ((int) $today->diff($trialEndDate)->format('%r%a')) + 1);
+}
+$trialBehaviorLabel = [
+    'await_payment' => 'Aguardar contratação ou pagamento',
+    'activate' => 'Converter para assinatura ativa',
+    'suspend' => 'Suspender o acesso',
+];
 $whatsappNumber = '5532987073537';
 $whatsappMessage = rawurlencode('Olá! Gostaria de conhecer as opções para melhorar meu plano no RS Connect. Minha empresa é ' . (string) ($tenant['name'] ?? '') . '.');
 $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
@@ -56,6 +70,24 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
         <small><?= View::e($cycleLabel[$plan['billing_cycle'] ?? 'monthly'] ?? 'por período') ?></small>
     </div>
 </section>
+
+<?php if ($billingStatus === 'trialing'): ?>
+<section class="client-trial-card">
+    <div class="client-trial-card-head">
+        <div>
+            <span class="eyebrow">Teste gratuito</span>
+            <h3><?= $trialDaysRemaining === 1 ? 'Último dia do teste' : View::e((string) ($trialDaysRemaining ?? 0)) . ' dias restantes' ?></h3>
+            <p>Os recursos do plano estão liberados durante a avaliação. Nenhuma cobrança é criada antes do término do teste.</p>
+        </div>
+        <span class="badge badge-trialing">Em avaliação</span>
+    </div>
+    <div class="client-trial-card-grid">
+        <div><span>Último dia gratuito</span><strong><?= View::e($date($trialEndsAt ?: null)) ?></strong><small>Acesso integral até o final desta data.</small></div>
+        <div><span>Primeira cobrança prevista</span><strong><?= View::e($date($plan['next_billing_at'] ?? null)) ?></strong><small>Somente após o término do teste.</small></div>
+        <div><span>Após o teste</span><strong><?= View::e($trialBehaviorLabel[$trialBehavior] ?? 'Aguardar definição') ?></strong><small><?= $trialBehavior === 'await_payment' && $trialGraceDays > 0 ? View::e((string) $trialGraceDays) . ' dia(s) de tolerância.' : 'A regra foi definida pela equipe RS.' ?></small></div>
+    </div>
+</section>
+<?php endif; ?>
 
 <div class="client-subscription-summary-grid">
     <article class="client-subscription-summary-card">

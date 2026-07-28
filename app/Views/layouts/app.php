@@ -58,6 +58,8 @@ if (Auth::check() && !Auth::isSuperAdmin() && Auth::tenantId()) {
 }
 $communicationUnread = (int) ($communicationInbox['unread'] ?? 0);
 $communicationLatest = is_array($communicationInbox['latest'] ?? null) ? $communicationInbox['latest'] : null;
+$tenantAccessStatus = is_array($_SESSION['tenant_access_status'] ?? null) ? $_SESSION['tenant_access_status'] : [];
+$trialStatus = is_array($tenantAccessStatus['trial'] ?? null) ? $tenantAccessStatus['trial'] : [];
 
 $conversationUnread = 0;
 if (Auth::check() && Auth::can('conversations.view')) {
@@ -99,6 +101,7 @@ $svgIcon = static function (string $name): string {
         'bell' => '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>',
         'agent' => '<path d="M12 3l2.4 5 5.6.8-4 3.9.9 5.5L12 15.6 7.1 18.2l.9-5.5-4-3.9 5.6-.8L12 3Z"/>',
         'automation' => '<path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/>',
+        'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
         'company' => '<path d="M4 21V5h10v16M14 9h6v12M8 9h2M8 13h2M8 17h2M17 13h1M17 17h1"/>',
         'users' => '<path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
         'permissions' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
@@ -122,7 +125,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.6.33')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.6.34')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -267,6 +270,17 @@ $svgIcon = static function (string $name): string {
             <?php endif; ?>
         </header>
 
+        <?php if (!Auth::isSuperAdmin() && !empty($trialStatus)): ?>
+            <section class="trial-access-banner<?= !empty($trialStatus['in_grace']) ? ' is-grace' : '' ?>">
+                <span class="trial-access-icon" aria-hidden="true"><?= $svgIcon('clock') ?></span>
+                <div>
+                    <strong><?= !empty($trialStatus['in_grace']) ? 'Período gratuito encerrado' : 'Teste gratuito em andamento' ?></strong>
+                    <span><?php if (!empty($trialStatus['in_grace'])): ?>Acesso em tolerância comercial<?= !empty($trialStatus['grace_ends_at']) ? ' até ' . View::e(date('d/m/Y', strtotime((string) $trialStatus['grace_ends_at']))) : '' ?>.<?php else: ?><?= (int) ($trialStatus['days_remaining'] ?? 0) ?> dia(s) restante(s)<?= !empty($trialStatus['ends_at']) ? ', até ' . View::e(date('d/m/Y', strtotime((string) $trialStatus['ends_at']))) : '' ?>.<?php endif; ?></span>
+                </div>
+                <a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/subscription')) ?>">Ver plano</a>
+            </section>
+        <?php endif; ?>
+
         <?php if ($flashes): ?>
             <section class="flash-stack" aria-live="polite">
                 <?php foreach ($flashes as $flash): ?>
@@ -329,6 +343,6 @@ $svgIcon = static function (string $name): string {
 <button class="back-to-top" type="button" data-back-to-top aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
 </button>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.6.33')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.6.34')) ?>" defer></script>
 </body>
 </html>

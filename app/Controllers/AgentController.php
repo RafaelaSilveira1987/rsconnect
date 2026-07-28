@@ -15,6 +15,7 @@ use App\Services\AiAutomationService;
 use App\Services\AgentRoutingService;
 use App\Services\ConversationFlowService;
 use App\Services\SubscriptionService;
+use App\Services\OnboardingGuideService;
 use PDO;
 use Throwable;
 
@@ -254,8 +255,15 @@ final class AgentController
             }
 
             $pdo->commit();
+            $guideService = new OnboardingGuideService();
+            if ($guideService->requiresGuidedAccess($tenantId)) {
+                $guideService->applyStoredAttendanceToAgent($tenantId, $agentId);
+                $guideService->saveStep($tenantId, 'ai_agent', 'complete', 'Agente criado e regras operacionais aplicadas durante o primeiro acesso.', Auth::id());
+            }
             Audit::log('agent.created', ['agent_id' => $agentId, 'name' => $name], $tenantId);
-            Flash::set('success', 'Assistente criado. Revise as instruções e faça uma conversa de teste antes de liberar o atendimento.');
+            Flash::set('success', $guideService->requiresGuidedAccess($tenantId)
+                ? 'Assistente criado com as regras operacionais. Volte aos Primeiros passos para executar o teste final.'
+                : 'Assistente criado. Revise as instruções e faça uma conversa de teste antes de liberar o atendimento.');
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
