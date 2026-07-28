@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.28 — Polimento visual da Central de comunicação';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.29 — Busca confiável e avatar do contato';
     public const REQUIRED_MIGRATION = '059_contact_identity_confidence.sql';
 
     private PDO $pdo;

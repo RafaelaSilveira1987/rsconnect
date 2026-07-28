@@ -256,7 +256,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!workspace) return;
 
   const pollUrl = workspace.dataset.pollUrl || '';
-  const currentQuery = workspace.dataset.currentQuery || '';
+  const avatarUrl = workspace.dataset.avatarUrl || '';
+  const currentParams = new URLSearchParams(workspace.dataset.currentQuery || '');
   let selectedConversationId = Number(workspace.dataset.conversationId || 0);
   let lastMessageId = Number(workspace.dataset.lastMessageId || 0);
   let unreadTotal = 0;
@@ -270,6 +271,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const composerForm = document.querySelector('[data-chat-composer]');
   const composerInput = composerForm?.querySelector('textarea[name="message"]') || null;
   const composerButton = composerForm?.querySelector('button[type="submit"]') || null;
+  const searchInput = document.querySelector('[data-conversation-search]');
+  const conversationCount = document.querySelector('[data-conversation-count]');
+  let searchTimer = null;
 
   function escapeHtml(value) {
     return String(value || '')
@@ -309,13 +313,123 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function buildConversationUrl(id) {
     const url = new URL(window.location.href);
+    ['search', 'status', 'mode', 'instance_id', 'tenant_id', 'intent'].forEach((key) => url.searchParams.delete(key));
+    currentParams.forEach((value, key) => { if (value !== '') url.searchParams.set(key, value); });
     url.searchParams.set('conversation_id', String(id));
     return url.pathname + url.search;
+  }
+
+  function syncBrowserQuery() {
+    const url = new URL(window.location.href);
+    ['search', 'status', 'mode', 'instance_id', 'tenant_id', 'intent'].forEach((key) => url.searchParams.delete(key));
+    currentParams.forEach((value, key) => { if (value !== '') url.searchParams.set(key, value); });
+    if (selectedConversationId > 0) url.searchParams.set('conversation_id', String(selectedConversationId));
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
   }
 
   function initials(name, phone) {
     const source = String(name || phone || 'C').trim();
     return source ? source.charAt(0).toUpperCase() : 'C';
+  }
+
+  function safeAvatarUrl(value) {
+    const url = String(value || '').trim();
+    return /^https?:\/\//i.test(url) ? url : '';
+  }
+
+  function avatarMarkup(item) {
+    const fallback = escapeHtml(initials(item.name, item.phone));
+    const url = safeAvatarUrl(item.avatar_url);
+    return `<span class="conversation-avatar" data-contact-avatar-container data-avatar-resolved="${item.avatar_resolved ? '1' : '0'}"><span class="conversation-avatar-fallback" data-avatar-fallback>${fallback}</span>${url ? `<img class="conversation-avatar-image" data-contact-avatar src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>`;
+  }
+
+  function wireAvatarImages(root = document) {
+    root.querySelectorAll?.('[data-contact-avatar]').forEach((image) => {
+      if (image.dataset.avatarWired === '1') return;
+      image.dataset.avatarWired = '1';
+      image.addEventListener('error', () => image.remove(), { once: true });
+    });
+  }
+
+  function updateAvatar(node, item) {
+    const container = node?.querySelector?.('[data-contact-avatar-container]');
+    if (!container) return;
+    if (item && Object.prototype.hasOwnProperty.call(item, 'avatar_resolved')) {
+      container.dataset.avatarResolved = item.avatar_resolved ? '1' : '0';
+    }
+    const fallback = container.querySelector('[data-avatar-fallback]');
+    if (fallback) fallback.textContent = initials(item.name, item.phone);
+    const url = safeAvatarUrl(item.avatar_url);
+    let image = container.querySelector('[data-contact-avatar]');
+    if (!url) {
+      image?.remove();
+      return;
+    }
+    if (!image) {
+      image = document.createElement('img');
+      image.className = 'conversation-avatar-image';
+      image.setAttribute('data-contact-avatar', '');
+      image.alt = '';
+      image.loading = 'lazy';
+      image.referrerPolicy = 'no-referrer';
+      container.appendChild(image);
+    }
+    if (image.src !== url) image.src = url;
+    wireAvatarImages(container);
+  }
+
+  async function fetchConversationAvatar(row) {
+    if (!avatarUrl || !row || row.dataset.avatarLoading === '1') return;
+    const container = row.querySelector('[data-contact-avatar-container]');
+    if (!container || container.dataset.avatarResolved === '1') return;
+    const conversationId = Number(row.dataset.conversationId || 0);
+    if (!conversationId) return;
+
+    row.dataset.avatarLoading = '1';
+    try {
+      const params = new URLSearchParams();
+      params.set('conversation_id', String(conversationId));
+      const tenantId = currentParams.get('tenant_id');
+      if (tenantId) params.set('tenant_id', tenantId);
+      const response = await fetch(`${avatarUrl}?${params.toString()}`, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin',
+        cache: 'no-store'
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const item = {
+        name: row.querySelector('[data-conversation-name]')?.textContent || '',
+        phone: '',
+        avatar_url: payload.avatar_url || '',
+        avatar_resolved: Boolean(payload.resolved)
+      };
+      updateAvatar(row, item);
+    } catch (_) {
+      // Avatar é opcional; a conversa continua com as iniciais.
+    } finally {
+      row.dataset.avatarLoading = '0';
+    }
+  }
+
+  const avatarObserver = avatarUrl && 'IntersectionObserver' in window
+    ? new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          avatarObserver.unobserve(entry.target);
+          fetchConversationAvatar(entry.target);
+        });
+      }, { root: list || null, rootMargin: '80px' })
+    : null;
+
+  function observeConversationAvatars(root = list) {
+    if (!root) return;
+    root.querySelectorAll('[data-conversation-row]').forEach((row) => {
+      const container = row.querySelector('[data-contact-avatar-container]');
+      if (!container || container.dataset.avatarResolved === '1') return;
+      if (avatarObserver) avatarObserver.observe(row);
+      else fetchConversationAvatar(row);
+    });
   }
 
   function modeText(mode) {
@@ -357,7 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <span aria-hidden="true"></span>
       </label>
       <a class="conversation-list-item${selectedClass}" data-conversation-item data-conversation-id="${Number(item.id)}" href="${escapeHtml(buildConversationUrl(item.id))}">
-        <span class="conversation-avatar">${escapeHtml(initials(item.name, item.phone))}</span>
+        ${avatarMarkup(item)}
         <span class="conversation-summary">
           <span class="conversation-title-row">
             <strong data-conversation-name>${escapeHtml(item.name || item.phone || 'Contato')}</strong>
@@ -376,8 +490,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateConversationList(conversations) {
     if (!list || !Array.isArray(conversations)) return;
-    const empty = list.querySelector('.conversation-empty');
-    if (empty && conversations.length > 0) empty.remove();
+    const validIds = new Set(conversations.map((item) => Number(item.id)).filter(Boolean));
+    list.querySelectorAll('[data-conversation-row]').forEach((row) => {
+      const id = Number(row.dataset.conversationId || 0);
+      if (!validIds.has(id)) row.remove();
+    });
 
     conversations.slice().reverse().forEach((item) => {
       const id = Number(item.id);
@@ -397,6 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (name) name.textContent = item.name || item.phone || 'Contato';
       if (time) time.textContent = item.last_message_label || '';
       if (preview) preview.textContent = item.preview || 'Sem mensagens';
+      updateAvatar(node, item);
       if (modeBadge) {
         const itemMode = ['ai', 'human', 'paused'].includes(item.mode) ? item.mode : 'ai';
         modeBadge.className = `mini-badge mode-${itemMode}`;
@@ -408,6 +526,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       list.prepend(row || node);
     });
+
+    list.querySelector('.conversation-empty')?.remove();
+    if (conversations.length === 0) {
+      const searching = String(currentParams.get('search') || '').trim() !== '';
+      list.insertAdjacentHTML('beforeend', `<div class="empty-state conversation-empty"><strong>${searching ? 'Nenhum contato encontrado.' : 'Nenhuma conversa encontrada.'}</strong><span>${searching ? 'Tente outro nome, telefone ou trecho de mensagem.' : 'As novas conversas aparecerão aqui.'}</span></div>`);
+    }
+    if (conversationCount) conversationCount.textContent = String(conversations.length);
+    wireAvatarImages(list);
+    observeConversationAvatars(list);
   }
 
   function renderMessage(message) {
@@ -449,7 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function poll() {
     if (isPolling || !pollUrl) return;
     isPolling = true;
-    const params = new URLSearchParams(currentQuery);
+    const params = new URLSearchParams(currentParams);
     params.set('after_id', String(lastMessageId));
     params.set('mark_read', selectedConversationId > 0 ? '1' : '0');
 
@@ -481,6 +608,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const delay = document.hidden ? 12000 : 3500;
     timer = window.setTimeout(poll, delay);
   }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(async () => {
+        const value = searchInput.value.trim();
+        if (value) currentParams.set('search', value); else currentParams.delete('search');
+        syncBrowserQuery();
+        await poll();
+      }, 280);
+    });
+
+    searchInput.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape' || searchInput.value === '') return;
+      event.preventDefault();
+      searchInput.value = '';
+      currentParams.delete('search');
+      syncBrowserQuery();
+      window.clearTimeout(searchTimer);
+      poll();
+    });
+  }
+
+  wireAvatarImages(document);
+  observeConversationAvatars(list);
 
   if (composerForm && composerInput) {
     composerForm.addEventListener('submit', async (event) => {

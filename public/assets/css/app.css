@@ -8366,3 +8366,30 @@ body.has-communication-drawer{overflow:hidden}
   .communication-submit-bar{margin:0 -10px -10px;align-items:stretch}
   .communication-submit-bar .btn-primary{width:100%}
 }
+
+/* 36.6.29 — busca confiável e avatar real do contato */
+.conversation-avatar {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.conversation-avatar-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+.conversation-avatar-image {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  background: #eef3f6;
+}
+.filter-search:focus-within {
+  border-color: rgba(20, 139, 133, .58);
+  box-shadow: 0 0 0 3px rgba(20, 139, 133, .10);
+}

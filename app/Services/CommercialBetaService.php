@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.29', 'title' => 'Busca confiável e avatar do contato', 'summary' => 'Corrige a pesquisa da Caixa de Entrada com busca por nome, telefone normalizado e histórico de mensagens, adiciona busca instantânea e exibe foto de perfil do WhatsApp quando disponível pela Evolution.'],
             ['version' => '36.6.28', 'title' => 'Polimento visual da Central de comunicação', 'summary' => 'Refina a experiência do Admin com formulário em etapas, campos estilizados, destinatários e canais em cards, preview em tempo real e hierarquia visual alinhada ao RS Connect.'],
             ['version' => '36.6.27', 'title' => 'Central de comunicação refinada', 'summary' => 'Garante entrega in-app independente do menu de Notificações, renderiza a caixa no servidor e reorganiza o Admin em novo comunicado, histórico e respostas.'],
             ['version' => '36.6.26', 'title' => 'Agenda resiliente e identidade confiável', 'summary' => 'Recupera retornos de disponibilidade pela fila rápida e valida nomes do WhatsApp antes de promovê-los ao cadastro.'],

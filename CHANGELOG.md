@@ -1,3 +1,15 @@
+## 36.6.29 — Busca confiável e avatar do contato
+
+- Corrige a busca da tela Conversas e centraliza a mesma regra no carregamento inicial e no polling.
+- Busca por nome, telefone, e-mail, empresa, última mensagem e qualquer mensagem do histórico da conversa.
+- Normaliza números digitados com máscara, espaços, parênteses ou hífen antes de comparar com o telefone armazenado.
+- Adiciona pesquisa instantânea com debounce sem recarregar a página; Enter/Filtrar continuam compatíveis.
+- Sincroniza a lista durante o polling, removendo resultados que não atendem ao filtro atual.
+- Passa a consumir a foto de perfil pelo endpoint de perfil da Evolution quando disponível.
+- Processa `contacts.upsert` para atualizar avatar e mantém iniciais como fallback.
+- Foto é enriquecimento visual: falha ou privacidade do WhatsApp nunca bloqueia mensagens nem atendimento.
+- Não adiciona migration; reutiliza `contacts.avatar_url`, existente desde a migration 003.
+
 ## 36.6.28 — Polimento visual da Central de comunicação
 
 - Mantém intacta a lógica funcional da Central de comunicação da 36.6.27.

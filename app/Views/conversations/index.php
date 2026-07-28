@@ -29,6 +29,10 @@ $contactInitial = static function (array $row) use ($contactLabel): string {
     $initial = mb_substr($label, 0, 1);
     return $initial !== '' ? mb_strtoupper($initial) : '?';
 };
+$contactAvatarUrl = static function (array $row): string {
+    $url = trim((string) ($row['avatar_url'] ?? ''));
+    return $url !== '' && preg_match('#^https?://#i', $url) ? $url : '';
+};
 $currentQuery = array_filter([
     'search' => $filters['search'] ?? '',
     'status' => $filters['status'] ?? '',
@@ -52,7 +56,7 @@ $returnQuery = http_build_query($pollQuery);
     <?php if (($filters['intent'] ?? '') === 'agenda'): ?><input type="hidden" name="intent" value="agenda"><?php endif; ?>
     <div class="filter-search">
         <span class="search-icon" aria-hidden="true"></span>
-        <input name="search" value="<?= View::e($filters['search'] ?? '') ?>" placeholder="Buscar por nome, telefone ou mensagem">
+        <input name="search" data-conversation-search autocomplete="off" value="<?= View::e($filters['search'] ?? '') ?>" placeholder="Buscar por nome, telefone ou mensagem">
     </div>
 
     <?php if (Auth::isSuperAdmin()): ?>
@@ -94,7 +98,7 @@ $returnQuery = http_build_query($pollQuery);
     <a class="btn btn-outline" href="<?= View::e(Router::url('/conversations')) ?>">Limpar</a>
 </form>
 
-<div class="conversation-workspace" data-conversation-realtime data-poll-url="<?= View::e(Router::url('/conversations/poll')) ?>" data-current-query="<?= View::e(http_build_query($pollQuery)) ?>" data-conversation-id="<?= (int) ($selected['id'] ?? 0) ?>" data-last-message-id="<?= (int) $lastMessageId ?>" data-base-title="<?= View::e($title ?? 'Conversas') ?>">
+<div class="conversation-workspace" data-conversation-realtime data-poll-url="<?= View::e(Router::url('/conversations/poll')) ?>" data-avatar-url="<?= View::e(Router::url('/conversations/avatar')) ?>" data-current-query="<?= View::e(http_build_query($pollQuery)) ?>" data-conversation-id="<?= (int) ($selected['id'] ?? 0) ?>" data-last-message-id="<?= (int) $lastMessageId ?>" data-base-title="<?= View::e($title ?? 'Conversas') ?>">
     <div class="realtime-toast" data-realtime-toast hidden></div>
     <aside class="conversation-inbox card">
         <div class="conversation-panel-heading">
@@ -103,7 +107,7 @@ $returnQuery = http_build_query($pollQuery);
                 <h2>Conversas</h2>
             </div>
             <div class="conversation-heading-actions">
-                <span class="badge"><?= count($conversations) ?></span>
+                <span class="badge" data-conversation-count><?= count($conversations) ?></span>
                 <?php if ($canManage && $conversations): ?>
                     <button class="btn btn-outline btn-small conversation-select-toggle" type="button" data-toggle-bulk-read aria-expanded="false" aria-controls="conversation-bulk-read-form">
                         <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="m14.5 17 2 2 4-5"/></svg>
@@ -178,6 +182,7 @@ $returnQuery = http_build_query($pollQuery);
                 $isSelected = (int) ($selected['id'] ?? 0) === (int) $conversation['id'];
                 $displayName = $contactLabel($conversation);
                 $initial = $contactInitial($conversation);
+                $avatarUrl = $contactAvatarUrl($conversation);
                 ?>
                 <div class="conversation-list-row<?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>">
                     <?php if ($canManage): ?>
@@ -187,7 +192,10 @@ $returnQuery = http_build_query($pollQuery);
                         </label>
                     <?php endif; ?>
                     <a class="conversation-list-item<?= $isSelected ? ' is-selected' : '' ?>" data-conversation-item data-conversation-id="<?= (int) $conversation['id'] ?>" href="<?= View::e(Router::url('/conversations?' . http_build_query($query))) ?>">
-                    <span class="conversation-avatar"><?= View::e($initial) ?></span>
+                    <span class="conversation-avatar" data-contact-avatar-container data-avatar-resolved="<?= array_key_exists('avatar_url', $conversation) && $conversation['avatar_url'] !== null ? '1' : '0' ?>">
+                        <span class="conversation-avatar-fallback" data-avatar-fallback><?= View::e($initial) ?></span>
+                        <?php if ($avatarUrl !== ''): ?><img class="conversation-avatar-image" data-contact-avatar src="<?= View::e($avatarUrl) ?>" alt="" loading="lazy" referrerpolicy="no-referrer"><?php endif; ?>
+                    </span>
                     <span class="conversation-summary">
                         <span class="conversation-title-row">
                             <strong data-conversation-name><?= View::e($displayName) ?></strong>
@@ -221,7 +229,11 @@ $returnQuery = http_build_query($pollQuery);
         <?php if ($selected): ?>
             <header class="chat-header">
                 <div class="chat-contact-title">
-                    <span class="conversation-avatar large"><?= View::e($contactInitial($selected)) ?></span>
+                    <?php $selectedAvatarUrl = $contactAvatarUrl($selected); ?>
+                    <span class="conversation-avatar large" data-contact-avatar-container data-avatar-resolved="<?= array_key_exists('avatar_url', $selected) && $selected['avatar_url'] !== null ? '1' : '0' ?>">
+                        <span class="conversation-avatar-fallback" data-avatar-fallback><?= View::e($contactInitial($selected)) ?></span>
+                        <?php if ($selectedAvatarUrl !== ''): ?><img class="conversation-avatar-image" data-contact-avatar src="<?= View::e($selectedAvatarUrl) ?>" alt="" referrerpolicy="no-referrer"><?php endif; ?>
+                    </span>
                     <div>
                         <h2><?= View::e($contactLabel($selected)) ?></h2>
                         <p><?= View::e($selected['phone']) ?> · <?= View::e($selected['instance_label']) ?></p>

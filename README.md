@@ -1,8 +1,10 @@
 # RS Connect — pacote VPS
 
-Pacote consolidado até o RS Connect 36.6.28 — Polimento visual da Central de comunicação.
+Pacote consolidado até o RS Connect 36.6.29 — Busca confiável e avatar do contato.
 
 ## Última etapa incluída
+
+RS Connect 36.6.29 — corrige a pesquisa da Caixa de Entrada, pesquisa também o histórico de mensagens, normaliza telefone e exibe a foto real do contato quando a Evolution disponibilizar o perfil.
 
 RS Connect 36.6.28 — preserva a lógica da Central de comunicação e eleva o acabamento do Admin com formulário em etapas, controles estilizados, seleção de empresas em cards e preview mais fiel ao produto.
 

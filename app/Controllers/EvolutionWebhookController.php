@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Env;
 use App\Services\AccessControlService;
@@ -15,6 +16,7 @@ use App\Services\AutomationWebhookService;
 use App\Services\CrmAutoService;
 use App\Services\CalendarConversationService;
 use App\Services\ConversationFlowService;
+use App\Services\EvolutionService;
 use App\Services\NotificationService;
 use App\Services\PreSchedulingService;
 use PDO;
@@ -55,6 +57,11 @@ final class EvolutionWebhookController
             }
 
             $instance = $this->resolveInstance($payload);
+
+            if (str_contains($event, 'contacts.upsert')) {
+                $updated = $this->applyContactsUpsert($instance, $payload);
+                $this->respond(200, ['ok' => true, 'updated_contacts' => $updated]);
+            }
 
             if (str_contains($event, 'messages.update')) {
                 try {
@@ -190,6 +197,10 @@ final class EvolutionWebhookController
             );
             $pdo->commit();
             $inserted = $storedMessageId > 0;
+
+            if (!$fromMe && $contactId > 0) {
+                $this->refreshContactAvatarIfMissing($pdo, $instance, $contactId, $phone);
+            }
 
             $tenantAccess = ['allowed' => true, 'code' => null];
             $automationAllowed = true;
@@ -707,6 +718,93 @@ final class EvolutionWebhookController
             throw new \RuntimeException('A instância não foi encontrada de forma única. Use instance_id na URL do webhook.');
         }
         return $matches[0];
+    }
+
+    private function applyContactsUpsert(array $instance, array $payload): int
+    {
+        $rows = $payload['data'] ?? [];
+        if (!is_array($rows)) {
+            return 0;
+        }
+        if (!isset($rows[0]) || !is_array($rows[0])) {
+            $rows = [$rows];
+        }
+
+        $pdo = Database::connection();
+        $updated = 0;
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $remoteJid = trim((string) ($row['remoteJid'] ?? $row['id'] ?? ''));
+            if ($remoteJid === '' || $this->isIgnoredRemoteJid($remoteJid) || str_contains($remoteJid, '@g.us')) {
+                continue;
+            }
+            $phone = preg_replace('/\D+/', '', strstr($remoteJid, '@', true) ?: $remoteJid) ?: '';
+            if ($phone === '') {
+                continue;
+            }
+            $pushName = trim((string) ($row['pushName'] ?? $row['name'] ?? ''));
+            $contactId = $this->upsertContact($pdo, $instance, $remoteJid, $phone, $pushName);
+            if ($contactId < 1) {
+                continue;
+            }
+
+            $hasAvatarField = array_key_exists('profilePicUrl', $row) || array_key_exists('profilePictureUrl', $row);
+            if ($hasAvatarField) {
+                $avatar = trim((string) ($row['profilePicUrl'] ?? $row['profilePictureUrl'] ?? ''));
+                if ($avatar !== '' && !preg_match('#^https?://#i', $avatar)) {
+                    $avatar = '';
+                }
+                $pdo->prepare('UPDATE contacts SET avatar_url = :avatar_url WHERE id = :id AND tenant_id = :tenant_id')
+                    ->execute([
+                        'avatar_url' => mb_substr($avatar, 0, 500),
+                        'id' => $contactId,
+                        'tenant_id' => (int) $instance['tenant_id'],
+                    ]);
+            }
+            $updated++;
+        }
+
+        return $updated;
+    }
+
+    private function refreshContactAvatarIfMissing(PDO $pdo, array $instance, int $contactId, string $phone): void
+    {
+        try {
+            $statement = $pdo->prepare('SELECT avatar_url FROM contacts WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+            $statement->execute(['id' => $contactId, 'tenant_id' => (int) $instance['tenant_id']]);
+            $current = $statement->fetchColumn();
+            // NULL = nunca consultado. String vazia = consultado e sem foto disponível.
+            if ($current !== null) {
+                return;
+            }
+
+            $url = $this->evolutionServiceForInstance($instance)->fetchProfilePictureUrl($phone);
+            $pdo->prepare('UPDATE contacts SET avatar_url = :avatar_url WHERE id = :id AND tenant_id = :tenant_id')
+                ->execute([
+                    'avatar_url' => $url ?? '',
+                    'id' => $contactId,
+                    'tenant_id' => (int) $instance['tenant_id'],
+                ]);
+        } catch (Throwable) {
+            // Avatar é enriquecimento visual e nunca deve interromper o webhook principal.
+        }
+    }
+
+    private function evolutionServiceForInstance(array $instance): EvolutionService
+    {
+        $verifySsl = filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+        $caBundle = trim((string) Env::get('EVOLUTION_CA_BUNDLE', ''));
+
+        return new EvolutionService(
+            (string) ($instance['base_url'] ?? ''),
+            Crypto::decrypt((string) ($instance['api_key_encrypted'] ?? '')),
+            (string) ($instance['instance_name'] ?? ''),
+            12,
+            $verifySsl ?? true,
+            $caBundle !== '' ? $caBundle : null
+        );
     }
 
     private function upsertContact(PDO $pdo, array $instance, string $remoteJid, string $phone, string $pushName): int

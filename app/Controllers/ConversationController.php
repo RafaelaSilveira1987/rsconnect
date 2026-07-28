@@ -55,13 +55,7 @@ final class ConversationController
             $conditions[] = '1 = 0';
         }
 
-        if ($filters['search'] !== '') {
-            $conditions[] = '(ct.name LIKE :search_name OR ct.phone LIKE :search_phone OR c.last_message_preview LIKE :search_preview)';
-            $searchValue = '%' . $filters['search'] . '%';
-            $params['search_name'] = $searchValue;
-            $params['search_phone'] = $searchValue;
-            $params['search_preview'] = $searchValue;
-        }
+        $this->appendConversationSearchFilter($conditions, $params, $filters['search']);
 
         if (in_array($filters['status'], ['open', 'pending', 'closed'], true)) {
             $conditions[] = 'c.status = :status';
@@ -88,7 +82,7 @@ final class ConversationController
 
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
         $statement = $pdo->prepare(
-            'SELECT c.*, ct.name AS contact_name, ct.phone, ct.email, ct.company, ct.notes, ct.tags_json,
+            'SELECT c.*, ct.name AS contact_name, ct.phone, ct.email, ct.company, ct.notes, ct.tags_json, ct.avatar_url,
                     ct.status AS contact_status, i.name AS instance_label, i.instance_name,
                     t.name AS tenant_name, u.name AS assigned_user_name
              FROM conversations c
@@ -122,6 +116,15 @@ final class ConversationController
                 $selectedId = 0;
             }
             if ($selected !== null) {
+                $selected = $this->refreshSelectedContactAvatar($pdo, $selected);
+                foreach ($conversations as &$conversationAvatarRow) {
+                    if ((int) ($conversationAvatarRow['id'] ?? 0) === (int) $selected['id']) {
+                        $conversationAvatarRow['avatar_url'] = $selected['avatar_url'] ?? null;
+                        break;
+                    }
+                }
+                unset($conversationAvatarRow);
+
                 // HOTFIX 30.2: primeiro seleciona somente os IDs mais recentes e depois busca
                 // o conteúdo completo. Assim o MySQL nunca precisa ordenar TEXT/JSON no sort_buffer.
                 $messages = $this->loadRecentConversationMessages(
@@ -1101,7 +1104,7 @@ final class ConversationController
         }
 
         $sql = 'SELECT c.*, ct.name AS contact_name, ct.phone, ct.email, ct.company, ct.notes,
-                       ct.tags_json, ct.status AS contact_status,
+                       ct.tags_json, ct.avatar_url, ct.status AS contact_status,
                        COALESCE(NULLIF(ct.contact_group, ""), "unclassified") AS contact_group,
                        ct.id AS contact_id,
                        fs.stage AS flow_stage, fs.demand_status, fs.demand_summary,
@@ -1377,6 +1380,31 @@ final class ConversationController
     }
 
 
+    public function avatar(): void
+    {
+        $conversationId = (int) ($_GET['conversation_id'] ?? 0);
+        $tenantScope = Auth::isSuperAdmin()
+            ? (int) ($_GET['tenant_id'] ?? 0)
+            : (int) (Auth::tenantId() ?? 0);
+
+        if ($conversationId < 1 || $tenantScope < 1) {
+            $this->json(['ok' => false, 'message' => 'Conversa ou empresa inválida.'], 422);
+        }
+
+        $conversation = $this->findConversation($conversationId, $tenantScope);
+        if ($conversation === null) {
+            $this->json(['ok' => false, 'message' => 'Conversa não encontrada.'], 404);
+        }
+
+        $conversation = $this->refreshSelectedContactAvatar(Database::connection(), $conversation);
+        $this->json([
+            'ok' => true,
+            'conversation_id' => $conversationId,
+            'avatar_url' => $this->safeAvatarUrl((string) ($conversation['avatar_url'] ?? '')),
+            'resolved' => array_key_exists('avatar_url', $conversation) && $conversation['avatar_url'] !== null,
+        ]);
+    }
+
     public function poll(): void
     {
         $pdo = Database::connection();
@@ -1449,6 +1477,76 @@ final class ConversationController
         ]);
     }
 
+    private function appendConversationSearchFilter(array &$conditions, array &$params, string $search): void
+    {
+        $search = trim($search);
+        if ($search === '') {
+            return;
+        }
+
+        $value = '%' . $search . '%';
+        $parts = [
+            'ct.name LIKE :search_name',
+            'ct.phone LIKE :search_phone_text',
+            'ct.email LIKE :search_email',
+            'ct.company LIKE :search_company',
+            'c.last_message_preview LIKE :search_preview',
+            'EXISTS (SELECT 1 FROM conversation_messages sm WHERE sm.tenant_id = c.tenant_id AND sm.conversation_id = c.id AND sm.content LIKE :search_message)',
+        ];
+        $params['search_name'] = $value;
+        $params['search_phone_text'] = $value;
+        $params['search_email'] = $value;
+        $params['search_company'] = $value;
+        $params['search_preview'] = $value;
+        $params['search_message'] = $value;
+
+        $digits = preg_replace('/\D+/', '', $search) ?: '';
+        if (strlen($digits) >= 4) {
+            $parts[] = 'ct.phone LIKE :search_phone_digits';
+            $params['search_phone_digits'] = '%' . $digits . '%';
+        }
+
+        $conditions[] = '(' . implode(' OR ', $parts) . ')';
+    }
+
+    private function safeAvatarUrl(string $url): string
+    {
+        $url = trim($url);
+        return $url !== '' && preg_match('#^https?://#i', $url) ? $url : '';
+    }
+
+    private function refreshSelectedContactAvatar(PDO $pdo, array $conversation): array
+    {
+        if ($this->safeAvatarUrl((string) ($conversation['avatar_url'] ?? '')) !== '' || (string) ($conversation['avatar_url'] ?? '') === '') {
+            // string vazia significa que a Evolution já foi consultada e não disponibilizou foto.
+            if (array_key_exists('avatar_url', $conversation) && $conversation['avatar_url'] !== null) {
+                return $conversation;
+            }
+        }
+
+        $contactId = (int) ($conversation['contact_id'] ?? 0);
+        $phone = trim((string) ($conversation['phone'] ?? ''));
+        if ($contactId < 1 || $phone === '') {
+            return $conversation;
+        }
+
+        try {
+            $url = $this->serviceFor($conversation)->fetchProfilePictureUrl($phone);
+            $stored = $url ?? '';
+            $pdo->prepare('UPDATE contacts SET avatar_url = :avatar_url WHERE id = :id AND tenant_id = :tenant_id')
+                ->execute([
+                    'avatar_url' => $stored,
+                    'id' => $contactId,
+                    'tenant_id' => (int) $conversation['tenant_id'],
+                ]);
+            $conversation['avatar_url'] = $stored;
+        } catch (Throwable) {
+            // Foto é enriquecimento visual; falha da Evolution nunca bloqueia a conversa.
+        }
+
+        return $conversation;
+    }
+
     private function conversationSummaries(PDO $pdo, array $filters): array
     {
         $conditions = [];
@@ -1462,13 +1560,7 @@ final class ConversationController
             $conditions[] = '1 = 0';
         }
 
-        if (($filters['search'] ?? '') !== '') {
-            $conditions[] = '(ct.name LIKE :search_name OR ct.phone LIKE :search_phone OR c.last_message_preview LIKE :search_preview)';
-            $searchValue = '%' . $filters['search'] . '%';
-            $params['search_name'] = $searchValue;
-            $params['search_phone'] = $searchValue;
-            $params['search_preview'] = $searchValue;
-        }
+        $this->appendConversationSearchFilter($conditions, $params, (string) ($filters['search'] ?? ''));
 
         if (in_array($filters['status'] ?? '', ['open', 'pending', 'closed'], true)) {
             $conditions[] = 'c.status = :status';
@@ -1496,7 +1588,7 @@ final class ConversationController
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
         $statement = $pdo->prepare(
             'SELECT c.id, c.status, c.attendance_mode, c.unread_count, c.last_message_at, c.last_message_preview,
-                    ct.name AS contact_name, ct.phone, i.name AS instance_label, i.instance_name,
+                    ct.name AS contact_name, ct.phone, ct.avatar_url, i.name AS instance_label, i.instance_name,
                     t.name AS tenant_name
              FROM conversations c
              INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
@@ -1516,6 +1608,8 @@ final class ConversationController
             'id' => (int) $conversation['id'],
             'name' => (string) ($conversation['contact_name'] ?: $conversation['phone'] ?: 'Contato'),
             'phone' => (string) ($conversation['phone'] ?? ''),
+            'avatar_url' => $this->safeAvatarUrl((string) ($conversation['avatar_url'] ?? '')),
+            'avatar_resolved' => array_key_exists('avatar_url', $conversation) && $conversation['avatar_url'] !== null,
             'tenant_name' => (string) ($conversation['tenant_name'] ?? ''),
             'instance_label' => (string) ($conversation['instance_label'] ?: $conversation['instance_name'] ?? ''),
             'preview' => (string) ($conversation['last_message_preview'] ?? ''),

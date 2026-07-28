@@ -65,6 +65,22 @@ final class EvolutionService
         ];
     }
 
+    public function fetchProfilePictureUrl(string $phone): ?string
+    {
+        $endpoint = rtrim($this->baseUrl, '/') . '/chat/fetchProfilePictureUrl/' . rawurlencode($this->instanceName);
+        $result = $this->request('POST', $endpoint, [
+            'number' => $this->normalizePhone($phone),
+        ], 'fetchProfilePictureUrl');
+        $body = is_array($result['body'] ?? null) ? $result['body'] : [];
+        $url = trim((string) ($body['profilePictureUrl'] ?? $body['profilePicUrl'] ?? $body['url'] ?? ''));
+
+        if ($url === '' || !preg_match('#^https?://#i', $url)) {
+            return null;
+        }
+
+        return mb_substr($url, 0, 500);
+    }
+
     private function request(string $method, string $url, ?array $payload = null, string $operation = 'request'): array
     {
         $curl = curl_init($url);
