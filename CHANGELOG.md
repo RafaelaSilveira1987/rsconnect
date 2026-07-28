@@ -1,3 +1,12 @@
+## 36.6.33 — Busca funcional na Base de contatos
+
+- Corrige o uso repetido do mesmo placeholder SQL em uma conexão PDO com prepares nativos.
+- Pesquisa nome, telefone normalizado, e-mail, empresa, observações e tags.
+- Permite termos compostos e aplica todos os termos informados.
+- Adiciona filtro automático durante a digitação e atualização imediata ao trocar selects.
+- Exibe um estado vazio claro quando não houver correspondências.
+- Não altera CRM, IA, Agenda, contatos cadastrados ou conversas.
+
 ## 36.6.32 — Recuperação pós-horário da Agenda
 
 - A retomada pós-horário reentra na máquina determinística de Agenda antes de chamar o provedor de IA.

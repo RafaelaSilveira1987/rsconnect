@@ -108,8 +108,8 @@ $contactsBaseUrl = Router::url('/contacts' . ($queryBase ? '?' . http_build_quer
 </aside>
 <?php endif; ?>
 
-<form class="filter-bar" method="get" action="<?= View::e(Router::url('/contacts')) ?>">
-    <label class="filter-search"><span class="search-icon" aria-hidden="true"></span><input name="search" value="<?= View::e($filters['search'] ?? '') ?>" placeholder="Buscar por nome, telefone, e-mail ou empresa"></label>
+<form class="filter-bar" method="get" action="<?= View::e(Router::url('/contacts')) ?>" data-contact-filter-form>
+    <label class="filter-search"><span class="search-icon" aria-hidden="true"></span><input type="search" name="search" value="<?= View::e($filters['search'] ?? '') ?>" placeholder="Buscar por nome, telefone, e-mail, empresa ou tag" autocomplete="off" data-contact-search></label>
     <select name="status" aria-label="Classificação">
         <option value="">Todas as classificações</option>
         <?php foreach ($statusLabels as $value => $label): ?>
@@ -143,6 +143,16 @@ $contactsBaseUrl = Router::url('/contacts' . ($queryBase ? '?' . http_build_quer
             <table class="clean-table">
                 <thead><tr><th>Contato</th><th>Classificação</th><th>Relacionamento</th><th>Última interação</th><th></th></tr></thead>
                 <tbody>
+                <?php if (!$contacts): ?>
+                    <tr>
+                        <td colspan="5">
+                            <div class="contact-search-empty">
+                                <strong>Nenhum contato encontrado</strong>
+                                <span>Revise o termo pesquisado ou limpe os filtros para visualizar toda a base.</span>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endif; ?>
                 <?php foreach ($contacts as $contact): ?>
                     <?php
                     $params = $queryBase;
@@ -162,7 +172,6 @@ $contactsBaseUrl = Router::url('/contacts' . ($queryBase ? '?' . http_build_quer
                         <td><a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/contacts?' . http_build_query($params))) ?>">Ver</a></td>
                     </tr>
                 <?php endforeach; ?>
-                <?php if (!$contacts): ?><tr><td colspan="5" class="empty-state">Nenhum contato encontrado.</td></tr><?php endif; ?>
                 </tbody>
             </table>
         </div>

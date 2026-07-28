@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.33', 'title' => 'Busca funcional na Base de contatos', 'summary' => 'Corrige parâmetros repetidos da consulta com PDO nativo, normaliza telefone, pesquisa nome/e-mail/empresa/tags e aplica o filtro automaticamente durante a digitação.'],
             ['version' => '36.6.32', 'title' => 'Recuperação pós-horário da Agenda', 'summary' => 'Retoma pedidos de agenda pela máquina determinística antes de chamar a IA, reúne mensagens fragmentadas e bloqueia ai.replied no writer do Google Calendar mesmo sem cadastro de fluxo.'],
             ['version' => '36.6.31', 'title' => 'Novo atendimento em drawer', 'summary' => 'Move o formulário de nova conversa para um drawer independente da Caixa de Entrada, eliminando recortes em telas estreitas e preservando busca preventiva e posição da lista.' ],
             ['version' => '36.6.30', 'title' => 'Busca inicial, horários por dia e telemetria clara', 'summary' => 'Adiciona busca de contato antes da primeira conversa, permite faixas de atendimento diferentes por dia, refina telas de LGPD/contato/consumo e alinha a franquia de IA somente a respostas efetivamente entregues.'],

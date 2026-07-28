@@ -8491,3 +8491,30 @@ body.has-new-conversation-drawer { overflow:hidden; }
   .new-conversation-field-grid { grid-template-columns:1fr; }
   .new-conversation-actions { padding-bottom:max(15px, env(safe-area-inset-bottom)); }
 }
+
+.filter-bar[data-contact-filter-form] { position: relative; }
+.filter-bar[data-contact-filter-form].is-searching { opacity: .72; pointer-events: none; }
+.filter-bar[data-contact-filter-form].is-searching::after {
+  content: '';
+  position: absolute;
+  right: 18px;
+  bottom: -5px;
+  width: 74px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--rs-primary), transparent);
+  animation: rs-contact-search-progress .8s linear infinite;
+}
+.contact-search-empty {
+  min-height: 150px;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  text-align: center;
+  color: var(--rs-muted);
+}
+.contact-search-empty strong { color: var(--rs-text); font-size: 1rem; }
+@keyframes rs-contact-search-progress {
+  from { transform: translateX(-90px); }
+  to { transform: translateX(30px); }
+}

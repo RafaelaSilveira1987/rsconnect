@@ -38,8 +38,33 @@ final class ContactController
         }
 
         if ($filters['search'] !== '') {
-            $conditions[] = '(ct.name LIKE :search OR ct.phone LIKE :search OR ct.email LIKE :search OR ct.company LIKE :search)';
-            $params['search'] = '%' . $filters['search'] . '%';
+            $searchTokens = preg_split('/\s+/u', $filters['search'], -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            foreach (array_values($searchTokens) as $index => $token) {
+                $like = '%' . $token . '%';
+                $tokenConditions = [
+                    'ct.name LIKE :search_name_' . $index,
+                    'ct.email LIKE :search_email_' . $index,
+                    'ct.company LIKE :search_company_' . $index,
+                    'ct.notes LIKE :search_notes_' . $index,
+                    'CAST(ct.tags_json AS CHAR) LIKE :search_tags_' . $index,
+                ];
+                $params['search_name_' . $index] = $like;
+                $params['search_email_' . $index] = $like;
+                $params['search_company_' . $index] = $like;
+                $params['search_notes_' . $index] = $like;
+                $params['search_tags_' . $index] = $like;
+
+                $digits = preg_replace('/\D+/', '', $token) ?: '';
+                if ($digits !== '') {
+                    $tokenConditions[] = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ct.phone, '+', ''), '(', ''), ')', ''), '-', ''), ' ', '') LIKE :search_phone_{$index}";
+                    $params['search_phone_' . $index] = '%' . $digits . '%';
+                } else {
+                    $tokenConditions[] = 'ct.phone LIKE :search_phone_text_' . $index;
+                    $params['search_phone_text_' . $index] = $like;
+                }
+
+                $conditions[] = '(' . implode(' OR ', $tokenConditions) . ')';
+            }
         }
 
         if (in_array($filters['status'], ['lead', 'customer', 'inactive'], true)) {

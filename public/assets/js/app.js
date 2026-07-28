@@ -1993,3 +1993,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 })();
+
+(function () {
+  document.querySelectorAll('[data-contact-filter-form]').forEach((form) => {
+    const search = form.querySelector('[data-contact-search]');
+    if (!search) return;
+
+    let timer = null;
+    let lastSubmitted = String(search.value || '').trim();
+
+    const submit = () => {
+      const current = String(search.value || '').trim();
+      if (current === lastSubmitted) return;
+      lastSubmitted = current;
+      form.classList.add('is-searching');
+      form.requestSubmit();
+    };
+
+    search.addEventListener('input', () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(submit, 450);
+    });
+
+    search.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      window.clearTimeout(timer);
+      lastSubmitted = '__force_submit__';
+    });
+
+    form.querySelectorAll('select').forEach((select) => {
+      select.addEventListener('change', () => {
+        form.classList.add('is-searching');
+        form.requestSubmit();
+      });
+    });
+  });
+})();
