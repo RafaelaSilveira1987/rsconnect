@@ -1,3 +1,12 @@
+# RS Connect v36.6.38 — Status Evolution em tempo real
+
+- Remove o status manual do cadastro de conexões.
+- Força consulta quando `connection_state` está vazio.
+- Mapeia `close` para `disconnected`.
+- Usa UPDATE simples e distinto para conexão aberta ou fechada.
+- Expõe `source_version` no feed para validar o deploy.
+- Impede novos cadastros duplicados da mesma instância na mesma Evolution.
+
 ## 36.6.36 — Governança de mensagens e Evolution em tempo real
 
 - adiciona nome público, função pública e controle de assinatura por usuário;

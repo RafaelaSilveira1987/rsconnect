@@ -811,8 +811,8 @@ final class EvolutionWebhookController
                  profile_name = COALESCE(NULLIF(:profile_name, ""), profile_name),
                  profile_phone = COALESCE(NULLIF(:profile_phone, ""), profile_phone),
                  profile_picture_url = COALESCE(NULLIF(:profile_picture, ""), profile_picture_url),
-                 qrcode_base64 = IF(:status_connected = 1, NULL, qrcode_base64),
-                 qrcode_expires_at = IF(:status_connected = 1, NULL, qrcode_expires_at)
+                 qrcode_base64 = CASE WHEN :clear_qr_code = 1 THEN NULL ELSE qrcode_base64 END,
+                 qrcode_expires_at = CASE WHEN :clear_qr_expiry = 1 THEN NULL ELSE qrcode_expires_at END
              WHERE id = :id'
         )->execute([
             'status' => $status,
@@ -821,7 +821,8 @@ final class EvolutionWebhookController
             'profile_name' => mb_substr($profileName, 0, 150),
             'profile_phone' => mb_substr($profilePhone, 0, 40),
             'profile_picture' => mb_substr($profilePicture, 0, 500),
-            'status_connected' => $status === 'connected' ? 1 : 0,
+            'clear_qr_code' => $status === 'connected' ? 1 : 0,
+            'clear_qr_expiry' => $status === 'connected' ? 1 : 0,
             'id' => (int) $instance['id'],
         ]);
 

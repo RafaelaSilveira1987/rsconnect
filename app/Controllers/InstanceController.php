@@ -158,16 +158,26 @@ final class InstanceController
         $sql .= ' ORDER BY id';
 
         try {
-            $statement = Database::connection()->prepare($sql);
+            $pdo = Database::connection();
+            $statement = $pdo->prepare($sql);
             $statement->execute($params);
             $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
             $now = time();
             $liveChecks = 0;
+            $freshForSeconds = 8;
+
             foreach ($rows as &$row) {
+                $row['_live_check'] = 'cached';
                 $lastCheck = !empty($row['last_status_check_at']) ? strtotime((string) $row['last_status_check_at']) : false;
-                if ($liveChecks >= 8 || ($lastCheck !== false && ($now - $lastCheck) < 60)) {
+                $hasRealState = trim((string) ($row['connection_state'] ?? '')) !== '';
+                $isFresh = $lastCheck !== false && ($now - $lastCheck) < $freshForSeconds;
+
+                // Nunca confia apenas no status manual quando connection_state ainda está vazio.
+                if ($liveChecks >= 8 || ($hasRealState && $isFresh)) {
                     continue;
                 }
+
+                $row['_live_check'] = 'requested';
                 try {
                     $verifySsl = filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
                     $caBundle = trim((string) Env::get('EVOLUTION_CA_BUNDLE', ''));
@@ -181,32 +191,63 @@ final class InstanceController
                     );
                     $live = $service->connectionState();
                     $state = mb_strtolower(trim((string) ($live['state'] ?? '')));
-                    if ($state !== '') {
-                        $connected = in_array($state, ['open', 'connected', 'online', 'active'], true);
-                        $pending = in_array($state, ['connecting', 'qrcode', 'qr', 'pending', 'created'], true);
-                        $mappedStatus = $connected ? 'connected' : ($pending ? 'pending' : 'disconnected');
-                        Database::connection()->prepare(
+                    if ($state === '') {
+                        throw new \RuntimeException('A Evolution respondeu sem informar instance.state.');
+                    }
+
+                    $connected = in_array($state, ['open', 'connected', 'online', 'active'], true);
+                    $pending = in_array($state, ['connecting', 'qrcode', 'qr', 'pending', 'created'], true);
+                    $mappedStatus = $connected ? 'connected' : ($pending ? 'pending' : 'disconnected');
+
+                    // SQL separado elimina qualquer ambiguidade de parâmetros PDO/MariaDB.
+                    $updateSql = 'UPDATE evolution_instances
+                                  SET connection_state = :state,
+                                      status = :status,
+                                      connection_reason = NULL,
+                                      last_status_check_at = NOW(),
+                                      connection_updated_at = NOW()';
+                    if ($connected) {
+                        $updateSql .= ', qrcode_base64 = NULL, qrcode_expires_at = NULL';
+                    }
+                    $updateSql .= ' WHERE id = :id';
+
+                    $update = $pdo->prepare($updateSql);
+                    $update->execute([
+                        'state' => $state,
+                        'status' => $mappedStatus,
+                        'id' => (int) $row['id'],
+                    ]);
+
+                    $row['connection_state'] = $state;
+                    $row['status'] = $mappedStatus;
+                    $row['connection_reason'] = '';
+                    $row['last_status_check_at'] = date('Y-m-d H:i:s');
+                    $row['connection_updated_at'] = date('Y-m-d H:i:s');
+                    $row['_live_check'] = 'updated';
+                } catch (Throwable $exception) {
+                    $safeReason = mb_substr('Falha na consulta em tempo real: ' . $exception->getMessage(), 0, 255);
+                    error_log(
+                        '[InstanceController::statusFeed v36.6.38][instance_id=' . (int) $row['id'] .
+                        '][instance=' . (string) $row['instance_name'] . '] ' . $exception->getMessage()
+                    );
+                    try {
+                        $errorUpdate = $pdo->prepare(
                             'UPDATE evolution_instances
-                             SET connection_state = :state, status = :status,
-                                 last_status_check_at = NOW(), connection_updated_at = NOW(),
-                                 qrcode_base64 = IF(:connected = 1, NULL, qrcode_base64),
-                                 qrcode_expires_at = IF(:connected = 1, NULL, qrcode_expires_at)
+                             SET last_status_check_at = NOW(), connection_reason = :reason
                              WHERE id = :id'
-                        )->execute([
-                            'state' => $state,
-                            'status' => $mappedStatus,
-                            'connected' => $connected ? 1 : 0,
+                        );
+                        $errorUpdate->execute([
+                            'reason' => $safeReason,
                             'id' => (int) $row['id'],
                         ]);
-                        $row['connection_state'] = $state;
-                        $row['status'] = $mappedStatus;
                         $row['last_status_check_at'] = date('Y-m-d H:i:s');
-                    }
-                } catch (Throwable) {
-                    try {
-                        Database::connection()->prepare('UPDATE evolution_instances SET last_status_check_at = NOW() WHERE id = :id')
-                            ->execute(['id' => (int) $row['id']]);
-                    } catch (Throwable) {
+                        $row['connection_reason'] = $safeReason;
+                        $row['_live_check'] = 'failed';
+                    } catch (Throwable $databaseException) {
+                        error_log(
+                            '[InstanceController::statusFeed v36.6.38][instance_id=' . (int) $row['id'] .
+                            '] Falha ao registrar erro: ' . $databaseException->getMessage()
+                        );
                     }
                 }
                 $liveChecks++;
@@ -233,12 +274,24 @@ final class InstanceController
                     'profile_picture_url' => (string) ($row['profile_picture_url'] ?? ''),
                     'qr_ready' => $qrValid,
                     'qr_code' => $instanceId > 0 && $qrValid ? (string) $row['qrcode_base64'] : null,
+                    'live_check' => (string) ($row['_live_check'] ?? 'unknown'),
                 ];
             }
-            echo json_encode(['ok' => true, 'items' => $items, 'checked_at' => date(DATE_ATOM)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            echo json_encode([
+                'ok' => true,
+                'source_version' => '36.6.38-live-status',
+                'items' => $items,
+                'checked_at' => date(DATE_ATOM),
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         } catch (Throwable $exception) {
+            error_log('[InstanceController::statusFeed v36.6.38] ' . $exception->getMessage());
             http_response_code(500);
-            echo json_encode(['ok' => false, 'message' => 'Não foi possível atualizar o status das conexões.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            echo json_encode([
+                'ok' => false,
+                'source_version' => '36.6.38-live-status',
+                'message' => 'Não foi possível atualizar o status das conexões.',
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
     }
 
@@ -252,16 +305,13 @@ final class InstanceController
         $instanceName = trim((string) ($_POST['instance_name'] ?? ''));
         $baseUrl = rtrim(trim((string) ($_POST['base_url'] ?? '')), '/');
         $apiKey = trim((string) ($_POST['api_key'] ?? ''));
-        $status = (string) ($_POST['status'] ?? 'disconnected');
+        $status = 'pending';
 
         if ($tenantId < 1 || $name === '' || $instanceName === '' || !filter_var($baseUrl, FILTER_VALIDATE_URL) || $apiKey === '') {
             Flash::set('error', 'Preencha empresa, nome, identificador da Evolution, URL válida e API Key.');
             $this->redirect('/instances');
         }
 
-        if (!in_array($status, ['connected', 'disconnected', 'pending'], true)) {
-            $status = 'disconnected';
-        }
 
         $limit = (new SubscriptionService())->ensureCanCreate($tenantId, 'instances');
         if (empty($limit['ok'])) {
@@ -273,14 +323,14 @@ final class InstanceController
             $pdo = Database::connection();
 
             $duplicate = $pdo->prepare(
-                'SELECT id, name
+                'SELECT id, name, tenant_id
                  FROM evolution_instances
-                 WHERE tenant_id = :tenant_id
+                 WHERE LOWER(base_url) = LOWER(:base_url)
                    AND LOWER(instance_name) = LOWER(:instance_name)
                  LIMIT 1'
             );
             $duplicate->execute([
-                'tenant_id' => $tenantId,
+                'base_url' => $baseUrl,
                 'instance_name' => $instanceName,
             ]);
             $existingInstance = $duplicate->fetch(PDO::FETCH_ASSOC);
@@ -288,8 +338,8 @@ final class InstanceController
             if ($existingInstance) {
                 Flash::set(
                     'error',
-                    'A instância "' . $instanceName . '" já está cadastrada para esta empresa como "' .
-                    $existingInstance['name'] . '". Use outro nome na Evolution ou atualize a instância existente.'
+                    'A instância "' . $instanceName . '" já está cadastrada nesta mesma Evolution como "' .
+                    $existingInstance['name'] . '". Atualize o cadastro existente em vez de criar outro.'
                 );
                 $this->redirect('/instances');
             }
@@ -369,17 +419,12 @@ final class InstanceController
         $instanceName = trim((string) ($_POST['instance_name'] ?? ''));
         $baseUrl = rtrim(trim((string) ($_POST['base_url'] ?? '')), '/');
         $apiKey = trim((string) ($_POST['api_key'] ?? ''));
-        $status = (string) ($_POST['status'] ?? 'disconnected');
         $isDefault = isset($_POST['is_default']);
 
         if ($instanceId < 1 || $name === '' || $instanceName === '' || !filter_var($baseUrl, FILTER_VALIDATE_URL)) {
             Flash::set('error', 'Informe nome interno, nome na Evolution e URL válida.');
             $this->redirect('/instances');
         }
-        if (!in_array($status, ['connected', 'disconnected', 'pending'], true)) {
-            $status = 'disconnected';
-        }
-
         $pdo = Database::connection();
         try {
             $source = $this->findInstance($pdo, $instanceId);
@@ -389,18 +434,18 @@ final class InstanceController
 
             $duplicate = $pdo->prepare(
                 'SELECT id FROM evolution_instances
-                 WHERE tenant_id = :tenant_id
+                 WHERE LOWER(base_url) = LOWER(:base_url)
                    AND LOWER(instance_name) = LOWER(:instance_name)
                    AND id <> :id
                  LIMIT 1'
             );
             $duplicate->execute([
-                'tenant_id' => (int) $source['tenant_id'],
+                'base_url' => $baseUrl,
                 'instance_name' => $instanceName,
                 'id' => $instanceId,
             ]);
             if ($duplicate->fetchColumn()) {
-                throw new \RuntimeException('Já existe outra instância com esse nome na mesma empresa.');
+                throw new \RuntimeException('Já existe outro cadastro apontando para esta mesma instância da Evolution.');
             }
 
             $pdo->beginTransaction();
@@ -413,13 +458,16 @@ final class InstanceController
                     SET name = :name,
                         instance_name = :instance_name,
                         base_url = :base_url,
-                        status = :status,
+                        status = "pending",
+                        connection_state = NULL,
+                        connection_reason = NULL,
+                        last_status_check_at = NULL,
+                        connection_updated_at = NOW(),
                         is_default = :is_default';
             $params = [
                 'name' => $name,
                 'instance_name' => $instanceName,
                 'base_url' => $baseUrl,
-                'status' => $status,
                 'is_default' => $isDefault ? 1 : 0,
                 'id' => $instanceId,
             ];

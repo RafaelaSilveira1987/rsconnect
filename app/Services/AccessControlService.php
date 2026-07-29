@@ -11,7 +11,7 @@ use Throwable;
 
 final class AccessControlService
 {
-    public const VERSION = '36.6.36-message-governance-evolution';
+    public const VERSION = '36.6.38-evolution-live-status-source';
 
     public function statusForTenant(int $tenantId): array
     {

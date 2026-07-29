@@ -49,7 +49,7 @@ $used = (int) ($channelUsage['instances'] ?? count($instances));
                 }
             }
             ?>
-            <article class="channel-card" data-instance-status-card data-instance-id="<?= (int) $instance['id'] ?>">
+            <article class="channel-card" data-instance-status-card data-status-endpoint="<?= View::e(Router::url('/instances/status-feed')) ?>" data-instance-id="<?= (int) $instance['id'] ?>">
                 <div class="channel-card-head">
                     <div class="channel-identity">
                         <span class="channel-icon" aria-hidden="true">WA</span>

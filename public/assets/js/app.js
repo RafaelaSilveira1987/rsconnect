@@ -1272,7 +1272,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (instanceForm) {
     const field = (name) => instanceForm.querySelector(`[data-instance-field="${name}"]`);
     const reset = () => { instanceForm.reset(); instanceForm.action = `${window.location.origin}/instances`; field('id').value='0'; field('base_url').value=field('base_url').defaultValue || ''; field('api_key').required=true; instanceDrawer.querySelector('[data-instance-drawer-eyebrow]').textContent='Nova conexão'; instanceDrawer.querySelector('[data-instance-drawer-title]').textContent='Configurar WhatsApp'; instanceDrawer.querySelector('[data-instance-drawer-description]').textContent='Cadastre a conexão preparada na Evolution API.'; instanceDrawer.querySelector('[data-instance-api-hint]').textContent='Obrigatória no primeiro cadastro.'; instanceDrawer.querySelector('[data-instance-submit]').textContent='Salvar conexão'; instanceDrawer.querySelector('[data-instance-tenant-field]').hidden=false; field('tenant_id').required=true; };
-    document.querySelectorAll('[data-instance-open]').forEach((button)=>button.addEventListener('click',()=>{ if(button.dataset.instanceOpen==='edit'){ instanceForm.reset(); instanceForm.action=`${window.location.origin}/instances/update`; field('id').value=button.dataset.id||'0'; field('name').value=button.dataset.name||''; field('instance_name').value=button.dataset.instanceName||''; field('base_url').value=button.dataset.baseUrl||''; field('status').value=button.dataset.status||'disconnected'; field('is_default').checked=button.dataset.isDefault==='1'; field('api_key').value=''; field('api_key').required=false; instanceDrawer.querySelector('[data-instance-tenant-field]').hidden=true; field('tenant_id').required=false; instanceDrawer.querySelector('[data-instance-drawer-eyebrow]').textContent='Editar conexão'; instanceDrawer.querySelector('[data-instance-drawer-title]').textContent=button.dataset.name||'Atualizar conexão'; instanceDrawer.querySelector('[data-instance-drawer-description]').textContent='Atualize o cadastro sem perder os vínculos existentes.'; instanceDrawer.querySelector('[data-instance-api-hint]').textContent='Deixe em branco para manter a chave atual.'; instanceDrawer.querySelector('[data-instance-submit]').textContent='Salvar alterações'; } else reset(); }));
+    document.querySelectorAll('[data-instance-open]').forEach((button)=>button.addEventListener('click',()=>{ if(button.dataset.instanceOpen==='edit'){ instanceForm.reset(); instanceForm.action=`${window.location.origin}/instances/update`; field('id').value=button.dataset.id||'0'; field('name').value=button.dataset.name||''; field('instance_name').value=button.dataset.instanceName||''; field('base_url').value=button.dataset.baseUrl||''; field('is_default').checked=button.dataset.isDefault==='1'; field('api_key').value=''; field('api_key').required=false; instanceDrawer.querySelector('[data-instance-tenant-field]').hidden=true; field('tenant_id').required=false; instanceDrawer.querySelector('[data-instance-drawer-eyebrow]').textContent='Editar conexão'; instanceDrawer.querySelector('[data-instance-drawer-title]').textContent=button.dataset.name||'Atualizar conexão'; instanceDrawer.querySelector('[data-instance-drawer-description]').textContent='Atualize o cadastro sem perder os vínculos existentes.'; instanceDrawer.querySelector('[data-instance-api-hint]').textContent='Deixe em branco para manter a chave atual.'; instanceDrawer.querySelector('[data-instance-submit]').textContent='Salvar alterações'; } else reset(); }));
     reset();
   }
   document.querySelectorAll('[data-instance-delete]').forEach((button)=>button.addEventListener('click',()=>{ const form=document.querySelector('[data-instance-delete-form]'); if(!form)return; const id=form.querySelector('[data-instance-delete-field="id"]'); const replacement=form.querySelector('[data-instance-delete-field="replacement"]'); const confirmation=form.querySelector('[data-instance-delete-field="confirmation"]'); const name=document.querySelector('[data-instance-delete-name]'); const hint=document.querySelector('[data-instance-delete-hint]'); if(id)id.value=button.dataset.id||''; if(name)name.textContent=button.dataset.name||'Conexão'; if(confirmation){confirmation.value='';confirmation.placeholder=`EXCLUIR ${button.dataset.instanceName||''}`;} if(hint)hint.innerHTML=`Digite exatamente: <strong>EXCLUIR ${button.dataset.instanceName||''}</strong>`; Array.from(replacement?.options||[]).forEach((option,index)=>{if(index===0)return; const visible=option.dataset.tenantId===button.dataset.tenantId && option.value!==button.dataset.id; option.hidden=!visible; option.disabled=!visible;}); if(replacement)replacement.value=''; }));
@@ -2167,7 +2167,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 /* =========================================================
-   36.6.36 — Evolution: status refletido na tela por webhook + polling curto
+   36.6.38 — Evolution: status exclusivamente em tempo real
    ========================================================= */
 (function () {
   const cards = Array.from(document.querySelectorAll('[data-instance-status-card]'));
@@ -2175,6 +2175,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   let running = false;
   let timer = 0;
+  const statusEndpoint = cards[0].dataset.statusEndpoint || '/instances/status-feed';
 
   function classForStatus(status) {
     if (status === 'connected') return 'connected';
@@ -2239,7 +2240,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (running || document.hidden) return;
     running = true;
     try {
-      const response = await fetch('/instances/status-feed', {
+      const response = await fetch(statusEndpoint, {
         credentials: 'same-origin',
         cache: 'no-store',
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }

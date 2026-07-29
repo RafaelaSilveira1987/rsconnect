@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.6.38', 'title' => 'Status Evolution confiável', 'summary' => 'Corrige parâmetros PDO repetidos que impediam o polling e o webhook de salvar o estado real da conexão, registra falhas e usa endpoint compatível com a URL base da aplicação.'],
             ['version' => '36.6.36', 'title' => 'Governança de mensagens e Evolution em tempo real', 'summary' => 'Identifica o atendente nas respostas humanas, aplica retenção configurável e acompanha QR/conexão da Evolution por webhook com reconciliação automática.'],
             ['version' => '36.6.35', 'title' => 'Prompt Studio', 'summary' => 'Cria prompts guiados, valida conflitos operacionais e preserva versões restauráveis por assistente.'],
             ['version' => '36.6.34.2', 'title' => 'Agenda interna no onboarding', 'summary' => 'Torna explícita a escolha entre Agenda interna, Agenda inteligente homologada pela RS e operação sem agenda, sem expor n8n ou Google Calendar ao cliente.'],
