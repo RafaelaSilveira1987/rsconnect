@@ -258,7 +258,7 @@ $requestInsight = static function (array $request): string {
 
 <details class="calendar-settings-disclosure professional-calendar-disclosure" id="agenda-profissionais" <?= !empty($professionalCalendarSettings['enabled']) ? 'open' : '' ?>>
     <summary>
-        <span><span class="eyebrow">Equipe</span><strong>Agenda por profissional</strong><small>Horários individuais, calendário e bloqueio de conflitos por usuário.</small></span>
+        <span><span class="eyebrow">Equipe</span><strong>Agenda por profissional</strong><small>Horários individuais, calendário e proteção contra conflitos do profissional e do cliente.</small></span>
         <span class="calendar-settings-chevron" aria-hidden="true">⌄</span>
     </summary>
 
@@ -274,8 +274,10 @@ $requestInsight = static function (array $request): string {
                 <label class="switch-card"><input type="checkbox" name="professional_calendar_enabled" value="1" <?= !empty($professionalCalendarSettings['enabled']) ? 'checked' : '' ?>><span><strong>Usar agenda por profissional</strong><small>Cada usuário pode ter seus próprios dias, horários e calendário.</small></span></label>
                 <label class="switch-card"><input type="checkbox" name="professional_calendar_require_owner" value="1" <?= !array_key_exists('require_owner', $professionalCalendarSettings) || !empty($professionalCalendarSettings['require_owner']) ? 'checked' : '' ?>><span><strong>Exigir profissional no agendamento</strong><small>Impede consultar ou confirmar um horário sem selecionar quem realizará o atendimento.</small></span></label>
                 <label class="switch-card"><input type="checkbox" name="professional_calendar_auto_from_conversation" value="1" <?= !empty($professionalCalendarSettings['auto_from_conversation']) ? 'checked' : '' ?>><span><strong>Usar responsável da conversa automaticamente</strong><small>Opcional e desativado por padrão. Quando desligado, o profissional é escolhido manualmente na agenda.</small></span></label>
+                <input type="hidden" name="professional_calendar_prevent_contact_overlap" value="0">
+                <label class="switch-card"><input type="checkbox" name="professional_calendar_prevent_contact_overlap" value="1" <?= !array_key_exists('prevent_contact_overlap', $professionalCalendarSettings) || !empty($professionalCalendarSettings['prevent_contact_overlap']) ? 'checked' : '' ?>><span><strong>Impedir dois horários para o mesmo cliente</strong><small>Bloqueia agendamentos sobrepostos do mesmo contato, mesmo quando os profissionais são diferentes.</small></span></label>
             </div>
-            <div class="message-info"><strong>Nenhuma atribuição automática é obrigatória</strong><span>A conversa pode continuar sendo assumida manualmente. Esta terceira opção apenas reaproveita o responsável da conversa quando a IA cria um pré-agendamento.</span></div>
+            <div class="message-info"><strong>Nenhuma atribuição automática é obrigatória</strong><span>A conversa pode continuar sendo assumida manualmente. A atribuição automática é independente do bloqueio de conflito do cliente.</span></div>
             <div><button class="btn btn-primary" type="submit">Salvar funcionamento</button></div>
         </form>
     </section>

@@ -105,6 +105,47 @@ final class PreSchedulingService
         $this->markConversationIntent($pdo, $tenantId, $conversationId, $intent);
 
         if ($existing !== null) {
+            if ($this->hasFullPreference($intent)) {
+                $professionalService = new ProfessionalCalendarService();
+                $professionalSettings = $professionalService->tenantSettings($tenantId);
+                if (!empty($professionalSettings['enabled'])
+                    && !empty($professionalSettings['prevent_contact_overlap'])) {
+                    $preScheduleSettings = $this->settings($tenantId);
+                    $requestedPeriod = $this->periodFromIntent(
+                        $intent,
+                        (int) ($preScheduleSettings['default_duration_minutes'] ?? 50)
+                    );
+                    $contactConflict = $professionalService->contactConflict(
+                        $tenantId,
+                        $contactId,
+                        (string) $requestedPeriod['starts_at'],
+                        (string) $requestedPeriod['ends_at'],
+                        (int) ($existing['id'] ?? 0)
+                    );
+                    if ($contactConflict) {
+                        $blockedMessage = $professionalService->contactConflictCustomerMessage($contactConflict);
+                        $send = $this->sendAgendaGateMessage(
+                            $pdo,
+                            $instance,
+                            $conversationId,
+                            $contactId,
+                            $blockedMessage,
+                            'contact_schedule_conflict',
+                            $incomingMessageId
+                        );
+                        $result['blocked'] = true;
+                        $result['blocked_reason'] = 'contact_schedule_conflict';
+                        $result['blocked_message'] = $blockedMessage;
+                        $result['blocked_message_sent'] = (bool) ($send['ok'] ?? false);
+                        $result['blocked_message_error'] = $send['error'] ?? null;
+                        $result['skip_ai'] = true;
+                        $result['terminal_handled'] = true;
+                        $result['availability_request_needed'] = false;
+                        return $result;
+                    }
+                }
+            }
+
             $transition = [
                 'ok' => true,
                 'changed' => false,
@@ -205,6 +246,42 @@ final class PreSchedulingService
         $settings = $this->settings($tenantId);
         $contact = $this->findContact($pdo, $tenantId, $contactId);
         $period = $this->periodFromIntent($intent, (int) ($settings['default_duration_minutes'] ?? 50));
+
+        if ($this->hasFullPreference($intent)) {
+            $professionalService = new ProfessionalCalendarService();
+            $professionalSettings = $professionalService->tenantSettings($tenantId);
+            if (!empty($professionalSettings['enabled'])
+                && !empty($professionalSettings['prevent_contact_overlap'])) {
+                $contactConflict = $professionalService->contactConflict(
+                    $tenantId,
+                    $contactId,
+                    (string) $period['starts_at'],
+                    (string) $period['ends_at']
+                );
+                if ($contactConflict) {
+                    $blockedMessage = $professionalService->contactConflictCustomerMessage($contactConflict);
+                    $send = $this->sendAgendaGateMessage(
+                        $pdo,
+                        $instance,
+                        $conversationId,
+                        $contactId,
+                        $blockedMessage,
+                        'contact_schedule_conflict',
+                        $incomingMessageId
+                    );
+                    $result['blocked'] = true;
+                    $result['blocked_reason'] = 'contact_schedule_conflict';
+                    $result['blocked_message'] = $blockedMessage;
+                    $result['blocked_message_sent'] = (bool) ($send['ok'] ?? false);
+                    $result['blocked_message_error'] = $send['error'] ?? null;
+                    $result['skip_ai'] = true;
+                    $result['terminal_handled'] = true;
+                    $result['availability_request_needed'] = false;
+                    return $result;
+                }
+            }
+        }
+
         $titleName = trim((string) ($contact['name'] ?? '')) ?: trim((string) ($contact['phone'] ?? 'Paciente'));
         $title = 'Pré-agendamento - ' . mb_substr($titleName, 0, 90);
         $description = $this->buildDescription($content, $intent, $flowContext);

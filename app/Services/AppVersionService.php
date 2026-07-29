@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.8.0 — Agenda opcional por profissional';
-    public const REQUIRED_MIGRATION = '064_professional_conversation_assignment_compat.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.8.1 — Conflito de cliente na agenda';
+    public const REQUIRED_MIGRATION = '066_contact_schedule_overlap_guard_compat.sql';
 
     private PDO $pdo;
 
@@ -104,7 +104,7 @@ final class AppVersionService
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 064, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 066, conforme o pacote implantado.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')
@@ -164,14 +164,15 @@ final class AppVersionService
 
         $professionalCalendarReady = $this->columnExists('tenants', 'professional_calendar_enabled')
             && $this->columnExists('tenants', 'professional_calendar_auto_from_conversation')
+            && $this->columnExists('tenants', 'professional_calendar_prevent_contact_overlap')
             && $this->tableExists('user_calendar_profiles');
         $checks[] = $this->check(
             'Agenda por profissional',
             $professionalCalendarReady ? 'ok' : 'blocked',
             $professionalCalendarReady
-                ? 'Horários individuais, calendário por usuário e conflitos restritos ao profissional estão disponíveis.'
+                ? 'Horários individuais, calendário por usuário e bloqueio opcional de sobreposição do mesmo cliente estão disponíveis.'
                 : 'A estrutura opcional de agenda individual ainda não foi aplicada.',
-            'Executar database/migrations/065_professional_calendar_profiles_compat.sql.'
+            'Executar database/migrations/065_professional_calendar_profiles_compat.sql e 066_contact_schedule_overlap_guard_compat.sql.'
         );
 
         $calendarOnboardingReady = $this->columnExists('tenant_onboarding_settings', 'calendar_mode')

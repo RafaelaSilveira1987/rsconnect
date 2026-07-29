@@ -242,6 +242,18 @@ final class CalendarController
         $professionalCalendarService = new ProfessionalCalendarService();
         $professionalCalendarSettings = $professionalCalendarService->tenantSettings($tenantId);
         if (!empty($professionalCalendarSettings['enabled'])) {
+            if (!empty($professionalCalendarSettings['prevent_contact_overlap']) && $contactId > 0) {
+                $contactConflict = $professionalCalendarService->contactConflict(
+                    $tenantId,
+                    $contactId,
+                    $normalized['starts_at'],
+                    $normalized['ends_at']
+                );
+                if ($contactConflict) {
+                    Flash::set('error', $professionalCalendarService->contactConflictMessage($contactConflict));
+                    $this->redirect('/calendar?tenant_id=' . $tenantId);
+                }
+            }
             if (!empty($professionalCalendarSettings['require_owner']) && $ownerUserId < 1) {
                 Flash::set('error', 'Selecione o profissional responsável pelo agendamento.');
                 $this->redirect('/calendar?tenant_id=' . $tenantId);
@@ -464,6 +476,21 @@ final class CalendarController
         $professionalCalendarService = new ProfessionalCalendarService();
         $professionalCalendarSettings = $professionalCalendarService->tenantSettings($tenantId);
         if ($status === 'confirmed' && !empty($professionalCalendarSettings['enabled'])) {
+            if (!empty($professionalCalendarSettings['prevent_contact_overlap'])
+                && (int) ($appointmentBefore['contact_id'] ?? 0) > 0) {
+                $contactConflict = $professionalCalendarService->contactConflict(
+                    $tenantId,
+                    (int) $appointmentBefore['contact_id'],
+                    (string) ($appointmentBefore['starts_at'] ?? ''),
+                    (string) ($appointmentBefore['ends_at'] ?? ''),
+                    $appointmentId
+                );
+                if ($contactConflict) {
+                    Flash::set('error', $professionalCalendarService->contactConflictMessage($contactConflict));
+                    $this->redirect('/calendar?tenant_id=' . $tenantId);
+                }
+            }
+
             $ownerUserId = (int) ($appointmentBefore['owner_user_id'] ?? 0);
             if (!empty($professionalCalendarSettings['require_owner']) && $ownerUserId < 1) {
                 Flash::set('error', 'Selecione o profissional responsável antes de confirmar o agendamento.');

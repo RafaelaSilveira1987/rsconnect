@@ -24,16 +24,21 @@ final class ProfessionalCalendarService
             'enabled' => false,
             'require_owner' => true,
             'auto_from_conversation' => false,
+            'prevent_contact_overlap' => true,
         ];
         if ($tenantId < 1 || !$this->hasColumn('tenants', 'professional_calendar_enabled')) {
             return $defaults;
         }
 
         try {
+            $contactOverlapSelect = $this->hasColumn('tenants', 'professional_calendar_prevent_contact_overlap')
+                ? 'professional_calendar_prevent_contact_overlap'
+                : '1 AS professional_calendar_prevent_contact_overlap';
             $statement = Database::connection()->prepare(
                 'SELECT professional_calendar_enabled,
                         professional_calendar_require_owner,
-                        professional_calendar_auto_from_conversation
+                        professional_calendar_auto_from_conversation,
+                        ' . $contactOverlapSelect . '
                  FROM tenants WHERE id = :id LIMIT 1'
             );
             $statement->execute(['id' => $tenantId]);
@@ -42,6 +47,7 @@ final class ProfessionalCalendarService
                 'enabled' => (int) ($row['professional_calendar_enabled'] ?? 0) === 1,
                 'require_owner' => (int) ($row['professional_calendar_require_owner'] ?? 1) === 1,
                 'auto_from_conversation' => (int) ($row['professional_calendar_auto_from_conversation'] ?? 0) === 1,
+                'prevent_contact_overlap' => (int) ($row['professional_calendar_prevent_contact_overlap'] ?? 1) === 1,
             ];
         } catch (Throwable) {
             return $defaults;
@@ -57,27 +63,36 @@ final class ProfessionalCalendarService
         $enabled = !empty($data['professional_calendar_enabled']) ? 1 : 0;
         $requireOwner = !empty($data['professional_calendar_require_owner']) ? 1 : 0;
         $autoFromConversation = !empty($data['professional_calendar_auto_from_conversation']) ? 1 : 0;
+        $preventContactOverlap = !empty($data['professional_calendar_prevent_contact_overlap']) ? 1 : 0;
         if ($enabled !== 1) {
             $autoFromConversation = 0;
         }
 
-        Database::connection()->prepare(
-            'UPDATE tenants
-             SET professional_calendar_enabled = :enabled,
-                 professional_calendar_require_owner = :require_owner,
-                 professional_calendar_auto_from_conversation = :auto_from_conversation
-             WHERE id = :tenant_id'
-        )->execute([
+        $sets = [
+            'professional_calendar_enabled = :enabled',
+            'professional_calendar_require_owner = :require_owner',
+            'professional_calendar_auto_from_conversation = :auto_from_conversation',
+        ];
+        $params = [
             'enabled' => $enabled,
             'require_owner' => $requireOwner,
             'auto_from_conversation' => $autoFromConversation,
             'tenant_id' => $tenantId,
-        ]);
+        ];
+        if ($this->hasColumn('tenants', 'professional_calendar_prevent_contact_overlap')) {
+            $sets[] = 'professional_calendar_prevent_contact_overlap = :prevent_contact_overlap';
+            $params['prevent_contact_overlap'] = $preventContactOverlap;
+        }
+
+        Database::connection()->prepare(
+            'UPDATE tenants SET ' . implode(', ', $sets) . ' WHERE id = :tenant_id'
+        )->execute($params);
 
         Audit::log('calendar.professional_settings_updated', [
             'enabled' => $enabled,
             'require_owner' => $requireOwner,
             'auto_from_conversation' => $autoFromConversation,
+            'prevent_contact_overlap' => $preventContactOverlap,
         ], $tenantId);
     }
 
@@ -347,6 +362,93 @@ final class ProfessionalCalendarService
         } catch (Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Impede o mesmo contato de ocupar dois atendimentos sobrepostos,
+     * mesmo quando os profissionais são diferentes.
+     */
+    public function contactConflict(
+        int $tenantId,
+        int $contactId,
+        string $startsAt,
+        string $endsAt,
+        int $ignoreAppointmentId = 0
+    ): ?array {
+        if ($tenantId < 1 || $contactId < 1 || $startsAt === '' || $endsAt === '') {
+            return null;
+        }
+
+        try {
+            $sql = 'SELECT a.id, a.title, a.starts_at, a.ends_at, a.status, a.owner_user_id,
+                           u.name AS professional_name
+                    FROM calendar_appointments a
+                    LEFT JOIN users u ON u.id = a.owner_user_id AND u.tenant_id = a.tenant_id
+                    WHERE a.tenant_id = :tenant_id
+                      AND a.contact_id = :contact_id
+                      AND (
+                            a.status IN ("scheduled", "confirmed")
+                            OR (
+                                a.status IN ("pre_scheduled", "awaiting_approval")
+                                AND (
+                                    COALESCE(a.pre_schedule_source, "") = "manual"
+                                    OR (
+                                        COALESCE(a.preferred_day_text, "") <> ""
+                                        AND COALESCE(a.preferred_time_text, "") <> ""
+                                    )
+                                    OR COALESCE(a.chosen_availability_slot_id, 0) > 0
+                                    OR COALESCE(a.availability_status, "") IN ("slot_selected", "validated")
+                                )
+                            )
+                      )
+                      AND a.starts_at < :ends_at
+                      AND a.ends_at > :starts_at';
+            $params = [
+                'tenant_id' => $tenantId,
+                'contact_id' => $contactId,
+                'starts_at' => $startsAt,
+                'ends_at' => $endsAt,
+            ];
+            if ($ignoreAppointmentId > 0) {
+                $sql .= ' AND a.id <> :ignore_id';
+                $params['ignore_id'] = $ignoreAppointmentId;
+            }
+            $sql .= ' ORDER BY a.starts_at LIMIT 1';
+
+            $statement = Database::connection()->prepare($sql);
+            $statement->execute($params);
+            $row = $statement->fetch(PDO::FETCH_ASSOC);
+            return $row ?: null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    public function contactConflictMessage(array $conflict): string
+    {
+        $professional = trim((string) ($conflict['professional_name'] ?? ''));
+        $title = trim((string) ($conflict['title'] ?? 'outro atendimento')) ?: 'outro atendimento';
+        $startsAt = trim((string) ($conflict['starts_at'] ?? ''));
+
+        $message = 'Este cliente já possui “' . $title . '”';
+        if ($professional !== '') {
+            $message .= ' com ' . $professional;
+        }
+        if ($startsAt !== '' && strtotime($startsAt) !== false) {
+            $message .= ' em ' . date('d/m/Y H:i', strtotime($startsAt));
+        }
+
+        return $message . '. Escolha outro horário.';
+    }
+
+    public function contactConflictCustomerMessage(array $conflict): string
+    {
+        $startsAt = trim((string) ($conflict['starts_at'] ?? ''));
+        $when = $startsAt !== '' && strtotime($startsAt) !== false
+            ? ' em ' . date('d/m/Y \à\s H:i', strtotime($startsAt))
+            : ' nesse horário';
+
+        return 'Você já possui um atendimento marcado' . $when . '. Envie outra opção de dia ou horário, por favor.';
     }
 
     public function userBelongsToTenant(int $tenantId, int $userId): bool

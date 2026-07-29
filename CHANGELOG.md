@@ -1,3 +1,15 @@
+# RS Connect v36.8.1 — Conflito do cliente na agenda
+
+- impede que o mesmo contato tenha dois atendimentos sobrepostos, mesmo com profissionais diferentes;
+- mantém profissionais diferentes disponíveis no mesmo horário para clientes diferentes;
+- adiciona configuração por empresa, ativada por padrão;
+- valida criação manual, pré-agendamento, confirmação, troca de profissional e escolha de horário;
+- bloqueia conflitos também em pré-agendamentos iniciados pela conversa;
+- remove da Agenda interna sugestões que já estejam ocupadas pelo próprio cliente;
+- considera pré-agendado, aguardando aprovação, agendado e confirmado como horários ocupados;
+- adiciona a migration compatível `066_contact_schedule_overlap_guard_compat.sql`;
+- adiciona diagnóstico de duplicidades antigas e teste de fumaça.
+
 # RS Connect v36.8.0 — Agenda opcional por profissional
 
 - adiciona ativação independente da agenda por profissional, desativada por padrão;
