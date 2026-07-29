@@ -87,6 +87,7 @@ return static function (Router $router): void {
     $router->get('/conversations/contact-lookup', [ConversationController::class, 'contactLookup'], ['auth', 'permission:conversations.view']);
     $router->post('/conversations/start', [ConversationController::class, 'start'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/send', [ConversationController::class, 'send'], ['auth', 'permission:conversations.manage', 'csrf']);
+    $router->post('/conversations/assignment', [ConversationController::class, 'assignProfessional'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/mode', [ConversationController::class, 'setMode'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/agent', [ConversationController::class, 'setAgent'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/status', [ConversationController::class, 'updateStatus'], ['auth', 'permission:conversations.manage', 'csrf']);

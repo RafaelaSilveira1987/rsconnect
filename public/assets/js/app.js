@@ -434,6 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const composerForm = document.querySelector('[data-chat-composer]');
   const composerInput = composerForm?.querySelector('textarea[name="message"]') || null;
   const composerButton = composerForm?.querySelector('button[type="submit"]') || null;
+  const ownershipBanner = document.querySelector('[data-ownership-banner]');
   const searchInput = document.querySelector('[data-conversation-search]');
   const conversationCount = document.querySelector('[data-conversation-count]');
   let searchTimer = null;
@@ -595,6 +596,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function applyOwnership(ownership) {
+    if (!ownership || typeof ownership !== 'object') return;
+    const locked = Boolean(ownership.locked_by_other);
+    if (composerInput) {
+      composerInput.disabled = locked;
+      composerInput.placeholder = locked ? 'Conversa em atendimento por outro profissional' : 'Digite uma mensagem...';
+    }
+    if (composerButton) composerButton.disabled = locked;
+    if (ownershipBanner && locked) {
+      ownershipBanner.classList.remove('is-available', 'is-mine');
+      ownershipBanner.classList.add('is-locked');
+      const name = ownership.assigned_user_name || 'Outro profissional';
+      const strong = ownershipBanner.querySelector('strong');
+      const text = ownershipBanner.querySelector('span');
+      if (strong) strong.textContent = `Atendimento em andamento com ${name}`;
+      if (text) text.textContent = 'Você pode acompanhar a conversa, mas não pode responder nem alterar o atendimento enquanto ela estiver aberta.';
+    }
+  }
+
   function modeText(mode) {
     return mode === 'human' ? 'Humano' : (mode === 'paused' ? 'IA pausada' : 'IA ativa');
   }
@@ -643,7 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="conversation-preview" data-conversation-preview>${escapeHtml(item.preview || 'Sem mensagens')}</span>
           <span class="conversation-meta-row">
             <span class="mini-badge mode-${modeClass}">${escapeHtml(modeLabel)}</span>
-            <small>${escapeHtml(item.tenant_name || item.instance_label || '')}</small>
+            <small>${escapeHtml(item.assigned_user_name ? `Responsável: ${item.assigned_user_name}` : (item.tenant_name || item.instance_label || ''))}</small>
             <b class="unread-count" data-unread-count${unreadHidden}>${unread}</b>
           </span>
         </span>
@@ -756,6 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
       updateConversationList(payload.conversations || []);
+      applyOwnership(payload.ownership || null);
       const added = appendMessages(payload.messages || []);
       unreadTotal = Number(payload.unread_total || 0);
       pulseTitle(unreadTotal);

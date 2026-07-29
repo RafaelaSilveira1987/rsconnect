@@ -167,7 +167,7 @@ $contactsBaseUrl = Router::url('/contacts' . ($queryBase ? '?' . http_build_quer
                             </div>
                         </td>
                         <td><span class="badge badge-<?= View::e($contact['status']) ?>"><?= View::e($statusLabels[$contact['status']] ?? $contact['status']) ?></span><small><?= View::e($groupLabels[$contact['contact_group'] ?? 'unclassified'] ?? 'Não identificado') ?></small></td>
-                        <td><strong><?= (int) $contact['conversations_count'] ?> conversas</strong><small><?= (int) $contact['leads_count'] ?> negócios<?= Auth::isSuperAdmin() ? ' · ' . View::e($contact['tenant_name']) : '' ?></small></td>
+                        <td><strong><?= (int) $contact['conversations_count'] ?> conversas</strong><small><?= (int) $contact['leads_count'] ?> negócios<?= !empty($contact['preferred_user_name']) ? ' · Preferência: ' . View::e($contact['preferred_user_name']) : '' ?><?= Auth::isSuperAdmin() ? ' · ' . View::e($contact['tenant_name']) : '' ?></small></td>
                         <td><span><?= View::e($formatDate($contact['last_interaction_at'])) ?></span><?php if (is_array($tags) && $tags): ?><small><?= View::e(implode(' · ', array_slice($tags, 0, 3))) ?></small><?php endif; ?></td>
                         <td><a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/contacts?' . http_build_query($params))) ?>">Ver</a></td>
                     </tr>
@@ -211,6 +211,16 @@ $contactsBaseUrl = Router::url('/contacts' . ($queryBase ? '?' . http_build_quer
                         <label class="field"><span>Grupo de atendimento</span><select name="contact_group" <?= !$canManage ? 'disabled' : '' ?>>
                             <?php foreach ($groupLabels as $value => $label): ?><option value="<?= View::e($value) ?>" <?= ($selected['contact_group'] ?? 'unclassified') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?>
                         </select></label>
+                        <?php if (!empty($professionalAssignmentSettings['enabled'])): ?>
+                            <label class="field"><span>Profissional preferido</span><select name="preferred_user_id" <?= !$canManage ? 'disabled' : '' ?>>
+                                <option value="">Sem preferência</option>
+                                <?php foreach ($teamMembers as $member): ?>
+                                    <option value="<?= (int) $member['id'] ?>" <?= (int) ($selected['preferred_user_id'] ?? 0) === (int) $member['id'] ? 'selected' : '' ?>><?= View::e($member['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select><small><?= !empty($professionalAssignmentSettings['auto_assign_enabled']) ? 'Novas conversas poderão ser atribuídas automaticamente a esse profissional.' : 'A preferência fica salva, mas a atribuição automática está desativada.' ?></small></label>
+                        <?php else: ?>
+                            <input type="hidden" name="preferred_user_id" value="<?= (int) ($selected['preferred_user_id'] ?? 0) ?>">
+                        <?php endif; ?>
                         <label class="field contact-drawer-grid-full"><span>Tags</span><input name="tags" value="<?= View::e(is_array($selectedTags) ? implode(', ', $selectedTags) : '') ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
                     </div>
                 </section>

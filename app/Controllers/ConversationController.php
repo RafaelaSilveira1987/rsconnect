@@ -17,6 +17,7 @@ use App\Services\AgentRoutingService;
 use App\Services\AgentOperatingPolicyService;
 use App\Services\AiModelService;
 use App\Services\ConversationFlowService;
+use App\Services\ConversationOwnershipService;
 use App\Services\MessageGovernanceService;
 use App\Services\EvolutionService;
 use PDO;
@@ -84,13 +85,15 @@ final class ConversationController
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
         $statement = $pdo->prepare(
             'SELECT c.*, ct.name AS contact_name, ct.phone, ct.email, ct.company, ct.notes, ct.tags_json, ct.avatar_url,
-                    ct.status AS contact_status, i.name AS instance_label, i.instance_name,
+                    ct.status AS contact_status, ct.preferred_user_id, pref.name AS preferred_user_name,
+                    i.name AS instance_label, i.instance_name,
                     t.name AS tenant_name, u.name AS assigned_user_name
              FROM conversations c
              INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
              INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = c.tenant_id
              INNER JOIN tenants t ON t.id = c.tenant_id
              LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
+             LEFT JOIN users pref ON pref.id = ct.preferred_user_id AND pref.tenant_id = ct.tenant_id
              ' . $where . '
              ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
              LIMIT 100'
@@ -109,6 +112,8 @@ final class ConversationController
         $conversationAgents = [];
         $selectedRuleSnapshot = null;
         $selectedAfterHoursPending = null;
+        $professionalAssignmentSettings = ['enabled' => false, 'lock_enabled' => true, 'auto_assign_enabled' => false];
+        $ownershipSnapshot = ['enabled' => false, 'can_interact' => true, 'locked_by_other' => false];
 
         if ($selectedId > 0) {
             $selected = $this->findConversation($selectedId, $tenantId > 0 ? $tenantId : null);
@@ -159,6 +164,10 @@ final class ConversationController
                 );
                 $teamStatement->execute(['tenant_id' => $selected['tenant_id']]);
                 $team = $teamStatement->fetchAll(PDO::FETCH_ASSOC);
+
+                $ownershipService = new ConversationOwnershipService();
+                $professionalAssignmentSettings = $ownershipService->settingsForTenant($pdo, (int) $selected['tenant_id']);
+                $ownershipSnapshot = $ownershipService->snapshot($pdo, $selected);
 
                 try {
                     $conversationAgents = (new AgentRoutingService())->agentsForInstance(
@@ -251,6 +260,8 @@ final class ConversationController
             'conversationAgents' => $conversationAgents,
             'selectedRuleSnapshot' => $selectedRuleSnapshot,
             'selectedAfterHoursPending' => $selectedAfterHoursPending,
+            'professionalAssignmentSettings' => $professionalAssignmentSettings,
+            'ownershipSnapshot' => $ownershipSnapshot,
             'instances' => $instances,
             'tenants' => $tenants,
             'filters' => $filters,
@@ -280,6 +291,35 @@ final class ConversationController
 
         try {
             $pdo = Database::connection();
+            $ownershipService = new ConversationOwnershipService();
+            $ownershipSettings = $ownershipService->settingsForTenant($pdo, (int) $instance['tenant_id']);
+
+            // Antes de enviar externamente, respeita um atendimento já aberto para este número.
+            // A atribuição automática do profissional preferido não participa deste fluxo.
+            if (!empty($ownershipSettings['enabled'])) {
+                $existingStatement = $pdo->prepare(
+                    'SELECT c.id, c.tenant_id, c.status, c.assigned_user_id,
+                            u.name AS assigned_user_name
+                     FROM conversations c
+                     LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
+                     WHERE c.tenant_id = :tenant_id
+                       AND c.evolution_instance_id = :instance_id
+                       AND c.remote_jid = :remote_jid
+                     LIMIT 1'
+                );
+                $existingStatement->execute([
+                    'tenant_id' => (int) $instance['tenant_id'],
+                    'instance_id' => (int) $instance['id'],
+                    'remote_jid' => $remoteJid,
+                ]);
+                $existingConversation = $existingStatement->fetch(PDO::FETCH_ASSOC);
+
+                if ($existingConversation) {
+                    $existingConversation = $ownershipService->reopenIfClosed($pdo, $existingConversation);
+                    $ownershipService->claimForHumanAction($pdo, $existingConversation);
+                }
+            }
+
             $preparedMessage = (new MessageGovernanceService())->prepareHumanMessage(
                 $pdo,
                 (int) $instance['tenant_id'],
@@ -316,6 +356,9 @@ final class ConversationController
             ]);
             $contactId = (int) $pdo->lastInsertId();
 
+            $assignmentUpdateSql = !empty($ownershipSettings['enabled'])
+                ? 'assigned_user_id = assigned_user_id,'
+                : 'assigned_user_id = VALUES(assigned_user_id),';
             $conversationStatement = $pdo->prepare(
                 'INSERT INTO conversations
                     (tenant_id, evolution_instance_id, contact_id, remote_jid, status,
@@ -328,7 +371,7 @@ final class ConversationController
                     contact_id = VALUES(contact_id),
                     status = "open",
                     attendance_mode = "human",
-                    assigned_user_id = VALUES(assigned_user_id),
+                    ' . $assignmentUpdateSql . '
                     last_message_at = VALUES(last_message_at),
                     last_message_preview = VALUES(last_message_preview)'
             );
@@ -337,11 +380,18 @@ final class ConversationController
                 'instance_id' => $instance['id'],
                 'contact_id' => $contactId,
                 'remote_jid' => $remoteJid,
-                'user_id' => Auth::id(),
+                'user_id' => !empty($ownershipSettings['enabled']) ? null : Auth::id(),
                 'sent_at' => $sentAt,
                 'preview' => mb_substr($message, 0, 255),
             ]);
             $conversationId = (int) $pdo->lastInsertId();
+
+            if (!empty($ownershipSettings['enabled']) && !Auth::isSuperAdmin()) {
+                $createdConversation = $this->findConversation($conversationId, (int) $instance['tenant_id']);
+                if ($createdConversation !== null) {
+                    $ownershipService->claimForHumanAction($pdo, $createdConversation);
+                }
+            }
 
             $messageStatement = $pdo->prepare(
                 'INSERT INTO conversation_messages
@@ -435,23 +485,39 @@ final class ConversationController
             // O clique humano precisa pausar a automação ANTES da chamada externa.
             // Assim, mesmo que a Evolution demore ou falhe, a IA/agenda não entra no meio do atendimento.
             $pdo = Database::connection();
+            $ownershipService = new ConversationOwnershipService();
+            $ownershipSettings = $ownershipService->settingsForTenant($pdo, (int) $conversation['tenant_id']);
+            $conversation = $ownershipService->reopenIfClosed($pdo, $conversation);
+            $conversation = $ownershipService->claimForHumanAction($pdo, $conversation);
             $preparedMessage = (new MessageGovernanceService())->prepareHumanMessage(
                 $pdo,
                 (int) $conversation['tenant_id'],
                 (int) Auth::id(),
                 $message
             );
-            $pdo->prepare(
-                'UPDATE conversations
-                 SET attendance_mode = "human",
-                     assigned_user_id = :user_id,
-                     status = IF(status = "closed", "open", status)
-                 WHERE id = :id AND tenant_id = :tenant_id'
-            )->execute([
-                'user_id' => Auth::id(),
-                'id' => $conversationId,
-                'tenant_id' => (int) $conversation['tenant_id'],
-            ]);
+            if (!empty($ownershipSettings['enabled'])) {
+                $pdo->prepare(
+                    'UPDATE conversations
+                     SET attendance_mode = "human",
+                         status = IF(status = "closed", "open", status)
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute([
+                    'id' => $conversationId,
+                    'tenant_id' => (int) $conversation['tenant_id'],
+                ]);
+            } else {
+                $pdo->prepare(
+                    'UPDATE conversations
+                     SET attendance_mode = "human",
+                         assigned_user_id = :user_id,
+                         status = IF(status = "closed", "open", status)
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute([
+                    'user_id' => Auth::id(),
+                    'id' => $conversationId,
+                    'tenant_id' => (int) $conversation['tenant_id'],
+                ]);
+            }
 
             $service = $this->serviceFor($conversation);
             $result = $service->sendText((string) $conversation['phone'], $preparedMessage['delivered']);
@@ -493,21 +559,37 @@ final class ConversationController
                 'sent_at' => $sentAt,
             ]);
 
-            $update = $pdo->prepare(
-                'UPDATE conversations
-                 SET last_message_at = :sent_at,
-                     last_message_preview = :preview,
-                     status = IF(status = "closed", "open", status),
-                     attendance_mode = "human",
-                     assigned_user_id = :user_id
-                 WHERE id = :id'
-            );
-            $update->execute([
-                'sent_at' => $sentAt,
-                'preview' => mb_substr($message, 0, 255),
-                'user_id' => Auth::id(),
-                'id' => $conversationId,
-            ]);
+            if (!empty($ownershipSettings['enabled'])) {
+                $update = $pdo->prepare(
+                    'UPDATE conversations
+                     SET last_message_at = :sent_at,
+                         last_message_preview = :preview,
+                         status = IF(status = "closed", "open", status),
+                         attendance_mode = "human"
+                     WHERE id = :id'
+                );
+                $update->execute([
+                    'sent_at' => $sentAt,
+                    'preview' => mb_substr($message, 0, 255),
+                    'id' => $conversationId,
+                ]);
+            } else {
+                $update = $pdo->prepare(
+                    'UPDATE conversations
+                     SET last_message_at = :sent_at,
+                         last_message_preview = :preview,
+                         status = IF(status = "closed", "open", status),
+                         attendance_mode = "human",
+                         assigned_user_id = :user_id
+                     WHERE id = :id'
+                );
+                $update->execute([
+                    'sent_at' => $sentAt,
+                    'preview' => mb_substr($message, 0, 255),
+                    'user_id' => Auth::id(),
+                    'id' => $conversationId,
+                ]);
+            }
 
             $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'message.sent', 'Mensagem enviada pelo painel.');
             $pdo->commit();
@@ -752,6 +834,44 @@ final class ConversationController
         $this->redirect($this->conversationReturnPath(false));
     }
 
+    public function assignProfessional(): void
+    {
+        $conversationId = (int) ($_POST['conversation_id'] ?? 0);
+        $action = trim((string) ($_POST['action'] ?? 'claim'));
+        $targetUserId = (int) ($_POST['assigned_user_id'] ?? 0) ?: null;
+        $returnTenantId = (int) ($_POST['tenant_id'] ?? 0);
+
+        try {
+            $pdo = Database::connection();
+            $result = (new ConversationOwnershipService())->changeAssignment(
+                $pdo,
+                $conversationId,
+                $targetUserId,
+                $action
+            );
+
+            $name = trim((string) ($result['assigned_user_name'] ?? ''));
+            $description = match ($action) {
+                'claim' => 'Atendimento assumido por ' . ($name !== '' ? $name : (Auth::user()['name'] ?? 'usuário')) . '.',
+                'release' => 'Conversa liberada para a equipe.',
+                'transfer' => 'Atendimento transferido para ' . ($name !== '' ? $name : 'outro profissional') . '.',
+                default => 'Responsável definido como ' . ($name !== '' ? $name : 'profissional selecionado') . '.',
+            };
+            $returnTenantId = (int) $result['tenant_id'];
+            $this->insertEvent($conversationId, $returnTenantId, 'ownership.' . $action, $description);
+            Audit::log('conversation.ownership_changed', $result, $returnTenantId);
+            Flash::set('success', $description);
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+        }
+
+        $query = ['conversation_id' => $conversationId];
+        if (Auth::isSuperAdmin() && $returnTenantId > 0) {
+            $query['tenant_id'] = $returnTenantId;
+        }
+        $this->redirect('/conversations?' . http_build_query($query));
+    }
+
     public function setMode(): void
     {
         $conversationId = (int) ($_POST['conversation_id'] ?? 0);
@@ -768,24 +888,63 @@ final class ConversationController
             $this->redirect('/conversations');
         }
 
-        $assignedUserId = $mode === 'human' ? Auth::id() : null;
-        $statement = Database::connection()->prepare(
-            'UPDATE conversations
-             SET attendance_mode = :mode,
-                 assigned_user_id = :assigned_user_id,
-                 status = IF(status = "closed", "open", status)
-             WHERE id = :id'
-        );
-        $statement->execute([
-            'mode' => $mode,
-            'assigned_user_id' => $assignedUserId,
-            'id' => $conversationId,
-        ]);
+        $pdo = Database::connection();
+        $ownershipService = new ConversationOwnershipService();
+        $ownershipSettings = $ownershipService->settingsForTenant($pdo, (int) $conversation['tenant_id']);
+
+        try {
+            $pdo->beginTransaction();
+            if (!empty($ownershipSettings['enabled'])) {
+                $ownershipService->assertMayInteract($pdo, $conversation);
+                $conversation = $ownershipService->reopenIfClosed($pdo, $conversation);
+
+                if ($mode === 'human') {
+                    $ownershipService->claimForHumanAction($pdo, $conversation);
+                    $pdo->prepare('UPDATE conversations SET attendance_mode = "human" WHERE id = :id AND tenant_id = :tenant_id')
+                        ->execute(['id' => $conversationId, 'tenant_id' => (int) $conversation['tenant_id']]);
+                } elseif ($mode === 'ai') {
+                    if ((int) ($conversation['assigned_user_id'] ?? 0) > 0) {
+                        $ownershipService->changeAssignment($pdo, $conversationId, null, 'release');
+                    }
+                    $pdo->prepare(
+                        'UPDATE conversations
+                         SET attendance_mode = "ai", status = IF(status = "closed", "open", status)
+                         WHERE id = :id AND tenant_id = :tenant_id'
+                    )->execute(['id' => $conversationId, 'tenant_id' => (int) $conversation['tenant_id']]);
+                } else {
+                    $pdo->prepare(
+                        'UPDATE conversations
+                         SET attendance_mode = "paused", status = IF(status = "closed", "open", status)
+                         WHERE id = :id AND tenant_id = :tenant_id'
+                    )->execute(['id' => $conversationId, 'tenant_id' => (int) $conversation['tenant_id']]);
+                }
+            } else {
+                $assignedUserId = $mode === 'human' ? Auth::id() : null;
+                $pdo->prepare(
+                    'UPDATE conversations
+                     SET attendance_mode = :mode,
+                         assigned_user_id = :assigned_user_id,
+                         status = IF(status = "closed", "open", status)
+                     WHERE id = :id'
+                )->execute([
+                    'mode' => $mode,
+                    'assigned_user_id' => $assignedUserId,
+                    'id' => $conversationId,
+                ]);
+            }
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            Flash::set('error', $exception->getMessage());
+            $this->redirect('/conversations?conversation_id=' . $conversationId);
+        }
 
         if ($mode === 'ai' && empty($conversation['ai_agent_id'])) {
             try {
                 (new AgentRoutingService())->resolve(
-                    Database::connection(),
+                    $pdo,
                     [
                         'id' => (int) $conversation['evolution_instance_id'],
                         'tenant_id' => (int) $conversation['tenant_id'],
@@ -800,7 +959,7 @@ final class ConversationController
         }
 
         $descriptions = [
-            'ai' => 'Atendimento devolvido para a IA.',
+            'ai' => 'Atendimento devolvido para a IA e liberado para a equipe.',
             'human' => 'Atendimento assumido por ' . (Auth::user()['name'] ?? 'usuário') . '.',
             'paused' => 'IA pausada nesta conversa.',
         ];
@@ -820,6 +979,7 @@ final class ConversationController
             Flash::set('error', 'Conversa não encontrada.');
             $this->redirect('/conversations');
         }
+        $this->requireConversationInteraction($conversation, $conversationId);
         if ($agentId < 1) {
             Flash::set('error', 'Escolha um assistente vinculado a este WhatsApp.');
             $this->redirect('/conversations?conversation_id=' . $conversationId);
@@ -868,10 +1028,33 @@ final class ConversationController
             $this->redirect('/conversations');
         }
 
-        Database::connection()->prepare('UPDATE conversations SET status = :status WHERE id = :id')
-            ->execute(['status' => $status, 'id' => $conversationId]);
+        $pdo = Database::connection();
+        $ownershipService = new ConversationOwnershipService();
+        try {
+            $pdo->beginTransaction();
+            $ownershipService->assertMayInteract($pdo, $conversation);
+            if ($status !== 'closed') {
+                $conversation = $ownershipService->reopenIfClosed($pdo, $conversation);
+            }
+            $pdo->prepare('UPDATE conversations SET status = :status WHERE id = :id AND tenant_id = :tenant_id')
+                ->execute([
+                    'status' => $status,
+                    'id' => $conversationId,
+                    'tenant_id' => (int) $conversation['tenant_id'],
+                ]);
+            if ($status === 'closed') {
+                $ownershipService->releaseWhenClosed($pdo, $conversationId, (int) $conversation['tenant_id']);
+            }
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            Flash::set('error', $exception->getMessage());
+            $this->redirect('/conversations?conversation_id=' . $conversationId);
+        }
 
-        $label = ['open' => 'aberta', 'pending' => 'marcada como pendente', 'closed' => 'encerrada'][$status];
+        $label = ['open' => 'aberta', 'pending' => 'marcada como pendente', 'closed' => 'encerrada e liberada'][$status];
         $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'status.' . $status, 'Conversa ' . $label . '.');
         Audit::log('conversation.status_changed', ['conversation_id' => $conversationId, 'status' => $status], (int) $conversation['tenant_id']);
 
@@ -887,6 +1070,7 @@ final class ConversationController
             Flash::set('error', 'Conversa não encontrada.');
             $this->redirect('/conversations');
         }
+        $this->requireConversationInteraction($conversation, $conversationId);
 
         $name = trim((string) ($_POST['name'] ?? ''));
         $email = trim((string) ($_POST['email'] ?? ''));
@@ -973,6 +1157,7 @@ final class ConversationController
             Flash::set('error', 'Conversa não encontrada.');
             $this->redirect('/conversations');
         }
+        $this->requireConversationInteraction($conversation, $conversationId);
 
         $agent = null;
         $modelService = null;
@@ -1036,6 +1221,7 @@ final class ConversationController
             Flash::set('error', 'Conversa não encontrada.');
             $this->redirect('/conversations');
         }
+        $this->requireConversationInteraction($conversation, $conversationId);
 
         $pdo = Database::connection();
         $message = $pdo->prepare(
@@ -1105,6 +1291,16 @@ final class ConversationController
         return $instance ?: null;
     }
 
+    private function requireConversationInteraction(array $conversation, int $conversationId): void
+    {
+        try {
+            (new ConversationOwnershipService())->assertMayInteract(Database::connection(), $conversation);
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+            $this->redirect('/conversations?conversation_id=' . $conversationId);
+        }
+    }
+
     private function findConversation(int $id, ?int $tenantScope = null): ?array
     {
         $pdo = Database::connection();
@@ -1138,7 +1334,7 @@ final class ConversationController
         $sql = 'SELECT c.*, ct.name AS contact_name, ct.phone, ct.email, ct.company, ct.notes,
                        ct.tags_json, ct.avatar_url, ct.status AS contact_status,
                        COALESCE(NULLIF(ct.contact_group, ""), "unclassified") AS contact_group,
-                       ct.id AS contact_id,
+                       ct.id AS contact_id, ct.preferred_user_id, pref.name AS preferred_user_name,
                        fs.stage AS flow_stage, fs.demand_status, fs.demand_summary,
                        fs.is_existing_patient, fs.last_intent,
                        i.name AS instance_label, i.instance_name, i.base_url, i.api_key_encrypted,
@@ -1149,6 +1345,7 @@ final class ConversationController
                 INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = c.tenant_id
                 INNER JOIN tenants t ON t.id = c.tenant_id
                 LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
+                LEFT JOIN users pref ON pref.id = ct.preferred_user_id AND pref.tenant_id = ct.tenant_id
                 LEFT JOIN conversation_flow_states fs ON fs.conversation_id = c.id AND fs.tenant_id = c.tenant_id
                 ' . $leadJoins . '
                 WHERE c.id = :id';
@@ -1554,6 +1751,8 @@ final class ConversationController
         $conversations = $this->conversationSummaries($pdo, $filters);
         $messages = [];
         $latestMessageId = $afterId;
+        $selected = null;
+        $selectedOwnership = null;
 
         if ($selectedId > 0) {
             $selected = $this->findConversation($selectedId, $tenantId > 0 ? $tenantId : null);
@@ -1572,6 +1771,7 @@ final class ConversationController
                     $latestMessageId = max($latestMessageId, (int) $message['id']);
                     $messages[] = $this->formatMessageForJson($message);
                 }
+                $selectedOwnership = (new ConversationOwnershipService())->snapshot($pdo, $selected);
             }
         }
 
@@ -1587,6 +1787,7 @@ final class ConversationController
             'latest_message_id' => $latestMessageId,
             'unread_total' => $unreadTotal,
             'has_new_messages' => count($messages) > 0,
+            'ownership' => $selectedOwnership,
             'conversations' => array_map(fn (array $conversation): array => $this->formatConversationForJson($conversation, $selectedId), $conversations),
             'messages' => $messages,
         ]);
@@ -1702,13 +1903,14 @@ final class ConversationController
 
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
         $statement = $pdo->prepare(
-            'SELECT c.id, c.status, c.attendance_mode, c.unread_count, c.last_message_at, c.last_message_preview,
+            'SELECT c.id, c.status, c.attendance_mode, c.assigned_user_id, c.unread_count, c.last_message_at, c.last_message_preview,
                     ct.name AS contact_name, ct.phone, ct.avatar_url, i.name AS instance_label, i.instance_name,
-                    t.name AS tenant_name
+                    t.name AS tenant_name, u.name AS assigned_user_name
              FROM conversations c
              INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
              INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = c.tenant_id
              INNER JOIN tenants t ON t.id = c.tenant_id
+             LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
              ' . $where . '
              ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
              LIMIT 100'
@@ -1733,6 +1935,8 @@ final class ConversationController
             'unread_count' => (int) ($conversation['unread_count'] ?? 0),
             'status' => (string) ($conversation['status'] ?? ''),
             'mode' => (string) ($conversation['attendance_mode'] ?? ''),
+            'assigned_user_id' => (int) ($conversation['assigned_user_id'] ?? 0),
+            'assigned_user_name' => (string) ($conversation['assigned_user_name'] ?? ''),
             'is_selected' => (int) $conversation['id'] === $selectedId,
         ];
     }

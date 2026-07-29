@@ -16,6 +16,7 @@ use App\Services\AutomationWebhookService;
 use App\Services\CrmAutoService;
 use App\Services\CalendarConversationService;
 use App\Services\ConversationFlowService;
+use App\Services\ConversationOwnershipService;
 use App\Services\EvolutionService;
 use App\Services\NotificationService;
 use App\Services\PreSchedulingService;
@@ -216,6 +217,28 @@ final class EvolutionWebhookController
 
             if (!$fromMe && $contactId > 0) {
                 $this->refreshContactAvatarIfMissing($pdo, $instance, $contactId, $phone);
+            }
+
+            // A preferência do cliente só atribui automaticamente quando a empresa
+            // habilitou explicitamente essa opção. Com a opção desligada, a conversa
+            // permanece disponível para alguém assumir manualmente.
+            if (!$fromMe && $inserted) {
+                try {
+                    (new ConversationOwnershipService())->autoAssignPreferred(
+                        $pdo,
+                        (int) $instance['tenant_id'],
+                        $conversationId,
+                        $contactId
+                    );
+                } catch (Throwable $exception) {
+                    $this->logWebhookFailure($exception, [
+                        'phase' => 'professional_auto_assignment',
+                        'event' => $event,
+                        'instance_id' => (int) ($instance['id'] ?? 0),
+                        'conversation_id' => $conversationId,
+                        'contact_id' => $contactId,
+                    ]);
+                }
             }
 
             $tenantAccess = ['allowed' => true, 'code' => null];
@@ -1160,6 +1183,12 @@ final class EvolutionWebhookController
                 last_message_at = VALUES(last_message_at),
                 last_message_preview = VALUES(last_message_preview),
                 unread_count = unread_count + VALUES(unread_count),
+                assigned_user_id = IF(status = "closed", NULL, assigned_user_id),
+                assigned_at = IF(status = "closed", NULL, assigned_at),
+                assignment_source = IF(status = "closed", "released", assignment_source),
+                assignment_updated_by_user_id = IF(status = "closed", NULL, assignment_updated_by_user_id),
+                assignment_released_at = IF(status = "closed", CURRENT_TIMESTAMP, assignment_released_at),
+                operational_status = IF(status = "closed", "waiting_agent", operational_status),
                 status = IF(status = "closed", "open", status)'
         );
         $statement->execute([

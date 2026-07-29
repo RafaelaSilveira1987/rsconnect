@@ -12,6 +12,7 @@ use App\Core\Router;
 use App\Core\View;
 use PDO;
 use Throwable;
+use App\Services\ConversationOwnershipService;
 
 final class ContactController
 {
@@ -80,12 +81,14 @@ final class ContactController
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
         $statement = $pdo->prepare(
             'SELECT ct.*, t.name AS tenant_name, i.name AS instance_name,
+                    pref.name AS preferred_user_name,
                     COUNT(DISTINCT c.id) AS conversations_count,
                     COUNT(DISTINCT l.id) AS leads_count,
                     MAX(c.last_message_at) AS last_interaction_at
              FROM contacts ct
              INNER JOIN tenants t ON t.id = ct.tenant_id
              LEFT JOIN evolution_instances i ON i.id = ct.evolution_instance_id
+             LEFT JOIN users pref ON pref.id = ct.preferred_user_id AND pref.tenant_id = ct.tenant_id
              LEFT JOIN conversations c ON c.contact_id = ct.id
              LEFT JOIN crm_leads l ON l.contact_id = ct.id
              ' . $where . '
@@ -119,6 +122,17 @@ final class ContactController
             $instances = $instanceStatement->fetchAll(PDO::FETCH_ASSOC);
         }
 
+        $professionalService = new ConversationOwnershipService();
+        $teamTenantId = $selected
+            ? (int) $selected['tenant_id']
+            : (int) ($filters['tenant_id'] ?? 0);
+        $professionalAssignmentSettings = $teamTenantId > 0
+            ? $professionalService->settingsForTenant($pdo, $teamTenantId)
+            : ['enabled' => false, 'lock_enabled' => true, 'auto_assign_enabled' => false];
+        $teamMembers = $teamTenantId > 0
+            ? $professionalService->teamForTenant($pdo, $teamTenantId)
+            : [];
+
         View::render('contacts.index', [
             'title' => 'Contatos',
             'contacts' => $contacts,
@@ -127,6 +141,8 @@ final class ContactController
             'tenants' => $tenants,
             'instances' => $instances,
             'canManage' => Auth::can('contacts.manage'),
+            'teamMembers' => $teamMembers,
+            'professionalAssignmentSettings' => $professionalAssignmentSettings,
         ]);
     }
 
@@ -142,6 +158,7 @@ final class ContactController
         $contactGroup = (string) ($_POST['contact_group'] ?? 'unclassified');
         $notes = trim((string) ($_POST['notes'] ?? ''));
         $tags = $this->normalizeTags((string) ($_POST['tags'] ?? ''));
+        $preferredUserId = (int) ($_POST['preferred_user_id'] ?? 0) ?: null;
 
         if ($tenantId < 1 || strlen($phone) < 10) {
             Flash::set('error', 'Informe a empresa e um telefone completo com DDI e DDD.');
@@ -162,15 +179,21 @@ final class ContactController
             Flash::set('error', 'A instância selecionada não pertence à empresa.');
             $this->redirect('/contacts');
         }
+        if ($preferredUserId !== null && !$this->userBelongsToTenant($preferredUserId, $tenantId)) {
+            Flash::set('error', 'O profissional preferido não pertence à empresa ou está inativo.');
+            $this->redirect('/contacts');
+        }
 
         try {
             $statement = Database::connection()->prepare(
                 'INSERT INTO contacts
                     (tenant_id, evolution_instance_id, phone, name, name_source, whatsapp_name_candidate, whatsapp_name_seen_count,
-                     email, company, notes, tags_json, status, contact_group)
+                     email, company, notes, tags_json, status, contact_group,
+                     preferred_user_id, preferred_user_assigned_at, preferred_user_assigned_by_user_id)
                  VALUES
                     (:tenant_id, :instance_id, :phone, :name, :name_source, NULL, 0,
-                     :email, :company, :notes, :tags_json, :status, :contact_group)'
+                     :email, :company, :notes, :tags_json, :status, :contact_group,
+                     :preferred_user_id, :preferred_user_assigned_at, :preferred_user_assigned_by_user_id)'
             );
             $statement->execute([
                 'tenant_id' => $tenantId,
@@ -184,6 +207,9 @@ final class ContactController
                 'tags_json' => $tags ? json_encode($tags, JSON_UNESCAPED_UNICODE) : null,
                 'status' => $status,
                 'contact_group' => $contactGroup,
+                'preferred_user_id' => $preferredUserId,
+                'preferred_user_assigned_at' => $preferredUserId !== null ? date('Y-m-d H:i:s') : null,
+                'preferred_user_assigned_by_user_id' => $preferredUserId !== null ? Auth::id() : null,
             ]);
             $contactId = (int) Database::connection()->lastInsertId();
             Audit::log('contact.created', ['contact_id' => $contactId, 'phone' => $phone], $tenantId);
@@ -216,6 +242,10 @@ final class ContactController
         $contactGroup = (string) ($_POST['contact_group'] ?? 'unclassified');
         $notes = trim((string) ($_POST['notes'] ?? ''));
         $tags = $this->normalizeTags((string) ($_POST['tags'] ?? ''));
+        $preferredUserId = array_key_exists('preferred_user_id', $_POST)
+            ? ((int) $_POST['preferred_user_id'] ?: null)
+            : ((int) ($contact['preferred_user_id'] ?? 0) ?: null);
+        $preferredChanged = $preferredUserId !== ((int) ($contact['preferred_user_id'] ?? 0) ?: null);
 
         if (strlen($phone) < 10 || ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))) {
             Flash::set('error', 'Confira telefone e e-mail.');
@@ -228,6 +258,10 @@ final class ContactController
             $contactGroup = 'unclassified';
         }
         $contactGroup = $this->normalizeGroupForStatus($status, $contactGroup);
+        if ($preferredUserId !== null && !$this->userBelongsToTenant($preferredUserId, (int) $contact['tenant_id'])) {
+            Flash::set('error', 'O profissional preferido não pertence à empresa ou está inativo.');
+            $this->redirect('/contacts?contact_id=' . $contactId);
+        }
 
         try {
             $statement = Database::connection()->prepare(
@@ -237,7 +271,10 @@ final class ContactController
                      whatsapp_name_candidate = NULL,
                      whatsapp_name_seen_count = 0,
                      phone = :phone, email = :email, company = :company,
-                     notes = :notes, tags_json = :tags_json, status = :status, contact_group = :contact_group
+                     notes = :notes, tags_json = :tags_json, status = :status, contact_group = :contact_group,
+                     preferred_user_id = :preferred_user_id,
+                     preferred_user_assigned_at = :preferred_user_assigned_at,
+                     preferred_user_assigned_by_user_id = :preferred_user_assigned_by_user_id
                  WHERE id = :id AND tenant_id = :tenant_id'
             );
             $statement->execute([
@@ -250,6 +287,13 @@ final class ContactController
                 'tags_json' => $tags ? json_encode($tags, JSON_UNESCAPED_UNICODE) : null,
                 'status' => $status,
                 'contact_group' => $contactGroup,
+                'preferred_user_id' => $preferredUserId,
+                'preferred_user_assigned_at' => $preferredUserId === null
+                    ? null
+                    : ($preferredChanged ? date('Y-m-d H:i:s') : ($contact['preferred_user_assigned_at'] ?? null)),
+                'preferred_user_assigned_by_user_id' => $preferredUserId === null
+                    ? null
+                    : ($preferredChanged ? Auth::id() : ($contact['preferred_user_assigned_by_user_id'] ?? null)),
                 'id' => $contactId,
                 'tenant_id' => $contact['tenant_id'],
             ]);
@@ -279,10 +323,11 @@ final class ContactController
         if ($contactId < 1) {
             return null;
         }
-        $sql = 'SELECT ct.*, t.name AS tenant_name, i.name AS instance_name
+        $sql = 'SELECT ct.*, t.name AS tenant_name, i.name AS instance_name, pref.name AS preferred_user_name
                 FROM contacts ct
                 INNER JOIN tenants t ON t.id = ct.tenant_id
                 LEFT JOIN evolution_instances i ON i.id = ct.evolution_instance_id
+                LEFT JOIN users pref ON pref.id = ct.preferred_user_id AND pref.tenant_id = ct.tenant_id
                 WHERE ct.id = :id';
         $params = ['id' => $contactId];
         if (!Auth::isSuperAdmin()) {
@@ -308,6 +353,15 @@ final class ContactController
             'SELECT COUNT(*) FROM evolution_instances WHERE id = :id AND tenant_id = :tenant_id'
         );
         $statement->execute(['id' => $instanceId, 'tenant_id' => $tenantId]);
+        return (int) $statement->fetchColumn() > 0;
+    }
+
+    private function userBelongsToTenant(int $userId, int $tenantId): bool
+    {
+        $statement = Database::connection()->prepare(
+            'SELECT COUNT(*) FROM users WHERE id = :id AND tenant_id = :tenant_id AND status = "active"'
+        );
+        $statement->execute(['id' => $userId, 'tenant_id' => $tenantId]);
         return (int) $statement->fetchColumn() > 0;
     }
 

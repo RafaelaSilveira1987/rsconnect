@@ -12,8 +12,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.39 — Assinatura humana entregue ao WhatsApp';
-    public const REQUIRED_MIGRATION = '063_message_governance_evolution_realtime.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.7.0 — Atendimento opcional por profissional';
+    public const REQUIRED_MIGRATION = '064_professional_conversation_assignment_compat.sql';
 
     private PDO $pdo;
 
@@ -104,7 +104,7 @@ final class AppVersionService
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 063, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 064, conforme o pacote implantado.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')
@@ -147,6 +147,19 @@ final class AppVersionService
                 ? 'Assinatura do atendente, políticas de retenção e histórico de conexão da Evolution estão disponíveis.'
                 : 'A estrutura de identificação humana, retenção e atualização de conexão ainda não foi aplicada.',
             'Executar database/migrations/063_message_governance_evolution_realtime.sql.'
+        );
+
+        $professionalAssignmentReady = $this->columnExists('tenants', 'professional_assignment_enabled')
+            && $this->columnExists('tenants', 'professional_auto_assign_enabled')
+            && $this->columnExists('contacts', 'preferred_user_id')
+            && $this->columnExists('conversations', 'assignment_source');
+        $checks[] = $this->check(
+            'Atendimento por profissional',
+            $professionalAssignmentReady ? 'ok' : 'blocked',
+            $professionalAssignmentReady
+                ? 'Vínculo preferencial, bloqueio por responsável e atribuição automática opcional estão disponíveis.'
+                : 'A estrutura opcional de atendimento exclusivo por profissional ainda não foi aplicada.',
+            'Executar database/migrations/064_professional_conversation_assignment_compat.sql.'
         );
 
         $calendarOnboardingReady = $this->columnExists('tenant_onboarding_settings', 'calendar_mode')

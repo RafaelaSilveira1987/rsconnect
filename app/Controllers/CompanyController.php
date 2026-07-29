@@ -15,6 +15,7 @@ use App\Services\PreSchedulingService;
 use App\Services\TenantModuleService;
 use App\Services\OnboardingGuideService;
 use App\Services\MessageGovernanceService;
+use App\Services\ConversationOwnershipService;
 use PDO;
 use Throwable;
 
@@ -154,6 +155,7 @@ final class CompanyController
             'moduleSettings' => $moduleService->settingsForTenant($tenantId),
             'calendarAccessSettings' => (new OnboardingGuideService())->calendarAccessSettings($tenantId),
             'messageGovernanceSettings' => (new MessageGovernanceService())->settingsForTenant($tenantId),
+            'professionalAssignmentSettings' => (new ConversationOwnershipService())->settingsForTenant(Database::connection(), $tenantId),
         ]);
     }
 
@@ -221,6 +223,20 @@ final class CompanyController
         $retentionDays = max(1, min(3650, (int) ($_POST['message_retention_days'] ?? ($current['message_retention_days'] ?? 90))));
         $rawPayloadDays = max(1, min(3650, (int) ($_POST['message_raw_payload_days'] ?? ($current['message_raw_payload_days'] ?? 30))));
         $ephemeralHours = max(1, min(720, (int) ($_POST['message_ephemeral_hours'] ?? ($current['message_ephemeral_hours'] ?? 24))));
+        $professionalAssignmentEnabled = array_key_exists('professional_assignment_settings_submitted', $_POST)
+            ? (isset($_POST['professional_assignment_enabled']) ? 1 : 0)
+            : (int) ($current['professional_assignment_enabled'] ?? 0);
+        $professionalLockEnabled = array_key_exists('professional_assignment_settings_submitted', $_POST)
+            ? (isset($_POST['professional_lock_enabled']) ? 1 : 0)
+            : (int) ($current['professional_lock_enabled'] ?? 1);
+        $professionalAutoAssignEnabled = array_key_exists('professional_assignment_settings_submitted', $_POST)
+            ? (isset($_POST['professional_auto_assign_enabled']) ? 1 : 0)
+            : (int) ($current['professional_auto_assign_enabled'] ?? 0);
+        // A atribuição automática nunca é ligada implicitamente. Ela só permanece ativa
+        // quando o recurso geral também está habilitado e a empresa marcou a opção.
+        if ($professionalAssignmentEnabled !== 1) {
+            $professionalAutoAssignEnabled = 0;
+        }
 
         if ($name === '' || ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))) {
             Flash::set('error', 'Informe o nome da empresa e um e-mail válido.');
@@ -248,6 +264,9 @@ final class CompanyController
                  message_retention_days = :message_retention_days,
                  message_raw_payload_days = :message_raw_payload_days,
                  message_ephemeral_hours = :message_ephemeral_hours,
+                 professional_assignment_enabled = :professional_assignment_enabled,
+                 professional_lock_enabled = :professional_lock_enabled,
+                 professional_auto_assign_enabled = :professional_auto_assign_enabled,
                  onboarding_step = GREATEST(onboarding_step, 2)
              WHERE id = :id'
         );
@@ -279,6 +298,9 @@ final class CompanyController
             'message_retention_days' => $retentionDays,
             'message_raw_payload_days' => $rawPayloadDays,
             'message_ephemeral_hours' => $ephemeralHours,
+            'professional_assignment_enabled' => $professionalAssignmentEnabled,
+            'professional_lock_enabled' => $professionalLockEnabled,
+            'professional_auto_assign_enabled' => $professionalAutoAssignEnabled,
             'id' => $tenantId,
         ]);
 

@@ -1,3 +1,17 @@
+# RS Connect v36.7.0 — Atendimento opcional por profissional
+
+- adiciona ativação independente por empresa, desativada por padrão;
+- permite definir um profissional preferido no contato sem obrigar atribuição automática;
+- mantém a atribuição automática como opção separada e desligada por padrão;
+- permite assumir, atribuir, transferir e liberar conversas ativas;
+- bloqueia no backend a interferência de outro usuário enquanto houver responsável;
+- libera o responsável ao encerrar a conversa;
+- evita dupla atribuição simultânea com transação e `SELECT ... FOR UPDATE`;
+- exibe profissional preferido e responsável atual nas telas de Contatos e Conversas;
+- adiciona a migration compatível `064_professional_conversation_assignment_compat.sql`;
+- preserva a v36.6.39 para empresas que mantiverem o recurso desligado;
+- não inclui ainda agenda individual por profissional.
+
 # RS Connect v36.6.39 — Assinatura humana entregue ao WhatsApp
 
 - corrige a assinatura quando o atendimento é realizado por um Super Admin global;
