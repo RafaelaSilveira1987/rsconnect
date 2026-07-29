@@ -2293,3 +2293,200 @@ document.addEventListener('DOMContentLoaded', function () {
   poll();
   schedule();
 })();
+
+/* RS Connect 36.8.2 — visualizações Dia, Semana e Mês da agenda */
+(() => {
+  const viewToolbar = document.querySelector('[data-calendar-preference-key]');
+  const preferenceKey = String(viewToolbar?.dataset.calendarPreferenceKey || 'rs_calendar_view_0');
+  const viewLinks = document.querySelectorAll('[data-calendar-view-link]');
+  viewLinks.forEach((link) => {
+    link.addEventListener('click', () => {
+      const view = String(link.dataset.calendarViewLink || 'list');
+      try { window.localStorage.setItem(preferenceKey, view); } catch (_) {}
+      document.cookie = `${encodeURIComponent(preferenceKey)}=${encodeURIComponent(view)}; path=/; max-age=31536000; SameSite=Lax`;
+    });
+  });
+
+  const board = document.querySelector('[data-calendar-board]');
+  if (!board) return;
+
+  const source = board.querySelector('[data-calendar-events]');
+  const content = board.querySelector('[data-calendar-content]');
+  const loading = board.querySelector('[data-calendar-loading]');
+  const dialog = document.querySelector('[data-calendar-event-dialog]');
+  if (!source || !content) return;
+
+  let events = [];
+  try {
+    const parsed = JSON.parse(source.textContent || '[]');
+    events = Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    events = [];
+  }
+
+  const parseLocalDate = (value) => {
+    const normalized = String(value || '').trim();
+    if (!normalized) return null;
+    const date = new Date(normalized.length === 10 ? `${normalized}T00:00:00` : normalized);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+  const dateKey = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const sameDate = (event, date) => {
+    const startsAt = parseLocalDate(event.starts_at);
+    return startsAt ? dateKey(startsAt) === dateKey(date) : false;
+  };
+  const formatTime = (value) => {
+    const date = parseLocalDate(value);
+    return date ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(date) : '—';
+  };
+  const formatDate = (value, options = {}) => {
+    const date = value instanceof Date ? value : parseLocalDate(value);
+    return date ? new Intl.DateTimeFormat('pt-BR', options).format(date) : '—';
+  };
+  const formatPeriod = (event) => {
+    const start = parseLocalDate(event.starts_at);
+    const end = parseLocalDate(event.ends_at);
+    if (!start) return 'Horário não definido';
+    const dateLabel = formatDate(start, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+    return `${dateLabel} · ${formatTime(start)}${end ? ` às ${formatTime(end)}` : ''}`;
+  };
+  const statusClass = (status) => String(status || 'scheduled').replace(/[^a-z0-9_-]/gi, '');
+  const element = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  events = events
+    .map((event) => ({ ...event, _start: parseLocalDate(event.starts_at), _end: parseLocalDate(event.ends_at) }))
+    .filter((event) => event._start)
+    .sort((a, b) => a._start - b._start);
+
+  const openEvent = (event) => {
+    if (!dialog) return;
+    const setText = (selector, value) => {
+      const target = dialog.querySelector(selector);
+      if (target) target.textContent = value;
+    };
+    setText('[data-calendar-dialog-status]', event.status_label || 'Agendamento');
+    setText('[data-calendar-dialog-title]', event.title || 'Compromisso');
+    setText('[data-calendar-dialog-time]', formatPeriod(event));
+    setText('[data-calendar-dialog-contact]', event.contact_name || 'Sem contato');
+    setText('[data-calendar-dialog-owner]', event.owner_name || 'Não definido');
+    setText('[data-calendar-dialog-location]', event.location_label || 'A definir');
+    setText('[data-calendar-dialog-description]', event.description || 'Sem descrição.');
+    const openLink = dialog.querySelector('[data-calendar-dialog-open]');
+    const googleLink = dialog.querySelector('[data-calendar-dialog-google]');
+    if (openLink) openLink.href = event.list_url || '#';
+    if (googleLink) googleLink.href = event.google_url || '#';
+    dialog.className = `calendar-event-dialog calendar-dialog-status-${statusClass(event.status)}`;
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+  };
+
+  const eventButton = (event, compact = false) => {
+    const button = element('button', `calendar-event-card calendar-event-${statusClass(event.status)}${compact ? ' is-compact' : ''}`);
+    button.type = 'button';
+    button.dataset.calendarEventId = String(event.id || '');
+    button.setAttribute('aria-label', `${formatTime(event.starts_at)}. ${event.title}. ${event.contact_name}. ${event.owner_name}.`);
+
+    const time = element('span', 'calendar-event-time', compact ? formatTime(event.starts_at) : `${formatTime(event.starts_at)} – ${formatTime(event.ends_at)}`);
+    const title = element('strong', 'calendar-event-title', event.title || 'Compromisso');
+    const contact = element('span', 'calendar-event-contact', event.contact_name || 'Sem contato');
+    button.append(time, title);
+    if (!compact) {
+      button.append(contact, element('span', 'calendar-event-owner', event.owner_name || 'Não definido'));
+      button.append(element('span', 'calendar-event-status', event.status_label || 'Agendado'));
+    }
+    button.addEventListener('click', () => openEvent(event));
+    return button;
+  };
+
+  const emptyState = (message) => element('div', 'calendar-visual-empty', message);
+
+  const renderDay = () => {
+    const anchor = parseLocalDate(board.dataset.calendarAnchor) || new Date();
+    const dayEvents = events.filter((event) => sameDate(event, anchor));
+    const wrapper = element('div', 'calendar-day-view');
+    const heading = element('div', 'calendar-day-heading');
+    heading.append(
+      element('strong', '', formatDate(anchor, { weekday: 'long', day: '2-digit', month: 'long' })),
+      element('span', '', `${dayEvents.length} compromisso${dayEvents.length === 1 ? '' : 's'}`)
+    );
+    wrapper.appendChild(heading);
+    const list = element('div', 'calendar-day-events');
+    dayEvents.forEach((event) => list.appendChild(eventButton(event)));
+    wrapper.appendChild(dayEvents.length ? list : emptyState('Nenhum compromisso neste dia.'));
+    return wrapper;
+  };
+
+  const renderWeek = () => {
+    const rangeStart = parseLocalDate(board.dataset.calendarRangeStart) || new Date();
+    const wrapper = element('div', 'calendar-week-scroll');
+    const grid = element('div', 'calendar-week-grid');
+    for (let offset = 0; offset < 7; offset += 1) {
+      const day = new Date(rangeStart);
+      day.setDate(rangeStart.getDate() + offset);
+      const dayEvents = events.filter((event) => sameDate(event, day));
+      const column = element('section', `calendar-week-day${dateKey(day) === dateKey(new Date()) ? ' is-today' : ''}`);
+      const header = element('header', 'calendar-week-day-header');
+      header.append(
+        element('span', '', formatDate(day, { weekday: 'short' })),
+        element('strong', '', formatDate(day, { day: '2-digit', month: 'short' })),
+        element('small', '', String(dayEvents.length))
+      );
+      column.appendChild(header);
+      const list = element('div', 'calendar-week-events');
+      dayEvents.forEach((event) => list.appendChild(eventButton(event)));
+      column.appendChild(dayEvents.length ? list : emptyState('Livre'));
+      grid.appendChild(column);
+    }
+    wrapper.appendChild(grid);
+    return wrapper;
+  };
+
+  const renderMonth = () => {
+    const rangeStart = parseLocalDate(board.dataset.calendarRangeStart) || new Date();
+    const rangeEnd = parseLocalDate(board.dataset.calendarRangeEnd) || rangeStart;
+    const anchor = parseLocalDate(board.dataset.calendarAnchor) || new Date();
+    const wrapper = element('div', 'calendar-month-scroll');
+    const grid = element('div', 'calendar-month-grid');
+    ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].forEach((label) => grid.appendChild(element('div', 'calendar-month-weekday', label)));
+    const cursor = new Date(rangeStart);
+    while (cursor <= rangeEnd) {
+      const day = new Date(cursor);
+      const dayEvents = events.filter((event) => sameDate(event, day));
+      const cell = element('section', 'calendar-month-day');
+      if (day.getMonth() !== anchor.getMonth()) cell.classList.add('is-outside');
+      if (dateKey(day) === dateKey(new Date())) cell.classList.add('is-today');
+      const header = element('header', 'calendar-month-day-header');
+      header.appendChild(element('strong', '', String(day.getDate())));
+      if (dayEvents.length) header.appendChild(element('small', '', `${dayEvents.length}`));
+      cell.appendChild(header);
+      const list = element('div', 'calendar-month-events');
+      dayEvents.slice(0, 3).forEach((event) => list.appendChild(eventButton(event, true)));
+      if (dayEvents.length > 3) list.appendChild(element('span', 'calendar-month-more', `+${dayEvents.length - 3} compromisso(s)`));
+      cell.appendChild(list);
+      grid.appendChild(cell);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    wrapper.appendChild(grid);
+    return wrapper;
+  };
+
+  const view = String(board.dataset.calendarView || 'week');
+  const rendered = view === 'day' ? renderDay() : (view === 'month' ? renderMonth() : renderWeek());
+  content.replaceChildren(rendered);
+  content.hidden = false;
+  if (loading) loading.hidden = true;
+
+  dialog?.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+})();

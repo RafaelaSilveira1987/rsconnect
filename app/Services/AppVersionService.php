@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.8.1 — Conflito de cliente na agenda';
+    public const PACKAGE_LABEL = 'RS Connect 36.8.2 — Visualização de calendário';
     public const REQUIRED_MIGRATION = '066_contact_schedule_overlap_guard_compat.sql';
 
     private PDO $pdo;

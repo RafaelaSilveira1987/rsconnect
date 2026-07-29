@@ -1,3 +1,17 @@
+# RS Connect v36.8.2 — Visualização de calendário
+
+- mantém a visualização em lista para operação e ações administrativas;
+- adiciona visualizações Dia, Semana e Mês sem dependência externa;
+- usa Semana como padrão quando a agenda por profissional está ativa;
+- mantém Lista como padrão para empresas sem agenda individual;
+- adiciona navegação entre períodos e botão Hoje;
+- preserva filtros por empresa, status e profissional;
+- abre detalhes do compromisso em modal ao selecionar um evento;
+- permite abrir o compromisso na lista ou adicionar ao Google;
+- salva a última visualização escolhida no navegador;
+- melhora o uso em celular com rolagem horizontal controlada;
+- não exige migration nova.
+
 # RS Connect v36.8.1 — Conflito do cliente na agenda
 
 - impede que o mesmo contato tenha dois atendimentos sobrepostos, mesmo com profissionais diferentes;

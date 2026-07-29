@@ -36,13 +36,54 @@ final class CalendarController
 
         $pdo = Database::connection();
         $tenantId = $this->resolveTenantFromQuery();
-        $today = new DateTimeImmutable('today', new DateTimeZone((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo')));
+        $timezone = new DateTimeZone((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo'));
+        $today = new DateTimeImmutable('today', $timezone);
+        $professionalCalendarSettings = $tenantId > 0
+            ? (new ProfessionalCalendarService())->tenantSettings($tenantId)
+            : ['enabled' => false, 'require_owner' => true, 'auto_from_conversation' => false];
+
+        $allowedViews = ['list', 'day', 'week', 'month'];
+        $calendarPreferenceKey = 'rs_calendar_view_' . (string) (Auth::id() ?? 0);
+        $requestedView = strtolower(trim((string) ($_GET['view'] ?? ($_COOKIE[$calendarPreferenceKey] ?? ''))));
+        $defaultView = !empty($professionalCalendarSettings['enabled']) ? 'week' : 'list';
+        $calendarView = in_array($requestedView, $allowedViews, true) ? $requestedView : $defaultView;
+
+        try {
+            $calendarDate = new DateTimeImmutable(trim((string) ($_GET['calendar_date'] ?? $today->format('Y-m-d'))), $timezone);
+        } catch (Throwable) {
+            $calendarDate = $today;
+        }
+
+        $defaultDateFrom = $today->format('Y-m-d');
+        $defaultDateTo = $today->modify('+14 days')->format('Y-m-d');
+        if ($calendarView === 'day') {
+            $defaultDateFrom = $calendarDate->format('Y-m-d');
+            $defaultDateTo = $defaultDateFrom;
+        } elseif ($calendarView === 'week') {
+            $weekStart = $calendarDate->modify('monday this week');
+            $defaultDateFrom = $weekStart->format('Y-m-d');
+            $defaultDateTo = $weekStart->modify('+6 days')->format('Y-m-d');
+        } elseif ($calendarView === 'month') {
+            $monthStart = $calendarDate->modify('first day of this month');
+            $gridStart = $monthStart->modify('monday this week');
+            $monthEnd = $calendarDate->modify('last day of this month');
+            $gridEnd = $monthEnd->modify('sunday this week');
+            $defaultDateFrom = $gridStart->format('Y-m-d');
+            $defaultDateTo = $gridEnd->format('Y-m-d');
+        }
+
         $filters = [
             'tenant_id' => $tenantId,
             'status' => (string) ($_GET['status'] ?? ''),
             'owner_user_id' => (int) ($_GET['owner_user_id'] ?? 0),
-            'date_from' => trim((string) ($_GET['date_from'] ?? $today->format('Y-m-d'))),
-            'date_to' => trim((string) ($_GET['date_to'] ?? $today->modify('+14 days')->format('Y-m-d'))),
+            'date_from' => $calendarView === 'list'
+                ? trim((string) ($_GET['date_from'] ?? $defaultDateFrom))
+                : $defaultDateFrom,
+            'date_to' => $calendarView === 'list'
+                ? trim((string) ($_GET['date_to'] ?? $defaultDateTo))
+                : $defaultDateTo,
+            'view' => $calendarView,
+            'calendar_date' => $calendarDate->format('Y-m-d'),
         ];
 
         $tenants = Auth::isSuperAdmin()
@@ -88,7 +129,7 @@ final class CalendarController
                  LEFT JOIN users creator ON creator.id = a.created_by_user_id
                  WHERE ' . implode(' AND ', $conditions) . '
                  ORDER BY a.starts_at ASC, a.created_at DESC
-                 LIMIT 300'
+                 LIMIT 800'
             );
             $statement->execute($params);
             $appointments = $statement->fetchAll(PDO::FETCH_ASSOC);
@@ -139,10 +180,6 @@ final class CalendarController
             $metricStatement->execute(['tenant_id' => $tenantId]);
             $metrics = $metricStatement->fetch(PDO::FETCH_ASSOC) ?: $metrics;
         }
-
-        $professionalCalendarSettings = $tenantId > 0
-            ? (new ProfessionalCalendarService())->tenantSettings($tenantId)
-            : ['enabled' => false, 'require_owner' => true, 'auto_from_conversation' => false];
 
         View::render('calendar.index', [
             'title' => 'Agenda',

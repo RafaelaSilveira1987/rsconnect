@@ -1,0 +1,16 @@
+RS CONNECT v36.8.2 — VISUALIZAÇÃO DE CALENDÁRIO
+
+Atualização sobre a v36.8.1.
+
+NOVIDADES
+- Lista, Dia, Semana e Mês.
+- Filtros por status e profissional.
+- Navegação de período e botão Hoje.
+- Detalhes do compromisso ao clicar.
+- Preferência de visualização salva no navegador.
+
+BANCO
+Não exige migration nova.
+
+DEPLOY
+Aplicar o patch na branch feature/atendimento-por-profissional, fazer commit, push e rebuild no EasyPanel. Atualizar o navegador com Ctrl + F5.
