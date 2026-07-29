@@ -1,3 +1,18 @@
+# RS Connect v36.8.0 — Agenda opcional por profissional
+
+- adiciona ativação independente da agenda por profissional, desativada por padrão;
+- mantém o reaproveitamento automático do responsável da conversa como opção separada e desligada por padrão;
+- permite horários, duração, intervalos, margem e antecedência individual por usuário;
+- permite pausar novos agendamentos de um profissional sem inativar seu acesso;
+- permite informar um Google Agenda diferente para cada profissional;
+- filtra disponibilidade e conflitos pelo profissional selecionado;
+- permite definir ou trocar o profissional na Agenda e na fila de pré-agendamentos;
+- libera pré-reservas e limpa vínculos antigos antes de trocar a agenda responsável;
+- bloqueia transferência para um profissional com conflito no mesmo horário;
+- envia nome, usuário e calendar ID do profissional nos payloads do n8n;
+- adiciona a migration compatível `065_professional_calendar_profiles_compat.sql`;
+- adiciona diagnóstico e teste de fumaça da agenda individual.
+
 # RS Connect v36.7.1 — Saudação neutra e notificações por direção
 
 - substitui a mensagem fixa “Bem-vinda” por uma saudação neutra de acordo com o horário;

@@ -211,14 +211,30 @@ final class PreSchedulingService
         $intentModality = $this->intentSchedulingModality($intent);
         $readyForAvailability = $this->hasFullPreference($intent) && $this->isAvailabilityModality($intentModality);
         $status = $readyForAvailability ? 'awaiting_approval' : 'pre_scheduled';
+        $ownerUserId = null;
+        $professionalCalendarService = new ProfessionalCalendarService();
+        $professionalCalendarSettings = $professionalCalendarService->tenantSettings($tenantId);
+        if (!empty($professionalCalendarSettings['enabled']) && !empty($professionalCalendarSettings['auto_from_conversation'])) {
+            $ownerStatement = $pdo->prepare(
+                'SELECT assigned_user_id FROM conversations WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+            );
+            $ownerStatement->execute(['id' => $conversationId, 'tenant_id' => $tenantId]);
+            $candidateOwnerId = (int) ($ownerStatement->fetchColumn() ?: 0);
+            if ($candidateOwnerId > 0) {
+                $profile = $professionalCalendarService->profile($tenantId, $candidateOwnerId);
+                if ($profile && !empty($profile['accepting_appointments'])) {
+                    $ownerUserId = $candidateOwnerId;
+                }
+            }
+        }
 
         $statement = $pdo->prepare(
             'INSERT INTO calendar_appointments
-                (tenant_id, contact_id, conversation_id, title, description, starts_at, ends_at, timezone, status,
+                (tenant_id, contact_id, conversation_id, owner_user_id, title, description, starts_at, ends_at, timezone, status,
                  location_type, location, reminder_minutes, sync_status, is_pre_schedule, pre_schedule_source, appointment_modality,
                  preferred_day_text, preferred_time_text, approval_status, approval_notes)
              VALUES
-                (:tenant_id, :contact_id, :conversation_id, :title, :description, :starts_at, :ends_at, :timezone, :status,
+                (:tenant_id, :contact_id, :conversation_id, :owner_user_id, :title, :description, :starts_at, :ends_at, :timezone, :status,
                  :location_type, :location, 60, "pending", 1, "ai_whatsapp", :appointment_modality,
                  :preferred_day_text, :preferred_time_text, "pending", :approval_notes)'
         );
@@ -226,6 +242,7 @@ final class PreSchedulingService
             'tenant_id' => $tenantId,
             'contact_id' => $contactId,
             'conversation_id' => $conversationId,
+            'owner_user_id' => $ownerUserId,
             'title' => $title,
             'description' => $description,
             'starts_at' => $period['starts_at'],
@@ -320,6 +337,7 @@ final class PreSchedulingService
                 'tenant_id' => $tenantId,
                 'conversation_id' => $conversationId,
                 'contact_id' => $contactId,
+                'owner_user_id' => $ownerUserId,
                 'title' => $title,
                 'starts_at' => $period['starts_at'],
                 'ends_at' => $period['ends_at'],

@@ -13,7 +13,7 @@ $checks = [
     'Assinatura integra o texto entregue' => str_contains($governance, '$result[\'delivered\'] = \'*\' . $signature . "*\\n" . $original;'),
     'Usuário global pode habilitar assinatura' => !str_contains($users, '$tenantId !== null ? $whatsappSignatureEnabled : 0'),
     'Retorno expõe diagnóstico' => str_contains($conversations, "'human_signature_applied'"),
-    'Versão atualizada' => str_contains($version, '36.7.1'),
+    'Versão atualizada' => str_contains($version, '36.8.0'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

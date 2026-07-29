@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.7.1 — Saudação neutra e notificações por direção';
+    public const PACKAGE_LABEL = 'RS Connect 36.8.0 — Agenda opcional por profissional';
     public const REQUIRED_MIGRATION = '064_professional_conversation_assignment_compat.sql';
 
     private PDO $pdo;
@@ -160,6 +160,18 @@ final class AppVersionService
                 ? 'Vínculo preferencial, bloqueio por responsável e atribuição automática opcional estão disponíveis.'
                 : 'A estrutura opcional de atendimento exclusivo por profissional ainda não foi aplicada.',
             'Executar database/migrations/064_professional_conversation_assignment_compat.sql.'
+        );
+
+        $professionalCalendarReady = $this->columnExists('tenants', 'professional_calendar_enabled')
+            && $this->columnExists('tenants', 'professional_calendar_auto_from_conversation')
+            && $this->tableExists('user_calendar_profiles');
+        $checks[] = $this->check(
+            'Agenda por profissional',
+            $professionalCalendarReady ? 'ok' : 'blocked',
+            $professionalCalendarReady
+                ? 'Horários individuais, calendário por usuário e conflitos restritos ao profissional estão disponíveis.'
+                : 'A estrutura opcional de agenda individual ainda não foi aplicada.',
+            'Executar database/migrations/065_professional_calendar_profiles_compat.sql.'
         );
 
         $calendarOnboardingReady = $this->columnExists('tenant_onboarding_settings', 'calendar_mode')

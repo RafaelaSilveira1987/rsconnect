@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.8.0', 'title' => 'Agenda opcional por profissional', 'summary' => 'Adiciona horários e calendário individual por usuário, seleção manual do profissional e bloqueio de conflitos apenas na agenda escolhida. O reaproveitamento automático do responsável da conversa permanece opcional e desligado por padrão.'],
             ['version' => '36.7.0', 'title' => 'Atendimento opcional por profissional', 'summary' => 'Permite vincular um profissional preferido ao contato, assumir e transferir conversas e bloquear interferência enquanto o atendimento estiver ativo. A atribuição automática permanece opcional e desligada por padrão.'],
             ['version' => '36.6.39', 'title' => 'Assinatura humana no WhatsApp', 'summary' => 'Entrega o nome e a função do atendente ao cliente também quando a mensagem é enviada por um Super Admin global, sem assinar respostas da IA.'],
             ['version' => '36.6.38', 'title' => 'Status Evolution confiável', 'summary' => 'Corrige parâmetros PDO repetidos que impediam o polling e o webhook de salvar o estado real da conexão, registra falhas e usa endpoint compatível com a URL base da aplicação.'],

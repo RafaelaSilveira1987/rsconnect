@@ -18,6 +18,7 @@ use App\Services\CalendarGoogleLifecycleService;
 use App\Services\EvolutionService;
 use App\Services\NotificationService;
 use App\Services\PreSchedulingService;
+use App\Services\ProfessionalCalendarService;
 use App\Services\SubscriptionService;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -139,6 +140,10 @@ final class CalendarController
             $metrics = $metricStatement->fetch(PDO::FETCH_ASSOC) ?: $metrics;
         }
 
+        $professionalCalendarSettings = $tenantId > 0
+            ? (new ProfessionalCalendarService())->tenantSettings($tenantId)
+            : ['enabled' => false, 'require_owner' => true, 'auto_from_conversation' => false];
+
         View::render('calendar.index', [
             'title' => 'Agenda',
             'tenants' => $tenants,
@@ -150,6 +155,7 @@ final class CalendarController
             'metrics' => $metrics,
             'filters' => $filters,
             'canManage' => Auth::can('calendar.manage'),
+            'professionalCalendarSettings' => $professionalCalendarSettings,
         ]);
     }
 
@@ -233,6 +239,29 @@ final class CalendarController
             $this->redirect('/calendar?tenant_id=' . $tenantId);
         }
 
+        $professionalCalendarService = new ProfessionalCalendarService();
+        $professionalCalendarSettings = $professionalCalendarService->tenantSettings($tenantId);
+        if (!empty($professionalCalendarSettings['enabled'])) {
+            if (!empty($professionalCalendarSettings['require_owner']) && $ownerUserId < 1) {
+                Flash::set('error', 'Selecione o profissional responsável pelo agendamento.');
+                $this->redirect('/calendar?tenant_id=' . $tenantId);
+            }
+            if ($ownerUserId > 0) {
+                $profile = $professionalCalendarService->profile($tenantId, $ownerUserId);
+                if (!$profile || empty($profile['accepting_appointments'])) {
+                    Flash::set('error', 'O profissional selecionado não está recebendo novos agendamentos.');
+                    $this->redirect('/calendar?tenant_id=' . $tenantId);
+                }
+                if ($isPreSchedule !== 1) {
+                    $conflict = $professionalCalendarService->conflict($tenantId, $ownerUserId, $normalized['starts_at'], $normalized['ends_at']);
+                    if ($conflict) {
+                        Flash::set('error', 'O profissional já possui “' . (string) ($conflict['title'] ?? 'outro compromisso') . '” nesse horário.');
+                        $this->redirect('/calendar?tenant_id=' . $tenantId);
+                    }
+                }
+            }
+        }
+
         $statement = Database::connection()->prepare(
             'INSERT INTO calendar_appointments
                 (tenant_id, contact_id, crm_lead_id, conversation_id, owner_user_id, created_by_user_id,
@@ -288,6 +317,132 @@ final class CalendarController
         $this->redirect('/calendar?tenant_id=' . $tenantId);
     }
 
+    public function updateOwner(): void
+    {
+        $tenantId = $this->resolveTenantFromPost();
+        $appointmentId = (int) ($_POST['appointment_id'] ?? 0);
+        $ownerUserId = (int) ($_POST['owner_user_id'] ?? 0);
+        $returnTo = trim((string) ($_POST['return_to'] ?? ''));
+        $fallback = '/calendar?tenant_id=' . $tenantId;
+
+        $appointment = $this->findAppointment($appointmentId, $tenantId);
+        if (!$appointment) {
+            Flash::set('error', 'Agendamento não encontrado.');
+            $this->redirect($fallback);
+        }
+
+        $professionalService = new ProfessionalCalendarService();
+        $professionalSettings = $professionalService->tenantSettings($tenantId);
+        if ($ownerUserId > 0 && !$professionalService->userBelongsToTenant($tenantId, $ownerUserId)) {
+            Flash::set('error', 'O profissional selecionado não pertence à empresa.');
+            $this->redirect($fallback);
+        }
+        if (!empty($professionalSettings['enabled']) && !empty($professionalSettings['require_owner']) && $ownerUserId < 1) {
+            Flash::set('error', 'Esta empresa exige um profissional responsável nos agendamentos.');
+            $this->redirect($fallback);
+        }
+        if ($ownerUserId > 0) {
+            $profile = $professionalService->profile($tenantId, $ownerUserId);
+            if (!$profile || empty($profile['accepting_appointments'])) {
+                Flash::set('error', 'O profissional selecionado não está recebendo agendamentos.');
+                $this->redirect($fallback);
+            }
+        }
+
+        $previousOwnerId = (int) ($appointment['owner_user_id'] ?? 0);
+        if ($previousOwnerId === $ownerUserId) {
+            Flash::set('success', 'O profissional responsável já está atualizado.');
+            $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : $fallback);
+        }
+
+        if ($ownerUserId > 0
+            && in_array((string) ($appointment['status'] ?? ''), ['scheduled', 'confirmed'], true)
+            && trim((string) ($appointment['starts_at'] ?? '')) !== ''
+            && trim((string) ($appointment['ends_at'] ?? '')) !== '') {
+            $conflict = $professionalService->conflict(
+                $tenantId,
+                $ownerUserId,
+                (string) $appointment['starts_at'],
+                (string) $appointment['ends_at'],
+                $appointmentId
+            );
+            if ($conflict !== null) {
+                $conflictTitle = trim((string) ($conflict['title'] ?? 'outro compromisso')) ?: 'outro compromisso';
+                $conflictStart = trim((string) ($conflict['starts_at'] ?? ''));
+                Flash::set('error', 'O profissional já possui “' . $conflictTitle . '”' . ($conflictStart !== '' ? ' em ' . date('d/m/Y H:i', strtotime($conflictStart)) : '') . '. Escolha outro profissional ou horário.');
+                $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : $fallback);
+            }
+        }
+
+        if ((string) ($appointment['availability_source'] ?? '') === 'google_marked_slots'
+            && in_array((string) ($appointment['google_event_state'] ?? ''), ['held', 'confirmed', 'hold_requested', 'confirm_requested'], true)) {
+            $released = (new CalendarAvailabilityService())->releaseSelectedSlot($tenantId, $appointmentId);
+            if (empty($released['ok'])) {
+                Flash::set('error', 'Não foi possível trocar o profissional porque o horário anterior não foi liberado: ' . (string) ($released['message'] ?? 'erro não informado'));
+                $this->redirect($fallback);
+            }
+        }
+
+        if (in_array((string) ($appointment['availability_source'] ?? ''), ['google_free_slots', 'internal_fallback'], true)
+            && trim((string) ($appointment['google_event_id'] ?? '')) !== ''
+            && in_array((string) ($appointment['google_event_state'] ?? ''), ['created', 'updated'], true)) {
+            $deleted = (new CalendarGoogleLifecycleService())->cancelAppointment($tenantId, $appointmentId, true);
+            if (!empty($deleted['attempted']) && empty($deleted['ok'])) {
+                Flash::set('error', 'Não foi possível trocar o profissional porque o evento anterior não foi removido do Google Agenda: ' . (string) ($deleted['message'] ?? 'erro não informado'));
+                $this->redirect($fallback);
+            }
+        }
+
+        $pdo = Database::connection();
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare(
+                'UPDATE calendar_appointments
+                 SET owner_user_id = :owner_user_id,
+                     availability_status = NULL,
+                     availability_request_id = NULL,
+                     availability_slot_count = 0,
+                     chosen_availability_slot_id = NULL,
+                     availability_error = NULL,
+                     availability_source = NULL,
+                     google_calendar_id = NULL,
+                     google_event_id = NULL,
+                     google_event_state = NULL,
+                     google_event_summary = NULL,
+                     google_synced_starts_at = NULL,
+                     google_synced_ends_at = NULL,
+                     sync_status = "pending",
+                     sync_error = NULL,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            )->execute([
+                'owner_user_id' => $ownerUserId > 0 ? $ownerUserId : null,
+                'id' => $appointmentId,
+                'tenant_id' => $tenantId,
+            ]);
+            $pdo->prepare(
+                'UPDATE calendar_availability_slots
+                 SET selected_at = NULL, event_state = "available"
+                 WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id'
+            )->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId]);
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            Flash::set('error', 'Não foi possível alterar o profissional responsável.');
+            $this->redirect($fallback);
+        }
+
+        Audit::log('calendar.owner_updated', [
+            'appointment_id' => $appointmentId,
+            'previous_owner_user_id' => $previousOwnerId ?: null,
+            'owner_user_id' => $ownerUserId ?: null,
+        ], $tenantId);
+        Flash::set('success', 'Profissional responsável atualizado. Faça uma nova busca de disponibilidade.');
+        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : $fallback);
+    }
+
     public function updateStatus(): void
     {
         $tenantId = $this->resolveTenantFromPost();
@@ -306,6 +461,33 @@ final class CalendarController
         }
 
         $wasPreSchedule = (int) ($appointmentBefore['is_pre_schedule'] ?? 0) === 1;
+        $professionalCalendarService = new ProfessionalCalendarService();
+        $professionalCalendarSettings = $professionalCalendarService->tenantSettings($tenantId);
+        if ($status === 'confirmed' && !empty($professionalCalendarSettings['enabled'])) {
+            $ownerUserId = (int) ($appointmentBefore['owner_user_id'] ?? 0);
+            if (!empty($professionalCalendarSettings['require_owner']) && $ownerUserId < 1) {
+                Flash::set('error', 'Selecione o profissional responsável antes de confirmar o agendamento.');
+                $this->redirect('/calendar?tenant_id=' . $tenantId);
+            }
+            if ($ownerUserId > 0) {
+                $profile = $professionalCalendarService->profile($tenantId, $ownerUserId);
+                if (!$profile || empty($profile['accepting_appointments'])) {
+                    Flash::set('error', 'O profissional selecionado não está recebendo agendamentos.');
+                    $this->redirect('/calendar?tenant_id=' . $tenantId);
+                }
+                $conflict = $professionalCalendarService->conflict(
+                    $tenantId,
+                    $ownerUserId,
+                    (string) ($appointmentBefore['starts_at'] ?? ''),
+                    (string) ($appointmentBefore['ends_at'] ?? ''),
+                    $appointmentId
+                );
+                if ($conflict) {
+                    Flash::set('error', 'O profissional já possui “' . (string) ($conflict['title'] ?? 'outro compromisso') . '” nesse horário.');
+                    $this->redirect('/calendar?tenant_id=' . $tenantId);
+                }
+            }
+        }
         $availabilityService = new CalendarAvailabilityService();
         $googleLifecycleService = new CalendarGoogleLifecycleService();
         $googleReleaseWarning = null;

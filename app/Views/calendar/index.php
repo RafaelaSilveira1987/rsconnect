@@ -38,6 +38,9 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
     'date_from' => $filters['date_from'] ?? '',
     'date_to' => $filters['date_to'] ?? '',
 ], static fn ($value) => $value !== '' && $value !== 0));
+$professionalCalendarSettings = $professionalCalendarSettings ?? ['enabled' => false, 'require_owner' => true, 'auto_from_conversation' => false];
+$professionalCalendarEnabled = !empty($professionalCalendarSettings['enabled']);
+$professionalOwnerRequired = $professionalCalendarEnabled && !empty($professionalCalendarSettings['require_owner']);
 ?>
 
 
@@ -81,7 +84,7 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
                 </div>
                 <div class="form-grid two">
                     <label class="field"><span>Conversa</span><select name="conversation_id"><option value="">Sem conversa</option><?php foreach ($conversations as $conversation): ?><option value="<?= (int) $conversation['id'] ?>"><?= View::e(($conversation['contact_name'] ?: $conversation['phone']) . ' · #' . $conversation['id']) ?></option><?php endforeach; ?></select></label>
-                    <label class="field"><span>Responsável</span><select name="owner_user_id"><option value="">Sem responsável</option><?php foreach ($team as $member): ?><option value="<?= (int) $member['id'] ?>"><?= View::e($member['name']) ?></option><?php endforeach; ?></select></label>
+                    <label class="field"><span><?= $professionalCalendarEnabled ? 'Profissional' : 'Responsável' ?><?= $professionalOwnerRequired ? ' *' : '' ?></span><select name="owner_user_id" <?= $professionalOwnerRequired ? 'required' : '' ?>><option value=""><?= $professionalOwnerRequired ? 'Selecione o profissional' : 'Sem responsável' ?></option><?php foreach ($team as $member): ?><option value="<?= (int) $member['id'] ?>"><?= View::e($member['name']) ?></option><?php endforeach; ?></select></label>
                 </div>
                 <div class="form-grid two">
                     <label class="field"><span>Tipo/local</span><select name="location_type"><option value="online">Online</option><option value="presencial">Presencial</option><option value="telefone">Telefone</option></select></label>
@@ -147,7 +150,20 @@ $returnUrl = '/calendar?' . http_build_query(array_filter([
                             </div>
                         <?php endif; ?>
                     <?php endif; ?>
-                    <small><?= View::e($appointment['contact_name'] ?: ($appointment['phone'] ?: 'Sem contato')) ?> · <?= View::e($appointment['lead_title'] ?: 'Sem negócio') ?> · Responsável: <?= View::e($appointment['owner_name'] ?: 'não definido') ?></small>
+                    <small><?= View::e($appointment['contact_name'] ?: ($appointment['phone'] ?: 'Sem contato')) ?> · <?= View::e($appointment['lead_title'] ?: 'Sem negócio') ?> · <?= $professionalCalendarEnabled ? 'Profissional' : 'Responsável' ?>: <?= View::e($appointment['owner_name'] ?: 'não definido') ?></small>
+                    <?php if ($professionalCalendarEnabled && $canManage && !in_array($appointment['status'], ['completed', 'cancelled', 'rejected'], true)): ?>
+                        <form class="calendar-owner-inline" method="post" action="<?= View::e(Router::url('/calendar/owner')) ?>">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>">
+                            <input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>">
+                            <input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>">
+                            <label><span>Profissional</span><select name="owner_user_id" <?= $professionalOwnerRequired ? 'required' : '' ?>>
+                                <option value=""><?= $professionalOwnerRequired ? 'Selecione' : 'Sem profissional' ?></option>
+                                <?php foreach ($team as $member): ?><option value="<?= (int) $member['id'] ?>" <?= (int) ($appointment['owner_user_id'] ?? 0) === (int) $member['id'] ? 'selected' : '' ?>><?= View::e($member['name']) ?></option><?php endforeach; ?>
+                            </select></label>
+                            <button class="btn btn-small btn-quiet" type="submit">Alterar</button>
+                        </form>
+                    <?php endif; ?>
                     <?php if (($appointment['meeting_url'] ?? '') !== ''): ?><small><a href="<?= View::e($appointment['meeting_url']) ?>" target="_blank" rel="noopener">Abrir link da reunião</a></small><?php endif; ?>
                     <?php if (($appointment['sync_status'] ?? '') === 'failed'): ?><small class="text-danger">Falha sync: <?= View::e($appointment['sync_error'] ?? 'erro não informado') ?></small><?php endif; ?>
                     <?php if (!empty($appointment['approval_message_sent_at'])): ?><small class="text-success">Confirmação enviada em <?= View::e($date($appointment['approval_message_sent_at'])) ?></small><?php endif; ?>
