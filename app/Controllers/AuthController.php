@@ -73,7 +73,15 @@ final class AuthController
             }
         }
 
-        Flash::set('success', 'Bem-vinda ao RS Connect!');
+        $userName = trim((string) (Auth::user()['name'] ?? ''));
+        $firstName = $userName !== '' ? (preg_split('/\s+/u', $userName)[0] ?? $userName) : '';
+        $hour = (int) date('G');
+        $greeting = match (true) {
+            $hour >= 5 && $hour < 12 => 'Bom dia',
+            $hour >= 12 && $hour < 18 => 'Boa tarde',
+            default => 'Boa noite',
+        };
+        Flash::set('success', $firstName !== '' ? $greeting . ', ' . $firstName . '!' : $greeting . '!');
         if (!Auth::isSuperAdmin() && Auth::tenantId() && (new OnboardingGuideService())->requiresGuidedAccess((int) Auth::tenantId())) {
             header('Location: ' . Router::url('/onboarding'));
             exit;

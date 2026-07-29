@@ -1,3 +1,13 @@
+# RS Connect v36.7.1 — Saudação neutra e notificações por direção
+
+- substitui a mensagem fixa “Bem-vinda” por uma saudação neutra de acordo com o horário;
+- identifica o usuário pelo primeiro nome após o login;
+- contabiliza separadamente mensagens recebidas e enviadas na atualização em tempo real;
+- mostra “Nova mensagem recebida” somente para mensagens realmente recebidas do contato;
+- mantém “Mensagem enviada” como confirmação do envio feito pela plataforma;
+- evita que mensagens humanas, da IA ou de automações sejam tratadas visualmente como recebidas;
+- não exige migration nova.
+
 # RS Connect v36.7.0 — Atendimento opcional por profissional
 
 - adiciona ativação independente por empresa, desativada por padrão;

@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.7.0 — Atendimento opcional por profissional';
+    public const PACKAGE_LABEL = 'RS Connect 36.7.1 — Saudação neutra e notificações por direção';
     public const REQUIRED_MIGRATION = '064_professional_conversation_assignment_compat.sql';
 
     private PDO $pdo;

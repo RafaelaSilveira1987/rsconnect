@@ -741,22 +741,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function appendMessages(messages) {
-    if (!thread || !Array.isArray(messages) || messages.length === 0) return 0;
+    const summary = { added: 0, incoming: 0, outgoing: 0 };
+    if (!thread || !Array.isArray(messages) || messages.length === 0) return summary;
     const stick = shouldStickToBottom();
-    let added = 0;
     messages.forEach((message) => {
       const id = Number(message.id || 0);
       if (!id || thread.querySelector(`[data-message-id="${id}"]`)) return;
       thread.insertAdjacentHTML('beforeend', renderMessage(message));
       lastMessageId = Math.max(lastMessageId, id);
-      added += 1;
+      summary.added += 1;
+      if (message.direction === 'incoming') summary.incoming += 1;
+      if (message.direction === 'outgoing') summary.outgoing += 1;
     });
     const empty = thread.querySelector('.chat-empty');
-    if (empty && added > 0) empty.remove();
+    if (empty && summary.added > 0) empty.remove();
     workspace.dataset.lastMessageId = String(lastMessageId);
     thread.dataset.lastMessageId = String(lastMessageId);
-    if (stick || added > 0) thread.scrollTop = thread.scrollHeight;
-    return added;
+    if (stick || summary.added > 0) thread.scrollTop = thread.scrollHeight;
+    return summary;
   }
 
   async function poll() {
@@ -777,10 +779,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const payload = await response.json();
       updateConversationList(payload.conversations || []);
       applyOwnership(payload.ownership || null);
-      const added = appendMessages(payload.messages || []);
+      const messageSummary = appendMessages(payload.messages || []);
       unreadTotal = Number(payload.unread_total || 0);
       pulseTitle(unreadTotal);
-      if (added > 0) showToast(`${added} nova(s) mensagem(ns) recebida(s).`);
+      if (messageSummary.incoming === 1) showToast('Nova mensagem recebida.');
+      if (messageSummary.incoming > 1) showToast(`${messageSummary.incoming} novas mensagens recebidas.`);
       setStatus('Atualização automática ativa', 'ok');
     } catch (error) {
       setStatus('Reconectando atualização...', 'error');
