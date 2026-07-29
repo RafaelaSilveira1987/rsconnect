@@ -1,3 +1,12 @@
+# RS Connect v36.6.39 — Assinatura humana entregue ao WhatsApp
+
+- corrige a assinatura quando o atendimento é realizado por um Super Admin global;
+- permite habilitar nome público e função também para usuários da Equipe RS;
+- envia ao contato o nome do atendente em negrito na primeira linha da mensagem;
+- mantém respostas da IA e automações sem assinatura humana;
+- registra em auditoria e na resposta JSON se a assinatura foi realmente aplicada;
+- não exige migration nova.
+
 # RS Connect v36.6.38 — Status Evolution em tempo real
 
 - Remove o status manual do cadastro de conexões.

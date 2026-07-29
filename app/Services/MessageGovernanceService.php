@@ -51,14 +51,25 @@ final class MessageGovernanceService
         ];
 
         try {
+            // A empresa define se mensagens humanas devem ser assinadas. O usuário pode
+            // pertencer à própria empresa ou ser um Super Admin global atendendo em nome dela.
+            // A consulta anterior fazia INNER JOIN por tenant_id e, por isso, descartava todo
+            // usuário global antes mesmo de montar o texto entregue à Evolution.
             $statement = $pdo->prepare(
                 'SELECT t.name AS tenant_name, t.whatsapp_human_signature_enabled,
                         t.whatsapp_human_signature_format,
+                        u.tenant_id AS user_tenant_id, u.role, u.status,
                         u.name, u.whatsapp_display_name, u.whatsapp_role_label,
                         u.whatsapp_signature_enabled
-                 FROM users u
-                 INNER JOIN tenants t ON t.id = u.tenant_id
-                 WHERE u.id = :user_id AND u.tenant_id = :tenant_id LIMIT 1'
+                 FROM tenants t
+                 INNER JOIN users u ON u.id = :user_id
+                 WHERE t.id = :tenant_id
+                   AND u.status = "active"
+                   AND (
+                        u.tenant_id = t.id
+                        OR (u.tenant_id IS NULL AND u.role = "super_admin")
+                   )
+                 LIMIT 1'
             );
             $statement->execute(['user_id' => $userId, 'tenant_id' => $tenantId]);
             $row = $statement->fetch(PDO::FETCH_ASSOC);
@@ -83,12 +94,20 @@ final class MessageGovernanceService
                 default => $roleLabel !== '' ? $displayName . ' — ' . $roleLabel : $displayName,
             };
 
-            $result['delivered'] = $signature . "\n" . $original;
+            // A assinatura integra o texto enviado para a Evolution. O WhatsApp não
+            // possui um campo separado para o nome do atendente em conversas individuais.
+            $result['delivered'] = '*' . $signature . "*\n" . $original;
             $result['display_name'] = $displayName;
             $result['role_label'] = $roleLabel !== '' ? $roleLabel : null;
             $result['signed'] = true;
             return $result;
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            error_log(sprintf(
+                '[RS Connect][human-signature] tenant=%d user=%d error=%s',
+                $tenantId,
+                $userId,
+                $exception->getMessage()
+            ));
             return $result;
         }
     }

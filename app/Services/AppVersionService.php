@@ -12,7 +12,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.38 — Status Evolution validado diretamente na API';
+    public const PACKAGE_LABEL = 'RS Connect 36.6.39 — Assinatura humana entregue ao WhatsApp';
     public const REQUIRED_MIGRATION = '063_message_governance_evolution_realtime.sql';
 
     private PDO $pdo;

@@ -384,6 +384,7 @@ final class ConversationController
                 'conversation_id' => $conversationId,
                 'instance_id' => $instanceId,
                 'http_status' => $result['status'] ?? null,
+                'human_signature_applied' => (bool) $preparedMessage['signed'],
             ], (int) $instance['tenant_id']);
 
             Flash::set('success', 'Conversa iniciada e mensagem enviada.');
@@ -514,6 +515,7 @@ final class ConversationController
             Audit::log('conversation.message_sent', [
                 'conversation_id' => $conversationId,
                 'http_status' => $result['status'] ?? null,
+                'human_signature_applied' => (bool) $preparedMessage['signed'],
             ], (int) $conversation['tenant_id']);
             $sendSucceeded = true;
             if (!$wantsJson) {
@@ -541,6 +543,7 @@ final class ConversationController
                 'message' => $sendSucceeded ? 'Mensagem enviada.' : ('Falha no envio: ' . $sendError),
                 'conversation_id' => $conversationId,
                 'attendance_mode' => 'human',
+                'human_signature_applied' => $sendSucceeded && !empty($preparedMessage['signed']),
             ], $sendSucceeded ? 200 : 422);
         }
 
