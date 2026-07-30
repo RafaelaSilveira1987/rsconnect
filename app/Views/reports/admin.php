@@ -55,7 +55,7 @@ $healthSeries = json_encode(array_map(static fn (array $row): array => [
     'value' => (int) ($row['total'] ?? 0),
 ], $healthDistribution), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.4.7')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.10.0')) ?>">
 <div class="executive-report-page executive-report-admin report-v3646 report-v3647">
 <section class="admin-executive-hero executive-report-hero">
     <div class="admin-executive-hero-copy">
@@ -64,6 +64,7 @@ $healthSeries = json_encode(array_map(static fn (array $row): array => [
         <p>Uma visão executiva da operação: crescimento, adoção, saúde dos clientes, IA, integrações, agenda, receita e comercial RS.</p>
     </div>
     <div class="admin-executive-hero-actions">
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/team?' . http_build_query(array_filter(['start' => $filters['start'] ?? '', 'end' => $filters['end'] ?? '', 'tenant_id' => (int) ($filters['tenant_id'] ?? 0)], static fn ($value) => $value !== '' && $value !== 0)))) ?>">Equipe e profissionais</a>
         <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'companies']))) ?>">Exportar empresas</a>
         <button class="btn btn-outline" type="button" onclick="window.print()">Imprimir relatório</button>
     </div>
@@ -145,5 +146,5 @@ $healthSeries = json_encode(array_map(static fn (array $row): array => [
         <div class="report-funnel is-admin"><?php $commercialMax=$max($commercialStages); foreach ($commercialStages as $row): $width=max(18,min(100,((int)$row['total']/$commercialMax)*100)); ?><article><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= (int)$row['total'] ?></strong><small><?= $money($row['value']) ?></small></div></article><?php endforeach; ?><?php if (!$commercialStages): ?><div class="empty-state">Aplique a migration 037 para carregar o CRM comercial.</div><?php endif; ?></div>
     </section>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.4.7')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.10.0')) ?>" defer></script>
 </div>

@@ -9,6 +9,7 @@ use App\Core\Database;
 use App\Core\View;
 use App\Services\AdminExecutiveReportService;
 use App\Services\TenantExecutiveReportService;
+use App\Services\TeamProfessionalReportService;
 use PDO;
 
 final class ReportController
@@ -34,6 +35,82 @@ final class ReportController
             'tenants' => [],
             ...$reportData,
         ], 'app');
+    }
+
+
+    public function team(): void
+    {
+        $filters = $this->teamFilters();
+        $tenants = Auth::isSuperAdmin() ? $this->reportTenants() : [];
+        $reportData = [
+            'scope' => ['allowed' => false, 'mode' => 'pending'],
+            'readiness' => ['ready' => false, 'missing' => [], 'version' => ''],
+            'tenant' => [],
+            'users' => [],
+            'selected_user_id' => 0,
+            'overview' => [],
+            'professionals' => [],
+            'dailySeries' => [],
+            'recentActivities' => [],
+            'warnings' => [],
+        ];
+
+        if ((int) $filters['tenant_id'] > 0) {
+            try {
+                $reportData = (new TeamProfessionalReportService())->build($filters);
+            } catch (\RuntimeException $exception) {
+                http_response_code(403);
+                $reportData['warnings'][] = $exception->getMessage();
+            }
+        }
+
+        View::render('reports.team', [
+            'title' => 'Equipe e profissionais',
+            'filters' => $filters,
+            'tenants' => $tenants,
+            ...$reportData,
+        ], 'app');
+    }
+
+    public function teamExport(): void
+    {
+        $filters = $this->teamFilters();
+        if ((int) $filters['tenant_id'] < 1) {
+            http_response_code(422);
+            $this->csv('rs-connect-equipe-profissionais.csv', []);
+        }
+
+        try {
+            $data = (new TeamProfessionalReportService())->build($filters);
+        } catch (\RuntimeException $exception) {
+            http_response_code(403);
+            $this->csv('rs-connect-equipe-profissionais.csv', []);
+        }
+        $rows = [];
+        foreach ($data['professionals'] ?? [] as $row) {
+            $rows[] = [
+                'profissional' => (string) ($row['name'] ?? ''),
+                'funcao' => (string) ($row['role_label'] ?? ''),
+                'status_usuario' => (string) ($row['status'] ?? ''),
+                'mensagens_humanas' => (int) ($row['human_messages'] ?? 0),
+                'conversas_respondidas' => (int) ($row['conversations_replied'] ?? 0),
+                'primeiras_respostas' => (int) ($row['first_responses'] ?? 0),
+                'tempo_medio_primeira_resposta_segundos' => (int) ($row['avg_first_response_seconds'] ?? 0),
+                'conversas_encerradas' => (int) ($row['closed_conversations'] ?? 0),
+                'conversas_abertas' => (int) ($row['open_conversations'] ?? 0),
+                'transferencias_recebidas' => (int) ($row['transfers_received'] ?? 0),
+                'transferencias_enviadas' => (int) ($row['transfers_out'] ?? 0),
+                'clientes_preferenciais' => (int) ($row['preferred_clients'] ?? 0),
+                'agendamentos' => (int) ($row['appointments'] ?? 0),
+                'confirmados' => (int) ($row['appointments_confirmed'] ?? 0),
+                'concluidos' => (int) ($row['appointments_completed'] ?? 0),
+                'cancelados' => (int) ($row['appointments_cancelled'] ?? 0),
+                'nao_compareceram' => (int) ($row['appointments_no_show'] ?? 0),
+                'taxa_resultado_agenda_percentual' => number_format((float) ($row['appointment_success_rate'] ?? 0), 2, '.', ''),
+                'taxa_comparecimento_percentual' => number_format((float) ($row['attendance_rate'] ?? 0), 2, '.', ''),
+            ];
+        }
+        $this->csv('rs-connect-equipe-profissionais.csv', $rows);
     }
 
     public function export(): void
@@ -170,6 +247,40 @@ final class ReportController
             'end' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $end) ? $end : date('Y-m-d'),
             'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
         ];
+    }
+
+
+    private function teamFilters(): array
+    {
+        $start = trim((string) ($_GET['start'] ?? date('Y-m-d', strtotime('-29 days'))));
+        $end = trim((string) ($_GET['end'] ?? date('Y-m-d')));
+        $start = preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) ? $start : date('Y-m-d', strtotime('-29 days'));
+        $end = preg_match('/^\d{4}-\d{2}-\d{2}$/', $end) ? $end : date('Y-m-d');
+        if ($start > $end) {
+            [$start, $end] = [$end, $start];
+        }
+
+        $startDate = new \DateTimeImmutable($start);
+        $endDate = new \DateTimeImmutable($end);
+        if ($startDate->diff($endDate)->days > 366) {
+            $start = $endDate->modify('-365 days')->format('Y-m-d');
+        }
+
+        return [
+            'start' => $start,
+            'end' => $end,
+            'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
+            'user_id' => (int) ($_GET['user_id'] ?? 0),
+        ];
+    }
+
+    private function reportTenants(): array
+    {
+        return $this->rows(
+            Database::connection(),
+            'SELECT id, name, status FROM tenants ORDER BY status = "active" DESC, name',
+            []
+        );
     }
 
     private function dateParams(array $filters): array

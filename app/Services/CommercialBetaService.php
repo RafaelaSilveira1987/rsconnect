@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.10.0', 'title' => 'Relatórios de equipe e profissionais', 'summary' => 'Adiciona visão consolidada e individual por profissional com conversas respondidas, primeira resposta por ciclo persistente, transferências, clientes preferenciais, agenda, comparecimento, histórico operacional e exportação CSV com escopo próprio ou da equipe.'],
             ['version' => '36.9.1', 'title' => 'Base histórica e métricas por profissional', 'summary' => 'Registra atribuições, transferências, ciclos de conversa, primeira resposta humana, mudanças de responsável e status da agenda, preparando relatórios confiáveis com permissões próprias e da equipe.'],
             ['version' => '36.9.0', 'title' => 'Identificadores públicos UUID', 'summary' => 'Substitui IDs numéricos nas URLs por UUIDs públicos criptografados e autenticados, mantém compatibilidade com links antigos e preserva as chaves numéricas somente no backend e no banco.'],
             ['version' => '36.8.2', 'title' => 'Calendário da agenda', 'summary' => 'Mantém a lista operacional e adiciona visualizações Dia, Semana e Mês, filtros por profissional e status, navegação entre períodos e detalhes do compromisso em modal. A última visualização fica salva por usuário no navegador.'],

@@ -24,7 +24,7 @@ $checks = [
     'troca de profissional disponível' => str_contains($calendar, 'public function updateOwner(): void'),
     'rotas de perfil disponíveis' => str_contains($routes, '/calendar/availability/professional-profile'),
     'tela possui agenda individual' => str_contains($view, 'Agenda por profissional'),
-    'versão atualizada' => str_contains($version, '36.9.1'),
+    'versão atualizada' => str_contains($version, '36.10.0'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

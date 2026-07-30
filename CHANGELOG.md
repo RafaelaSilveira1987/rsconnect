@@ -1,3 +1,20 @@
+# RS Connect v36.10.0 — Relatórios de equipe e profissionais
+
+- cria a nova área `Relatórios → Equipe e profissionais`;
+- separa profissional preferido, responsável pela conversa e profissional do agendamento;
+- respeita os escopos `reports.team.view_own` e `reports.team.view_all`;
+- permite ao Super Admin selecionar uma empresa por UUID público;
+- permite filtrar período e profissional sem expor IDs numéricos no navegador;
+- mostra conversas respondidas, mensagens humanas, primeira resposta, encerramentos, transferências e conversas abertas;
+- mostra clientes preferenciais, agendamentos, confirmados, concluídos, cancelados e não comparecimentos;
+- calcula resultado da agenda e taxa de comparecimento por profissional;
+- adiciona evolução diária, comparativo da equipe, carga operacional e histórico recente;
+- adiciona exportação CSV respeitando o mesmo escopo de permissão;
+- adiciona diagnóstico `database/diagnostics/team_professional_reports_v36.10.0.sql`;
+- adiciona a migration compatível `068_conversation_service_cycles_compat.sql`;
+- preserva cada ciclo aberto/reaberto para não perder a primeira resposta ao encerrar e reabrir uma conversa;
+- exige as migrations 067 e 068 aplicadas em sequência.
+
 # RS Connect v36.9.1 — Base histórica e métricas por profissional
 
 - registra atribuições, transferências e liberações de conversas em histórico próprio;

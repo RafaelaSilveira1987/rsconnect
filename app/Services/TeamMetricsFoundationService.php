@@ -12,11 +12,11 @@ use Throwable;
 
 /**
  * Define o escopo seguro dos futuros relatórios por profissional e informa
- * se a base histórica da migration 067 está pronta.
+ * se a base histórica das migrations 067 e 068 está pronta.
  */
 final class TeamMetricsFoundationService
 {
-    public const VERSION = '36.9.1-operational-history';
+    public const VERSION = '36.10.0-persistent-service-cycles';
 
     private PDO $pdo;
 
@@ -90,6 +90,7 @@ final class TeamMetricsFoundationService
             'conversation_assignment_history',
             'conversation_status_history',
             'calendar_appointment_history',
+            'conversation_service_cycles',
         ];
         $requiredColumns = [
             ['conversations', 'first_incoming_at'],

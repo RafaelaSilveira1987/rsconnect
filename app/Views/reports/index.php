@@ -1,5 +1,6 @@
 <?php
 
+use App\Core\Auth;
 use App\Core\Router;
 use App\Core\View;
 
@@ -63,7 +64,7 @@ if (!is_string($donutSeries)) {
 }
 $donutSeriesB64 = base64_encode($donutSeries);
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.4.7')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.10.0')) ?>">
 <div class="executive-report-page client-manager-report report-v3646 report-v3647">
     <section class="client-report-hero">
         <div>
@@ -72,6 +73,7 @@ $donutSeriesB64 = base64_encode($donutSeries);
             <p>Veja o que realmente aconteceu no período: crescimento do atendimento, participação da IA, horários de maior procura, conversão do CRM e desempenho da agenda.</p>
         </div>
         <div class="client-report-hero-actions">
+            <?php if (Auth::can('reports.team.view_own') || Auth::can('reports.team.view_all')): ?><a class="btn btn-outline" href="<?= View::e(Router::url('/reports/team?' . http_build_query($queryBase))) ?>">Equipe e profissionais</a><?php endif; ?>
             <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'conversations']))) ?>">Exportar conversas</a>
             <button class="btn btn-outline" type="button" onclick="window.print()">Imprimir relatório</button>
         </div>
@@ -166,5 +168,5 @@ $donutSeriesB64 = base64_encode($donutSeries);
             </div>
         </section>
     </div>
-<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.4.7')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.10.0')) ?>" defer></script>
 </div>

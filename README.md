@@ -1,3 +1,16 @@
+# RS Connect v36.10.0 — Relatórios de equipe e profissionais
+
+A versão 36.10.0 transforma a base histórica das migrations 067 e 068 em uma tela operacional de relatórios. Acesse **Relatórios → Equipe e profissionais** para comparar atendimento, primeira resposta, transferências, carteira preferencial e resultados da agenda por usuário.
+
+- exige `067_operational_history_metrics_compat.sql` e depois `068_conversation_service_cycles_compat.sql`;
+- a migration 068 preserva cada ciclo de atendimento e sua primeira resposta, inclusive após reaberturas;
+- profissionais comuns veem somente os próprios indicadores quando possuem `reports.team.view_own`;
+- administradores da empresa veem toda a equipe com `reports.team.view_all`;
+- Super Admin escolhe uma empresa por vez;
+- filtros e exportações usam UUIDs públicos nas URLs.
+
+Diagnóstico: `database/diagnostics/team_professional_reports_v36.10.0.sql`.
+
 # RS Connect — pacote VPS
 
 Pacote consolidado até o RS Connect 36.6.36 — Governança de mensagens e Evolution em tempo real.
@@ -110,6 +123,11 @@ database/migrations/060_free_trial_guided_first_access.sql
 database/migrations/061_onboarding_calendar_modes.sql
 database/migrations/062_prompt_studio_and_versions.sql
 database/migrations/063_message_governance_evolution_realtime.sql
+database/migrations/064_professional_conversation_assignment_compat.sql
+database/migrations/065_professional_calendar_profiles_compat.sql
+database/migrations/066_contact_schedule_overlap_guard_compat.sql
+database/migrations/067_operational_history_metrics_compat.sql
+database/migrations/068_conversation_service_cycles_compat.sql
 ```
 
 Consulte `README-RS-CONNECT-36.3.0.md` para instalar e validar a rotina de backup.
