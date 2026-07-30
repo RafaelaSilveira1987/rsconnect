@@ -16,7 +16,7 @@ use Throwable;
  */
 final class TeamMetricsFoundationService
 {
-    public const VERSION = '36.10.1-resilient-service-cycles';
+    public const VERSION = '36.10.3-cycle-status-sync';
 
     private PDO $pdo;
 

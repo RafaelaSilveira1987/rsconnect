@@ -379,6 +379,13 @@ final class ConversationOwnershipService
             'tenant_id' => $tenantId,
         ]);
 
+        (new ConversationCycleService())->ensureActiveCycle(
+            $pdo,
+            $conversationId,
+            $tenantId,
+            'application_conversation_reopened'
+        );
+
         $conversation['status'] = 'open';
         $conversation['assigned_user_id'] = null;
         $conversation['assigned_user_name'] = null;

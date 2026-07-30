@@ -18,6 +18,7 @@ use App\Services\AgentRoutingService;
 use App\Services\AgentOperatingPolicyService;
 use App\Services\AiModelService;
 use App\Services\ConversationFlowService;
+use App\Services\ConversationCycleService;
 use App\Services\ConversationOwnershipService;
 use App\Services\MessageGovernanceService;
 use App\Services\EvolutionService;
@@ -1058,8 +1059,27 @@ final class ConversationController
                     'id' => $conversationId,
                     'tenant_id' => (int) $conversation['tenant_id'],
                 ]);
+
+            $cycleService = new ConversationCycleService();
             if ($status === 'closed') {
+                // Fecha o ciclo antes de liberar o responsável. Assim o ator e
+                // os marcos do atendimento permanecem disponíveis no relatório.
+                $cycleService->closeActiveCycle(
+                    $pdo,
+                    $conversationId,
+                    (int) $conversation['tenant_id'],
+                    Auth::id()
+                );
                 $ownershipService->releaseWhenClosed($pdo, $conversationId, (int) $conversation['tenant_id']);
+            } else {
+                // Defesa adicional para conversas legadas ou reabertas durante
+                // uma janela sem trigger de ciclo.
+                $cycleService->ensureActiveCycle(
+                    $pdo,
+                    $conversationId,
+                    (int) $conversation['tenant_id'],
+                    'application_status_reopen'
+                );
             }
             $pdo->commit();
         } catch (Throwable $exception) {

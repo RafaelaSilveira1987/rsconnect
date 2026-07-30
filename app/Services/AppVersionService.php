@@ -13,8 +13,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.10.2 — Status visual das conversas e recuperação resiliente dos ciclos';
-    public const REQUIRED_MIGRATION = '069_service_cycle_recovery_compat.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.10.3 — Sincronização resiliente do status e dos ciclos';
+    public const REQUIRED_MIGRATION = '070_conversation_cycle_status_sync_compat.sql';
 
     private PDO $pdo;
 
@@ -196,7 +196,7 @@ final class AppVersionService
             $operationalHistoryReady
                 ? 'Atribuições, transferências, ciclos das conversas, primeira resposta humana e mudanças da agenda estão auditáveis.'
                 : 'O histórico operacional necessário para relatórios confiáveis ainda não foi aplicado.',
-            'Executar database/migrations/067_operational_history_metrics_compat.sql e 069_service_cycle_recovery_compat.sql.'
+            'Executar as migrations 067, 068, 069 e 070; a 070 sincroniza encerramento e reabertura com os ciclos dos relatórios.'
         );
 
         $calendarOnboardingReady = $this->columnExists('tenant_onboarding_settings', 'calendar_mode')

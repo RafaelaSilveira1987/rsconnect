@@ -1,16 +1,25 @@
-# RS Connect v36.10.2 — Status visual das conversas e recuperação dos ciclos
+# RS Connect v36.10.3 — Sincronização resiliente do status e dos ciclos
 
-Esta versão reúne em um único pacote a recuperação de ciclos ausentes da v36.10.1 e a identificação visual das conversas conforme o status operacional.
+Esta correção fecha a divergência identificada na homologação: a conversa podia aparecer como **Encerrada** na interface enquanto `conversation_service_cycles` permanecia com `cycle_status = active`.
 
-- **Aberta:** destaque verde;
-- **Pendente:** destaque amarelo;
-- **Encerrada:** destaque cinza;
-- cada item também exibe o rótulo textual do status;
-- a lista e o painel selecionado são atualizados pelo polling em tempo real;
-- execute somente `database/migrations/069_service_cycle_recovery_compat.sql`;
-- não existe migration adicional para as cores.
+Aplique, após as migrations 067, 068 e 069:
 
-Diagnóstico dos ciclos: `database/diagnostics/service_cycle_recovery_v36.10.1.sql`.
+`database/migrations/070_conversation_cycle_status_sync_compat.sql`
+
+A versão adiciona duas garantias complementares:
+
+- o backend fecha/reabre o ciclo na mesma transação da ação manual;
+- o trigger sincroniza os ciclos para atualizações vindas de webhook, n8n e rotinas externas.
+
+Valide com:
+
+`database/diagnostics/conversation_cycle_status_sync_v36.10.3.sql`
+
+# RS Connect v36.10.2 — Status visual das conversas
+
+- diferencia conversas abertas, pendentes e encerradas por cor;
+- atualiza o estado visual pelo polling em tempo real;
+- mantém junto a recuperação resiliente da migration 069.
 
 # RS Connect v36.10.1 — Recuperação resiliente dos ciclos de atendimento
 
