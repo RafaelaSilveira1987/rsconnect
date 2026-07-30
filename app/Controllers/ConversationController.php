@@ -925,11 +925,21 @@ final class ConversationController
                     'UPDATE conversations
                      SET attendance_mode = :mode,
                          assigned_user_id = :assigned_user_id,
-                         status = IF(status = "closed", "open", status)
+                         assigned_at = IF(:assigned_user_for_date IS NULL, NULL, CURRENT_TIMESTAMP),
+                         assignment_source = IF(:assigned_user_for_source IS NULL, "released", "manual_mode"),
+                         assignment_updated_by_user_id = :assignment_updated_by_user_id,
+                         assignment_released_at = IF(:assigned_user_for_release IS NULL, CURRENT_TIMESTAMP, NULL),
+                         status = IF(status = "closed", "open", status),
+                         status_changed_by_user_id = :status_changed_by_user_id
                      WHERE id = :id'
                 )->execute([
                     'mode' => $mode,
                     'assigned_user_id' => $assignedUserId,
+                    'assigned_user_for_date' => $assignedUserId,
+                    'assigned_user_for_source' => $assignedUserId,
+                    'assigned_user_for_release' => $assignedUserId,
+                    'assignment_updated_by_user_id' => Auth::id(),
+                    'status_changed_by_user_id' => Auth::id(),
                     'id' => $conversationId,
                 ]);
             }
@@ -1037,9 +1047,14 @@ final class ConversationController
             if ($status !== 'closed') {
                 $conversation = $ownershipService->reopenIfClosed($pdo, $conversation);
             }
-            $pdo->prepare('UPDATE conversations SET status = :status WHERE id = :id AND tenant_id = :tenant_id')
-                ->execute([
+            $pdo->prepare(
+                'UPDATE conversations
+                 SET status = :status,
+                     status_changed_by_user_id = :status_changed_by_user_id
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            )->execute([
                     'status' => $status,
+                    'status_changed_by_user_id' => Auth::id(),
                     'id' => $conversationId,
                     'tenant_id' => (int) $conversation['tenant_id'],
                 ]);

@@ -13,8 +13,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.9.0 — Identificadores públicos UUID';
-    public const REQUIRED_MIGRATION = '066_contact_schedule_overlap_guard_compat.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.9.1 — Base histórica e métricas por profissional';
+    public const REQUIRED_MIGRATION = '067_operational_history_metrics_compat.sql';
 
     private PDO $pdo;
 
@@ -99,13 +99,16 @@ final class AppVersionService
             'ai_agent_prompt_versions',
             'evolution_connection_events',
             'message_retention_runs',
+            'conversation_assignment_history',
+            'conversation_status_history',
+            'calendar_appointment_history',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 066, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 067, conforme o pacote implantado.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')
@@ -174,6 +177,24 @@ final class AppVersionService
                 ? 'Horários individuais, calendário por usuário e bloqueio opcional de sobreposição do mesmo cliente estão disponíveis.'
                 : 'A estrutura opcional de agenda individual ainda não foi aplicada.',
             'Executar database/migrations/065_professional_calendar_profiles_compat.sql e 066_contact_schedule_overlap_guard_compat.sql.'
+        );
+
+        $operationalHistoryReady = $this->tableExists('conversation_assignment_history')
+            && $this->tableExists('conversation_status_history')
+            && $this->tableExists('calendar_appointment_history')
+            && $this->columnExists('conversations', 'first_incoming_at')
+            && $this->columnExists('conversations', 'first_response_at')
+            && $this->columnExists('conversations', 'first_response_user_id')
+            && $this->columnExists('calendar_appointments', 'confirmed_at')
+            && $this->columnExists('calendar_appointments', 'completed_at')
+            && $this->columnExists('calendar_appointments', 'no_show_at');
+        $checks[] = $this->check(
+            'Base histórica por profissional',
+            $operationalHistoryReady ? 'ok' : 'blocked',
+            $operationalHistoryReady
+                ? 'Atribuições, transferências, ciclos das conversas, primeira resposta humana e mudanças da agenda estão auditáveis.'
+                : 'O histórico operacional necessário para relatórios confiáveis ainda não foi aplicado.',
+            'Executar database/migrations/067_operational_history_metrics_compat.sql.'
         );
 
         $calendarOnboardingReady = $this->columnExists('tenant_onboarding_settings', 'calendar_mode')

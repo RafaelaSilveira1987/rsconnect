@@ -448,6 +448,7 @@ final class CalendarController
             $pdo->prepare(
                 'UPDATE calendar_appointments
                  SET owner_user_id = :owner_user_id,
+                     owner_changed_by_user_id = :owner_changed_by_user_id,
                      availability_status = NULL,
                      availability_request_id = NULL,
                      availability_slot_count = 0,
@@ -466,6 +467,7 @@ final class CalendarController
                  WHERE id = :id AND tenant_id = :tenant_id'
             )->execute([
                 'owner_user_id' => $ownerUserId > 0 ? $ownerUserId : null,
+                'owner_changed_by_user_id' => Auth::id(),
                 'id' => $appointmentId,
                 'tenant_id' => $tenantId,
             ]);
@@ -609,7 +611,12 @@ final class CalendarController
             default => null,
         };
         $approvalSet = '';
-        $params = ['status' => $status, 'id' => $appointmentId, 'tenant_id' => $tenantId];
+        $params = [
+            'status' => $status,
+            'status_changed_by_user_id' => Auth::id(),
+            'id' => $appointmentId,
+            'tenant_id' => $tenantId,
+        ];
         if ($this->hasColumn('calendar_appointments', 'approval_status') && $approvalStatus !== null) {
             $approvalSet = ', approval_status = :approval_status';
             $params['approval_status'] = $approvalStatus;
@@ -621,7 +628,9 @@ final class CalendarController
 
         $statement = Database::connection()->prepare(
             'UPDATE calendar_appointments
-             SET status = :status' . $approvalSet . ', updated_at = CURRENT_TIMESTAMP
+             SET status = :status,
+                 status_changed_by_user_id = :status_changed_by_user_id' . $approvalSet . ',
+                 updated_at = CURRENT_TIMESTAMP
              WHERE id = :id AND tenant_id = :tenant_id'
         );
         $statement->execute($params);

@@ -1,3 +1,16 @@
+# RS Connect v36.9.1 — Base histórica e métricas por profissional
+
+- registra atribuições, transferências e liberações de conversas em histórico próprio;
+- registra abertura, reabertura, pendência e encerramento de cada conversa;
+- identifica a primeira mensagem recebida, a primeira resposta humana e o usuário responsável;
+- registra criação, status, troca de profissional, reagendamento e exclusão da agenda;
+- mantém confirmação, conclusão, cancelamento e não comparecimento como marcos separados;
+- adiciona permissões distintas para indicadores próprios e para toda a equipe;
+- utiliza triggers para cobrir painel, webhook, IA, n8n e manutenção automática;
+- recupera métricas antigas a partir das mensagens reais quando possível e cria snapshots idempotentes do estado atual;
+- adiciona a migration compatível `067_operational_history_metrics_compat.sql`;
+- prepara a base para `Relatórios > Equipe e profissionais` sem ainda alterar a interface do relatório.
+
 # RS Connect v36.9.0 — Identificadores públicos UUID
 
 - substitui IDs numéricos sequenciais nas URLs por UUIDs públicos opacos, autenticados e vinculados ao tipo do registro;

@@ -364,6 +364,7 @@ final class ConversationOwnershipService
         $pdo->prepare(
             'UPDATE conversations
              SET status = "open",
+                 status_changed_by_user_id = :status_actor_id,
                  assigned_user_id = NULL,
                  assigned_at = NULL,
                  assignment_source = "released",
@@ -372,6 +373,7 @@ final class ConversationOwnershipService
                  operational_status = "waiting_agent"
              WHERE id = :id AND tenant_id = :tenant_id'
         )->execute([
+            'status_actor_id' => Auth::id(),
             'actor_id' => Auth::id(),
             'id' => $conversationId,
             'tenant_id' => $tenantId,
