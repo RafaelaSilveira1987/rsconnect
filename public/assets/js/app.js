@@ -309,9 +309,12 @@ document.addEventListener('DOMContentLoaded', () => {
     existing.innerHTML = '';
   }
 
-  function conversationUrl(id) {
+  function conversationUrl(id, publicId = '') {
     const url = new URL(window.location.href);
-    url.searchParams.set('conversation_id', String(id));
+    url.searchParams.delete('conversation_id');
+    url.searchParams.delete('conversation_uuid');
+    if (publicId) url.searchParams.set('conversation_uuid', String(publicId));
+    else url.searchParams.set('conversation_id', String(id));
     return url.pathname + url.search;
   }
 
@@ -321,7 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
       clearExisting();
       return;
     }
-    existing.innerHTML = `<div><strong>Conversa já existente</strong><small>Este contato já possui atendimento neste canal. Ao enviar, a conversa existente será reaberta e usada.</small></div><a class="btn btn-outline btn-small" href="${escape(conversationUrl(item.conversation_id))}">Abrir conversa</a>`;
+    existing.innerHTML = `<div><strong>Conversa já existente</strong><small>Este contato já possui atendimento neste canal. Ao enviar, a conversa existente será reaberta e usada.</small></div><a class="btn btn-outline btn-small" href="${escape(conversationUrl(item.conversation_id, item.conversation_public_id || ''))}">Abrir conversa</a>`;
     existing.hidden = false;
   }
 
@@ -422,6 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const avatarUrl = workspace.dataset.avatarUrl || '';
   const currentParams = new URLSearchParams(workspace.dataset.currentQuery || '');
   let selectedConversationId = Number(workspace.dataset.conversationId || 0);
+  let selectedConversationPublicId = String(workspace.dataset.conversationPublicId || '');
   let lastMessageId = Number(workspace.dataset.lastMessageId || 0);
   let unreadTotal = 0;
   let timer = null;
@@ -475,19 +479,21 @@ document.addEventListener('DOMContentLoaded', () => {
     document.title = count > 0 ? `(${count}) ${baseTitle} — RS Connect` : `${baseTitle} — RS Connect`;
   }
 
-  function buildConversationUrl(id) {
+  function buildConversationUrl(id, publicId = '') {
     const url = new URL(window.location.href);
-    ['search', 'status', 'mode', 'instance_id', 'tenant_id', 'intent'].forEach((key) => url.searchParams.delete(key));
+    ['search', 'status', 'mode', 'instance_id', 'tenant_id', 'conversation_id', 'instance_uuid', 'tenant_uuid', 'conversation_uuid', 'intent'].forEach((key) => url.searchParams.delete(key));
     currentParams.forEach((value, key) => { if (value !== '') url.searchParams.set(key, value); });
-    url.searchParams.set('conversation_id', String(id));
+    if (publicId) url.searchParams.set('conversation_uuid', String(publicId));
+    else url.searchParams.set('conversation_id', String(id));
     return url.pathname + url.search;
   }
 
   function syncBrowserQuery() {
     const url = new URL(window.location.href);
-    ['search', 'status', 'mode', 'instance_id', 'tenant_id', 'intent'].forEach((key) => url.searchParams.delete(key));
+    ['search', 'status', 'mode', 'instance_id', 'tenant_id', 'conversation_id', 'instance_uuid', 'tenant_uuid', 'conversation_uuid', 'intent'].forEach((key) => url.searchParams.delete(key));
     currentParams.forEach((value, key) => { if (value !== '') url.searchParams.set(key, value); });
-    if (selectedConversationId > 0) url.searchParams.set('conversation_id', String(selectedConversationId));
+    if (selectedConversationPublicId) url.searchParams.set('conversation_uuid', selectedConversationPublicId);
+    else if (selectedConversationId > 0) url.searchParams.set('conversation_id', String(selectedConversationId));
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
   }
 
@@ -547,14 +553,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const container = row.querySelector('[data-contact-avatar-container]');
     if (!container || container.dataset.avatarResolved === '1') return;
     const conversationId = Number(row.dataset.conversationId || 0);
-    if (!conversationId) return;
+    const conversationPublicId = String(row.dataset.conversationPublicId || '');
+    if (!conversationId && !conversationPublicId) return;
 
     row.dataset.avatarLoading = '1';
     try {
       const params = new URLSearchParams();
-      params.set('conversation_id', String(conversationId));
+      if (conversationPublicId) params.set('conversation_uuid', conversationPublicId);
+      else params.set('conversation_id', String(conversationId));
+      const tenantPublicId = currentParams.get('tenant_uuid');
       const tenantId = currentParams.get('tenant_id');
-      if (tenantId) params.set('tenant_id', tenantId);
+      if (tenantPublicId) params.set('tenant_uuid', tenantPublicId);
+      else if (tenantId) params.set('tenant_id', tenantId);
       const response = await fetch(`${avatarUrl}?${params.toString()}`, {
         headers: { 'Accept': 'application/json' },
         credentials: 'same-origin',
@@ -648,12 +658,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const unreadHidden = unread > 0 ? '' : ' hidden';
     const modeClass = escapeHtml(item.mode || 'ai');
     const modeLabel = modeText(item.mode);
-    return `<div class="conversation-list-row${unread > 0 ? ' has-unread' : ''}" data-conversation-row data-conversation-id="${Number(item.id)}">
+    const publicId = String(item.public_id || '');
+    return `<div class="conversation-list-row${unread > 0 ? ' has-unread' : ''}" data-conversation-row data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}">
       <label class="conversation-select-control" title="Selecionar ${escapeHtml(item.name || item.phone || 'conversa')}">
         <input type="checkbox" name="conversation_ids[]" value="${Number(item.id)}" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de ${escapeHtml(item.name || item.phone || 'contato')}">
         <span aria-hidden="true"></span>
       </label>
-      <a class="conversation-list-item${selectedClass}" data-conversation-item data-conversation-id="${Number(item.id)}" href="${escapeHtml(buildConversationUrl(item.id))}">
+      <a class="conversation-list-item${selectedClass}" data-conversation-item data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}" href="${escapeHtml(buildConversationUrl(item.id, publicId))}">
         ${avatarMarkup(item)}
         <span class="conversation-summary">
           <span class="conversation-title-row">
@@ -686,8 +697,14 @@ document.addEventListener('DOMContentLoaded', () => {
         list.insertAdjacentHTML('afterbegin', renderConversationItem(item));
         node = list.querySelector(`[data-conversation-item][data-conversation-id="${id}"]`);
       }
+      const publicId = String(item.public_id || node.dataset.conversationPublicId || '');
+      if (publicId) {
+        node.dataset.conversationPublicId = publicId;
+        node.href = buildConversationUrl(id, publicId);
+      }
       node.classList.toggle('is-selected', id === selectedConversationId);
       const row = node.closest('[data-conversation-row]');
+      if (row && publicId) row.dataset.conversationPublicId = publicId;
       row?.classList.toggle('has-unread', Number(item.unread_count || 0) > 0);
       const name = node.querySelector('[data-conversation-name]');
       const time = node.querySelector('[data-conversation-time]');
@@ -777,6 +794,10 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
+      if (payload.selected_conversation_public_id) {
+        selectedConversationPublicId = String(payload.selected_conversation_public_id);
+        workspace.dataset.conversationPublicId = selectedConversationPublicId;
+      }
       updateConversationList(payload.conversations || []);
       applyOwnership(payload.ownership || null);
       const messageSummary = appendMessages(payload.messages || []);
@@ -1822,7 +1843,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const floatMessage = root.querySelector('[data-communication-float-message]');
   const minimizedKey = 'rs-connect-communication-minimized';
   const latestSignalKey = 'rs-connect-communication-latest-signal';
-  const requestedCommunicationId = Number(new URLSearchParams(window.location.search).get('communication_id') || 0);
+  const requestedCommunicationId = Number(root.dataset.requestedCommunicationId || 0);
   let requestedCommunicationOpened = false;
   let currentPayload = { unread: 0, items: [], latest: null };
   const initialPayloadNode = root.querySelector('[data-communication-initial]');

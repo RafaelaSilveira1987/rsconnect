@@ -42,6 +42,32 @@ final class Router
             $this->redirect(self::safeInternalPath($embeddedUrl, '/login'));
         }
 
+        $queryString = (string) (parse_url($uri, PHP_URL_QUERY) ?? '');
+        $internalUri = $path . ($queryString !== '' ? '?' . $queryString : '');
+        $query = [];
+        if ($queryString !== '') {
+            parse_str($queryString, $query);
+        }
+
+        // Legacy numeric GET links remain compatible, but are immediately
+        // redirected to their UUID-based canonical URL.
+        if (strtoupper($method) === 'GET'
+            && !str_starts_with($this->normalize($path), '/webhooks/')
+            && PublicId::hasLegacyPublicQuery($this->normalize($path), $query)) {
+            $canonical = PublicId::publicizePath($internalUri);
+            if ($canonical !== $internalUri) {
+                $this->redirect($canonical);
+            }
+        }
+
+        // Controllers continue working with numeric IDs internally. Public
+        // UUID aliases are decoded before middleware and controller execution.
+        if (!PublicId::hydrateRequest($this->normalize($path))) {
+            http_response_code(404);
+            View::render('errors.404', ['title' => 'Registro não encontrado'], Auth::check() ? 'app' : 'guest');
+            return;
+        }
+
         $route = $this->routes[strtoupper($method)][$this->normalize($path)] ?? null;
         if ($route === null) {
             http_response_code(404);
@@ -201,6 +227,8 @@ final class Router
         if (preg_match('~^https?://~i', $path) === 1 || str_starts_with($path, '//')) {
             $path = self::safeInternalPath($path, '/');
         }
+
+        $path = PublicId::publicizePath($path);
 
         if ($base === '') {
             return '/' . ltrim($path, '/');

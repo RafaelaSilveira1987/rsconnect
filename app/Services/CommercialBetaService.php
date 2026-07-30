@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.9.0', 'title' => 'Identificadores públicos UUID', 'summary' => 'Substitui IDs numéricos nas URLs por UUIDs públicos criptografados e autenticados, mantém compatibilidade com links antigos e preserva as chaves numéricas somente no backend e no banco.'],
             ['version' => '36.8.2', 'title' => 'Calendário da agenda', 'summary' => 'Mantém a lista operacional e adiciona visualizações Dia, Semana e Mês, filtros por profissional e status, navegação entre períodos e detalhes do compromisso em modal. A última visualização fica salva por usuário no navegador.'],
             ['version' => '36.8.1', 'title' => 'Conflito do cliente na agenda', 'summary' => 'Impede o mesmo contato de ocupar horários sobrepostos, mesmo com profissionais diferentes. A regra é configurável por empresa e fica ativa por padrão na agenda por profissional.'],
             ['version' => '36.8.0', 'title' => 'Agenda opcional por profissional', 'summary' => 'Adiciona horários e calendário individual por usuário, seleção manual do profissional e bloqueio de conflitos apenas na agenda escolhida. O reaproveitamento automático do responsável da conversa permanece opcional e desligado por padrão.'],

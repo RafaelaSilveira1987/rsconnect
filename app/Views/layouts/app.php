@@ -125,7 +125,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.8.2')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.9.0')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -303,6 +303,7 @@ $svgIcon = static function (string $name): string {
      data-read-url="<?= View::e(Router::url('/communications/read')) ?>"
      data-ack-url="<?= View::e(Router::url('/communications/acknowledge')) ?>"
      data-respond-url="<?= View::e(Router::url('/communications/respond')) ?>"
+     data-requested-communication-id="<?= (int) ($_GET['communication_id'] ?? 0) ?>"
      data-csrf="<?= View::e(Csrf::token()) ?>"<?= $communicationUnread > 0 ? '' : ' hidden' ?>>
     <script type="application/json" data-communication-initial><?= json_encode($communicationInbox, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
     <section class="rs-communication-float<?= (($communicationLatest['priority'] ?? '') === 'important') ? ' is-important' : ((($communicationLatest['priority'] ?? '') === 'critical') ? ' is-critical' : '') ?>" data-communication-float<?= $communicationUnread > 0 ? '' : ' hidden' ?> aria-live="polite">
@@ -343,6 +344,6 @@ $svgIcon = static function (string $name): string {
 <button class="back-to-top" type="button" data-back-to-top aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
 </button>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.8.2')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.9.0')) ?>" defer></script>
 </body>
 </html>

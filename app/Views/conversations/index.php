@@ -3,6 +3,7 @@
 use App\Core\Auth;
 use App\Core\Csrf;
 use App\Core\Router;
+use App\Core\PublicId;
 use App\Core\View;
 
 $canManage = Auth::can('conversations.manage');
@@ -53,6 +54,8 @@ if ($selected) {
     $pollQuery['conversation_id'] = (int) $selected['id'];
 }
 $returnQuery = http_build_query($pollQuery);
+$publicPollQuery = (string) (parse_url(Router::url('/conversations?' . http_build_query($pollQuery)), PHP_URL_QUERY) ?? '');
+$selectedConversationPublicId = $selected ? PublicId::encode('conversation', (int) $selected['id']) : '';
 ?>
 
 <form class="conversation-filters card" method="get" action="<?= View::e(Router::url('/conversations')) ?>">
@@ -101,7 +104,7 @@ $returnQuery = http_build_query($pollQuery);
     <a class="btn btn-outline" href="<?= View::e(Router::url('/conversations')) ?>">Limpar</a>
 </form>
 
-<div class="conversation-workspace" data-conversation-realtime data-poll-url="<?= View::e(Router::url('/conversations/poll')) ?>" data-avatar-url="<?= View::e(Router::url('/conversations/avatar')) ?>" data-current-query="<?= View::e(http_build_query($pollQuery)) ?>" data-conversation-id="<?= (int) ($selected['id'] ?? 0) ?>" data-last-message-id="<?= (int) $lastMessageId ?>" data-base-title="<?= View::e($title ?? 'Conversas') ?>">
+<div class="conversation-workspace" data-conversation-realtime data-poll-url="<?= View::e(Router::url('/conversations/poll')) ?>" data-avatar-url="<?= View::e(Router::url('/conversations/avatar')) ?>" data-current-query="<?= View::e($publicPollQuery) ?>" data-conversation-id="<?= (int) ($selected['id'] ?? 0) ?>" data-conversation-public-id="<?= View::e($selectedConversationPublicId) ?>" data-last-message-id="<?= (int) $lastMessageId ?>" data-base-title="<?= View::e($title ?? 'Conversas') ?>">
     <div class="realtime-toast" data-realtime-toast hidden></div>
     <?php if ($canManage): ?>
         <div class="new-conversation-shell" data-new-conversation-shell hidden>
@@ -209,15 +212,16 @@ $returnQuery = http_build_query($pollQuery);
                 $displayName = $contactLabel($conversation);
                 $initial = $contactInitial($conversation);
                 $avatarUrl = $contactAvatarUrl($conversation);
+                $conversationPublicId = PublicId::encode('conversation', (int) $conversation['id']);
                 ?>
-                <div class="conversation-list-row<?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>">
+                <div class="conversation-list-row<?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>" data-conversation-public-id="<?= View::e($conversationPublicId) ?>">
                     <?php if ($canManage): ?>
                         <label class="conversation-select-control" title="Selecionar <?= View::e($displayName) ?>">
                             <input type="checkbox" name="conversation_ids[]" value="<?= (int) $conversation['id'] ?>" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de <?= View::e($displayName) ?>">
                             <span aria-hidden="true"></span>
                         </label>
                     <?php endif; ?>
-                    <a class="conversation-list-item<?= $isSelected ? ' is-selected' : '' ?>" data-conversation-item data-conversation-id="<?= (int) $conversation['id'] ?>" href="<?= View::e(Router::url('/conversations?' . http_build_query($query))) ?>">
+                    <a class="conversation-list-item<?= $isSelected ? ' is-selected' : '' ?>" data-conversation-item data-conversation-id="<?= (int) $conversation['id'] ?>" data-conversation-public-id="<?= View::e($conversationPublicId) ?>" href="<?= View::e(Router::url('/conversations?' . http_build_query($query))) ?>">
                     <span class="conversation-avatar" data-contact-avatar-container data-avatar-resolved="<?= array_key_exists('avatar_url', $conversation) && $conversation['avatar_url'] !== null ? '1' : '0' ?>">
                         <span class="conversation-avatar-fallback" data-avatar-fallback><?= View::e($initial) ?></span>
                         <?php if ($avatarUrl !== ''): ?><img class="conversation-avatar-image" data-contact-avatar src="<?= View::e($avatarUrl) ?>" alt="" loading="lazy" referrerpolicy="no-referrer"><?php endif; ?>

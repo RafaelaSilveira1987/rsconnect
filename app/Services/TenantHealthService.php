@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Env;
+use App\Core\PublicId;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
@@ -335,8 +336,11 @@ final class TenantHealthService
                 $enabled = filter_var($webhook['enabled'] ?? false, FILTER_VALIDATE_BOOL);
                 $byEvents = filter_var($webhook['webhookByEvents'] ?? false, FILTER_VALIDATE_BOOL);
                 $url = (string) ($webhook['url'] ?? '');
+                $publicInstanceId = PublicId::encode('instance', $id);
+                $validInstanceReference = str_contains($url, 'instance_uuid=' . rawurlencode($publicInstanceId))
+                    || str_contains($url, 'instance_id=' . $id); // compatibilidade com webhooks antigos
                 $valid = $enabled && !$byEvents && in_array('MESSAGES_UPSERT', $events, true)
-                    && str_contains($url, '/webhooks/evolution') && str_contains($url, 'instance_id=' . $id);
+                    && str_contains($url, '/webhooks/evolution') && $validInstanceReference;
                 $details['Webhook'] = $valid ? 'Configurado corretamente' : 'Revisar configuração';
                 $details['MESSAGES_UPSERT'] = in_array('MESSAGES_UPSERT', $events, true) ? 'Ativo' : 'Ausente';
                 if (!$valid) {

@@ -10,6 +10,7 @@ use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Env;
 use App\Core\Flash;
+use App\Core\PublicId;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AiAutomationService;
@@ -1670,12 +1671,14 @@ final class ConversationController
             foreach ($statement->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
                 $results[] = [
                     'contact_id' => (int) ($row['id'] ?? 0),
+                    'contact_public_id' => PublicId::encode('contact', (int) ($row['id'] ?? 0)),
                     'name' => trim((string) ($row['name'] ?? '')),
                     'phone' => trim((string) ($row['phone'] ?? '')),
                     'email' => trim((string) ($row['email'] ?? '')),
                     'company' => trim((string) ($row['company'] ?? '')),
                     'avatar_url' => $this->safeAvatarUrl((string) ($row['avatar_url'] ?? '')),
                     'conversation_id' => !empty($row['conversation_id']) ? (int) $row['conversation_id'] : null,
+                    'conversation_public_id' => !empty($row['conversation_id']) ? PublicId::encode('conversation', (int) $row['conversation_id']) : null,
                     'conversation_status' => (string) ($row['conversation_status'] ?? ''),
                     'last_message_preview' => (string) ($row['last_message_preview'] ?? ''),
                 ];
@@ -1784,6 +1787,7 @@ final class ConversationController
             'ok' => true,
             'server_time' => date(DATE_ATOM),
             'selected_conversation_id' => $selectedId,
+            'selected_conversation_public_id' => $selectedId > 0 ? PublicId::encode('conversation', $selectedId) : null,
             'latest_message_id' => $latestMessageId,
             'unread_total' => $unreadTotal,
             'has_new_messages' => count($messages) > 0,
@@ -1923,6 +1927,7 @@ final class ConversationController
     {
         return [
             'id' => (int) $conversation['id'],
+            'public_id' => PublicId::encode('conversation', (int) $conversation['id']),
             'name' => (string) ($conversation['contact_name'] ?: $conversation['phone'] ?: 'Contato'),
             'phone' => (string) ($conversation['phone'] ?? ''),
             'avatar_url' => $this->safeAvatarUrl((string) ($conversation['avatar_url'] ?? '')),

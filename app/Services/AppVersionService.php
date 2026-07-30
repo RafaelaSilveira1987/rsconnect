@@ -6,13 +6,14 @@ namespace App\Services;
 
 use App\Core\Database;
 use App\Core\Env;
+use App\Core\PublicId;
 use PDO;
 use Throwable;
 
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.8.2 — Visualização de calendário';
+    public const PACKAGE_LABEL = 'RS Connect 36.9.0 — Identificadores públicos UUID';
     public const REQUIRED_MIGRATION = '066_contact_schedule_overlap_guard_compat.sql';
 
     private PDO $pdo;
@@ -359,6 +360,25 @@ final class AppVersionService
             $appKey !== '' ? 'ok' : 'blocked',
             $appKey !== '' ? 'Chave da aplicação configurada.' : 'APP_KEY vazio.',
             'Não trocar APP_KEY em produção sem plano, pois ela protege dados criptografados.'
+        );
+
+        $publicIdReady = false;
+        if ($appKey !== '') {
+            try {
+                $publicToken = PublicId::encode('tenant', 1);
+                $publicIdReady = PublicId::isUuid($publicToken)
+                    && PublicId::decode('tenant', $publicToken) === 1;
+            } catch (Throwable) {
+                $publicIdReady = false;
+            }
+        }
+        $checks[] = $this->check(
+            'Identificadores públicos UUID',
+            $publicIdReady ? 'ok' : 'blocked',
+            $publicIdReady
+                ? 'IDs numéricos internos são convertidos em UUIDs públicos autenticados nas URLs.'
+                : 'Não foi possível gerar ou validar UUIDs públicos com a APP_KEY atual.',
+            'Manter APP_KEY configurada e estável; ela protege os UUIDs públicos e as credenciais criptografadas.'
         );
 
         $appUrl = (string) Env::get('APP_URL', '');

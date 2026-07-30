@@ -992,7 +992,7 @@ final class InstanceController
             throw new \RuntimeException('APP_URL HTTPS não configurada.');
         }
         $token = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
-        $webhookUrl = $appUrl . '/webhooks/evolution?instance_id=' . $instanceId;
+        $webhookUrl = Router::url('/webhooks/evolution?instance_id=' . $instanceId);
         if ($token !== '') {
             $webhookUrl .= '&token=' . rawurlencode($token);
         }

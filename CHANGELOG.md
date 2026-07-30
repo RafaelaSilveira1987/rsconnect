@@ -1,16 +1,22 @@
-# RS Connect v36.8.2 — Visualização de calendário
+# RS Connect v36.9.0 — Identificadores públicos UUID
 
-- mantém a visualização em lista para operação e ações administrativas;
-- adiciona visualizações Dia, Semana e Mês sem dependência externa;
-- usa Semana como padrão quando a agenda por profissional está ativa;
-- mantém Lista como padrão para empresas sem agenda individual;
-- adiciona navegação entre períodos e botão Hoje;
-- preserva filtros por empresa, status e profissional;
-- abre detalhes do compromisso em modal ao selecionar um evento;
-- permite abrir o compromisso na lista ou adicionar ao Google;
-- salva a última visualização escolhida no navegador;
-- melhora o uso em celular com rolagem horizontal controlada;
-- não exige migration nova.
+- substitui IDs numéricos sequenciais nas URLs por UUIDs públicos opacos, autenticados e vinculados ao tipo do registro;
+- mantém chaves primárias e estrangeiras numéricas somente no banco e no backend, evitando uma migração estrutural de alto risco;
+- converte automaticamente links gerados pelo Router para `tenant_uuid`, `contact_uuid`, `conversation_uuid`, `appointment_uuid` e demais aliases públicos;
+- redireciona links numéricos antigos para a URL canônica com UUID, preservando favoritos e links já distribuídos;
+- rejeita UUID inválido, adulterado ou usado para o tipo de entidade errado com resposta 404;
+- protege também o webhook da Evolution e os links ao vivo da tela de Conversas;
+- preserva slugs legítimos como `/login?tenant=empresa-slug`;
+- depende da `APP_KEY` estável já usada pelo RS Connect e não exige migration nova;
+- adiciona verificação de saúde e teste de fumaça específico para roteamento UUID.
+
+# RS Connect v36.8.2 — Visualizações de calendário da agenda
+
+- mantém a visão operacional em Lista e adiciona Dia, Semana e Mês;
+- permite filtrar por empresa, profissional e status em todas as visualizações;
+- salva a última visualização escolhida por usuário no navegador;
+- abre detalhes do compromisso em modal e mantém as ações administrativas na Lista;
+- não adiciona arrastar e soltar nesta etapa.
 
 # RS Connect v36.8.1 — Conflito do cliente na agenda
 
