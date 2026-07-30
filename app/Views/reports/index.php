@@ -64,7 +64,7 @@ if (!is_string($donutSeries)) {
 }
 $donutSeriesB64 = base64_encode($donutSeries);
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.10.0')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.10.1')) ?>">
 <div class="executive-report-page client-manager-report report-v3646 report-v3647">
     <section class="client-report-hero">
         <div>
@@ -168,5 +168,5 @@ $donutSeriesB64 = base64_encode($donutSeries);
             </div>
         </section>
     </div>
-<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.10.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.10.1')) ?>" defer></script>
 </div>

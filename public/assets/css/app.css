@@ -9449,3 +9449,116 @@ body.has-new-conversation-drawer { overflow:hidden; }
         width: 100%;
     }
 }
+
+/* RS Connect v36.10.2 — identificação visual das conversas pelo status */
+.conversation-list-row .conversation-list-item {
+  border-left: 4px solid transparent;
+  transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, opacity .18s ease;
+}
+
+.conversation-list-row.status-open .conversation-list-item {
+  border-left-color: #22c55e;
+  background: linear-gradient(90deg, rgba(34,197,94,.075), rgba(255,255,255,.96) 58%);
+}
+
+.conversation-list-row.status-pending .conversation-list-item {
+  border-left-color: #f59e0b;
+  background: linear-gradient(90deg, rgba(245,158,11,.11), rgba(255,255,255,.96) 58%);
+}
+
+.conversation-list-row.status-closed .conversation-list-item {
+  border-left-color: #94a3b8;
+  background: linear-gradient(90deg, rgba(148,163,184,.14), rgba(248,250,252,.96) 58%);
+}
+
+.conversation-list-row.status-closed .conversation-avatar,
+.conversation-list-row.status-closed .conversation-preview,
+.conversation-list-row.status-closed .conversation-title-row time {
+  filter: saturate(.55);
+}
+
+.conversation-list-row.status-closed .conversation-preview {
+  color: #64748b;
+}
+
+.conversation-list-row.status-open .conversation-list-item.is-selected {
+  background: linear-gradient(90deg, rgba(34,197,94,.18), rgba(236,253,245,.9));
+  box-shadow: inset 4px 0 #16a34a, 0 8px 22px rgba(22,163,74,.08);
+}
+
+.conversation-list-row.status-pending .conversation-list-item.is-selected {
+  background: linear-gradient(90deg, rgba(245,158,11,.22), rgba(255,251,235,.92));
+  box-shadow: inset 4px 0 #d97706, 0 8px 22px rgba(217,119,6,.08);
+}
+
+.conversation-list-row.status-closed .conversation-list-item.is-selected {
+  background: linear-gradient(90deg, rgba(100,116,139,.2), rgba(241,245,249,.94));
+  box-shadow: inset 4px 0 #64748b, 0 8px 22px rgba(71,85,105,.08);
+}
+
+.conversation-list-row.has-unread .conversation-list-item {
+  font-weight: inherit;
+}
+
+.conversation-list-row.status-open.has-unread .conversation-list-item {
+  box-shadow: inset 4px 0 #16a34a;
+}
+
+.conversation-list-row.status-pending.has-unread .conversation-list-item {
+  box-shadow: inset 4px 0 #d97706;
+}
+
+.conversation-list-row.status-closed.has-unread .conversation-list-item {
+  box-shadow: inset 4px 0 #64748b;
+}
+
+.conversation-status-badge.status-open {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.conversation-status-badge.status-pending {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.conversation-status-badge.status-closed {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.conversation-chat[data-selected-conversation-panel] {
+  border-top: 4px solid transparent;
+  transition: border-color .18s ease;
+}
+
+.conversation-chat.conversation-status-open {
+  border-top-color: #22c55e;
+}
+
+.conversation-chat.conversation-status-pending {
+  border-top-color: #f59e0b;
+}
+
+.conversation-chat.conversation-status-closed {
+  border-top-color: #94a3b8;
+}
+
+.conversation-chat.conversation-status-open .chat-state-bar {
+  background: linear-gradient(90deg, rgba(220,252,231,.78), rgba(248,250,252,.86));
+}
+
+.conversation-chat.conversation-status-pending .chat-state-bar {
+  background: linear-gradient(90deg, rgba(254,243,199,.82), rgba(248,250,252,.86));
+}
+
+.conversation-chat.conversation-status-closed .chat-state-bar {
+  background: linear-gradient(90deg, rgba(226,232,240,.88), rgba(248,250,252,.9));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-list-row .conversation-list-item,
+  .conversation-chat[data-selected-conversation-panel] {
+    transition: none;
+  }
+}

@@ -20,6 +20,7 @@ $formatDate = static function (?string $date, string $format = 'd/m/Y H:i'): str
 };
 $modeLabel = ['ai' => 'IA ativa', 'human' => 'Humano', 'paused' => 'IA pausada'];
 $statusLabel = ['open' => 'Aberta', 'pending' => 'Pendente', 'closed' => 'Encerrada'];
+$normalizeStatus = static fn (?string $status): string => in_array($status, ['open', 'pending', 'closed'], true) ? (string) $status : 'open';
 $contactGroupLabels = \App\Services\ConversationFlowService::GROUPS;
 $flowStageLabels = \App\Services\ConversationFlowService::STAGES;
 $demandStatusLabels = \App\Services\ConversationFlowService::DEMAND_STATUSES;
@@ -213,8 +214,9 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
                 $initial = $contactInitial($conversation);
                 $avatarUrl = $contactAvatarUrl($conversation);
                 $conversationPublicId = PublicId::encode('conversation', (int) $conversation['id']);
+                $conversationStatus = $normalizeStatus((string) ($conversation['status'] ?? 'open'));
                 ?>
-                <div class="conversation-list-row<?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>" data-conversation-public-id="<?= View::e($conversationPublicId) ?>">
+                <div class="conversation-list-row status-<?= View::e($conversationStatus) ?><?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>" data-conversation-public-id="<?= View::e($conversationPublicId) ?>" data-conversation-status="<?= View::e($conversationStatus) ?>">
                     <?php if ($canManage): ?>
                         <label class="conversation-select-control" title="Selecionar <?= View::e($displayName) ?>">
                             <input type="checkbox" name="conversation_ids[]" value="<?= (int) $conversation['id'] ?>" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de <?= View::e($displayName) ?>">
@@ -234,6 +236,7 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
                         <span class="conversation-preview" data-conversation-preview><?= View::e($conversation['last_message_preview'] ?: 'Sem mensagens') ?></span>
                         <span class="conversation-meta-row">
                             <span class="mini-badge mode-<?= View::e($conversation['attendance_mode']) ?>"><?= View::e($modeLabel[$conversation['attendance_mode']] ?? $conversation['attendance_mode']) ?></span>
+                            <span class="mini-badge conversation-status-badge status-<?= View::e($conversationStatus) ?>" data-conversation-list-status><?= View::e($statusLabel[$conversationStatus]) ?></span>
                             <?php if (Auth::isSuperAdmin()): ?><small><?= View::e($conversation['tenant_name']) ?></small><?php endif; ?>
                             <b class="unread-count" data-unread-count <?= (int) $conversation['unread_count'] > 0 ? '' : 'hidden' ?>><?= (int) $conversation['unread_count'] ?></b>
                         </span>
@@ -255,7 +258,8 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
         </div>
     </aside>
 
-    <section class="conversation-chat card">
+    <?php $selectedStatus = $normalizeStatus((string) ($selected['status'] ?? 'open')); ?>
+    <section class="conversation-chat card conversation-status-<?= View::e($selectedStatus) ?>" data-selected-conversation-panel data-conversation-status="<?= View::e($selectedStatus) ?>">
         <?php if ($selected): ?>
             <header class="chat-header">
                 <div class="chat-contact-title">
@@ -298,7 +302,7 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
             </header>
 
             <div class="chat-state-bar">
-                <span class="badge badge-<?= View::e($selected['status']) ?>"><?= View::e($statusLabel[$selected['status']] ?? $selected['status']) ?></span>
+                <span class="badge badge-<?= View::e($selectedStatus) ?>" data-conversation-status-badge><?= View::e($statusLabel[$selectedStatus]) ?></span>
                 <span class="mini-badge mode-<?= View::e($selected['attendance_mode']) ?>"><?= View::e($modeLabel[$selected['attendance_mode']] ?? $selected['attendance_mode']) ?></span>
                 <?php if ($selected['assigned_user_name']): ?><small>Responsável: <strong><?= View::e($selected['assigned_user_name']) ?></strong></small><?php endif; ?>
                 <?php if (!empty($professionalAssignmentSettings['enabled'])): ?>

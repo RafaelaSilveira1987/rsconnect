@@ -13,8 +13,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.10.0 — Relatórios de equipe e profissionais';
-    public const REQUIRED_MIGRATION = '068_conversation_service_cycles_compat.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.10.2 — Status visual das conversas e recuperação resiliente dos ciclos';
+    public const REQUIRED_MIGRATION = '069_service_cycle_recovery_compat.sql';
 
     private PDO $pdo;
 
@@ -109,7 +109,7 @@ final class AppVersionService
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 068, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 069, conforme o pacote implantado.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')
@@ -196,7 +196,7 @@ final class AppVersionService
             $operationalHistoryReady
                 ? 'Atribuições, transferências, ciclos das conversas, primeira resposta humana e mudanças da agenda estão auditáveis.'
                 : 'O histórico operacional necessário para relatórios confiáveis ainda não foi aplicado.',
-            'Executar database/migrations/067_operational_history_metrics_compat.sql e 068_conversation_service_cycles_compat.sql.'
+            'Executar database/migrations/067_operational_history_metrics_compat.sql e 069_service_cycle_recovery_compat.sql.'
         );
 
         $calendarOnboardingReady = $this->columnExists('tenant_onboarding_settings', 'calendar_mode')

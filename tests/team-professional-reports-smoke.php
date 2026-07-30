@@ -13,6 +13,7 @@ $version = (string) file_get_contents($root . '/app/Services/AppVersionService.p
 $layout = (string) file_get_contents($root . '/app/Views/layouts/app.php');
 $diagnostic = (string) file_get_contents($root . '/database/diagnostics/team_professional_reports_v36.10.0.sql');
 $cycleMigration = (string) file_get_contents($root . '/database/migrations/068_conversation_service_cycles_compat.sql');
+$recoveryMigration = (string) file_get_contents($root . '/database/migrations/069_service_cycle_recovery_compat.sql');
 
 $checks = [
     'rota do relatório criada' => str_contains($routes, "'/reports/team'")
@@ -25,7 +26,8 @@ $checks = [
         && str_contains($foundation, "'mode' => 'all'"),
     'ciclos persistentes preservam reaberturas' => str_contains($cycleMigration, 'CREATE TABLE IF NOT EXISTS conversation_service_cycles')
         && str_contains($cycleMigration, 'conversation_reopened')
-        && str_contains($cycleMigration, 'trg_rs_messages_after_insert_metrics'),
+        && str_contains($cycleMigration, 'trg_rs_messages_after_insert_metrics')
+        && str_contains($recoveryMigration, 'message_cycle_recovery'),
     'métricas de atendimento disponíveis' => str_contains($service, 'humanMessages')
         && str_contains($service, 'firstResponses')
         && str_contains($service, 'conversationClosures')
@@ -54,11 +56,11 @@ $checks = [
         && str_contains($css, '@media (max-width:620px)'),
     'diagnóstico adicionado' => str_contains($diagnostic, 'tempo_medio_primeira_resposta_segundos')
         && str_contains($diagnostic, 'nao_compareceram'),
-    'versão e migration 068 atualizadas' => str_contains($version, 'RS Connect 36.10.0')
-        && str_contains($version, '068_conversation_service_cycles_compat.sql')
+    'versão e migrations 068/069 atualizadas' => str_contains($version, 'RS Connect 36.10.2')
+        && str_contains($version, '069_service_cycle_recovery_compat.sql')
         && str_contains($foundation, 'conversation_service_cycles'),
-    'cache visual atualizado' => str_contains($layout, 'app.css?v=36.10.0')
-        && str_contains($layout, 'app.js?v=36.10.0'),
+    'cache visual atualizado' => str_contains($layout, 'app.css?v=36.10.2')
+        && str_contains($layout, 'app.js?v=36.10.2'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

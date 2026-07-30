@@ -923,7 +923,7 @@ body:has(> .executive-report-page) {
   .report-v3647 .chart-line { stroke-width: 2.35; }
 }
 
-/* RS Connect 36.10.0 — Relatórios de equipe e profissionais */
+/* RS Connect 36.10.1 — Relatórios de equipe e profissionais */
 .team-report-page { --team-soft:#f4f8fa; --team-line:#dfe8ed; --team-green:#0f9d94; --team-blue:#526fb2; }
 .team-report-hero { margin-bottom:16px; }
 .team-report-filters { display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)) auto; gap:12px; align-items:end; padding:16px; margin-bottom:16px; }

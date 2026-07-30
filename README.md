@@ -1,3 +1,29 @@
+# RS Connect v36.10.2 — Status visual das conversas e recuperação dos ciclos
+
+Esta versão reúne em um único pacote a recuperação de ciclos ausentes da v36.10.1 e a identificação visual das conversas conforme o status operacional.
+
+- **Aberta:** destaque verde;
+- **Pendente:** destaque amarelo;
+- **Encerrada:** destaque cinza;
+- cada item também exibe o rótulo textual do status;
+- a lista e o painel selecionado são atualizados pelo polling em tempo real;
+- execute somente `database/migrations/069_service_cycle_recovery_compat.sql`;
+- não existe migration adicional para as cores.
+
+Diagnóstico dos ciclos: `database/diagnostics/service_cycle_recovery_v36.10.1.sql`.
+
+# RS Connect v36.10.1 — Recuperação resiliente dos ciclos de atendimento
+
+Esta correção complementa as migrations 067 e 068. Ela cobre conversas que foram criadas ou receberam mensagens durante uma janela em que os triggers ainda não estavam ativos e, por isso, não possuíam registro em `conversation_service_cycles`.
+
+Importe no Adminer, com `log_bin_trust_function_creators` temporariamente habilitado:
+
+`database/migrations/069_service_cycle_recovery_compat.sql`
+
+A migration é idempotente, recupera os dados reais das mensagens e recria somente o trigger de mensagens com autorrecuperação. Depois, valide com:
+
+`database/diagnostics/service_cycle_recovery_v36.10.1.sql`
+
 # RS Connect v36.10.0 — Relatórios de equipe e profissionais
 
 A versão 36.10.0 transforma a base histórica das migrations 067 e 068 em uma tela operacional de relatórios. Acesse **Relatórios → Equipe e profissionais** para comparar atendimento, primeira resposta, transferências, carteira preferencial e resultados da agenda por usuário.

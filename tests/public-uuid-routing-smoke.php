@@ -83,9 +83,9 @@ $checks = [
         && str_contains($conversationController, "'conversation_public_id'"),
     'histórico do navegador usa conversation UUID' => str_contains($javascript, "url.searchParams.set('conversation_uuid', selectedConversationPublicId)")
         && str_contains($conversationView, 'data-conversation-public-id'),
-    'cache e versão atualizados' => str_contains($layout, 'app.js?v=36.10.0')
-        && str_contains($layout, 'app.css?v=36.10.0')
-        && str_contains($version, 'RS Connect 36.10.0'),
+    'cache e versão atualizados' => str_contains($layout, 'app.js?v=36.10.2')
+        && str_contains($layout, 'app.css?v=36.10.2')
+        && str_contains($version, 'RS Connect 36.10.2'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

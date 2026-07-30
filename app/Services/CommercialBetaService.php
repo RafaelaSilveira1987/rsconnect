@@ -160,6 +160,8 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.10.2', 'title' => 'Status visual das conversas', 'summary' => 'Diferencia conversas abertas, pendentes e encerradas por cor na lista e no painel selecionado, com atualização em tempo real, mantendo junto a recuperação resiliente dos ciclos da migration 069.'],
+            ['version' => '36.10.1', 'title' => 'Ciclos de atendimento resilientes', 'summary' => 'Recupera conversas sem ciclo ativo, preenche primeira entrada e primeira resposta com mensagens reais e torna o trigger de mensagens autocorretivo para evitar lacunas futuras nos relatórios.'],
             ['version' => '36.10.0', 'title' => 'Relatórios de equipe e profissionais', 'summary' => 'Adiciona visão consolidada e individual por profissional com conversas respondidas, primeira resposta por ciclo persistente, transferências, clientes preferenciais, agenda, comparecimento, histórico operacional e exportação CSV com escopo próprio ou da equipe.'],
             ['version' => '36.9.1', 'title' => 'Base histórica e métricas por profissional', 'summary' => 'Registra atribuições, transferências, ciclos de conversa, primeira resposta humana, mudanças de responsável e status da agenda, preparando relatórios confiáveis com permissões próprias e da equipe.'],
             ['version' => '36.9.0', 'title' => 'Identificadores públicos UUID', 'summary' => 'Substitui IDs numéricos nas URLs por UUIDs públicos criptografados e autenticados, mantém compatibilidade com links antigos e preserva as chaves numéricas somente no backend e no banco.'],

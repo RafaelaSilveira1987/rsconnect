@@ -17,7 +17,7 @@ use Throwable;
  */
 final class TeamProfessionalReportService
 {
-    public const VERSION = '36.10.0-team-professional-reports';
+    public const VERSION = '36.10.1-team-professional-reports';
 
     private PDO $pdo;
     private TeamMetricsFoundationService $foundation;

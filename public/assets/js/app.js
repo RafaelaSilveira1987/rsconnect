@@ -629,6 +629,31 @@ document.addEventListener('DOMContentLoaded', () => {
     return mode === 'human' ? 'Humano' : (mode === 'paused' ? 'IA pausada' : 'IA ativa');
   }
 
+  function normalizeConversationStatus(value) {
+    const normalized = String(value || '').toLowerCase();
+    return ['open', 'pending', 'closed'].includes(normalized) ? normalized : 'open';
+  }
+
+  function conversationStatusText(value) {
+    const normalized = normalizeConversationStatus(value);
+    return normalized === 'closed' ? 'Encerrada' : (normalized === 'pending' ? 'Pendente' : 'Aberta');
+  }
+
+  function applySelectedConversationStatus(value) {
+    const normalized = normalizeConversationStatus(value);
+    const panel = document.querySelector('[data-selected-conversation-panel]');
+    if (panel) {
+      panel.classList.remove('conversation-status-open', 'conversation-status-pending', 'conversation-status-closed');
+      panel.classList.add(`conversation-status-${normalized}`);
+      panel.dataset.conversationStatus = normalized;
+    }
+    const badge = document.querySelector('[data-conversation-status-badge]');
+    if (badge) {
+      badge.className = `badge badge-${normalized}`;
+      badge.textContent = conversationStatusText(normalized);
+    }
+  }
+
   function setConversationMode(mode) {
     const normalized = ['ai', 'human', 'paused'].includes(mode) ? mode : 'ai';
     const stateBadge = document.querySelector('.chat-state-bar .mini-badge');
@@ -658,8 +683,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const unreadHidden = unread > 0 ? '' : ' hidden';
     const modeClass = escapeHtml(item.mode || 'ai');
     const modeLabel = modeText(item.mode);
+    const conversationStatus = normalizeConversationStatus(item.status);
     const publicId = String(item.public_id || '');
-    return `<div class="conversation-list-row${unread > 0 ? ' has-unread' : ''}" data-conversation-row data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}">
+    return `<div class="conversation-list-row status-${conversationStatus}${unread > 0 ? ' has-unread' : ''}" data-conversation-row data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}" data-conversation-status="${conversationStatus}">
       <label class="conversation-select-control" title="Selecionar ${escapeHtml(item.name || item.phone || 'conversa')}">
         <input type="checkbox" name="conversation_ids[]" value="${Number(item.id)}" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de ${escapeHtml(item.name || item.phone || 'contato')}">
         <span aria-hidden="true"></span>
@@ -674,6 +700,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="conversation-preview" data-conversation-preview>${escapeHtml(item.preview || 'Sem mensagens')}</span>
           <span class="conversation-meta-row">
             <span class="mini-badge mode-${modeClass}">${escapeHtml(modeLabel)}</span>
+            <span class="mini-badge conversation-status-badge status-${conversationStatus}" data-conversation-list-status>${escapeHtml(conversationStatusText(conversationStatus))}</span>
             <small>${escapeHtml(item.assigned_user_name ? `Responsável: ${item.assigned_user_name}` : (item.tenant_name || item.instance_label || ''))}</small>
             <b class="unread-count" data-unread-count${unreadHidden}>${unread}</b>
           </span>
@@ -705,12 +732,19 @@ document.addEventListener('DOMContentLoaded', () => {
       node.classList.toggle('is-selected', id === selectedConversationId);
       const row = node.closest('[data-conversation-row]');
       if (row && publicId) row.dataset.conversationPublicId = publicId;
+      const itemStatus = normalizeConversationStatus(item.status);
+      if (row) {
+        row.classList.remove('status-open', 'status-pending', 'status-closed');
+        row.classList.add(`status-${itemStatus}`);
+        row.dataset.conversationStatus = itemStatus;
+      }
       row?.classList.toggle('has-unread', Number(item.unread_count || 0) > 0);
       const name = node.querySelector('[data-conversation-name]');
       const time = node.querySelector('[data-conversation-time]');
       const preview = node.querySelector('[data-conversation-preview]');
       const unread = node.querySelector('[data-unread-count]');
       const modeBadge = node.querySelector('.mini-badge');
+      const statusBadge = node.querySelector('[data-conversation-list-status]');
       if (name) name.textContent = item.name || item.phone || 'Contato';
       if (time) time.textContent = item.last_message_label || '';
       if (preview) preview.textContent = item.preview || 'Sem mensagens';
@@ -720,6 +754,11 @@ document.addEventListener('DOMContentLoaded', () => {
         modeBadge.className = `mini-badge mode-${itemMode}`;
         modeBadge.textContent = modeText(itemMode);
       }
+      if (statusBadge) {
+        statusBadge.className = `mini-badge conversation-status-badge status-${itemStatus}`;
+        statusBadge.textContent = conversationStatusText(itemStatus);
+      }
+      if (id === selectedConversationId) applySelectedConversationStatus(itemStatus);
       if (unread) {
         unread.textContent = Number(item.unread_count || 0);
         unread.hidden = Number(item.unread_count || 0) < 1;

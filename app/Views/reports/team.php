@@ -51,7 +51,7 @@ foreach ($professionals as $professional) {
     $professionalMax = max($professionalMax, (int) ($professional['activity_score'] ?? 0));
 }
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.10.0')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.10.1')) ?>">
 <div class="executive-report-page team-report-page report-v36100">
     <section class="client-report-hero team-report-hero">
         <div>
