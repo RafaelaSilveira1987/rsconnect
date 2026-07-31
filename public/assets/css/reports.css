@@ -1011,3 +1011,22 @@ body:has(> .executive-report-page) {
   .team-report-filters,.team-report-hero .client-report-hero-actions,.team-report-table .table-link { display:none !important; }
   .team-report-timeline { max-height:none; overflow:visible; }
 }
+
+/* RS Connect 36.10.6 — Auditoria das métricas de primeira resposta */
+.team-report-audit .section-heading { align-items:flex-start; gap:16px; }
+.team-report-audit-kpis { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; margin:14px 0 16px; }
+.team-report-audit-kpis article { padding:13px 14px; border:1px solid var(--team-line); border-radius:14px; background:#f8fbfc; display:flex; flex-direction:column; gap:5px; min-height:92px; }
+.team-report-audit-kpis article span { color:var(--report-muted); font-size:.65rem; font-weight:900; letter-spacing:.05em; text-transform:uppercase; }
+.team-report-audit-kpis article strong { font-size:1.15rem; color:var(--report-ink); }
+.team-report-audit-kpis article.is-warning { background:#fff9ed; border-color:#eed8a3; }
+.team-report-audit-kpis article.is-danger { background:#fff3f2; border-color:#efc6c2; }
+.team-report-audit-wrap { overflow-x:auto; }
+.team-report-audit-table { min-width:1040px !important; }
+.team-report-audit-table td { vertical-align:middle; white-space:nowrap; }
+.team-report-audit-table td:first-child { white-space:normal; min-width:210px; }
+.team-report-audit-table td:first-child strong,.team-report-audit-table td:first-child small { display:block; }
+.team-report-audit-table td:first-child small { color:var(--report-muted); font-size:.6rem; margin-top:3px; word-break:break-all; }
+.team-report-audit-note { display:block; margin-top:10px; color:var(--report-muted); }
+@media (max-width:1200px) { .team-report-audit-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media (max-width:620px) { .team-report-audit-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media print { .team-report-audit-note { display:none; } }

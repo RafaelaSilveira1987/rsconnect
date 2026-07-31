@@ -9,6 +9,8 @@ $overview = $overview ?? [];
 $professionals = $professionals ?? [];
 $dailySeries = $dailySeries ?? [];
 $recentActivities = $recentActivities ?? [];
+$responseAudit = $responseAudit ?? [];
+$dataQuality = $dataQuality ?? [];
 $warnings = $warnings ?? [];
 $users = $users ?? [];
 $tenants = $tenants ?? [];
@@ -51,7 +53,7 @@ foreach ($professionals as $professional) {
     $professionalMax = max($professionalMax, (int) ($professional['activity_score'] ?? 0));
 }
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.10.5')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.10.6')) ?>">
 <div class="executive-report-page team-report-page report-v36100">
     <section class="client-report-hero team-report-hero">
         <div>
@@ -67,6 +69,7 @@ foreach ($professionals as $professional) {
             ], static fn ($value): bool => $value !== '' && $value !== 0)))) ?>">Visão geral</a>
             <?php if ($tenantId > 0 && !empty($readiness['ready'])): ?>
                 <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/team/export?' . http_build_query($queryBase))) ?>">Exportar equipe</a>
+                <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/team/export?' . http_build_query($queryBase + ['detail' => 'first_responses']))) ?>">Exportar 1ª respostas</a>
             <?php endif; ?>
             <button class="btn btn-outline" type="button" onclick="window.print()">Imprimir</button>
         </div>
@@ -116,6 +119,41 @@ foreach ($professionals as $professional) {
             <article class="card"><span>Agendamentos</span><strong><?= $number($overview['appointments'] ?? 0) ?></strong><small><?= $number($overview['appointments_upcoming'] ?? 0) ?> futuros no período</small></article>
             <article class="card is-success"><span>Resultado da agenda</span><strong><?= $percent($overview['appointment_success_rate'] ?? 0) ?></strong><small>Confirmados e concluídos</small></article>
             <article class="card <?= (int) ($overview['appointments_no_show'] ?? 0) > 0 ? 'is-warning' : '' ?>"><span>Comparecimento</span><strong><?= $percent($overview['attendance_rate'] ?? 0) ?></strong><small><?= $number($overview['appointments_no_show'] ?? 0) ?> falta(s) · <?= $number($overview['appointments_cancelled'] ?? 0) ?> cancelado(s)</small></article>
+        </section>
+
+        <section class="card team-report-section team-report-audit">
+            <div class="section-heading">
+                <div><span class="eyebrow">Conferência da métrica</span><h2>Auditoria das primeiras respostas</h2><p>Detalhamento dos ciclos que formam o tempo médio, com horário local e duração exata.</p></div>
+                <span class="badge <?= (int) ($dataQuality['invalid_response_cycles'] ?? 0) > 0 ? 'badge-warning' : 'badge-success' ?>"><?= (int) ($dataQuality['invalid_response_cycles'] ?? 0) > 0 ? 'Revisão necessária' : 'Base consistente' ?></span>
+            </div>
+            <div class="team-report-audit-kpis">
+                <article><span>Respostas medidas</span><strong><?= $number($dataQuality['measured_responses'] ?? 0) ?></strong></article>
+                <article><span>Média exata</span><strong><?= View::e($duration($dataQuality['avg_response_seconds'] ?? 0)) ?></strong></article>
+                <article><span>Menor tempo</span><strong><?= View::e($duration($dataQuality['min_response_seconds'] ?? 0)) ?></strong></article>
+                <article><span>Maior tempo</span><strong><?= View::e($duration($dataQuality['max_response_seconds'] ?? 0)) ?></strong></article>
+                <article class="<?= (int) ($dataQuality['pending_response_cycles'] ?? 0) > 0 ? 'is-warning' : '' ?>"><span>Aguardando resposta</span><strong><?= $number($dataQuality['pending_response_cycles'] ?? 0) ?></strong></article>
+                <article class="<?= (int) ($dataQuality['invalid_response_cycles'] ?? 0) > 0 ? 'is-danger' : '' ?>"><span>Datas inconsistentes</span><strong><?= $number($dataQuality['invalid_response_cycles'] ?? 0) ?></strong></article>
+            </div>
+            <div class="table-wrap team-report-audit-wrap">
+                <table class="team-report-audit-table">
+                    <thead><tr><th>Cliente</th><th>Profissional</th><th>Ciclo</th><th>Entrada do cliente</th><th>Primeira resposta</th><th>Tempo</th><th>Status</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($responseAudit as $cycle): ?>
+                        <tr>
+                            <td><strong><?= View::e((string) ($cycle['contact_name'] ?? 'Cliente')) ?></strong><small><?= View::e((string) ($cycle['conversation_uuid'] ?? '')) ?></small></td>
+                            <td><?= View::e((string) ($cycle['professional_name'] ?? 'Usuário')) ?></td>
+                            <td>#<?= $number($cycle['cycle_number'] ?? 0) ?></td>
+                            <td><?= View::e(date('d/m/Y H:i:s', strtotime((string) ($cycle['first_incoming_at_local'] ?? 'now')))) ?></td>
+                            <td><?= View::e(date('d/m/Y H:i:s', strtotime((string) ($cycle['first_response_at_local'] ?? 'now')))) ?></td>
+                            <td><strong><?= View::e($duration($cycle['response_seconds'] ?? 0)) ?></strong></td>
+                            <td><span class="badge <?= ($cycle['cycle_status'] ?? '') === 'closed' ? 'badge-info' : 'badge-success' ?>"><?= ($cycle['cycle_status'] ?? '') === 'closed' ? 'Encerrado' : 'Ativo' ?></span></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php if (!$responseAudit): ?><tr><td colspan="7"><div class="empty-state">Nenhuma primeira resposta humana medida no período.</div></td></tr><?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php if (count($responseAudit) >= 50): ?><small class="team-report-audit-note">A tela mostra as 50 respostas mais recentes. Use “Exportar 1ª respostas” para o período completo.</small><?php endif; ?>
         </section>
 
         <section class="card team-report-section">

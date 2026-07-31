@@ -52,6 +52,8 @@ final class ReportController
             'professionals' => [],
             'dailySeries' => [],
             'recentActivities' => [],
+            'responseAudit' => [],
+            'dataQuality' => [],
             'warnings' => [],
         ];
 
@@ -81,7 +83,27 @@ final class ReportController
         }
 
         try {
-            $data = (new TeamProfessionalReportService())->build($filters);
+            $service = new TeamProfessionalReportService();
+            if ((string) ($_GET['detail'] ?? '') === 'first_responses') {
+                $auditRows = [];
+                foreach ($service->firstResponseExport($filters) as $row) {
+                    $auditRows[] = [
+                        'conversation_uuid' => (string) ($row['conversation_uuid'] ?? ''),
+                        'ciclo' => (int) ($row['cycle_number'] ?? 0),
+                        'cliente' => (string) ($row['contact_name'] ?? ''),
+                        'profissional' => (string) ($row['professional_name'] ?? ''),
+                        'entrada_cliente_local' => (string) ($row['first_incoming_at_local'] ?? ''),
+                        'primeira_resposta_local' => (string) ($row['first_response_at_local'] ?? ''),
+                        'entrada_cliente_utc' => (string) ($row['first_incoming_at'] ?? ''),
+                        'primeira_resposta_utc' => (string) ($row['first_response_at'] ?? ''),
+                        'tempo_primeira_resposta_segundos' => (int) ($row['response_seconds'] ?? 0),
+                        'status_ciclo' => (string) ($row['cycle_status'] ?? ''),
+                        'origem_ciclo' => (string) ($row['source'] ?? ''),
+                    ];
+                }
+                $this->csv('rs-connect-auditoria-primeiras-respostas.csv', $auditRows);
+            }
+            $data = $service->build($filters);
         } catch (\RuntimeException $exception) {
             http_response_code(403);
             $this->csv('rs-connect-equipe-profissionais.csv', []);

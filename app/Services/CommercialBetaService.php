@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.10.6', 'title' => 'Auditoria final das métricas', 'summary' => 'Exibe os ciclos que formam o tempo médio de primeira resposta, horários local e UTC, menor e maior tempo, pendências, inconsistências e exportação detalhada sem expor IDs internos.'],
             ['version' => '36.10.5', 'title' => 'Filtros UUID opcionais', 'summary' => 'Corrige o falso 404 causado por parâmetros UUID vazios em filtros GET, preservando a validação rígida para identificadores preenchidos.'],
             ['version' => '36.10.4', 'title' => 'Datas técnicas em UTC', 'summary' => 'Padroniza mensagens, ciclos e históricos em UTC, converte filtros e atividades para o fuso da empresa e mantém os horários da agenda no fuso próprio do compromisso.'],
             ['version' => '36.10.3', 'title' => 'Status e ciclos sincronizados', 'summary' => 'Fecha e reabre o ciclo operacional junto com o status real da conversa, adiciona garantia no backend e repara divergências existentes pela migration 070.'],

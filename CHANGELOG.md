@@ -1,3 +1,12 @@
+# RS Connect v36.10.6 — Auditoria final das métricas de equipe
+
+- adiciona conferência detalhada dos ciclos que compõem o tempo médio de primeira resposta;
+- mostra horários local e UTC, profissional, cliente, ciclo e duração exata;
+- calcula a média geral diretamente sobre os ciclos, sem média de médias arredondadas;
+- identifica ciclos ativos aguardando resposta e datas inconsistentes;
+- exporta a auditoria completa em CSV usando UUID público da conversa;
+- mantém as migrations até a 071, sem nova alteração de banco.
+
 # RS Connect v36.10.5 — Filtros UUID opcionais sem erro 404
 
 - corrige o 404 em `Relatórios → Equipe e profissionais` ao selecionar “Toda a equipe”;

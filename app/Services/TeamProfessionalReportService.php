@@ -17,7 +17,7 @@ use Throwable;
  */
 final class TeamProfessionalReportService
 {
-    public const VERSION = '36.10.4-team-professional-reports-utc';
+    public const VERSION = '36.10.6-team-professional-reports-audit';
 
     private PDO $pdo;
     private TeamMetricsFoundationService $foundation;
@@ -58,6 +58,8 @@ final class TeamProfessionalReportService
             'professionals' => [],
             'dailySeries' => [],
             'recentActivities' => [],
+            'responseAudit' => [],
+            'dataQuality' => $this->emptyDataQuality(),
             'warnings' => [],
         ];
 
@@ -106,17 +108,39 @@ final class TeamProfessionalReportService
         });
 
         $professionalRows = array_values($professionals);
+        $dataQuality = $this->responseDataQuality($tenantId, $date, $selectedUserId);
         $overview = $this->overview($professionalRows, $scope, $selectedUserId);
+        // Use the raw cycle aggregate instead of an average of rounded professional averages.
+        $overview['first_responses'] = (int) ($dataQuality['measured_responses'] ?? 0);
+        $overview['avg_first_response_seconds'] = (int) ($dataQuality['avg_response_seconds'] ?? 0);
         $dailySeries = $this->dailySeries($tenantId, $filters, $selectedUserId);
         $activities = $this->recentActivities($tenantId, $date, $selectedUserId);
+        $responseAudit = $this->firstResponseAudit($tenantId, $date, $selectedUserId, 50);
 
         return array_merge($base, [
             'overview' => $overview,
             'professionals' => $professionalRows,
             'dailySeries' => $dailySeries,
             'recentActivities' => $activities,
+            'responseAudit' => $responseAudit,
+            'dataQuality' => $dataQuality,
             'warnings' => array_values(array_unique($this->warnings)),
         ]);
+    }
+
+    /**
+     * Returns auditable first-response cycles for CSV export. Public identifiers
+     * are used so internal numeric IDs never leave the application.
+     */
+    public function firstResponseExport(array $filters): array
+    {
+        $this->warnings = [];
+        $tenantId = (int) ($filters['tenant_id'] ?? 0);
+        $scope = $this->foundation->assertMayView($tenantId);
+        $selectedUserId = $this->selectedUserId($tenantId, $scope, (int) ($filters['user_id'] ?? 0));
+        $timezone = $this->tenantTimezone($tenantId);
+        $date = $this->dateParams($filters, $timezone);
+        return $this->firstResponseAudit($tenantId, $date, $selectedUserId, 5000);
     }
 
     private function selectedUserId(int $tenantId, array $scope, int $requested): int
@@ -457,6 +481,92 @@ final class TeamProfessionalReportService
         return array_values($series);
     }
 
+    private function responseDataQuality(int $tenantId, array $date, int $userId): array
+    {
+        [$measuredFilter, $measuredParams] = $this->userFilter('sc.first_response_user_id', $userId);
+        $measured = $this->row(
+            'SELECT COUNT(*) AS measured_responses,
+                    AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at))) AS avg_response_seconds,
+                    MIN(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at))) AS min_response_seconds,
+                    MAX(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at))) AS max_response_seconds,
+                    SUM(sc.first_response_at < sc.first_incoming_at) AS invalid_response_cycles
+             FROM conversation_service_cycles sc
+             WHERE sc.tenant_id = :tenant_id
+               AND sc.first_incoming_at IS NOT NULL
+               AND sc.first_response_at IS NOT NULL
+               AND sc.first_response_user_id IS NOT NULL
+               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $measuredFilter,
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $measuredParams
+        );
+
+        $pendingFilter = '';
+        $pendingParams = [];
+        if ($userId > 0) {
+            $pendingFilter = ' AND c.assigned_user_id = :pending_user_id';
+            $pendingParams['pending_user_id'] = $userId;
+        }
+        $pending = $this->scalar(
+            'SELECT COUNT(*)
+             FROM conversation_service_cycles sc
+             INNER JOIN conversations c ON c.id = sc.conversation_id AND c.tenant_id = sc.tenant_id
+             WHERE sc.tenant_id = :tenant_id
+               AND sc.cycle_status = "active"
+               AND sc.first_incoming_at IS NOT NULL
+               AND sc.first_response_at IS NULL
+               AND sc.first_incoming_at BETWEEN :start_at AND :end_at' . $pendingFilter,
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $pendingParams
+        );
+
+        $quality = [
+            'measured_responses' => (int) ($measured['measured_responses'] ?? 0),
+            'avg_response_seconds' => (int) round((float) ($measured['avg_response_seconds'] ?? 0)),
+            'min_response_seconds' => (int) ($measured['min_response_seconds'] ?? 0),
+            'max_response_seconds' => (int) ($measured['max_response_seconds'] ?? 0),
+            'pending_response_cycles' => $pending,
+            'invalid_response_cycles' => (int) ($measured['invalid_response_cycles'] ?? 0),
+        ];
+
+        if ($quality['invalid_response_cycles'] > 0) {
+            $this->warnings[] = 'Há ciclos com resposta anterior à entrada do cliente. Revise a auditoria de primeira resposta.';
+        }
+        return $quality;
+    }
+
+    private function firstResponseAudit(int $tenantId, array $date, int $userId, int $limit): array
+    {
+        [$filter, $params] = $this->userFilter('sc.first_response_user_id', $userId);
+        $limit = max(1, min(5000, $limit));
+        $rows = $this->rows(
+            'SELECT sc.conversation_id, sc.cycle_number, sc.first_incoming_at, sc.first_response_at,
+                    sc.first_response_user_id, sc.cycle_status, sc.source,
+                    GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at)) AS response_seconds,
+                    COALESCE(NULLIF(u.whatsapp_display_name, ""), u.name, "Usuário") AS professional_name,
+                    COALESCE(NULLIF(ct.name, ""), ct.phone, "Cliente") AS contact_name
+             FROM conversation_service_cycles sc
+             INNER JOIN conversations c ON c.id = sc.conversation_id AND c.tenant_id = sc.tenant_id
+             INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = sc.tenant_id
+             LEFT JOIN users u ON u.id = sc.first_response_user_id
+             WHERE sc.tenant_id = :tenant_id
+               AND sc.first_incoming_at IS NOT NULL
+               AND sc.first_response_at IS NOT NULL
+               AND sc.first_response_user_id IS NOT NULL
+               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $filter . '
+             ORDER BY sc.first_response_at DESC
+             LIMIT ' . $limit,
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params
+        );
+
+        foreach ($rows as &$row) {
+            $row['conversation_uuid'] = \App\Core\PublicId::encode('conversation', (int) ($row['conversation_id'] ?? 0));
+            unset($row['conversation_id']);
+            $row['first_incoming_at_local'] = \App\Core\Clock::utcToLocal((string) ($row['first_incoming_at'] ?? ''), $date['timezone']);
+            $row['first_response_at_local'] = \App\Core\Clock::utcToLocal((string) ($row['first_response_at'] ?? ''), $date['timezone']);
+            $row['response_seconds'] = (int) ($row['response_seconds'] ?? 0);
+        }
+        unset($row);
+        return $rows;
+    }
+
     private function recentActivities(int $tenantId, array $date, int $userId): array
     {
         $activities = [];
@@ -598,6 +708,18 @@ final class TeamProfessionalReportService
             'local_end' => $filters['end'] . ' 23:59:59',
             'now_local' => $nowLocal,
             'timezone' => $timezone,
+        ];
+    }
+
+    private function emptyDataQuality(): array
+    {
+        return [
+            'measured_responses' => 0,
+            'avg_response_seconds' => 0,
+            'min_response_seconds' => 0,
+            'max_response_seconds' => 0,
+            'pending_response_cycles' => 0,
+            'invalid_response_cycles' => 0,
         ];
     }
 
