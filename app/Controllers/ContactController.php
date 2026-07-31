@@ -208,7 +208,7 @@ final class ContactController
                 'status' => $status,
                 'contact_group' => $contactGroup,
                 'preferred_user_id' => $preferredUserId,
-                'preferred_user_assigned_at' => $preferredUserId !== null ? date('Y-m-d H:i:s') : null,
+                'preferred_user_assigned_at' => $preferredUserId !== null ? \App\Core\Clock::nowUtc() : null,
                 'preferred_user_assigned_by_user_id' => $preferredUserId !== null ? Auth::id() : null,
             ]);
             $contactId = (int) Database::connection()->lastInsertId();
@@ -290,7 +290,7 @@ final class ContactController
                 'preferred_user_id' => $preferredUserId,
                 'preferred_user_assigned_at' => $preferredUserId === null
                     ? null
-                    : ($preferredChanged ? date('Y-m-d H:i:s') : ($contact['preferred_user_assigned_at'] ?? null)),
+                    : ($preferredChanged ? \App\Core\Clock::nowUtc() : ($contact['preferred_user_assigned_at'] ?? null)),
                 'preferred_user_assigned_by_user_id' => $preferredUserId === null
                     ? null
                     : ($preferredChanged ? Auth::id() : ($contact['preferred_user_assigned_by_user_id'] ?? null)),

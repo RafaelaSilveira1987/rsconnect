@@ -25,7 +25,7 @@ $checks = [
     'aplicação de horário valida contato' => str_contains($availability, '$professionalService->contactConflict('),
     'agenda interna remove horários ocupados pelo cliente' => str_contains($availability, '$this->contactBusyPeriods('),
     'pré-agendamento da conversa valida conflito' => str_contains($preSchedule, "'contact_schedule_conflict'"),
-    'versão atualizada' => str_contains($version, '36.10.3'),
+    'versão atualizada' => str_contains($version, '36.10.4'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

@@ -13,8 +13,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.10.3 — Sincronização resiliente do status e dos ciclos';
-    public const REQUIRED_MIGRATION = '070_conversation_cycle_status_sync_compat.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.10.4 — Datas técnicas em UTC e relatórios no fuso da empresa';
+    public const REQUIRED_MIGRATION = '071_utc_datetime_contract_compat.sql';
 
     private PDO $pdo;
 
@@ -103,13 +103,14 @@ final class AppVersionService
             'conversation_status_history',
             'calendar_appointment_history',
             'conversation_service_cycles',
+            'rs_datetime_contract',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 069, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 071, conforme o pacote implantado.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')
@@ -196,7 +197,7 @@ final class AppVersionService
             $operationalHistoryReady
                 ? 'Atribuições, transferências, ciclos das conversas, primeira resposta humana e mudanças da agenda estão auditáveis.'
                 : 'O histórico operacional necessário para relatórios confiáveis ainda não foi aplicado.',
-            'Executar as migrations 067, 068, 069 e 070; a 070 sincroniza encerramento e reabertura com os ciclos dos relatórios.'
+            'Executar as migrations 067, 068, 069, 070 e 071; a 071 padroniza datas em UTC e preserva o fuso dos relatórios. A 070 sincroniza encerramento e reabertura com os ciclos dos relatórios.'
         );
 
         $calendarOnboardingReady = $this->columnExists('tenant_onboarding_settings', 'calendar_mode')

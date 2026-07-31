@@ -349,7 +349,7 @@ final class AdminDashboardService
             'connected_instances' => $connectedInstances,
             'critical_incidents' => $criticalIncidents,
             'unread' => $unread,
-            'refreshed_at' => date('Y-m-d H:i:s'),
+            'refreshed_at' => \App\Core\Clock::nowUtc(),
         ];
     }
 

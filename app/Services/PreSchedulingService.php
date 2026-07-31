@@ -1045,7 +1045,7 @@ final class PreSchedulingService
             );
             $response = $service->sendText($phone, $message);
             $externalId = $this->extractMessageId($response['body'] ?? []);
-            $sentAt = date('Y-m-d H:i:s');
+            $sentAt = \App\Core\Clock::nowUtc();
 
             $pdo->prepare(
                 'INSERT INTO conversation_messages
@@ -1140,7 +1140,7 @@ final class PreSchedulingService
             );
             $response = $service->sendText($phone, $message);
             $externalId = $this->extractMessageId($response['body'] ?? []);
-            $sentAt = date('Y-m-d H:i:s');
+            $sentAt = \App\Core\Clock::nowUtc();
 
             $pdo->prepare(
                 'INSERT INTO conversation_messages

@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.10.4', 'title' => 'Datas técnicas em UTC', 'summary' => 'Padroniza mensagens, ciclos e históricos em UTC, converte filtros e atividades para o fuso da empresa e mantém os horários da agenda no fuso próprio do compromisso.'],
             ['version' => '36.10.3', 'title' => 'Status e ciclos sincronizados', 'summary' => 'Fecha e reabre o ciclo operacional junto com o status real da conversa, adiciona garantia no backend e repara divergências existentes pela migration 070.'],
             ['version' => '36.10.2', 'title' => 'Status visual das conversas', 'summary' => 'Diferencia conversas abertas, pendentes e encerradas por cor na lista e no painel selecionado, com atualização em tempo real, mantendo junto a recuperação resiliente dos ciclos da migration 069.'],
             ['version' => '36.10.1', 'title' => 'Ciclos de atendimento resilientes', 'summary' => 'Recupera conversas sem ciclo ativo, preenche primeira entrada e primeira resposta com mensagens reais e torna o trigger de mensagens autocorretivo para evitar lacunas futuras nos relatórios.'],

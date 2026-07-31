@@ -422,7 +422,7 @@ final class SecurityService
                 'timezone' => date_default_timezone_get(),
                 'database' => $this->databaseName(),
             ],
-            'checked_at' => date('Y-m-d H:i:s'),
+            'checked_at' => \App\Core\Clock::nowUtc(),
             'version' => '33.0-security-validation',
         ];
     }

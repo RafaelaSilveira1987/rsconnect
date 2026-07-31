@@ -17,7 +17,7 @@ use Throwable;
  */
 final class TeamProfessionalReportService
 {
-    public const VERSION = '36.10.1-team-professional-reports';
+    public const VERSION = '36.10.4-team-professional-reports-utc';
 
     private PDO $pdo;
     private TeamMetricsFoundationService $foundation;
@@ -37,8 +37,12 @@ final class TeamProfessionalReportService
         $readiness = $this->foundation->readiness();
         $selectedUserId = $this->selectedUserId($tenantId, $scope, (int) ($filters['user_id'] ?? 0));
         $tenant = $this->row(
-            'SELECT id, name, professional_assignment_enabled, professional_calendar_enabled
-             FROM tenants WHERE id = :tenant_id LIMIT 1',
+            'SELECT t.id, t.name, t.professional_assignment_enabled, t.professional_calendar_enabled,
+                    COALESCE(NULLIF(os.business_timezone, ""), NULLIF(cas.timezone, ""), "America/Sao_Paulo") AS timezone
+             FROM tenants t
+             LEFT JOIN tenant_onboarding_settings os ON os.tenant_id = t.id
+             LEFT JOIN tenant_calendar_availability_settings cas ON cas.tenant_id = t.id
+             WHERE t.id = :tenant_id LIMIT 1',
             ['tenant_id' => $tenantId]
         );
         $users = $this->users($tenantId, $scope);
@@ -58,13 +62,13 @@ final class TeamProfessionalReportService
         ];
 
         if (!$readiness['ready']) {
-            $this->warnings[] = 'As migrations 067 e 068 ainda não estão completas. Aplique a base histórica antes de usar este relatório.';
+            $this->warnings[] = 'As migrations históricas até a 071 ainda não estão completas. Aplique o contrato UTC antes de usar este relatório.';
             $base['warnings'] = $this->warnings;
             return $base;
         }
 
         $professionals = $this->professionalBase($users, $selectedUserId);
-        $date = $this->dateParams($filters);
+        $date = $this->dateParams($filters, (string) ($tenant['timezone'] ?? 'America/Sao_Paulo'));
 
         $this->mergeRows($professionals, $this->humanMessages($tenantId, $date, $selectedUserId));
         $this->mergeRows($professionals, $this->firstResponses($tenantId, $date, $selectedUserId));
@@ -202,7 +206,7 @@ final class TeamProfessionalReportService
                AND sender_user_id IS NOT NULL
                AND sent_at BETWEEN :start_at AND :end_at' . $filter . '
              GROUP BY sender_user_id',
-            ['tenant_id' => $tenantId, 'start_at' => $date['start'], 'end_at' => $date['end']] + $params
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params
         );
     }
 
@@ -218,7 +222,7 @@ final class TeamProfessionalReportService
                AND first_response_user_id IS NOT NULL
                AND first_response_at BETWEEN :start_at AND :end_at' . $filter . '
              GROUP BY first_response_user_id',
-            ['tenant_id' => $tenantId, 'start_at' => $date['start'], 'end_at' => $date['end']] + $params
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params
         );
     }
 
@@ -235,7 +239,7 @@ final class TeamProfessionalReportService
                AND assigned_user_id IS NOT NULL
                AND occurred_at BETWEEN :start_at AND :end_at' . $filter . '
              GROUP BY assigned_user_id',
-            ['tenant_id' => $tenantId, 'start_at' => $date['start'], 'end_at' => $date['end']] + $params
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params
         );
     }
 
@@ -251,7 +255,7 @@ final class TeamProfessionalReportService
                AND previous_user_id IS NOT NULL
                AND occurred_at BETWEEN :start_at AND :end_at' . $filter . '
              GROUP BY previous_user_id',
-            ['tenant_id' => $tenantId, 'start_at' => $date['start'], 'end_at' => $date['end']] + $params
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params
         );
     }
 
@@ -267,7 +271,7 @@ final class TeamProfessionalReportService
                AND closed_by_user_id IS NOT NULL
                AND closed_at BETWEEN :start_at AND :end_at' . $filter . '
              GROUP BY closed_by_user_id',
-            ['tenant_id' => $tenantId, 'start_at' => $date['start'], 'end_at' => $date['end']] + $params
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params
         );
     }
 
@@ -296,13 +300,13 @@ final class TeamProfessionalReportService
                     SUM(status = "completed") AS appointments_completed,
                     SUM(status IN ("cancelled", "rejected")) AS appointments_cancelled,
                     SUM(status = "no_show") AS appointments_no_show,
-                    SUM(starts_at >= NOW() AND status NOT IN ("cancelled", "rejected", "completed", "no_show")) AS appointments_upcoming
+                    SUM(starts_at >= :now_local AND status NOT IN ("cancelled", "rejected", "completed", "no_show")) AS appointments_upcoming
              FROM calendar_appointments
              WHERE tenant_id = :tenant_id
                AND owner_user_id IS NOT NULL
                AND starts_at BETWEEN :start_at AND :end_at' . $filter . '
              GROUP BY owner_user_id',
-            ['tenant_id' => $tenantId, 'start_at' => $date['start'], 'end_at' => $date['end']] + $params
+            ['tenant_id' => $tenantId, 'start_at' => $date['local_start'], 'end_at' => $date['local_end'], 'now_local' => $date['now_local']] + $params
         );
     }
 
@@ -318,7 +322,7 @@ final class TeamProfessionalReportService
                AND owner_user_id IS NOT NULL
                AND occurred_at BETWEEN :start_at AND :end_at' . $inFilter . '
              GROUP BY owner_user_id',
-            ['tenant_id' => $tenantId, 'start_at' => $date['start'], 'end_at' => $date['end']] + $inParams
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $inParams
         ) as $row) {
             $rows[(int) $row['user_id']] = $row;
         }
@@ -332,7 +336,7 @@ final class TeamProfessionalReportService
                AND previous_owner_user_id IS NOT NULL
                AND occurred_at BETWEEN :start_at AND :end_at' . $outFilter . '
              GROUP BY previous_owner_user_id',
-            ['tenant_id' => $tenantId, 'start_at' => $date['start'], 'end_at' => $date['end']] + $outParams
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $outParams
         ) as $row) {
             $id = (int) $row['user_id'];
             $rows[$id] = ($rows[$id] ?? ['user_id' => $id]) + $row;
@@ -391,14 +395,16 @@ final class TeamProfessionalReportService
 
     private function dailySeries(int $tenantId, array $filters, int $userId): array
     {
+        $timezone = $this->tenantTimezone($tenantId);
+        $date = $this->dateParams($filters, $timezone);
         $series = [];
         $start = new DateTimeImmutable((string) $filters['start']);
         $end = new DateTimeImmutable((string) $filters['end']);
-        foreach (new DatePeriod($start, new DateInterval('P1D'), $end->modify('+1 day')) as $date) {
-            $key = $date->format('Y-m-d');
+        foreach (new DatePeriod($start, new DateInterval('P1D'), $end->modify('+1 day')) as $day) {
+            $key = $day->format('Y-m-d');
             $series[$key] = [
                 'date' => $key,
-                'label' => $date->format('d/m'),
+                'label' => $day->format('d/m'),
                 'human_messages' => 0,
                 'first_responses' => 0,
                 'appointments' => 0,
@@ -408,29 +414,27 @@ final class TeamProfessionalReportService
 
         [$messageFilter, $messageParams] = $this->userFilter('sender_user_id', $userId);
         foreach ($this->rows(
-            'SELECT DATE(sent_at) AS metric_date, COUNT(*) AS human_messages
+            'SELECT sent_at
              FROM conversation_messages
              WHERE tenant_id = :tenant_id
                AND direction = "outgoing" AND sender_type = "user"
-               AND sent_at BETWEEN :start_at AND :end_at' . $messageFilter . '
-             GROUP BY DATE(sent_at)',
-            ['tenant_id' => $tenantId, 'start_at' => $filters['start'] . ' 00:00:00', 'end_at' => $filters['end'] . ' 23:59:59'] + $messageParams
+               AND sent_at BETWEEN :start_at AND :end_at' . $messageFilter,
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $messageParams
         ) as $row) {
-            $key = (string) $row['metric_date'];
-            if (isset($series[$key])) $series[$key]['human_messages'] = (int) $row['human_messages'];
+            $key = \App\Core\Clock::localDateKey((string) ($row['sent_at'] ?? ''), $timezone);
+            if (isset($series[$key])) $series[$key]['human_messages']++;
         }
 
         [$responseFilter, $responseParams] = $this->userFilter('first_response_user_id', $userId);
         foreach ($this->rows(
-            'SELECT DATE(first_response_at) AS metric_date, COUNT(*) AS first_responses
+            'SELECT first_response_at
              FROM conversation_service_cycles
              WHERE tenant_id = :tenant_id
-               AND first_response_at BETWEEN :start_at AND :end_at' . $responseFilter . '
-             GROUP BY DATE(first_response_at)',
-            ['tenant_id' => $tenantId, 'start_at' => $filters['start'] . ' 00:00:00', 'end_at' => $filters['end'] . ' 23:59:59'] + $responseParams
+               AND first_response_at BETWEEN :start_at AND :end_at' . $responseFilter,
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $responseParams
         ) as $row) {
-            $key = (string) $row['metric_date'];
-            if (isset($series[$key])) $series[$key]['first_responses'] = (int) $row['first_responses'];
+            $key = \App\Core\Clock::localDateKey((string) ($row['first_response_at'] ?? ''), $timezone);
+            if (isset($series[$key])) $series[$key]['first_responses']++;
         }
 
         [$appointmentFilter, $appointmentParams] = $this->userFilter('owner_user_id', $userId);
@@ -441,7 +445,7 @@ final class TeamProfessionalReportService
              WHERE tenant_id = :tenant_id
                AND starts_at BETWEEN :start_at AND :end_at' . $appointmentFilter . '
              GROUP BY DATE(starts_at)',
-            ['tenant_id' => $tenantId, 'start_at' => $filters['start'] . ' 00:00:00', 'end_at' => $filters['end'] . ' 23:59:59'] + $appointmentParams
+            ['tenant_id' => $tenantId, 'start_at' => $date['local_start'], 'end_at' => $date['local_end']] + $appointmentParams
         ) as $row) {
             $key = (string) $row['metric_date'];
             if (isset($series[$key])) {
@@ -470,9 +474,10 @@ final class TeamProfessionalReportService
              WHERE h.tenant_id = :tenant_id
                AND h.occurred_at BETWEEN :start_at AND :end_at' . $assignedFilter . '
              ORDER BY h.occurred_at DESC LIMIT 30',
-            ['tenant_id' => $tenantId, 'start_at' => $date['start'], 'end_at' => $date['end']] + $assignedParams
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $assignedParams
         ) as $row) {
             $row['description'] = $this->assignmentDescription($row);
+            $row['occurred_at_local'] = \App\Core\Clock::utcToLocal((string) ($row['occurred_at'] ?? ''), $date['timezone']);
             $activities[] = $row;
         }
 
@@ -488,9 +493,10 @@ final class TeamProfessionalReportService
              WHERE h.tenant_id = :tenant_id
                AND h.occurred_at BETWEEN :start_at AND :end_at' . $appointmentFilter . '
              ORDER BY h.occurred_at DESC LIMIT 30',
-            ['tenant_id' => $tenantId, 'start_at' => $date['start'], 'end_at' => $date['end']] + $appointmentParams
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $appointmentParams
         ) as $row) {
             $row['description'] = $this->appointmentDescription($row);
+            $row['occurred_at_local'] = \App\Core\Clock::utcToLocal((string) ($row['occurred_at'] ?? ''), $date['timezone']);
             $activities[] = $row;
         }
 
@@ -566,9 +572,33 @@ final class TeamProfessionalReportService
         ];
     }
 
-    private function dateParams(array $filters): array
+    private function tenantTimezone(int $tenantId): string
     {
-        return ['start' => $filters['start'] . ' 00:00:00', 'end' => $filters['end'] . ' 23:59:59'];
+        $row = $this->row(
+            'SELECT COALESCE(NULLIF(os.business_timezone, ""), NULLIF(cas.timezone, ""), "America/Sao_Paulo") AS timezone
+             FROM tenants t
+             LEFT JOIN tenant_onboarding_settings os ON os.tenant_id = t.id
+             LEFT JOIN tenant_calendar_availability_settings cas ON cas.tenant_id = t.id
+             WHERE t.id = :tenant_id LIMIT 1',
+            ['tenant_id' => $tenantId]
+        );
+        return \App\Core\Clock::safeTimezone((string) ($row['timezone'] ?? 'America/Sao_Paulo'));
+    }
+
+    private function dateParams(array $filters, string $timezone): array
+    {
+        $timezone = \App\Core\Clock::safeTimezone($timezone);
+        $utc = \App\Core\Clock::localRangeToUtc((string) $filters['start'], (string) $filters['end'], $timezone);
+        $nowLocal = (new \DateTimeImmutable('now', new \DateTimeZone($timezone)))->format('Y-m-d H:i:s');
+
+        return [
+            'utc_start' => $utc['start'],
+            'utc_end' => $utc['end'],
+            'local_start' => $filters['start'] . ' 00:00:00',
+            'local_end' => $filters['end'] . ' 23:59:59',
+            'now_local' => $nowLocal,
+            'timezone' => $timezone,
+        ];
     }
 
     private function emptyOverview(): array

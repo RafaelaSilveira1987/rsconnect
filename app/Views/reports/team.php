@@ -51,7 +51,7 @@ foreach ($professionals as $professional) {
     $professionalMax = max($professionalMax, (int) ($professional['activity_score'] ?? 0));
 }
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.10.1')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.10.4')) ?>">
 <div class="executive-report-page team-report-page report-v36100">
     <section class="client-report-hero team-report-hero">
         <div>
@@ -97,13 +97,13 @@ foreach ($professionals as $professional) {
     <?php elseif (empty($readiness['ready'])): ?>
         <section class="card team-report-empty-selection is-warning">
             <span class="eyebrow">Base histórica pendente</span>
-            <h2>Execute as migrations 067 e 068</h2>
-            <p>Sem as tabelas de histórico e os ciclos persistentes, o sistema não consegue atribuir primeiras respostas, transferências, encerramentos e mudanças da agenda ao profissional correto.</p>
+            <h2>Execute as migrations até a 071</h2>
+            <p>Sem os históricos, ciclos persistentes e o contrato UTC, o sistema não consegue filtrar períodos e atribuir primeiras respostas, transferências, encerramentos e mudanças da agenda com segurança.</p>
             <?php if (!empty($readiness['missing'])): ?><small>Pendente: <?= View::e(implode(', ', $readiness['missing'])) ?></small><?php endif; ?>
         </section>
     <?php else: ?>
         <section class="team-report-context card">
-            <div><span class="eyebrow">Escopo</span><strong><?= View::e((string) ($overview['scope_label'] ?? 'Toda a equipe')) ?></strong><small><?= View::e((string) ($tenant['name'] ?? 'Empresa')) ?> · <?= View::e(date('d/m/Y', strtotime((string) $filters['start']))) ?> a <?= View::e(date('d/m/Y', strtotime((string) $filters['end']))) ?></small></div>
+            <div><span class="eyebrow">Escopo</span><strong><?= View::e((string) ($overview['scope_label'] ?? 'Toda a equipe')) ?></strong><small><?= View::e((string) ($tenant['name'] ?? 'Empresa')) ?> · Fuso <?= View::e((string) ($tenant['timezone'] ?? 'America/Sao_Paulo')) ?> · <?= View::e(date('d/m/Y', strtotime((string) $filters['start']))) ?> a <?= View::e(date('d/m/Y', strtotime((string) $filters['end']))) ?></small></div>
             <div class="team-report-context-badges"><span class="badge <?= !empty($tenant['professional_assignment_enabled']) ? 'badge-success' : 'badge-info' ?>">Atendimento por profissional <?= !empty($tenant['professional_assignment_enabled']) ? 'ativo' : 'opcional' ?></span><span class="badge <?= !empty($tenant['professional_calendar_enabled']) ? 'badge-success' : 'badge-info' ?>">Agenda individual <?= !empty($tenant['professional_calendar_enabled']) ? 'ativa' : 'opcional' ?></span></div>
         </section>
 
@@ -173,7 +173,7 @@ foreach ($professionals as $professional) {
                 <div class="section-heading"><div><span class="eyebrow">Histórico</span><h2>Movimentações recentes</h2></div></div>
                 <div class="team-report-timeline">
                     <?php foreach ($recentActivities as $activity): $tone = $activityTone((string) ($activity['activity_type'] ?? ''), (string) ($activity['action'] ?? '')); ?>
-                        <article class="is-<?= View::e($tone) ?>"><i></i><div><strong><?= View::e((string) ($activity['description'] ?? 'Movimentação registrada.')) ?></strong><small><?= View::e(date('d/m/Y H:i', strtotime((string) ($activity['occurred_at'] ?? 'now')))) ?></small></div></article>
+                        <article class="is-<?= View::e($tone) ?>"><i></i><div><strong><?= View::e((string) ($activity['description'] ?? 'Movimentação registrada.')) ?></strong><small><?= View::e(date('d/m/Y H:i', strtotime((string) ($activity['occurred_at_local'] ?? $activity['occurred_at'] ?? 'now')))) ?></small></div></article>
                     <?php endforeach; ?>
                     <?php if (!$recentActivities): ?><div class="empty-state">Nenhuma atribuição ou mudança da agenda no período.</div><?php endif; ?>
                 </div>

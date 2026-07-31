@@ -1,3 +1,14 @@
+# RS Connect v36.10.4 — Datas técnicas em UTC e relatórios no fuso da empresa
+
+- define a sessão PDO do MySQL como `+00:00`;
+- adiciona `App\Core\Clock` para escrita UTC e conversão de apresentação;
+- grava mensagens manuais, automáticas e recebidas pela Evolution em UTC;
+- normaliza uma única vez mensagens e marcos históricos pela migration 071;
+- recria os 10 triggers operacionais com `UTC_TIMESTAMP()`;
+- converte filtros, série diária e histórico recente do relatório para o fuso da empresa;
+- preserva `starts_at`/`ends_at` da agenda como horário local do compromisso;
+- adiciona diagnóstico `utc_datetime_contract_v36.10.4.sql`.
+
 # RS Connect v36.10.3 — Sincronização resiliente do status e dos ciclos
 
 - corrige conversas encerradas na interface cujo ciclo permanecia `active`;

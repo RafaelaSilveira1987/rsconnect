@@ -502,7 +502,7 @@ final class AiReprocessService
                 $item['connection_state'] = $cache[$instanceId];
                 $item['instance_status'] = in_array($cache[$instanceId], ['open', 'connected', 'active', 'online'], true) ? 'connected' : 'disconnected';
                 $item['live_state_checked'] = true;
-                $item['last_status_check_at'] = date('Y-m-d H:i:s');
+                $item['last_status_check_at'] = \App\Core\Clock::nowUtc();
             }
         }
         unset($item);

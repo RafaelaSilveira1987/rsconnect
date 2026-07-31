@@ -25,7 +25,7 @@ final class AccessControlService
             'subscription' => null,
             'invoice' => null,
             'grace_days' => $this->invoiceGraceDays(),
-            'checked_at' => date('Y-m-d H:i:s'),
+            'checked_at' => \App\Core\Clock::nowUtc(),
             'version' => self::VERSION,
         ];
 

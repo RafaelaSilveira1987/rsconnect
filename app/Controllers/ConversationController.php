@@ -288,7 +288,7 @@ final class ConversationController
             $this->redirect('/conversations');
         }
 
-        $sentAt = date('Y-m-d H:i:s');
+        $sentAt = \App\Core\Clock::nowUtc();
         $remoteJid = $phone . '@s.whatsapp.net';
 
         try {
@@ -479,7 +479,7 @@ final class ConversationController
             $this->redirect('/conversations');
         }
 
-        $sentAt = date('Y-m-d H:i:s');
+        $sentAt = \App\Core\Clock::nowUtc();
         $sendSucceeded = false;
         $sendError = '';
 
@@ -2001,14 +2001,7 @@ final class ConversationController
 
     private function formatTimeLabel(string $dateTime): string
     {
-        if ($dateTime === '') {
-            return '';
-        }
-        $timestamp = strtotime($dateTime);
-        if (!$timestamp) {
-            return '';
-        }
-        return date('d/m H:i', $timestamp);
+        return \App\Core\Clock::formatUtc($dateTime, 'd/m H:i');
     }
 
     private function json(array $payload, int $status = 200): never

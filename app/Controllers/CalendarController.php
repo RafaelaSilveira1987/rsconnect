@@ -1048,7 +1048,7 @@ final class CalendarController
             return;
         }
 
-        $sentAt = date('Y-m-d H:i:s');
+        $sentAt = \App\Core\Clock::nowUtc();
         $externalId = $this->extractEvolutionMessageId($result['body'] ?? []);
         $pdo = Database::connection();
         $pdo->prepare(

@@ -434,7 +434,7 @@ final class ConversationOwnershipService
                  WHERE id = :id AND tenant_id = :tenant_id'
             )->execute([
                 'assigned_user_id' => $targetUserId,
-                'assigned_at' => $targetUserId !== null ? date('Y-m-d H:i:s') : null,
+                'assigned_at' => $targetUserId !== null ? \App\Core\Clock::nowUtc() : null,
                 'attendance_mode' => $targetUserId !== null ? 'human' : 'paused',
                 'operational_status' => $targetUserId !== null ? 'in_service' : 'waiting_agent',
                 'id' => $conversationId,
@@ -455,12 +455,12 @@ final class ConversationOwnershipService
              WHERE id = :id AND tenant_id = :tenant_id'
         )->execute([
             'assigned_user_id' => $targetUserId,
-            'assigned_at' => $targetUserId !== null ? date('Y-m-d H:i:s') : null,
+            'assigned_at' => $targetUserId !== null ? \App\Core\Clock::nowUtc() : null,
             'attendance_mode' => $targetUserId !== null ? 'human' : 'paused',
             'operational_status' => $targetUserId !== null ? 'in_service' : 'waiting_agent',
             'assignment_source' => $source,
             'assignment_updated_by_user_id' => $actorId,
-            'assignment_released_at' => $targetUserId === null ? date('Y-m-d H:i:s') : null,
+            'assignment_released_at' => $targetUserId === null ? \App\Core\Clock::nowUtc() : null,
             'id' => $conversationId,
             'tenant_id' => $tenantId,
         ]);

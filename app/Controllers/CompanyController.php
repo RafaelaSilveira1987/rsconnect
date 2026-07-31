@@ -383,8 +383,8 @@ final class CompanyController
         }
 
         try {
-            $acknowledgedAt = in_array($trackingStatus, ['reviewed', 'resolved'], true) ? date('Y-m-d H:i:s') : null;
-            $resolvedAt = $trackingStatus === 'resolved' ? date('Y-m-d H:i:s') : null;
+            $acknowledgedAt = in_array($trackingStatus, ['reviewed', 'resolved'], true) ? \App\Core\Clock::nowUtc() : null;
+            $resolvedAt = $trackingStatus === 'resolved' ? \App\Core\Clock::nowUtc() : null;
             if ($trackingStatus === 'automatic') {
                 $note = '';
                 $acknowledgedAt = null;

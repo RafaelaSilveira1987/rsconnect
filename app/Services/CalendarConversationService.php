@@ -817,7 +817,7 @@ final class CalendarConversationService
                 'status' => $status,
                 'appointment_status' => $selected ? 'awaiting_approval' : 'pre_scheduled',
                 'request_id' => (!$selected && !$sent) ? null : $requestId,
-                'sent_at' => $sent ? date('Y-m-d H:i:s') : null,
+                'sent_at' => $sent ? \App\Core\Clock::nowUtc() : null,
                 'message_id' => $externalId,
                 'expires_at' => $expiresAt,
                 'appointment_id' => $appointmentId,
@@ -949,7 +949,7 @@ final class CalendarConversationService
             );
             $response = $service->sendText($phone, $message);
             $externalId = $this->extractMessageId(is_array($response['body'] ?? null) ? $response['body'] : []);
-            $sentAt = date('Y-m-d H:i:s');
+            $sentAt = \App\Core\Clock::nowUtc();
             $pdo = Database::connection();
             $pdo->prepare(
                 'INSERT INTO conversation_messages

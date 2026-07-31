@@ -354,7 +354,7 @@ final class OnboardingGuideService
             throw new \RuntimeException('Situação da Agenda inteligente inválida.');
         }
         $this->ensureOnboardingSettingsTable();
-        $releasedAt = $status === 'ready' ? date('Y-m-d H:i:s') : null;
+        $releasedAt = $status === 'ready' ? \App\Core\Clock::nowUtc() : null;
         $this->pdo->prepare(
             'INSERT INTO tenant_onboarding_settings
                 (tenant_id, smart_calendar_status, smart_calendar_released_by, smart_calendar_released_at)

@@ -55,7 +55,7 @@ final class OperationsController
                 'ok' => true,
                 'message' => 'Verificações executadas com sucesso.',
                 'redirect' => $redirectUrl,
-                'checked_at' => date('Y-m-d H:i:s'),
+                'checked_at' => \App\Core\Clock::nowUtc(),
                 'data' => $service->dashboard(),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             return;
@@ -78,7 +78,7 @@ final class OperationsController
         $this->json([
             'ok' => true,
             'message' => 'Monitoramento operacional executado.',
-            'checked_at' => date('Y-m-d H:i:s'),
+            'checked_at' => \App\Core\Clock::nowUtc(),
             'summary' => $service->dashboard()['summary'] ?? [],
         ]);
     }

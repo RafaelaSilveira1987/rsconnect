@@ -15,8 +15,7 @@ $formatDate = static function (?string $date, string $format = 'd/m/Y H:i'): str
     if (!$date) {
         return '—';
     }
-    $timestamp = strtotime($date);
-    return $timestamp ? date($format, $timestamp) : $date;
+    return \App\Core\Clock::formatUtc($date, $format);
 };
 $modeLabel = ['ai' => 'IA ativa', 'human' => 'Humano', 'paused' => 'IA pausada'];
 $statusLabel = ['open' => 'Aberta', 'pending' => 'Pendente', 'closed' => 'Encerrada'];

@@ -312,7 +312,7 @@ final class AiAutomationService
                     'direction' => 'incoming',
                     'sender_type' => 'contact',
                     'content' => 'INSTRUÇÃO INTERNA DE RETOMADA: o horário de atendimento foi reaberto. Responda agora à demanda pendente nas mensagens anteriores do cliente. Não reinicie a conversa, não repita a mensagem de ausência e não peça informações que já estejam no cadastro ou no histórico.',
-                    'sent_at' => date('Y-m-d H:i:s'),
+                    'sent_at' => \App\Core\Clock::nowUtc(),
                 ];
             }
             $failurePhase = 'ai.generate';
@@ -1166,7 +1166,7 @@ final class AiAutomationService
             throw new RuntimeException($message, 0, $exception);
         }
         $externalId = $this->extractMessageId($result['body'] ?? []);
-        $sentAt = date('Y-m-d H:i:s');
+        $sentAt = \App\Core\Clock::nowUtc();
 
         $pdo->beginTransaction();
         $insert = $pdo->prepare(

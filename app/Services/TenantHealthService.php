@@ -152,7 +152,7 @@ final class TenantHealthService
                 : ($counts['warning'] > 0 ? 'attention'
                     : ($this->isIdle($tenantId) ? 'idle' : 'healthy')));
         $score = max(0, min(100, 100 - ($counts['critical'] * 25) - ($counts['warning'] * 8)));
-        $checkedAt = date('Y-m-d H:i:s');
+        $checkedAt = \App\Core\Clock::nowUtc();
 
         $this->pdo->beginTransaction();
         try {
@@ -1103,7 +1103,7 @@ final class TenantHealthService
         ];
 
         return [
-            'generated_at' => date('Y-m-d H:i:s'),
+            'generated_at' => \App\Core\Clock::nowUtc(),
             'groups' => $groups,
             'record_count' => array_sum(array_map(static fn (array $group): int => count($group['records'] ?? []), $groups)),
             'secrets_notice' => 'Chaves de API, tokens e senhas permanecem ocultos. A tela mostra apenas se estão configurados.',
@@ -1589,7 +1589,7 @@ final class TenantHealthService
             if (!in_array($priority, ['attention', 'critical', 'implantation'], true)) {
                 $priority = 'attention';
             }
-            $resolvedAt = $nextStatus === 'resolved' ? date('Y-m-d H:i:s') : null;
+            $resolvedAt = $nextStatus === 'resolved' ? \App\Core\Clock::nowUtc() : null;
 
             $statement = $this->pdo->prepare(
                 'INSERT INTO tenant_admin_tracking

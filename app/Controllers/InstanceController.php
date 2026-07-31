@@ -221,8 +221,8 @@ final class InstanceController
                     $row['connection_state'] = $state;
                     $row['status'] = $mappedStatus;
                     $row['connection_reason'] = '';
-                    $row['last_status_check_at'] = date('Y-m-d H:i:s');
-                    $row['connection_updated_at'] = date('Y-m-d H:i:s');
+                    $row['last_status_check_at'] = \App\Core\Clock::nowUtc();
+                    $row['connection_updated_at'] = \App\Core\Clock::nowUtc();
                     $row['_live_check'] = 'updated';
                 } catch (Throwable $exception) {
                     $safeReason = mb_substr('Falha na consulta em tempo real: ' . $exception->getMessage(), 0, 255);
@@ -240,7 +240,7 @@ final class InstanceController
                             'reason' => $safeReason,
                             'id' => (int) $row['id'],
                         ]);
-                        $row['last_status_check_at'] = date('Y-m-d H:i:s');
+                        $row['last_status_check_at'] = \App\Core\Clock::nowUtc();
                         $row['connection_reason'] = $safeReason;
                         $row['_live_check'] = 'failed';
                     } catch (Throwable $databaseException) {

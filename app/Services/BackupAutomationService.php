@@ -382,7 +382,7 @@ final class BackupAutomationService
 
             $startedAt = $this->mysqlDate((string) ($payload['started_at'] ?? $job['started_at'] ?? $job['requested_at'] ?? ''));
             $finishedAt = $this->mysqlDate((string) ($payload['finished_at'] ?? ''));
-            $finishedAt = $finishedAt ?: date('Y-m-d H:i:s');
+            $finishedAt = $finishedAt ?: \App\Core\Clock::nowUtc();
             $verified = filter_var($payload['verified'] ?? false, FILTER_VALIDATE_BOOL);
 
             $insert = $pdo->prepare(
@@ -562,7 +562,7 @@ final class BackupAutomationService
         array $payload
     ): void {
         $startedAt = $this->mysqlDate((string) ($payload['started_at'] ?? ''));
-        $finishedAt = $this->mysqlDate((string) ($payload['finished_at'] ?? '')) ?: date('Y-m-d H:i:s');
+        $finishedAt = $this->mysqlDate((string) ($payload['finished_at'] ?? '')) ?: \App\Core\Clock::nowUtc();
         $duration = null;
         if ($startedAt) {
             $duration = max(0, strtotime($finishedAt) - strtotime($startedAt));

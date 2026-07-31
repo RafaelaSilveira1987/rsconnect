@@ -1539,9 +1539,9 @@ final class EvolutionWebhookController
             if ($value > 20000000000) {
                 $value = (int) floor($value / 1000);
             }
-            return date('Y-m-d H:i:s', $value);
+            return \App\Core\Clock::fromUnixUtc($value);
         }
-        return date('Y-m-d H:i:s');
+        return \App\Core\Clock::nowUtc();
     }
 
     private function respond(int $status, array $body): never
