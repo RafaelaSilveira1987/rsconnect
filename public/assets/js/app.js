@@ -309,9 +309,12 @@ document.addEventListener('DOMContentLoaded', () => {
     existing.innerHTML = '';
   }
 
-  function conversationUrl(id) {
+  function conversationUrl(id, publicId = '') {
     const url = new URL(window.location.href);
-    url.searchParams.set('conversation_id', String(id));
+    url.searchParams.delete('conversation_id');
+    url.searchParams.delete('conversation_uuid');
+    if (publicId) url.searchParams.set('conversation_uuid', String(publicId));
+    else url.searchParams.set('conversation_id', String(id));
     return url.pathname + url.search;
   }
 
@@ -321,7 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
       clearExisting();
       return;
     }
-    existing.innerHTML = `<div><strong>Conversa já existente</strong><small>Este contato já possui atendimento neste canal. Ao enviar, a conversa existente será reaberta e usada.</small></div><a class="btn btn-outline btn-small" href="${escape(conversationUrl(item.conversation_id))}">Abrir conversa</a>`;
+    existing.innerHTML = `<div><strong>Conversa já existente</strong><small>Este contato já possui atendimento neste canal. Ao enviar, a conversa existente será reaberta e usada.</small></div><a class="btn btn-outline btn-small" href="${escape(conversationUrl(item.conversation_id, item.conversation_public_id || ''))}">Abrir conversa</a>`;
     existing.hidden = false;
   }
 
@@ -422,6 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const avatarUrl = workspace.dataset.avatarUrl || '';
   const currentParams = new URLSearchParams(workspace.dataset.currentQuery || '');
   let selectedConversationId = Number(workspace.dataset.conversationId || 0);
+  let selectedConversationPublicId = String(workspace.dataset.conversationPublicId || '');
   let lastMessageId = Number(workspace.dataset.lastMessageId || 0);
   let unreadTotal = 0;
   let timer = null;
@@ -434,6 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const composerForm = document.querySelector('[data-chat-composer]');
   const composerInput = composerForm?.querySelector('textarea[name="message"]') || null;
   const composerButton = composerForm?.querySelector('button[type="submit"]') || null;
+  const ownershipBanner = document.querySelector('[data-ownership-banner]');
   const searchInput = document.querySelector('[data-conversation-search]');
   const conversationCount = document.querySelector('[data-conversation-count]');
   let searchTimer = null;
@@ -474,19 +479,21 @@ document.addEventListener('DOMContentLoaded', () => {
     document.title = count > 0 ? `(${count}) ${baseTitle} — RS Connect` : `${baseTitle} — RS Connect`;
   }
 
-  function buildConversationUrl(id) {
+  function buildConversationUrl(id, publicId = '') {
     const url = new URL(window.location.href);
-    ['search', 'status', 'mode', 'instance_id', 'tenant_id', 'intent'].forEach((key) => url.searchParams.delete(key));
+    ['search', 'status', 'mode', 'instance_id', 'tenant_id', 'conversation_id', 'instance_uuid', 'tenant_uuid', 'conversation_uuid', 'intent'].forEach((key) => url.searchParams.delete(key));
     currentParams.forEach((value, key) => { if (value !== '') url.searchParams.set(key, value); });
-    url.searchParams.set('conversation_id', String(id));
+    if (publicId) url.searchParams.set('conversation_uuid', String(publicId));
+    else url.searchParams.set('conversation_id', String(id));
     return url.pathname + url.search;
   }
 
   function syncBrowserQuery() {
     const url = new URL(window.location.href);
-    ['search', 'status', 'mode', 'instance_id', 'tenant_id', 'intent'].forEach((key) => url.searchParams.delete(key));
+    ['search', 'status', 'mode', 'instance_id', 'tenant_id', 'conversation_id', 'instance_uuid', 'tenant_uuid', 'conversation_uuid', 'intent'].forEach((key) => url.searchParams.delete(key));
     currentParams.forEach((value, key) => { if (value !== '') url.searchParams.set(key, value); });
-    if (selectedConversationId > 0) url.searchParams.set('conversation_id', String(selectedConversationId));
+    if (selectedConversationPublicId) url.searchParams.set('conversation_uuid', selectedConversationPublicId);
+    else if (selectedConversationId > 0) url.searchParams.set('conversation_id', String(selectedConversationId));
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
   }
 
@@ -546,14 +553,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const container = row.querySelector('[data-contact-avatar-container]');
     if (!container || container.dataset.avatarResolved === '1') return;
     const conversationId = Number(row.dataset.conversationId || 0);
-    if (!conversationId) return;
+    const conversationPublicId = String(row.dataset.conversationPublicId || '');
+    if (!conversationId && !conversationPublicId) return;
 
     row.dataset.avatarLoading = '1';
     try {
       const params = new URLSearchParams();
-      params.set('conversation_id', String(conversationId));
+      if (conversationPublicId) params.set('conversation_uuid', conversationPublicId);
+      else params.set('conversation_id', String(conversationId));
+      const tenantPublicId = currentParams.get('tenant_uuid');
       const tenantId = currentParams.get('tenant_id');
-      if (tenantId) params.set('tenant_id', tenantId);
+      if (tenantPublicId) params.set('tenant_uuid', tenantPublicId);
+      else if (tenantId) params.set('tenant_id', tenantId);
       const response = await fetch(`${avatarUrl}?${params.toString()}`, {
         headers: { 'Accept': 'application/json' },
         credentials: 'same-origin',
@@ -595,8 +606,52 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function applyOwnership(ownership) {
+    if (!ownership || typeof ownership !== 'object') return;
+    const locked = Boolean(ownership.locked_by_other);
+    if (composerInput) {
+      composerInput.disabled = locked;
+      composerInput.placeholder = locked ? 'Conversa em atendimento por outro profissional' : 'Digite uma mensagem...';
+    }
+    if (composerButton) composerButton.disabled = locked;
+    if (ownershipBanner && locked) {
+      ownershipBanner.classList.remove('is-available', 'is-mine');
+      ownershipBanner.classList.add('is-locked');
+      const name = ownership.assigned_user_name || 'Outro profissional';
+      const strong = ownershipBanner.querySelector('strong');
+      const text = ownershipBanner.querySelector('span');
+      if (strong) strong.textContent = `Atendimento em andamento com ${name}`;
+      if (text) text.textContent = 'Você pode acompanhar a conversa, mas não pode responder nem alterar o atendimento enquanto ela estiver aberta.';
+    }
+  }
+
   function modeText(mode) {
     return mode === 'human' ? 'Humano' : (mode === 'paused' ? 'IA pausada' : 'IA ativa');
+  }
+
+  function normalizeConversationStatus(value) {
+    const normalized = String(value || '').toLowerCase();
+    return ['open', 'pending', 'closed'].includes(normalized) ? normalized : 'open';
+  }
+
+  function conversationStatusText(value) {
+    const normalized = normalizeConversationStatus(value);
+    return normalized === 'closed' ? 'Encerrada' : (normalized === 'pending' ? 'Pendente' : 'Aberta');
+  }
+
+  function applySelectedConversationStatus(value) {
+    const normalized = normalizeConversationStatus(value);
+    const panel = document.querySelector('[data-selected-conversation-panel]');
+    if (panel) {
+      panel.classList.remove('conversation-status-open', 'conversation-status-pending', 'conversation-status-closed');
+      panel.classList.add(`conversation-status-${normalized}`);
+      panel.dataset.conversationStatus = normalized;
+    }
+    const badge = document.querySelector('[data-conversation-status-badge]');
+    if (badge) {
+      badge.className = `badge badge-${normalized}`;
+      badge.textContent = conversationStatusText(normalized);
+    }
   }
 
   function setConversationMode(mode) {
@@ -628,12 +683,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const unreadHidden = unread > 0 ? '' : ' hidden';
     const modeClass = escapeHtml(item.mode || 'ai');
     const modeLabel = modeText(item.mode);
-    return `<div class="conversation-list-row${unread > 0 ? ' has-unread' : ''}" data-conversation-row data-conversation-id="${Number(item.id)}">
+    const conversationStatus = normalizeConversationStatus(item.status);
+    const publicId = String(item.public_id || '');
+    return `<div class="conversation-list-row status-${conversationStatus}${unread > 0 ? ' has-unread' : ''}" data-conversation-row data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}" data-conversation-status="${conversationStatus}">
       <label class="conversation-select-control" title="Selecionar ${escapeHtml(item.name || item.phone || 'conversa')}">
         <input type="checkbox" name="conversation_ids[]" value="${Number(item.id)}" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de ${escapeHtml(item.name || item.phone || 'contato')}">
         <span aria-hidden="true"></span>
       </label>
-      <a class="conversation-list-item${selectedClass}" data-conversation-item data-conversation-id="${Number(item.id)}" href="${escapeHtml(buildConversationUrl(item.id))}">
+      <a class="conversation-list-item${selectedClass}" data-conversation-item data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}" href="${escapeHtml(buildConversationUrl(item.id, publicId))}">
         ${avatarMarkup(item)}
         <span class="conversation-summary">
           <span class="conversation-title-row">
@@ -643,7 +700,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="conversation-preview" data-conversation-preview>${escapeHtml(item.preview || 'Sem mensagens')}</span>
           <span class="conversation-meta-row">
             <span class="mini-badge mode-${modeClass}">${escapeHtml(modeLabel)}</span>
-            <small>${escapeHtml(item.tenant_name || item.instance_label || '')}</small>
+            <span class="mini-badge conversation-status-badge status-${conversationStatus}" data-conversation-list-status>${escapeHtml(conversationStatusText(conversationStatus))}</span>
+            <small>${escapeHtml(item.assigned_user_name ? `Responsável: ${item.assigned_user_name}` : (item.tenant_name || item.instance_label || ''))}</small>
             <b class="unread-count" data-unread-count${unreadHidden}>${unread}</b>
           </span>
         </span>
@@ -666,14 +724,27 @@ document.addEventListener('DOMContentLoaded', () => {
         list.insertAdjacentHTML('afterbegin', renderConversationItem(item));
         node = list.querySelector(`[data-conversation-item][data-conversation-id="${id}"]`);
       }
+      const publicId = String(item.public_id || node.dataset.conversationPublicId || '');
+      if (publicId) {
+        node.dataset.conversationPublicId = publicId;
+        node.href = buildConversationUrl(id, publicId);
+      }
       node.classList.toggle('is-selected', id === selectedConversationId);
       const row = node.closest('[data-conversation-row]');
+      if (row && publicId) row.dataset.conversationPublicId = publicId;
+      const itemStatus = normalizeConversationStatus(item.status);
+      if (row) {
+        row.classList.remove('status-open', 'status-pending', 'status-closed');
+        row.classList.add(`status-${itemStatus}`);
+        row.dataset.conversationStatus = itemStatus;
+      }
       row?.classList.toggle('has-unread', Number(item.unread_count || 0) > 0);
       const name = node.querySelector('[data-conversation-name]');
       const time = node.querySelector('[data-conversation-time]');
       const preview = node.querySelector('[data-conversation-preview]');
       const unread = node.querySelector('[data-unread-count]');
       const modeBadge = node.querySelector('.mini-badge');
+      const statusBadge = node.querySelector('[data-conversation-list-status]');
       if (name) name.textContent = item.name || item.phone || 'Contato';
       if (time) time.textContent = item.last_message_label || '';
       if (preview) preview.textContent = item.preview || 'Sem mensagens';
@@ -683,6 +754,11 @@ document.addEventListener('DOMContentLoaded', () => {
         modeBadge.className = `mini-badge mode-${itemMode}`;
         modeBadge.textContent = modeText(itemMode);
       }
+      if (statusBadge) {
+        statusBadge.className = `mini-badge conversation-status-badge status-${itemStatus}`;
+        statusBadge.textContent = conversationStatusText(itemStatus);
+      }
+      if (id === selectedConversationId) applySelectedConversationStatus(itemStatus);
       if (unread) {
         unread.textContent = Number(item.unread_count || 0);
         unread.hidden = Number(item.unread_count || 0) < 1;
@@ -721,22 +797,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function appendMessages(messages) {
-    if (!thread || !Array.isArray(messages) || messages.length === 0) return 0;
+    const summary = { added: 0, incoming: 0, outgoing: 0 };
+    if (!thread || !Array.isArray(messages) || messages.length === 0) return summary;
     const stick = shouldStickToBottom();
-    let added = 0;
     messages.forEach((message) => {
       const id = Number(message.id || 0);
       if (!id || thread.querySelector(`[data-message-id="${id}"]`)) return;
       thread.insertAdjacentHTML('beforeend', renderMessage(message));
       lastMessageId = Math.max(lastMessageId, id);
-      added += 1;
+      summary.added += 1;
+      if (message.direction === 'incoming') summary.incoming += 1;
+      if (message.direction === 'outgoing') summary.outgoing += 1;
     });
     const empty = thread.querySelector('.chat-empty');
-    if (empty && added > 0) empty.remove();
+    if (empty && summary.added > 0) empty.remove();
     workspace.dataset.lastMessageId = String(lastMessageId);
     thread.dataset.lastMessageId = String(lastMessageId);
-    if (stick || added > 0) thread.scrollTop = thread.scrollHeight;
-    return added;
+    if (stick || summary.added > 0) thread.scrollTop = thread.scrollHeight;
+    return summary;
   }
 
   async function poll() {
@@ -755,11 +833,17 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
+      if (payload.selected_conversation_public_id) {
+        selectedConversationPublicId = String(payload.selected_conversation_public_id);
+        workspace.dataset.conversationPublicId = selectedConversationPublicId;
+      }
       updateConversationList(payload.conversations || []);
-      const added = appendMessages(payload.messages || []);
+      applyOwnership(payload.ownership || null);
+      const messageSummary = appendMessages(payload.messages || []);
       unreadTotal = Number(payload.unread_total || 0);
       pulseTitle(unreadTotal);
-      if (added > 0) showToast(`${added} nova(s) mensagem(ns) recebida(s).`);
+      if (messageSummary.incoming === 1) showToast('Nova mensagem recebida.');
+      if (messageSummary.incoming > 1) showToast(`${messageSummary.incoming} novas mensagens recebidas.`);
       setStatus('Atualização automática ativa', 'ok');
     } catch (error) {
       setStatus('Reconectando atualização...', 'error');
@@ -1798,7 +1882,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const floatMessage = root.querySelector('[data-communication-float-message]');
   const minimizedKey = 'rs-connect-communication-minimized';
   const latestSignalKey = 'rs-connect-communication-latest-signal';
-  const requestedCommunicationId = Number(new URLSearchParams(window.location.search).get('communication_id') || 0);
+  const requestedCommunicationId = Number(root.dataset.requestedCommunicationId || 0);
   let requestedCommunicationOpened = false;
   let currentPayload = { unread: 0, items: [], latest: null };
   const initialPayloadNode = root.querySelector('[data-communication-initial]');
@@ -2268,4 +2352,201 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   poll();
   schedule();
+})();
+
+/* RS Connect 36.8.2 — visualizações Dia, Semana e Mês da agenda */
+(() => {
+  const viewToolbar = document.querySelector('[data-calendar-preference-key]');
+  const preferenceKey = String(viewToolbar?.dataset.calendarPreferenceKey || 'rs_calendar_view_0');
+  const viewLinks = document.querySelectorAll('[data-calendar-view-link]');
+  viewLinks.forEach((link) => {
+    link.addEventListener('click', () => {
+      const view = String(link.dataset.calendarViewLink || 'list');
+      try { window.localStorage.setItem(preferenceKey, view); } catch (_) {}
+      document.cookie = `${encodeURIComponent(preferenceKey)}=${encodeURIComponent(view)}; path=/; max-age=31536000; SameSite=Lax`;
+    });
+  });
+
+  const board = document.querySelector('[data-calendar-board]');
+  if (!board) return;
+
+  const source = board.querySelector('[data-calendar-events]');
+  const content = board.querySelector('[data-calendar-content]');
+  const loading = board.querySelector('[data-calendar-loading]');
+  const dialog = document.querySelector('[data-calendar-event-dialog]');
+  if (!source || !content) return;
+
+  let events = [];
+  try {
+    const parsed = JSON.parse(source.textContent || '[]');
+    events = Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    events = [];
+  }
+
+  const parseLocalDate = (value) => {
+    const normalized = String(value || '').trim();
+    if (!normalized) return null;
+    const date = new Date(normalized.length === 10 ? `${normalized}T00:00:00` : normalized);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+  const dateKey = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const sameDate = (event, date) => {
+    const startsAt = parseLocalDate(event.starts_at);
+    return startsAt ? dateKey(startsAt) === dateKey(date) : false;
+  };
+  const formatTime = (value) => {
+    const date = parseLocalDate(value);
+    return date ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(date) : '—';
+  };
+  const formatDate = (value, options = {}) => {
+    const date = value instanceof Date ? value : parseLocalDate(value);
+    return date ? new Intl.DateTimeFormat('pt-BR', options).format(date) : '—';
+  };
+  const formatPeriod = (event) => {
+    const start = parseLocalDate(event.starts_at);
+    const end = parseLocalDate(event.ends_at);
+    if (!start) return 'Horário não definido';
+    const dateLabel = formatDate(start, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+    return `${dateLabel} · ${formatTime(start)}${end ? ` às ${formatTime(end)}` : ''}`;
+  };
+  const statusClass = (status) => String(status || 'scheduled').replace(/[^a-z0-9_-]/gi, '');
+  const element = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  events = events
+    .map((event) => ({ ...event, _start: parseLocalDate(event.starts_at), _end: parseLocalDate(event.ends_at) }))
+    .filter((event) => event._start)
+    .sort((a, b) => a._start - b._start);
+
+  const openEvent = (event) => {
+    if (!dialog) return;
+    const setText = (selector, value) => {
+      const target = dialog.querySelector(selector);
+      if (target) target.textContent = value;
+    };
+    setText('[data-calendar-dialog-status]', event.status_label || 'Agendamento');
+    setText('[data-calendar-dialog-title]', event.title || 'Compromisso');
+    setText('[data-calendar-dialog-time]', formatPeriod(event));
+    setText('[data-calendar-dialog-contact]', event.contact_name || 'Sem contato');
+    setText('[data-calendar-dialog-owner]', event.owner_name || 'Não definido');
+    setText('[data-calendar-dialog-location]', event.location_label || 'A definir');
+    setText('[data-calendar-dialog-description]', event.description || 'Sem descrição.');
+    const openLink = dialog.querySelector('[data-calendar-dialog-open]');
+    const googleLink = dialog.querySelector('[data-calendar-dialog-google]');
+    if (openLink) openLink.href = event.list_url || '#';
+    if (googleLink) googleLink.href = event.google_url || '#';
+    dialog.className = `calendar-event-dialog calendar-dialog-status-${statusClass(event.status)}`;
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+  };
+
+  const eventButton = (event, compact = false) => {
+    const button = element('button', `calendar-event-card calendar-event-${statusClass(event.status)}${compact ? ' is-compact' : ''}`);
+    button.type = 'button';
+    button.dataset.calendarEventId = String(event.id || '');
+    button.setAttribute('aria-label', `${formatTime(event.starts_at)}. ${event.title}. ${event.contact_name}. ${event.owner_name}.`);
+
+    const time = element('span', 'calendar-event-time', compact ? formatTime(event.starts_at) : `${formatTime(event.starts_at)} – ${formatTime(event.ends_at)}`);
+    const title = element('strong', 'calendar-event-title', event.title || 'Compromisso');
+    const contact = element('span', 'calendar-event-contact', event.contact_name || 'Sem contato');
+    button.append(time, title);
+    if (!compact) {
+      button.append(contact, element('span', 'calendar-event-owner', event.owner_name || 'Não definido'));
+      button.append(element('span', 'calendar-event-status', event.status_label || 'Agendado'));
+    }
+    button.addEventListener('click', () => openEvent(event));
+    return button;
+  };
+
+  const emptyState = (message) => element('div', 'calendar-visual-empty', message);
+
+  const renderDay = () => {
+    const anchor = parseLocalDate(board.dataset.calendarAnchor) || new Date();
+    const dayEvents = events.filter((event) => sameDate(event, anchor));
+    const wrapper = element('div', 'calendar-day-view');
+    const heading = element('div', 'calendar-day-heading');
+    heading.append(
+      element('strong', '', formatDate(anchor, { weekday: 'long', day: '2-digit', month: 'long' })),
+      element('span', '', `${dayEvents.length} compromisso${dayEvents.length === 1 ? '' : 's'}`)
+    );
+    wrapper.appendChild(heading);
+    const list = element('div', 'calendar-day-events');
+    dayEvents.forEach((event) => list.appendChild(eventButton(event)));
+    wrapper.appendChild(dayEvents.length ? list : emptyState('Nenhum compromisso neste dia.'));
+    return wrapper;
+  };
+
+  const renderWeek = () => {
+    const rangeStart = parseLocalDate(board.dataset.calendarRangeStart) || new Date();
+    const wrapper = element('div', 'calendar-week-scroll');
+    const grid = element('div', 'calendar-week-grid');
+    for (let offset = 0; offset < 7; offset += 1) {
+      const day = new Date(rangeStart);
+      day.setDate(rangeStart.getDate() + offset);
+      const dayEvents = events.filter((event) => sameDate(event, day));
+      const column = element('section', `calendar-week-day${dateKey(day) === dateKey(new Date()) ? ' is-today' : ''}`);
+      const header = element('header', 'calendar-week-day-header');
+      header.append(
+        element('span', '', formatDate(day, { weekday: 'short' })),
+        element('strong', '', formatDate(day, { day: '2-digit', month: 'short' })),
+        element('small', '', String(dayEvents.length))
+      );
+      column.appendChild(header);
+      const list = element('div', 'calendar-week-events');
+      dayEvents.forEach((event) => list.appendChild(eventButton(event)));
+      column.appendChild(dayEvents.length ? list : emptyState('Livre'));
+      grid.appendChild(column);
+    }
+    wrapper.appendChild(grid);
+    return wrapper;
+  };
+
+  const renderMonth = () => {
+    const rangeStart = parseLocalDate(board.dataset.calendarRangeStart) || new Date();
+    const rangeEnd = parseLocalDate(board.dataset.calendarRangeEnd) || rangeStart;
+    const anchor = parseLocalDate(board.dataset.calendarAnchor) || new Date();
+    const wrapper = element('div', 'calendar-month-scroll');
+    const grid = element('div', 'calendar-month-grid');
+    ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].forEach((label) => grid.appendChild(element('div', 'calendar-month-weekday', label)));
+    const cursor = new Date(rangeStart);
+    while (cursor <= rangeEnd) {
+      const day = new Date(cursor);
+      const dayEvents = events.filter((event) => sameDate(event, day));
+      const cell = element('section', 'calendar-month-day');
+      if (day.getMonth() !== anchor.getMonth()) cell.classList.add('is-outside');
+      if (dateKey(day) === dateKey(new Date())) cell.classList.add('is-today');
+      const header = element('header', 'calendar-month-day-header');
+      header.appendChild(element('strong', '', String(day.getDate())));
+      if (dayEvents.length) header.appendChild(element('small', '', `${dayEvents.length}`));
+      cell.appendChild(header);
+      const list = element('div', 'calendar-month-events');
+      dayEvents.slice(0, 3).forEach((event) => list.appendChild(eventButton(event, true)));
+      if (dayEvents.length > 3) list.appendChild(element('span', 'calendar-month-more', `+${dayEvents.length - 3} compromisso(s)`));
+      cell.appendChild(list);
+      grid.appendChild(cell);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    wrapper.appendChild(grid);
+    return wrapper;
+  };
+
+  const view = String(board.dataset.calendarView || 'week');
+  const rendered = view === 'day' ? renderDay() : (view === 'month' ? renderMonth() : renderWeek());
+  content.replaceChildren(rendered);
+  content.hidden = false;
+  if (loading) loading.hidden = true;
+
+  dialog?.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
 })();

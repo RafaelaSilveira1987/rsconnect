@@ -139,7 +139,7 @@ final class ImplementationChecklistService
                 $attention++;
             }
         }
-        $readyAt = $status === 'ready' ? date('Y-m-d H:i:s') : null;
+        $readyAt = $status === 'ready' ? \App\Core\Clock::nowUtc() : null;
 
         $statement = $this->pdo->prepare(
             'INSERT INTO tenant_implementation_status

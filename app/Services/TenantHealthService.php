@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Env;
+use App\Core\PublicId;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
@@ -151,7 +152,7 @@ final class TenantHealthService
                 : ($counts['warning'] > 0 ? 'attention'
                     : ($this->isIdle($tenantId) ? 'idle' : 'healthy')));
         $score = max(0, min(100, 100 - ($counts['critical'] * 25) - ($counts['warning'] * 8)));
-        $checkedAt = date('Y-m-d H:i:s');
+        $checkedAt = \App\Core\Clock::nowUtc();
 
         $this->pdo->beginTransaction();
         try {
@@ -335,8 +336,11 @@ final class TenantHealthService
                 $enabled = filter_var($webhook['enabled'] ?? false, FILTER_VALIDATE_BOOL);
                 $byEvents = filter_var($webhook['webhookByEvents'] ?? false, FILTER_VALIDATE_BOOL);
                 $url = (string) ($webhook['url'] ?? '');
+                $publicInstanceId = PublicId::encode('instance', $id);
+                $validInstanceReference = str_contains($url, 'instance_uuid=' . rawurlencode($publicInstanceId))
+                    || str_contains($url, 'instance_id=' . $id); // compatibilidade com webhooks antigos
                 $valid = $enabled && !$byEvents && in_array('MESSAGES_UPSERT', $events, true)
-                    && str_contains($url, '/webhooks/evolution') && str_contains($url, 'instance_id=' . $id);
+                    && str_contains($url, '/webhooks/evolution') && $validInstanceReference;
                 $details['Webhook'] = $valid ? 'Configurado corretamente' : 'Revisar configuração';
                 $details['MESSAGES_UPSERT'] = in_array('MESSAGES_UPSERT', $events, true) ? 'Ativo' : 'Ausente';
                 if (!$valid) {
@@ -1099,7 +1103,7 @@ final class TenantHealthService
         ];
 
         return [
-            'generated_at' => date('Y-m-d H:i:s'),
+            'generated_at' => \App\Core\Clock::nowUtc(),
             'groups' => $groups,
             'record_count' => array_sum(array_map(static fn (array $group): int => count($group['records'] ?? []), $groups)),
             'secrets_notice' => 'Chaves de API, tokens e senhas permanecem ocultos. A tela mostra apenas se estão configurados.',
@@ -1585,7 +1589,7 @@ final class TenantHealthService
             if (!in_array($priority, ['attention', 'critical', 'implantation'], true)) {
                 $priority = 'attention';
             }
-            $resolvedAt = $nextStatus === 'resolved' ? date('Y-m-d H:i:s') : null;
+            $resolvedAt = $nextStatus === 'resolved' ? \App\Core\Clock::nowUtc() : null;
 
             $statement = $this->pdo->prepare(
                 'INSERT INTO tenant_admin_tracking

@@ -117,7 +117,7 @@ final class MessageGovernanceService
     {
         $pdo = Database::connection();
         $source = in_array($source, ['manual', 'cron', 'n8n', 'system'], true) ? $source : 'system';
-        $startedAt = date('Y-m-d H:i:s');
+        $startedAt = \App\Core\Clock::nowUtc();
         $summary = [
             'ok' => true,
             'source' => $source,
@@ -219,7 +219,7 @@ final class MessageGovernanceService
             $summary['results'][] = $result;
         }
 
-        $summary['finished_at'] = date('Y-m-d H:i:s');
+        $summary['finished_at'] = \App\Core\Clock::nowUtc();
         return $summary;
     }
 

@@ -1,3 +1,62 @@
+# RS Connect v36.10.4 — Datas técnicas em UTC e relatórios no fuso da empresa
+
+- define a sessão PDO do MySQL como `+00:00`;
+- adiciona `App\Core\Clock` para escrita UTC e conversão de apresentação;
+- grava mensagens manuais, automáticas e recebidas pela Evolution em UTC;
+- normaliza uma única vez mensagens e marcos históricos pela migration 071;
+- recria os 10 triggers operacionais com `UTC_TIMESTAMP()`;
+- converte filtros, série diária e histórico recente do relatório para o fuso da empresa;
+- preserva `starts_at`/`ends_at` da agenda como horário local do compromisso;
+- adiciona diagnóstico `utc_datetime_contract_v36.10.4.sql`.
+
+# RS Connect v36.10.3 — Sincronização resiliente do status e dos ciclos
+
+Esta correção fecha a divergência identificada na homologação: a conversa podia aparecer como **Encerrada** na interface enquanto `conversation_service_cycles` permanecia com `cycle_status = active`.
+
+Aplique, após as migrations 067, 068 e 069:
+
+`database/migrations/070_conversation_cycle_status_sync_compat.sql`
+
+A versão adiciona duas garantias complementares:
+
+- o backend fecha/reabre o ciclo na mesma transação da ação manual;
+- o trigger sincroniza os ciclos para atualizações vindas de webhook, n8n e rotinas externas.
+
+Valide com:
+
+`database/diagnostics/conversation_cycle_status_sync_v36.10.3.sql`
+
+# RS Connect v36.10.2 — Status visual das conversas
+
+- diferencia conversas abertas, pendentes e encerradas por cor;
+- atualiza o estado visual pelo polling em tempo real;
+- mantém junto a recuperação resiliente da migration 069.
+
+# RS Connect v36.10.1 — Recuperação resiliente dos ciclos de atendimento
+
+Esta correção complementa as migrations 067 e 068. Ela cobre conversas que foram criadas ou receberam mensagens durante uma janela em que os triggers ainda não estavam ativos e, por isso, não possuíam registro em `conversation_service_cycles`.
+
+Importe no Adminer, com `log_bin_trust_function_creators` temporariamente habilitado:
+
+`database/migrations/069_service_cycle_recovery_compat.sql`
+
+A migration é idempotente, recupera os dados reais das mensagens e recria somente o trigger de mensagens com autorrecuperação. Depois, valide com:
+
+`database/diagnostics/service_cycle_recovery_v36.10.1.sql`
+
+# RS Connect v36.10.0 — Relatórios de equipe e profissionais
+
+A versão 36.10.0 transforma a base histórica das migrations 067 e 068 em uma tela operacional de relatórios. Acesse **Relatórios → Equipe e profissionais** para comparar atendimento, primeira resposta, transferências, carteira preferencial e resultados da agenda por usuário.
+
+- exige `067_operational_history_metrics_compat.sql` e depois `068_conversation_service_cycles_compat.sql`;
+- a migration 068 preserva cada ciclo de atendimento e sua primeira resposta, inclusive após reaberturas;
+- profissionais comuns veem somente os próprios indicadores quando possuem `reports.team.view_own`;
+- administradores da empresa veem toda a equipe com `reports.team.view_all`;
+- Super Admin escolhe uma empresa por vez;
+- filtros e exportações usam UUIDs públicos nas URLs.
+
+Diagnóstico: `database/diagnostics/team_professional_reports_v36.10.0.sql`.
+
 # RS Connect — pacote VPS
 
 Pacote consolidado até o RS Connect 36.6.36 — Governança de mensagens e Evolution em tempo real.
@@ -110,6 +169,11 @@ database/migrations/060_free_trial_guided_first_access.sql
 database/migrations/061_onboarding_calendar_modes.sql
 database/migrations/062_prompt_studio_and_versions.sql
 database/migrations/063_message_governance_evolution_realtime.sql
+database/migrations/064_professional_conversation_assignment_compat.sql
+database/migrations/065_professional_calendar_profiles_compat.sql
+database/migrations/066_contact_schedule_overlap_guard_compat.sql
+database/migrations/067_operational_history_metrics_compat.sql
+database/migrations/068_conversation_service_cycles_compat.sql
 ```
 
 Consulte `README-RS-CONNECT-36.3.0.md` para instalar e validar a rotina de backup.

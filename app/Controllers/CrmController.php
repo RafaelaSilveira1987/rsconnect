@@ -201,7 +201,7 @@ final class CrmController
 
         $stage = $this->findStage($stageId, $tenantId);
         $status = $stage['stage_type'] ?? 'open';
-        $closedAt = $status === 'open' ? null : date('Y-m-d H:i:s');
+        $closedAt = $status === 'open' ? null : \App\Core\Clock::nowUtc();
 
         $statement = Database::connection()->prepare(
             'INSERT INTO crm_leads
@@ -293,7 +293,7 @@ final class CrmController
 
         $stage = $this->findStage($stageId, $tenantId);
         $status = $stage['stage_type'] ?? 'open';
-        $closedAt = $status === 'open' ? null : date('Y-m-d H:i:s');
+        $closedAt = $status === 'open' ? null : \App\Core\Clock::nowUtc();
 
         $statement = Database::connection()->prepare(
             'UPDATE crm_leads

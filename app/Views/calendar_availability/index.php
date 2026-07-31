@@ -13,6 +13,8 @@ $googleLogs = $googleLogs ?? [];
 $metrics = $metrics ?? [];
 $integration = $integration ?? [];
 $maintenance = $maintenance ?? [];
+$professionalCalendarSettings = $professionalCalendarSettings ?? ['enabled' => false, 'require_owner' => true, 'auto_from_conversation' => false];
+$professionalProfiles = $professionalProfiles ?? [];
 $isRsAdmin = Auth::isSuperAdmin();
 $availabilityMode = ($settings['availability_mode'] ?? 'free_slots') === 'marked_events' ? 'marked_events' : 'free_slots';
 $workdays = json_decode((string) ($settings['workdays_json'] ?? '[]'), true);
@@ -212,6 +214,7 @@ $requestInsight = static function (array $request): string {
                     </div>
                     <p><?= View::e(($appointment['contact_name'] ?? '') ?: ($appointment['phone'] ?? 'Sem contato identificado')) ?></p>
                     <small>Preferência: <?= View::e(($appointment['preferred_day_text'] ?? '') ?: 'dia não informado') ?> · <?= View::e(($appointment['preferred_time_text'] ?? '') ?: 'horário não informado') ?></small>
+                    <?php if (!empty($professionalCalendarSettings['enabled'])): ?><small>Profissional: <?= View::e(($appointment['owner_name'] ?? '') ?: 'não selecionado') ?></small><?php endif; ?>
                     <?php if ($isMarked): ?>
                         <small>Evento Google: <?= View::e($eventStateLabels[$googleState] ?? ($googleState ?: 'não vinculado')) ?><?= !empty($appointment['google_event_summary']) ? ' · ' . View::e($appointment['google_event_summary']) : '' ?></small>
                     <?php endif; ?>
@@ -224,6 +227,19 @@ $requestInsight = static function (array $request): string {
                     <?php if (!empty($appointment['availability_error'])): ?><div class="calendar-inline-alert"><?= View::e($appointment['availability_error']) ?></div><?php endif; ?>
                 </div>
                 <div class="calendar-appointment-actions">
+                    <?php if (!empty($professionalCalendarSettings['enabled']) && $canManage): ?>
+                        <form method="post" action="<?= View::e(Router::url('/calendar/owner')) ?>" class="calendar-professional-quick-form">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
+                            <input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>">
+                            <input type="hidden" name="return_to" value="/calendar?section=availability&amp;tenant_id=<?= (int) $tenantId ?>">
+                            <select name="owner_user_id" <?= !empty($professionalCalendarSettings['require_owner']) ? 'required' : '' ?>>
+                                <option value="">Selecione o profissional</option>
+                                <?php foreach ($professionalProfiles as $profile): ?><option value="<?= (int) $profile['id'] ?>" <?= (int) ($appointment['owner_user_id'] ?? 0) === (int) $profile['id'] ? 'selected' : '' ?> <?= empty($profile['accepting_appointments']) ? 'disabled' : '' ?>><?= View::e($profile['name']) ?><?= empty($profile['accepting_appointments']) ? ' — agenda pausada' : '' ?></option><?php endforeach; ?>
+                            </select>
+                            <button class="btn btn-small btn-quiet" type="submit">Definir</button>
+                        </form>
+                    <?php endif; ?>
                     <?php if (!empty($appointment['availability_slot_count'])): ?>
                         <a class="btn btn-small btn-quiet" href="#horarios-<?= (int) $appointment['id'] ?>">Ver <?= (int) $appointment['availability_slot_count'] ?> horário(s)</a>
                     <?php endif; ?>
@@ -239,6 +255,88 @@ $requestInsight = static function (array $request): string {
         <?php if (!$pending): ?><div class="empty-state">Nenhum pré-agendamento pendente.</div><?php endif; ?>
     </div>
 </section>
+
+<details class="calendar-settings-disclosure professional-calendar-disclosure" id="agenda-profissionais" <?= !empty($professionalCalendarSettings['enabled']) ? 'open' : '' ?>>
+    <summary>
+        <span><span class="eyebrow">Equipe</span><strong>Agenda por profissional</strong><small>Horários individuais, calendário e proteção contra conflitos do profissional e do cliente.</small></span>
+        <span class="calendar-settings-chevron" aria-hidden="true">⌄</span>
+    </summary>
+
+    <section class="card professional-calendar-settings-card" style="margin-top:16px">
+        <div class="section-heading">
+            <div><span class="eyebrow">Recurso opcional</span><h2>Funcionamento da agenda individual</h2></div>
+            <span class="badge <?= !empty($professionalCalendarSettings['enabled']) ? 'badge-success' : 'badge-warning' ?>"><?= !empty($professionalCalendarSettings['enabled']) ? 'Ativa' : 'Desativada' ?></span>
+        </div>
+        <form method="post" action="<?= View::e(Router::url('/calendar/availability/professional-settings')) ?>" class="form-stack">
+            <?= Csrf::input() ?>
+            <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
+            <div class="settings-toggle-grid professional-calendar-toggle-grid">
+                <label class="switch-card"><input type="checkbox" name="professional_calendar_enabled" value="1" <?= !empty($professionalCalendarSettings['enabled']) ? 'checked' : '' ?>><span><strong>Usar agenda por profissional</strong><small>Cada usuário pode ter seus próprios dias, horários e calendário.</small></span></label>
+                <label class="switch-card"><input type="checkbox" name="professional_calendar_require_owner" value="1" <?= !array_key_exists('require_owner', $professionalCalendarSettings) || !empty($professionalCalendarSettings['require_owner']) ? 'checked' : '' ?>><span><strong>Exigir profissional no agendamento</strong><small>Impede consultar ou confirmar um horário sem selecionar quem realizará o atendimento.</small></span></label>
+                <label class="switch-card"><input type="checkbox" name="professional_calendar_auto_from_conversation" value="1" <?= !empty($professionalCalendarSettings['auto_from_conversation']) ? 'checked' : '' ?>><span><strong>Usar responsável da conversa automaticamente</strong><small>Opcional e desativado por padrão. Quando desligado, o profissional é escolhido manualmente na agenda.</small></span></label>
+                <input type="hidden" name="professional_calendar_prevent_contact_overlap" value="0">
+                <label class="switch-card"><input type="checkbox" name="professional_calendar_prevent_contact_overlap" value="1" <?= !array_key_exists('prevent_contact_overlap', $professionalCalendarSettings) || !empty($professionalCalendarSettings['prevent_contact_overlap']) ? 'checked' : '' ?>><span><strong>Impedir dois horários para o mesmo cliente</strong><small>Bloqueia agendamentos sobrepostos do mesmo contato, mesmo quando os profissionais são diferentes.</small></span></label>
+            </div>
+            <div class="message-info"><strong>Nenhuma atribuição automática é obrigatória</strong><span>A conversa pode continuar sendo assumida manualmente. A atribuição automática é independente do bloqueio de conflito do cliente.</span></div>
+            <div><button class="btn btn-primary" type="submit">Salvar funcionamento</button></div>
+        </form>
+    </section>
+
+    <?php if (!empty($professionalCalendarSettings['enabled'])): ?>
+        <div class="professional-calendar-profile-grid">
+            <?php foreach ($professionalProfiles as $profile): ?>
+                <?php
+                    $profileWorkdays = json_decode((string) ($profile['workdays_json'] ?? '[]'), true);
+                    $profileWorkdays = is_array($profileWorkdays) ? array_map('intval', $profileWorkdays) : [1, 2, 3, 4, 5];
+                    $profileHours = json_decode((string) ($profile['working_hours_json'] ?? '{}'), true);
+                    $profileHours = is_array($profileHours) ? $profileHours : [];
+                    $profileByDay = isset($profileHours['by_day']) && is_array($profileHours['by_day']) ? $profileHours['by_day'] : [];
+                    $fallbackStart = (string) ($profileHours['start'] ?? '08:00');
+                    $fallbackEnd = (string) ($profileHours['end'] ?? '18:00');
+                ?>
+                <article class="card professional-calendar-profile" id="profissional-<?= (int) $profile['id'] ?>">
+                    <form method="post" action="<?= View::e(Router::url('/calendar/availability/professional-profile')) ?>" class="form-stack">
+                        <?= Csrf::input() ?>
+                        <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
+                        <input type="hidden" name="user_id" value="<?= (int) $profile['id'] ?>">
+                        <div class="section-heading compact">
+                            <div><span class="eyebrow">Profissional</span><h2><?= View::e($profile['name']) ?></h2><p><?= View::e($profile['email'] ?? '') ?></p></div>
+                            <span class="badge <?= !empty($profile['accepting_appointments']) ? 'badge-success' : 'badge-warning' ?>"><?= !empty($profile['accepting_appointments']) ? 'Recebendo agenda' : 'Agenda pausada' ?></span>
+                        </div>
+                        <label class="switch-inline"><input type="checkbox" name="accepting_appointments" value="1" <?= !empty($profile['accepting_appointments']) ? 'checked' : '' ?>><span>Receber novos agendamentos</span></label>
+                        <div class="field-grid two">
+                            <div class="field"><label>Calendário Google deste profissional</label><input type="text" name="google_calendar_id" value="<?= View::e($profile['google_calendar_id'] ?? '') ?>" placeholder="primary ou ID do calendário"><small class="muted-text">Vazio usa o calendário geral da empresa.</small></div>
+                            <div class="field"><label>Fuso horário</label><input type="text" name="timezone" value="<?= View::e($profile['timezone'] ?? 'America/Sao_Paulo') ?>"></div>
+                        </div>
+                        <div class="field-grid three">
+                            <div class="field"><label>Duração</label><div class="input-with-suffix"><input type="number" name="default_duration_minutes" min="15" max="240" value="<?= (int) ($profile['default_duration_minutes'] ?? 50) ?>"><span>min</span></div></div>
+                            <div class="field"><label>Intervalo das opções</label><div class="input-with-suffix"><input type="number" name="slot_interval_minutes" min="5" max="240" value="<?= (int) ($profile['slot_interval_minutes'] ?? 30) ?>"><span>min</span></div></div>
+                            <div class="field"><label>Margem entre compromissos</label><div class="input-with-suffix"><input type="number" name="buffer_minutes" min="0" max="180" value="<?= (int) ($profile['buffer_minutes'] ?? 10) ?>"><span>min</span></div></div>
+                        </div>
+                        <div class="field-grid three">
+                            <div class="field"><label>Antecedência mínima</label><div class="input-with-suffix"><input type="number" name="min_notice_hours" min="0" max="720" value="<?= (int) ($profile['min_notice_hours'] ?? 4) ?>"><span>h</span></div></div>
+                            <div class="field"><label>Buscar por</label><div class="input-with-suffix"><input type="number" name="search_days_ahead" min="1" max="90" value="<?= (int) ($profile['search_days_ahead'] ?? 14) ?>"><span>dias</span></div></div>
+                            <div class="field"><label>Máximo de opções</label><input type="number" name="max_suggestions" min="1" max="20" value="<?= (int) ($profile['max_suggestions'] ?? 5) ?>"></div>
+                        </div>
+                        <div class="professional-week-schedule">
+                            <?php foreach ([1 => 'Segunda', 2 => 'Terça', 3 => 'Quarta', 4 => 'Quinta', 5 => 'Sexta', 6 => 'Sábado', 0 => 'Domingo'] as $day => $label): ?>
+                                <?php $dayConfig = $profileByDay[(string) $day] ?? $profileByDay[$day] ?? []; $dayEnabled = array_key_exists('enabled', $dayConfig) ? !empty($dayConfig['enabled']) : in_array($day, $profileWorkdays, true); ?>
+                                <div class="professional-week-row">
+                                    <label class="professional-day-toggle"><input type="checkbox" name="workdays[]" value="<?= (int) $day ?>" <?= $dayEnabled ? 'checked' : '' ?>><span><?= View::e($label) ?></span></label>
+                                    <input type="time" name="working_start[<?= (int) $day ?>]" value="<?= View::e($dayConfig['start'] ?? $fallbackStart) ?>">
+                                    <span>até</span>
+                                    <input type="time" name="working_end[<?= (int) $day ?>]" value="<?= View::e($dayConfig['end'] ?? ($day === 6 ? '12:00' : $fallbackEnd)) ?>">
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <div><button class="btn btn-secondary" type="submit">Salvar agenda de <?= View::e($profile['name']) ?></button></div>
+                    </form>
+                </article>
+            <?php endforeach; ?>
+            <?php if (!$professionalProfiles): ?><div class="empty-state">Cadastre usuários ativos na empresa para configurar agendas individuais.</div><?php endif; ?>
+        </div>
+    <?php endif; ?>
+</details>
 
 <details class="calendar-settings-disclosure" id="configuracoes-da-agenda">
     <summary>

@@ -14,6 +14,7 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\CalendarAvailabilityService;
 use App\Services\CalendarGoogleLifecycleService;
+use App\Services\ProfessionalCalendarService;
 use PDO;
 use Throwable;
 
@@ -38,6 +39,8 @@ final class CalendarAvailabilityController
             'maintenance' => ['enabled' => false, 'expired_holds' => 0, 'confirmed_without_event' => 0, 'failed_syncs' => 0, 'stale_requests' => 0, 'last_run' => null],
         ];
 
+        $professionalCalendarService = new ProfessionalCalendarService();
+
         View::render('calendar_availability.index', [
             'title' => 'Agenda — disponibilidade',
             'tenantId' => $tenantId,
@@ -51,6 +54,8 @@ final class CalendarAvailabilityController
             'integration' => $dashboard['integration'] ?? [],
             'maintenance' => $dashboard['maintenance'] ?? [],
             'canManage' => Auth::can('calendar.manage'),
+            'professionalCalendarSettings' => $tenantId > 0 ? $professionalCalendarService->tenantSettings($tenantId) : ['enabled' => false, 'require_owner' => true, 'auto_from_conversation' => false],
+            'professionalProfiles' => $tenantId > 0 ? $professionalCalendarService->teamProfiles($tenantId) : [],
         ]);
     }
 
@@ -70,6 +75,44 @@ final class CalendarAvailabilityController
             Flash::set('error', 'Não foi possível salvar: ' . $exception->getMessage());
         }
         $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId);
+    }
+
+
+    public function saveProfessionalSettings(): void
+    {
+        Csrf::validate($_POST['_token'] ?? null);
+        $tenantId = $this->resolveTenantFromPost();
+        if ($tenantId < 1) {
+            Flash::set('error', 'Selecione uma empresa para configurar a agenda por profissional.');
+            $this->redirect('/calendar?section=availability');
+        }
+
+        try {
+            (new ProfessionalCalendarService())->saveTenantSettings($tenantId, $_POST);
+            Flash::set('success', 'Configuração da agenda por profissional salva.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar: ' . $exception->getMessage());
+        }
+        $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId . '#agenda-profissionais');
+    }
+
+    public function saveProfessionalProfile(): void
+    {
+        Csrf::validate($_POST['_token'] ?? null);
+        $tenantId = $this->resolveTenantFromPost();
+        $userId = (int) ($_POST['user_id'] ?? 0);
+        if ($tenantId < 1 || $userId < 1) {
+            Flash::set('error', 'Empresa ou profissional inválido.');
+            $this->redirect('/calendar?section=availability');
+        }
+
+        try {
+            (new ProfessionalCalendarService())->saveProfile($tenantId, $userId, $_POST);
+            Flash::set('success', 'Horários individuais do profissional foram salvos.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar: ' . $exception->getMessage());
+        }
+        $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId . '#profissional-' . $userId);
     }
 
     public function request(): void

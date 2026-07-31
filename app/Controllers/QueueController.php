@@ -161,7 +161,10 @@ final class QueueController
                  priority = :priority,
                  operational_status = :operational_status,
                  attendance_mode = IF(:user_id_for_mode IS NULL, attendance_mode, "human"),
-                 assigned_at = IF(:user_id_for_date IS NULL, assigned_at, CURRENT_TIMESTAMP)
+                 assigned_at = IF(:user_id_for_date IS NULL, NULL, CURRENT_TIMESTAMP),
+                 assignment_source = IF(:user_id_for_source IS NULL, "released", "queue"),
+                 assignment_updated_by_user_id = :assignment_updated_by_user_id,
+                 assignment_released_at = IF(:user_id_for_release IS NULL, CURRENT_TIMESTAMP, NULL)
              WHERE id = :id'
         )->execute([
             'user_id' => $userId,
@@ -170,6 +173,9 @@ final class QueueController
             'operational_status' => $operationalStatus,
             'user_id_for_mode' => $userId,
             'user_id_for_date' => $userId,
+            'user_id_for_source' => $userId,
+            'user_id_for_release' => $userId,
+            'assignment_updated_by_user_id' => Auth::id(),
             'id' => $conversationId,
         ]);
 

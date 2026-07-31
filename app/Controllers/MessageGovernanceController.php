@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\Env;
 use App\Core\Flash;
+use App\Core\Router;
 use App\Services\MessageGovernanceService;
 
 final class MessageGovernanceController
@@ -20,7 +21,7 @@ final class MessageGovernanceController
             (int) ($result['messages_purged'] ?? 0),
             (int) ($result['payloads_purged'] ?? 0)
         ));
-        header('Location: /company-settings' . (Auth::isSuperAdmin() && $tenantId > 0 ? '?id=' . $tenantId : ''));
+        header('Location: ' . Router::url('/company-settings' . (Auth::isSuperAdmin() && $tenantId > 0 ? '?id=' . $tenantId : '')));
         exit;
     }
 

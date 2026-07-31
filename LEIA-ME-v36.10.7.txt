@@ -1,0 +1,8 @@
+RS CONNECT 36.10.7 — CONVERSAS ABERTAS SOMENTE POR SELEÇÃO
+
+Base: v36.10.6.
+Migration: nenhuma. A última continua sendo a 071.
+
+Ao entrar em Conversas, o sistema exibe a lista e aguarda um clique antes de abrir o histórico. Links diretos e retornos de ações continuam abrindo a conversa indicada.
+
+Aplicar o patch, fazer deploy e atualizar com Ctrl + F5.

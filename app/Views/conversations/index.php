@@ -3,19 +3,23 @@
 use App\Core\Auth;
 use App\Core\Csrf;
 use App\Core\Router;
+use App\Core\PublicId;
 use App\Core\View;
 
 $canManage = Auth::can('conversations.manage');
+$professionalAssignmentSettings = is_array($professionalAssignmentSettings ?? null) ? $professionalAssignmentSettings : ['enabled' => false, 'lock_enabled' => true, 'auto_assign_enabled' => false];
+$ownershipSnapshot = is_array($ownershipSnapshot ?? null) ? $ownershipSnapshot : ['enabled' => false, 'can_interact' => true, 'locked_by_other' => false];
+$canOperateSelected = $canManage && !empty($ownershipSnapshot['can_interact']);
 $conversationAgents = is_array($conversationAgents ?? null) ? $conversationAgents : [];
 $formatDate = static function (?string $date, string $format = 'd/m/Y H:i'): string {
     if (!$date) {
         return '—';
     }
-    $timestamp = strtotime($date);
-    return $timestamp ? date($format, $timestamp) : $date;
+    return \App\Core\Clock::formatUtc($date, $format);
 };
 $modeLabel = ['ai' => 'IA ativa', 'human' => 'Humano', 'paused' => 'IA pausada'];
 $statusLabel = ['open' => 'Aberta', 'pending' => 'Pendente', 'closed' => 'Encerrada'];
+$normalizeStatus = static fn (?string $status): string => in_array($status, ['open', 'pending', 'closed'], true) ? (string) $status : 'open';
 $contactGroupLabels = \App\Services\ConversationFlowService::GROUPS;
 $flowStageLabels = \App\Services\ConversationFlowService::STAGES;
 $demandStatusLabels = \App\Services\ConversationFlowService::DEMAND_STATUSES;
@@ -50,6 +54,8 @@ if ($selected) {
     $pollQuery['conversation_id'] = (int) $selected['id'];
 }
 $returnQuery = http_build_query($pollQuery);
+$publicPollQuery = (string) (parse_url(Router::url('/conversations?' . http_build_query($pollQuery)), PHP_URL_QUERY) ?? '');
+$selectedConversationPublicId = $selected ? PublicId::encode('conversation', (int) $selected['id']) : '';
 ?>
 
 <form class="conversation-filters card" method="get" action="<?= View::e(Router::url('/conversations')) ?>">
@@ -98,7 +104,7 @@ $returnQuery = http_build_query($pollQuery);
     <a class="btn btn-outline" href="<?= View::e(Router::url('/conversations')) ?>">Limpar</a>
 </form>
 
-<div class="conversation-workspace" data-conversation-realtime data-poll-url="<?= View::e(Router::url('/conversations/poll')) ?>" data-avatar-url="<?= View::e(Router::url('/conversations/avatar')) ?>" data-current-query="<?= View::e(http_build_query($pollQuery)) ?>" data-conversation-id="<?= (int) ($selected['id'] ?? 0) ?>" data-last-message-id="<?= (int) $lastMessageId ?>" data-base-title="<?= View::e($title ?? 'Conversas') ?>">
+<div class="conversation-workspace" data-conversation-realtime data-poll-url="<?= View::e(Router::url('/conversations/poll')) ?>" data-avatar-url="<?= View::e(Router::url('/conversations/avatar')) ?>" data-current-query="<?= View::e($publicPollQuery) ?>" data-conversation-id="<?= (int) ($selected['id'] ?? 0) ?>" data-conversation-public-id="<?= View::e($selectedConversationPublicId) ?>" data-last-message-id="<?= (int) $lastMessageId ?>" data-base-title="<?= View::e($title ?? 'Conversas') ?>">
     <div class="realtime-toast" data-realtime-toast hidden></div>
     <?php if ($canManage): ?>
         <div class="new-conversation-shell" data-new-conversation-shell hidden>
@@ -206,15 +212,17 @@ $returnQuery = http_build_query($pollQuery);
                 $displayName = $contactLabel($conversation);
                 $initial = $contactInitial($conversation);
                 $avatarUrl = $contactAvatarUrl($conversation);
+                $conversationPublicId = PublicId::encode('conversation', (int) $conversation['id']);
+                $conversationStatus = $normalizeStatus((string) ($conversation['status'] ?? 'open'));
                 ?>
-                <div class="conversation-list-row<?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>">
+                <div class="conversation-list-row status-<?= View::e($conversationStatus) ?><?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>" data-conversation-public-id="<?= View::e($conversationPublicId) ?>" data-conversation-status="<?= View::e($conversationStatus) ?>">
                     <?php if ($canManage): ?>
                         <label class="conversation-select-control" title="Selecionar <?= View::e($displayName) ?>">
                             <input type="checkbox" name="conversation_ids[]" value="<?= (int) $conversation['id'] ?>" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de <?= View::e($displayName) ?>">
                             <span aria-hidden="true"></span>
                         </label>
                     <?php endif; ?>
-                    <a class="conversation-list-item<?= $isSelected ? ' is-selected' : '' ?>" data-conversation-item data-conversation-id="<?= (int) $conversation['id'] ?>" href="<?= View::e(Router::url('/conversations?' . http_build_query($query))) ?>">
+                    <a class="conversation-list-item<?= $isSelected ? ' is-selected' : '' ?>" data-conversation-item data-conversation-id="<?= (int) $conversation['id'] ?>" data-conversation-public-id="<?= View::e($conversationPublicId) ?>" href="<?= View::e(Router::url('/conversations?' . http_build_query($query))) ?>">
                     <span class="conversation-avatar" data-contact-avatar-container data-avatar-resolved="<?= array_key_exists('avatar_url', $conversation) && $conversation['avatar_url'] !== null ? '1' : '0' ?>">
                         <span class="conversation-avatar-fallback" data-avatar-fallback><?= View::e($initial) ?></span>
                         <?php if ($avatarUrl !== ''): ?><img class="conversation-avatar-image" data-contact-avatar src="<?= View::e($avatarUrl) ?>" alt="" loading="lazy" referrerpolicy="no-referrer"><?php endif; ?>
@@ -227,6 +235,7 @@ $returnQuery = http_build_query($pollQuery);
                         <span class="conversation-preview" data-conversation-preview><?= View::e($conversation['last_message_preview'] ?: 'Sem mensagens') ?></span>
                         <span class="conversation-meta-row">
                             <span class="mini-badge mode-<?= View::e($conversation['attendance_mode']) ?>"><?= View::e($modeLabel[$conversation['attendance_mode']] ?? $conversation['attendance_mode']) ?></span>
+                            <span class="mini-badge conversation-status-badge status-<?= View::e($conversationStatus) ?>" data-conversation-list-status><?= View::e($statusLabel[$conversationStatus]) ?></span>
                             <?php if (Auth::isSuperAdmin()): ?><small><?= View::e($conversation['tenant_name']) ?></small><?php endif; ?>
                             <b class="unread-count" data-unread-count <?= (int) $conversation['unread_count'] > 0 ? '' : 'hidden' ?>><?= (int) $conversation['unread_count'] ?></b>
                         </span>
@@ -248,7 +257,8 @@ $returnQuery = http_build_query($pollQuery);
         </div>
     </aside>
 
-    <section class="conversation-chat card">
+    <?php $selectedStatus = $selected ? $normalizeStatus((string) ($selected['status'] ?? 'open')) : ''; ?>
+    <section class="conversation-chat card<?= $selectedStatus !== '' ? ' conversation-status-' . View::e($selectedStatus) : '' ?>" data-selected-conversation-panel data-conversation-status="<?= View::e($selectedStatus) ?>">
         <?php if ($selected): ?>
             <header class="chat-header">
                 <div class="chat-contact-title">
@@ -263,7 +273,7 @@ $returnQuery = http_build_query($pollQuery);
                     </div>
                 </div>
 
-                <?php if ($canManage): ?>
+                <?php if ($canOperateSelected): ?>
                     <div class="chat-actions">
                         <button class="btn btn-outline btn-small" type="button" data-toggle-panel="conversation-details">Dados do lead</button>
                         <form method="post" action="<?= View::e(Router::url('/conversations/mode')) ?>" data-mode-action="human" <?= $selected['attendance_mode'] === 'human' ? 'hidden' : '' ?>>
@@ -291,9 +301,16 @@ $returnQuery = http_build_query($pollQuery);
             </header>
 
             <div class="chat-state-bar">
-                <span class="badge badge-<?= View::e($selected['status']) ?>"><?= View::e($statusLabel[$selected['status']] ?? $selected['status']) ?></span>
+                <span class="badge badge-<?= View::e($selectedStatus) ?>" data-conversation-status-badge><?= View::e($statusLabel[$selectedStatus]) ?></span>
                 <span class="mini-badge mode-<?= View::e($selected['attendance_mode']) ?>"><?= View::e($modeLabel[$selected['attendance_mode']] ?? $selected['attendance_mode']) ?></span>
                 <?php if ($selected['assigned_user_name']): ?><small>Responsável: <strong><?= View::e($selected['assigned_user_name']) ?></strong></small><?php endif; ?>
+                <?php if (!empty($professionalAssignmentSettings['enabled'])): ?>
+                    <small class="ownership-state <?= !empty($ownershipSnapshot['locked_by_other']) ? 'is-locked' : 'is-available' ?>">
+                        <?= !empty($ownershipSnapshot['locked_by_other'])
+                            ? 'Atendimento exclusivo em andamento'
+                            : ((int) ($selected['assigned_user_id'] ?? 0) > 0 ? 'Responsável definido' : 'Disponível para assumir') ?>
+                    </small>
+                <?php endif; ?>
                 <?php if (Auth::isSuperAdmin()): ?><small>Empresa: <strong><?= View::e($selected['tenant_name']) ?></strong></small><?php endif; ?>
                 <span class="realtime-status" data-realtime-status>Atualização automática ativa</span>
                 <?php
@@ -313,6 +330,25 @@ $returnQuery = http_build_query($pollQuery);
                 <a class="refresh-chat" href="<?= View::e(Router::url('/conversations?' . http_build_query($refreshQuery))) ?>">Atualizar</a>
             </div>
 
+            <?php if (!empty($professionalAssignmentSettings['enabled'])): ?>
+                <?php if (!empty($ownershipSnapshot['locked_by_other'])): ?>
+                    <div class="conversation-ownership-banner is-locked" data-ownership-banner>
+                        <strong>Atendimento em andamento com <?= View::e($selected['assigned_user_name'] ?: 'outro profissional') ?></strong>
+                        <span>Você pode acompanhar a conversa, mas não pode responder nem alterar o atendimento enquanto ela estiver aberta.</span>
+                    </div>
+                <?php elseif ((int) ($selected['assigned_user_id'] ?? 0) < 1 && (string) ($selected['status'] ?? '') !== 'closed'): ?>
+                    <div class="conversation-ownership-banner is-available" data-ownership-banner>
+                        <strong>Conversa disponível</strong>
+                        <span>Ao enviar uma mensagem ou clicar em Assumir atendimento, você se torna o responsável.</span>
+                    </div>
+                <?php elseif ((int) ($selected['assigned_user_id'] ?? 0) === (int) (Auth::id() ?? 0)): ?>
+                    <div class="conversation-ownership-banner is-mine" data-ownership-banner>
+                        <strong>Você está responsável por este atendimento</strong>
+                        <span>Outros usuários não poderão interferir até a transferência, liberação ou encerramento.</span>
+                    </div>
+                <?php endif; ?>
+            <?php endif; ?>
+
             <?php if (!empty($selected['last_ai_suggestion'])): ?>
                 <div class="ai-suggestion-card">
                     <div>
@@ -320,7 +356,7 @@ $returnQuery = http_build_query($pollQuery);
                         <p><?= nl2br(View::e($selected['last_ai_suggestion'])) ?></p>
                         <?php if (!empty($selected['last_ai_suggestion_at'])): ?><small>Gerada em <?= View::e($formatDate($selected['last_ai_suggestion_at'])) ?></small><?php endif; ?>
                     </div>
-                    <?php if ($canManage): ?>
+                    <?php if ($canOperateSelected): ?>
                         <form method="post" action="<?= View::e(Router::url('/conversations/send')) ?>">
                             <?= Csrf::input() ?>
                             <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
@@ -357,16 +393,21 @@ $returnQuery = http_build_query($pollQuery);
                 <?php endif; ?>
             </div>
 
-            <?php if ($canManage): ?>
+            <?php if ($canOperateSelected): ?>
                 <form class="chat-composer" id="conversation-composer" data-chat-composer method="post" action="<?= View::e(Router::url('/conversations/send')) ?>">
                     <?= Csrf::input() ?>
                     <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
                     <textarea name="message" rows="2" maxlength="4000" placeholder="Digite uma mensagem..." required></textarea>
                     <button class="btn btn-primary" type="submit">Enviar</button>
                 </form>
+            <?php elseif ($canManage && !empty($ownershipSnapshot['locked_by_other'])): ?>
+                <div class="chat-composer chat-composer-locked" data-chat-composer-locked>
+                    <span>Conversa bloqueada para envio</span>
+                    <strong><?= View::e($selected['assigned_user_name'] ?: 'Outro profissional') ?> está atendendo este cliente.</strong>
+                </div>
             <?php endif; ?>
         <?php else: ?>
-            <div class="chat-empty workspace-empty"><span class="empty-symbol"></span><strong>Selecione uma conversa</strong><p>O histórico e as ações de atendimento aparecerão nesta área.</p></div>
+            <div class="chat-empty workspace-empty"><span class="empty-symbol"></span><strong>Selecione uma conversa</strong><p>Clique em um contato da lista para abrir o histórico. Nenhuma conversa é aberta automaticamente.</p></div>
         <?php endif; ?>
     </section>
 
@@ -387,7 +428,80 @@ $returnQuery = http_build_query($pollQuery);
             </div>
 
             <div class="conversation-drawer-body">
-                <?php if ($canManage): ?>
+                <?php if (!empty($professionalAssignmentSettings['enabled'])): ?>
+                    <section class="drawer-section conversation-ownership-card">
+                        <div class="drawer-section-title">
+                            <div>
+                                <span class="eyebrow">Responsabilidade</span>
+                                <h3>Profissional da conversa</h3>
+                                <small>A atribuição automática está <?= !empty($professionalAssignmentSettings['auto_assign_enabled']) ? 'ativada' : 'desativada' ?> para esta empresa.</small>
+                            </div>
+                        </div>
+                        <div class="ownership-summary-grid">
+                            <div><span>Profissional preferido</span><strong><?= View::e($selected['preferred_user_name'] ?: 'Sem preferência') ?></strong></div>
+                            <div><span>Responsável atual</span><strong><?= View::e($selected['assigned_user_name'] ?: 'Conversa disponível') ?></strong></div>
+                        </div>
+
+                        <?php if (!empty($ownershipSnapshot['can_claim'])): ?>
+                            <form method="post" action="<?= View::e(Router::url('/conversations/assignment')) ?>">
+                                <?= Csrf::input() ?>
+                                <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
+                                <input type="hidden" name="tenant_id" value="<?= (int) $selected['tenant_id'] ?>">
+                                <input type="hidden" name="action" value="claim">
+                                <button class="btn btn-primary btn-block" type="submit">Assumir atendimento</button>
+                            </form>
+                        <?php endif; ?>
+
+                        <?php if (!empty($ownershipSnapshot['can_assign'])): ?>
+                            <form method="post" action="<?= View::e(Router::url('/conversations/assignment')) ?>" class="ownership-transfer-form">
+                                <?= Csrf::input() ?>
+                                <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
+                                <input type="hidden" name="tenant_id" value="<?= (int) $selected['tenant_id'] ?>">
+                                <input type="hidden" name="action" value="assign">
+                                <label class="field"><span>Definir responsável</span><select name="assigned_user_id" required>
+                                    <option value="">Escolha um profissional</option>
+                                    <?php foreach ($team as $member): ?>
+                                        <option value="<?= (int) $member['id'] ?>"><?= View::e($member['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select></label>
+                                <button class="btn btn-outline btn-block" type="submit">Atribuir conversa</button>
+                            </form>
+                        <?php endif; ?>
+
+                        <?php if (!empty($ownershipSnapshot['can_transfer'])): ?>
+                            <form method="post" action="<?= View::e(Router::url('/conversations/assignment')) ?>" class="ownership-transfer-form">
+                                <?= Csrf::input() ?>
+                                <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
+                                <input type="hidden" name="tenant_id" value="<?= (int) $selected['tenant_id'] ?>">
+                                <input type="hidden" name="action" value="transfer">
+                                <label class="field"><span>Transferir para</span><select name="assigned_user_id" required>
+                                    <option value="">Escolha um profissional</option>
+                                    <?php foreach ($team as $member): ?>
+                                        <?php if ((int) $member['id'] === (int) ($selected['assigned_user_id'] ?? 0)) continue; ?>
+                                        <option value="<?= (int) $member['id'] ?>"><?= View::e($member['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select></label>
+                                <button class="btn btn-outline btn-block" type="submit">Transferir atendimento</button>
+                            </form>
+                        <?php endif; ?>
+
+                        <?php if (!empty($ownershipSnapshot['can_release'])): ?>
+                            <form method="post" action="<?= View::e(Router::url('/conversations/assignment')) ?>" onsubmit="return confirm('Liberar esta conversa para que outro profissional possa assumir?');">
+                                <?= Csrf::input() ?>
+                                <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
+                                <input type="hidden" name="tenant_id" value="<?= (int) $selected['tenant_id'] ?>">
+                                <input type="hidden" name="action" value="release">
+                                <button class="btn btn-quiet btn-block" type="submit">Liberar conversa</button>
+                            </form>
+                        <?php endif; ?>
+
+                        <?php if (!empty($ownershipSnapshot['locked_by_other'])): ?>
+                            <div class="message-warning">Somente <?= View::e($selected['assigned_user_name'] ?: 'o responsável atual') ?> ou um administrador após a transferência pode alterar este atendimento.</div>
+                        <?php endif; ?>
+                    </section>
+                <?php endif; ?>
+
+                <?php if ($canOperateSelected): ?>
                     <section class="drawer-section drawer-status-card">
                         <div class="drawer-section-title">
                             <div>
@@ -416,7 +530,7 @@ $returnQuery = http_build_query($pollQuery);
                         </div>
                     </div>
                     <?php if ($conversationAgents): ?>
-                        <?php if ($canManage): ?>
+                        <?php if ($canOperateSelected): ?>
                             <form method="post" action="<?= View::e(Router::url('/conversations/agent')) ?>" class="conversation-agent-route-form">
                                 <?= Csrf::input() ?>
                                 <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
@@ -498,18 +612,18 @@ $returnQuery = http_build_query($pollQuery);
                             </div>
                         </div>
                         <div class="drawer-form-grid">
-                            <label class="field"><span>Nome</span><input name="name" value="<?= View::e($selected['contact_name']) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
-                            <label class="field"><span>E-mail</span><input type="email" name="email" value="<?= View::e($selected['email']) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
-                            <label class="field"><span>Empresa</span><input name="company" value="<?= View::e($selected['company']) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
+                            <label class="field"><span>Nome</span><input name="name" value="<?= View::e($selected['contact_name']) ?>" <?= !$canOperateSelected ? 'readonly' : '' ?>></label>
+                            <label class="field"><span>E-mail</span><input type="email" name="email" value="<?= View::e($selected['email']) ?>" <?= !$canOperateSelected ? 'readonly' : '' ?>></label>
+                            <label class="field"><span>Empresa</span><input name="company" value="<?= View::e($selected['company']) ?>" <?= !$canOperateSelected ? 'readonly' : '' ?>></label>
                             <label class="field"><span>Classificação</span>
-                                <select name="contact_status" <?= !$canManage ? 'disabled' : '' ?>>
+                                <select name="contact_status" <?= !$canOperateSelected ? 'disabled' : '' ?>>
                                     <option value="lead" <?= $selected['contact_status'] === 'lead' ? 'selected' : '' ?>>Lead</option>
                                     <option value="customer" <?= $selected['contact_status'] === 'customer' ? 'selected' : '' ?>>Cliente</option>
                                     <option value="inactive" <?= $selected['contact_status'] === 'inactive' ? 'selected' : '' ?>>Inativo</option>
                                 </select>
                             </label>
                             <label class="field"><span>Grupo de atendimento</span>
-                                <select name="contact_group" <?= !$canManage ? 'disabled' : '' ?>>
+                                <select name="contact_group" <?= !$canOperateSelected ? 'disabled' : '' ?>>
                                     <?php foreach ($contactGroupLabels as $value => $label): ?>
                                         <option value="<?= View::e($value) ?>" <?= ($selected['contact_group'] ?? 'unclassified') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
                                     <?php endforeach; ?>
@@ -517,8 +631,8 @@ $returnQuery = http_build_query($pollQuery);
                                 <small class="field-hint">O assistente recebe esse grupo junto com as tags e aplica as regras específicas.</small>
                             </label>
                         </div>
-                        <label class="field drawer-span"><span>Tags separadas por vírgula</span><input name="tags" value="<?= View::e($tagText) ?>" <?= !$canManage ? 'readonly' : '' ?>></label>
-                        <label class="field drawer-span"><span>Notas internas</span><textarea name="notes" rows="7" <?= !$canManage ? 'readonly' : '' ?>><?= View::e($selected['notes']) ?></textarea></label>
+                        <label class="field drawer-span"><span>Tags separadas por vírgula</span><input name="tags" value="<?= View::e($tagText) ?>" <?= !$canOperateSelected ? 'readonly' : '' ?>></label>
+                        <label class="field drawer-span"><span>Notas internas</span><textarea name="notes" rows="7" <?= !$canOperateSelected ? 'readonly' : '' ?>><?= View::e($selected['notes']) ?></textarea></label>
                     </section>
 
                     <section class="drawer-section conversation-flow-card">
@@ -530,14 +644,14 @@ $returnQuery = http_build_query($pollQuery);
                             </div>
                         </div>
                         <div class="drawer-form-grid">
-                            <label class="field"><span>Etapa atual</span><select name="flow_stage" <?= !$canManage ? 'disabled' : '' ?>>
+                            <label class="field"><span>Etapa atual</span><select name="flow_stage" <?= !$canOperateSelected ? 'disabled' : '' ?>>
                                 <?php foreach ($flowStageLabels as $value => $label): ?><option value="<?= View::e($value) ?>" <?= ($selected['flow_stage'] ?? 'identifying_contact') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?>
                             </select></label>
-                            <label class="field"><span>Situação da demanda</span><select name="demand_status" <?= !$canManage ? 'disabled' : '' ?>>
+                            <label class="field"><span>Situação da demanda</span><select name="demand_status" <?= !$canOperateSelected ? 'disabled' : '' ?>>
                                 <?php foreach ($demandStatusLabels as $value => $label): ?><option value="<?= View::e($value) ?>" <?= ($selected['demand_status'] ?? 'pending') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?>
                             </select></label>
                         </div>
-                        <label class="field drawer-span"><span>Resumo da demanda</span><textarea name="demand_summary" rows="5" <?= !$canManage ? 'readonly' : '' ?> placeholder="Registre a queixa, necessidade ou a recusa em informar."><?= View::e($selected['demand_summary'] ?? '') ?></textarea></label>
+                        <label class="field drawer-span"><span>Resumo da demanda</span><textarea name="demand_summary" rows="5" <?= !$canOperateSelected ? 'readonly' : '' ?> placeholder="Registre a queixa, necessidade ou a recusa em informar."><?= View::e($selected['demand_summary'] ?? '') ?></textarea></label>
                         <?php if (($selected['demand_status'] ?? 'pending') === 'pending'): ?>
                             <div class="message-warning">O pré-agendamento automático ficará bloqueado até a demanda ser coletada, recusada ou dispensada pela regra do grupo.</div>
                         <?php else: ?>
@@ -545,7 +659,7 @@ $returnQuery = http_build_query($pollQuery);
                         <?php endif; ?>
                     </section>
 
-                    <?php if ($canManage): ?>
+                    <?php if ($canOperateSelected): ?>
                         <div class="drawer-savebar">
                             <button class="btn btn-primary btn-block" type="submit">Salvar alterações</button>
                         </div>

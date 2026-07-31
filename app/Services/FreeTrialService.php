@@ -77,7 +77,7 @@ final class FreeTrialService
         if ($behavior === 'activate') {
             $this->activateAfterTrial($summary, $end);
             $summary['billing_status'] = 'active';
-            $summary['trial_converted_at'] = date('Y-m-d H:i:s');
+            $summary['trial_converted_at'] = \App\Core\Clock::nowUtc();
             $summary['trial_active'] = false;
             $summary['trial_in_grace'] = false;
             return $summary;

@@ -419,6 +419,16 @@ final class CalendarAvailabilityService
         if (empty($settings['enabled'])) {
             return ['ok' => false, 'message' => 'A busca automática de horários ainda não está ativada para esta empresa.'];
         }
+        $professionalContext = (new ProfessionalCalendarService())->contextForAppointment($tenantId, $appointment, $settings);
+        if (empty($professionalContext['ok'])) {
+            return [
+                'ok' => false,
+                'skipped' => true,
+                'code' => (string) ($professionalContext['code'] ?? 'professional_unavailable'),
+                'message' => (string) ($professionalContext['message'] ?? 'Não foi possível identificar o profissional do agendamento.'),
+            ];
+        }
+        $settings = (array) ($professionalContext['settings'] ?? $settings);
 
         $requestedModality = $this->normalizeModality((string) ($appointment['appointment_modality'] ?? $appointment['location_type'] ?? 'indefinida'));
         if (!in_array($requestedModality, ['online', 'presencial'], true)) {
@@ -541,7 +551,14 @@ final class CalendarAvailabilityService
         }
 
         if ($mode === 'free_slots' && !empty($settings['use_internal_fallback'])) {
-            $slots = $this->generateInternalSlots($tenantId, $window, $settings);
+            $slots = $this->generateInternalSlots(
+                $tenantId,
+                $window,
+                $settings,
+                (int) ($appointment['owner_user_id'] ?? 0),
+                (int) ($appointment['contact_id'] ?? 0),
+                $appointmentId
+            );
             $this->storeSlots($requestId, $tenantId, $appointmentId, $slots, 'internal_fallback');
             $internalOnly = empty($settings['use_n8n']);
             $message = $slots === []
@@ -809,14 +826,49 @@ final class CalendarAvailabilityService
             return ['ok' => false, 'message' => 'Horário não encontrado.'];
         }
 
+        $appointment = $this->appointment($tenantId, $appointmentId);
+        if (!$appointment) {
+            return ['ok' => false, 'message' => 'Pré-agendamento não encontrado.'];
+        }
+
+        $professionalService = new ProfessionalCalendarService();
+        $professionalSettings = $professionalService->tenantSettings($tenantId);
+        if (!empty($professionalSettings['enabled'])) {
+            $ownerUserId = (int) ($appointment['owner_user_id'] ?? 0);
+            if ($ownerUserId > 0) {
+                $professionalConflict = $professionalService->conflict(
+                    $tenantId,
+                    $ownerUserId,
+                    (string) ($slot['starts_at'] ?? ''),
+                    (string) ($slot['ends_at'] ?? ''),
+                    $appointmentId
+                );
+                if ($professionalConflict) {
+                    return [
+                        'ok' => false,
+                        'message' => 'O profissional já possui “' . (string) ($professionalConflict['title'] ?? 'outro compromisso') . '” nesse horário.',
+                    ];
+                }
+            }
+
+            if (!empty($professionalSettings['prevent_contact_overlap'])
+                && (int) ($appointment['contact_id'] ?? 0) > 0) {
+                $contactConflict = $professionalService->contactConflict(
+                    $tenantId,
+                    (int) $appointment['contact_id'],
+                    (string) ($slot['starts_at'] ?? ''),
+                    (string) ($slot['ends_at'] ?? ''),
+                    $appointmentId
+                );
+                if ($contactConflict) {
+                    return ['ok' => false, 'message' => $professionalService->contactConflictMessage($contactConflict)];
+                }
+            }
+        }
+
         $source = trim((string) ($slot['source'] ?? ''));
         $isMarked = $source === 'google_marked_slots' || trim((string) ($slot['google_event_id'] ?? '')) !== '';
         if ($isMarked) {
-            $appointment = $this->appointment($tenantId, $appointmentId);
-            if (!$appointment) {
-                return ['ok' => false, 'message' => 'Pré-agendamento não encontrado.'];
-            }
-
             $currentSlotId = (int) ($appointment['chosen_availability_slot_id'] ?? 0);
             if ($currentSlotId > 0 && $currentSlotId !== $slotId && in_array((string) ($appointment['google_event_state'] ?? ''), ['held', 'confirmed'], true)) {
                 $release = $this->releaseMarkedAppointment($tenantId, $appointmentId, true);
@@ -974,6 +1026,11 @@ final class CalendarAvailabilityService
     public function canApprove(int $tenantId, array $appointment): array
     {
         $settings = $this->settings($tenantId);
+        $professionalContext = (new ProfessionalCalendarService())->contextForAppointment($tenantId, $appointment, $settings);
+        if (empty($professionalContext['ok'])) {
+            return ['ok' => false, 'message' => (string) ($professionalContext['message'] ?? 'Selecione um profissional disponível.')];
+        }
+        $settings = (array) ($professionalContext['settings'] ?? $settings);
         if (empty($settings['enabled']) || empty($settings['require_before_approval'])) {
             return ['ok' => true, 'message' => null];
         }
@@ -1006,9 +1063,10 @@ final class CalendarAvailabilityService
 
         if ($tenantId > 0 && $this->tableExists('calendar_appointments')) {
             $statement = $pdo->prepare(
-                'SELECT a.*, ct.name AS contact_name, ct.phone
+                'SELECT a.*, ct.name AS contact_name, ct.phone, u.name AS owner_name
                  FROM calendar_appointments a
                  LEFT JOIN contacts ct ON ct.id = a.contact_id
+                 LEFT JOIN users u ON u.id = a.owner_user_id
                  WHERE a.tenant_id = :tenant_id
                    AND a.is_pre_schedule = 1
                    AND a.status IN ("pre_scheduled", "awaiting_approval", "rescheduled")
@@ -1490,6 +1548,12 @@ final class CalendarAvailabilityService
             'appointment_id' => (int) $appointment['id'],
             'conversation_id' => !empty($appointment['conversation_id']) ? (int) $appointment['conversation_id'] : null,
             'contact_id' => !empty($appointment['contact_id']) ? (int) $appointment['contact_id'] : null,
+            'owner_user_id' => !empty($appointment['owner_user_id']) ? (int) $appointment['owner_user_id'] : null,
+            'professional' => !empty($appointment['owner_user_id']) ? [
+                'user_id' => (int) $appointment['owner_user_id'],
+                'name' => (string) ($settings['professional_name'] ?? ''),
+                'calendar_id' => (string) ($settings['google_calendar_id'] ?? 'primary'),
+            ] : null,
             'request_id' => $requestId,
             'request_token' => $token,
             'appointment' => $appointment,
@@ -1513,6 +1577,7 @@ final class CalendarAvailabilityService
                 'workdays' => array_values(array_map('intval', $workdays)),
                 'working_start' => $this->normalizeHour((string) ($hours['start'] ?? '08:00'), '08:00'),
                 'working_end' => $this->normalizeHour((string) ($hours['end'] ?? '18:00'), '18:00'),
+                'working_hours_by_day' => isset($hours['by_day']) && is_array($hours['by_day']) ? $hours['by_day'] : null,
                 'calendar_id' => (string) ($settings['google_calendar_id'] ?? 'primary'),
                 'ignore_transparent_events' => !empty($settings['ignore_transparent_events']),
                 'marked_require_transparent' => !empty($settings['marked_require_transparent']),
@@ -1533,6 +1598,16 @@ final class CalendarAvailabilityService
             return ['ok' => false, 'message' => 'Ação de evento Google inválida.'];
         }
         $settings = $this->settings($tenantId);
+        $professionalContext = (new ProfessionalCalendarService())->contextForAppointment(
+            $tenantId,
+            $appointment,
+            $settings,
+            in_array($action, ['release', 'delete'], true)
+        );
+        if (empty($professionalContext['ok'])) {
+            return ['ok' => false, 'message' => (string) ($professionalContext['message'] ?? 'Profissional indisponível para este agendamento.')];
+        }
+        $settings = (array) ($professionalContext['settings'] ?? $settings);
         $url = $this->webhookUrlForMode($settings, 'marked_events');
         if ($url === '') {
             return ['ok' => false, 'message' => 'Configure a URL do fluxo n8n “Eventos VAGO”.'];
@@ -1563,6 +1638,8 @@ final class CalendarAvailabilityService
             'appointment_id' => (int) $appointment['id'],
             'conversation_id' => !empty($appointment['conversation_id']) ? (int) $appointment['conversation_id'] : null,
             'contact_id' => !empty($appointment['contact_id']) ? (int) $appointment['contact_id'] : null,
+            'owner_user_id' => !empty($appointment['owner_user_id']) ? (int) $appointment['owner_user_id'] : null,
+            'professional_name' => (string) ($settings['professional_name'] ?? ''),
             'calendar_id' => trim((string) ($slot['google_calendar_id'] ?? $appointment['google_calendar_id'] ?? $settings['google_calendar_id'] ?? 'primary')) ?: 'primary',
             'google_event_id' => $googleEventId,
             'google_event_etag' => trim((string) ($slot['google_event_etag'] ?? '')),
@@ -1633,7 +1710,14 @@ final class CalendarAvailabilityService
         return ['start' => $start->format('Y-m-d H:i:s'), 'end' => $end->format('Y-m-d H:i:s')];
     }
 
-    private function generateInternalSlots(int $tenantId, array $window, array $settings): array
+    private function generateInternalSlots(
+        int $tenantId,
+        array $window,
+        array $settings,
+        int $ownerUserId = 0,
+        int $contactId = 0,
+        int $ignoreAppointmentId = 0
+    ): array
     {
         $timezone = new DateTimeZone((string) ($settings['timezone'] ?? 'America/Sao_Paulo'));
         $globalStart = new DateTimeImmutable($window['start'], $timezone);
@@ -1654,7 +1738,22 @@ final class CalendarAvailabilityService
         $byDay = isset($hours['by_day']) && is_array($hours['by_day']) ? $hours['by_day'] : [];
         $defaultDayStart = $this->normalizeHour((string) ($hours['start'] ?? '08:00'), '08:00');
         $defaultDayEnd = $this->normalizeHour((string) ($hours['end'] ?? '18:00'), '18:00');
-        $busy = $this->busyPeriods($tenantId, $window['start'], $window['end']);
+        $busy = $this->busyPeriods($tenantId, $window['start'], $window['end'], $ownerUserId);
+        $professionalSettings = (new ProfessionalCalendarService())->tenantSettings($tenantId);
+        if (!empty($professionalSettings['enabled'])
+            && !empty($professionalSettings['prevent_contact_overlap'])
+            && $contactId > 0) {
+            $busy = array_merge(
+                $busy,
+                $this->contactBusyPeriods(
+                    $tenantId,
+                    $contactId,
+                    $window['start'],
+                    $window['end'],
+                    $ignoreAppointmentId
+                )
+            );
+        }
 
         $slots = [];
         $day = $globalStart->setTime(0, 0, 0);
@@ -1692,18 +1791,74 @@ final class CalendarAvailabilityService
         return $slots;
     }
 
-    private function busyPeriods(int $tenantId, string $start, string $end): array
+    private function busyPeriods(int $tenantId, string $start, string $end, int $ownerUserId = 0): array
     {
         try {
-            $statement = Database::connection()->prepare(
-                'SELECT starts_at, ends_at FROM calendar_appointments
-                 WHERE tenant_id = :tenant_id
-                   AND status IN ("scheduled", "confirmed")
-                   AND starts_at < :end_at
-                   AND ends_at > :start_at'
-            );
-            $statement->execute(['tenant_id' => $tenantId, 'start_at' => $start, 'end_at' => $end]);
+            $sql = 'SELECT starts_at, ends_at FROM calendar_appointments
+                    WHERE tenant_id = :tenant_id
+                      AND status IN ("scheduled", "confirmed")
+                      AND starts_at < :end_at
+                      AND ends_at > :start_at';
+            $params = ['tenant_id' => $tenantId, 'start_at' => $start, 'end_at' => $end];
+            if ($ownerUserId > 0) {
+                $sql .= ' AND owner_user_id = :owner_user_id';
+                $params['owner_user_id'] = $ownerUserId;
+            }
+            $statement = Database::connection()->prepare($sql);
+            $statement->execute($params);
             return $statement->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    private function contactBusyPeriods(
+        int $tenantId,
+        int $contactId,
+        string $start,
+        string $end,
+        int $ignoreAppointmentId = 0
+    ): array {
+        if ($tenantId < 1 || $contactId < 1) {
+            return [];
+        }
+
+        try {
+            $sql = 'SELECT starts_at, ends_at
+                    FROM calendar_appointments
+                    WHERE tenant_id = :tenant_id
+                      AND contact_id = :contact_id
+                      AND (
+                            status IN ("scheduled", "confirmed")
+                            OR (
+                                status IN ("pre_scheduled", "awaiting_approval")
+                                AND (
+                                    COALESCE(pre_schedule_source, "") = "manual"
+                                    OR (
+                                        COALESCE(preferred_day_text, "") <> ""
+                                        AND COALESCE(preferred_time_text, "") <> ""
+                                    )
+                                    OR COALESCE(chosen_availability_slot_id, 0) > 0
+                                    OR COALESCE(availability_status, "") IN ("slot_selected", "validated")
+                                )
+                            )
+                      )
+                      AND starts_at < :end_at
+                      AND ends_at > :start_at';
+            $params = [
+                'tenant_id' => $tenantId,
+                'contact_id' => $contactId,
+                'start_at' => $start,
+                'end_at' => $end,
+            ];
+            if ($ignoreAppointmentId > 0) {
+                $sql .= ' AND id <> :ignore_id';
+                $params['ignore_id'] = $ignoreAppointmentId;
+            }
+
+            $statement = Database::connection()->prepare($sql);
+            $statement->execute($params);
+            return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
             return [];
         }

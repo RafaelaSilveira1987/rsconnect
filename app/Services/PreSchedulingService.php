@@ -105,6 +105,47 @@ final class PreSchedulingService
         $this->markConversationIntent($pdo, $tenantId, $conversationId, $intent);
 
         if ($existing !== null) {
+            if ($this->hasFullPreference($intent)) {
+                $professionalService = new ProfessionalCalendarService();
+                $professionalSettings = $professionalService->tenantSettings($tenantId);
+                if (!empty($professionalSettings['enabled'])
+                    && !empty($professionalSettings['prevent_contact_overlap'])) {
+                    $preScheduleSettings = $this->settings($tenantId);
+                    $requestedPeriod = $this->periodFromIntent(
+                        $intent,
+                        (int) ($preScheduleSettings['default_duration_minutes'] ?? 50)
+                    );
+                    $contactConflict = $professionalService->contactConflict(
+                        $tenantId,
+                        $contactId,
+                        (string) $requestedPeriod['starts_at'],
+                        (string) $requestedPeriod['ends_at'],
+                        (int) ($existing['id'] ?? 0)
+                    );
+                    if ($contactConflict) {
+                        $blockedMessage = $professionalService->contactConflictCustomerMessage($contactConflict);
+                        $send = $this->sendAgendaGateMessage(
+                            $pdo,
+                            $instance,
+                            $conversationId,
+                            $contactId,
+                            $blockedMessage,
+                            'contact_schedule_conflict',
+                            $incomingMessageId
+                        );
+                        $result['blocked'] = true;
+                        $result['blocked_reason'] = 'contact_schedule_conflict';
+                        $result['blocked_message'] = $blockedMessage;
+                        $result['blocked_message_sent'] = (bool) ($send['ok'] ?? false);
+                        $result['blocked_message_error'] = $send['error'] ?? null;
+                        $result['skip_ai'] = true;
+                        $result['terminal_handled'] = true;
+                        $result['availability_request_needed'] = false;
+                        return $result;
+                    }
+                }
+            }
+
             $transition = [
                 'ok' => true,
                 'changed' => false,
@@ -205,20 +246,72 @@ final class PreSchedulingService
         $settings = $this->settings($tenantId);
         $contact = $this->findContact($pdo, $tenantId, $contactId);
         $period = $this->periodFromIntent($intent, (int) ($settings['default_duration_minutes'] ?? 50));
+
+        if ($this->hasFullPreference($intent)) {
+            $professionalService = new ProfessionalCalendarService();
+            $professionalSettings = $professionalService->tenantSettings($tenantId);
+            if (!empty($professionalSettings['enabled'])
+                && !empty($professionalSettings['prevent_contact_overlap'])) {
+                $contactConflict = $professionalService->contactConflict(
+                    $tenantId,
+                    $contactId,
+                    (string) $period['starts_at'],
+                    (string) $period['ends_at']
+                );
+                if ($contactConflict) {
+                    $blockedMessage = $professionalService->contactConflictCustomerMessage($contactConflict);
+                    $send = $this->sendAgendaGateMessage(
+                        $pdo,
+                        $instance,
+                        $conversationId,
+                        $contactId,
+                        $blockedMessage,
+                        'contact_schedule_conflict',
+                        $incomingMessageId
+                    );
+                    $result['blocked'] = true;
+                    $result['blocked_reason'] = 'contact_schedule_conflict';
+                    $result['blocked_message'] = $blockedMessage;
+                    $result['blocked_message_sent'] = (bool) ($send['ok'] ?? false);
+                    $result['blocked_message_error'] = $send['error'] ?? null;
+                    $result['skip_ai'] = true;
+                    $result['terminal_handled'] = true;
+                    $result['availability_request_needed'] = false;
+                    return $result;
+                }
+            }
+        }
+
         $titleName = trim((string) ($contact['name'] ?? '')) ?: trim((string) ($contact['phone'] ?? 'Paciente'));
         $title = 'Pré-agendamento - ' . mb_substr($titleName, 0, 90);
         $description = $this->buildDescription($content, $intent, $flowContext);
         $intentModality = $this->intentSchedulingModality($intent);
         $readyForAvailability = $this->hasFullPreference($intent) && $this->isAvailabilityModality($intentModality);
         $status = $readyForAvailability ? 'awaiting_approval' : 'pre_scheduled';
+        $ownerUserId = null;
+        $professionalCalendarService = new ProfessionalCalendarService();
+        $professionalCalendarSettings = $professionalCalendarService->tenantSettings($tenantId);
+        if (!empty($professionalCalendarSettings['enabled']) && !empty($professionalCalendarSettings['auto_from_conversation'])) {
+            $ownerStatement = $pdo->prepare(
+                'SELECT assigned_user_id FROM conversations WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+            );
+            $ownerStatement->execute(['id' => $conversationId, 'tenant_id' => $tenantId]);
+            $candidateOwnerId = (int) ($ownerStatement->fetchColumn() ?: 0);
+            if ($candidateOwnerId > 0) {
+                $profile = $professionalCalendarService->profile($tenantId, $candidateOwnerId);
+                if ($profile && !empty($profile['accepting_appointments'])) {
+                    $ownerUserId = $candidateOwnerId;
+                }
+            }
+        }
 
         $statement = $pdo->prepare(
             'INSERT INTO calendar_appointments
-                (tenant_id, contact_id, conversation_id, title, description, starts_at, ends_at, timezone, status,
+                (tenant_id, contact_id, conversation_id, owner_user_id, title, description, starts_at, ends_at, timezone, status,
                  location_type, location, reminder_minutes, sync_status, is_pre_schedule, pre_schedule_source, appointment_modality,
                  preferred_day_text, preferred_time_text, approval_status, approval_notes)
              VALUES
-                (:tenant_id, :contact_id, :conversation_id, :title, :description, :starts_at, :ends_at, :timezone, :status,
+                (:tenant_id, :contact_id, :conversation_id, :owner_user_id, :title, :description, :starts_at, :ends_at, :timezone, :status,
                  :location_type, :location, 60, "pending", 1, "ai_whatsapp", :appointment_modality,
                  :preferred_day_text, :preferred_time_text, "pending", :approval_notes)'
         );
@@ -226,6 +319,7 @@ final class PreSchedulingService
             'tenant_id' => $tenantId,
             'contact_id' => $contactId,
             'conversation_id' => $conversationId,
+            'owner_user_id' => $ownerUserId,
             'title' => $title,
             'description' => $description,
             'starts_at' => $period['starts_at'],
@@ -320,6 +414,7 @@ final class PreSchedulingService
                 'tenant_id' => $tenantId,
                 'conversation_id' => $conversationId,
                 'contact_id' => $contactId,
+                'owner_user_id' => $ownerUserId,
                 'title' => $title,
                 'starts_at' => $period['starts_at'],
                 'ends_at' => $period['ends_at'],
@@ -950,7 +1045,7 @@ final class PreSchedulingService
             );
             $response = $service->sendText($phone, $message);
             $externalId = $this->extractMessageId($response['body'] ?? []);
-            $sentAt = date('Y-m-d H:i:s');
+            $sentAt = \App\Core\Clock::nowUtc();
 
             $pdo->prepare(
                 'INSERT INTO conversation_messages
@@ -1045,7 +1140,7 @@ final class PreSchedulingService
             );
             $response = $service->sendText($phone, $message);
             $externalId = $this->extractMessageId($response['body'] ?? []);
-            $sentAt = date('Y-m-d H:i:s');
+            $sentAt = \App\Core\Clock::nowUtc();
 
             $pdo->prepare(
                 'INSERT INTO conversation_messages

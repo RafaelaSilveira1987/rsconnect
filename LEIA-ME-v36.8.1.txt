@@ -1,0 +1,27 @@
+RS CONNECT v36.8.1 — CONFLITO DO CLIENTE NA AGENDA
+
+Base esperada: v36.8.0 na branch feature/atendimento-por-profissional.
+
+O que muda:
+- impede o mesmo contato em dois atendimentos sobrepostos;
+- mantém profissionais diferentes livres para clientes diferentes;
+- protege criação, confirmação, escolha de horário e pré-agendamento da conversa;
+- remove da Agenda interna sugestões que conflitam com outro compromisso do cliente;
+- regra configurável por empresa e ativa por padrão.
+
+Instalação:
+1. importe database/migrations/066_contact_schedule_overlap_guard_compat.sql no Adminer;
+2. aplique os arquivos do patch na raiz do projeto;
+3. faça commit e push na branch feature/atendimento-por-profissional;
+4. faça novo deploy/rebuild no EasyPanel;
+5. atualize o navegador com Ctrl + F5;
+6. confirme em Agenda > Disponibilidade > Agenda por profissional que a opção
+   “Impedir dois horários para o mesmo cliente” está marcada.
+
+Teste:
+- crie João + Caco às 14h;
+- tente Pedro + Caco às 14h: deve bloquear;
+- crie Pedro + outro cliente às 14h: deve permitir;
+- crie Pedro + Caco às 16h: deve permitir.
+
+Esta é uma versão de homologação.

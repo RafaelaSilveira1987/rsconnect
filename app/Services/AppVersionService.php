@@ -6,14 +6,15 @@ namespace App\Services;
 
 use App\Core\Database;
 use App\Core\Env;
+use App\Core\PublicId;
 use PDO;
 use Throwable;
 
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.6.39 — Assinatura humana entregue ao WhatsApp';
-    public const REQUIRED_MIGRATION = '063_message_governance_evolution_realtime.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.10.7 — Conversas abertas somente por seleção';
+    public const REQUIRED_MIGRATION = '071_utc_datetime_contract_compat.sql';
 
     private PDO $pdo;
 
@@ -98,13 +99,18 @@ final class AppVersionService
             'ai_agent_prompt_versions',
             'evolution_connection_events',
             'message_retention_runs',
+            'conversation_assignment_history',
+            'conversation_status_history',
+            'calendar_appointment_history',
+            'conversation_service_cycles',
+            'rs_datetime_contract',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 063, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 071, conforme o pacote implantado.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')
@@ -147,6 +153,51 @@ final class AppVersionService
                 ? 'Assinatura do atendente, políticas de retenção e histórico de conexão da Evolution estão disponíveis.'
                 : 'A estrutura de identificação humana, retenção e atualização de conexão ainda não foi aplicada.',
             'Executar database/migrations/063_message_governance_evolution_realtime.sql.'
+        );
+
+        $professionalAssignmentReady = $this->columnExists('tenants', 'professional_assignment_enabled')
+            && $this->columnExists('tenants', 'professional_auto_assign_enabled')
+            && $this->columnExists('contacts', 'preferred_user_id')
+            && $this->columnExists('conversations', 'assignment_source');
+        $checks[] = $this->check(
+            'Atendimento por profissional',
+            $professionalAssignmentReady ? 'ok' : 'blocked',
+            $professionalAssignmentReady
+                ? 'Vínculo preferencial, bloqueio por responsável e atribuição automática opcional estão disponíveis.'
+                : 'A estrutura opcional de atendimento exclusivo por profissional ainda não foi aplicada.',
+            'Executar database/migrations/064_professional_conversation_assignment_compat.sql.'
+        );
+
+        $professionalCalendarReady = $this->columnExists('tenants', 'professional_calendar_enabled')
+            && $this->columnExists('tenants', 'professional_calendar_auto_from_conversation')
+            && $this->columnExists('tenants', 'professional_calendar_prevent_contact_overlap')
+            && $this->tableExists('user_calendar_profiles');
+        $checks[] = $this->check(
+            'Agenda por profissional',
+            $professionalCalendarReady ? 'ok' : 'blocked',
+            $professionalCalendarReady
+                ? 'Horários individuais, calendário por usuário e bloqueio opcional de sobreposição do mesmo cliente estão disponíveis.'
+                : 'A estrutura opcional de agenda individual ainda não foi aplicada.',
+            'Executar database/migrations/065_professional_calendar_profiles_compat.sql e 066_contact_schedule_overlap_guard_compat.sql.'
+        );
+
+        $operationalHistoryReady = $this->tableExists('conversation_assignment_history')
+            && $this->tableExists('conversation_status_history')
+            && $this->tableExists('calendar_appointment_history')
+            && $this->tableExists('conversation_service_cycles')
+            && $this->columnExists('conversations', 'first_incoming_at')
+            && $this->columnExists('conversations', 'first_response_at')
+            && $this->columnExists('conversations', 'first_response_user_id')
+            && $this->columnExists('calendar_appointments', 'confirmed_at')
+            && $this->columnExists('calendar_appointments', 'completed_at')
+            && $this->columnExists('calendar_appointments', 'no_show_at');
+        $checks[] = $this->check(
+            'Base histórica por profissional',
+            $operationalHistoryReady ? 'ok' : 'blocked',
+            $operationalHistoryReady
+                ? 'Atribuições, transferências, ciclos das conversas, primeira resposta humana e mudanças da agenda estão auditáveis.'
+                : 'O histórico operacional necessário para relatórios confiáveis ainda não foi aplicado.',
+            'Executar as migrations 067, 068, 069, 070 e 071; a 071 padroniza datas em UTC e preserva o fuso dos relatórios. A 070 sincroniza encerramento e reabertura com os ciclos dos relatórios.'
         );
 
         $calendarOnboardingReady = $this->columnExists('tenant_onboarding_settings', 'calendar_mode')
@@ -333,6 +384,25 @@ final class AppVersionService
             $appKey !== '' ? 'ok' : 'blocked',
             $appKey !== '' ? 'Chave da aplicação configurada.' : 'APP_KEY vazio.',
             'Não trocar APP_KEY em produção sem plano, pois ela protege dados criptografados.'
+        );
+
+        $publicIdReady = false;
+        if ($appKey !== '') {
+            try {
+                $publicToken = PublicId::encode('tenant', 1);
+                $publicIdReady = PublicId::isUuid($publicToken)
+                    && PublicId::decode('tenant', $publicToken) === 1;
+            } catch (Throwable) {
+                $publicIdReady = false;
+            }
+        }
+        $checks[] = $this->check(
+            'Identificadores públicos UUID',
+            $publicIdReady ? 'ok' : 'blocked',
+            $publicIdReady
+                ? 'IDs numéricos internos são convertidos em UUIDs públicos autenticados nas URLs.'
+                : 'Não foi possível gerar ou validar UUIDs públicos com a APP_KEY atual.',
+            'Manter APP_KEY configurada e estável; ela protege os UUIDs públicos e as credenciais criptografadas.'
         );
 
         $appUrl = (string) Env::get('APP_URL', '');

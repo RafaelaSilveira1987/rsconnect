@@ -34,7 +34,7 @@ final class AiAfterHoursRecoveryService
             }
 
             $resolvedMessageId = (int) ($message['id'] ?? 0) ?: null;
-            $receivedAt = (string) ($message['sent_at'] ?? date('Y-m-d H:i:s'));
+            $receivedAt = (string) ($message['sent_at'] ?? \App\Core\Clock::nowUtc());
             $businessTimezone = (string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo');
             try {
                 $timezoneStatement = $pdo->prepare('SELECT business_timezone FROM ai_agents WHERE id = :agent_id AND tenant_id = :tenant_id LIMIT 1');
@@ -124,7 +124,7 @@ final class AiAfterHoursRecoveryService
         }
         try {
             Database::connection()->prepare('UPDATE ai_after_hours_pending SET ack_sent_at = COALESCE(ack_sent_at, :ack_sent_at) WHERE id = :id')->execute([
-                'ack_sent_at' => date('Y-m-d H:i:s'),
+                'ack_sent_at' => \App\Core\Clock::nowUtc(),
                 'id' => $pendingId,
             ]);
         } catch (Throwable) {
@@ -234,7 +234,7 @@ final class AiAfterHoursRecoveryService
                     continue;
                 }
 
-                $attemptStartedAt = date('Y-m-d H:i:s');
+                $attemptStartedAt = \App\Core\Clock::nowUtc();
                 $pdo->prepare('UPDATE ai_after_hours_pending SET status = "processing", recovery_attempts = recovery_attempts + 1, last_attempt_at = :attempt_started_at, recovery_source = :source, last_error = NULL WHERE id = :id')
                     ->execute([
                         'attempt_started_at' => $attemptStartedAt,

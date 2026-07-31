@@ -1,0 +1,13 @@
+RS Connect v36.10.2 — Status visual das conversas e recuperação dos ciclos
+
+1. Aplicar este patch sobre a v36.10.0.
+2. Executar no Adminer apenas: database/migrations/069_service_cycle_recovery_compat.sql
+3. Fazer um único deploy/rebuild.
+4. Atualizar o navegador com Ctrl + F5.
+
+Cores:
+- Aberta: verde
+- Pendente: amarelo
+- Encerrada: cinza
+
+A migration 069 recupera ciclos ausentes e torna o trigger de mensagens autocorretivo. O ajuste visual não exige migration nova.

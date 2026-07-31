@@ -130,7 +130,7 @@ final class AdminExecutiveDashboardService
             'connected_instances' => $connected,
             'critical_incidents' => $critical,
             'unread' => $unread,
-            'refreshed_at' => date('Y-m-d H:i:s'),
+            'refreshed_at' => \App\Core\Clock::nowUtc(),
             'source_version' => self::VERSION,
         ];
     }

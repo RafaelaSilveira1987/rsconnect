@@ -120,10 +120,10 @@ final class OperationsService
             'size_bytes' => $sizeBytes,
             'checksum' => $checksum !== '' ? $checksum : null,
             'notes' => $notes,
-            'verified_at' => $verified ? date('Y-m-d H:i:s') : null,
+            'verified_at' => $verified ? \App\Core\Clock::nowUtc() : null,
             'verified_by' => $verified ? Auth::id() : null,
-            'started_at' => date('Y-m-d H:i:s'),
-            'finished_at' => date('Y-m-d H:i:s'),
+            'started_at' => \App\Core\Clock::nowUtc(),
+            'finished_at' => \App\Core\Clock::nowUtc(),
         ]);
 
         $this->recordIncident('backup.manual_registered', 'info', 'Backup manual registrado no painel.', [

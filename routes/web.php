@@ -87,6 +87,7 @@ return static function (Router $router): void {
     $router->get('/conversations/contact-lookup', [ConversationController::class, 'contactLookup'], ['auth', 'permission:conversations.view']);
     $router->post('/conversations/start', [ConversationController::class, 'start'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/send', [ConversationController::class, 'send'], ['auth', 'permission:conversations.manage', 'csrf']);
+    $router->post('/conversations/assignment', [ConversationController::class, 'assignProfessional'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/mode', [ConversationController::class, 'setMode'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/agent', [ConversationController::class, 'setAgent'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/status', [ConversationController::class, 'updateStatus'], ['auth', 'permission:conversations.manage', 'csrf']);
@@ -119,6 +120,8 @@ return static function (Router $router): void {
 
     $router->get('/reports', [ReportController::class, 'index'], ['auth', 'permission:reports.view']);
     $router->get('/reports/export', [ReportController::class, 'export'], ['auth', 'permission:reports.view']);
+    $router->get('/reports/team', [ReportController::class, 'team'], ['auth', 'permission:reports.view']);
+    $router->get('/reports/team/export', [ReportController::class, 'teamExport'], ['auth', 'permission:reports.view']);
 
     $router->get('/security', [OperationsCenterController::class, 'security'], ['auth', 'super_admin']);
     $router->get('/seguranca', [OperationsCenterController::class, 'security'], ['auth', 'super_admin']);
@@ -179,6 +182,8 @@ return static function (Router $router): void {
     $router->get('/agenda-disponibilidade', [CalendarController::class, 'availability'], ['auth', 'permission:calendar.view']);
     $router->get('/calendar/availability', [CalendarController::class, 'availability'], ['auth', 'permission:calendar.view']);
     $router->post('/calendar/availability/settings', [CalendarAvailabilityController::class, 'saveSettings'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->post('/calendar/availability/professional-settings', [CalendarAvailabilityController::class, 'saveProfessionalSettings'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->post('/calendar/availability/professional-profile', [CalendarAvailabilityController::class, 'saveProfessionalProfile'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/request', [CalendarAvailabilityController::class, 'request'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/apply', [CalendarAvailabilityController::class, 'applySlot'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/release', [CalendarAvailabilityController::class, 'releaseSlot'], ['auth', 'permission:calendar.manage', 'csrf']);
@@ -190,6 +195,7 @@ return static function (Router $router): void {
     $router->get('/calendar', [CalendarController::class, 'index'], ['auth', 'permission:calendar.view']);
     $router->post('/calendar/appointments', [CalendarController::class, 'store'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/status', [CalendarController::class, 'updateStatus'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->post('/calendar/owner', [CalendarController::class, 'updateOwner'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/delete', [CalendarController::class, 'delete'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->get('/calendar/ics', [CalendarController::class, 'ics'], ['auth', 'permission:calendar.view']);
     $router->post('/tasks', [TaskController::class, 'store'], ['auth', 'permission:tasks.manage', 'csrf']);

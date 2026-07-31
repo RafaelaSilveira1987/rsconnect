@@ -72,6 +72,11 @@ final class CalendarGoogleLifecycleService
         }
 
         $settings = (new CalendarAvailabilityService())->settings($tenantId);
+        $professionalContext = (new ProfessionalCalendarService())->contextForAppointment($tenantId, $appointment, $settings, true);
+        if (empty($professionalContext['ok'])) {
+            return ['attempted' => true, 'ok' => false, 'message' => (string) ($professionalContext['message'] ?? 'Profissional indisponível para sincronização.')];
+        }
+        $settings = (array) ($professionalContext['settings'] ?? $settings);
         if (empty($settings['enabled']) || empty($settings['create_google_event_on_confirm'])) {
             return ['attempted' => false, 'ok' => true, 'message' => null];
         }
@@ -108,7 +113,7 @@ final class CalendarGoogleLifecycleService
             return ['attempted' => false, 'ok' => true, 'message' => null];
         }
 
-        $localConflict = $this->localConflict($tenantId, $appointmentId, (string) $appointment['starts_at'], (string) $appointment['ends_at']);
+        $localConflict = $this->localConflict($tenantId, $appointmentId, (string) $appointment['starts_at'], (string) $appointment['ends_at'], (int) ($appointment['owner_user_id'] ?? 0));
         if ($localConflict !== null) {
             return [
                 'attempted' => true,
@@ -117,7 +122,7 @@ final class CalendarGoogleLifecycleService
             ];
         }
 
-        return $this->dispatchLifecycle($operation, $tenantId, $appointment, $settings);
+        return $this->dispatchLifecycle($operation, $tenantId, $appointment, $settings, $confirmationTransition);
     }
 
     public function cancelAppointment(int $tenantId, int $appointmentId, bool $force = false): array
@@ -138,6 +143,11 @@ final class CalendarGoogleLifecycleService
         }
 
         $settings = (new CalendarAvailabilityService())->settings($tenantId);
+        $professionalContext = (new ProfessionalCalendarService())->contextForAppointment($tenantId, $appointment, $settings, true);
+        if (empty($professionalContext['ok'])) {
+            return ['attempted' => true, 'ok' => false, 'message' => (string) ($professionalContext['message'] ?? 'Profissional indisponível para sincronização.')];
+        }
+        $settings = (array) ($professionalContext['settings'] ?? $settings);
         if (!$force && empty($settings['delete_google_event_on_cancel'])) {
             return ['attempted' => false, 'ok' => true, 'message' => null];
         }
@@ -147,7 +157,7 @@ final class CalendarGoogleLifecycleService
             return ['attempted' => true, 'ok' => false, 'message' => 'Configure a URL do fluxo “Ciclo do Google Agenda” para remover o evento.'];
         }
 
-        return $this->dispatchLifecycle('delete', $tenantId, $appointment, $settings);
+        return $this->dispatchLifecycle('delete', $tenantId, $appointment, $settings, false);
     }
 
     public function handleCallback(array $payload, ?string $token = null): array
@@ -433,7 +443,7 @@ final class CalendarGoogleLifecycleService
         return $summary;
     }
 
-    private function dispatchLifecycle(string $operation, int $tenantId, array $appointment, array $settings): array
+    private function dispatchLifecycle(string $operation, int $tenantId, array $appointment, array $settings, bool $confirmationTransition = false): array
     {
         $request = $this->createLifecycleRequest($tenantId, (int) $appointment['id'], $operation, $appointment, $settings);
         $syncKey = trim((string) ($appointment['google_sync_key'] ?? '')) ?: 'rsconnect-' . $tenantId . '-' . (int) $appointment['id'];
@@ -446,6 +456,12 @@ final class CalendarGoogleLifecycleService
             'request_id' => (int) $request['id'],
             'request_token' => (string) $request['request_token'],
             'appointment_id' => (int) $appointment['id'],
+            'owner_user_id' => !empty($appointment['owner_user_id']) ? (int) $appointment['owner_user_id'] : null,
+            'professional' => !empty($appointment['owner_user_id']) ? [
+                'user_id' => (int) $appointment['owner_user_id'],
+                'name' => (string) ($settings['professional_name'] ?? ''),
+                'calendar_id' => $calendarId,
+            ] : null,
             'idempotency_key' => $syncKey,
             'calendar_id' => $calendarId,
             'google_event_id' => trim((string) ($appointment['google_event_id'] ?? '')) ?: null,
@@ -639,24 +655,28 @@ final class CalendarGoogleLifecycleService
         return $eventId === '' || in_array($state, ['', 'released', 'deleted', 'error'], true);
     }
 
-    private function localConflict(int $tenantId, int $appointmentId, string $startsAt, string $endsAt): ?string
+    private function localConflict(int $tenantId, int $appointmentId, string $startsAt, string $endsAt, int $ownerUserId = 0): ?string
     {
         if ($startsAt === '' || $endsAt === '') {
             return 'período inválido';
         }
-        $statement = Database::connection()->prepare(
-            'SELECT title FROM calendar_appointments
-             WHERE tenant_id = :tenant_id AND id <> :id
-               AND status IN ("scheduled", "confirmed")
-               AND starts_at < :ends_at AND ends_at > :starts_at
-             ORDER BY starts_at ASC LIMIT 1'
-        );
-        $statement->execute([
+        $sql = 'SELECT title FROM calendar_appointments
+                WHERE tenant_id = :tenant_id AND id <> :id
+                  AND status IN ("scheduled", "confirmed")
+                  AND starts_at < :ends_at AND ends_at > :starts_at';
+        $params = [
             'tenant_id' => $tenantId,
             'id' => $appointmentId,
             'ends_at' => $endsAt,
             'starts_at' => $startsAt,
-        ]);
+        ];
+        if ($ownerUserId > 0) {
+            $sql .= ' AND owner_user_id = :owner_user_id';
+            $params['owner_user_id'] = $ownerUserId;
+        }
+        $sql .= ' ORDER BY starts_at ASC LIMIT 1';
+        $statement = Database::connection()->prepare($sql);
+        $statement->execute($params);
         $title = $statement->fetchColumn();
         return $title !== false ? (string) $title : null;
     }

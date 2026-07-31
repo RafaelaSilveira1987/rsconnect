@@ -1,3 +1,170 @@
+# RS Connect v36.10.7 — Conversas abertas somente por seleção
+
+- deixa de abrir automaticamente a primeira conversa ao entrar no módulo;
+- mantém lista, filtros e atualização em tempo real ativos com o painel central vazio;
+- abre o histórico somente após clique explícito do usuário ou acesso por link direto;
+- evita marcar como lida a primeira conversa apenas pela navegação até o menu;
+- mantém links públicos UUID, ações e retorno para a conversa selecionada;
+- não exige migration nova.
+
+# RS Connect v36.10.6 — Auditoria final das métricas de equipe
+
+- adiciona conferência detalhada dos ciclos que compõem o tempo médio de primeira resposta;
+- mostra horários local e UTC, profissional, cliente, ciclo e duração exata;
+- calcula a média geral diretamente sobre os ciclos, sem média de médias arredondadas;
+- identifica ciclos ativos aguardando resposta e datas inconsistentes;
+- exporta a auditoria completa em CSV usando UUID público da conversa;
+- mantém as migrations até a 071, sem nova alteração de banco.
+
+# RS Connect v36.10.5 — Filtros UUID opcionais sem erro 404
+
+- corrige o 404 em `Relatórios → Equipe e profissionais` ao selecionar “Toda a equipe”;
+- ignora aliases UUID vazios enviados por filtros GET opcionais, como `user_uuid=`;
+- mantém rejeição rígida para UUID preenchido, inválido, adulterado ou de tipo incorreto;
+- permite que filtros obrigatórios vazios sejam tratados pela própria tela, em vez de virarem falso “Registro não encontrado”;
+- não altera o banco e não exige migration.
+
+# RS Connect v36.10.4 — Datas técnicas em UTC e relatórios no fuso da empresa
+
+- define a sessão PDO do MySQL como `+00:00`;
+- adiciona `App\Core\Clock` para escrita UTC e conversão de apresentação;
+- grava mensagens manuais, automáticas e recebidas pela Evolution em UTC;
+- normaliza uma única vez mensagens e marcos históricos pela migration 071;
+- recria os 10 triggers operacionais com `UTC_TIMESTAMP()`;
+- converte filtros, série diária e histórico recente do relatório para o fuso da empresa;
+- preserva `starts_at`/`ends_at` da agenda como horário local do compromisso;
+- adiciona diagnóstico `utc_datetime_contract_v36.10.4.sql`.
+
+# RS Connect v36.10.3 — Sincronização resiliente do status e dos ciclos
+
+- corrige conversas encerradas na interface cujo ciclo permanecia `active`;
+- fecha o ciclo no backend antes de liberar o responsável atual;
+- garante ciclo ativo ao reabrir uma conversa, inclusive por envio de mensagem;
+- recria `trg_rs_conversations_after_update_history` com sincronização idempotente;
+- utiliza `status_changed_by_user_id` e o responsável anterior para preservar quem encerrou;
+- repara ciclos divergentes já existentes sem duplicar o histórico;
+- adiciona a migration `070_conversation_cycle_status_sync_compat.sql`;
+- adiciona diagnóstico `conversation_cycle_status_sync_v36.10.3.sql`;
+- mantém as cores por status entregues na v36.10.2.
+
+# RS Connect v36.10.2 — Status visual das conversas
+
+- diferencia conversas abertas, pendentes e encerradas por cor;
+- atualiza o estado visual pelo polling em tempo real;
+- mantém junto a recuperação resiliente da migration 069.
+
+# RS Connect v36.10.1 — Recuperação resiliente dos ciclos de atendimento
+
+- corrige conversas abertas que receberam mensagens, mas ficaram sem registro em `conversation_service_cycles` durante a janela entre o snapshot e a criação dos triggers;
+- recupera os ciclos ausentes sem duplicar ciclos já existentes;
+- reconstrói primeira entrada, última entrada, primeira resposta humana e atendente usando as mensagens reais;
+- torna `trg_rs_messages_after_insert_metrics` autocorretivo: ao encontrar conversa sem ciclo ativo, cria o ciclo antes de atualizar as métricas;
+- mantém os campos atuais da conversa coerentes com o ciclo reparado;
+- adiciona resultado dinâmico à migration para não declarar sucesso quando o trigger não foi criado;
+- adiciona diagnóstico `database/diagnostics/service_cycle_recovery_v36.10.1.sql`;
+- exige a migration `069_service_cycle_recovery_compat.sql`.
+
+# RS Connect v36.10.0 — Relatórios de equipe e profissionais
+
+- cria a nova área `Relatórios → Equipe e profissionais`;
+- separa profissional preferido, responsável pela conversa e profissional do agendamento;
+- respeita os escopos `reports.team.view_own` e `reports.team.view_all`;
+- permite ao Super Admin selecionar uma empresa por UUID público;
+- permite filtrar período e profissional sem expor IDs numéricos no navegador;
+- mostra conversas respondidas, mensagens humanas, primeira resposta, encerramentos, transferências e conversas abertas;
+- mostra clientes preferenciais, agendamentos, confirmados, concluídos, cancelados e não comparecimentos;
+- calcula resultado da agenda e taxa de comparecimento por profissional;
+- adiciona evolução diária, comparativo da equipe, carga operacional e histórico recente;
+- adiciona exportação CSV respeitando o mesmo escopo de permissão;
+- adiciona diagnóstico `database/diagnostics/team_professional_reports_v36.10.0.sql`;
+- adiciona a migration compatível `068_conversation_service_cycles_compat.sql`;
+- preserva cada ciclo aberto/reaberto para não perder a primeira resposta ao encerrar e reabrir uma conversa;
+- exige as migrations 067 e 068 aplicadas em sequência.
+
+# RS Connect v36.9.1 — Base histórica e métricas por profissional
+
+- registra atribuições, transferências e liberações de conversas em histórico próprio;
+- registra abertura, reabertura, pendência e encerramento de cada conversa;
+- identifica a primeira mensagem recebida, a primeira resposta humana e o usuário responsável;
+- registra criação, status, troca de profissional, reagendamento e exclusão da agenda;
+- mantém confirmação, conclusão, cancelamento e não comparecimento como marcos separados;
+- adiciona permissões distintas para indicadores próprios e para toda a equipe;
+- utiliza triggers para cobrir painel, webhook, IA, n8n e manutenção automática;
+- recupera métricas antigas a partir das mensagens reais quando possível e cria snapshots idempotentes do estado atual;
+- adiciona a migration compatível `067_operational_history_metrics_compat.sql`;
+- prepara a base para `Relatórios > Equipe e profissionais` sem ainda alterar a interface do relatório.
+
+# RS Connect v36.9.0 — Identificadores públicos UUID
+
+- substitui IDs numéricos sequenciais nas URLs por UUIDs públicos opacos, autenticados e vinculados ao tipo do registro;
+- mantém chaves primárias e estrangeiras numéricas somente no banco e no backend, evitando uma migração estrutural de alto risco;
+- converte automaticamente links gerados pelo Router para `tenant_uuid`, `contact_uuid`, `conversation_uuid`, `appointment_uuid` e demais aliases públicos;
+- redireciona links numéricos antigos para a URL canônica com UUID, preservando favoritos e links já distribuídos;
+- rejeita UUID inválido, adulterado ou usado para o tipo de entidade errado com resposta 404;
+- protege também o webhook da Evolution e os links ao vivo da tela de Conversas;
+- preserva slugs legítimos como `/login?tenant=empresa-slug`;
+- depende da `APP_KEY` estável já usada pelo RS Connect e não exige migration nova;
+- adiciona verificação de saúde e teste de fumaça específico para roteamento UUID.
+
+# RS Connect v36.8.2 — Visualizações de calendário da agenda
+
+- mantém a visão operacional em Lista e adiciona Dia, Semana e Mês;
+- permite filtrar por empresa, profissional e status em todas as visualizações;
+- salva a última visualização escolhida por usuário no navegador;
+- abre detalhes do compromisso em modal e mantém as ações administrativas na Lista;
+- não adiciona arrastar e soltar nesta etapa.
+
+# RS Connect v36.8.1 — Conflito do cliente na agenda
+
+- impede que o mesmo contato tenha dois atendimentos sobrepostos, mesmo com profissionais diferentes;
+- mantém profissionais diferentes disponíveis no mesmo horário para clientes diferentes;
+- adiciona configuração por empresa, ativada por padrão;
+- valida criação manual, pré-agendamento, confirmação, troca de profissional e escolha de horário;
+- bloqueia conflitos também em pré-agendamentos iniciados pela conversa;
+- remove da Agenda interna sugestões que já estejam ocupadas pelo próprio cliente;
+- considera pré-agendado, aguardando aprovação, agendado e confirmado como horários ocupados;
+- adiciona a migration compatível `066_contact_schedule_overlap_guard_compat.sql`;
+- adiciona diagnóstico de duplicidades antigas e teste de fumaça.
+
+# RS Connect v36.8.0 — Agenda opcional por profissional
+
+- adiciona ativação independente da agenda por profissional, desativada por padrão;
+- mantém o reaproveitamento automático do responsável da conversa como opção separada e desligada por padrão;
+- permite horários, duração, intervalos, margem e antecedência individual por usuário;
+- permite pausar novos agendamentos de um profissional sem inativar seu acesso;
+- permite informar um Google Agenda diferente para cada profissional;
+- filtra disponibilidade e conflitos pelo profissional selecionado;
+- permite definir ou trocar o profissional na Agenda e na fila de pré-agendamentos;
+- libera pré-reservas e limpa vínculos antigos antes de trocar a agenda responsável;
+- bloqueia transferência para um profissional com conflito no mesmo horário;
+- envia nome, usuário e calendar ID do profissional nos payloads do n8n;
+- adiciona a migration compatível `065_professional_calendar_profiles_compat.sql`;
+- adiciona diagnóstico e teste de fumaça da agenda individual.
+
+# RS Connect v36.7.1 — Saudação neutra e notificações por direção
+
+- substitui a mensagem fixa “Bem-vinda” por uma saudação neutra de acordo com o horário;
+- identifica o usuário pelo primeiro nome após o login;
+- contabiliza separadamente mensagens recebidas e enviadas na atualização em tempo real;
+- mostra “Nova mensagem recebida” somente para mensagens realmente recebidas do contato;
+- mantém “Mensagem enviada” como confirmação do envio feito pela plataforma;
+- evita que mensagens humanas, da IA ou de automações sejam tratadas visualmente como recebidas;
+- não exige migration nova.
+
+# RS Connect v36.7.0 — Atendimento opcional por profissional
+
+- adiciona ativação independente por empresa, desativada por padrão;
+- permite definir um profissional preferido no contato sem obrigar atribuição automática;
+- mantém a atribuição automática como opção separada e desligada por padrão;
+- permite assumir, atribuir, transferir e liberar conversas ativas;
+- bloqueia no backend a interferência de outro usuário enquanto houver responsável;
+- libera o responsável ao encerrar a conversa;
+- evita dupla atribuição simultânea com transação e `SELECT ... FOR UPDATE`;
+- exibe profissional preferido e responsável atual nas telas de Contatos e Conversas;
+- adiciona a migration compatível `064_professional_conversation_assignment_compat.sql`;
+- preserva a v36.6.39 para empresas que mantiverem o recurso desligado;
+- não inclui ainda agenda individual por profissional.
+
 # RS Connect v36.6.39 — Assinatura humana entregue ao WhatsApp
 
 - corrige a assinatura quando o atendimento é realizado por um Super Admin global;

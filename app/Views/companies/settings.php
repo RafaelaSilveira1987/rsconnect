@@ -109,6 +109,24 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
         <div class="message-info"><strong>Modo efêmero</strong><span>Preserva mensagens enquanto a conversa está ativa. Depois da janela configurada, remove conteúdo e payload, mantendo data, remetente, status e métricas.</span></div>
     </section>
 
+    <section class="settings-block professional-assignment-settings">
+        <input type="hidden" name="professional_assignment_settings_submitted" value="1">
+        <div class="section-heading compact">
+            <div>
+                <span class="eyebrow">Equipe e responsabilidade</span>
+                <h2>Atendimento por profissional</h2>
+                <p>Ative somente para empresas que trabalham com carteira individual, como barbearias, clínicas e equipes comerciais.</p>
+            </div>
+            <span class="badge <?= !empty($professionalAssignmentSettings['enabled']) ? 'badge-active' : 'badge-pending' ?>"><?= !empty($professionalAssignmentSettings['enabled']) ? 'Recurso ativo' : 'Desativado' ?></span>
+        </div>
+        <div class="settings-toggle-grid">
+            <label class="switch-card"><input type="checkbox" name="professional_assignment_enabled" value="1" <?= !empty($professionalAssignmentSettings['enabled']) ? 'checked' : '' ?>><span><strong>Usar atendimento por profissional</strong><small>Permite assumir, transferir e liberar conversas entre os usuários da empresa.</small></span></label>
+            <label class="switch-card"><input type="checkbox" name="professional_lock_enabled" value="1" <?= !array_key_exists('lock_enabled', $professionalAssignmentSettings) || !empty($professionalAssignmentSettings['lock_enabled']) ? 'checked' : '' ?>><span><strong>Bloquear interferência durante a conversa aberta</strong><small>Somente o responsável atual pode responder e alterar o atendimento. Administradores podem transferir.</small></span></label>
+            <label class="switch-card"><input type="checkbox" name="professional_auto_assign_enabled" value="1" <?= !empty($professionalAssignmentSettings['auto_assign_enabled']) ? 'checked' : '' ?>><span><strong>Atribuir automaticamente ao profissional preferido</strong><small>Opcional e desativado por padrão. Quando desligado, a conversa fica disponível até alguém assumir manualmente.</small></span></label>
+        </div>
+        <div class="message-info"><strong>Atribuição automática é independente</strong><span>Você pode usar o vínculo Cliente → Profissional apenas como referência, sem entregar automaticamente a conversa. O bloqueio começa somente quando alguém assume ou é atribuído manualmente.</span></div>
+    </section>
+
     <section class="settings-block">
         <div class="section-heading compact">
             <div>
@@ -352,6 +370,24 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
             <div class="readonly-grid compact-readonly-grid"><div><span>Última limpeza</span><strong><?= View::e((string) ($messageGovernanceSettings['message_retention_last_run_at'] ?? 'Ainda não executada')) ?></strong></div></div>
         </div>
         <div class="message-info"><strong>Modo efêmero</strong><span>Preserva mensagens enquanto a conversa está ativa. Depois da janela configurada, remove conteúdo e payload, mantendo data, remetente, status e métricas.</span></div>
+    </section>
+
+    <section class="card client-settings-card professional-assignment-settings">
+        <input type="hidden" name="professional_assignment_settings_submitted" value="1">
+        <div class="section-heading compact">
+            <div>
+                <span class="eyebrow">Equipe e responsabilidade</span>
+                <h2>Atendimento por profissional</h2>
+                <p>Use quando cada cliente costuma ser atendido por uma pessoa específica da equipe.</p>
+            </div>
+            <span class="badge <?= !empty($professionalAssignmentSettings['enabled']) ? 'badge-active' : 'badge-pending' ?>"><?= !empty($professionalAssignmentSettings['enabled']) ? 'Recurso ativo' : 'Desativado' ?></span>
+        </div>
+        <div class="settings-toggle-grid">
+            <label class="switch-card"><input type="checkbox" name="professional_assignment_enabled" value="1" <?= !empty($professionalAssignmentSettings['enabled']) ? 'checked' : '' ?>><span><strong>Usar atendimento por profissional</strong><small>Permite assumir, transferir e liberar conversas entre os usuários da empresa.</small></span></label>
+            <label class="switch-card"><input type="checkbox" name="professional_lock_enabled" value="1" <?= !array_key_exists('lock_enabled', $professionalAssignmentSettings) || !empty($professionalAssignmentSettings['lock_enabled']) ? 'checked' : '' ?>><span><strong>Bloquear interferência durante a conversa aberta</strong><small>Somente o responsável atual pode responder e alterar o atendimento.</small></span></label>
+            <label class="switch-card"><input type="checkbox" name="professional_auto_assign_enabled" value="1" <?= !empty($professionalAssignmentSettings['auto_assign_enabled']) ? 'checked' : '' ?>><span><strong>Atribuir automaticamente ao profissional preferido</strong><small>Opcional. Deixe desligado para a equipe assumir as conversas manualmente.</small></span></label>
+        </div>
+        <div class="message-info"><strong>Sem atribuição automática</strong><span>O profissional preferido continuará aparecendo no cadastro do cliente, mas a conversa ficará livre até alguém assumir.</span></div>
     </section>
 
     <details class="card client-settings-accordion">

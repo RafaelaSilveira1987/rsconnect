@@ -174,7 +174,7 @@ final class AdminCrmController
             'expected_close_at' => $data['expected_close_at'] ?: null,
             'next_activity_at' => $data['next_activity_at'] ?: null,
             'created_by' => Auth::id(),
-            'closed_at' => in_array($status, ['won', 'lost', 'active'], true) ? date('Y-m-d H:i:s') : null,
+            'closed_at' => in_array($status, ['won', 'lost', 'active'], true) ? \App\Core\Clock::nowUtc() : null,
         ]);
         $id = (int) Database::connection()->lastInsertId();
         if ($data['next_activity_at']) {
@@ -258,7 +258,7 @@ final class AdminCrmController
         $statement->execute([
             'stage_id' => $stageId,
             'status' => $status,
-            'closed_at' => in_array($status, ['won', 'lost', 'active'], true) ? date('Y-m-d H:i:s') : null,
+            'closed_at' => in_array($status, ['won', 'lost', 'active'], true) ? \App\Core\Clock::nowUtc() : null,
             'id' => $id,
         ]);
         Audit::log('admin_crm.opportunity_moved', ['opportunity_id' => $id, 'stage' => $stage['stage_key']]);
@@ -350,7 +350,7 @@ final class AdminCrmController
             'UPDATE admin_crm_activities SET status = :status, completed_at = :completed_at WHERE id = :id'
         )->execute([
             'status' => $status,
-            'completed_at' => $status === 'completed' ? date('Y-m-d H:i:s') : null,
+            'completed_at' => $status === 'completed' ? \App\Core\Clock::nowUtc() : null,
             'id' => $activityId,
         ]);
         Audit::log('admin_crm.activity_status_updated', ['activity_id' => $activityId, 'status' => $status]);

@@ -35,6 +35,11 @@ final class Database
                     PDO::ATTR_EMULATE_PREPARES => false,
                 ]
             );
+
+            // Contrato v36.10.4: toda data técnica gerada pelo banco usa UTC.
+            // A conversão para o fuso da empresa acontece somente na camada
+            // de apresentação, filtros e exportações.
+            self::$connection->exec("SET SESSION time_zone = '+00:00'");
         } catch (PDOException $exception) {
             throw new RuntimeException(
                 'Não foi possível conectar ao banco. Confira o arquivo .env.',
