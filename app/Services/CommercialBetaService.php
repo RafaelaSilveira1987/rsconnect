@@ -36,7 +36,7 @@ final class CommercialBetaService
             'metrics' => $this->metrics(),
             'quick_actions' => $this->quickActions(),
             'release_notes' => $this->releaseNotes(),
-            'version_label' => 'Beta Comercial 1.0',
+            'version_label' => 'Beta Comercial 1.1',
             'operational_routine' => $this->operationalRoutine(),
         ];
     }
@@ -241,15 +241,15 @@ final class CommercialBetaService
     private function statusLabel(int $score, int $blocked): string
     {
         if ($blocked > 0) {
-            return 'Beta 1.0 com bloqueios';
+            return 'Beta 1.1 com bloqueios';
         }
         if ($score >= 90) {
-            return 'Beta 1.0 operacional';
+            return 'Beta 1.1 operacional';
         }
         if ($score >= 70) {
-            return 'Beta 1.0 em validação';
+            return 'Beta 1.1 em validação';
         }
-        return 'Beta 1.0 em preparação';
+        return 'Beta 1.1 em preparação';
     }
 
     private function check(string $label, string $status, string $message, string $action): array
