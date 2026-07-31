@@ -13,7 +13,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.10.4 — Datas técnicas em UTC e relatórios no fuso da empresa';
+    public const PACKAGE_LABEL = 'RS Connect 36.10.5 — Filtros UUID opcionais sem erro 404';
     public const REQUIRED_MIGRATION = '071_utc_datetime_contract_compat.sql';
 
     private PDO $pdo;

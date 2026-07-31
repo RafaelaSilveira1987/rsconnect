@@ -389,6 +389,11 @@ final class PublicId
             }
 
             $value = $bag[$alias];
+            if (is_scalar($value) && trim((string) $value) === '') {
+                unset($bag[$alias]);
+                continue;
+            }
+
             $numeric = self::positiveInteger($value);
             $decoded = $numeric ?? (is_scalar($value) ? self::decode($definition['entity'], (string) $value) : null);
             if ($decoded === null) {
@@ -405,6 +410,11 @@ final class PublicId
             }
 
             $value = $bag[$alias];
+            if (is_scalar($value) && trim((string) $value) === '') {
+                unset($bag[$alias]);
+                continue;
+            }
+
             $numeric = self::positiveInteger($value);
             if ($numeric !== null) {
                 $bag[$internal] = $numeric;

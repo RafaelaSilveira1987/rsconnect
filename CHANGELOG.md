@@ -1,3 +1,11 @@
+# RS Connect v36.10.5 — Filtros UUID opcionais sem erro 404
+
+- corrige o 404 em `Relatórios → Equipe e profissionais` ao selecionar “Toda a equipe”;
+- ignora aliases UUID vazios enviados por filtros GET opcionais, como `user_uuid=`;
+- mantém rejeição rígida para UUID preenchido, inválido, adulterado ou de tipo incorreto;
+- permite que filtros obrigatórios vazios sejam tratados pela própria tela, em vez de virarem falso “Registro não encontrado”;
+- não altera o banco e não exige migration.
+
 # RS Connect v36.10.4 — Datas técnicas em UTC e relatórios no fuso da empresa
 
 - define a sessão PDO do MySQL como `+00:00`;

@@ -41,6 +41,15 @@ $_GET = ['tenant_uuid' => $tenantUuid];
 $operationsHydrated = PublicId::hydrateRequest('/central-operacao');
 $operationsTenantId = $_GET['tenant'] ?? 0;
 
+$_GET = ['user_uuid' => '', 'start' => '2026-07-31', 'end' => '2026-07-31'];
+$emptyOptionalUuidHydrated = PublicId::hydrateRequest('/reports/team');
+$emptyOptionalUuidRemoved = !isset($_GET['user_uuid'])
+    && ($_GET['start'] ?? '') === '2026-07-31'
+    && ($_GET['end'] ?? '') === '2026-07-31';
+
+$_GET = ['user_uuid' => 'uuid-invalido'];
+$invalidFilledUuidRejected = !PublicId::hydrateRequest('/reports/team');
+
 $routerSource = (string) file_get_contents($root . '/app/Core/Router.php');
 $instanceController = (string) file_get_contents($root . '/app/Controllers/InstanceController.php');
 $conversationController = (string) file_get_contents($root . '/app/Controllers/ConversationController.php');
@@ -76,6 +85,8 @@ $checks = [
         && $publicAliasesRemoved,
     'alias específico de empresa volta ao parâmetro id legado' => $companyHydrated && $companyInternalId === 2,
     'alias de tenant na central volta ao parâmetro tenant legado' => $operationsHydrated && $operationsTenantId === 2,
+    'UUID opcional vazio é ignorado sem gerar falso 404' => $emptyOptionalUuidHydrated && $emptyOptionalUuidRemoved,
+    'UUID preenchido e inválido continua rejeitado' => $invalidFilledUuidRejected,
     'router redireciona links numéricos antigos' => str_contains($routerSource, 'hasLegacyPublicQuery')
         && str_contains($routerSource, 'PublicId::hydrateRequest'),
     'webhook Evolution novo recebe UUID' => str_contains($instanceController, "Router::url('/webhooks/evolution?instance_id='"),
@@ -83,9 +94,9 @@ $checks = [
         && str_contains($conversationController, "'conversation_public_id'"),
     'histórico do navegador usa conversation UUID' => str_contains($javascript, "url.searchParams.set('conversation_uuid', selectedConversationPublicId)")
         && str_contains($conversationView, 'data-conversation-public-id'),
-    'cache e versão atualizados' => str_contains($layout, 'app.js?v=36.10.4')
-        && str_contains($layout, 'app.css?v=36.10.4')
-        && str_contains($version, 'RS Connect 36.10.4'),
+    'cache e versão atualizados' => str_contains($layout, 'app.js?v=36.10.5')
+        && str_contains($layout, 'app.css?v=36.10.5')
+        && str_contains($version, 'RS Connect 36.10.5'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

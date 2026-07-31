@@ -1,0 +1,12 @@
+RS Connect v36.10.5 — Filtros UUID opcionais sem erro 404
+
+Correção aplicada sobre a v36.10.4.
+
+Problema corrigido:
+- ao selecionar “Toda a equipe” no relatório, o navegador enviava user_uuid vazio;
+- o resolvedor tratava o campo vazio como UUID inválido e exibia 404.
+
+Comportamento novo:
+- UUID opcional vazio é removido da requisição;
+- UUID preenchido continua autenticado e validado rigorosamente;
+- nenhuma migration é necessária.
