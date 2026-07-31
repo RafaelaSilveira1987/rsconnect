@@ -12,8 +12,8 @@ use Throwable;
 
 final class AppVersionService
 {
-    public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.10.7 — Conversas abertas somente por seleção';
+    public const VERSION_LABEL = 'Beta Comercial 1.1';
+    public const PACKAGE_LABEL = 'RS Connect Beta 1.1 — atendimento por profissional, agenda individual, UUID, UTC, relatorios auditados e abertura manual de conversas';
     public const REQUIRED_MIGRATION = '071_utc_datetime_contract_compat.sql';
 
     private PDO $pdo;
@@ -588,15 +588,15 @@ final class AppVersionService
     private function statusLabel(int $score, int $blocked): string
     {
         if ($blocked > 0) {
-            return 'Beta 1.0 com bloqueios';
+            return 'Beta 1.1 com bloqueios';
         }
         if ($score >= 90) {
-            return 'Beta 1.0 operacional';
+            return 'Beta 1.1 operacional';
         }
         if ($score >= 70) {
-            return 'Beta 1.0 em validação';
+            return 'Beta 1.1 em validação';
         }
-        return 'Beta 1.0 em preparação';
+        return 'Beta 1.1 em preparação';
     }
 
     private function check(string $label, string $status, string $message, string $action): array
