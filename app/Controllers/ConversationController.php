@@ -103,10 +103,10 @@ final class ConversationController
         $statement->execute($params);
         $conversations = $statement->fetchAll(PDO::FETCH_ASSOC);
 
+        // Uma conversa somente é aberta quando o usuário a seleciona explicitamente.
+        // Isso evita marcar a primeira conversa como lida ou assumir visualmente um
+        // atendimento apenas por entrar no módulo. Links diretos continuam aceitos.
         $selectedId = (int) ($_GET['conversation_id'] ?? 0);
-        if ($selectedId < 1 && $conversations) {
-            $selectedId = (int) $conversations[0]['id'];
-        }
 
         $selected = null;
         $messages = [];

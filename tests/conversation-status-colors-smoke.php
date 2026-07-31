@@ -28,9 +28,9 @@ $checks = [
         && str_contains($css, '.conversation-chat.conversation-status-pending')
         && str_contains($css, '.conversation-chat.conversation-status-closed'),
     'não depende somente da cor' => str_contains($view, '$statusLabel[$conversationStatus]'),
-    'versão e cache atualizados' => str_contains($version, 'RS Connect 36.10.6')
-        && str_contains($layout, 'app.css?v=36.10.6')
-        && str_contains($layout, 'app.js?v=36.10.6'),
+    'versão e cache atualizados' => str_contains($version, 'RS Connect 36.10.7')
+        && str_contains($layout, 'app.css?v=36.10.7')
+        && str_contains($layout, 'app.js?v=36.10.7'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

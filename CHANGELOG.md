@@ -1,3 +1,12 @@
+# RS Connect v36.10.7 — Conversas abertas somente por seleção
+
+- deixa de abrir automaticamente a primeira conversa ao entrar no módulo;
+- mantém lista, filtros e atualização em tempo real ativos com o painel central vazio;
+- abre o histórico somente após clique explícito do usuário ou acesso por link direto;
+- evita marcar como lida a primeira conversa apenas pela navegação até o menu;
+- mantém links públicos UUID, ações e retorno para a conversa selecionada;
+- não exige migration nova.
+
 # RS Connect v36.10.6 — Auditoria final das métricas de equipe
 
 - adiciona conferência detalhada dos ciclos que compõem o tempo médio de primeira resposta;

@@ -257,8 +257,8 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
         </div>
     </aside>
 
-    <?php $selectedStatus = $normalizeStatus((string) ($selected['status'] ?? 'open')); ?>
-    <section class="conversation-chat card conversation-status-<?= View::e($selectedStatus) ?>" data-selected-conversation-panel data-conversation-status="<?= View::e($selectedStatus) ?>">
+    <?php $selectedStatus = $selected ? $normalizeStatus((string) ($selected['status'] ?? 'open')) : ''; ?>
+    <section class="conversation-chat card<?= $selectedStatus !== '' ? ' conversation-status-' . View::e($selectedStatus) : '' ?>" data-selected-conversation-panel data-conversation-status="<?= View::e($selectedStatus) ?>">
         <?php if ($selected): ?>
             <header class="chat-header">
                 <div class="chat-contact-title">
@@ -407,7 +407,7 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
                 </div>
             <?php endif; ?>
         <?php else: ?>
-            <div class="chat-empty workspace-empty"><span class="empty-symbol"></span><strong>Selecione uma conversa</strong><p>O histórico e as ações de atendimento aparecerão nesta área.</p></div>
+            <div class="chat-empty workspace-empty"><span class="empty-symbol"></span><strong>Selecione uma conversa</strong><p>Clique em um contato da lista para abrir o histórico. Nenhuma conversa é aberta automaticamente.</p></div>
         <?php endif; ?>
     </section>
 

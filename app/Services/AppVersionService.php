@@ -13,7 +13,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.10.6 — Auditoria final das métricas de equipe';
+    public const PACKAGE_LABEL = 'RS Connect 36.10.7 — Conversas abertas somente por seleção';
     public const REQUIRED_MIGRATION = '071_utc_datetime_contract_compat.sql';
 
     private PDO $pdo;
