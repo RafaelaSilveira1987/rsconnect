@@ -9,6 +9,7 @@ use App\Services\AccessControlService;
 use App\Services\SecurityService;
 use App\Services\PrivacyService;
 use App\Services\OnboardingGuideService;
+use App\Services\TenantIsolationService;
 
 final class Router
 {
@@ -77,6 +78,24 @@ final class Router
 
         foreach ($route['middleware'] as $middleware) {
             if (!$this->runMiddleware($middleware)) {
+                return;
+            }
+        }
+
+        if (Auth::check() && !Auth::isSuperAdmin()) {
+            $isolation = (new TenantIsolationService())->validateAuthenticatedRequest(
+                $this->normalize($path),
+                $_GET,
+                $_POST
+            );
+            if (empty($isolation['allowed'])) {
+                (new SecurityService())->recordEvent('tenant.cross_scope_access_blocked', 'critical', [
+                    'path' => $this->normalize($path),
+                    'method' => strtoupper($method),
+                    'violations' => $isolation['violations'] ?? [],
+                ]);
+                http_response_code(404);
+                View::render('errors.404', ['title' => 'Registro não encontrado'], 'app');
                 return;
             }
         }

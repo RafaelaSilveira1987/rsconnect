@@ -6,7 +6,7 @@ use App\Core\View;
 $dashboard = is_array($data['data'] ?? null) ? $data['data'] : ($data ?? []);
 
 $score = (int) ($dashboard['score'] ?? 0);
-$statusLabel = (string) ($dashboard['status_label'] ?? 'Beta 1.0 em preparação');
+$statusLabel = (string) ($dashboard['status_label'] ?? 'Beta 1.1 em preparação');
 $statusClass = str_contains($statusLabel, 'operacional') ? 'badge-success' : (str_contains($statusLabel, 'bloqueios') ? 'badge-danger' : 'badge-warning');
 $statusToBadge = static fn (string $status): string => match ($status) {
     'ok' => 'badge-success',
@@ -25,7 +25,7 @@ $statusText = static fn (string $status): string => match ($status) {
 <section class="hero-card docs-hero beta-hero version-hero">
     <div>
         <span class="eyebrow">Versão estabilizada</span>
-        <h2><?= View::e($dashboard['version'] ?? 'Beta Comercial 1.0') ?></h2>
+        <h2><?= View::e($dashboard['version'] ?? 'Beta Comercial 1.1') ?></h2>
         <p>Este painel confirma se a instalação está pronta para uso controlado com clientes reais, sem campanhas e sem disparos em massa.</p>
     </div>
     <div class="beta-score-card">
@@ -121,7 +121,7 @@ $statusText = static fn (string $status): string => match ($status) {
 <section class="card" style="margin-top:16px">
     <div class="section-heading"><div><span class="eyebrow">Escopo final validado</span><h2>Produto central</h2></div></div>
     <div class="docs-scope-grid">
-        <div class="operations-alert is-success"><strong>Dentro da Beta 1.0</strong><p>Atendimento WhatsApp, IA, CRM, agenda, pré-agendamento, n8n por empresa, cobrança, LGPD, monitoramento, backup automático e onboarding.</p></div>
-        <div class="operations-alert is-warning"><strong>Fora da Beta 1.0</strong><p>Campanhas e disparos em massa permanecem fora do escopo por decisão comercial.</p></div>
+        <div class="operations-alert is-success"><strong>Dentro da Beta 1.1</strong><p>Atendimento WhatsApp, IA, CRM, agenda, pré-agendamento, n8n por empresa, cobrança, LGPD, monitoramento, backup automático e onboarding.</p></div>
+        <div class="operations-alert is-warning"><strong>Fora da Beta 1.1</strong><p>Campanhas e disparos em massa permanecem fora do escopo por decisão comercial.</p></div>
     </div>
 </section>

@@ -2872,7 +2872,7 @@ pre.codebox {
 }
 
 
-/* ZIP 26 - Beta 1.0 / Status do sistema */
+/* ZIP 26 - Beta 1.1 / Status do sistema */
 .version-hero .beta-score-card strong { letter-spacing: -0.04em; }
 .version-info-list { display: grid; gap: 10px; }
 .version-info-list > div { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border, #e5e7eb); }

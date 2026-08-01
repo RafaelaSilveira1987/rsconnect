@@ -1,3 +1,15 @@
+# RS Connect v36.11.0 — Hardening de isolamento entre empresas
+
+- adiciona uma segunda barreira central de isolamento por tenant no Router;
+- valida UUIDs decodificados, IDs numéricos de campos ocultos e listas de IDs antes do controller;
+- bloqueia acesso cruzado a usuários, contatos, conversas, mensagens, instâncias, agenda, CRM, campanhas, fluxos e demais entidades de cliente;
+- responde com 404 para não confirmar a existência de registros de outra empresa;
+- registra tentativas como `tenant.cross_scope_access_blocked` em `security_events`;
+- preserva o acesso global do Super Admin e mantém as validações locais já existentes nos controllers;
+- inclui diagnóstico SQL de integridade entre tenants e teste de fumaça do hardening;
+- não exige migration nova; a migration mais recente continua sendo a 071;
+- identifica comercialmente o pacote como Beta 1.1.
+
 # RS Connect v36.10.7 — Conversas abertas somente por seleção
 
 - deixa de abrir automaticamente a primeira conversa ao entrar no módulo;

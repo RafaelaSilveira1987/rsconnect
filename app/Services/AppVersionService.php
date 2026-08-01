@@ -13,7 +13,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.1';
-    public const PACKAGE_LABEL = 'RS Connect Beta 1.1 — atendimento por profissional, agenda individual, UUID, UTC, relatorios auditados e abertura manual de conversas';
+    public const PACKAGE_LABEL = 'RS Connect 36.11.0 — Hardening de isolamento entre empresas';
     public const REQUIRED_MIGRATION = '071_utc_datetime_contract_compat.sql';
 
     private PDO $pdo;
@@ -111,6 +111,18 @@ final class AppVersionService
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
             'Rodar as migrations pendentes até a 071, conforme o pacote implantado.'
+        );
+
+        $tenantIsolationReady = class_exists(TenantIsolationService::class)
+            && method_exists(TenantIsolationService::class, 'validateAuthenticatedRequest')
+            && $this->tableExists('security_events');
+        $checks[] = $this->check(
+            'Isolamento entre empresas',
+            $tenantIsolationReady ? 'ok' : 'blocked',
+            $tenantIsolationReady
+                ? 'UUIDs e IDs internos são validados contra o tenant autenticado antes do controller.'
+                : 'A barreira central de isolamento por tenant ou a auditoria de segurança não está disponível.',
+            'Implantar o pacote 36.11.0 e executar o diagnóstico tenant_isolation_v36.11.0.sql.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')

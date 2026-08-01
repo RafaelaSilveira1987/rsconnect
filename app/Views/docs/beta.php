@@ -24,12 +24,12 @@ $metrics = $dashboard['metrics'] ?? [];
 
 <section class="hero-card docs-hero beta-hero">
     <div>
-        <span class="eyebrow">Beta Comercial 1.0</span>
+        <span class="eyebrow">Beta Comercial 1.1</span>
         <h2>Prontidão para operar clientes reais em beta controlada.</h2>
-        <p>Este painel consolida os módulos centrais do RS Connect e substitui o status genérico de preparação por critérios objetivos de Beta 1.0.</p>
+        <p>Este painel consolida os módulos centrais do RS Connect e substitui o status genérico de preparação por critérios objetivos de Beta 1.1.</p>
     </div>
     <div class="beta-score-card">
-        <span class="eyebrow">Status Beta 1.0</span>
+        <span class="eyebrow">Status Beta 1.1</span>
         <strong><?= $score ?>%</strong>
         <span class="badge <?= $statusClass ?>"><?= View::e($dashboard['status_label'] ?? 'Em preparação') ?></span>
     </div>
@@ -65,11 +65,11 @@ $metrics = $dashboard['metrics'] ?? [];
                 <?php if (($action['scope'] ?? 'all') === 'client') { continue; } ?>
                 <a href="<?= View::e(Router::url($action['url'])) ?>"><?= View::e($action['label']) ?></a>
             <?php endforeach; ?>
-            <a href="<?= View::e(Router::url('/status-sistema')) ?>">Status Beta 1.0</a>
+            <a href="<?= View::e(Router::url('/status-sistema')) ?>">Status Beta 1.1</a>
         </div>
         <div class="operations-alert is-info" style="margin-top:12px">
             <strong>Critério comercial sugerido</strong>
-            <p>Use a Beta 1.0 com poucos clientes controlados, onboarding acompanhado, backup validado e monitoramento diário.</p>
+            <p>Use a Beta 1.1 com poucos clientes controlados, onboarding acompanhado, backup validado e monitoramento diário.</p>
         </div>
     </aside>
 </div>

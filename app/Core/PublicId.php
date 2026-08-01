@@ -325,6 +325,40 @@ final class PublicId
         return false;
     }
 
+    /**
+     * Returns the entity type bound to an internal request parameter.
+     *
+     * This is used by the tenant-isolation guard after public UUIDs have been
+     * hydrated back to the numeric IDs expected by legacy controllers.
+     */
+    public static function entityForParameter(string $parameter, string $routePath = '/'): ?string
+    {
+        $routePath = '/' . trim($routePath, '/');
+        if ($routePath === '//') {
+            $routePath = '/';
+        }
+
+        if (isset(self::PATH_PARAMETER_MAP[$routePath][$parameter])) {
+            return self::PATH_PARAMETER_MAP[$routePath][$parameter]['entity'];
+        }
+
+        return self::PARAMETER_MAP[$parameter]['entity'] ?? null;
+    }
+
+    /** @return array<string,string> */
+    public static function requestParameterEntities(string $routePath = '/'): array
+    {
+        $entities = [];
+        foreach (self::PARAMETER_MAP as $parameter => $definition) {
+            $entities[$parameter] = $definition['entity'];
+        }
+        foreach (self::PATH_PARAMETER_MAP['/' . trim($routePath, '/')] ?? [] as $parameter => $definition) {
+            $entities[$parameter] = $definition['entity'];
+        }
+
+        return $entities;
+    }
+
     public static function isUuid(string $value): bool
     {
         return preg_match(
