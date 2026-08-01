@@ -13,7 +13,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.1';
-    public const PACKAGE_LABEL = 'RS Connect 36.11.1 — Segurança de sessão, CSRF, login e webhooks';
+    public const PACKAGE_LABEL = 'RS Connect 36.11.2 — Separação de métricas históricas e operacionais';
     public const REQUIRED_MIGRATION = '072_security_session_webhook_hardening.sql';
 
     private PDO $pdo;
@@ -123,7 +123,7 @@ final class AppVersionService
             $tenantIsolationReady
                 ? 'UUIDs e IDs internos são validados contra o tenant autenticado antes do controller.'
                 : 'A barreira central de isolamento por tenant ou a auditoria de segurança não está disponível.',
-            'Implantar o pacote 36.11.1, executar a migration 072 e os diagnósticos de isolamento e segurança.'
+            'Implantar o pacote 36.11.2, executar a migration 072 e os diagnósticos de isolamento e segurança.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')

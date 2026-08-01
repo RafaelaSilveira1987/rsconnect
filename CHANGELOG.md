@@ -1,3 +1,14 @@
+# RS Connect v36.11.2 — Métricas históricas e operacionais separadas
+
+- identifica ciclos reconstruídos como histórico recuperado;
+- usa `rs_datetime_contract.cutover_at_utc` como início da coleta operacional confiável;
+- adiciona o filtro **Somente métricas operacionais** para primeira resposta e encerramentos por ciclo;
+- preserva e exibe o histórico sem apagá-lo ou misturá-lo silenciosamente;
+- mostra contagens de ciclos operacionais, recuperados automaticamente e históricos;
+- inclui qualidade, origem, corte UTC e fuso local na auditoria e no CSV;
+- adiciona diagnóstico SQL e roteiro de homologação;
+- não exige migration nova; a última continua sendo a 072.
+
 # RS Connect v36.11.1 — Segurança de sessão, CSRF, login e webhooks
 
 - ativa o modo estrito da sessão PHP e uso exclusivo de cookies;

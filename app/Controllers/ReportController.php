@@ -54,6 +54,7 @@ final class ReportController
             'recentActivities' => [],
             'responseAudit' => [],
             'dataQuality' => [],
+            'responseProvenance' => [],
             'warnings' => [],
         ];
 
@@ -98,7 +99,14 @@ final class ReportController
                         'primeira_resposta_utc' => (string) ($row['first_response_at'] ?? ''),
                         'tempo_primeira_resposta_segundos' => (int) ($row['response_seconds'] ?? 0),
                         'status_ciclo' => (string) ($row['cycle_status'] ?? ''),
+                        'qualidade_dado' => (string) ($row['data_quality_label'] ?? ''),
+                        'qualidade_dado_codigo' => (string) ($row['data_quality'] ?? ''),
                         'origem_ciclo' => (string) ($row['source'] ?? ''),
+                        'origem_descricao' => (string) ($row['source_label'] ?? ''),
+                        'inicio_metrica_confiavel_utc' => (string) ($row['metric_cutover_at_utc'] ?? ''),
+                        'inicio_metrica_confiavel_local' => (string) ($row['metric_cutover_at_local'] ?? ''),
+                        'fuso_exibicao' => (string) ($row['metric_timezone'] ?? ''),
+                        'filtro_somente_operacional' => !empty($row['operational_only']) ? 'sim' : 'nao',
                     ];
                 }
                 $this->csv('rs-connect-auditoria-primeiras-respostas.csv', $auditRows);
@@ -109,6 +117,7 @@ final class ReportController
             $this->csv('rs-connect-equipe-profissionais.csv', []);
         }
         $rows = [];
+        $provenance = is_array($data['responseProvenance'] ?? null) ? $data['responseProvenance'] : [];
         foreach ($data['professionals'] ?? [] as $row) {
             $rows[] = [
                 'profissional' => (string) ($row['name'] ?? ''),
@@ -130,6 +139,11 @@ final class ReportController
                 'nao_compareceram' => (int) ($row['appointments_no_show'] ?? 0),
                 'taxa_resultado_agenda_percentual' => number_format((float) ($row['appointment_success_rate'] ?? 0), 2, '.', ''),
                 'taxa_comparecimento_percentual' => number_format((float) ($row['attendance_rate'] ?? 0), 2, '.', ''),
+                'escopo_metricas_ciclo' => (string) ($provenance['filter_label'] ?? ''),
+                'inicio_metrica_confiavel_utc' => (string) ($provenance['cutover_at_utc'] ?? ''),
+                'inicio_metrica_confiavel_local' => (string) ($provenance['cutover_at_local'] ?? ''),
+                'ciclos_historicos_recuperados_no_periodo' => (int) ($provenance['historical_recovered_cycles'] ?? 0),
+                'ciclos_operacionais_no_periodo' => (int) ($provenance['operational_cycles'] ?? 0),
             ];
         }
         $this->csv('rs-connect-equipe-profissionais.csv', $rows);
@@ -293,6 +307,7 @@ final class ReportController
             'end' => $end,
             'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
             'user_id' => (int) ($_GET['user_id'] ?? 0),
+            'operational_only' => filter_var($_GET['operational_only'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
         ];
     }
 

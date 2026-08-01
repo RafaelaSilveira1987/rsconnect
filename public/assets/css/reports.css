@@ -1030,3 +1030,34 @@ body:has(> .executive-report-page) {
 @media (max-width:1200px) { .team-report-audit-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:620px) { .team-report-audit-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media print { .team-report-audit-note { display:none; } }
+
+/* RS Connect 36.11.2 — Proveniência das métricas operacionais */
+.team-report-operational-filter { min-height:44px; display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--team-line); border-radius:12px; background:#f8fbfc; cursor:pointer; }
+.team-report-operational-filter input { width:18px; height:18px; flex:0 0 18px; accent-color:var(--team-green); }
+.team-report-operational-filter > span { display:flex; flex-direction:column; gap:2px; }
+.team-report-operational-filter strong { font-size:.76rem; color:var(--report-ink); }
+.team-report-operational-filter small { color:var(--report-muted); font-size:.64rem; line-height:1.35; }
+.team-report-provenance { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:16px 18px; margin-bottom:16px; border-left:4px solid #8798a6; }
+.team-report-provenance.is-operational { border-left-color:var(--team-green); background:linear-gradient(135deg,#f0fbf8,#fff); }
+.team-report-provenance.is-mixed { border-left-color:#d29a37; background:linear-gradient(135deg,#fff9ee,#fff); }
+.team-report-provenance > div:first-child { display:flex; flex-direction:column; gap:5px; max-width:690px; }
+.team-report-provenance > div:first-child > strong { color:var(--report-ink); font-size:.98rem; }
+.team-report-provenance > div:first-child > small { color:var(--report-muted); line-height:1.45; }
+.team-report-provenance-counts { display:grid; grid-template-columns:repeat(2,minmax(150px,1fr)); gap:9px; min-width:340px; }
+.team-report-provenance-counts article { padding:10px 12px; border:1px solid var(--team-line); border-radius:12px; background:rgba(255,255,255,.78); display:flex; flex-direction:column; gap:3px; }
+.team-report-provenance-counts article span { color:var(--report-muted); font-size:.62rem; font-weight:900; letter-spacing:.04em; text-transform:uppercase; }
+.team-report-provenance-counts article strong { font-size:1.15rem; color:var(--report-ink); }
+.team-report-provenance-counts article small { color:var(--report-muted); font-size:.62rem; }
+.team-report-provenance-counts article.is-history { border-color:#ead8b5; }
+.team-report-source-label { display:block; margin-top:4px; color:var(--report-muted); font-size:.62rem; max-width:190px; white-space:normal; }
+.team-report-audit-table { min-width:1210px !important; }
+@media (max-width:820px) {
+  .team-report-provenance { align-items:flex-start; flex-direction:column; }
+  .team-report-provenance-counts { width:100%; min-width:0; }
+}
+@media (max-width:520px) {
+  .team-report-provenance-counts { grid-template-columns:1fr; }
+}
+@media print {
+  .team-report-operational-filter { display:none !important; }
+}
