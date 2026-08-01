@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.11.1', 'title' => 'Sessão, CSRF, login e webhooks reforçados', 'summary' => 'Ativa sessão PHP estrita, cookies protegidos atrás do proxy, renovação periódica de sessão e CSRF, bloqueio global por IP no login, limite de payload e frequência dos webhooks e validação estrita de tokens em produção.'],
             ['version' => '36.11.0', 'title' => 'Hardening de isolamento entre empresas', 'summary' => 'Adiciona uma barreira central que bloqueia UUIDs e IDs ocultos de outro tenant antes do controller, registra a tentativa em segurança e mantém o Super Admin com acesso administrativo explícito.'],
             ['version' => '36.10.6', 'title' => 'Auditoria final das métricas', 'summary' => 'Exibe os ciclos que formam o tempo médio de primeira resposta, horários local e UTC, menor e maior tempo, pendências, inconsistências e exportação detalhada sem expor IDs internos.'],
             ['version' => '36.10.5', 'title' => 'Filtros UUID opcionais', 'summary' => 'Corrige o falso 404 causado por parâmetros UUID vazios em filtros GET, preservando a validação rígida para identificadores preenchidos.'],

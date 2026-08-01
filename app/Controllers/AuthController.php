@@ -25,6 +25,14 @@ final class AuthController
         $password = (string) ($_POST['password'] ?? '');
 
         $security = new SecurityService();
+        $genericFailure = 'Não foi possível entrar. Confira os dados ou aguarde alguns minutos antes de tentar novamente.';
+
+        if ($security->tooManyFailedLoginAttemptsFromIp()) {
+            $security->recordEvent('auth.login_blocked_ip_rate_limit', 'critical', ['email' => $email]);
+            Flash::set('error', $genericFailure);
+            header('Location: ' . Router::url('/login'));
+            exit;
+        }
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $password === '') {
             $security->recordLoginAttempt($email, false, null, null, 'invalid_input');
@@ -36,14 +44,14 @@ final class AuthController
         $lockState = $security->loginLockState($email);
         if (!empty($lockState['locked'])) {
             $security->recordEvent('auth.login_blocked_user_lock', 'critical', ['email' => $email, 'locked_until' => $lockState['locked_until'] ?? null]);
-            Flash::set('error', $security->lockMessage($lockState));
+            Flash::set('error', $genericFailure);
             header('Location: ' . Router::url('/login'));
             exit;
         }
 
         if ($security->tooManyFailedLoginAttempts($email)) {
             $security->recordEvent('auth.login_blocked_rate_limit', 'critical', ['email' => $email]);
-            Flash::set('error', 'Muitas tentativas incorretas neste dispositivo. Aguarde alguns minutos e tente novamente.');
+            Flash::set('error', $genericFailure);
             header('Location: ' . Router::url('/login'));
             exit;
         }
@@ -51,9 +59,7 @@ final class AuthController
         if (!Auth::attempt($email, $password)) {
             $lockState = $security->applyFailedLoginLock($email);
             $security->recordLoginAttempt($email, false, isset($lockState['user_id']) ? (int) $lockState['user_id'] : null, null, 'invalid_credentials');
-            Flash::set('error', !empty($lockState['locked'])
-                ? $security->lockMessage($lockState)
-                : 'E-mail ou senha incorretos. Confira os dados e tente novamente.');
+            Flash::set('error', $genericFailure);
             header('Location: ' . Router::url('/login'));
             exit;
         }

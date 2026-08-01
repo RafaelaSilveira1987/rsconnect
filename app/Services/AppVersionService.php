@@ -13,8 +13,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.1';
-    public const PACKAGE_LABEL = 'RS Connect 36.11.0 — Hardening de isolamento entre empresas';
-    public const REQUIRED_MIGRATION = '071_utc_datetime_contract_compat.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.11.1 — Segurança de sessão, CSRF, login e webhooks';
+    public const REQUIRED_MIGRATION = '072_security_session_webhook_hardening.sql';
 
     private PDO $pdo;
 
@@ -104,13 +104,14 @@ final class AppVersionService
             'calendar_appointment_history',
             'conversation_service_cycles',
             'rs_datetime_contract',
+            'security_rate_limits',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 071, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 072, conforme o pacote implantado.'
         );
 
         $tenantIsolationReady = class_exists(TenantIsolationService::class)
@@ -122,7 +123,7 @@ final class AppVersionService
             $tenantIsolationReady
                 ? 'UUIDs e IDs internos são validados contra o tenant autenticado antes do controller.'
                 : 'A barreira central de isolamento por tenant ou a auditoria de segurança não está disponível.',
-            'Implantar o pacote 36.11.0 e executar o diagnóstico tenant_isolation_v36.11.0.sql.'
+            'Implantar o pacote 36.11.1, executar a migration 072 e os diagnósticos de isolamento e segurança.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')

@@ -30,10 +30,10 @@ $checks = [
         && str_contains($cycleService, 'information_schema.TABLES'),
     'diagnóstico detecta divergências' => str_contains($diagnostic, "conversation.status = 'closed' AND cycle.id IS NOT NULL")
         && str_contains($diagnostic, 'conversation.id = 1104'),
-    'pacote exige migration 070' => str_contains($version, 'RS Connect 36.11.0')
-        && str_contains($version, '071_utc_datetime_contract_compat.sql'),
-    'cache atualizado' => str_contains($layout, 'app.css?v=36.11.0')
-        && str_contains($layout, 'app.js?v=36.11.0'),
+    'pacote exige migration 070' => str_contains($version, 'RS Connect 36.11.1')
+        && str_contains($version, '072_security_session_webhook_hardening.sql'),
+    'cache atualizado' => str_contains($layout, 'app.css?v=36.11.1')
+        && str_contains($layout, 'app.js?v=36.11.1'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

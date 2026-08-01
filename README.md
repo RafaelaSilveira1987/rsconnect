@@ -1,3 +1,23 @@
+# RS Connect v36.11.1 — Segurança de sessão, CSRF, login e webhooks
+
+Esta versão conclui a etapa de hardening da Beta 1.1 iniciada pela v36.11.0. Ela reforça sessão, autenticação, CSRF e endpoints públicos sem alterar os fluxos funcionais já homologados.
+
+Aplique a migration:
+
+`database/migrations/072_security_session_webhook_hardening.sql`
+
+Depois, revise as variáveis de segurança no `.env`, valide os tokens das integrações e execute:
+
+`database/diagnostics/security_hardening_v36.11.1.sql`
+
+O modo `SECURITY_WEBHOOK_STRICT=true` deve ser ativado somente depois de confirmar `EVOLUTION_WEBHOOK_TOKEN`, `N8N_CALLBACK_TOKEN` quando utilizado e o segredo dos gateways de pagamento ativos.
+
+# RS Connect v36.11.0 — Isolamento entre empresas
+
+A v36.11.0 adiciona uma barreira central no Router para impedir acesso cruzado entre tenants por UUID, ID numérico escondido ou listas adulteradas. O Super Admin mantém o acesso global e as tentativas bloqueadas são registradas em `security_events`.
+
+Validação: `database/diagnostics/tenant_isolation_v36.11.0.sql`.
+
 # RS Connect v36.10.4 — Datas técnicas em UTC e relatórios no fuso da empresa
 
 - define a sessão PDO do MySQL como `+00:00`;
@@ -174,6 +194,10 @@ database/migrations/065_professional_calendar_profiles_compat.sql
 database/migrations/066_contact_schedule_overlap_guard_compat.sql
 database/migrations/067_operational_history_metrics_compat.sql
 database/migrations/068_conversation_service_cycles_compat.sql
+database/migrations/069_service_cycle_recovery_compat.sql
+database/migrations/070_conversation_cycle_status_sync_compat.sql
+database/migrations/071_utc_datetime_contract_compat.sql
+database/migrations/072_security_session_webhook_hardening.sql
 ```
 
 Consulte `README-RS-CONNECT-36.3.0.md` para instalar e validar a rotina de backup.

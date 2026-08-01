@@ -922,19 +922,28 @@ final class PaymentGatewayService
 
     private function passesInternalWebhookToken(array $gateway, array $headers, array $payload): bool
     {
-        $secret = $this->webhookSecret($gateway);
+        $secret = trim($this->webhookSecret($gateway));
+        $strict = filter_var(Env::get('SECURITY_WEBHOOK_STRICT', false), FILTER_VALIDATE_BOOL);
         if ($secret === '') {
-            return true;
+            return !$strict;
         }
-        $token = (string) ($payload['token'] ?? $_GET['token'] ?? '');
+
+        $token = trim((string) ($payload['token'] ?? $_GET['token'] ?? ''));
         foreach ($headers as $key => $value) {
             $normalized = strtolower((string) $key);
-            if (in_array($normalized, ['x-rs-payment-token', 'x-webhook-token'], true)) {
-                $token = is_array($value) ? (string) reset($value) : (string) $value;
+            if (in_array($normalized, ['x-rs-payment-token', 'x-webhook-token', 'x-rs-connect-token'], true)) {
+                $token = trim(is_array($value) ? (string) reset($value) : (string) $value);
                 break;
             }
+            if ($normalized === 'authorization') {
+                $authorization = trim(is_array($value) ? (string) reset($value) : (string) $value);
+                if (preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches) === 1) {
+                    $token = trim((string) ($matches[1] ?? ''));
+                    break;
+                }
+            }
         }
-        return hash_equals($secret, $token);
+        return $token !== '' && hash_equals($secret, $token);
     }
 
     private function invoiceDescription(array $invoice): string

@@ -76,6 +76,24 @@ final class Router
             return;
         }
 
+        if (str_starts_with($this->normalize($path), '/webhooks/')) {
+            $guard = (new SecurityService())->guardWebhookRequest($this->normalize($path));
+            if (empty($guard['allowed'])) {
+                $status = (int) ($guard['status'] ?? 429);
+                http_response_code($status);
+                header('Content-Type: application/json; charset=utf-8');
+                header('Cache-Control: no-store, no-cache, must-revalidate');
+                if (!empty($guard['retry_after'])) {
+                    header('Retry-After: ' . (int) $guard['retry_after']);
+                }
+                echo json_encode([
+                    'ok' => false,
+                    'error' => (string) ($guard['message'] ?? 'Requisição bloqueada pela política de segurança.'),
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                return;
+            }
+        }
+
         foreach ($route['middleware'] as $middleware) {
             if (!$this->runMiddleware($middleware)) {
                 return;
@@ -203,7 +221,7 @@ final class Router
             }
         }
 
-        if ($middleware === 'csrf' && !Csrf::validate($_POST['_token'] ?? null)) {
+        if ($middleware === 'csrf' && !Csrf::validateRequest()) {
             http_response_code(419);
             $currentPath = $this->normalize(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
             if ($currentPath === '/login') {

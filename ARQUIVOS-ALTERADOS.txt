@@ -1,18 +1,31 @@
+RS Connect 36.11.1 — arquivos alterados em relação à v36.11.0
+
+Aplicar preservando a estrutura de pastas.
+Executar database/migrations/072_security_session_webhook_hardening.sql.
+
+.env.example
+.env.local.example
+.env.vps.example
 CHANGELOG.md
-INSTRUCOES-v36.11.0.md
-app/Controllers/DocumentationController.php
-app/Controllers/VersionController.php
-app/Core/PublicId.php
+INSTRUCOES-v36.11.1.md
+LEIA-ME-v36.11.1.txt
+README.md
+app/Controllers/AuthController.php
+app/Controllers/EvolutionWebhookController.php
+app/Controllers/N8nTemplateController.php
+app/Core/Auth.php
+app/Core/Csrf.php
+app/Core/RequestSecurity.php
 app/Core/Router.php
 app/Services/AppVersionService.php
 app/Services/CommercialBetaService.php
-app/Services/TenantIsolationService.php
-app/Views/docs/beta.php
-app/Views/docs/status.php
+app/Services/PaymentGatewayService.php
+app/Services/SecurityService.php
 app/Views/layouts/app.php
-database/diagnostics/tenant_isolation_v36.11.0.sql
-docs/diagnostics/TENANT-ISOLATION-VALIDATION-v36.11.0.md
-public/assets/css/app.css
+bootstrap.php
+database/diagnostics/security_hardening_v36.11.1.sql
+database/migrations/072_security_session_webhook_hardening.sql
+docs/diagnostics/SECURITY-HARDENING-VALIDATION-v36.11.1.md
 tests/calendar-visualization-smoke.php
 tests/contact-schedule-overlap-smoke.php
 tests/conversation-cycle-status-sync-smoke.php
@@ -24,6 +37,7 @@ tests/operational-history-metrics-smoke.php
 tests/professional-assignment-smoke.php
 tests/professional-calendar-smoke.php
 tests/public-uuid-routing-smoke.php
+tests/security-session-webhook-hardening-smoke.php
 tests/service-cycle-recovery-smoke.php
 tests/team-professional-reports-smoke.php
 tests/team-report-audit-smoke.php

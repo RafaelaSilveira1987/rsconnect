@@ -1,3 +1,19 @@
+# RS Connect v36.11.1 — Segurança de sessão, CSRF, login e webhooks
+
+- ativa o modo estrito da sessão PHP e uso exclusivo de cookies;
+- configura cookies `HttpOnly`, `Secure` em HTTPS e `SameSite=Lax` com suporte seguro a proxy reverso;
+- revalida usuário e empresa em cada requisição autenticada;
+- aplica expiração por inatividade, prazo absoluto e rotação periódica do ID de sessão;
+- renova o token CSRF no login/logout, define validade e valida `Origin`/`Sec-Fetch-Site` quando disponíveis;
+- reduz enumeração de contas com verificação de hash fictício e mensagem pública genérica;
+- adiciona limite de falhas por conta/IP e um limite global por IP;
+- limita tamanho e frequência de webhooks, devolvendo HTTP 413 ou 429 quando necessário;
+- centraliza a validação dos tokens da Evolution e do callback n8n;
+- permite exigir segredo dos webhooks de pagamento através do modo estrito;
+- registra bloqueios e anomalias em `security_events`;
+- adiciona a migration `072_security_session_webhook_hardening.sql` e o diagnóstico `security_hardening_v36.11.1.sql`;
+- mantém o hardening de isolamento entre empresas da v36.11.0.
+
 # RS Connect v36.11.0 — Hardening de isolamento entre empresas
 
 - adiciona uma segunda barreira central de isolamento por tenant no Router;
