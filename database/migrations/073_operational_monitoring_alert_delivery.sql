@@ -120,12 +120,14 @@ SET delivery_key = CASE
 END
 WHERE delivery_key IS NULL OR delivery_key = '' OR delivery_key = 'legacy';
 
+-- O índice legado também pode estar sustentando a FK de incident_id.
+-- Criamos primeiro um índice dedicado e o novo índice único; só então removemos o legado.
 SET @sql = (
-    SELECT IF(COUNT(*) > 0,
-        'ALTER TABLE operational_alert_deliveries DROP INDEX uq_operational_alert_delivery',
+    SELECT IF(COUNT(*) = 0,
+        'CREATE INDEX idx_operational_alert_delivery_incident ON operational_alert_deliveries (incident_id)',
         'SELECT 1')
     FROM information_schema.STATISTICS
-    WHERE TABLE_SCHEMA = @db_name AND TABLE_NAME = 'operational_alert_deliveries' AND INDEX_NAME = 'uq_operational_alert_delivery'
+    WHERE TABLE_SCHEMA = @db_name AND TABLE_NAME = 'operational_alert_deliveries' AND INDEX_NAME = 'idx_operational_alert_delivery_incident'
 );
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
@@ -135,6 +137,15 @@ SET @sql = (
         'SELECT 1')
     FROM information_schema.STATISTICS
     WHERE TABLE_SCHEMA = @db_name AND TABLE_NAME = 'operational_alert_deliveries' AND INDEX_NAME = 'uq_operational_alert_delivery_v2'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql = (
+    SELECT IF(COUNT(*) > 0,
+        'ALTER TABLE operational_alert_deliveries DROP INDEX uq_operational_alert_delivery',
+        'SELECT 1')
+    FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = @db_name AND TABLE_NAME = 'operational_alert_deliveries' AND INDEX_NAME = 'uq_operational_alert_delivery'
 );
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
