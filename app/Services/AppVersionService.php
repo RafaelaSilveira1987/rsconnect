@@ -13,8 +13,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.1';
-    public const PACKAGE_LABEL = 'RS Connect 36.11.2 — Separação de métricas históricas e operacionais';
-    public const REQUIRED_MIGRATION = '072_security_session_webhook_hardening.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.12.0 — Monitoramento e alertas operacionais';
+    public const REQUIRED_MIGRATION = '073_operational_monitoring_alert_delivery.sql';
 
     private PDO $pdo;
 
@@ -105,13 +105,30 @@ final class AppVersionService
             'conversation_service_cycles',
             'rs_datetime_contract',
             'security_rate_limits',
+            'operational_monitor_runs',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 072, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 073, conforme o pacote implantado.'
+        );
+
+        $monitoringReady = $this->tableExists('operational_monitor_runs')
+            && $this->columnExists('system_incidents', 'acknowledged_at')
+            && $this->columnExists('operational_alert_deliveries', 'delivery_key')
+            && $this->columnExists('operational_alert_preferences', 'disk_enabled')
+            && $this->columnExists('client_communication_recipients', 'whatsapp_provider_message_id')
+            && $this->columnExists('client_communication_recipients', 'email_provider_message_id')
+            && class_exists(OperationalAlertService::class);
+        $checks[] = $this->check(
+            'Monitoramento e alertas operacionais',
+            $monitoringReady ? 'ok' : 'blocked',
+            $monitoringReady
+                ? 'Incidentes, reconhecimento, lembretes, recuperação, disco, filas e canais externos estão disponíveis.'
+                : 'A estrutura do monitoramento operacional v36.12.0 ainda não foi aplicada.',
+            'Executar database/migrations/073_operational_monitoring_alert_delivery.sql e validar os canais em Alertas operacionais.'
         );
 
         $tenantIsolationReady = class_exists(TenantIsolationService::class)
@@ -123,7 +140,7 @@ final class AppVersionService
             $tenantIsolationReady
                 ? 'UUIDs e IDs internos são validados contra o tenant autenticado antes do controller.'
                 : 'A barreira central de isolamento por tenant ou a auditoria de segurança não está disponível.',
-            'Implantar o pacote 36.11.2, executar a migration 072 e os diagnósticos de isolamento e segurança.'
+            'Implantar o pacote 36.12.0, executar a migration 073 e os diagnósticos de isolamento, segurança e monitoramento.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')

@@ -38,6 +38,14 @@ final class OperationalHealthService
             'impact' => 'Estruturas ausentes podem deixar recursos incompletos ou inconsistentes.',
             'action' => 'Aplicar as migrations pendentes e validar novamente.',
         ],
+        'disk' => [
+            'label' => 'Espaço em disco',
+            'category' => 'Sistema',
+            'route' => '/central-operacao?tab=status',
+            'fresh_minutes' => 15,
+            'impact' => 'Pouco espaço pode interromper logs, uploads, backups e o funcionamento do banco.',
+            'action' => 'Liberar espaço na VPS e revisar arquivos antigos, logs e backups locais.',
+        ],
         'evolution' => [
             'label' => 'WhatsApp / Evolution',
             'category' => 'Integrações',
@@ -69,6 +77,14 @@ final class OperationalHealthService
             'fresh_minutes' => 60,
             'impact' => 'Eventos externos podem não chegar corretamente ao RS Connect.',
             'action' => 'Validar o tráfego recente de mensagens e callbacks.',
+        ],
+        'message_queue' => [
+            'label' => 'Fila de mensagens',
+            'category' => 'Integrações',
+            'route' => '/conversations',
+            'fresh_minutes' => 15,
+            'impact' => 'Mensagens de saída podem permanecer pendentes ou falhar sem chegar ao cliente.',
+            'action' => 'Abrir Conversas e Fila da IA, revisar a Evolution e reprocessar somente após corrigir a causa.',
         ],
         'calendar' => [
             'label' => 'Google Agenda',

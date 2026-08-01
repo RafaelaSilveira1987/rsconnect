@@ -47,6 +47,26 @@ $priorityLabel = static fn (string $priority): string => [
     'important' => 'Importante',
     'critical' => 'Crítica',
 ][$priority] ?? 'Normal';
+$externalStatusLabel = static function (array $row, string $channel, string $label): string {
+    $sent = (int) ($row[$channel . '_sent'] ?? 0);
+    $error = (int) ($row[$channel . '_error'] ?? 0);
+    $pending = (int) ($row[$channel . '_pending'] ?? 0);
+    $queued = (int) ($row[$channel . '_queued'] ?? 0);
+    $parts = [];
+    if ($sent > 0) {
+        $parts[] = $sent . ' enviado(s)';
+    }
+    if ($error > 0) {
+        $parts[] = $error . ' com erro';
+    }
+    if ($queued > 0) {
+        $parts[] = $queued . ' na fila';
+    }
+    if ($pending > 0) {
+        $parts[] = $pending . ' aguardando configuração';
+    }
+    return $parts !== [] ? $label . ': ' . implode(' · ', $parts) : $label . ' não solicitado';
+};
 ?>
 <section class="admin-module-hero communications-hero-v3">
     <div class="communications-hero-copy">
@@ -218,8 +238,8 @@ $priorityLabel = static fn (string $priority): string => [
                 </div>
                 <div class="communication-history-footer-v3">
                     <span><?= (int) ($row['unread_count'] ?? 0) > 0 ? (int) $row['unread_count'] . ' pendente(s) de leitura' : 'Leitura interna em dia' ?></span>
-                    <span><?= (int) ($row['whatsapp_pending'] ?? 0) > 0 ? 'WhatsApp aguardando configuração' : 'WhatsApp não solicitado' ?></span>
-                    <span><?= (int) ($row['email_pending'] ?? 0) > 0 ? 'E-mail aguardando configuração' : 'E-mail não solicitado' ?></span>
+                    <span><?= View::e($externalStatusLabel($row, 'whatsapp', 'WhatsApp')) ?></span>
+                    <span><?= View::e($externalStatusLabel($row, 'email', 'E-mail')) ?></span>
                 </div>
             </article>
         <?php endforeach; ?>

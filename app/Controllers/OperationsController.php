@@ -45,7 +45,7 @@ final class OperationsController
         }
 
         $service = new OperationsService();
-        $service->runChecks();
+        $service->runChecks(false, 'manual');
         $returnPath = $this->safeReturnPath((string) ($_POST['return_to'] ?? ''), '/operations');
         $redirectUrl = Router::url($returnPath);
 
@@ -74,7 +74,7 @@ final class OperationsController
             return;
         }
 
-        $service->runChecks(true);
+        $service->runChecks(true, 'cron');
         $this->json([
             'ok' => true,
             'message' => 'Monitoramento operacional executado.',

@@ -1,3 +1,18 @@
+# RS Connect v36.12.0 — Monitoramento e alertas operacionais
+
+- adiciona histórico auditável das execuções automáticas e manuais do monitor;
+- monitora banco, migrations, Evolution, n8n, OpenAI/IA, webhooks, agenda, pagamentos, backup, disco, filas e relatórios;
+- considera falhas consecutivas do n8n e janelas configuráveis de inatividade de webhooks;
+- abre, atualiza e resolve incidentes sem criar duplicidades silenciosas;
+- permite reconhecer incidente, registrar observação e manter lembretes recorrentes enquanto a falha continuar;
+- entrega alertas internos ao Super Admin e, quando configurado, por uma instância administrativa da Evolution e por e-mail;
+- registra canal, destino, tentativas, retorno do provedor, erro e horário de envio;
+- adiciona teste manual dos canais na tela **Alertas operacionais**;
+- permite comunicar empresas afetadas a partir do incidente;
+- entrega os comunicados aos clientes por WhatsApp/e-mail e mantém o status por empresa, sem impedir a notificação interna quando o canal externo falhar;
+- adiciona o monitor CLI `bin/operations-monitor.php` e mantém o endpoint protegido por `OPERATIONS_MONITOR_TOKEN` para execução pelo n8n;
+- adiciona a migration `073_operational_monitoring_alert_delivery.sql` e o diagnóstico `operational_monitoring_v36.12.0.sql`.
+
 # RS Connect v36.11.2 — Métricas históricas e operacionais separadas
 
 - identifica ciclos reconstruídos como histórico recuperado;

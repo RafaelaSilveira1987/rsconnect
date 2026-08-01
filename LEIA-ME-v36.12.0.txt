@@ -1,0 +1,21 @@
+RS CONNECT v36.12.0 — MONITORAMENTO E ALERTAS OPERACIONAIS
+
+Base: v36.11.2
+Migration obrigatória: 073_operational_monitoring_alert_delivery.sql
+Diagnóstico: database/diagnostics/operational_monitoring_v36.12.0.sql
+
+ENTREGAS PRINCIPAIS
+- monitor de Evolution, n8n, IA, webhooks, backup, disco, filas, banco e rotinas;
+- incidentes com abertura, reconhecimento, lembrete e resolução;
+- alertas internos e canais externos por WhatsApp/e-mail;
+- histórico de execuções e tentativas de entrega;
+- comunicação de empresas afetadas com status por destinatário;
+- execução automática via n8n ou bin/operations-monitor.php.
+
+ANTES DO DEPLOY
+1. Faça backup.
+2. Extraia o patch.
+3. Execute a migration 073.
+4. Configure o .env sem versionar segredos.
+5. Faça rebuild completo.
+6. Teste os canais com uma empresa de homologação.

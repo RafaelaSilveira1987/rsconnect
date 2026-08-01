@@ -73,22 +73,32 @@ final class OperationsService
         ];
     }
 
-    public function runChecks(bool $processAfterHoursRecovery = false): void
+    public function runChecks(bool $processAfterHoursRecovery = false, string $triggerSource = 'manual'): void
     {
-        $this->recordCheck('database', 'Banco de dados', $this->checkDatabase());
-        $this->recordCheck('migrations', 'Estrutura e migrations', $this->checkMigrations());
-        $this->recordCheck('evolution', 'WhatsApp / Evolution', $this->checkEvolution());
-        $this->recordCheck('n8n', 'n8n', $this->checkN8n());
-        $this->recordCheck('openai', 'OpenAI / IA', $this->checkOpenAi());
-        $this->recordCheck('webhooks', 'Webhooks e mensagens', $this->checkWebhooks());
-        $this->recordCheck('calendar', 'Google Agenda', $this->checkCalendar());
-        $this->recordCheck('payments', 'Gateways e pagamentos', $this->checkPayments());
-        $this->refreshBillingCronCheck();
-        $this->recordCheck('ai_reprocess', 'Rotina da fila da IA', $this->checkAiReprocess());
-        $this->recordCheck('after_hours_recovery', 'Recuperação pós-horário', $this->checkAfterHoursRecovery($processAfterHoursRecovery));
-        $this->recordCheck('reporting', 'Agregação de relatórios', $this->checkReporting());
-        $this->recordCheck('backup', 'Backup', $this->checkBackupAge());
-        $this->syncBlockedEvolutionIncidents();
+        $started = microtime(true);
+        $runId = $this->startMonitorRun($triggerSource);
+        try {
+            $this->recordCheck('database', 'Banco de dados', $this->checkDatabase());
+            $this->recordCheck('migrations', 'Estrutura e migrations', $this->checkMigrations());
+            $this->recordCheck('disk', 'Espaço em disco', $this->checkDisk());
+            $this->recordCheck('evolution', 'WhatsApp / Evolution', $this->checkEvolution());
+            $this->recordCheck('n8n', 'n8n', $this->checkN8n());
+            $this->recordCheck('openai', 'OpenAI / IA', $this->checkOpenAi());
+            $this->recordCheck('webhooks', 'Webhooks e mensagens', $this->checkWebhooks());
+            $this->recordCheck('message_queue', 'Fila de mensagens', $this->checkMessageQueue());
+            $this->recordCheck('calendar', 'Google Agenda', $this->checkCalendar());
+            $this->recordCheck('payments', 'Gateways e pagamentos', $this->checkPayments());
+            $this->refreshBillingCronCheck();
+            $this->recordCheck('ai_reprocess', 'Rotina da fila da IA', $this->checkAiReprocess());
+            $this->recordCheck('after_hours_recovery', 'Recuperação pós-horário', $this->checkAfterHoursRecovery($processAfterHoursRecovery));
+            $this->recordCheck('reporting', 'Agregação de relatórios', $this->checkReporting());
+            $this->recordCheck('backup', 'Backup', $this->checkBackupAge());
+            $this->syncBlockedEvolutionIncidents();
+            $this->finishMonitorRun($runId, $started, null);
+        } catch (Throwable $exception) {
+            $this->finishMonitorRun($runId, $started, $exception->getMessage());
+            throw $exception;
+        }
     }
 
     public function refreshBillingCronCheck(): void
@@ -292,14 +302,26 @@ final class OperationsService
         $lastError = $this->fetchOne("SELECT created_at, error_message FROM n8n_flow_logs WHERE status = 'error' ORDER BY id DESC LIMIT 1");
         $successAt = strtotime((string) ($lastSuccess['created_at'] ?? '')) ?: 0;
         $errorAt = strtotime((string) ($lastError['created_at'] ?? '')) ?: 0;
+        $consecutiveErrors = $this->consecutiveN8nErrors();
+        $criticalAfter = max(2, (int) Env::get('OPERATIONS_N8N_CONSECUTIVE_ERRORS_CRITICAL', 3));
 
         if ($activeFlows < 1) {
             return ['status' => 'warning', 'message' => 'Nenhum fluxo n8n ativo foi encontrado no RS Connect.', 'latency_ms' => null];
         }
+        if ($consecutiveErrors >= $criticalAfter) {
+            return [
+                'status' => 'down',
+                'message' => $activeFlows . ' fluxo(s) ativo(s), com ' . $consecutiveErrors
+                    . ' falha(s) consecutiva(s). Último erro: '
+                    . trim((string) ($lastError['error_message'] ?? 'erro sem detalhe')),
+                'latency_ms' => null,
+            ];
+        }
         if ($errorAt > $successAt && $errorAt >= time() - 86400) {
             return [
                 'status' => 'warning',
-                'message' => $activeFlows . ' fluxo(s) ativo(s), porém a execução mais recente com evidência foi uma falha: ' . trim((string) ($lastError['error_message'] ?? 'erro sem detalhe')),
+                'message' => $activeFlows . ' fluxo(s) ativo(s), porém a execução mais recente com evidência foi uma falha: '
+                    . trim((string) ($lastError['error_message'] ?? 'erro sem detalhe')),
                 'latency_ms' => null,
             ];
         }
@@ -308,6 +330,25 @@ final class OperationsService
         }
 
         return ['status' => 'warning', 'message' => $activeFlows . ' fluxo(s) ativo(s), mas não há sucesso registrado nas últimas 24h para comprovar execução recente.', 'latency_ms' => null];
+    }
+
+    private function consecutiveN8nErrors(): int
+    {
+        try {
+            $rows = Database::connection()->query(
+                'SELECT status FROM n8n_flow_logs ORDER BY id DESC LIMIT 20'
+            )->fetchAll(PDO::FETCH_COLUMN) ?: [];
+            $count = 0;
+            foreach ($rows as $status) {
+                if ((string) $status !== 'error') {
+                    break;
+                }
+                $count++;
+            }
+            return $count;
+        } catch (Throwable) {
+            return 0;
+        }
     }
 
     private function checkOpenAi(): array
@@ -409,12 +450,40 @@ final class OperationsService
 
     private function checkWebhooks(): array
     {
-        $recentMessages = $this->count('SELECT COUNT(*) FROM conversation_messages WHERE created_at >= (NOW() - INTERVAL 24 HOUR)');
-        $recentN8n = $this->count('SELECT COUNT(*) FROM n8n_flow_logs WHERE created_at >= (NOW() - INTERVAL 24 HOUR)');
+        $windowHours = max(1, min(168, (int) Env::get('OPERATIONS_WEBHOOK_INACTIVITY_HOURS', 24)));
+        $recentMessages = $this->count(
+            'SELECT COUNT(*) FROM conversation_messages WHERE created_at >= (NOW() - INTERVAL ' . $windowHours . ' HOUR)'
+        );
+        $recentN8n = $this->count(
+            'SELECT COUNT(*) FROM n8n_flow_logs WHERE created_at >= (NOW() - INTERVAL ' . $windowHours . ' HOUR)'
+        );
+        $connectedInstances = $this->count(
+            "SELECT COUNT(*) FROM evolution_instances WHERE status IN ('connected','open','active','online')"
+        );
+        $activeFlows = $this->count("SELECT COUNT(*) FROM n8n_tenant_flows WHERE status = 'active'")
+            + $this->count("SELECT COUNT(*) FROM n8n_flows WHERE status = 'active'");
+
         if ($recentMessages > 0 || $recentN8n > 0) {
-            return ['status' => 'ok', 'message' => $recentMessages . ' mensagem(ns) e ' . $recentN8n . ' evento(s) n8n nas últimas 24h.', 'latency_ms' => null];
+            return [
+                'status' => 'ok',
+                'message' => $recentMessages . ' mensagem(ns) e ' . $recentN8n . ' evento(s) n8n nas últimas '
+                    . $windowHours . 'h.',
+                'latency_ms' => null,
+            ];
         }
-        return ['status' => 'warning', 'message' => 'Nenhum evento recente de mensagens/n8n nas últimas 24h. Verifique se é esperado.', 'latency_ms' => null];
+        if ($connectedInstances < 1 && $activeFlows < 1) {
+            return [
+                'status' => 'unknown',
+                'message' => 'Não há instância conectada nem fluxo n8n ativo para exigir heartbeat de webhook.',
+                'latency_ms' => null,
+            ];
+        }
+        return [
+            'status' => 'warning',
+            'message' => 'Nenhum evento de mensagens ou n8n foi registrado nas últimas ' . $windowHours
+                . 'h, apesar de existirem integrações ativas. Revise os webhooks.',
+            'latency_ms' => null,
+        ];
     }
 
     private function checkPayments(): array
@@ -561,7 +630,7 @@ final class OperationsService
 
     private function checkMigrations(): array
     {
-        $requiredTables = ['conversation_flow_states', 'calendar_google_sync_logs', 'operations_backup_jobs', 'report_daily_metrics', 'ai_usage_events', 'ai_usage_threshold_events', 'ai_after_hours_pending'];
+        $requiredTables = ['conversation_flow_states', 'calendar_google_sync_logs', 'operations_backup_jobs', 'report_daily_metrics', 'ai_usage_events', 'ai_usage_threshold_events', 'ai_after_hours_pending', 'operational_monitor_runs'];
         $missing = [];
         foreach ($requiredTables as $table) {
             if ($this->count("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . str_replace("'", "''", $table) . "'") < 1) {
@@ -571,7 +640,7 @@ final class OperationsService
         if ($missing !== []) {
             return ['status' => 'down', 'message' => 'Estruturas obrigatórias ausentes: ' . implode(', ', $missing) . '.', 'latency_ms' => null];
         }
-        return ['status' => 'ok', 'message' => 'Estruturas principais, incluindo consumo de IA e recuperação pós-horário, foram localizadas no banco.', 'latency_ms' => null];
+        return ['status' => 'ok', 'message' => 'Estruturas principais, incluindo consumo de IA, recuperação pós-horário e monitoramento operacional, foram localizadas no banco.', 'latency_ms' => null];
     }
 
     private function checkBillingCron(): array
@@ -618,6 +687,140 @@ final class OperationsService
             'message' => 'Há processamento da régua registrado em ' . ($last['created_at'] ?? '') . ', mas ainda não existe um heartbeat comprovando execução automática. Importe/ative o cron n8n e execute-o uma vez.',
             'latency_ms' => null,
         ];
+    }
+
+
+    private function checkDisk(): array
+    {
+        $path = trim((string) Env::get('OPERATIONS_DISK_PATH', dirname(__DIR__, 2)));
+        if ($path === '' || !is_dir($path)) {
+            return ['status' => 'warning', 'message' => 'Caminho de disco inválido: ' . $path, 'latency_ms' => null];
+        }
+        $total = @disk_total_space($path);
+        $free = @disk_free_space($path);
+        if (!is_float($total) && !is_int($total) || !is_float($free) && !is_int($free) || $total <= 0) {
+            return ['status' => 'warning', 'message' => 'Não foi possível medir o espaço disponível em ' . $path . '.', 'latency_ms' => null];
+        }
+        $freePercent = ($free / $total) * 100;
+        $freeGb = $free / 1073741824;
+        $warningPercent = max(1.0, min(90.0, (float) Env::get('OPERATIONS_DISK_WARNING_PERCENT', 20)));
+        $criticalPercent = max(1.0, min($warningPercent, (float) Env::get('OPERATIONS_DISK_CRITICAL_PERCENT', 10)));
+        $minimumFreeGb = max(0.1, (float) Env::get('OPERATIONS_DISK_MIN_FREE_GB', 2));
+        $message = number_format($freeGb, 1, ',', '.') . ' GB livres ('
+            . number_format($freePercent, 1, ',', '.') . '%) em ' . $path . '.';
+        if ($freePercent <= $criticalPercent || $freeGb <= max(0.1, $minimumFreeGb / 2)) {
+            return ['status' => 'down', 'message' => $message . ' Libere espaço imediatamente.', 'latency_ms' => null];
+        }
+        if ($freePercent <= $warningPercent || $freeGb <= $minimumFreeGb) {
+            return ['status' => 'warning', 'message' => $message . ' O limite de atenção foi atingido.', 'latency_ms' => null];
+        }
+        return ['status' => 'ok', 'message' => $message, 'latency_ms' => null];
+    }
+
+    private function checkMessageQueue(): array
+    {
+        $pendingMinutes = max(5, (int) Env::get('OPERATIONS_MESSAGE_PENDING_MINUTES', 15));
+        $warningCount = max(1, (int) Env::get('OPERATIONS_MESSAGE_QUEUE_WARNING', 10));
+        $criticalCount = max($warningCount + 1, (int) Env::get('OPERATIONS_MESSAGE_QUEUE_CRITICAL', 50));
+        $pending = $this->count(
+            "SELECT COUNT(*) FROM conversation_messages
+             WHERE direction = 'outgoing' AND status = 'pending'
+               AND created_at <= (NOW() - INTERVAL " . $pendingMinutes . " MINUTE)"
+        );
+        $failed24 = $this->count(
+            "SELECT COUNT(*) FROM conversation_messages
+             WHERE direction = 'outgoing' AND status = 'failed'
+               AND created_at >= (NOW() - INTERVAL 24 HOUR)"
+        );
+        $oldest = $this->fetchOne(
+            "SELECT created_at FROM conversation_messages
+             WHERE direction = 'outgoing' AND status = 'pending'
+               AND created_at <= (NOW() - INTERVAL " . $pendingMinutes . " MINUTE)
+             ORDER BY created_at ASC LIMIT 1"
+        );
+        $details = $pending . ' mensagem(ns) pendente(s) há mais de ' . $pendingMinutes . ' min; '
+            . $failed24 . ' falha(s) nas últimas 24h.';
+        if (!empty($oldest['created_at'])) {
+            $details .= ' Mais antiga: ' . $oldest['created_at'] . '.';
+        }
+        if ($pending >= $criticalCount) {
+            return ['status' => 'down', 'message' => $details, 'latency_ms' => null];
+        }
+        if ($pending >= $warningCount || $failed24 > 0) {
+            return ['status' => 'warning', 'message' => $details, 'latency_ms' => null];
+        }
+        return ['status' => 'ok', 'message' => $details, 'latency_ms' => null];
+    }
+
+    private function startMonitorRun(string $triggerSource): ?int
+    {
+        try {
+            $triggerSource = mb_substr(trim($triggerSource) ?: 'manual', 0, 60);
+            $statement = Database::connection()->prepare(
+                'INSERT INTO operational_monitor_runs (trigger_source, status, started_at)
+                 VALUES (:source, "running", NOW())'
+            );
+            $statement->execute(['source' => $triggerSource]);
+            return (int) Database::connection()->lastInsertId();
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function finishMonitorRun(?int $runId, float $started, ?string $error): void
+    {
+        if (!$runId) {
+            return;
+        }
+        try {
+            $checks = $this->withExpectedChecks($this->latestChecks());
+            $healthy = $this->countStatus($checks, 'ok');
+            $warning = $this->countStatus($checks, 'warning');
+            $down = $this->countStatus($checks, 'down');
+            $status = $error !== null ? 'error' : ($down > 0 || $warning > 0 ? 'partial' : 'success');
+            $run = $this->fetchOne('SELECT started_at FROM operational_monitor_runs WHERE id = ' . (int) $runId);
+            $startedAt = trim((string) ($run['started_at'] ?? ''));
+            $incidentsOpened = 0;
+            $incidentsRecovered = 0;
+            if ($startedAt !== '') {
+                $statementOpened = Database::connection()->prepare(
+                    "SELECT COUNT(*) FROM system_incidents WHERE event LIKE 'operations.alert.%' AND created_at >= :started_at"
+                );
+                $statementOpened->execute(['started_at' => $startedAt]);
+                $incidentsOpened = (int) $statementOpened->fetchColumn();
+                $statementRecovered = Database::connection()->prepare(
+                    "SELECT COUNT(*) FROM system_incidents WHERE event LIKE 'operations.alert.%' AND resolved_at >= :started_at"
+                );
+                $statementRecovered->execute(['started_at' => $startedAt]);
+                $incidentsRecovered = (int) $statementRecovered->fetchColumn();
+            }
+            $summary = [
+                'unknown' => $this->countStatus($checks, 'unknown'),
+                'checked_at' => \App\Core\Clock::nowUtc(),
+            ];
+            Database::connection()->prepare(
+                'UPDATE operational_monitor_runs
+                 SET status = :status, checks_total = :total, healthy_total = :healthy,
+                     warning_total = :warning, down_total = :down,
+                     incidents_opened = :incidents_opened, incidents_recovered = :incidents_recovered,
+                     duration_ms = :duration, summary_json = :summary,
+                     error_message = :error, finished_at = NOW()
+                 WHERE id = :id'
+            )->execute([
+                'status' => $status,
+                'total' => count($checks),
+                'healthy' => $healthy,
+                'warning' => $warning,
+                'down' => $down,
+                'incidents_opened' => $incidentsOpened,
+                'incidents_recovered' => $incidentsRecovered,
+                'duration' => max(0, (int) round((microtime(true) - $started) * 1000)),
+                'summary' => json_encode($summary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'error' => $error ? mb_substr($error, 0, 1000) : null,
+                'id' => $runId,
+            ]);
+        } catch (Throwable) {
+        }
     }
 
     private function checkBackupAge(): array
@@ -674,13 +877,16 @@ final class OperationsService
         try {
             $active = $this->fetchOne("SELECT id FROM system_incidents WHERE event = '" . str_replace("'", "''", $event) . "' AND resolved_at IS NULL LIMIT 1");
 
-            if (in_array($status, ['ok', 'unknown'], true)) {
+            if ($status === 'unknown') {
+                // Ausência de evidência não comprova recuperação e não deve encerrar o incidente.
+                return;
+            }
+            if ($status === 'ok') {
                 if ($active && (int) ($active['id'] ?? 0) > 0) {
                     $incidentId = (int) $active['id'];
                     $statement = Database::connection()->prepare('UPDATE system_incidents SET resolved_at = NOW(), last_seen_at = NOW() WHERE id = :id AND resolved_at IS NULL');
                     $statement->execute(['id' => $incidentId]);
-                    // 'unknown' significa ausência de evidência, não recuperação confirmada.
-                    if ($status === 'ok' && $statement->rowCount() > 0) {
+                    if ($statement->rowCount() > 0) {
                         (new OperationalAlertService())->dispatchRecovered($incidentId);
                     }
                 }
@@ -854,10 +1060,12 @@ final class OperationsService
         return [
             'database' => ['label' => 'Banco de dados', 'category' => 'infrastructure', 'category_label' => 'Infraestrutura e aplicação', 'route' => '/central-operacao?tab=status'],
             'migrations' => ['label' => 'Estrutura e migrations', 'category' => 'infrastructure', 'category_label' => 'Infraestrutura e aplicação', 'route' => '/central-operacao?tab=status'],
+            'disk' => ['label' => 'Espaço em disco', 'category' => 'infrastructure', 'category_label' => 'Infraestrutura e aplicação', 'route' => '/central-operacao?tab=status'],
             'evolution' => ['label' => 'WhatsApp / Evolution', 'category' => 'integration', 'category_label' => 'Integrações', 'route' => '/instances'],
             'n8n' => ['label' => 'n8n', 'category' => 'integration', 'category_label' => 'Integrações', 'route' => '/n8n'],
             'openai' => ['label' => 'OpenAI / IA', 'category' => 'integration', 'category_label' => 'Integrações', 'route' => '/ai-credentials'],
             'webhooks' => ['label' => 'Webhooks e mensagens', 'category' => 'integration', 'category_label' => 'Integrações', 'route' => '/conversations'],
+            'message_queue' => ['label' => 'Fila de mensagens', 'category' => 'integration', 'category_label' => 'Integrações', 'route' => '/conversations'],
             'calendar' => ['label' => 'Google Agenda', 'category' => 'integration', 'category_label' => 'Integrações', 'route' => '/calendar/availability'],
             'payments' => ['label' => 'Gateways e pagamentos', 'category' => 'integration', 'category_label' => 'Integrações', 'route' => '/payment-gateways'],
             'billing_cron' => ['label' => 'Cron de cobrança', 'category' => 'routine', 'category_label' => 'Rotinas automáticas', 'route' => '/billing-reminders'],

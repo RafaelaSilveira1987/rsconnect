@@ -1,3 +1,21 @@
+# RS Connect v36.12.0 — Monitoramento e alertas operacionais
+
+Esta versão transforma o painel de saúde em um ciclo operacional completo: verifica serviços, abre incidentes, evita alertas duplicados, envia lembretes, permite reconhecimento e resolução e registra cada tentativa de entrega.
+
+Aplique a migration:
+
+`database/migrations/073_operational_monitoring_alert_delivery.sql`
+
+O monitor cobre banco, migrations, Evolution, n8n, OpenAI/IA, webhooks, agenda, pagamentos, backups, espaço em disco, filas de mensagens e rotinas de relatório. Os alertas podem ser exibidos dentro do RS Connect e enviados por WhatsApp ou e-mail quando os transportadores estiverem configurados.
+
+A Central de comunicação também passa a entregar comunicados aos clientes pelos mesmos transportadores externos e registrar, por empresa, enviado, erro ou configuração pendente.
+
+Validação:
+
+`database/diagnostics/operational_monitoring_v36.12.0.sql`
+
+Execução automática recomendada: importar o template **Monitor operacional RS Connect** no n8n, usando `OPERATIONS_MONITOR_TOKEN`, ou agendar `php /var/www/html/bin/operations-monitor.php` a cada 15 minutos.
+
 # RS Connect v36.11.1 — Segurança de sessão, CSRF, login e webhooks
 
 Esta versão conclui a etapa de hardening da Beta 1.1 iniciada pela v36.11.0. Ela reforça sessão, autenticação, CSRF e endpoints públicos sem alterar os fluxos funcionais já homologados.
