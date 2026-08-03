@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Core\Env;
+use App\Core\RequestSecurity;
 
 require_once __DIR__ . '/app/Core/Autoloader.php';
 App\Core\Autoloader::register(__DIR__ . '/app');
@@ -16,25 +17,57 @@ ini_set('display_errors', $debug ? '1' : '0');
 error_reporting(E_ALL);
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
+    $lifetimeSeconds = max(300, (int) Env::get('SESSION_LIFETIME', 120) * 60);
+    $sameSite = ucfirst(strtolower(trim((string) Env::get('SESSION_SAMESITE', 'Lax'))));
+    if (!in_array($sameSite, ['Lax', 'Strict'], true)) {
+        $sameSite = 'Lax';
+    }
+
+    $secureSetting = strtolower(trim((string) Env::get('SESSION_COOKIE_SECURE', 'auto')));
+    $secureCookie = match ($secureSetting) {
+        '1', 'true', 'yes', 'on' => true,
+        '0', 'false', 'no', 'off' => false,
+        default => RequestSecurity::isHttps(),
+    };
+
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.use_trans_sid', '0');
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.gc_maxlifetime', (string) $lifetimeSeconds);
+    session_cache_limiter('nocache');
+
     session_name((string) Env::get('SESSION_NAME', 'rs_connect_session'));
     session_set_cookie_params([
-        'lifetime' => (int) Env::get('SESSION_LIFETIME', 120) * 60,
+        'lifetime' => $lifetimeSeconds,
         'path' => '/',
-        'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'secure' => $secureCookie,
         'httponly' => true,
-        'samesite' => 'Lax',
+        'samesite' => $sameSite,
     ]);
     session_start();
 }
-
 
 if (!headers_sent() && filter_var(Env::get('SECURITY_HEADERS_ENABLED', true), FILTER_VALIDATE_BOOL)) {
     header('X-Frame-Options: SAMEORIGIN');
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: strict-origin-when-cross-origin');
-    header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
-    if ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || str_starts_with((string) Env::get('APP_URL', ''), 'https://')) {
+    header('Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()');
+    header('Cross-Origin-Opener-Policy: same-origin');
+    header('X-Permitted-Cross-Domain-Policies: none');
+
+    if (filter_var(Env::get('SECURITY_CSP_ENABLED', true), FILTER_VALIDATE_BOOL)) {
+        header("Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; img-src 'self' data: blob: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; media-src 'self' blob:");
+    }
+
+    if (RequestSecurity::isHttps()) {
         header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
+
+    $requestPath = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
+    if (!str_starts_with($requestPath, '/assets/') && !str_starts_with($requestPath, '/uploads/')) {
+        header('Cache-Control: no-store, private, max-age=0');
+        header('Pragma: no-cache');
     }
 }
 

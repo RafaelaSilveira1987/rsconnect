@@ -3,6 +3,7 @@
 use App\Core\Auth;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\OperationalLanguageService;
 
 $step = (int) ($company['onboarding_step'] ?? 1);
 $completed = !empty($company['onboarding_completed_at']);
@@ -19,7 +20,7 @@ $totalInstances = (int) ($instances['total'] ?? 0);
     <div>
         <span class="eyebrow">Configuração inicial</span>
         <h2>Vamos preparar sua operação.</h2>
-        <p>Conclua os passos iniciais para configurar a empresa, o WhatsApp e o primeiro agente de IA.</p>
+        <p>Conclua os passos iniciais para configurar a empresa, o WhatsApp e o primeiro assistente virtual.</p>
     </div>
     <?php if (Auth::can('onboarding.manage')): ?><a class="btn btn-primary" href="<?= View::e(Router::url('/onboarding')) ?>">Continuar configuração</a><?php endif; ?>
 </section>
@@ -74,8 +75,8 @@ $totalInstances = (int) ($instances['total'] ?? 0);
     <section class="card client-dashboard-operation">
         <div class="section-heading"><div><span class="eyebrow">Operação</span><h2>Situação atual</h2></div></div>
         <div class="client-status-list">
-            <div><span>WhatsApp</span><strong class="<?= $connected > 0 ? 'is-ok' : 'is-warning' ?>"><?= $connected > 0 ? 'Conectado' : 'Atenção' ?></strong></div>
-            <div><span>Agentes de IA</span><strong class="<?= (int) $activeAgents > 0 ? 'is-ok' : 'is-warning' ?>"><?= (int) $activeAgents ?> ativo(s)</strong></div>
+            <div><span>WhatsApp</span><strong class="<?= $connected > 0 ? 'is-ok' : 'is-warning' ?>"><?= $connected > 0 ? 'Conectado' : 'Precisa reconectar' ?></strong></div>
+            <div><span>Assistentes virtuais</span><strong class="<?= (int) $activeAgents > 0 ? 'is-ok' : 'is-warning' ?>"><?= (int) $activeAgents ?> ativo(s)</strong></div>
             <div><span>Equipe</span><strong><?= (int) $activeUsers ?> usuário(s)</strong></div>
             <div><span>Agenda automática</span><strong class="<?= $pendingAgenda > 0 ? 'is-warning' : 'is-ok' ?>"><?= $pendingAgenda > 0 ? 'Revisar' : 'Em dia' ?></strong></div>
         </div>
@@ -100,9 +101,10 @@ $totalInstances = (int) ($instances['total'] ?? 0);
     </div>
     <div class="compact-notifications">
         <?php foreach (array_slice($notifications, 0, 3) as $notification): ?>
+            <?php $notice = OperationalLanguageService::notification($notification, true); ?>
             <a class="compact-notification <?= ($notification['status'] ?? '') === 'unread' ? 'is-unread' : '' ?>" href="<?= View::e(Router::url('/notifications')) ?>">
                 <span class="notification-dot"></span>
-                <span><strong><?= View::e($notification['title'] ?? '') ?></strong><small><?= View::e(mb_strimwidth((string) ($notification['message'] ?? ''), 0, 120, '...')) ?></small></span>
+                <span><strong><?= View::e((string) $notice['title']) ?></strong><small><?= View::e(mb_strimwidth((string) $notice['summary'], 0, 120, '...')) ?></small></span>
             </a>
         <?php endforeach; ?>
     </div>

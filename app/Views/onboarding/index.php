@@ -64,7 +64,7 @@ $statusClass = static fn (string $status): string => match ($status) {
     <div>
         <span class="eyebrow">Primeiros passos</span>
         <h2><?= ($summary['is_complete'] ?? false) ? 'Sua operação está pronta para uso.' : 'Configure sua operação com orientação.' ?></h2>
-        <p>Siga a sequência de implantação: cadastro, LGPD, regras de atendimento, agenda, WhatsApp, agente de IA e teste final. As demais telas são liberadas conforme o avanço.</p>
+        <p>Siga a sequência de implantação: cadastro, LGPD, regras de atendimento, agenda, WhatsApp, assistente virtual e teste final. As demais telas são liberadas conforme o avanço.</p>
     </div>
     <div class="onboarding-score-card">
         <strong><?= $percent ?>%</strong>
@@ -240,7 +240,7 @@ $statusClass = static fn (string $status): string => match ($status) {
                         </section>
 
                         <section class="calendar-mode-panel" data-calendar-mode-panel="smart" <?= $calendarMode === 'smart' ? '' : 'hidden' ?>>
-                            <div class="message-info"><strong>Integração administrada pela RS Connect</strong><span>Credenciais, Google Calendar, n8n, callbacks, eventos VAGO e manutenção são configurados e homologados pelo Super Admin. O cliente define apenas as regras comerciais abaixo.</span></div>
+                            <div class="message-info"><strong>Integração administrada pela RS Connect</strong><span>Credenciais, Google Calendar, n8n, retornos técnicos, horários disponíveis e manutenção são configurados e homologados pelo Super Admin. O cliente define apenas as regras comerciais abaixo.</span></div>
                         </section>
 
                         <section class="calendar-commercial-rules" data-calendar-commercial-rules <?= $calendarMode === 'none' ? 'hidden' : '' ?>>

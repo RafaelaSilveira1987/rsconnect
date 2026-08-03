@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Core\Auth;
 use App\Core\Database;
+use App\Core\Env;
 use DateTimeImmutable;
 use PDO;
 use Throwable;
@@ -84,8 +85,8 @@ final class ClientCommunicationService
 
             foreach ($tenantIds as $tenantId) {
                 $notificationId = $this->notification($pdo, $tenantId, $type, $priority, $title, $message, $communicationId, $responseMode);
-                $whatsapp = $channels['whatsapp'] ? 'pending_configuration' : 'not_requested';
-                $email = $channels['email'] ? 'pending_configuration' : 'not_requested';
+                $whatsapp = $channels['whatsapp'] ? 'queued' : 'not_requested';
+                $email = $channels['email'] ? 'queued' : 'not_requested';
                 $pdo->prepare(
                     'INSERT INTO client_communication_recipients
                         (communication_id, tenant_id, notification_id, in_app_status, whatsapp_status, email_status)
@@ -100,6 +101,14 @@ final class ClientCommunicationService
             }
 
             $pdo->commit();
+            $this->deliverExternalChannels(
+                $communicationId,
+                $tenantIds,
+                $channels,
+                $title,
+                $message,
+                $incidentId
+            );
             return $communicationId;
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
@@ -433,6 +442,127 @@ final class ClientCommunicationService
         return array_values(array_unique(array_filter(array_map('intval', $selected), static fn (int $id): bool => $id > 0)));
     }
 
+    /** @param array<string,int> $channels @param array<int,int> $tenantIds */
+    private function deliverExternalChannels(
+        int $communicationId,
+        array $tenantIds,
+        array $channels,
+        string $title,
+        string $message,
+        int $incidentId
+    ): void {
+        if (empty($channels['whatsapp']) && empty($channels['email'])) {
+            return;
+        }
+
+        try {
+            $placeholders = implode(',', array_fill(0, count($tenantIds), '?'));
+            $statement = Database::connection()->prepare(
+                "SELECT id, name, email, COALESCE(NULLIF(commercial_whatsapp,''),phone) AS admin_phone
+                 FROM tenants WHERE id IN ($placeholders)"
+            );
+            foreach (array_values($tenantIds) as $index => $tenantId) {
+                $statement->bindValue($index + 1, (int) $tenantId, PDO::PARAM_INT);
+            }
+            $statement->execute();
+            $tenants = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            $tenants = [];
+        }
+
+        $byId = [];
+        foreach ($tenants as $tenant) {
+            $byId[(int) ($tenant['id'] ?? 0)] = $tenant;
+        }
+
+        $transport = new OperationalAlertService();
+        $url = $this->communicationUrl($communicationId);
+        foreach ($tenantIds as $tenantId) {
+            $tenant = $byId[(int) $tenantId] ?? [];
+            if (!empty($channels['whatsapp'])) {
+                $destination = preg_replace('/\D+/', '', (string) ($tenant['admin_phone'] ?? '')) ?: '';
+                $result = $transport->sendExternalWhatsapp($destination, $title, $message, $url);
+                $this->updateExternalDelivery(
+                    $communicationId,
+                    (int) $tenantId,
+                    'whatsapp',
+                    $result
+                );
+            }
+            if (!empty($channels['email'])) {
+                $destination = trim((string) ($tenant['email'] ?? ''));
+                $result = $transport->sendExternalEmail(
+                    $destination,
+                    $title,
+                    $message,
+                    $url,
+                    $incidentId,
+                    'client_communication'
+                );
+                $this->updateExternalDelivery(
+                    $communicationId,
+                    (int) $tenantId,
+                    'email',
+                    $result
+                );
+            }
+        }
+    }
+
+    /** @param array<string,mixed> $result */
+    private function updateExternalDelivery(int $communicationId, int $tenantId, string $channel, array $result): void
+    {
+        $status = !empty($result['ok'])
+            ? 'sent'
+            : (!empty($result['configured']) ? 'error' : 'pending_configuration');
+        $providerId = trim((string) ($result['provider_message_id'] ?? ''));
+        $error = !empty($result['ok']) ? null : mb_substr(trim((string) ($result['message'] ?? 'Falha não identificada.')), 0, 500);
+        $sentAt = !empty($result['ok']) ? date('Y-m-d H:i:s') : null;
+
+        $allowed = ['whatsapp', 'email'];
+        if (!in_array($channel, $allowed, true)) {
+            return;
+        }
+
+        try {
+            $sql = "UPDATE client_communication_recipients
+                    SET {$channel}_status = :status,
+                        {$channel}_provider_message_id = :provider_id,
+                        {$channel}_error = :error,
+                        {$channel}_sent_at = :sent_at
+                    WHERE communication_id = :communication_id AND tenant_id = :tenant_id";
+            Database::connection()->prepare($sql)->execute([
+                'status' => $status,
+                'provider_id' => $providerId !== '' ? $providerId : null,
+                'error' => $error,
+                'sent_at' => $sentAt,
+                'communication_id' => $communicationId,
+                'tenant_id' => $tenantId,
+            ]);
+        } catch (Throwable) {
+            // Compatibilidade temporária caso o código suba antes da migration 073.
+            try {
+                Database::connection()->prepare(
+                    "UPDATE client_communication_recipients
+                     SET {$channel}_status = :status
+                     WHERE communication_id = :communication_id AND tenant_id = :tenant_id"
+                )->execute([
+                    'status' => $status,
+                    'communication_id' => $communicationId,
+                    'tenant_id' => $tenantId,
+                ]);
+            } catch (Throwable) {
+            }
+        }
+    }
+
+    private function communicationUrl(int $communicationId): string
+    {
+        $path = '/notifications?communication_id=' . $communicationId;
+        $base = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+        return $base !== '' ? $base . $path : $path;
+    }
+
     private function parseExpiresAt(string $value): ?string
     {
         $value = trim($value);
@@ -487,7 +617,13 @@ final class ClientCommunicationService
                     (SELECT COUNT(*) FROM client_communication_recipients r WHERE r.communication_id = c.id AND r.acknowledged_at IS NOT NULL) AS acknowledged_count,
                     (SELECT COUNT(*) FROM client_communication_replies cr WHERE cr.communication_id = c.id AND cr.direction = "tenant_to_rs") AS reply_count,
                     (SELECT COUNT(*) FROM client_communication_recipients r WHERE r.communication_id = c.id AND r.whatsapp_status = "pending_configuration") AS whatsapp_pending,
-                    (SELECT COUNT(*) FROM client_communication_recipients r WHERE r.communication_id = c.id AND r.email_status = "pending_configuration") AS email_pending
+                    (SELECT COUNT(*) FROM client_communication_recipients r WHERE r.communication_id = c.id AND r.whatsapp_status = "queued") AS whatsapp_queued,
+                    (SELECT COUNT(*) FROM client_communication_recipients r WHERE r.communication_id = c.id AND r.whatsapp_status = "sent") AS whatsapp_sent,
+                    (SELECT COUNT(*) FROM client_communication_recipients r WHERE r.communication_id = c.id AND r.whatsapp_status = "error") AS whatsapp_error,
+                    (SELECT COUNT(*) FROM client_communication_recipients r WHERE r.communication_id = c.id AND r.email_status = "pending_configuration") AS email_pending,
+                    (SELECT COUNT(*) FROM client_communication_recipients r WHERE r.communication_id = c.id AND r.email_status = "queued") AS email_queued,
+                    (SELECT COUNT(*) FROM client_communication_recipients r WHERE r.communication_id = c.id AND r.email_status = "sent") AS email_sent,
+                    (SELECT COUNT(*) FROM client_communication_recipients r WHERE r.communication_id = c.id AND r.email_status = "error") AS email_error
                  FROM client_communications c
                  ORDER BY c.id DESC LIMIT 60'
             )->fetchAll(PDO::FETCH_ASSOC) ?: [];

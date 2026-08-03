@@ -8,6 +8,7 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\NotificationService;
 use App\Services\OperationalAlertService;
+use App\Services\OperationalLanguageService;
 use App\Services\TenantModuleService;
 use App\Services\ClientCommunicationService;
 
@@ -125,7 +126,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.10.7')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.12.1')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -180,7 +181,7 @@ $svgIcon = static function (string $name): string {
                 <span class="nav-caption">Operação RS</span>
                 <a class="nav-link<?= $isAnyActive(['/painel-operacional', '/operacao-rs']) ?>" href="<?= View::e(Router::url('/painel-operacional')) ?>"><?= $svgIcon('operations') ?><span>Painel operacional</span></a>
                 <a class="nav-link<?= $isAnyActive(['/central-operacao', '/security', '/seguranca', '/operations', '/monitoramento', '/backup-automatico', '/operations/backups/automation', '/operations/ai-reprocess', '/beta-comercial', '/status-sistema']) ?>" href="<?= View::e(Router::url('/central-operacao')) ?>"><?= $svgIcon('operations') ?><span>Central de operação</span></a>
-                <a class="nav-link<?= $isActive('/operacao-alertas') ?>" href="<?= View::e(Router::url('/operacao-alertas')) ?>"><?= $svgIcon('bell') ?><span>Alertas operacionais</span><?= $notificationBadge($notificationUnread) ?></a>
+                <a class="nav-link<?= $isActive('/operacao-alertas') ?>" href="<?= View::e(Router::url('/operacao-alertas')) ?>"><?= $svgIcon('bell') ?><span>Avisos do sistema</span><?= $notificationBadge($notificationUnread) ?></a>
                 <a class="nav-link<?= $isActive('/comunicados') ?>" href="<?= View::e(Router::url('/comunicados')) ?>"><?= $svgIcon('chat') ?><span>Comunicados</span></a>
                 <a class="nav-link<?= $isActive('/implementation') ?>" href="<?= View::e(Router::url('/implementation')) ?>"><?= $svgIcon('implementation') ?><span>Implantação</span></a>
 
@@ -258,7 +259,7 @@ $svgIcon = static function (string $name): string {
                 <h1><?= View::e($title ?? 'RS Connect') ?></h1>
             </div>
             <?php if (Auth::isSuperAdmin()): ?>
-                <a class="topbar-notification" href="<?= View::e(Router::url('/operacao-alertas')) ?>" aria-label="Alertas operacionais" data-notification-link data-count-url="<?= View::e(Router::url('/operacao-alertas/count')) ?>">
+                <a class="topbar-notification" href="<?= View::e(Router::url('/operacao-alertas')) ?>" aria-label="Avisos do sistema" data-notification-link data-count-url="<?= View::e(Router::url('/operacao-alertas/count')) ?>">
                     <?= $svgIcon('bell') ?>
                     <?= $notificationLiveBadge($notificationUnread) ?>
                 </a>
@@ -285,7 +286,7 @@ $svgIcon = static function (string $name): string {
             <section class="flash-stack" aria-live="polite">
                 <?php foreach ($flashes as $flash): ?>
                     <div class="flash flash-<?= View::e($flash['type']) ?>">
-                        <span><?= View::e($flash['message']) ?></span>
+                        <span><?= View::e(OperationalLanguageService::replaceTechnicalTerms((string) $flash['message'])) ?></span>
                         <button type="button" data-dismiss-flash aria-label="Fechar">×</button>
                     </div>
                 <?php endforeach; ?>
@@ -344,6 +345,6 @@ $svgIcon = static function (string $name): string {
 <button class="back-to-top" type="button" data-back-to-top aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
 </button>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.10.7')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.12.1')) ?>" defer></script>
 </body>
 </html>

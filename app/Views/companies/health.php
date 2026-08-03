@@ -3,6 +3,7 @@
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\OperationalLanguageService;
 
 $data = $healthData ?? [];
 $tenant = $data['tenant'] ?? [];
@@ -19,21 +20,21 @@ $configGroups = $configuration['groups'] ?? [];
 $tenantId = (int) ($tenant['id'] ?? 0);
 
 $statusLabels = [
-    'healthy' => 'Saudável',
+    'healthy' => 'Tudo normal',
     'attention' => 'Atenção',
-    'critical' => 'Crítico',
+    'critical' => 'Ação imediata',
     'idle' => 'Sem atividade recente',
-    'blocked' => 'Bloqueado',
+    'blocked' => 'Acesso interrompido',
 ];
-$checkLabels = ['ok' => 'Operacional', 'info' => 'Informação', 'warning' => 'Atenção', 'critical' => 'Crítico'];
-$configToneLabels = ['ok' => 'Configurado', 'info' => 'Informação', 'warning' => 'Revisar', 'critical' => 'Crítico'];
-$incidentLabels = ['open' => 'Aberto', 'acknowledged' => 'Visualizado', 'monitoring' => 'Em acompanhamento', 'resolved' => 'Resolvido'];
+$checkLabels = ['ok' => 'Tudo normal', 'info' => 'Informação', 'warning' => 'Precisa de atenção', 'critical' => 'Ação imediata'];
+$configToneLabels = ['ok' => 'Configurado', 'info' => 'Informação', 'warning' => 'Revisar', 'critical' => 'Ação imediata'];
+$incidentLabels = ['open' => 'Aguardando análise', 'acknowledged' => 'Em análise', 'monitoring' => 'Acompanhando', 'resolved' => 'Tudo normal novamente'];
 $eventLabels = [
-    'opened' => 'Problema identificado',
-    'reopened' => 'Problema reaberto',
-    'acknowledged' => 'Problema visualizado',
+    'opened' => 'Situação identificada',
+    'reopened' => 'Situação reaberta',
+    'acknowledged' => 'Análise assumida',
     'monitoring' => 'Acompanhamento iniciado',
-    'resolved' => 'Problema resolvido',
+    'resolved' => 'Situação normalizada',
     'auto_resolved' => 'Normalização confirmada',
     'note' => 'Observação adicionada',
 ];
@@ -74,7 +75,7 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
     <div>
         <span class="eyebrow">Saúde do cliente</span>
         <h2><?= View::e((string) ($tenant['name'] ?? 'Empresa')) ?></h2>
-        <p>Veja se WhatsApp, assistentes, integrações, agenda, assinatura e acessos estão funcionando agora.</p>
+        <p>Veja rapidamente o que está funcionando, o que precisa de atenção e como corrigir cada situação.</p>
         <?php if (!empty($snapshot)): ?>
             <small>Última verificação: <?= View::e($formatDate((string) ($snapshot['checked_at'] ?? ''))) ?> · <?= View::e((string) ($snapshot['checked_by_name'] ?? 'Rotina automática')) ?></small>
         <?php endif; ?>
@@ -93,9 +94,9 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
 </section>
 
 <section class="tenant-health-summary-grid" aria-label="Resumo da saúde">
-    <article><span class="health-summary-icon is-ok">✓</span><div><small>Operacionais</small><strong><?= (int) ($snapshot['ok_count'] ?? 0) ?></strong><em>componentes sem falhas</em></div></article>
+    <article><span class="health-summary-icon is-ok">✓</span><div><small>Tudo normal</small><strong><?= (int) ($snapshot['ok_count'] ?? 0) ?></strong><em>áreas funcionando como esperado</em></div></article>
     <article><span class="health-summary-icon is-warning">!</span><div><small>Pontos de atenção</small><strong><?= (int) ($snapshot['warning_count'] ?? 0) ?></strong><em>precisam ser revisados</em></div></article>
-    <article><span class="health-summary-icon is-critical">×</span><div><small>Problemas críticos</small><strong><?= (int) ($snapshot['critical_count'] ?? 0) ?></strong><em>podem interromper o atendimento</em></div></article>
+    <article><span class="health-summary-icon is-critical">×</span><div><small>Ação imediata</small><strong><?= (int) ($snapshot['critical_count'] ?? 0) ?></strong><em>podem interromper o atendimento</em></div></article>
     <article><span class="health-summary-icon is-monitoring">◎</span><div><small>Em acompanhamento</small><strong><?= (int) ($summary['monitoring'] ?? 0) ?></strong><em>vistos pela equipe RS</em></div></article>
 </section>
 
@@ -106,7 +107,7 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
 </section>
 <?php else: ?>
 <section class="tenant-health-section-heading">
-    <div><span class="eyebrow">Diagnóstico atual</span><h2>Componentes da operação</h2><p>Itens informativos não são tratados como falha. Uma empresa sem mensagens recentes pode apenas estar sem atividade.</p></div>
+    <div><span class="eyebrow">Situação atual</span><h2>Áreas da empresa</h2><p>Cada item mostra de forma simples o que foi encontrado. Os dados técnicos ficam disponíveis nos detalhes.</p></div>
 </section>
 
 <div class="tenant-health-category-grid">
@@ -126,12 +127,13 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
             </header>
             <div class="tenant-health-check-list">
                 <?php foreach ($checks as $check): ?>
+                    <?php $checkPresentation = OperationalLanguageService::check($check, false); ?>
                     <article class="tenant-health-check is-<?= View::e((string) ($check['status'] ?? 'info')) ?>">
                         <div class="tenant-health-check-main">
                             <span class="tenant-health-dot is-<?= View::e((string) ($check['status'] ?? 'info')) ?>"></span>
                             <div>
-                                <strong><?= View::e((string) ($check['component_label'] ?? 'Verificação')) ?></strong>
-                                <p><?= View::e((string) ($check['summary'] ?? '')) ?></p>
+                                <strong><?= View::e((string) $checkPresentation['label']) ?></strong>
+                                <p><?= View::e((string) $checkPresentation['summary']) ?></p>
                                 <small>Verificado <?= View::e($relative((string) ($check['checked_at'] ?? ''))) ?></small>
                             </div>
                             <?php
@@ -147,7 +149,7 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
                             <span class="health-check-label is-<?= View::e($itemStatus) ?>"><?= View::e($itemStatusLabel) ?></span>
                         </div>
                         <div class="tenant-health-check-actions">
-                            <?php if (!empty($check['action_url'])): ?><a class="btn btn-quiet" href="<?= View::e(Router::url((string) $check['action_url'])) ?>">Abrir configuração</a><?php endif; ?>
+                            <?php if (!empty($check['action_url'])): ?><a class="btn btn-quiet" href="<?= View::e(Router::url((string) $check['action_url'])) ?>">Abrir área de correção</a><?php endif; ?>
                             <?php
                             $pendingConversationCount = (int) (($check['details']['Conversas aguardando resposta'] ?? 0));
                             $componentKey = (string) ($check['component_key'] ?? '');
@@ -158,7 +160,7 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
                                     <?= Csrf::input() ?>
                                     <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
                                     <input type="hidden" name="agent_id" value="<?= $pendingAgentId ?>">
-                                    <button class="btn <?= $pendingConversationCount > 0 ? 'btn-primary' : 'btn-outline' ?>" type="submit">Reprocessar IA</button>
+                                    <button class="btn <?= $pendingConversationCount > 0 ? 'btn-primary' : 'btn-outline' ?>" type="submit">Tentar respostas novamente</button>
                                 </form>
                             <?php endif; ?>
                             <?php if (!empty($check['details'])): ?>
@@ -192,7 +194,7 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
 
     <div class="tenant-health-occurrence-summary">
         <a class="<?= $occurrenceFilter === 'unreviewed' ? 'is-active' : '' ?>" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId . '&occurrence_filter=unreviewed#occurrences')) ?>"><small>Não revisadas</small><strong><?= (int) ($occurrenceSummary['unreviewed'] ?? 0) ?></strong></a>
-        <a class="<?= $occurrenceFilter === 'ai' ? 'is-active' : '' ?>" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId . '&occurrence_filter=ai#occurrences')) ?>"><small>Falhas de IA</small><strong><?= (int) ($occurrenceSummary['ai'] ?? 0) ?></strong></a>
+        <a class="<?= $occurrenceFilter === 'ai' ? 'is-active' : '' ?>" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId . '&occurrence_filter=ai#occurrences')) ?>"><small>Assistente virtual</small><strong><?= (int) ($occurrenceSummary['ai'] ?? 0) ?></strong></a>
         <a class="<?= $occurrenceFilter === 'integration' ? 'is-active' : '' ?>" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId . '&occurrence_filter=integration#occurrences')) ?>"><small>Integrações</small><strong><?= (int) ($occurrenceSummary['integration'] ?? 0) ?></strong></a>
         <a class="<?= $occurrenceFilter === 'reviewed' ? 'is-active' : '' ?>" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId . '&occurrence_filter=reviewed#occurrences')) ?>"><small>Já revisadas</small><strong><?= (int) ($occurrenceSummary['reviewed'] ?? 0) ?></strong></a>
         <a class="<?= $occurrenceFilter === 'all' ? 'is-active' : '' ?>" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId . '&occurrence_filter=all#occurrences')) ?>"><small>Todas</small><strong><?= (int) ($occurrenceSummary['total'] ?? 0) ?></strong></a>
@@ -212,12 +214,13 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
                 <button class="btn btn-outline" name="tracking_status" value="reviewed" type="submit">Marcar todas como revisadas</button>
                 <button class="btn btn-primary" name="tracking_status" value="resolved" type="submit">Marcar empresa como corrigida</button>
             </div>
-            <small>Ao revisar, as marcações antigas desaparecem. Se surgir uma falha nova, a empresa volta automaticamente para Atenção.</small>
+            <small>Ao revisar, as marcações antigas deixam de aparecer. Se surgir uma nova situação, a empresa volta automaticamente para Atenção.</small>
         </form>
     <?php endif; ?>
 
     <div class="tenant-health-occurrence-list">
         <?php foreach ($visibleOccurrences as $occurrence): ?>
+            <?php $occurrencePresentation = OperationalLanguageService::incident($occurrence, false); ?>
             <article class="tenant-health-occurrence <?= !empty($occurrence['reviewed']) ? 'is-reviewed' : 'is-unreviewed' ?>">
                 <div class="tenant-health-occurrence-icon is-<?= View::e((string) ($occurrence['source'] ?? 'integration')) ?>">
                     <?= ($occurrence['source'] ?? '') === 'ai' ? 'IA' : 'IN' ?>
@@ -225,16 +228,15 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
                 <div class="tenant-health-occurrence-content">
                     <header>
                         <div>
-                            <span class="eyebrow"><?= View::e((string) ($occurrence['source_label'] ?? 'Ocorrência')) ?></span>
-                            <h3><?= View::e((string) ($occurrence['title'] ?? 'Falha registrada')) ?></h3>
+                            <span class="eyebrow"><?= View::e((string) $occurrencePresentation['label']) ?></span>
+                            <h3><?= View::e((string) $occurrencePresentation['title']) ?></h3>
                         </div>
-                        <span class="health-incident-status is-<?= !empty($occurrence['reviewed']) ? 'acknowledged' : 'open' ?>"><?= !empty($occurrence['reviewed']) ? 'Revisada' : 'Não revisada' ?></span>
+                        <span class="health-incident-status is-<?= !empty($occurrence['reviewed']) ? 'acknowledged' : 'open' ?>"><?= !empty($occurrence['reviewed']) ? 'Revisada' : 'Aguardando revisão' ?></span>
                     </header>
-                    <p><?= View::e((string) ($occurrence['message'] ?? '')) ?></p>
-                    <div class="tenant-health-occurrence-meta">
-                        <span><?= View::e((string) ($occurrence['created_at_display'] ?? '')) ?></span>
-                        <code><?= View::e((string) ($occurrence['event'] ?? '')) ?></code>
-                    </div>
+                    <p><strong>O que aconteceu:</strong> <?= View::e((string) $occurrencePresentation['summary']) ?></p>
+                    <p><strong>O que fazer agora:</strong> <?= View::e((string) $occurrencePresentation['action']) ?></p>
+                    <div class="tenant-health-occurrence-meta"><span><?= View::e((string) ($occurrence['created_at_display'] ?? '')) ?></span></div>
+                    <details class="health-technical-details"><summary>Ver detalhes técnicos</summary><pre><?= View::e(trim((string) $occurrencePresentation['technical_event'] . "\n" . (string) $occurrencePresentation['technical_title'] . "\n" . (string) $occurrencePresentation['technical_message'])) ?></pre></details>
                     <div class="tenant-health-occurrence-actions">
                         <?php if (!empty($occurrence['related_url'])): ?><a class="btn btn-small btn-primary" href="<?= View::e(Router::url((string) $occurrence['related_url'])) ?>"><?= View::e((string) ($occurrence['related_label'] ?? (($occurrence['source'] ?? '') === 'ai' ? 'Abrir conversa' : 'Abrir integração'))) ?></a><?php endif; ?>
                         <?php if (!empty($occurrence['secondary_url'])): ?><a class="btn btn-small btn-outline" href="<?= View::e(Router::url((string) $occurrence['secondary_url'])) ?>">Abrir assistente</a><?php endif; ?>
@@ -254,7 +256,7 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
         <?php endforeach; ?>
         <?php if (!$visibleOccurrences): ?>
             <div class="empty-state">
-                <?= $occurrenceFilter === 'unreviewed' ? 'Nenhuma falha aguarda revisão.' : 'Nenhuma ocorrência encontrada neste filtro.' ?>
+                <?= $occurrenceFilter === 'unreviewed' ? 'Nenhuma situação aguarda revisão.' : 'Nenhuma ocorrência encontrada neste filtro.' ?>
             </div>
         <?php endif; ?>
     </div>
@@ -262,21 +264,23 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
 
 <section class="card tenant-health-incidents" id="incidents">
     <div class="section-heading">
-        <div><span class="eyebrow">Acompanhamento</span><h2>Incidentes e correções</h2><p>O mesmo problema não gera alertas duplicados: ele permanece aberto até ser resolvido.</p></div>
-        <span class="badge"><?= (int) ($summary['open'] ?? 0) ?> aberto(s)</span>
+        <div><span class="eyebrow">Acompanhamento</span><h2>Situações e correções</h2><p>A mesma situação não gera avisos repetidos: ela permanece aberta até a normalização.</p></div>
+        <span class="badge"><?= (int) ($summary['open'] ?? 0) ?> em aberto</span>
     </div>
     <div class="tenant-health-incident-list">
         <?php foreach ($incidents as $incident): ?>
+            <?php $incidentPresentation = OperationalLanguageService::incident($incident, false); ?>
             <article class="tenant-health-incident is-<?= View::e((string) ($incident['severity'] ?? 'warning')) ?> <?= ($incident['status'] ?? '') === 'resolved' ? 'is-resolved' : '' ?>">
                 <header>
-                    <div><span class="tenant-health-dot is-<?= View::e((string) ($incident['severity'] ?? 'warning')) ?>"></span><div><strong><?= View::e((string) ($incident['title'] ?? 'Incidente')) ?></strong><small><?= View::e((string) ($incident['category'] ?? '')) ?></small></div></div>
+                    <div><span class="tenant-health-dot is-<?= View::e((string) ($incident['severity'] ?? 'warning')) ?>"></span><div><strong><?= View::e((string) $incidentPresentation['title']) ?></strong><small><?= View::e((string) $incidentPresentation['label']) ?></small></div></div>
                     <span class="health-incident-status is-<?= View::e((string) ($incident['status'] ?? 'open')) ?>"><?= View::e($incidentLabels[(string) ($incident['status'] ?? 'open')] ?? 'Aberto') ?></span>
                 </header>
-                <p><?= View::e((string) ($incident['summary'] ?? '')) ?></p>
+                <p><strong>O que aconteceu:</strong> <?= View::e((string) $incidentPresentation['summary']) ?></p><p><strong>O que fazer agora:</strong> <?= View::e((string) $incidentPresentation['action']) ?></p>
+                <details class="health-technical-details"><summary>Ver detalhes técnicos</summary><pre><?= View::e(trim((string) $incidentPresentation['technical_event'] . "\n" . (string) $incidentPresentation['technical_title'] . "\n" . (string) $incidentPresentation['technical_message'])) ?></pre></details>
                 <div class="tenant-health-incident-meta">
-                    <span>Primeira ocorrência: <?= View::e($formatDate((string) ($incident['first_seen_at'] ?? ''))) ?></span>
-                    <span>Última ocorrência: <?= View::e($relative((string) ($incident['last_seen_at'] ?? ''))) ?></span>
-                    <span>Ocorrências: <?= (int) ($incident['occurrence_count'] ?? 1) ?></span>
+                    <span>Identificada em: <?= View::e($formatDate((string) ($incident['first_seen_at'] ?? ''))) ?></span>
+                    <span>Última confirmação: <?= View::e($relative((string) ($incident['last_seen_at'] ?? ''))) ?></span>
+                    <span>Vezes identificada: <?= (int) ($incident['occurrence_count'] ?? 1) ?></span>
                     <?php if (!empty($incident['assigned_user_name'])): ?><span>Responsável: <?= View::e((string) $incident['assigned_user_name']) ?></span><?php endif; ?>
                 </div>
                 <?php if (!empty($incident['notes'])): ?><div class="tenant-health-note"><strong>Observação:</strong> <?= View::e((string) $incident['notes']) ?></div><?php endif; ?>
@@ -289,28 +293,29 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
                         <label class="field"><span>Observação interna</span><input name="note" placeholder="O que foi verificado ou corrigido?"></label>
                         <div class="tenant-health-inline-actions">
                             <?php if (($incident['status'] ?? '') !== 'resolved'): ?>
-                                <button class="btn btn-quiet" name="incident_action" value="acknowledge" type="submit">Marcar visualizado</button>
+                                <button class="btn btn-quiet" name="incident_action" value="acknowledge" type="submit">Assumir análise</button>
                                 <button class="btn btn-outline" name="incident_action" value="monitor" type="submit">Acompanhar</button>
-                                <button class="btn btn-primary" name="incident_action" value="resolve" type="submit">Marcar resolvido</button>
+                                <button class="btn btn-primary" name="incident_action" value="resolve" type="submit">Marcar como normalizado</button>
                             <?php else: ?>
-                                <button class="btn btn-outline" name="incident_action" value="reopen" type="submit">Reabrir incidente</button>
+                                <button class="btn btn-outline" name="incident_action" value="reopen" type="submit">Reabrir situação</button>
                             <?php endif; ?>
                         </div>
                     </form>
                 </div>
             </article>
         <?php endforeach; ?>
-        <?php if (!$incidents): ?><div class="empty-state">Nenhum incidente registrado. Execute uma verificação para validar a operação.</div><?php endif; ?>
+        <?php if (!$incidents): ?><div class="empty-state">Nenhuma situação foi registrada. Execute uma verificação para confirmar o funcionamento.</div><?php endif; ?>
     </div>
 </section>
 
 <section class="card tenant-health-history">
-    <div class="section-heading"><div><span class="eyebrow">Histórico</span><h2>Linha do tempo de resolução</h2></div></div>
+    <div class="section-heading"><div><span class="eyebrow">Histórico</span><h2>Histórico das correções</h2></div></div>
     <div class="tenant-health-timeline">
         <?php foreach ($events as $event): ?>
+            <?php $eventPresentation = OperationalLanguageService::incident($event, false, (string) ($event['event_type'] ?? '')); ?>
             <article>
                 <span></span>
-                <div><strong><?= View::e($eventLabels[(string) ($event['event_type'] ?? '')] ?? 'Atualização') ?> — <?= View::e((string) ($event['title'] ?? 'Incidente')) ?></strong><p><?= View::e((string) ($event['note'] ?? '')) ?></p><small><?= View::e((string) ($event['user_name'] ?? 'Sistema')) ?></small></div>
+                <div><strong><?= View::e($eventLabels[(string) ($event['event_type'] ?? '')] ?? 'Atualização') ?> — <?= View::e((string) $eventPresentation['title']) ?></strong><p><?= View::e((string) ($event['note'] ?? '')) ?></p><small><?= View::e((string) ($event['user_name'] ?? 'Sistema')) ?></small></div>
                 <time><?= View::e($formatDate((string) ($event['created_at'] ?? ''))) ?></time>
             </article>
         <?php endforeach; ?>
@@ -321,7 +326,7 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
 <aside class="conversation-details conversation-drawer tenant-health-config-drawer" id="tenant-health-config-drawer" aria-label="Configurações completas da empresa" aria-modal="true" role="dialog">
     <div class="conversation-drawer-header">
         <div>
-            <span class="eyebrow">Visão técnica completa</span>
+            <span class="eyebrow">Detalhes completos</span>
             <h2>Configurações de <?= View::e((string) ($tenant['name'] ?? 'empresa')) ?></h2>
             <p>Consulte o que está configurado em cada módulo sem precisar abrir várias telas.</p>
         </div>

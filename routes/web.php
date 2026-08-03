@@ -61,6 +61,9 @@ return static function (Router $router): void {
     $router->get('/operacao-alertas', [OperationalAlertsController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/operacao-alertas/count', [OperationalAlertsController::class, 'count'], ['auth', 'super_admin']);
     $router->post('/operacao-alertas/save', [OperationalAlertsController::class, 'save'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/operacao-alertas/test', [OperationalAlertsController::class, 'test'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/operacao-alertas/acknowledge', [OperationalAlertsController::class, 'acknowledge'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/operacao-alertas/resolve', [OperationalAlertsController::class, 'resolve'], ['auth', 'super_admin', 'csrf']);
     $router->post('/operacao-alertas/read-all', [OperationalAlertsController::class, 'readAll'], ['auth', 'super_admin', 'csrf']);
     $router->get('/comunicados', [CommunicationsController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/comunicados/send', [CommunicationsController::class, 'send'], ['auth', 'super_admin', 'csrf']);

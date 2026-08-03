@@ -39,14 +39,34 @@ $typeLabel = static fn (string $type): string => [
     'information' => 'Informação',
     'maintenance' => 'Manutenção',
     'attention' => 'Atenção',
-    'incident' => 'Incidente',
+    'incident' => 'Situação em aberto',
     'resolved' => 'Resolvido',
 ][$type] ?? 'Informação';
 $priorityLabel = static fn (string $priority): string => [
     'normal' => 'Normal',
     'important' => 'Importante',
-    'critical' => 'Crítica',
+    'critical' => 'Ação imediata',
 ][$priority] ?? 'Normal';
+$externalStatusLabel = static function (array $row, string $channel, string $label): string {
+    $sent = (int) ($row[$channel . '_sent'] ?? 0);
+    $error = (int) ($row[$channel . '_error'] ?? 0);
+    $pending = (int) ($row[$channel . '_pending'] ?? 0);
+    $queued = (int) ($row[$channel . '_queued'] ?? 0);
+    $parts = [];
+    if ($sent > 0) {
+        $parts[] = $sent . ' enviado(s)';
+    }
+    if ($error > 0) {
+        $parts[] = $error . ' não concluído(s)';
+    }
+    if ($queued > 0) {
+        $parts[] = $queued . ' aguardando envio';
+    }
+    if ($pending > 0) {
+        $parts[] = $pending . ' aguardando configuração';
+    }
+    return $parts !== [] ? $label . ': ' . implode(' · ', $parts) : $label . ' não solicitado';
+};
 ?>
 <section class="admin-module-hero communications-hero-v3">
     <div class="communications-hero-copy">
@@ -58,7 +78,7 @@ $priorityLabel = static fn (string $priority): string => [
         <span><?= $icon('send') ?><strong><?= (int) ($summary['sent'] ?? 0) ?></strong><small>Enviados</small></span>
         <span><?= $icon('eye') ?><strong><?= (int) ($summary['unread'] ?? 0) ?></strong><small>Não lidos</small></span>
         <span><?= $icon('reply') ?><strong><?= (int) ($summary['replies'] ?? 0) ?></strong><small>Respostas</small></span>
-        <span><?= $icon('alert') ?><strong><?= (int) ($summary['active_incidents'] ?? 0) ?></strong><small>Incidentes ativos</small></span>
+        <span><?= $icon('alert') ?><strong><?= (int) ($summary['active_incidents'] ?? 0) ?></strong><small>Situações em aberto</small></span>
     </div>
 </section>
 
@@ -87,7 +107,7 @@ $priorityLabel = static fn (string $priority): string => [
                             <option value="information">Informação</option>
                             <option value="maintenance">Manutenção</option>
                             <option value="attention">Atenção</option>
-                            <option value="incident" <?= $prefillType === 'incident' ? 'selected' : '' ?>>Incidente</option>
+                            <option value="incident" <?= $prefillType === 'incident' ? 'selected' : '' ?>>Situação em aberto</option>
                             <option value="resolved" <?= $prefillType === 'resolved' ? 'selected' : '' ?>>Resolvido</option>
                         </select>
                         <small class="communication-control-help">Define o contexto visual e a categoria do aviso.</small>
@@ -96,7 +116,7 @@ $priorityLabel = static fn (string $priority): string => [
                         <select class="input" name="priority" data-communication-field="priority">
                             <option value="normal">Normal</option>
                             <option value="important">Importante</option>
-                            <option value="critical">Crítica</option>
+                            <option value="critical">Ação imediata</option>
                         </select>
                         <small class="communication-control-help">Use destaque maior somente quando houver impacto real.</small>
                     </label>
@@ -117,7 +137,7 @@ $priorityLabel = static fn (string $priority): string => [
                         <select class="input" name="audience_type">
                             <option value="selected">Empresas selecionadas</option>
                             <option value="all">Todas as empresas</option>
-                            <?php if ($prefillIncident > 0): ?><option value="incident" selected>Empresa afetada pelo incidente</option><?php endif; ?>
+                            <?php if ($prefillIncident > 0): ?><option value="incident" selected>Empresa afetada pela situação</option><?php endif; ?>
                         </select>
                         <small class="communication-control-help">Escolha uma empresa, várias empresas ou toda a base.</small>
                     </label>
@@ -218,8 +238,8 @@ $priorityLabel = static fn (string $priority): string => [
                 </div>
                 <div class="communication-history-footer-v3">
                     <span><?= (int) ($row['unread_count'] ?? 0) > 0 ? (int) $row['unread_count'] . ' pendente(s) de leitura' : 'Leitura interna em dia' ?></span>
-                    <span><?= (int) ($row['whatsapp_pending'] ?? 0) > 0 ? 'WhatsApp aguardando configuração' : 'WhatsApp não solicitado' ?></span>
-                    <span><?= (int) ($row['email_pending'] ?? 0) > 0 ? 'E-mail aguardando configuração' : 'E-mail não solicitado' ?></span>
+                    <span><?= View::e($externalStatusLabel($row, 'whatsapp', 'WhatsApp')) ?></span>
+                    <span><?= View::e($externalStatusLabel($row, 'email', 'E-mail')) ?></span>
                 </div>
             </article>
         <?php endforeach; ?>

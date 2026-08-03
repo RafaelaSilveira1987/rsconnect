@@ -9,6 +9,7 @@ use App\Services\AccessControlService;
 use App\Services\SecurityService;
 use App\Services\PrivacyService;
 use App\Services\OnboardingGuideService;
+use App\Services\TenantIsolationService;
 
 final class Router
 {
@@ -75,8 +76,44 @@ final class Router
             return;
         }
 
+        if (str_starts_with($this->normalize($path), '/webhooks/')) {
+            $guard = (new SecurityService())->guardWebhookRequest($this->normalize($path));
+            if (empty($guard['allowed'])) {
+                $status = (int) ($guard['status'] ?? 429);
+                http_response_code($status);
+                header('Content-Type: application/json; charset=utf-8');
+                header('Cache-Control: no-store, no-cache, must-revalidate');
+                if (!empty($guard['retry_after'])) {
+                    header('Retry-After: ' . (int) $guard['retry_after']);
+                }
+                echo json_encode([
+                    'ok' => false,
+                    'error' => (string) ($guard['message'] ?? 'Requisição bloqueada pela política de segurança.'),
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                return;
+            }
+        }
+
         foreach ($route['middleware'] as $middleware) {
             if (!$this->runMiddleware($middleware)) {
+                return;
+            }
+        }
+
+        if (Auth::check() && !Auth::isSuperAdmin()) {
+            $isolation = (new TenantIsolationService())->validateAuthenticatedRequest(
+                $this->normalize($path),
+                $_GET,
+                $_POST
+            );
+            if (empty($isolation['allowed'])) {
+                (new SecurityService())->recordEvent('tenant.cross_scope_access_blocked', 'critical', [
+                    'path' => $this->normalize($path),
+                    'method' => strtoupper($method),
+                    'violations' => $isolation['violations'] ?? [],
+                ]);
+                http_response_code(404);
+                View::render('errors.404', ['title' => 'Registro não encontrado'], 'app');
                 return;
             }
         }
@@ -184,7 +221,7 @@ final class Router
             }
         }
 
-        if ($middleware === 'csrf' && !Csrf::validate($_POST['_token'] ?? null)) {
+        if ($middleware === 'csrf' && !Csrf::validateRequest()) {
             http_response_code(419);
             $currentPath = $this->normalize(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
             if ($currentPath === '/login') {

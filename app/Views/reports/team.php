@@ -11,6 +11,7 @@ $dailySeries = $dailySeries ?? [];
 $recentActivities = $recentActivities ?? [];
 $responseAudit = $responseAudit ?? [];
 $dataQuality = $dataQuality ?? [];
+$responseProvenance = $responseProvenance ?? [];
 $warnings = $warnings ?? [];
 $users = $users ?? [];
 $tenants = $tenants ?? [];
@@ -42,6 +43,7 @@ $queryBase = array_filter([
     'end' => $filters['end'] ?? '',
     'tenant_id' => $tenantId,
     'user_id' => $selectedUserId,
+    'operational_only' => !empty($filters['operational_only']) ? 1 : 0,
 ], static fn ($value): bool => $value !== '' && $value !== 0);
 
 $dailyMax = 1;
@@ -53,7 +55,7 @@ foreach ($professionals as $professional) {
     $professionalMax = max($professionalMax, (int) ($professional['activity_score'] ?? 0));
 }
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.10.6')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.12.1')) ?>">
 <div class="executive-report-page team-report-page report-v36100">
     <section class="client-report-hero team-report-hero">
         <div>
@@ -87,6 +89,7 @@ foreach ($professionals as $professional) {
         <label class="field"><span>Data final</span><input type="date" name="end" value="<?= View::e((string) ($filters['end'] ?? '')) ?>"></label>
         <?php if ($tenantId > 0): ?>
             <label class="field"><span>Profissional</span><select name="user_uuid" <?= ($scope['mode'] ?? '') === 'own' ? 'disabled' : '' ?>><option value="">Toda a equipe</option><?php foreach ($users as $user): $userId = (int) ($user['id'] ?? 0); ?><option value="<?= View::e(PublicId::encode('user', $userId)) ?>" <?= $selectedUserId === $userId ? 'selected' : '' ?>><?= View::e((string) (($user['whatsapp_display_name'] ?? '') ?: ($user['name'] ?? 'Usuário'))) ?><?= ($user['status'] ?? '') !== 'active' ? ' · inativo' : '' ?></option><?php endforeach; ?></select><?php if (($scope['mode'] ?? '') === 'own'): ?><input type="hidden" name="user_uuid" value="<?= View::e(PublicId::encode('user', $selectedUserId)) ?>"><?php endif; ?></label>
+            <label class="team-report-operational-filter"><input type="checkbox" name="operational_only" value="1" <?= !empty($filters['operational_only']) ? 'checked' : '' ?>><span><strong>Somente métricas operacionais</strong><small>Exclui ciclos históricos recuperados da 1ª resposta e dos encerramentos.</small></span></label>
         <?php endif; ?>
         <div class="team-report-filter-actions"><button class="btn btn-primary" type="submit">Atualizar relatório</button><a class="btn btn-quiet" href="<?= View::e(Router::url('/reports/team' . (Auth::isSuperAdmin() && $tenantId > 0 ? '?tenant_id=' . $tenantId : ''))) ?>">Limpar filtros</a></div>
     </form>
@@ -107,7 +110,19 @@ foreach ($professionals as $professional) {
     <?php else: ?>
         <section class="team-report-context card">
             <div><span class="eyebrow">Escopo</span><strong><?= View::e((string) ($overview['scope_label'] ?? 'Toda a equipe')) ?></strong><small><?= View::e((string) ($tenant['name'] ?? 'Empresa')) ?> · Fuso <?= View::e((string) ($tenant['timezone'] ?? 'America/Sao_Paulo')) ?> · <?= View::e(date('d/m/Y', strtotime((string) $filters['start']))) ?> a <?= View::e(date('d/m/Y', strtotime((string) $filters['end']))) ?></small></div>
-            <div class="team-report-context-badges"><span class="badge <?= !empty($tenant['professional_assignment_enabled']) ? 'badge-success' : 'badge-info' ?>">Atendimento por profissional <?= !empty($tenant['professional_assignment_enabled']) ? 'ativo' : 'opcional' ?></span><span class="badge <?= !empty($tenant['professional_calendar_enabled']) ? 'badge-success' : 'badge-info' ?>">Agenda individual <?= !empty($tenant['professional_calendar_enabled']) ? 'ativa' : 'opcional' ?></span></div>
+            <div class="team-report-context-badges"><span class="badge <?= !empty($tenant['professional_assignment_enabled']) ? 'badge-success' : 'badge-info' ?>">Atendimento por profissional <?= !empty($tenant['professional_assignment_enabled']) ? 'ativo' : 'opcional' ?></span><span class="badge <?= !empty($tenant['professional_calendar_enabled']) ? 'badge-success' : 'badge-info' ?>">Agenda individual <?= !empty($tenant['professional_calendar_enabled']) ? 'ativa' : 'opcional' ?></span><span class="badge <?= !empty($responseProvenance['operational_only']) ? 'badge-success' : 'badge-info' ?>"><?= View::e((string) ($responseProvenance['filter_label'] ?? 'Histórico + operacional')) ?></span></div>
+        </section>
+
+        <section class="card team-report-provenance <?= !empty($responseProvenance['operational_only']) ? 'is-operational' : 'is-mixed' ?>">
+            <div>
+                <span class="eyebrow">Qualidade das métricas de ciclo</span>
+                <strong>Coleta operacional confiável desde <?= !empty($responseProvenance['cutover_at_local']) ? View::e(date('d/m/Y H:i:s', strtotime((string) $responseProvenance['cutover_at_local']))) : 'a implantação do contrato UTC' ?></strong>
+                <small>Fuso <?= View::e((string) ($responseProvenance['timezone'] ?? 'America/Sao_Paulo')) ?>. Os registros recuperados permanecem disponíveis para auditoria e não são apagados.</small>
+            </div>
+            <div class="team-report-provenance-counts">
+                <article><span>Operacionais</span><strong><?= $number($responseProvenance['operational_cycles'] ?? 0) ?></strong><small><?= $number($responseProvenance['operational_recovered_cycles'] ?? 0) ?> recuperado(s) automaticamente</small></article>
+                <article class="is-history"><span>Históricos recuperados</span><strong><?= $number($responseProvenance['historical_recovered_cycles'] ?? 0) ?></strong><small><?= !empty($responseProvenance['operational_only']) ? 'fora dos cálculos' : 'incluídos nos cálculos' ?></small></article>
+            </div>
         </section>
 
         <section class="team-report-kpis" aria-label="Indicadores da equipe">
@@ -136,7 +151,7 @@ foreach ($professionals as $professional) {
             </div>
             <div class="table-wrap team-report-audit-wrap">
                 <table class="team-report-audit-table">
-                    <thead><tr><th>Cliente</th><th>Profissional</th><th>Ciclo</th><th>Entrada do cliente</th><th>Primeira resposta</th><th>Tempo</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Cliente</th><th>Profissional</th><th>Ciclo</th><th>Entrada do cliente</th><th>Primeira resposta</th><th>Tempo</th><th>Qualidade</th><th>Status</th></tr></thead>
                     <tbody>
                     <?php foreach ($responseAudit as $cycle): ?>
                         <tr>
@@ -146,10 +161,11 @@ foreach ($professionals as $professional) {
                             <td><?= View::e(date('d/m/Y H:i:s', strtotime((string) ($cycle['first_incoming_at_local'] ?? 'now')))) ?></td>
                             <td><?= View::e(date('d/m/Y H:i:s', strtotime((string) ($cycle['first_response_at_local'] ?? 'now')))) ?></td>
                             <td><strong><?= View::e($duration($cycle['response_seconds'] ?? 0)) ?></strong></td>
+                            <td><span class="badge <?= ($cycle['data_quality'] ?? '') === 'historical_recovered' ? 'badge-info' : 'badge-success' ?>"><?= View::e((string) ($cycle['data_quality_label'] ?? 'Métrica operacional')) ?></span><small class="team-report-source-label"><?= View::e((string) ($cycle['source_label'] ?? $cycle['source'] ?? '')) ?></small></td>
                             <td><span class="badge <?= ($cycle['cycle_status'] ?? '') === 'closed' ? 'badge-info' : 'badge-success' ?>"><?= ($cycle['cycle_status'] ?? '') === 'closed' ? 'Encerrado' : 'Ativo' ?></span></td>
                         </tr>
                     <?php endforeach; ?>
-                    <?php if (!$responseAudit): ?><tr><td colspan="7"><div class="empty-state">Nenhuma primeira resposta humana medida no período.</div></td></tr><?php endif; ?>
+                    <?php if (!$responseAudit): ?><tr><td colspan="8"><div class="empty-state">Nenhuma primeira resposta humana medida no período.</div></td></tr><?php endif; ?>
                     </tbody>
                 </table>
             </div>
@@ -189,6 +205,7 @@ foreach ($professionals as $professional) {
                             'end' => $filters['end'] ?? '',
                             'tenant_id' => $tenantId,
                             'user_id' => $userId,
+                            'operational_only' => !empty($filters['operational_only']) ? 1 : 0,
                         ], static fn ($value): bool => $value !== '' && $value !== 0)))) ?>">Detalhar</a><?php endif; ?></td>
                     </tr>
                 <?php endforeach; ?>

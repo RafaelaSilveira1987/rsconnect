@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Core\Auth;
 use App\Core\Database;
 use App\Core\Env;
+use App\Core\RequestSecurity;
 use PDO;
 use Throwable;
 
@@ -250,10 +251,34 @@ final class SecurityService
         }
     }
 
+    public function tooManyFailedLoginAttemptsFromIp(): bool
+    {
+        $limit = max(5, (int) Env::get('SECURITY_LOGIN_IP_LIMIT', 30));
+        $windowMinutes = max(1, (int) Env::get('SECURITY_LOGIN_ATTEMPT_WINDOW_MINUTES', 15));
+
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT COUNT(*)
+                 FROM login_attempts
+                 WHERE success = 0
+                   AND ip_address = :ip
+                   AND created_at >= (NOW() - INTERVAL ' . $windowMinutes . ' MINUTE)'
+            );
+            $statement->execute(['ip' => $this->ipAddress()]);
+            return (int) $statement->fetchColumn() >= $limit;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
     public function registerSession(int $userId): void
     {
-        $_SESSION['last_activity_at'] = time();
+        $now = time();
+        $_SESSION['last_activity_at'] = $now;
         $_SESSION['security_session_id'] = session_id();
+        $_SESSION['security_session_created_at'] = (int) ($_SESSION['security_session_created_at'] ?? $now);
+        $_SESSION['security_session_rotated_at'] = $now;
+        $_SESSION['security_user_agent_hash'] = $this->userAgentHash();
 
         try {
             $statement = Database::connection()->prepare(
@@ -266,7 +291,7 @@ final class SecurityService
                 'session_id' => session_id(),
                 'ip_address' => $this->ipAddress(),
                 'user_agent' => substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 500),
-                'expires_at' => date('Y-m-d H:i:s', time() + ((int) Env::get('SESSION_LIFETIME', 120) * 60)),
+                'expires_at' => date('Y-m-d H:i:s', $now + ((int) Env::get('SESSION_LIFETIME', 120) * 60)),
             ]);
         } catch (Throwable) {
             // Ignora se as tabelas ainda não existem.
@@ -343,16 +368,204 @@ final class SecurityService
             return false;
         }
 
-        $idleMinutes = max(5, (int) Env::get('SECURITY_SESSION_IDLE_MINUTES', Env::get('SESSION_LIFETIME', 120)));
-        $lastActivity = (int) ($_SESSION['last_activity_at'] ?? time());
-        if ((time() - $lastActivity) > ($idleMinutes * 60)) {
-            $this->recordEvent('auth.session_expired', 'warning');
+        if (!Auth::refreshUser()) {
+            $this->recordEvent('auth.session_principal_disabled', 'critical');
+            $this->closeCurrentSession();
             Auth::logout();
             return false;
         }
 
+        if (filter_var(Env::get('SECURITY_SESSION_BIND_USER_AGENT', true), FILTER_VALIDATE_BOOL)) {
+            $storedHash = (string) ($_SESSION['security_user_agent_hash'] ?? '');
+            $currentHash = $this->userAgentHash();
+            if ($storedHash !== '' && !hash_equals($storedHash, $currentHash)) {
+                $this->recordEvent('auth.session_user_agent_mismatch', 'critical');
+                $this->closeCurrentSession();
+                Auth::logout();
+                return false;
+            }
+            $_SESSION['security_user_agent_hash'] = $currentHash;
+        }
+
+        $idleMinutes = max(5, (int) Env::get('SECURITY_SESSION_IDLE_MINUTES', Env::get('SESSION_LIFETIME', 120)));
+        $lastActivity = (int) ($_SESSION['last_activity_at'] ?? time());
+        if ((time() - $lastActivity) > ($idleMinutes * 60)) {
+            $this->recordEvent('auth.session_idle_expired', 'warning');
+            $this->closeCurrentSession();
+            Auth::logout();
+            return false;
+        }
+
+        $absoluteMinutes = max($idleMinutes, (int) Env::get('SECURITY_SESSION_ABSOLUTE_MINUTES', 720));
+        $createdAt = (int) ($_SESSION['security_session_created_at'] ?? time());
+        $_SESSION['security_session_created_at'] = $createdAt;
+        if ((time() - $createdAt) > ($absoluteMinutes * 60)) {
+            $this->recordEvent('auth.session_absolute_expired', 'warning');
+            $this->closeCurrentSession();
+            Auth::logout();
+            return false;
+        }
+
+        $rotateMinutes = max(5, (int) Env::get('SECURITY_SESSION_ROTATE_MINUTES', 30));
+        $rotatedAt = (int) ($_SESSION['security_session_rotated_at'] ?? $createdAt);
+        if ((time() - $rotatedAt) > ($rotateMinutes * 60)) {
+            $this->rotateCurrentSession();
+        }
+
         $this->touchSession();
         return true;
+    }
+
+    /**
+     * Limita tamanho e frequência de webhooks antes do controller processar JSON,
+     * anexos ou integrações externas.
+     *
+     * @return array{allowed:bool,status?:int,message?:string,retry_after?:int}
+     */
+    public function guardWebhookRequest(string $path): array
+    {
+        $maxBytes = max(65536, (int) Env::get('SECURITY_WEBHOOK_MAX_BYTES', 5242880));
+        $contentLength = max(0, (int) ($_SERVER['CONTENT_LENGTH'] ?? 0));
+        if ($contentLength > $maxBytes) {
+            $this->recordEvent('webhook.payload_too_large', 'critical', [
+                'path' => $path,
+                'content_length' => $contentLength,
+                'max_bytes' => $maxBytes,
+            ]);
+            return ['allowed' => false, 'status' => 413, 'message' => 'Payload acima do limite permitido.'];
+        }
+
+        $isCron = str_contains($path, '/run') || str_contains($path, '/dispatch');
+        $limit = $isCron
+            ? max(5, (int) Env::get('SECURITY_CRON_RATE_LIMIT_PER_MINUTE', 60))
+            : max(30, (int) Env::get('SECURITY_WEBHOOK_RATE_LIMIT_PER_MINUTE', 600));
+        $scope = ($isCron ? 'cron:' : 'webhook:') . $path;
+        $rate = $this->consumeRateLimit($scope, $limit, 60);
+        if (!$rate['allowed']) {
+            $this->recordEvent('webhook.rate_limited', 'critical', [
+                'path' => $path,
+                'limit' => $limit,
+                'retry_after' => $rate['retry_after'],
+            ]);
+            return [
+                'allowed' => false,
+                'status' => 429,
+                'message' => 'Muitas requisições. Tente novamente em instantes.',
+                'retry_after' => $rate['retry_after'],
+            ];
+        }
+
+        return ['allowed' => true];
+    }
+
+    private function rotateCurrentSession(): void
+    {
+        $oldSessionId = session_id();
+        try {
+            Database::connection()->prepare(
+                'UPDATE user_sessions SET revoked_at = NOW(), last_seen_at = NOW() WHERE session_id = :session_id'
+            )->execute(['session_id' => $oldSessionId]);
+        } catch (Throwable) {
+            // A rotação local continua mesmo se o registro histórico estiver indisponível.
+        }
+
+        session_regenerate_id(true);
+        $_SESSION['security_session_rotated_at'] = time();
+        $_SESSION['security_session_id'] = session_id();
+        if (Auth::id()) {
+            $this->registerSession((int) Auth::id());
+        }
+        $this->recordEvent('auth.session_rotated', 'info', [
+            'previous_session_id' => substr($oldSessionId, 0, 12) . '...',
+        ]);
+    }
+
+    /** @return array{allowed:bool,retry_after:int} */
+    private function consumeRateLimit(string $scope, int $limit, int $windowSeconds): array
+    {
+        $bucketKey = hash('sha256', $scope . '|' . $this->ipAddress());
+        $now = time();
+        $retryAfter = $windowSeconds;
+
+        try {
+            $pdo = Database::connection();
+            $pdo->beginTransaction();
+            $statement = $pdo->prepare(
+                'SELECT bucket_key, window_started_at, hits, blocked_until
+                 FROM security_rate_limits
+                 WHERE bucket_key = :bucket_key
+                 FOR UPDATE'
+            );
+            $statement->execute(['bucket_key' => $bucketKey]);
+            $row = $statement->fetch(PDO::FETCH_ASSOC);
+
+            if (!$row) {
+                $insert = $pdo->prepare(
+                    'INSERT INTO security_rate_limits
+                        (bucket_key, scope, ip_address, window_started_at, hits, blocked_until, updated_at)
+                     VALUES
+                        (:bucket_key, :scope, :ip_address, NOW(), 1, NULL, NOW())'
+                );
+                $insert->execute([
+                    'bucket_key' => $bucketKey,
+                    'scope' => mb_substr($scope, 0, 190),
+                    'ip_address' => $this->ipAddress(),
+                ]);
+                $pdo->commit();
+                return ['allowed' => true, 'retry_after' => 0];
+            }
+
+            $blockedUntil = !empty($row['blocked_until']) ? strtotime((string) $row['blocked_until']) : 0;
+            if ($blockedUntil > $now) {
+                $pdo->commit();
+                return ['allowed' => false, 'retry_after' => max(1, $blockedUntil - $now)];
+            }
+
+            $windowStartedAt = strtotime((string) ($row['window_started_at'] ?? '')) ?: 0;
+            $hits = (int) ($row['hits'] ?? 0);
+            if ($windowStartedAt <= 0 || ($now - $windowStartedAt) >= $windowSeconds) {
+                $hits = 1;
+                $windowStartedAt = $now;
+                $blockedUntilSql = null;
+            } else {
+                $hits++;
+                $blockedUntilSql = $hits > $limit ? date('Y-m-d H:i:s', $windowStartedAt + $windowSeconds) : null;
+                $retryAfter = max(1, ($windowStartedAt + $windowSeconds) - $now);
+            }
+
+            $update = $pdo->prepare(
+                'UPDATE security_rate_limits
+                 SET scope = :scope,
+                     ip_address = :ip_address,
+                     window_started_at = :window_started_at,
+                     hits = :hits,
+                     blocked_until = :blocked_until,
+                     updated_at = NOW()
+                 WHERE bucket_key = :bucket_key'
+            );
+            $update->execute([
+                'scope' => mb_substr($scope, 0, 190),
+                'ip_address' => $this->ipAddress(),
+                'window_started_at' => date('Y-m-d H:i:s', $windowStartedAt),
+                'hits' => $hits,
+                'blocked_until' => $blockedUntilSql,
+                'bucket_key' => $bucketKey,
+            ]);
+            $pdo->commit();
+
+            return ['allowed' => $blockedUntilSql === null, 'retry_after' => $blockedUntilSql === null ? 0 : $retryAfter];
+        } catch (Throwable) {
+            if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            // Fail-open para não derrubar webhooks caso a migration ainda não tenha sido aplicada.
+            return ['allowed' => true, 'retry_after' => 0];
+        }
+    }
+
+    private function userAgentHash(): string
+    {
+        return hash('sha256', (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
     }
 
     public function dashboard(): array
@@ -414,22 +627,28 @@ final class SecurityService
             'checks' => $this->validationChecks($access),
             'settings' => [
                 'attempt_limit' => (int) Env::get('SECURITY_LOGIN_ATTEMPT_LIMIT', 6),
+                'attempt_ip_limit' => (int) Env::get('SECURITY_LOGIN_IP_LIMIT', 30),
                 'attempt_window' => (int) Env::get('SECURITY_LOGIN_ATTEMPT_WINDOW_MINUTES', 15),
                 'idle_minutes' => $idleMinutes,
+                'absolute_minutes' => (int) Env::get('SECURITY_SESSION_ABSOLUTE_MINUTES', 720),
+                'rotate_minutes' => (int) Env::get('SECURITY_SESSION_ROTATE_MINUTES', 30),
+                'csrf_ttl_minutes' => (int) Env::get('SECURITY_CSRF_TTL_MINUTES', 120),
                 'webhook_strict' => filter_var(Env::get('SECURITY_WEBHOOK_STRICT', false), FILTER_VALIDATE_BOOL),
+                'webhook_max_bytes' => (int) Env::get('SECURITY_WEBHOOK_MAX_BYTES', 5242880),
+                'webhook_rate_limit' => (int) Env::get('SECURITY_WEBHOOK_RATE_LIMIT_PER_MINUTE', 600),
                 'headers_enabled' => filter_var(Env::get('SECURITY_HEADERS_ENABLED', true), FILTER_VALIDATE_BOOL),
                 'invoice_grace_days' => (int) ($access['invoice_grace_days'] ?? 5),
                 'timezone' => date_default_timezone_get(),
                 'database' => $this->databaseName(),
             ],
             'checked_at' => \App\Core\Clock::nowUtc(),
-            'version' => '33.0-security-validation',
+            'version' => '36.11.1-security-hardening',
         ];
     }
 
     private function validationChecks(array $access): array
     {
-        $tables = ['security_events', 'login_attempts', 'user_sessions', 'tenant_subscriptions', 'tenant_invoices'];
+        $tables = ['security_events', 'login_attempts', 'user_sessions', 'security_rate_limits', 'tenant_subscriptions', 'tenant_invoices'];
         $checks = [];
         foreach ($tables as $table) {
             $exists = $this->tableExists($table);
@@ -443,6 +662,8 @@ final class SecurityService
         $headers = filter_var(Env::get('SECURITY_HEADERS_ENABLED', true), FILTER_VALIDATE_BOOL);
         $strict = filter_var(Env::get('SECURITY_WEBHOOK_STRICT', false), FILTER_VALIDATE_BOOL);
         $checks[] = ['label' => 'Headers de segurança', 'status' => $headers ? 'ok' : 'warning', 'detail' => $headers ? 'Configurados para todas as respostas.' : 'Desativados no ambiente.'];
+        $checks[] = ['label' => 'Sessão PHP em modo estrito', 'status' => ini_get('session.use_strict_mode') === '1' ? 'ok' : 'error', 'detail' => ini_get('session.use_strict_mode') === '1' ? 'IDs de sessão não inicializados são recusados.' : 'Ative session.use_strict_mode.'];
+        $checks[] = ['label' => 'Cookie de sessão protegido', 'status' => (ini_get('session.cookie_httponly') === '1' && ini_get('session.use_only_cookies') === '1') ? 'ok' : 'error', 'detail' => 'HttpOnly e uso exclusivo de cookies devem permanecer ativos.'];
         $checks[] = ['label' => 'Tokens obrigatórios em webhooks', 'status' => $strict ? 'ok' : 'warning', 'detail' => $strict ? 'Validação estrita ativada.' : 'Validação estrita desativada; revisar antes de produção.'];
         $checks[] = ['label' => 'Bloqueio por vigência', 'status' => 'ok', 'detail' => (int) ($access['expired_subscriptions'] ?? 0) . ' assinatura(s) vencida(s) identificada(s).'];
         $checks[] = ['label' => 'Bloqueio por inadimplência', 'status' => 'ok', 'detail' => 'Tolerância configurada em ' . (int) ($access['invoice_grace_days'] ?? 5) . ' dia(s).'];
@@ -476,15 +697,20 @@ final class SecurityService
     public function verifyWebhookToken(string $type, ?string $providedToken, ?string $expectedToken): bool
     {
         $strict = filter_var(Env::get('SECURITY_WEBHOOK_STRICT', false), FILTER_VALIDATE_BOOL);
-        if (!$strict) {
+        $expected = trim((string) $expectedToken);
+        if ($expected === '') {
+            if ($strict) {
+                $this->recordEvent('webhook.token_missing_config', 'error', ['type' => $type]);
+                return false;
+            }
             return true;
         }
-        if ($expectedToken === null || $expectedToken === '') {
-            $this->recordEvent('webhook.token_missing_config', 'error', ['type' => $type]);
-            return false;
+
+        $provided = trim((string) $providedToken);
+        $ok = $provided !== '' && hash_equals($expected, $provided);
+        if (!$ok) {
+            $this->recordEvent('webhook.token_invalid', 'critical', ['type' => $type]);
         }
-        $ok = is_string($providedToken) && hash_equals($expectedToken, $providedToken);
-        $this->recordEvent($ok ? 'webhook.token_valid' : 'webhook.token_invalid', $ok ? 'info' : 'critical', ['type' => $type]);
         return $ok;
     }
 
@@ -593,6 +819,39 @@ final class SecurityService
             'action' => '/central-operacao?tab=ai_reprocess',
         ];
 
+        $webhookStrict = filter_var(Env::get('SECURITY_WEBHOOK_STRICT', false), FILTER_VALIDATE_BOOL);
+        $evolutionWebhookToken = $this->secretConfigured('EVOLUTION_WEBHOOK_TOKEN');
+        $review[] = [
+            'key' => 'EVOLUTION_WEBHOOK_TOKEN',
+            'label' => 'Autenticação do webhook Evolution',
+            'status' => $evolutionWebhookToken ? 'ok' : ($webhookStrict ? 'critical' : 'recommended'),
+            'detail' => $evolutionWebhookToken
+                ? 'Token configurado para validar mensagens recebidas da Evolution.'
+                : ($webhookStrict
+                    ? 'Modo estrito ativo sem token: mensagens recebidas da Evolution serão recusadas.'
+                    : 'Configure o token e atualize o webhook da Evolution antes de ativar o modo estrito.'),
+            'action' => '/instances',
+        ];
+
+        $activePaymentGateways = $this->tableExists('payment_gateways')
+            ? $this->count("SELECT COUNT(*) FROM payment_gateways WHERE status = 'active' AND provider <> 'manual'")
+            : 0;
+        $paymentGatewaysWithSecret = $this->tableExists('payment_gateways')
+            ? $this->count("SELECT COUNT(*) FROM payment_gateways WHERE status = 'active' AND provider <> 'manual' AND webhook_secret_encrypted IS NOT NULL AND webhook_secret_encrypted <> ''")
+            : 0;
+        $missingPaymentSecrets = max(0, $activePaymentGateways - $paymentGatewaysWithSecret);
+        $review[] = [
+            'key' => 'PAYMENT_WEBHOOK_SECRETS',
+            'label' => 'Segredos dos webhooks de pagamento',
+            'status' => $missingPaymentSecrets === 0 ? 'ok' : ($webhookStrict ? 'critical' : 'recommended'),
+            'detail' => $activePaymentGateways === 0
+                ? 'Nenhum gateway automático ativo.'
+                : ($missingPaymentSecrets === 0
+                    ? 'Todos os gateways automáticos ativos possuem segredo de webhook.'
+                    : $missingPaymentSecrets . ' gateway(s) ativo(s) ainda não possuem segredo de webhook.'),
+            'action' => '/payment-gateways',
+        ];
+
         $globalEvolution = $this->secretConfigured('EVOLUTION_DEFAULT_API_KEY');
         $instanceCount = $this->tableExists('evolution_instances') ? $this->count('SELECT COUNT(*) FROM evolution_instances') : 0;
         $instancesWithKey = $this->tableExists('evolution_instances')
@@ -655,10 +914,6 @@ final class SecurityService
 
     private function ipAddress(): string
     {
-        $forwarded = trim((string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
-        if ($forwarded !== '') {
-            return trim(explode(',', $forwarded)[0]);
-        }
-        return (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+        return RequestSecurity::clientIp();
     }
 }

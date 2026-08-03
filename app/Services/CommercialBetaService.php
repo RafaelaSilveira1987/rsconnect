@@ -151,7 +151,7 @@ final class CommercialBetaService
             ['label' => 'Ver implantação', 'url' => '/implantacao', 'scope' => 'super_admin'],
             ['label' => 'Abrir monitoramento', 'url' => '/monitoramento', 'scope' => 'super_admin'],
             ['label' => 'Backup automático', 'url' => '/backup-automatico', 'scope' => 'super_admin'],
-            ['label' => 'n8n', 'url' => '/n8n', 'scope' => 'super_admin'],
+            ['label' => 'Automações', 'url' => '/n8n', 'scope' => 'super_admin'],
             ['label' => 'Primeiros passos', 'url' => '/primeiros-passos', 'scope' => 'client'],
             ['label' => 'Privacidade/LGPD', 'url' => '/privacy', 'scope' => 'all'],
         ];
@@ -160,7 +160,11 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
-            ['version' => '36.10.7', 'title' => 'Conversas abertas somente por seleção', 'summary' => 'Ao entrar no módulo, mantém a lista visível e o painel de atendimento vazio até o usuário clicar em uma conversa, evitando leitura ou abertura automática da primeira conversa.'],
+            ['version' => '36.12.1', 'title' => 'Linguagem clara e diagnóstico simplificado', 'summary' => 'Mostra o que aconteceu, o que pode ser afetado e o que fazer agora, sem expor nomes técnicos ao cliente e mantendo detalhes expansíveis para o Super Admin.'],
+            ['version' => '36.12.0', 'title' => 'Monitoramento e avisos do sistema', 'summary' => 'Monitora o funcionamento do WhatsApp, automações, assistente virtual, cópias de segurança, dados e servidor; registra análise, normalização e entrega dos avisos.'],
+            ['version' => '36.11.2', 'title' => 'Métricas históricas e operacionais separadas', 'summary' => 'Identifica ciclos recuperados, mostra o início da coleta operacional confiável, permite excluir o histórico dos cálculos e leva qualidade e origem dos dados para a auditoria e o CSV.'],
+            ['version' => '36.11.1', 'title' => 'Sessão, CSRF, login e webhooks reforçados', 'summary' => 'Ativa sessão PHP estrita, cookies protegidos atrás do proxy, renovação periódica de sessão e CSRF, bloqueio global por IP no login, limite de payload e frequência dos webhooks e validação estrita de tokens em produção.'],
+            ['version' => '36.11.0', 'title' => 'Hardening de isolamento entre empresas', 'summary' => 'Adiciona uma barreira central que bloqueia UUIDs e IDs ocultos de outro tenant antes do controller, registra a tentativa em segurança e mantém o Super Admin com acesso administrativo explícito.'],
             ['version' => '36.10.6', 'title' => 'Auditoria final das métricas', 'summary' => 'Exibe os ciclos que formam o tempo médio de primeira resposta, horários local e UTC, menor e maior tempo, pendências, inconsistências e exportação detalhada sem expor IDs internos.'],
             ['version' => '36.10.5', 'title' => 'Filtros UUID opcionais', 'summary' => 'Corrige o falso 404 causado por parâmetros UUID vazios em filtros GET, preservando a validação rígida para identificadores preenchidos.'],
             ['version' => '36.10.4', 'title' => 'Datas técnicas em UTC', 'summary' => 'Padroniza mensagens, ciclos e históricos em UTC, converte filtros e atividades para o fuso da empresa e mantém os horários da agenda no fuso próprio do compromisso.'],

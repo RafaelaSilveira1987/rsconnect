@@ -31,7 +31,7 @@ use App\Core\View;
                     <span class="login-benefit-icon is-purple" aria-hidden="true">
                         <svg viewBox="0 0 24 24" fill="none"><path d="M9 4.7A3.2 3.2 0 0 0 4.8 8a3 3 0 0 0 .4 5.7A3.2 3.2 0 0 0 9 18.9V4.7Zm6 0A3.2 3.2 0 0 1 19.2 8a3 3 0 0 1-.4 5.7A3.2 3.2 0 0 1 15 18.9V4.7Z" stroke="currentColor" stroke-width="1.8"/><path d="M9 8.5H7.5M9 13H6.8M15 8.5h1.5M15 13h2.2M9 11h6M12 7v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
                     </span>
-                    <div><strong>Agentes de IA</strong><small>Mais produtividade e respostas inteligentes.</small></div>
+                    <div><strong>Assistentes virtuais</strong><small>Mais produtividade e respostas inteligentes.</small></div>
                 </article>
 
                 <article class="login-benefit">

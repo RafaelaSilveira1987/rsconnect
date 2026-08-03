@@ -7,7 +7,9 @@ namespace App\Controllers;
 use App\Core\Database;
 use App\Core\Env;
 use App\Core\Router;
+use App\Core\RequestSecurity;
 use App\Core\View;
+use App\Services\SecurityService;
 use PDO;
 use Throwable;
 
@@ -306,18 +308,16 @@ final class N8nTemplateController
         }
 
         $configuredToken = trim((string) Env::get('N8N_CALLBACK_TOKEN', ''));
-        if ($configuredToken !== '') {
-            $headerToken = $_SERVER['HTTP_X_RS_CONNECT_TOKEN'] ?? '';
-            $bearer = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-            $bodyToken = (string) ($payload['token'] ?? '');
-            $valid = hash_equals($configuredToken, (string) $headerToken)
-                || hash_equals('Bearer ' . $configuredToken, (string) $bearer)
-                || hash_equals($configuredToken, $bodyToken);
-            if (!$valid) {
-                http_response_code(401);
-                $this->json(['ok' => false, 'error' => 'Token de callback inválido.']);
-                return;
-            }
+        $providedToken = trim((string) (
+            $_SERVER['HTTP_X_RS_CONNECT_TOKEN']
+            ?? $_SERVER['HTTP_X_WEBHOOK_TOKEN']
+            ?? $payload['token']
+            ?? RequestSecurity::bearerToken()
+        ));
+        if (!(new SecurityService())->verifyWebhookToken('n8n.callback', $providedToken, $configuredToken)) {
+            http_response_code(401);
+            $this->json(['ok' => false, 'error' => 'Token de callback inválido.']);
+            return;
         }
 
         $tenantId = isset($payload['tenant_id']) ? (int) $payload['tenant_id'] : null;

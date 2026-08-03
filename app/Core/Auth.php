@@ -9,6 +9,7 @@ use PDO;
 final class Auth
 {
     private const SESSION_KEY = 'auth_user';
+    private const DUMMY_PASSWORD_HASH = '$2y$12$X2VKb4/Q7o6LTV59qAHgUuaoT4NPhS/vVvAY.kamZ/qDDNtW1IbHi';
     private static array $permissionCache = [];
 
     public static function attempt(string $email, string $password): bool
@@ -25,22 +26,25 @@ final class Auth
         $statement->execute(['email' => mb_strtolower(trim($email))]);
         $user = $statement->fetch(PDO::FETCH_ASSOC);
 
-        if (!$user || $user['status'] !== 'active') {
+        if (!$user) {
+            // Reduz diferenças de tempo entre conta inexistente e senha incorreta.
+            password_verify($password, self::DUMMY_PASSWORD_HASH);
             return false;
         }
 
-        if ($user['tenant_id'] !== null && $user['tenant_status'] !== 'active') {
+        $passwordValid = password_verify($password, (string) $user['password_hash']);
+        $userActive = ($user['status'] ?? null) === 'active';
+        $tenantActive = $user['tenant_id'] === null || ($user['tenant_status'] ?? null) === 'active';
+        if (!$passwordValid || !$userActive || !$tenantActive) {
             return false;
         }
 
-        if (!password_verify($password, $user['password_hash'])) {
-            return false;
-        }
-
-        unset($user['password_hash'], $user['tenant_status']);
+        unset($user['password_hash'], $user['tenant_status'], $user['status']);
         session_regenerate_id(true);
         $_SESSION[self::SESSION_KEY] = $user;
+        $_SESSION['auth_issued_at'] = time();
         self::$permissionCache = [];
+        Csrf::regenerate();
 
         $update = $pdo->prepare('UPDATE users SET last_login_at = NOW() WHERE id = :id');
         $update->execute(['id' => $user['id']]);
@@ -116,15 +120,19 @@ final class Auth
         return $allowed;
     }
 
-    public static function refreshUser(): void
+    /**
+     * Recarrega a identidade da sessão e invalida o acesso imediatamente quando
+     * usuário ou empresa forem desativados durante uma sessão já aberta.
+     */
+    public static function refreshUser(): bool
     {
         if (!self::check()) {
-            return;
+            return false;
         }
 
         $statement = Database::connection()->prepare(
             'SELECT u.id, u.tenant_id, u.name, u.email, u.role, u.status,
-                    t.name AS tenant_name
+                    t.name AS tenant_name, t.status AS tenant_status
              FROM users u
              LEFT JOIN tenants t ON t.id = u.tenant_id
              WHERE u.id = :id
@@ -132,16 +140,27 @@ final class Auth
         );
         $statement->execute(['id' => self::id()]);
         $user = $statement->fetch(PDO::FETCH_ASSOC);
-        if ($user) {
-            $_SESSION[self::SESSION_KEY] = $user;
+        if (!$user) {
+            return false;
         }
+
+        $userActive = ($user['status'] ?? null) === 'active';
+        $tenantActive = $user['tenant_id'] === null || ($user['tenant_status'] ?? null) === 'active';
+        if (!$userActive || !$tenantActive) {
+            return false;
+        }
+
+        unset($user['status'], $user['tenant_status']);
+        $_SESSION[self::SESSION_KEY] = $user;
         self::$permissionCache = [];
+        return true;
     }
 
     public static function logout(): void
     {
-        unset($_SESSION[self::SESSION_KEY]);
+        $_SESSION = [];
         self::$permissionCache = [];
         session_regenerate_id(true);
+        Csrf::regenerate();
     }
 }

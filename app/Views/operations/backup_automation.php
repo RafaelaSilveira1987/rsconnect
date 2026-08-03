@@ -3,6 +3,7 @@
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\OperationalLanguageService;
 
 $summary = $data['summary'] ?? [];
 $routines = $data['routines'] ?? [];
@@ -23,7 +24,7 @@ $statusLabel = static fn (string $status): string => match ($status) {
     'requested' => 'Aguardando',
     'running' => 'Executando',
     'success' => 'Concluído',
-    'error' => 'Falhou',
+    'error' => 'Não concluído',
     'timeout' => 'Tempo esgotado',
     'skipped' => 'Ignorado',
     default => $status,
@@ -40,7 +41,7 @@ $triggerLabel = static fn (string $trigger): string => match ($trigger) {
     'manual' => 'Manual',
     'scheduled' => 'Automático',
     'test' => 'Teste',
-    'webhook' => 'Callback',
+    'webhook' => 'Confirmação externa',
     default => $trigger,
 };
 $formatBytes = static function ($bytes): string {
@@ -75,11 +76,11 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
 <section class="hero-card operations-hero-clean backup-hero-v363">
     <div>
         <span class="eyebrow">Continuidade operacional</span>
-        <h2>Backup confiável do RS Connect</h2>
-        <p>O sucesso só é confirmado depois que o arquivo real é criado, validado e vinculado ao job pelo callback do n8n.</p>
+        <h2>Cópia de segurança do RS Connect</h2>
+        <p>A cópia só é considerada concluída depois que o arquivo real é criado e validado.</p>
     </div>
     <div class="hero-actions operations-hero-actions">
-        <a class="btn btn-primary" href="<?= View::e((string) ($settings['template_url'] ?? Router::url('/n8n-templates'))) ?>">Baixar fluxo n8n atualizado</a>
+        <a class="btn btn-primary" href="<?= View::e((string) ($settings['template_url'] ?? Router::url('/n8n-templates'))) ?>">Baixar automação atualizada</a>
         <span class="badge <?= !empty($settings['backup_token_configured']) ? 'badge-success' : 'badge-warning' ?>">
             Token: <?= !empty($settings['backup_token_configured']) ? 'configurado' : 'pendente' ?>
         </span>
@@ -88,26 +89,26 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
 
 <?php if (empty($settings['backup_token_configured'])): ?>
     <div class="operations-alert is-warning backup-token-alert">
-        <strong>O backup não pode ser executado ainda</strong>
+        <strong>A cópia de segurança ainda não pode ser executada</strong>
         <p>Configure <code>OPERATIONS_BACKUP_TOKEN</code> no EasyPanel e faça o redeploy do serviço.</p>
     </div>
 <?php endif; ?>
 
 <div class="report-kpi-grid operations-kpis backup-kpis-v363">
     <article class="report-kpi-card">
-        <span>Último backup válido</span>
+        <span>Última cópia válida</span>
         <strong id="backup-kpi-last"><?= View::e($lastBackup['finished_at'] ?? $lastBackup['created_at'] ?? 'Nenhum') ?></strong>
         <small id="backup-kpi-last-detail"><?= $lastBackup ? View::e(($lastBackup['file_name'] ?? 'Arquivo') . ' · ' . $formatBytes($lastBackup['size_bytes'] ?? null)) : 'Aguardando o primeiro arquivo verificado' ?></small>
     </article>
     <article class="report-kpi-card">
         <span>Em execução</span>
         <strong id="backup-kpi-running"><?= (int) ($summary['running'] ?? 0) ?></strong>
-        <small>Jobs aguardando callback</small>
+        <small>Cópias aguardando confirmação</small>
     </article>
     <article class="report-kpi-card">
-        <span>Falhas recentes</span>
+        <span>Tentativas não concluídas</span>
         <strong id="backup-kpi-errors"><?= (int) ($summary['jobs_error'] ?? 0) ?></strong>
-        <small>Erro ou tempo esgotado no histórico exibido</small>
+        <small>Problema ou tempo esgotado no histórico exibido</small>
     </article>
     <article class="report-kpi-card">
         <span>Próxima execução</span>
@@ -138,7 +139,7 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
                 <div><span>Retenção</span><strong><?= (int) ($primaryRoutine['retention_days'] ?? 5) ?> dias</strong></div>
                 <div><span>Destino</span><strong><?= View::e($primaryRoutine['storage_path'] ?? '/backups/rs-connect') ?></strong></div>
                 <div><span>Tempo limite</span><strong><?= (int) ($settings['job_timeout_minutes'] ?? 30) ?> min</strong></div>
-                <div><span>Nova tentativa após falha</span><strong><?= (int) ($settings['retry_minutes'] ?? 30) ?> min</strong></div>
+                <div><span>Nova tentativa após problema</span><strong><?= (int) ($settings['retry_minutes'] ?? 30) ?> min</strong></div>
             </div>
 
             <div class="backup-routine-state">
@@ -152,8 +153,8 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
                 </div>
                 <?php if (!empty($primaryRoutine['last_error'])): ?>
                     <div class="is-error">
-                        <span>Último erro</span>
-                        <strong><?= View::e($primaryRoutine['last_error']) ?></strong>
+                        <span>Última tentativa não concluída</span>
+                        <strong><?= View::e(OperationalLanguageService::replaceTechnicalTerms((string) $primaryRoutine['last_error'])) ?></strong>
                     </div>
                 <?php endif; ?>
             </div>
@@ -169,7 +170,7 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
                 <form method="post" action="<?= View::e(Router::url('/backup-automatico/test')) ?>">
                     <?= Csrf::input() ?>
                     <input type="hidden" name="routine_id" value="<?= $routineId ?>">
-                    <button class="btn btn-quiet" type="submit">Testar conexão com n8n</button>
+                    <button class="btn btn-quiet" type="submit">Testar automação da cópia</button>
                 </form>
                 <form method="post" action="<?= View::e(Router::url('/backup-automatico/toggle')) ?>">
                     <?= Csrf::input() ?>
@@ -178,8 +179,8 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
                     <button class="btn btn-quiet" type="submit"><?= ($primaryRoutine['status'] ?? '') === 'active' ? 'Pausar rotina' : 'Ativar rotina' ?></button>
                 </form>
             </div>
-            <p class="muted-text backup-webhook-line">Webhook n8n: <?= View::e($primaryRoutine['webhook_url_masked'] ?? 'Não configurado') ?></p>
-            <p class="muted-text">Uma tentativa com erro/timeout não encerra o ciclo. Enquanto não houver sucesso real, a rotina vencida volta a ficar elegível após a janela de nova tentativa.</p>
+            <p class="muted-text backup-webhook-line">Endereço técnico da automação: <?= View::e($primaryRoutine['webhook_url_masked'] ?? 'Não configurado') ?></p>
+            <p class="muted-text">Uma tentativa não concluída não encerra o ciclo. Enquanto não houver uma cópia válida, a rotina tentará novamente após o intervalo configurado.</p>
         <?php else: ?>
             <div class="empty-state">Preencha a configuração ao lado para criar a primeira rotina.</div>
         <?php endif; ?>
@@ -201,12 +202,12 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
                 <input type="text" name="name" value="<?= View::e($primaryRoutine['name'] ?? 'Backup diário RS Connect') ?>" required>
             </div>
             <div class="field">
-                <label>URL do webhook n8n</label>
+                <label>Endereço da automação</label>
                 <input type="url" name="n8n_webhook_url" value="<?= View::e($primaryRoutine['n8n_webhook_url'] ?? '') ?>" placeholder="https://n8n.../webhook/rsconnect-backup" <?= $primaryRoutine ? '' : 'required' ?>>
-                <small class="muted-text">Use a URL de produção do node “Webhook RS Connect”.</small>
+                <small class="muted-text">Use o endereço de produção fornecido pela automação da RS Connect.</small>
             </div>
             <div class="field">
-                <label>Token de entrada do fluxo n8n</label>
+                <label>Chave de segurança da automação</label>
                 <input type="password" name="secret_token" autocomplete="new-password" placeholder="<?= !empty($primaryRoutine['secret_token_configured']) ? 'Já configurado — preencha somente para trocar' : 'Opcional, mas recomendado' ?>">
             </div>
             <div class="field-grid two">
@@ -267,7 +268,7 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
     <div class="section-heading">
         <div>
             <span class="eyebrow">Histórico operacional</span>
-            <h2>Execuções de backup</h2>
+            <h2>Histórico das cópias de segurança</h2>
         </div>
         <small id="backup-live-status" class="muted-text">Atualização automática ativa</small>
     </div>
@@ -293,8 +294,8 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
                         <details>
                             <summary>Ver</summary>
                             <div class="backup-job-detail">
-                                <strong>Job #<?= (int) ($job['id'] ?? 0) ?></strong>
-                                <p><?= View::e($job['error_message'] ?? $job['response_preview'] ?? 'Sem detalhes adicionais.') ?></p>
+                                <strong>Execução #<?= (int) ($job['id'] ?? 0) ?></strong>
+                                <p><?= View::e(OperationalLanguageService::replaceTechnicalTerms((string) ($job['error_message'] ?? $job['response_preview'] ?? 'Sem detalhes adicionais.'))) ?></p>
                                 <?php if (!empty($job['backup_location'])): ?><code><?= View::e($job['backup_location']) ?></code><?php endif; ?>
                                 <?php if (!empty($job['backup_checksum'])): ?><code>SHA-256: <?= View::e($job['backup_checksum']) ?></code><?php endif; ?>
                             </div>
@@ -314,9 +315,9 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
         <span>Expandir</span>
     </summary>
     <div class="backup-advanced-content">
-        <p>O n8n confirma o recebimento imediatamente. O job só muda para concluído quando o callback final traz arquivo, tamanho, checksum e <code>verified=true</code>.</p>
+        <p>A automação confirma o recebimento imediatamente. A cópia só muda para concluída quando o arquivo final é validado.</p>
         <div class="backup-endpoint-grid">
-            <div><span>Callback final</span><code><?= View::e((string) ($settings['callback_url'] ?? '')) ?></code></div>
+            <div><span>Confirmação técnica final</span><code><?= View::e((string) ($settings['callback_url'] ?? '')) ?></code></div>
             <div><span>Despacho das rotinas vencidas</span><code><?= View::e((string) ($settings['dispatch_url'] ?? '')) ?></code></div>
         </div>
         <p class="muted-text">Envie o token no cabeçalho <code>X-RS-Connect-Token</code>. O fluxo atualizado já utiliza esse formato.</p>
@@ -334,11 +335,11 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
         requested: ['Aguardando', 'badge-info'],
         running: ['Executando', 'badge-info'],
         success: ['Concluído', 'badge-success'],
-        error: ['Falhou', 'badge-danger'],
+        error: ['Não concluído', 'badge-danger'],
         timeout: ['Tempo esgotado', 'badge-warning'],
         skipped: ['Ignorado', 'badge-warning']
     };
-    const triggerMeta = { manual: 'Manual', scheduled: 'Automático', test: 'Teste', webhook: 'Callback' };
+    const triggerMeta = { manual: 'Manual', scheduled: 'Automático', test: 'Teste', webhook: 'Confirmação externa' };
     const bytes = (value) => {
         if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
         let number = Number(value); const units = ['B', 'KB', 'MB', 'GB', 'TB']; let index = 0;
@@ -376,7 +377,7 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
             const verify = document.createElement('span'); verify.className = `badge ${Number(job.verified) ? 'badge-success' : 'badge-info'}`; verify.textContent = Number(job.verified) ? 'Verificado' : 'Aguardando'; verifyTd.appendChild(verify); row.appendChild(verifyTd);
             const detailsTd = document.createElement('td'); const details = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = 'Ver'; details.appendChild(summary);
             const detail = document.createElement('div'); detail.className = 'backup-job-detail';
-            const title = document.createElement('strong'); title.textContent = `Job #${job.id}`; detail.appendChild(title);
+            const title = document.createElement('strong'); title.textContent = `Execução #${job.id}`; detail.appendChild(title);
             const message = document.createElement('p'); message.textContent = job.error_message || job.response_preview || 'Sem detalhes adicionais.'; detail.appendChild(message);
             if (job.backup_location) { const code = document.createElement('code'); code.textContent = job.backup_location; detail.appendChild(code); }
             if (job.backup_checksum) { const code = document.createElement('code'); code.textContent = `SHA-256: ${job.backup_checksum}`; detail.appendChild(code); }

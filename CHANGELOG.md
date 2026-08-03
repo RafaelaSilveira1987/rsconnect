@@ -1,3 +1,68 @@
+# RS Connect v36.12.1 — Linguagem clara e diagnóstico simplificado
+
+- traduz avisos técnicos para uma linguagem que explica o que aconteceu, o que pode ser afetado e o que fazer agora;
+- aplica a linguagem simplificada no painel do cliente, notificações, Central de funcionamento, saúde das empresas, relatórios e painel do Super Admin;
+- troca termos como incidente, crítico, Evolution, OpenAI, n8n, webhook, callback e cron por nomes compreensíveis na camada visual;
+- preserva códigos, mensagens originais e respostas técnicas em detalhes expansíveis para o Super Admin;
+- padroniza os avisos enviados por WhatsApp administrativo com situação, impacto, orientação, empresa e estado atual;
+- simplifica o histórico de cópias de segurança e de respostas automáticas pendentes;
+- não altera códigos internos, integrações, rotas ou dados armazenados;
+- não exige migration nova; a última continua sendo a `073_operational_monitoring_alert_delivery.sql`.
+
+# RS Connect v36.12.0 — Monitoramento e alertas operacionais
+
+- adiciona histórico auditável das execuções automáticas e manuais do monitor;
+- monitora banco, migrations, Evolution, n8n, OpenAI/IA, webhooks, agenda, pagamentos, backup, disco, filas e relatórios;
+- considera falhas consecutivas do n8n e janelas configuráveis de inatividade de webhooks;
+- abre, atualiza e resolve incidentes sem criar duplicidades silenciosas;
+- permite reconhecer incidente, registrar observação e manter lembretes recorrentes enquanto a falha continuar;
+- entrega alertas internos ao Super Admin e, quando configurado, por uma instância administrativa da Evolution e por e-mail;
+- registra canal, destino, tentativas, retorno do provedor, erro e horário de envio;
+- adiciona teste manual dos canais na tela **Alertas operacionais**;
+- permite comunicar empresas afetadas a partir do incidente;
+- entrega os comunicados aos clientes por WhatsApp/e-mail e mantém o status por empresa, sem impedir a notificação interna quando o canal externo falhar;
+- adiciona o monitor CLI `bin/operations-monitor.php` e mantém o endpoint protegido por `OPERATIONS_MONITOR_TOKEN` para execução pelo n8n;
+- adiciona a migration `073_operational_monitoring_alert_delivery.sql` e o diagnóstico `operational_monitoring_v36.12.0.sql`.
+
+# RS Connect v36.11.2 — Métricas históricas e operacionais separadas
+
+- identifica ciclos reconstruídos como histórico recuperado;
+- usa `rs_datetime_contract.cutover_at_utc` como início da coleta operacional confiável;
+- adiciona o filtro **Somente métricas operacionais** para primeira resposta e encerramentos por ciclo;
+- preserva e exibe o histórico sem apagá-lo ou misturá-lo silenciosamente;
+- mostra contagens de ciclos operacionais, recuperados automaticamente e históricos;
+- inclui qualidade, origem, corte UTC e fuso local na auditoria e no CSV;
+- adiciona diagnóstico SQL e roteiro de homologação;
+- não exige migration nova; a última continua sendo a 072.
+
+# RS Connect v36.11.1 — Segurança de sessão, CSRF, login e webhooks
+
+- ativa o modo estrito da sessão PHP e uso exclusivo de cookies;
+- configura cookies `HttpOnly`, `Secure` em HTTPS e `SameSite=Lax` com suporte seguro a proxy reverso;
+- revalida usuário e empresa em cada requisição autenticada;
+- aplica expiração por inatividade, prazo absoluto e rotação periódica do ID de sessão;
+- renova o token CSRF no login/logout, define validade e valida `Origin`/`Sec-Fetch-Site` quando disponíveis;
+- reduz enumeração de contas com verificação de hash fictício e mensagem pública genérica;
+- adiciona limite de falhas por conta/IP e um limite global por IP;
+- limita tamanho e frequência de webhooks, devolvendo HTTP 413 ou 429 quando necessário;
+- centraliza a validação dos tokens da Evolution e do callback n8n;
+- permite exigir segredo dos webhooks de pagamento através do modo estrito;
+- registra bloqueios e anomalias em `security_events`;
+- adiciona a migration `072_security_session_webhook_hardening.sql` e o diagnóstico `security_hardening_v36.11.1.sql`;
+- mantém o hardening de isolamento entre empresas da v36.11.0.
+
+# RS Connect v36.11.0 — Hardening de isolamento entre empresas
+
+- adiciona uma segunda barreira central de isolamento por tenant no Router;
+- valida UUIDs decodificados, IDs numéricos de campos ocultos e listas de IDs antes do controller;
+- bloqueia acesso cruzado a usuários, contatos, conversas, mensagens, instâncias, agenda, CRM, campanhas, fluxos e demais entidades de cliente;
+- responde com 404 para não confirmar a existência de registros de outra empresa;
+- registra tentativas como `tenant.cross_scope_access_blocked` em `security_events`;
+- preserva o acesso global do Super Admin e mantém as validações locais já existentes nos controllers;
+- inclui diagnóstico SQL de integridade entre tenants e teste de fumaça do hardening;
+- não exige migration nova; a migration mais recente continua sendo a 071;
+- identifica comercialmente o pacote como Beta 1.1.
+
 # RS Connect v36.10.7 — Conversas abertas somente por seleção
 
 - deixa de abrir automaticamente a primeira conversa ao entrar no módulo;

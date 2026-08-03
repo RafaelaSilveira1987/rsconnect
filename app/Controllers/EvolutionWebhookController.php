@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Env;
+use App\Core\RequestSecurity;
 use App\Services\AccessControlService;
 use App\Services\AiAutomationService;
 use App\Services\AiReplyTimingService;
@@ -20,6 +21,7 @@ use App\Services\ConversationOwnershipService;
 use App\Services\EvolutionService;
 use App\Services\NotificationService;
 use App\Services\PreSchedulingService;
+use App\Services\SecurityService;
 use PDO;
 use Throwable;
 
@@ -708,19 +710,14 @@ final class EvolutionWebhookController
     private function validateToken(): void
     {
         $expected = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
-        if ($expected === '') {
-            return;
-        }
+        $received = trim((string) (
+            $_SERVER['HTTP_X_WEBHOOK_TOKEN']
+            ?? $_SERVER['HTTP_X_RS_CONNECT_TOKEN']
+            ?? $_GET['token']
+            ?? RequestSecurity::bearerToken()
+        ));
 
-        $authorization = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
-        $bearer = str_starts_with($authorization, 'Bearer ') ? substr($authorization, 7) : '';
-        $received = (string) (
-            $_GET['token']
-            ?? $_SERVER['HTTP_X_WEBHOOK_TOKEN']
-            ?? $bearer
-        );
-
-        if ($received === '' || !hash_equals($expected, $received)) {
+        if (!(new SecurityService())->verifyWebhookToken('evolution', $received, $expected)) {
             throw new \RuntimeException('Webhook não autorizado.', 401);
         }
     }

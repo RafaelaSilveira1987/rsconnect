@@ -13,7 +13,7 @@ final class VersionController
     {
         $service = new AppVersionService();
         View::render('docs.status', [
-            'title' => 'Status Beta 1.0',
+            'title' => 'Status Beta 1.1',
             'data' => $service->dashboard(),
         ]);
     }

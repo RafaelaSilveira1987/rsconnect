@@ -17,11 +17,15 @@ use Throwable;
  */
 final class TeamProfessionalReportService
 {
-    public const VERSION = '36.10.6-team-professional-reports-audit';
+    public const VERSION = '36.11.2-team-metrics-provenance';
+
+    private const HISTORICAL_CYCLE_SOURCES = ['migration_snapshot', 'migration_069_recovery'];
 
     private PDO $pdo;
     private TeamMetricsFoundationService $foundation;
     private array $warnings = [];
+    private bool $cutoverLoaded = false;
+    private string $cutoverAtUtc = '';
 
     public function __construct(?PDO $pdo = null)
     {
@@ -36,6 +40,7 @@ final class TeamProfessionalReportService
         $scope = $this->foundation->assertMayView($tenantId);
         $readiness = $this->foundation->readiness();
         $selectedUserId = $this->selectedUserId($tenantId, $scope, (int) ($filters['user_id'] ?? 0));
+        $operationalOnly = !empty($filters['operational_only']);
         $tenant = $this->row(
             'SELECT t.id, t.name, t.professional_assignment_enabled, t.professional_calendar_enabled,
                     COALESCE(NULLIF(os.business_timezone, ""), NULLIF(cas.timezone, ""), "America/Sao_Paulo") AS timezone
@@ -60,6 +65,7 @@ final class TeamProfessionalReportService
             'recentActivities' => [],
             'responseAudit' => [],
             'dataQuality' => $this->emptyDataQuality(),
+            'responseProvenance' => $this->emptyResponseProvenance($operationalOnly),
             'warnings' => [],
         ];
 
@@ -71,12 +77,13 @@ final class TeamProfessionalReportService
 
         $professionals = $this->professionalBase($users, $selectedUserId);
         $date = $this->dateParams($filters, (string) ($tenant['timezone'] ?? 'America/Sao_Paulo'));
+        $responseProvenance = $this->responseProvenance($tenantId, $date, $selectedUserId, $operationalOnly);
 
         $this->mergeRows($professionals, $this->humanMessages($tenantId, $date, $selectedUserId));
-        $this->mergeRows($professionals, $this->firstResponses($tenantId, $date, $selectedUserId));
+        $this->mergeRows($professionals, $this->firstResponses($tenantId, $date, $selectedUserId, $operationalOnly));
         $this->mergeRows($professionals, $this->assignmentIncoming($tenantId, $date, $selectedUserId));
         $this->mergeRows($professionals, $this->assignmentOutgoing($tenantId, $date, $selectedUserId));
-        $this->mergeRows($professionals, $this->conversationClosures($tenantId, $date, $selectedUserId));
+        $this->mergeRows($professionals, $this->conversationClosures($tenantId, $date, $selectedUserId, $operationalOnly));
         $this->mergeRows($professionals, $this->openConversations($tenantId, $selectedUserId));
         $this->mergeRows($professionals, $this->appointments($tenantId, $date, $selectedUserId));
         $this->mergeRows($professionals, $this->appointmentTransfers($tenantId, $date, $selectedUserId));
@@ -108,14 +115,14 @@ final class TeamProfessionalReportService
         });
 
         $professionalRows = array_values($professionals);
-        $dataQuality = $this->responseDataQuality($tenantId, $date, $selectedUserId);
+        $dataQuality = $this->responseDataQuality($tenantId, $date, $selectedUserId, $operationalOnly);
         $overview = $this->overview($professionalRows, $scope, $selectedUserId);
         // Use the raw cycle aggregate instead of an average of rounded professional averages.
         $overview['first_responses'] = (int) ($dataQuality['measured_responses'] ?? 0);
         $overview['avg_first_response_seconds'] = (int) ($dataQuality['avg_response_seconds'] ?? 0);
-        $dailySeries = $this->dailySeries($tenantId, $filters, $selectedUserId);
+        $dailySeries = $this->dailySeries($tenantId, $filters, $selectedUserId, $operationalOnly);
         $activities = $this->recentActivities($tenantId, $date, $selectedUserId);
-        $responseAudit = $this->firstResponseAudit($tenantId, $date, $selectedUserId, 50);
+        $responseAudit = $this->firstResponseAudit($tenantId, $date, $selectedUserId, 50, $operationalOnly);
 
         return array_merge($base, [
             'overview' => $overview,
@@ -124,6 +131,7 @@ final class TeamProfessionalReportService
             'recentActivities' => $activities,
             'responseAudit' => $responseAudit,
             'dataQuality' => $dataQuality,
+            'responseProvenance' => $responseProvenance,
             'warnings' => array_values(array_unique($this->warnings)),
         ]);
     }
@@ -138,9 +146,10 @@ final class TeamProfessionalReportService
         $tenantId = (int) ($filters['tenant_id'] ?? 0);
         $scope = $this->foundation->assertMayView($tenantId);
         $selectedUserId = $this->selectedUserId($tenantId, $scope, (int) ($filters['user_id'] ?? 0));
+        $operationalOnly = !empty($filters['operational_only']);
         $timezone = $this->tenantTimezone($tenantId);
         $date = $this->dateParams($filters, $timezone);
-        return $this->firstResponseAudit($tenantId, $date, $selectedUserId, 5000);
+        return $this->firstResponseAudit($tenantId, $date, $selectedUserId, 5000, $operationalOnly);
     }
 
     private function selectedUserId(int $tenantId, array $scope, int $requested): int
@@ -234,19 +243,20 @@ final class TeamProfessionalReportService
         );
     }
 
-    private function firstResponses(int $tenantId, array $date, int $userId): array
+    private function firstResponses(int $tenantId, array $date, int $userId, bool $operationalOnly): array
     {
-        [$filter, $params] = $this->userFilter('first_response_user_id', $userId);
+        [$filter, $params] = $this->userFilter('sc.first_response_user_id', $userId);
+        [$reliabilityFilter, $reliabilityParams] = $this->cycleReliabilityFilter('sc', 'first_response_at', $date, $operationalOnly);
         return $this->rows(
-            'SELECT first_response_user_id AS user_id,
+            'SELECT sc.first_response_user_id AS user_id,
                     COUNT(*) AS first_responses,
-                    AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, first_incoming_at, first_response_at))) AS avg_first_response_seconds
-             FROM conversation_service_cycles
-             WHERE tenant_id = :tenant_id
-               AND first_response_user_id IS NOT NULL
-               AND first_response_at BETWEEN :start_at AND :end_at' . $filter . '
-             GROUP BY first_response_user_id',
-            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params
+                    AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at))) AS avg_first_response_seconds
+             FROM conversation_service_cycles sc
+             WHERE sc.tenant_id = :tenant_id
+               AND sc.first_response_user_id IS NOT NULL
+               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $filter . $reliabilityFilter . '
+             GROUP BY sc.first_response_user_id',
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params + $reliabilityParams
         );
     }
 
@@ -283,19 +293,20 @@ final class TeamProfessionalReportService
         );
     }
 
-    private function conversationClosures(int $tenantId, array $date, int $userId): array
+    private function conversationClosures(int $tenantId, array $date, int $userId, bool $operationalOnly): array
     {
-        [$filter, $params] = $this->userFilter('closed_by_user_id', $userId);
+        [$filter, $params] = $this->userFilter('sc.closed_by_user_id', $userId);
+        [$reliabilityFilter, $reliabilityParams] = $this->cycleReliabilityFilter('sc', 'closed_at', $date, $operationalOnly);
         return $this->rows(
-            'SELECT closed_by_user_id AS user_id,
+            'SELECT sc.closed_by_user_id AS user_id,
                     COUNT(*) AS closed_conversations
-             FROM conversation_service_cycles
-             WHERE tenant_id = :tenant_id
-               AND cycle_status = "closed"
-               AND closed_by_user_id IS NOT NULL
-               AND closed_at BETWEEN :start_at AND :end_at' . $filter . '
-             GROUP BY closed_by_user_id',
-            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params
+             FROM conversation_service_cycles sc
+             WHERE sc.tenant_id = :tenant_id
+               AND sc.cycle_status = "closed"
+               AND sc.closed_by_user_id IS NOT NULL
+               AND sc.closed_at BETWEEN :start_at AND :end_at' . $filter . $reliabilityFilter . '
+             GROUP BY sc.closed_by_user_id',
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params + $reliabilityParams
         );
     }
 
@@ -417,7 +428,7 @@ final class TeamProfessionalReportService
         return $overview;
     }
 
-    private function dailySeries(int $tenantId, array $filters, int $userId): array
+    private function dailySeries(int $tenantId, array $filters, int $userId, bool $operationalOnly): array
     {
         $timezone = $this->tenantTimezone($tenantId);
         $date = $this->dateParams($filters, $timezone);
@@ -449,13 +460,14 @@ final class TeamProfessionalReportService
             if (isset($series[$key])) $series[$key]['human_messages']++;
         }
 
-        [$responseFilter, $responseParams] = $this->userFilter('first_response_user_id', $userId);
+        [$responseFilter, $responseParams] = $this->userFilter('sc.first_response_user_id', $userId);
+        [$responseReliabilityFilter, $responseReliabilityParams] = $this->cycleReliabilityFilter('sc', 'first_response_at', $date, $operationalOnly);
         foreach ($this->rows(
-            'SELECT first_response_at
-             FROM conversation_service_cycles
-             WHERE tenant_id = :tenant_id
-               AND first_response_at BETWEEN :start_at AND :end_at' . $responseFilter,
-            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $responseParams
+            'SELECT sc.first_response_at
+             FROM conversation_service_cycles sc
+             WHERE sc.tenant_id = :tenant_id
+               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $responseFilter . $responseReliabilityFilter,
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $responseParams + $responseReliabilityParams
         ) as $row) {
             $key = \App\Core\Clock::localDateKey((string) ($row['first_response_at'] ?? ''), $timezone);
             if (isset($series[$key])) $series[$key]['first_responses']++;
@@ -481,9 +493,10 @@ final class TeamProfessionalReportService
         return array_values($series);
     }
 
-    private function responseDataQuality(int $tenantId, array $date, int $userId): array
+    private function responseDataQuality(int $tenantId, array $date, int $userId, bool $operationalOnly): array
     {
         [$measuredFilter, $measuredParams] = $this->userFilter('sc.first_response_user_id', $userId);
+        [$measuredReliabilityFilter, $measuredReliabilityParams] = $this->cycleReliabilityFilter('sc', 'first_response_at', $date, $operationalOnly);
         $measured = $this->row(
             'SELECT COUNT(*) AS measured_responses,
                     AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at))) AS avg_response_seconds,
@@ -495,8 +508,8 @@ final class TeamProfessionalReportService
                AND sc.first_incoming_at IS NOT NULL
                AND sc.first_response_at IS NOT NULL
                AND sc.first_response_user_id IS NOT NULL
-               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $measuredFilter,
-            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $measuredParams
+               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $measuredFilter . $measuredReliabilityFilter,
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $measuredParams + $measuredReliabilityParams
         );
 
         $pendingFilter = '';
@@ -505,6 +518,7 @@ final class TeamProfessionalReportService
             $pendingFilter = ' AND c.assigned_user_id = :pending_user_id';
             $pendingParams['pending_user_id'] = $userId;
         }
+        [$pendingReliabilityFilter, $pendingReliabilityParams] = $this->cycleReliabilityFilter('sc', 'first_incoming_at', $date, $operationalOnly, 'pending');
         $pending = $this->scalar(
             'SELECT COUNT(*)
              FROM conversation_service_cycles sc
@@ -513,8 +527,8 @@ final class TeamProfessionalReportService
                AND sc.cycle_status = "active"
                AND sc.first_incoming_at IS NOT NULL
                AND sc.first_response_at IS NULL
-               AND sc.first_incoming_at BETWEEN :start_at AND :end_at' . $pendingFilter,
-            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $pendingParams
+               AND sc.first_incoming_at BETWEEN :start_at AND :end_at' . $pendingFilter . $pendingReliabilityFilter,
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $pendingParams + $pendingReliabilityParams
         );
 
         $quality = [
@@ -524,6 +538,7 @@ final class TeamProfessionalReportService
             'max_response_seconds' => (int) ($measured['max_response_seconds'] ?? 0),
             'pending_response_cycles' => $pending,
             'invalid_response_cycles' => (int) ($measured['invalid_response_cycles'] ?? 0),
+            'operational_only' => $operationalOnly,
         ];
 
         if ($quality['invalid_response_cycles'] > 0) {
@@ -532,9 +547,10 @@ final class TeamProfessionalReportService
         return $quality;
     }
 
-    private function firstResponseAudit(int $tenantId, array $date, int $userId, int $limit): array
+    private function firstResponseAudit(int $tenantId, array $date, int $userId, int $limit, bool $operationalOnly): array
     {
         [$filter, $params] = $this->userFilter('sc.first_response_user_id', $userId);
+        [$reliabilityFilter, $reliabilityParams] = $this->cycleReliabilityFilter('sc', 'first_response_at', $date, $operationalOnly);
         $limit = max(1, min(5000, $limit));
         $rows = $this->rows(
             'SELECT sc.conversation_id, sc.cycle_number, sc.first_incoming_at, sc.first_response_at,
@@ -550,10 +566,10 @@ final class TeamProfessionalReportService
                AND sc.first_incoming_at IS NOT NULL
                AND sc.first_response_at IS NOT NULL
                AND sc.first_response_user_id IS NOT NULL
-               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $filter . '
+               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $filter . $reliabilityFilter . '
              ORDER BY sc.first_response_at DESC
              LIMIT ' . $limit,
-            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params + $reliabilityParams
         );
 
         foreach ($rows as &$row) {
@@ -562,9 +578,110 @@ final class TeamProfessionalReportService
             $row['first_incoming_at_local'] = \App\Core\Clock::utcToLocal((string) ($row['first_incoming_at'] ?? ''), $date['timezone']);
             $row['first_response_at_local'] = \App\Core\Clock::utcToLocal((string) ($row['first_response_at'] ?? ''), $date['timezone']);
             $row['response_seconds'] = (int) ($row['response_seconds'] ?? 0);
+            $classification = $this->classifyCycleSource((string) ($row['source'] ?? ''), (string) ($row['first_response_at'] ?? ''), (string) ($date['cutover_at_utc'] ?? ''));
+            $row['data_quality'] = $classification['code'];
+            $row['data_quality_label'] = $classification['label'];
+            $row['source_label'] = $this->sourceLabel((string) ($row['source'] ?? ''));
+            $row['metric_cutover_at_utc'] = (string) ($date['cutover_at_utc'] ?? '');
+            $row['metric_cutover_at_local'] = (string) ($date['cutover_at_local'] ?? '');
+            $row['metric_timezone'] = (string) ($date['timezone'] ?? 'America/Sao_Paulo');
+            $row['operational_only'] = $operationalOnly;
         }
         unset($row);
         return $rows;
+    }
+
+    private function responseProvenance(int $tenantId, array $date, int $userId, bool $operationalOnly): array
+    {
+        [$filter, $params] = $this->userFilter('sc.first_response_user_id', $userId);
+        $row = $this->row(
+            'SELECT COUNT(*) AS total_measured_cycles,
+                    SUM(CASE
+                        WHEN COALESCE(sc.source, "") IN ("migration_snapshot", "migration_069_recovery")
+                          OR (dc.cutover_at_utc IS NOT NULL AND sc.first_response_at < dc.cutover_at_utc)
+                        THEN 1 ELSE 0 END) AS historical_recovered_cycles,
+                    SUM(CASE
+                        WHEN COALESCE(sc.source, "") = "message_cycle_recovery"
+                         AND (dc.cutover_at_utc IS NULL OR sc.first_response_at >= dc.cutover_at_utc)
+                        THEN 1 ELSE 0 END) AS operational_recovered_cycles,
+                    SUM(CASE
+                        WHEN COALESCE(sc.source, "") NOT IN ("migration_snapshot", "migration_069_recovery", "message_cycle_recovery")
+                         AND (dc.cutover_at_utc IS NULL OR sc.first_response_at >= dc.cutover_at_utc)
+                        THEN 1 ELSE 0 END) AS realtime_operational_cycles
+             FROM conversation_service_cycles sc
+             LEFT JOIN rs_datetime_contract dc ON dc.id = 1
+             WHERE sc.tenant_id = :tenant_id
+               AND sc.first_incoming_at IS NOT NULL
+               AND sc.first_response_at IS NOT NULL
+               AND sc.first_response_user_id IS NOT NULL
+               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $filter,
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params
+        );
+
+        $historical = (int) ($row['historical_recovered_cycles'] ?? 0);
+        $operationalRecovered = (int) ($row['operational_recovered_cycles'] ?? 0);
+        $realtime = (int) ($row['realtime_operational_cycles'] ?? 0);
+        $operational = $operationalRecovered + $realtime;
+        $total = (int) ($row['total_measured_cycles'] ?? 0);
+
+        return [
+            'operational_only' => $operationalOnly,
+            'cutover_at_utc' => (string) ($date['cutover_at_utc'] ?? ''),
+            'cutover_at_local' => (string) ($date['cutover_at_local'] ?? ''),
+            'timezone' => (string) ($date['timezone'] ?? 'America/Sao_Paulo'),
+            'total_measured_cycles' => $total,
+            'historical_recovered_cycles' => $historical,
+            'operational_recovered_cycles' => $operationalRecovered,
+            'realtime_operational_cycles' => $realtime,
+            'operational_cycles' => $operational,
+            'included_cycles' => $operationalOnly ? $operational : $total,
+            'excluded_historical_cycles' => $operationalOnly ? $historical : 0,
+            'historical_sources' => self::HISTORICAL_CYCLE_SOURCES,
+            'filter_label' => $operationalOnly ? 'Somente métricas operacionais' : 'Histórico recuperado + métricas operacionais',
+        ];
+    }
+
+    private function cycleReliabilityFilter(string $alias, string $timeColumn, array $date, bool $operationalOnly, string $suffix = 'measured'): array
+    {
+        if (!$operationalOnly) {
+            return ['', []];
+        }
+
+        $alias = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'sc';
+        $timeColumn = preg_replace('/[^a-zA-Z0-9_]/', '', $timeColumn) ?: 'first_response_at';
+        $parameter = 'operational_cutover_' . preg_replace('/[^a-zA-Z0-9_]/', '', $suffix);
+        $filter = ' AND COALESCE(' . $alias . '.source, "") NOT IN ("migration_snapshot", "migration_069_recovery")';
+        $params = [];
+        $cutoverAtUtc = (string) ($date['cutover_at_utc'] ?? '');
+        if ($cutoverAtUtc !== '') {
+            $filter .= ' AND ' . $alias . '.' . $timeColumn . ' >= :' . $parameter;
+            $params[$parameter] = $cutoverAtUtc;
+        }
+        return [$filter, $params];
+    }
+
+    private function classifyCycleSource(string $source, string $eventAtUtc, string $cutoverAtUtc): array
+    {
+        if (in_array($source, self::HISTORICAL_CYCLE_SOURCES, true)
+            || ($cutoverAtUtc !== '' && $eventAtUtc !== '' && $eventAtUtc < $cutoverAtUtc)) {
+            return ['code' => 'historical_recovered', 'label' => 'Histórico recuperado'];
+        }
+        if ($source === 'message_cycle_recovery') {
+            return ['code' => 'operational_recovered', 'label' => 'Operacional recuperado'];
+        }
+        return ['code' => 'operational', 'label' => 'Métrica operacional'];
+    }
+
+    private function sourceLabel(string $source): string
+    {
+        return match ($source) {
+            'migration_snapshot' => 'Snapshot da migração',
+            'migration_069_recovery' => 'Recuperação da migration 069',
+            'message_cycle_recovery' => 'Recuperação automática por mensagem',
+            'conversation_reopened' => 'Conversa reaberta',
+            'conversation_created' => 'Conversa criada',
+            default => $source !== '' ? str_replace('_', ' ', $source) : 'Origem não informada',
+        };
     }
 
     private function recentActivities(int $tenantId, array $date, int $userId): array
@@ -700,6 +817,7 @@ final class TeamProfessionalReportService
         $timezone = \App\Core\Clock::safeTimezone($timezone);
         $utc = \App\Core\Clock::localRangeToUtc((string) $filters['start'], (string) $filters['end'], $timezone);
         $nowLocal = (new \DateTimeImmutable('now', new \DateTimeZone($timezone)))->format('Y-m-d H:i:s');
+        $cutoverAtUtc = $this->reliableCutoverAtUtc();
 
         return [
             'utc_start' => $utc['start'],
@@ -708,6 +826,38 @@ final class TeamProfessionalReportService
             'local_end' => $filters['end'] . ' 23:59:59',
             'now_local' => $nowLocal,
             'timezone' => $timezone,
+            'cutover_at_utc' => $cutoverAtUtc,
+            'cutover_at_local' => $cutoverAtUtc !== '' ? \App\Core\Clock::utcToLocal($cutoverAtUtc, $timezone) : '',
+        ];
+    }
+
+    private function reliableCutoverAtUtc(): string
+    {
+        if ($this->cutoverLoaded) {
+            return $this->cutoverAtUtc;
+        }
+        $this->cutoverLoaded = true;
+        $row = $this->row('SELECT cutover_at_utc FROM rs_datetime_contract WHERE id = 1 LIMIT 1');
+        $this->cutoverAtUtc = trim((string) ($row['cutover_at_utc'] ?? ''));
+        return $this->cutoverAtUtc;
+    }
+
+    private function emptyResponseProvenance(bool $operationalOnly = false): array
+    {
+        return [
+            'operational_only' => $operationalOnly,
+            'cutover_at_utc' => '',
+            'cutover_at_local' => '',
+            'timezone' => 'America/Sao_Paulo',
+            'total_measured_cycles' => 0,
+            'historical_recovered_cycles' => 0,
+            'operational_recovered_cycles' => 0,
+            'realtime_operational_cycles' => 0,
+            'operational_cycles' => 0,
+            'included_cycles' => 0,
+            'excluded_historical_cycles' => 0,
+            'historical_sources' => self::HISTORICAL_CYCLE_SOURCES,
+            'filter_label' => $operationalOnly ? 'Somente métricas operacionais' : 'Histórico recuperado + métricas operacionais',
         ];
     }
 
