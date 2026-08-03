@@ -3,6 +3,7 @@
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\OperationalLanguageService;
 
 $verification = $data['verification'] ?? [];
 $summary = $data['summary'] ?? [];
@@ -13,20 +14,20 @@ $companies = $data['companies'] ?? [];
 $history = $data['history'] ?? [];
 
 $statusLabel = static fn (string $status): string => match ($status) {
-    'operational' => 'Operando',
-    'critical' => 'Crítico',
-    'attention' => 'Atenção',
-    'blocked' => 'Bloqueio externo',
-    'unknown' => 'Sem evidência',
+    'operational' => 'Tudo normal',
+    'critical' => 'Ação imediata',
+    'attention' => 'Precisa de atenção',
+    'blocked' => 'Aguardando serviço externo',
+    'unknown' => 'Ainda não verificado',
     'neutral' => 'Não configurado',
     default => 'Informação',
 };
 $companyStatusLabel = static fn (string $status): string => match ($status) {
-    'operational' => 'Operando',
-    'critical' => 'Crítico',
+    'operational' => 'Tudo normal',
+    'critical' => 'Ação imediata',
     'attention' => 'Revisar',
     'blocked' => 'Aguardando',
-    'unknown' => 'Sem evidência',
+    'unknown' => 'Ainda não verificado',
     default => 'Sem configuração',
 };
 $summaryState = (string) ($summary['state'] ?? 'unknown');
@@ -61,11 +62,11 @@ $historySummary = $history['summary'] ?? ['ok' => 0, 'warning' => 0, 'down' => 0
 </section>
 
 <section class="health-kpi-strip" aria-label="Resumo da saúde">
-    <div class="health-kpi is-operational"><span>Disponíveis</span><strong><?= (int) ($summary['available'] ?? 0) ?></strong><small>de <?= (int) ($summary['services_total'] ?? 0) ?> serviços</small></div>
-    <div class="health-kpi is-critical"><span>Críticos</span><strong><?= (int) ($summary['critical'] ?? 0) ?></strong><small>ação imediata</small></div>
+    <div class="health-kpi is-operational"><span>Funcionando</span><strong><?= (int) ($summary['available'] ?? 0) ?></strong><small>de <?= (int) ($summary['services_total'] ?? 0) ?> serviços</small></div>
+    <div class="health-kpi is-critical"><span>Ação imediata</span><strong><?= (int) ($summary['critical'] ?? 0) ?></strong><small>ação imediata</small></div>
     <div class="health-kpi is-attention"><span>Atenções</span><strong><?= (int) ($summary['attention'] ?? 0) ?></strong><small>revisar</small></div>
-    <div class="health-kpi is-blocked"><span>Bloqueios externos</span><strong><?= (int) ($summary['blocked'] ?? 0) ?></strong><small>dependências</small></div>
-    <div class="health-kpi is-unknown"><span>Sem evidência</span><strong><?= (int) ($summary['unknown'] ?? 0) ?></strong><small>precisam validar</small></div>
+    <div class="health-kpi is-blocked"><span>Aguardando serviço externo</span><strong><?= (int) ($summary['blocked'] ?? 0) ?></strong><small>dependências</small></div>
+    <div class="health-kpi is-unknown"><span>Ainda não verificados</span><strong><?= (int) ($summary['unknown'] ?? 0) ?></strong><small>aguardam verificação</small></div>
     <div class="health-kpi is-companies"><span>Empresas afetadas</span><strong><?= (int) ($summary['affected_companies'] ?? 0) ?></strong><small>com impacto atual</small></div>
 </section>
 
@@ -73,10 +74,10 @@ $historySummary = $history['summary'] ?? ['ok' => 0, 'warning' => 0, 'down' => 0
     <div class="health-panel-heading">
         <div>
             <span class="eyebrow">Situação atual</span>
-            <h2>Problemas ativos</h2>
-            <p>O que aconteceu, qual o impacto e qual ação deve ser tomada. Falhas antigas ficam fora desta leitura principal.</p>
+            <h2>Situações que precisam de atenção</h2>
+            <p>Veja o que aconteceu, o que pode ser afetado e qual ação deve ser tomada agora.</p>
         </div>
-        <span class="health-count-badge"><?= count($issues) ?> ativo(s)</span>
+        <span class="health-count-badge"><?= count($issues) ?> em aberto</span>
     </div>
 
     <?php if ($issues): ?>
@@ -94,7 +95,7 @@ $historySummary = $history['summary'] ?? ['ok' => 0, 'warning' => 0, 'down' => 0
                         <p><?= View::e((string) ($issue['summary'] ?? '')) ?></p>
                         <div class="health-issue-facts">
                             <?php if (!empty($issue['impact'])): ?><div><strong>Impacto</strong><span><?= View::e((string) $issue['impact']) ?></span></div><?php endif; ?>
-                            <?php if (!empty($issue['recommended_action'])): ?><div><strong>Ação recomendada</strong><span><?= View::e((string) $issue['recommended_action']) ?></span></div><?php endif; ?>
+                            <?php if (!empty($issue['recommended_action'])): ?><div><strong>O que fazer agora</strong><span><?= View::e((string) $issue['recommended_action']) ?></span></div><?php endif; ?>
                         </div>
                         <?php if (!empty($issue['meta'])): ?><small class="health-evidence-meta"><?= View::e((string) $issue['meta']) ?></small><?php endif; ?>
                         <?php if (!empty($issue['technical_details']) && trim((string) $issue['technical_details']) !== trim((string) ($issue['summary'] ?? ''))): ?>
@@ -129,15 +130,15 @@ $historySummary = $history['summary'] ?? ['ok' => 0, 'warning' => 0, 'down' => 0
     <div class="health-panel-heading">
         <div>
             <span class="eyebrow">Serviços essenciais</span>
-            <h2>Saúde dos serviços</h2>
-            <p>Um serviço só fica verde quando existe evidência positiva dentro da janela esperada para aquele tipo de validação.</p>
+            <h2>Funcionamento das áreas do sistema</h2>
+            <p>Uma área só aparece como normal quando existe uma verificação recente confirmando o funcionamento.</p>
         </div>
-        <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/central-operacao')) ?>">Central técnica</a>
+        <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/central-operacao')) ?>">Detalhes e configurações</a>
     </div>
 
     <div class="health-services-table-wrap">
         <table class="health-services-table">
-            <thead><tr><th>Serviço</th><th>Estado</th><th>Evidência</th><th>Última validação</th><th></th></tr></thead>
+            <thead><tr><th>Área</th><th>Situação</th><th>O que foi encontrado</th><th>Última verificação</th><th></th></tr></thead>
             <tbody>
             <?php foreach ($services as $service): ?>
                 <?php $serviceStatus = (string) ($service['status'] ?? 'unknown'); ?>
@@ -145,7 +146,7 @@ $historySummary = $history['summary'] ?? ['ok' => 0, 'warning' => 0, 'down' => 0
                     <td><strong><?= View::e((string) ($service['label'] ?? 'Serviço')) ?></strong><small><?= View::e((string) ($service['category'] ?? '')) ?></small></td>
                     <td><span class="health-status-pill is-<?= View::e($serviceStatus) ?>"><?= View::e($statusLabel($serviceStatus)) ?></span></td>
                     <td>
-                        <span class="health-service-evidence"><?= View::e((string) ($service['evidence'] ?? 'Sem evidência.')) ?></span>
+                        <span class="health-service-evidence"><?= View::e((string) ($service['evidence'] ?? 'Ainda não verificado.')) ?></span>
                         <?php if (($service['latency_ms'] ?? null) !== null): ?><small><?= (int) $service['latency_ms'] ?> ms</small><?php endif; ?>
                     </td>
                     <td>
@@ -160,8 +161,8 @@ $historySummary = $history['summary'] ?? ['ok' => 0, 'warning' => 0, 'down' => 0
                         <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url((string) ($service['route'] ?? '/central-operacao'))) ?>">Abrir</a>
                         <?php if (!empty($service['technical_details']) && trim((string) $service['technical_details']) !== trim((string) ($service['evidence'] ?? ''))): ?>
                             <details class="health-service-detail">
-                                <summary aria-label="Ver detalhe técnico">Detalhes</summary>
-                                <div><strong>Ação recomendada</strong><p><?= View::e((string) ($service['recommended_action'] ?? 'Revisar a ferramenta.')) ?></p><pre><?= View::e((string) $service['technical_details']) ?></pre></div>
+                                <summary aria-label="Ver detalhes técnicos">Detalhes</summary>
+                                <div><strong>O que fazer agora</strong><p><?= View::e((string) ($service['recommended_action'] ?? 'Revisar a ferramenta.')) ?></p><pre><?= View::e((string) $service['technical_details']) ?></pre></div>
                             </details>
                         <?php endif; ?>
                     </td>
@@ -199,22 +200,25 @@ $historySummary = $history['summary'] ?? ['ok' => 0, 'warning' => 0, 'down' => 0
         <div class="health-panel-heading compact">
             <div>
                 <span class="eyebrow">Evidências nas últimas 24h</span>
-                <h2>Histórico recente</h2>
-                <p>Ajuda a diferenciar uma ocorrência isolada de uma instabilidade recorrente.</p>
+                <h2>Últimas verificações</h2>
+                <p>Ajuda a perceber se a situação aconteceu uma vez ou está se repetindo.</p>
             </div>
         </div>
         <div class="health-history-kpis">
-            <div class="is-operational"><strong><?= (int) ($historySummary['ok'] ?? 0) ?></strong><span>OK</span></div>
+            <div class="is-operational"><strong><?= (int) ($historySummary['ok'] ?? 0) ?></strong><span>Tudo normal</span></div>
             <div class="is-attention"><strong><?= (int) ($historySummary['warning'] ?? 0) ?></strong><span>Atenções</span></div>
-            <div class="is-critical"><strong><?= (int) ($historySummary['down'] ?? 0) ?></strong><span>Críticos</span></div>
-            <div class="is-unknown"><strong><?= (int) ($historySummary['unknown'] ?? 0) ?></strong><span>Sem evidência</span></div>
+            <div class="is-critical"><strong><?= (int) ($historySummary['down'] ?? 0) ?></strong><span>Ação imediata</span></div>
+            <div class="is-unknown"><strong><?= (int) ($historySummary['unknown'] ?? 0) ?></strong><span>Ainda não verificados</span></div>
         </div>
         <div class="health-history-list" data-collapsible-list="3">
             <?php foreach (($history['events'] ?? []) as $event): ?>
-                <?php $eventStatus = match ((string) ($event['status'] ?? 'warning')) { 'ok' => 'operational', 'down' => 'critical', 'unknown' => 'unknown', default => 'attention' }; ?>
+                <?php
+                $eventStatus = match ((string) ($event['status'] ?? 'warning')) { 'ok' => 'operational', 'down' => 'critical', 'unknown' => 'unknown', default => 'attention' };
+                $eventPresentation = OperationalLanguageService::check($event, false);
+                ?>
                 <div class="health-history-event">
                     <span class="health-routine-dot is-<?= View::e($eventStatus) ?>"></span>
-                    <div><strong><?= View::e((string) ($event['label'] ?? $event['check_key'] ?? 'Verificação')) ?></strong><small><?= View::e((string) ($event['checked_at'] ?? '')) ?></small></div>
+                    <div><strong><?= View::e((string) $eventPresentation['label']) ?></strong><small><?= View::e((string) ($event['checked_at'] ?? '')) ?></small></div>
                     <span class="health-status-pill is-<?= View::e($eventStatus) ?>"><?= View::e($statusLabel($eventStatus)) ?></span>
                 </div>
             <?php endforeach; ?>
@@ -253,6 +257,6 @@ $historySummary = $history['summary'] ?? ['ok' => 0, 'warning' => 0, 'down' => 0
 </section>
 
 <section class="health-technical-footer">
-    <div><span class="eyebrow">Investigação técnica</span><strong>A Central de operação original continua intacta.</strong><p>Use o Painel operacional para decidir rapidamente onde agir e a Central para logs, históricos e configurações detalhadas.</p></div>
-    <a class="btn btn-outline" href="<?= View::e(Router::url('/central-operacao')) ?>">Abrir Central de operação</a>
+    <div><span class="eyebrow">Mais detalhes</span><strong>Os detalhes técnicos continuam disponíveis para a equipe responsável.</strong><p>Use este painel para identificar rapidamente o que fazer e abra a Central quando precisar consultar registros e configurações.</p></div>
+    <a class="btn btn-outline" href="<?= View::e(Router::url('/central-operacao')) ?>">Abrir detalhes da operação</a>
 </section>

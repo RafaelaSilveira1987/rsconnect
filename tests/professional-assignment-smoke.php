@@ -27,7 +27,7 @@ $checks = [
         && str_contains($conversationView, 'Transferir atendimento'),
     'configuração deixa automático opcional' => str_contains($settingsView, 'Opcional e desativado por padrão')
         || str_contains($settingsView, 'Opcional. Deixe desligado'),
-    'versão e migration atualizadas' => str_contains($version, '36.12.0')
+    'versão e migration atualizadas' => str_contains($version, '36.12.1')
         && str_contains($version, '064_professional_conversation_assignment_compat.sql'),
 ];
 

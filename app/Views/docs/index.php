@@ -145,10 +145,10 @@ $clientManuals = [
         'code' => 'AU',
         'title' => 'Automações',
         'summary' => 'Acompanhamento das respostas do assistente e das integrações acionadas durante o atendimento.',
-        'functions' => ['Consultar respostas enviadas', 'Identificar falhas em linguagem simples', 'Ver integrações executadas', 'Acompanhar o resultado das automações'],
+        'functions' => ['Consultar respostas enviadas', 'Identificar situações que precisam de atenção', 'Ver integrações executadas', 'Acompanhar o resultado das automações'],
         'steps' => [
             'Use os filtros para localizar o período, o contato ou o tipo de evento.',
-            'Observe o status de sucesso, atenção ou falha.',
+            'Observe o status de concluído, atenção ou não concluído.',
             'Abra o registro para entender o que ocorreu e a ação recomendada.',
             'Procure o suporte ou o Admin RS quando a mensagem indicar uma configuração técnica.',
         ],
@@ -206,7 +206,7 @@ $clientManuals = [
         'code' => 'NT',
         'title' => 'Notificações',
         'summary' => 'Central de avisos e preferências para escolher quais acontecimentos devem aparecer no sininho.',
-        'functions' => ['Ativar alertas de mensagens', 'Receber avisos do assistente', 'Acompanhar falhas de integrações', 'Receber avisos de agenda e conta'],
+        'functions' => ['Ativar alertas de mensagens', 'Receber avisos do assistente', 'Acompanhar problemas nas conexões', 'Receber avisos de agenda e conta'],
         'steps' => [
             'Abra as preferências de notificação.',
             'Ative somente os tipos de aviso importantes para a sua equipe.',
@@ -274,8 +274,8 @@ $adminManuals = [
         'code' => 'MO',
         'title' => 'Monitoramento',
         'summary' => 'Saúde dos serviços, alertas, backups e orientações de recuperação da plataforma.',
-        'functions' => ['Executar verificações', 'Acompanhar alertas', 'Registrar backups', 'Consultar incidentes'],
-        'steps' => ['Clique em verificar agora.', 'Revise falhas e atenções.', 'Execute a ação recomendada.', 'Registre a solução ou o backup quando aplicável.'],
+        'functions' => ['Executar verificações', 'Acompanhar alertas', 'Registrar backups', 'Consultar situações em aberto'],
+        'steps' => ['Clique em verificar agora.', 'Revise as situações de atenção.', 'Execute a ação recomendada.', 'Registre a solução ou o backup quando aplicável.'],
         'tips' => ['Alertas técnicos e diagnósticos são destinados à equipe RS.'],
         'url' => '/operations',
     ],
@@ -295,9 +295,9 @@ $manuals = !empty($is_super_admin) ? array_merge($clientManuals, $adminManuals) 
 
 $troubleshooting = [
     ['title' => 'Botão salva, mas a tela não muda', 'fix' => 'Conferir resposta da requisição, mensagem de sucesso, cache do navegador e dados gravados no banco.'],
-    ['title' => 'Webhook retornou erro', 'fix' => 'Validar URL, token, workflow ativo e logs do serviço responsável pela entrega.'],
+    ['title' => 'O RS Connect não recebeu a atualização', 'fix' => 'Conferir a conexão da automação e os detalhes técnicos da última tentativa.'],
     ['title' => 'Assistente não respondeu', 'fix' => 'Conferir credencial, agente ativo, mensagem recebida, saldo/limite e logs de automação.'],
-    ['title' => 'Backup não validou', 'fix' => 'Conferir rotina, arquivo gerado, callback e registro no monitoramento.'],
+    ['title' => 'A cópia de segurança não foi confirmada', 'fix' => 'Conferir a rotina, o arquivo gerado e a confirmação final no monitoramento.'],
 ];
 ?>
 

@@ -3,6 +3,7 @@
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\OperationalLanguageService;
 
 $summary = $data['summary'] ?? [];
 $checks = $data['checks'] ?? [];
@@ -23,18 +24,7 @@ $statusBadge = static fn (string $status): string => match ($status) {
     'unknown' => 'badge-neutral',
     default => 'badge-warning',
 };
-$statusLabel = static fn (string $status): string => match ($status) {
-    'ok' => 'Operando',
-    'down' => 'Falha',
-    'success' => 'Sucesso',
-    'error', 'failed' => 'Erro',
-    'critical' => 'Crítico',
-    'running' => 'Executando',
-    'info' => 'Info',
-    'warning' => 'Atenção',
-    'unknown' => 'Sem evidência',
-    default => 'Atenção',
-};
+$statusLabel = static fn (string $status): string => OperationalLanguageService::severityLabel($status);
 $storageLabel = static fn (string $storage): string => match ($storage) {
     'manual_local' => 'Local da minha máquina',
     'server' => 'Servidor/VPS',
@@ -59,10 +49,10 @@ $formatBytes = static function ($bytes): string {
         <div>
             <span class="eyebrow">Saúde do RS Connect</span>
             <div class="operations-command-title-row">
-                <h2><?= View::e((string) ($overall['label'] ?? 'Sem evidência')) ?></h2>
+                <h2><?= View::e((string) ($overall['label'] ?? 'Ainda não verificado')) ?></h2>
                 <span class="badge <?= $statusBadge((string) ($overall['status'] ?? 'unknown')) ?>"><?= $statusLabel((string) ($overall['status'] ?? 'unknown')) ?></span>
             </div>
-            <p>Validação operacional de integrações, rotinas automáticas e infraestrutura. Cada item mostra a evidência usada para definir o status.</p>
+            <p>Veja o que está funcionando, o que precisa de atenção e onde agir. Os detalhes técnicos ficam disponíveis somente quando necessários.</p>
         </div>
         <div class="operations-command-actions">
             <form method="post" action="<?= View::e(Router::url('/operations/checks/run')) ?>" data-operations-check-form>
@@ -74,29 +64,29 @@ $formatBytes = static function ($bytes): string {
         </div>
     </div>
     <div class="operations-command-evidence">
-        <div><span>Ferramentas acompanhadas</span><strong><?= (int) ($overall['total'] ?? count($checks)) ?></strong></div>
-        <div><span>Operando</span><strong><?= (int) ($summary['healthy'] ?? 0) ?></strong></div>
+        <div><span>Áreas acompanhadas</span><strong><?= (int) ($overall['total'] ?? count($checks)) ?></strong></div>
+        <div><span>Tudo normal</span><strong><?= (int) ($summary['healthy'] ?? 0) ?></strong></div>
         <div><span>Com atenção</span><strong><?= (int) ($summary['warning'] ?? 0) ?></strong></div>
-        <div><span>Sem evidência</span><strong><?= (int) ($summary['unknown'] ?? 0) ?></strong></div>
+        <div><span>Ainda não verificado</span><strong><?= (int) ($summary['unknown'] ?? 0) ?></strong></div>
     </div>
 </section>
 
 <div class="report-kpi-grid operations-kpis operations-kpis-v2">
-    <article class="card report-kpi is-success"><span>Operando</span><strong data-operations-kpi="healthy"><?= (int) ($summary['healthy'] ?? 0) ?></strong><small>Evidência recente e válida</small></article>
+    <article class="card report-kpi is-success"><span>Tudo normal</span><strong data-operations-kpi="healthy"><?= (int) ($summary['healthy'] ?? 0) ?></strong><small>Evidência recente e válida</small></article>
     <article class="card report-kpi is-warning"><span>Atenções</span><strong data-operations-kpi="warning"><?= (int) ($summary['warning'] ?? 0) ?></strong><small>Funciona, mas requer revisão</small></article>
-    <article class="card report-kpi is-danger"><span>Críticos</span><strong data-operations-kpi="down"><?= (int) ($summary['down'] ?? 0) ?></strong><small>Falha ou estrutura obrigatória ausente</small></article>
-    <article class="card report-kpi"><span>Alertas abertos</span><strong data-operations-kpi="alerts"><?= (int) ($summary['alerts'] ?? 0) ?></strong><small>Incidentes que ainda precisam de ação</small></article>
+    <article class="card report-kpi is-danger"><span>Ação imediata</span><strong data-operations-kpi="down"><?= (int) ($summary['down'] ?? 0) ?></strong><small>Pode interromper uma parte do sistema</small></article>
+    <article class="card report-kpi"><span>Situações em aberto</span><strong data-operations-kpi="alerts"><?= (int) ($summary['alerts'] ?? 0) ?></strong><small>Itens que ainda precisam de análise</small></article>
 </div>
 
 <div class="operations-grid operations-main-grid">
     <section class="card operations-health-panel" data-operations-monitor>
         <div class="section-heading operations-health-heading">
-            <div><span class="eyebrow">Monitoramento</span><h2>Ferramentas e rotinas</h2><p>Pesquise uma ferramenta ou filtre pelo estado e pelo tipo de validação.</p></div>
+            <div><span class="eyebrow">Acompanhamento</span><h2>Áreas e rotinas do sistema</h2><p>Pesquise uma área ou filtre pelo estado para encontrar rapidamente o que precisa de ação.</p></div>
             <span class="badge"><?= count($checks) ?> verificações</span>
         </div>
 
         <div class="operations-monitor-toolbar">
-            <label class="operations-monitor-search"><span class="sr-only">Buscar</span><input type="search" placeholder="Buscar Evolution, cobrança, IA, agenda, backup..." data-operations-search></label>
+            <label class="operations-monitor-search"><span class="sr-only">Buscar</span><input type="search" placeholder="Buscar WhatsApp, cobrança, assistente, agenda, cópia..." data-operations-search></label>
             <select aria-label="Filtrar categoria" data-operations-category>
                 <option value="all">Todas as áreas</option>
                 <option value="integration">Integrações</option>
@@ -105,10 +95,10 @@ $formatBytes = static function ($bytes): string {
             </select>
             <div class="operations-filter-chips" aria-label="Filtrar situação">
                 <button class="is-active" type="button" data-operations-status="all">Todos</button>
-                <button type="button" data-operations-status="down">Críticos</button>
+                <button type="button" data-operations-status="down">Ação imediata</button>
                 <button type="button" data-operations-status="warning">Atenção</button>
-                <button type="button" data-operations-status="unknown">Sem evidência</button>
-                <button type="button" data-operations-status="ok">Operando</button>
+                <button type="button" data-operations-status="unknown">Ainda não verificado</button>
+                <button type="button" data-operations-status="ok">Tudo normal</button>
             </div>
         </div>
 
@@ -119,8 +109,9 @@ $formatBytes = static function ($bytes): string {
                 $checkStatus = (string) ($check['status'] ?? 'unknown');
                 $checkCategory = (string) ($check['category'] ?? 'infrastructure');
                 $historyItems = $checkHistory[$checkKey] ?? [];
+                $checkPresentation = OperationalLanguageService::check($check, false);
                 $searchText = mb_strtolower(trim(implode(' ', [
-                    (string) ($check['label'] ?? ''), (string) ($check['message'] ?? ''),
+                    (string) ($checkPresentation['label'] ?? ''), (string) ($checkPresentation['summary'] ?? ''),
                     (string) ($check['category_label'] ?? ''), $checkKey,
                 ])));
                 ?>
@@ -129,11 +120,14 @@ $formatBytes = static function ($bytes): string {
                     <span class="operations-status-dot" aria-hidden="true"></span>
                     <div class="operations-check-copy">
                         <div class="operations-check-title">
-                            <strong><?= View::e($check['label'] ?? $checkKey) ?></strong>
+                            <strong><?= View::e((string) $checkPresentation['label']) ?></strong>
                             <span><?= View::e((string) ($check['category_label'] ?? 'Infraestrutura')) ?></span>
                         </div>
-                        <p><?= View::e($check['message'] ?? '') ?></p>
+                        <p><?= View::e((string) $checkPresentation['summary']) ?></p>
                         <small><?= !empty($check['checked_at']) ? 'Evidência verificada em ' . View::e((string) $check['checked_at']) : 'Nenhuma evidência registrada ainda.' ?><?= isset($check['latency_ms']) && $check['latency_ms'] !== null ? ' · ' . (int) $check['latency_ms'] . 'ms' : '' ?></small>
+                        <?php if (($checkPresentation['technical_message'] ?? '') !== ''): ?><details class="health-technical-details"><summary>Ver detalhes técnicos</summary><pre><?= View::e(trim((string) $checkPresentation['technical_event'] . "
+" . (string) $checkPresentation['technical_title'] . "
+" . (string) $checkPresentation['technical_message'])) ?></pre></details><?php endif; ?>
                     </div>
                     <div class="operations-check-state"><span class="badge <?= $statusBadge($checkStatus) ?>"><?= $statusLabel($checkStatus) ?></span></div>
                     <div class="operations-check-actions">
@@ -145,14 +139,15 @@ $formatBytes = static function ($bytes): string {
                         <?php elseif ($checkKey === 'backup' && !empty($activeBackupRoutine['id'])): ?>
                             <form method="post" action="<?= View::e(Router::url('/backup-automatico/trigger')) ?>">
                                 <?= Csrf::input() ?><input type="hidden" name="routine_id" value="<?= (int) $activeBackupRoutine['id'] ?>"><input type="hidden" name="trigger_type" value="manual"><input type="hidden" name="return_to" value="/central-operacao?tab=monitoring">
-                                <button class="btn btn-small btn-outline" type="submit">Executar backup</button>
+                                <button class="btn btn-small btn-outline" type="submit">Gerar cópia agora</button>
                             </form>
                         <?php endif; ?>
-                        <?php if (!empty($check['route'])): ?><a class="btn btn-small btn-quiet" href="<?= View::e(Router::url((string) $check['route'])) ?>">Abrir ferramenta</a><?php endif; ?>
+                        <?php if (!empty($check['route'])): ?><a class="btn btn-small btn-quiet" href="<?= View::e(Router::url((string) $check['route'])) ?>">Abrir área relacionada</a><?php endif; ?>
                         <?php if ($historyItems): ?>
                             <details class="operations-check-history"><summary>Histórico</summary><div>
                                 <?php foreach ($historyItems as $historyItem): ?>
-                                    <p><span class="badge <?= $statusBadge((string) ($historyItem['status'] ?? 'warning')) ?>"><?= $statusLabel((string) ($historyItem['status'] ?? 'warning')) ?></span><strong><?= View::e((string) ($historyItem['checked_at'] ?? '')) ?></strong><small><?= View::e((string) ($historyItem['message'] ?? '')) ?></small></p>
+                                    <?php $historyPresentation = OperationalLanguageService::check(array_merge($historyItem, ['check_key' => $checkKey, 'label' => $check['label'] ?? '']), false); ?>
+                                    <p><span class="badge <?= $statusBadge((string) ($historyItem['status'] ?? 'warning')) ?>"><?= $statusLabel((string) ($historyItem['status'] ?? 'warning')) ?></span><strong><?= View::e((string) ($historyItem['checked_at'] ?? '')) ?></strong><small><?= View::e((string) $historyPresentation['summary']) ?></small></p>
                                 <?php endforeach; ?>
                             </div></details>
                         <?php endif; ?>
@@ -171,43 +166,48 @@ $formatBytes = static function ($bytes): string {
             <div class="operations-backup-card">
                 <span class="badge <?= $statusBadge((string) ($lastBackup['status'] ?? 'warning')) ?>"><?= $statusLabel((string) ($lastBackup['status'] ?? 'warning')) ?></span>
                 <?php if (!empty($lastBackup['verified_at'])): ?><span class="badge badge-success">Verificado</span><?php endif; ?>
-                <strong><?= View::e($lastBackup['file_name'] ?? 'Backup registrado') ?></strong>
+                <strong><?= View::e($lastBackup['file_name'] ?? 'Cópia registrada') ?></strong>
                 <p><?= View::e($storageLabel((string) ($lastBackup['storage_type'] ?? 'manual_local'))) ?><?= !empty($lastBackup['size_bytes']) ? ' · ' . View::e($formatBytes($lastBackup['size_bytes'])) : '' ?></p>
                 <small>Último registro: <?= View::e($lastBackup['finished_at'] ?? $lastBackup['created_at'] ?? '') ?></small>
             </div>
         <?php else: ?>
-            <div class="operations-backup-card pending"><span class="badge badge-warning">Sem evidência</span><strong>Nenhum backup registrado</strong><p>Abra a aba Backups para configurar e validar a rotina.</p></div>
+            <div class="operations-backup-card pending"><span class="badge badge-warning">Ainda não verificado</span><strong>Nenhuma cópia registrada</strong><p>Abra a área de cópias de segurança para configurar e validar a rotina.</p></div>
         <?php endif; ?>
-        <a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/central-operacao?tab=backups')) ?>">Abrir Backups</a>
+        <a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/central-operacao?tab=backups')) ?>">Abrir cópias de segurança</a>
     </aside>
 </div>
 
 <div class="operations-grid" style="margin-top:16px">
     <section class="card">
-        <div class="section-heading"><div><span class="eyebrow">Alertas ativos</span><h2>O que precisa de atenção</h2></div></div>
+        <div class="section-heading"><div><span class="eyebrow">Situação atual</span><h2>O que precisa de atenção</h2></div></div>
         <div class="operations-alert-list" data-collapsible-list="3">
             <?php foreach ($alerts as $alert): ?>
+                <?php $alertPresentation = OperationalLanguageService::incident($alert, false); ?>
                 <article class="operations-alert is-<?= View::e($alert['type'] ?? 'warning') ?>">
                     <div>
-                        <strong><?= View::e($alert['title'] ?? '') ?></strong>
-                        <p><?= View::e($alert['message'] ?? '') ?></p>
+                        <strong><?= View::e((string) $alertPresentation['title']) ?></strong>
+                        <p><b>O que aconteceu:</b> <?= View::e((string) $alertPresentation['summary']) ?></p>
+                        <p><b>O que fazer:</b> <?= View::e((string) $alertPresentation['action']) ?></p>
                         <?php if (!empty($alert['created_at'])): ?><small><?= View::e($alert['created_at']) ?></small><?php endif; ?>
+                        <details class="health-technical-details"><summary>Ver detalhes técnicos</summary><pre><?= View::e(trim((string) $alertPresentation['technical_event'] . "
+" . (string) $alertPresentation['technical_title'] . "
+" . (string) $alertPresentation['technical_message'])) ?></pre></details>
                     </div>
                     <?php if (!empty($alert['id'])): ?>
                         <form method="post" action="<?= View::e(Router::url('/operations/incidents/resolve')) ?>">
                             <?= Csrf::input() ?>
                             <input type="hidden" name="id" value="<?= (int) $alert['id'] ?>">
-                            <button class="btn btn-quiet" type="submit">Resolver</button>
+                            <button class="btn btn-quiet" type="submit">Marcar como normalizado</button>
                         </form>
                     <?php endif; ?>
                 </article>
             <?php endforeach; ?>
-            <?php if (!$alerts): ?><div class="empty-state">Nenhum alerta ativo no momento.</div><?php endif; ?>
+            <?php if (!$alerts): ?><div class="empty-state">Nenhuma situação precisa de atenção neste momento.</div><?php endif; ?>
         </div>
     </section>
 
     <section class="card">
-        <div class="section-heading"><div><span class="eyebrow">Recuperação</span><h2>Planos rápidos</h2></div></div>
+        <div class="section-heading"><div><span class="eyebrow">Orientações</span><h2>Como corrigir</h2></div></div>
         <div class="operations-playbooks">
             <?php foreach ($recovery as $playbook): ?>
                 <details class="operations-playbook">
@@ -225,26 +225,30 @@ $formatBytes = static function ($bytes): string {
 
 <div style="margin-top:16px">
     <section class="card">
-        <div class="section-heading"><div><span class="eyebrow">Incidentes</span><h2>Eventos operacionais</h2></div></div>
+        <div class="section-heading"><div><span class="eyebrow">Histórico</span><h2>Situações registradas</h2></div></div>
         <div class="security-timeline" data-collapsible-list="3">
             <?php foreach ($incidents as $incident): ?>
+                <?php $incidentPresentation = OperationalLanguageService::incident($incident, false); ?>
                 <article class="security-event">
-                    <span class="badge <?= $statusBadge((string) ($incident['severity'] ?? 'warning')) ?>"><?= View::e($incident['severity'] ?? '') ?></span>
+                    <span class="badge <?= $statusBadge((string) ($incident['severity'] ?? 'warning')) ?>"><?= View::e((string) $incidentPresentation['severity_label']) ?></span>
                     <div>
-                        <strong><?= View::e($incident['event'] ?? '') ?></strong>
-                        <p><?= View::e($incident['message'] ?? '') ?></p>
-                        <small><?= View::e($incident['created_at'] ?? '') ?><?= !empty($incident['resolved_at']) ? ' · resolvido em ' . View::e($incident['resolved_at']) : '' ?></small>
+                        <strong><?= View::e((string) $incidentPresentation['title']) ?></strong>
+                        <p><?= View::e((string) $incidentPresentation['summary']) ?></p>
+                        <small><?= View::e($incident['created_at'] ?? '') ?><?= !empty($incident['resolved_at']) ? ' · normalizado em ' . View::e($incident['resolved_at']) : '' ?></small>
+                        <details class="health-technical-details"><summary>Ver detalhes técnicos</summary><pre><?= View::e(trim((string) $incidentPresentation['technical_event'] . "
+" . (string) $incidentPresentation['technical_title'] . "
+" . (string) $incidentPresentation['technical_message'])) ?></pre></details>
                     </div>
                     <?php if (empty($incident['resolved_at']) && in_array((string) ($incident['severity'] ?? ''), ['warning', 'error', 'critical'], true)): ?>
                         <form method="post" action="<?= View::e(Router::url('/operations/incidents/resolve')) ?>">
                             <?= Csrf::input() ?>
                             <input type="hidden" name="id" value="<?= (int) $incident['id'] ?>">
-                            <button class="btn btn-quiet" type="submit">Resolver</button>
+                            <button class="btn btn-quiet" type="submit">Marcar como normalizado</button>
                         </form>
                     <?php endif; ?>
                 </article>
             <?php endforeach; ?>
-            <?php if (!$incidents): ?><div class="empty-state">Nenhum incidente operacional registrado.</div><?php endif; ?>
+            <?php if (!$incidents): ?><div class="empty-state">Nenhuma situação foi registrada.</div><?php endif; ?>
         </div>
     </section>
 </div>

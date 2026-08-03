@@ -3,6 +3,7 @@
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\OperationalLanguageService;
 
 $data = $aiReprocessData ?? [];
 $settings = $data['settings'] ?? [];
@@ -23,7 +24,7 @@ $statusLabel = static function (string $status): string {
     return [
         'success' => 'Concluída',
         'partial' => 'Concluída com atenção',
-        'error' => 'Falhou',
+        'error' => 'Não foi concluída',
         'running' => 'Em execução',
         'skipped' => 'Ignorada',
     ][$status] ?? ucfirst($status ?: 'Sem registro');
@@ -32,21 +33,21 @@ $statusLabel = static function (string $status): string {
 
 <?php if (!empty($data['migration_required'])): ?>
 <section class="card operations-alert is-warning">
-    <strong>Atualização do banco necessária</strong>
+    <strong>Atualização do sistema necessária</strong>
     <p>Execute <code><?= View::e((string) ($data['migration'] ?? 'database/migrations/044_ai_pending_failures_message_link.sql')) ?></code> antes de usar esta rotina.</p>
 </section>
 <?php else: ?>
 <?php if (!empty($data['migration_recommended'])): ?>
 <section class="card operations-alert is-warning">
-    <strong>Fila em modo de compatibilidade</strong>
+    <strong>Atualização recomendada</strong>
     <p>As pendências já podem ser encontradas, mas execute <code><?= View::e((string) ($data['migration'] ?? 'database/migrations/045_ai_webhook_ingestion_resilience.sql')) ?></code> para vincular cada tentativa à mensagem correta e otimizar a rotina.</p>
 </section>
 <?php endif; ?>
 <section class="admin-module-summary">
     <article class="<?= (int) ($data['pending_total'] ?? 0) > 0 ? 'is-warning' : 'is-success' ?>">
-        <span>Mensagens presas</span>
+        <span>Respostas automáticas pendentes</span>
         <strong><?= (int) ($data['pending_total'] ?? 0) ?></strong>
-        <small><?= $pendingBlocked > 0 ? $pendingBlocked . ' aguardando reconexão do WhatsApp' : 'intervalo, falha ou execução interrompida' ?></small>
+        <small><?= $pendingBlocked > 0 ? $pendingBlocked . ' aguardando reconexão do WhatsApp' : 'intervalo de espera ou tentativa não concluída' ?></small>
     </article>
     <article class="<?= !empty($settings['enabled']) ? 'is-success' : 'is-warning' ?>">
         <span>Rotina automática</span>
@@ -64,19 +65,19 @@ $statusLabel = static function (string $status): string {
         <small><?= (int) ($lastSummary['attempted'] ?? 0) ?> item(ns) reavaliado(s)<?= $blockedLast > 0 ? ' · ' . $blockedLast . ' bloqueado(s) por conexão' : '' ?></small>
     </article>
     <article class="<?= (int) ($afterHours['errors'] ?? 0) > 0 ? 'is-warning' : ((int) ($afterHours['total'] ?? 0) > 0 ? 'is-blue' : 'is-success') ?>">
-        <span>Pós-horário</span>
+        <span>Fora do horário</span>
         <strong><?= (int) ($afterHours['total'] ?? 0) ?> pendência(s)</strong>
-        <small><?php if ((int) ($afterHours['blocked_plan'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_plan'] ?> aguardando franquia · <?php endif; ?><?php if ((int) ($afterHours['blocked_human'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_human'] ?> respeitando humano · <?php endif; ?><?= (int) ($afterHours['errors'] ?? 0) ?> erro(s)</small>
+        <small><?php if ((int) ($afterHours['blocked_plan'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_plan'] ?> aguardando franquia · <?php endif; ?><?php if ((int) ($afterHours['blocked_human'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_human'] ?> respeitando humano · <?php endif; ?><?= (int) ($afterHours['errors'] ?? 0) ?> com atenção</small>
     </article>
 </section>
 
 <section class="card" style="margin-bottom:16px">
     <div class="section-heading"><div><span class="eyebrow">Recursos 36.6.8+</span><h2>Onde validar consumo e continuidade</h2><p>Atalhos para os pontos de franquia, custeio da credencial e recuperação pós-horário.</p></div></div>
     <div class="action-row">
-        <a class="btn btn-outline" href="<?= View::e(Router::url('/billing')) ?>">Franquia e consumo de IA</a>
-        <a class="btn btn-outline" href="<?= View::e(Router::url('/ai-credentials')) ?>">Custeio RS × cliente</a>
-        <a class="btn btn-outline" href="#after-hours-recovery">Recuperação pós-horário</a>
-        <a class="btn btn-outline" href="<?= View::e(Router::url('/operacao-alertas')) ?>">Alertas operacionais</a>
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/billing')) ?>">Franquia do assistente virtual</a>
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/ai-credentials')) ?>">Responsável pelo assistente virtual</a>
+        <a class="btn btn-outline" href="#after-hours-recovery">Mensagens fora do horário</a>
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/operacao-alertas')) ?>">Avisos do sistema</a>
     </div>
 </section>
 
@@ -85,8 +86,8 @@ $statusLabel = static function (string $status): string {
         <div class="section-heading">
             <div>
                 <span class="eyebrow">Agendamento geral</span>
-                <h2>Reprocessar fila da IA</h2>
-                <p>A rotina percorre todas as empresas e identifica mensagens sem resposta por intervalo, erro da IA/Evolution ou execução interrompida. Conversas já respondidas não recebem novo envio.</p>
+                <h2>Retomar respostas automáticas pendentes</h2>
+                <p>A rotina percorre todas as empresas e identifica conversas que ficaram sem resposta por intervalo de espera, indisponibilidade do assistente ou desconexão do WhatsApp. Conversas já respondidas não recebem novo envio.</p>
             </div>
         </div>
 
@@ -94,7 +95,7 @@ $statusLabel = static function (string $status): string {
             <?= Csrf::input() ?>
             <label class="switch-card field-span-2">
                 <input type="checkbox" name="enabled" value="1" <?= !empty($settings['enabled']) ? 'checked' : '' ?>>
-                <span><strong>Ativar verificação diária</strong><small>O cron pode consultar o sistema várias vezes; a execução ocorre somente uma vez por dia, depois do horário configurado.</small></span>
+                <span><strong>Ativar verificação diária</strong><small>A rotina automática pode consultar o sistema várias vezes; a execução ocorre somente uma vez por dia, depois do horário configurado.</small></span>
             </label>
             <label class="field">
                 <span>Horário diário</span>
@@ -120,17 +121,17 @@ $statusLabel = static function (string $status): string {
         <div class="section-heading">
             <div><span class="eyebrow">Ação imediata</span><h2>Verificar agora</h2></div>
         </div>
-        <p>Executa a mesma validação segura em todas as empresas. Falhas continuam registradas na fila e, se não houver mensagem sem resposta, nenhum WhatsApp será enviado.</p>
-        <form method="post" action="<?= View::e(Router::url('/operations/ai-reprocess/run')) ?>" onsubmit="return confirm('Verificar agora as filas de IA de todas as empresas? Mensagens já respondidas não serão reenviadas.');">
+        <p>Executa a mesma verificação segura em todas as empresas. Tentativas não concluídas continuam registradas e nenhuma mensagem é repetida quando a conversa já recebeu resposta.</p>
+        <form method="post" action="<?= View::e(Router::url('/operations/ai-reprocess/run')) ?>" onsubmit="return confirm('Verificar agora as respostas automáticas pendentes de todas as empresas? Mensagens já respondidas não serão reenviadas.');">
             <?= Csrf::input() ?>
-            <button class="btn btn-primary" type="submit">Reprocessar pendências agora</button>
+            <button class="btn btn-primary" type="submit">Tentar respostas pendentes agora</button>
         </form>
 
         <div class="operations-alert <?= !empty($data['cron_token_configured']) ? 'is-ok' : 'is-warning' ?>" style="margin-top:16px">
-            <strong>Fila rápida — intervalo entre respostas</strong>
-            <p><?= !empty($data['cron_token_configured']) ? 'Token configurado. Mantenha o template n8n “Fila rápida da IA” ativo a cada 1 minuto para retomar mensagens assim que o intervalo configurado terminar.' : 'Configure AI_REPROCESS_CRON_TOKEN no ambiente antes de ativar a fila rápida no n8n.' ?></p>
-            <small>Endpoint da fila: <code><?= View::e((string) ($data['queue_url'] ?? '')) ?></code></small><br>
-            <small>Rotina diária de contingência: <code><?= View::e((string) ($data['cron_url'] ?? '')) ?></code></small>
+            <strong>Retomada rápida após o intervalo</strong>
+            <p><?= !empty($data['cron_token_configured']) ? 'A retomada rápida está configurada. Mantenha a automação ativa para continuar as conversas quando o intervalo terminar.' : 'A retomada rápida ainda precisa ser configurada pela equipe técnica.' ?></p>
+            <small>Endereço técnico da retomada: <code><?= View::e((string) ($data['queue_url'] ?? '')) ?></code></small><br>
+            <small>Endereço técnico da verificação diária: <code><?= View::e((string) ($data['cron_url'] ?? '')) ?></code></small>
         </div>
     </section>
 </div>
@@ -139,7 +140,7 @@ $statusLabel = static function (string $status): string {
     <div class="section-heading">
         <div>
             <span class="eyebrow">Continuidade do atendimento</span>
-            <h2>Recuperação pós-horário</h2>
+            <h2>Mensagens fora do horário</h2>
             <p>Mensagens recebidas fora do expediente ficam preservadas e voltam a ser avaliadas no próximo período válido. Várias mensagens da mesma conversa são tratadas como uma única demanda, sem consumir franquia enquanto aguardam.</p>
         </div>
         <span class="badge <?= (int) ($afterHours['errors'] ?? 0) > 0 ? 'badge-warning' : ((int) ($afterHours['total'] ?? 0) > 0 ? 'badge-info' : 'badge-success') ?>"><?= (int) ($afterHours['total'] ?? 0) ?> pendente(s)</span>
@@ -163,7 +164,7 @@ $statusLabel = static function (string $status): string {
             <tr>
                 <td><strong><?= View::e((string) ($item['tenant_name'] ?? 'Empresa')) ?></strong><br><small><?= View::e((string) (($item['contact_name'] ?? '') ?: ($item['contact_phone'] ?? 'Contato'))) ?> · <?= View::e((string) ($item['agent_name'] ?? 'Assistente')) ?></small></td>
                 <td><?= View::e($formatDate($item['first_received_at'] ?? null)) ?><br><small>última: <?= View::e($formatDate($item['last_received_at'] ?? null)) ?></small></td>
-                <td><span class="badge <?= $pendingBadge ?>"><?= View::e($pendingLabel) ?></span><?php if (!empty($item['last_error'])): ?><br><small><?= View::e((string) $item['last_error']) ?></small><?php endif; ?></td>
+                <td><span class="badge <?= $pendingBadge ?>"><?= View::e($pendingLabel) ?></span><?php if (!empty($item['last_error'])): ?><br><small><?= View::e(OperationalLanguageService::replaceTechnicalTerms((string) $item['last_error'])) ?></small><?php endif; ?></td>
                 <td><?= View::e($formatDate($item['next_attempt_at'] ?? null)) ?><br><small><?= (int) ($item['recovery_attempts'] ?? 0) ?> tentativa(s)</small></td>
                 <td><a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) ($item['conversation_id'] ?? 0))) ?>">Abrir conversa</a></td>
             </tr>
@@ -175,16 +176,16 @@ $statusLabel = static function (string $status): string {
 
 <section class="card ai-reprocess-failures" style="margin-top:16px">
     <div class="section-heading">
-        <div><span class="eyebrow">Diagnóstico da falha</span><h2>Erros recentes da IA e do envio</h2><p>Mostra onde a tentativa parou para diferenciar geração de resposta, Evolution e integrações externas.</p></div>
+        <div><span class="eyebrow">O que precisa de atenção</span><h2>Tentativas recentes não concluídas</h2><p>Mostra em qual etapa a resposta parou e qual área precisa ser revisada.</p></div>
         <span class="badge <?= $recentFailures ? 'badge-warning' : 'badge-success' ?>"><?= count($recentFailures) ?> registro(s)</span>
     </div>
     <div class="ai-reprocess-failure-list" data-collapsible-list="3">
         <?php foreach ($recentFailures as $failure): ?>
             <article class="ai-reprocess-failure-card">
                 <div class="ai-reprocess-failure-main">
-                    <span class="badge badge-danger"><?= View::e((string) ($failure['phase_label'] ?? 'Falha')) ?></span>
+                    <span class="badge badge-danger"><?= View::e((string) ($failure['phase_label'] ?? 'Não concluída')) ?></span>
                     <strong><?= View::e((string) ($failure['tenant_name'] ?? 'Empresa')) ?></strong>
-                    <p><?= View::e((string) ($failure['diagnostic_message'] ?? $failure['error_message'] ?? 'Falha sem detalhe registrado.')) ?></p>
+                    <p><?= View::e((string) OperationalLanguageService::replaceTechnicalTerms((string) ($failure['diagnostic_message'] ?? $failure['error_message'] ?? 'A tentativa não foi concluída.'))) ?></p>
                     <small>
                         <?= View::e($formatDate($failure['created_at'] ?? null)) ?>
                         · Assistente: <?= View::e((string) ($failure['agent_name'] ?? 'não identificado')) ?>
@@ -194,18 +195,18 @@ $statusLabel = static function (string $status): string {
                 </div>
                 <div class="ai-reprocess-failure-actions">
                     <?php if (!empty($failure['conversation_id'])): ?><a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) $failure['conversation_id'])) ?>">Abrir conversa</a><?php endif; ?>
-                    <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/instances')) ?>">Evolution</a>
-                    <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/ai-credentials')) ?>">Credenciais IA</a>
+                    <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/instances')) ?>">Abrir WhatsApp</a>
+                    <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/ai-credentials')) ?>">Configurar assistente</a>
                 </div>
             </article>
         <?php endforeach; ?>
-        <?php if (!$recentFailures): ?><div class="empty-state">Nenhuma falha recente registrada na automação da IA.</div><?php endif; ?>
+        <?php if (!$recentFailures): ?><div class="empty-state">Nenhuma tentativa recente precisa de atenção.</div><?php endif; ?>
     </div>
 </section>
 
 <section class="card ai-pending-instance-card" style="margin-top:16px">
     <div class="section-heading">
-        <div><span class="eyebrow">Situação atual</span><h2>Instâncias com mensagens presas</h2><p>As pendências são agrupadas pela conexão WhatsApp e pelo assistente responsável. Quando a primeira tentativa de um mesmo assistente falha, a execução pausa novas tentativas daquele grupo para não disparar várias falhas iguais.</p></div>
+        <div><span class="eyebrow">Situação atual</span><h2>Conexões com respostas pendentes</h2><p>As pendências são agrupadas pelo WhatsApp e pelo assistente responsável. Quando uma tentativa não é concluída, o sistema pausa novas tentativas daquele grupo para evitar repetições.</p></div>
         <span class="badge <?= $pendingInstances ? 'badge-warning' : 'badge-success' ?>"><?= count($pendingInstances) ?> grupo(s)</span>
     </div>
     <div class="ai-pending-instance-list" data-collapsible-list="3">
@@ -227,22 +228,22 @@ $statusLabel = static function (string $status): string {
                     <?php if (!$instanceOk): ?>
                         <div class="ai-pending-instance-error">
                             <strong><?= $instanceState === 'unverified' ? 'Não foi possível validar a conexão' : 'Aguardando reconexão' ?></strong>
-                            <span><?= $instanceState === 'unverified' ? 'O RS Connect não liberará o reprocessamento até conseguir confirmar o estado diretamente na Evolution.' : 'As mensagens permanecem na fila, mas o RS Connect não repetirá tentativas enquanto a Evolution informar a instância como desconectada.' ?></span>
-                            <?php if ($liveCheckError !== ''): ?><small><?= View::e($liveCheckError) ?></small><?php endif; ?>
+                            <span><?= $instanceState === 'unverified' ? 'O RS Connect aguardará a confirmação da conexão antes de tentar novamente.' : 'As mensagens permanecem guardadas, mas o RS Connect não repetirá tentativas enquanto o WhatsApp estiver desconectado.' ?></span>
+                            <?php if ($liveCheckError !== ''): ?><small><?= View::e(OperationalLanguageService::replaceTechnicalTerms($liveCheckError)) ?></small><?php endif; ?>
                         </div>
                     <?php endif; ?>
-                    <small>Mais antiga: <?= View::e($formatDate($item['oldest_pending_at'] ?? null)) ?> · Mais recente: <?= View::e($formatDate($item['latest_pending_at'] ?? null)) ?><?= !empty($item['last_status_check_at']) ? ' · Evolution verificada em ' . View::e($formatDate($item['last_status_check_at'])) : '' ?></small>
+                    <small>Mais antiga: <?= View::e($formatDate($item['oldest_pending_at'] ?? null)) ?> · Mais recente: <?= View::e($formatDate($item['latest_pending_at'] ?? null)) ?><?= !empty($item['last_status_check_at']) ? ' · WhatsApp verificado em ' . View::e($formatDate($item['last_status_check_at'])) : '' ?></small>
                     <?php if (!empty($item['last_error_message'])): ?>
-                        <div class="ai-pending-instance-error"><strong>Última falha</strong><span><?= View::e((string) $item['last_error_message']) ?></span><?php if (!empty($item['last_error_at'])): ?><small><?= View::e($formatDate($item['last_error_at'])) ?></small><?php endif; ?></div>
+                        <div class="ai-pending-instance-error"><strong>Última tentativa não concluída</strong><span><?= View::e(OperationalLanguageService::replaceTechnicalTerms((string) $item['last_error_message'])) ?></span><?php if (!empty($item['last_error_at'])): ?><small><?= View::e($formatDate($item['last_error_at'])) ?></small><?php endif; ?></div>
                     <?php endif; ?>
                 </div>
                 <div class="ai-pending-instance-actions">
                     <a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/instances')) ?>">Abrir WhatsApp</a>
-                    <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/companies/health?tenant_id=' . (int) ($item['tenant_id'] ?? 0))) ?>">Diagnóstico da empresa</a>
+                    <a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/companies/health?tenant_id=' . (int) ($item['tenant_id'] ?? 0))) ?>">Ver situação da empresa</a>
                 </div>
             </article>
         <?php endforeach; ?>
-        <?php if (!$pendingInstances): ?><div class="empty-state">Nenhuma mensagem presa na fila da IA.</div><?php endif; ?>
+        <?php if (!$pendingInstances): ?><div class="empty-state">Nenhuma resposta automática está pendente.</div><?php endif; ?>
     </div>
 </section>
 
@@ -257,7 +258,7 @@ $statusLabel = static function (string $status): string {
                 <?php foreach ($history as $run): ?>
                     <tr>
                         <td><?= View::e($formatDate($run['started_at'] ?? null)) ?></td>
-                        <td><?= View::e(['manual' => 'Manual', 'scheduled' => 'Agendada', 'webhook' => 'Webhook', 'cli' => 'CLI'][(string) ($run['source'] ?? '')] ?? (string) ($run['source'] ?? '')) ?></td>
+                        <td><?= View::e(['manual' => 'Manual', 'scheduled' => 'Agendada', 'webhook' => 'Integração', 'cli' => 'CLI'][(string) ($run['source'] ?? '')] ?? (string) ($run['source'] ?? '')) ?></td>
                         <td><span class="badge <?= ($run['status'] ?? '') === 'success' ? 'badge-success' : (($run['status'] ?? '') === 'error' ? 'badge-danger' : 'badge-warning') ?>"><?= View::e($statusLabel((string) ($run['status'] ?? ''))) ?></span></td>
                         <td><?= (int) ($run['attempted_count'] ?? 0) ?></td>
                         <td><?= (int) ($run['replied_count'] ?? 0) ?></td>

@@ -2,6 +2,7 @@
 
 use App\Core\Router;
 use App\Core\View;
+use App\Services\OperationalLanguageService;
 
 $dashboardData = isset($dashboardData) && is_array($dashboardData) ? $dashboardData : [];
 $metrics = $dashboardData['metrics'] ?? [];
@@ -33,13 +34,7 @@ $relative = static function (?string $value): string {
     if ($diff < 604800) return 'há ' . (int) floor($diff / 86400) . ' dia(s)';
     return date('d/m/Y', $ts);
 };
-$statusLabel = static fn (string $status): string => match ($status) {
-    'ok' => 'Operacional',
-    'warning' => 'Atenção',
-    'down' => 'Indisponível',
-    'unknown' => 'Sem evidência',
-    default => ucfirst($status),
-};
+$statusLabel = static fn (string $status): string => OperationalLanguageService::severityLabel($status);
 ?>
 
 <section class="admin-executive-hero">
@@ -58,8 +53,8 @@ $statusLabel = static fn (string $status): string => match ($status) {
 
 <?php if ($dataWarnings): ?>
 <section class="admin-data-warning" role="alert">
-    <div><strong>Alguns dados não puderam ser atualizados.</strong><span>O painel evitou exibir números presumidos. Consulte o log da aplicação ou faça o redeploy completo.</span></div>
-    <a class="btn btn-outline btn-small" href="<?= View::e(Router::url('/status-sistema')) ?>">Ver diagnóstico</a>
+    <div><strong>Alguns dados não puderam ser atualizados.</strong><span>O painel evitou exibir números estimados. Abra os detalhes para conferir o que precisa ser corrigido.</span></div>
+    <a class="btn btn-outline btn-small" href="<?= View::e(Router::url('/status-sistema')) ?>">Ver o que aconteceu</a>
 </section>
 <?php endif; ?>
 
@@ -86,7 +81,7 @@ $statusLabel = static fn (string $status): string => match ($status) {
     </a>
     <a class="admin-kpi-card<?= (int) ($metrics['critical_incidents'] ?? 0) > 0 ? ' is-alert' : '' ?>" href="<?= View::e(Router::url('/operations')) ?>">
         <span class="admin-kpi-icon is-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></svg></span>
-        <span><small>Falhas críticas abertas</small><strong><?= (int) ($metrics['critical_incidents'] ?? 0) ?></strong><em><?= (int) ($metrics['critical_incidents'] ?? 0) > 0 ? 'requer ação imediata' : 'nenhuma falha crítica' ?></em></span>
+        <span><small>Situações urgentes</small><strong><?= (int) ($metrics['critical_incidents'] ?? 0) ?></strong><em><?= (int) ($metrics['critical_incidents'] ?? 0) > 0 ? 'requer ação imediata' : 'nenhuma situação urgente' ?></em></span>
     </a>
 </section>
 
@@ -134,9 +129,10 @@ $statusLabel = static fn (string $status): string => match ($status) {
         </div>
         <div class="admin-health-list">
             <?php foreach ($healthChecks as $check): ?>
+                <?php $healthPresentation = OperationalLanguageService::check($check, false); ?>
                 <a href="<?= View::e(Router::url('/operations')) ?>" class="admin-health-row">
                     <span class="admin-health-dot is-<?= View::e((string) $check['status']) ?>"></span>
-                    <span><strong><?= View::e((string) $check['label']) ?></strong><small><?= View::e((string) ($check['message'] ?? '')) ?></small></span>
+                    <span><strong><?= View::e((string) $healthPresentation['label']) ?></strong><small><?= View::e((string) $healthPresentation['summary']) ?></small></span>
                     <em class="admin-health-status is-<?= View::e((string) $check['status']) ?>"><?= View::e($statusLabel((string) $check['status'])) ?></em>
                 </a>
             <?php endforeach; ?>

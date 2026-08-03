@@ -61,11 +61,11 @@ $eventLabel = static function (string $event): string {
 
 <section class="admin-kpi-grid security-kpis-v2" aria-label="Indicadores de segurança">
     <article class="admin-kpi-card"><span class="admin-kpi-icon is-green">✓</span><span><small>Logins com sucesso 24h</small><strong><?= (int) ($metrics['successful_logins_24h'] ?? 0) ?></strong><em>acessos autenticados</em></span></article>
-    <article class="admin-kpi-card"><span class="admin-kpi-icon is-red">!</span><span><small>Tentativas falhas 24h</small><strong><?= (int) ($metrics['failed_logins_24h'] ?? 0) ?></strong><em>limite: <?= (int) ($settings['attempt_limit'] ?? 6) ?> em <?= (int) ($settings['attempt_window'] ?? 15) ?> min</em></span></article>
+    <article class="admin-kpi-card"><span class="admin-kpi-icon is-red">!</span><span><small>Acessos não concluídos em 24h</small><strong><?= (int) ($metrics['failed_logins_24h'] ?? 0) ?></strong><em>limite: <?= (int) ($settings['attempt_limit'] ?? 6) ?> em <?= (int) ($settings['attempt_window'] ?? 15) ?> min</em></span></article>
     <article class="admin-kpi-card"><span class="admin-kpi-icon is-blue">S</span><span><small>Sessões ativas</small><strong><?= (int) ($metrics['active_sessions'] ?? 0) ?></strong><em><?= (int) ($metrics['expired_sessions'] ?? 0) ?> expirada(s)</em></span></article>
     <article class="admin-kpi-card"><span class="admin-kpi-icon is-purple">B</span><span><small>Empresas com acesso bloqueado</small><strong><?= count($blockedTenants) ?></strong><em>vigência, cobrança ou suspensão</em></span></article>
     <article class="admin-kpi-card"><span class="admin-kpi-icon is-cyan">U</span><span><small>Usuários bloqueados</small><strong><?= count($lockedUsers) ?></strong><em>tentativas incorretas</em></span></article>
-    <article class="admin-kpi-card"><span class="admin-kpi-icon is-red">E</span><span><small>Eventos críticos 7d</small><strong><?= (int) ($metrics['critical_events_7d'] ?? 0) ?></strong><em>eventos para revisão</em></span></article>
+    <article class="admin-kpi-card"><span class="admin-kpi-icon is-red">E</span><span><small>Situações urgentes em 7 dias</small><strong><?= (int) ($metrics['critical_events_7d'] ?? 0) ?></strong><em>situações para revisão</em></span></article>
 </section>
 
 <div class="admin-dashboard-grid security-validation-grid">
@@ -94,7 +94,7 @@ $eventLabel = static function (string $event): string {
                     <?php $credentialStatus = (string) ($credential['status'] ?? 'optional'); ?>
                     <article class="security-credential-item is-<?= View::e($credentialStatus) ?>">
                         <div>
-                            <span class="badge <?= in_array($credentialStatus, ['ok'], true) ? 'badge-success' : (in_array($credentialStatus, ['warning','critical'], true) ? 'badge-warning' : 'badge-neutral') ?>"><?= View::e(match ($credentialStatus) { 'ok' => 'Configurado', 'warning' => 'Revisar', 'critical' => 'Crítico', 'recommended' => 'Recomendado', default => 'Opcional' }) ?></span>
+                            <span class="badge <?= in_array($credentialStatus, ['ok'], true) ? 'badge-success' : (in_array($credentialStatus, ['warning','critical'], true) ? 'badge-warning' : 'badge-neutral') ?>"><?= View::e(match ($credentialStatus) { 'ok' => 'Configurado', 'warning' => 'Revisar', 'critical' => 'Ação imediata', 'recommended' => 'Recomendado', default => 'Opcional' }) ?></span>
                             <strong><?= View::e((string) ($credential['label'] ?? $credential['key'] ?? 'Credencial')) ?></strong>
                             <code><?= View::e((string) ($credential['key'] ?? '')) ?></code>
                             <p><?= View::e((string) ($credential['detail'] ?? '')) ?></p>
@@ -169,7 +169,7 @@ $eventLabel = static function (string $event): string {
         <div class="security-login-list" data-collapsible-list="3">
             <?php foreach ($attempts as $attempt): ?>
                 <article class="security-login-item">
-                    <span class="badge <?= (int) ($attempt['success'] ?? 0) === 1 ? 'badge-success' : 'badge-warning' ?>"><?= (int) ($attempt['success'] ?? 0) === 1 ? 'Sucesso' : 'Falha' ?></span>
+                    <span class="badge <?= (int) ($attempt['success'] ?? 0) === 1 ? 'badge-success' : 'badge-warning' ?>"><?= (int) ($attempt['success'] ?? 0) === 1 ? 'Concluído' : 'Não concluído' ?></span>
                     <div><strong><?= View::e($attempt['email'] ?? '') ?></strong><small><?= View::e($attempt['ip_address'] ?? '') ?> · <?= View::e($attempt['created_at'] ?? '') ?> · <?= View::e($attempt['reason'] ?? '') ?></small></div>
                 </article>
             <?php endforeach; ?>

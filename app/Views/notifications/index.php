@@ -1,8 +1,10 @@
 <?php
 
+use App\Core\Auth;
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\OperationalLanguageService;
 
 $formatDate = static function (?string $value): string {
     if (!$value) return '—';
@@ -10,7 +12,7 @@ $formatDate = static function (?string $value): string {
     return $timestamp ? date('d/m/Y H:i', $timestamp) : $value;
 };
 
-$severityLabel = ['info' => 'Informação', 'success' => 'Sucesso', 'warning' => 'Atenção', 'danger' => 'Crítico'];
+$isClientView = !Auth::isSuperAdmin();
 $statusLabel = ['unread' => 'Nova', 'read' => 'Lida', 'archived' => 'Arquivada'];
 $preferences = is_array($preferences ?? null) ? $preferences : [];
 $canManagePreferences = !empty($canManagePreferences);
@@ -31,7 +33,7 @@ $preferenceCards = [
     [
         'field' => 'automation_errors_enabled',
         'title' => 'Integrações e automações',
-        'description' => 'Avise quando um fluxo, webhook ou integração externa apresentar falha.',
+        'description' => 'Avise quando uma automação ou conexão com outro serviço não for concluída.',
         'icon' => '<path d="M6 7h4v4H6zM14 13h4v4h-4zM10 9h2a2 2 0 0 1 2 2v2"/>',
     ],
     [
@@ -59,7 +61,7 @@ $preferenceCards = [
     <div>
         <span class="eyebrow light">Central de notificações</span>
         <h2>Seus avisos em um só lugar</h2>
-        <p>Consulte primeiro o que aconteceu. As preferências de quais alertas receber ficam no final da página.</p>
+        <p>Veja o que aconteceu, o que pode ser afetado e qual é o próximo passo. As preferências ficam no final da página.</p>
     </div>
     <div class="hero-actions">
         <span class="badge <?= (int) $unreadCount > 0 ? 'badge-overdue' : 'badge-active' ?>"><?= (int) $unreadCount ?> nova(s)</span>
@@ -80,19 +82,34 @@ $preferenceCards = [
 
     <div class="notification-list">
         <?php foreach ($notifications as $notification): ?>
-            <?php $actionUrl = (string) ($notification['action_url'] ?? ''); ?>
+            <?php
+            $actionUrl = (string) ($notification['action_url'] ?? '');
+            $notice = OperationalLanguageService::notification($notification, $isClientView);
+            $hasGuidance = ($notice['impact'] ?? '') !== '' || ($notice['action'] ?? '') !== '';
+            ?>
             <article class="notification-item notification-<?= View::e($notification['severity'] ?? 'info') ?> <?= ($notification['status'] ?? '') === 'unread' ? 'is-unread' : '' ?>">
                 <div class="notification-marker"></div>
                 <div class="notification-main">
                     <div class="notification-title-row">
-                        <strong><?= View::e($notification['title'] ?? '') ?></strong>
-                        <span class="badge badge-<?= View::e($notification['severity'] ?? 'info') ?>"><?= View::e($severityLabel[$notification['severity'] ?? 'info'] ?? 'Informação') ?></span>
+                        <strong><?= View::e((string) $notice['title']) ?></strong>
+                        <span class="badge badge-<?= View::e($notification['severity'] ?? 'info') ?>"><?= View::e(OperationalLanguageService::severityLabel((string) ($notification['severity'] ?? 'info'))) ?></span>
                     </div>
-                    <p><?= nl2br(View::e($notification['message'] ?? '')) ?></p>
+                    <?php if ($hasGuidance): ?>
+                        <p><strong>O que aconteceu:</strong> <?= View::e((string) $notice['summary']) ?></p>
+                        <?php if (($notice['impact'] ?? '') !== ''): ?><p><strong>O que pode ser afetado:</strong> <?= View::e((string) $notice['impact']) ?></p><?php endif; ?>
+                        <?php if (($notice['action'] ?? '') !== ''): ?><p><strong>O que fazer agora:</strong> <?= View::e((string) $notice['action']) ?></p><?php endif; ?>
+                    <?php else: ?>
+                        <p><?= nl2br(View::e((string) $notice['summary'])) ?></p>
+                    <?php endif; ?>
                     <small><?= View::e($formatDate($notification['created_at'] ?? null)) ?> · <?= View::e($statusLabel[$notification['status'] ?? 'read'] ?? ($notification['status'] ?? '')) ?></small>
+                    <?php if (!$isClientView && (($notice['technical_title'] ?? '') !== '' || ($notice['technical_message'] ?? '') !== '')): ?>
+                        <details class="health-technical-details"><summary>Ver detalhes técnicos</summary><pre><?= View::e(trim((string) ($notice['technical_event'] ?? '') . "
+" . (string) ($notice['technical_title'] ?? '') . "
+" . (string) ($notice['technical_message'] ?? ''))) ?></pre></details>
+                    <?php endif; ?>
                 </div>
                 <?php if ($actionUrl !== ''): ?>
-                    <a class="btn btn-small btn-outline" href="<?= View::e(str_starts_with($actionUrl, 'http') ? $actionUrl : Router::url($actionUrl)) ?>">Ver detalhes</a>
+                    <a class="btn btn-small btn-outline" href="<?= View::e(str_starts_with($actionUrl, 'http') ? $actionUrl : Router::url($actionUrl)) ?>"><?= $hasGuidance ? 'Abrir orientação' : 'Ver detalhes' ?></a>
                 <?php endif; ?>
             </article>
         <?php endforeach; ?>

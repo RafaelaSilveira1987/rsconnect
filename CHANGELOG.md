@@ -1,3 +1,14 @@
+# RS Connect v36.12.1 — Linguagem clara e diagnóstico simplificado
+
+- traduz avisos técnicos para uma linguagem que explica o que aconteceu, o que pode ser afetado e o que fazer agora;
+- aplica a linguagem simplificada no painel do cliente, notificações, Central de funcionamento, saúde das empresas, relatórios e painel do Super Admin;
+- troca termos como incidente, crítico, Evolution, OpenAI, n8n, webhook, callback e cron por nomes compreensíveis na camada visual;
+- preserva códigos, mensagens originais e respostas técnicas em detalhes expansíveis para o Super Admin;
+- padroniza os avisos enviados por WhatsApp administrativo com situação, impacto, orientação, empresa e estado atual;
+- simplifica o histórico de cópias de segurança e de respostas automáticas pendentes;
+- não altera códigos internos, integrações, rotas ou dados armazenados;
+- não exige migration nova; a última continua sendo a `073_operational_monitoring_alert_delivery.sql`.
+
 # RS Connect v36.12.0 — Monitoramento e alertas operacionais
 
 - adiciona histórico auditável das execuções automáticas e manuais do monitor;

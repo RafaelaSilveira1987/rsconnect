@@ -192,8 +192,8 @@ final class OperationalAlertService
     public function testConfiguredChannels(int $userId): array
     {
         $preferences = $this->preferences($userId);
-        $title = 'Teste de alertas — RS Connect';
-        $message = 'Este é um teste manual dos canais operacionais. Nenhum incidente foi aberto.';
+        $title = 'Teste de avisos — RS Connect';
+        $message = "Este é um teste dos avisos da RS Connect.\n\nO que aconteceu:\nOs canais habilitados estão sendo verificados.\n\nO que fazer agora:\nConfirme se este aviso apareceu na RS Connect e no WhatsApp.\n\nSituação: Teste dos avisos";
         $url = $this->absoluteUrl('/operacao-alertas');
         $result = [];
 
@@ -286,14 +286,17 @@ final class OperationalAlertService
             $diagnostic = $this->diagnosticKey((string) $incident['event']);
             $relativeUrl = (new OperationalPlaybookService())->centralUrl($diagnostic, (int) ($incident['tenant_id'] ?? 0));
             $absoluteUrl = $this->absoluteUrl($relativeUrl);
+            $presentation = OperationalLanguageService::incident($incident, false, $kind);
             $title = match ($kind) {
-                'recovered' => 'Resolvido — ' . $this->label($diagnostic),
-                'reminder' => 'Continua ativo — ' . $this->label($diagnostic),
-                default => 'Alerta — ' . $this->label($diagnostic),
+                'recovered' => 'Tudo normal novamente — ' . (string) $presentation['label'],
+                'reminder' => 'Ainda precisa de atenção — ' . (string) $presentation['title'],
+                default => (string) $presentation['title'],
             };
-            $message = $kind === 'recovered'
-                ? 'O monitoramento confirmou a recuperação. ' . (string) $incident['message']
-                : (string) $incident['message'];
+            $message = OperationalLanguageService::alertMessage(
+                $presentation,
+                trim((string) ($incident['tenant_name'] ?? '')),
+                $kind
+            );
             $severity = $kind === 'recovered'
                 ? 'success'
                 : (in_array((string) $incident['severity'], ['critical', 'error'], true) ? 'danger' : 'warning');
@@ -379,23 +382,7 @@ final class OperationalAlertService
 
     private function label(string $key): string
     {
-        return [
-            'evolution' => 'WhatsApp / Evolution',
-            'openai' => 'OpenAI / IA',
-            'n8n' => 'n8n',
-            'webhooks' => 'Webhooks',
-            'backup' => 'Backup',
-            'disk' => 'Espaço em disco',
-            'message_queue' => 'Fila de mensagens',
-            'billing_cron' => 'Cron de cobrança',
-            'ai_reprocess' => 'Fila da IA',
-            'after_hours_recovery' => 'Recuperação pós-horário',
-            'reporting' => 'Relatórios',
-            'database' => 'Banco de dados',
-            'migrations' => 'Migrations',
-            'calendar' => 'Google Agenda',
-            'payments' => 'Pagamentos',
-        ][$key] ?? 'Operação RS';
+        return (string) (OperationalLanguageService::service($key)['label'] ?? 'Funcionamento do sistema');
     }
 
     private function platform(
@@ -634,7 +621,12 @@ final class OperationalAlertService
     private function incident(int $id): ?array
     {
         try {
-            $statement = Database::connection()->prepare('SELECT * FROM system_incidents WHERE id = :id LIMIT 1');
+            $statement = Database::connection()->prepare(
+                'SELECT i.*, t.name AS tenant_name
+                 FROM system_incidents i
+                 LEFT JOIN tenants t ON t.id = i.tenant_id
+                 WHERE i.id = :id LIMIT 1'
+            );
             $statement->execute(['id' => $id]);
             return $statement->fetch(PDO::FETCH_ASSOC) ?: null;
         } catch (Throwable) {

@@ -39,13 +39,13 @@ $typeLabel = static fn (string $type): string => [
     'information' => 'Informação',
     'maintenance' => 'Manutenção',
     'attention' => 'Atenção',
-    'incident' => 'Incidente',
+    'incident' => 'Situação em aberto',
     'resolved' => 'Resolvido',
 ][$type] ?? 'Informação';
 $priorityLabel = static fn (string $priority): string => [
     'normal' => 'Normal',
     'important' => 'Importante',
-    'critical' => 'Crítica',
+    'critical' => 'Ação imediata',
 ][$priority] ?? 'Normal';
 $externalStatusLabel = static function (array $row, string $channel, string $label): string {
     $sent = (int) ($row[$channel . '_sent'] ?? 0);
@@ -57,10 +57,10 @@ $externalStatusLabel = static function (array $row, string $channel, string $lab
         $parts[] = $sent . ' enviado(s)';
     }
     if ($error > 0) {
-        $parts[] = $error . ' com erro';
+        $parts[] = $error . ' não concluído(s)';
     }
     if ($queued > 0) {
-        $parts[] = $queued . ' na fila';
+        $parts[] = $queued . ' aguardando envio';
     }
     if ($pending > 0) {
         $parts[] = $pending . ' aguardando configuração';
@@ -78,7 +78,7 @@ $externalStatusLabel = static function (array $row, string $channel, string $lab
         <span><?= $icon('send') ?><strong><?= (int) ($summary['sent'] ?? 0) ?></strong><small>Enviados</small></span>
         <span><?= $icon('eye') ?><strong><?= (int) ($summary['unread'] ?? 0) ?></strong><small>Não lidos</small></span>
         <span><?= $icon('reply') ?><strong><?= (int) ($summary['replies'] ?? 0) ?></strong><small>Respostas</small></span>
-        <span><?= $icon('alert') ?><strong><?= (int) ($summary['active_incidents'] ?? 0) ?></strong><small>Incidentes ativos</small></span>
+        <span><?= $icon('alert') ?><strong><?= (int) ($summary['active_incidents'] ?? 0) ?></strong><small>Situações em aberto</small></span>
     </div>
 </section>
 
@@ -107,7 +107,7 @@ $externalStatusLabel = static function (array $row, string $channel, string $lab
                             <option value="information">Informação</option>
                             <option value="maintenance">Manutenção</option>
                             <option value="attention">Atenção</option>
-                            <option value="incident" <?= $prefillType === 'incident' ? 'selected' : '' ?>>Incidente</option>
+                            <option value="incident" <?= $prefillType === 'incident' ? 'selected' : '' ?>>Situação em aberto</option>
                             <option value="resolved" <?= $prefillType === 'resolved' ? 'selected' : '' ?>>Resolvido</option>
                         </select>
                         <small class="communication-control-help">Define o contexto visual e a categoria do aviso.</small>
@@ -116,7 +116,7 @@ $externalStatusLabel = static function (array $row, string $channel, string $lab
                         <select class="input" name="priority" data-communication-field="priority">
                             <option value="normal">Normal</option>
                             <option value="important">Importante</option>
-                            <option value="critical">Crítica</option>
+                            <option value="critical">Ação imediata</option>
                         </select>
                         <small class="communication-control-help">Use destaque maior somente quando houver impacto real.</small>
                     </label>
@@ -137,7 +137,7 @@ $externalStatusLabel = static function (array $row, string $channel, string $lab
                         <select class="input" name="audience_type">
                             <option value="selected">Empresas selecionadas</option>
                             <option value="all">Todas as empresas</option>
-                            <?php if ($prefillIncident > 0): ?><option value="incident" selected>Empresa afetada pelo incidente</option><?php endif; ?>
+                            <?php if ($prefillIncident > 0): ?><option value="incident" selected>Empresa afetada pela situação</option><?php endif; ?>
                         </select>
                         <small class="communication-control-help">Escolha uma empresa, várias empresas ou toda a base.</small>
                     </label>

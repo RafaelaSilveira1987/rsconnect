@@ -1,6 +1,12 @@
-# RS Connect v36.12.0 — Monitoramento e alertas operacionais
+# RS Connect v36.12.1 — Linguagem clara e diagnóstico simplificado
 
-Esta versão transforma o painel de saúde em um ciclo operacional completo: verifica serviços, abre incidentes, evita alertas duplicados, envia lembretes, permite reconhecimento e resolução e registra cada tentativa de entrega.
+
+Esta versão mantém o monitoramento da v36.12.0 e reorganiza a comunicação visual para que clientes e administradores entendam rapidamente a situação, o impacto e a ação recomendada. Informações técnicas continuam disponíveis apenas em áreas expansíveis do Super Admin.
+
+A última migration obrigatória continua sendo:
+
+`database/migrations/073_operational_monitoring_alert_delivery.sql`
+
 
 Aplique a migration:
 

@@ -66,10 +66,10 @@ $checks = [
         && str_contains($routes, "'/operacao-alertas/acknowledge'")
         && str_contains($routes, "'/operacao-alertas/resolve'")
         && substr_count($routes, "['auth', 'super_admin', 'csrf']") >= 3,
-    'tela apresenta prontidão, incidentes e entregas' => str_contains($view, 'Prontidão de entrega')
-        && str_contains($view, 'Incidentes ativos')
-        && str_contains($view, 'Status dos canais')
-        && str_contains($view, 'Avisar cliente'),
+    'tela apresenta prontidão, incidentes e entregas' => str_contains($view, 'Onde os avisos serão recebidos')
+        && str_contains($view, 'Situações em aberto')
+        && str_contains($view, 'Resultado dos avisos')
+        && str_contains($view, 'Avisar empresa'),
     'painel de saúde conhece disco e fila' => str_contains($health, "'disk' => [")
         && str_contains($health, "'message_queue' => ["),
     'ambiente documenta limiares e canais' => str_contains($env, 'OPERATIONS_DISK_CRITICAL_PERCENT')
@@ -78,10 +78,10 @@ $checks = [
     'diagnóstico cobre ciclo completo' => str_contains($diagnostic, 'operational_monitor_runs')
         && str_contains($diagnostic, 'operational_alert_deliveries')
         && str_contains($diagnostic, 'acknowledged_at'),
-    'versão e migration atualizadas' => str_contains($version, 'RS Connect 36.12.0')
+    'versão e migration atualizadas' => str_contains($version, 'RS Connect 36.12.1')
         && str_contains($version, '073_operational_monitoring_alert_delivery.sql'),
-    'cache dos assets atualizado' => str_contains($layout, 'app.css?v=36.12.0')
-        && str_contains($layout, 'app.js?v=36.12.0'),
+    'cache dos assets atualizado' => str_contains($layout, 'app.css?v=36.12.1')
+        && str_contains($layout, 'app.js?v=36.12.1'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));
@@ -90,4 +90,4 @@ if ($failures !== []) {
     exit(1);
 }
 
-echo "OK - monitoramento, ciclo de incidentes e canais operacionais validados na v36.12.0.\n";
+echo "OK - monitoramento, ciclo de incidentes e canais operacionais validados na v36.12.1.\n";
