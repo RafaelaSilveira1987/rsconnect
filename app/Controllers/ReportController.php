@@ -19,7 +19,8 @@ final class ReportController
         if (Auth::isSuperAdmin()) {
             $filters = $this->filters();
             $reportData = (new AdminExecutiveReportService())->build($filters);
-            View::render('reports.admin', [
+            $reportView = (string) ($_GET['layout'] ?? '') === 'legacy' ? 'reports.admin' : 'reports.admin_v2';
+            View::render($reportView, [
                 'title' => 'Relatórios executivos',
                 'filters' => $filters,
                 'reportData' => $reportData,
@@ -29,7 +30,8 @@ final class ReportController
         $filters = $this->filters();
         $reportData = (new TenantExecutiveReportService())->build($filters);
 
-        View::render('reports.index', [
+        $reportView = (string) ($_GET['layout'] ?? '') === 'legacy' ? 'reports.index' : 'reports.index_v2';
+        View::render($reportView, [
             'title' => 'Relatórios',
             'filters' => $filters,
             'tenants' => [],

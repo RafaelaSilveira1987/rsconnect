@@ -13,6 +13,21 @@ use App\Services\TenantModuleService;
 use App\Services\ClientCommunicationService;
 
 $user = Auth::user();
+$userName = trim((string) ($user['name'] ?? 'Usuário'));
+$userNameParts = preg_split('/\s+/', $userName, -1, PREG_SPLIT_NO_EMPTY) ?: ['U'];
+$userInitials = mb_strtoupper(mb_substr((string) $userNameParts[0], 0, 1));
+if (count($userNameParts) > 1) {
+    $userInitials .= mb_strtoupper(mb_substr((string) $userNameParts[count($userNameParts) - 1], 0, 1));
+}
+$userRoleLabels = [
+    'super_admin' => 'Administrador RS',
+    'admin' => 'Administrador',
+    'manager' => 'Gestor',
+    'supervisor' => 'Supervisor',
+    'agent' => 'Atendente',
+    'viewer' => 'Visualizador',
+];
+$userRoleLabel = $userRoleLabels[(string) ($user['role'] ?? '')] ?? ucfirst(str_replace('_', ' ', (string) ($user['role'] ?? 'Usuário')));
 $flashes = Flash::all();
 $currentPath = rtrim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', '/');
 $isActive = static function (string $path) use ($currentPath): string {
@@ -126,7 +141,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.12.1')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.12.1&rsv2=36.13.0')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -258,17 +273,23 @@ $svgIcon = static function (string $name): string {
                 <span class="eyebrow"><?= Auth::isSuperAdmin() ? 'Operação RS' : View::e($user['tenant_name'] ?? 'Cliente') ?></span>
                 <h1><?= View::e($title ?? 'RS Connect') ?></h1>
             </div>
-            <?php if (Auth::isSuperAdmin()): ?>
-                <a class="topbar-notification" href="<?= View::e(Router::url('/operacao-alertas')) ?>" aria-label="Avisos do sistema" data-notification-link data-count-url="<?= View::e(Router::url('/operacao-alertas/count')) ?>">
-                    <?= $svgIcon('bell') ?>
-                    <?= $notificationLiveBadge($notificationUnread) ?>
-                </a>
-            <?php elseif (Auth::can('notifications.view') && $moduleVisible('notifications')): ?>
-                <a class="topbar-notification" href="<?= View::e(Router::url('/notifications')) ?>" aria-label="Notificações" data-notification-link data-count-url="<?= View::e(Router::url('/notifications/count')) ?>">
-                    <?= $svgIcon('bell') ?>
-                    <?= $notificationLiveBadge($notificationUnread) ?>
-                </a>
-            <?php endif; ?>
+            <div class="topbar-actions">
+                <?php if (Auth::isSuperAdmin()): ?>
+                    <a class="topbar-notification" href="<?= View::e(Router::url('/operacao-alertas')) ?>" aria-label="Avisos do sistema" data-notification-link data-count-url="<?= View::e(Router::url('/operacao-alertas/count')) ?>">
+                        <?= $svgIcon('bell') ?>
+                        <?= $notificationLiveBadge($notificationUnread) ?>
+                    </a>
+                <?php elseif (Auth::can('notifications.view') && $moduleVisible('notifications')): ?>
+                    <a class="topbar-notification" href="<?= View::e(Router::url('/notifications')) ?>" aria-label="Notificações" data-notification-link data-count-url="<?= View::e(Router::url('/notifications/count')) ?>">
+                        <?= $svgIcon('bell') ?>
+                        <?= $notificationLiveBadge($notificationUnread) ?>
+                    </a>
+                <?php endif; ?>
+                <div class="topbar-user-chip" title="<?= View::e((string) ($user['email'] ?? $userName)) ?>" aria-label="Usuário conectado: <?= View::e($userName) ?>">
+                    <span class="topbar-user-avatar"><?= View::e($userInitials) ?></span>
+                    <span class="topbar-user-copy"><strong><?= View::e($userName) ?></strong><small><?= View::e($userRoleLabel) ?></small></span>
+                </div>
+            </div>
         </header>
 
         <?php if (!Auth::isSuperAdmin() && !empty($trialStatus)): ?>

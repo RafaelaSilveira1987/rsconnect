@@ -1,3 +1,11 @@
+# RS Connect — Relatórios V2 e identificação do usuário
+
+- adiciona uma apresentação executiva premium para os relatórios do cliente e do Super Admin;
+- reaproveita métricas, filtros, permissões e exportações existentes, sem alterar regras de negócio;
+- inclui nome, função e iniciais do usuário conectado no topo da aplicação;
+- mantém o layout anterior disponível por `?layout=legacy` para retorno imediato durante a homologação;
+- não exige migration nova.
+
 # RS Connect v36.12.1 — Linguagem clara e diagnóstico simplificado
 
 - traduz avisos técnicos para uma linguagem que explica o que aconteceu, o que pode ser afetado e o que fazer agora;

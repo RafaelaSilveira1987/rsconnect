@@ -42,3 +42,10 @@ tests/service-cycle-recovery-smoke.php
 tests/team-professional-reports-smoke.php
 tests/team-report-audit-smoke.php
 tests/tenant-isolation-hardening-smoke.php
+IMPLEMENTACAO-RELATORIOS-V2.md
+app/Controllers/ReportController.php
+app/Views/layouts/app.php
+app/Views/reports/admin_v2.php
+app/Views/reports/index_v2.php
+public/assets/css/app.css
+public/assets/css/reports-v2.css
