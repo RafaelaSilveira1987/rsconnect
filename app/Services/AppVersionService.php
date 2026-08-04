@@ -13,7 +13,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.1';
-    public const PACKAGE_LABEL = 'RS Connect 36.13.0 — Áudios, imagens e documentos nas conversas';
+    public const PACKAGE_LABEL = 'RS Connect 36.14.0 — Painel executivo de relatórios da RS Admin';
     public const REQUIRED_MIGRATION = '074_conversation_message_attachments.sql';
 
     private PDO $pdo;
@@ -152,7 +152,7 @@ final class AppVersionService
             $tenantIsolationReady
                 ? 'UUIDs e IDs internos são validados contra o tenant autenticado antes do controller.'
                 : 'A barreira central de isolamento por tenant ou a auditoria de segurança não está disponível.',
-            'Implantar o pacote 36.13.0, executar a migration 074 e validar anexos, isolamento, segurança e monitoramento.'
+            'Implantar o pacote 36.14.0, manter a migration 074 aplicada e validar o painel executivo, anexos, isolamento, segurança e monitoramento.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')

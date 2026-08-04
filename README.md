@@ -1,3 +1,17 @@
+# RS Connect v36.14.0 — Painel executivo de relatórios da RS Admin
+
+A v36.14.0 cria uma nova visão geral de relatórios para o Super Admin, com indicadores rápidos, comparações com o período anterior, gráficos de movimento, horários de pico, desempenho da equipe, agenda, uso da IA e exportações rápidas.
+
+Acesse como Super Admin:
+
+`Relatórios → Visão geral`
+
+Não existe migration nova. A última migration obrigatória continua sendo:
+
+`database/migrations/074_conversation_message_attachments.sql`
+
+A implantação e a homologação estão descritas em `INSTRUCOES-v36.14.0.md`.
+
 # RS Connect v36.13.0 — Áudios, imagens e documentos nas conversas
 
 A v36.13.0 adiciona recebimento, visualização, reprodução, download e envio de mídias nas conversas. O primeiro pacote suporta imagens JPEG/PNG/WEBP, documentos PDF e áudios MP3/OGG/OPUS/M4A.
