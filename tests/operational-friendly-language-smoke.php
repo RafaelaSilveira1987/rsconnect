@@ -65,8 +65,8 @@ $assert(str_contains($alertService, 'OperationalLanguageService::alertMessage'),
 $assert(str_contains($alertService, 't.name AS tenant_name'), 'Aviso administrativo deve incluir o nome da empresa afetada.');
 $assert(str_contains($layout, 'Avisos do sistema'), 'Menu deve usar o nome Avisos do sistema.');
 $assert(str_contains($layout, 'OperationalLanguageService::replaceTechnicalTerms'), 'Mensagens rápidas do sistema devem ser simplificadas no layout global.');
-$assert(str_contains($layout, 'app.css?v=36.15.0') && str_contains($layout, 'app.js?v=36.15.0'), 'Cache dos assets deve estar em 36.15.0.');
-$assert(str_contains($version, 'RS Connect 36.15.0') && str_contains($version, '074_conversation_message_attachments.sql'), 'Versão 36.15.0 deve exigir a migration 074.');
+$assert(str_contains($layout, 'app.css?v=36.15.1') && str_contains($layout, 'app.js?v=36.15.1'), 'Cache dos assets deve estar em 36.15.0.');
+$assert(str_contains($version, 'RS Connect 36.15.1') && str_contains($version, '075_scheduled_reports_and_deliveries.sql'), 'Versão 36.15.0 deve exigir a migration 074.');
 
 if ($failures !== []) {
     fwrite(STDERR, "Falhas:\n- " . implode("\n- ", $failures) . "\n");

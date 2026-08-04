@@ -101,7 +101,7 @@ $quickReports = [
     ['name' => 'Cobranças da empresa', 'type' => 'Financeiro', 'metric' => $money($metrics['received_amount'] ?? 0) . ' recebido', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'billing']))],
 ];
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.15.0')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.15.1')) ?>">
 <div class="executive-report-page client-manager-report report-v3646 report-v3647 report-v36140 report-v36150">
     <header class="rs-admin-report-header rs-client-report-header">
         <div>
@@ -110,6 +110,7 @@ $quickReports = [
             <p>Indicadores da sua empresa para acompanhar atendimento, equipe, automações, agenda e resultados em um só lugar.</p>
         </div>
         <div class="rs-admin-report-header-actions">
+            <?php if (Auth::can('reports.schedule.manage')): ?><a class="btn btn-outline" href="<?= View::e(Router::url('/reports/automatic')) ?>">Relatórios automáticos</a><?php endif; ?>
             <?php if (Auth::can('reports.team.view_own') || Auth::can('reports.team.view_all')): ?><a class="btn btn-outline" href="<?= View::e($teamReportUrl) ?>">Equipe e profissionais</a><?php endif; ?>
             <button class="btn btn-outline" type="button" onclick="window.location.reload()"><?= $icon('refresh') ?> Atualizar</button>
             <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'conversations']))) ?>"><?= $icon('download') ?> Exportar</a>
@@ -140,7 +141,7 @@ $quickReports = [
         <a class="card rs-admin-kpi is-green" href="<?= View::e(Router::url('/calendar')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('check') ?></span><div><small>Comparecimento</small><strong><?= $percent($metrics['attendance_rate'] ?? 0) ?></strong><em><?= $number($metrics['appointments_completed'] ?? 0) ?> concluído(s)</em></div></a>
         <?php $t = $trend($comparisons['ai_replies'] ?? null); ?>
         <a class="card rs-admin-kpi is-violet" href="#client-report-team"><span class="rs-admin-kpi-icon"><?= $icon('spark') ?></span><div><small>Uso da IA</small><strong><?= $number($metrics['ai_replies'] ?? 0) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= $percent($metrics['ai_share'] ?? 0) ?> das respostas</em></div></a>
-        <a class="card rs-admin-kpi is-red" href="#client-report-attention"><span class="rs-admin-kpi-icon"><?= $icon('alert') ?></span><div><small>Situações que precisam atenção</small><strong><?= $number($metrics['situations_open'] ?? 0) ?></strong><em><?= $number($metrics['unread'] ?? 0) ?> mensagem(ns) não lida(s)</em></div></a>
+        <a class="card rs-admin-kpi is-red" href="#client-report-attention"><span class="rs-admin-kpi-icon"><?= $icon('alert') ?></span><div><small>Itens que precisam de atenção</small><strong><?= $number($metrics['situations_open'] ?? 0) ?></strong><em><?= $number($metrics['unread'] ?? 0) ?> mensagem(ns) não lida(s)</em></div></a>
     </section>
 
     <section class="rs-admin-chart-grid rs-admin-chart-grid-primary">
@@ -244,5 +245,5 @@ $quickReports = [
             </div>
         </section>
     </div>
-<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.15.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.15.1')) ?>" defer></script>
 </div>

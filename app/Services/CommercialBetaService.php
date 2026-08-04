@@ -160,6 +160,8 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.15.1', 'title' => 'Relatórios automáticos, PDF e WhatsApp', 'summary' => 'Gera relatórios protegidos com identidade visual, programação diária, semanal ou mensal, destinatários por empresa, histórico, reenvio e controle de duplicidade.'],
+            ['version' => '36.15.0-r1', 'title' => 'Consistência dos indicadores executivos', 'summary' => 'Padroniza primeira resposta operacional, participação da IA e nomenclatura dos cards equivalentes entre RS Admin e empresa cliente.'],
             ['version' => '36.15.0', 'title' => 'Painel executivo das empresas clientes', 'summary' => 'Leva o padrão visual executivo para cada empresa, com indicadores de conversas, respostas, equipe, tempo de primeira resposta, agenda, comparecimento, IA, situações que precisam de atenção, exportações e análises detalhadas isoladas por tenant.'],
             ['version' => '36.14.0', 'title' => 'Painel executivo de relatórios da RS Admin', 'summary' => 'Reorganiza a visão de relatórios do Super Admin com indicadores rápidos, tendências, distribuição das interações, horários de pico, desempenho da equipe, agenda, uso da IA e exportações em um painel responsivo.'],
             ['version' => '36.13.0', 'title' => 'Áudios, imagens e documentos nas conversas', 'summary' => 'Permite ouvir áudios, visualizar imagens, abrir PDFs, baixar arquivos e enviar anexos pelo painel com armazenamento privado e isolamento por empresa.'],

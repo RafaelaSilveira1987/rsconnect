@@ -35,6 +35,7 @@ use App\Controllers\CommunicationsController;
 use App\Controllers\PaymentGatewayController;
 use App\Controllers\PrivacyController;
 use App\Controllers\ReportController;
+use App\Controllers\ScheduledReportController;
 use App\Controllers\SecurityController;
 use App\Controllers\BillingReminderController;
 use App\Controllers\PermissionController;
@@ -124,6 +125,14 @@ return static function (Router $router): void {
 
 
     $router->get('/reports', [ReportController::class, 'index'], ['auth', 'permission:reports.view']);
+    $router->get('/reports/automatic', [ScheduledReportController::class, 'index'], ['auth', 'permission:reports.schedule.manage']);
+    $router->post('/reports/automatic/save', [ScheduledReportController::class, 'save'], ['auth', 'permission:reports.schedule.manage', 'csrf']);
+    $router->post('/reports/automatic/generate', [ScheduledReportController::class, 'generate'], ['auth', 'permission:reports.schedule.manage', 'csrf']);
+    $router->post('/reports/automatic/toggle', [ScheduledReportController::class, 'toggle'], ['auth', 'permission:reports.schedule.manage', 'csrf']);
+    $router->post('/reports/automatic/resend', [ScheduledReportController::class, 'resend'], ['auth', 'permission:reports.schedule.manage', 'csrf']);
+    $router->get('/reports/automatic/download', [ScheduledReportController::class, 'download'], ['auth', 'permission:reports.schedule.manage']);
+    $router->get('/webhooks/reports/scheduled/run', [ScheduledReportController::class, 'cron']);
+    $router->post('/webhooks/reports/scheduled/run', [ScheduledReportController::class, 'cron']);
     $router->get('/reports/export', [ReportController::class, 'export'], ['auth', 'permission:reports.view']);
     $router->get('/reports/team', [ReportController::class, 'team'], ['auth', 'permission:reports.view']);
     $router->get('/reports/team/export', [ReportController::class, 'teamExport'], ['auth', 'permission:reports.view']);

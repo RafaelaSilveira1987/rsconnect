@@ -295,3 +295,7 @@ Para a saúde operacional automática, configure `OPERATIONS_MONITOR_TOKEN` e ba
 - Checklist de implantação RS.
 - Fila de atendimento e distribuição por equipe.
 - Campanhas e disparos controlados.
+## Relatórios automáticos (v36.15.1)
+
+A RS Connect gera relatórios executivos em PDF para a RS Admin e para cada empresa, permite programação diária, semanal ou mensal e envia o arquivo pelo WhatsApp. Os PDFs ficam em armazenamento privado e são entregues somente após validação do usuário e do tenant.
+

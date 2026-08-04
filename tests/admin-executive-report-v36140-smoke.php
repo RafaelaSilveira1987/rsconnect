@@ -10,17 +10,17 @@ $version = file_get_contents($root . '/app/Services/AppVersionService.php') ?: '
 $layout = file_get_contents($root . '/app/Views/layouts/app.php') ?: '';
 
 $assertions = [
-    'versão 36.15.0 publicada' => str_contains($version, 'RS Connect 36.15.0')
-        && str_contains($version, '074_conversation_message_attachments.sql'),
-    'cache global renovado' => str_contains($layout, 'app.css?v=36.15.0')
-        && str_contains($layout, 'app.js?v=36.15.0'),
+    'versão 36.15.0 publicada' => str_contains($version, 'RS Connect 36.15.1')
+        && str_contains($version, '075_scheduled_reports_and_deliveries.sql'),
+    'cache global renovado' => str_contains($layout, 'app.css?v=36.15.1')
+        && str_contains($layout, 'app.js?v=36.15.1'),
     'métricas executivas adicionadas' => str_contains($service, "'conversations_started'")
         && str_contains($service, "'avg_first_response_seconds'")
         && str_contains($service, 'teamPerformance')
         && str_contains($service, 'interactionsByHour'),
     'painel contém indicadores principais' => str_contains($view, 'rs-admin-kpi-grid')
         && str_contains($view, 'Tempo médio da 1ª resposta')
-        && str_contains($view, 'Situações em aberto'),
+        && str_contains($view, 'Incidentes operacionais'),
     'painel contém os gráficos principais' => str_contains($view, 'Atendimentos ao longo do tempo')
         && str_contains($view, 'Distribuição das interações')
         && str_contains($view, 'Interações por horário'),
