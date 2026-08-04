@@ -46,7 +46,7 @@ $checks = [
         && str_contains($migration, 'uq_conversation_attachment_uuid'),
     'Docker suporta upload e diretório privado' => str_contains($dockerfile, 'upload_max_filesize=25M')
         && str_contains($dockerfile, 'storage/conversation-attachments'),
-    'versão e migration atualizadas' => str_contains($version, 'RS Connect 36.13.0')
+    'versão e migration atualizadas' => str_contains($version, 'RS Connect 36.14.0')
         && str_contains($version, '074_conversation_message_attachments.sql'),
 ];
 
@@ -62,4 +62,4 @@ if ($failed !== []) {
     exit(1);
 }
 
-echo "OK - anexos, áudios, imagens e documentos validados na v36.13.0." . PHP_EOL;
+echo "OK - anexos, áudios, imagens e documentos validados na v36.14.0." . PHP_EOL;

@@ -41,10 +41,10 @@ $checks = [
     'serviço aplica escopo own/all' => str_contains($foundation, "'mode' => 'own'")
         && str_contains($foundation, "'mode' => 'all'")
         && str_contains($foundation, 'reports.team.view_all'),
-    'versão e migrations atualizadas' => str_contains($version, 'RS Connect 36.13.0')
+    'versão e migrations atualizadas' => str_contains($version, 'RS Connect 36.14.0')
         && str_contains($version, '074_conversation_message_attachments.sql'),
-    'cache atualizado' => str_contains($layout, 'app.css?v=36.13.0')
-        && str_contains($layout, 'app.js?v=36.13.0'),
+    'cache atualizado' => str_contains($layout, 'app.css?v=36.14.0')
+        && str_contains($layout, 'app.js?v=36.14.0'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));
