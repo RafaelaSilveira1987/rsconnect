@@ -13,8 +13,8 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.1';
-    public const PACKAGE_LABEL = 'RS Connect 36.12.1 — Linguagem clara e diagnóstico simplificado';
-    public const REQUIRED_MIGRATION = '073_operational_monitoring_alert_delivery.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.13.0 — Áudios, imagens e documentos nas conversas';
+    public const REQUIRED_MIGRATION = '074_conversation_message_attachments.sql';
 
     private PDO $pdo;
 
@@ -106,13 +106,14 @@ final class AppVersionService
             'rs_datetime_contract',
             'security_rate_limits',
             'operational_monitor_runs',
+            'conversation_message_attachments',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 073, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 074, conforme o pacote implantado.'
         );
 
         $monitoringReady = $this->tableExists('operational_monitor_runs')
@@ -131,6 +132,17 @@ final class AppVersionService
             'Executar database/migrations/073_operational_monitoring_alert_delivery.sql e validar os canais em Avisos do sistema.'
         );
 
+        $attachmentsReady = $this->tableExists('conversation_message_attachments')
+            && class_exists(ConversationAttachmentService::class);
+        $checks[] = $this->check(
+            'Arquivos nas conversas',
+            $attachmentsReady ? 'ok' : 'blocked',
+            $attachmentsReady
+                ? 'Imagens, PDFs e áudios podem ser enviados, recebidos e acessados com autorização por empresa.'
+                : 'A estrutura privada de anexos ainda não foi aplicada.',
+            'Executar database/migrations/074_conversation_message_attachments.sql e testar um envio e um recebimento de arquivo.'
+        );
+
         $tenantIsolationReady = class_exists(TenantIsolationService::class)
             && method_exists(TenantIsolationService::class, 'validateAuthenticatedRequest')
             && $this->tableExists('security_events');
@@ -140,7 +152,7 @@ final class AppVersionService
             $tenantIsolationReady
                 ? 'UUIDs e IDs internos são validados contra o tenant autenticado antes do controller.'
                 : 'A barreira central de isolamento por tenant ou a auditoria de segurança não está disponível.',
-            'Implantar o pacote 36.12.1, executar a migration 073 e validar isolamento, segurança, monitoramento e linguagem dos avisos.'
+            'Implantar o pacote 36.13.0, executar a migration 074 e validar anexos, isolamento, segurança e monitoramento.'
         );
 
         $trialStructureReady = $this->columnExists('tenant_subscriptions', 'trial_days')

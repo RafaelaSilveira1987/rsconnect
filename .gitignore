@@ -1,6 +1,7 @@
 /.env
 /storage/logs/*.log
 /storage/cache/*
+/storage/conversation-attachments/*
 !/storage/logs/.gitkeep
 !/storage/cache/.gitkeep
 /vendor/
@@ -14,5 +15,3 @@
 *.tar.gz
 /backups/
 /tmp/
-
-.env

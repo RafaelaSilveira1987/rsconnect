@@ -18,6 +18,7 @@ use App\Services\CrmAutoService;
 use App\Services\CalendarConversationService;
 use App\Services\ConversationFlowService;
 use App\Services\ConversationOwnershipService;
+use App\Services\ConversationAttachmentService;
 use App\Services\EvolutionService;
 use App\Services\NotificationService;
 use App\Services\PreSchedulingService;
@@ -268,6 +269,32 @@ final class EvolutionWebhookController
             $flowContext = [];
             $preScheduleResult = ['skip_ai' => false, 'handled' => false];
             $processingWarnings = [];
+
+            if (!$fromMe && $inserted && in_array($messageType, ['image', 'audio', 'document'], true)) {
+                try {
+                    $this->persistIncomingAttachment(
+                        $pdo,
+                        $instance,
+                        $data,
+                        $payload,
+                        $conversationId,
+                        $storedMessageId,
+                        $externalId,
+                        $messageType
+                    );
+                } catch (Throwable $exception) {
+                    $processingWarnings[] = 'media_attachment';
+                    $this->logWebhookFailure($exception, [
+                        'phase' => 'media_attachment',
+                        'event' => $event,
+                        'instance_id' => (int) ($instance['id'] ?? 0),
+                        'conversation_id' => $conversationId,
+                        'stored_message_id' => $storedMessageId,
+                        'message_type' => $messageType,
+                    ]);
+                }
+            }
+
             $resolvedAgent = null;
             $operatingPolicy = ['enforced' => false, 'inside' => true, 'reason' => 'agent_not_resolved'];
             $outsideBusinessHours = false;
@@ -1480,6 +1507,184 @@ final class EvolutionWebhookController
             // Antes da migration 038, reações permanecem ignoradas por segurança.
             return false;
         }
+    }
+
+    /**
+     * Salva a mídia recebida em armazenamento privado. Falhas são registradas
+     * na tabela de anexos, mas nunca fazem a Evolution repetir a mensagem.
+     *
+     * @param array<string,mixed> $instance
+     * @param array<string,mixed> $data
+     * @param array<string,mixed> $payload
+     */
+    private function persistIncomingAttachment(
+        PDO $pdo,
+        array $instance,
+        array $data,
+        array $payload,
+        int $conversationId,
+        int $messageId,
+        ?string $externalId,
+        string $messageType
+    ): void {
+        if (!$this->hasTable($pdo, 'conversation_message_attachments')) {
+            return;
+        }
+
+        $attachmentService = new ConversationAttachmentService();
+        if (!$attachmentService->enabled()) {
+            return;
+        }
+
+        $media = $this->mediaMetadata($data, $messageType, $externalId);
+        $base64 = $this->extractMediaBase64($data);
+        $downloadBody = [];
+
+        try {
+            if ($base64 === '') {
+                $download = $this->evolutionServiceForInstance($instance)->downloadMediaMessage($data, false);
+                $downloadBody = is_array($download['body'] ?? null) ? $download['body'] : [];
+                $base64 = $this->extractMediaBase64($downloadBody);
+                $media = array_merge($media, array_filter([
+                    'mime_type' => $this->firstScalar($downloadBody, ['mimetype', 'mimeType', 'data.mimetype', 'data.mimeType']),
+                    'original_name' => $this->firstScalar($downloadBody, ['fileName', 'filename', 'data.fileName', 'data.filename']),
+                ], static fn ($value): bool => is_string($value) && trim($value) !== ''));
+            }
+
+            if ($base64 === '') {
+                throw new \RuntimeException('A Evolution não retornou o conteúdo da mídia.');
+            }
+
+            $media['evolution_message_id'] = $externalId;
+            $media['metadata_json'] = [
+                'message_type' => $messageType,
+                'download_response' => $downloadBody !== [] ? array_keys($downloadBody) : [],
+            ];
+            $attachment = $attachmentService->storeIncomingBase64(
+                $base64,
+                $media,
+                (int) $instance['tenant_id'],
+                $conversationId,
+                $messageId
+            );
+            $attachmentService->insert($pdo, $attachment);
+        } catch (Throwable $exception) {
+            $attachmentService->recordFailure(
+                $pdo,
+                (int) $instance['tenant_id'],
+                $conversationId,
+                $messageId,
+                $externalId,
+                $messageType,
+                (string) ($media['original_name'] ?? 'arquivo'),
+                (string) ($media['mime_type'] ?? 'application/octet-stream'),
+                $exception->getMessage(),
+                ['message_type' => $messageType]
+            );
+            throw $exception;
+        }
+    }
+
+    /** @return array<string,mixed> */
+    private function mediaMetadata(array $data, string $messageType, ?string $externalId): array
+    {
+        $message = is_array($data['message'] ?? null) ? $data['message'] : [];
+        $message = $this->unwrapMediaMessage($message);
+        $node = match ($messageType) {
+            'image' => is_array($message['imageMessage'] ?? null) ? $message['imageMessage'] : [],
+            'audio' => is_array($message['audioMessage'] ?? null) ? $message['audioMessage'] : [],
+            'document' => is_array($message['documentMessage'] ?? null) ? $message['documentMessage'] : [],
+            default => [],
+        };
+
+        $mime = trim((string) ($node['mimetype'] ?? $node['mimeType'] ?? ''));
+        if ($mime === '') {
+            $mime = match ($messageType) {
+                'image' => 'image/jpeg',
+                'audio' => 'audio/ogg',
+                'document' => 'application/pdf',
+                default => 'application/octet-stream',
+            };
+        }
+
+        $fileName = trim((string) ($node['fileName'] ?? $node['filename'] ?? ''));
+        if ($fileName === '') {
+            $extension = match ($messageType) {
+                'image' => 'jpg',
+                'audio' => 'ogg',
+                'document' => 'pdf',
+                default => 'bin',
+            };
+            $fileName = $messageType . '-' . ($externalId !== null ? preg_replace('/[^A-Za-z0-9_-]+/', '', $externalId) : gmdate('YmdHis')) . '.' . $extension;
+        }
+
+        return [
+            'mime_type' => $mime,
+            'original_name' => $fileName,
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function unwrapMediaMessage(array $message): array
+    {
+        foreach (['ephemeralMessage', 'viewOnceMessage', 'viewOnceMessageV2', 'documentWithCaptionMessage'] as $wrapper) {
+            $inner = $message[$wrapper]['message'] ?? null;
+            if (is_array($inner)) {
+                return $this->unwrapMediaMessage($inner);
+            }
+        }
+        return $message;
+    }
+
+    private function extractMediaBase64(array $source): string
+    {
+        foreach (['base64', 'mediaBase64', 'media_base64'] as $key) {
+            $value = $source[$key] ?? null;
+            if (is_string($value) && strlen(trim($value)) > 80 && !preg_match('#^https?://#i', trim($value))) {
+                return trim($value);
+            }
+        }
+
+        foreach (['data', 'message', 'imageMessage', 'audioMessage', 'documentMessage', 'ephemeralMessage', 'viewOnceMessage', 'viewOnceMessageV2'] as $key) {
+            $value = $source[$key] ?? null;
+            if (is_array($value)) {
+                $found = $this->extractMediaBase64($value);
+                if ($found !== '') {
+                    return $found;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /** @param list<string> $paths */
+    private function firstScalar(array $source, array $paths): string
+    {
+        foreach ($paths as $path) {
+            $value = $source;
+            foreach (explode('.', $path) as $segment) {
+                if (!is_array($value) || !array_key_exists($segment, $value)) {
+                    $value = null;
+                    break;
+                }
+                $value = $value[$segment];
+            }
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                return trim((string) $value);
+            }
+        }
+        return '';
+    }
+
+    private function hasTable(PDO $pdo, string $table): bool
+    {
+        $statement = $pdo->prepare(
+            'SELECT COUNT(*) FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table'
+        );
+        $statement->execute(['table' => $table]);
+        return (int) $statement->fetchColumn() > 0;
     }
 
     private function extractContent(array $data): array

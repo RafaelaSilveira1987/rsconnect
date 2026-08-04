@@ -30,9 +30,9 @@ $checks = [
     'layout responsivo' => str_contains($css, '.calendar-week-scroll')
         && str_contains($css, '.calendar-month-scroll')
         && str_contains($css, '@media (max-width: 560px)'),
-    'cache renovado' => str_contains($layout, 'app.css?v=36.12.1')
-        && str_contains($layout, 'app.js?v=36.12.1'),
-    'versão atualizada' => str_contains($version, 'RS Connect 36.12.1'),
+    'cache renovado' => str_contains($layout, 'app.css?v=36.13.0')
+        && str_contains($layout, 'app.js?v=36.13.0'),
+    'versão atualizada' => str_contains($version, 'RS Connect 36.13.0'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));
