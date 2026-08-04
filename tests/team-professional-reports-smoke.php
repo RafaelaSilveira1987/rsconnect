@@ -56,11 +56,11 @@ $checks = [
         && str_contains($css, '@media (max-width:620px)'),
     'diagnóstico adicionado' => str_contains($diagnostic, 'tempo_medio_primeira_resposta_segundos')
         && str_contains($diagnostic, 'nao_compareceram'),
-    'versão e migrations históricas atualizadas até 070' => str_contains($version, 'RS Connect 36.12.1')
-        && str_contains($version, '073_operational_monitoring_alert_delivery.sql')
+    'versão e migrations históricas atualizadas até 070' => str_contains($version, 'RS Connect 36.13.0')
+        && str_contains($version, '074_conversation_message_attachments.sql')
         && str_contains($foundation, 'conversation_service_cycles'),
-    'cache visual atualizado' => str_contains($layout, 'app.css?v=36.12.1')
-        && str_contains($layout, 'app.js?v=36.12.1'),
+    'cache visual atualizado' => str_contains($layout, 'app.css?v=36.13.0')
+        && str_contains($layout, 'app.js?v=36.13.0'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

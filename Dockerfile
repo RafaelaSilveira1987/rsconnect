@@ -5,6 +5,7 @@ ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 RUN apt-get update \
     && apt-get install -y libzip-dev libcurl4-openssl-dev libonig-dev unzip git \
     && docker-php-ext-install pdo_mysql curl mbstring zip \
+    && printf 'upload_max_filesize=25M\npost_max_size=26M\nmax_file_uploads=5\n' > /usr/local/etc/php/conf.d/rs-connect-uploads.ini \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
 
@@ -26,7 +27,7 @@ RUN printf '%s\n' \
     '    CustomLog ${APACHE_LOG_DIR}/access.log combined' \
     '</VirtualHost>' \
     > /etc/apache2/sites-available/000-default.conf \
-    && mkdir -p /var/www/html/storage/logs /var/www/html/storage/cache \
+    && mkdir -p /var/www/html/storage/logs /var/www/html/storage/cache /var/www/html/storage/conversation-attachments \
     && chown -R www-data:www-data /var/www/html/storage
 
 EXPOSE 80

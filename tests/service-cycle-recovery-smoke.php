@@ -24,11 +24,11 @@ $checks = [
     'diagnóstico procura conversas e mensagens sem ciclo' => str_contains($diagnostic, 'HAVING COUNT(sc.id) = 0')
         && str_contains($diagnostic, 'Mensagens humanas recentes sem ciclo ativo')
         && str_contains($diagnostic, 'conversation_id = 1104'),
-    'pacote exige migration 070 após a recuperação 069' => str_contains($version, 'RS Connect 36.12.1')
-        && str_contains($version, '073_operational_monitoring_alert_delivery.sql'),
+    'pacote exige migration 070 após a recuperação 069' => str_contains($version, 'RS Connect 36.13.0')
+        && str_contains($version, '074_conversation_message_attachments.sql'),
     'fundação identifica ciclo resiliente' => str_contains($foundation, '36.10.4-utc-datetime-contract'),
-    'cache visual atualizado' => str_contains($layout, 'app.css?v=36.12.1')
-        && str_contains($layout, 'app.js?v=36.12.1'),
+    'cache visual atualizado' => str_contains($layout, 'app.css?v=36.13.0')
+        && str_contains($layout, 'app.js?v=36.13.0'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

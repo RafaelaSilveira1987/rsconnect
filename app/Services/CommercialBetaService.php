@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.13.0', 'title' => 'Áudios, imagens e documentos nas conversas', 'summary' => 'Permite ouvir áudios, visualizar imagens, abrir PDFs, baixar arquivos e enviar anexos pelo painel com armazenamento privado e isolamento por empresa.'],
             ['version' => '36.12.1', 'title' => 'Linguagem clara e diagnóstico simplificado', 'summary' => 'Mostra o que aconteceu, o que pode ser afetado e o que fazer agora, sem expor nomes técnicos ao cliente e mantendo detalhes expansíveis para o Super Admin.'],
             ['version' => '36.12.0', 'title' => 'Monitoramento e avisos do sistema', 'summary' => 'Monitora o funcionamento do WhatsApp, automações, assistente virtual, cópias de segurança, dados e servidor; registra análise, normalização e entrega dos avisos.'],
             ['version' => '36.11.2', 'title' => 'Métricas históricas e operacionais separadas', 'summary' => 'Identifica ciclos recuperados, mostra o início da coleta operacional confiável, permite excluir o histórico dos cálculos e leva qualidade e origem dos dados para a auditoria e o CSV.'],
