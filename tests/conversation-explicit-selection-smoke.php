@@ -39,9 +39,9 @@ $assert(
     str_contains($view, 'conversation_uuid') || str_contains($view, "PublicId::encode('conversation'"),
     'Os links de conversa devem continuar usando identificador público.'
 );
-$assert(str_contains($version, 'RS Connect 36.15.0'), 'A versão do pacote deve ser 36.15.0.');
+$assert(str_contains($version, 'RS Connect 36.15.1'), 'A versão do pacote deve ser 36.15.0.');
 $assert(
-    str_contains($layout, 'app.css?v=36.15.0') && str_contains($layout, 'app.js?v=36.15.0'),
+    str_contains($layout, 'app.css?v=36.15.1') && str_contains($layout, 'app.js?v=36.15.1'),
     'O cache dos assets deve ser renovado para 36.15.0.'
 );
 

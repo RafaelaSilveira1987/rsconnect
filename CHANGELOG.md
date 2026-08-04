@@ -1,3 +1,28 @@
+# v36.15.1 — Relatórios automáticos, PDF e WhatsApp
+
+- inclui a correção de consistência dos indicadores executivos da v36.15.0-r1;
+- geração manual de relatório em PDF;
+- programação diária, semanal ou mensal;
+- versão RS Admin e versão da empresa cliente;
+- identidade visual por empresa;
+- escolha das seções do relatório;
+- comparação com o período anterior;
+- destinatários por empresa e envio pelo WhatsApp;
+- histórico com situação aguardando, enviado, parcial ou não concluído;
+- reenvio manual e controle de duplicidade por período;
+- arquivos em armazenamento privado com acesso protegido;
+- migration 075 para programações, arquivos e entregas.
+
+# RS Connect v36.15.0-r1 — Consistência dos indicadores executivos
+
+- padroniza os cards equivalentes da RS Admin e da empresa cliente;
+- usa somente ciclos operacionais nas métricas executivas de primeira resposta;
+- mantém `migration_snapshot` e `migration_069_recovery` apenas na auditoria histórica;
+- unifica a participação da IA pela fórmula `IA / (IA + respostas humanas)`;
+- diferencia “Incidentes operacionais” da RS Admin de “Itens que precisam de atenção” do cliente;
+- adiciona uma política central de métricas e teste de consistência entre os dois painéis;
+- não exige nova migration; a última continua sendo `074_conversation_message_attachments.sql`.
+
 # RS Connect v36.15.0 — Painel executivo das empresas clientes
 
 - Reaproveita o padrão visual homologado na RS Admin para a visão de cada empresa.

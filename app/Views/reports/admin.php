@@ -101,7 +101,7 @@ $quickReports = [
     ['name' => 'Pipeline comercial RS', 'type' => 'Comercial', 'metric' => $money($metrics['commercial_pipeline'] ?? 0), 'export' => 'commercial'],
 ];
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.14.0')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.15.1')) ?>">
 <div class="executive-report-page executive-report-admin report-v3646 report-v3647 report-v36140">
     <header class="rs-admin-report-header">
         <div>
@@ -110,6 +110,7 @@ $quickReports = [
             <p>Indicadores e insights da operação RS Connect para decisões rápidas e acompanhamento das empresas.</p>
         </div>
         <div class="rs-admin-report-header-actions">
+            <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/automatic')) ?>">Relatórios automáticos</a>
             <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/team?' . http_build_query($queryBase))) ?>">Equipe e profissionais</a>
             <button class="btn btn-outline" type="button" onclick="window.location.reload()"><?= $icon('refresh') ?> Atualizar</button>
             <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'companies']))) ?>"><?= $icon('download') ?> Exportar</a>
@@ -143,7 +144,7 @@ $quickReports = [
         <?php $t = $trend($comparisons['ai_replies'] ?? null); ?>
         <a class="card rs-admin-kpi is-violet" href="#report-automation"><span class="rs-admin-kpi-icon"><?= $icon('spark') ?></span><div><small>Uso da IA</small><strong><?= $number($metrics['ai_replies'] ?? 0) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= number_format((float) ($metrics['ai_share'] ?? 0), 1, ',', '.') ?>% das respostas</em></div></a>
         <?php $t = $trend($comparisons['automation_failures'] ?? null, true); ?>
-        <a class="card rs-admin-kpi is-red" href="<?= View::e(Router::url('/operacao-alertas')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('alert') ?></span><div><small>Situações em aberto</small><strong><?= $number(($metrics['open_operational_incidents'] ?? 0) + ($metrics['open_health_incidents'] ?? 0)) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= $number($metrics['automation_failures'] ?? 0) ?> no período</em></div></a>
+        <a class="card rs-admin-kpi is-red" href="<?= View::e(Router::url('/operacao-alertas')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('alert') ?></span><div><small>Incidentes operacionais</small><strong><?= $number(($metrics['open_operational_incidents'] ?? 0) + ($metrics['open_health_incidents'] ?? 0)) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= $number($metrics['automation_failures'] ?? 0) ?> no período</em></div></a>
     </section>
 
     <section class="rs-admin-chart-grid rs-admin-chart-grid-primary">

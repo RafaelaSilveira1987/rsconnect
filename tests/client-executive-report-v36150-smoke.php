@@ -10,10 +10,10 @@ $version = file_get_contents($root . '/app/Services/AppVersionService.php') ?: '
 $layout = file_get_contents($root . '/app/Views/layouts/app.php') ?: '';
 
 $assertions = [
-    'versão 36.15.0 publicada' => str_contains($version, 'RS Connect 36.15.0')
-        && str_contains($version, '074_conversation_message_attachments.sql'),
-    'cache global renovado' => str_contains($layout, 'app.css?v=36.15.0')
-        && str_contains($layout, 'app.js?v=36.15.0'),
+    'versão 36.15.0 publicada' => str_contains($version, 'RS Connect 36.15.1')
+        && str_contains($version, '075_scheduled_reports_and_deliveries.sql'),
+    'cache global renovado' => str_contains($layout, 'app.css?v=36.15.1')
+        && str_contains($layout, 'app.js?v=36.15.1'),
     'métricas executivas do tenant disponíveis' => str_contains($service, "'responded_conversations'")
         && str_contains($service, "'human_conversations'")
         && str_contains($service, "'first_responses_measured'")
@@ -25,7 +25,7 @@ $assertions = [
         && str_contains($view, 'Agendamentos')
         && str_contains($view, 'Comparecimento')
         && str_contains($view, 'Uso da IA')
-        && str_contains($view, 'Situações que precisam atenção'),
+        && str_contains($view, 'Itens que precisam de atenção'),
     'gráficos principais incluídos' => str_contains($view, 'Atendimentos ao longo do tempo')
         && str_contains($view, 'Distribuição das interações')
         && str_contains($view, 'Interações por horário'),

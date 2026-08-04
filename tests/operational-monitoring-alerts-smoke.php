@@ -78,10 +78,10 @@ $checks = [
     'diagnóstico cobre ciclo completo' => str_contains($diagnostic, 'operational_monitor_runs')
         && str_contains($diagnostic, 'operational_alert_deliveries')
         && str_contains($diagnostic, 'acknowledged_at'),
-    'versão e migration atualizadas' => str_contains($version, 'RS Connect 36.15.0')
-        && str_contains($version, '074_conversation_message_attachments.sql'),
-    'cache dos assets atualizado' => str_contains($layout, 'app.css?v=36.15.0')
-        && str_contains($layout, 'app.js?v=36.15.0'),
+    'versão e migration atualizadas' => str_contains($version, 'RS Connect 36.15.1')
+        && str_contains($version, '075_scheduled_reports_and_deliveries.sql'),
+    'cache dos assets atualizado' => str_contains($layout, 'app.css?v=36.15.1')
+        && str_contains($layout, 'app.js?v=36.15.1'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

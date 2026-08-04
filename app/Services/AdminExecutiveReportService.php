@@ -13,12 +13,14 @@ final class AdminExecutiveReportService
 {
     private PDO $pdo;
     private ReportingAggregationService $aggregation;
+    private ExecutiveMetricsPolicyService $executivePolicy;
     private array $warnings = [];
 
     public function __construct(?PDO $pdo = null)
     {
         $this->pdo = $pdo ?? Database::connection();
         $this->aggregation = new ReportingAggregationService($this->pdo);
+        $this->executivePolicy = new ExecutiveMetricsPolicyService($this->pdo);
     }
 
     public function build(array $filters): array
@@ -49,6 +51,12 @@ final class AdminExecutiveReportService
                 $this->warnings[] = 'A camada agregada não pôde ser atualizada; o relatório executivo usou as tabelas operacionais.';
             }
         }
+
+        $operationalResponses = $this->executivePolicy->operationalFirstResponses(
+            $tenantId > 0 ? $tenantId : null,
+            $date['start'],
+            $date['end']
+        );
 
         $metrics = [
             'new_companies' => $this->scalar(
@@ -124,20 +132,10 @@ final class AdminExecutiveReportService
                  WHERE direction = "outgoing" AND sender_type = "user" AND sent_at BETWEEN :start AND :end' . $scope,
                 $params
             ),
-            'first_responses' => $this->scalar(
-                'SELECT COUNT(*)
-                 FROM conversation_service_cycles
-                 WHERE first_incoming_at BETWEEN :start AND :end
-                   AND first_response_at IS NOT NULL' . $scope,
-                $params
-            ),
-            'avg_first_response_seconds' => $this->scalar(
-                'SELECT COALESCE(AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, first_incoming_at, first_response_at))), 0)
-                 FROM conversation_service_cycles
-                 WHERE first_incoming_at BETWEEN :start AND :end
-                   AND first_response_at IS NOT NULL' . $scope,
-                $params
-            ),
+            'first_responses' => $operationalResponses['count'],
+            'avg_first_response_seconds' => $operationalResponses['average_seconds'],
+            'min_first_response_seconds' => $operationalResponses['min_seconds'],
+            'max_first_response_seconds' => $operationalResponses['max_seconds'],
             'connected_instances' => $this->scalar(
                 'SELECT COUNT(*) FROM evolution_instances WHERE status IN ("connected","open","active","online")' . $scope,
                 $tenantParams
@@ -227,12 +225,11 @@ final class AdminExecutiveReportService
                 'SELECT COUNT(*) FROM conversation_messages WHERE direction = "outgoing" AND sender_type = "user" AND sent_at BETWEEN :start AND :end' . $scope,
                 $previousParams
             ),
-            'avg_first_response_seconds' => $this->scalar(
-                'SELECT COALESCE(AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, first_incoming_at, first_response_at))), 0)
-                 FROM conversation_service_cycles
-                 WHERE first_incoming_at BETWEEN :start AND :end AND first_response_at IS NOT NULL' . $scope,
-                $previousParams
-            ),
+            'avg_first_response_seconds' => $this->executivePolicy->operationalFirstResponses(
+                $tenantId > 0 ? $tenantId : null,
+                $previousDate['start'],
+                $previousDate['end']
+            )['average_seconds'],
             'ai_replies' => $this->scalar(
                 'SELECT COUNT(*) FROM conversation_messages WHERE direction = "outgoing" AND sender_type = "ai" AND sent_at BETWEEN :start AND :end' . $scope,
                 $previousParams
@@ -619,7 +616,8 @@ final class AdminExecutiveReportService
                        AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, first_incoming_at, first_response_at))) AS avg_response_seconds
                 FROM conversation_service_cycles
                 WHERE first_incoming_at BETWEEN :cycle_start AND :cycle_end
-                  AND first_response_at IS NOT NULL' . $cycleScope . '
+                  AND first_response_at IS NOT NULL
+                  AND source NOT IN ("migration_snapshot", "migration_069_recovery")' . $cycleScope . '
                 GROUP BY first_response_user_id
              ) r ON r.first_response_user_id = u.id
              WHERE u.role <> "super_admin" AND u.status = "active"' . $userScope . '

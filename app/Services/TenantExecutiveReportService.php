@@ -13,12 +13,14 @@ final class TenantExecutiveReportService
 {
     private PDO $pdo;
     private ReportingAggregationService $aggregation;
+    private ExecutiveMetricsPolicyService $executivePolicy;
     private array $warnings = [];
 
     public function __construct(?PDO $pdo = null)
     {
         $this->pdo = $pdo ?? Database::connection();
         $this->aggregation = new ReportingAggregationService($this->pdo);
+        $this->executivePolicy = new ExecutiveMetricsPolicyService($this->pdo);
     }
 
     public function build(array $filters): array
@@ -211,70 +213,17 @@ final class TenantExecutiveReportService
             'google_sync_errors' => (int) ($aggregateTotals['google_sync_errors'] ?? 0),
         ];
 
-        // Primeira resposta real: primeira saída de IA ou equipe APÓS a primeira mensagem recebida.
-        // Mensagens de sistema não entram nessa métrica e uma automação anterior à entrada do contato
-        // não invalida a conversa inteira.
-        $metrics['avg_first_response_seconds'] = $this->scalar(
-            'SELECT COALESCE(AVG(TIMESTAMPDIFF(SECOND, x.first_incoming, x.first_response)), 0)
-             FROM (
-                SELECT fi.conversation_id, fi.first_incoming, MIN(response.sent_at) AS first_response
-                FROM (
-                    SELECT conversation_id, MIN(sent_at) AS first_incoming
-                    FROM conversation_messages
-                    WHERE tenant_id = :tenant_id_in
-                      AND direction = "incoming"
-                      AND sent_at BETWEEN :start_in AND :end_in
-                    GROUP BY conversation_id
-                ) fi
-                INNER JOIN conversation_messages response
-                        ON response.conversation_id = fi.conversation_id
-                       AND response.tenant_id = :tenant_id_out
-                       AND response.direction = "outgoing"
-                       AND response.sender_type IN ("ai", "user")
-                       AND response.sent_at >= fi.first_incoming
-                       AND response.sent_at BETWEEN :start_out AND :end_out
-                GROUP BY fi.conversation_id, fi.first_incoming
-             ) x',
-            [
-                'tenant_id_in' => $tenantId,
-                'start_in' => $date['start'],
-                'end_in' => $date['end'],
-                'tenant_id_out' => $tenantId,
-                'start_out' => $date['start'],
-                'end_out' => $date['end'],
-            ]
+        // Card executivo: somente ciclos operacionais. Dados reconstruídos por
+        // migrations permanecem disponíveis na auditoria detalhada.
+        $operationalResponses = $this->executivePolicy->operationalFirstResponses(
+            $tenantId,
+            $date['start'],
+            $date['end']
         );
-
-        $metrics['first_responses_measured'] = $this->scalar(
-            'SELECT COUNT(*)
-             FROM (
-                SELECT fi.conversation_id
-                FROM (
-                    SELECT conversation_id, MIN(sent_at) AS first_incoming
-                    FROM conversation_messages
-                    WHERE tenant_id = :tenant_id_in
-                      AND direction = "incoming"
-                      AND sent_at BETWEEN :start_in AND :end_in
-                    GROUP BY conversation_id
-                ) fi
-                INNER JOIN conversation_messages response
-                        ON response.conversation_id = fi.conversation_id
-                       AND response.tenant_id = :tenant_id_out
-                       AND response.direction = "outgoing"
-                       AND response.sender_type IN ("ai", "user")
-                       AND response.sent_at >= fi.first_incoming
-                       AND response.sent_at BETWEEN :start_out AND :end_out
-                GROUP BY fi.conversation_id
-             ) measured',
-            [
-                'tenant_id_in' => $tenantId,
-                'start_in' => $date['start'],
-                'end_in' => $date['end'],
-                'tenant_id_out' => $tenantId,
-                'start_out' => $date['start'],
-                'end_out' => $date['end'],
-            ]
-        );
+        $metrics['avg_first_response_seconds'] = $operationalResponses['average_seconds'];
+        $metrics['first_responses_measured'] = $operationalResponses['count'];
+        $metrics['min_first_response_seconds'] = $operationalResponses['min_seconds'];
+        $metrics['max_first_response_seconds'] = $operationalResponses['max_seconds'];
 
         $metrics['attendance_rate'] = ((int) $metrics['appointments_completed'] + (int) $metrics['appointments_no_show']) > 0
             ? round(((int) $metrics['appointments_completed'] / ((int) $metrics['appointments_completed'] + (int) $metrics['appointments_no_show'])) * 100, 1)
@@ -285,12 +234,13 @@ final class TenantExecutiveReportService
             + (int) $metrics['google_sync_errors'];
 
         $metrics['total_messages'] = (int) $metrics['incoming_messages'] + (int) $metrics['outgoing_messages'];
-        $metrics['ai_share'] = (int) $metrics['outgoing_messages'] > 0
-            ? round(((int) $metrics['ai_replies'] / (int) $metrics['outgoing_messages']) * 100, 1)
-            : 0;
-        $metrics['human_share'] = (int) $metrics['outgoing_messages'] > 0
-            ? round(((int) $metrics['human_replies'] / (int) $metrics['outgoing_messages']) * 100, 1)
-            : 0;
+        $attributedShares = $this->executivePolicy->attributedResponseShares(
+            (int) $metrics['ai_replies'],
+            (int) $metrics['human_replies']
+        );
+        $metrics['attributed_response_base'] = $attributedShares['base'];
+        $metrics['ai_share'] = $attributedShares['ai_share'];
+        $metrics['human_share'] = $attributedShares['human_share'];
         $metrics['system_share'] = (int) $metrics['outgoing_messages'] > 0
             ? round(((int) $metrics['system_replies'] / (int) $metrics['outgoing_messages']) * 100, 1)
             : 0;
