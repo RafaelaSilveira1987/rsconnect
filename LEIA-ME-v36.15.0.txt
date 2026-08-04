@@ -1,0 +1,7 @@
+RS CONNECT 36.15.0
+PAINEL EXECUTIVO DAS EMPRESAS CLIENTES
+
+Sem migration nova.
+Última migration: 074_conversation_message_attachments.sql
+
+Acesse: Relatórios > Visão geral

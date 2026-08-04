@@ -1,3 +1,13 @@
+# RS Connect v36.15.0 — Painel executivo das empresas clientes
+
+- Reaproveita o padrão visual homologado na RS Admin para a visão de cada empresa.
+- Adiciona oito indicadores principais: conversas, respostas, atendimento humano, primeira resposta, agenda, comparecimento, IA e situações que precisam de atenção.
+- Inclui gráficos de evolução, distribuição das interações e horários de maior procura.
+- Exibe desempenho da equipe, resultado da agenda, uso da IA e conversas que exigem ação.
+- Mantém análises detalhadas de atendimento, CRM e agenda na mesma página.
+- Restringe todas as consultas ao tenant autenticado e mantém os UUIDs públicos nas rotas.
+- Não exige nova migration; a base continua em 074_conversation_message_attachments.sql.
+
 # RS Connect v36.14.0 — Painel executivo de relatórios da RS Admin
 
 - reorganiza a página de relatórios do Super Admin em uma visão executiva inspirada em dashboards SaaS modernos;

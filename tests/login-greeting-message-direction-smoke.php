@@ -25,7 +25,7 @@ $assert(str_contains($js, "message.direction === 'incoming'"), 'Somente incoming
 $assert(str_contains($js, "showToast('Nova mensagem recebida.')"), 'O aviso singular de recebimento está configurado.');
 $assert(str_contains($js, "showToast(payload.message || 'Mensagem enviada.')"), 'A confirmação de envio permanece configurada.');
 $assert(!str_contains($js, 'nova(s) mensagem(ns) recebida(s)'), 'O contador genérico que classificava qualquer mensagem como recebida foi removido.');
-$assert(str_contains($version, 'RS Connect 36.14.0'), 'A versão do pacote foi atualizada.');
-$assert(str_contains($layout, 'app.js?v=36.14.0'), 'O cache do JavaScript foi renovado.');
+$assert(str_contains($version, 'RS Connect 36.15.0'), 'A versão do pacote foi atualizada.');
+$assert(str_contains($layout, 'app.js?v=36.15.0'), 'O cache do JavaScript foi renovado.');
 
 echo "OK: saudação neutra e notificações por direção validadas.\n";
