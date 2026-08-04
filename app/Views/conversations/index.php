@@ -372,9 +372,56 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
                     <?php $outgoing = $message['direction'] === 'outgoing'; ?>
                     <article class="message-row <?= $outgoing ? 'is-outgoing' : 'is-incoming' ?>" data-message-id="<?= (int) $message['id'] ?>">
                         <div class="message-bubble <?= $message['status'] === 'failed' ? 'has-error' : '' ?>" data-sender="<?= View::e($message['sender_type']) ?>">
-                            <?php if ($message['message_type'] !== 'text'): ?><span class="message-type"><?= View::e(ucfirst($message['message_type'])) ?></span><?php endif; ?>
-                            <?php $messageContent = !empty($message['content_purged_at']) ? 'Conteúdo removido pela política de retenção.' : ($message['content'] ?: '[Sem conteúdo]'); ?>
-                            <p><?= nl2br(View::e($messageContent)) ?></p>
+                            <?php
+                            $messageTypeLabel = match ((string) ($message['message_type'] ?? 'text')) {
+                                'image' => 'Imagem',
+                                'audio' => 'Áudio',
+                                'document' => 'Documento',
+                                default => ucfirst((string) ($message['message_type'] ?? 'text')),
+                            };
+                            ?>
+                            <?php if ($message['message_type'] !== 'text'): ?><span class="message-type"><?= View::e($messageTypeLabel) ?></span><?php endif; ?>
+                            <?php foreach (($message['attachments'] ?? []) as $attachment): ?>
+                                <?php $attachmentStatus = (string) ($attachment['status'] ?? 'pending'); ?>
+                                <div class="message-attachment kind-<?= View::e((string) ($attachment['kind'] ?? 'other')) ?> status-<?= View::e($attachmentStatus) ?>">
+                                    <?php if ($attachmentStatus === 'ready' && ($attachment['kind'] ?? '') === 'image'): ?>
+                                        <a class="message-attachment-image" href="<?= View::e((string) $attachment['view_url']) ?>" target="_blank" rel="noopener">
+                                            <img src="<?= View::e((string) $attachment['view_url']) ?>" alt="<?= View::e((string) $attachment['name']) ?>" loading="lazy">
+                                        </a>
+                                    <?php elseif ($attachmentStatus === 'ready' && ($attachment['kind'] ?? '') === 'audio'): ?>
+                                        <div class="message-attachment-audio">
+                                            <audio controls preload="metadata" src="<?= View::e((string) $attachment['view_url']) ?>"></audio>
+                                            <label>Velocidade
+                                                <select data-audio-speed>
+                                                    <option value="1">1x</option>
+                                                    <option value="1.5">1,5x</option>
+                                                    <option value="2">2x</option>
+                                                </select>
+                                            </label>
+                                        </div>
+                                    <?php endif; ?>
+
+                                    <div class="message-attachment-info">
+                                        <span class="message-attachment-icon" aria-hidden="true"><?= ($attachment['kind'] ?? '') === 'image' ? '🖼️' : (($attachment['kind'] ?? '') === 'audio' ? '🎵' : '📄') ?></span>
+                                        <span><strong><?= View::e((string) $attachment['name']) ?></strong><small><?= View::e((string) $attachment['size_label']) ?></small></span>
+                                        <?php if ($attachmentStatus === 'ready'): ?>
+                                            <span class="message-attachment-actions">
+                                                <?php if (($attachment['kind'] ?? '') === 'document'): ?><a href="<?= View::e((string) $attachment['view_url']) ?>" target="_blank" rel="noopener">Visualizar</a><?php endif; ?>
+                                                <a href="<?= View::e((string) $attachment['download_url']) ?>">Baixar</a>
+                                            </span>
+                                        <?php else: ?>
+                                            <small class="message-attachment-error"><?= View::e((string) ($attachment['error_message'] ?: 'Arquivo indisponível.')) ?></small>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                            <?php
+                            $messageContent = !empty($message['content_purged_at']) ? 'Conteúdo removido pela política de retenção.' : trim((string) ($message['content'] ?? ''));
+                            $attachmentNames = array_map(static fn (array $item): string => trim((string) ($item['name'] ?? '')), (array) ($message['attachments'] ?? []));
+                            $mediaPlaceholders = ['[Imagem]', '[Áudio]', '[Documento]', '[Arquivo]', ...$attachmentNames];
+                            $showMessageContent = $messageContent !== '' && (!empty($message['content_purged_at']) || !in_array($messageContent, $mediaPlaceholders, true));
+                            ?>
+                            <?php if ($showMessageContent): ?><p><?= nl2br(View::e($messageContent)) ?></p><?php endif; ?>
                             <?php if (!empty($message['error_message'])): ?><small class="message-error"><?= View::e($message['error_message']) ?></small><?php endif; ?>
                             <footer>
                                 <?php if ($outgoing): ?>
@@ -394,10 +441,20 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
             </div>
 
             <?php if ($canOperateSelected): ?>
-                <form class="chat-composer" id="conversation-composer" data-chat-composer method="post" action="<?= View::e(Router::url('/conversations/send')) ?>">
+                <form class="chat-composer" id="conversation-composer" data-chat-composer method="post" enctype="multipart/form-data" action="<?= View::e(Router::url('/conversations/send')) ?>" data-attachment-action="<?= View::e(Router::url('/conversations/attachments/send')) ?>">
                     <?= Csrf::input() ?>
                     <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
-                    <textarea name="message" rows="2" maxlength="4000" placeholder="Digite uma mensagem..." required></textarea>
+                    <input class="chat-attachment-input" type="file" name="attachment" data-attachment-input accept="image/jpeg,image/png,image/webp,application/pdf,audio/mpeg,audio/ogg,audio/opus,audio/mp4,.m4a" hidden>
+                    <button class="chat-attachment-button" type="button" data-attachment-open aria-label="Anexar imagem, PDF ou áudio" title="Anexar imagem, PDF ou áudio">📎</button>
+                    <div class="chat-composer-main">
+                        <div class="chat-attachment-preview" data-attachment-preview hidden>
+                            <span class="chat-attachment-preview-icon" data-attachment-preview-icon>📄</span>
+                            <span><strong data-attachment-preview-name></strong><small data-attachment-preview-size></small></span>
+                            <button type="button" data-attachment-remove aria-label="Remover anexo">×</button>
+                        </div>
+                        <textarea name="message" rows="2" maxlength="4000" placeholder="Digite uma mensagem..."></textarea>
+                        <small class="chat-composer-help">Envie texto, imagem, PDF ou áudio. Limite configurado: <?= View::e((string) ($attachmentMaxLabel ?? '20 MB')) ?>.</small>
+                    </div>
                     <button class="btn btn-primary" type="submit">Enviar</button>
                 </form>
             <?php elseif ($canManage && !empty($ownershipSnapshot['locked_by_other'])): ?>

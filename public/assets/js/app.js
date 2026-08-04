@@ -438,6 +438,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const composerForm = document.querySelector('[data-chat-composer]');
   const composerInput = composerForm?.querySelector('textarea[name="message"]') || null;
   const composerButton = composerForm?.querySelector('button[type="submit"]') || null;
+  const attachmentInput = composerForm?.querySelector('[data-attachment-input]') || null;
+  const attachmentOpen = composerForm?.querySelector('[data-attachment-open]') || null;
+  const attachmentPreview = composerForm?.querySelector('[data-attachment-preview]') || null;
+  const attachmentPreviewName = composerForm?.querySelector('[data-attachment-preview-name]') || null;
+  const attachmentPreviewSize = composerForm?.querySelector('[data-attachment-preview-size]') || null;
+  const attachmentPreviewIcon = composerForm?.querySelector('[data-attachment-preview-icon]') || null;
+  const attachmentRemove = composerForm?.querySelector('[data-attachment-remove]') || null;
   const ownershipBanner = document.querySelector('[data-ownership-banner]');
   const searchInput = document.querySelector('[data-conversation-search]');
   const conversationCount = document.querySelector('[data-conversation-count]');
@@ -614,6 +621,8 @@ document.addEventListener('DOMContentLoaded', () => {
       composerInput.placeholder = locked ? 'Conversa em atendimento por outro profissional' : 'Digite uma mensagem...';
     }
     if (composerButton) composerButton.disabled = locked;
+    if (attachmentOpen) attachmentOpen.disabled = locked;
+    if (attachmentInput) attachmentInput.disabled = locked;
     if (ownershipBanner && locked) {
       ownershipBanner.classList.remove('is-available', 'is-mine');
       ownershipBanner.classList.add('is-locked');
@@ -776,6 +785,66 @@ document.addEventListener('DOMContentLoaded', () => {
     observeConversationAvatars(list);
   }
 
+  function attachmentIcon(kind) {
+    if (kind === 'image') return '🖼️';
+    if (kind === 'audio') return '🎵';
+    return '📄';
+  }
+
+  function formatBytes(bytes) {
+    const value = Number(bytes || 0);
+    if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
+    if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+    return `${value} B`;
+  }
+
+  function renderAttachments(attachments) {
+    if (!Array.isArray(attachments) || attachments.length === 0) return '';
+    return attachments.map((attachment) => {
+      const kind = String(attachment.kind || 'other');
+      const ready = String(attachment.status || '') === 'ready';
+      const name = escapeHtml(attachment.name || 'arquivo');
+      const size = escapeHtml(attachment.size_label || formatBytes(attachment.size_bytes));
+      const viewUrl = escapeHtml(attachment.view_url || '');
+      const downloadUrl = escapeHtml(attachment.download_url || '');
+      const image = ready && kind === 'image'
+        ? `<a class="message-attachment-image" href="${viewUrl}" target="_blank" rel="noopener"><img src="${viewUrl}" alt="${name}" loading="lazy"></a>`
+        : '';
+      const audio = ready && kind === 'audio'
+        ? `<div class="message-attachment-audio"><audio controls preload="metadata" src="${viewUrl}"></audio><label>Velocidade <select data-audio-speed><option value="1">1x</option><option value="1.5">1,5x</option><option value="2">2x</option></select></label></div>`
+        : '';
+      const actions = ready
+        ? `<span class="message-attachment-actions">${kind === 'document' ? `<a href="${viewUrl}" target="_blank" rel="noopener">Visualizar</a>` : ''}<a href="${downloadUrl}">Baixar</a></span>`
+        : `<small class="message-attachment-error">${escapeHtml(attachment.error_message || 'Arquivo indisponível.')}</small>`;
+      return `<div class="message-attachment kind-${escapeHtml(kind)} status-${escapeHtml(attachment.status || 'pending')}">
+        ${image}${audio}
+        <div class="message-attachment-info"><span class="message-attachment-icon" aria-hidden="true">${attachmentIcon(kind)}</span><span><strong>${name}</strong><small>${size}</small></span>${actions}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function resetAttachmentSelection() {
+    if (attachmentInput) attachmentInput.value = '';
+    if (attachmentPreview) attachmentPreview.hidden = true;
+    if (attachmentPreviewName) attachmentPreviewName.textContent = '';
+    if (attachmentPreviewSize) attachmentPreviewSize.textContent = '';
+    if (composerInput) composerInput.placeholder = 'Digite uma mensagem...';
+    composerForm?.classList.remove('has-attachment', 'is-dragging-file');
+  }
+
+  function showAttachmentSelection(file) {
+    if (!file || !attachmentPreview) return;
+    attachmentPreview.hidden = false;
+    if (attachmentPreviewName) attachmentPreviewName.textContent = file.name || 'arquivo';
+    if (attachmentPreviewSize) attachmentPreviewSize.textContent = formatBytes(file.size || 0);
+    if (attachmentPreviewIcon) {
+      const type = String(file.type || '');
+      attachmentPreviewIcon.textContent = type.startsWith('image/') ? '🖼️' : (type.startsWith('audio/') ? '🎵' : '📄');
+    }
+    if (composerInput) composerInput.placeholder = 'Legenda opcional...';
+    composerForm?.classList.add('has-attachment');
+  }
+
   function renderMessage(message) {
     const outgoing = message.direction === 'outgoing';
     const failed = message.status === 'failed';
@@ -783,14 +852,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const sender = outgoing && message.sender_type === 'user' && message.sender_role_label
       ? `${baseSender} — ${message.sender_role_label}`
       : (outgoing ? baseSender : '');
-    const content = escapeHtml(message.content || '[Sem conteúdo]').replace(/\n/g, '<br>');
-    const type = message.message_type && message.message_type !== 'text' ? `<span class="message-type">${escapeHtml(message.message_type)}</span>` : '';
+    const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+    const rawContent = String(message.content || '').trim();
+    const attachmentNames = attachments.map((item) => String(item?.name || '').trim()).filter(Boolean);
+    const mediaPlaceholders = ['[Imagem]', '[Áudio]', '[Documento]', '[Arquivo]', ...attachmentNames];
+    const content = rawContent && !mediaPlaceholders.includes(rawContent)
+      ? `<p>${escapeHtml(rawContent).replace(/\n/g, '<br>')}</p>`
+      : '';
+    const typeLabels = { image: 'Imagem', audio: 'Áudio', document: 'Documento' };
+    const type = message.message_type && message.message_type !== 'text' ? `<span class="message-type">${escapeHtml(typeLabels[message.message_type] || message.message_type)}</span>` : '';
+    const attachmentMarkup = renderAttachments(attachments);
     const statusText = outgoing ? `<span class="message-status">${escapeHtml(message.status || '')}</span>` : '';
     const senderText = outgoing ? `<span>${escapeHtml(sender)}</span>` : '';
     return `<article class="message-row ${outgoing ? 'is-outgoing' : 'is-incoming'}" data-message-id="${Number(message.id)}">
       <div class="message-bubble ${failed ? 'has-error' : ''}" data-sender="${escapeHtml(message.sender_type || '')}">
         ${type}
-        <p>${content}</p>
+        ${attachmentMarkup}
+        ${content}
         <footer>${senderText}<time>${escapeHtml(message.time_label || '')}</time>${statusText}</footer>
       </div>
     </article>`;
@@ -884,21 +962,61 @@ document.addEventListener('DOMContentLoaded', () => {
   wireAvatarImages(document);
   observeConversationAvatars(list);
 
+  if (composerForm && attachmentInput) {
+    attachmentOpen?.addEventListener('click', () => attachmentInput.click());
+    attachmentInput.addEventListener('change', () => {
+      const file = attachmentInput.files?.[0] || null;
+      if (file) showAttachmentSelection(file); else resetAttachmentSelection();
+    });
+    attachmentRemove?.addEventListener('click', resetAttachmentSelection);
+
+    ['dragenter', 'dragover'].forEach((name) => composerForm.addEventListener(name, (event) => {
+      if (!event.dataTransfer?.types?.includes('Files')) return;
+      event.preventDefault();
+      composerForm.classList.add('is-dragging-file');
+    }));
+    ['dragleave', 'drop'].forEach((name) => composerForm.addEventListener(name, (event) => {
+      if (name === 'drop') event.preventDefault();
+      composerForm.classList.remove('is-dragging-file');
+    }));
+    composerForm.addEventListener('drop', (event) => {
+      const file = event.dataTransfer?.files?.[0] || null;
+      if (!file) return;
+      if (typeof DataTransfer === 'undefined') {
+        showToast('Use o botão de anexo para selecionar o arquivo neste navegador.');
+        return;
+      }
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      attachmentInput.files = transfer.files;
+      showAttachmentSelection(file);
+    });
+  }
+
+  document.addEventListener('change', (event) => {
+    const select = event.target.closest?.('[data-audio-speed]');
+    if (!select) return;
+    const audio = select.closest('.message-attachment-audio')?.querySelector('audio');
+    if (audio) audio.playbackRate = Number(select.value || 1);
+  });
+
   if (composerForm && composerInput) {
     composerForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       const text = composerInput.value.trim();
-      if (!text || composerForm.dataset.sending === '1') return;
+      const file = attachmentInput?.files?.[0] || null;
+      if ((!text && !file) || composerForm.dataset.sending === '1') return;
 
       composerForm.dataset.sending = '1';
       if (composerButton) {
         composerButton.disabled = true;
         composerButton.dataset.originalLabel = composerButton.textContent || 'Enviar';
-        composerButton.textContent = 'Enviando...';
+        composerButton.textContent = file ? 'Enviando arquivo...' : 'Enviando...';
       }
 
       try {
-        const response = await fetch(composerForm.action, {
+        const endpoint = file ? (composerForm.dataset.attachmentAction || composerForm.action) : composerForm.action;
+        const response = await fetch(endpoint, {
           method: 'POST',
           body: new FormData(composerForm),
           headers: {
@@ -914,6 +1032,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         composerInput.value = '';
+        resetAttachmentSelection();
         setConversationMode(payload.attendance_mode || 'human');
         await poll();
         if (thread) thread.scrollTop = thread.scrollHeight;

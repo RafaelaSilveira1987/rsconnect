@@ -1,3 +1,16 @@
+# RS Connect v36.13.0 — Áudios, imagens e documentos nas conversas
+
+- adiciona reprodução de áudio com controle de velocidade;
+- exibe imagens recebidas e enviadas dentro da conversa;
+- permite visualizar e baixar PDFs por rota autenticada;
+- adiciona envio de imagem, PDF e áudio pelo botão de anexo ou arrastar e soltar;
+- mantém legenda opcional e assinatura do profissional;
+- busca mídias recebidas pela Evolution e salva cópia privada;
+- valida tipo MIME real, tamanho, hash SHA-256 e nome interno aleatório;
+- isola anexos por empresa e revalida a permissão da conversa no acesso ao arquivo;
+- adiciona armazenamento persistente configurável e limite padrão de 20 MB;
+- adiciona a migration `074_conversation_message_attachments.sql` e o diagnóstico `conversation_attachments_v36.13.0.sql`.
+
 # RS Connect v36.12.1 — Linguagem clara e diagnóstico simplificado
 
 - traduz avisos técnicos para uma linguagem que explica o que aconteceu, o que pode ser afetado e o que fazer agora;

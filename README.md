@@ -1,3 +1,29 @@
+# RS Connect v36.13.0 — Áudios, imagens e documentos nas conversas
+
+A v36.13.0 adiciona recebimento, visualização, reprodução, download e envio de mídias nas conversas. O primeiro pacote suporta imagens JPEG/PNG/WEBP, documentos PDF e áudios MP3/OGG/OPUS/M4A.
+
+Aplique a migration:
+
+`database/migrations/074_conversation_message_attachments.sql`
+
+Configure um volume persistente em:
+
+`/var/www/html/storage/conversation-attachments`
+
+Variáveis principais:
+
+```dotenv
+CONVERSATION_ATTACHMENTS_ENABLED=true
+CONVERSATION_ATTACHMENT_MAX_MB=20
+CONVERSATION_ATTACHMENTS_PATH=/var/www/html/storage/conversation-attachments
+```
+
+Validação:
+
+`database/diagnostics/conversation_attachments_v36.13.0.sql`
+
+Consulte `INSTRUCOES-v36.13.0.md` para o roteiro completo de implantação e homologação.
+
 # RS Connect v36.12.1 — Linguagem clara e diagnóstico simplificado
 
 

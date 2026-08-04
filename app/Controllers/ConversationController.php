@@ -20,6 +20,7 @@ use App\Services\AiModelService;
 use App\Services\ConversationFlowService;
 use App\Services\ConversationCycleService;
 use App\Services\ConversationOwnershipService;
+use App\Services\ConversationAttachmentService;
 use App\Services\MessageGovernanceService;
 use App\Services\EvolutionService;
 use PDO;
@@ -267,6 +268,7 @@ final class ConversationController
             'instances' => $instances,
             'tenants' => $tenants,
             'filters' => $filters,
+            'attachmentMaxLabel' => (new ConversationAttachmentService())->humanSize((new ConversationAttachmentService())->maxBytes()),
         ]);
     }
 
@@ -632,6 +634,257 @@ final class ConversationController
         }
 
         $this->redirect('/conversations?conversation_id=' . $conversationId . '#conversation-composer');
+    }
+
+    public function sendAttachment(): void
+    {
+        $conversationId = (int) ($_POST['conversation_id'] ?? 0);
+        $caption = trim((string) ($_POST['message'] ?? ''));
+        $file = is_array($_FILES['attachment'] ?? null) ? $_FILES['attachment'] : [];
+
+        if ($conversationId < 1 || $file === []) {
+            $this->json(['ok' => false, 'message' => 'Selecione uma conversa e um arquivo.'], 422);
+        }
+
+        $conversation = $this->findConversation($conversationId);
+        if ($conversation === null) {
+            $this->json(['ok' => false, 'message' => 'Conversa não encontrada para sua empresa.'], 404);
+        }
+
+        $pdo = Database::connection();
+        $attachmentService = new ConversationAttachmentService();
+        $attachment = null;
+        $sentAt = \App\Core\Clock::nowUtc();
+
+        try {
+            $ownershipService = new ConversationOwnershipService();
+            $ownershipSettings = $ownershipService->settingsForTenant($pdo, (int) $conversation['tenant_id']);
+            $conversation = $ownershipService->reopenIfClosed($pdo, $conversation);
+            $conversation = $ownershipService->claimForHumanAction($pdo, $conversation);
+
+            $attachment = $attachmentService->storeUploadedFile(
+                $file,
+                (int) $conversation['tenant_id'],
+                $conversationId,
+                (int) (Auth::id() ?? 0)
+            );
+
+            $senderMeta = $this->humanSenderMeta($pdo, (int) $conversation['tenant_id'], (int) (Auth::id() ?? 0));
+            $preparedCaption = [
+                'original' => $caption,
+                'delivered' => $caption,
+                'display_name' => $senderMeta['display_name'],
+                'role_label' => $senderMeta['role_label'],
+                'signed' => false,
+            ];
+            if ($caption !== '') {
+                $preparedCaption = (new MessageGovernanceService())->prepareHumanMessage(
+                    $pdo,
+                    (int) $conversation['tenant_id'],
+                    (int) (Auth::id() ?? 0),
+                    $caption
+                );
+                if (empty($preparedCaption['display_name'])) {
+                    $preparedCaption['display_name'] = $senderMeta['display_name'];
+                    $preparedCaption['role_label'] = $senderMeta['role_label'];
+                }
+            }
+
+            $binary = file_get_contents((string) $attachment['absolute_path']);
+            if ($binary === false || $binary === '') {
+                throw new \RuntimeException('O arquivo não pôde ser lido para envio.');
+            }
+
+            $result = $this->serviceFor($conversation)->sendMedia(
+                (string) $conversation['phone'],
+                (string) $attachment['kind'],
+                (string) $attachment['mime_type'],
+                (string) $attachment['original_name'],
+                base64_encode($binary),
+                (string) $preparedCaption['delivered']
+            );
+            $externalId = $this->extractMessageId($result['body'] ?? []);
+
+            $pdo->beginTransaction();
+            $insert = $pdo->prepare(
+                'INSERT INTO conversation_messages
+                    (tenant_id, conversation_id, evolution_message_id, direction, sender_type,
+                     sender_user_id, sender_display_name, sender_role_label, message_type,
+                     content, delivered_content, status, raw_payload_json, sent_at)
+                 VALUES
+                    (:tenant_id, :conversation_id, :external_id, "outgoing", "user",
+                     :sender_user_id, :sender_display_name, :sender_role_label, :message_type,
+                     :content, :delivered_content, "sent", :raw_payload, :sent_at)'
+            );
+            $insert->execute([
+                'tenant_id' => (int) $conversation['tenant_id'],
+                'conversation_id' => $conversationId,
+                'external_id' => $externalId,
+                'sender_user_id' => Auth::id(),
+                'sender_display_name' => $preparedCaption['display_name'],
+                'sender_role_label' => $preparedCaption['role_label'],
+                'message_type' => (string) $attachment['kind'],
+                'content' => $caption !== '' ? $caption : (string) $attachment['original_name'],
+                'delivered_content' => (string) $preparedCaption['delivered'],
+                'raw_payload' => json_encode($result['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'sent_at' => $sentAt,
+            ]);
+            $messageId = (int) $pdo->lastInsertId();
+
+            $attachment['message_id'] = $messageId;
+            $attachment['evolution_message_id'] = $externalId;
+            $attachmentService->insert($pdo, $attachment);
+
+            $previewLabel = match ((string) $attachment['kind']) {
+                'image' => '[Imagem enviada]',
+                'audio' => '[Áudio enviado]',
+                'document' => '[Documento enviado]',
+                default => '[Arquivo enviado]',
+            };
+            $preview = $caption !== '' ? $previewLabel . ' ' . $caption : $previewLabel . ' ' . (string) $attachment['original_name'];
+
+            if (!empty($ownershipSettings['enabled'])) {
+                $pdo->prepare(
+                    'UPDATE conversations
+                     SET last_message_at = :sent_at, last_message_preview = :preview,
+                         status = IF(status = "closed", "open", status), attendance_mode = "human"
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute([
+                    'sent_at' => $sentAt,
+                    'preview' => mb_substr($preview, 0, 255),
+                    'id' => $conversationId,
+                    'tenant_id' => (int) $conversation['tenant_id'],
+                ]);
+            } else {
+                $pdo->prepare(
+                    'UPDATE conversations
+                     SET last_message_at = :sent_at, last_message_preview = :preview,
+                         status = IF(status = "closed", "open", status), attendance_mode = "human",
+                         assigned_user_id = :user_id
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute([
+                    'sent_at' => $sentAt,
+                    'preview' => mb_substr($preview, 0, 255),
+                    'user_id' => Auth::id(),
+                    'id' => $conversationId,
+                    'tenant_id' => (int) $conversation['tenant_id'],
+                ]);
+            }
+
+            $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'attachment.sent', 'Anexo enviado pelo painel.');
+            $pdo->commit();
+
+            Audit::log('conversation.attachment_sent', [
+                'conversation_id' => $conversationId,
+                'attachment_kind' => $attachment['kind'],
+                'mime_type' => $attachment['mime_type'],
+                'size_bytes' => $attachment['size_bytes'],
+                'http_status' => $result['status'] ?? null,
+                'human_signature_applied' => (bool) ($preparedCaption['signed'] ?? false),
+            ], (int) $conversation['tenant_id']);
+
+            $this->json([
+                'ok' => true,
+                'message' => 'Arquivo enviado.',
+                'conversation_id' => $conversationId,
+                'attendance_mode' => 'human',
+            ]);
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            if (is_array($attachment)) {
+                $attachmentService->deleteStoredFile($attachment);
+            }
+            Audit::log('conversation.attachment_failed', [
+                'conversation_id' => $conversationId,
+                'error' => $exception->getMessage(),
+            ], (int) $conversation['tenant_id']);
+            $this->json(['ok' => false, 'message' => 'Não foi possível enviar o arquivo: ' . $exception->getMessage()], 422);
+        }
+    }
+
+    public function attachment(): void
+    {
+        $uuid = trim((string) ($_GET['attachment_uuid'] ?? ''));
+        if ($uuid === '') {
+            http_response_code(404);
+            exit('Arquivo não encontrado.');
+        }
+
+        $pdo = Database::connection();
+        $service = new ConversationAttachmentService();
+        $attachment = $service->findByUuid($pdo, $uuid);
+        if ($attachment === null) {
+            http_response_code(404);
+            exit('Arquivo não encontrado.');
+        }
+
+        $conversation = $this->findConversation((int) $attachment['conversation_id']);
+        if ($conversation === null || (int) $conversation['tenant_id'] !== (int) $attachment['tenant_id']) {
+            http_response_code(404);
+            exit('Arquivo não encontrado.');
+        }
+
+        $path = (string) ($attachment['absolute_path'] ?? '');
+        if ((string) ($attachment['status'] ?? '') !== 'ready' || $path === '' || !is_file($path) || !is_readable($path)) {
+            http_response_code(404);
+            exit('Arquivo indisponível.');
+        }
+
+        $size = filesize($path);
+        if ($size === false) {
+            http_response_code(404);
+            exit('Arquivo indisponível.');
+        }
+
+        $download = filter_var($_GET['download'] ?? false, FILTER_VALIDATE_BOOL);
+        $mimeType = trim((string) ($attachment['mime_type'] ?? 'application/octet-stream')) ?: 'application/octet-stream';
+        $fileName = str_replace(["\r", "\n", '"'], ['', '', "'"], (string) ($attachment['original_name'] ?? 'arquivo'));
+        $start = 0;
+        $end = max(0, $size - 1);
+        $status = 200;
+
+        $range = trim((string) ($_SERVER['HTTP_RANGE'] ?? ''));
+        if (!$download && preg_match('/bytes=(\d*)-(\d*)/i', $range, $matches)) {
+            if ($matches[1] !== '') {
+                $start = min($end, max(0, (int) $matches[1]));
+            }
+            if ($matches[2] !== '') {
+                $end = min($end, max($start, (int) $matches[2]));
+            }
+            $status = 206;
+        }
+        $length = $end - $start + 1;
+
+        http_response_code($status);
+        header('Content-Type: ' . $mimeType);
+        header('Content-Length: ' . $length);
+        header('Accept-Ranges: bytes');
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: private, max-age=300');
+        header('Content-Security-Policy: default-src \'none\'; sandbox');
+        header('Content-Disposition: ' . ($download ? 'attachment' : 'inline') . '; filename="' . $fileName . '"; filename*=UTF-8\'\'' . rawurlencode($fileName));
+        if ($status === 206) {
+            header('Content-Range: bytes ' . $start . '-' . $end . '/' . $size);
+        }
+
+        $handle = fopen($path, 'rb');
+        if ($handle === false) {
+            exit;
+        }
+        fseek($handle, $start);
+        $remaining = $length;
+        while ($remaining > 0 && !feof($handle)) {
+            $chunk = fread($handle, min(8192, $remaining));
+            if ($chunk === false || $chunk === '') {
+                break;
+            }
+            echo $chunk;
+            $remaining -= strlen($chunk);
+        }
+        fclose($handle);
+        exit;
     }
 
     public function markRead(): void
@@ -1337,6 +1590,26 @@ final class ConversationController
         }
     }
 
+    /** @return array{display_name:?string,role_label:?string} */
+    private function humanSenderMeta(PDO $pdo, int $tenantId, int $userId): array
+    {
+        $statement = $pdo->prepare(
+            'SELECT COALESCE(NULLIF(whatsapp_display_name, ""), name) AS display_name,
+                    NULLIF(whatsapp_role_label, "") AS role_label
+             FROM users
+             WHERE id = :user_id
+               AND status = "active"
+               AND (tenant_id = :tenant_id OR (tenant_id IS NULL AND role = "super_admin"))
+             LIMIT 1'
+        );
+        $statement->execute(['user_id' => $userId, 'tenant_id' => $tenantId]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+        return [
+            'display_name' => isset($row['display_name']) ? (string) $row['display_name'] : null,
+            'role_label' => isset($row['role_label']) ? (string) $row['role_label'] : null,
+        ];
+    }
+
     private function findConversation(int $id, ?int $tenantScope = null): ?array
     {
         $pdo = Database::connection();
@@ -1579,6 +1852,32 @@ final class ConversationController
         );
         $statement->execute(array_merge([$tenantId, $conversationId], $ids));
         $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+        $attachmentsByMessage = [];
+        if ($this->hasTable($pdo, 'conversation_message_attachments')) {
+            $attachmentStatement = $pdo->prepare(
+                'SELECT id, uuid, message_id, attachment_kind, original_name, mime_type,
+                        size_bytes, status, error_message
+                 FROM conversation_message_attachments
+                 WHERE tenant_id = ?
+                   AND conversation_id = ?
+                   AND message_id IN (' . $placeholders . ')
+                 ORDER BY id'
+            );
+            $attachmentStatement->execute(array_merge([$tenantId, $conversationId], $ids));
+            foreach ($attachmentStatement->fetchAll(PDO::FETCH_ASSOC) as $attachment) {
+                $messageId = (int) ($attachment['message_id'] ?? 0);
+                if ($messageId < 1) {
+                    continue;
+                }
+                $attachmentsByMessage[$messageId][] = $this->formatAttachmentForJson($attachment);
+            }
+        }
+
+        foreach ($rows as &$row) {
+            $row['attachments'] = $attachmentsByMessage[(int) $row['id']] ?? [];
+        }
+        unset($row);
 
         usort($rows, static fn (array $left, array $right): int => (int) $left['id'] <=> (int) $right['id']);
         return $rows;
@@ -1981,6 +2280,26 @@ final class ConversationController
         ];
     }
 
+    /** @return array<string,mixed> */
+    private function formatAttachmentForJson(array $attachment): array
+    {
+        $uuid = (string) ($attachment['uuid'] ?? '');
+        $baseUrl = Router::url('/conversations/attachment?attachment_uuid=' . rawurlencode($uuid));
+        $size = (int) ($attachment['size_bytes'] ?? 0);
+        return [
+            'uuid' => $uuid,
+            'kind' => (string) ($attachment['attachment_kind'] ?? 'other'),
+            'name' => (string) ($attachment['original_name'] ?? 'arquivo'),
+            'mime_type' => (string) ($attachment['mime_type'] ?? 'application/octet-stream'),
+            'size_bytes' => $size,
+            'size_label' => (new ConversationAttachmentService())->humanSize($size),
+            'status' => (string) ($attachment['status'] ?? 'pending'),
+            'error_message' => (string) ($attachment['error_message'] ?? ''),
+            'view_url' => $baseUrl,
+            'download_url' => $baseUrl . '&download=1',
+        ];
+    }
+
     private function formatMessageForJson(array $message): array
     {
         return [
@@ -1996,6 +2315,7 @@ final class ConversationController
             'status' => (string) ($message['status'] ?? ''),
             'sent_at' => (string) $message['sent_at'],
             'time_label' => $this->formatTimeLabel((string) $message['sent_at']),
+            'attachments' => is_array($message['attachments'] ?? null) ? $message['attachments'] : [],
         ];
     }
 

@@ -30,6 +30,54 @@ final class EvolutionService
         return $this->request('POST', $endpoint, $payload, 'sendText');
     }
 
+    /**
+     * Envia imagem, áudio ou documento pela rota oficial de mídia da Evolution.
+     * O campo media aceita base64 puro ou URL; a RS Connect usa base64 para não
+     * expor o armazenamento privado ao provedor externo.
+     */
+    public function sendMedia(
+        string $phone,
+        string $mediaType,
+        string $mimeType,
+        string $fileName,
+        string $base64,
+        string $caption = ''
+    ): array {
+        $mediaType = strtolower(trim($mediaType));
+        if (!in_array($mediaType, ['image', 'audio', 'document', 'video'], true)) {
+            throw new RuntimeException('Tipo de mídia não permitido para envio.');
+        }
+
+        $endpoint = rtrim($this->baseUrl, '/') . '/message/sendMedia/' . rawurlencode($this->instanceName);
+        $payload = [
+            'number' => $this->normalizePhone($phone),
+            'mediatype' => $mediaType,
+            'mimetype' => trim($mimeType),
+            'media' => $base64,
+            'fileName' => $fileName,
+        ];
+        if (trim($caption) !== '') {
+            $payload['caption'] = $caption;
+        }
+
+        return $this->request('POST', $endpoint, $payload, 'sendMedia');
+    }
+
+    /**
+     * Solicita à Evolution o conteúdo de uma mídia recebida. A resposta varia
+     * entre versões; o chamador faz a extração flexível do campo base64.
+     *
+     * @param array<string,mixed> $message
+     */
+    public function downloadMediaMessage(array $message, bool $convertToMp4 = false): array
+    {
+        $endpoint = rtrim($this->baseUrl, '/') . '/chat/getBase64FromMediaMessage/' . rawurlencode($this->instanceName);
+        return $this->request('POST', $endpoint, [
+            'message' => $message,
+            'convertToMp4' => $convertToMp4,
+        ], 'getBase64FromMediaMessage');
+    }
+
     private function normalizePhone(string $phone): string
     {
         $digits = preg_replace('/\D+/', '', $phone) ?: '';
