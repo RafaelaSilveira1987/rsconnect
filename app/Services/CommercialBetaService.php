@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.14.0', 'title' => 'Painel executivo de relatórios da RS Admin', 'summary' => 'Reorganiza a visão de relatórios do Super Admin com indicadores rápidos, tendências, distribuição das interações, horários de pico, desempenho da equipe, agenda, uso da IA e exportações em um painel responsivo.'],
             ['version' => '36.13.0', 'title' => 'Áudios, imagens e documentos nas conversas', 'summary' => 'Permite ouvir áudios, visualizar imagens, abrir PDFs, baixar arquivos e enviar anexos pelo painel com armazenamento privado e isolamento por empresa.'],
             ['version' => '36.12.1', 'title' => 'Linguagem clara e diagnóstico simplificado', 'summary' => 'Mostra o que aconteceu, o que pode ser afetado e o que fazer agora, sem expor nomes técnicos ao cliente e mantendo detalhes expansíveis para o Super Admin.'],
             ['version' => '36.12.0', 'title' => 'Monitoramento e avisos do sistema', 'summary' => 'Monitora o funcionamento do WhatsApp, automações, assistente virtual, cópias de segurança, dados e servidor; registra análise, normalização e entrega dos avisos.'],

@@ -105,11 +105,37 @@ final class AdminExecutiveReportService
                 'SELECT COUNT(*) FROM conversation_messages WHERE direction = "outgoing" AND sender_type = "ai" AND sent_at BETWEEN :start AND :end' . $scope,
                 $params
             ),
-            // Corrigido: atendimento humano é medido por resposta humana dentro do período, não pelo modo atual da conversa.
+            'conversations_started' => $this->metricOrScalar(
+                $aggregateTotals,
+                ['conversations_started'],
+                'SELECT COUNT(*) FROM conversations WHERE created_at BETWEEN :start AND :end' . $scope,
+                $params
+            ),
+            // Atendimento humano é medido por respostas humanas dentro do período, não pelo modo atual da conversa.
             'human_conversations' => $this->scalar(
                 'SELECT COUNT(DISTINCT conversation_id)
                  FROM conversation_messages
                  WHERE direction = "outgoing" AND sender_type = "user" AND sent_at BETWEEN :start AND :end' . $scope,
+                $params
+            ),
+            'human_messages' => $this->scalar(
+                'SELECT COUNT(*)
+                 FROM conversation_messages
+                 WHERE direction = "outgoing" AND sender_type = "user" AND sent_at BETWEEN :start AND :end' . $scope,
+                $params
+            ),
+            'first_responses' => $this->scalar(
+                'SELECT COUNT(*)
+                 FROM conversation_service_cycles
+                 WHERE first_incoming_at BETWEEN :start AND :end
+                   AND first_response_at IS NOT NULL' . $scope,
+                $params
+            ),
+            'avg_first_response_seconds' => $this->scalar(
+                'SELECT COALESCE(AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, first_incoming_at, first_response_at))), 0)
+                 FROM conversation_service_cycles
+                 WHERE first_incoming_at BETWEEN :start AND :end
+                   AND first_response_at IS NOT NULL' . $scope,
                 $params
             ),
             'connected_instances' => $this->scalar(
@@ -145,6 +171,17 @@ final class AdminExecutiveReportService
                 'SELECT COUNT(*) FROM calendar_appointments WHERE status IN ("cancelled","no_show") AND starts_at BETWEEN :start AND :end' . $scope,
                 $params
             ),
+            'appointments_completed' => $this->scalar(
+                'SELECT COUNT(*) FROM calendar_appointments WHERE status = "completed" AND starts_at BETWEEN :start AND :end' . $scope,
+                $params
+            ),
+            'appointments_no_show' => $this->scalar(
+                'SELECT COUNT(*) FROM calendar_appointments WHERE status = "no_show" AND starts_at BETWEEN :start AND :end' . $scope,
+                $params
+            ),
+            'open_operational_incidents' => $this->scalar(
+                'SELECT COUNT(*) FROM system_incidents WHERE resolved_at IS NULL'
+            ),
             'commercial_open' => $this->scalar('SELECT COUNT(*) FROM admin_crm_opportunities WHERE status = "open"'),
             'commercial_pipeline' => $this->money('SELECT COALESCE(SUM(value),0) FROM admin_crm_opportunities WHERE status = "open"'),
             'commercial_won' => $this->scalar(
@@ -159,6 +196,17 @@ final class AdminExecutiveReportService
         $metrics['agenda_conversion'] = (int) $metrics['appointments'] > 0
             ? round(((int) $metrics['appointments_confirmed'] / (int) $metrics['appointments']) * 100, 1)
             : 0;
+        $attendanceBase = (int) $metrics['appointments_completed'] + (int) $metrics['appointments_no_show'];
+        $metrics['attendance_rate'] = $attendanceBase > 0
+            ? round(((int) $metrics['appointments_completed'] / $attendanceBase) * 100, 1)
+            : 0;
+        $responseBase = (int) $metrics['ai_replies'] + (int) $metrics['human_messages'];
+        $metrics['ai_share'] = $responseBase > 0
+            ? round(((int) $metrics['ai_replies'] / $responseBase) * 100, 1)
+            : 0;
+        $metrics['human_share'] = $responseBase > 0
+            ? round(((int) $metrics['human_messages'] / $responseBase) * 100, 1)
+            : 0;
 
         $previousDate = $this->previousDateParams($filters);
         $previousParams = $previousDate + ($tenantId > 0 ? ['tenant_id' => $tenantId] : []);
@@ -169,6 +217,20 @@ final class AdminExecutiveReportService
             ),
             'messages' => $this->scalar(
                 'SELECT COUNT(*) FROM conversation_messages WHERE sent_at BETWEEN :start AND :end' . $scope,
+                $previousParams
+            ),
+            'conversations_started' => $this->scalar(
+                'SELECT COUNT(*) FROM conversations WHERE created_at BETWEEN :start AND :end' . $scope,
+                $previousParams
+            ),
+            'human_messages' => $this->scalar(
+                'SELECT COUNT(*) FROM conversation_messages WHERE direction = "outgoing" AND sender_type = "user" AND sent_at BETWEEN :start AND :end' . $scope,
+                $previousParams
+            ),
+            'avg_first_response_seconds' => $this->scalar(
+                'SELECT COALESCE(AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, first_incoming_at, first_response_at))), 0)
+                 FROM conversation_service_cycles
+                 WHERE first_incoming_at BETWEEN :start AND :end AND first_response_at IS NOT NULL' . $scope,
                 $previousParams
             ),
             'ai_replies' => $this->scalar(
@@ -190,6 +252,9 @@ final class AdminExecutiveReportService
         $comparisons = [
             'new_companies' => $this->percentChange((int) $metrics['new_companies'], (int) $previousMetrics['new_companies']),
             'messages' => $this->percentChange((int) $metrics['messages'], (int) $previousMetrics['messages']),
+            'conversations_started' => $this->percentChange((int) $metrics['conversations_started'], (int) $previousMetrics['conversations_started']),
+            'human_messages' => $this->percentChange((int) $metrics['human_messages'], (int) $previousMetrics['human_messages']),
+            'avg_first_response_seconds' => $this->percentChange((int) $metrics['avg_first_response_seconds'], (int) $previousMetrics['avg_first_response_seconds']),
             'ai_replies' => $this->percentChange((int) $metrics['ai_replies'], (int) $previousMetrics['ai_replies']),
             'appointments_confirmed' => $this->percentChange((int) $metrics['appointments_confirmed'], (int) $previousMetrics['appointments_confirmed']),
             'automation_failures' => $this->percentChange((int) $metrics['automation_failures'], (int) $previousMetrics['automation_failures']),
@@ -212,6 +277,34 @@ final class AdminExecutiveReportService
                 $params
             );
         }
+
+        $interactionHoursRaw = $this->rows(
+            'SELECT HOUR(sent_at) AS hour_label, COUNT(*) AS total
+             FROM conversation_messages
+             WHERE sent_at BETWEEN :start AND :end' . $scope . '
+             GROUP BY HOUR(sent_at) ORDER BY hour_label',
+            $params
+        );
+        $interactionHourMap = [];
+        foreach ($interactionHoursRaw as $row) {
+            $interactionHourMap[(int) ($row['hour_label'] ?? 0)] = (int) ($row['total'] ?? 0);
+        }
+        $interactionsByHour = [];
+        for ($hour = 0; $hour < 24; $hour++) {
+            $interactionsByHour[] = [
+                'hour' => $hour,
+                'label' => str_pad((string) $hour, 2, '0', STR_PAD_LEFT),
+                'total' => (int) ($interactionHourMap[$hour] ?? 0),
+            ];
+        }
+
+        $responseDistribution = [
+            ['label' => 'Mensagens recebidas', 'value' => (int) ($metrics['incoming'] ?? 0)],
+            ['label' => 'Respostas da equipe', 'value' => (int) ($metrics['human_messages'] ?? 0)],
+            ['label' => 'Respostas da IA', 'value' => (int) ($metrics['ai_replies'] ?? 0)],
+        ];
+
+        $teamPerformance = $this->teamPerformance($tenantId, $date);
 
         $revenueByPlan = $this->rows(
             'SELECT sp.name AS label, COUNT(ts.id) AS subscriptions, COALESCE(SUM(ts.amount),0) AS total
@@ -294,7 +387,8 @@ final class AdminExecutiveReportService
 
         return compact(
             'metrics', 'comparisons', 'previousMetrics', 'companyGrowth', 'messagesByDay', 'revenueByPlan', 'usageByTenant',
-            'lowUsage', 'failures', 'failureTrend', 'healthDistribution', 'insights', 'agendaStatus', 'commercialStages', 'recentInvoices', 'tenants'
+            'lowUsage', 'failures', 'failureTrend', 'healthDistribution', 'insights', 'agendaStatus', 'commercialStages', 'recentInvoices', 'tenants',
+            'interactionsByHour', 'responseDistribution', 'teamPerformance'
         ) + ['warnings' => array_values(array_unique($this->warnings))];
     }
 
@@ -484,6 +578,55 @@ final class AdminExecutiveReportService
                 'message_start' => $date['start'],
                 'message_end' => $date['end'],
             ] + ($tenantId > 0 ? ['tenant_outer' => $tenantId] : [])
+        );
+    }
+
+    private function teamPerformance(int $tenantId, array $date): array
+    {
+        $userScope = $tenantId > 0 ? ' AND u.tenant_id = :tenant_users' : '';
+        $messageScope = $tenantId > 0 ? ' AND tenant_id = :tenant_messages' : '';
+        $cycleScope = $tenantId > 0 ? ' AND tenant_id = :tenant_cycles' : '';
+        $params = [
+            'message_start' => $date['start'],
+            'message_end' => $date['end'],
+            'cycle_start' => $date['start'],
+            'cycle_end' => $date['end'],
+        ];
+        if ($tenantId > 0) {
+            $params += [
+                'tenant_users' => $tenantId,
+                'tenant_messages' => $tenantId,
+                'tenant_cycles' => $tenantId,
+            ];
+        }
+
+        return $this->rows(
+            'SELECT u.id, u.name, u.whatsapp_role_label AS role_label, u.status,
+                    COALESCE(m.human_messages, 0) AS human_messages,
+                    COALESCE(m.conversations, 0) AS conversations,
+                    COALESCE(r.first_responses, 0) AS first_responses,
+                    COALESCE(r.avg_response_seconds, 0) AS avg_response_seconds
+             FROM users u
+             LEFT JOIN (
+                SELECT sender_user_id, COUNT(*) AS human_messages, COUNT(DISTINCT conversation_id) AS conversations
+                FROM conversation_messages
+                WHERE direction = "outgoing" AND sender_type = "user"
+                  AND sent_at BETWEEN :message_start AND :message_end' . $messageScope . '
+                GROUP BY sender_user_id
+             ) m ON m.sender_user_id = u.id
+             LEFT JOIN (
+                SELECT first_response_user_id, COUNT(*) AS first_responses,
+                       AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, first_incoming_at, first_response_at))) AS avg_response_seconds
+                FROM conversation_service_cycles
+                WHERE first_incoming_at BETWEEN :cycle_start AND :cycle_end
+                  AND first_response_at IS NOT NULL' . $cycleScope . '
+                GROUP BY first_response_user_id
+             ) r ON r.first_response_user_id = u.id
+             WHERE u.role <> "super_admin" AND u.status = "active"' . $userScope . '
+               AND (COALESCE(m.human_messages, 0) > 0 OR COALESCE(r.first_responses, 0) > 0)
+             ORDER BY conversations DESC, human_messages DESC, u.name
+             LIMIT 8',
+            $params
         );
     }
 

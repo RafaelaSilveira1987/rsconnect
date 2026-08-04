@@ -78,10 +78,10 @@ $checks = [
     'diagnóstico cobre ciclo completo' => str_contains($diagnostic, 'operational_monitor_runs')
         && str_contains($diagnostic, 'operational_alert_deliveries')
         && str_contains($diagnostic, 'acknowledged_at'),
-    'versão e migration atualizadas' => str_contains($version, 'RS Connect 36.13.0')
+    'versão e migration atualizadas' => str_contains($version, 'RS Connect 36.14.0')
         && str_contains($version, '074_conversation_message_attachments.sql'),
-    'cache dos assets atualizado' => str_contains($layout, 'app.css?v=36.13.0')
-        && str_contains($layout, 'app.js?v=36.13.0'),
+    'cache dos assets atualizado' => str_contains($layout, 'app.css?v=36.14.0')
+        && str_contains($layout, 'app.js?v=36.14.0'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));
@@ -90,4 +90,4 @@ if ($failures !== []) {
     exit(1);
 }
 
-echo "OK - monitoramento, ciclo de incidentes e canais operacionais validados na v36.13.0.\n";
+echo "OK - monitoramento, ciclo de incidentes e canais operacionais validados na v36.14.0.\n";

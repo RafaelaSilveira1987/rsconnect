@@ -41,9 +41,9 @@ $checks = [
     'diagnóstico separa histórico de operacional' => str_contains($diagnostic, 'historical_recovered')
         && str_contains($diagnostic, 'operational_recovered')
         && str_contains($diagnostic, 'cutover_at_utc'),
-    'versão e cache atualizados' => str_contains($version, 'RS Connect 36.13.0')
-        && str_contains($layout, 'app.css?v=36.13.0')
-        && str_contains($layout, 'app.js?v=36.13.0'),
+    'versão e cache atualizados' => str_contains($version, 'RS Connect 36.14.0')
+        && str_contains($layout, 'app.css?v=36.14.0')
+        && str_contains($layout, 'app.js?v=36.14.0'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));
