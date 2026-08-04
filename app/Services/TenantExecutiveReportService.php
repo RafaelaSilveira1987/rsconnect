@@ -52,6 +52,30 @@ final class TenantExecutiveReportService
                 'SELECT COUNT(*) FROM conversations WHERE tenant_id = :tenant_id AND created_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $date
             ),
+            'responded_conversations' => $this->scalar(
+                'SELECT COUNT(DISTINCT conversation_id)
+                 FROM conversation_messages
+                 WHERE tenant_id = :tenant_id
+                   AND direction = "outgoing"
+                   AND sender_type IN ("ai", "user")
+                   AND sent_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $date
+            ),
+            'human_conversations' => $this->scalar(
+                'SELECT COUNT(DISTINCT conversation_id)
+                 FROM conversation_messages
+                 WHERE tenant_id = :tenant_id
+                   AND direction = "outgoing"
+                   AND sender_type = "user"
+                   AND sent_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $date
+            ),
+            'open_incidents' => $this->scalar(
+                'SELECT COUNT(*)
+                 FROM system_incidents
+                 WHERE tenant_id = :tenant_id AND resolved_at IS NULL',
+                ['tenant_id' => $tenantId]
+            ),
             'open_conversations' => $this->scalar(
                 'SELECT COUNT(*) FROM conversations WHERE tenant_id = :tenant_id AND status = "open"',
                 ['tenant_id' => $tenantId]
@@ -221,6 +245,45 @@ final class TenantExecutiveReportService
             ]
         );
 
+        $metrics['first_responses_measured'] = $this->scalar(
+            'SELECT COUNT(*)
+             FROM (
+                SELECT fi.conversation_id
+                FROM (
+                    SELECT conversation_id, MIN(sent_at) AS first_incoming
+                    FROM conversation_messages
+                    WHERE tenant_id = :tenant_id_in
+                      AND direction = "incoming"
+                      AND sent_at BETWEEN :start_in AND :end_in
+                    GROUP BY conversation_id
+                ) fi
+                INNER JOIN conversation_messages response
+                        ON response.conversation_id = fi.conversation_id
+                       AND response.tenant_id = :tenant_id_out
+                       AND response.direction = "outgoing"
+                       AND response.sender_type IN ("ai", "user")
+                       AND response.sent_at >= fi.first_incoming
+                       AND response.sent_at BETWEEN :start_out AND :end_out
+                GROUP BY fi.conversation_id
+             ) measured',
+            [
+                'tenant_id_in' => $tenantId,
+                'start_in' => $date['start'],
+                'end_in' => $date['end'],
+                'tenant_id_out' => $tenantId,
+                'start_out' => $date['start'],
+                'end_out' => $date['end'],
+            ]
+        );
+
+        $metrics['attendance_rate'] = ((int) $metrics['appointments_completed'] + (int) $metrics['appointments_no_show']) > 0
+            ? round(((int) $metrics['appointments_completed'] / ((int) $metrics['appointments_completed'] + (int) $metrics['appointments_no_show'])) * 100, 1)
+            : 0;
+        $metrics['situations_open'] = (int) $metrics['open_incidents']
+            + (int) $metrics['failed_messages']
+            + (int) $metrics['ai_errors']
+            + (int) $metrics['google_sync_errors'];
+
         $metrics['total_messages'] = (int) $metrics['incoming_messages'] + (int) $metrics['outgoing_messages'];
         $metrics['ai_share'] = (int) $metrics['outgoing_messages'] > 0
             ? round(((int) $metrics['ai_replies'] / (int) $metrics['outgoing_messages']) * 100, 1)
@@ -248,6 +311,24 @@ final class TenantExecutiveReportService
                 'SELECT COUNT(*) FROM conversations WHERE tenant_id = :tenant_id AND created_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $previousDate
             ),
+            'responded_conversations' => $this->scalar(
+                'SELECT COUNT(DISTINCT conversation_id)
+                 FROM conversation_messages
+                 WHERE tenant_id = :tenant_id
+                   AND direction = "outgoing"
+                   AND sender_type IN ("ai", "user")
+                   AND sent_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $previousDate
+            ),
+            'human_conversations' => $this->scalar(
+                'SELECT COUNT(DISTINCT conversation_id)
+                 FROM conversation_messages
+                 WHERE tenant_id = :tenant_id
+                   AND direction = "outgoing"
+                   AND sender_type = "user"
+                   AND sent_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $previousDate
+            ),
             'contacts' => $this->scalar(
                 'SELECT COUNT(*) FROM contacts WHERE tenant_id = :tenant_id AND created_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $previousDate
@@ -271,6 +352,8 @@ final class TenantExecutiveReportService
         ];
         $comparisons = [
             'conversations' => $this->percentChange((int) $metrics['conversations'], (int) $previousMetrics['conversations']),
+            'responded_conversations' => $this->percentChange((int) $metrics['responded_conversations'], (int) $previousMetrics['responded_conversations']),
+            'human_conversations' => $this->percentChange((int) $metrics['human_conversations'], (int) $previousMetrics['human_conversations']),
             'contacts' => $this->percentChange((int) $metrics['contacts'], (int) $previousMetrics['contacts']),
             'total_messages' => $this->percentChange((int) $metrics['total_messages'], (int) $previousMetrics['total_messages']),
             'ai_replies' => $this->percentChange((int) $metrics['ai_replies'], (int) $previousMetrics['ai_replies']),

@@ -75,10 +75,10 @@ $checks = [
     'produção usa cookie seguro e ativação progressiva do modo estrito' => str_contains($envVps, 'SESSION_COOKIE_SECURE=true')
         && str_contains($envVps, 'SECURITY_WEBHOOK_STRICT=false')
         && str_contains($envVps, 'Após confirmar os tokens'),
-    'versão e migration foram atualizadas' => str_contains($version, 'RS Connect 36.14.0')
+    'versão e migration foram atualizadas' => str_contains($version, 'RS Connect 36.15.0')
         && str_contains($version, '074_conversation_message_attachments.sql'),
-    'cache de assets foi renovado' => str_contains($layout, 'app.css?v=36.14.0')
-        && str_contains($layout, 'app.js?v=36.14.0'),
+    'cache de assets foi renovado' => str_contains($layout, 'app.css?v=36.15.0')
+        && str_contains($layout, 'app.js?v=36.15.0'),
 ];
 
 preg_match_all('/\$router->post\(\'([^\']+)\'[^;]+\);/', $routes, $postMatches);

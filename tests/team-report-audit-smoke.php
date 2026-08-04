@@ -32,9 +32,9 @@ $checks = [
     'estilos responsivos adicionados' => str_contains($css, '.team-report-audit-kpis')
         && str_contains($css, '.team-report-audit-table')
         && str_contains($css, '@media (max-width:620px)'),
-    'versão e cache atualizados' => str_contains($version, 'RS Connect 36.14.0')
-        && str_contains($layout, 'app.css?v=36.14.0')
-        && str_contains($layout, 'app.js?v=36.14.0'),
+    'versão e cache atualizados' => str_contains($version, 'RS Connect 36.15.0')
+        && str_contains($layout, 'app.css?v=36.15.0')
+        && str_contains($layout, 'app.js?v=36.15.0'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

@@ -13,7 +13,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.1';
-    public const PACKAGE_LABEL = 'RS Connect 36.14.0 — Painel executivo de relatórios da RS Admin';
+    public const PACKAGE_LABEL = 'RS Connect 36.15.0 — Painel executivo das empresas clientes';
     public const REQUIRED_MIGRATION = '074_conversation_message_attachments.sql';
 
     private PDO $pdo;
