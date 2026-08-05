@@ -210,10 +210,14 @@ final class SimplePdfDocument
 
     private function footerCommands(int $page, int $total): string
     {
-        [$r, $g, $b] = $this->rgb('#7a8496');
-        $text = $this->escape('RS Connect · Página ' . $page . ' de ' . $total);
+        [$r, $g, $b] = $this->rgb('#7A8496');
+        [$br, $bg, $bb] = $this->rgb('#2F80FF');
+        [$pr, $pg, $pb] = $this->rgb('#7B3FF2');
+        $text = $this->escape('RS CONNECT  ·  Página ' . $page . ' de ' . $total);
         return sprintf(
-            "q 0.87 0.90 0.94 RG 0.5 w 42 31 m 553 31 l S Q\nBT /F1 7.5 Tf %.4F %.4F %.4F rg 42 17 Td (%s) Tj ET\n",
+            "q %.4F %.4F %.4F RG 1.4 w 42 31 m 300 31 l S Q\nq %.4F %.4F %.4F RG 1.4 w 300 31 m 553 31 l S Q\nBT /F2 7.2 Tf %.4F %.4F %.4F rg 42 17 Td (%s) Tj ET\n",
+            $br, $bg, $bb,
+            $pr, $pg, $pb,
             $r,
             $g,
             $b,

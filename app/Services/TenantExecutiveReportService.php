@@ -101,6 +101,13 @@ final class TenantExecutiveReportService
                    AND (unread_count > 0 OR attendance_mode = "human")',
                 ['tenant_id' => $tenantId]
             ),
+            'attention_human_conversations' => $this->scalar(
+                'SELECT COUNT(*)
+                 FROM conversations
+                 WHERE tenant_id = :tenant_id AND status <> "closed"
+                   AND attendance_mode = "human"',
+                ['tenant_id' => $tenantId]
+            ),
             'incoming_messages' => $this->metricOrScalar(
                 $aggregateTotals,
                 'messages_incoming',

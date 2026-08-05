@@ -30,7 +30,7 @@ $checks = [
     'painel usa nomenclatura consistente' => str_contains($view, 'Conversas atendidas')
         && str_contains($view, 'Mensagens ao longo do tempo')
         && str_contains($view, 'Exportações detalhadas'),
-    'pacote de correção identificado' => str_contains($version, 'RS Connect 36.15.1-r3')
+    'pacote de correção identificado' => str_contains($version, 'RS Connect 36.15.1-r4')
         && str_contains($version, '075_scheduled_reports_and_deliveries.sql'),
 ];
 
@@ -40,4 +40,4 @@ if ($failed !== []) {
     exit(1);
 }
 
-echo "OK - consistência do painel, PDF, agenda e histórico validada na v36.15.1-r3.\n";
+echo "OK - consistência do painel, PDF, agenda e histórico validada na v36.15.1-r4.\n";

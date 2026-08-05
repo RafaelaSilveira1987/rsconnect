@@ -1,3 +1,15 @@
+# v36.15.1-r4 — PDF executivo com identidade RS Connect
+
+- redesenha o PDF com branco predominante, azul `#2F80FF` e roxo `#7B3FF2`;
+- transforma os indicadores em grade 4x2 com linguagem visual de dashboard;
+- mantém a empresa identificada, com RS Connect como marca principal do documento;
+- usa paginação dinâmica conforme a quantidade real de linhas de cada seção;
+- amplia a coluna de situação para não cortar “Aguardando atendimento”;
+- troca zeros técnicos por textos naturais, como “Não mensurado” e “Nenhuma nova”;
+- explica no card de atenção quantas conversas estão em atendimento humano e quantas mensagens não foram lidas;
+- deixa tabelas, cabeçalhos, seções e rodapé mais leves e alinhados à interface da plataforma;
+- não exige migration nova; a última continua sendo `075_scheduled_reports_and_deliveries.sql`.
+
 # v36.15.1-r3 — Relatórios executivos consistentes
 
 - diferencia conversas atendidas no período de conversas novas, evitando comparação enganosa com conversas respondidas;
