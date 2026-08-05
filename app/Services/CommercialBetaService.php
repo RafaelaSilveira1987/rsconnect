@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.15.1-r1', 'title' => 'Correção do envio de relatórios pelo WhatsApp', 'summary' => 'Corrige o erro de parâmetros do banco no envio imediato, reenvio e execução automática, preservando o PDF já gerado e o histórico de entregas.'],
             ['version' => '36.15.1', 'title' => 'Relatórios automáticos, PDF e WhatsApp', 'summary' => 'Gera relatórios protegidos com identidade visual, programação diária, semanal ou mensal, destinatários por empresa, histórico, reenvio e controle de duplicidade.'],
             ['version' => '36.15.0-r1', 'title' => 'Consistência dos indicadores executivos', 'summary' => 'Padroniza primeira resposta operacional, participação da IA e nomenclatura dos cards equivalentes entre RS Admin e empresa cliente.'],
             ['version' => '36.15.0', 'title' => 'Painel executivo das empresas clientes', 'summary' => 'Leva o padrão visual executivo para cada empresa, com indicadores de conversas, respostas, equipe, tempo de primeira resposta, agenda, comparecimento, IA, situações que precisam de atenção, exportações e análises detalhadas isoladas por tenant.'],

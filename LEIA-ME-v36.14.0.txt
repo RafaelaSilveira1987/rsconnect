@@ -1,0 +1,8 @@
+RS Connect v36.14.0 — Painel executivo de relatórios da RS Admin
+
+1. Aplique o pacote sobre a v36.13.0 em uma branch nova.
+2. Preserve o .env real fora do Git.
+3. Não existe migration nova; a última continua sendo a 074.
+4. Faça Deploy/Rebuild no EasyPanel.
+5. Acesse Relatórios como Super Admin e valide cards, gráficos, equipe, agenda, IA e exportações.
+6. Diagnóstico opcional: database/diagnostics/admin_executive_report_v36.14.0.sql

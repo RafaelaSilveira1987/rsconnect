@@ -388,10 +388,11 @@ final class ScheduledReportService
                 ];
                 $this->pdo->prepare(
                     'UPDATE scheduled_reports
-                     SET last_run_at = :now, last_error = :error, next_run_at = :next_run_at, updated_at = :now
+                     SET last_run_at = :last_run_at, last_error = :error, next_run_at = :next_run_at, updated_at = :updated_at
                      WHERE id = :id'
                 )->execute([
-                    'now' => Clock::nowUtc(),
+                    'last_run_at' => Clock::nowUtc(),
+                    'updated_at' => Clock::nowUtc(),
                     'error' => mb_substr($exception->getMessage(), 0, 1000),
                     'next_run_at' => $this->nextRunUtc(
                         (string) $schedule['frequency'],
@@ -457,14 +458,15 @@ final class ScheduledReportService
         $now = Clock::nowUtc();
         $this->pdo->prepare(
             'UPDATE scheduled_reports
-             SET last_run_at = :now,
+             SET last_run_at = :last_run_at,
                  last_success_at = :success_at,
                  last_error = :last_error,
                  next_run_at = :next_run_at,
-                 updated_at = :now
+                 updated_at = :updated_at
              WHERE id = :id'
         )->execute([
-            'now' => $now,
+            'last_run_at' => $now,
+            'updated_at' => $now,
             'success_at' => in_array((string) ($report['status'] ?? ''), ['ready', 'sent', 'partial'], true) ? $now : null,
             'last_error' => (string) ($report['status'] ?? '') === 'failed' ? (string) ($report['error_message'] ?? 'Não foi possível concluir o relatório.') : null,
             'next_run_at' => $this->nextRunUtc(
@@ -707,13 +709,15 @@ final class ScheduledReportService
                          attempt_count = attempt_count + 1,
                          provider_message_id = :provider_message_id,
                          error_message = NULL,
-                         last_attempt_at = :now,
-                         sent_at = :now,
-                         updated_at = :now
+                         last_attempt_at = :last_attempt_at,
+                         sent_at = :sent_at,
+                         updated_at = :updated_at
                      WHERE id = :id'
                 )->execute([
                     'provider_message_id' => $providerId,
-                    'now' => $now,
+                    'last_attempt_at' => $now,
+                    'sent_at' => $now,
+                    'updated_at' => $now,
                     'id' => (int) $delivery['id'],
                 ]);
             } catch (Throwable $exception) {
@@ -722,12 +726,13 @@ final class ScheduledReportService
                      SET status = "failed",
                          attempt_count = attempt_count + 1,
                          error_message = :error_message,
-                         last_attempt_at = :now,
-                         updated_at = :now
+                         last_attempt_at = :last_attempt_at,
+                         updated_at = :updated_at
                      WHERE id = :id'
                 )->execute([
                     'error_message' => mb_substr($exception->getMessage(), 0, 1000),
-                    'now' => $now,
+                    'last_attempt_at' => $now,
+                    'updated_at' => $now,
                     'id' => (int) $delivery['id'],
                 ]);
             }
@@ -777,12 +782,13 @@ final class ScheduledReportService
              SET status = "failed",
                  attempt_count = attempt_count + 1,
                  error_message = :error_message,
-                 last_attempt_at = :now,
-                 updated_at = :now
+                 last_attempt_at = :last_attempt_at,
+                 updated_at = :updated_at
              WHERE generated_report_id = :report_id AND status IN ("pending","failed")'
         )->execute([
             'error_message' => mb_substr($message, 0, 1000),
-            'now' => $now,
+            'last_attempt_at' => $now,
+            'updated_at' => $now,
             'report_id' => $reportId,
         ]);
     }

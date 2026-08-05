@@ -1,3 +1,11 @@
+# v36.15.1-r1 — Correção do envio de relatórios pelo WhatsApp
+
+- corrige `SQLSTATE[HY093]: Invalid parameter number` no envio imediato de PDFs;
+- usa nomes exclusivos para cada parâmetro de data em consultas preparadas nativas do PDO;
+- corrige também reenvio, falha controlada e execução automática pelo n8n;
+- mantém a migration `075_scheduled_reports_and_deliveries.sql`;
+- não altera os relatórios já gerados nem exige mudança no banco.
+
 # v36.15.1 — Relatórios automáticos, PDF e WhatsApp
 
 - inclui a correção de consistência dos indicadores executivos da v36.15.0-r1;

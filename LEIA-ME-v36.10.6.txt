@@ -1,0 +1,16 @@
+RS CONNECT 36.10.6 — AUDITORIA FINAL DAS MÉTRICAS
+
+Base: v36.10.5
+Migration nova: não
+Migration obrigatória mais recente: 071_utc_datetime_contract_compat.sql
+
+Aplicação:
+1. Use a branch feature/atendimento-por-profissional.
+2. Substitua os arquivos pelo patch.
+3. Commit e push.
+4. Faça rebuild no EasyPanel.
+5. Atualize o navegador com Ctrl + F5.
+6. Valide Relatórios > Equipe e profissionais.
+
+Novo diagnóstico:
+database/diagnostics/team_report_audit_v36.10.6.sql
