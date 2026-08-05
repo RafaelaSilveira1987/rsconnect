@@ -115,9 +115,11 @@ final class EvolutionWebhookController
             }
 
             $key = is_array($data['key'] ?? null) ? $data['key'] : [];
+            $pushName = trim((string) ($data['pushName'] ?? $data['senderName'] ?? ''));
             $remoteJid = $this->preferredRemoteJid(
                 trim((string) ($key['remoteJid'] ?? $data['remoteJid'] ?? '')),
-                trim((string) ($key['remoteJidAlt'] ?? $data['remoteJidAlt'] ?? ''))
+                trim((string) ($key['remoteJidAlt'] ?? $data['remoteJidAlt'] ?? '')),
+                $data
             );
             if ($remoteJid === '') {
                 throw new \RuntimeException('remoteJid não informado.');
@@ -125,6 +127,26 @@ final class EvolutionWebhookController
 
             if ($this->isIgnoredRemoteJid($remoteJid)) {
                 $this->respond(202, ['ok' => true, 'ignored' => 'non_contact_jid']);
+            }
+
+            // LIDs são identificadores internos do WhatsApp/Meta, não números de telefone.
+            // Quando a Evolution não fornece um JID alternativo com telefone, o evento não
+            // pode criar contato nem pendência de IA. Isso evita tentar responder Meta AI,
+            // contatos de sistema ou usuários cujo número ainda não foi resolvido.
+            if ($this->isLidRemoteJid($remoteJid)) {
+                $this->respond(202, [
+                    'ok' => true,
+                    'ignored' => 'lid_without_phone',
+                    'reason' => 'recipient_phone_unresolved',
+                ]);
+            }
+
+            if ($this->isKnownSystemContact($remoteJid, $pushName, $data)) {
+                $this->respond(202, [
+                    'ok' => true,
+                    'ignored' => 'system_contact',
+                    'reason' => 'non_replyable_recipient',
+                ]);
             }
 
             $fromMe = filter_var($key['fromMe'] ?? $data['fromMe'] ?? false, FILTER_VALIDATE_BOOL);
@@ -148,7 +170,6 @@ final class EvolutionWebhookController
             }
 
             $externalId = trim((string) ($key['id'] ?? $data['id'] ?? '')) ?: null;
-            $pushName = trim((string) ($data['pushName'] ?? $data['senderName'] ?? ''));
             $phone = preg_replace('/\D+/', '', strstr($remoteJid, '@', true) ?: $remoteJid) ?: '';
             if ($phone === '') {
                 // Eventos de status, canais e broadcasts não devem derrubar o webhook.
@@ -606,7 +627,7 @@ final class EvolutionWebhookController
 
     private function isIgnoredRemoteJid(string $remoteJid): bool
     {
-        $jid = mb_strtolower(trim($remoteJid));
+        $jid = strtolower(trim($remoteJid));
         if ($jid === '') {
             return true;
         }
@@ -1175,14 +1196,100 @@ final class EvolutionWebhookController
         return false;
     }
 
-    private function preferredRemoteJid(string $remoteJid, string $remoteJidAlt): string
+    private function preferredRemoteJid(string $remoteJid, string $remoteJidAlt, array $data = []): string
     {
         $primary = trim($remoteJid);
         $alternate = trim($remoteJidAlt);
-        if ($primary !== '' && str_ends_with(mb_strtolower($primary), '@lid') && $alternate !== '') {
-            return $alternate;
+
+        // Preserva o JID telefônico principal quando ele já é utilizável.
+        if ($this->isPhoneRemoteJid($primary)) {
+            return $primary;
         }
+
+        // Em eventos LID, versões diferentes da Evolution podem expor o telefone em
+        // remoteJidAlt, senderPn, participantPn ou em estruturas aninhadas. Procura
+        // somente valores que sejam JIDs telefônicos válidos; um segundo LID não serve.
+        foreach (array_merge([$alternate], $this->phoneJidCandidates($data)) as $candidate) {
+            if ($this->isPhoneRemoteJid($candidate)) {
+                return trim($candidate);
+            }
+        }
+
         return $primary !== '' ? $primary : $alternate;
+    }
+
+    private function isPhoneRemoteJid(string $remoteJid): bool
+    {
+        $jid = strtolower(trim($remoteJid));
+        if (!str_ends_with($jid, '@s.whatsapp.net') && !str_ends_with($jid, '@c.us')) {
+            return false;
+        }
+
+        $local = strstr($jid, '@', true);
+        $digits = preg_replace('/\D+/', '', $local !== false ? $local : $jid) ?: '';
+        return strlen($digits) >= 10 && strlen($digits) <= 15;
+    }
+
+    private function isLidRemoteJid(string $remoteJid): bool
+    {
+        return str_ends_with(strtolower(trim($remoteJid)), '@lid');
+    }
+
+    /** @return list<string> */
+    private function phoneJidCandidates(array $payload): array
+    {
+        $candidates = [];
+        $walk = static function (mixed $value, int $depth = 0) use (&$walk, &$candidates): void {
+            if ($depth > 7 || count($candidates) >= 80 || !is_array($value)) {
+                return;
+            }
+
+            foreach ($value as $key => $item) {
+                if (is_scalar($item)) {
+                    $name = strtolower((string) $key);
+                    if (in_array($name, [
+                        'remotejidalt', 'senderpn', 'participantpn', 'senderjid',
+                        'participantjid', 'remotejid', 'sender', 'participant',
+                    ], true)) {
+                        $candidate = trim((string) $item);
+                        if ($candidate !== '') {
+                            $candidates[] = $candidate;
+                        }
+                    }
+                    continue;
+                }
+
+                if (is_array($item)) {
+                    $walk($item, $depth + 1);
+                }
+            }
+        };
+        $walk($payload);
+
+        return array_values(array_unique($candidates));
+    }
+
+    private function isKnownSystemContact(string $remoteJid, string $pushName, array $data): bool
+    {
+        $jid = strtolower(trim($remoteJid));
+        $name = strtolower(trim($pushName));
+        $compactName = preg_replace('/[^a-z0-9]+/u', '', $name) ?: '';
+
+        if (str_contains($jid, 'metaai') || str_contains($jid, 'meta.ai')) {
+            return true;
+        }
+        if (in_array($compactName, ['metaai', 'iadameta', 'metaia'], true)) {
+            return true;
+        }
+
+        $category = strtolower(trim((string) (
+            $data['category']
+            ?? $data['contactType']
+            ?? $data['type']
+            ?? ''
+        )));
+        return in_array($category, ['system', 'bot', 'assistant', 'newsletter'], true)
+            && !$this->isPhoneRemoteJid($remoteJid);
     }
 
     private function upsertConversation(

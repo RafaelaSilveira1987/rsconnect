@@ -13,7 +13,7 @@ use Throwable;
 final class AppVersionService
 {
     public const VERSION_LABEL = 'Beta Comercial 1.1';
-    public const PACKAGE_LABEL = 'RS Connect 36.15.1-r1 — Correção do envio de relatórios pelo WhatsApp';
+    public const PACKAGE_LABEL = 'RS Connect 36.15.1-r2 — Proteção para Meta AI, LID e destinatários inválidos';
     public const REQUIRED_MIGRATION = '075_scheduled_reports_and_deliveries.sql';
 
     private PDO $pdo;
