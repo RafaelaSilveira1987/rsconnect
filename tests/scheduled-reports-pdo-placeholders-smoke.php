@@ -8,7 +8,7 @@ $version = (string) file_get_contents($root . '/app/Services/AppVersionService.p
 
 $failed = [];
 
-if (!str_contains($version, 'RS Connect 36.15.1-r3')) {
+if (!str_contains($version, 'RS Connect 36.15.1-r4')) {
     $failed[] = 'A versão do hotfix não foi identificada.';
 }
 
