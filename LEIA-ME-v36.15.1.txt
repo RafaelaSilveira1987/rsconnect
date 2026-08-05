@@ -1,0 +1,20 @@
+RS CONNECT v36.15.1
+
+Inclui:
+- correção de consistência dos indicadores executivos entre RS Admin e cliente;
+- primeira resposta calculada somente com métricas operacionais;
+- participação da IA padronizada;
+- geração manual de PDF;
+- programação diária, semanal e mensal;
+- identidade visual e seleção de indicadores;
+- histórico, reenvio, deduplicação e download protegido;
+- envio do PDF pelo WhatsApp;
+- versões RS Admin e empresa cliente.
+
+Migration obrigatória:
+database/migrations/075_scheduled_reports_and_deliveries.sql
+
+Volume persistente:
+/var/www/html/storage/generated-reports
+
+Leia INSTRUCOES-v36.15.1.md antes do deploy.

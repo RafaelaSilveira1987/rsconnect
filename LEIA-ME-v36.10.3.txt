@@ -1,0 +1,17 @@
+RS Connect v36.10.3 — Sincronização resiliente do status e dos ciclos
+
+1. Aplique este patch sobre a v36.10.2.
+2. Mantenha log_bin_trust_function_creators=ON durante a migration.
+3. Importe database/migrations/070_conversation_cycle_status_sync_compat.sql.
+4. Faça commit/push na branch de homologação e execute um único deploy/rebuild.
+5. Atualize o navegador com Ctrl+F5.
+6. Valide com database/diagnostics/conversation_cycle_status_sync_v36.10.3.sql.
+7. Depois da criação do trigger, retorne log_bin_trust_function_creators=OFF.
+
+Resultado esperado para uma conversa encerrada:
+- conversations.status = closed
+- conversation_service_cycles.cycle_status = closed
+- closed_at preenchido
+- closed_by_user_id preenchido
+
+Ao reabrir, o ciclo anterior permanece fechado e um novo ciclo ativo é criado.

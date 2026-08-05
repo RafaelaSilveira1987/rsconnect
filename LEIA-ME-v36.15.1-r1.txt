@@ -1,0 +1,18 @@
+RS CONNECT v36.15.1-r1
+
+Correção do envio de relatórios pelo WhatsApp.
+
+CORRIGIDO
+- SQLSTATE[HY093]: Invalid parameter number
+- envio imediato
+- reenvio manual
+- atualização de falha
+- execução automática pelo n8n
+
+BANCO
+Não existe migration nova.
+A última continua sendo 075_scheduled_reports_and_deliveries.sql.
+
+ATENÇÃO
+Antes de reenviar um relatório que apresentou o erro, confira se o PDF já chegou ao WhatsApp.
+A chamada ao provedor pode ter concluído antes de o banco falhar ao atualizar a situação.
