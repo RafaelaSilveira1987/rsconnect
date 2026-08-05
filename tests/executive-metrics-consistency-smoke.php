@@ -24,7 +24,7 @@ $assertions = [
     'participação da IA padronizada' => str_contains($tenant, 'attributedResponseShares')
         && str_contains($admin, '$responseBase = (int) $metrics[\'ai_replies\'] + (int) $metrics[\'human_messages\']'),
     'nomenclatura diferencia escopos' => str_contains($adminView, 'Incidentes operacionais')
-        && str_contains($tenantView, 'Itens que precisam de atenção'),
+        && str_contains($tenantView, 'Conversas que precisam de atenção'),
 ];
 
 $failed = [];

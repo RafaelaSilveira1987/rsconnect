@@ -47,14 +47,15 @@ $checks = [
     'PDF usa identidade e métricas consistentes' => str_contains($pdf, "identity['primary']")
         && str_contains($pdf, 'first_responses_measured')
         && str_contains($pdf, 'Incidentes operacionais')
-        && str_contains($pdf, 'Itens que precisam de atenção')
+        && str_contains($pdf, 'Conversas que precisam de atenção')
         && str_contains($simplePdf, '%PDF-'),
     'admin e cliente usam política operacional' => str_contains($admin, 'ExecutiveMetricsPolicyService')
         && str_contains($tenant, 'ExecutiveMetricsPolicyService'),
     'tela oferece geração programação histórico e reenvio' => str_contains($view, 'Criar relatório em PDF')
         && str_contains($view, 'Novo envio automático')
         && str_contains($view, 'Relatórios gerados')
-        && str_contains($view, 'Reenviar'),
+        && str_contains($view, 'Reenviar')
+        && str_contains($view, 'delivery_summary'),
     'rotas de escrita usam autenticação e csrf' => str_contains($routes, "'/reports/automatic/save'")
         && str_contains($routes, "'/reports/automatic/generate'")
         && str_contains($routes, "'/reports/automatic/resend'")

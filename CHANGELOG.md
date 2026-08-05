@@ -1,3 +1,14 @@
+# v36.15.1-r3 — Relatórios executivos consistentes
+
+- diferencia conversas atendidas no período de conversas novas, evitando comparação enganosa com conversas respondidas;
+- usa conversas com movimento no período como base da média de mensagens por conversa;
+- alinha o card de atenção à mesma regra da lista de conversas prioritárias;
+- inclui agendados, pré-agendados, aguardando aprovação e remarcações no resultado da agenda;
+- corrige os campos do desempenho da equipe no PDF;
+- renomeia o gráfico diário para deixar claro que ele representa mensagens, não quantidade de atendimentos;
+- detalha canal e destinatário no histórico de entregas e diferencia `Enviar` de `Reenviar`;
+- não exige migration nova; a última continua sendo `075_scheduled_reports_and_deliveries.sql`.
+
 # v36.15.1-r2 — Proteção para Meta AI, LID e destinatários inválidos
 
 - impede que contatos da Meta AI entrem na fila automática;

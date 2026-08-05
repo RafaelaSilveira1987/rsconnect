@@ -48,6 +48,14 @@ final class TenantExecutiveReportService
         }
 
         $metrics = [
+            // Conversas com movimento no período. Esta é a base executiva de
+            // atendimento e pode incluir conversas criadas em dias anteriores.
+            'active_conversations' => $this->scalar(
+                'SELECT COUNT(DISTINCT conversation_id)
+                 FROM conversation_messages
+                 WHERE tenant_id = :tenant_id AND sent_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $date
+            ),
             'conversations' => $this->metricOrScalar(
                 $aggregateTotals,
                 'conversations_started',
@@ -84,6 +92,13 @@ final class TenantExecutiveReportService
             ),
             'unread' => $this->scalar(
                 'SELECT COALESCE(SUM(unread_count),0) FROM conversations WHERE tenant_id = :tenant_id',
+                ['tenant_id' => $tenantId]
+            ),
+            'attention_conversations' => $this->scalar(
+                'SELECT COUNT(*)
+                 FROM conversations
+                 WHERE tenant_id = :tenant_id AND status <> "closed"
+                   AND (unread_count > 0 OR attendance_mode = "human")',
                 ['tenant_id' => $tenantId]
             ),
             'incoming_messages' => $this->metricOrScalar(
@@ -161,6 +176,13 @@ final class TenantExecutiveReportService
                 'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status = "scheduled" AND starts_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $date
             ),
+            'appointments_pending' => $this->scalar(
+                'SELECT COUNT(*) FROM calendar_appointments
+                 WHERE tenant_id = :tenant_id
+                   AND status IN ("pre_scheduled","awaiting_approval","rescheduled")
+                   AND starts_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $date
+            ),
             'appointments_confirmed' => $this->scalar(
                 'SELECT COUNT(*) FROM calendar_appointments WHERE tenant_id = :tenant_id AND status = "confirmed" AND starts_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $date
@@ -228,10 +250,13 @@ final class TenantExecutiveReportService
         $metrics['attendance_rate'] = ((int) $metrics['appointments_completed'] + (int) $metrics['appointments_no_show']) > 0
             ? round(((int) $metrics['appointments_completed'] / ((int) $metrics['appointments_completed'] + (int) $metrics['appointments_no_show'])) * 100, 1)
             : 0;
-        $metrics['situations_open'] = (int) $metrics['open_incidents']
+        $metrics['operational_attention'] = (int) $metrics['open_incidents']
             + (int) $metrics['failed_messages']
             + (int) $metrics['ai_errors']
             + (int) $metrics['google_sync_errors'];
+        // Mantido por compatibilidade com telas/integrações antigas. A UI do
+        // cliente usa attention_conversations, que corresponde à lista exibida.
+        $metrics['situations_open'] = $metrics['attention_conversations'];
 
         $metrics['total_messages'] = (int) $metrics['incoming_messages'] + (int) $metrics['outgoing_messages'];
         $attributedShares = $this->executivePolicy->attributedResponseShares(
@@ -251,12 +276,18 @@ final class TenantExecutiveReportService
         $metrics['agenda_conversion'] = (int) $metrics['appointments'] > 0
             ? round(((int) $metrics['appointments_successful'] / (int) $metrics['appointments']) * 100, 1)
             : 0;
-        $metrics['avg_messages_per_conversation'] = (int) $metrics['conversations'] > 0
-            ? round((int) $metrics['total_messages'] / (int) $metrics['conversations'], 1)
+        $metrics['avg_messages_per_conversation'] = (int) $metrics['active_conversations'] > 0
+            ? round((int) $metrics['total_messages'] / (int) $metrics['active_conversations'], 1)
             : 0;
 
         $previousDate = $this->previousDateParams($filters);
         $previousMetrics = [
+            'active_conversations' => $this->scalar(
+                'SELECT COUNT(DISTINCT conversation_id)
+                 FROM conversation_messages
+                 WHERE tenant_id = :tenant_id AND sent_at BETWEEN :start AND :end',
+                ['tenant_id' => $tenantId] + $previousDate
+            ),
             'conversations' => $this->scalar(
                 'SELECT COUNT(*) FROM conversations WHERE tenant_id = :tenant_id AND created_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $previousDate
@@ -301,6 +332,7 @@ final class TenantExecutiveReportService
             ),
         ];
         $comparisons = [
+            'active_conversations' => $this->percentChange((int) $metrics['active_conversations'], (int) $previousMetrics['active_conversations']),
             'conversations' => $this->percentChange((int) $metrics['conversations'], (int) $previousMetrics['conversations']),
             'responded_conversations' => $this->percentChange((int) $metrics['responded_conversations'], (int) $previousMetrics['responded_conversations']),
             'human_conversations' => $this->percentChange((int) $metrics['human_conversations'], (int) $previousMetrics['human_conversations']),
@@ -425,6 +457,8 @@ final class TenantExecutiveReportService
             ['label' => 'Escolhas registradas', 'total' => (int) ($metrics['availability_selected_slots'] ?? 0)],
         ];
         $agendaResults = [
+            ['label' => 'Aguardando confirmação', 'total' => (int) ($metrics['appointments_pending'] ?? 0), 'tone' => 'neutral'],
+            ['label' => 'Agendados', 'total' => (int) ($metrics['appointments_scheduled'] ?? 0), 'tone' => 'neutral'],
             ['label' => 'Confirmados', 'total' => (int) ($metrics['appointments_confirmed'] ?? 0), 'tone' => 'positive'],
             ['label' => 'Concluídos', 'total' => (int) ($metrics['appointments_completed'] ?? 0), 'tone' => 'positive'],
             ['label' => 'Rejeitados', 'total' => (int) ($metrics['appointments_rejected'] ?? 0), 'tone' => 'attention'],

@@ -59,7 +59,7 @@ $versionSource = (string) file_get_contents(dirname(__DIR__) . '/app/Services/Ap
 $afterHoursSource = (string) file_get_contents(dirname(__DIR__) . '/app/Services/AiAfterHoursRecoveryService.php');
 $assert(str_contains($serviceSource, "'ai.recipient.unavailable'"), 'Serviço deve registrar evento não repetível do destinatário.');
 $assert(str_contains($webhookSource, "'ignored' => 'lid_without_phone'"), 'Webhook deve ignorar LID sem telefone resolvido.');
-$assert(str_contains($versionSource, 'RS Connect 36.15.1-r2'), 'Versão r2 deve estar publicada.');
+$assert(str_contains($versionSource, 'RS Connect 36.15.1-r3'), 'Versão r3 deve estar publicada.');
 $assert(str_contains($afterHoursSource, "\$event === 'ai.recipient.unavailable'") && str_contains($afterHoursSource, "'cancelled'"), 'Recuperação pós-horário deve encerrar destinatário não respondível.');
 
 if ($failures !== []) {
