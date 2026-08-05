@@ -64,7 +64,9 @@ final class ScheduledReportService
                     COUNT(DISTINCT d.id) AS delivery_count,
                     SUM(d.status = "sent") AS sent_count,
                     SUM(d.status = "failed") AS failed_count,
-                    SUM(d.status = "pending") AS pending_count
+                    SUM(d.status = "pending") AS pending_count,
+                    GROUP_CONCAT(DISTINCT d.destination ORDER BY d.destination SEPARATOR ", ") AS delivery_destinations,
+                    GROUP_CONCAT(DISTINCT d.channel ORDER BY d.channel SEPARATOR ", ") AS delivery_channels
              FROM generated_reports gr
              LEFT JOIN tenants t ON t.id = gr.tenant_id
              LEFT JOIN scheduled_reports sr ON sr.id = gr.scheduled_report_id
@@ -1012,15 +1014,15 @@ final class ScheduledReportService
         $labels = [
             'overview' => 'Indicadores principais',
             'companies' => 'Desempenho por empresa',
-            'usage' => 'Atendimentos ao longo do tempo',
+            'usage' => 'Mensagens ao longo do tempo',
             'health' => 'Saúde da operação',
             'automation' => 'IA e automações',
             'commercial' => 'Comercial RS',
-            'conversations' => 'Conversas e evolução',
+            'conversations' => 'Mensagens e evolução',
             'team' => 'Equipe',
             'agenda' => 'Agenda',
             'ai' => 'Uso da IA',
-            'attention' => 'Itens que precisam de atenção',
+            'attention' => 'Conversas que precisam de atenção',
         ];
         $keys = $scope === 'admin' ? self::ADMIN_SECTIONS : self::TENANT_SECTIONS;
         return array_map(static fn (string $key): array => ['key' => $key, 'label' => $labels[$key] ?? $key], $keys);
@@ -1116,6 +1118,11 @@ final class ScheduledReportService
             'expired' => 'Expirado',
             default => 'Gerando',
         };
+        $destinations = trim((string) ($row['delivery_destinations'] ?? ''));
+        $channels = trim((string) ($row['delivery_channels'] ?? ''));
+        $row['delivery_summary'] = (int) ($row['delivery_count'] ?? 0) > 0
+            ? (($channels === '' ? 'WhatsApp' : ucfirst($channels)) . ($destinations !== '' ? ' · ' . $destinations : ''))
+            : 'Ainda não enviado';
         return $row;
     }
 

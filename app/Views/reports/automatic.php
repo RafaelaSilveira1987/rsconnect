@@ -309,7 +309,7 @@ $frequencyLabel = static fn (string $value): string => match ($value) {
                         <th>Período</th>
                         <th>Gerado em</th>
                         <th>Arquivo</th>
-                        <th>Envio</th>
+                        <th>Entrega</th>
                         <th>Ações</th>
                     </tr>
                 </thead>
@@ -323,13 +323,14 @@ $frequencyLabel = static fn (string $value): string => match ($value) {
                         <td><?= View::e((string) ($report['size_label'] ?? '')) ?></td>
                         <td>
                             <span class="scheduled-status <?= $statusClass((string) $report['status']) ?>"><?= View::e((string) ($report['status_label'] ?? $report['status'])) ?></span>
-                            <small><?= (int) ($report['sent_count'] ?? 0) ?> enviada(s) · <?= (int) ($report['failed_count'] ?? 0) ?> não concluída(s)</small>
+                            <small><?= View::e((string) ($report['delivery_summary'] ?? 'Ainda não enviado')) ?></small>
+                            <?php if ((int) ($report['delivery_count'] ?? 0) > 0): ?><small><?= (int) ($report['sent_count'] ?? 0) ?> concluída(s) · <?= (int) ($report['failed_count'] ?? 0) ?> falha(s)</small><?php endif; ?>
                         </td>
                         <td class="scheduled-actions">
                             <a class="btn btn-quiet btn-small" target="_blank" href="<?= View::e(Router::url('/reports/automatic/download?report_uuid=' . rawurlencode((string) $report['uuid']))) ?>">Visualizar</a>
                             <a class="btn btn-outline btn-small" href="<?= View::e(Router::url('/reports/automatic/download?download=1&report_uuid=' . rawurlencode((string) $report['uuid']))) ?>">Baixar</a>
                             <?php if ((int) ($report['delivery_count'] ?? 0) > 0): ?>
-                                <form method="post" action="<?= View::e(Router::url('/reports/automatic/resend')) ?>"><?= Csrf::input() ?><input type="hidden" name="report_uuid" value="<?= View::e((string) $report['uuid']) ?>"><button class="btn btn-outline btn-small" type="submit">Reenviar</button></form>
+                                <form method="post" action="<?= View::e(Router::url('/reports/automatic/resend')) ?>"><?= Csrf::input() ?><input type="hidden" name="report_uuid" value="<?= View::e((string) $report['uuid']) ?>"><button class="btn btn-outline btn-small" type="submit"><?= (int) ($report['sent_count'] ?? 0) > 0 ? 'Reenviar' : 'Enviar' ?></button></form>
                             <?php endif; ?>
                         </td>
                     </tr>

@@ -150,14 +150,14 @@ final class ExecutiveReportPdfService
     private function tenantKpis(array $m, array $c): array
     {
         return [
-            ['label' => 'Conversas iniciadas', 'value' => $this->number($m['conversations'] ?? 0), 'detail' => $this->trend($c['conversations'] ?? null, 'comparação anterior'), 'tone' => 'primary'],
+            ['label' => 'Conversas atendidas', 'value' => $this->number($m['active_conversations'] ?? 0), 'detail' => $this->number($m['conversations'] ?? 0) . ' nova(s) · ' . $this->trend($c['active_conversations'] ?? null, 'sem base anterior'), 'tone' => 'primary'],
             ['label' => 'Conversas respondidas', 'value' => $this->number($m['responded_conversations'] ?? 0), 'detail' => $this->trend($c['responded_conversations'] ?? null, 'comparação anterior'), 'tone' => 'primary'],
             ['label' => 'Atendimentos humanos', 'value' => $this->number($m['human_conversations'] ?? 0), 'detail' => $this->number($m['human_replies'] ?? 0) . ' respostas da equipe', 'tone' => 'accent'],
             ['label' => 'Primeira resposta', 'value' => $this->duration($m['avg_first_response_seconds'] ?? 0), 'detail' => $this->number($m['first_responses_measured'] ?? $m['first_responses'] ?? 0) . ' respostas medidas', 'tone' => 'primary'],
             ['label' => 'Agendamentos', 'value' => $this->number($m['appointments'] ?? 0), 'detail' => $this->percent($m['appointment_success_rate'] ?? $m['agenda_conversion'] ?? 0) . ' de resultado', 'tone' => 'accent'],
             ['label' => 'Comparecimento', 'value' => $this->percent($m['attendance_rate'] ?? 0), 'detail' => $this->number($m['appointments_completed'] ?? 0) . ' concluído(s)', 'tone' => 'accent'],
             ['label' => 'Uso da IA', 'value' => $this->number($m['ai_replies'] ?? 0), 'detail' => $this->percent($m['ai_share'] ?? 0) . ' das respostas', 'tone' => 'primary'],
-            ['label' => 'Itens que precisam de atenção', 'value' => $this->number(($m['open_incidents'] ?? 0) + ($m['unread'] ?? 0)), 'detail' => $this->number($m['unread'] ?? 0) . ' mensagem(ns) não lida(s)', 'tone' => 'primary'],
+            ['label' => 'Conversas que precisam de atenção', 'value' => $this->number($m['attention_conversations'] ?? 0), 'detail' => $this->number($m['unread'] ?? 0) . ' mensagem(ns) não lida(s)', 'tone' => 'primary'],
         ];
     }
 
@@ -237,8 +237,8 @@ final class ExecutiveReportPdfService
         string $period
     ): void {
         if (in_array('conversations', $sections, true)) {
-            $this->ensureSpace($pdf, $y, 155, $name, $period, $primary);
-            $y = $this->sectionTitle($pdf, $y, 'Atendimentos ao longo do tempo', 'Conversas e mensagens registradas por dia.', $primary);
+            $this->ensureSpace($pdf, $y, 275, $name, $period, $primary);
+            $y = $this->sectionTitle($pdf, $y, 'Mensagens ao longo do tempo', 'Volume diário de mensagens registradas no período.', $primary);
             $series = is_array($data['byDay'] ?? null) ? $data['byDay'] : [];
             $y = $this->barList($pdf, $y, array_map(fn (array $row): array => [
                 'label' => $this->dateBr((string) ($row['label'] ?? '')),
@@ -247,19 +247,18 @@ final class ExecutiveReportPdfService
         }
 
         if (in_array('team', $sections, true)) {
-            $this->ensureSpace($pdf, $y, 160, $name, $period, $primary);
+            $this->ensureSpace($pdf, $y, 320, $name, $period, $primary);
             $y = $this->sectionTitle($pdf, $y, 'Desempenho da equipe', 'Atuação dos profissionais no período.', $primary);
             $rows = array_map(fn (array $row): array => [
-                (string) ($row['name'] ?? 'Profissional'),
-                $this->number($row['conversations'] ?? $row['human_conversations'] ?? 0),
-                $this->number($row['human_messages'] ?? 0),
-                $this->duration($row['avg_response_seconds'] ?? 0),
+                (string) ($row['label'] ?? 'Profissional'),
+                $this->number($row['conversations'] ?? 0),
+                $this->number($row['total'] ?? 0),
             ], array_slice(is_array($data['teamPerformance'] ?? null) ? $data['teamPerformance'] : [], 0, 10));
-            $y = $this->table($pdf, $y, ['Profissional', 'Conversas', 'Respostas', '1ª resposta'], $rows, [240, 80, 82, 95], $primary);
+            $y = $this->table($pdf, $y, ['Profissional', 'Conversas', 'Respostas'], $rows, [315, 90, 92], $primary);
         }
 
         if (in_array('agenda', $sections, true)) {
-            $this->ensureSpace($pdf, $y, 150, $name, $period, $primary);
+            $this->ensureSpace($pdf, $y, 245, $name, $period, $primary);
             $y = $this->sectionTitle($pdf, $y, 'Resultado da agenda', 'Confirmações, conclusões e ausências.', $primary);
             $source = is_array($data['agendaResults'] ?? null) ? $data['agendaResults'] : (is_array($data['agendaByStatus'] ?? null) ? $data['agendaByStatus'] : []);
             $rows = array_map(fn (array $row): array => [$this->friendlyStatus((string) ($row['label'] ?? '')), $this->number($row['total'] ?? 0)], $source);
@@ -267,7 +266,7 @@ final class ExecutiveReportPdfService
         }
 
         if (in_array('ai', $sections, true)) {
-            $this->ensureSpace($pdf, $y, 135, $name, $period, $primary);
+            $this->ensureSpace($pdf, $y, 180, $name, $period, $primary);
             $y = $this->sectionTitle($pdf, $y, 'IA e equipe', 'Participação nas respostas enviadas.', $primary);
             $m = is_array($data['metrics'] ?? null) ? $data['metrics'] : [];
             $rows = [
@@ -280,7 +279,7 @@ final class ExecutiveReportPdfService
         }
 
         if (in_array('attention', $sections, true)) {
-            $this->ensureSpace($pdf, $y, 170, $name, $period, $primary);
+            $this->ensureSpace($pdf, $y, 310, $name, $period, $primary);
             $y = $this->sectionTitle($pdf, $y, 'Conversas que precisam de atenção', 'Itens ainda abertos ou com mensagens não lidas.', $primary);
             $rows = array_map(fn (array $row): array => [
                 (string) ($row['contact_name'] ?? 'Contato'),
@@ -406,12 +405,14 @@ final class ExecutiveReportPdfService
             ];
         }
         return [
+            'active_conversations' => (int) ($metrics['active_conversations'] ?? 0),
             'conversations' => (int) ($metrics['conversations'] ?? 0),
             'responded_conversations' => (int) ($metrics['responded_conversations'] ?? 0),
             'human_conversations' => (int) ($metrics['human_conversations'] ?? 0),
             'appointments' => (int) ($metrics['appointments'] ?? 0),
             'ai_replies' => (int) ($metrics['ai_replies'] ?? 0),
             'unread' => (int) ($metrics['unread'] ?? 0),
+            'attention_conversations' => (int) ($metrics['attention_conversations'] ?? 0),
         ];
     }
 
@@ -419,6 +420,7 @@ final class ExecutiveReportPdfService
     {
         return match (strtolower(trim($status))) {
             'open', 'active' => 'Em aberto',
+            'pending' => 'Aguardando atendimento',
             'closed' => 'Encerrado',
             'scheduled' => 'Agendado',
             'confirmed' => 'Confirmado',
