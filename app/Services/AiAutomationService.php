@@ -102,6 +102,26 @@ final class AiAutomationService
                 return;
             }
 
+            $recipientBlock = $this->nonReplyableRecipientReason($conversation);
+            if ($recipientBlock !== null) {
+                $this->log(
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    'ai.recipient.unavailable',
+                    'skipped',
+                    $recipientBlock,
+                    null,
+                    [
+                        'non_retryable' => true,
+                        'failure_phase' => 'recipient.guard',
+                        'remote_jid' => (string) ($conversation['remote_jid'] ?? ''),
+                        'phone' => (string) ($conversation['phone'] ?? ''),
+                    ]
+                );
+                return;
+            }
+
             $lockStatement = $pdo->prepare('SELECT GET_LOCK(:lock_name, 35)');
             $lockStatement->execute(['lock_name' => $conversationLockName]);
             $conversationLockAcquired = (int) $lockStatement->fetchColumn() === 1;
@@ -416,8 +436,15 @@ final class AiAutomationService
                 }
             }
         } catch (Throwable $exception) {
+            $recipientUnavailable = $failurePhase === 'evolution.send'
+                && $this->isNonRetryableRecipientError($exception->getMessage());
             if ($usageReservationId > 0) {
-                $usageService->cancelReservation($usageReservationId, $exception->getMessage(), true, $this->ai->lastUsage());
+                $usageService->cancelReservation(
+                    $usageReservationId,
+                    $exception->getMessage(),
+                    !$recipientUnavailable,
+                    $this->ai->lastUsage()
+                );
                 $usageReservationId = 0;
             }
             if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
@@ -425,6 +452,28 @@ final class AiAutomationService
             }
             $tenantId = (int) $instance['tenant_id'];
             $agentId = isset($agent['id']) ? (int) $agent['id'] : null;
+
+            if ($recipientUnavailable) {
+                $this->log(
+                    $tenantId,
+                    $conversationId,
+                    $agentId,
+                    'ai.recipient.unavailable',
+                    'skipped',
+                    'O destinatário não corresponde a um número WhatsApp disponível. A pendência foi encerrada sem novas tentativas.',
+                    null,
+                    [
+                        'payload_event' => $payload['event'] ?? null,
+                        'failure_phase' => $failurePhase,
+                        'instance_id' => (int) ($instance['id'] ?? 0),
+                        'instance_name' => (string) ($instance['instance_name'] ?? ''),
+                        'non_retryable' => true,
+                        'provider_error' => mb_substr($exception->getMessage(), 0, 700),
+                    ]
+                );
+                return;
+            }
+
             $this->log($tenantId, $conversationId, $agentId, 'ai.failed', 'error', $exception->getMessage(), null, [
                 'payload_event' => $payload['event'] ?? null,
                 'failure_phase' => $failurePhase,
@@ -1153,7 +1202,7 @@ final class AiAutomationService
     {
         $service = $this->evolutionService($instance);
         $phone = preg_replace('/\D+/', '', (string) ($conversation['phone'] ?? '')) ?: '';
-        if (strlen($phone) < 10) {
+        if (strlen($phone) < 10 || strlen($phone) > 15) {
             throw new RuntimeException('Evolution sendText bloqueado: telefone do contato inválido ou incompleto.');
         }
         try {
@@ -1311,6 +1360,47 @@ final class AiAutomationService
         }
         $decoded = json_decode((string) $raw, true);
         return is_array($decoded) ? array_values(array_filter(array_map('strval', $decoded))) : [];
+    }
+
+    private function nonReplyableRecipientReason(array $conversation): ?string
+    {
+        $remoteJid = strtolower(trim((string) ($conversation['remote_jid'] ?? '')));
+        $phone = preg_replace('/\D+/', '', (string) ($conversation['phone'] ?? '')) ?: '';
+        $name = strtolower(trim((string) ($conversation['name'] ?? '')));
+        $compactName = preg_replace('/[^a-z0-9]+/u', '', $name) ?: '';
+
+        if ($remoteJid !== '' && str_ends_with($remoteJid, '@lid')) {
+            return 'O contato possui apenas um identificador interno LID e não tem número WhatsApp resolvido. Nenhuma nova tentativa será feita.';
+        }
+        foreach (['@g.us', 'status@broadcast', '@broadcast', '@newsletter', 'newsletter'] as $pattern) {
+            if ($remoteJid !== '' && str_contains($remoteJid, $pattern)) {
+                return 'O destinatário é um grupo, canal, status ou contato de sistema e não pode receber resposta automática individual.';
+            }
+        }
+        if (str_contains($remoteJid, 'metaai') || str_contains($remoteJid, 'meta.ai')
+            || in_array($compactName, ['metaai', 'iadameta', 'metaia'], true)) {
+            return 'O contato pertence à Meta AI e não deve receber resposta automática da RS Connect.';
+        }
+        if ($phone === '' || strlen($phone) < 10 || strlen($phone) > 15) {
+            return 'O contato não possui um telefone WhatsApp válido para resposta automática.';
+        }
+
+        return null;
+    }
+
+    private function isNonRetryableRecipientError(string $message): bool
+    {
+        $normalized = strtolower(trim($message));
+        $compact = preg_replace('/\s+/', '', $normalized) ?: $normalized;
+
+        return str_contains($compact, '"exists":false')
+            || str_contains($compact, "'exists':false")
+            || str_contains($normalized, 'number does not exist')
+            || str_contains($normalized, 'number not found')
+            || str_contains($normalized, 'número não existe')
+            || str_contains($normalized, 'numero nao existe')
+            || str_contains($normalized, 'jid não encontrado')
+            || str_contains($normalized, 'jid nao encontrado');
     }
 
     private function friendlyAiFailure(string $error): string

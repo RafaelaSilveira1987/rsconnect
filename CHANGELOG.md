@@ -1,3 +1,13 @@
+# v36.15.1-r2 — Proteção para Meta AI, LID e destinatários inválidos
+
+- impede que contatos da Meta AI entrem na fila automática;
+- resolve `@lid` por `remoteJidAlt`, `senderPn`, `participantPn` e campos aninhados quando existe telefone real;
+- ignora LID sem telefone, grupos, status, canais e contatos de sistema antes de criar pendência;
+- classifica `exists:false` da Evolution como destinatário não respondível;
+- encerra a pendência com `ai.recipient.unavailable` sem repetir a tentativa a cada minuto;
+- mantém novas tentativas para falhas temporárias;
+- não exige migration nova; a última continua sendo `075_scheduled_reports_and_deliveries.sql`.
+
 # v36.15.1-r1 — Correção do envio de relatórios pelo WhatsApp
 
 - corrige `SQLSTATE[HY093]: Invalid parameter number` no envio imediato de PDFs;

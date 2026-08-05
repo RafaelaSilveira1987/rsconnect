@@ -12,6 +12,7 @@ $statusLabel = [
 $eventLabel = [
     'ai.replied' => 'Resposta automática enviada',
     'ai.failed' => 'Não foi possível responder automaticamente',
+    'ai.recipient.unavailable' => 'Destinatário não respondível',
     'ai.skipped' => 'Resposta automática não executada',
     'ai.cooldown' => 'Mensagem aguardando tempo de interação da IA',
     'n8n.flow.test' => 'Teste de integração externa',
@@ -50,6 +51,9 @@ $friendlyLog = static function (array $log): array {
 
     if ($event === 'ai.cooldown' || str_contains($lower, 'tempo de espera da IA')) {
         return ['A mensagem chegou antes do intervalo definido para uma nova resposta automática.', 'Ela permanece na conversa e pode ser reprocessada manualmente. Ao salvar o assistente, a última pendência também é reavaliada automaticamente.'];
+    }
+    if ($event === 'ai.recipient.unavailable') {
+        return ['O contato não corresponde a um número WhatsApp que possa receber resposta.', 'A pendência foi encerrada sem novas tentativas. Contatos da Meta AI, LIDs sem telefone, grupos e canais são ignorados automaticamente.', 'skipped', 'Destinatário não respondível'];
     }
     if (str_contains($lower, 'não existe mensagem recebida') || str_contains($lower, 'no inbound message')) {
         return ['Não há uma mensagem do cliente disponível para gerar uma nova resposta.', 'Aguarde uma mensagem recebida ou escolha outra conversa.'];

@@ -291,6 +291,16 @@ final class AiAfterHoursRecoveryService
                     $summary['blocked_plan']++;
                     continue;
                 }
+                if ($event === 'ai.recipient.unavailable') {
+                    $this->finish(
+                        $id,
+                        'cancelled',
+                        $error !== '' ? $error : 'Destinatário não respondível; recuperação encerrada sem novas tentativas.',
+                        null,
+                        $source
+                    );
+                    continue;
+                }
                 if ($event === 'ai.failed' || $status === 'error') {
                     $this->finish($id, 'error', $error !== '' ? $error : 'Falha ao recuperar a conversa.', '+15 minutes', $source);
                     $summary['errors']++;
