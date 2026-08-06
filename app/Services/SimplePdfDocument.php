@@ -18,6 +18,8 @@ final class SimplePdfDocument
     /** @var list<string> */
     private array $pages = [];
     private int $currentPage = -1;
+    /** @var array<string,array{bytes:string,width:int,height:int}> */
+    private array $images = [];
 
     public function addPage(): int
     {
@@ -155,6 +157,34 @@ final class SimplePdfDocument
         ));
     }
 
+    public function jpeg(string $path, float $x, float $top, float $width, float $height): void
+    {
+        $this->ensurePage();
+        if (!isset($this->images[$path])) {
+            $info = @getimagesize($path);
+            $bytes = @file_get_contents($path);
+            if ($info === false || $bytes === false || ($info['mime'] ?? '') !== 'image/jpeg') {
+                return;
+            }
+            $this->images[$path] = [
+                'bytes' => $bytes,
+                'width' => (int) $info[0],
+                'height' => (int) $info[1],
+            ];
+        }
+        $index = array_search($path, array_keys($this->images), true);
+        $resource = 'Im' . ((int) $index + 1);
+        $y = self::PAGE_HEIGHT - $top - $height;
+        $this->append(sprintf(
+            "q %.2F 0 0 %.2F %.2F %.2F cm /%s Do Q\n",
+            $width,
+            $height,
+            $x,
+            $y,
+            $resource
+        ));
+    }
+
     public function output(): string
     {
         if ($this->pages === []) {
@@ -164,24 +194,42 @@ final class SimplePdfDocument
         $objects = [];
         $objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
 
+        $imageCount = count($this->images);
+        $firstPageObjectId = 5 + $imageCount;
         $pageObjectIds = [];
         foreach ($this->pages as $index => $_content) {
-            $pageObjectIds[] = 5 + ($index * 2);
+            $pageObjectIds[] = $firstPageObjectId + ($index * 2);
         }
         $kids = implode(' ', array_map(static fn (int $id): string => $id . ' 0 R', $pageObjectIds));
         $objects[2] = '<< /Type /Pages /Kids [' . $kids . '] /Count ' . count($this->pages) . ' >>';
         $objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
         $objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
 
+        $xObjects = [];
+        foreach (array_values($this->images) as $index => $image) {
+            $imageId = 5 + $index;
+            $resource = 'Im' . ($index + 1);
+            $xObjects[] = '/' . $resource . ' ' . $imageId . ' 0 R';
+            $objects[$imageId] = sprintf(
+                "<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length %d >>\nstream\n%s\nendstream",
+                $image['width'],
+                $image['height'],
+                strlen($image['bytes']),
+                $image['bytes']
+            );
+        }
+        $xObjectResources = $xObjects !== [] ? ' /XObject << ' . implode(' ', $xObjects) . ' >>' : '';
+
         foreach ($this->pages as $index => $content) {
-            $pageId = 5 + ($index * 2);
+            $pageId = $firstPageObjectId + ($index * 2);
             $contentId = $pageId + 1;
             $footer = $this->footerCommands($index + 1, count($this->pages));
             $stream = $content . $footer;
             $objects[$pageId] = sprintf(
-                '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.2F %.2F] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents %d 0 R >>',
+                '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.2F %.2F] /Resources << /Font << /F1 3 0 R /F2 4 0 R >>%s >> /Contents %d 0 R >>',
                 self::PAGE_WIDTH,
                 self::PAGE_HEIGHT,
+                $xObjectResources,
                 $contentId
             );
             $objects[$contentId] = "<< /Length " . strlen($stream) . " >>\nstream\n" . $stream . "endstream";
@@ -213,7 +261,7 @@ final class SimplePdfDocument
         [$r, $g, $b] = $this->rgb('#7A8496');
         [$br, $bg, $bb] = $this->rgb('#2F80FF');
         [$pr, $pg, $pb] = $this->rgb('#7B3FF2');
-        $text = $this->escape('RS CONNECT  ·  Página ' . $page . ' de ' . $total);
+        $text = $this->escape('RS CONNECT  |  Página ' . $page . ' de ' . $total);
         return sprintf(
             "q %.4F %.4F %.4F RG 1.4 w 42 31 m 300 31 l S Q\nq %.4F %.4F %.4F RG 1.4 w 300 31 m 553 31 l S Q\nBT /F2 7.2 Tf %.4F %.4F %.4F rg 42 17 Td (%s) Tj ET\n",
             $br, $bg, $bb,
