@@ -8,9 +8,9 @@ $simple = (string) file_get_contents($root . '/app/Services/SimplePdfDocument.ph
 $version = (string) file_get_contents($root . '/app/Services/AppVersionService.php');
 
 $checks = [
-    'logo institucional incorporada ao PDF' => str_contains($pdf, 'rs-digital-lab-report.jpg')
+    'logo institucional incorporada ao PDF' => str_contains($pdf, 'rs-connect-report-mark.jpg')
         && str_contains($simple, 'public function jpeg(')
-        && is_file($root . '/public/assets/img/rs-digital-lab-report.jpg'),
+        && is_file($root . '/public/assets/img/rs-connect-report-mark.jpg'),
     'produto continua identificado como RS Connect' => str_contains($pdf, "'RS CONNECT'")
         && str_contains($pdf, "'RELATÓRIO EXECUTIVO'"),
     'zero de comparecimento usa linguagem natural' => str_contains($pdf, 'completedAppointmentsDetail(')
