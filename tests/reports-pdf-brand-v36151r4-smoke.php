@@ -25,7 +25,7 @@ $checks = [
     'situação ganhou largura suficiente' => str_contains($pdf, '[185, 115, 60, 151]'),
     'rodapé usa azul e roxo da plataforma' => str_contains($simple, "'#2F80FF'")
         && str_contains($simple, "'#7B3FF2'"),
-    'pacote r4 publicado sem migration nova' => str_contains($version, 'RS Connect 36.15.1-r4')
+    'identidade r4 preservada em release posterior sem migration nova' => str_contains($version, 'RS Connect 36.15.1-r')
         && str_contains($version, '075_scheduled_reports_and_deliveries.sql'),
 ];
 

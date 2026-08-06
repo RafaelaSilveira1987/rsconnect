@@ -96,12 +96,11 @@ final class ExecutiveReportPdfService
     ): void {
         $pdf->rect(0, 0, 370, 6, $primary, null);
         $pdf->rect(370, 0, SimplePdfDocument::PAGE_WIDTH - 370, 6, $secondary, null);
-        $pdf->text(self::MARGIN, 21, 'R', 20, true, $primary);
-        $pdf->text(self::MARGIN + 15, 21, 'S', 20, true, $secondary);
-        $pdf->text(self::MARGIN + 34, 24, 'CONNECT', 14, true, '#172033');
-        $pdf->rect(self::MARGIN, 53, 118, 20, '#F2EDFF', null);
-        $pdf->text(self::MARGIN + 9, 58, 'RELATÓRIO EXECUTIVO', 7.1, true, $secondary);
-        $pdf->text(self::MARGIN, 82, mb_strtoupper($name), 9.2, true, '#253047');
+        $pdf->jpeg($this->logoPath(), self::MARGIN, 17, 164, 43);
+        $pdf->text(self::MARGIN, 68, 'RS CONNECT', 12.2, true, '#172033');
+        $pdf->rect(self::MARGIN + 88, 65, 118, 20, '#F2EDFF', null);
+        $pdf->text(self::MARGIN + 97, 70, 'RELATÓRIO EXECUTIVO', 7.1, true, $secondary);
+        $pdf->text(self::MARGIN, 91, mb_strtoupper($name), 8.3, true, '#5B6578');
         $pdf->text(350, 24, 'PERÍODO ANALISADO', 6.8, true, '#7A8496');
         $pdf->text(350, 37, $period, 9.4, true, '#253047');
         $pdf->text(350, 58, 'GERADO EM', 6.8, true, '#7A8496');
@@ -113,9 +112,8 @@ final class ExecutiveReportPdfService
     {
         $pdf->rect(0, 0, 370, 5, '#2F80FF', null);
         $pdf->rect(370, 0, SimplePdfDocument::PAGE_WIDTH - 370, 5, '#7B3FF2', null);
-        $pdf->text(self::MARGIN, 18, 'R', 13.5, true, '#2F80FF');
-        $pdf->text(self::MARGIN + 10, 18, 'S', 13.5, true, '#7B3FF2');
-        $pdf->text(self::MARGIN + 23, 19.5, 'CONNECT', 9.4, true, '#172033');
+        $pdf->jpeg($this->logoPath(), self::MARGIN, 12, 91, 24);
+        $pdf->text(145, 18, 'RS CONNECT', 8.4, true, '#172033');
         $pdf->text(225, 18, mb_strtoupper($name), 7.4, true, '#4F5B70');
         $pdf->text(395, 18, $period, 7.4, false, '#7A8496');
         $pdf->line(self::MARGIN, 46, self::MARGIN + self::CONTENT_WIDTH, 46, '#E3E8F2', 0.7);
@@ -157,9 +155,9 @@ final class ExecutiveReportPdfService
             ['label' => 'Atendimentos humanos', 'value' => $this->number($m['human_conversations'] ?? 0), 'detail' => $this->number($m['human_messages'] ?? 0) . ' respostas da equipe', 'tone' => 'accent'],
             ['label' => '1ª resposta', 'value' => $measuredResponses > 0 ? $this->duration($m['avg_first_response_seconds'] ?? 0) : 'Não mensurado', 'detail' => $measuredResponses > 0 ? $this->plural($measuredResponses, 'resposta medida', 'respostas medidas') : 'Nenhum ciclo com tempo disponível', 'tone' => 'primary'],
             ['label' => 'Agendamentos', 'value' => $this->number($m['appointments'] ?? 0), 'detail' => $this->percent($m['agenda_conversion'] ?? 0) . ' confirmados/concluídos', 'tone' => 'accent'],
-            ['label' => 'Comparecimento', 'value' => $this->percent($m['attendance_rate'] ?? 0), 'detail' => $this->number($m['appointments_completed'] ?? 0) . ' concluído(s)', 'tone' => 'accent'],
+            ['label' => 'Comparecimento', 'value' => $this->percent($m['attendance_rate'] ?? 0), 'detail' => $this->completedAppointmentsDetail((int) ($m['appointments_completed'] ?? 0)), 'tone' => 'accent'],
             ['label' => 'Uso da IA', 'value' => $this->number($m['ai_replies'] ?? 0), 'detail' => $this->percent($m['ai_share'] ?? 0) . ' das respostas', 'tone' => 'primary'],
-            ['label' => 'Incidentes operacionais', 'value' => $this->number($m['open_operational_incidents'] ?? 0), 'detail' => $this->number($m['automation_failures'] ?? 0) . ' falha(s) no período', 'tone' => 'primary'],
+            ['label' => 'Incidentes operacionais', 'value' => $this->number($m['open_operational_incidents'] ?? 0), 'detail' => $this->automationFailuresDetail((int) ($m['automation_failures'] ?? 0)), 'tone' => 'primary'],
         ];
     }
 
@@ -177,8 +175,8 @@ final class ExecutiveReportPdfService
             ['label' => 'Atendimentos humanos', 'value' => $this->number($m['human_conversations'] ?? 0), 'detail' => $this->number($m['human_replies'] ?? 0) . ' respostas da equipe', 'tone' => 'accent'],
             ['label' => '1ª resposta', 'value' => $measuredResponses > 0 ? $this->duration($m['avg_first_response_seconds'] ?? 0) : 'Não mensurado', 'detail' => $measuredResponses > 0 ? $this->plural($measuredResponses, 'resposta medida', 'respostas medidas') : 'Nenhum ciclo com tempo disponível', 'tone' => 'primary'],
             ['label' => 'Agendamentos', 'value' => $this->number($m['appointments'] ?? 0), 'detail' => $this->percent($m['appointment_success_rate'] ?? $m['agenda_conversion'] ?? 0) . ' de resultado', 'tone' => 'accent'],
-            ['label' => 'Comparecimento', 'value' => $this->percent($m['attendance_rate'] ?? 0), 'detail' => $this->number($m['appointments_completed'] ?? 0) . ' concluído(s)', 'tone' => 'accent'],
-            ['label' => 'Respostas da IA', 'value' => $this->number($m['ai_replies'] ?? 0), 'detail' => $this->percent($m['ai_share'] ?? 0) . ' das respostas atribuídas', 'tone' => 'primary'],
+            ['label' => 'Comparecimento', 'value' => $this->percent($m['attendance_rate'] ?? 0), 'detail' => $this->completedAppointmentsDetail((int) ($m['appointments_completed'] ?? 0)), 'tone' => 'accent'],
+            ['label' => 'Respostas da IA', 'value' => $this->number($m['ai_replies'] ?? 0), 'detail' => (int) ($m['ai_replies'] ?? 0) === 0 ? 'Nenhuma resposta da IA no período' : $this->percent($m['ai_share'] ?? 0) . ' das respostas atribuídas', 'tone' => 'primary'],
             ['label' => 'Atenção', 'value' => $this->number($attention), 'detail' => $attention === 0 ? 'Nenhuma conversa pendente' : $this->attentionDetail($attentionHuman, $unread), 'tone' => 'attention'],
         ];
     }
@@ -280,14 +278,6 @@ final class ExecutiveReportPdfService
             $y = $this->table($pdf, $y, ['Profissional', 'Conversas', 'Respostas'], $rows, [315, 90, 92], $primary);
         }
 
-        if (in_array('agenda', $sections, true)) {
-            $source = is_array($data['agendaResults'] ?? null) ? $data['agendaResults'] : (is_array($data['agendaByStatus'] ?? null) ? $data['agendaByStatus'] : []);
-            $this->ensureSpace($pdf, $y, 92 + (max(1, count($source)) * 22), $name, $period, $primary);
-            $y = $this->sectionTitle($pdf, $y, 'Resultado da agenda', 'Situação dos compromissos no período.', $primary);
-            $rows = array_map(fn (array $row): array => [$this->friendlyStatus((string) ($row['label'] ?? '')), $this->number($row['total'] ?? 0)], $source);
-            $y = $this->table($pdf, $y, ['Situação', 'Compromissos'], $rows, [390, 107], $primary);
-        }
-
         if (in_array('ai', $sections, true)) {
             $this->ensureSpace($pdf, $y, 180, $name, $period, $primary);
             $y = $this->sectionTitle($pdf, $y, 'IA e equipe', 'Participação nas respostas enviadas.', $primary);
@@ -299,6 +289,19 @@ final class ExecutiveReportPdfService
                 ['Respostas do sistema', $this->number($m['system_replies'] ?? 0)],
             ];
             $y = $this->table($pdf, $y, ['Interação', 'Total'], $rows, [390, 107], $secondary);
+        }
+
+        if (in_array('agenda', $sections, true)) {
+            $source = is_array($data['agendaResults'] ?? null) ? $data['agendaResults'] : (is_array($data['agendaByStatus'] ?? null) ? $data['agendaByStatus'] : []);
+            if ($pdf->pageCount() === 1 && $y > 470 && count($source) >= 4) {
+                $pdf->addPage();
+                $this->continuationHeader($pdf, $name, $period, $primary);
+                $y = 64;
+            }
+            $this->ensureSpace($pdf, $y, 92 + (max(1, count($source)) * 22), $name, $period, $primary);
+            $y = $this->sectionTitle($pdf, $y, 'Resultado da agenda', 'Situação dos compromissos no período.', $primary);
+            $rows = array_map(fn (array $row): array => [$this->friendlyStatus((string) ($row['label'] ?? '')), $this->number($row['total'] ?? 0)], $source);
+            $y = $this->table($pdf, $y, ['Situação', 'Compromissos'], $rows, [390, 107], $primary);
         }
 
         if (in_array('attention', $sections, true)) {
@@ -328,9 +331,15 @@ final class ExecutiveReportPdfService
         foreach (array_slice($insights, 0, 5) as $insight) {
             $title = trim((string) ($insight['title'] ?? 'Insight'));
             $text = trim((string) ($insight['text'] ?? ''));
-            $pdf->text(self::MARGIN + 8, $y, $title, 9, true, '#172033');
-            $used = $pdf->paragraph(self::MARGIN + 8, $y + 14, self::CONTENT_WIDTH - 16, $text, 8.2, 11.5, false, '#566176', 3);
-            $y += 20 + $used;
+            $lines = $pdf->wrap($text, self::CONTENT_WIDTH - 48, 8.2, false);
+            $cardHeight = max(64.0, 43.0 + (min(3, count($lines)) * 11.5));
+            $pdf->rect(self::MARGIN, $y, self::CONTENT_WIDTH, $cardHeight, '#F8FBFF', '#DDE6F3', 0.55);
+            $pdf->rect(self::MARGIN, $y, 4, $cardHeight, '#7B3FF2', null);
+            $pdf->rect(self::MARGIN + 18, $y + 15, 22, 22, '#EAF3FF', null);
+            $pdf->text(self::MARGIN + 25, $y + 20, 'i', 9.5, true, '#2F80FF');
+            $pdf->text(self::MARGIN + 52, $y + 14, $title, 9.3, true, '#172033');
+            $pdf->paragraph(self::MARGIN + 52, $y + 31, self::CONTENT_WIDTH - 70, $text, 8.2, 11.5, false, '#566176', 3);
+            $y += $cardHeight + 10;
         }
     }
 
@@ -469,6 +478,29 @@ final class ExecutiveReportPdfService
     private function plural(int $count, string $singular, string $plural): string
     {
         return $this->number($count) . ' ' . ($count === 1 ? $singular : $plural);
+    }
+
+    private function completedAppointmentsDetail(int $count): string
+    {
+        return match ($count) {
+            0 => 'Não há atividade no período',
+            1 => '1 compromisso concluído',
+            default => $this->number($count) . ' compromissos concluídos',
+        };
+    }
+
+    private function automationFailuresDetail(int $count): string
+    {
+        return match ($count) {
+            0 => 'Nenhuma falha no período',
+            1 => '1 falha no período',
+            default => $this->number($count) . ' falhas no período',
+        };
+    }
+
+    private function logoPath(): string
+    {
+        return dirname(__DIR__, 2) . '/public/assets/img/rs-digital-lab-report.jpg';
     }
 
     private function friendlyStatus(string $status): string

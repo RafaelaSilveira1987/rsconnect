@@ -1,3 +1,11 @@
+# v36.15.1-r5 — polimento final do PDF executivo
+
+- incorpora a marca gráfica fornecida da RS Digital Lab como assinatura visual, preservando RS Connect como nome da plataforma;
+- corrige textos mecânicos como `0 concluído(s)` e usa linguagem natural quando não há atividade;
+- equilibra a paginação do relatório curto e distribui IA, agenda, atenção e insights de forma mais uniforme;
+- transforma `Leituras rápidas` em destaque executivo e corrige o rodapé para uma paginação estável;
+- mantém a paleta clara RS Connect em azul `#2F80FF` e roxo `#7B3FF2`, sem migration adicional.
+
 # v36.15.1-r4 — PDF executivo com identidade RS Connect
 
 - redesenha o PDF com branco predominante, azul `#2F80FF` e roxo `#7B3FF2`;
@@ -614,8 +622,6 @@
 - Recursos n8n são comunicados como automações integradas.
 - Incluída seção explicativa dos limites e descrições no formulário de edição.
 - Sem migration nova.
-
-# Changelog
 
 ## 36.6.13 — Canais WhatsApp e roteamento de agentes
 
