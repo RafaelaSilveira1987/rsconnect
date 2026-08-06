@@ -96,11 +96,10 @@ final class ExecutiveReportPdfService
     ): void {
         $pdf->rect(0, 0, 370, 6, $primary, null);
         $pdf->rect(370, 0, SimplePdfDocument::PAGE_WIDTH - 370, 6, $secondary, null);
-        $pdf->jpeg($this->logoPath(), self::MARGIN, 17, 164, 43);
-        $pdf->text(self::MARGIN, 68, 'RS CONNECT', 12.2, true, '#172033');
-        $pdf->rect(self::MARGIN + 88, 65, 118, 20, '#F2EDFF', null);
-        $pdf->text(self::MARGIN + 97, 70, 'RELATÓRIO EXECUTIVO', 7.1, true, $secondary);
-        $pdf->text(self::MARGIN, 91, mb_strtoupper($name), 8.3, true, '#5B6578');
+        $pdf->jpeg($this->logoPath(), self::MARGIN, 13, 68, 60);
+        $pdf->rect(self::MARGIN + 84, 25, 118, 20, '#F2EDFF', null);
+        $pdf->text(self::MARGIN + 93, 30, 'RELATÓRIO EXECUTIVO', 7.1, true, $secondary);
+        $pdf->text(self::MARGIN + 84, 55, mb_strtoupper($name), 8.3, true, '#5B6578');
         $pdf->text(350, 24, 'PERÍODO ANALISADO', 6.8, true, '#7A8496');
         $pdf->text(350, 37, $period, 9.4, true, '#253047');
         $pdf->text(350, 58, 'GERADO EM', 6.8, true, '#7A8496');
@@ -112,8 +111,8 @@ final class ExecutiveReportPdfService
     {
         $pdf->rect(0, 0, 370, 5, '#2F80FF', null);
         $pdf->rect(370, 0, SimplePdfDocument::PAGE_WIDTH - 370, 5, '#7B3FF2', null);
-        $pdf->jpeg($this->logoPath(), self::MARGIN, 12, 91, 24);
-        $pdf->text(145, 18, 'RS CONNECT', 8.4, true, '#172033');
+        $pdf->jpeg($this->logoPath(), self::MARGIN, 7, 39, 34);
+        $pdf->text(94, 18, 'RELATÓRIO EXECUTIVO', 7.4, true, '#7B3FF2');
         $pdf->text(225, 18, mb_strtoupper($name), 7.4, true, '#4F5B70');
         $pdf->text(395, 18, $period, 7.4, false, '#7A8496');
         $pdf->line(self::MARGIN, 46, self::MARGIN + self::CONTENT_WIDTH, 46, '#E3E8F2', 0.7);
@@ -500,7 +499,7 @@ final class ExecutiveReportPdfService
 
     private function logoPath(): string
     {
-        return dirname(__DIR__, 2) . '/public/assets/img/rs-digital-lab-report.jpg';
+        return dirname(__DIR__, 2) . '/public/assets/img/rs-connect-report-mark.jpg';
     }
 
     private function friendlyStatus(string $status): string

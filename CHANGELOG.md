@@ -1,3 +1,11 @@
+# v36.15.1-r6 — logo oficial RS Connect no PDF executivo
+
+- substitui a assinatura escura da RS Digital Lab pela nova logo RS Connect fornecida pela usuária;
+- usa a versão vertical azul/roxa sobre fundo branco, sem caixa preta no cabeçalho;
+- mantém RS Digital Lab apenas como identificação da empresa geradora, sem competir visualmente com a marca do produto;
+- preserva métricas, linguagem natural, paginação em 2 páginas, cards e demais correções do r5;
+- não exige migration nova.
+
 # v36.15.1-r5 — polimento final do PDF executivo
 
 - incorpora a marca gráfica fornecida da RS Digital Lab como assinatura visual, preservando RS Connect como nome da plataforma;
