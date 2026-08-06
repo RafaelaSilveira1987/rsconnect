@@ -22,9 +22,9 @@ final class ExecutiveReportPdfService
     {
         $scope = $scope === 'admin' ? 'admin' : 'tenant';
         $sections = $sections !== [] ? array_values(array_unique($sections)) : $this->defaultSections($scope);
-        // A estrutura do documento segue a identidade da plataforma. A empresa
-        // continua identificada no cabeçalho, mas o relatório mantém a mesma
-        // linguagem visual da RS Connect em todos os tenants.
+        // A estrutura do documento segue a identidade visual da RS Connect.
+        // O nome da empresa continua disponível nos dados do relatório, mas não
+        // é exibido no cabeçalho do PDF.
         $primary = '#2F80FF';
         $secondary = '#7B3FF2';
         $accent = '#14B8A6';
@@ -97,9 +97,17 @@ final class ExecutiveReportPdfService
         $pdf->rect(0, 0, 370, 6, $primary, null);
         $pdf->rect(370, 0, SimplePdfDocument::PAGE_WIDTH - 370, 6, $secondary, null);
         $pdf->jpeg($this->logoPath(), self::MARGIN, 13, 68, 60);
-        $pdf->rect(self::MARGIN + 84, 25, 118, 20, '#F2EDFF', null);
-        $pdf->text(self::MARGIN + 93, 30, 'RELATÓRIO EXECUTIVO', 7.1, true, $secondary);
-       /*  $pdf->text(self::MARGIN + 84, 55, mb_strtoupper($name), 8.3, true, '#5B6578'); */
+
+        $titleText = mb_strtoupper($title !== '' ? $title : 'Relatório executivo');
+        $titleAreaX = 126.0;
+        $titleAreaWidth = 200.0;
+        $titleSize = 8.0;
+        $titleApproxWidth = mb_strlen($titleText) * $titleSize * 0.56;
+        $titleX = $titleAreaX + max(8.0, ($titleAreaWidth - $titleApproxWidth) / 2);
+
+        $pdf->rect($titleAreaX, 30, $titleAreaWidth, 25, '#F2EDFF', null);
+        $pdf->text($titleX, 37, $titleText, $titleSize, true, $secondary);
+
         $pdf->text(350, 24, 'PERÍODO ANALISADO', 6.8, true, '#7A8496');
         $pdf->text(350, 37, $period, 9.4, true, '#253047');
         $pdf->text(350, 58, 'GERADO EM', 6.8, true, '#7A8496');
@@ -112,8 +120,15 @@ final class ExecutiveReportPdfService
         $pdf->rect(0, 0, 370, 5, '#2F80FF', null);
         $pdf->rect(370, 0, SimplePdfDocument::PAGE_WIDTH - 370, 5, '#7B3FF2', null);
         $pdf->jpeg($this->logoPath(), self::MARGIN, 7, 39, 34);
-        $pdf->text(94, 18, 'RELATÓRIO EXECUTIVO', 7.4, true, '#7B3FF2');
-     /*    $pdf->text(225, 18, mb_strtoupper($name), 7.4, true, '#4F5B70'); */
+
+        $titleText = 'RELATÓRIO EXECUTIVO';
+        $titleAreaX = 95.0;
+        $titleAreaWidth = 275.0;
+        $titleSize = 7.4;
+        $titleApproxWidth = mb_strlen($titleText) * $titleSize * 0.56;
+        $titleX = $titleAreaX + max(0.0, ($titleAreaWidth - $titleApproxWidth) / 2);
+
+        $pdf->text($titleX, 18, $titleText, $titleSize, true, '#7B3FF2');
         $pdf->text(395, 18, $period, 7.4, false, '#7A8496');
         $pdf->line(self::MARGIN, 46, self::MARGIN + self::CONTENT_WIDTH, 46, '#E3E8F2', 0.7);
     }
