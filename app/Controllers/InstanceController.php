@@ -19,6 +19,33 @@ use Throwable;
 
 final class InstanceController
 {
+    /** @var list<string> */
+    private const DEFAULT_WEBHOOK_EVENTS = [
+        'MESSAGES_UPSERT',
+        'MESSAGES_UPDATE',
+        'CONNECTION_UPDATE',
+        'QRCODE_UPDATED',
+        'CONTACTS_UPSERT',
+    ];
+
+    /** @var list<string> */
+    private const ALLOWED_WEBHOOK_EVENTS = [
+        'MESSAGES_UPSERT',
+        'MESSAGES_UPDATE',
+        'MESSAGES_DELETE',
+        'SEND_MESSAGE',
+        'CONNECTION_UPDATE',
+        'QRCODE_UPDATED',
+        'CONTACTS_UPSERT',
+        'CONTACTS_UPDATE',
+        'CHATS_UPSERT',
+        'CHATS_UPDATE',
+        'PRESENCE_UPDATE',
+        'GROUPS_UPSERT',
+        'GROUPS_UPDATE',
+        'GROUP_PARTICIPANTS_UPDATE',
+        'CALL',
+    ];
     public function index(): void
     {
         $pdo = Database::connection();
@@ -62,7 +89,11 @@ final class InstanceController
         $instancesByTenant = [];
         foreach ($instances as &$instance) {
             $instance['api_key_masked'] = $instance['api_key_encrypted'] ? '••••••••••••' : 'Não informada';
-            unset($instance['api_key_encrypted']);
+            $decodedEvents = json_decode((string) ($instance['webhook_events'] ?? '[]'), true);
+            $instance['webhook_events_list'] = is_array($decodedEvents) && $decodedEvents !== []
+                ? array_values(array_filter(array_map('strval', $decodedEvents)))
+                : self::DEFAULT_WEBHOOK_EVENTS;
+            unset($instance['api_key_encrypted'], $instance['remote_hash_encrypted']);
             $instancesByTenant[(int) $instance['tenant_id']][] = [
                 'id' => (int) $instance['id'],
                 'name' => (string) $instance['name'],
@@ -122,6 +153,7 @@ final class InstanceController
             'routingByInstance' => $routingByInstance,
             'channelPlan' => $channelPlan,
             'channelUsage' => $channelUsage,
+            'allowedWebhookEvents' => self::ALLOWED_WEBHOOK_EVENTS,
         ]);
     }
 
@@ -303,15 +335,31 @@ final class InstanceController
 
         $name = trim((string) ($_POST['name'] ?? ''));
         $instanceName = trim((string) ($_POST['instance_name'] ?? ''));
-        $baseUrl = rtrim(trim((string) ($_POST['base_url'] ?? '')), '/');
+        $baseUrl = rtrim(trim((string) ($_POST['base_url'] ?? Env::get('EVOLUTION_DEFAULT_URL', ''))), '/');
         $apiKey = trim((string) ($_POST['api_key'] ?? ''));
+        if ($apiKey === '') {
+            $apiKey = trim((string) Env::get('EVOLUTION_DEFAULT_API_KEY', ''));
+        }
+        $managementMode = isset($_POST['create_in_evolution']) ? 'managed' : 'external';
+        $integration = strtoupper(trim((string) ($_POST['integration'] ?? 'WHATSAPP-BAILEYS')));
+        if (!in_array($integration, ['WHATSAPP-BAILEYS', 'WHATSAPP-BUSINESS'], true)) {
+            $integration = 'WHATSAPP-BAILEYS';
+        }
+        $phone = preg_replace('/\D+/', '', (string) ($_POST['phone_number'] ?? '')) ?: '';
+        $settings = $this->settingsFromRequest($_POST);
+        $events = $this->webhookEventsFromRequest($_POST);
+        $webhookEnabled = isset($_POST['webhook_enabled']);
         $status = 'pending';
 
         if ($tenantId < 1 || $name === '' || $instanceName === '' || !filter_var($baseUrl, FILTER_VALIDATE_URL) || $apiKey === '') {
-            Flash::set('error', 'Preencha empresa, nome, identificador da Evolution, URL válida e API Key.');
+            Flash::set('error', 'Preencha empresa, nome, identificador da Evolution, URL válida e API Key global.');
             $this->redirect('/instances');
         }
 
+        if (!preg_match('/^[A-Za-z0-9._-]{2,120}$/', $instanceName)) {
+            Flash::set('error', 'O identificador da instância deve usar apenas letras, números, ponto, hífen ou sublinhado.');
+            $this->redirect('/instances');
+        }
 
         $limit = (new SubscriptionService())->ensureCanCreate($tenantId, 'instances');
         if (empty($limit['ok'])) {
@@ -319,9 +367,19 @@ final class InstanceController
             $this->redirect('/instances');
         }
 
-        try {
-            $pdo = Database::connection();
+        $pdo = Database::connection();
+        $service = new EvolutionService(
+            $baseUrl,
+            $apiKey,
+            $instanceName,
+            30,
+            $this->evolutionVerifySsl(),
+            $this->evolutionCaBundle()
+        );
+        $remoteCreated = false;
+        $warnings = [];
 
+        try {
             $duplicate = $pdo->prepare(
                 'SELECT id, name, tenant_id
                  FROM evolution_instances
@@ -336,12 +394,10 @@ final class InstanceController
             $existingInstance = $duplicate->fetch(PDO::FETCH_ASSOC);
 
             if ($existingInstance) {
-                Flash::set(
-                    'error',
-                    'A instância "' . $instanceName . '" já está cadastrada nesta mesma Evolution como "' .
-                    $existingInstance['name'] . '". Atualize o cadastro existente em vez de criar outro.'
+                throw new \RuntimeException(
+                    'A instância "' . $instanceName . '" já está cadastrada nesta Evolution como "' .
+                    $existingInstance['name'] . '".'
                 );
-                $this->redirect('/instances');
             }
 
             $pdo->beginTransaction();
@@ -353,9 +409,17 @@ final class InstanceController
 
             $statement = $pdo->prepare(
                 'INSERT INTO evolution_instances
-                    (tenant_id, name, instance_name, base_url, api_key_encrypted, status, is_default)
+                    (tenant_id, name, instance_name, base_url, api_key_encrypted,
+                     management_mode, integration, status, is_default,
+                     webhook_enabled, webhook_events, receive_messages,
+                     ignore_groups, ignore_status, ignore_broadcast, ignore_newsletters, ignore_from_me,
+                     reject_calls, reject_call_message, always_online, read_messages, read_status, sync_full_history)
                  VALUES
-                    (:tenant_id, :name, :instance_name, :base_url, :api_key, :status, :is_default)'
+                    (:tenant_id, :name, :instance_name, :base_url, :api_key,
+                     :management_mode, :integration, :status, :is_default,
+                     :webhook_enabled, :webhook_events, :receive_messages,
+                     :ignore_groups, :ignore_status, :ignore_broadcast, :ignore_newsletters, :ignore_from_me,
+                     :reject_calls, :reject_call_message, :always_online, :read_messages, :read_status, :sync_full_history)'
             );
             $statement->execute([
                 'tenant_id' => $tenantId,
@@ -363,49 +427,110 @@ final class InstanceController
                 'instance_name' => $instanceName,
                 'base_url' => $baseUrl,
                 'api_key' => Crypto::encrypt($apiKey),
+                'management_mode' => $managementMode,
+                'integration' => $integration,
                 'status' => $status,
                 'is_default' => $isDefault ? 1 : 0,
+                'webhook_enabled' => $webhookEnabled ? 1 : 0,
+                'webhook_events' => json_encode($events, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                'receive_messages' => $settings['receive_messages'],
+                'ignore_groups' => $settings['ignore_groups'],
+                'ignore_status' => $settings['ignore_status'],
+                'ignore_broadcast' => $settings['ignore_broadcast'],
+                'ignore_newsletters' => $settings['ignore_newsletters'],
+                'ignore_from_me' => $settings['ignore_from_me'],
+                'reject_calls' => $settings['reject_calls'],
+                'reject_call_message' => $settings['reject_call_message'] !== '' ? $settings['reject_call_message'] : null,
+                'always_online' => $settings['always_online'],
+                'read_messages' => $settings['read_messages'],
+                'read_status' => $settings['read_status'],
+                'sync_full_history' => $settings['sync_full_history'],
             ]);
             $instanceId = (int) $pdo->lastInsertId();
-            $pdo->commit();
+
+            $remoteBody = [];
+            if ($managementMode === 'managed') {
+                $created = $service->createInstance($integration, $phone !== '' ? $phone : null, true);
+                $remoteCreated = true;
+                $remoteBody = is_array($created['body'] ?? null) ? $created['body'] : [];
+            } else {
+                // O modo externo só é salvo quando a instância realmente existe e a chave possui acesso.
+                $existingState = $service->connectionState();
+                $remoteBody = is_array($existingState['body'] ?? null) ? $existingState['body'] : [];
+            }
 
             try {
-                $verifySsl = filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
-                $caBundle = trim((string) Env::get('EVOLUTION_CA_BUNDLE', ''));
-                $service = new EvolutionService(
-                    $baseUrl,
-                    $apiKey,
-                    $instanceName,
-                    20,
-                    $verifySsl ?? true,
-                    $caBundle !== '' ? $caBundle : null
-                );
-                $this->configureRealtimeWebhook($service, $instanceId);
-            } catch (Throwable $webhookException) {
-                $this->audit($tenantId, 'evolution.webhook_config_warning', [
-                    'instance_id' => $instanceId,
-                    'error' => $webhookException->getMessage(),
-                ]);
+                $service->setSettings($this->evolutionSettingsPayload($settings));
+            } catch (Throwable $settingsException) {
+                $warnings[] = 'Configurações: ' . $settingsException->getMessage();
             }
+
+            try {
+                $this->configureRealtimeWebhook($service, $instanceId, $events, $webhookEnabled);
+            } catch (Throwable $webhookException) {
+                $warnings[] = 'Webhook: ' . $webhookException->getMessage();
+            }
+
+            $remoteInstance = is_array($remoteBody['instance'] ?? null) ? $remoteBody['instance'] : [];
+            $remoteState = mb_strtolower(trim((string) ($remoteInstance['status'] ?? $remoteInstance['state'] ?? $remoteBody['state'] ?? 'pending')));
+            $remoteId = trim((string) ($remoteInstance['instanceId'] ?? $remoteInstance['id'] ?? ''));
+            $remoteHash = trim((string) ($remoteBody['hash'] ?? ''));
+            $qrCode = EvolutionService::extractQrCode($remoteBody);
+
+            $update = $pdo->prepare(
+                'UPDATE evolution_instances
+                 SET remote_instance_id = :remote_instance_id,
+                     remote_hash_encrypted = :remote_hash,
+                     status = :status,
+                     connection_state = :connection_state,
+                     connection_updated_at = NOW(),
+                     remote_created_at = IF(:managed = 1, NOW(), remote_created_at),
+                     last_settings_sync_at = NOW(),
+                     qrcode_base64 = :qrcode,
+                     qrcode_updated_at = IF(:has_qrcode = 1, NOW(), qrcode_updated_at),
+                     qrcode_expires_at = IF(:has_qrcode = 1, DATE_ADD(NOW(), INTERVAL 2 MINUTE), qrcode_expires_at)
+                 WHERE id = :id'
+            );
+            $update->execute([
+                'remote_instance_id' => $remoteId !== '' ? $remoteId : null,
+                'remote_hash' => $remoteHash !== '' ? Crypto::encrypt($remoteHash) : null,
+                'status' => in_array($remoteState, ['open', 'connected', 'online'], true) ? 'connected' : 'pending',
+                'connection_state' => $remoteState !== '' ? $remoteState : 'created',
+                'managed' => $managementMode === 'managed' ? 1 : 0,
+                'qrcode' => $qrCode !== '' ? $qrCode : null,
+                'has_qrcode' => $qrCode !== '' ? 1 : 0,
+                'id' => $instanceId,
+            ]);
+            $pdo->commit();
 
             $this->audit($tenantId, 'evolution.instance_created', [
                 'instance_id' => $instanceId,
                 'instance_name' => $instanceName,
+                'management_mode' => $managementMode,
+                'integration' => $integration,
+                'warnings' => $warnings,
             ]);
-            Flash::set('success', 'Instância cadastrada com segurança.');
+
+            $message = $managementMode === 'managed'
+                ? 'Instância criada na Evolution e cadastrada no RS Connect.'
+                : 'Instância existente vinculada ao RS Connect.';
+            if ($warnings !== []) {
+                $message .= ' Atenção: ' . implode(' | ', $warnings);
+            }
+            Flash::set($warnings === [] ? 'success' : 'warning', $message);
         } catch (Throwable $exception) {
-            if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+            if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            $isDuplicate = str_contains($exception->getMessage(), 'uq_instance_tenant_name')
-                || str_contains($exception->getMessage(), 'Duplicate entry');
+            if ($remoteCreated) {
+                try {
+                    $service->deleteInstance();
+                } catch (Throwable) {
+                    // A criação remota será registrada no log da Evolution; evita esconder o erro principal.
+                }
+            }
 
-            Flash::set(
-                'error',
-                $isDuplicate
-                    ? 'Essa conexão já está cadastrada para esta empresa. Use outro nome na Evolution ou atualize o cadastro existente.'
-                    : 'Não foi possível cadastrar a instância. Verifique os dados informados e tente novamente.'
-            );
+            Flash::set('error', 'Não foi possível criar a conexão: ' . $exception->getMessage());
         }
 
         $this->redirect('/instances');
@@ -430,6 +555,10 @@ final class InstanceController
             $source = $this->findInstance($pdo, $instanceId);
             if (!$source) {
                 throw new \RuntimeException('Instância não encontrada.');
+            }
+            if (($source['management_mode'] ?? 'external') === 'managed'
+                && strcasecmp((string) $source['instance_name'], $instanceName) !== 0) {
+                throw new \RuntimeException('O identificador de uma instância criada pelo RS Connect não pode ser renomeado. Crie uma nova conexão para usar outro identificador.');
             }
 
             $duplicate = $pdo->prepare(
@@ -725,12 +854,157 @@ final class InstanceController
         $this->redirect('/instances');
     }
 
-    /** Exclui somente o cadastro no RS Connect, com migração opcional para outra instância. */
+    /** Salva configurações da Evolution e os filtros locais de recebimento. */
+    public function saveSettings(): void
+    {
+        $instanceId = (int) ($_POST['instance_id'] ?? 0);
+        $settings = $this->settingsFromRequest($_POST);
+        $events = $this->webhookEventsFromRequest($_POST);
+        $webhookEnabled = isset($_POST['webhook_enabled']);
+
+        $pdo = Database::connection();
+        try {
+            $instance = $this->findInstance($pdo, $instanceId);
+            if (!$instance) {
+                throw new \RuntimeException('Instância não encontrada.');
+            }
+
+            $service = $this->evolutionServiceFor($instance, 25);
+            $service->setSettings($this->evolutionSettingsPayload($settings));
+            $this->configureRealtimeWebhook($service, $instanceId, $events, $webhookEnabled);
+
+            $update = $pdo->prepare(
+                'UPDATE evolution_instances
+                 SET webhook_enabled = :webhook_enabled,
+                     webhook_events = :webhook_events,
+                     receive_messages = :receive_messages,
+                     ignore_groups = :ignore_groups,
+                     ignore_status = :ignore_status,
+                     ignore_broadcast = :ignore_broadcast,
+                     ignore_newsletters = :ignore_newsletters,
+                     ignore_from_me = :ignore_from_me,
+                     reject_calls = :reject_calls,
+                     reject_call_message = :reject_call_message,
+                     always_online = :always_online,
+                     read_messages = :read_messages,
+                     read_status = :read_status,
+                     sync_full_history = :sync_full_history,
+                     last_settings_sync_at = NOW()
+                 WHERE id = :id'
+            );
+            $update->execute([
+                'webhook_enabled' => $webhookEnabled ? 1 : 0,
+                'webhook_events' => json_encode($events, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                'receive_messages' => $settings['receive_messages'],
+                'ignore_groups' => $settings['ignore_groups'],
+                'ignore_status' => $settings['ignore_status'],
+                'ignore_broadcast' => $settings['ignore_broadcast'],
+                'ignore_newsletters' => $settings['ignore_newsletters'],
+                'ignore_from_me' => $settings['ignore_from_me'],
+                'reject_calls' => $settings['reject_calls'],
+                'reject_call_message' => $settings['reject_call_message'] !== '' ? $settings['reject_call_message'] : null,
+                'always_online' => $settings['always_online'],
+                'read_messages' => $settings['read_messages'],
+                'read_status' => $settings['read_status'],
+                'sync_full_history' => $settings['sync_full_history'],
+                'id' => $instanceId,
+            ]);
+
+            $this->audit((int) $instance['tenant_id'], 'evolution.settings_updated', [
+                'instance_id' => $instanceId,
+                'events' => $events,
+                'webhook_enabled' => $webhookEnabled,
+                'settings' => $settings,
+            ]);
+            Flash::set('success', 'Configurações aplicadas na Evolution e salvas no RS Connect.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível aplicar as configurações: ' . $exception->getMessage());
+        }
+
+        $this->redirect('/instances');
+    }
+
+    /** Reinicia, desconecta ou força nova sincronização da instância remota. */
+    public function remoteAction(): void
+    {
+        $instanceId = (int) ($_POST['instance_id'] ?? 0);
+        $action = strtolower(trim((string) ($_POST['action'] ?? '')));
+        if (!in_array($action, ['restart', 'logout', 'sync'], true)) {
+            Flash::set('error', 'Ação da Evolution inválida.');
+            $this->redirect('/instances');
+        }
+
+        $pdo = Database::connection();
+        try {
+            $instance = $this->findInstance($pdo, $instanceId);
+            if (!$instance) {
+                throw new \RuntimeException('Instância não encontrada.');
+            }
+            $service = $this->evolutionServiceFor($instance, 30);
+
+            if ($action === 'restart') {
+                $service->restartInstance();
+                $pdo->prepare(
+                    'UPDATE evolution_instances SET status="pending", connection_state="restarting", connection_updated_at=NOW() WHERE id=:id'
+                )->execute(['id' => $instanceId]);
+                $message = 'Reinicialização solicitada à Evolution.';
+            } elseif ($action === 'logout') {
+                $service->logoutInstance();
+                $pdo->prepare(
+                    'UPDATE evolution_instances
+                     SET status="disconnected", connection_state="logged_out", disconnected_at=NOW(),
+                         qrcode_base64=NULL, qrcode_expires_at=NULL, connection_updated_at=NOW()
+                     WHERE id=:id'
+                )->execute(['id' => $instanceId]);
+                $message = 'WhatsApp desconectado. Gere um novo QR Code para reconectar.';
+            } else {
+                $storedSettings = [
+                    'receive_messages' => (int) ($instance['receive_messages'] ?? 1),
+                    'ignore_groups' => (int) ($instance['ignore_groups'] ?? 1),
+                    'ignore_status' => (int) ($instance['ignore_status'] ?? 1),
+                    'ignore_broadcast' => (int) ($instance['ignore_broadcast'] ?? 1),
+                    'ignore_newsletters' => (int) ($instance['ignore_newsletters'] ?? 1),
+                    'ignore_from_me' => (int) ($instance['ignore_from_me'] ?? 0),
+                    'reject_calls' => (int) ($instance['reject_calls'] ?? 0),
+                    'reject_call_message' => (string) ($instance['reject_call_message'] ?? ''),
+                    'always_online' => (int) ($instance['always_online'] ?? 0),
+                    'read_messages' => (int) ($instance['read_messages'] ?? 0),
+                    'read_status' => (int) ($instance['read_status'] ?? 0),
+                    'sync_full_history' => (int) ($instance['sync_full_history'] ?? 0),
+                ];
+                $decodedEvents = json_decode((string) ($instance['webhook_events'] ?? '[]'), true);
+                $events = is_array($decodedEvents) && $decodedEvents !== [] ? $decodedEvents : self::DEFAULT_WEBHOOK_EVENTS;
+                $service->setSettings($this->evolutionSettingsPayload($storedSettings));
+                $this->configureRealtimeWebhook(
+                    $service,
+                    $instanceId,
+                    array_values(array_map('strval', $events)),
+                    (int) ($instance['webhook_enabled'] ?? 1) === 1
+                );
+                $pdo->prepare('UPDATE evolution_instances SET last_settings_sync_at=NOW() WHERE id=:id')
+                    ->execute(['id' => $instanceId]);
+                $message = 'Webhook e configurações sincronizados novamente com a Evolution.';
+            }
+
+            $this->audit((int) $instance['tenant_id'], 'evolution.remote_action', [
+                'instance_id' => $instanceId,
+                'action' => $action,
+            ]);
+            Flash::set('success', $message);
+        } catch (Throwable $exception) {
+            Flash::set('error', 'A Evolution não concluiu a ação: ' . $exception->getMessage());
+        }
+
+        $this->redirect('/instances');
+    }
+
+    /** Exclui o cadastro local e, opcionalmente, a instância remota da Evolution. */
     public function delete(): void
     {
         $instanceId = (int) ($_POST['instance_id'] ?? 0);
         $replacementId = (int) ($_POST['replacement_instance_id'] ?? 0);
         $confirmation = trim((string) ($_POST['confirmation'] ?? ''));
+        $deleteRemote = isset($_POST['delete_remote']);
 
         $pdo = Database::connection();
         try {
@@ -761,6 +1035,16 @@ final class InstanceController
                 throw new \RuntimeException(
                     'Essa instância possui vínculos (' . $this->dependencySummary($counts) . '). Selecione uma instância de substituição para preservar os dados.'
                 );
+            }
+
+            if ($deleteRemote) {
+                $service = $this->evolutionServiceFor($source, 30);
+                try {
+                    $service->logoutInstance();
+                } catch (Throwable) {
+                    // Logout é apenas preparação; a exclusão remota continua sendo a ação obrigatória.
+                }
+                $service->deleteInstance();
             }
 
             $pdo->beginTransaction();
@@ -802,10 +1086,15 @@ final class InstanceController
                 'instance_name' => (string) $source['instance_name'],
                 'replacement_instance_id' => $replacementId > 0 ? $replacementId : null,
                 'migration_stats' => $migrationStats,
+                'remote_deleted' => $deleteRemote,
             ]);
-            Flash::set('success', $replacement
+            $successMessage = $replacement
                 ? 'Instância excluída do RS Connect e vínculos migrados para a substituta.'
-                : 'Instância sem vínculos excluída do RS Connect.');
+                : 'Instância sem vínculos excluída do RS Connect.';
+            if ($deleteRemote) {
+                $successMessage .= ' A instância também foi removida da Evolution.';
+            }
+            Flash::set('success', $successMessage);
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -862,14 +1151,23 @@ final class InstanceController
             );
             $webhookWarning = null;
             try {
-                $this->configureRealtimeWebhook($service, $instanceId);
+                $storedEvents = json_decode((string) ($instance['webhook_events'] ?? '[]'), true);
+                $storedEvents = is_array($storedEvents) && $storedEvents !== []
+                    ? array_values(array_map('strval', $storedEvents))
+                    : self::DEFAULT_WEBHOOK_EVENTS;
+                $this->configureRealtimeWebhook(
+                    $service,
+                    $instanceId,
+                    $storedEvents,
+                    (int) ($instance['webhook_enabled'] ?? 1) === 1
+                );
             } catch (Throwable $webhookException) {
                 $webhookWarning = $webhookException->getMessage();
             }
 
             $result = $service->connectQrCode();
             $body = is_array($result['body'] ?? null) ? $result['body'] : [];
-            $base64 = trim((string) ($body['base64'] ?? $body['qrcode'] ?? $body['qrCode'] ?? ''));
+            $base64 = EvolutionService::extractQrCode($body);
             $pairingCode = trim((string) ($body['pairingCode'] ?? ''));
 
             if ($base64 === '' || !str_starts_with($base64, 'data:image/')) {
@@ -985,24 +1283,110 @@ final class InstanceController
         $this->redirect('/instances');
     }
 
-    private function configureRealtimeWebhook(EvolutionService $service, int $instanceId): void
-    {
+    /** @param list<string>|null $events */
+    private function configureRealtimeWebhook(
+        EvolutionService $service,
+        int $instanceId,
+        ?array $events = null,
+        bool $enabled = true
+    ): void {
         $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
-        if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+        if ($enabled && ($appUrl === '' || !str_starts_with($appUrl, 'https://'))) {
             throw new \RuntimeException('APP_URL HTTPS não configurada.');
         }
+
         $token = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
         $webhookUrl = Router::url('/webhooks/evolution?instance_id=' . $instanceId);
         if ($token !== '') {
             $webhookUrl .= '&token=' . rawurlencode($token);
         }
-        $service->setWebhook($webhookUrl, [
-            'MESSAGES_UPSERT',
-            'MESSAGES_UPDATE',
-            'CONNECTION_UPDATE',
-            'QRCODE_UPDATED',
-            'CONTACTS_UPSERT',
-        ]);
+        $headers = $token !== '' ? ['X-RS-Connect-Token' => $token] : [];
+
+        $service->setWebhook(
+            $webhookUrl,
+            $events !== null && $events !== [] ? $events : self::DEFAULT_WEBHOOK_EVENTS,
+            $enabled,
+            false,
+            false,
+            $headers
+        );
+    }
+
+    /** @param array<string,mixed> $source @return array<string,int|string> */
+    private function settingsFromRequest(array $source): array
+    {
+        return [
+            'receive_messages' => isset($source['receive_messages']) ? 1 : 0,
+            'ignore_groups' => isset($source['ignore_groups']) ? 1 : 0,
+            'ignore_status' => isset($source['ignore_status']) ? 1 : 0,
+            'ignore_broadcast' => isset($source['ignore_broadcast']) ? 1 : 0,
+            'ignore_newsletters' => isset($source['ignore_newsletters']) ? 1 : 0,
+            'ignore_from_me' => isset($source['ignore_from_me']) ? 1 : 0,
+            'reject_calls' => isset($source['reject_calls']) ? 1 : 0,
+            'reject_call_message' => mb_substr(trim((string) ($source['reject_call_message'] ?? '')), 0, 255),
+            'always_online' => isset($source['always_online']) ? 1 : 0,
+            'read_messages' => isset($source['read_messages']) ? 1 : 0,
+            'read_status' => isset($source['read_status']) ? 1 : 0,
+            'sync_full_history' => isset($source['sync_full_history']) ? 1 : 0,
+        ];
+    }
+
+    /** @param array<string,mixed> $source @return list<string> */
+    private function webhookEventsFromRequest(array $source): array
+    {
+        $raw = $source['webhook_events'] ?? self::DEFAULT_WEBHOOK_EVENTS;
+        if (!is_array($raw)) {
+            $raw = [$raw];
+        }
+
+        $events = [];
+        foreach ($raw as $event) {
+            $normalized = strtoupper(trim((string) $event));
+            if (in_array($normalized, self::ALLOWED_WEBHOOK_EVENTS, true)) {
+                $events[] = $normalized;
+            }
+        }
+
+        return $events !== [] ? array_values(array_unique($events)) : self::DEFAULT_WEBHOOK_EVENTS;
+    }
+
+    /** @param array<string,int|string> $settings @return array<string,mixed> */
+    private function evolutionSettingsPayload(array $settings): array
+    {
+        return [
+            'rejectCall' => (bool) $settings['reject_calls'],
+            'msgCall' => (string) $settings['reject_call_message'],
+            'groupsIgnore' => (bool) $settings['ignore_groups'],
+            'alwaysOnline' => (bool) $settings['always_online'],
+            'readMessages' => (bool) $settings['read_messages'],
+            'readStatus' => (bool) $settings['read_status'],
+            'syncFullHistory' => (bool) $settings['sync_full_history'],
+        ];
+    }
+
+    private function evolutionVerifySsl(): bool
+    {
+        $verifySsl = filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+        return $verifySsl ?? true;
+    }
+
+    private function evolutionCaBundle(): ?string
+    {
+        $caBundle = trim((string) Env::get('EVOLUTION_CA_BUNDLE', ''));
+        return $caBundle !== '' ? $caBundle : null;
+    }
+
+    /** @param array<string,mixed> $instance */
+    private function evolutionServiceFor(array $instance, int $timeout = 20): EvolutionService
+    {
+        return new EvolutionService(
+            (string) $instance['base_url'],
+            Crypto::decrypt((string) $instance['api_key_encrypted']),
+            (string) $instance['instance_name'],
+            $timeout,
+            $this->evolutionVerifySsl(),
+            $this->evolutionCaBundle()
+        );
     }
 
     private function connectionLabel(string $state, string $status): string

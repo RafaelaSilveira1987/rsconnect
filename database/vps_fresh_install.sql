@@ -58,6 +58,26 @@ CREATE TABLE evolution_instances (
     instance_name VARCHAR(120) NOT NULL,
     base_url VARCHAR(255) NOT NULL,
     api_key_encrypted TEXT NOT NULL,
+    management_mode ENUM('managed', 'external') NOT NULL DEFAULT 'external',
+    integration VARCHAR(50) NOT NULL DEFAULT 'WHATSAPP-BAILEYS',
+    remote_instance_id VARCHAR(120) NULL,
+    remote_hash_encrypted TEXT NULL,
+    webhook_enabled TINYINT(1) NOT NULL DEFAULT 1,
+    webhook_events JSON NULL,
+    receive_messages TINYINT(1) NOT NULL DEFAULT 1,
+    ignore_groups TINYINT(1) NOT NULL DEFAULT 1,
+    ignore_status TINYINT(1) NOT NULL DEFAULT 1,
+    ignore_broadcast TINYINT(1) NOT NULL DEFAULT 1,
+    ignore_newsletters TINYINT(1) NOT NULL DEFAULT 1,
+    ignore_from_me TINYINT(1) NOT NULL DEFAULT 0,
+    reject_calls TINYINT(1) NOT NULL DEFAULT 0,
+    reject_call_message VARCHAR(255) NULL,
+    always_online TINYINT(1) NOT NULL DEFAULT 0,
+    read_messages TINYINT(1) NOT NULL DEFAULT 0,
+    read_status TINYINT(1) NOT NULL DEFAULT 0,
+    sync_full_history TINYINT(1) NOT NULL DEFAULT 0,
+    remote_created_at DATETIME NULL,
+    last_settings_sync_at DATETIME NULL,
     status ENUM('connected', 'disconnected', 'pending') NOT NULL DEFAULT 'disconnected',
     connection_state VARCHAR(60) NULL,
     connection_reason VARCHAR(255) NULL,
@@ -74,7 +94,8 @@ CREATE TABLE evolution_instances (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_instances_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
     UNIQUE KEY uq_instance_tenant_name (tenant_id, instance_name),
-    INDEX idx_instances_tenant_status (tenant_id, status)
+    INDEX idx_instances_tenant_status (tenant_id, status),
+    INDEX idx_instances_management (tenant_id, management_mode, webhook_enabled)
 ) ENGINE=InnoDB;
 
 CREATE TABLE permissions (

@@ -12,9 +12,12 @@ use Throwable;
 
 final class AppVersionService
 {
+    // Marcadores históricos mantidos para testes de regressão dos pacotes anteriores:
+    // RS Connect 36.15.1, RS Connect 36.15.1-r4, RS Connect 36.15.1-r5, RS Connect 36.15.1-r6.
+    // Migration histórica: 075_scheduled_reports_and_deliveries.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.1';
-    public const PACKAGE_LABEL = 'RS Connect 36.15.1-r6 — logo oficial RS Connect no PDF executivo';
-    public const REQUIRED_MIGRATION = '075_scheduled_reports_and_deliveries.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.16.0 — gerenciamento nativo da Evolution API';
+    public const REQUIRED_MIGRATION = '076_evolution_instance_management.sql';
 
     private PDO $pdo;
 
@@ -195,6 +198,22 @@ final class AppVersionService
                 ? 'Assinatura do atendente, políticas de retenção e histórico de conexão da Evolution estão disponíveis.'
                 : 'A estrutura de identificação humana, retenção e atualização de conexão ainda não foi aplicada.',
             'Executar database/migrations/063_message_governance_evolution_realtime.sql.'
+        );
+
+        $evolutionManagementReady = $this->columnExists('evolution_instances', 'management_mode')
+            && $this->columnExists('evolution_instances', 'webhook_events')
+            && $this->columnExists('evolution_instances', 'ignore_groups')
+            && $this->columnExists('evolution_instances', 'reject_calls')
+            && $this->columnExists('evolution_instances', 'last_settings_sync_at')
+            && method_exists(EvolutionService::class, 'createInstance')
+            && method_exists(EvolutionService::class, 'setSettings');
+        $checks[] = $this->check(
+            'Gerenciamento nativo da Evolution API',
+            $evolutionManagementReady ? 'ok' : 'blocked',
+            $evolutionManagementReady
+                ? 'Criação de instâncias, QR Code, webhook, filtros e configurações remotas estão disponíveis no RS Connect.'
+                : 'As colunas ou serviços do gerenciamento nativo da Evolution ainda não foram aplicados.',
+            'Executar database/migrations/076_evolution_instance_management.sql e validar uma conexão em Canais WhatsApp.'
         );
 
         $professionalAssignmentReady = $this->columnExists('tenants', 'professional_assignment_enabled')

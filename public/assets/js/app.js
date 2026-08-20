@@ -1474,11 +1474,134 @@ document.addEventListener('DOMContentLoaded', () => {
   const instanceForm = instanceDrawer?.querySelector('[data-instance-form]');
   if (instanceForm) {
     const field = (name) => instanceForm.querySelector(`[data-instance-field="${name}"]`);
-    const reset = () => { instanceForm.reset(); instanceForm.action = `${window.location.origin}/instances`; field('id').value='0'; field('base_url').value=field('base_url').defaultValue || ''; field('api_key').required=true; instanceDrawer.querySelector('[data-instance-drawer-eyebrow]').textContent='Nova conexão'; instanceDrawer.querySelector('[data-instance-drawer-title]').textContent='Configurar WhatsApp'; instanceDrawer.querySelector('[data-instance-drawer-description]').textContent='Cadastre a conexão preparada na Evolution API.'; instanceDrawer.querySelector('[data-instance-api-hint]').textContent='Obrigatória no primeiro cadastro.'; instanceDrawer.querySelector('[data-instance-submit]').textContent='Salvar conexão'; instanceDrawer.querySelector('[data-instance-tenant-field]').hidden=false; field('tenant_id').required=true; };
-    document.querySelectorAll('[data-instance-open]').forEach((button)=>button.addEventListener('click',()=>{ if(button.dataset.instanceOpen==='edit'){ instanceForm.reset(); instanceForm.action=`${window.location.origin}/instances/update`; field('id').value=button.dataset.id||'0'; field('name').value=button.dataset.name||''; field('instance_name').value=button.dataset.instanceName||''; field('base_url').value=button.dataset.baseUrl||''; field('is_default').checked=button.dataset.isDefault==='1'; field('api_key').value=''; field('api_key').required=false; instanceDrawer.querySelector('[data-instance-tenant-field]').hidden=true; field('tenant_id').required=false; instanceDrawer.querySelector('[data-instance-drawer-eyebrow]').textContent='Editar conexão'; instanceDrawer.querySelector('[data-instance-drawer-title]').textContent=button.dataset.name||'Atualizar conexão'; instanceDrawer.querySelector('[data-instance-drawer-description]').textContent='Atualize o cadastro sem perder os vínculos existentes.'; instanceDrawer.querySelector('[data-instance-api-hint]').textContent='Deixe em branco para manter a chave atual.'; instanceDrawer.querySelector('[data-instance-submit]').textContent='Salvar alterações'; } else reset(); }));
+    const createOnlySections = Array.from(instanceForm.querySelectorAll('[data-instance-create-only]'));
+    const tenantField = instanceDrawer.querySelector('[data-instance-tenant-field]');
+    const eyebrow = instanceDrawer.querySelector('[data-instance-drawer-eyebrow]');
+    const title = instanceDrawer.querySelector('[data-instance-drawer-title]');
+    const description = instanceDrawer.querySelector('[data-instance-drawer-description]');
+    const apiHint = instanceDrawer.querySelector('[data-instance-api-hint]');
+    const submit = instanceDrawer.querySelector('[data-instance-submit]');
+
+    const reset = () => {
+      instanceForm.reset();
+      instanceForm.action = instanceForm.dataset.createAction || instanceForm.getAttribute('action') || '/instances';
+      field('id').value = '0';
+      field('instance_name').readOnly = false;
+      field('api_key').required = false;
+      field('api_key').value = '';
+      createOnlySections.forEach((section) => { section.hidden = false; });
+      if (tenantField) tenantField.hidden = false;
+      field('tenant_id').required = true;
+      if (eyebrow) eyebrow.textContent = 'Nova conexão';
+      if (title) title.textContent = 'Criar WhatsApp';
+      if (description) description.textContent = 'Crie a instância na Evolution e conecte o número sem sair do RS Connect.';
+      if (apiHint) apiHint.textContent = 'Se EVOLUTION_DEFAULT_API_KEY estiver configurada, este campo pode ficar vazio.';
+      if (submit) submit.textContent = 'Criar conexão';
+    };
+
+    document.querySelectorAll('[data-instance-open]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (button.dataset.instanceOpen !== 'edit') {
+          reset();
+          return;
+        }
+
+        instanceForm.reset();
+        instanceForm.action = instanceForm.dataset.updateAction || '/instances/update';
+        field('id').value = button.dataset.id || '0';
+        field('name').value = button.dataset.name || '';
+        field('instance_name').value = button.dataset.instanceName || '';
+        field('base_url').value = button.dataset.baseUrl || '';
+        field('is_default').checked = button.dataset.isDefault === '1';
+        field('api_key').value = '';
+        field('api_key').required = false;
+        field('instance_name').readOnly = button.dataset.managementMode === 'managed';
+        createOnlySections.forEach((section) => { section.hidden = true; });
+        if (tenantField) tenantField.hidden = true;
+        field('tenant_id').required = false;
+        if (eyebrow) eyebrow.textContent = 'Editar conexão';
+        if (title) title.textContent = button.dataset.name || 'Atualizar conexão';
+        if (description) description.textContent = button.dataset.managementMode === 'managed'
+          ? 'A instância é gerenciada pelo RS Connect. O identificador remoto permanece bloqueado para evitar perda de vínculo.'
+          : 'Atualize o cadastro local sem perder os vínculos existentes.';
+        if (apiHint) apiHint.textContent = 'Deixe em branco para manter a chave atual.';
+        if (submit) submit.textContent = 'Salvar alterações';
+      });
+    });
     reset();
   }
-  document.querySelectorAll('[data-instance-delete]').forEach((button)=>button.addEventListener('click',()=>{ const form=document.querySelector('[data-instance-delete-form]'); if(!form)return; const id=form.querySelector('[data-instance-delete-field="id"]'); const replacement=form.querySelector('[data-instance-delete-field="replacement"]'); const confirmation=form.querySelector('[data-instance-delete-field="confirmation"]'); const name=document.querySelector('[data-instance-delete-name]'); const hint=document.querySelector('[data-instance-delete-hint]'); if(id)id.value=button.dataset.id||''; if(name)name.textContent=button.dataset.name||'Conexão'; if(confirmation){confirmation.value='';confirmation.placeholder=`EXCLUIR ${button.dataset.instanceName||''}`;} if(hint)hint.innerHTML=`Digite exatamente: <strong>EXCLUIR ${button.dataset.instanceName||''}</strong>`; Array.from(replacement?.options||[]).forEach((option,index)=>{if(index===0)return; const visible=option.dataset.tenantId===button.dataset.tenantId && option.value!==button.dataset.id; option.hidden=!visible; option.disabled=!visible;}); if(replacement)replacement.value=''; }));
+
+  const settingsDrawer = document.getElementById('instance-settings-drawer');
+  const settingsForm = settingsDrawer?.querySelector('[data-instance-settings-form]');
+  if (settingsForm) {
+    const settingsField = (name) => settingsForm.querySelector(`[data-instance-settings-field="${name}"]`);
+    document.querySelectorAll('[data-instance-settings]').forEach((button) => {
+      button.addEventListener('click', () => {
+        settingsForm.reset();
+        let data = {};
+        try {
+          data = JSON.parse(decodeURIComponent(button.dataset.instanceSettings || '%7B%7D'));
+        } catch (error) {
+          console.error('Não foi possível carregar as configurações da instância.', error);
+        }
+
+        const idField = settingsField('id');
+        if (idField) idField.value = data.id || '';
+        const title = settingsDrawer.querySelector('[data-instance-settings-title]');
+        if (title) title.textContent = data.name ? `Configurar ${data.name}` : 'Configurar conexão';
+
+        [
+          'receive_messages', 'ignore_groups', 'ignore_status', 'ignore_broadcast',
+          'ignore_newsletters', 'ignore_from_me', 'reject_calls', 'always_online',
+          'read_messages', 'read_status', 'sync_full_history', 'webhook_enabled'
+        ].forEach((name) => {
+          const input = settingsField(name);
+          if (input) input.checked = Number(data[name] || 0) === 1;
+        });
+
+        const rejectMessage = settingsField('reject_call_message');
+        if (rejectMessage) rejectMessage.value = data.reject_call_message || '';
+        const selectedEvents = Array.isArray(data.webhook_events) ? data.webhook_events : [];
+        settingsForm.querySelectorAll('[data-instance-event]').forEach((input) => {
+          input.checked = selectedEvents.includes(input.value);
+        });
+      });
+    });
+  }
+
+  document.querySelectorAll('[data-instance-delete]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const form = document.querySelector('[data-instance-delete-form]');
+      if (!form) return;
+      const id = form.querySelector('[data-instance-delete-field="id"]');
+      const replacement = form.querySelector('[data-instance-delete-field="replacement"]');
+      const confirmation = form.querySelector('[data-instance-delete-field="confirmation"]');
+      const deleteRemote = form.querySelector('[data-instance-delete-field="delete_remote"]');
+      const name = document.querySelector('[data-instance-delete-name]');
+      const hint = document.querySelector('[data-instance-delete-hint]');
+      const description = document.querySelector('[data-instance-delete-description]');
+      const managed = button.dataset.managementMode === 'managed';
+
+      if (id) id.value = button.dataset.id || '';
+      if (name) name.textContent = button.dataset.name || 'Conexão';
+      if (deleteRemote) deleteRemote.checked = managed;
+      if (description) description.textContent = managed
+        ? 'Esta instância foi criada pelo RS Connect. Por padrão, ela também será removida da Evolution.'
+        : 'Esta instância foi vinculada ao RS Connect. A exclusão remota fica desmarcada por segurança.';
+      if (confirmation) {
+        confirmation.value = '';
+        confirmation.placeholder = `EXCLUIR ${button.dataset.instanceName || ''}`;
+      }
+      if (hint) hint.innerHTML = `Digite exatamente: <strong>EXCLUIR ${button.dataset.instanceName || ''}</strong>`;
+      Array.from(replacement?.options || []).forEach((option, index) => {
+        if (index === 0) return;
+        const visible = option.dataset.tenantId === button.dataset.tenantId && option.value !== button.dataset.id;
+        option.hidden = !visible;
+        option.disabled = !visible;
+      });
+      if (replacement) replacement.value = '';
+    });
+  });
 
   const setupSimpleDrawer = (config) => {
     const drawer=document.getElementById(config.drawer); const form=drawer?.querySelector(config.form); if(!drawer||!form)return;

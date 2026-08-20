@@ -9610,3 +9610,83 @@ body.has-new-conversation-drawer { overflow:hidden; }
   .chat-composer>.btn{grid-column:1/-1;width:100%}
   .chat-attachment-button{margin-bottom:18px}
 }
+
+/* v36.16.0 — gerenciamento nativo de instâncias Evolution */
+.instance-option-grid,
+.instance-event-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.instance-option-grid .check-field,
+.instance-event-grid .check-field,
+.instance-webhook-master {
+  align-items: flex-start;
+  min-width: 0;
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--rs-border);
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.instance-option-grid .check-field span,
+.instance-event-grid .check-field span,
+.instance-webhook-master span,
+[data-instance-delete-remote-row] span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.instance-option-grid .check-field strong,
+.instance-event-grid .check-field strong,
+.instance-webhook-master strong,
+[data-instance-delete-remote-row] strong {
+  color: var(--rs-text);
+}
+
+.instance-option-grid .check-field small,
+.instance-event-grid .check-field small,
+.instance-webhook-master small,
+[data-instance-delete-remote-row] small {
+  color: var(--rs-muted);
+  font-size: .68rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.instance-webhook-master {
+  margin-bottom: 10px;
+  background: #eef9f7;
+}
+
+.instance-management-actions {
+  align-items: center;
+}
+
+.instance-management-actions form {
+  display: inline-flex;
+}
+
+.instance-management-actions form .btn {
+  white-space: nowrap;
+}
+
+.admin-form-drawer [data-instance-create-only][hidden] {
+  display: none !important;
+}
+
+.admin-form-drawer input[readonly] {
+  background: #eef2f6;
+  color: var(--rs-muted);
+  cursor: not-allowed;
+}
+
+@media (max-width: 680px) {
+  .instance-option-grid,
+  .instance-event-grid {
+    grid-template-columns: 1fr;
+  }
+}

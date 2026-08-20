@@ -61,6 +61,9 @@ final class EvolutionWebhookController
             }
 
             $instance = $this->resolveInstance($payload);
+            if (str_contains($event, 'messages.upsert') && (int) ($instance['receive_messages'] ?? 1) !== 1) {
+                $this->respond(202, ['ok' => true, 'ignored' => 'message_reception_disabled']);
+            }
             try {
                 Database::connection()->prepare('UPDATE evolution_instances SET last_webhook_at = NOW() WHERE id = :id')
                     ->execute(['id' => (int) $instance['id']]);
@@ -125,8 +128,9 @@ final class EvolutionWebhookController
                 throw new \RuntimeException('remoteJid não informado.');
             }
 
-            if ($this->isIgnoredRemoteJid($remoteJid)) {
-                $this->respond(202, ['ok' => true, 'ignored' => 'non_contact_jid']);
+            $ignoredJidReason = $this->ignoredRemoteJidReason($remoteJid, $instance);
+            if ($ignoredJidReason !== null) {
+                $this->respond(202, ['ok' => true, 'ignored' => $ignoredJidReason]);
             }
 
             // LIDs são identificadores internos do WhatsApp/Meta, não números de telefone.
@@ -150,6 +154,9 @@ final class EvolutionWebhookController
             }
 
             $fromMe = filter_var($key['fromMe'] ?? $data['fromMe'] ?? false, FILTER_VALIDATE_BOOL);
+            if ($fromMe && (int) ($instance['ignore_from_me'] ?? 0) === 1) {
+                $this->respond(202, ['ok' => true, 'ignored' => 'own_message']);
+            }
             $reaction = $this->reactionDetails($data);
             if ($reaction !== null) {
                 if ($fromMe) {
@@ -625,20 +632,30 @@ final class EvolutionWebhookController
         }
     }
 
-    private function isIgnoredRemoteJid(string $remoteJid): bool
+    /** @param array<string,mixed> $instance */
+    private function ignoredRemoteJidReason(string $remoteJid, array $instance): ?string
     {
         $jid = strtolower(trim($remoteJid));
         if ($jid === '') {
-            return true;
+            return 'empty_jid';
         }
 
-        foreach (['@g.us', 'status@broadcast', '@broadcast', '@newsletter', 'newsletter'] as $pattern) {
-            if (str_contains($jid, $pattern)) {
-                return true;
-            }
+        if (str_contains($jid, '@g.us') && (int) ($instance['ignore_groups'] ?? 1) === 1) {
+            return 'group_ignored';
+        }
+        if ($jid === 'status@broadcast' && (int) ($instance['ignore_status'] ?? 1) === 1) {
+            return 'status_ignored';
+        }
+        if (str_contains($jid, '@broadcast') && $jid !== 'status@broadcast'
+            && (int) ($instance['ignore_broadcast'] ?? 1) === 1) {
+            return 'broadcast_ignored';
+        }
+        if ((str_contains($jid, '@newsletter') || str_contains($jid, 'newsletter'))
+            && (int) ($instance['ignore_newsletters'] ?? 1) === 1) {
+            return 'newsletter_ignored';
         }
 
-        return false;
+        return null;
     }
 
     private function recordStoredMessageFailure(
@@ -941,7 +958,7 @@ final class EvolutionWebhookController
                 continue;
             }
             $remoteJid = trim((string) ($row['remoteJid'] ?? $row['id'] ?? ''));
-            if ($remoteJid === '' || $this->isIgnoredRemoteJid($remoteJid) || str_contains($remoteJid, '@g.us')) {
+            if ($remoteJid === '' || $this->ignoredRemoteJidReason($remoteJid, $instance) !== null) {
                 continue;
             }
             $phone = preg_replace('/\D+/', '', strstr($remoteJid, '@', true) ?: $remoteJid) ?: '';
@@ -1200,6 +1217,11 @@ final class EvolutionWebhookController
     {
         $primary = trim($remoteJid);
         $alternate = trim($remoteJidAlt);
+
+        // Grupos precisam manter o JID do próprio grupo para formar uma única conversa.
+        if (str_ends_with(strtolower($primary), '@g.us')) {
+            return $primary;
+        }
 
         // Preserva o JID telefônico principal quando ele já é utilizável.
         if ($this->isPhoneRemoteJid($primary)) {

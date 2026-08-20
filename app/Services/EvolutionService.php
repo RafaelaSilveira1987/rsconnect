@@ -19,6 +19,31 @@ final class EvolutionService
     ) {
     }
 
+    /**
+     * Cria uma instância diretamente na Evolution API.
+     * As configurações operacionais e o webhook são aplicados em chamadas
+     * separadas para manter compatibilidade entre versões 2.x.
+     */
+    public function createInstance(
+        string $integration = 'WHATSAPP-BAILEYS',
+        ?string $phone = null,
+        bool $requestQrCode = true
+    ): array {
+        $endpoint = rtrim($this->baseUrl, '/') . '/instance/create';
+        $payload = [
+            'instanceName' => trim($this->instanceName),
+            'qrcode' => $requestQrCode,
+            'integration' => trim($integration) !== '' ? trim($integration) : 'WHATSAPP-BAILEYS',
+        ];
+
+        $phone = $phone !== null ? $this->normalizePhone($phone) : '';
+        if ($phone !== '') {
+            $payload['number'] = $phone;
+        }
+
+        return $this->request('POST', $endpoint, $payload, 'createInstance');
+    }
+
     public function sendText(string $phone, string $message): array
     {
         $endpoint = rtrim($this->baseUrl, '/') . '/message/sendText/' . rawurlencode($this->instanceName);
@@ -78,21 +103,6 @@ final class EvolutionService
         ], 'getBase64FromMediaMessage');
     }
 
-    private function normalizePhone(string $phone): string
-    {
-        $digits = preg_replace('/\D+/', '', $phone) ?: '';
-        if (str_starts_with($digits, '00')) {
-            $digits = substr($digits, 2);
-        }
-
-        $countryCode = preg_replace('/\D+/', '', (string) Env::get('DEFAULT_COUNTRY_CODE', '55')) ?: '55';
-        if ($countryCode === '55' && in_array(strlen($digits), [10, 11], true)) {
-            $digits = '55' . $digits;
-        }
-
-        return $digits;
-    }
-
     public function connectQrCode(): array
     {
         $endpoint = rtrim($this->baseUrl, '/') . '/instance/connect/' . rawurlencode($this->instanceName);
@@ -113,22 +123,95 @@ final class EvolutionService
         ];
     }
 
-    /** @param list<string> $events */
-    public function setWebhook(string $url, array $events): array
-    {
+    /**
+     * @param list<string> $events
+     * @param array<string,string> $headers
+     */
+    public function setWebhook(
+        string $url,
+        array $events,
+        bool $enabled = true,
+        bool $webhookByEvents = false,
+        bool $base64 = false,
+        array $headers = []
+    ): array {
         $endpoint = rtrim($this->baseUrl, '/') . '/webhook/set/' . rawurlencode($this->instanceName);
-        $payload = [
-            'webhook' => [
-                'enabled' => true,
-                'url' => $url,
-                'webhookByEvents' => false,
-                'webhookBase64' => false,
-                'base64' => false,
-                'events' => array_values(array_unique($events)),
-            ],
+        $webhook = [
+            'enabled' => $enabled,
+            'url' => $enabled ? trim($url) : '',
+            'webhookByEvents' => $webhookByEvents,
+            'webhookBase64' => $base64,
+            'base64' => $base64,
+            'events' => array_values(array_unique(array_filter(array_map(
+                static fn (mixed $event): string => strtoupper(trim((string) $event)),
+                $events
+            )))),
         ];
+        if ($headers !== []) {
+            $webhook['headers'] = $headers;
+        }
 
-        return $this->request('POST', $endpoint, $payload, 'setWebhook');
+        return $this->request('POST', $endpoint, ['webhook' => $webhook], 'setWebhook');
+    }
+
+    public function findWebhook(): array
+    {
+        $endpoint = rtrim($this->baseUrl, '/') . '/webhook/find/' . rawurlencode($this->instanceName);
+        return $this->request('GET', $endpoint, null, 'findWebhook');
+    }
+
+    /** @param array<string,mixed> $settings */
+    public function setSettings(array $settings): array
+    {
+        $allowed = [
+            'rejectCall',
+            'msgCall',
+            'groupsIgnore',
+            'alwaysOnline',
+            'readMessages',
+            'readStatus',
+            'syncFullHistory',
+        ];
+        $payload = [];
+        foreach ($allowed as $key) {
+            if (array_key_exists($key, $settings)) {
+                $payload[$key] = $settings[$key];
+            }
+        }
+
+        $endpoint = rtrim($this->baseUrl, '/') . '/settings/set/' . rawurlencode($this->instanceName);
+        return $this->request('POST', $endpoint, $payload, 'setSettings');
+    }
+
+    public function findSettings(): array
+    {
+        $endpoint = rtrim($this->baseUrl, '/') . '/settings/find/' . rawurlencode($this->instanceName);
+        return $this->request('GET', $endpoint, null, 'findSettings');
+    }
+
+    public function restartInstance(): array
+    {
+        $endpoint = rtrim($this->baseUrl, '/') . '/instance/restart/' . rawurlencode($this->instanceName);
+        try {
+            return $this->request('PUT', $endpoint, null, 'restart');
+        } catch (RuntimeException $exception) {
+            if (!str_contains($exception->getMessage(), 'HTTP 404') && !str_contains($exception->getMessage(), 'HTTP 405')) {
+                throw $exception;
+            }
+            return $this->request('POST', $endpoint, [], 'restart');
+        }
+    }
+
+    public function logoutInstance(): array
+    {
+        $endpoint = rtrim($this->baseUrl, '/') . '/instance/logout/' . rawurlencode($this->instanceName);
+        return $this->request('DELETE', $endpoint, null, 'logout');
+    }
+
+    public function deleteInstance(): array
+    {
+        $endpoint = rtrim($this->baseUrl, '/') . '/instance/delete/' . rawurlencode($this->instanceName);
+        return $this->request('DELETE', $endpoint, null, 'deleteInstance');
     }
 
     public function fetchProfilePictureUrl(string $phone): ?string
@@ -145,6 +228,48 @@ final class EvolutionService
         }
 
         return mb_substr($url, 0, 500);
+    }
+
+    /** @param array<string,mixed> $body */
+    public static function extractQrCode(array $body): string
+    {
+        $candidates = [
+            $body['base64'] ?? null,
+            $body['qrCode'] ?? null,
+            $body['qrcode']['base64'] ?? null,
+            $body['qrcode']['code'] ?? null,
+            $body['instance']['qrcode']['base64'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $value = trim((string) $candidate);
+            if ($value === '') {
+                continue;
+            }
+            if (str_starts_with($value, 'data:image/')) {
+                return $value;
+            }
+            if (preg_match('/^[A-Za-z0-9+\/=\r\n]+$/', $value) === 1 && strlen($value) > 500) {
+                return 'data:image/png;base64,' . preg_replace('/\s+/', '', $value);
+            }
+        }
+
+        return '';
+    }
+
+    private function normalizePhone(string $phone): string
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?: '';
+        if (str_starts_with($digits, '00')) {
+            $digits = substr($digits, 2);
+        }
+
+        $countryCode = preg_replace('/\D+/', '', (string) Env::get('DEFAULT_COUNTRY_CODE', '55')) ?: '55';
+        if ($countryCode === '55' && in_array(strlen($digits), [10, 11], true)) {
+            $digits = '55' . $digits;
+        }
+
+        return $digits;
     }
 
     private function request(string $method, string $url, ?array $payload = null, string $operation = 'request'): array

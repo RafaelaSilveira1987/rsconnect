@@ -12,6 +12,24 @@ $canGenerateQr = $canManage;
 $adminAgents = $adminAgents ?? [];
 $instancesByTenant = $instancesByTenant ?? [];
 $routingByInstance = $routingByInstance ?? [];
+$allowedWebhookEvents = $allowedWebhookEvents ?? [];
+$eventLabels = [
+    'MESSAGES_UPSERT' => 'Novas mensagens',
+    'MESSAGES_UPDATE' => 'Status das mensagens',
+    'MESSAGES_DELETE' => 'Mensagens apagadas',
+    'SEND_MESSAGE' => 'Mensagens enviadas pela API',
+    'CONNECTION_UPDATE' => 'Estado da conexão',
+    'QRCODE_UPDATED' => 'Atualização do QR Code',
+    'CONTACTS_UPSERT' => 'Novos contatos',
+    'CONTACTS_UPDATE' => 'Atualização de contatos',
+    'CHATS_UPSERT' => 'Novas conversas',
+    'CHATS_UPDATE' => 'Atualização de conversas',
+    'PRESENCE_UPDATE' => 'Presença e digitação',
+    'GROUPS_UPSERT' => 'Novos grupos',
+    'GROUPS_UPDATE' => 'Atualização de grupos',
+    'GROUP_PARTICIPANTS_UPDATE' => 'Participantes de grupos',
+    'CALL' => 'Chamadas recebidas',
+];
 
 if (!$isSuperAdmin) {
     require __DIR__ . '/_client.php';
@@ -61,6 +79,24 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
             <?php
             $webhookUrl = Router::url('/webhooks/evolution?instance_id=' . (int) $instance['id'] . ($webhookToken !== '' ? '&token=' . rawurlencode($webhookToken) : ''));
             $searchText = mb_strtolower(trim(implode(' ', [$instance['name'], $instance['instance_name'], $instance['tenant_name'], $instance['base_url']])));
+            $settingsData = rawurlencode(json_encode([
+                'id' => (int) $instance['id'],
+                'name' => (string) $instance['name'],
+                'webhook_enabled' => (int) ($instance['webhook_enabled'] ?? 1),
+                'webhook_events' => $instance['webhook_events_list'] ?? [],
+                'receive_messages' => (int) ($instance['receive_messages'] ?? 1),
+                'ignore_groups' => (int) ($instance['ignore_groups'] ?? 1),
+                'ignore_status' => (int) ($instance['ignore_status'] ?? 1),
+                'ignore_broadcast' => (int) ($instance['ignore_broadcast'] ?? 1),
+                'ignore_newsletters' => (int) ($instance['ignore_newsletters'] ?? 1),
+                'ignore_from_me' => (int) ($instance['ignore_from_me'] ?? 0),
+                'reject_calls' => (int) ($instance['reject_calls'] ?? 0),
+                'reject_call_message' => (string) ($instance['reject_call_message'] ?? ''),
+                'always_online' => (int) ($instance['always_online'] ?? 0),
+                'read_messages' => (int) ($instance['read_messages'] ?? 0),
+                'read_status' => (int) ($instance['read_status'] ?? 0),
+                'sync_full_history' => (int) ($instance['sync_full_history'] ?? 0),
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             ?>
             <article class="admin-record-card" data-admin-card data-instance-status-card data-status-endpoint="<?= View::e(Router::url('/instances/status-feed')) ?>" data-instance-id="<?= (int) $instance['id'] ?>" data-search="<?= View::e($searchText) ?>" data-status="<?= View::e((string) $instance['status']) ?>">
                 <div class="admin-record-main">
@@ -68,7 +104,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
                     <div class="admin-record-copy">
                         <div class="admin-record-title-row">
                             <div><h3><?= View::e($instance['name']) ?></h3><p><?= View::e($instance['tenant_name']) ?> · <?= View::e($instance['instance_name']) ?></p></div>
-                            <div class="admin-record-badges"><span class="badge badge-<?= View::e($instance['status']) ?>" data-instance-status-badge><?= View::e($statusLabels[$instance['status']] ?? ucfirst((string) $instance['status'])) ?></span><?php if ((int) $instance['is_default'] === 1): ?><span class="badge">Padrão</span><?php endif; ?></div>
+                            <div class="admin-record-badges"><span class="badge badge-<?= View::e($instance['status']) ?>" data-instance-status-badge><?= View::e($statusLabels[$instance['status']] ?? ucfirst((string) $instance['status'])) ?></span><span class="badge <?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'badge-success' : '' ?>"><?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'Gerenciada pelo RS' : 'Instância externa' ?></span><?php if ((int) $instance['is_default'] === 1): ?><span class="badge">Padrão</span><?php endif; ?></div>
                         </div>
                         <small class="admin-record-muted"><?= View::e($instance['base_url']) ?></small><small class="admin-record-muted" data-instance-status-detail><?= View::e((string) (($instance['connection_state'] ?? '') ?: 'Aguardando atualização')) ?></small>
                     </div>
@@ -79,19 +115,23 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
                     <div><dt>Conversas</dt><dd><?= (int) $instance['conversations_count'] ?></dd></div>
                     <div><dt>Campanhas</dt><dd><?= (int) $instance['campaigns_count'] ?></dd></div>
                 </dl>
-                <details class="admin-inline-details"><summary>Webhook e informações técnicas</summary><div class="admin-technical-copy"><strong>Webhook para mensagens</strong><code><?= View::e($webhookUrl) ?></code><small><?= $webhookToken === '' ? 'Defina EVOLUTION_WEBHOOK_TOKEN antes de utilizar.' : 'Use este endereço nos eventos MESSAGES_UPSERT, MESSAGES_UPDATE, QRCODE_UPDATED e CONNECTION_UPDATE da Evolution.' ?></small></div></details>
+                <details class="admin-inline-details"><summary>Webhook e informações técnicas</summary><div class="admin-technical-copy"><strong>Webhook da instância</strong><code><?= View::e($webhookUrl) ?></code><small><?= (int) ($instance['webhook_enabled'] ?? 1) === 1 ? 'Ativo · ' . count($instance['webhook_events_list'] ?? []) . ' evento(s) selecionado(s).' : 'Webhook desativado para esta conexão.' ?></small><small>Grupos: <?= (int) ($instance['ignore_groups'] ?? 1) === 1 ? 'ignorados' : 'recebidos' ?> · Chamadas: <?= (int) ($instance['reject_calls'] ?? 0) === 1 ? 'rejeitadas' : 'permitidas' ?> · Histórico completo: <?= (int) ($instance['sync_full_history'] ?? 0) === 1 ? 'sim' : 'não' ?></small></div></details>
                 <?php
                 $bindings = $routingByInstance[(int) $instance['id']] ?? [];
                 $allAgents = array_values(array_filter($adminAgents, static fn (array $agent): bool => (int) ($agent['tenant_id'] ?? 0) === (int) $instance['tenant_id']));
                 $canRoute = Auth::can('agents.manage');
                 require __DIR__ . '/_routing.php';
                 ?>
-                <div class="admin-record-actions">
-                    <form method="post" action="<?= View::e(Router::url('/instances/qr')) ?>" data-qr-code-form <?= $instance['status'] === 'connected' ? 'hidden' : '' ?>><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><button class="btn btn-small btn-outline" type="submit" data-qr-code-button>Gerar QR Code</button></form>
+                <div class="admin-record-actions instance-management-actions">
+                    <form method="post" action="<?= View::e(Router::url('/instances/qr')) ?>" data-qr-code-form <?= $instance['status'] === 'connected' ? 'hidden' : '' ?>><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><button class="btn btn-small btn-primary" type="submit" data-qr-code-button>Gerar QR Code</button></form>
+                    <button class="btn btn-small btn-outline" type="button" data-toggle-panel="instance-settings-drawer" data-instance-settings="<?= View::e($settingsData) ?>">Configurar Evolution</button>
+                    <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="sync"><button class="btn btn-small btn-outline" type="submit">Sincronizar</button></form>
+                    <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>" onsubmit="return confirm('Reiniciar esta instância na Evolution?');"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="restart"><button class="btn btn-small btn-outline" type="submit">Reiniciar</button></form>
+                    <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>" onsubmit="return confirm('Desconectar o WhatsApp desta instância? Será necessário ler um novo QR Code.');"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="logout"><button class="btn btn-small btn-danger-soft" type="submit">Desconectar</button></form>
                     <button class="btn btn-small btn-outline" type="button" data-toggle-panel="instance-drawer" data-instance-open="edit"
-                        data-id="<?= (int) $instance['id'] ?>" data-name="<?= View::e($instance['name']) ?>" data-instance-name="<?= View::e($instance['instance_name']) ?>" data-base-url="<?= View::e($instance['base_url']) ?>" data-status="<?= View::e($instance['status']) ?>" data-is-default="<?= (int) $instance['is_default'] ?>">Editar conexão</button>
+                        data-id="<?= (int) $instance['id'] ?>" data-name="<?= View::e($instance['name']) ?>" data-instance-name="<?= View::e($instance['instance_name']) ?>" data-base-url="<?= View::e($instance['base_url']) ?>" data-status="<?= View::e($instance['status']) ?>" data-is-default="<?= (int) $instance['is_default'] ?>" data-management-mode="<?= View::e((string) ($instance['management_mode'] ?? 'external')) ?>">Editar cadastro</button>
                     <button class="btn btn-small btn-danger-soft" type="button" data-toggle-panel="instance-delete-drawer" data-instance-delete
-                        data-id="<?= (int) $instance['id'] ?>" data-name="<?= View::e($instance['name']) ?>" data-instance-name="<?= View::e($instance['instance_name']) ?>" data-tenant-id="<?= (int) $instance['tenant_id'] ?>">Excluir</button>
+                        data-id="<?= (int) $instance['id'] ?>" data-name="<?= View::e($instance['name']) ?>" data-instance-name="<?= View::e($instance['instance_name']) ?>" data-tenant-id="<?= (int) $instance['tenant_id'] ?>" data-management-mode="<?= View::e((string) ($instance['management_mode'] ?? 'external')) ?>">Excluir</button>
                 </div>
             </article>
         <?php endforeach; ?>
@@ -122,12 +162,110 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
 </section>
 
 <aside class="conversation-details conversation-drawer admin-form-drawer" id="instance-drawer" aria-label="Configurar conexão WhatsApp" aria-modal="true" role="dialog">
-    <div class="conversation-drawer-header"><div><span class="eyebrow" data-instance-drawer-eyebrow>Nova conexão</span><h2 data-instance-drawer-title>Configurar WhatsApp</h2><p data-instance-drawer-description>Cadastre a conexão preparada na Evolution API.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="instance-drawer" aria-label="Fechar">×</button></div>
-    <div class="conversation-drawer-body"><form class="drawer-form" method="post" action="<?= View::e(Router::url('/instances')) ?>" data-instance-form><?= Csrf::input() ?><input type="hidden" name="instance_id" value="0" data-instance-field="id">
-        <section class="drawer-section"><div class="drawer-section-title"><div><span class="eyebrow">1. Cliente</span><h3>Empresa e identificação</h3></div></div><div class="drawer-form-grid"><label class="field drawer-span" data-instance-tenant-field><span>Empresa</span><select name="tenant_id" data-instance-field="tenant_id" required><option value="">Selecione</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>"><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select></label><label class="field"><span>Nome interno</span><input name="name" data-instance-field="name" placeholder="WhatsApp Comercial" required></label><label class="field"><span>Identificador na Evolution</span><input name="instance_name" data-instance-field="instance_name" placeholder="rsconnect-comercial" required></label></div></section>
-        <section class="drawer-section"><div class="drawer-section-title"><div><span class="eyebrow">2. Integração</span><h3>Acesso à Evolution</h3></div></div><div class="drawer-form-grid"><label class="field drawer-span"><span>URL base</span><input type="url" name="base_url" data-instance-field="base_url" value="<?= View::e($defaultUrl) ?>" placeholder="https://evolution.seudominio.com" required></label><label class="field drawer-span"><span data-instance-api-label>API Key</span><input type="password" name="api_key" data-instance-field="api_key" placeholder="Chave global ou da conexão"><small class="field-hint" data-instance-api-hint>Obrigatória no primeiro cadastro.</small></label><div class="field"><span>Situação</span><div class="admin-record-muted">Atualizada automaticamente pela Evolution API.</div></div><label class="check-field drawer-check"><input type="checkbox" name="is_default" value="1" data-instance-field="is_default"><span>Definir como conexão padrão</span></label></div></section>
-        <div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="instance-drawer">Cancelar</button><button class="btn btn-primary" type="submit" data-instance-submit>Salvar conexão</button></div>
-    </form></div>
+    <div class="conversation-drawer-header">
+        <div><span class="eyebrow" data-instance-drawer-eyebrow>Nova conexão</span><h2 data-instance-drawer-title>Criar WhatsApp</h2><p data-instance-drawer-description>Crie a instância na Evolution e conecte o número sem sair do RS Connect.</p></div>
+        <button class="icon-button drawer-close" type="button" data-close-panel="instance-drawer" aria-label="Fechar">×</button>
+    </div>
+    <div class="conversation-drawer-body">
+        <form class="drawer-form" method="post" action="<?= View::e(Router::url('/instances')) ?>" data-instance-form data-create-action="<?= View::e(Router::url('/instances')) ?>" data-update-action="<?= View::e(Router::url('/instances/update')) ?>">
+            <?= Csrf::input() ?><input type="hidden" name="instance_id" value="0" data-instance-field="id">
+            <section class="drawer-section">
+                <div class="drawer-section-title"><div><span class="eyebrow">1. Cliente</span><h3>Empresa e identificação</h3></div></div>
+                <div class="drawer-form-grid">
+                    <label class="field drawer-span" data-instance-tenant-field><span>Empresa</span><select name="tenant_id" data-instance-field="tenant_id" required><option value="">Selecione</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>"><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select></label>
+                    <label class="field"><span>Nome interno</span><input name="name" data-instance-field="name" placeholder="WhatsApp Comercial" required></label>
+                    <label class="field"><span>Identificador na Evolution</span><input name="instance_name" data-instance-field="instance_name" placeholder="cliente-comercial" pattern="[A-Za-z0-9._-]{2,120}" required><small class="field-hint">Sem espaços; use letras, números, hífen ou sublinhado.</small></label>
+                </div>
+            </section>
+            <section class="drawer-section" data-instance-create-only>
+                <div class="drawer-section-title"><div><span class="eyebrow">2. Provisionamento</span><h3>Criar ou vincular na Evolution</h3></div></div>
+                <div class="drawer-form-grid">
+                    <label class="check-field drawer-check drawer-span"><input type="checkbox" name="create_in_evolution" value="1" checked data-instance-field="create_in_evolution"><span><strong>Criar automaticamente na Evolution</strong><small>Desmarque somente para vincular uma instância que já existe.</small></span></label>
+                    <label class="field"><span>Integração</span><select name="integration" data-instance-field="integration"><option value="WHATSAPP-BAILEYS">WhatsApp via QR Code (Baileys)</option><option value="WHATSAPP-BUSINESS">WhatsApp Business Cloud</option></select></label>
+                    <label class="field"><span>Número com DDI — opcional</span><input name="phone_number" inputmode="numeric" placeholder="5532999999999"></label>
+                </div>
+            </section>
+            <section class="drawer-section">
+                <div class="drawer-section-title"><div><span class="eyebrow">3. Servidor</span><h3>Acesso protegido à Evolution</h3></div></div>
+                <div class="drawer-form-grid">
+                    <label class="field drawer-span"><span>URL base</span><input type="url" name="base_url" data-instance-field="base_url" value="<?= View::e($defaultUrl) ?>" placeholder="https://evolution.seudominio.com" required></label>
+                    <label class="field drawer-span"><span data-instance-api-label>API Key global</span><input type="password" name="api_key" data-instance-field="api_key" placeholder="Use a chave do .env ou informe outra"><small class="field-hint" data-instance-api-hint>Se EVOLUTION_DEFAULT_API_KEY estiver configurada, este campo pode ficar vazio.</small></label>
+                    <label class="check-field drawer-check"><input type="checkbox" name="is_default" value="1" data-instance-field="is_default"><span>Definir como conexão padrão</span></label>
+                </div>
+            </section>
+            <section class="drawer-section" data-instance-create-only>
+                <div class="drawer-section-title"><div><span class="eyebrow">4. Comportamento inicial</span><h3>Mensagens, grupos e chamadas</h3></div></div>
+                <div class="instance-option-grid">
+                    <label class="check-field"><input type="checkbox" name="webhook_enabled" value="1" checked><span>Ativar webhook do RS Connect</span></label>
+                    <label class="check-field"><input type="checkbox" name="receive_messages" value="1" checked><span>Receber novas mensagens</span></label>
+                    <label class="check-field"><input type="checkbox" name="ignore_groups" value="1" checked><span>Ignorar grupos</span></label>
+                    <label class="check-field"><input type="checkbox" name="ignore_status" value="1" checked><span>Ignorar status</span></label>
+                    <label class="check-field"><input type="checkbox" name="ignore_broadcast" value="1" checked><span>Ignorar listas de transmissão</span></label>
+                    <label class="check-field"><input type="checkbox" name="ignore_newsletters" value="1" checked><span>Ignorar canais/newsletters</span></label>
+                    <label class="check-field"><input type="checkbox" name="ignore_from_me" value="1"><span>Ignorar mensagens enviadas pelo próprio número</span></label>
+                    <label class="check-field"><input type="checkbox" name="reject_calls" value="1"><span>Rejeitar chamadas</span></label>
+                    <label class="check-field"><input type="checkbox" name="always_online" value="1"><span>Manter sempre online</span></label>
+                    <label class="check-field"><input type="checkbox" name="read_messages" value="1"><span>Marcar mensagens como lidas</span></label>
+                    <label class="check-field"><input type="checkbox" name="read_status" value="1"><span>Marcar status como visualizado</span></label>
+                    <label class="check-field"><input type="checkbox" name="sync_full_history" value="1"><span>Sincronizar histórico completo</span></label>
+                </div>
+                <label class="field"><span>Mensagem ao rejeitar chamadas</span><input name="reject_call_message" value="Este número não recebe chamadas. Envie uma mensagem por WhatsApp."></label>
+            </section>
+            <section class="drawer-section" data-instance-create-only>
+                <div class="drawer-section-title"><div><span class="eyebrow">5. Eventos</span><h3>O que a Evolution enviará ao RS Connect</h3></div></div>
+                <div class="instance-event-grid">
+                    <?php foreach ($allowedWebhookEvents as $event): ?>
+                        <label class="check-field"><input type="checkbox" name="webhook_events[]" value="<?= View::e($event) ?>" <?= in_array($event, ['MESSAGES_UPSERT','MESSAGES_UPDATE','CONNECTION_UPDATE','QRCODE_UPDATED','CONTACTS_UPSERT'], true) ? 'checked' : '' ?>><span><?= View::e($eventLabels[$event] ?? $event) ?></span></label>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+            <div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="instance-drawer">Cancelar</button><button class="btn btn-primary" type="submit" data-instance-submit>Criar conexão</button></div>
+        </form>
+    </div>
+</aside>
+
+<aside class="conversation-details conversation-drawer admin-form-drawer" id="instance-settings-drawer" aria-label="Configurações da Evolution" aria-modal="true" role="dialog">
+    <div class="conversation-drawer-header">
+        <div><span class="eyebrow">Evolution API</span><h2 data-instance-settings-title>Configurar conexão</h2><p>As alterações são aplicadas imediatamente na Evolution e também controlam o que o webhook aceita no RS Connect.</p></div>
+        <button class="icon-button drawer-close" type="button" data-close-panel="instance-settings-drawer" aria-label="Fechar">×</button>
+    </div>
+    <div class="conversation-drawer-body">
+        <form class="drawer-form" method="post" action="<?= View::e(Router::url('/instances/settings')) ?>" data-instance-settings-form>
+            <?= Csrf::input() ?><input type="hidden" name="instance_id" data-instance-settings-field="id">
+            <section class="drawer-section">
+                <div class="drawer-section-title"><div><span class="eyebrow">Recebimento</span><h3>Filtros das mensagens</h3></div></div>
+                <div class="instance-option-grid">
+                    <label class="check-field"><input type="checkbox" name="receive_messages" value="1" data-instance-settings-field="receive_messages"><span>Receber novas mensagens</span></label>
+                    <label class="check-field"><input type="checkbox" name="ignore_groups" value="1" data-instance-settings-field="ignore_groups"><span>Ignorar grupos</span></label>
+                    <label class="check-field"><input type="checkbox" name="ignore_status" value="1" data-instance-settings-field="ignore_status"><span>Ignorar status</span></label>
+                    <label class="check-field"><input type="checkbox" name="ignore_broadcast" value="1" data-instance-settings-field="ignore_broadcast"><span>Ignorar listas de transmissão</span></label>
+                    <label class="check-field"><input type="checkbox" name="ignore_newsletters" value="1" data-instance-settings-field="ignore_newsletters"><span>Ignorar canais/newsletters</span></label>
+                    <label class="check-field"><input type="checkbox" name="ignore_from_me" value="1" data-instance-settings-field="ignore_from_me"><span>Ignorar mensagens do próprio número</span></label>
+                </div>
+            </section>
+            <section class="drawer-section">
+                <div class="drawer-section-title"><div><span class="eyebrow">WhatsApp</span><h3>Comportamento da sessão</h3></div></div>
+                <div class="instance-option-grid">
+                    <label class="check-field"><input type="checkbox" name="reject_calls" value="1" data-instance-settings-field="reject_calls"><span>Rejeitar chamadas</span></label>
+                    <label class="check-field"><input type="checkbox" name="always_online" value="1" data-instance-settings-field="always_online"><span>Manter sempre online</span></label>
+                    <label class="check-field"><input type="checkbox" name="read_messages" value="1" data-instance-settings-field="read_messages"><span>Marcar mensagens como lidas</span></label>
+                    <label class="check-field"><input type="checkbox" name="read_status" value="1" data-instance-settings-field="read_status"><span>Visualizar status automaticamente</span></label>
+                    <label class="check-field"><input type="checkbox" name="sync_full_history" value="1" data-instance-settings-field="sync_full_history"><span>Sincronizar histórico completo</span></label>
+                </div>
+                <label class="field"><span>Mensagem ao rejeitar chamadas</span><input name="reject_call_message" data-instance-settings-field="reject_call_message" placeholder="Este número não recebe chamadas."></label>
+            </section>
+            <section class="drawer-section">
+                <div class="drawer-section-title"><div><span class="eyebrow">Webhook</span><h3>Eventos enviados ao RS Connect</h3></div></div>
+                <label class="check-field instance-webhook-master"><input type="checkbox" name="webhook_enabled" value="1" data-instance-settings-field="webhook_enabled"><span><strong>Webhook ativo</strong><small>Desative somente para interromper completamente os eventos desta instância.</small></span></label>
+                <div class="instance-event-grid">
+                    <?php foreach ($allowedWebhookEvents as $event): ?>
+                        <label class="check-field"><input type="checkbox" name="webhook_events[]" value="<?= View::e($event) ?>" data-instance-event="<?= View::e($event) ?>"><span><?= View::e($eventLabels[$event] ?? $event) ?></span></label>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+            <div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="instance-settings-drawer">Cancelar</button><button class="btn btn-primary" type="submit">Aplicar configurações</button></div>
+        </form>
+    </div>
 </aside>
 
 <aside class="conversation-details conversation-drawer admin-form-drawer" id="instance-test-drawer" aria-label="Testar conexão WhatsApp" aria-modal="true" role="dialog">
@@ -136,8 +274,21 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
 </aside>
 
 <aside class="conversation-details conversation-drawer admin-form-drawer" id="instance-delete-drawer" aria-label="Excluir conexão" aria-modal="true" role="dialog">
-    <div class="conversation-drawer-header"><div><span class="eyebrow text-danger">Ação restrita</span><h2>Excluir cadastro da conexão</h2><p>A conexão será removida apenas do RS Connect. O cadastro na Evolution permanece.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="instance-delete-drawer" aria-label="Fechar">×</button></div>
-    <div class="conversation-drawer-body"><form class="drawer-form" method="post" action="<?= View::e(Router::url('/instances/delete')) ?>" data-instance-delete-form onsubmit="return confirm('Confirma a exclusão deste cadastro no RS Connect?');"><?= Csrf::input() ?><input type="hidden" name="instance_id" data-instance-delete-field="id"><section class="drawer-section danger-zone"><div class="drawer-form-grid"><div class="drawer-span admin-danger-message"><strong data-instance-delete-name>Conexão</strong><span>Selecione uma substituta quando existirem assistentes, contatos, conversas ou campanhas vinculadas.</span></div><label class="field drawer-span"><span>Migrar vínculos para</span><select name="replacement_instance_id" data-instance-delete-field="replacement"><option value="">Nenhuma — somente se não houver vínculos</option><?php foreach ($instances as $replacement): ?><option value="<?= (int) $replacement['id'] ?>" data-tenant-id="<?= (int) $replacement['tenant_id'] ?>"><?= View::e($replacement['name']) ?> — <?= View::e($replacement['tenant_name']) ?></option><?php endforeach; ?></select></label><label class="field drawer-span"><span>Confirmação</span><input name="confirmation" autocomplete="off" data-instance-delete-field="confirmation" required><small class="field-hint" data-instance-delete-hint></small></label></div></section><div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="instance-delete-drawer">Cancelar</button><button class="btn btn-danger" type="submit">Excluir cadastro</button></div></form></div>
+    <div class="conversation-drawer-header"><div><span class="eyebrow text-danger">Ação restrita</span><h2>Excluir conexão</h2><p data-instance-delete-description>Remova o cadastro do RS Connect e escolha se a instância também deve ser apagada na Evolution.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="instance-delete-drawer" aria-label="Fechar">×</button></div>
+    <div class="conversation-drawer-body">
+        <form class="drawer-form" method="post" action="<?= View::e(Router::url('/instances/delete')) ?>" data-instance-delete-form onsubmit="return confirm('Confirma a exclusão desta conexão?');">
+            <?= Csrf::input() ?><input type="hidden" name="instance_id" data-instance-delete-field="id">
+            <section class="drawer-section danger-zone">
+                <div class="drawer-form-grid">
+                    <div class="drawer-span admin-danger-message"><strong data-instance-delete-name>Conexão</strong><span>Selecione uma substituta quando existirem assistentes, contatos, conversas ou campanhas vinculadas.</span></div>
+                    <label class="field drawer-span"><span>Migrar vínculos para</span><select name="replacement_instance_id" data-instance-delete-field="replacement"><option value="">Nenhuma — somente se não houver vínculos</option><?php foreach ($instances as $replacement): ?><option value="<?= (int) $replacement['id'] ?>" data-tenant-id="<?= (int) $replacement['tenant_id'] ?>"><?= View::e($replacement['name']) ?> — <?= View::e($replacement['tenant_name']) ?></option><?php endforeach; ?></select></label>
+                    <label class="check-field drawer-check drawer-span" data-instance-delete-remote-row><input type="checkbox" name="delete_remote" value="1" data-instance-delete-field="delete_remote"><span><strong>Excluir também na Evolution API</strong><small>Esta ação remove a instância remota e exige uma nova criação para reconectar o número.</small></span></label>
+                    <label class="field drawer-span"><span>Confirmação</span><input name="confirmation" autocomplete="off" data-instance-delete-field="confirmation" required><small class="field-hint" data-instance-delete-hint></small></label>
+                </div>
+            </section>
+            <div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="instance-delete-drawer">Cancelar</button><button class="btn btn-danger" type="submit">Excluir conexão</button></div>
+        </form>
+    </div>
 </aside>
 
 <?php if ($canGenerateQr): ?>
