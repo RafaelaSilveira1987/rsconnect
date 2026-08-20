@@ -24,6 +24,7 @@ use App\Controllers\InstanceController;
 use App\Controllers\ImplementationController;
 use App\Controllers\MessageGovernanceController;
 use App\Controllers\OnboardingController;
+use App\Controllers\OpenAiUsageController;
 use App\Controllers\N8nFlowController;
 use App\Controllers\N8nTemplateController;
 use App\Controllers\NotificationsController;
@@ -249,18 +250,19 @@ return static function (Router $router): void {
 
     $router->get('/instances', [InstanceController::class, 'index'], ['auth', 'permission:instances.view']);
     $router->get('/instances/status-feed', [InstanceController::class, 'statusFeed'], ['auth', 'permission:instances.view']);
-    $router->post('/instances', [InstanceController::class, 'store'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/instances', [InstanceController::class, 'store'], ['auth', 'permission:instances.manage', 'csrf']);
     $router->post('/instances/qr', [InstanceController::class, 'qrCode'], ['auth', 'permission:instances.manage', 'csrf']);
-    $router->post('/instances/test', [InstanceController::class, 'sendTest'], ['auth', 'super_admin', 'csrf']);
-    $router->post('/instances/update', [InstanceController::class, 'update'], ['auth', 'super_admin', 'csrf']);
-    $router->post('/instances/settings', [InstanceController::class, 'saveSettings'], ['auth', 'super_admin', 'csrf']);
-    $router->post('/instances/action', [InstanceController::class, 'remoteAction'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/instances/test', [InstanceController::class, 'sendTest'], ['auth', 'permission:instances.manage', 'csrf']);
+    $router->post('/instances/update', [InstanceController::class, 'update'], ['auth', 'permission:instances.manage', 'csrf']);
+    $router->post('/instances/settings', [InstanceController::class, 'saveSettings'], ['auth', 'permission:instances.manage', 'csrf']);
+    $router->post('/instances/action', [InstanceController::class, 'remoteAction'], ['auth', 'permission:instances.manage', 'csrf']);
     $router->post('/instances/routing', [InstanceController::class, 'updateRouting'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->post('/instances/agent-update', [InstanceController::class, 'updateAgent'], ['auth', 'super_admin', 'csrf']);
-    $router->post('/instances/delete', [InstanceController::class, 'delete'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/instances/delete', [InstanceController::class, 'delete'], ['auth', 'permission:instances.manage', 'csrf']);
 
     $router->get('/agents', [AgentController::class, 'index'], ['auth', 'permission:agents.view']);
     $router->get('/ai-credentials', [AiCredentialController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/openai-usage', [OpenAiUsageController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/ai-credentials/save', [AiCredentialController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/agents', [AgentController::class, 'store'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->post('/agents/status', [AgentController::class, 'updateStatus'], ['auth', 'permission:agents.manage', 'csrf']);

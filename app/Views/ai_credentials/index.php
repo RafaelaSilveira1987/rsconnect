@@ -45,6 +45,15 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
     </article>
 </section>
 
+<section class="card openai-usage-shortcut" aria-label="Atalho para consumo da OpenAI">
+    <div>
+        <span class="eyebrow">Dados oficiais da organização</span>
+        <h2>Consumo OpenAI em página própria</h2>
+        <p>Acompanhe tokens, chamadas, modelos e custos no novo menu exclusivo do Super Admin.</p>
+    </div>
+    <a class="btn btn-outline" href="<?= View::e(Router::url('/openai-usage')) ?>">Abrir consumo OpenAI</a>
+</section>
+
 <div class="operations-alert is-info" style="margin-bottom:16px">
     <strong>Revise o custeio das chaves existentes</strong>
     <p>Na atualização 36.6.8, credenciais já cadastradas são classificadas conservadoramente como <strong>Cliente</strong>. Marque como <strong>RS Connect</strong> as chaves que são pagas pela RS para que o consumo da franquia seja contabilizado corretamente. A chave global do ambiente é considerada RS automaticamente.</p>

@@ -329,19 +329,30 @@ final class InstanceController
 
     public function store(): void
     {
-        $tenantId = Auth::isSuperAdmin()
+        $isSuperAdmin = Auth::isSuperAdmin();
+        $tenantId = $isSuperAdmin
             ? (int) ($_POST['tenant_id'] ?? 0)
             : (int) Auth::tenantId();
 
         $name = trim((string) ($_POST['name'] ?? ''));
         $instanceName = trim((string) ($_POST['instance_name'] ?? ''));
-        $baseUrl = rtrim(trim((string) ($_POST['base_url'] ?? Env::get('EVOLUTION_DEFAULT_URL', ''))), '/');
-        $apiKey = trim((string) ($_POST['api_key'] ?? ''));
+
+        // O administrador do cliente gerencia a própria conexão sem receber ou alterar
+        // credenciais globais da Evolution no navegador. URL, chave e modo de
+        // provisionamento são sempre obtidos do ambiente protegido do RS Connect.
+        $baseUrl = $isSuperAdmin
+            ? rtrim(trim((string) ($_POST['base_url'] ?? Env::get('EVOLUTION_DEFAULT_URL', ''))), '/')
+            : rtrim(trim((string) Env::get('EVOLUTION_DEFAULT_URL', '')), '/');
+        $apiKey = $isSuperAdmin ? trim((string) ($_POST['api_key'] ?? '')) : '';
         if ($apiKey === '') {
             $apiKey = trim((string) Env::get('EVOLUTION_DEFAULT_API_KEY', ''));
         }
-        $managementMode = isset($_POST['create_in_evolution']) ? 'managed' : 'external';
-        $integration = strtoupper(trim((string) ($_POST['integration'] ?? 'WHATSAPP-BAILEYS')));
+        $managementMode = $isSuperAdmin
+            ? (isset($_POST['create_in_evolution']) ? 'managed' : 'external')
+            : 'managed';
+        $integration = $isSuperAdmin
+            ? strtoupper(trim((string) ($_POST['integration'] ?? 'WHATSAPP-BAILEYS')))
+            : 'WHATSAPP-BAILEYS';
         if (!in_array($integration, ['WHATSAPP-BAILEYS', 'WHATSAPP-BUSINESS'], true)) {
             $integration = 'WHATSAPP-BAILEYS';
         }
@@ -352,7 +363,10 @@ final class InstanceController
         $status = 'pending';
 
         if ($tenantId < 1 || $name === '' || $instanceName === '' || !filter_var($baseUrl, FILTER_VALIDATE_URL) || $apiKey === '') {
-            Flash::set('error', 'Preencha empresa, nome, identificador da Evolution, URL válida e API Key global.');
+            $message = $isSuperAdmin
+                ? 'Preencha empresa, nome, identificador da Evolution, URL válida e API Key global.'
+                : 'A conexão não pôde ser criada porque o servidor Evolution ainda não foi configurado no RS Connect. Solicite ao suporte a configuração de EVOLUTION_DEFAULT_URL e EVOLUTION_DEFAULT_API_KEY.';
+            Flash::set('error', $message);
             $this->redirect('/instances');
         }
 
@@ -394,10 +408,10 @@ final class InstanceController
             $existingInstance = $duplicate->fetch(PDO::FETCH_ASSOC);
 
             if ($existingInstance) {
-                throw new \RuntimeException(
-                    'A instância "' . $instanceName . '" já está cadastrada nesta Evolution como "' .
-                    $existingInstance['name'] . '".'
-                );
+                $duplicateMessage = $isSuperAdmin
+                    ? 'A instância "' . $instanceName . '" já está cadastrada nesta Evolution como "' . $existingInstance['name'] . '".'
+                    : 'Esse identificador já está em uso. Escolha outro identificador para a conexão.';
+                throw new \RuntimeException($duplicateMessage);
             }
 
             $pdo->beginTransaction();
@@ -536,7 +550,7 @@ final class InstanceController
         $this->redirect('/instances');
     }
 
-    /** Atualização técnica exclusiva do Super Admin RS. */
+    /** Atualiza o cadastro. O cliente altera apenas dados operacionais da própria empresa. */
     public function update(): void
     {
         $instanceId = (int) ($_POST['instance_id'] ?? 0);
@@ -546,15 +560,25 @@ final class InstanceController
         $apiKey = trim((string) ($_POST['api_key'] ?? ''));
         $isDefault = isset($_POST['is_default']);
 
-        if ($instanceId < 1 || $name === '' || $instanceName === '' || !filter_var($baseUrl, FILTER_VALIDATE_URL)) {
-            Flash::set('error', 'Informe nome interno, nome na Evolution e URL válida.');
+        if ($instanceId < 1 || $name === '') {
+            Flash::set('error', 'Informe o nome interno da conexão.');
             $this->redirect('/instances');
         }
         $pdo = Database::connection();
         try {
             $source = $this->findInstance($pdo, $instanceId);
             if (!$source) {
-                throw new \RuntimeException('Instância não encontrada.');
+                throw new \RuntimeException('Instância não encontrada para sua empresa.');
+            }
+
+            if (!Auth::isSuperAdmin()) {
+                $instanceName = (string) $source['instance_name'];
+                $baseUrl = (string) $source['base_url'];
+                $apiKey = '';
+            }
+
+            if ($instanceName === '' || !filter_var($baseUrl, FILTER_VALIDATE_URL)) {
+                throw new \RuntimeException('O cadastro técnico da conexão está incompleto. Solicite suporte da RS Connect.');
             }
             if (($source['management_mode'] ?? 'external') === 'managed'
                 && strcasecmp((string) $source['instance_name'], $instanceName) !== 0) {
@@ -1603,8 +1627,14 @@ final class InstanceController
 
     private function findInstance(PDO $pdo, int $instanceId): ?array
     {
-        $statement = $pdo->prepare('SELECT * FROM evolution_instances WHERE id = :id LIMIT 1');
-        $statement->execute(['id' => $instanceId]);
+        $sql = 'SELECT * FROM evolution_instances WHERE id = :id';
+        $params = ['id' => $instanceId];
+        if (!Auth::isSuperAdmin()) {
+            $sql .= ' AND tenant_id = :tenant_id';
+            $params['tenant_id'] = (int) Auth::tenantId();
+        }
+        $statement = $pdo->prepare($sql . ' LIMIT 1');
+        $statement->execute($params);
         $instance = $statement->fetch(PDO::FETCH_ASSOC);
         return $instance ?: null;
     }

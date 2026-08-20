@@ -31,7 +31,7 @@ $eventLabels = [
     'CALL' => 'Chamadas recebidas',
 ];
 
-if (!$isSuperAdmin) {
+if (!$canManage) {
     require __DIR__ . '/_client.php';
     return;
 }
@@ -48,7 +48,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
     <div>
         <span class="eyebrow">Operação WhatsApp</span>
         <h2>Canais WhatsApp</h2>
-        <p>Gerencie todos os números em uma única tela, conecte assistentes especializados e preserve os vínculos com contatos e conversas.</p>
+        <p><?= $isSuperAdmin ? 'Gerencie os números de todas as empresas, conecte assistentes e preserve os vínculos com contatos e conversas.' : 'Crie e administre os números da sua empresa sem depender do acesso ao painel da Evolution.' ?></p>
     </div>
     <div class="admin-module-hero-actions">
         <button class="btn btn-outline" type="button" data-toggle-panel="instance-test-drawer">Enviar teste</button>
@@ -65,11 +65,11 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
 
 <section class="card admin-module-panel">
     <div class="section-heading admin-module-heading">
-        <div><span class="eyebrow">Canais cadastrados</span><h2>WhatsApps por empresa</h2><p>Cada número é um canal. Configure conexão, agente principal e especialistas no mesmo registro.</p></div>
+        <div><span class="eyebrow">Canais cadastrados</span><h2><?= $isSuperAdmin ? 'WhatsApps por empresa' : 'WhatsApps da empresa' ?></h2><p>Cada número é um canal. Configure conexão, filtros, webhook e roteamento no mesmo registro.</p></div>
         <span class="badge" data-admin-visible-count><?= $total ?> registro(s)</span>
     </div>
     <div class="admin-module-filters" data-admin-filter-root>
-        <label class="field admin-module-search"><span>Buscar</span><input type="search" placeholder="Empresa, nome interno ou identificador Evolution" data-admin-search></label>
+        <label class="field admin-module-search"><span>Buscar</span><input type="search" placeholder="<?= $isSuperAdmin ? 'Empresa, nome interno ou identificador Evolution' : 'Nome interno ou identificador do WhatsApp' ?>" data-admin-search></label>
         <label class="field"><span>Situação</span><select data-admin-filter="status"><option value="">Todas</option><option value="connected">Conectadas</option><option value="pending">Pendentes</option><option value="disconnected">Desconectadas</option></select></label>
         <button class="btn btn-quiet" type="button" data-admin-clear>Limpar</button>
     </div>
@@ -77,8 +77,13 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
     <div class="admin-module-card-list" data-admin-card-list>
         <?php foreach ($instances as $instance): ?>
             <?php
-            $webhookUrl = Router::url('/webhooks/evolution?instance_id=' . (int) $instance['id'] . ($webhookToken !== '' ? '&token=' . rawurlencode($webhookToken) : ''));
-            $searchText = mb_strtolower(trim(implode(' ', [$instance['name'], $instance['instance_name'], $instance['tenant_name'], $instance['base_url']])));
+            $webhookUrl = $isSuperAdmin ? Router::url('/webhooks/evolution?instance_id=' . (int) $instance['id'] . ($webhookToken !== '' ? '&token=' . rawurlencode($webhookToken) : '')) : '';
+            $searchParts = [$instance['name'], $instance['instance_name']];
+            if ($isSuperAdmin) {
+                $searchParts[] = $instance['tenant_name'];
+                $searchParts[] = $instance['base_url'];
+            }
+            $searchText = mb_strtolower(trim(implode(' ', $searchParts)));
             $settingsData = rawurlencode(json_encode([
                 'id' => (int) $instance['id'],
                 'name' => (string) $instance['name'],
@@ -103,10 +108,10 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
                     <span class="admin-record-mark is-whatsapp" aria-hidden="true">WA</span>
                     <div class="admin-record-copy">
                         <div class="admin-record-title-row">
-                            <div><h3><?= View::e($instance['name']) ?></h3><p><?= View::e($instance['tenant_name']) ?> · <?= View::e($instance['instance_name']) ?></p></div>
-                            <div class="admin-record-badges"><span class="badge badge-<?= View::e($instance['status']) ?>" data-instance-status-badge><?= View::e($statusLabels[$instance['status']] ?? ucfirst((string) $instance['status'])) ?></span><span class="badge <?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'badge-success' : '' ?>"><?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'Gerenciada pelo RS' : 'Instância externa' ?></span><?php if ((int) $instance['is_default'] === 1): ?><span class="badge">Padrão</span><?php endif; ?></div>
+                            <div><h3><?= View::e($instance['name']) ?></h3><p><?= $isSuperAdmin ? View::e($instance['tenant_name']) . ' · ' : '' ?><?= View::e($instance['instance_name']) ?></p></div>
+                            <div class="admin-record-badges"><span class="badge badge-<?= View::e($instance['status']) ?>" data-instance-status-badge><?= View::e($statusLabels[$instance['status']] ?? ucfirst((string) $instance['status'])) ?></span><span class="badge <?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'badge-success' : '' ?>"><?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'Gerenciada pelo sistema' : 'Instância externa' ?></span><?php if ((int) $instance['is_default'] === 1): ?><span class="badge">Padrão</span><?php endif; ?></div>
                         </div>
-                        <small class="admin-record-muted"><?= View::e($instance['base_url']) ?></small><small class="admin-record-muted" data-instance-status-detail><?= View::e((string) (($instance['connection_state'] ?? '') ?: 'Aguardando atualização')) ?></small>
+                        <?php if ($isSuperAdmin): ?><small class="admin-record-muted"><?= View::e($instance['base_url']) ?></small><?php endif; ?><small class="admin-record-muted" data-instance-status-detail><?= View::e((string) (($instance['connection_state'] ?? '') ?: 'Aguardando atualização')) ?></small>
                     </div>
                 </div>
                 <dl class="admin-record-metrics">
@@ -115,7 +120,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
                     <div><dt>Conversas</dt><dd><?= (int) $instance['conversations_count'] ?></dd></div>
                     <div><dt>Campanhas</dt><dd><?= (int) $instance['campaigns_count'] ?></dd></div>
                 </dl>
-                <details class="admin-inline-details"><summary>Webhook e informações técnicas</summary><div class="admin-technical-copy"><strong>Webhook da instância</strong><code><?= View::e($webhookUrl) ?></code><small><?= (int) ($instance['webhook_enabled'] ?? 1) === 1 ? 'Ativo · ' . count($instance['webhook_events_list'] ?? []) . ' evento(s) selecionado(s).' : 'Webhook desativado para esta conexão.' ?></small><small>Grupos: <?= (int) ($instance['ignore_groups'] ?? 1) === 1 ? 'ignorados' : 'recebidos' ?> · Chamadas: <?= (int) ($instance['reject_calls'] ?? 0) === 1 ? 'rejeitadas' : 'permitidas' ?> · Histórico completo: <?= (int) ($instance['sync_full_history'] ?? 0) === 1 ? 'sim' : 'não' ?></small></div></details>
+                <details class="admin-inline-details"><summary><?= $isSuperAdmin ? 'Webhook e informações técnicas' : 'Regras de recebimento' ?></summary><div class="admin-technical-copy"><strong><?= $isSuperAdmin ? 'Webhook da instância' : 'Webhook administrado automaticamente' ?></strong><?php if ($isSuperAdmin): ?><code><?= View::e($webhookUrl) ?></code><?php endif; ?><small><?= (int) ($instance['webhook_enabled'] ?? 1) === 1 ? 'Ativo · ' . count($instance['webhook_events_list'] ?? []) . ' evento(s) selecionado(s).' : 'Webhook desativado para esta conexão.' ?></small><small>Grupos: <?= (int) ($instance['ignore_groups'] ?? 1) === 1 ? 'ignorados' : 'recebidos' ?> · Chamadas: <?= (int) ($instance['reject_calls'] ?? 0) === 1 ? 'rejeitadas' : 'permitidas' ?> · Histórico completo: <?= (int) ($instance['sync_full_history'] ?? 0) === 1 ? 'sim' : 'não' ?></small><?php if (!$isSuperAdmin): ?><small>A URL e a chave da Evolution permanecem protegidas no servidor do RS Connect.</small><?php endif; ?></div></details>
                 <?php
                 $bindings = $routingByInstance[(int) $instance['id']] ?? [];
                 $allAgents = array_values(array_filter($adminAgents, static fn (array $agent): bool => (int) ($agent['tenant_id'] ?? 0) === (int) $instance['tenant_id']));
@@ -129,7 +134,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
                     <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>" onsubmit="return confirm('Reiniciar esta instância na Evolution?');"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="restart"><button class="btn btn-small btn-outline" type="submit">Reiniciar</button></form>
                     <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>" onsubmit="return confirm('Desconectar o WhatsApp desta instância? Será necessário ler um novo QR Code.');"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="logout"><button class="btn btn-small btn-danger-soft" type="submit">Desconectar</button></form>
                     <button class="btn btn-small btn-outline" type="button" data-toggle-panel="instance-drawer" data-instance-open="edit"
-                        data-id="<?= (int) $instance['id'] ?>" data-name="<?= View::e($instance['name']) ?>" data-instance-name="<?= View::e($instance['instance_name']) ?>" data-base-url="<?= View::e($instance['base_url']) ?>" data-status="<?= View::e($instance['status']) ?>" data-is-default="<?= (int) $instance['is_default'] ?>" data-management-mode="<?= View::e((string) ($instance['management_mode'] ?? 'external')) ?>">Editar cadastro</button>
+                        data-id="<?= (int) $instance['id'] ?>" data-name="<?= View::e($instance['name']) ?>" data-instance-name="<?= View::e($instance['instance_name']) ?>" data-base-url="<?= $isSuperAdmin ? View::e($instance['base_url']) : '' ?>" data-status="<?= View::e($instance['status']) ?>" data-is-default="<?= (int) $instance['is_default'] ?>" data-management-mode="<?= View::e((string) ($instance['management_mode'] ?? 'external')) ?>">Editar cadastro</button>
                     <button class="btn btn-small btn-danger-soft" type="button" data-toggle-panel="instance-delete-drawer" data-instance-delete
                         data-id="<?= (int) $instance['id'] ?>" data-name="<?= View::e($instance['name']) ?>" data-instance-name="<?= View::e($instance['instance_name']) ?>" data-tenant-id="<?= (int) $instance['tenant_id'] ?>" data-management-mode="<?= View::e((string) ($instance['management_mode'] ?? 'external')) ?>">Excluir</button>
                 </div>
@@ -140,6 +145,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
     </div>
 </section>
 
+<?php if ($isSuperAdmin): ?>
 <section class="card admin-agent-recovery admin-secondary-panel">
     <div class="section-heading"><div><span class="eyebrow">Recuperação técnica (legado)</span><h2>Compatibilidade de assistentes e conexões</h2><p>Use apenas para recuperar associações antigas após recriar uma conexão. O roteamento normal agora é feito em cada Canal WhatsApp.</p></div><span class="badge"><?= count($adminAgents) ?> assistente(s)</span></div>
     <div class="admin-agent-list">
@@ -160,6 +166,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
         <?php if (!$adminAgents): ?><div class="empty-state">Nenhum assistente cadastrado.</div><?php endif; ?>
     </div>
 </section>
+<?php endif; ?>
 
 <aside class="conversation-details conversation-drawer admin-form-drawer" id="instance-drawer" aria-label="Configurar conexão WhatsApp" aria-modal="true" role="dialog">
     <div class="conversation-drawer-header">
@@ -172,27 +179,46 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
             <section class="drawer-section">
                 <div class="drawer-section-title"><div><span class="eyebrow">1. Cliente</span><h3>Empresa e identificação</h3></div></div>
                 <div class="drawer-form-grid">
-                    <label class="field drawer-span" data-instance-tenant-field><span>Empresa</span><select name="tenant_id" data-instance-field="tenant_id" required><option value="">Selecione</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>"><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select></label>
+                    <?php if ($isSuperAdmin): ?>
+                        <label class="field drawer-span" data-instance-tenant-field><span>Empresa</span><select name="tenant_id" data-instance-field="tenant_id" required><option value="">Selecione</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>"><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select></label>
+                    <?php else: ?>
+                        <div hidden data-instance-tenant-field><input type="hidden" name="tenant_id" value="<?= (int) Auth::tenantId() ?>" data-instance-field="tenant_id"></div>
+                    <?php endif; ?>
                     <label class="field"><span>Nome interno</span><input name="name" data-instance-field="name" placeholder="WhatsApp Comercial" required></label>
                     <label class="field"><span>Identificador na Evolution</span><input name="instance_name" data-instance-field="instance_name" placeholder="cliente-comercial" pattern="[A-Za-z0-9._-]{2,120}" required><small class="field-hint">Sem espaços; use letras, números, hífen ou sublinhado.</small></label>
                 </div>
             </section>
             <section class="drawer-section" data-instance-create-only>
-                <div class="drawer-section-title"><div><span class="eyebrow">2. Provisionamento</span><h3>Criar ou vincular na Evolution</h3></div></div>
+                <div class="drawer-section-title"><div><span class="eyebrow">2. Provisionamento</span><h3><?= $isSuperAdmin ? 'Criar ou vincular na Evolution' : 'Criação automática da conexão' ?></h3></div></div>
                 <div class="drawer-form-grid">
-                    <label class="check-field drawer-check drawer-span"><input type="checkbox" name="create_in_evolution" value="1" checked data-instance-field="create_in_evolution"><span><strong>Criar automaticamente na Evolution</strong><small>Desmarque somente para vincular uma instância que já existe.</small></span></label>
-                    <label class="field"><span>Integração</span><select name="integration" data-instance-field="integration"><option value="WHATSAPP-BAILEYS">WhatsApp via QR Code (Baileys)</option><option value="WHATSAPP-BUSINESS">WhatsApp Business Cloud</option></select></label>
+                    <?php if ($isSuperAdmin): ?>
+                        <label class="check-field drawer-check drawer-span"><input type="checkbox" name="create_in_evolution" value="1" checked data-instance-field="create_in_evolution"><span><strong>Criar automaticamente na Evolution</strong><small>Desmarque somente para vincular uma instância que já existe.</small></span></label>
+                        <label class="field"><span>Integração</span><select name="integration" data-instance-field="integration"><option value="WHATSAPP-BAILEYS">WhatsApp via QR Code (Baileys)</option><option value="WHATSAPP-BUSINESS">WhatsApp Business Cloud</option></select></label>
+                    <?php else: ?>
+                        <input type="hidden" name="create_in_evolution" value="1" data-instance-field="create_in_evolution">
+                        <input type="hidden" name="integration" value="WHATSAPP-BAILEYS" data-instance-field="integration">
+                        <div class="drawer-span admin-danger-message is-info"><strong>Conexão independente</strong><span>O RS Connect criará a instância, aplicará o webhook e abrirá o QR Code. As credenciais da Evolution permanecem protegidas.</span></div>
+                    <?php endif; ?>
                     <label class="field"><span>Número com DDI — opcional</span><input name="phone_number" inputmode="numeric" placeholder="5532999999999"></label>
                 </div>
             </section>
-            <section class="drawer-section">
-                <div class="drawer-section-title"><div><span class="eyebrow">3. Servidor</span><h3>Acesso protegido à Evolution</h3></div></div>
-                <div class="drawer-form-grid">
-                    <label class="field drawer-span"><span>URL base</span><input type="url" name="base_url" data-instance-field="base_url" value="<?= View::e($defaultUrl) ?>" placeholder="https://evolution.seudominio.com" required></label>
-                    <label class="field drawer-span"><span data-instance-api-label>API Key global</span><input type="password" name="api_key" data-instance-field="api_key" placeholder="Use a chave do .env ou informe outra"><small class="field-hint" data-instance-api-hint>Se EVOLUTION_DEFAULT_API_KEY estiver configurada, este campo pode ficar vazio.</small></label>
-                    <label class="check-field drawer-check"><input type="checkbox" name="is_default" value="1" data-instance-field="is_default"><span>Definir como conexão padrão</span></label>
-                </div>
-            </section>
+            <?php if ($isSuperAdmin): ?>
+                <section class="drawer-section">
+                    <div class="drawer-section-title"><div><span class="eyebrow">3. Servidor</span><h3>Acesso protegido à Evolution</h3></div></div>
+                    <div class="drawer-form-grid">
+                        <label class="field drawer-span"><span>URL base</span><input type="url" name="base_url" data-instance-field="base_url" value="<?= View::e($defaultUrl) ?>" placeholder="https://evolution.seudominio.com" required></label>
+                        <label class="field drawer-span"><span data-instance-api-label>API Key global</span><input type="password" name="api_key" data-instance-field="api_key" placeholder="Use a chave do .env ou informe outra"><small class="field-hint" data-instance-api-hint>Se EVOLUTION_DEFAULT_API_KEY estiver configurada, este campo pode ficar vazio.</small></label>
+                        <label class="check-field drawer-check"><input type="checkbox" name="is_default" value="1" data-instance-field="is_default"><span>Definir como conexão padrão</span></label>
+                    </div>
+                </section>
+            <?php else: ?>
+                <input type="hidden" name="base_url" value="" data-instance-field="base_url">
+                <input type="hidden" name="api_key" value="" data-instance-field="api_key">
+                <section class="drawer-section">
+                    <div class="drawer-section-title"><div><span class="eyebrow">3. Preferência</span><h3>Canal principal da empresa</h3></div></div>
+                    <label class="check-field drawer-check"><input type="checkbox" name="is_default" value="1" data-instance-field="is_default"><span><strong>Definir como conexão padrão</strong><small>Novas operações usarão este canal quando nenhuma conexão específica for escolhida.</small></span></label>
+                </section>
+            <?php endif; ?>
             <section class="drawer-section" data-instance-create-only>
                 <div class="drawer-section-title"><div><span class="eyebrow">4. Comportamento inicial</span><h3>Mensagens, grupos e chamadas</h3></div></div>
                 <div class="instance-option-grid">
@@ -269,7 +295,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
 </aside>
 
 <aside class="conversation-details conversation-drawer admin-form-drawer" id="instance-test-drawer" aria-label="Testar conexão WhatsApp" aria-modal="true" role="dialog">
-    <div class="conversation-drawer-header"><div><span class="eyebrow">Validação</span><h2>Enviar mensagem de teste</h2><p>Confirme se a conexão consegue enviar mensagens antes de liberar para o cliente.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="instance-test-drawer" aria-label="Fechar">×</button></div>
+    <div class="conversation-drawer-header"><div><span class="eyebrow">Validação</span><h2>Enviar mensagem de teste</h2><p><?= $isSuperAdmin ? 'Confirme se a conexão consegue enviar mensagens antes de liberar para o cliente.' : 'Confirme se o seu WhatsApp está enviando mensagens corretamente.' ?></p></div><button class="icon-button drawer-close" type="button" data-close-panel="instance-test-drawer" aria-label="Fechar">×</button></div>
     <div class="conversation-drawer-body"><form class="drawer-form" method="post" action="<?= View::e(Router::url('/instances/test')) ?>"><?= Csrf::input() ?><section class="drawer-section"><div class="drawer-form-grid"><label class="field drawer-span"><span>Conexão</span><select name="instance_id" required><option value="">Selecione</option><?php foreach ($instances as $instance): ?><option value="<?= (int) $instance['id'] ?>"><?= View::e($instance['name']) ?> — <?= View::e($instance['tenant_name']) ?></option><?php endforeach; ?></select></label><label class="field drawer-span"><span>Telefone com DDI</span><input name="phone" inputmode="numeric" placeholder="5511999999999" required></label><label class="field drawer-span"><span>Mensagem</span><textarea name="message" rows="5" required>Teste de integração do RS Connect.</textarea></label></div></section><div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="instance-test-drawer">Cancelar</button><button class="btn btn-primary" type="submit" <?= !$instances ? 'disabled' : '' ?>>Enviar teste</button></div></form></div>
 </aside>
 

@@ -36,7 +36,7 @@ $checks = [
     'ações remotas foram expostas com segurança' => str_contains($controller, 'remoteAction')
         && str_contains($routes, "'/instances/settings'")
         && str_contains($routes, "'/instances/action'")
-        && substr_count($routes, "['auth', 'super_admin', 'csrf']") >= 6,
+        && substr_count($routes, "['auth', 'permission:instances.manage', 'csrf']") >= 6,
     'tela possui criação e configuração nativas' => str_contains($view, 'Criar automaticamente na Evolution')
         && str_contains($view, 'Configurar Evolution')
         && str_contains($view, 'Ignorar grupos')
@@ -54,7 +54,7 @@ $checks = [
         && str_contains($migration, 'idx_instances_management'),
     'diagnóstico confere colunas e índice' => str_contains($diagnostic, 'colunas_encontradas')
         && str_contains($diagnostic, 'idx_instances_management'),
-    'versão exige migration 076' => str_contains($version, 'RS Connect 36.16.0')
+    'versão exige migration 076' => preg_match('/RS Connect 36\.16\.[0-3]/', $version) === 1
         && str_contains($version, '076_evolution_instance_management.sql'),
     'implantação está documentada' => str_contains($instructions, 'EVOLUTION_DEFAULT_API_KEY')
         && str_contains($instructions, 'Gerar QR Code')

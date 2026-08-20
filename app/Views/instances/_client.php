@@ -33,7 +33,7 @@ $used = (int) ($channelUsage['instances'] ?? count($instances));
 
 <section class="card channels-client-layout">
     <div class="section-heading">
-        <div><span class="eyebrow">Canais conectados</span><h2>Operação WhatsApp</h2><p>A configuração técnica da Evolution continua protegida pela equipe RS Connect; o roteamento dos assistentes pode ser ajustado aqui.</p></div>
+        <div><span class="eyebrow">Canais conectados</span><h2>Operação WhatsApp</h2><p>A criação e as configurações da Evolution ficam disponíveis ao Administrador da empresa; aqui permanecem apenas as ações liberadas para o seu perfil.</p></div>
         <span class="badge"><?= count($instances) ?> canal(is)</span>
     </div>
 
@@ -88,7 +88,7 @@ $used = (int) ($channelUsage['instances'] ?? count($instances));
             </article>
         <?php endforeach; ?>
         <?php if (!$instances): ?>
-            <div class="empty-state">Nenhum canal foi preparado para a empresa. A equipe RS Connect precisa cadastrar a primeira conexão.</div>
+            <div class="empty-state">Nenhum canal foi criado para a empresa. Solicite ao Administrador da empresa que cadastre a primeira conexão.</div>
         <?php endif; ?>
     </div>
 </section>

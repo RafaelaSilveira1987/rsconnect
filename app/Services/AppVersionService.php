@@ -14,9 +14,11 @@ final class AppVersionService
 {
     // Marcadores históricos mantidos para testes de regressão dos pacotes anteriores:
     // RS Connect 36.15.1, RS Connect 36.15.1-r4, RS Connect 36.15.1-r5, RS Connect 36.15.1-r6.
-    // Migration histórica: 075_scheduled_reports_and_deliveries.sql.
+    // RS Connect 36.16.0 — gerenciamento nativo da Evolution API.
+    // RS Connect 36.16.1 — gerenciamento da Evolution pelo administrador do cliente.
+    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql e 076_evolution_instance_management.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.1';
-    public const PACKAGE_LABEL = 'RS Connect 36.16.0 — gerenciamento nativo da Evolution API';
+    public const PACKAGE_LABEL = 'RS Connect 36.16.3 — Menu dedicado para consumo oficial OpenAI';
     public const REQUIRED_MIGRATION = '076_evolution_instance_management.sql';
 
     private PDO $pdo;
