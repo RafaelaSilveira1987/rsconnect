@@ -90,6 +90,7 @@ $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['extern
         <div><span>Tokens de saída</span><strong><?= $count($aiUsage['technical']['output_tokens'] ?? 0) ?></strong><small>conteúdo produzido pelos modelos</small></div>
         <div><span>Tokens em cache</span><strong><?= $count($aiUsage['technical']['cached_tokens'] ?? 0) ?></strong><small>informados pelo provedor quando disponíveis</small></div>
         <div><span>Total de tokens</span><strong><?= $count($aiUsage['technical']['total_tokens'] ?? 0) ?></strong><small>soma técnica registrada no período</small></div>
+        <div><span>Entrada evitada</span><strong><?= $count($aiUsage['technical']['estimated_input_tokens_avoided'] ?? 0) ?></strong><small>estimativa de contexto que deixou de ser enviado ao provedor</small></div>
         <div><span>Falhas técnicas</span><strong><?= $count($aiUsage['technical']['failed_events'] ?? 0) ?></strong><small>não consomem interação comercial se a resposta não foi entregue</small></div>
     </div>
 
@@ -108,7 +109,7 @@ $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['extern
 
     <div class="table-wrap">
         <table class="clean-table">
-            <thead><tr><th>Assistente</th><th>Origem</th><th>Provedor / modelo</th><th>Interações</th><th>Chamadas</th><th>Tokens</th><th>Falhas</th><th>Custo estimado</th></tr></thead>
+            <thead><tr><th>Assistente</th><th>Origem</th><th>Provedor / modelo</th><th>Interações</th><th>Chamadas</th><th>Tokens</th><th>Entrada evitada</th><th>Falhas</th><th>Custo estimado</th></tr></thead>
             <tbody>
             <?php foreach (($aiUsage['agents'] ?? []) as $agentUsage): ?>
                 <tr>
@@ -118,11 +119,12 @@ $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['extern
                     <td><?= $count($agentUsage['interactions'] ?? 0) ?></td>
                     <td><?= $count($agentUsage['provider_calls'] ?? 0) ?></td>
                     <td><?= $count($agentUsage['total_tokens'] ?? 0) ?><br><small>entrada <?= $count($agentUsage['input_tokens'] ?? 0) ?> · saída <?= $count($agentUsage['output_tokens'] ?? 0) ?></small></td>
+                    <td><?= $count($agentUsage['estimated_input_tokens_avoided'] ?? 0) ?><br><small>estimativa do contexto compactado</small></td>
                     <td><?= $count($agentUsage['failed_events'] ?? 0) ?></td>
                     <td><?php if (!empty($agentUsage['costs'])): ?><?php foreach ($agentUsage['costs'] as $currency => $value): ?><span class="usage-cost-line"><?= View::e($costLabel((string) $currency, (float) $value)) ?></span><?php endforeach; ?><?php else: ?>—<?php endif; ?></td>
                 </tr>
             <?php endforeach; ?>
-            <?php if (empty($aiUsage['agents'])): ?><tr><td colspan="8"><div class="empty-state">Ainda não há telemetria técnica detalhada neste ciclo.</div></td></tr><?php endif; ?>
+            <?php if (empty($aiUsage['agents'])): ?><tr><td colspan="9"><div class="empty-state">Ainda não há telemetria técnica detalhada neste ciclo.</div></td></tr><?php endif; ?>
             </tbody>
         </table>
     </div>

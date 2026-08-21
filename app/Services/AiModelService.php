@@ -66,7 +66,7 @@ final class AiModelService
             'instructions' => $systemPrompt,
             'input' => $input,
             'temperature' => (float) ($agent['temperature'] ?? 0.2),
-            'max_output_tokens' => (int) Env::get('AI_MAX_OUTPUT_TOKENS', 420),
+            'max_output_tokens' => max(64, min(2000, (int) ($agent['_ai_max_output_tokens'] ?? Env::get('AI_MAX_OUTPUT_TOKENS', 420)))),
         ];
 
         // A chamada é contabilizada tecnicamente mesmo que o provedor responda com erro.
@@ -123,7 +123,7 @@ final class AiModelService
             'contents' => $contents,
             'generationConfig' => [
                 'temperature' => (float) ($agent['temperature'] ?? 0.2),
-                'maxOutputTokens' => (int) Env::get('AI_MAX_OUTPUT_TOKENS', 420),
+                'maxOutputTokens' => max(64, min(2000, (int) ($agent['_ai_max_output_tokens'] ?? Env::get('AI_MAX_OUTPUT_TOKENS', 420)))),
             ],
         ];
 
@@ -169,6 +169,11 @@ final class AiModelService
 
     private function model(array $agent, string $fallback): string
     {
+        $routedModel = trim((string) ($agent['_ai_selected_model'] ?? ''));
+        if ($routedModel !== '') {
+            return $routedModel;
+        }
+
         $credentialModel = trim((string) ($agent['credential_default_model'] ?? ''));
         if ($credentialModel !== '') {
             return $credentialModel;

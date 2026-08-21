@@ -164,11 +164,19 @@ final class AiUsageService
                      SET status = "success",
                          delivery_status = "delivered",
                          outgoing_message_id = :outgoing_message_id,
+                         provider = :provider,
+                         model = :model,
+                         efficiency_mode = :efficiency_mode,
                          provider_calls = :provider_calls,
                          input_tokens = :input_tokens,
                          output_tokens = :output_tokens,
                          total_tokens = :total_tokens,
                          cached_tokens = :cached_tokens,
+                         history_messages_total = :history_messages_total,
+                         history_messages_sent = :history_messages_sent,
+                         knowledge_chars_total = :knowledge_chars_total,
+                         knowledge_chars_sent = :knowledge_chars_sent,
+                         estimated_input_tokens_avoided = :estimated_input_tokens_avoided,
                          estimated_cost = :estimated_cost,
                          estimated_cost_currency = :estimated_cost_currency,
                          completed_at = NOW(),
@@ -176,32 +184,74 @@ final class AiUsageService
                      WHERE id = :id AND status = "reserved"'
                 )->execute([
                     'outgoing_message_id' => $outgoingMessageId && $outgoingMessageId > 0 ? $outgoingMessageId : null,
+                    'provider' => $telemetry['provider'],
+                    'model' => $telemetry['model'] !== '' ? $telemetry['model'] : null,
+                    'efficiency_mode' => $telemetry['efficiency_mode'],
                     'provider_calls' => $telemetry['provider_calls'],
                     'input_tokens' => $telemetry['input_tokens'],
                     'output_tokens' => $telemetry['output_tokens'],
                     'total_tokens' => $telemetry['total_tokens'],
                     'cached_tokens' => $telemetry['cached_tokens'],
+                    'history_messages_total' => $telemetry['history_messages_total'],
+                    'history_messages_sent' => $telemetry['history_messages_sent'],
+                    'knowledge_chars_total' => $telemetry['knowledge_chars_total'],
+                    'knowledge_chars_sent' => $telemetry['knowledge_chars_sent'],
+                    'estimated_input_tokens_avoided' => $telemetry['estimated_input_tokens_avoided'],
                     'estimated_cost' => $telemetry['estimated_cost'],
                     'estimated_cost_currency' => $telemetry['estimated_cost_currency'],
                     'id' => $eventId,
                 ]);
             } catch (Throwable) {
-                // Compatibilidade durante a janela de deploy antes da migration 054.
-                $pdo->prepare(
-                    'UPDATE ai_usage_events
-                     SET status = "success",
-                         outgoing_message_id = :outgoing_message_id,
-                         input_tokens = :input_tokens,
-                         output_tokens = :output_tokens,
-                         completed_at = NOW(),
-                         error_message = NULL
-                     WHERE id = :id AND status = "reserved"'
-                )->execute([
-                    'outgoing_message_id' => $outgoingMessageId && $outgoingMessageId > 0 ? $outgoingMessageId : null,
-                    'input_tokens' => $telemetry['input_tokens'],
-                    'output_tokens' => $telemetry['output_tokens'],
-                    'id' => $eventId,
-                ]);
+                try {
+                    // Compatibilidade durante a janela de deploy antes da migration 077.
+                    $pdo->prepare(
+                        'UPDATE ai_usage_events
+                         SET status = "success",
+                             delivery_status = "delivered",
+                             outgoing_message_id = :outgoing_message_id,
+                             provider = :provider,
+                             model = :model,
+                             provider_calls = :provider_calls,
+                             input_tokens = :input_tokens,
+                             output_tokens = :output_tokens,
+                             total_tokens = :total_tokens,
+                             cached_tokens = :cached_tokens,
+                             estimated_cost = :estimated_cost,
+                             estimated_cost_currency = :estimated_cost_currency,
+                             completed_at = NOW(),
+                             error_message = NULL
+                         WHERE id = :id AND status = "reserved"'
+                    )->execute([
+                        'outgoing_message_id' => $outgoingMessageId && $outgoingMessageId > 0 ? $outgoingMessageId : null,
+                        'provider' => $telemetry['provider'],
+                        'model' => $telemetry['model'] !== '' ? $telemetry['model'] : null,
+                        'provider_calls' => $telemetry['provider_calls'],
+                        'input_tokens' => $telemetry['input_tokens'],
+                        'output_tokens' => $telemetry['output_tokens'],
+                        'total_tokens' => $telemetry['total_tokens'],
+                        'cached_tokens' => $telemetry['cached_tokens'],
+                        'estimated_cost' => $telemetry['estimated_cost'],
+                        'estimated_cost_currency' => $telemetry['estimated_cost_currency'],
+                        'id' => $eventId,
+                    ]);
+                } catch (Throwable) {
+                    // Compatibilidade durante a janela de deploy antes da migration 054.
+                    $pdo->prepare(
+                        'UPDATE ai_usage_events
+                         SET status = "success",
+                             outgoing_message_id = :outgoing_message_id,
+                             input_tokens = :input_tokens,
+                             output_tokens = :output_tokens,
+                             completed_at = NOW(),
+                             error_message = NULL
+                         WHERE id = :id AND status = "reserved"'
+                    )->execute([
+                        'outgoing_message_id' => $outgoingMessageId && $outgoingMessageId > 0 ? $outgoingMessageId : null,
+                        'input_tokens' => $telemetry['input_tokens'],
+                        'output_tokens' => $telemetry['output_tokens'],
+                        'id' => $eventId,
+                    ]);
+                }
             }
 
             if ((int) ($event['plan_billable'] ?? 0) === 1) {
@@ -227,11 +277,19 @@ final class AiUsageService
                     'UPDATE ai_usage_events
                      SET status = :status,
                          delivery_status = "not_delivered",
+                         provider = :provider,
+                         model = :model,
+                         efficiency_mode = :efficiency_mode,
                          provider_calls = :provider_calls,
                          input_tokens = :input_tokens,
                          output_tokens = :output_tokens,
                          total_tokens = :total_tokens,
                          cached_tokens = :cached_tokens,
+                         history_messages_total = :history_messages_total,
+                         history_messages_sent = :history_messages_sent,
+                         knowledge_chars_total = :knowledge_chars_total,
+                         knowledge_chars_sent = :knowledge_chars_sent,
+                         estimated_input_tokens_avoided = :estimated_input_tokens_avoided,
                          estimated_cost = :estimated_cost,
                          estimated_cost_currency = :estimated_cost_currency,
                          error_message = :error_message,
@@ -239,28 +297,69 @@ final class AiUsageService
                      WHERE id = :id AND status = "reserved"'
                 )->execute([
                     'status' => $failed ? 'failed' : 'cancelled',
+                    'provider' => $telemetry['provider'],
+                    'model' => $telemetry['model'] !== '' ? $telemetry['model'] : null,
+                    'efficiency_mode' => $telemetry['efficiency_mode'],
                     'provider_calls' => $telemetry['provider_calls'],
                     'input_tokens' => $telemetry['input_tokens'],
                     'output_tokens' => $telemetry['output_tokens'],
                     'total_tokens' => $telemetry['total_tokens'],
                     'cached_tokens' => $telemetry['cached_tokens'],
+                    'history_messages_total' => $telemetry['history_messages_total'],
+                    'history_messages_sent' => $telemetry['history_messages_sent'],
+                    'knowledge_chars_total' => $telemetry['knowledge_chars_total'],
+                    'knowledge_chars_sent' => $telemetry['knowledge_chars_sent'],
+                    'estimated_input_tokens_avoided' => $telemetry['estimated_input_tokens_avoided'],
                     'estimated_cost' => $telemetry['estimated_cost'],
                     'estimated_cost_currency' => $telemetry['estimated_cost_currency'],
                     'error_message' => $reason !== '' ? mb_substr($reason, 0, 500) : null,
                     'id' => $eventId,
                 ]);
             } catch (Throwable) {
-                $pdo->prepare(
-                    'UPDATE ai_usage_events
-                     SET status = :status,
-                         error_message = :error_message,
-                         completed_at = NOW()
-                     WHERE id = :id AND status = "reserved"'
-                )->execute([
-                    'status' => $failed ? 'failed' : 'cancelled',
-                    'error_message' => $reason !== '' ? mb_substr($reason, 0, 500) : null,
-                    'id' => $eventId,
-                ]);
+                try {
+                    $pdo->prepare(
+                        'UPDATE ai_usage_events
+                         SET status = :status,
+                             delivery_status = "not_delivered",
+                             provider = :provider,
+                             model = :model,
+                             provider_calls = :provider_calls,
+                             input_tokens = :input_tokens,
+                             output_tokens = :output_tokens,
+                             total_tokens = :total_tokens,
+                             cached_tokens = :cached_tokens,
+                             estimated_cost = :estimated_cost,
+                             estimated_cost_currency = :estimated_cost_currency,
+                             error_message = :error_message,
+                             completed_at = NOW()
+                         WHERE id = :id AND status = "reserved"'
+                    )->execute([
+                        'status' => $failed ? 'failed' : 'cancelled',
+                        'provider' => $telemetry['provider'],
+                        'model' => $telemetry['model'] !== '' ? $telemetry['model'] : null,
+                        'provider_calls' => $telemetry['provider_calls'],
+                        'input_tokens' => $telemetry['input_tokens'],
+                        'output_tokens' => $telemetry['output_tokens'],
+                        'total_tokens' => $telemetry['total_tokens'],
+                        'cached_tokens' => $telemetry['cached_tokens'],
+                        'estimated_cost' => $telemetry['estimated_cost'],
+                        'estimated_cost_currency' => $telemetry['estimated_cost_currency'],
+                        'error_message' => $reason !== '' ? mb_substr($reason, 0, 500) : null,
+                        'id' => $eventId,
+                    ]);
+                } catch (Throwable) {
+                    $pdo->prepare(
+                        'UPDATE ai_usage_events
+                         SET status = :status,
+                             error_message = :error_message,
+                             completed_at = NOW()
+                         WHERE id = :id AND status = "reserved"'
+                    )->execute([
+                        'status' => $failed ? 'failed' : 'cancelled',
+                        'error_message' => $reason !== '' ? mb_substr($reason, 0, 500) : null,
+                        'id' => $eventId,
+                    ]);
+                }
             }
         } catch (Throwable) {
         }
@@ -433,7 +532,7 @@ final class AiUsageService
 
     /**
      * @param array<string,mixed> $usage
-     * @return array{provider_calls:int,input_tokens:?int,output_tokens:?int,total_tokens:?int,cached_tokens:?int,estimated_cost:?float,estimated_cost_currency:?string}
+     * @return array<string,mixed>
      */
     private function telemetry(array $usage, string $fallbackProvider, string $fallbackModel): array
     {
@@ -455,6 +554,16 @@ final class AiUsageService
             'output_tokens' => $output,
             'total_tokens' => $total,
             'cached_tokens' => $cached,
+            'provider' => $provider,
+            'model' => $model,
+            'efficiency_mode' => in_array((string) ($usage['efficiency_mode'] ?? ''), ['economy','balanced','quality'], true)
+                ? (string) $usage['efficiency_mode']
+                : null,
+            'history_messages_total' => isset($usage['history_messages_total']) ? max(0, (int) $usage['history_messages_total']) : null,
+            'history_messages_sent' => isset($usage['history_messages_sent']) ? max(0, (int) $usage['history_messages_sent']) : null,
+            'knowledge_chars_total' => isset($usage['knowledge_chars_total']) ? max(0, (int) $usage['knowledge_chars_total']) : null,
+            'knowledge_chars_sent' => isset($usage['knowledge_chars_sent']) ? max(0, (int) $usage['knowledge_chars_sent']) : null,
+            'estimated_input_tokens_avoided' => isset($usage['estimated_input_tokens_avoided']) ? max(0, (int) $usage['estimated_input_tokens_avoided']) : 0,
             'estimated_cost' => $cost['cost'],
             'estimated_cost_currency' => $cost['currency'],
         ];
@@ -649,6 +758,10 @@ final class AiUsageService
 
     private function model(array $agent): string
     {
+        $routedModel = trim((string) ($agent['_ai_selected_model'] ?? ''));
+        if ($routedModel !== '') {
+            return $routedModel;
+        }
         $model = trim((string) ($agent['credential_default_model'] ?? ''));
         return $model !== '' ? $model : trim((string) ($agent['model_name'] ?? ''));
     }

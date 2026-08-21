@@ -75,7 +75,7 @@ $checks = [
         && str_contains($view, 'Custo oficial'),
     'admin key separada da chave de inferência' => str_contains($env, 'OPENAI_ADMIN_API_KEY=')
         && str_contains($env, 'OPENAI_USAGE_PROJECT_IDS='),
-    'pacote atualizado' => (str_contains($version, 'RS Connect 36.16.2') || str_contains($version, 'RS Connect 36.16.3')),
+    'pacote atualizado' => preg_match('/RS Connect 36\.(16\.2|16\.3|17\.0)/', $version) === 1,
 ];
 
 $failed = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

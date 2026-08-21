@@ -35,6 +35,9 @@ final class AiAutomationService
         $failurePhase = 'bootstrap';
         $usageReservationId = 0;
         $usageService = new AiUsageService();
+        $generationAgent = null;
+        $efficiencyTelemetry = [];
+        $aiRoute = null;
 
         // Defesa adicional contra eco de mensagens enviadas pela própria Evolution.
         // Mesmo que outro chamador encaminhe SEND_MESSAGE ou fromMe=true por engano,
@@ -297,9 +300,12 @@ final class AiAutomationService
                 }
             }
 
+            $aiRoute = (new AiRouterService())->route($agent, $conversation, $incomingContent);
+            $generationAgent = array_merge($agent, (array) ($aiRoute['agent_overrides'] ?? []));
+
             $quota = $usageService->reserveAutoReply(
                 (int) $instance['tenant_id'],
-                $agent,
+                $generationAgent,
                 $conversationId,
                 $storedMessageId > 0 ? $storedMessageId : null
             );
@@ -323,7 +329,10 @@ final class AiAutomationService
             }
             $usageReservationId = (int) ($quota['event_id'] ?? 0);
 
-            $messages = $this->recentMessages($pdo, $conversationId, (int) ($agent['max_context_messages'] ?? 12));
+            $preparedContext = (new AiContextBuilder())->build($pdo, $generationAgent, $conversationId, $incomingContent);
+            $messages = (array) ($preparedContext['messages'] ?? []);
+            $generationAgent = is_array($preparedContext['agent'] ?? null) ? $preparedContext['agent'] : $generationAgent;
+            $efficiencyTelemetry = is_array($preparedContext['telemetry'] ?? null) ? $preparedContext['telemetry'] : [];
             if ($afterHoursRecovery) {
                 // A mensagem de ausência é uma saída automática e pode ser o último item do histórico.
                 // Acrescenta somente em memória uma instrução de retomada para que o modelo responda
@@ -336,14 +345,14 @@ final class AiAutomationService
                 ];
             }
             $failurePhase = 'ai.generate';
-            $reply = $this->ai->generateReply($agent, $messages, $conversation, $conversation);
+            $reply = $this->ai->generateReply($generationAgent, $messages, $conversation, $conversation);
 
             // O horário também é revalidado imediatamente antes do envio. Assim uma
             // resposta que começou dentro do expediente não é entregue depois do fechamento,
             // e nenhuma integração/prompt consegue ultrapassar a regra operacional.
             $sendPolicy = (new AgentOperatingPolicyService())->status($agent);
             if (!empty($sendPolicy['enforced']) && empty($sendPolicy['inside'])) {
-                $usageService->cancelReservation($usageReservationId, 'Resposta descartada porque o expediente encerrou antes do envio.', false, $this->ai->lastUsage());
+                $usageService->cancelReservation($usageReservationId, 'Resposta descartada porque o expediente encerrou antes do envio.', false, array_merge($this->ai->lastUsage(), $efficiencyTelemetry));
                 $usageReservationId = 0;
                 (new AiAfterHoursRecoveryService())->markPending(
                     $pdo,
@@ -369,7 +378,7 @@ final class AiAutomationService
             // Revalida imediatamente antes do envio externo para que assumir atendimento pause a IA de fato.
             $conversation = $this->conversation($pdo, $conversationId);
             if (!$this->conversationAllowsAutomaticReply($conversation)) {
-                $usageService->cancelReservation($usageReservationId, 'Resposta descartada porque o atendimento foi assumido ou a IA foi pausada.', false, $this->ai->lastUsage());
+                $usageService->cancelReservation($usageReservationId, 'Resposta descartada porque o atendimento foi assumido ou a IA foi pausada.', false, array_merge($this->ai->lastUsage(), $efficiencyTelemetry));
                 $usageReservationId = 0;
                 $this->log(
                     (int) $instance['tenant_id'],
@@ -386,7 +395,7 @@ final class AiAutomationService
 
             $failurePhase = 'evolution.send';
             $result = $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $reply, 'ai.replied', 'Resposta automática enviada pela IA.');
-            $usageService->completeAutoReply($usageReservationId, (int) ($result['_stored_message_id'] ?? 0), $this->ai->lastUsage());
+            $usageService->completeAutoReply($usageReservationId, (int) ($result['_stored_message_id'] ?? 0), array_merge($this->ai->lastUsage(), $efficiencyTelemetry));
             $usageReservationId = 0;
 
             $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.replied', 'success', null, $reply, [
@@ -394,6 +403,15 @@ final class AiAutomationService
                 'external_id' => $this->extractMessageId($result['body'] ?? []),
                 'provider' => $agent['credential_provider'] ?? $agent['model_provider'] ?? null,
                 'credential_id' => $agent['credential_id'] ?? null,
+                'ai_efficiency' => [
+                    'mode' => $aiRoute['mode'] ?? ($generationAgent['_ai_efficiency_mode'] ?? 'balanced'),
+                    'complexity' => $aiRoute['complexity'] ?? null,
+                    'history_messages_total' => $efficiencyTelemetry['history_messages_total'] ?? null,
+                    'history_messages_sent' => $efficiencyTelemetry['history_messages_sent'] ?? null,
+                    'knowledge_chars_total' => $efficiencyTelemetry['knowledge_chars_total'] ?? null,
+                    'knowledge_chars_sent' => $efficiencyTelemetry['knowledge_chars_sent'] ?? null,
+                    'estimated_input_tokens_avoided' => $efficiencyTelemetry['estimated_input_tokens_avoided'] ?? 0,
+                ],
                 'contact_context' => [
                     'status' => $conversation['contact_status'] ?? null,
                     'group' => $conversation['contact_group'] ?? null,
@@ -443,7 +461,7 @@ final class AiAutomationService
                     $usageReservationId,
                     $exception->getMessage(),
                     !$recipientUnavailable,
-                    $this->ai->lastUsage()
+                    array_merge($this->ai->lastUsage(), $efficiencyTelemetry)
                 );
                 $usageReservationId = 0;
             }

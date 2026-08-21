@@ -246,6 +246,7 @@ final class SubscriptionService
             'output_tokens' => 0,
             'total_tokens' => 0,
             'cached_tokens' => 0,
+            'estimated_input_tokens_avoided' => 0,
             'failed_events' => 0,
             'cancelled_events' => 0,
             'successful_events' => 0,
@@ -259,6 +260,7 @@ final class SubscriptionService
                     COALESCE(SUM(output_tokens), 0) AS output_tokens,
                     COALESCE(SUM(total_tokens), 0) AS total_tokens,
                     COALESCE(SUM(cached_tokens), 0) AS cached_tokens,
+                    COALESCE(SUM(estimated_input_tokens_avoided), 0) AS estimated_input_tokens_avoided,
                     SUM(CASE WHEN status = "failed" THEN 1 ELSE 0 END) AS failed_events,
                     SUM(CASE WHEN status = "cancelled" THEN 1 ELSE 0 END) AS cancelled_events,
                     SUM(CASE WHEN status = "success" THEN 1 ELSE 0 END) AS successful_events
@@ -336,6 +338,7 @@ final class SubscriptionService
                     COALESCE(SUM(e.output_tokens), 0) AS output_tokens,
                     COALESCE(SUM(e.total_tokens), 0) AS total_tokens,
                     COALESCE(SUM(e.cached_tokens), 0) AS cached_tokens,
+                    COALESCE(SUM(e.estimated_input_tokens_avoided), 0) AS estimated_input_tokens_avoided,
                     SUM(CASE WHEN e.status = "failed" THEN 1 ELSE 0 END) AS failed_events,
                     e.estimated_cost_currency AS cost_currency,
                     COALESCE(SUM(e.estimated_cost), 0) AS estimated_cost
@@ -372,11 +375,12 @@ final class SubscriptionService
                         'output_tokens' => 0,
                         'total_tokens' => 0,
                         'cached_tokens' => 0,
+                        'estimated_input_tokens_avoided' => 0,
                         'failed_events' => 0,
                         'costs' => [],
                     ];
                 }
-                foreach (['interactions','provider_calls','input_tokens','output_tokens','total_tokens','cached_tokens','failed_events'] as $metric) {
+                foreach (['interactions','provider_calls','input_tokens','output_tokens','total_tokens','cached_tokens','estimated_input_tokens_avoided','failed_events'] as $metric) {
                     $merged[$key][$metric] += (int) ($row[$metric] ?? 0);
                 }
                 $currency = strtoupper(trim((string) ($row['cost_currency'] ?? '')));

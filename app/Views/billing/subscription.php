@@ -191,9 +191,10 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
             <div><span>Tokens de entrada</span><strong><?= number_format((int) ($aiUsage['technical']['input_tokens'] ?? 0), 0, ',', '.') ?></strong><small>contexto e instruções enviados ao modelo</small></div>
             <div><span>Tokens de saída</span><strong><?= number_format((int) ($aiUsage['technical']['output_tokens'] ?? 0), 0, ',', '.') ?></strong><small>conteúdo produzido pelo modelo</small></div>
             <div><span>Total de tokens</span><strong><?= number_format((int) ($aiUsage['technical']['total_tokens'] ?? 0), 0, ',', '.') ?></strong><small>telemetria registrada pela RS Connect no período</small></div>
+            <div><span>Entrada evitada</span><strong><?= number_format((int) ($aiUsage['technical']['estimated_input_tokens_avoided'] ?? 0), 0, ',', '.') ?></strong><small>estimativa de tokens que deixaram de ser reenviados pelo contexto enxuto</small></div>
             <div><span>Falhas técnicas</span><strong><?= number_format((int) ($aiUsage['technical']['failed_events'] ?? 0), 0, ',', '.') ?></strong><small>não reduzem franquia quando não há entrega</small></div>
         </div>
-        <p class="client-ai-telemetry-note">A franquia considera somente respostas automáticas entregues com IA custeada pela RS Connect. O número de requisições exibido pelo provedor pode ser maior porque inclui chamadas técnicas, testes, falhas e outros usos.</p>
+        <p class="client-ai-telemetry-note">A franquia considera somente respostas automáticas entregues com IA custeada pela RS Connect. “Entrada evitada” é uma estimativa baseada no histórico e na base que o roteador deixou de reenviar. O número de requisições exibido pelo provedor pode ser maior porque inclui chamadas técnicas, testes, falhas e outros usos.</p>
     </details>
 </section>
 

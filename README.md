@@ -1,4 +1,22 @@
-# RS Connect — v36.16.3
+# RS Connect — v36.17.0
+
+A v36.17.0 adiciona uma camada central de **eficiência de IA**. Cada assistente pode operar em modo Econômico, Equilibrado ou Qualidade máxima; o RS Connect limita o histórico enviado, seleciona localmente os trechos relevantes da base de conhecimento, controla a saída máxima e registra uma estimativa de tokens de entrada evitados. O modelo atual é preservado por padrão.
+
+Aplique a migration:
+
+`database/migrations/077_ai_efficiency_foundation.sql`
+
+Valide com:
+
+`database/diagnostics/ai_efficiency_v36.17.0.sql`
+
+Teste principal:
+
+`php tests/ai-efficiency-v36170-smoke.php`
+
+Roteiro completo: `INSTRUCOES-v36.17.0.md`.
+
+## Histórico v36.16.3
 
 A v36.16.3 corrige a navegação do consumo oficial da OpenAI. O Super Admin agora possui o item **Consumo OpenAI** no menu **Automação e integrações**, com página própria em `/openai-usage`. A tela **IA e credenciais** também contém um atalho para o relatório.
 

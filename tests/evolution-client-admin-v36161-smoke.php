@@ -42,7 +42,7 @@ $checks = [
     'super admin continua com recursos técnicos' => str_contains($view, '<?php if ($isSuperAdmin): ?>')
         && str_contains($view, 'Criar ou vincular na Evolution')
         && str_contains($view, 'API Key global'),
-    'pacote e documentação atualizados' => preg_match('/RS Connect 36\.16\.[1-3]/', $version) === 1
+    'pacote e documentação atualizados' => preg_match('/RS Connect 36\.(16\.[1-3]|17\.0)/', $version) === 1
         && str_contains($instructions, 'Administrador do cliente')
         && str_contains($instructions, 'instances.manage'),
 ];

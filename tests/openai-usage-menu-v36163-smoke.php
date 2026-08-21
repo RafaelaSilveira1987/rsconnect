@@ -17,11 +17,11 @@ $checks = [
     'controller importado' => str_contains($routes, 'use App\\Controllers\\OpenAiUsageController;'),
     'rota dedicada protegida' => str_contains($routes, "\$router->get('/openai-usage', [OpenAiUsageController::class, 'index'], ['auth', 'super_admin']);"),
     'menu do super admin' => str_contains($layout, '<span>Consumo OpenAI</span>') && str_contains($layout, "Router::url('/openai-usage')"),
-    'cache bust 36.16.3' => str_contains($layout, 'app.css?v=36.16.3') && str_contains($layout, 'app.js?v=36.16.3'),
+    'cache bust atual' => preg_match('/app\.css\?v=36\.(16\.3|17\.0)/', $layout) === 1 && preg_match('/app\.js\?v=36\.(16\.3|17\.0)/', $layout) === 1,
     'controller consulta serviço' => str_contains($controller, 'OpenAiOrganizationUsageService') && str_contains($controller, "View::render('openai_usage.index'"),
     'view dedicada completa' => str_contains($view, 'Consumo oficial da OpenAI') && str_contains($view, 'OPENAI_ADMIN_API_KEY') && str_contains($view, 'Atualizar agora'),
     'atalho em credenciais' => str_contains($credentialsView, 'Abrir consumo OpenAI'),
-    'pacote atualizado' => str_contains($version, 'RS Connect 36.16.3'),
+    'pacote atualizado' => preg_match('/RS Connect 36\.(16\.3|17\.0)/', $version) === 1,
     'documentação atualizada' => str_contains($instructions, '/openai-usage'),
 ];
 

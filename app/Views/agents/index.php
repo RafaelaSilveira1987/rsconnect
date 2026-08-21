@@ -46,6 +46,12 @@ foreach ([
     }
 }
 $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
+$aiModeLabels = ['economy' => 'Econômico', 'balanced' => 'Equilibrado', 'quality' => 'Qualidade máxima'];
+$aiModeHints = [
+    'economy' => 'Até 6 mensagens recentes, base seletiva e respostas mais curtas.',
+    'balanced' => 'Até 10 mensagens recentes, contexto enxuto e boa cobertura.',
+    'quality' => 'Até 20 mensagens recentes e contexto ampliado quando necessário.',
+];
 ?>
 <div class="agent-management-page <?= $isClientExperience ? 'agent-client-experience' : 'agent-admin-experience' ?>">
     <section class="card agent-list-card">
@@ -100,7 +106,8 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                         <div><span>Canais WhatsApp</span><strong><?= View::e(($agent['channel_names'] ?? '') !== '' ? $agent['channel_names'] : ($agent['instance_name'] ?? 'Não vinculado')) ?></strong><small><?= (int) ($agent['channel_count'] ?? 0) ?> canal(is) vinculado(s)</small></div>
                         <div><span>Modelo de IA</span><strong><?= View::e($agent['credential_model'] ?: $agent['model_name']) ?></strong></div>
                         <div><span>Acesso à IA</span><strong><?= View::e($agent['credential_label'] ?: 'Configuração da RS Connect') ?></strong></div>
-                        <div><span>Memória da conversa</span><strong><?= (int) ($agent['max_context_messages'] ?? 12) ?> mensagens</strong></div>
+                        <div><span>Memória configurada</span><strong><?= (int) ($agent['max_context_messages'] ?? 12) ?> mensagens</strong></div>
+                        <div><span>Estratégia de IA</span><strong><?= View::e($aiModeLabels[$agent['ai_efficiency_mode'] ?? 'balanced'] ?? 'Equilibrado') ?></strong><small><?= View::e($aiModeHints[$agent['ai_efficiency_mode'] ?? 'balanced'] ?? $aiModeHints['balanced']) ?></small></div>
                     </div>
                     <div class="badge-row">
                         <span class="badge badge-<?= View::e($agent['status']) ?>"><?= $agent['status'] === 'active' ? 'Ativo' : 'Inativo' ?></span>
@@ -165,7 +172,10 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                             <input type="hidden" name="agent_id" value="<?= (int) $agent['id'] ?>">
                             <div class="form-grid two">
                                 <label class="field compact-field"><span>Disponibilidade do assistente</span><select name="status"><option value="active" <?= $agent['status'] === 'active' ? 'selected' : '' ?>>Ativo</option><option value="inactive" <?= $agent['status'] === 'inactive' ? 'selected' : '' ?>>Inativo</option></select></label>
-                                <label class="field compact-field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="<?= (int) ($agent['max_context_messages'] ?? 12) ?>" min="4" max="30"></label>
+                                <label class="field compact-field"><span>Estratégia de consumo</span><select name="ai_efficiency_mode"><option value="economy" <?= ($agent['ai_efficiency_mode'] ?? 'balanced') === 'economy' ? 'selected' : '' ?>>Econômico</option><option value="balanced" <?= ($agent['ai_efficiency_mode'] ?? 'balanced') === 'balanced' ? 'selected' : '' ?>>Equilibrado</option><option value="quality" <?= ($agent['ai_efficiency_mode'] ?? 'balanced') === 'quality' ? 'selected' : '' ?>>Qualidade máxima</option></select><small class="field-hint">Controla automaticamente histórico, base de conhecimento e tamanho da resposta.</small></label>
+                                <label class="field compact-field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="<?= (int) ($agent['max_context_messages'] ?? 12) ?>" min="4" max="30"><small class="field-hint">Funciona como teto. O modo Econômico usa no máximo 6 e o Equilibrado no máximo 10.</small></label>
+                                <label class="field compact-field"><span>Máximo de saída (tokens)</span><input type="number" name="ai_max_output_tokens" value="<?= View::e((string) ($agent['ai_max_output_tokens'] ?? '')) ?>" min="64" max="2000" placeholder="Automático pelo modo"><small class="field-hint">Vazio: Econômico 160 · Equilibrado 260 · Qualidade 420.</small></label>
+                                <label class="field compact-field"><span>Orçamento da base (caracteres)</span><input type="number" name="ai_knowledge_budget_chars" value="<?= View::e((string) ($agent['ai_knowledge_budget_chars'] ?? '')) ?>" min="1000" max="120000" placeholder="Automático pelo modo"><small class="field-hint">Limita quanto da base de conhecimento entra em cada chamada.</small></label>
                                 <label class="field compact-field">
                                     <span>Tempo de espera da IA (seg.)</span>
                                     <input type="number" name="cooldown_seconds" value="<?= (int) ($agent['cooldown_seconds'] ?? 15) ?>" min="0" max="3600">
@@ -194,6 +204,7 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                                 <label class="check-field compact-check"><input type="checkbox" name="business_hours_enabled" value="1" <?= (int) ($agent['business_hours_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder somente no horário configurado</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="n8n_enabled" value="1" <?= (int) ($agent['n8n_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Usar integração externa</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="reply_to_reactions" value="1" <?= (int) ($agent['reply_to_reactions'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder a reações em mensagens</span></label>
+                                <label class="check-field compact-check"><input type="checkbox" name="ai_selective_knowledge" value="1" <?= !array_key_exists('ai_selective_knowledge', $agent) || (int) ($agent['ai_selective_knowledge'] ?? 1) === 1 ? 'checked' : '' ?>><span>Enviar somente trechos relevantes da base</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="is_default" value="1" <?= (int) $agent['is_default'] === 1 ? 'checked' : '' ?>><span>Fallback geral</span></label>
                             </div>
                             <p class="field-hint"><strong>Horário é uma regra técnica.</strong> Quando “Responder somente no horário configurado” estiver ativo, IA, agenda, seleção de horários e automações conversacionais ficam bloqueadas fora do expediente, mesmo que o prompt diga para atender 24h.</p>
@@ -356,10 +367,17 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                         <?php endforeach; ?>
                     </div>
                     <label class="field"><span>Mensagem fora do horário</span><input name="after_hours_message" value="Estamos fora do horário de atendimento agora. Assim que retornarmos, nossa equipe responde por aqui."></label>
-                    <div class="form-grid two">
-                        <label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label>
-                        <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se o cliente enviar outra mensagem, a contagem reinicia.</small></label>
+                    <div class="ai-efficiency-create-card">
+                        <div><span class="eyebrow">Economia de IA</span><strong>Estratégia de consumo</strong><small>O modo Equilibrado é recomendado para começar.</small></div>
+                        <div class="form-grid two">
+                            <label class="field"><span>Modo</span><select name="ai_efficiency_mode"><option value="economy">Econômico</option><option value="balanced" selected>Equilibrado</option><option value="quality">Qualidade máxima</option></select></label>
+                            <label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label>
+                            <label class="field"><span>Máx. saída (tokens)</span><input type="number" name="ai_max_output_tokens" min="64" max="2000" placeholder="Automático pelo modo"></label>
+                            <label class="field"><span>Base por chamada (caracteres)</span><input type="number" name="ai_knowledge_budget_chars" min="1000" max="120000" placeholder="Automático pelo modo"></label>
+                        </div>
+                        <label class="check-field"><input type="checkbox" name="ai_selective_knowledge" value="1" checked><span>Enviar somente os trechos da base relacionados à conversa</span></label>
                     </div>
+                    <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se o cliente enviar outra mensagem, a contagem reinicia.</small></label>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
                     <p class="field-hint">Quando ativado, este horário prevalece sobre o prompt e bloqueia IA, agenda e automações conversacionais fora do expediente.</p>
@@ -457,10 +475,17 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
                         <?php endforeach; ?>
                     </div>
                     <label class="field"><span>Mensagem fora do horário</span><input name="after_hours_message" value="Estamos fora do horário de atendimento agora. Assim que retornarmos, nossa equipe responde por aqui."></label>
-                    <div class="form-grid two">
-                        <label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label>
-                        <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se o cliente enviar outra mensagem, a contagem reinicia.</small></label>
+                    <div class="ai-efficiency-create-card">
+                        <div><span class="eyebrow">Economia de IA</span><strong>Estratégia de consumo</strong><small>O modo Equilibrado é recomendado para começar.</small></div>
+                        <div class="form-grid two">
+                            <label class="field"><span>Modo</span><select name="ai_efficiency_mode"><option value="economy">Econômico</option><option value="balanced" selected>Equilibrado</option><option value="quality">Qualidade máxima</option></select></label>
+                            <label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label>
+                            <label class="field"><span>Máx. saída (tokens)</span><input type="number" name="ai_max_output_tokens" min="64" max="2000" placeholder="Automático pelo modo"></label>
+                            <label class="field"><span>Base por chamada (caracteres)</span><input type="number" name="ai_knowledge_budget_chars" min="1000" max="120000" placeholder="Automático pelo modo"></label>
+                        </div>
+                        <label class="check-field"><input type="checkbox" name="ai_selective_knowledge" value="1" checked><span>Enviar somente os trechos da base relacionados à conversa</span></label>
                     </div>
+                    <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se o cliente enviar outra mensagem, a contagem reinicia.</small></label>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
                     <p class="field-hint">Quando ativado, este horário prevalece sobre o prompt e bloqueia IA, agenda e automações conversacionais fora do expediente.</p>

@@ -16,10 +16,11 @@ final class AppVersionService
     // RS Connect 36.15.1, RS Connect 36.15.1-r4, RS Connect 36.15.1-r5, RS Connect 36.15.1-r6.
     // RS Connect 36.16.0 — gerenciamento nativo da Evolution API.
     // RS Connect 36.16.1 — gerenciamento da Evolution pelo administrador do cliente.
-    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql e 076_evolution_instance_management.sql.
+    // RS Connect 36.17.0 — roteamento econômico de contexto e saída de IA.
+    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql e 077_ai_efficiency_foundation.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.1';
-    public const PACKAGE_LABEL = 'RS Connect 36.16.3 — Menu dedicado para consumo oficial OpenAI';
-    public const REQUIRED_MIGRATION = '076_evolution_instance_management.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.17.0 — Eficiência e economia de tokens de IA';
+    public const REQUIRED_MIGRATION = '077_ai_efficiency_foundation.sql';
 
     private PDO $pdo;
 
@@ -118,7 +119,7 @@ final class AppVersionService
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 074, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 077, conforme o pacote implantado.'
         );
 
         $monitoringReady = $this->tableExists('operational_monitor_runs')
@@ -296,6 +297,18 @@ final class AppVersionService
                 ? 'Interações entregues, chamadas ao provedor, tokens e custo estimado podem ser auditados separadamente.'
                 : 'A estrutura de telemetria detalhada da IA ainda não foi aplicada.',
             'Executar database/migrations/054_ai_metrics_and_delivery_telemetry.sql.'
+        );
+
+        $aiEfficiencyReady = $this->columnExists('ai_agents', 'ai_efficiency_mode')
+            && $this->columnExists('ai_agents', 'ai_selective_knowledge')
+            && $this->columnExists('ai_usage_events', 'estimated_input_tokens_avoided');
+        $checks[] = $this->check(
+            'Eficiência de contexto da IA',
+            $aiEfficiencyReady ? 'ok' : 'blocked',
+            $aiEfficiencyReady
+                ? 'Perfis Econômico, Equilibrado e Qualidade controlam histórico, base e saída com telemetria de economia.'
+                : 'A camada de economia de contexto e a medição de tokens evitados ainda não foram aplicadas.',
+            'Executar database/migrations/077_ai_efficiency_foundation.sql.'
         );
 
         $multiChannelReady = $this->tableExists('ai_agent_instance_bindings')

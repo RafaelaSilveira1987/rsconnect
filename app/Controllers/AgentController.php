@@ -152,6 +152,10 @@ final class AgentController
         $knowledgeBase = trim((string) ($_POST['knowledge_base'] ?? ''));
         $handoffKeywords = trim((string) ($_POST['handoff_keywords'] ?? 'humano, atendente, pessoa, suporte'));
         $maxContextMessages = max(4, min(30, (int) ($_POST['max_context_messages'] ?? 12)));
+        $aiEfficiencyMode = $this->aiEfficiencyModeFromPost();
+        $aiMaxOutputTokens = $this->nullableIntFromPost('ai_max_output_tokens', 64, 2000);
+        $aiKnowledgeBudgetChars = $this->nullableIntFromPost('ai_knowledge_budget_chars', 1000, 120000);
+        $aiSelectiveKnowledge = isset($_POST['ai_selective_knowledge']);
         $n8nWebhookUrl = trim((string) ($_POST['n8n_webhook_url'] ?? ''));
         $autoReplyEnabled = isset($_POST['auto_reply_enabled']);
         $n8nEnabled = isset($_POST['n8n_enabled']);
@@ -196,12 +200,12 @@ final class AgentController
                 'INSERT INTO ai_agents
                     (tenant_id, instance_id, name, segment, model_provider, model_name, temperature, system_prompt,
                      status, is_default, auto_reply_enabled, handoff_keywords, max_context_messages,
-                     knowledge_base, n8n_enabled, n8n_webhook_url, business_hours_enabled, business_timezone,
+                     ai_efficiency_mode, ai_max_output_tokens, ai_knowledge_budget_chars, ai_selective_knowledge, knowledge_base, n8n_enabled, n8n_webhook_url, business_hours_enabled, business_timezone,
                      business_hours_json, after_hours_message, human_handoff_message, handoff_action, cooldown_seconds, reply_to_reactions)
                  VALUES
                     (:tenant_id, :instance_id, :name, :segment, :provider, :model, :temperature, :prompt,
                      "active", :is_default, :auto_reply_enabled, :handoff_keywords, :max_context_messages,
-                     :knowledge_base, :n8n_enabled, :n8n_webhook_url, :business_hours_enabled, :business_timezone,
+                     :ai_efficiency_mode, :ai_max_output_tokens, :ai_knowledge_budget_chars, :ai_selective_knowledge, :knowledge_base, :n8n_enabled, :n8n_webhook_url, :business_hours_enabled, :business_timezone,
                      :business_hours_json, :after_hours_message, :human_handoff_message, :handoff_action, :cooldown_seconds, :reply_to_reactions)'
             );
             $insert->execute([
@@ -217,6 +221,10 @@ final class AgentController
                 'auto_reply_enabled' => $autoReplyEnabled ? 1 : 0,
                 'handoff_keywords' => $handoffKeywords !== '' ? $handoffKeywords : null,
                 'max_context_messages' => $maxContextMessages,
+                'ai_efficiency_mode' => $aiEfficiencyMode,
+                'ai_max_output_tokens' => $aiMaxOutputTokens,
+                'ai_knowledge_budget_chars' => $aiKnowledgeBudgetChars,
+                'ai_selective_knowledge' => $aiSelectiveKnowledge ? 1 : 0,
                 'knowledge_base' => $knowledgeBase !== '' ? $knowledgeBase : null,
                 'n8n_enabled' => $n8nEnabled ? 1 : 0,
                 'n8n_webhook_url' => $n8nWebhookUrl !== '' ? $n8nWebhookUrl : null,
@@ -300,6 +308,10 @@ final class AgentController
         $n8nEnabled = isset($_POST['n8n_enabled']);
         $handoffKeywords = trim((string) ($_POST['handoff_keywords'] ?? ''));
         $maxContextMessages = max(4, min(30, (int) ($_POST['max_context_messages'] ?? 12)));
+        $aiEfficiencyMode = $this->aiEfficiencyModeFromPost();
+        $aiMaxOutputTokens = $this->nullableIntFromPost('ai_max_output_tokens', 64, 2000);
+        $aiKnowledgeBudgetChars = $this->nullableIntFromPost('ai_knowledge_budget_chars', 1000, 120000);
+        $aiSelectiveKnowledge = isset($_POST['ai_selective_knowledge']);
         $n8nWebhookUrl = trim((string) ($_POST['n8n_webhook_url'] ?? ''));
         $isDefault = isset($_POST['is_default']);
         $replyToReactions = isset($_POST['reply_to_reactions']);
@@ -330,6 +342,10 @@ final class AgentController
                      n8n_enabled = :n8n_enabled,
                      handoff_keywords = :handoff_keywords,
                      max_context_messages = :max_context_messages,
+                     ai_efficiency_mode = :ai_efficiency_mode,
+                     ai_max_output_tokens = :ai_max_output_tokens,
+                     ai_knowledge_budget_chars = :ai_knowledge_budget_chars,
+                     ai_selective_knowledge = :ai_selective_knowledge,
                      n8n_webhook_url = :n8n_webhook_url,
                      business_hours_enabled = :business_hours_enabled,
                      business_timezone = :business_timezone,
@@ -348,6 +364,10 @@ final class AgentController
                 'n8n_enabled' => $n8nEnabled ? 1 : 0,
                 'handoff_keywords' => $handoffKeywords !== '' ? $handoffKeywords : null,
                 'max_context_messages' => $maxContextMessages,
+                'ai_efficiency_mode' => $aiEfficiencyMode,
+                'ai_max_output_tokens' => $aiMaxOutputTokens,
+                'ai_knowledge_budget_chars' => $aiKnowledgeBudgetChars,
+                'ai_selective_knowledge' => $aiSelectiveKnowledge ? 1 : 0,
                 'n8n_webhook_url' => $n8nWebhookUrl !== '' ? $n8nWebhookUrl : null,
                 'business_hours_enabled' => $business['enabled'],
                 'business_timezone' => $business['timezone'],
@@ -375,6 +395,7 @@ final class AgentController
                 'auto_reply_enabled' => $autoReplyEnabled,
                 'n8n_enabled' => $n8nEnabled,
                 'cooldown_seconds' => $business['cooldown_seconds'],
+                'ai_efficiency_mode' => $aiEfficiencyMode,
             ], $tenantId);
 
             $reprocess = (new AiAutomationService())->reprocessLatestPendingForAgent($tenantId, $agentId);
@@ -736,4 +757,19 @@ final class AgentController
         header('Location: ' . Router::url($path));
         exit;
     }
+    private function aiEfficiencyModeFromPost(): string
+    {
+        $mode = strtolower(trim((string) ($_POST['ai_efficiency_mode'] ?? 'balanced')));
+        return in_array($mode, ['economy', 'balanced', 'quality'], true) ? $mode : 'balanced';
+    }
+
+    private function nullableIntFromPost(string $key, int $min, int $max): ?int
+    {
+        $raw = trim((string) ($_POST[$key] ?? ''));
+        if ($raw === '') {
+            return null;
+        }
+        return max($min, min($max, (int) $raw));
+    }
+
 }
