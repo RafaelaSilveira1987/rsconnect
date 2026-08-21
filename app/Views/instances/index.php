@@ -168,84 +168,161 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
 </section>
 <?php endif; ?>
 
-<aside class="conversation-details conversation-drawer admin-form-drawer" id="instance-drawer" aria-label="Configurar conexão WhatsApp" aria-modal="true" role="dialog">
-    <div class="conversation-drawer-header">
-        <div><span class="eyebrow" data-instance-drawer-eyebrow>Nova conexão</span><h2 data-instance-drawer-title>Criar WhatsApp</h2><p data-instance-drawer-description>Crie a instância na Evolution e conecte o número sem sair do RS Connect.</p></div>
-        <button class="icon-button drawer-close" type="button" data-close-panel="instance-drawer" aria-label="Fechar">×</button>
+<aside class="conversation-details conversation-drawer admin-form-drawer instance-create-drawer" id="instance-drawer" aria-label="Configurar conexão WhatsApp" aria-modal="true" role="dialog">
+    <svg class="instance-icon-sprite" aria-hidden="true" focusable="false">
+        <symbol id="instance-icon-whatsapp" viewBox="0 0 24 24"><path d="M20.5 11.8a8.4 8.4 0 0 1-12.4 7.4L3 20.5l1.4-4.9A8.4 8.4 0 1 1 20.5 11.8Z"/><path d="M8.1 7.6c.2-.5.5-.5.8-.5h.6c.2 0 .4.1.5.4l.8 1.9c.1.3.1.5-.1.7l-.7.8c-.2.2-.1.4 0 .6.7 1.3 1.7 2.3 3 3 .2.1.4.2.6 0l.9-1c.2-.2.4-.3.7-.2l1.9.9c.3.1.4.3.4.5 0 .5-.2 1.5-1 2.1-.6.5-1.4.8-2.3.6-1.5-.3-3.5-1.1-5.4-2.8-1.5-1.4-2.6-3.1-3-4.6-.2-.8.1-1.8.7-2.4Z"/></symbol>
+        <symbol id="instance-icon-id" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16c.8-1.7 1.9-2.6 3.2-2.6s2.4.9 3.2 2.6M14.5 9h4M14.5 13h4"/></symbol>
+        <symbol id="instance-icon-cloud" viewBox="0 0 24 24"><path d="M7.5 18.5h10a4 4 0 0 0 .5-8 6 6 0 0 0-11.5-1.8A4.8 4.8 0 0 0 7.5 18.5Z"/><path d="M12 9.5v6M9.5 12l2.5-2.5 2.5 2.5"/></symbol>
+        <symbol id="instance-icon-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h7M11 17h7"/></symbol>
+        <symbol id="instance-icon-star" viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"/></symbol>
+        <symbol id="instance-icon-webhook" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="7" r="2.5"/><circle cx="12" cy="17" r="2.5"/><path d="M9.2 8.2 11 14M14.8 8.2 13 14M9.5 17h-3a3.5 3.5 0 0 1-3.5-3.5V12"/></symbol>
+        <symbol id="instance-icon-message" viewBox="0 0 24 24"><path d="M4 5.5h16v11H9l-5 3v-14Z"/><path d="M8 9h8M8 13h5"/></symbol>
+        <symbol id="instance-icon-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3.5 19c.7-3.3 2.5-5 5.5-5s4.8 1.7 5.5 5M14.5 14.5c2.9-.5 5 .9 6 4.5"/></symbol>
+        <symbol id="instance-icon-status" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2M4 4l16 16"/></symbol>
+        <symbol id="instance-icon-broadcast" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.5 5.5a9 9 0 0 0 0 13M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
+        <symbol id="instance-icon-news" viewBox="0 0 24 24"><path d="M5 4h13v16H6.5A2.5 2.5 0 0 1 4 17.5V5a1 1 0 0 1 1-1Z"/><path d="M18 7h2v10.5a2.5 2.5 0 0 1-2.5 2.5M8 8h6M8 12h7M8 16h4"/></symbol>
+        <symbol id="instance-icon-send" viewBox="0 0 24 24"><path d="m3 11 18-8-8 18-2-8-8-2Z"/><path d="m11 13 5-5"/></symbol>
+        <symbol id="instance-icon-phone-off" viewBox="0 0 24 24"><path d="M6.6 3.8 9 7.5 7.5 9c1 2.5 3 4.5 5.5 5.5l1.5-1.5 3.7 2.4c.5.3.7.9.5 1.5-.5 1.7-2 2.7-3.8 2.4-5.5-.9-9.8-5.2-10.7-10.7-.3-1.8.7-3.3 2.4-3.8Z"/><path d="M4 4l16 16"/></symbol>
+        <symbol id="instance-icon-wifi" viewBox="0 0 24 24"><path d="M4 9a12 12 0 0 1 16 0M7 12.5a7.5 7.5 0 0 1 10 0M10 16a3 3 0 0 1 4 0"/><circle cx="12" cy="19" r="1"/></symbol>
+        <symbol id="instance-icon-checks" viewBox="0 0 24 24"><path d="m3 12 4 4 7-8M10 16l2 2 9-10"/></symbol>
+        <symbol id="instance-icon-eye" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></symbol>
+        <symbol id="instance-icon-history" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.5"/><path d="M4 4v4.5h4.5M12 8v4l3 2"/></symbol>
+        <symbol id="instance-icon-events" viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></symbol>
+        <symbol id="instance-icon-chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></symbol>
+        <symbol id="instance-icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+        <symbol id="instance-icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    </svg>
+
+    <div class="conversation-drawer-header instance-create-header">
+        <div class="instance-create-heading">
+            <span class="instance-create-logo" aria-hidden="true"><svg><use href="#instance-icon-whatsapp"></use></svg></span>
+            <div>
+                <span class="eyebrow" data-instance-drawer-eyebrow>Nova conexão</span>
+                <h2 data-instance-drawer-title>Criar WhatsApp</h2>
+                <p data-instance-drawer-description>Crie a instância na Evolution e conecte o número sem sair do RS Connect.</p>
+            </div>
+        </div>
+        <button class="icon-button drawer-close instance-create-close" type="button" data-close-panel="instance-drawer" aria-label="Fechar">×</button>
     </div>
-    <div class="conversation-drawer-body">
-        <form class="drawer-form" method="post" action="<?= View::e(Router::url('/instances')) ?>" data-instance-form data-create-action="<?= View::e(Router::url('/instances')) ?>" data-update-action="<?= View::e(Router::url('/instances/update')) ?>">
+    <div class="conversation-drawer-body instance-create-body">
+        <form class="drawer-form instance-create-form" method="post" action="<?= View::e(Router::url('/instances')) ?>" data-instance-form data-create-action="<?= View::e(Router::url('/instances')) ?>" data-update-action="<?= View::e(Router::url('/instances/update')) ?>">
             <?= Csrf::input() ?><input type="hidden" name="instance_id" value="0" data-instance-field="id">
-            <section class="drawer-section">
-                <div class="drawer-section-title"><div><span class="eyebrow">1. Cliente</span><h3>Empresa e identificação</h3></div></div>
-                <div class="drawer-form-grid">
+
+            <section class="drawer-section instance-create-section">
+                <div class="drawer-section-title instance-step-title">
+                    <span class="instance-step-number">1</span>
+                    <span class="instance-step-icon" aria-hidden="true"><svg><use href="#instance-icon-id"></use></svg></span>
+                    <div><span class="eyebrow">Identificação</span><h3>Empresa e conexão</h3><p>Use nomes claros para localizar este canal depois.</p></div>
+                </div>
+                <div class="drawer-form-grid instance-form-grid">
                     <?php if ($isSuperAdmin): ?>
                         <label class="field drawer-span" data-instance-tenant-field><span>Empresa</span><select name="tenant_id" data-instance-field="tenant_id" required><option value="">Selecione</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>"><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select></label>
                     <?php else: ?>
                         <div hidden data-instance-tenant-field><input type="hidden" name="tenant_id" value="<?= (int) Auth::tenantId() ?>" data-instance-field="tenant_id"></div>
                     <?php endif; ?>
-                    <label class="field"><span>Nome interno</span><input name="name" data-instance-field="name" placeholder="WhatsApp Comercial" required></label>
-                    <label class="field"><span>Identificador na Evolution</span><input name="instance_name" data-instance-field="instance_name" placeholder="cliente-comercial" pattern="[A-Za-z0-9._-]{2,120}" required><small class="field-hint">Sem espaços; use letras, números, hífen ou sublinhado.</small></label>
+                    <label class="field"><span>Nome interno</span><input name="name" data-instance-field="name" placeholder="Ex.: WhatsApp Comercial" autocomplete="off" required><small class="field-hint">Nome que aparecerá para sua equipe.</small></label>
+                    <label class="field"><span>Identificador na Evolution</span><input name="instance_name" data-instance-field="instance_name" placeholder="Ex.: empresa-comercial" pattern="[A-Za-z0-9._-]{2,120}" autocomplete="off" required><small class="field-hint">Sem espaços; use letras, números, hífen ou sublinhado.</small></label>
                 </div>
             </section>
-            <section class="drawer-section" data-instance-create-only>
-                <div class="drawer-section-title"><div><span class="eyebrow">2. Provisionamento</span><h3><?= $isSuperAdmin ? 'Criar ou vincular na Evolution' : 'Criação automática da conexão' ?></h3></div></div>
-                <div class="drawer-form-grid">
+
+            <section class="drawer-section instance-create-section" data-instance-create-only>
+                <div class="drawer-section-title instance-step-title">
+                    <span class="instance-step-number">2</span>
+                    <span class="instance-step-icon" aria-hidden="true"><svg><use href="#instance-icon-cloud"></use></svg></span>
+                    <div><span class="eyebrow">Provisionamento</span><h3><?= $isSuperAdmin ? 'Criar ou vincular na Evolution' : 'Criação automática da conexão' ?></h3><p>O RS Connect prepara a instância e abre o QR Code para conexão.</p></div>
+                </div>
+                <div class="drawer-form-grid instance-form-grid">
                     <?php if ($isSuperAdmin): ?>
-                        <label class="check-field drawer-check drawer-span"><input type="checkbox" name="create_in_evolution" value="1" checked data-instance-field="create_in_evolution"><span><strong>Criar automaticamente na Evolution</strong><small>Desmarque somente para vincular uma instância que já existe.</small></span></label>
+                        <label class="instance-choice-card instance-choice-featured drawer-span">
+                            <input type="checkbox" name="create_in_evolution" value="1" checked data-instance-field="create_in_evolution">
+                            <span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-cloud"></use></svg></span><span class="instance-choice-copy"><strong>Criar automaticamente na Evolution</strong><small>Desmarque somente para vincular uma instância que já existe.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span>
+                        </label>
                         <label class="field"><span>Integração</span><select name="integration" data-instance-field="integration"><option value="WHATSAPP-BAILEYS">WhatsApp via QR Code (Baileys)</option><option value="WHATSAPP-BUSINESS">WhatsApp Business Cloud</option></select></label>
                     <?php else: ?>
                         <input type="hidden" name="create_in_evolution" value="1" data-instance-field="create_in_evolution">
                         <input type="hidden" name="integration" value="WHATSAPP-BAILEYS" data-instance-field="integration">
-                        <div class="drawer-span admin-danger-message is-info"><strong>Conexão independente</strong><span>O RS Connect criará a instância, aplicará o webhook e abrirá o QR Code. As credenciais da Evolution permanecem protegidas.</span></div>
+                        <div class="drawer-span instance-provision-note"><span class="instance-provision-note-icon"><svg><use href="#instance-icon-cloud"></use></svg></span><span><strong>Conexão independente</strong><small>O RS Connect criará a instância, aplicará o webhook e abrirá o QR Code. As credenciais da Evolution permanecem protegidas.</small></span></div>
                     <?php endif; ?>
-                    <label class="field"><span>Número com DDI — opcional</span><input name="phone_number" inputmode="numeric" placeholder="5532999999999"></label>
+                    <label class="field"><span>Número com DDI — opcional</span><input name="phone_number" inputmode="numeric" placeholder="Ex.: 5532999999999" autocomplete="tel"><small class="field-hint">Pode ser informado depois da leitura do QR Code.</small></label>
                 </div>
             </section>
+
             <?php if ($isSuperAdmin): ?>
-                <section class="drawer-section">
-                    <div class="drawer-section-title"><div><span class="eyebrow">3. Servidor</span><h3>Acesso protegido à Evolution</h3></div></div>
-                    <div class="drawer-form-grid">
+                <section class="drawer-section instance-create-section">
+                    <div class="drawer-section-title instance-step-title">
+                        <span class="instance-step-number">3</span>
+                        <span class="instance-step-icon" aria-hidden="true"><svg><use href="#instance-icon-server"></use></svg></span>
+                        <div><span class="eyebrow">Servidor</span><h3>Acesso protegido à Evolution</h3><p>Credenciais técnicas ficam visíveis somente no suporte RS Connect.</p></div>
+                    </div>
+                    <div class="drawer-form-grid instance-form-grid">
                         <label class="field drawer-span"><span>URL base</span><input type="url" name="base_url" data-instance-field="base_url" value="<?= View::e($defaultUrl) ?>" placeholder="https://evolution.seudominio.com" required></label>
-                        <label class="field drawer-span"><span data-instance-api-label>API Key global</span><input type="password" name="api_key" data-instance-field="api_key" placeholder="Use a chave do .env ou informe outra"><small class="field-hint" data-instance-api-hint>Se EVOLUTION_DEFAULT_API_KEY estiver configurada, este campo pode ficar vazio.</small></label>
-                        <label class="check-field drawer-check"><input type="checkbox" name="is_default" value="1" data-instance-field="is_default"><span>Definir como conexão padrão</span></label>
+                        <label class="field drawer-span"><span data-instance-api-label>API Key global</span><input type="password" name="api_key" data-instance-field="api_key" placeholder="Use a chave do .env ou informe outra" autocomplete="new-password"><small class="field-hint" data-instance-api-hint>Se EVOLUTION_DEFAULT_API_KEY estiver configurada, este campo pode ficar vazio.</small></label>
+                        <label class="instance-choice-card instance-choice-featured drawer-span">
+                            <input type="checkbox" name="is_default" value="1" data-instance-field="is_default">
+                            <span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-star"></use></svg></span><span class="instance-choice-copy"><strong>Definir como conexão padrão</strong><small>Novas operações usarão este canal quando nenhuma conexão específica for escolhida.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span>
+                        </label>
                     </div>
                 </section>
             <?php else: ?>
                 <input type="hidden" name="base_url" value="" data-instance-field="base_url">
                 <input type="hidden" name="api_key" value="" data-instance-field="api_key">
-                <section class="drawer-section">
-                    <div class="drawer-section-title"><div><span class="eyebrow">3. Preferência</span><h3>Canal principal da empresa</h3></div></div>
-                    <label class="check-field drawer-check"><input type="checkbox" name="is_default" value="1" data-instance-field="is_default"><span><strong>Definir como conexão padrão</strong><small>Novas operações usarão este canal quando nenhuma conexão específica for escolhida.</small></span></label>
+                <section class="drawer-section instance-create-section instance-preference-section">
+                    <div class="drawer-section-title instance-step-title">
+                        <span class="instance-step-number">3</span>
+                        <span class="instance-step-icon" aria-hidden="true"><svg><use href="#instance-icon-star"></use></svg></span>
+                        <div><span class="eyebrow">Preferência</span><h3>Canal principal da empresa</h3><p>Escolha se esta conexão será usada como padrão nas novas operações.</p></div>
+                    </div>
+                    <label class="instance-choice-card instance-choice-featured">
+                        <input type="checkbox" name="is_default" value="1" data-instance-field="is_default">
+                        <span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-star"></use></svg></span><span class="instance-choice-copy"><strong>Definir como conexão padrão</strong><small>Novas operações usarão este canal quando nenhuma conexão específica for escolhida.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span>
+                    </label>
                 </section>
             <?php endif; ?>
-            <section class="drawer-section" data-instance-create-only>
-                <div class="drawer-section-title"><div><span class="eyebrow">4. Comportamento inicial</span><h3>Mensagens, grupos e chamadas</h3></div></div>
-                <div class="instance-option-grid">
-                    <label class="check-field"><input type="checkbox" name="webhook_enabled" value="1" checked><span>Ativar webhook do RS Connect</span></label>
-                    <label class="check-field"><input type="checkbox" name="receive_messages" value="1" checked><span>Receber novas mensagens</span></label>
-                    <label class="check-field"><input type="checkbox" name="ignore_groups" value="1" checked><span>Ignorar grupos</span></label>
-                    <label class="check-field"><input type="checkbox" name="ignore_status" value="1" checked><span>Ignorar status</span></label>
-                    <label class="check-field"><input type="checkbox" name="ignore_broadcast" value="1" checked><span>Ignorar listas de transmissão</span></label>
-                    <label class="check-field"><input type="checkbox" name="ignore_newsletters" value="1" checked><span>Ignorar canais/newsletters</span></label>
-                    <label class="check-field"><input type="checkbox" name="ignore_from_me" value="1"><span>Ignorar mensagens enviadas pelo próprio número</span></label>
-                    <label class="check-field"><input type="checkbox" name="reject_calls" value="1"><span>Rejeitar chamadas</span></label>
-                    <label class="check-field"><input type="checkbox" name="always_online" value="1"><span>Manter sempre online</span></label>
-                    <label class="check-field"><input type="checkbox" name="read_messages" value="1"><span>Marcar mensagens como lidas</span></label>
-                    <label class="check-field"><input type="checkbox" name="read_status" value="1"><span>Marcar status como visualizado</span></label>
-                    <label class="check-field"><input type="checkbox" name="sync_full_history" value="1"><span>Sincronizar histórico completo</span></label>
+
+            <section class="drawer-section instance-create-section" data-instance-create-only>
+                <div class="drawer-section-title instance-step-title">
+                    <span class="instance-step-number">4</span>
+                    <span class="instance-step-icon" aria-hidden="true"><svg><use href="#instance-icon-message"></use></svg></span>
+                    <div><span class="eyebrow">Comportamento inicial</span><h3>Mensagens, grupos e chamadas</h3><p>As opções recomendadas já vêm ativadas para evitar ruído no atendimento.</p></div>
                 </div>
-                <label class="field"><span>Mensagem ao rejeitar chamadas</span><input name="reject_call_message" value="Este número não recebe chamadas. Envie uma mensagem por WhatsApp."></label>
-            </section>
-            <section class="drawer-section" data-instance-create-only>
-                <div class="drawer-section-title"><div><span class="eyebrow">5. Eventos</span><h3>O que a Evolution enviará ao RS Connect</h3></div></div>
-                <div class="instance-event-grid">
-                    <?php foreach ($allowedWebhookEvents as $event): ?>
-                        <label class="check-field"><input type="checkbox" name="webhook_events[]" value="<?= View::e($event) ?>" <?= in_array($event, ['MESSAGES_UPSERT','MESSAGES_UPDATE','CONNECTION_UPDATE','QRCODE_UPDATED','CONTACTS_UPSERT'], true) ? 'checked' : '' ?>><span><?= View::e($eventLabels[$event] ?? $event) ?></span></label>
-                    <?php endforeach; ?>
+                <div class="instance-option-grid instance-choice-grid">
+                    <label class="instance-choice-card"><input type="checkbox" name="webhook_enabled" value="1" checked><span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-webhook"></use></svg></span><span class="instance-choice-copy"><strong>Ativar webhook do RS Connect</strong><small>Receba eventos e atualizações em tempo real.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span></label>
+                    <label class="instance-choice-card"><input type="checkbox" name="receive_messages" value="1" checked><span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-message"></use></svg></span><span class="instance-choice-copy"><strong>Receber novas mensagens</strong><small>Crie conversas quando novas mensagens chegarem.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span></label>
+                    <label class="instance-choice-card"><input type="checkbox" name="ignore_groups" value="1" checked><span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-users"></use></svg></span><span class="instance-choice-copy"><strong>Ignorar grupos</strong><small>Não transforme mensagens de grupos em atendimentos.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span></label>
+                    <label class="instance-choice-card"><input type="checkbox" name="ignore_status" value="1" checked><span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-status"></use></svg></span><span class="instance-choice-copy"><strong>Ignorar status</strong><small>Descarte atualizações do status do WhatsApp.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span></label>
+                    <label class="instance-choice-card"><input type="checkbox" name="ignore_broadcast" value="1" checked><span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-broadcast"></use></svg></span><span class="instance-choice-copy"><strong>Ignorar listas de transmissão</strong><small>Não processe mensagens enviadas por listas.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span></label>
+                    <label class="instance-choice-card"><input type="checkbox" name="ignore_newsletters" value="1" checked><span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-news"></use></svg></span><span class="instance-choice-copy"><strong>Ignorar canais e newsletters</strong><small>Evite criar conversas para conteúdos informativos.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span></label>
+                    <label class="instance-choice-card"><input type="checkbox" name="ignore_from_me" value="1"><span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-send"></use></svg></span><span class="instance-choice-copy"><strong>Ignorar mensagens próprias</strong><small>Evite duplicar mensagens enviadas pelo próprio número.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span></label>
+                    <label class="instance-choice-card"><input type="checkbox" name="reject_calls" value="1" data-instance-reject-toggle><span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-phone-off"></use></svg></span><span class="instance-choice-copy"><strong>Rejeitar chamadas</strong><small>Recuse ligações e oriente o contato por mensagem.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span></label>
+                    <label class="instance-choice-card"><input type="checkbox" name="always_online" value="1"><span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-wifi"></use></svg></span><span class="instance-choice-copy"><strong>Manter sempre online</strong><small>Mantenha a sessão disponível no WhatsApp.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span></label>
+                    <label class="instance-choice-card"><input type="checkbox" name="read_messages" value="1"><span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-checks"></use></svg></span><span class="instance-choice-copy"><strong>Marcar mensagens como lidas</strong><small>Confirme automaticamente a leitura das mensagens.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span></label>
+                    <label class="instance-choice-card"><input type="checkbox" name="read_status" value="1"><span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-eye"></use></svg></span><span class="instance-choice-copy"><strong>Visualizar status automaticamente</strong><small>Marque atualizações de status como visualizadas.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span></label>
+                    <label class="instance-choice-card"><input type="checkbox" name="sync_full_history" value="1"><span class="instance-choice-ui"><span class="instance-choice-icon"><svg><use href="#instance-icon-history"></use></svg></span><span class="instance-choice-copy"><strong>Sincronizar histórico completo</strong><small>Importe conversas anteriores ao conectar o número.</small></span><span class="instance-choice-state"><svg><use href="#instance-icon-check"></use></svg></span></span></label>
                 </div>
+                <label class="field instance-dependent-field" data-instance-reject-message-wrap hidden><span>Mensagem ao rejeitar chamadas</span><input name="reject_call_message" value="Este número não recebe chamadas. Envie uma mensagem por WhatsApp." data-instance-reject-message disabled><small class="field-hint">Esta mensagem será enviada quando uma ligação for recusada.</small></label>
             </section>
-            <div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="instance-drawer">Cancelar</button><button class="btn btn-primary" type="submit" data-instance-submit>Criar conexão</button></div>
+
+            <details class="drawer-section instance-create-section instance-advanced-section" data-instance-create-only>
+                <summary class="instance-advanced-summary">
+                    <span class="instance-step-number">5</span>
+                    <span class="instance-step-icon" aria-hidden="true"><svg><use href="#instance-icon-events"></use></svg></span>
+                    <span class="instance-advanced-copy"><span class="eyebrow">Eventos avançados</span><strong>O que a Evolution enviará ao RS Connect</strong><small><span data-instance-event-count>5 eventos selecionados</span>. Os essenciais já estão configurados.</small></span>
+                    <span class="instance-advanced-chevron" aria-hidden="true"><svg><use href="#instance-icon-chevron"></use></svg></span>
+                </summary>
+                <div class="instance-advanced-body">
+                    <p>Altere esta seleção somente quando sua operação precisar de contatos, presença, grupos ou outros eventos específicos.</p>
+                    <div class="instance-event-grid">
+                        <?php foreach ($allowedWebhookEvents as $event): ?>
+                            <label class="instance-event-card"><input type="checkbox" name="webhook_events[]" value="<?= View::e($event) ?>" <?= in_array($event, ['MESSAGES_UPSERT','MESSAGES_UPDATE','CONNECTION_UPDATE','QRCODE_UPDATED','CONTACTS_UPSERT'], true) ? 'checked' : '' ?> data-instance-create-event><span><strong><?= View::e($eventLabels[$event] ?? $event) ?></strong><small><?= View::e($event) ?></small></span><span class="instance-event-check"><svg><use href="#instance-icon-check"></use></svg></span></label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </details>
+
+            <div class="drawer-savebar instance-create-savebar">
+                <button class="btn btn-quiet" type="button" data-close-panel="instance-drawer">Cancelar</button>
+                <button class="btn btn-primary instance-create-submit" type="submit" data-instance-submit><svg aria-hidden="true"><use href="#instance-icon-plus"></use></svg><span data-instance-submit-label>Criar conexão</span></button>
+            </div>
         </form>
     </div>
 </aside>

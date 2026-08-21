@@ -1481,6 +1481,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const description = instanceDrawer.querySelector('[data-instance-drawer-description]');
     const apiHint = instanceDrawer.querySelector('[data-instance-api-hint]');
     const submit = instanceDrawer.querySelector('[data-instance-submit]');
+    const submitLabel = submit?.querySelector('[data-instance-submit-label]');
+    const rejectToggle = instanceForm.querySelector('[data-instance-reject-toggle]');
+    const rejectMessageWrap = instanceForm.querySelector('[data-instance-reject-message-wrap]');
+    const rejectMessage = instanceForm.querySelector('[data-instance-reject-message]');
+    const eventInputs = Array.from(instanceForm.querySelectorAll('[data-instance-create-event]'));
+    const eventCount = instanceForm.querySelector('[data-instance-event-count]');
+    const advancedEvents = instanceForm.querySelector('.instance-advanced-section');
+
+    const setSubmitLabel = (value) => {
+      if (submitLabel) submitLabel.textContent = value;
+      else if (submit) submit.textContent = value;
+    };
+    const syncRejectMessage = () => {
+      const enabled = Boolean(rejectToggle?.checked);
+      if (rejectMessageWrap) rejectMessageWrap.hidden = !enabled;
+      if (rejectMessage) rejectMessage.disabled = !enabled;
+    };
+    const syncEventCount = () => {
+      if (!eventCount) return;
+      const selected = eventInputs.filter((input) => input.checked).length;
+      eventCount.textContent = `${selected} evento${selected === 1 ? '' : 's'} selecionado${selected === 1 ? '' : 's'}`;
+    };
+    const syncDrawerState = () => {
+      document.body.classList.toggle('has-instance-create-drawer', instanceDrawer.classList.contains('is-open'));
+    };
+    new MutationObserver(syncDrawerState).observe(instanceDrawer, { attributes: true, attributeFilter: ['class'] });
+    rejectToggle?.addEventListener('change', syncRejectMessage);
+    eventInputs.forEach((input) => input.addEventListener('change', syncEventCount));
 
     const reset = () => {
       instanceForm.reset();
@@ -1496,7 +1524,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (title) title.textContent = 'Criar WhatsApp';
       if (description) description.textContent = 'Crie a instância na Evolution e conecte o número sem sair do RS Connect.';
       if (apiHint) apiHint.textContent = 'Se EVOLUTION_DEFAULT_API_KEY estiver configurada, este campo pode ficar vazio.';
-      if (submit) submit.textContent = 'Criar conexão';
+      setSubmitLabel('Criar conexão');
+      submit?.classList.remove('is-submitting');
+      if (submit) submit.disabled = false;
+      syncRejectMessage();
+      syncEventCount();
+      if (advancedEvents) advancedEvents.open = false;
     };
 
     document.querySelectorAll('[data-instance-open]').forEach((button) => {
@@ -1525,10 +1558,28 @@ document.addEventListener('DOMContentLoaded', () => {
           ? 'A instância é gerenciada pelo RS Connect. O identificador remoto permanece bloqueado para evitar perda de vínculo.'
           : 'Atualize o cadastro local sem perder os vínculos existentes.';
         if (apiHint) apiHint.textContent = 'Deixe em branco para manter a chave atual.';
-        if (submit) submit.textContent = 'Salvar alterações';
+        setSubmitLabel('Salvar alterações');
+        submit?.classList.remove('is-submitting');
+        if (submit) submit.disabled = false;
+        syncRejectMessage();
       });
     });
+
+    instanceForm.addEventListener('submit', (event) => {
+      if (!instanceForm.checkValidity()) return;
+      if (submit?.disabled) {
+        event.preventDefault();
+        return;
+      }
+      if (submit) {
+        submit.disabled = true;
+        submit.classList.add('is-submitting');
+      }
+      setSubmitLabel(field('id')?.value && field('id').value !== '0' ? 'Salvando...' : 'Criando conexão...');
+    });
+
     reset();
+    syncDrawerState();
   }
 
   const settingsDrawer = document.getElementById('instance-settings-drawer');

@@ -1,4 +1,18 @@
-# RS Connect — v36.17.0
+# RS Connect — v36.17.1
+
+A v36.17.1 reorganiza diretamente no código a tela **Canais WhatsApp → Nova conexão**. O formulário agora possui etapas mais claras, opções em cards selecionáveis, informações auxiliares, eventos avançados recolhíveis, mensagem de rejeição exibida somente quando necessária e rodapé fixo mais estável em desktop e celular.
+
+Não existe nova migration. A estrutura de banco continua até:
+
+`database/migrations/077_ai_efficiency_foundation.sql`
+
+Validação específica:
+
+`php tests/instance-create-layout-v36171-smoke.php`
+
+Roteiro completo: `INSTRUCOES-v36.17.1.md`.
+
+## Histórico v36.17.0
 
 A v36.17.0 adiciona uma camada central de **eficiência de IA**. Cada assistente pode operar em modo Econômico, Equilibrado ou Qualidade máxima; o RS Connect limita o histórico enviado, seleciona localmente os trechos relevantes da base de conhecimento, controla a saída máxima e registra uma estimativa de tokens de entrada evitados. O modelo atual é preservado por padrão.
 

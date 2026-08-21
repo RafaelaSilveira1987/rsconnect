@@ -17,9 +17,10 @@ final class AppVersionService
     // RS Connect 36.16.0 — gerenciamento nativo da Evolution API.
     // RS Connect 36.16.1 — gerenciamento da Evolution pelo administrador do cliente.
     // RS Connect 36.17.0 — roteamento econômico de contexto e saída de IA.
+    // RS Connect 36.17.1 — novo layout responsivo da criação de instância Evolution.
     // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql e 077_ai_efficiency_foundation.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.1';
-    public const PACKAGE_LABEL = 'RS Connect 36.17.0 — Eficiência e economia de tokens de IA';
+    public const PACKAGE_LABEL = 'RS Connect 36.17.1 — Nova experiência para criar conexões WhatsApp';
     public const REQUIRED_MIGRATION = '077_ai_efficiency_foundation.sql';
 
     private PDO $pdo;
