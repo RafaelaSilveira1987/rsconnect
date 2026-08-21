@@ -221,13 +221,48 @@ final class EvolutionService
             'number' => $this->normalizePhone($phone),
         ], 'fetchProfilePictureUrl');
         $body = is_array($result['body'] ?? null) ? $result['body'] : [];
-        $url = trim((string) ($body['profilePictureUrl'] ?? $body['profilePicUrl'] ?? $body['url'] ?? ''));
+        $url = $this->extractProfilePictureUrl($body);
 
         if ($url === '' || !preg_match('#^https?://#i', $url)) {
             return null;
         }
 
         return mb_substr($url, 0, 500);
+    }
+
+    /** @param array<string|int,mixed> $payload */
+    private function extractProfilePictureUrl(array $payload): string
+    {
+        foreach (['profilePictureUrl', 'profilePicUrl', 'url'] as $key) {
+            $candidate = $payload[$key] ?? null;
+            if (is_string($candidate) && preg_match('#^https?://#i', trim($candidate))) {
+                return trim($candidate);
+            }
+        }
+
+        foreach (['data', 'response', 'result', 'contact'] as $key) {
+            $nested = $payload[$key] ?? null;
+            if (is_array($nested)) {
+                $url = $this->extractProfilePictureUrl($nested);
+                if ($url !== '') {
+                    return $url;
+                }
+            }
+        }
+
+        if (array_is_list($payload)) {
+            foreach ($payload as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $url = $this->extractProfilePictureUrl($item);
+                if ($url !== '') {
+                    return $url;
+                }
+            }
+        }
+
+        return '';
     }
 
     /** @param array<string,mixed> $body */

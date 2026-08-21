@@ -313,7 +313,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
                     <p>Altere esta seleção somente quando sua operação precisar de contatos, presença, grupos ou outros eventos específicos.</p>
                     <div class="instance-event-grid">
                         <?php foreach ($allowedWebhookEvents as $event): ?>
-                            <label class="instance-event-card"><input type="checkbox" name="webhook_events[]" value="<?= View::e($event) ?>" <?= in_array($event, ['MESSAGES_UPSERT','MESSAGES_UPDATE','CONNECTION_UPDATE','QRCODE_UPDATED','CONTACTS_UPSERT'], true) ? 'checked' : '' ?> data-instance-create-event><span><strong><?= View::e($eventLabels[$event] ?? $event) ?></strong><small><?= View::e($event) ?></small></span><span class="instance-event-check"><svg><use href="#instance-icon-check"></use></svg></span></label>
+                            <label class="instance-event-card"><input type="checkbox" name="webhook_events[]" value="<?= View::e($event) ?>" <?= in_array($event, ['MESSAGES_UPSERT','MESSAGES_UPDATE','CONNECTION_UPDATE','QRCODE_UPDATED','CONTACTS_UPSERT','CONTACTS_UPDATE'], true) ? 'checked' : '' ?> data-instance-create-event><span><strong><?= View::e($eventLabels[$event] ?? $event) ?></strong><small><?= View::e($event) ?></small></span><span class="instance-event-check"><svg><use href="#instance-icon-check"></use></svg></span></label>
                         <?php endforeach; ?>
                     </div>
                 </div>

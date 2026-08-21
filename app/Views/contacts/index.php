@@ -17,6 +17,15 @@ $formatDate = static function (?string $value): string {
         return $value;
     }
 };
+$contactInitial = static function (array $contact): string {
+    $source = trim((string) (($contact['name'] ?? '') ?: ($contact['phone'] ?? 'C')));
+    $initial = mb_substr($source, 0, 1);
+    return $initial !== '' ? mb_strtoupper($initial) : 'C';
+};
+$contactAvatar = static function (array $contact): string {
+    $url = trim((string) ($contact['avatar_url'] ?? ''));
+    return $url !== '' && preg_match('#^https?://#i', $url) ? $url : '';
+};
 $queryBase = [];
 if (($filters['search'] ?? '') !== '') $queryBase['search'] = $filters['search'];
 if (($filters['status'] ?? '') !== '') $queryBase['status'] = $filters['status'];
@@ -162,7 +171,7 @@ $contactsBaseUrl = Router::url('/contacts' . ($queryBase ? '?' . http_build_quer
                     <tr class="<?= $selected && (int) $selected['id'] === (int) $contact['id'] ? 'is-selected' : '' ?>">
                         <td>
                             <div class="person-cell">
-                                <span class="soft-avatar"><?= View::e(mb_strtoupper(mb_substr($contact['name'] ?: $contact['phone'], 0, 1))) ?></span>
+                                <span class="soft-avatar"><span><?= View::e($contactInitial($contact)) ?></span><?php if ($contactAvatar($contact) !== ''): ?><img src="<?= View::e($contactAvatar($contact)) ?>" alt="" loading="lazy" referrerpolicy="no-referrer" data-static-contact-avatar><?php endif; ?></span>
                                 <span><strong><?= View::e($contact['name'] ?: 'Contato sem nome') ?></strong><small><?= View::e($contact['phone']) ?><?= $contact['company'] ? ' · ' . View::e($contact['company']) : '' ?></small></span>
                             </div>
                         </td>
@@ -183,7 +192,7 @@ $contactsBaseUrl = Router::url('/contacts' . ($queryBase ? '?' . http_build_quer
     <aside id="contact-edit-drawer" class="conversation-details conversation-drawer contact-form-drawer is-open" aria-label="Editar contato">
         <div class="conversation-drawer-header">
             <div class="person-cell">
-                <span class="soft-avatar large"><?= View::e(mb_strtoupper(mb_substr($selected['name'] ?: $selected['phone'], 0, 1))) ?></span>
+                <span class="soft-avatar large"><span><?= View::e($contactInitial($selected)) ?></span><?php if ($contactAvatar($selected) !== ''): ?><img src="<?= View::e($contactAvatar($selected)) ?>" alt="" referrerpolicy="no-referrer" data-static-contact-avatar><?php endif; ?></span>
                 <span><span class="eyebrow">Contato</span><h2><?= View::e($selected['name'] ?: 'Contato sem nome') ?></h2><small><?= View::e($selected['phone']) ?></small></span>
             </div>
             <a class="icon-button drawer-close" href="<?= View::e($contactsBaseUrl) ?>" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>

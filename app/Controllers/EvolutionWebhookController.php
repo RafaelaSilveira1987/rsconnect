@@ -81,7 +81,7 @@ final class EvolutionWebhookController
                 $this->respond(200, ['ok' => true, 'event' => $event, 'connection' => $result]);
             }
 
-            if (str_contains($event, 'contacts.upsert')) {
+            if (str_contains($event, 'contacts.upsert') || str_contains($event, 'contacts.update')) {
                 $updated = $this->applyContactsUpsert($instance, $payload);
                 $this->respond(200, ['ok' => true, 'updated_contacts' => $updated]);
             }
@@ -977,12 +977,15 @@ final class EvolutionWebhookController
                 if ($avatar !== '' && !preg_match('#^https?://#i', $avatar)) {
                     $avatar = '';
                 }
-                $pdo->prepare('UPDATE contacts SET avatar_url = :avatar_url WHERE id = :id AND tenant_id = :tenant_id')
-                    ->execute([
-                        'avatar_url' => mb_substr($avatar, 0, 500),
-                        'id' => $contactId,
-                        'tenant_id' => (int) $instance['tenant_id'],
-                    ]);
+                $hasCheckedAt = $this->columnExists($pdo, 'contacts', 'avatar_checked_at');
+                $sql = $hasCheckedAt
+                    ? 'UPDATE contacts SET avatar_url = :avatar_url, avatar_checked_at = NOW() WHERE id = :id AND tenant_id = :tenant_id'
+                    : 'UPDATE contacts SET avatar_url = :avatar_url WHERE id = :id AND tenant_id = :tenant_id';
+                $pdo->prepare($sql)->execute([
+                    'avatar_url' => mb_substr($avatar, 0, 500),
+                    'id' => $contactId,
+                    'tenant_id' => (int) $instance['tenant_id'],
+                ]);
             }
             $updated++;
         }
@@ -993,21 +996,38 @@ final class EvolutionWebhookController
     private function refreshContactAvatarIfMissing(PDO $pdo, array $instance, int $contactId, string $phone): void
     {
         try {
-            $statement = $pdo->prepare('SELECT avatar_url FROM contacts WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+            $hasCheckedAt = $this->columnExists($pdo, 'contacts', 'avatar_checked_at');
+            $statement = $pdo->prepare(
+                $hasCheckedAt
+                    ? 'SELECT avatar_url, avatar_checked_at FROM contacts WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+                    : 'SELECT avatar_url, NULL AS avatar_checked_at FROM contacts WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+            );
             $statement->execute(['id' => $contactId, 'tenant_id' => (int) $instance['tenant_id']]);
-            $current = $statement->fetchColumn();
-            // NULL = nunca consultado. String vazia = consultado e sem foto disponível.
-            if ($current !== null) {
+            $state = $statement->fetch(PDO::FETCH_ASSOC);
+            $current = is_array($state) ? ($state['avatar_url'] ?? null) : null;
+            $checkedAt = is_array($state) && !empty($state['avatar_checked_at'])
+                ? strtotime((string) $state['avatar_checked_at'])
+                : null;
+
+            if ($hasCheckedAt && $checkedAt !== null) {
+                $hasAvatar = is_string($current) && preg_match('#^https?://#i', $current) === 1;
+                $ttl = $hasAvatar ? 86400 : 21600;
+                if ((time() - $checkedAt) < $ttl) {
+                    return;
+                }
+            } elseif (!$hasCheckedAt && $current !== null) {
                 return;
             }
 
             $url = $this->evolutionServiceForInstance($instance)->fetchProfilePictureUrl($phone);
-            $pdo->prepare('UPDATE contacts SET avatar_url = :avatar_url WHERE id = :id AND tenant_id = :tenant_id')
-                ->execute([
-                    'avatar_url' => $url ?? '',
-                    'id' => $contactId,
-                    'tenant_id' => (int) $instance['tenant_id'],
-                ]);
+            $sql = $hasCheckedAt
+                ? 'UPDATE contacts SET avatar_url = :avatar_url, avatar_checked_at = NOW() WHERE id = :id AND tenant_id = :tenant_id'
+                : 'UPDATE contacts SET avatar_url = :avatar_url WHERE id = :id AND tenant_id = :tenant_id';
+            $pdo->prepare($sql)->execute([
+                'avatar_url' => $url ?? '',
+                'id' => $contactId,
+                'tenant_id' => (int) $instance['tenant_id'],
+            ]);
         } catch (Throwable) {
             // Avatar é enriquecimento visual e nunca deve interromper o webhook principal.
         }
@@ -1814,6 +1834,28 @@ final class EvolutionWebhookController
         );
         $statement->execute(['table' => $table]);
         return (int) $statement->fetchColumn() > 0;
+    }
+
+    private function columnExists(PDO $pdo, string $table, string $column): bool
+    {
+        static $cache = [];
+        $key = $table . '.' . $column;
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        try {
+            $statement = $pdo->prepare(
+                'SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = :table
+                   AND COLUMN_NAME = :column'
+            );
+            $statement->execute(['table' => $table, 'column' => $column]);
+            return $cache[$key] = (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return $cache[$key] = false;
+        }
     }
 
     private function extractContent(array $data): array

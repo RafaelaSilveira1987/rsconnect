@@ -182,6 +182,7 @@ CREATE TABLE contacts (
     notes TEXT NULL,
     tags_json JSON NULL,
     avatar_url VARCHAR(500) NULL,
+    avatar_checked_at TIMESTAMP NULL,
     status ENUM('lead', 'customer', 'inactive') NOT NULL DEFAULT 'lead',
     contact_group VARCHAR(40) NOT NULL DEFAULT 'unclassified',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

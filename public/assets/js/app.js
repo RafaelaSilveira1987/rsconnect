@@ -524,12 +524,35 @@ document.addEventListener('DOMContentLoaded', () => {
     root.querySelectorAll?.('[data-contact-avatar]').forEach((image) => {
       if (image.dataset.avatarWired === '1') return;
       image.dataset.avatarWired = '1';
-      image.addEventListener('error', () => image.remove(), { once: true });
+      const handleLoad = () => {
+        const container = image.closest('[data-contact-avatar-container]');
+        if (!container) return;
+        container.dataset.avatarResolved = '1';
+        container.dataset.avatarRetry = '0';
+      };
+      const handleError = () => {
+        const container = image.closest('[data-contact-avatar-container]');
+        image.remove();
+        if (!container || container.dataset.avatarRetry === '1') return;
+        container.dataset.avatarRetry = '1';
+        container.dataset.avatarResolved = '0';
+        fetchConversationAvatar(container, true);
+      };
+      image.addEventListener('load', handleLoad, { once: true });
+      image.addEventListener('error', handleError, { once: true });
+
+      // O script é carregado com defer; a imagem pode ter concluído antes dos listeners.
+      if (image.complete) {
+        if (image.naturalWidth > 0) handleLoad();
+        else handleError();
+      }
     });
   }
 
   function updateAvatar(node, item) {
-    const container = node?.querySelector?.('[data-contact-avatar-container]');
+    const container = node?.matches?.('[data-contact-avatar-container]')
+      ? node
+      : node?.querySelector?.('[data-contact-avatar-container]');
     if (!container) return;
     if (item && Object.prototype.hasOwnProperty.call(item, 'avatar_resolved')) {
       container.dataset.avatarResolved = item.avatar_resolved ? '1' : '0';
@@ -555,19 +578,35 @@ document.addEventListener('DOMContentLoaded', () => {
     wireAvatarImages(container);
   }
 
-  async function fetchConversationAvatar(row) {
-    if (!avatarUrl || !row || row.dataset.avatarLoading === '1') return;
-    const container = row.querySelector('[data-contact-avatar-container]');
-    if (!container || container.dataset.avatarResolved === '1') return;
-    const conversationId = Number(row.dataset.conversationId || 0);
-    const conversationPublicId = String(row.dataset.conversationPublicId || '');
+  async function fetchConversationAvatar(target, force = false) {
+    if (!avatarUrl || !target) return;
+    const container = target.matches?.('[data-contact-avatar-container]')
+      ? target
+      : target.querySelector?.('[data-contact-avatar-container]');
+    if (!container || container.dataset.avatarLoading === '1') return;
+    if (!force && container.dataset.avatarResolved === '1') return;
+
+    const row = container.closest('[data-conversation-row]');
+    const conversationId = Number(
+      container.dataset.conversationId
+      || row?.dataset.conversationId
+      || (container.closest('[data-selected-conversation-panel]') ? selectedConversationId : 0)
+      || 0
+    );
+    const conversationPublicId = String(
+      container.dataset.conversationPublicId
+      || row?.dataset.conversationPublicId
+      || (container.closest('[data-selected-conversation-panel]') ? selectedConversationPublicId : '')
+      || ''
+    );
     if (!conversationId && !conversationPublicId) return;
 
-    row.dataset.avatarLoading = '1';
+    container.dataset.avatarLoading = '1';
     try {
       const params = new URLSearchParams();
       if (conversationPublicId) params.set('conversation_uuid', conversationPublicId);
       else params.set('conversation_id', String(conversationId));
+      if (force) params.set('force', '1');
       const tenantPublicId = currentParams.get('tenant_uuid');
       const tenantId = currentParams.get('tenant_id');
       if (tenantPublicId) params.set('tenant_uuid', tenantPublicId);
@@ -580,16 +619,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!response.ok) return;
       const payload = await response.json();
       const item = {
-        name: row.querySelector('[data-conversation-name]')?.textContent || '',
+        name: row?.querySelector('[data-conversation-name]')?.textContent
+          || document.querySelector('.chat-contact-title h2')?.textContent
+          || '',
         phone: '',
         avatar_url: payload.avatar_url || '',
         avatar_resolved: Boolean(payload.resolved)
       };
-      updateAvatar(row, item);
+      updateAvatar(container, item);
     } catch (_) {
       // Avatar é opcional; a conversa continua com as iniciais.
     } finally {
-      row.dataset.avatarLoading = '0';
+      container.dataset.avatarLoading = '0';
     }
   }
 
@@ -2843,3 +2884,10 @@ document.addEventListener('DOMContentLoaded', function () {
     if (event.target === dialog) dialog.close();
   });
 })();
+
+// RS Connect 36.17.2 — mantém a inicial como fallback quando uma foto estática expira.
+document.querySelectorAll('[data-static-contact-avatar]').forEach((image) => {
+  const hideBrokenImage = () => image.remove();
+  image.addEventListener('error', hideBrokenImage, { once: true });
+  if (image.complete && image.naturalWidth < 1) hideBrokenImage();
+});

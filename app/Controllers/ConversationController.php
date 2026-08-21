@@ -2032,6 +2032,7 @@ final class ConversationController
     public function avatar(): void
     {
         $conversationId = (int) ($_GET['conversation_id'] ?? 0);
+        $forceRefresh = (int) ($_GET['force'] ?? 0) === 1;
         $tenantScope = Auth::isSuperAdmin()
             ? (int) ($_GET['tenant_id'] ?? 0)
             : (int) (Auth::tenantId() ?? 0);
@@ -2045,7 +2046,7 @@ final class ConversationController
             $this->json(['ok' => false, 'message' => 'Conversa não encontrada.'], 404);
         }
 
-        $conversation = $this->refreshSelectedContactAvatar(Database::connection(), $conversation);
+        $conversation = $this->refreshSelectedContactAvatar(Database::connection(), $conversation, $forceRefresh);
         $this->json([
             'ok' => true,
             'conversation_id' => $conversationId,
@@ -2169,32 +2170,85 @@ final class ConversationController
         return $url !== '' && preg_match('#^https?://#i', $url) ? $url : '';
     }
 
-    private function refreshSelectedContactAvatar(PDO $pdo, array $conversation): array
+    private function refreshSelectedContactAvatar(PDO $pdo, array $conversation, bool $force = false): array
     {
-        if ($this->safeAvatarUrl((string) ($conversation['avatar_url'] ?? '')) !== '' || (string) ($conversation['avatar_url'] ?? '') === '') {
-            // string vazia significa que a Evolution já foi consultada e não disponibilizou foto.
-            if (array_key_exists('avatar_url', $conversation) && $conversation['avatar_url'] !== null) {
-                return $conversation;
-            }
-        }
-
         $contactId = (int) ($conversation['contact_id'] ?? 0);
         $phone = trim((string) ($conversation['phone'] ?? ''));
         if ($contactId < 1 || $phone === '') {
             return $conversation;
         }
 
-        try {
-            $url = $this->serviceFor($conversation)->fetchProfilePictureUrl($phone);
-            $stored = $url ?? '';
-            $pdo->prepare('UPDATE contacts SET avatar_url = :avatar_url WHERE id = :id AND tenant_id = :tenant_id')
-                ->execute([
-                    'avatar_url' => $stored,
+        $trackingAvailable = $this->hasColumn($pdo, 'contacts', 'avatar_checked_at');
+        $currentRaw = array_key_exists('avatar_url', $conversation) ? $conversation['avatar_url'] : null;
+        $checkedAt = null;
+
+        if ($trackingAvailable) {
+            try {
+                $state = $pdo->prepare(
+                    'SELECT avatar_url, avatar_checked_at
+                     FROM contacts
+                     WHERE id = :id AND tenant_id = :tenant_id
+                     LIMIT 1'
+                );
+                $state->execute([
                     'id' => $contactId,
                     'tenant_id' => (int) $conversation['tenant_id'],
                 ]);
+                $row = $state->fetch(PDO::FETCH_ASSOC);
+                if (is_array($row)) {
+                    $currentRaw = $row['avatar_url'] ?? null;
+                    $checkedAt = !empty($row['avatar_checked_at']) ? strtotime((string) $row['avatar_checked_at']) : null;
+                    $conversation['avatar_url'] = $currentRaw;
+                }
+            } catch (Throwable) {
+                $trackingAvailable = false;
+            }
+        }
+
+        if (!$force) {
+            $hasUsableAvatar = $this->safeAvatarUrl((string) ($currentRaw ?? '')) !== '';
+
+            if ($trackingAvailable) {
+                // URLs de foto do WhatsApp podem expirar. Renova diariamente quando a conversa é aberta.
+                $ttl = $hasUsableAvatar ? 86400 : 21600;
+                if ($checkedAt !== null && (time() - $checkedAt) < $ttl) {
+                    return $conversation;
+                }
+            } elseif ($hasUsableAvatar || $currentRaw === '') {
+                // Compatibilidade temporária para instalações que ainda não executaram a migration 078.
+                return $conversation;
+            }
+        }
+
+        try {
+            $url = $this->serviceFor($conversation)->fetchProfilePictureUrl($phone);
+            $stored = $url ?? '';
+            $sql = $trackingAvailable
+                ? 'UPDATE contacts SET avatar_url = :avatar_url, avatar_checked_at = NOW() WHERE id = :id AND tenant_id = :tenant_id'
+                : 'UPDATE contacts SET avatar_url = :avatar_url WHERE id = :id AND tenant_id = :tenant_id';
+            $pdo->prepare($sql)->execute([
+                'avatar_url' => $stored,
+                'id' => $contactId,
+                'tenant_id' => (int) $conversation['tenant_id'],
+            ]);
             $conversation['avatar_url'] = $stored;
         } catch (Throwable) {
+            if ($force && $trackingAvailable) {
+                // Evita manter uma URL quebrada em tela e aplica um pequeno cooldown antes de nova tentativa.
+                try {
+                    $pdo->prepare(
+                        'UPDATE contacts
+                         SET avatar_url = "", avatar_checked_at = DATE_SUB(NOW(), INTERVAL 345 MINUTE)
+                         WHERE id = :id AND tenant_id = :tenant_id'
+                    )->execute([
+                        'id' => $contactId,
+                        'tenant_id' => (int) $conversation['tenant_id'],
+                    ]);
+                    $conversation['avatar_url'] = '';
+                } catch (Throwable) {
+                    // A conversa permanece funcional mesmo quando o enriquecimento visual falha.
+                }
+            }
             // Foto é enriquecimento visual; falha da Evolution nunca bloqueia a conversa.
         }
 

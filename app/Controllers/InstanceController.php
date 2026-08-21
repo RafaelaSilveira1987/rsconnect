@@ -26,6 +26,7 @@ final class InstanceController
         'CONNECTION_UPDATE',
         'QRCODE_UPDATED',
         'CONTACTS_UPSERT',
+        'CONTACTS_UPDATE',
     ];
 
     /** @var list<string> */

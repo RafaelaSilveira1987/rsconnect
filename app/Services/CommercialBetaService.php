@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.17.2', 'title' => 'Fotos dos contatos restauradas', 'summary' => 'Renova automaticamente URLs expiradas das fotos do WhatsApp, tenta novamente quando a imagem falha, atualiza alterações recebidas pela Evolution e mantém a inicial apenas quando o contato realmente não disponibiliza foto.'],
             ['version' => '36.17.1', 'title' => 'Criação de WhatsApp reorganizada', 'summary' => 'Reestrutura o modal de novas conexões com etapas claras, opções em cards, eventos avançados recolhíveis, mensagem condicional para chamadas, melhor responsividade e correção dos checkboxes esticados.'],
             ['version' => '36.17.0', 'title' => 'Economia inteligente de tokens', 'summary' => 'Adiciona roteador de IA, perfis Econômico/Equilibrado/Qualidade, histórico enxuto, seleção local de trechos da base e medição estimada de tokens de entrada evitados.'],
             ['version' => '36.15.1-r2', 'title' => 'Proteção para Meta AI e identificadores LID', 'summary' => 'Ignora contatos de sistema sem telefone resolvido, usa JIDs alternativos quando disponíveis e encerra falhas exists:false sem repetir a mesma tentativa a cada minuto.'],
