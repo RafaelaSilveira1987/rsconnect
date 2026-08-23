@@ -300,6 +300,62 @@ final class AiAutomationService
                 }
             }
 
+            // Antes de reservar franquia ou chamar o provedor, tenta respostas determinísticas
+            // configuradas e o cache exato opcional. Essas saídas não consomem tokens.
+            if (!$afterHoursRecovery) {
+                $localReply = (new AiLocalReplyService())->match($agent, $incomingContent);
+                if (!empty($localReply['matched']) && trim((string) ($localReply['reply'] ?? '')) !== '') {
+                    $conversation = $this->conversation($pdo, $conversationId);
+                    if (!$this->conversationAllowsAutomaticReply($conversation)) {
+                        $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.local_rule.skipped', 'skipped', 'Atendimento assumido ou IA pausada antes da resposta local.', null, ['strategy' => 'local_rule']);
+                        return;
+                    }
+                    $reply = trim((string) $localReply['reply']);
+                    $result = $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $reply, 'ai.local_rule', 'Resposta automática enviada por regra local, sem chamada ao provedor.');
+                    $usageService->recordAvoidedAutoReply(
+                        (int) $instance['tenant_id'],
+                        $agent,
+                        $conversationId,
+                        $storedMessageId > 0 ? $storedMessageId : null,
+                        (int) ($result['_stored_message_id'] ?? 0),
+                        'local_rule',
+                        'Regra local: ' . (string) ($localReply['type'] ?? 'configurada')
+                    );
+                    $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.local_rule', 'success', null, $reply, [
+                        'strategy' => 'local_rule',
+                        'rule_type' => $localReply['type'] ?? null,
+                        'provider_call_avoided' => true,
+                    ]);
+                    return;
+                }
+
+                $cacheResult = (new AiExactCacheService())->lookup($pdo, (int) $instance['tenant_id'], $agent, $incomingContent);
+                if (!empty($cacheResult['hit']) && trim((string) ($cacheResult['reply'] ?? '')) !== '') {
+                    $conversation = $this->conversation($pdo, $conversationId);
+                    if (!$this->conversationAllowsAutomaticReply($conversation)) {
+                        $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.cache.skipped', 'skipped', 'Atendimento assumido ou IA pausada antes da resposta em cache.', null, ['strategy' => 'exact_cache']);
+                        return;
+                    }
+                    $reply = trim((string) $cacheResult['reply']);
+                    $result = $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $reply, 'ai.cache.replied', 'Resposta automática reutilizada do cache exato, sem chamada ao provedor.');
+                    $usageService->recordAvoidedAutoReply(
+                        (int) $instance['tenant_id'],
+                        $agent,
+                        $conversationId,
+                        $storedMessageId > 0 ? $storedMessageId : null,
+                        (int) ($result['_stored_message_id'] ?? 0),
+                        'exact_cache',
+                        'Cache exato #' . (int) ($cacheResult['cache_id'] ?? 0)
+                    );
+                    $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.cache.replied', 'success', null, $reply, [
+                        'strategy' => 'exact_cache',
+                        'cache_id' => $cacheResult['cache_id'] ?? null,
+                        'provider_call_avoided' => true,
+                    ]);
+                    return;
+                }
+            }
+
             $aiRoute = (new AiRouterService())->route($agent, $conversation, $incomingContent);
             $generationAgent = array_merge($agent, (array) ($aiRoute['agent_overrides'] ?? []));
 
@@ -397,6 +453,9 @@ final class AiAutomationService
             $result = $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $reply, 'ai.replied', 'Resposta automática enviada pela IA.');
             $usageService->completeAutoReply($usageReservationId, (int) ($result['_stored_message_id'] ?? 0), array_merge($this->ai->lastUsage(), $efficiencyTelemetry));
             $usageReservationId = 0;
+
+            // O cache é opcional, exato e invalidado automaticamente quando prompt, base ou modelo mudam.
+            (new AiExactCacheService())->store($pdo, (int) $instance['tenant_id'], $agent, $incomingContent, $reply);
 
             $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.replied', 'success', null, $reply, [
                 'http_status' => $result['status'] ?? null,

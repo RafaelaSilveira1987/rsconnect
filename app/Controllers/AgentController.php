@@ -156,6 +156,7 @@ final class AgentController
         $aiMaxOutputTokens = $this->nullableIntFromPost('ai_max_output_tokens', 64, 2000);
         $aiKnowledgeBudgetChars = $this->nullableIntFromPost('ai_knowledge_budget_chars', 1000, 120000);
         $aiSelectiveKnowledge = isset($_POST['ai_selective_knowledge']);
+        $localAutomation = $this->aiLocalAutomationFromPost();
         $n8nWebhookUrl = trim((string) ($_POST['n8n_webhook_url'] ?? ''));
         $autoReplyEnabled = isset($_POST['auto_reply_enabled']);
         $n8nEnabled = isset($_POST['n8n_enabled']);
@@ -200,12 +201,16 @@ final class AgentController
                 'INSERT INTO ai_agents
                     (tenant_id, instance_id, name, segment, model_provider, model_name, temperature, system_prompt,
                      status, is_default, auto_reply_enabled, handoff_keywords, max_context_messages,
-                     ai_efficiency_mode, ai_max_output_tokens, ai_knowledge_budget_chars, ai_selective_knowledge, knowledge_base, n8n_enabled, n8n_webhook_url, business_hours_enabled, business_timezone,
+                     ai_efficiency_mode, ai_max_output_tokens, ai_knowledge_budget_chars, ai_selective_knowledge,
+                     ai_local_replies_enabled, ai_greeting_reply, ai_gratitude_reply, ai_farewell_reply, ai_menu_reply,
+                     ai_exact_cache_enabled, ai_exact_cache_ttl_hours, knowledge_base, n8n_enabled, n8n_webhook_url, business_hours_enabled, business_timezone,
                      business_hours_json, after_hours_message, human_handoff_message, handoff_action, cooldown_seconds, reply_to_reactions)
                  VALUES
                     (:tenant_id, :instance_id, :name, :segment, :provider, :model, :temperature, :prompt,
                      "active", :is_default, :auto_reply_enabled, :handoff_keywords, :max_context_messages,
-                     :ai_efficiency_mode, :ai_max_output_tokens, :ai_knowledge_budget_chars, :ai_selective_knowledge, :knowledge_base, :n8n_enabled, :n8n_webhook_url, :business_hours_enabled, :business_timezone,
+                     :ai_efficiency_mode, :ai_max_output_tokens, :ai_knowledge_budget_chars, :ai_selective_knowledge,
+                     :ai_local_replies_enabled, :ai_greeting_reply, :ai_gratitude_reply, :ai_farewell_reply, :ai_menu_reply,
+                     :ai_exact_cache_enabled, :ai_exact_cache_ttl_hours, :knowledge_base, :n8n_enabled, :n8n_webhook_url, :business_hours_enabled, :business_timezone,
                      :business_hours_json, :after_hours_message, :human_handoff_message, :handoff_action, :cooldown_seconds, :reply_to_reactions)'
             );
             $insert->execute([
@@ -225,6 +230,13 @@ final class AgentController
                 'ai_max_output_tokens' => $aiMaxOutputTokens,
                 'ai_knowledge_budget_chars' => $aiKnowledgeBudgetChars,
                 'ai_selective_knowledge' => $aiSelectiveKnowledge ? 1 : 0,
+                'ai_local_replies_enabled' => $localAutomation['enabled'],
+                'ai_greeting_reply' => $localAutomation['greeting'],
+                'ai_gratitude_reply' => $localAutomation['gratitude'],
+                'ai_farewell_reply' => $localAutomation['farewell'],
+                'ai_menu_reply' => $localAutomation['menu'],
+                'ai_exact_cache_enabled' => $localAutomation['cache_enabled'],
+                'ai_exact_cache_ttl_hours' => $localAutomation['cache_ttl_hours'],
                 'knowledge_base' => $knowledgeBase !== '' ? $knowledgeBase : null,
                 'n8n_enabled' => $n8nEnabled ? 1 : 0,
                 'n8n_webhook_url' => $n8nWebhookUrl !== '' ? $n8nWebhookUrl : null,
@@ -312,6 +324,7 @@ final class AgentController
         $aiMaxOutputTokens = $this->nullableIntFromPost('ai_max_output_tokens', 64, 2000);
         $aiKnowledgeBudgetChars = $this->nullableIntFromPost('ai_knowledge_budget_chars', 1000, 120000);
         $aiSelectiveKnowledge = isset($_POST['ai_selective_knowledge']);
+        $localAutomation = $this->aiLocalAutomationFromPost();
         $n8nWebhookUrl = trim((string) ($_POST['n8n_webhook_url'] ?? ''));
         $isDefault = isset($_POST['is_default']);
         $replyToReactions = isset($_POST['reply_to_reactions']);
@@ -346,6 +359,13 @@ final class AgentController
                      ai_max_output_tokens = :ai_max_output_tokens,
                      ai_knowledge_budget_chars = :ai_knowledge_budget_chars,
                      ai_selective_knowledge = :ai_selective_knowledge,
+                     ai_local_replies_enabled = :ai_local_replies_enabled,
+                     ai_greeting_reply = :ai_greeting_reply,
+                     ai_gratitude_reply = :ai_gratitude_reply,
+                     ai_farewell_reply = :ai_farewell_reply,
+                     ai_menu_reply = :ai_menu_reply,
+                     ai_exact_cache_enabled = :ai_exact_cache_enabled,
+                     ai_exact_cache_ttl_hours = :ai_exact_cache_ttl_hours,
                      n8n_webhook_url = :n8n_webhook_url,
                      business_hours_enabled = :business_hours_enabled,
                      business_timezone = :business_timezone,
@@ -368,6 +388,13 @@ final class AgentController
                 'ai_max_output_tokens' => $aiMaxOutputTokens,
                 'ai_knowledge_budget_chars' => $aiKnowledgeBudgetChars,
                 'ai_selective_knowledge' => $aiSelectiveKnowledge ? 1 : 0,
+                'ai_local_replies_enabled' => $localAutomation['enabled'],
+                'ai_greeting_reply' => $localAutomation['greeting'],
+                'ai_gratitude_reply' => $localAutomation['gratitude'],
+                'ai_farewell_reply' => $localAutomation['farewell'],
+                'ai_menu_reply' => $localAutomation['menu'],
+                'ai_exact_cache_enabled' => $localAutomation['cache_enabled'],
+                'ai_exact_cache_ttl_hours' => $localAutomation['cache_ttl_hours'],
                 'n8n_webhook_url' => $n8nWebhookUrl !== '' ? $n8nWebhookUrl : null,
                 'business_hours_enabled' => $business['enabled'],
                 'business_timezone' => $business['timezone'],
@@ -396,6 +423,8 @@ final class AgentController
                 'n8n_enabled' => $n8nEnabled,
                 'cooldown_seconds' => $business['cooldown_seconds'],
                 'ai_efficiency_mode' => $aiEfficiencyMode,
+                'ai_local_replies_enabled' => $localAutomation['enabled'] === 1,
+                'ai_exact_cache_enabled' => $localAutomation['cache_enabled'] === 1,
             ], $tenantId);
 
             $reprocess = (new AiAutomationService())->reprocessLatestPendingForAgent($tenantId, $agentId);
@@ -757,6 +786,25 @@ final class AgentController
         header('Location: ' . Router::url($path));
         exit;
     }
+    /** @return array{enabled:int,greeting:?string,gratitude:?string,farewell:?string,menu:?string,cache_enabled:int,cache_ttl_hours:int} */
+    private function aiLocalAutomationFromPost(): array
+    {
+        $clean = static function (string $key, int $limit): ?string {
+            $value = trim((string) ($_POST[$key] ?? ''));
+            return $value !== '' ? mb_substr($value, 0, $limit) : null;
+        };
+
+        return [
+            'enabled' => isset($_POST['ai_local_replies_enabled']) ? 1 : 0,
+            'greeting' => $clean('ai_greeting_reply', 500),
+            'gratitude' => $clean('ai_gratitude_reply', 500),
+            'farewell' => $clean('ai_farewell_reply', 500),
+            'menu' => $clean('ai_menu_reply', 4000),
+            'cache_enabled' => isset($_POST['ai_exact_cache_enabled']) ? 1 : 0,
+            'cache_ttl_hours' => max(1, min(720, (int) ($_POST['ai_exact_cache_ttl_hours'] ?? 168))),
+        ];
+    }
+
     private function aiEfficiencyModeFromPost(): string
     {
         $mode = strtolower(trim((string) ($_POST['ai_efficiency_mode'] ?? 'balanced')));

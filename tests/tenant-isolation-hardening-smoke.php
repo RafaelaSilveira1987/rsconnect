@@ -30,10 +30,11 @@ $checks = [
     'diagnóstico cobre vínculos principais' => str_contains($diagnostic, 'conversa x contato')
         && str_contains($diagnostic, 'agenda x profissional')
         && str_contains($diagnostic, 'crm lead x pipeline'),
-    'versão Beta 1.1 atualizada' => str_contains($version, 'RS Connect 36.15.1')
-        && str_contains($version, 'Beta Comercial 1.1'),
-    'cache dos assets renovado' => str_contains($layout, 'app.css?v=36.15.1')
-        && str_contains($layout, 'app.js?v=36.15.1'),
+    'histórico e versão atual preservados' => str_contains($version, 'RS Connect 36.15.1')
+        && str_contains($version, 'RS Connect 36.18.0')
+        && str_contains($version, 'Beta Comercial 1.2'),
+    'cache dos assets renovado' => str_contains($layout, 'app.css?v=36.18.0')
+        && str_contains($layout, 'app.js?v=36.18.0'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

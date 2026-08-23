@@ -77,7 +77,7 @@ final class SimplePdfDocument
         if ($maxLines > 0 && count($lines) > $maxLines) {
             $lines = array_slice($lines, 0, $maxLines);
             $last = array_pop($lines) ?? '';
-            $lines[] = rtrim(mb_substr($last, 0, max(1, mb_strlen($last) - 1))) . '…';
+            $lines[] = rtrim($this->substring($last, 0, max(1, $this->length($last) - 1))) . '…';
         }
         foreach ($lines as $index => $line) {
             $this->text($x, $top + ($index * $lineHeight), $line, $size, $bold, $color);
@@ -104,7 +104,7 @@ final class SimplePdfDocument
                 $line = $word;
                 continue;
             }
-            if (mb_strlen($line . ' ' . $word) <= $maxChars) {
+            if ($this->length($line . ' ' . $word) <= $maxChars) {
                 $line .= ' ' . $word;
                 continue;
             }
@@ -311,4 +311,14 @@ final class SimplePdfDocument
         }
         return str_replace(['\\', '(', ')', "\r", "\n"], ['\\\\', '\\(', '\\)', ' ', ' '], $encoded);
     }
+    private function length(string $value): int
+    {
+        return function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : strlen($value);
+    }
+
+    private function substring(string $value, int $start, int $length): string
+    {
+        return function_exists('mb_substr') ? mb_substr($value, $start, $length, 'UTF-8') : substr($value, $start, $length);
+    }
+
 }

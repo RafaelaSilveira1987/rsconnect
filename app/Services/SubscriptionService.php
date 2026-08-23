@@ -242,6 +242,7 @@ final class SubscriptionService
 
         $technical = [
             'provider_calls' => 0,
+            'provider_calls_avoided' => 0,
             'input_tokens' => 0,
             'output_tokens' => 0,
             'total_tokens' => 0,
@@ -256,6 +257,7 @@ final class SubscriptionService
             $statement = $pdo->prepare(
                 'SELECT
                     COALESCE(SUM(provider_calls), 0) AS provider_calls,
+                    COALESCE(SUM(provider_calls_avoided), 0) AS provider_calls_avoided,
                     COALESCE(SUM(input_tokens), 0) AS input_tokens,
                     COALESCE(SUM(output_tokens), 0) AS output_tokens,
                     COALESCE(SUM(total_tokens), 0) AS total_tokens,
@@ -334,6 +336,7 @@ final class SubscriptionService
                     COALESCE(NULLIF(e.model, ""), "—") AS model,
                     SUM(CASE WHEN e.usage_type = "auto_reply" AND e.status = "success" AND e.delivery_status = "delivered" THEN 1 ELSE 0 END) AS interactions,
                     COALESCE(SUM(e.provider_calls), 0) AS provider_calls,
+                    COALESCE(SUM(e.provider_calls_avoided), 0) AS provider_calls_avoided,
                     COALESCE(SUM(e.input_tokens), 0) AS input_tokens,
                     COALESCE(SUM(e.output_tokens), 0) AS output_tokens,
                     COALESCE(SUM(e.total_tokens), 0) AS total_tokens,
@@ -371,6 +374,7 @@ final class SubscriptionService
                         'model' => (string) ($row['model'] ?? '—'),
                         'interactions' => 0,
                         'provider_calls' => 0,
+                        'provider_calls_avoided' => 0,
                         'input_tokens' => 0,
                         'output_tokens' => 0,
                         'total_tokens' => 0,
@@ -380,7 +384,7 @@ final class SubscriptionService
                         'costs' => [],
                     ];
                 }
-                foreach (['interactions','provider_calls','input_tokens','output_tokens','total_tokens','cached_tokens','estimated_input_tokens_avoided','failed_events'] as $metric) {
+                foreach (['interactions','provider_calls','provider_calls_avoided','input_tokens','output_tokens','total_tokens','cached_tokens','estimated_input_tokens_avoided','failed_events'] as $metric) {
                     $merged[$key][$metric] += (int) ($row[$metric] ?? 0);
                 }
                 $currency = strtoupper(trim((string) ($row['cost_currency'] ?? '')));

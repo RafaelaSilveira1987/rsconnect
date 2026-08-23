@@ -492,6 +492,54 @@ final class AiUsageService
         }
     }
 
+    /**
+     * Registra uma resposta automática entregue sem chamada ao provedor.
+     * Regras locais e cache não reduzem a franquia de IA custeada pela RS Connect.
+     */
+    public function recordAvoidedAutoReply(
+        int $tenantId,
+        array $agent,
+        int $conversationId,
+        ?int $incomingMessageId,
+        ?int $outgoingMessageId,
+        string $strategy,
+        string $detail = ''
+    ): void {
+        if ($tenantId < 1) {
+            return;
+        }
+        $strategy = in_array($strategy, ['local_rule', 'exact_cache'], true) ? $strategy : 'local_rule';
+
+        try {
+            Database::connection()->prepare(
+                'INSERT INTO ai_usage_events
+                    (tenant_id, agent_id, conversation_id, incoming_message_id, outgoing_message_id,
+                     credential_id, credential_owner, provider, model, efficiency_mode, usage_type,
+                     status, delivery_status, plan_billable, execution_strategy, provider_calls,
+                     provider_calls_avoided, input_tokens, output_tokens, total_tokens, cached_tokens,
+                     estimated_input_tokens_avoided, error_message, completed_at)
+                 VALUES
+                    (:tenant_id, :agent_id, :conversation_id, :incoming_message_id, :outgoing_message_id,
+                     NULL, "rs_connect", "local", :model, :efficiency_mode, "auto_reply",
+                     "success", "delivered", 0, :execution_strategy, 0,
+                     1, 0, 0, 0, 0, 0, NULL, NOW())'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'agent_id' => (int) ($agent['id'] ?? 0) ?: null,
+                'conversation_id' => $conversationId > 0 ? $conversationId : null,
+                'incoming_message_id' => $incomingMessageId && $incomingMessageId > 0 ? $incomingMessageId : null,
+                'outgoing_message_id' => $outgoingMessageId && $outgoingMessageId > 0 ? $outgoingMessageId : null,
+                'model' => $strategy,
+                'efficiency_mode' => in_array((string) ($agent['ai_efficiency_mode'] ?? ''), ['economy','balanced','quality'], true)
+                    ? (string) $agent['ai_efficiency_mode']
+                    : 'balanced',
+                'execution_strategy' => $strategy,
+            ]);
+        } catch (Throwable) {
+            // Compatibilidade durante a janela anterior à migration 079.
+        }
+    }
+
     public function credentialOwner(array $agent): string
     {
         $owner = strtolower(trim((string) ($agent['credential_owner'] ?? '')));

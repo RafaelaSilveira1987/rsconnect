@@ -10567,3 +10567,29 @@ body.has-instance-create-drawer::before {
   border-radius: inherit;
   background: #eef3f6;
 }
+
+/* RS Connect 36.18.0 — respostas locais e cache exato */
+.ai-local-automation-card {
+    margin: 14px 0;
+    border: 1px solid rgba(20, 184, 166, .25);
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(20, 184, 166, .055), rgba(47, 128, 255, .035));
+    overflow: hidden;
+}
+.ai-local-automation-card > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 16px 18px;
+    cursor: pointer;
+    list-style: none;
+}
+.ai-local-automation-card > summary::-webkit-details-marker { display: none; }
+.ai-local-automation-card > summary span:first-child { display: grid; gap: 3px; }
+.ai-local-automation-card > summary small { color: var(--muted, #6b7280); font-weight: 400; }
+.ai-local-automation-body { display: grid; gap: 14px; padding: 0 18px 18px; }
+@media (max-width: 720px) {
+    .ai-local-automation-card > summary { padding: 14px; }
+    .ai-local-automation-body { padding: 0 14px 14px; }
+}

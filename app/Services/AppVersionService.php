@@ -19,10 +19,11 @@ final class AppVersionService
     // RS Connect 36.17.0 — roteamento econômico de contexto e saída de IA.
     // RS Connect 36.17.1 — novo layout responsivo da criação de instância Evolution.
     // RS Connect 36.17.2 — restauração e renovação resiliente da foto dos contatos WhatsApp.
-    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql e 078_contact_avatar_refresh.sql.
-    public const VERSION_LABEL = 'Beta Comercial 1.1';
-    public const PACKAGE_LABEL = 'RS Connect 36.17.2 — Fotos dos contatos WhatsApp restauradas';
-    public const REQUIRED_MIGRATION = '078_contact_avatar_refresh.sql';
+    // RS Connect 36.18.0 — respostas locais, cache exato opcional e relatórios PDF corrigidos.
+    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql e 079_ai_efficiency_phase2_and_report_cleanup.sql.
+    public const VERSION_LABEL = 'Beta Comercial 1.2';
+    public const PACKAGE_LABEL = 'RS Connect 36.18.0 — Economia de IA fase 2 e relatórios corrigidos';
+    public const REQUIRED_MIGRATION = '079_ai_efficiency_phase2_and_report_cleanup.sql';
 
     private PDO $pdo;
 
@@ -121,7 +122,7 @@ final class AppVersionService
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 078, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 079, conforme o pacote implantado.'
         );
 
         $monitoringReady = $this->tableExists('operational_monitor_runs')
@@ -311,6 +312,20 @@ final class AppVersionService
                 ? 'Perfis Econômico, Equilibrado e Qualidade controlam histórico, base e saída com telemetria de economia.'
                 : 'A camada de economia de contexto e a medição de tokens evitados ainda não foram aplicadas.',
             'Executar database/migrations/077_ai_efficiency_foundation.sql.'
+        );
+
+        $aiEfficiencyPhase2Ready = $this->columnExists('ai_agents', 'ai_local_replies_enabled')
+            && $this->columnExists('ai_agents', 'ai_exact_cache_enabled')
+            && $this->tableExists('ai_response_cache')
+            && $this->columnExists('ai_usage_events', 'execution_strategy')
+            && $this->columnExists('ai_usage_events', 'provider_calls_avoided');
+        $checks[] = $this->check(
+            'Respostas sem consumo de tokens',
+            $aiEfficiencyPhase2Ready ? 'ok' : 'blocked',
+            $aiEfficiencyPhase2Ready
+                ? 'Regras locais e cache exato opcional podem responder sem chamar o provedor, com telemetria de chamadas evitadas.'
+                : 'A segunda fase da economia de IA ainda não foi aplicada.',
+            'Executar database/migrations/079_ai_efficiency_phase2_and_report_cleanup.sql.'
         );
 
         $contactAvatarReady = $this->columnExists('contacts', 'avatar_checked_at');

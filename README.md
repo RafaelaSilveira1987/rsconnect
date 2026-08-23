@@ -1,30 +1,46 @@
-# RS Connect — v36.17.2
+# RS Connect - v36.18.0
 
-A v36.17.2 restaura e fortalece a exibição da foto real dos contatos do WhatsApp na Caixa de Entrada e na base de contatos.
+A versão 36.18.0 conclui parte das pendências técnicas da etapa anterior e adiciona a segunda camada de economia de IA.
 
-## Principais correções
+## Principais implementações
 
-- renova automaticamente URLs temporárias/expiradas das fotos;
-- ao detectar erro de carregamento no navegador, solicita uma nova URL à Evolution;
-- mantém a inicial somente quando o contato realmente não possui foto disponível;
-- processa eventos `CONTACTS_UPSERT` e `CONTACTS_UPDATE`;
-- registra a última verificação para evitar consultas repetitivas;
-- mostra a foto também na tela **Contatos**, quando disponível;
-- mantém todo o layout de criação de instância da v36.17.1;
-- preserva a camada de economia de IA da v36.17.0.
+- respostas locais configuráveis para saudações, agradecimentos, despedidas e solicitação de menu;
+- respostas locais executadas antes da reserva de franquia e antes da chamada ao provedor de IA;
+- cache exato opcional para perguntas curtas e repetidas;
+- invalidação automática do cache quando prompt, base de conhecimento, modelo ou temperatura mudam;
+- filtros conservadores que não armazenam perguntas personalizadas, agendamentos, cancelamentos, protocolos, links ou números extensos;
+- telemetria de chamadas ao provedor evitadas por empresa e assistente;
+- novo indicador **Chamadas evitadas** nas telas de consumo;
+- correção da identidade, cores e compatibilidade dos relatórios PDF;
+- geração de PDF compatível mesmo quando a extensão `mbstring` não está disponível no PHP CLI;
+- correção dos testes de relatórios PDF e relatórios agendados;
+- remoção dos arquivos temporários `app/Controllers.tmp` e `app/Controllers.tmp.php`.
 
-## Atualização obrigatória
+## Migration obrigatória
 
-Execute:
-
-```sql
-database/migrations/078_contact_avatar_refresh.sql
-```
-
-Depois valide com:
+Para atualizar a partir da v36.17.2, execute:
 
 ```sql
-database/diagnostics/contact_avatar_refresh_v36.17.2.sql
+database/migrations/079_ai_efficiency_phase2_and_report_cleanup.sql
 ```
 
-Consulte `INSTRUCOES-v36.17.2.md` para o roteiro completo.
+Depois valide:
+
+```sql
+database/diagnostics/ai_efficiency_phase2_v36.18.0.sql
+```
+
+Os três primeiros resultados devem retornar `OK`.
+
+## Configuração recomendada
+
+Acesse **Assistentes**, edite o assistente e abra **Respostas sem consumir tokens**.
+
+1. Mantenha **Respostas locais** ativado.
+2. Preencha somente as respostas que deseja tratar sem IA.
+3. Inicialmente, mantenha o **Cache exato** desativado.
+4. Depois de homologar as respostas do assistente, ative o cache com TTL de 168 horas.
+
+As respostas locais só são utilizadas quando a mensagem recebida corresponde exatamente a um padrão curto e inequívoco. Campos vazios não alteram o fluxo atual.
+
+Consulte `INSTRUCOES-v36.18.0.md` para o roteiro completo de implantação e testes.

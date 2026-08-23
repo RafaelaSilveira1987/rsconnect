@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.18.0', 'title' => 'Mais respostas com zero tokens', 'summary' => 'Adiciona respostas locais configuráveis, cache exato opcional com invalidação automática, telemetria de chamadas evitadas, corrige identidade dos PDFs e remove arquivos temporários do pacote.'],
             ['version' => '36.17.2', 'title' => 'Fotos dos contatos restauradas', 'summary' => 'Renova automaticamente URLs expiradas das fotos do WhatsApp, tenta novamente quando a imagem falha, atualiza alterações recebidas pela Evolution e mantém a inicial apenas quando o contato realmente não disponibiliza foto.'],
             ['version' => '36.17.1', 'title' => 'Criação de WhatsApp reorganizada', 'summary' => 'Reestrutura o modal de novas conexões com etapas claras, opções em cards, eventos avançados recolhíveis, mensagem condicional para chamadas, melhor responsividade e correção dos checkboxes esticados.'],
             ['version' => '36.17.0', 'title' => 'Economia inteligente de tokens', 'summary' => 'Adiciona roteador de IA, perfis Econômico/Equilibrado/Qualidade, histórico enxuto, seleção local de trechos da base e medição estimada de tokens de entrada evitados.'],

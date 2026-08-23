@@ -188,6 +188,7 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
         <div class="client-ai-telemetry-grid">
             <div><span>Interações entregues</span><strong><?= number_format((int) ($aiUsage['total'] ?? 0), 0, ',', '.') ?></strong><small>respostas automáticas efetivamente entregues</small></div>
             <div><span>Chamadas ao provedor</span><strong><?= number_format((int) ($aiUsage['technical']['provider_calls'] ?? 0), 0, ',', '.') ?></strong><small>inclui chamadas técnicas, falhas e outros usos de IA</small></div>
+            <div><span>Chamadas evitadas</span><strong><?= number_format((int) ($aiUsage['technical']['provider_calls_avoided'] ?? 0), 0, ',', '.') ?></strong><small>respostas locais ou reutilizadas sem acessar o provedor</small></div>
             <div><span>Tokens de entrada</span><strong><?= number_format((int) ($aiUsage['technical']['input_tokens'] ?? 0), 0, ',', '.') ?></strong><small>contexto e instruções enviados ao modelo</small></div>
             <div><span>Tokens de saída</span><strong><?= number_format((int) ($aiUsage['technical']['output_tokens'] ?? 0), 0, ',', '.') ?></strong><small>conteúdo produzido pelo modelo</small></div>
             <div><span>Total de tokens</span><strong><?= number_format((int) ($aiUsage['technical']['total_tokens'] ?? 0), 0, ',', '.') ?></strong><small>telemetria registrada pela RS Connect no período</small></div>

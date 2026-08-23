@@ -182,6 +182,23 @@ $aiModeHints = [
                                     <small class="field-hint">A IA aguarda este tempo após a última mensagem recebida. Se outra chegar durante a espera, o relógio reinicia e as mensagens são agrupadas no contexto.</small>
                                 </label>
                             </div>
+                            <details class="ai-local-automation-card">
+                                <summary><span><strong>Respostas sem consumir tokens</strong><small>Saudações configuradas e cache exato opcional antes da chamada ao provedor.</small></span><span class="drawer-chevron"></span></summary>
+                                <div class="ai-local-automation-body">
+                                    <div class="agent-toggle-grid">
+                                        <label class="check-field compact-check"><input type="checkbox" name="ai_local_replies_enabled" value="1" <?= !array_key_exists('ai_local_replies_enabled', $agent) || (int) ($agent['ai_local_replies_enabled'] ?? 1) === 1 ? 'checked' : '' ?>><span>Usar respostas locais configuradas</span></label>
+                                        <label class="check-field compact-check"><input type="checkbox" name="ai_exact_cache_enabled" value="1" <?= (int) ($agent['ai_exact_cache_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Reutilizar perguntas idênticas elegíveis</span></label>
+                                    </div>
+                                    <div class="form-grid two">
+                                        <label class="field compact-field"><span>Resposta para saudação</span><input name="ai_greeting_reply" value="<?= View::e($agent['ai_greeting_reply'] ?? '') ?>" maxlength="500" placeholder="Olá! Como posso ajudar você hoje?"></label>
+                                        <label class="field compact-field"><span>Resposta para agradecimento</span><input name="ai_gratitude_reply" value="<?= View::e($agent['ai_gratitude_reply'] ?? '') ?>" maxlength="500" placeholder="Por nada! Estou à disposição."></label>
+                                        <label class="field compact-field"><span>Resposta para despedida</span><input name="ai_farewell_reply" value="<?= View::e($agent['ai_farewell_reply'] ?? '') ?>" maxlength="500" placeholder="Até mais! Quando precisar, fale com a gente."></label>
+                                        <label class="field compact-field"><span>Validade do cache (horas)</span><input type="number" name="ai_exact_cache_ttl_hours" value="<?= (int) ($agent['ai_exact_cache_ttl_hours'] ?? 168) ?>" min="1" max="720"><small class="field-hint">O cache é invalidado automaticamente ao mudar prompt, base ou modelo.</small></label>
+                                    </div>
+                                    <label class="field compact-field"><span>Resposta para menu/ajuda</span><textarea name="ai_menu_reply" rows="3" maxlength="4000" placeholder="Liste aqui as opções principais disponíveis."><?= View::e($agent['ai_menu_reply'] ?? '') ?></textarea></label>
+                                    <p class="field-hint">As regras locais só respondem mensagens exatas e curtas. O cache vem desativado por padrão e ignora perguntas pessoais, pedidos, agenda, números e links.</p>
+                                </div>
+                            </details>
                             <label class="field compact-field"><span>Palavras que pedem atendimento humano</span><input name="handoff_keywords" value="<?= View::e($agent['handoff_keywords'] ?? '') ?>" placeholder="humano, atendente, pessoa"></label>
                             <label class="field compact-field"><span>Ao chamar uma pessoa</span><select name="handoff_action"><option value="paused" <?= ($agent['handoff_action'] ?? 'paused') === 'paused' ? 'selected' : '' ?>>Pausar respostas automáticas</option><option value="human" <?= ($agent['handoff_action'] ?? '') === 'human' ? 'selected' : '' ?>>Marcar atendimento humano</option></select></label>
                             <label class="field compact-field"><span>Mensagem ao encaminhar para a equipe</span><input name="human_handoff_message" value="<?= View::e($agent['human_handoff_message'] ?? '') ?>" placeholder="Vou encaminhar você para uma pessoa da equipe."></label>
@@ -377,6 +394,21 @@ $aiModeHints = [
                         </div>
                         <label class="check-field"><input type="checkbox" name="ai_selective_knowledge" value="1" checked><span>Enviar somente os trechos da base relacionados à conversa</span></label>
                     </div>
+                    <details class="ai-local-automation-card">
+                        <summary><span><strong>Respostas sem consumir tokens</strong><small>Configure saudações locais. O cache exato é opcional.</small></span><span class="drawer-chevron"></span></summary>
+                        <div class="ai-local-automation-body">
+                            <label class="check-field"><input type="checkbox" name="ai_local_replies_enabled" value="1" checked><span>Usar respostas locais configuradas</span></label>
+                            <div class="form-grid two">
+                                <label class="field"><span>Saudação</span><input name="ai_greeting_reply" maxlength="500" placeholder="Olá! Como posso ajudar você hoje?"></label>
+                                <label class="field"><span>Agradecimento</span><input name="ai_gratitude_reply" maxlength="500" placeholder="Por nada! Estou à disposição."></label>
+                                <label class="field"><span>Despedida</span><input name="ai_farewell_reply" maxlength="500" placeholder="Até mais! Quando precisar, fale com a gente."></label>
+                                <label class="field"><span>Validade do cache (horas)</span><input type="number" name="ai_exact_cache_ttl_hours" value="168" min="1" max="720"></label>
+                            </div>
+                            <label class="field"><span>Menu/ajuda</span><textarea name="ai_menu_reply" rows="3" maxlength="4000" placeholder="Liste as opções principais disponíveis."></textarea></label>
+                            <label class="check-field"><input type="checkbox" name="ai_exact_cache_enabled" value="1"><span>Reutilizar respostas para perguntas idênticas e elegíveis</span></label>
+                            <small class="field-hint">O cache não é aplicado a agenda, dados pessoais, números, links ou mensagens dependentes do histórico.</small>
+                        </div>
+                    </details>
                     <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se o cliente enviar outra mensagem, a contagem reinicia.</small></label>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
@@ -485,6 +517,21 @@ $aiModeHints = [
                         </div>
                         <label class="check-field"><input type="checkbox" name="ai_selective_knowledge" value="1" checked><span>Enviar somente os trechos da base relacionados à conversa</span></label>
                     </div>
+                    <details class="ai-local-automation-card">
+                        <summary><span><strong>Respostas sem consumir tokens</strong><small>Configure saudações locais. O cache exato é opcional.</small></span><span class="drawer-chevron"></span></summary>
+                        <div class="ai-local-automation-body">
+                            <label class="check-field"><input type="checkbox" name="ai_local_replies_enabled" value="1" checked><span>Usar respostas locais configuradas</span></label>
+                            <div class="form-grid two">
+                                <label class="field"><span>Saudação</span><input name="ai_greeting_reply" maxlength="500" placeholder="Olá! Como posso ajudar você hoje?"></label>
+                                <label class="field"><span>Agradecimento</span><input name="ai_gratitude_reply" maxlength="500" placeholder="Por nada! Estou à disposição."></label>
+                                <label class="field"><span>Despedida</span><input name="ai_farewell_reply" maxlength="500" placeholder="Até mais! Quando precisar, fale com a gente."></label>
+                                <label class="field"><span>Validade do cache (horas)</span><input type="number" name="ai_exact_cache_ttl_hours" value="168" min="1" max="720"></label>
+                            </div>
+                            <label class="field"><span>Menu/ajuda</span><textarea name="ai_menu_reply" rows="3" maxlength="4000" placeholder="Liste as opções principais disponíveis."></textarea></label>
+                            <label class="check-field"><input type="checkbox" name="ai_exact_cache_enabled" value="1"><span>Reutilizar respostas para perguntas idênticas e elegíveis</span></label>
+                            <small class="field-hint">O cache não é aplicado a agenda, dados pessoais, números, links ou mensagens dependentes do histórico.</small>
+                        </div>
+                    </details>
                     <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se o cliente enviar outra mensagem, a contagem reinicia.</small></label>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>

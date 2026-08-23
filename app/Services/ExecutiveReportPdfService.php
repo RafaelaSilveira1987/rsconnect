@@ -28,6 +28,13 @@ final class ExecutiveReportPdfService
         $primary = '#2F80FF';
         $secondary = '#7B3FF2';
         $accent = '#14B8A6';
+        // Permite identidade personalizada sem perder os padrões oficiais do RS Connect.
+        if (isset($identity['primary']) && is_string($identity['primary']) && preg_match('/^#[0-9A-Fa-f]{6}$/', $identity['primary'])) {
+            $primary = strtoupper($identity['primary']);
+        }
+        if (isset($identity['secondary']) && is_string($identity['secondary']) && preg_match('/^#[0-9A-Fa-f]{6}$/', $identity['secondary'])) {
+            $secondary = strtoupper($identity['secondary']);
+        }
         $name = trim((string) ($identity['name'] ?? ($scope === 'admin' ? 'RS Connect' : 'Empresa')));
         $title = trim((string) ($identity['report_title'] ?? 'Relatório executivo'));
         $periodLabel = $this->dateBr((string) ($filters['start'] ?? '')) . ' a ' . $this->dateBr((string) ($filters['end'] ?? ''));
@@ -97,12 +104,19 @@ final class ExecutiveReportPdfService
         $pdf->rect(0, 0, 370, 6, $primary, null);
         $pdf->rect(370, 0, SimplePdfDocument::PAGE_WIDTH - 370, 6, $secondary, null);
         $pdf->jpeg($this->logoPath(), self::MARGIN, 13, 68, 60);
+        // Mantém a marca legível mesmo quando o visualizador bloqueia ou reduz imagens.
+        $brandText = 'RS CONNECT';
+        $brandSuffix = 'CONNECT';
+        $pdf->text(115, 17, $brandText, 8.6, true, '#172033');
 
-        $titleText = mb_strtoupper($title !== '' ? $title : 'Relatório executivo');
+        $titleText = 'RELATÓRIO EXECUTIVO';
+        if ($title !== '' && $this->upper($title) !== $titleText) {
+            $titleText = $this->upper($title);
+        }
         $titleAreaX = 126.0;
         $titleAreaWidth = 200.0;
         $titleSize = 8.0;
-        $titleApproxWidth = mb_strlen($titleText) * $titleSize * 0.56;
+        $titleApproxWidth = $this->length($titleText) * $titleSize * 0.56;
         $titleX = $titleAreaX + max(8.0, ($titleAreaWidth - $titleApproxWidth) / 2);
 
         $pdf->rect($titleAreaX, 30, $titleAreaWidth, 25, '#F2EDFF', null);
@@ -125,7 +139,7 @@ final class ExecutiveReportPdfService
         $titleAreaX = 95.0;
         $titleAreaWidth = 275.0;
         $titleSize = 7.4;
-        $titleApproxWidth = mb_strlen($titleText) * $titleSize * 0.56;
+        $titleApproxWidth = $this->length($titleText) * $titleSize * 0.56;
         $titleX = $titleAreaX + max(0.0, ($titleAreaWidth - $titleApproxWidth) / 2);
 
         $pdf->text($titleX, 18, $titleText, $titleSize, true, '#7B3FF2');
@@ -151,8 +165,8 @@ final class ExecutiveReportPdfService
             $fill = $kpi['tone'] === 'accent' ? '#FBF9FF' : ($kpi['tone'] === 'attention' ? '#FFF9FA' : '#F8FBFF');
             $pdf->rect($x, $top, $width, $height, $fill, '#E3E8F2', 0.65);
             $pdf->rect($x, $top, $width, 3, $tone, null);
-            $pdf->paragraph($x + 10, $top + 11, $width - 20, mb_strtoupper($kpi['label']), 6.6, 8.0, true, '#6A7487', 2);
-            $valueSize = mb_strlen($kpi['value']) > 10 ? 12.5 : 17.5;
+            $pdf->paragraph($x + 10, $top + 11, $width - 20, $this->upper($kpi['label']), 6.6, 8.0, true, '#6A7487', 2);
+            $valueSize = $this->length($kpi['value']) > 10 ? 12.5 : 17.5;
             $pdf->text($x + 10, $top + 32, $kpi['value'], $valueSize, true, '#172033');
             $pdf->paragraph($x + 10, $top + 54, $width - 20, $kpi['detail'], 6.8, 8.4, false, '#687589', 2);
         }
@@ -582,4 +596,14 @@ final class ExecutiveReportPdfService
     {
         return preg_match('/^#[0-9a-fA-F]{6}$/', trim($value)) === 1 ? trim($value) : $fallback;
     }
+    private function upper(string $value): string
+    {
+        return function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
+    }
+
+    private function length(string $value): int
+    {
+        return function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : strlen($value);
+    }
+
 }
