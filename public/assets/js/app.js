@@ -2891,3 +2891,42 @@ document.querySelectorAll('[data-static-contact-avatar]').forEach((image) => {
   image.addEventListener('error', hideBrokenImage, { once: true });
   if (image.complete && image.naturalWidth < 1) hideBrokenImage();
 });
+
+
+// RS Connect 36.18.1 — busca rápida de módulos no cabeçalho.
+document.addEventListener('DOMContentLoaded', () => {
+  const shell = document.querySelector('[data-module-search]');
+  if (!shell) return;
+  const input = shell.querySelector('[data-module-search-input]');
+  const results = shell.querySelector('[data-module-search-results]');
+  if (!input || !results) return;
+  const links = Array.from(document.querySelectorAll('.sidebar-nav a.nav-link')).map((link) => ({
+    label: (link.querySelector('span')?.textContent || link.textContent || '').trim(),
+    href: link.getAttribute('href') || '#'
+  })).filter((item, index, all) => item.label && all.findIndex((x) => x.href === item.href) === index);
+  const normalize = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const close = () => { results.hidden = true; results.innerHTML = ''; };
+  const render = () => {
+    const query = normalize(input.value.trim());
+    if (!query) { close(); return; }
+    const matches = links.filter((item) => normalize(item.label).includes(query)).slice(0, 8);
+    results.innerHTML = matches.length
+      ? matches.map((item, i) => `<a class="topbar-search-result${i === 0 ? ' is-active' : ''}" href="${item.href}"><span>${item.label.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}</span><small>Abrir</small></a>`).join('')
+      : '<div class="topbar-search-empty">Nenhum módulo encontrado.</div>';
+    results.hidden = false;
+  };
+  input.addEventListener('input', render);
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') { close(); input.blur(); }
+    if (event.key === 'Enter') {
+      const first = results.querySelector('a');
+      if (first) { event.preventDefault(); window.location.href = first.href; }
+    }
+  });
+  document.addEventListener('keydown', (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault(); shell.classList.add('is-open'); input.focus(); input.select();
+    }
+  });
+  document.addEventListener('click', (event) => { if (!shell.contains(event.target)) close(); });
+});

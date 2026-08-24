@@ -128,7 +128,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.18.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.18.1')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -256,22 +256,38 @@ $svgIcon = static function (string $name): string {
     <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="Fechar menu"></button>
 
     <main class="main-content">
-        <header class="topbar">
-            <div>
+        <header class="topbar topbar-v36181">
+            <a class="topbar-home" href="<?= View::e(Router::url('/')) ?>" aria-label="Ir para o início"><?= $svgIcon('dashboard') ?></a>
+            <div class="topbar-title-block">
                 <span class="eyebrow"><?= Auth::isSuperAdmin() ? 'Operação RS' : View::e($user['tenant_name'] ?? 'Cliente') ?></span>
                 <h1><?= View::e($title ?? 'RS Connect') ?></h1>
             </div>
-            <?php if (Auth::isSuperAdmin()): ?>
-                <a class="topbar-notification" href="<?= View::e(Router::url('/operacao-alertas')) ?>" aria-label="Avisos do sistema" data-notification-link data-count-url="<?= View::e(Router::url('/operacao-alertas/count')) ?>">
-                    <?= $svgIcon('bell') ?>
-                    <?= $notificationLiveBadge($notificationUnread) ?>
-                </a>
-            <?php elseif (Auth::can('notifications.view') && $moduleVisible('notifications')): ?>
-                <a class="topbar-notification" href="<?= View::e(Router::url('/notifications')) ?>" aria-label="Notificações" data-notification-link data-count-url="<?= View::e(Router::url('/notifications/count')) ?>">
-                    <?= $svgIcon('bell') ?>
-                    <?= $notificationLiveBadge($notificationUnread) ?>
-                </a>
-            <?php endif; ?>
+            <div class="topbar-module-search" data-module-search>
+                <span class="topbar-search-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                </span>
+                <input type="search" placeholder="Buscar módulo..." autocomplete="off" aria-label="Buscar módulo" data-module-search-input>
+                <kbd>Ctrl K</kbd>
+                <div class="topbar-search-results" data-module-search-results hidden></div>
+            </div>
+            <div class="topbar-actions">
+                <a class="topbar-action-button" href="<?= View::e(Router::url('/ajuda')) ?>" aria-label="Central de ajuda"><?= $svgIcon('help') ?></a>
+                <?php if (Auth::isSuperAdmin()): ?>
+                    <a class="topbar-notification" href="<?= View::e(Router::url('/operacao-alertas')) ?>" aria-label="Avisos do sistema" data-notification-link data-count-url="<?= View::e(Router::url('/operacao-alertas/count')) ?>">
+                        <?= $svgIcon('bell') ?>
+                        <?= $notificationLiveBadge($notificationUnread) ?>
+                    </a>
+                <?php elseif (Auth::can('notifications.view') && $moduleVisible('notifications')): ?>
+                    <a class="topbar-notification" href="<?= View::e(Router::url('/notifications')) ?>" aria-label="Notificações" data-notification-link data-count-url="<?= View::e(Router::url('/notifications/count')) ?>">
+                        <?= $svgIcon('bell') ?>
+                        <?= $notificationLiveBadge($notificationUnread) ?>
+                    </a>
+                <?php endif; ?>
+                <div class="topbar-profile" title="<?= View::e($user['name'] ?? '') ?>">
+                    <span class="topbar-profile-avatar"><?= View::e(mb_strtoupper(mb_substr($user['name'] ?? 'U', 0, 1))) ?></span>
+                    <span class="topbar-profile-copy"><strong><?= View::e($user['name'] ?? '') ?></strong><small><?= Auth::isSuperAdmin() ? 'Administrador RS' : View::e($user['tenant_name'] ?? 'Administrador') ?></small></span>
+                </div>
+            </div>
         </header>
 
         <?php if (!Auth::isSuperAdmin() && !empty($trialStatus)): ?>
@@ -348,6 +364,6 @@ $svgIcon = static function (string $name): string {
 <button class="back-to-top" type="button" data-back-to-top aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
 </button>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.18.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.18.1')) ?>" defer></script>
 </body>
 </html>

@@ -499,11 +499,11 @@ final class InstanceController
                      status = :status,
                      connection_state = :connection_state,
                      connection_updated_at = NOW(),
-                     remote_created_at = IF(:managed = 1, NOW(), remote_created_at),
+                     remote_created_at = IF(:managed_remote_created = 1, NOW(), remote_created_at),
                      last_settings_sync_at = NOW(),
                      qrcode_base64 = :qrcode,
-                     qrcode_updated_at = IF(:has_qrcode = 1, NOW(), qrcode_updated_at),
-                     qrcode_expires_at = IF(:has_qrcode = 1, DATE_ADD(NOW(), INTERVAL 2 MINUTE), qrcode_expires_at)
+                     qrcode_updated_at = IF(:has_qrcode_updated = 1, NOW(), qrcode_updated_at),
+                     qrcode_expires_at = IF(:has_qrcode_expires = 1, DATE_ADD(NOW(), INTERVAL 2 MINUTE), qrcode_expires_at)
                  WHERE id = :id'
             );
             $update->execute([
@@ -511,9 +511,10 @@ final class InstanceController
                 'remote_hash' => $remoteHash !== '' ? Crypto::encrypt($remoteHash) : null,
                 'status' => in_array($remoteState, ['open', 'connected', 'online'], true) ? 'connected' : 'pending',
                 'connection_state' => $remoteState !== '' ? $remoteState : 'created',
-                'managed' => $managementMode === 'managed' ? 1 : 0,
+                'managed_remote_created' => $managementMode === 'managed' ? 1 : 0,
                 'qrcode' => $qrCode !== '' ? $qrCode : null,
-                'has_qrcode' => $qrCode !== '' ? 1 : 0,
+                'has_qrcode_updated' => $qrCode !== '' ? 1 : 0,
+                'has_qrcode_expires' => $qrCode !== '' ? 1 : 0,
                 'id' => $instanceId,
             ]);
             $pdo->commit();
