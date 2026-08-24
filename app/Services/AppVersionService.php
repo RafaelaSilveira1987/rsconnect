@@ -19,10 +19,12 @@ final class AppVersionService
     // RS Connect 36.17.0 — roteamento econômico de contexto e saída de IA.
     // RS Connect 36.17.1 — novo layout responsivo da criação de instância Evolution.
     // RS Connect 36.17.2 — restauração e renovação resiliente da foto dos contatos WhatsApp.
+    // RS Connect 36.18.0 — respostas locais, cache exato e relatórios PDF corrigidos.
     // RS Connect 36.18.1 — criação de instâncias corrigida e novo cabeçalho operacional.
+    // RS Connect 36.18.2 — vínculo automático e edição manual dos canais por assistente.
     // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql e 079_ai_efficiency_phase2_and_report_cleanup.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.2';
-    public const PACKAGE_LABEL = 'RS Connect 36.18.1 — Instâncias e cabeçalho operacional';
+    public const PACKAGE_LABEL = 'RS Connect 36.18.2 — Vínculo de assistentes aos canais WhatsApp';
     public const REQUIRED_MIGRATION = '079_ai_efficiency_phase2_and_report_cleanup.sql';
 
     private PDO $pdo;

@@ -393,6 +393,7 @@ final class InstanceController
         );
         $remoteCreated = false;
         $warnings = [];
+        $autoLinkedAgent = null;
 
         try {
             $duplicate = $pdo->prepare(
@@ -517,6 +518,8 @@ final class InstanceController
                 'has_qrcode_expires' => $qrCode !== '' ? 1 : 0,
                 'id' => $instanceId,
             ]);
+
+            $autoLinkedAgent = $this->autoLinkAgentToNewInstance($pdo, $tenantId, $instanceId);
             $pdo->commit();
 
             $this->audit($tenantId, 'evolution.instance_created', [
@@ -525,11 +528,15 @@ final class InstanceController
                 'management_mode' => $managementMode,
                 'integration' => $integration,
                 'warnings' => $warnings,
+                'auto_linked_agent_id' => is_array($autoLinkedAgent) ? (int) ($autoLinkedAgent['id'] ?? 0) : null,
             ]);
 
             $message = $managementMode === 'managed'
                 ? 'Instância criada na Evolution e cadastrada no RS Connect.'
                 : 'Instância existente vinculada ao RS Connect.';
+            if (is_array($autoLinkedAgent)) {
+                $message .= ' O assistente "' . (string) ($autoLinkedAgent['name'] ?? 'principal') . '" foi vinculado automaticamente a este canal.';
+            }
             if ($warnings !== []) {
                 $message .= ' Atenção: ' . implode(' | ', $warnings);
             }
@@ -1429,6 +1436,91 @@ final class InstanceController
             'error', 'failed' => 'Falha na conexão',
             default => 'Desconectado',
         };
+    }
+
+    /**
+     * Vincula automaticamente o novo canal quando existe um único assistente ativo
+     * ou um único fallback geral ativo. Em ambientes com vários assistentes sem
+     * principal definido, o vínculo fica para configuração manual.
+     *
+     * @return array{id:int,name:string}|null
+     */
+    private function autoLinkAgentToNewInstance(PDO $pdo, int $tenantId, int $instanceId): ?array
+    {
+        $statement = $pdo->prepare(
+            'SELECT id, name, is_default, instance_id
+             FROM ai_agents
+             WHERE tenant_id = :tenant_id AND status = "active"
+             ORDER BY is_default DESC, auto_reply_enabled DESC, id ASC'
+        );
+        $statement->execute(['tenant_id' => $tenantId]);
+        $agents = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        if ($agents === []) {
+            return null;
+        }
+
+        $defaults = array_values(array_filter(
+            $agents,
+            static fn (array $agent): bool => (int) ($agent['is_default'] ?? 0) === 1
+        ));
+
+        $candidate = null;
+        if (count($agents) === 1) {
+            $candidate = $agents[0];
+        } elseif (count($defaults) === 1) {
+            $candidate = $defaults[0];
+        }
+        if (!is_array($candidate)) {
+            return null;
+        }
+
+        $agentId = (int) ($candidate['id'] ?? 0);
+        if ($agentId < 1) {
+            return null;
+        }
+
+        if ($this->tableExists($pdo, 'ai_agent_instance_bindings')) {
+            $pdo->prepare(
+                'UPDATE ai_agent_instance_bindings
+                 SET is_primary = 0
+                 WHERE tenant_id = :tenant_id AND instance_id = :instance_id'
+            )->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId]);
+
+            $pdo->prepare(
+                'INSERT INTO ai_agent_instance_bindings
+                    (tenant_id, agent_id, instance_id, is_primary, priority, status)
+                 VALUES (:tenant_id, :agent_id, :instance_id, 1, 200, "active")
+                 ON DUPLICATE KEY UPDATE status = "active", is_primary = 1, priority = 200'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'agent_id' => $agentId,
+                'instance_id' => $instanceId,
+            ]);
+
+            $pdo->prepare(
+                'UPDATE ai_agents
+                 SET instance_id = COALESCE(instance_id, :instance_id)
+                 WHERE id = :agent_id AND tenant_id = :tenant_id'
+            )->execute([
+                'instance_id' => $instanceId,
+                'agent_id' => $agentId,
+                'tenant_id' => $tenantId,
+            ]);
+        } else {
+            $pdo->prepare(
+                'UPDATE ai_agents SET instance_id = :instance_id
+                 WHERE id = :agent_id AND tenant_id = :tenant_id'
+            )->execute([
+                'instance_id' => $instanceId,
+                'agent_id' => $agentId,
+                'tenant_id' => $tenantId,
+            ]);
+        }
+
+        return [
+            'id' => $agentId,
+            'name' => (string) ($candidate['name'] ?? 'Assistente'),
+        ];
     }
 
     private function migrateAgentBindings(PDO $pdo, int $sourceInstanceId, int $replacementInstanceId, int $tenantId): int

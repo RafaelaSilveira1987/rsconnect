@@ -96,7 +96,25 @@ $aiModeHints = [
 
         <div class="agent-grid">
             <?php foreach ($agents as $agent): ?>
-                <?php $dayHours = $businessHoursByDay($agent['business_hours_json'] ?? null); ?>
+                <?php
+                $dayHours = $businessHoursByDay($agent['business_hours_json'] ?? null);
+                $agentChannelBindings = [];
+                foreach (($agent['channels'] ?? []) as $channelBinding) {
+                    $bindingInstanceId = (int) ($channelBinding['instance_id'] ?? 0);
+                    if ($bindingInstanceId > 0) {
+                        $agentChannelBindings[$bindingInstanceId] = $channelBinding;
+                    }
+                }
+                $legacyInstanceId = (int) ($agent['instance_id'] ?? 0);
+                if ($legacyInstanceId > 0 && !isset($agentChannelBindings[$legacyInstanceId])) {
+                    $agentChannelBindings[$legacyInstanceId] = [
+                        'instance_id' => $legacyInstanceId,
+                        'is_primary' => 1,
+                        'priority' => 100,
+                        'status' => 'active',
+                    ];
+                }
+                ?>
                 <article class="agent-card">
                     <div class="agent-card-head">
                         <span class="agent-icon agent-icon-bot" aria-hidden="true"></span>
@@ -170,6 +188,48 @@ $aiModeHints = [
                             <?= Csrf::input() ?>
                             <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
                             <input type="hidden" name="agent_id" value="<?= (int) $agent['id'] ?>">
+                            <input type="hidden" name="channels_present" value="1">
+
+                            <section class="agent-channel-editor">
+                                <div class="agent-channel-editor-head">
+                                    <div>
+                                        <span class="eyebrow">Canais WhatsApp</span>
+                                        <strong>Onde este assistente deve atuar?</strong>
+                                        <small>Marque uma ou mais conexões. O canal principal será usado primeiro quando houver mais de um assistente no mesmo número.</small>
+                                    </div>
+                                    <span class="badge"><?= count($agentChannelBindings) ?> vinculado(s)</span>
+                                </div>
+                                <?php if ($instances): ?>
+                                    <div class="agent-channel-selection-grid">
+                                        <?php foreach ($instances as $instance): ?>
+                                            <?php
+                                            $channelId = (int) $instance['id'];
+                                            $channelBinding = $agentChannelBindings[$channelId] ?? null;
+                                            $isLinked = is_array($channelBinding);
+                                            $isPrimaryChannel = $isLinked && (int) ($channelBinding['is_primary'] ?? 0) === 1;
+                                            ?>
+                                            <article class="agent-channel-option <?= $isLinked ? 'is-linked' : '' ?>">
+                                                <label class="agent-channel-link-toggle">
+                                                    <input type="checkbox" name="instance_ids[]" value="<?= $channelId ?>" <?= $isLinked ? 'checked' : '' ?>>
+                                                    <span class="agent-channel-check" aria-hidden="true"></span>
+                                                    <span>
+                                                        <strong><?= View::e($instance['name']) ?></strong>
+                                                        <small><?= $isLinked ? 'Assistente vinculado a este WhatsApp' : 'Marque para vincular este WhatsApp' ?></small>
+                                                    </span>
+                                                </label>
+                                                <label class="agent-channel-primary-toggle">
+                                                    <input type="checkbox" name="primary_instance_ids[]" value="<?= $channelId ?>" <?= $isPrimaryChannel ? 'checked' : '' ?>>
+                                                    <span>Principal neste canal</span>
+                                                </label>
+                                            </article>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <p class="field-hint agent-channel-help">Se somente este assistente estiver vinculado a um canal, ele será mantido automaticamente como principal.</p>
+                                <?php else: ?>
+                                    <div class="message-warning">Cadastre uma conexão em Canais WhatsApp antes de vincular este assistente.</div>
+                                <?php endif; ?>
+                            </section>
+
                             <div class="form-grid two">
                                 <label class="field compact-field"><span>Disponibilidade do assistente</span><select name="status"><option value="active" <?= $agent['status'] === 'active' ? 'selected' : '' ?>>Ativo</option><option value="inactive" <?= $agent['status'] === 'inactive' ? 'selected' : '' ?>>Inativo</option></select></label>
                                 <label class="field compact-field"><span>Estratégia de consumo</span><select name="ai_efficiency_mode"><option value="economy" <?= ($agent['ai_efficiency_mode'] ?? 'balanced') === 'economy' ? 'selected' : '' ?>>Econômico</option><option value="balanced" <?= ($agent['ai_efficiency_mode'] ?? 'balanced') === 'balanced' ? 'selected' : '' ?>>Equilibrado</option><option value="quality" <?= ($agent['ai_efficiency_mode'] ?? 'balanced') === 'quality' ? 'selected' : '' ?>>Qualidade máxima</option></select><small class="field-hint">Controla automaticamente histórico, base de conhecimento e tamanho da resposta.</small></label>

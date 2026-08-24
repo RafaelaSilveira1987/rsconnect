@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.18.2', 'title' => 'Assistentes vinculados aos canais', 'summary' => 'Vincula automaticamente o único assistente ou fallback ao criar um WhatsApp e permite editar manualmente um ou vários canais diretamente no assistente.'],
                         ['version' => '36.18.1', 'title' => 'Instâncias e navegação corrigidas', 'summary' => 'Corrige a criação de instâncias Evolution no MySQL e moderniza o cabeçalho com busca rápida, ajuda, alertas e identificação do usuário.'],
 ['version' => '36.18.0', 'title' => 'Mais respostas com zero tokens', 'summary' => 'Adiciona respostas locais configuráveis, cache exato opcional com invalidação automática, telemetria de chamadas evitadas, corrige identidade dos PDFs e remove arquivos temporários do pacote.'],
             ['version' => '36.17.2', 'title' => 'Fotos dos contatos restauradas', 'summary' => 'Renova automaticamente URLs expiradas das fotos do WhatsApp, tenta novamente quando a imagem falha, atualiza alterações recebidas pela Evolution e mantém a inicial apenas quando o contato realmente não disponibiliza foto.'],

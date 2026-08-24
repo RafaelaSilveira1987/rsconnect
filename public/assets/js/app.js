@@ -2930,3 +2930,22 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.addEventListener('click', (event) => { if (!shell.contains(event.target)) close(); });
 });
+
+// RS Connect 36.18.2 — mantém vínculo e principal do canal coerentes no editor do assistente.
+document.addEventListener('change', (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    const option = input.closest('.agent-channel-option');
+    if (!option) return;
+
+    const linkInput = option.querySelector('input[name="instance_ids[]"]');
+    const primaryInput = option.querySelector('input[name="primary_instance_ids[]"]');
+    if (!(linkInput instanceof HTMLInputElement) || !(primaryInput instanceof HTMLInputElement)) return;
+
+    if (input === primaryInput && primaryInput.checked) {
+        linkInput.checked = true;
+    }
+    if (input === linkInput && !linkInput.checked) {
+        primaryInput.checked = false;
+    }
+});

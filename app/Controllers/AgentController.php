@@ -328,6 +328,16 @@ final class AgentController
         $n8nWebhookUrl = trim((string) ($_POST['n8n_webhook_url'] ?? ''));
         $isDefault = isset($_POST['is_default']);
         $replyToReactions = isset($_POST['reply_to_reactions']);
+        $channelSelectionSubmitted = isset($_POST['channels_present']);
+        $selectedInstanceIds = $channelSelectionSubmitted
+            ? $this->positiveIntArray($_POST['instance_ids'] ?? [])
+            : [];
+        $primaryInstanceIds = $channelSelectionSubmitted
+            ? array_values(array_intersect(
+                $this->positiveIntArray($_POST['primary_instance_ids'] ?? []),
+                $selectedInstanceIds
+            ))
+            : [];
 
         if ($agentId < 1 || !in_array($status, ['active', 'inactive'], true)) {
             Flash::set('error', 'Não foi possível identificar o assistente ou a opção escolhida.');
@@ -341,6 +351,10 @@ final class AgentController
         $pdo = Database::connection();
         try {
             $business = $this->businessHoursFromPost();
+            if ($channelSelectionSubmitted) {
+                $this->assertInstancesBelongToTenant($pdo, $tenantId, $selectedInstanceIds);
+            }
+
             $pdo->beginTransaction();
             if ($isDefault) {
                 $reset = $pdo->prepare('UPDATE ai_agents SET is_default = 0 WHERE tenant_id = :tenant_id');
@@ -415,6 +429,16 @@ final class AgentController
                 }
             }
 
+            if ($channelSelectionSubmitted) {
+                $this->syncAgentChannels(
+                    $pdo,
+                    $tenantId,
+                    $agentId,
+                    $selectedInstanceIds,
+                    $primaryInstanceIds
+                );
+            }
+
             $pdo->commit();
             Audit::log('agent.status_updated', [
                 'agent_id' => $agentId,
@@ -425,10 +449,19 @@ final class AgentController
                 'ai_efficiency_mode' => $aiEfficiencyMode,
                 'ai_local_replies_enabled' => $localAutomation['enabled'] === 1,
                 'ai_exact_cache_enabled' => $localAutomation['cache_enabled'] === 1,
+                'channels_updated' => $channelSelectionSubmitted,
+                'instance_ids' => $channelSelectionSubmitted ? $selectedInstanceIds : null,
+                'primary_instance_ids' => $channelSelectionSubmitted ? $primaryInstanceIds : null,
             ], $tenantId);
 
             $reprocess = (new AiAutomationService())->reprocessLatestPendingForAgent($tenantId, $agentId);
-            Flash::set('success', $this->settingsSavedMessage($reprocess));
+            $message = $this->settingsSavedMessage($reprocess);
+            if ($channelSelectionSubmitted) {
+                $message = $selectedInstanceIds === []
+                    ? 'Configurações salvas. O assistente ficou sem canal WhatsApp vinculado.'
+                    : 'Canais WhatsApp e configurações do assistente atualizados.';
+            }
+            Flash::set('success', $message);
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -730,6 +763,165 @@ final class AgentController
             'handoff_action' => $handoffAction,
             'cooldown_seconds' => max(0, min(3600, (int) ($_POST['cooldown_seconds'] ?? 15))),
         ];
+    }
+
+    /** @return int[] */
+    private function positiveIntArray(mixed $value): array
+    {
+        $items = is_array($value) ? $value : [$value];
+        $ids = [];
+        foreach ($items as $item) {
+            $id = (int) $item;
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+        return array_values($ids);
+    }
+
+    /** @param int[] $instanceIds */
+    private function assertInstancesBelongToTenant(PDO $pdo, int $tenantId, array $instanceIds): void
+    {
+        if ($instanceIds === []) {
+            return;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($instanceIds), '?'));
+        $statement = $pdo->prepare(
+            'SELECT id FROM evolution_instances WHERE tenant_id = ? AND id IN (' . $placeholders . ')'
+        );
+        $statement->execute(array_merge([$tenantId], $instanceIds));
+        $found = array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN) ?: []);
+        sort($found);
+        $expected = $instanceIds;
+        sort($expected);
+        if ($found !== $expected) {
+            throw new \RuntimeException('Uma das conexões selecionadas não pertence a esta empresa.');
+        }
+    }
+
+    /**
+     * Atualiza o vínculo N:N entre assistente e canais e mantém ai_agents.instance_id
+     * como compatibilidade para rotinas antigas.
+     *
+     * @param int[] $instanceIds
+     * @param int[] $primaryInstanceIds
+     */
+    private function syncAgentChannels(PDO $pdo, int $tenantId, int $agentId, array $instanceIds, array $primaryInstanceIds): void
+    {
+        $legacyInstanceId = $primaryInstanceIds[0] ?? $instanceIds[0] ?? null;
+
+        if (!$this->tableExists($pdo, 'ai_agent_instance_bindings')) {
+            $updateLegacy = $pdo->prepare(
+                'UPDATE ai_agents SET instance_id = :instance_id WHERE id = :agent_id AND tenant_id = :tenant_id'
+            );
+            $updateLegacy->execute([
+                'instance_id' => $legacyInstanceId,
+                'agent_id' => $agentId,
+                'tenant_id' => $tenantId,
+            ]);
+            return;
+        }
+
+        $current = $pdo->prepare(
+            'SELECT instance_id FROM ai_agent_instance_bindings WHERE tenant_id = :tenant_id AND agent_id = :agent_id'
+        );
+        $current->execute(['tenant_id' => $tenantId, 'agent_id' => $agentId]);
+        $currentIds = array_map('intval', $current->fetchAll(PDO::FETCH_COLUMN) ?: []);
+        $affectedInstanceIds = array_values(array_unique(array_merge($currentIds, $instanceIds)));
+
+        if ($instanceIds === []) {
+            $delete = $pdo->prepare(
+                'DELETE FROM ai_agent_instance_bindings WHERE tenant_id = :tenant_id AND agent_id = :agent_id'
+            );
+            $delete->execute(['tenant_id' => $tenantId, 'agent_id' => $agentId]);
+        } else {
+            $placeholders = implode(',', array_fill(0, count($instanceIds), '?'));
+            $delete = $pdo->prepare(
+                'DELETE FROM ai_agent_instance_bindings
+                 WHERE tenant_id = ? AND agent_id = ? AND instance_id NOT IN (' . $placeholders . ')'
+            );
+            $delete->execute(array_merge([$tenantId, $agentId], $instanceIds));
+
+            $insert = $pdo->prepare(
+                'INSERT INTO ai_agent_instance_bindings
+                    (tenant_id, agent_id, instance_id, is_primary, priority, status)
+                 VALUES (:tenant_id, :agent_id, :instance_id, :is_primary, :priority, "active")
+                 ON DUPLICATE KEY UPDATE
+                    status = "active",
+                    is_primary = VALUES(is_primary),
+                    priority = VALUES(priority)'
+            );
+
+            foreach ($instanceIds as $instanceId) {
+                $isPrimary = in_array($instanceId, $primaryInstanceIds, true);
+                if ($isPrimary) {
+                    $clearPrimary = $pdo->prepare(
+                        'UPDATE ai_agent_instance_bindings
+                         SET is_primary = 0
+                         WHERE tenant_id = :tenant_id AND instance_id = :instance_id'
+                    );
+                    $clearPrimary->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId]);
+                }
+                $insert->execute([
+                    'tenant_id' => $tenantId,
+                    'agent_id' => $agentId,
+                    'instance_id' => $instanceId,
+                    'is_primary' => $isPrimary ? 1 : 0,
+                    'priority' => $isPrimary ? 200 : 100,
+                ]);
+            }
+        }
+
+        foreach ($affectedInstanceIds as $instanceId) {
+            $this->normalizePrimaryAgentForInstance($pdo, $tenantId, $instanceId);
+        }
+
+        $updateLegacy = $pdo->prepare(
+            'UPDATE ai_agents SET instance_id = :instance_id WHERE id = :agent_id AND tenant_id = :tenant_id'
+        );
+        $updateLegacy->execute([
+            'instance_id' => $legacyInstanceId,
+            'agent_id' => $agentId,
+            'tenant_id' => $tenantId,
+        ]);
+    }
+
+    private function normalizePrimaryAgentForInstance(PDO $pdo, int $tenantId, int $instanceId): void
+    {
+        $primary = $pdo->prepare(
+            'SELECT id
+             FROM ai_agent_instance_bindings
+             WHERE tenant_id = :tenant_id AND instance_id = :instance_id AND status = "active"
+             ORDER BY is_primary DESC, priority DESC, id ASC
+             LIMIT 1'
+        );
+        $primary->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId]);
+        $primaryId = (int) ($primary->fetchColumn() ?: 0);
+        if ($primaryId < 1) {
+            return;
+        }
+
+        $normalize = $pdo->prepare(
+            'UPDATE ai_agent_instance_bindings
+             SET is_primary = CASE WHEN id = :primary_id THEN 1 ELSE 0 END
+             WHERE tenant_id = :tenant_id AND instance_id = :instance_id AND status = "active"'
+        );
+        $normalize->execute([
+            'primary_id' => $primaryId,
+            'tenant_id' => $tenantId,
+            'instance_id' => $instanceId,
+        ]);
+    }
+
+    private function tableExists(PDO $pdo, string $table): bool
+    {
+        $statement = $pdo->prepare(
+            'SELECT COUNT(*) FROM information_schema.tables
+             WHERE table_schema = DATABASE() AND table_name = :table_name'
+        );
+        $statement->execute(['table_name' => $table]);
+        return (int) $statement->fetchColumn() > 0;
     }
 
     private function resolveTenantId(): int
