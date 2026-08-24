@@ -47,6 +47,7 @@ final class ConversationController
             'instance_id' => (int) ($_GET['instance_id'] ?? 0),
             'tenant_id' => $tenantId,
             'intent' => trim((string) ($_GET['intent'] ?? '')),
+            'queue' => trim((string) ($_GET['queue'] ?? '')),
         ];
 
         $conditions = [];
@@ -85,18 +86,42 @@ final class ConversationController
             }
         }
 
+        if (($filters['queue'] ?? '') === 'after_hours') {
+            $conditions[] = 'EXISTS (SELECT 1 FROM ai_after_hours_pending ah_filter WHERE ah_filter.conversation_id = c.id AND ah_filter.status IN ("pending","processing","blocked_plan","blocked_human","error"))';
+        }
+
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
         $statement = $pdo->prepare(
             'SELECT c.*, ct.name AS contact_name, ct.phone, ct.email, ct.company, ct.notes, ct.tags_json, ct.avatar_url,
                     ct.status AS contact_status, ct.preferred_user_id, pref.name AS preferred_user_name,
                     i.name AS instance_label, i.instance_name,
-                    t.name AS tenant_name, u.name AS assigned_user_name
+                    t.name AS tenant_name, u.name AS assigned_user_name,
+                    ah.status AS after_hours_status,
+                    ah.first_received_at AS after_hours_first_received_at,
+                    ah.last_received_at AS after_hours_last_received_at,
+                    ah.ack_sent_at AS after_hours_ack_sent_at,
+                    ah.recovery_attempts AS after_hours_recovery_attempts,
+                    ah.last_attempt_at AS after_hours_last_attempt_at,
+                    ah.next_attempt_at AS after_hours_next_attempt_at,
+                    ah.last_error AS after_hours_last_error,
+                    CASE
+                        WHEN ah.id IS NULL OR ah.first_message_id IS NULL OR ah.last_message_id IS NULL THEN 0
+                        ELSE (
+                            SELECT COUNT(*)
+                            FROM conversation_messages ahm
+                            WHERE ahm.conversation_id = c.id
+                              AND ahm.direction = "incoming"
+                              AND ahm.id BETWEEN ah.first_message_id AND ah.last_message_id
+                        )
+                    END AS after_hours_message_count
              FROM conversations c
              INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
              INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = c.tenant_id
              INNER JOIN tenants t ON t.id = c.tenant_id
              LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
              LEFT JOIN users pref ON pref.id = ct.preferred_user_id AND pref.tenant_id = ct.tenant_id
+             LEFT JOIN ai_after_hours_pending ah ON ah.conversation_id = c.id
+                AND ah.status IN ("pending","processing","blocked_plan","blocked_human","error")
              ' . $where . '
              ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
              LIMIT 100'
@@ -218,21 +243,14 @@ final class ConversationController
                         'next_opening_at' => $nextOpeningAt?->format('Y-m-d H:i:s'),
                     ];
 
-                    try {
-                        $pendingStatement = $pdo->prepare(
-                            'SELECT status, last_received_at, ack_sent_at, recovery_attempts, last_attempt_at, next_attempt_at, last_error
-                             FROM ai_after_hours_pending
-                             WHERE conversation_id = :conversation_id
-                               AND status IN ("pending","processing","blocked_plan","blocked_human","error")
-                             LIMIT 1'
-                        );
-                        $pendingStatement->execute(['conversation_id' => (int) $selected['id']]);
-                        $selectedAfterHoursPending = $pendingStatement->fetch(PDO::FETCH_ASSOC) ?: null;
-                    } catch (Throwable) {
-                        $selectedAfterHoursPending = null;
-                    }
                 } catch (Throwable) {
                     $selectedRuleSnapshot = null;
+                }
+
+                try {
+                    $selectedAfterHoursPending = $this->findActiveAfterHoursPending($pdo, (int) $selected['id']);
+                } catch (Throwable) {
+                    $selectedAfterHoursPending = null;
                 }
             }
         }
@@ -2073,6 +2091,7 @@ final class ConversationController
             'instance_id' => (int) ($_GET['instance_id'] ?? 0),
             'tenant_id' => $tenantId,
             'intent' => trim((string) ($_GET['intent'] ?? '')),
+            'queue' => trim((string) ($_GET['queue'] ?? '')),
         ];
 
         if ($selectedId > 0 && $markRead) {
@@ -2293,16 +2312,39 @@ final class ConversationController
             }
         }
 
+        if (($filters['queue'] ?? '') === 'after_hours') {
+            $conditions[] = 'EXISTS (SELECT 1 FROM ai_after_hours_pending ah_filter WHERE ah_filter.conversation_id = c.id AND ah_filter.status IN ("pending","processing","blocked_plan","blocked_human","error"))';
+        }
+
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
         $statement = $pdo->prepare(
             'SELECT c.id, c.status, c.attendance_mode, c.assigned_user_id, c.unread_count, c.last_message_at, c.last_message_preview,
                     ct.name AS contact_name, ct.phone, ct.avatar_url, i.name AS instance_label, i.instance_name,
-                    t.name AS tenant_name, u.name AS assigned_user_name
+                    t.name AS tenant_name, u.name AS assigned_user_name,
+                    ah.status AS after_hours_status,
+                    ah.first_received_at AS after_hours_first_received_at,
+                    ah.last_received_at AS after_hours_last_received_at,
+                    ah.ack_sent_at AS after_hours_ack_sent_at,
+                    ah.recovery_attempts AS after_hours_recovery_attempts,
+                    ah.next_attempt_at AS after_hours_next_attempt_at,
+                    ah.last_error AS after_hours_last_error,
+                    CASE
+                        WHEN ah.id IS NULL OR ah.first_message_id IS NULL OR ah.last_message_id IS NULL THEN 0
+                        ELSE (
+                            SELECT COUNT(*)
+                            FROM conversation_messages ahm
+                            WHERE ahm.conversation_id = c.id
+                              AND ahm.direction = "incoming"
+                              AND ahm.id BETWEEN ah.first_message_id AND ah.last_message_id
+                        )
+                    END AS after_hours_message_count
              FROM conversations c
              INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
              INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = c.tenant_id
              INNER JOIN tenants t ON t.id = c.tenant_id
              LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
+             LEFT JOIN ai_after_hours_pending ah ON ah.conversation_id = c.id
+                AND ah.status IN ("pending","processing","blocked_plan","blocked_human","error")
              ' . $where . '
              ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
              LIMIT 100'
@@ -2330,7 +2372,59 @@ final class ConversationController
             'mode' => (string) ($conversation['attendance_mode'] ?? ''),
             'assigned_user_id' => (int) ($conversation['assigned_user_id'] ?? 0),
             'assigned_user_name' => (string) ($conversation['assigned_user_name'] ?? ''),
+            'after_hours' => $this->formatAfterHoursForJson($conversation),
             'is_selected' => (int) $conversation['id'] === $selectedId,
+        ];
+    }
+
+    /** @return array<string,mixed>|null */
+    private function findActiveAfterHoursPending(PDO $pdo, int $conversationId): ?array
+    {
+        if ($conversationId < 1) {
+            return null;
+        }
+
+        $statement = $pdo->prepare(
+            'SELECT p.status, p.first_received_at, p.last_received_at, p.ack_sent_at,
+                    p.recovery_attempts, p.last_attempt_at, p.next_attempt_at, p.last_error,
+                    p.first_message_id, p.last_message_id,
+                    CASE
+                        WHEN p.first_message_id IS NULL OR p.last_message_id IS NULL THEN 0
+                        ELSE (
+                            SELECT COUNT(*)
+                            FROM conversation_messages pm
+                            WHERE pm.conversation_id = p.conversation_id
+                              AND pm.direction = "incoming"
+                              AND pm.id BETWEEN p.first_message_id AND p.last_message_id
+                        )
+                    END AS message_count
+             FROM ai_after_hours_pending p
+             WHERE p.conversation_id = :conversation_id
+               AND p.status IN ("pending","processing","blocked_plan","blocked_human","error")
+             LIMIT 1'
+        );
+        $statement->execute(['conversation_id' => $conversationId]);
+        return $statement->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /** @return array<string,mixed>|null */
+    private function formatAfterHoursForJson(array $conversation): ?array
+    {
+        $status = trim((string) ($conversation['after_hours_status'] ?? ''));
+        if ($status === '') {
+            return null;
+        }
+
+        return [
+            'status' => $status,
+            'message_count' => max(1, (int) ($conversation['after_hours_message_count'] ?? 0)),
+            'first_received_at' => (string) ($conversation['after_hours_first_received_at'] ?? ''),
+            'last_received_at' => (string) ($conversation['after_hours_last_received_at'] ?? ''),
+            'last_received_label' => $this->formatTimeLabel((string) ($conversation['after_hours_last_received_at'] ?? '')),
+            'ack_sent' => !empty($conversation['after_hours_ack_sent_at']),
+            'recovery_attempts' => (int) ($conversation['after_hours_recovery_attempts'] ?? 0),
+            'next_attempt_at' => (string) ($conversation['after_hours_next_attempt_at'] ?? ''),
+            'last_error' => (string) ($conversation['after_hours_last_error'] ?? ''),
         ];
     }
 

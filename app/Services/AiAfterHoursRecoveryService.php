@@ -335,8 +335,19 @@ final class AiAfterHoursRecoveryService
         try {
             $statement = Database::connection()->query(
                 'SELECT p.*, t.name AS tenant_name, a.name AS agent_name,
+                        a.business_hours_enabled, a.business_timezone, a.business_hours_json,
                         c.attendance_mode, c.status AS conversation_status,
-                        ct.name AS contact_name, ct.phone AS contact_phone
+                        ct.name AS contact_name, ct.phone AS contact_phone,
+                        CASE
+                            WHEN p.first_message_id IS NULL OR p.last_message_id IS NULL THEN 0
+                            ELSE (
+                                SELECT COUNT(*)
+                                FROM conversation_messages pm
+                                WHERE pm.conversation_id = p.conversation_id
+                                  AND pm.direction = "incoming"
+                                  AND pm.id BETWEEN p.first_message_id AND p.last_message_id
+                            )
+                        END AS message_count
                  FROM ai_after_hours_pending p
                  INNER JOIN tenants t ON t.id = p.tenant_id
                  INNER JOIN conversations c ON c.id = p.conversation_id
@@ -346,7 +357,15 @@ final class AiAfterHoursRecoveryService
                  ORDER BY p.last_received_at ASC, p.id ASC
                  LIMIT ' . $limit
             );
-            return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $items = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $policy = new AgentOperatingPolicyService();
+            foreach ($items as &$item) {
+                $nextOpening = $policy->nextOpeningAt($item);
+                $item['next_opening_at'] = $nextOpening?->format('Y-m-d H:i:s');
+                $item['message_count'] = max(1, (int) ($item['message_count'] ?? 0));
+            }
+            unset($item);
+            return $items;
         } catch (Throwable) {
             return [];
         }

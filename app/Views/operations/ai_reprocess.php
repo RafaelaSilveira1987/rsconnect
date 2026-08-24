@@ -152,25 +152,67 @@ $statusLabel = static function (string $status): string {
         <?php if ((int) ($afterHours['blocked_human'] ?? 0) > 0): ?><small><?= (int) $afterHours['blocked_human'] ?> conversa(s) não serão automatizadas enquanto estiverem sob atendimento humano ou assistente pausado.</small><?php endif; ?>
     </div>
     <?php if ($afterHoursItems): ?>
-    <div class="table-wrap" style="margin-top:16px"><table class="clean-table">
-        <thead><tr><th>Empresa / contato</th><th>Recebida</th><th>Situação</th><th>Próxima tentativa</th><th>Ação</th></tr></thead>
-        <tbody data-collapsible-list="5">
+    <div class="after-hours-operations-list" data-collapsible-list="5">
         <?php foreach ($afterHoursItems as $item): ?>
             <?php
                 $pendingStatus = (string) ($item['status'] ?? 'pending');
-                $pendingLabel = ['pending'=>'Aguardando horário','processing'=>'Processando','blocked_plan'=>'Aguardando franquia','blocked_human'=>'Atendimento humano/IA pausada','error'=>'Tentará novamente'][$pendingStatus] ?? ucfirst($pendingStatus);
-                $pendingBadge = $pendingStatus === 'error' ? 'badge-warning' : ($pendingStatus === 'blocked_plan' ? 'badge-overdue' : ($pendingStatus === 'blocked_human' ? 'badge-info' : 'badge-active'));
+                $pendingLabel = [
+                    'pending' => 'Aguardando horário',
+                    'processing' => 'Retomando agora',
+                    'blocked_plan' => 'Aguardando franquia',
+                    'blocked_human' => 'Pausada para humano',
+                    'error' => 'Nova tentativa programada',
+                ][$pendingStatus] ?? ucfirst($pendingStatus);
+                $pendingClass = [
+                    'pending' => 'is-waiting',
+                    'processing' => 'is-processing',
+                    'blocked_plan' => 'is-blocked',
+                    'blocked_human' => 'is-human',
+                    'error' => 'is-error',
+                ][$pendingStatus] ?? 'is-waiting';
+                $messageCount = max(1, (int) ($item['message_count'] ?? 0));
+                $nextOpening = trim((string) ($item['next_opening_at'] ?? ''));
+                $ackSent = !empty($item['ack_sent_at']);
             ?>
-            <tr>
-                <td><strong><?= View::e((string) ($item['tenant_name'] ?? 'Empresa')) ?></strong><br><small><?= View::e((string) (($item['contact_name'] ?? '') ?: ($item['contact_phone'] ?? 'Contato'))) ?> · <?= View::e((string) ($item['agent_name'] ?? 'Assistente')) ?></small></td>
-                <td><?= View::e($formatDate($item['first_received_at'] ?? null)) ?><br><small>última: <?= View::e($formatDate($item['last_received_at'] ?? null)) ?></small></td>
-                <td><span class="badge <?= $pendingBadge ?>"><?= View::e($pendingLabel) ?></span><?php if (!empty($item['last_error'])): ?><br><small><?= View::e(OperationalLanguageService::replaceTechnicalTerms((string) $item['last_error'])) ?></small><?php endif; ?></td>
-                <td><?= View::e($formatDate($item['next_attempt_at'] ?? null)) ?><br><small><?= (int) ($item['recovery_attempts'] ?? 0) ?> tentativa(s)</small></td>
-                <td><a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) ($item['conversation_id'] ?? 0))) ?>">Abrir conversa</a></td>
-            </tr>
+            <article class="after-hours-operation-card <?= View::e($pendingClass) ?>">
+                <div class="after-hours-operation-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                </div>
+                <div class="after-hours-operation-main">
+                    <div class="after-hours-operation-head">
+                        <div>
+                            <span class="after-hours-operation-status"><?= View::e($pendingLabel) ?></span>
+                            <h3><?= View::e((string) (($item['contact_name'] ?? '') ?: ($item['contact_phone'] ?? 'Contato'))) ?></h3>
+                            <p><?= View::e((string) ($item['tenant_name'] ?? 'Empresa')) ?> · Assistente <?= View::e((string) ($item['agent_name'] ?? 'não definido')) ?></p>
+                        </div>
+                        <span class="after-hours-operation-count"><strong><?= $messageCount ?></strong><?= $messageCount === 1 ? ' mensagem' : ' mensagens' ?></span>
+                    </div>
+                    <div class="after-hours-operation-metrics">
+                        <span><small>Primeira mensagem</small><strong><?= View::e($formatDate($item['first_received_at'] ?? null)) ?></strong></span>
+                        <span><small>Última mensagem</small><strong><?= View::e($formatDate($item['last_received_at'] ?? null)) ?></strong></span>
+                        <span><small>Aviso de ausência</small><strong><?= $ackSent ? 'Enviado' : 'Não enviado' ?></strong></span>
+                        <span><small>Retomada prevista</small><strong><?= View::e($nextOpening !== '' ? $formatDate($nextOpening) : 'Próximo expediente') ?></strong></span>
+                    </div>
+                    <?php if (!empty($item['last_error'])): ?>
+                        <div class="after-hours-operation-note is-error"><?= View::e(OperationalLanguageService::replaceTechnicalTerms((string) $item['last_error'])) ?></div>
+                    <?php elseif ($pendingStatus === 'blocked_human'): ?>
+                        <div class="after-hours-operation-note">A automação está respeitando o atendimento humano ou a IA pausada.</div>
+                    <?php elseif ($pendingStatus === 'blocked_plan'): ?>
+                        <div class="after-hours-operation-note">A conversa permanece preservada até a franquia estar disponível.</div>
+                    <?php else: ?>
+                        <div class="after-hours-operation-note">A demanda será retomada sem repetir respostas já enviadas.</div>
+                    <?php endif; ?>
+                </div>
+                <div class="after-hours-operation-actions">
+                    <?php $conversationQuery = http_build_query(['tenant_id' => (int) ($item['tenant_id'] ?? 0), 'conversation_id' => (int) ($item['conversation_id'] ?? 0)]); ?>
+                    <a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/conversations?' . $conversationQuery)) ?>">Abrir conversa</a>
+                    <small><?= (int) ($item['recovery_attempts'] ?? 0) ?> tentativa(s)</small>
+                </div>
+            </article>
         <?php endforeach; ?>
-        </tbody>
-    </table></div>
+    </div>
+    <?php else: ?>
+        <div class="empty-state after-hours-empty-state"><strong>Nenhuma mensagem aguardando horário.</strong><span>As conversas fora do expediente aparecerão aqui quando houver demanda preservada.</span></div>
     <?php endif; ?>
 </section>
 

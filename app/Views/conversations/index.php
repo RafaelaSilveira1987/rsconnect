@@ -19,6 +19,20 @@ $formatDate = static function (?string $date, string $format = 'd/m/Y H:i'): str
 };
 $modeLabel = ['ai' => 'IA ativa', 'human' => 'Humano', 'paused' => 'IA pausada'];
 $statusLabel = ['open' => 'Aberta', 'pending' => 'Pendente', 'closed' => 'Encerrada'];
+$afterHoursStatusLabels = [
+    'pending' => 'Aguardando horário',
+    'processing' => 'Retomando agora',
+    'blocked_plan' => 'Aguardando franquia',
+    'blocked_human' => 'Pausada para humano',
+    'error' => 'Nova tentativa programada',
+];
+$afterHoursStatusClasses = [
+    'pending' => 'is-waiting',
+    'processing' => 'is-processing',
+    'blocked_plan' => 'is-blocked',
+    'blocked_human' => 'is-human',
+    'error' => 'is-error',
+];
 $normalizeStatus = static fn (?string $status): string => in_array($status, ['open', 'pending', 'closed'], true) ? (string) $status : 'open';
 $contactGroupLabels = \App\Services\ConversationFlowService::GROUPS;
 $flowStageLabels = \App\Services\ConversationFlowService::STAGES;
@@ -44,6 +58,7 @@ $currentQuery = array_filter([
     'instance_id' => $filters['instance_id'] ?? 0,
     'tenant_id' => $filters['tenant_id'] ?? 0,
     'intent' => $filters['intent'] ?? '',
+    'queue' => $filters['queue'] ?? '',
 ], static fn ($value) => $value !== '' && $value !== 0 && $value !== 'tenant');
 $lastMessageId = 0;
 foreach ($messages as $message) {
@@ -56,6 +71,7 @@ if ($selected) {
 $returnQuery = http_build_query($pollQuery);
 $publicPollQuery = (string) (parse_url(Router::url('/conversations?' . http_build_query($pollQuery)), PHP_URL_QUERY) ?? '');
 $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (int) $selected['id']) : '';
+$afterHoursQueueCount = count(array_filter($conversations, static fn (array $conversation): bool => trim((string) ($conversation['after_hours_status'] ?? '')) !== ''));
 ?>
 
 <form class="conversation-filters card" method="get" action="<?= View::e(Router::url('/conversations')) ?>">
@@ -97,6 +113,11 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
         <?php foreach ($modeLabel as $value => $label): ?>
             <option value="<?= View::e($value) ?>" <?= ($filters['mode'] ?? '') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
         <?php endforeach; ?>
+    </select>
+
+    <select name="queue" aria-label="Filtrar por fila operacional">
+        <option value="">Todas as filas</option>
+        <option value="after_hours" <?= ($filters['queue'] ?? '') === 'after_hours' ? 'selected' : '' ?>>Aguardando horário</option>
     </select>
 
     <?php if (($filters['intent'] ?? '') === 'agenda'): ?><span class="badge badge-info">Intenção de agenda</span><?php endif; ?>
@@ -158,6 +179,11 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
                 <h2>Conversas</h2>
             </div>
             <div class="conversation-heading-actions">
+                <?php $afterHoursFilterQuery = $currentQuery; $afterHoursFilterQuery['queue'] = 'after_hours'; unset($afterHoursFilterQuery['conversation_id']); ?>
+                <a class="conversation-queue-filter<?= ($filters['queue'] ?? '') === 'after_hours' ? ' is-active' : '' ?>" data-after-hours-queue-count href="<?= View::e(Router::url('/conversations?' . http_build_query($afterHoursFilterQuery))) ?>" title="Mostrar somente mensagens aguardando o próximo horário" <?= $afterHoursQueueCount > 0 ? '' : 'hidden' ?>>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                    <span><?= (int) $afterHoursQueueCount ?></span>
+                </a>
                 <span class="badge" data-conversation-count><?= count($conversations) ?></span>
                 <?php if ($canManage && $conversations): ?>
                     <button class="btn btn-outline btn-small conversation-select-toggle" type="button" data-toggle-bulk-read aria-expanded="false" aria-controls="conversation-bulk-read-form">
@@ -214,8 +240,12 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
                 $avatarUrl = $contactAvatarUrl($conversation);
                 $conversationPublicId = PublicId::encode('conversation', (int) $conversation['id']);
                 $conversationStatus = $normalizeStatus((string) ($conversation['status'] ?? 'open'));
+                $afterHoursStatus = trim((string) ($conversation['after_hours_status'] ?? ''));
+                $afterHoursCount = max(1, (int) ($conversation['after_hours_message_count'] ?? 0));
+                $afterHoursClass = $afterHoursStatusClasses[$afterHoursStatus] ?? 'is-waiting';
+                $afterHoursLabel = $afterHoursStatusLabels[$afterHoursStatus] ?? 'Aguardando horário';
                 ?>
-                <div class="conversation-list-row status-<?= View::e($conversationStatus) ?><?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>" data-conversation-public-id="<?= View::e($conversationPublicId) ?>" data-conversation-status="<?= View::e($conversationStatus) ?>">
+                <div class="conversation-list-row status-<?= View::e($conversationStatus) ?><?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?><?= $afterHoursStatus !== '' ? ' has-after-hours-queue' : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>" data-conversation-public-id="<?= View::e($conversationPublicId) ?>" data-conversation-status="<?= View::e($conversationStatus) ?>" data-after-hours-status="<?= View::e($afterHoursStatus) ?>">
                     <?php if ($canManage): ?>
                         <label class="conversation-select-control" title="Selecionar <?= View::e($displayName) ?>">
                             <input type="checkbox" name="conversation_ids[]" value="<?= (int) $conversation['id'] ?>" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de <?= View::e($displayName) ?>">
@@ -233,6 +263,14 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
                             <time data-conversation-time><?= View::e($formatDate($conversation['last_message_at'], 'd/m H:i')) ?></time>
                         </span>
                         <span class="conversation-preview" data-conversation-preview><?= View::e($conversation['last_message_preview'] ?: 'Sem mensagens') ?></span>
+                        <span class="conversation-queue-slot" data-after-hours-list-slot>
+                            <?php if ($afterHoursStatus !== ''): ?>
+                                <span class="conversation-queue-state <?= View::e($afterHoursClass) ?>" data-after-hours-list-state>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                                    <span><strong><?= View::e($afterHoursLabel) ?></strong><small><?= $afterHoursCount ?> <?= $afterHoursCount === 1 ? 'mensagem preservada' : 'mensagens preservadas' ?></small></span>
+                                </span>
+                            <?php endif; ?>
+                        </span>
                         <span class="conversation-meta-row">
                             <span class="mini-badge mode-<?= View::e($conversation['attendance_mode']) ?>"><?= View::e($modeLabel[$conversation['attendance_mode']] ?? $conversation['attendance_mode']) ?></span>
                             <span class="mini-badge conversation-status-badge status-<?= View::e($conversationStatus) ?>" data-conversation-list-status><?= View::e($statusLabel[$conversationStatus]) ?></span>
@@ -318,10 +356,14 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
                 $isOutsideConfiguredHours = !empty($ruleHoursState['enforced']) && empty($ruleHoursState['inside']);
                 $hasAfterHoursPending = is_array($selectedAfterHoursPending ?? null);
                 $nextOpeningRaw = trim((string) ($selectedRuleSnapshot['next_opening_at'] ?? ''));
+                $selectedAfterHoursStatus = trim((string) ($selectedAfterHoursPending['status'] ?? ''));
+                $selectedAfterHoursCount = max(1, (int) ($selectedAfterHoursPending['message_count'] ?? 0));
+                $selectedAfterHoursClass = $afterHoursStatusClasses[$selectedAfterHoursStatus] ?? 'is-waiting';
+                $selectedAfterHoursLabel = $afterHoursStatusLabels[$selectedAfterHoursStatus] ?? 'Aguardando horário';
                 ?>
-                <?php if ($isOutsideConfiguredHours && $hasAfterHoursPending): ?>
-                    <span class="after-hours-state" title="A demanda está preservada para recuperação automática no próximo período válido.">
-                        Fora do horário · mensagem preservada<?php if ($nextOpeningRaw !== ''): ?> · retoma a partir de <?= View::e($formatDate($nextOpeningRaw, 'd/m H:i')) ?><?php endif; ?>
+                <?php if ($hasAfterHoursPending): ?>
+                    <span class="after-hours-state <?= View::e($selectedAfterHoursClass) ?>" title="A demanda está preservada e não será perdida.">
+                        <?= View::e($selectedAfterHoursLabel) ?> · <?= $selectedAfterHoursCount ?> <?= $selectedAfterHoursCount === 1 ? 'mensagem' : 'mensagens' ?>
                     </span>
                 <?php elseif ($isOutsideConfiguredHours): ?>
                     <span class="after-hours-state is-neutral">Fora do horário configurado</span>
@@ -329,6 +371,58 @@ $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (in
                 <?php $refreshQuery = $currentQuery; $refreshQuery['conversation_id'] = (int) $selected['id']; ?>
                 <a class="refresh-chat" href="<?= View::e(Router::url('/conversations?' . http_build_query($refreshQuery))) ?>">Atualizar</a>
             </div>
+
+            <?php if ($hasAfterHoursPending): ?>
+                <?php
+                $receivedAt = trim((string) ($selectedAfterHoursPending['first_received_at'] ?? $selectedAfterHoursPending['last_received_at'] ?? ''));
+                $lastReceivedAt = trim((string) ($selectedAfterHoursPending['last_received_at'] ?? ''));
+                $ackSent = !empty($selectedAfterHoursPending['ack_sent_at']);
+                $queueDescription = match ($selectedAfterHoursStatus) {
+                    'processing' => 'A automação já iniciou a retomada desta conversa.',
+                    'blocked_plan' => 'A mensagem está segura, mas a retomada automática depende da franquia de IA.',
+                    'blocked_human' => 'A mensagem está segura e a automação respeitará o atendimento humano ou a IA pausada.',
+                    'error' => 'A mensagem está segura. O sistema fará uma nova tentativa sem duplicar respostas.',
+                    default => $isOutsideConfiguredHours
+                        ? 'A conversa será retomada automaticamente quando o expediente começar.'
+                        : 'O expediente já abriu e esta conversa está na fila de retomada automática.',
+                };
+                ?>
+                <section class="after-hours-queue-banner <?= View::e($selectedAfterHoursClass) ?>" data-after-hours-banner>
+                    <div class="after-hours-queue-banner-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                    </div>
+                    <div class="after-hours-queue-banner-content">
+                        <div class="after-hours-queue-banner-head">
+                            <div>
+                                <span class="eyebrow">Fila fora do horário</span>
+                                <h3><?= View::e($selectedAfterHoursLabel) ?></h3>
+                                <p><?= View::e($queueDescription) ?></p>
+                            </div>
+                            <span class="after-hours-queue-count"><strong><?= $selectedAfterHoursCount ?></strong><?= $selectedAfterHoursCount === 1 ? ' mensagem' : ' mensagens' ?></span>
+                        </div>
+                        <div class="after-hours-queue-details">
+                            <span><small>Primeiro contato</small><strong><?= View::e($receivedAt !== '' ? $formatDate($receivedAt, 'd/m H:i') : '—') ?></strong></span>
+                            <span><small>Última mensagem</small><strong><?= View::e($lastReceivedAt !== '' ? $formatDate($lastReceivedAt, 'd/m H:i') : '—') ?></strong></span>
+                            <span><small>Aviso de ausência</small><strong><?= $ackSent ? 'Enviado' : 'Não enviado' ?></strong></span>
+                            <span><small>Retomada prevista</small><strong><?= View::e($nextOpeningRaw !== '' ? $formatDate($nextOpeningRaw, 'd/m H:i') : ($isOutsideConfiguredHours ? 'Próximo expediente' : 'Em processamento')) ?></strong></span>
+                        </div>
+                        <?php if (!empty($selectedAfterHoursPending['last_error'])): ?>
+                            <div class="after-hours-queue-note is-error"><strong>Última tentativa:</strong> <?= View::e((string) $selectedAfterHoursPending['last_error']) ?></div>
+                        <?php elseif ($selectedAfterHoursStatus === 'blocked_human'): ?>
+                            <div class="after-hours-queue-note">A automação só voltará a responder quando a conversa retornar ao modo IA.</div>
+                        <?php else: ?>
+                            <div class="after-hours-queue-note">As mensagens ficam reunidas em uma única demanda e não consomem tokens enquanto aguardam.</div>
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($canOperateSelected && (string) ($selected['attendance_mode'] ?? '') !== 'human'): ?>
+                        <form class="after-hours-queue-action" method="post" action="<?= View::e(Router::url('/conversations/mode')) ?>">
+                            <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="mode" value="human">
+                            <button class="btn btn-outline btn-small" type="submit">Assumir agora</button>
+                            <small>Para responder antes da abertura.</small>
+                        </form>
+                    <?php endif; ?>
+                </section>
+            <?php endif; ?>
 
             <?php if (!empty($professionalAssignmentSettings['enabled'])): ?>
                 <?php if (!empty($ownershipSnapshot['locked_by_other'])): ?>

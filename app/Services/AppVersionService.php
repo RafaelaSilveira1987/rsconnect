@@ -22,9 +22,10 @@ final class AppVersionService
     // RS Connect 36.18.0 — respostas locais, cache exato e relatórios PDF corrigidos.
     // RS Connect 36.18.1 — criação de instâncias corrigida e novo cabeçalho operacional.
     // RS Connect 36.18.2 — vínculo automático e edição manual dos canais por assistente.
+    // RS Connect 36.18.3 — exibição operacional da fila de mensagens fora do horário.
     // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql e 079_ai_efficiency_phase2_and_report_cleanup.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.2';
-    public const PACKAGE_LABEL = 'RS Connect 36.18.2 — Vínculo de assistentes aos canais WhatsApp';
+    public const PACKAGE_LABEL = 'RS Connect 36.18.3 — Fila fora do horário clara e acionável';
     public const REQUIRED_MIGRATION = '079_ai_efficiency_phase2_and_report_cleanup.sql';
 
     private PDO $pdo;

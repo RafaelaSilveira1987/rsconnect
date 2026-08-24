@@ -1,13 +1,37 @@
-# RS Connect - v36.18.2
+# RS Connect - v36.18.3
 
-Esta versão corrige o vínculo entre assistentes de IA e conexões WhatsApp. Ao criar um novo canal, o RS Connect vincula automaticamente o único assistente ativo ou o fallback geral da empresa. Também passa a ser possível selecionar manualmente um ou vários canais dentro da edição do próprio assistente.
+Esta versão melhora a visualização das mensagens recebidas fora do horário de atendimento. A fila deixa de parecer uma conversa comum ou uma falha e passa a informar claramente o que está aguardando, quantas mensagens foram preservadas, quando a automação deve retomar e quando é necessária uma ação humana.
+
+## Principais mudanças
+
+- Destaque visual das conversas que estão na fila fora do horário.
+- Contador de mensagens preservadas por conversa.
+- Filtro **Aguardando horário** na Caixa de Entrada.
+- Indicador rápido da quantidade de conversas nessa fila.
+- Painel detalhado ao abrir a conversa, com:
+  - situação atual;
+  - primeira e última mensagem da janela;
+  - confirmação do aviso de ausência;
+  - previsão do próximo expediente;
+  - motivo de bloqueio ou última falha;
+  - ação **Assumir agora**.
+- Atualização em tempo real do estado na lista de conversas.
+- Central de Operação reformulada com cards responsivos para cada pendência fora do horário.
+- Link da Central de Operação abre a conversa já no escopo correto da empresa.
 
 ## Atualização
 
-- Não exige nova migration.
-- Preserve o `.env`.
-- Faça rebuild/redeploy e `Ctrl + F5`.
-- Acesse **Assistentes de IA**, marque a conexão em **Canais WhatsApp** e clique em **Salvar configurações**.
-- Novas instâncias são vinculadas automaticamente quando a empresa possui um único assistente ativo ou um único fallback geral.
+- Não exige migration nova.
+- As migrations anteriores até `079_ai_efficiency_phase2_and_report_cleanup.sql` continuam obrigatórias.
+- Preserve o `.env` atual.
+- Faça rebuild/redeploy completo.
+- Depois use `Ctrl + F5` ou abra em janela anônima.
 
-As migrations anteriores até `079_ai_efficiency_phase2_and_report_cleanup.sql` continuam obrigatórias conforme a origem da instalação.
+## Validação sugerida
+
+1. Configure um assistente para responder apenas dentro do horário.
+2. Envie duas mensagens fora do expediente.
+3. Abra **Conversas** e confirme o card **Aguardando horário**.
+4. Abra a conversa e confira quantidade, aviso de ausência e previsão de retomada.
+5. Teste **Assumir agora** para atendimento manual antecipado.
+6. Acesse **Central de Operação → Fila da IA → Mensagens fora do horário**.

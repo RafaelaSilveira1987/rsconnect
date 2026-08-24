@@ -448,6 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const ownershipBanner = document.querySelector('[data-ownership-banner]');
   const searchInput = document.querySelector('[data-conversation-search]');
   const conversationCount = document.querySelector('[data-conversation-count]');
+  const afterHoursQueueCount = document.querySelector('[data-after-hours-queue-count]');
   let searchTimer = null;
 
   function escapeHtml(value) {
@@ -727,6 +728,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function afterHoursStatusMeta(status) {
+    const normalized = String(status || '').trim();
+    const map = {
+      pending: { label: 'Aguardando horário', className: 'is-waiting' },
+      processing: { label: 'Retomando agora', className: 'is-processing' },
+      blocked_plan: { label: 'Aguardando franquia', className: 'is-blocked' },
+      blocked_human: { label: 'Pausada para humano', className: 'is-human' },
+      error: { label: 'Nova tentativa programada', className: 'is-error' },
+    };
+    return map[normalized] || { label: 'Aguardando horário', className: 'is-waiting' };
+  }
+
+  function afterHoursListMarkup(afterHours) {
+    if (!afterHours || !afterHours.status) return '';
+    const meta = afterHoursStatusMeta(afterHours.status);
+    const count = Math.max(1, Number(afterHours.message_count || 0));
+    const messageLabel = count === 1 ? 'mensagem preservada' : 'mensagens preservadas';
+    return `<span class="conversation-queue-state ${meta.className}" data-after-hours-list-state>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      <span><strong>${escapeHtml(meta.label)}</strong><small>${count} ${messageLabel}</small></span>
+    </span>`;
+  }
+
   function renderConversationItem(item) {
     const unread = Number(item.unread_count || 0);
     const selectedClass = item.is_selected ? ' is-selected' : '';
@@ -735,7 +759,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const modeLabel = modeText(item.mode);
     const conversationStatus = normalizeConversationStatus(item.status);
     const publicId = String(item.public_id || '');
-    return `<div class="conversation-list-row status-${conversationStatus}${unread > 0 ? ' has-unread' : ''}" data-conversation-row data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}" data-conversation-status="${conversationStatus}">
+    const hasAfterHoursQueue = Boolean(item.after_hours && item.after_hours.status);
+    const afterHoursStatus = hasAfterHoursQueue ? String(item.after_hours.status) : '';
+    return `<div class="conversation-list-row status-${conversationStatus}${unread > 0 ? ' has-unread' : ''}${hasAfterHoursQueue ? ' has-after-hours-queue' : ''}" data-conversation-row data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}" data-conversation-status="${conversationStatus}" data-after-hours-status="${escapeHtml(afterHoursStatus)}">
       <label class="conversation-select-control" title="Selecionar ${escapeHtml(item.name || item.phone || 'conversa')}">
         <input type="checkbox" name="conversation_ids[]" value="${Number(item.id)}" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de ${escapeHtml(item.name || item.phone || 'contato')}">
         <span aria-hidden="true"></span>
@@ -748,6 +774,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <time data-conversation-time>${escapeHtml(item.last_message_label || '')}</time>
           </span>
           <span class="conversation-preview" data-conversation-preview>${escapeHtml(item.preview || 'Sem mensagens')}</span>
+          <span class="conversation-queue-slot" data-after-hours-list-slot>${afterHoursListMarkup(item.after_hours)}</span>
           <span class="conversation-meta-row">
             <span class="mini-badge mode-${modeClass}">${escapeHtml(modeLabel)}</span>
             <span class="mini-badge conversation-status-badge status-${conversationStatus}" data-conversation-list-status>${escapeHtml(conversationStatusText(conversationStatus))}</span>
@@ -789,15 +816,20 @@ document.addEventListener('DOMContentLoaded', () => {
         row.dataset.conversationStatus = itemStatus;
       }
       row?.classList.toggle('has-unread', Number(item.unread_count || 0) > 0);
+      const hasAfterHoursQueue = Boolean(item.after_hours && item.after_hours.status);
+      row?.classList.toggle('has-after-hours-queue', hasAfterHoursQueue);
+      if (row) row.dataset.afterHoursStatus = hasAfterHoursQueue ? String(item.after_hours.status) : '';
       const name = node.querySelector('[data-conversation-name]');
       const time = node.querySelector('[data-conversation-time]');
       const preview = node.querySelector('[data-conversation-preview]');
+      const afterHoursSlot = node.querySelector('[data-after-hours-list-slot]');
       const unread = node.querySelector('[data-unread-count]');
       const modeBadge = node.querySelector('.mini-badge');
       const statusBadge = node.querySelector('[data-conversation-list-status]');
       if (name) name.textContent = item.name || item.phone || 'Contato';
       if (time) time.textContent = item.last_message_label || '';
       if (preview) preview.textContent = item.preview || 'Sem mensagens';
+      if (afterHoursSlot) afterHoursSlot.innerHTML = afterHoursListMarkup(item.after_hours);
       updateAvatar(node, item);
       if (modeBadge) {
         const itemMode = ['ai', 'human', 'paused'].includes(item.mode) ? item.mode : 'ai';
@@ -822,6 +854,12 @@ document.addEventListener('DOMContentLoaded', () => {
       list.insertAdjacentHTML('beforeend', `<div class="empty-state conversation-empty"><strong>${searching ? 'Nenhum contato encontrado.' : 'Nenhuma conversa encontrada.'}</strong><span>${searching ? 'Tente outro nome, telefone ou trecho de mensagem.' : 'As novas conversas aparecerão aqui.'}</span></div>`);
     }
     if (conversationCount) conversationCount.textContent = String(conversations.length);
+    if (afterHoursQueueCount) {
+      const queueTotal = conversations.filter((item) => item.after_hours && item.after_hours.status).length;
+      const value = afterHoursQueueCount.querySelector('span');
+      if (value) value.textContent = String(queueTotal);
+      afterHoursQueueCount.hidden = queueTotal < 1;
+    }
     wireAvatarImages(list);
     observeConversationAvatars(list);
   }
