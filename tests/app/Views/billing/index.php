@@ -1,0 +1,274 @@
+<?php
+use App\Core\Csrf;
+use App\Core\Router;
+use App\Core\View;
+
+$money = static fn (mixed $value): string => 'R$ ' . number_format((float) $value, 2, ',', '.');
+$date = static function (?string $value): string {
+    if (!$value) return '—';
+    $timestamp = strtotime($value);
+    return $timestamp ? date('d/m/Y', $timestamp) : $value;
+};
+$statusLabel = [
+    'active' => 'Ativa', 'inactive' => 'Inativa', 'suspended' => 'Suspensa', 'trialing' => 'Teste',
+    'overdue' => 'Em atraso', 'canceled' => 'Cancelada', 'open' => 'Aberta', 'paid' => 'Paga',
+    'cancelled' => 'Cancelada', 'monthly' => 'Mensal', 'quarterly' => 'Trimestral',
+    'semiannual' => 'Semestral', 'annual' => 'Anual',
+];
+$activeSubscriptions = count(array_filter($tenants, static fn (array $tenant): bool => in_array(($tenant['billing_status'] ?? ''), ['active', 'trialing', 'overdue'], true)));
+$mrr = array_sum(array_map(static fn (array $tenant): float => in_array(($tenant['billing_status'] ?? ''), ['active', 'trialing', 'overdue'], true) ? (float) ($tenant['amount'] ?? 0) : 0.0, $tenants));
+$openInvoices = count(array_filter($invoices, static fn (array $invoice): bool => in_array(($invoice['status'] ?? ''), ['open', 'overdue'], true)));
+$overdueInvoices = count(array_filter($invoices, static fn (array $invoice): bool => ($invoice['status'] ?? '') === 'overdue'));
+$selectedTenantId = (int) ($selectedTenantId ?? 0);
+$autoEditSubscription = (bool) ($autoEditSubscription ?? false);
+$paymentGateways = $paymentGateways ?? [];
+$paymentMethodLabels = $paymentMethodLabels ?? [];
+$payableInvoices = array_values(array_filter($invoices, static fn (array $invoice): bool => in_array(($invoice['status'] ?? ''), ['open', 'overdue'], true)));
+?>
+<section class="admin-module-hero billing-hero-v2">
+    <div>
+        <span class="eyebrow">Comercial SaaS</span>
+        <h2>Planos e cobranças</h2>
+        <p>Controle vigência, receita, cobranças e links de pagamento sem navegar por telas técnicas.</p>
+    </div>
+    <div class="admin-module-hero-actions">
+        <div class="hero-actions"><button class="btn btn-outline" type="button" data-toggle-panel="external-charge-drawer">Importar cobrança externa</button><button class="btn btn-primary" type="button" data-payment-link-open data-toggle-panel="payment-link-drawer">Gerar link de pagamento</button></div>
+        <button class="btn btn-outline" type="button" data-subscription-open="new" data-toggle-panel="subscription-drawer">Vincular plano</button>
+        <button class="btn btn-outline" type="button" data-plan-open="new" data-toggle-panel="plan-drawer">Novo plano</button>
+        <a class="btn btn-quiet" href="<?= View::e(Router::url('/payment-gateways')) ?>">Configurar gateways</a>
+    </div>
+</section>
+
+<section class="admin-module-summary billing-summary-v2">
+    <article><span>Planos</span><strong><?= count($plans) ?></strong><small>pacotes comerciais</small></article>
+    <article class="is-success"><span>Assinaturas ativas</span><strong><?= $activeSubscriptions ?></strong><small>clientes com contrato vigente</small></article>
+    <article class="is-purple"><span>Receita mensal</span><strong><?= View::e($money($mrr)) ?></strong><small>valor contratado estimado</small></article>
+    <article class="is-warning"><span>Cobranças pendentes</span><strong><?= $openInvoices ?></strong><small><?= $overdueInvoices ?> vencida(s)</small></article>
+</section>
+
+<div class="billing-guidance-strip">
+    <div><strong>Fluxo recomendado</strong><span>1. Vincule o plano · 2. Crie a cobrança · 3. Gere o link · 4. Acompanhe o pagamento</span></div>
+    <a href="<?= View::e(Router::url('/billing-reminders')) ?>">Configurar avisos automáticos</a>
+</div>
+
+<div class="admin-tab-shell billing-tabs-v2" data-tabs-shell>
+    <div class="admin-tab-bar" data-tabs>
+        <button class="is-active" type="button" data-tab-target="subscriptions">Assinaturas</button>
+        <button type="button" data-tab-target="invoices">Cobranças e links</button>
+        <button type="button" data-tab-target="plans">Planos</button>
+    </div>
+
+    <section class="card admin-module-panel" data-tab-panel="subscriptions">
+        <div class="section-heading">
+            <div><span class="eyebrow">Clientes</span><h2>Assinaturas e vigências</h2><p>Veja rapidamente quem está liberado, bloqueado ou próximo do vencimento.</p></div>
+            <button class="btn btn-primary" type="button" data-subscription-open="new" data-toggle-panel="subscription-drawer">Vincular novo plano</button>
+        </div>
+        <div class="billing-subscription-list">
+            <?php foreach ($tenants as $tenant): ?>
+                <?php $access = $tenant['access_status'] ?? ['allowed' => true, 'message' => 'Acesso liberado']; $isBlocked = empty($access['allowed']); ?>
+                <article class="billing-subscription-card <?= $isBlocked ? 'is-access-blocked' : '' ?>">
+                    <header>
+                        <div><span class="eyebrow">Empresa</span><h3><?= View::e($tenant['name']) ?></h3><p><?= View::e($tenant['plan_name'] ?? $tenant['plan'] ?? 'Sem plano') ?></p></div>
+                        <div class="billing-status-stack"><span class="badge badge-<?= View::e($tenant['billing_status'] ?? 'inactive') ?>"><?= View::e($statusLabel[$tenant['billing_status'] ?? 'inactive'] ?? ($tenant['billing_status'] ?? 'Sem assinatura')) ?></span><span class="badge <?= $isBlocked ? 'badge-suspended' : 'badge-active' ?>"><?= $isBlocked ? 'Acesso bloqueado' : 'Acesso liberado' ?></span></div>
+                    </header>
+                    <div class="billing-subscription-facts">
+                        <div><span>Vigência</span><strong><?= View::e($date($tenant['current_period_ends_at'] ?? null)) ?></strong></div>
+                        <div><span>Próxima cobrança</span><strong><?= View::e($date($tenant['next_billing_at'] ?? null)) ?></strong></div>
+                        <div><span>Valor</span><strong><?= View::e($money($tenant['amount'] ?? 0)) ?></strong></div>
+                        <div><span>Ciclo</span><strong><?= View::e($statusLabel[$tenant['billing_cycle'] ?? 'monthly'] ?? ($tenant['billing_cycle'] ?? '—')) ?></strong></div>
+                        <?php
+                            $tenantAiUsage = $tenant['ai_usage'] ?? [];
+                            $tenantAiUsed = (int) ($tenantAiUsage['rs_connect'] ?? 0);
+                            $tenantAiLimit = $tenantAiUsage['billable_limit'] ?? null;
+                            $tenantAiPercent = $tenantAiLimit !== null && (int) $tenantAiLimit > 0 ? min(100, (int) round(($tenantAiUsed / (int) $tenantAiLimit) * 100)) : 0;
+                        ?>
+                        <div><span>IA no mês</span><strong><?= (int) ($tenantAiUsage['total'] ?? 0) ?> interação(ões) entregues</strong><small>Franquia RS: <?= $tenantAiUsed ?> / <?= $tenantAiLimit === null ? '∞' : (int) $tenantAiLimit ?><?= $tenantAiLimit === null ? '' : ' (' . $tenantAiPercent . '%)' ?> · credencial própria: <?= (int) ($tenantAiUsage['tenant'] ?? 0) ?> · mensagens: <?= (int) ($tenantAiUsage['messages']['total'] ?? 0) ?></small></div>
+                    </div>
+                    <?php if ($isBlocked): ?><div class="billing-access-alert"><strong>Motivo do bloqueio</strong><span><?= View::e((string) ($access['message'] ?? 'Revise a vigência ou as cobranças.')) ?></span></div><?php endif; ?>
+                    <footer>
+                        <a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/subscription?tenant_id=' . (int) $tenant['id'])) ?>">Ver uso e histórico</a>
+                        <button class="btn btn-small <?= $isBlocked ? 'btn-primary' : 'btn-primary-soft' ?>" type="button" data-toggle-panel="subscription-drawer" data-subscription-open="edit" data-subscription-auto-open="<?= $autoEditSubscription && $selectedTenantId === (int) $tenant['id'] ? '1' : '0' ?>" data-subscription-id="<?= (int) ($tenant['subscription_id'] ?? 0) ?>" data-tenant-id="<?= (int) $tenant['id'] ?>" data-plan-id="<?= (int) ($tenant['plan_id'] ?? 0) ?>" data-billing-status="<?= View::e((string) ($tenant['billing_status'] ?? 'active')) ?>" data-billing-cycle="<?= View::e((string) ($tenant['billing_cycle'] ?? 'monthly')) ?>" data-amount="<?= View::e(number_format((float) ($tenant['amount'] ?? 0), 2, ',', '.')) ?>" data-period-start="<?= View::e((string) ($tenant['current_period_starts_at'] ?? '')) ?>" data-period-end="<?= View::e((string) ($tenant['current_period_ends_at'] ?? '')) ?>" data-next-billing="<?= View::e((string) ($tenant['next_billing_at'] ?? '')) ?>" data-trial-end="<?= View::e((string) ($tenant['trial_ends_at'] ?? '')) ?>" data-trial-days="<?= (int) ($tenant['trial_days'] ?? 7) ?>" data-trial-end-behavior="<?= View::e((string) ($tenant['trial_end_behavior'] ?? 'await_payment')) ?>" data-trial-grace-days="<?= (int) ($tenant['trial_grace_days'] ?? 3) ?>" data-notes="<?= View::e(rawurlencode((string) ($tenant['notes'] ?? ''))) ?>" data-tenant-name="<?= View::e((string) $tenant['name']) ?>" data-access-message="<?= View::e(rawurlencode((string) ($access['message'] ?? ''))) ?>"><?= $isBlocked ? 'Editar vigência e liberar' : 'Editar vigência' ?></button>
+                        <?php if (!empty($tenant['subscription_id'])): ?><button class="btn btn-small btn-outline" type="button" data-toggle-panel="invoice-create-drawer" data-invoice-open data-tenant-id="<?= (int) $tenant['id'] ?>" data-subscription-id="<?= (int) $tenant['subscription_id'] ?>" data-tenant-name="<?= View::e($tenant['name']) ?>" data-amount="<?= View::e(number_format((float) ($tenant['amount'] ?? 0), 2, ',', '.')) ?>">Criar cobrança</button><?php endif; ?>
+                    </footer>
+                </article>
+            <?php endforeach; ?>
+            <?php if (!$tenants): ?><div class="empty-state">Nenhuma empresa cadastrada.</div><?php endif; ?>
+        </div>
+    </section>
+
+    <section class="card admin-module-panel" data-tab-panel="invoices" hidden>
+        <div class="section-heading">
+            <div><span class="eyebrow">Financeiro</span><h2>Cobranças e links de pagamento</h2><p>Crie cobranças, gere links e acompanhe a situação em um único lugar.</p></div>
+            <button class="btn btn-primary" type="button" data-payment-link-open data-toggle-panel="payment-link-drawer">Gerar link</button>
+        </div>
+        <div class="billing-invoice-list">
+            <?php foreach ($invoices as $invoice): ?>
+                <?php $paymentLink = (string) ($invoice['external_checkout_url'] ?? $invoice['external_invoice_url'] ?? ''); ?>
+                <article class="billing-invoice-card">
+                    <div class="billing-invoice-main"><span class="eyebrow">Cobrança</span><h3><?= View::e($invoice['invoice_number']) ?></h3><p><?= View::e($invoice['tenant_name']) ?> · <?= View::e($invoice['plan_name'] ?? 'Sem plano') ?></p></div>
+                    <div class="billing-invoice-facts"><div><span>Valor</span><strong><?= View::e($money($invoice['amount'])) ?></strong></div><div><span>Vencimento</span><strong><?= View::e($date($invoice['due_date'])) ?></strong></div><div><span>Período</span><strong><?= View::e($date($invoice['period_start'])) ?> a <?= View::e($date($invoice['period_end'])) ?></strong></div></div>
+                    <div class="billing-invoice-status"><span class="badge badge-<?= View::e($invoice['status']) ?>"><?= View::e($statusLabel[$invoice['status']] ?? $invoice['status']) ?></span><?php if (!empty($invoice['gateway_provider'])): ?><small><?= View::e($invoice['gateway_label'] ?: ucfirst((string) $invoice['gateway_provider'])) ?><?= !empty($invoice['external_status']) ? ' · ' . View::e((string) $invoice['external_status']) : '' ?></small><?php endif; ?></div>
+                    <div class="billing-invoice-actions">
+                        <?php if ($paymentLink): ?><a class="btn btn-small btn-primary" href="<?= View::e($paymentLink) ?>" target="_blank" rel="noopener">Abrir link</a><button class="btn btn-small btn-outline" type="button" data-copy-value="<?= View::e($paymentLink) ?>">Copiar link</button><?php elseif (in_array($invoice['status'], ['open', 'overdue'], true)): ?><button class="btn btn-small btn-primary" type="button" data-payment-link-open data-toggle-panel="payment-link-drawer" data-invoice-id="<?= (int) $invoice['id'] ?>">Gerar link</button><?php endif; ?>
+                        <?php if (($invoice['gateway_provider'] ?? '') === 'pagbank' && !empty($invoice['external_payment_id'])): ?><form method="post" action="<?= View::e(Router::url('/payment-gateways/invoices/refresh-status')) ?>"><?= Csrf::input() ?><input type="hidden" name="invoice_id" value="<?= (int) $invoice['id'] ?>"><input type="hidden" name="return_to" value="/billing"><button class="btn btn-small btn-outline" type="submit">Consultar PagBank</button></form><?php endif; ?>
+                        <form class="admin-inline-status-form" method="post" action="<?= View::e(Router::url('/billing/invoices/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="invoice_id" value="<?= (int) $invoice['id'] ?>"><select name="status"><option value="open" <?= $invoice['status'] === 'open' ? 'selected' : '' ?>>Aberta</option><option value="paid" <?= $invoice['status'] === 'paid' ? 'selected' : '' ?>>Paga</option><option value="overdue" <?= $invoice['status'] === 'overdue' ? 'selected' : '' ?>>Atrasada</option><option value="cancelled" <?= $invoice['status'] === 'cancelled' ? 'selected' : '' ?>>Cancelada</option></select><button class="btn btn-small btn-outline" type="submit">Salvar status</button></form>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+            <?php if (!$invoices): ?><div class="empty-state">Nenhuma cobrança criada.</div><?php endif; ?>
+        </div>
+    </section>
+
+    <section class="card admin-module-panel commercial-plans-panel" data-tab-panel="plans" hidden>
+        <?php
+        $commercialProfiles = [
+            'starter' => [
+                'market_name' => 'Essencial',
+                'kicker' => 'Para começar',
+                'summary' => 'Para profissionais e pequenas operações que querem automatizar um canal de atendimento com simplicidade.',
+                'tone' => 'starter',
+            ],
+            'pro' => [
+                'market_name' => 'Profissional',
+                'kicker' => 'Mais indicado',
+                'summary' => 'Para equipes que precisam dividir funções entre atendimento, agenda e comercial em mais de um canal.',
+                'tone' => 'pro',
+            ],
+            'business' => [
+                'market_name' => 'Business',
+                'kicker' => 'Para escalar',
+                'summary' => 'Para operações com vários números, áreas e agentes especializados trabalhando de forma coordenada.',
+                'tone' => 'business',
+            ],
+            'custom' => [
+                'market_name' => 'Custom',
+                'kicker' => 'Sob medida',
+                'summary' => 'Para múltiplas unidades, volumes maiores, integrações próprias ou necessidades comerciais específicas.',
+                'tone' => 'custom',
+            ],
+        ];
+        $normalizeCommercialFeature = static function (string $feature): string {
+            $feature = trim($feature);
+            $feature = preg_replace('/(\d+)\s+fluxos?\s+n8n/iu', '$1 automações integradas', $feature) ?? $feature;
+            $feature = preg_replace('/CRM\s+b[aá]sico/iu', 'CRM essencial', $feature) ?? $feature;
+            $feature = preg_replace('/Agenda\s*\+\s*Google Calendar\s+via\s+n8n/iu', 'Agenda + Google Calendar', $feature) ?? $feature;
+            $feature = preg_replace('/inst[aâ]ncias?\s+WhatsApp/iu', 'canais WhatsApp', $feature) ?? $feature;
+            $feature = preg_replace('/agentes?\s+IA/iu', 'agentes de IA', $feature) ?? $feature;
+            return trim($feature);
+        };
+        ?>
+        <div class="section-heading commercial-plans-heading">
+            <div>
+                <span class="eyebrow">Produtos comerciais</span>
+                <h2>Planos RS Connect</h2>
+                <p>Os planos evoluem pela complexidade da operação: canais de atendimento, agentes especializados, automações e franquia de IA fornecida pela RS Connect.</p>
+            </div>
+            <button class="btn btn-primary" type="button" data-plan-open="new" data-toggle-panel="plan-drawer">Novo plano</button>
+        </div>
+
+        <div class="commercial-plan-grid">
+            <?php foreach ($plans as $plan): ?>
+                <?php
+                $planKey = strtolower((string) ($plan['plan_key'] ?? ''));
+                $profile = $commercialProfiles[$planKey] ?? [
+                    'market_name' => (string) ($plan['name'] ?? 'Plano'),
+                    'kicker' => 'Plano personalizado',
+                    'summary' => (string) ($plan['description'] ?? 'Capacidade e recursos definidos para esta oferta.'),
+                    'tone' => 'custom',
+                ];
+                $isCustomQuote = $planKey === 'custom' && (float) ($plan['monthly_price'] ?? 0) <= 0;
+                $limits = $plan['limits'] ?? [];
+                $usersLimit = $limits['users'] ?? null;
+                $channelLimit = $limits['instances'] ?? null;
+                $agentLimit = $limits['agents'] ?? null;
+                $automationLimit = $limits['n8n_flows'] ?? null;
+                $aiLimit = $limits['ai_interactions_month'] ?? $limits['messages_month'] ?? null;
+                $displayFeatures = [];
+                foreach (($plan['features'] ?? []) as $feature) {
+                    $featureText = $normalizeCommercialFeature((string) $feature);
+                    if ($featureText === '') { continue; }
+                    if (preg_match('/\b(inst[aâ]ncia|whatsapps?|canais?\s+WhatsApp|agentes?\s+(?:de\s+)?IA|assistentes?\s+IA|automa[cç][oõ]es?\s+integradas?)\b/iu', $featureText)) { continue; }
+                    if (!in_array($featureText, $displayFeatures, true)) { $displayFeatures[] = $featureText; }
+                }
+                $limitText = static fn (mixed $value): string => $value === null || $value === '' ? 'Ilimitado' : number_format((int) $value, 0, ',', '.');
+                ?>
+                <article class="commercial-plan-card is-<?= View::e($profile['tone']) ?><?= $planKey === 'pro' ? ' is-featured' : '' ?>">
+                    <header class="commercial-plan-card-header">
+                        <div class="commercial-plan-kicker-row">
+                            <span class="commercial-plan-kicker"><?= View::e($profile['kicker']) ?></span>
+                            <?php if ($planKey === 'pro'): ?><span class="commercial-plan-recommended">Recomendado</span><?php endif; ?>
+                            <span class="badge badge-<?= View::e($plan['status']) ?>"><?= View::e($statusLabel[$plan['status']] ?? $plan['status']) ?></span>
+                        </div>
+                        <div class="commercial-plan-title-row">
+                            <span class="admin-record-mark is-plan" aria-hidden="true">R$</span>
+                            <div>
+                                <h3><?= View::e($profile['market_name']) ?></h3>
+                                <small>Plano interno: <?= View::e((string) ($plan['name'] ?? $planKey)) ?></small>
+                            </div>
+                        </div>
+                        <p class="commercial-plan-audience"><?= View::e($profile['summary']) ?></p>
+                        <div class="commercial-plan-price">
+                            <?php if ($isCustomQuote): ?>
+                                <strong>Sob consulta</strong><span>capacidade definida por proposta</span>
+                            <?php else: ?>
+                                <strong><?= View::e($money($plan['monthly_price'])) ?></strong><span>/mês</span>
+                            <?php endif; ?>
+                        </div>
+                    </header>
+
+                    <div class="commercial-plan-capacity">
+                        <div><span>Canais WhatsApp</span><strong><?= View::e($limitText($channelLimit)) ?></strong><small>números conectados</small></div>
+                        <div><span>Agentes de IA</span><strong><?= View::e($limitText($agentLimit)) ?></strong><small>funções especializadas</small></div>
+                        <div><span>Usuários</span><strong><?= View::e($limitText($usersLimit)) ?></strong><small>pessoas da equipe</small></div>
+                        <div><span>Franquia IA RS</span><strong><?= View::e($limitText($aiLimit)) ?></strong><small>respostas automáticas/mês</small></div>
+                    </div>
+
+                    <div class="commercial-plan-included">
+                        <strong>O que este plano viabiliza</strong>
+                        <ul>
+                            <li><span>✓</span><b><?= View::e($limitText($automationLimit)) ?></b> automações integradas</li>
+                            <?php foreach (array_slice($displayFeatures, 0, 5) as $feature): ?><li><span>✓</span><?= View::e($feature) ?></li><?php endforeach; ?>
+                            <?php if (!$displayFeatures): ?><li><span>✓</span>Recursos definidos conforme a capacidade acima</li><?php endif; ?>
+                        </ul>
+                    </div>
+
+                    <div class="commercial-plan-ai-note">
+                        <strong>IA própria do cliente</strong>
+                        <span>É monitorada no uso total, mas não reduz a franquia de IA custeada pela RS Connect.</span>
+                    </div>
+
+                    <footer class="commercial-plan-actions">
+                        <button class="btn btn-small btn-outline" type="button" data-toggle-panel="plan-drawer" data-plan-open="edit" data-id="<?= (int) $plan['id'] ?>" data-plan-key="<?= View::e($plan['plan_key']) ?>" data-name="<?= View::e($plan['name']) ?>" data-description="<?= View::e($plan['description'] ?? '') ?>" data-price="<?= View::e(number_format((float) $plan['monthly_price'], 2, ',', '.')) ?>" data-status="<?= View::e($plan['status']) ?>" data-sort-order="<?= (int) $plan['sort_order'] ?>" data-limits="<?= View::e(rawurlencode(json_encode($plan['limits'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))) ?>" data-features="<?= View::e(rawurlencode(implode("\n", $plan['features'] ?? []))) ?>">Editar plano</button>
+                    </footer>
+                </article>
+            <?php endforeach; ?>
+            <?php if (!$plans): ?><div class="empty-state">Nenhum plano cadastrado.</div><?php endif; ?>
+        </div>
+
+        <section class="commercial-capability-guide">
+            <div class="commercial-capability-guide-title">
+                <span class="eyebrow">Como interpretar os limites</span>
+                <h3>O que cada capacidade representa na prática</h3>
+                <p>Esses conceitos também orientam as telas de Canais e Agentes, evitando que limite comercial e configuração técnica sejam coisas diferentes.</p>
+            </div>
+            <div class="commercial-capability-grid">
+                <article><span class="commercial-capability-icon">WA</span><div><strong>Canal WhatsApp</strong><p>Cada número conectado conta como 1 canal. Todos os números da empresa ficam em uma única tela de Canais WhatsApp.</p></div></article>
+                <article><span class="commercial-capability-icon">IA</span><div><strong>Agente especializado</strong><p>É uma função de atendimento. Vários agentes podem compartilhar um WhatsApp e o mesmo agente pode atuar em vários canais.</p></div></article>
+                <article><span class="commercial-capability-icon">RS</span><div><strong>Franquia IA RS</strong><p>Conta somente respostas automáticas entregues utilizando IA custeada pela RS Connect. Mensagens humanas não consomem esta franquia.</p></div></article>
+                <article><span class="commercial-capability-icon">↻</span><div><strong>Automação integrada</strong><p>É uma rotina ativa de integração ou operação, como agenda, follow-up, cobrança ou sincronização. n8n continua sendo a tecnologia por trás dela.</p></div></article>
+            </div>
+        </section>
+    </section>
+</div>
+
+<aside class="conversation-details conversation-drawer admin-form-drawer" id="plan-drawer" aria-label="Configurar plano" aria-modal="true" role="dialog"><div class="conversation-drawer-header"><div><span class="eyebrow" data-plan-eyebrow>Novo plano</span><h2 data-plan-title>Criar pacote comercial</h2><p>Defina valor, limites e recursos apresentados ao cliente.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="plan-drawer">×</button></div><div class="conversation-drawer-body"><form class="drawer-form" method="post" action="<?= View::e(Router::url('/billing/plans/save')) ?>" data-plan-form><?= Csrf::input() ?><input type="hidden" name="id" value="0" data-plan-field="id"><section class="drawer-section"><div class="drawer-form-grid"><label class="field"><span>Identificador</span><input name="plan_key" data-plan-field="plan_key" placeholder="custom-clinica" required></label><label class="field"><span>Situação</span><select name="status" data-plan-field="status"><option value="active">Ativo</option><option value="inactive">Inativo</option></select></label><label class="field drawer-span"><span>Nome</span><input name="name" data-plan-field="name" placeholder="Plano Clínica" required></label><label class="field drawer-span"><span>Descrição</span><input name="description" data-plan-field="description" placeholder="Pacote específico para clínicas"></label><label class="field"><span>Valor mensal</span><input name="monthly_price" data-plan-field="monthly_price" placeholder="497,00"></label><label class="field"><span>Ordem de exibição</span><input name="sort_order" type="number" value="50" data-plan-field="sort_order"></label></div></section><section class="drawer-section"><div class="drawer-section-title"><div><span class="eyebrow">Limites</span><h3>Capacidade do plano</h3></div></div><div class="drawer-form-grid"><?php foreach ($limitLabels as $key => $label): ?><label class="field"><span><?= View::e($label) ?></span><input name="limits[<?= View::e($key) ?>]" type="number" min="0" placeholder="Ilimitado" data-plan-limit="<?= View::e($key) ?>"><?php if (!empty($limitDescriptions[$key])): ?><small class="field-hint"><?= View::e($limitDescriptions[$key]) ?></small><?php endif; ?></label><?php endforeach; ?></div></section><section class="drawer-section"><label class="field"><span>Recursos inclusos, um por linha</span><textarea name="features" rows="7" data-plan-field="features" placeholder="CRM
+Agenda
+Assistente virtual"></textarea></label></section><div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="plan-drawer">Cancelar</button><button class="btn btn-primary" type="submit" data-plan-submit>Salvar plano</button></div></form></div></aside>
+
+<aside class="conversation-details conversation-drawer admin-form-drawer" id="subscription-drawer" aria-label="Vincular ou editar assinatura" aria-modal="true" role="dialog"><div class="conversation-drawer-header"><div><span class="eyebrow" data-subscription-eyebrow>Assinatura</span><h2 data-subscription-title>Vincular plano</h2><p data-subscription-description>Defina o plano e o período de acesso da empresa.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="subscription-drawer">×</button></div><div class="conversation-drawer-body"><form class="drawer-form" method="post" action="<?= View::e(Router::url('/billing/subscriptions/save')) ?>" data-subscription-form><?= Csrf::input() ?><input type="hidden" name="subscription_id" value="0" data-subscription-field="subscription_id"><div class="admin-access-edit-note" data-subscription-access-note hidden></div><section class="drawer-section"><div class="drawer-form-grid"><label class="field drawer-span"><span>Empresa</span><select name="tenant_id" required data-subscription-field="tenant_id"><option value="">Selecione</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>"><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select></label><label class="field drawer-span"><span>Plano</span><select name="plan_id" required data-subscription-field="plan_id"><option value="">Selecione</option><?php foreach ($plans as $plan): ?><option value="<?= (int) $plan['id'] ?>"><?= View::e($plan['name']) ?> — <?= View::e($money($plan['monthly_price'])) ?></option><?php endforeach; ?></select></label><label class="field"><span>Situação</span><select name="billing_status" data-subscription-field="billing_status"><option value="trialing">Teste</option><option value="active" selected>Ativa</option><option value="overdue">Em atraso</option><option value="suspended">Suspensa</option><option value="canceled">Cancelada</option></select></label><label class="field"><span>Ciclo</span><select name="billing_cycle" data-subscription-field="billing_cycle"><option value="monthly">Mensal</option><option value="quarterly">Trimestral</option><option value="semiannual">Semestral</option><option value="annual">Anual</option></select></label><label class="field drawer-span"><span>Valor negociado</span><input name="amount" placeholder="297,00" data-subscription-field="amount"></label><label class="field"><span>Início do período</span><input type="date" name="current_period_starts_at" value="<?= date('Y-m-01') ?>" data-subscription-field="current_period_starts_at"></label><label class="field"><span>Fim da vigência</span><input type="date" name="current_period_ends_at" value="<?= date('Y-m-t') ?>" required data-subscription-field="current_period_ends_at"><small class="field-hint">O cliente permanece com acesso até o final desta data.</small></label><label class="field"><span>Próxima cobrança</span><input type="date" name="next_billing_at" data-subscription-field="next_billing_at"><small class="field-hint" data-trial-billing-hint>A primeira cobrança do teste é calculada para o dia seguinte ao término.</small></label><section class="drawer-span subscription-trial-settings" data-trial-settings hidden><div class="subscription-trial-settings-head"><div><span class="eyebrow">Teste gratuito</span><strong>Período e transição</strong></div><span class="badge badge-trialing">Sem cobrança durante o teste</span></div><div class="drawer-form-grid"><label class="field"><span>Duração do teste (dias)</span><input type="number" name="trial_days" min="1" max="365" value="7" data-subscription-field="trial_days"></label><label class="field"><span>Último dia gratuito</span><input type="date" name="trial_ends_at" data-subscription-field="trial_ends_at" readonly></label><label class="field"><span>Após o teste</span><select name="trial_end_behavior" data-subscription-field="trial_end_behavior"><option value="await_payment">Aguardar contratação/pagamento</option><option value="activate">Converter para assinatura ativa</option><option value="suspend">Suspender acesso</option></select></label><label class="field"><span>Tolerância após o teste</span><input type="number" name="trial_grace_days" min="0" max="30" value="3" data-subscription-field="trial_grace_days"><small class="field-hint">Aplicada quando a opção for aguardar contratação.</small></label></div><div class="subscription-trial-summary" data-trial-summary>Informe o início e a duração para calcular as datas.</div></section><label class="field drawer-span"><span>Observações comerciais</span><textarea name="notes" rows="4" data-subscription-field="notes"></textarea></label></div></section><div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="subscription-drawer">Cancelar</button><button class="btn btn-primary" type="submit" data-subscription-submit>Salvar assinatura</button></div></form></div></aside>
+
+<aside class="conversation-details conversation-drawer admin-form-drawer" id="invoice-create-drawer" aria-label="Criar cobrança" aria-modal="true" role="dialog"><div class="conversation-drawer-header"><div><span class="eyebrow">Nova cobrança</span><h2 data-invoice-title>Criar cobrança</h2><p>Gere um registro financeiro para uma assinatura existente.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="invoice-create-drawer">×</button></div><div class="conversation-drawer-body"><form class="drawer-form" method="post" action="<?= View::e(Router::url('/billing/invoices/create')) ?>" data-invoice-form><?= Csrf::input() ?><input type="hidden" name="tenant_id" data-invoice-field="tenant_id"><input type="hidden" name="subscription_id" data-invoice-field="subscription_id"><section class="drawer-section"><div class="drawer-form-grid"><label class="field drawer-span"><span>Valor</span><input name="amount" data-invoice-field="amount" required></label><label class="field"><span>Vencimento</span><input type="date" name="due_date" value="<?= date('Y-m-d') ?>"></label><label class="field"><span>Início do período</span><input type="date" name="period_start" value="<?= date('Y-m-01') ?>"></label><label class="field"><span>Fim do período</span><input type="date" name="period_end" value="<?= date('Y-m-t') ?>"></label><label class="field drawer-span"><span>Observação</span><input name="notes" placeholder="Cobrança mensal"></label></div></section><div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="invoice-create-drawer">Cancelar</button><button class="btn btn-primary" type="submit">Criar cobrança</button></div></form></div></aside>
+
+<aside class="conversation-details conversation-drawer admin-form-drawer" id="external-charge-drawer" aria-label="Importar cobrança externa" aria-modal="true" role="dialog"><div class="conversation-drawer-header"><div><span class="eyebrow">Cobrança existente</span><h2>Importar link externo</h2><p>Vincule ao RS Connect uma cobrança já criada na InfinitePay ou em outro provedor.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="external-charge-drawer">×</button></div><div class="conversation-drawer-body"><form class="drawer-form" method="post" action="<?= View::e(Router::url('/payment-gateways/invoices/import-external')) ?>"><?= Csrf::input() ?><input type="hidden" name="return_to" value="/billing"><section class="drawer-section"><div class="drawer-form-grid"><label class="field drawer-span"><span>Cobrança do RS Connect</span><select name="invoice_id" required><option value="">Selecione</option><?php foreach ($payableInvoices as $invoice): ?><option value="<?= (int) $invoice['id'] ?>"><?= View::e($invoice['tenant_name']) ?> · <?= View::e($invoice['invoice_number']) ?> · <?= View::e($money($invoice['amount'])) ?></option><?php endforeach; ?></select></label><label class="field"><span>Provedor</span><select name="provider"><option value="infinitepay">InfinitePay</option><option value="external">Outro provedor externo</option></select></label><label class="field"><span>Situação atual</span><select name="status"><option value="open">Aguardando pagamento</option><option value="paid">Paga</option><option value="overdue">Vencida</option><option value="cancelled">Cancelada</option></select></label><label class="field drawer-span"><span>Identificador da cobrança externa</span><input name="external_id" placeholder="Código exibido no provedor" required></label><label class="field drawer-span"><span>Link de pagamento</span><input name="checkout_url" type="url" placeholder="https://..." required><small class="field-hint">O RS Connect armazenará e enviará esse link; não criará uma nova cobrança no provedor.</small></label></div></section><div class="operations-alert is-info"><strong>Atualização automática opcional</strong><p>Um fluxo n8n pode enviar o status normalizado para <code>/webhooks/payments/infinitepay</code> usando o token configurado no gateway.</p></div><div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="external-charge-drawer">Cancelar</button><button class="btn btn-primary" type="submit" <?= !$payableInvoices ? 'disabled' : '' ?>>Vincular cobrança</button></div></form></div></aside>
+
+<aside class="conversation-details conversation-drawer admin-form-drawer" id="payment-link-drawer" aria-label="Gerar link de pagamento" aria-modal="true" role="dialog"><div class="conversation-drawer-header"><div><span class="eyebrow">Pagamento</span><h2>Gerar link de pagamento</h2><p>Escolha uma cobrança pendente e o gateway que processará o pagamento.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="payment-link-drawer">×</button></div><div class="conversation-drawer-body"><form class="drawer-form" method="post" action="<?= View::e(Router::url('/payment-gateways/invoices/create-link')) ?>" data-payment-link-form><?= Csrf::input() ?><input type="hidden" name="return_to" value="/billing"><section class="drawer-section"><div class="drawer-form-grid"><label class="field drawer-span"><span>Cobrança pendente</span><select name="invoice_id" required data-payment-link-invoice><option value="">Selecione</option><?php foreach ($payableInvoices as $invoice): ?><option value="<?= (int) $invoice['id'] ?>"><?= View::e($invoice['tenant_name']) ?> · <?= View::e($invoice['invoice_number']) ?> · <?= View::e($money($invoice['amount'])) ?> · vence <?= View::e($date($invoice['due_date'])) ?></option><?php endforeach; ?></select></label><label class="field drawer-span"><span>Gateway</span><select name="gateway_id"><option value="0">Usar gateway padrão</option><?php foreach ($paymentGateways as $gateway): ?><option value="<?= (int) $gateway['id'] ?>"><?= View::e($gateway['label']) ?><?= !empty($gateway['is_default']) ? ' · padrão' : '' ?></option><?php endforeach; ?></select></label><label class="field drawer-span"><span>Forma de pagamento</span><select name="payment_method"><option value="">Usar padrão do gateway</option><?php foreach ($paymentMethodLabels as $key => $label): ?><option value="<?= View::e($key) ?>"><?= View::e($label) ?></option><?php endforeach; ?></select></label></div></section><?php if (!$paymentGateways): ?><div class="operations-alert is-warning"><strong>Nenhum gateway ativo</strong><p>Cadastre ou ative um gateway antes de gerar o link.</p><a class="btn btn-small btn-outline" href="<?= View::e(Router::url('/payment-gateways')) ?>">Configurar gateway</a></div><?php endif; ?><div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="payment-link-drawer">Cancelar</button><button class="btn btn-primary" type="submit" <?= !$paymentGateways || !$payableInvoices ? 'disabled' : '' ?>>Gerar link</button></div></form></div></aside>

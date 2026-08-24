@@ -1,0 +1,17 @@
+{
+  "event": "calendar.free_slot.updated",
+  "action": "create",
+  "state": "created",
+  "tenant_id": 2,
+  "request_id": 101,
+  "request_token": "REQUEST_TOKEN",
+  "appointment_id": 55,
+  "google_calendar_id": "primary",
+  "google_event_id": "rsconnect2a1n",
+  "summary": "Atendimento confirmado — Cliente Teste",
+  "google_event": {
+    "id": "rsconnect2a1n",
+    "status": "confirmed",
+    "htmlLink": "https://calendar.google.com/calendar/event?eid=exemplo"
+  }
+}

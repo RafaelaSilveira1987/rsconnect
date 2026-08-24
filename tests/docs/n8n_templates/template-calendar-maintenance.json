@@ -1,0 +1,104 @@
+{
+  "name": "RS Connect - Manutenção automática da agenda",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "ScheduleCalendarMaintenance",
+      "name": "A cada 10 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://SEU_DOMINIO_RS_CONNECT/webhooks/calendar/maintenance/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-RS-Calendar-Maintenance-Token",
+              "value": "SEU_CALENDAR_MAINTENANCE_TOKEN"
+            },
+            {
+              "name": "X-RS-Automation-Origin",
+              "value": "n8n"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "CallCalendarMaintenance",
+      "name": "Executar manutenção da agenda",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $json;\nconst data = response.result && typeof response.result === 'object' ? response.result : response;\nreturn [{ json: {\n  ok: !!response.ok,\n  status: response.status || (response.ok ? 'success' : 'error'),\n  tenants_processed: Number(response.tenants_processed || 0),\n  released: Number(data.expired_holds_released || 0),\n  callbacks_closed: Number(data.stale_requests_closed || 0),\n  synced: Number(data.syncs_retried || 0),\n  google_events_created: Number(data.google_events_created || 0),\n  google_events_updated: Number(data.google_events_updated || 0),\n  google_events_deleted: Number(data.google_events_deleted || 0),\n  warnings: Array.isArray(data.errors) ? data.errors : [],\n  processed_at: new Date().toISOString(),\n  raw: response\n} }];"
+      },
+      "id": "CalendarMaintenanceSummary",
+      "name": "Resumo da manutenção",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "A cada 10 minutos": {
+      "main": [
+        [
+          {
+            "node": "Executar manutenção da agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Executar manutenção da agenda": {
+      "main": [
+        [
+          {
+            "node": "Resumo da manutenção",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "timezone": "America/Sao_Paulo"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "rs-connect-calendar-maintenance-template"
+  }
+}

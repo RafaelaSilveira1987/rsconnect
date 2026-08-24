@@ -1,0 +1,1655 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services;
+
+use App\Core\Crypto;
+use App\Core\Database;
+use App\Core\Env;
+use DateInterval;
+use DateTimeImmutable;
+use DateTimeZone;
+use PDO;
+use Throwable;
+
+final class PreSchedulingService
+{
+    public function handleIncoming(PDO $pdo, array $instance, int $contactId, int $conversationId, string $content, array $flowContext = [], int $incomingMessageId = 0): array
+    {
+        $result = $this->defaultResult();
+        $tenantId = (int) ($instance['tenant_id'] ?? 0);
+        $content = trim($content);
+        if ($tenantId < 1 || $content === '' || !$this->isEnabled($tenantId)) {
+            return $result;
+        }
+
+        // Atendimento humano/IA pausada interrompe TODO o diálogo automático de agenda,
+        // não apenas a chamada ao provedor de IA.
+        if (!$this->conversationAllowsAutomation($pdo, $tenantId, $conversationId)) {
+            $result['skip_ai'] = true;
+            $result['automation_paused'] = true;
+            return $result;
+        }
+
+        // Defesa em profundidade: horário do agente é regra operacional e vale também
+        // quando este serviço for chamado fora do webhook principal.
+        try {
+            $agent = (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, $content, false);
+            if (is_array($agent) && !(new AgentOperatingPolicyService())->allowsConversationalAutomation($agent)) {
+                $result['outside_business_hours'] = true;
+                $result['skip_ai'] = false; // deixa a IA principal enviar/registrar a ausência.
+                return $result;
+            }
+        } catch (Throwable) {
+            // Falha ao avaliar a política não libera agenda por atalho; o webhook principal ainda valida.
+        }
+
+        $existing = $this->pendingPreSchedule($pdo, $tenantId, $conversationId, $contactId);
+        $continuationContext = $this->isAgendaContinuationContext($existing, $flowContext);
+        $intent = $this->detectIntent($content, $continuationContext);
+        if (!$intent['has_intent']) {
+            return $result;
+        }
+
+        $result['handled'] = true;
+        $result['has_preference'] = $this->hasAnyPreference($intent);
+        $result['has_full_preference'] = $this->hasFullPreference($intent);
+        if ($existing === null) {
+            $decision = (new ConversationFlowService())->schedulingDecision(
+                $pdo,
+                $instance,
+                $contactId,
+                $conversationId,
+                $content,
+                $flowContext
+            );
+            if (empty($decision['allowed'])) {
+                $blockedReason = (string) ($decision['code'] ?? 'flow_blocked');
+                $blockedMessage = $this->publicBlockedMessage($blockedReason);
+                $send = $this->sendAgendaGateMessage(
+                    $pdo,
+                    $instance,
+                    $conversationId,
+                    $contactId,
+                    $blockedMessage,
+                    $blockedReason,
+                    $incomingMessageId
+                );
+
+                $result['handled'] = true;
+                $result['blocked'] = true;
+                $result['blocked_reason'] = $blockedReason;
+                $result['blocked_message'] = $blockedMessage;
+                $result['blocked_message_sent'] = (bool) ($send['ok'] ?? false);
+                $result['blocked_message_error'] = $send['error'] ?? null;
+                $result['conversation_flow'] = $decision['flow'] ?? $flowContext;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['availability_request_needed'] = false;
+
+                if (empty($send['ok'])) {
+                    $this->notifyAvailabilityFailure(
+                        $tenantId,
+                        0,
+                        $conversationId,
+                        (string) ($send['error'] ?? 'Não foi possível enviar a mensagem da etapa anterior ao agendamento.')
+                    );
+                }
+
+                return $result;
+            }
+            $flowContext = is_array($decision['flow'] ?? null) ? $decision['flow'] : $flowContext;
+        }
+
+        $this->markConversationIntent($pdo, $tenantId, $conversationId, $intent);
+
+        if ($existing !== null) {
+            if ($this->hasFullPreference($intent)) {
+                $professionalService = new ProfessionalCalendarService();
+                $professionalSettings = $professionalService->tenantSettings($tenantId);
+                if (!empty($professionalSettings['enabled'])
+                    && !empty($professionalSettings['prevent_contact_overlap'])) {
+                    $preScheduleSettings = $this->settings($tenantId);
+                    $requestedPeriod = $this->periodFromIntent(
+                        $intent,
+                        (int) ($preScheduleSettings['default_duration_minutes'] ?? 50)
+                    );
+                    $contactConflict = $professionalService->contactConflict(
+                        $tenantId,
+                        $contactId,
+                        (string) $requestedPeriod['starts_at'],
+                        (string) $requestedPeriod['ends_at'],
+                        (int) ($existing['id'] ?? 0)
+                    );
+                    if ($contactConflict) {
+                        $blockedMessage = $professionalService->contactConflictCustomerMessage($contactConflict);
+                        $send = $this->sendAgendaGateMessage(
+                            $pdo,
+                            $instance,
+                            $conversationId,
+                            $contactId,
+                            $blockedMessage,
+                            'contact_schedule_conflict',
+                            $incomingMessageId
+                        );
+                        $result['blocked'] = true;
+                        $result['blocked_reason'] = 'contact_schedule_conflict';
+                        $result['blocked_message'] = $blockedMessage;
+                        $result['blocked_message_sent'] = (bool) ($send['ok'] ?? false);
+                        $result['blocked_message_error'] = $send['error'] ?? null;
+                        $result['skip_ai'] = true;
+                        $result['terminal_handled'] = true;
+                        $result['availability_request_needed'] = false;
+                        return $result;
+                    }
+                }
+            }
+
+            $transition = [
+                'ok' => true,
+                'changed' => false,
+                'request_needed' => false,
+                'message' => null,
+            ];
+            if ($this->hasFullPreference($intent) || $this->isAvailabilityModality($this->intentSchedulingModality($intent))) {
+                $transition = $this->prepareExistingForNewPreference($pdo, $tenantId, $existing, $intent);
+                if (empty($transition['ok'])) {
+                    $result = array_merge($result, [
+                        'updated' => false,
+                        'appointment_id' => (int) ($existing['id'] ?? 0),
+                        'skip_ai' => true,
+                        'terminal_handled' => true,
+                        'availability_request_needed' => false,
+                        'calendar_error' => (string) ($transition['message'] ?? 'Não foi possível preparar uma nova consulta de agenda.'),
+                    ]);
+                    $this->notifyAvailabilityFailure(
+                        $tenantId,
+                        (int) ($existing['id'] ?? 0),
+                        $conversationId,
+                        (string) ($transition['message'] ?? 'Não foi possível reiniciar a disponibilidade antes da nova consulta.')
+                    );
+                    return $result;
+                }
+                if (!empty($transition['changed'])) {
+                    $existing = $this->appointmentById($pdo, $tenantId, (int) ($existing['id'] ?? 0)) ?: $existing;
+                }
+            }
+
+            $update = $this->updatePendingPreSchedule($pdo, $tenantId, $existing, $intent, $content);
+            $result = array_merge($result, [
+                'updated' => true,
+                'appointment_id' => (int) ($existing['id'] ?? 0),
+                'has_preference' => $update['has_preference'],
+                'has_full_preference' => $update['has_full_preference'],
+            ]);
+
+            if (empty($update['has_scheduling_modality'])) {
+                $question = $this->sendModalityQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
+                $result['modality_required'] = true;
+                $result['modality_question_sent'] = (bool) ($question['ok'] ?? false);
+                $result['modality_question_error'] = $question['error'] ?? null;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['availability_request_needed'] = false;
+                return $result;
+            }
+
+            if (empty($update['has_full_preference'])) {
+                $question = $this->sendDateTimeQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
+                $result['date_time_required'] = true;
+                $result['date_time_question_sent'] = (bool) ($question['ok'] ?? false);
+                $result['date_time_question_error'] = $question['error'] ?? null;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['availability_request_needed'] = false;
+                return $result;
+            }
+
+            if (!empty($update['ready_for_availability'])) {
+                // Preferência completa + modalidade válida são tratadas pela agenda.
+                // Nunca deixa a IA reutilizar opções antigas do histórico como se fossem atuais.
+                $ack = $this->sendPreferenceAcknowledgement($pdo, $instance, $conversationId, $contactId, $update['appointment'], $intent);
+                $result['ack_sent'] = $ack['ok'];
+                $result['ack_error'] = $ack['error'];
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['availability_request_needed'] = !empty($transition['request_needed'])
+                    || empty($existing['availability_request_id'])
+                    || !in_array((string) ($existing['availability_status'] ?? ''), ['requested', 'sent', 'received', 'options_sent', 'slot_selected'], true);
+            }
+
+            $appointmentLabel = trim((string) ($existing['title'] ?? 'Pré-agendamento')) ?: 'Pré-agendamento';
+            $preferenceLabel = trim($this->displayDay($intent) . ' ' . $this->displayTime($intent));
+            (new NotificationService())->createIfEnabled(
+                $tenantId,
+                'calendar',
+                'Preferência de agenda atualizada',
+                $appointmentLabel . ($preferenceLabel !== '' ? ': ' . $preferenceLabel : ' recebeu novas informações.'),
+                'info',
+                '/calendar',
+                'calendar',
+                'calendar.pre_schedule.updated',
+                'appointment',
+                (int) ($existing['id'] ?? 0),
+                ['conversation_id' => $conversationId],
+                120
+            );
+
+            return $result;
+        }
+
+        if (!$this->hasColumn($pdo, 'calendar_appointments', 'is_pre_schedule')) {
+            return $result;
+        }
+
+        $settings = $this->settings($tenantId);
+        $contact = $this->findContact($pdo, $tenantId, $contactId);
+        $period = $this->periodFromIntent($intent, (int) ($settings['default_duration_minutes'] ?? 50));
+
+        if ($this->hasFullPreference($intent)) {
+            $professionalService = new ProfessionalCalendarService();
+            $professionalSettings = $professionalService->tenantSettings($tenantId);
+            if (!empty($professionalSettings['enabled'])
+                && !empty($professionalSettings['prevent_contact_overlap'])) {
+                $contactConflict = $professionalService->contactConflict(
+                    $tenantId,
+                    $contactId,
+                    (string) $period['starts_at'],
+                    (string) $period['ends_at']
+                );
+                if ($contactConflict) {
+                    $blockedMessage = $professionalService->contactConflictCustomerMessage($contactConflict);
+                    $send = $this->sendAgendaGateMessage(
+                        $pdo,
+                        $instance,
+                        $conversationId,
+                        $contactId,
+                        $blockedMessage,
+                        'contact_schedule_conflict',
+                        $incomingMessageId
+                    );
+                    $result['blocked'] = true;
+                    $result['blocked_reason'] = 'contact_schedule_conflict';
+                    $result['blocked_message'] = $blockedMessage;
+                    $result['blocked_message_sent'] = (bool) ($send['ok'] ?? false);
+                    $result['blocked_message_error'] = $send['error'] ?? null;
+                    $result['skip_ai'] = true;
+                    $result['terminal_handled'] = true;
+                    $result['availability_request_needed'] = false;
+                    return $result;
+                }
+            }
+        }
+
+        $titleName = trim((string) ($contact['name'] ?? '')) ?: trim((string) ($contact['phone'] ?? 'Paciente'));
+        $title = 'Pré-agendamento - ' . mb_substr($titleName, 0, 90);
+        $description = $this->buildDescription($content, $intent, $flowContext);
+        $intentModality = $this->intentSchedulingModality($intent);
+        $readyForAvailability = $this->hasFullPreference($intent) && $this->isAvailabilityModality($intentModality);
+        $status = $readyForAvailability ? 'awaiting_approval' : 'pre_scheduled';
+        $ownerUserId = null;
+        $professionalCalendarService = new ProfessionalCalendarService();
+        $professionalCalendarSettings = $professionalCalendarService->tenantSettings($tenantId);
+        if (!empty($professionalCalendarSettings['enabled']) && !empty($professionalCalendarSettings['auto_from_conversation'])) {
+            $ownerStatement = $pdo->prepare(
+                'SELECT assigned_user_id FROM conversations WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+            );
+            $ownerStatement->execute(['id' => $conversationId, 'tenant_id' => $tenantId]);
+            $candidateOwnerId = (int) ($ownerStatement->fetchColumn() ?: 0);
+            if ($candidateOwnerId > 0) {
+                $profile = $professionalCalendarService->profile($tenantId, $candidateOwnerId);
+                if ($profile && !empty($profile['accepting_appointments'])) {
+                    $ownerUserId = $candidateOwnerId;
+                }
+            }
+        }
+
+        $statement = $pdo->prepare(
+            'INSERT INTO calendar_appointments
+                (tenant_id, contact_id, conversation_id, owner_user_id, title, description, starts_at, ends_at, timezone, status,
+                 location_type, location, reminder_minutes, sync_status, is_pre_schedule, pre_schedule_source, appointment_modality,
+                 preferred_day_text, preferred_time_text, approval_status, approval_notes)
+             VALUES
+                (:tenant_id, :contact_id, :conversation_id, :owner_user_id, :title, :description, :starts_at, :ends_at, :timezone, :status,
+                 :location_type, :location, 60, "pending", 1, "ai_whatsapp", :appointment_modality,
+                 :preferred_day_text, :preferred_time_text, "pending", :approval_notes)'
+        );
+        $statement->execute([
+            'tenant_id' => $tenantId,
+            'contact_id' => $contactId,
+            'conversation_id' => $conversationId,
+            'owner_user_id' => $ownerUserId,
+            'title' => $title,
+            'description' => $description,
+            'starts_at' => $period['starts_at'],
+            'ends_at' => $period['ends_at'],
+            'timezone' => 'America/Sao_Paulo',
+            'status' => $status,
+            'location_type' => $this->isAvailabilityModality($intentModality) ? $intentModality : 'indefinida',
+            'location' => $this->isAvailabilityModality($intentModality) ? ucfirst($intentModality) : null,
+            'appointment_modality' => $intentModality,
+            'preferred_day_text' => $this->displayDay($intent) ?: null,
+            'preferred_time_text' => $this->displayTime($intent) ?: null,
+            'approval_notes' => 'Criado automaticamente a partir da intenção de agenda detectada na conversa #' . $conversationId,
+        ]);
+        $appointmentId = (int) $pdo->lastInsertId();
+
+        $pdo->prepare(
+            'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
+             VALUES (:tenant_id, :conversation_id, "calendar.pre_scheduled", :description, :metadata_json)'
+        )->execute([
+            'tenant_id' => $tenantId,
+            'conversation_id' => $conversationId,
+            'description' => $this->hasFullPreference($intent)
+                ? 'Pré-agendamento criado com preferência de dia/horário para aprovação humana.'
+                : 'Pré-agendamento criado aguardando preferência de dia/horário.',
+            'metadata_json' => json_encode(['appointment_id' => $appointmentId, 'intent' => $intent], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+
+        // O evento externo é devolvido ao controller para ser enviado somente depois
+        // que a conversa já recebeu a resposta crítica (IA ou confirmação de preferência).
+        $result['appointment_event_payload'] = [
+            'tenant_id' => $tenantId,
+            'conversation_id' => $conversationId,
+            'contact' => $contact,
+            'appointment_id' => $appointmentId,
+            'preferred_day' => $this->displayDay($intent),
+            'preferred_time' => $this->displayTime($intent),
+            'preferred_date' => $intent['preferred_date'],
+            'modality' => $intentModality,
+            'message' => $content,
+            'contact_group' => (string) ($flowContext['contact_group'] ?? 'unclassified'),
+            'demand_status' => (string) ($flowContext['demand_status'] ?? 'pending'),
+            'demand_summary' => (string) ($flowContext['demand_summary'] ?? ''),
+        ];
+
+        $preferenceLabel = trim($this->displayDay($intent) . ' ' . $this->displayTime($intent));
+        (new NotificationService())->createIfEnabled(
+            $tenantId,
+            'calendar',
+            'Novo pedido de agendamento',
+            $titleName . ($preferenceLabel !== '' ? ' informou preferência para ' . $preferenceLabel . '.' : ' iniciou um pedido de agendamento.'),
+            'info',
+            '/calendar',
+            'calendar',
+            'calendar.pre_schedule.created',
+            'appointment',
+            $appointmentId,
+            [
+                'conversation_id' => $conversationId,
+                'contact_id' => $contactId,
+                'modality' => $intentModality,
+            ]
+        );
+
+        $result['created'] = true;
+        $result['appointment_id'] = $appointmentId;
+
+        if (!$this->isAvailabilityModality($intentModality)) {
+            $question = $this->sendModalityQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
+            $result['modality_required'] = true;
+            $result['modality_question_sent'] = (bool) ($question['ok'] ?? false);
+            $result['modality_question_error'] = $question['error'] ?? null;
+            $result['skip_ai'] = true;
+            $result['terminal_handled'] = true;
+            $result['availability_request_needed'] = false;
+            return $result;
+        }
+
+        if (!$this->hasFullPreference($intent)) {
+            $question = $this->sendDateTimeQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
+            $result['date_time_required'] = true;
+            $result['date_time_question_sent'] = (bool) ($question['ok'] ?? false);
+            $result['date_time_question_error'] = $question['error'] ?? null;
+            $result['skip_ai'] = true;
+            $result['terminal_handled'] = true;
+            $result['availability_request_needed'] = false;
+            return $result;
+        }
+
+        if ($this->hasFullPreference($intent)) {
+            $appointment = [
+                'id' => $appointmentId,
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'contact_id' => $contactId,
+                'owner_user_id' => $ownerUserId,
+                'title' => $title,
+                'starts_at' => $period['starts_at'],
+                'ends_at' => $period['ends_at'],
+                'preferred_day_text' => $this->displayDay($intent),
+                'preferred_time_text' => $this->displayTime($intent),
+                'location_type' => $this->isAvailabilityModality($intentModality) ? $intentModality : 'indefinida',
+                'appointment_modality' => $intentModality,
+                'location' => $this->isAvailabilityModality($intentModality) ? ucfirst($intentModality) : null,
+            ];
+            $ack = $this->sendPreferenceAcknowledgement($pdo, $instance, $conversationId, $contactId, $appointment, $intent);
+            $result['ack_sent'] = $ack['ok'];
+            $result['ack_error'] = $ack['error'];
+            $result['skip_ai'] = true;
+            $result['terminal_handled'] = true;
+            $result['availability_request_needed'] = true;
+        }
+
+        return $result;
+    }
+
+    private function defaultResult(): array
+    {
+        return [
+            'handled' => false,
+            'created' => false,
+            'updated' => false,
+            'appointment_id' => null,
+            'has_preference' => false,
+            'has_full_preference' => false,
+            'ack_sent' => false,
+            'ack_error' => null,
+            'skip_ai' => false,
+            'terminal_handled' => false,
+            'availability_request_needed' => false,
+            'modality_required' => false,
+            'modality_question_sent' => false,
+            'modality_question_error' => null,
+            'date_time_required' => false,
+            'date_time_question_sent' => false,
+            'date_time_question_error' => null,
+            'appointment_event_payload' => null,
+        ];
+    }
+
+    public function isEnabled(int $tenantId): bool
+    {
+        if (!$this->tableExists('tenant_pre_schedule_settings')) {
+            return false;
+        }
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT enabled FROM tenant_pre_schedule_settings WHERE tenant_id = :tenant_id LIMIT 1'
+            );
+            $statement->execute(['tenant_id' => $tenantId]);
+            $value = $statement->fetchColumn();
+            return (int) $value === 1;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    public function settings(int $tenantId): array
+    {
+        $defaults = [
+            'enabled' => 0,
+            'require_human_approval' => 1,
+            'ai_can_suggest_slots' => 1,
+            'ai_can_confirm' => 0,
+            'send_approval_message' => 1,
+            'default_duration_minutes' => 50,
+            'default_message' => 'Vou registrar sua preferência e encaminhar para confirmação da profissional.',
+            'collect_message' => 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.',
+            'modality_message' => 'Antes de consultar os horários, você prefere atendimento online ou presencial?',
+            'approved_message' => 'Seu agendamento foi confirmado para {{data}} às {{hora}}. {{local}}',
+            'rejected_message' => 'No momento não conseguimos confirmar esse horário. Pode me enviar outra opção de dia ou período?',
+            'reschedule_message' => 'Precisamos ajustar sua preferência de horário. Pode me enviar outra opção de dia ou período?',
+            'availability_options_message' => "O horário solicitado não está disponível. Encontrei estas opções:\n\n{{opcoes}}\n\nResponda com o número ou com o horário que prefere.",
+            'slot_selected_message' => 'Perfeito. Pré-reservei {{data}} às {{hora}}. O horário está aguardando validação da profissional. Você receberá a confirmação por aqui.',
+            'no_availability_message' => 'Não encontrei horários disponíveis para essa preferência. Pode me informar outro dia ou período?',
+            'invalid_slot_message' => 'Não consegui identificar uma dessas opções. Responda com o número ou com o horário desejado:',
+        ];
+        if ($tenantId < 1 || !$this->tableExists('tenant_pre_schedule_settings')) {
+            return $defaults;
+        }
+        try {
+            $statement = Database::connection()->prepare('SELECT * FROM tenant_pre_schedule_settings WHERE tenant_id = :tenant_id LIMIT 1');
+            $statement->execute(['tenant_id' => $tenantId]);
+            $row = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+            return array_merge($defaults, $row);
+        } catch (Throwable) {
+            return $defaults;
+        }
+    }
+
+    public function saveSettings(int $tenantId, array $data): void
+    {
+        if ($tenantId < 1 || !$this->tableExists('tenant_pre_schedule_settings')) {
+            return;
+        }
+        $duration = (int) ($data['default_duration_minutes'] ?? 50);
+        $duration = max(15, min(240, $duration));
+
+        $messages = [
+            'default_message' => 'Vou registrar sua preferência e encaminhar para confirmação da profissional.',
+            'collect_message' => 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.',
+            'modality_message' => 'Antes de consultar os horários, você prefere atendimento online ou presencial?',
+            'approved_message' => 'Seu agendamento foi confirmado para {{data}} às {{hora}}. {{local}}',
+            'rejected_message' => 'No momento não conseguimos confirmar esse horário. Pode me enviar outra opção de dia ou período?',
+            'reschedule_message' => 'Precisamos ajustar sua preferência de horário. Pode me enviar outra opção de dia ou período?',
+            'availability_options_message' => "O horário solicitado não está disponível. Encontrei estas opções:\n\n{{opcoes}}\n\nResponda com o número ou com o horário que prefere.",
+            'slot_selected_message' => 'Perfeito. Pré-reservei {{data}} às {{hora}}. O horário está aguardando validação da profissional. Você receberá a confirmação por aqui.',
+            'no_availability_message' => 'Não encontrei horários disponíveis para essa preferência. Pode me informar outro dia ou período?',
+            'invalid_slot_message' => 'Não consegui identificar uma dessas opções. Responda com o número ou com o horário desejado:',
+        ];
+        foreach ($messages as $field => $fallback) {
+            $messages[$field] = trim((string) ($data[$field] ?? '')) ?: $fallback;
+        }
+
+        $params = [
+            'tenant_id' => $tenantId,
+            'enabled' => !empty($data['enabled']) ? 1 : 0,
+            'require_human_approval' => !empty($data['require_human_approval']) ? 1 : 0,
+            'ai_can_suggest_slots' => !empty($data['ai_can_suggest_slots']) ? 1 : 0,
+            'ai_can_confirm' => !empty($data['ai_can_confirm']) ? 1 : 0,
+            'send_approval_message' => !empty($data['send_approval_message']) ? 1 : 0,
+            'default_duration_minutes' => $duration,
+            'default_message' => $messages['default_message'],
+            'collect_message' => $messages['collect_message'],
+            'modality_message' => $messages['modality_message'],
+            'approved_message' => $messages['approved_message'],
+            'rejected_message' => $messages['rejected_message'],
+            'reschedule_message' => $messages['reschedule_message'],
+            'availability_options_message' => $messages['availability_options_message'],
+            'slot_selected_message' => $messages['slot_selected_message'],
+            'no_availability_message' => $messages['no_availability_message'],
+            'invalid_slot_message' => $messages['invalid_slot_message'],
+        ];
+
+        try {
+            $statement = Database::connection()->prepare(
+                'INSERT INTO tenant_pre_schedule_settings
+                    (tenant_id, enabled, require_human_approval, ai_can_suggest_slots, ai_can_confirm, send_approval_message,
+                     default_duration_minutes, default_message, collect_message, modality_message, approved_message, rejected_message, reschedule_message,
+                     availability_options_message, slot_selected_message, no_availability_message, invalid_slot_message)
+                 VALUES
+                    (:tenant_id, :enabled, :require_human_approval, :ai_can_suggest_slots, :ai_can_confirm, :send_approval_message,
+                     :default_duration_minutes, :default_message, :collect_message, :modality_message, :approved_message, :rejected_message, :reschedule_message,
+                     :availability_options_message, :slot_selected_message, :no_availability_message, :invalid_slot_message)
+                 ON DUPLICATE KEY UPDATE
+                    enabled = VALUES(enabled),
+                    require_human_approval = VALUES(require_human_approval),
+                    ai_can_suggest_slots = VALUES(ai_can_suggest_slots),
+                    ai_can_confirm = VALUES(ai_can_confirm),
+                    send_approval_message = VALUES(send_approval_message),
+                    default_duration_minutes = VALUES(default_duration_minutes),
+                    default_message = VALUES(default_message),
+                    collect_message = VALUES(collect_message),
+                    modality_message = VALUES(modality_message),
+                    approved_message = VALUES(approved_message),
+                    rejected_message = VALUES(rejected_message),
+                    reschedule_message = VALUES(reschedule_message),
+                    availability_options_message = VALUES(availability_options_message),
+                    slot_selected_message = VALUES(slot_selected_message),
+                    no_availability_message = VALUES(no_availability_message),
+                    invalid_slot_message = VALUES(invalid_slot_message),
+                    updated_at = CURRENT_TIMESTAMP'
+            );
+            $statement->execute($params);
+        } catch (Throwable $exception) {
+            // Compatibilidade durante o deploy anterior à migration 046.
+            $legacy = Database::connection()->prepare(
+                'INSERT INTO tenant_pre_schedule_settings
+                    (tenant_id, enabled, require_human_approval, ai_can_suggest_slots, ai_can_confirm, send_approval_message,
+                     default_duration_minutes, default_message, collect_message, approved_message, rejected_message, reschedule_message)
+                 VALUES
+                    (:tenant_id, :enabled, :require_human_approval, :ai_can_suggest_slots, :ai_can_confirm, :send_approval_message,
+                     :default_duration_minutes, :default_message, :collect_message, :approved_message, :rejected_message, :reschedule_message)
+                 ON DUPLICATE KEY UPDATE
+                    enabled = VALUES(enabled),
+                    require_human_approval = VALUES(require_human_approval),
+                    ai_can_suggest_slots = VALUES(ai_can_suggest_slots),
+                    ai_can_confirm = VALUES(ai_can_confirm),
+                    send_approval_message = VALUES(send_approval_message),
+                    default_duration_minutes = VALUES(default_duration_minutes),
+                    default_message = VALUES(default_message),
+                    collect_message = VALUES(collect_message),
+                    approved_message = VALUES(approved_message),
+                    rejected_message = VALUES(rejected_message),
+                    reschedule_message = VALUES(reschedule_message),
+                    updated_at = CURRENT_TIMESTAMP'
+            );
+            $legacyParams = $params;
+            unset(
+                $legacyParams['modality_message'],
+                $legacyParams['availability_options_message'],
+                $legacyParams['slot_selected_message'],
+                $legacyParams['no_availability_message'],
+                $legacyParams['invalid_slot_message']
+            );
+            $legacy->execute($legacyParams);
+        }
+    }
+
+    public function renderMessage(string $template, array $appointment): string
+    {
+        $date = !empty($appointment['starts_at']) ? date('d/m/Y', strtotime((string) $appointment['starts_at'])) : '';
+        $hour = !empty($appointment['starts_at']) ? date('H:i', strtotime((string) $appointment['starts_at'])) : '';
+        $location = trim((string) (($appointment['meeting_url'] ?? '') ?: ($appointment['location'] ?? '')));
+        $locationText = $location !== '' ? 'Local/link: ' . $location : '';
+
+        $replacements = [
+            '{{nome}}' => (string) ($appointment['contact_name'] ?? $appointment['name'] ?? ''),
+            '{{telefone}}' => (string) ($appointment['phone'] ?? ''),
+            '{{titulo}}' => (string) ($appointment['title'] ?? ''),
+            '{{data}}' => $date,
+            '{{hora}}' => $hour,
+            '{{inicio}}' => trim($date . ' ' . $hour),
+            '{{local}}' => $locationText,
+            '{{modalidade}}' => (string) ($appointment['location_type'] ?? ''),
+            '{{dia_preferido}}' => (string) ($appointment['preferred_day_text'] ?? ''),
+            '{{horario_preferido}}' => (string) ($appointment['preferred_time_text'] ?? ''),
+        ];
+
+        return trim(strtr($template, $replacements));
+    }
+
+    public function detectIntent(string $content, bool $continuationContext = false): array
+    {
+        $text = $this->normalizeText($content);
+        $preferredDate = $this->extractDateText($text);
+        $preferredDay = $this->extractDayText($text);
+        $preferredTime = $this->extractTimeText($text);
+
+        // 36.6.15: data/período sozinhos NÃO iniciam agenda.
+        // Ex.: "vou configurar hoje à tarde/noite" é conversa comum, não agendamento.
+        $asksOpeningHours = (bool) preg_match(
+            '/\b(horario|horarios)\s+de\s+(atendimento|funcionamento|abertura|fechamento)\b|\b(qual|quais|que)\b.{0,20}\b(horario|horarios)\b.{0,20}\b(atendem|atendimento|funcionam|funcionamento)\b|\bque horas\b.{0,15}\b(abre|fecha|funciona|atende)\b/u',
+            $text
+        );
+        $directAgenda = !$asksOpeningHours && (bool) preg_match(
+            '/\b(agendar|reagendar|remarcar|desmarcar|encaixe)\b|\bmarcar\b.{0,30}\b(consulta|sessao|reuniao|horario)\b|\b(tem|ha|ver|consultar|confirma|confirmar|qual|quais)\b.{0,25}\b(horario|horarios|disponibilidade)\b|\b(quero|gostaria|preciso)\b.{0,20}\b(horario|horarios|agendar|marcar)\b|\b(horario|horarios)\s+(disponivel|disponiveis)\b/u',
+            $text
+        );
+        $hasPreference = $preferredDate !== '' || $preferredDay !== '' || $preferredTime !== '';
+        $modality = $this->extractModality($text);
+
+        // 36.6.24: dentro de um fluxo de agenda já aberto, responder apenas
+        // "online" ou "presencial" também é uma continuação válida. A modalidade
+        // precisa ser conhecida ANTES de consultar a disponibilidade do Google.
+        $hasIntent = $directAgenda || ($continuationContext && ($hasPreference || $modality !== ''));
+
+        return [
+            'has_intent' => $hasIntent,
+            'preferred_date' => $preferredDate,
+            'preferred_day' => $preferredDay,
+            'preferred_time' => $preferredTime,
+            'modality' => $modality,
+            'location_type' => $modality === 'Presencial'
+                ? 'presencial'
+                : ($modality === 'Online' ? 'online' : ($modality === 'Telefone' ? 'telefone' : 'indefinida')),
+        ];
+    }
+
+    private function isAgendaContinuationContext(?array $appointment, array $flowContext): bool
+    {
+        $lastIntent = (string) ($flowContext['last_intent'] ?? '');
+        $stage = (string) ($flowContext['stage'] ?? '');
+        if (in_array($lastIntent, ['schedule', 'reschedule'], true)
+            && in_array($stage, ['scheduling', 'awaiting_approval'], true)) {
+            return true;
+        }
+
+        // Quando o fluxo já foi ingerido e concluiu que a mensagem é conversa comum,
+        // um compromisso antigo não pode reabrir agenda sozinho. O fallback abaixo existe
+        // apenas para chamadas legadas que não receberam flowContext.
+        if ($flowContext !== []) {
+            return false;
+        }
+
+        if (!is_array($appointment) || $appointment === []) {
+            return false;
+        }
+        $reference = (string) ($appointment['updated_at'] ?? $appointment['created_at'] ?? '');
+        $timestamp = $reference !== '' ? strtotime($reference) : false;
+        if ($timestamp === false) {
+            return false;
+        }
+
+        // Evita que um pré-agendamento antigo deixe a conversa "presa" em agenda por dias.
+        return (time() - $timestamp) <= (36 * 3600);
+    }
+
+    private function pendingPreSchedule(PDO $pdo, int $tenantId, int $conversationId, int $contactId = 0): ?array
+    {
+        if (!$this->hasColumn($pdo, 'calendar_appointments', 'is_pre_schedule')) {
+            return null;
+        }
+
+        $statement = $pdo->prepare(
+            'SELECT * FROM calendar_appointments
+             WHERE tenant_id = :tenant_id
+               AND conversation_id = :conversation_id
+               AND is_pre_schedule = 1
+               AND status IN ("pre_scheduled", "awaiting_approval", "rescheduled")
+               AND updated_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+             ORDER BY id DESC
+             LIMIT 1'
+        );
+        $statement->execute(['tenant_id' => $tenantId, 'conversation_id' => $conversationId]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            return $row;
+        }
+
+        // Fallback importante: em alguns cenários a conversa pode mudar de ID
+        // após reconfiguração de instância/webhook. O pré-agendamento ainda pertence
+        // ao mesmo contato, então atualizamos o último pendente desse contato.
+        if ($contactId > 0) {
+            $statement = $pdo->prepare(
+                'SELECT * FROM calendar_appointments
+                 WHERE tenant_id = :tenant_id
+                   AND contact_id = :contact_id
+                   AND is_pre_schedule = 1
+                   AND status IN ("pre_scheduled", "awaiting_approval", "rescheduled")
+                   AND updated_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+                 ORDER BY id DESC
+                 LIMIT 1'
+            );
+            $statement->execute(['tenant_id' => $tenantId, 'contact_id' => $contactId]);
+            $row = $statement->fetch(PDO::FETCH_ASSOC);
+            if ($row) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /** @return array{ok:bool,changed:bool,request_needed:bool,message:?string} */
+    private function prepareExistingForNewPreference(PDO $pdo, int $tenantId, array $appointment, array $intent): array
+    {
+        $appointmentId = (int) ($appointment['id'] ?? 0);
+        if ($appointmentId < 1) {
+            return ['ok' => false, 'changed' => false, 'request_needed' => false, 'message' => 'Pré-agendamento inválido.'];
+        }
+
+        $settings = $this->settings($tenantId);
+        $hasDateTimeUpdate = $this->hasAnyPreference($intent);
+        $period = $hasDateTimeUpdate
+            ? $this->periodFromIntent($intent, (int) ($settings['default_duration_minutes'] ?? 50))
+            : ['starts_at' => (string) ($appointment['starts_at'] ?? ''), 'ends_at' => (string) ($appointment['ends_at'] ?? '')];
+        $oldStart = trim((string) ($appointment['starts_at'] ?? ''));
+        $newStart = trim((string) ($period['starts_at'] ?? ''));
+        $timeChanged = $hasDateTimeUpdate && ($oldStart === '' || $newStart === ''
+            || date('Y-m-d H:i', strtotime($oldStart)) !== date('Y-m-d H:i', strtotime($newStart)));
+        $oldModality = $this->appointmentSchedulingModality($appointment);
+        $incomingModality = $this->intentSchedulingModality($intent);
+        $modalityChanged = $this->isAvailabilityModality($incomingModality) && $incomingModality !== $oldModality;
+        $preferenceChanged = $timeChanged || $modalityChanged;
+
+        if (!$preferenceChanged) {
+            $status = (string) ($appointment['availability_status'] ?? '');
+            $requestNeeded = empty($appointment['availability_request_id'])
+                || !in_array($status, ['requested', 'sent', 'received', 'options_sent', 'slot_selected'], true);
+            return ['ok' => true, 'changed' => false, 'request_needed' => $requestNeeded, 'message' => null];
+        }
+
+        if ($modalityChanged && in_array((string) ($appointment['google_event_state'] ?? ''), ['held', 'confirmed'], true)) {
+            try {
+                (new CalendarAvailabilityService())->releaseSelectedSlot($tenantId, $appointmentId);
+            } catch (Throwable) {
+                // A limpeza abaixo invalida a consulta; a manutenção poderá reconciliar o hold se necessário.
+            }
+        }
+
+        try {
+            $pdo->prepare(
+                'UPDATE calendar_availability_requests
+                 SET status = "cancelled",
+                     error_message = COALESCE(error_message, "Substituída por uma nova preferência do contato."),
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE tenant_id = :tenant_id
+                   AND appointment_id = :appointment_id
+                   AND status IN ("pending", "sent")'
+            )->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId]);
+        } catch (Throwable) {
+        }
+
+        try {
+            $pdo->prepare(
+                'UPDATE calendar_availability_slots
+                 SET event_state = CASE WHEN event_state = "available" THEN "expired" ELSE event_state END
+                 WHERE tenant_id = :tenant_id
+                   AND appointment_id = :appointment_id
+                   AND selected_at IS NULL'
+            )->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId]);
+        } catch (Throwable) {
+        }
+
+        try {
+            $pdo->prepare(
+                'UPDATE calendar_appointments
+                 SET availability_status = NULL,
+                     availability_request_id = NULL,
+                     availability_slot_count = 0,
+                     availability_error = NULL,
+                     availability_options_request_id = NULL,
+                     availability_options_sent_at = NULL,
+                     availability_options_message_id = NULL,
+                     availability_selection_expires_at = NULL,
+                     availability_selected_at = NULL,
+                     availability_selected_by = NULL,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :appointment_id AND tenant_id = :tenant_id'
+            )->execute(['appointment_id' => $appointmentId, 'tenant_id' => $tenantId]);
+        } catch (Throwable) {
+            // Compatibilidade defensiva: limpa ao menos os campos existentes desde o ZIP 27.
+            $pdo->prepare(
+                'UPDATE calendar_appointments
+                 SET availability_status = NULL,
+                     availability_request_id = NULL,
+                     availability_slot_count = 0,
+                     availability_error = NULL,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :appointment_id AND tenant_id = :tenant_id'
+            )->execute(['appointment_id' => $appointmentId, 'tenant_id' => $tenantId]);
+        }
+
+        try {
+            $pdo->prepare(
+                'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
+                 VALUES (:tenant_id, :conversation_id, "calendar.preference_changed", :description, :metadata_json)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => (int) ($appointment['conversation_id'] ?? 0),
+                'description' => 'Opções anteriores invalidadas e estado da disponibilidade reiniciado antes de uma nova consulta; uma pré-reserva ativa é preservada até a escolha do novo horário.',
+                'metadata_json' => json_encode([
+                    'appointment_id' => $appointmentId,
+                    'old_start' => $oldStart,
+                    'new_start' => $newStart,
+                    'old_modality' => $oldModality,
+                    'new_modality' => $this->isAvailabilityModality($incomingModality) ? $incomingModality : $oldModality,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+        } catch (Throwable) {
+        }
+
+        return ['ok' => true, 'changed' => true, 'request_needed' => true, 'message' => null];
+    }
+
+    private function appointmentById(PDO $pdo, int $tenantId, int $appointmentId): ?array
+    {
+        $statement = $pdo->prepare('SELECT * FROM calendar_appointments WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+        $statement->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    private function notifyAvailabilityFailure(int $tenantId, int $appointmentId, int $conversationId, string $message): void
+    {
+        try {
+            (new NotificationService())->createIfEnabled(
+                $tenantId,
+                'calendar',
+                'Falha ao atualizar preferência da agenda',
+                mb_substr($message, 0, 500),
+                'error',
+                '/calendar',
+                'calendar',
+                'calendar.preference_change.failed',
+                'appointment',
+                $appointmentId,
+                ['conversation_id' => $conversationId],
+                120
+            );
+        } catch (Throwable) {
+        }
+    }
+
+    private function updatePendingPreSchedule(PDO $pdo, int $tenantId, array $appointment, array $intent, string $content): array
+    {
+        $settings = $this->settings($tenantId);
+        $day = $this->displayDay($intent);
+        $time = $this->displayTime($intent);
+        $hasPreference = $this->hasAnyPreference($intent);
+        $incomingModality = $this->intentSchedulingModality($intent);
+        $currentModality = $this->appointmentSchedulingModality($appointment);
+        $effectiveModality = $this->isAvailabilityModality($incomingModality) ? $incomingModality : $currentModality;
+
+        $hasMeaningfulUpdate = $hasPreference || $this->isAvailabilityModality($incomingModality);
+        $description = $hasMeaningfulUpdate
+            ? $this->buildDescription($content, $intent)
+            : (string) ($appointment['description'] ?? '');
+
+        if (!$hasMeaningfulUpdate) {
+            $newLine = 'Nova informação do lead: ' . mb_substr($content, 0, 300);
+            if (!str_contains($description, $newLine)) {
+                $description = trim($description . "\n" . $newLine);
+            }
+        }
+
+        $params = [
+            'id' => (int) $appointment['id'],
+            'tenant_id' => $tenantId,
+            'description' => mb_substr($description, 0, 2000),
+            'preferred_day_text' => $day !== '' ? $day : ($appointment['preferred_day_text'] ?? null),
+            'preferred_time_text' => $time !== '' ? $time : ($appointment['preferred_time_text'] ?? null),
+            'location_type' => $this->isAvailabilityModality($effectiveModality) ? $effectiveModality : 'indefinida',
+            'appointment_modality' => $effectiveModality,
+            'location' => $this->isAvailabilityModality($effectiveModality) ? ucfirst($effectiveModality) : null,
+        ];
+
+        $setPeriod = '';
+        if ($hasPreference) {
+            $period = $this->periodFromIntent($intent, (int) ($settings['default_duration_minutes'] ?? 50));
+            $params['starts_at'] = $period['starts_at'];
+            $params['ends_at'] = $period['ends_at'];
+            $setPeriod = ', starts_at = :starts_at, ends_at = :ends_at';
+        } else {
+            $period = [
+                'starts_at' => (string) ($appointment['starts_at'] ?? ''),
+                'ends_at' => (string) ($appointment['ends_at'] ?? ''),
+            ];
+        }
+
+        $mergedHasFullPreference = trim((string) ($params['preferred_day_text'] ?? '')) !== ''
+            && trim((string) ($params['preferred_time_text'] ?? '')) !== '';
+        $readyForAvailability = $mergedHasFullPreference && $this->isAvailabilityModality($effectiveModality);
+        $statusSet = $readyForAvailability ? ', status = "awaiting_approval"' : '';
+
+        $pdo->prepare(
+            'UPDATE calendar_appointments
+             SET description = :description' . $setPeriod . $statusSet . ',
+                 preferred_day_text = :preferred_day_text,
+                 preferred_time_text = :preferred_time_text,
+                 location_type = :location_type,
+                 appointment_modality = :appointment_modality,
+                 location = :location,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id AND tenant_id = :tenant_id'
+        )->execute($params);
+
+        $updatedAppointment = array_merge($appointment, [
+            'description' => $params['description'],
+            'preferred_day_text' => $params['preferred_day_text'],
+            'preferred_time_text' => $params['preferred_time_text'],
+            'location_type' => $params['location_type'],
+            'appointment_modality' => $params['appointment_modality'],
+            'location' => $params['location'],
+            'starts_at' => $period['starts_at'],
+            'ends_at' => $period['ends_at'],
+            'status' => $readyForAvailability ? 'awaiting_approval' : ($appointment['status'] ?? 'pre_scheduled'),
+        ]);
+
+        $pdo->prepare(
+            'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
+             VALUES (:tenant_id, :conversation_id, "calendar.pre_schedule_updated", :description, :metadata_json)'
+        )->execute([
+            'tenant_id' => $tenantId,
+            'conversation_id' => (int) ($updatedAppointment['conversation_id'] ?? 0),
+            'description' => $readyForAvailability
+                ? 'Preferência de dia/horário e modalidade recebidas; pré-agendamento pronto para consultar disponibilidade.'
+                : ($mergedHasFullPreference ? 'Dia/horário recebidos; aguardando modalidade antes de consultar disponibilidade.' : 'Pré-agendamento atualizado com nova informação do lead.'),
+            'metadata_json' => json_encode(['appointment_id' => (int) $appointment['id'], 'intent' => $intent], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+
+        return [
+            'appointment' => $updatedAppointment,
+            'has_preference' => $hasPreference,
+            'has_full_preference' => $mergedHasFullPreference,
+            'has_scheduling_modality' => $this->isAvailabilityModality($effectiveModality),
+            'ready_for_availability' => $readyForAvailability,
+        ];
+    }
+
+    private function hasAnyPreference(array $intent): bool
+    {
+        return ((string) ($intent['preferred_date'] ?? '')) !== ''
+            || ((string) ($intent['preferred_day'] ?? '')) !== ''
+            || ((string) ($intent['preferred_time'] ?? '')) !== '';
+    }
+
+    private function hasFullPreference(array $intent): bool
+    {
+        $hasDateOrDay = ((string) ($intent['preferred_date'] ?? '')) !== '' || ((string) ($intent['preferred_day'] ?? '')) !== '';
+        $hasTime = ((string) ($intent['preferred_time'] ?? '')) !== '';
+        return $hasDateOrDay && $hasTime;
+    }
+
+    private function sendPreferenceAcknowledgement(PDO $pdo, array $instance, int $conversationId, int $contactId, array $appointment, array $intent): array
+    {
+        try {
+            $tenantId = (int) ($instance['tenant_id'] ?? 0);
+            if (!$this->conversationAllowsAutomation($pdo, $tenantId, $conversationId)) {
+                return ['ok' => false, 'error' => 'Automação de agenda pausada: conversa em atendimento humano ou fechada.'];
+            }
+            $agent = (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, '', false);
+            if (is_array($agent) && !(new AgentOperatingPolicyService())->allowsConversationalAutomation($agent)) {
+                return ['ok' => false, 'error' => 'Automação de agenda aguardando o próximo horário de atendimento.'];
+            }
+            $contact = $this->findContact($pdo, $tenantId, $contactId);
+            $phone = preg_replace('/\D+/', '', (string) ($contact['phone'] ?? '')) ?: '';
+            if ($phone === '') {
+                return ['ok' => false, 'error' => 'Contato sem telefone para confirmação de preferência.'];
+            }
+
+            $settings = $this->settings($tenantId);
+            $template = trim((string) ($settings['default_message'] ?? '')) ?: 'Certo. Vou registrar sua preferência e encaminhar para confirmação da profissional.';
+            $message = $this->renderMessage($template, array_merge($appointment, [
+                'contact_name' => $contact['name'] ?? '',
+                'name' => $contact['name'] ?? '',
+                'phone' => $phone,
+                'preferred_day_text' => $this->displayDay($intent),
+                'preferred_time_text' => $this->displayTime($intent),
+            ]));
+
+            if ($this->recentOutgoingSameMessage($pdo, $conversationId, $message)) {
+                return ['ok' => true, 'error' => null];
+            }
+
+            $service = new EvolutionService(
+                (string) $instance['base_url'],
+                Crypto::decrypt((string) $instance['api_key_encrypted']),
+                (string) $instance['instance_name'],
+                24,
+                filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL) !== false,
+                trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) !== '' ? trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) : null
+            );
+            $response = $service->sendText($phone, $message);
+            $externalId = $this->extractMessageId($response['body'] ?? []);
+            $sentAt = \App\Core\Clock::nowUtc();
+
+            $pdo->prepare(
+                'INSERT INTO conversation_messages
+                    (tenant_id, conversation_id, evolution_message_id, direction, sender_type, message_type, content, status, raw_payload_json, sent_at)
+                 VALUES
+                    (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", "text", :content, "sent", :raw_payload, :sent_at)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'external_id' => $externalId,
+                'content' => $message,
+                'raw_payload' => json_encode($response['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'sent_at' => $sentAt,
+            ]);
+
+            $pdo->prepare(
+                'UPDATE conversations
+                 SET last_message_at = :sent_at,
+                     last_message_preview = :preview,
+                     status = IF(status = "closed", "open", status)
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            )->execute([
+                'sent_at' => $sentAt,
+                'preview' => mb_substr($message, 0, 255),
+                'id' => $conversationId,
+                'tenant_id' => $tenantId,
+            ]);
+
+            $pdo->prepare(
+                'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
+                 VALUES (:tenant_id, :conversation_id, "calendar.pre_schedule_ack_sent", :description, :metadata_json)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'description' => 'Mensagem de registro da preferência enviada automaticamente.',
+                'metadata_json' => json_encode(['appointment_id' => (int) ($appointment['id'] ?? 0)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+
+            return ['ok' => true, 'error' => null];
+        } catch (Throwable $exception) {
+            return ['ok' => false, 'error' => $exception->getMessage()];
+        }
+    }
+
+    private function publicBlockedMessage(string $reason): string
+    {
+        return match ($reason) {
+            'demand_required' => 'Antes de verificar os horários, preciso entender brevemente o motivo do atendimento. Você pode me contar o que está buscando ou qual é a principal queixa?',
+            'group_pre_schedule_blocked' => 'Não consigo iniciar o pré-agendamento automaticamente para este contato. Vou manter seu pedido registrado para revisão da equipe.',
+            default => 'Antes de continuar com o agendamento, preciso concluir uma etapa anterior do atendimento. Pode me contar um pouco mais sobre o que você precisa?',
+        };
+    }
+
+    /** @return array{ok:bool,error:?string,external_id:?string} */
+    private function sendAgendaGateMessage(
+        PDO $pdo,
+        array $instance,
+        int $conversationId,
+        int $contactId,
+        string $message,
+        string $reason,
+        int $incomingMessageId = 0
+    ): array {
+        try {
+            $tenantId = (int) ($instance['tenant_id'] ?? 0);
+            if (!$this->conversationAllowsAutomation($pdo, $tenantId, $conversationId)) {
+                return ['ok' => false, 'error' => 'Automação de agenda pausada: conversa em atendimento humano ou fechada.'];
+            }
+            $agent = (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, '', false);
+            if (is_array($agent) && !(new AgentOperatingPolicyService())->allowsConversationalAutomation($agent)) {
+                return ['ok' => false, 'error' => 'Automação de agenda aguardando o próximo horário de atendimento.'];
+            }
+            $contact = $this->findContact($pdo, $tenantId, $contactId);
+            $phone = preg_replace('/\D+/', '', (string) ($contact['phone'] ?? '')) ?: '';
+            if ($phone === '') {
+                $this->markIncomingHandledByAgendaGate($pdo, $instance, $conversationId, $incomingMessageId, $reason, false, 'Contato sem telefone.');
+                return ['ok' => false, 'error' => 'Contato sem telefone para continuar a etapa anterior ao agendamento.', 'external_id' => null];
+            }
+
+            if ($this->recentOutgoingSameMessage($pdo, $conversationId, $message)) {
+                $this->markIncomingHandledByAgendaGate($pdo, $instance, $conversationId, $incomingMessageId, $reason, true, null);
+                return ['ok' => true, 'error' => null, 'external_id' => null];
+            }
+
+            $service = new EvolutionService(
+                (string) $instance['base_url'],
+                Crypto::decrypt((string) $instance['api_key_encrypted']),
+                (string) $instance['instance_name'],
+                24,
+                filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL) !== false,
+                trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) !== '' ? trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) : null
+            );
+            $response = $service->sendText($phone, $message);
+            $externalId = $this->extractMessageId($response['body'] ?? []);
+            $sentAt = \App\Core\Clock::nowUtc();
+
+            $pdo->prepare(
+                'INSERT INTO conversation_messages
+                    (tenant_id, conversation_id, evolution_message_id, direction, sender_type, message_type, content, status, raw_payload_json, sent_at)
+                 VALUES
+                    (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", "text", :content, "sent", :raw_payload, :sent_at)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'external_id' => $externalId,
+                'content' => $message,
+                'raw_payload' => json_encode($response['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'sent_at' => $sentAt,
+            ]);
+
+            $pdo->prepare(
+                'UPDATE conversations
+                 SET last_message_at = :sent_at,
+                     last_message_preview = :preview,
+                     status = IF(status = "closed", "open", status)
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            )->execute([
+                'sent_at' => $sentAt,
+                'preview' => mb_substr($message, 0, 255),
+                'id' => $conversationId,
+                'tenant_id' => $tenantId,
+            ]);
+
+            $pdo->prepare(
+                'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
+                 VALUES (:tenant_id, :conversation_id, "calendar.pre_schedule_blocked", :description, :metadata_json)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'description' => match ($reason) {
+                    'modality_required' => 'Pré-agendamento aguardando definição de modalidade (Online ou Presencial) antes da consulta de disponibilidade.',
+                    'date_time_required' => 'Pré-agendamento aguardando dia e horário antes da consulta de disponibilidade.',
+                    default => 'Agendamento aguardando uma etapa anterior do atendimento; IA geral não acionada.',
+                },
+                'metadata_json' => json_encode([
+                    'reason' => $reason,
+                    'incoming_message_id' => $incomingMessageId > 0 ? $incomingMessageId : null,
+                    'message_sent' => true,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+
+            $this->markIncomingHandledByAgendaGate($pdo, $instance, $conversationId, $incomingMessageId, $reason, true, null);
+            return ['ok' => true, 'error' => null, 'external_id' => $externalId];
+        } catch (Throwable $exception) {
+            $this->markIncomingHandledByAgendaGate($pdo, $instance, $conversationId, $incomingMessageId, $reason, false, $exception->getMessage());
+            return ['ok' => false, 'error' => $exception->getMessage(), 'external_id' => null];
+        }
+    }
+
+    private function markIncomingHandledByAgendaGate(
+        PDO $pdo,
+        array $instance,
+        int $conversationId,
+        int $incomingMessageId,
+        string $reason,
+        bool $messageSent,
+        ?string $error
+    ): void {
+        if ($incomingMessageId < 1) {
+            return;
+        }
+
+        try {
+            $existing = $pdo->prepare(
+                'SELECT 1 FROM ai_automation_logs
+                 WHERE incoming_message_id = :incoming_message_id
+                   AND event = "ai.skipped"
+                 LIMIT 1'
+            );
+            $existing->execute(['incoming_message_id' => $incomingMessageId]);
+            if ($existing->fetchColumn()) {
+                return;
+            }
+
+            $tenantId = (int) ($instance['tenant_id'] ?? 0);
+            $resolvedAgent = $tenantId > 0
+                ? (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, '', true)
+                : null;
+            $agentId = !empty($resolvedAgent['id']) ? (int) $resolvedAgent['id'] : null;
+
+            $pdo->prepare(
+                'INSERT INTO ai_automation_logs
+                    (tenant_id, conversation_id, agent_id, incoming_message_id, event, status,
+                     response_preview, error_message, raw_json)
+                 VALUES
+                    (:tenant_id, :conversation_id, :agent_id, :incoming_message_id,
+                     "ai.skipped", "skipped", :response_preview, :error_message, :raw_json)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'agent_id' => $agentId,
+                'incoming_message_id' => $incomingMessageId,
+                'response_preview' => match ($reason) {
+                    'modality_required' => 'Agenda aguardando modalidade antes de consultar disponibilidade.',
+                    'date_time_required' => 'Agenda aguardando dia/horário antes de consultar disponibilidade.',
+                    default => 'Mensagem de agenda bloqueada pela etapa anterior; IA geral não acionada.',
+                },
+                'error_message' => $error !== null ? mb_substr($error, 0, 500) : null,
+                'raw_json' => json_encode([
+                    'calendar_handled' => true,
+                    'calendar_gate' => true,
+                    'calendar_code' => $reason,
+                    'message_sent' => $messageSent,
+                    'skip_ai' => true,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+        } catch (Throwable) {
+            // O marcador evita reprocessamento indevido, mas nunca interrompe o webhook.
+        }
+    }
+
+    private function recentOutgoingSameMessage(PDO $pdo, int $conversationId, string $message): bool
+    {
+        try {
+            $statement = $pdo->prepare(
+                'SELECT COUNT(*) FROM conversation_messages
+                 WHERE conversation_id = :conversation_id
+                   AND direction = "outgoing"
+                   AND content = :content
+                   AND sent_at >= DATE_SUB(NOW(), INTERVAL 45 SECOND)'
+            );
+            $statement->execute(['conversation_id' => $conversationId, 'content' => $message]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function conversationAllowsAutomation(PDO $pdo, int $tenantId, int $conversationId): bool
+    {
+        if ($tenantId < 1 || $conversationId < 1) {
+            return false;
+        }
+        try {
+            $statement = $pdo->prepare(
+                'SELECT attendance_mode, status
+                 FROM conversations
+                 WHERE id = :conversation_id AND tenant_id = :tenant_id
+                 LIMIT 1'
+            );
+            $statement->execute([
+                'conversation_id' => $conversationId,
+                'tenant_id' => $tenantId,
+            ]);
+            $conversation = $statement->fetch(PDO::FETCH_ASSOC);
+            return is_array($conversation)
+                && (string) ($conversation['attendance_mode'] ?? '') === 'ai'
+                && (string) ($conversation['status'] ?? '') !== 'closed';
+        } catch (Throwable) {
+            // Falha fechada: se não for possível confirmar que a IA está ativa, não envia automação.
+            return false;
+        }
+    }
+
+    private function extractMessageId(array $body): ?string
+    {
+        $id = $body['key']['id'] ?? $body['messageId'] ?? $body['id'] ?? $body['data']['key']['id'] ?? null;
+        return is_scalar($id) && trim((string) $id) !== '' ? trim((string) $id) : null;
+    }
+
+    private function buildDescription(string $content, array $intent, array $flowContext = []): string
+    {
+        return implode("\n", array_filter([
+            'Preferência recebida pelo WhatsApp/IA. Necessita aprovação humana antes de confirmar.',
+            'Grupo do contato: ' . ((string) ($flowContext['contact_group_label'] ?? $flowContext['contact_group'] ?? 'não identificado')),
+            'Situação da demanda: ' . ((string) ($flowContext['demand_status_label'] ?? $flowContext['demand_status'] ?? 'não informada')),
+            trim((string) ($flowContext['demand_summary'] ?? '')) !== ''
+                ? 'Resumo da demanda: ' . mb_substr(trim((string) $flowContext['demand_summary']), 0, 800)
+                : null,
+            'Dia/período informado: ' . ($this->displayDay($intent) ?: 'não informado'),
+            'Horário/período informado: ' . ($this->displayTime($intent) ?: 'não informado'),
+            'Modalidade: ' . ($intent['modality'] ?: 'não informada'),
+            'Mensagem do lead: ' . mb_substr($content, 0, 500),
+        ]));
+    }
+
+    private function normalizeText(string $content): string
+    {
+        $text = mb_strtolower($content);
+        $map = ['á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a', 'é' => 'e', 'ê' => 'e', 'í' => 'i', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ú' => 'u', 'ç' => 'c'];
+        return strtr($text, $map);
+    }
+
+    private function extractDateText(string $text): string
+    {
+        if (preg_match('/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/u', $text, $match)) {
+            $day = str_pad($match[1], 2, '0', STR_PAD_LEFT);
+            $month = str_pad($match[2], 2, '0', STR_PAD_LEFT);
+            $year = $match[3] ?? date('Y');
+            if (strlen($year) === 2) {
+                $year = '20' . $year;
+            }
+            return $year . '-' . $month . '-' . $day;
+        }
+        return '';
+    }
+
+    private function extractDayText(string $text): string
+    {
+        foreach (['segunda-feira' => 'segunda-feira', 'segunda feira' => 'segunda-feira', 'segunda' => 'segunda-feira', 'terca-feira' => 'terça-feira', 'terca feira' => 'terça-feira', 'terca' => 'terça-feira', 'quarta-feira' => 'quarta-feira', 'quarta feira' => 'quarta-feira', 'quarta' => 'quarta-feira', 'quinta-feira' => 'quinta-feira', 'quinta feira' => 'quinta-feira', 'quinta' => 'quinta-feira', 'sexta-feira' => 'sexta-feira', 'sexta feira' => 'sexta-feira', 'sexta' => 'sexta-feira', 'sabado' => 'sábado', 'domingo' => 'domingo'] as $needle => $label) {
+            if (str_contains($text, $needle)) {
+                return $label;
+            }
+        }
+        if (str_contains($text, 'amanha')) {
+            return 'amanhã';
+        }
+        if (str_contains($text, 'hoje')) {
+            return 'hoje';
+        }
+        return '';
+    }
+
+    private function extractTimeText(string $text): string
+    {
+        // Remove datas como 13/07 para não confundir o dia com horário 13:00.
+        $timeText = preg_replace('/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/u', ' ', $text) ?? $text;
+        if (preg_match('/\b(?:as|às|a|ap[oó]s|depois das)?\s*([01]?\d|2[0-3])\s*(?:h|:)?\s*([0-5]\d)?\b/u', $timeText, $match)) {
+            $hour = str_pad((string) (int) $match[1], 2, '0', STR_PAD_LEFT);
+            $minute = isset($match[2]) && $match[2] !== '' ? $match[2] : '00';
+            if ((int) $hour >= 6 && (int) $hour <= 23) {
+                return $hour . ':' . $minute;
+            }
+        }
+        if (preg_match('/\b(manha|tarde|noite)\b/u', $text, $match)) {
+            return match ($match[1]) {
+                'manha' => 'manhã',
+                'tarde' => 'tarde',
+                'noite' => 'noite',
+                default => '',
+            };
+        }
+        return '';
+    }
+
+    private function extractModality(string $text): string
+    {
+        if (str_contains($text, 'presencial') || str_contains($text, 'consultorio')) {
+            return 'Presencial';
+        }
+        if (str_contains($text, 'telefone') || str_contains($text, 'ligacao') || str_contains($text, 'ligar')) {
+            return 'Telefone';
+        }
+        if (str_contains($text, 'online') || str_contains($text, 'meet') || str_contains($text, 'video') || str_contains($text, 'remoto')) {
+            return 'Online';
+        }
+        return '';
+    }
+
+    private function intentSchedulingModality(array $intent): string
+    {
+        return $this->normalizeSchedulingModality((string) ($intent['location_type'] ?? $intent['modality'] ?? ''));
+    }
+
+    private function appointmentSchedulingModality(array $appointment): string
+    {
+        // Desde a migration 030, appointment_modality é a fonte de verdade. Se ela existe
+        // e está `indefinida`, não usamos o antigo default `location_type=online` como
+        // evidência, pois isso poderia pular a pergunta Online/Presencial.
+        if (array_key_exists('appointment_modality', $appointment)) {
+            return $this->normalizeSchedulingModality((string) ($appointment['appointment_modality'] ?? ''));
+        }
+        return $this->normalizeSchedulingModality((string) ($appointment['location_type'] ?? ''));
+    }
+
+    private function normalizeSchedulingModality(string $value): string
+    {
+        $normalized = $this->normalizeText($value);
+        if (in_array($normalized, ['online', 'virtual', 'remoto', 'video', 'meet'], true)) {
+            return 'online';
+        }
+        if (in_array($normalized, ['presencial', 'consultorio', 'in person', 'in-person', 'in_person'], true)) {
+            return 'presencial';
+        }
+        return 'indefinida';
+    }
+
+    private function isAvailabilityModality(string $modality): bool
+    {
+        return in_array($modality, ['online', 'presencial'], true);
+    }
+
+    /** @return array{ok:bool,error:?string,external_id?:?string} */
+    private function sendModalityQuestion(PDO $pdo, array $instance, int $conversationId, int $contactId, int $incomingMessageId = 0): array
+    {
+        $settings = $this->settings((int) ($instance['tenant_id'] ?? 0));
+        $message = trim((string) ($settings['modality_message'] ?? ''))
+            ?: 'Antes de consultar os horários, você prefere atendimento online ou presencial?';
+
+        return $this->sendAgendaGateMessage(
+            $pdo,
+            $instance,
+            $conversationId,
+            $contactId,
+            $message,
+            'modality_required',
+            $incomingMessageId
+        );
+    }
+
+    /** @return array{ok:bool,error:?string,external_id?:?string} */
+    private function sendDateTimeQuestion(PDO $pdo, array $instance, int $conversationId, int $contactId, int $incomingMessageId = 0): array
+    {
+        $settings = $this->settings((int) ($instance['tenant_id'] ?? 0));
+        $message = trim((string) ($settings['collect_message'] ?? ''))
+            ?: 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.';
+
+        return $this->sendAgendaGateMessage(
+            $pdo,
+            $instance,
+            $conversationId,
+            $contactId,
+            $message,
+            'date_time_required',
+            $incomingMessageId
+        );
+    }
+
+    private function periodFromIntent(array $intent, int $durationMinutes = 50): array
+    {
+        $durationMinutes = max(15, min(240, $durationMinutes));
+        $timezone = new DateTimeZone('America/Sao_Paulo');
+        $now = new DateTimeImmutable('now', $timezone);
+        $date = $this->dateFromIntent($intent, $now);
+        $time = $this->timeFromText((string) $intent['preferred_time']);
+        $start = new DateTimeImmutable($date->format('Y-m-d') . ' ' . $time, $timezone);
+        if ($start <= $now) {
+            $start = $start->add(new DateInterval('P7D'));
+        }
+        $end = $start->add(new DateInterval('PT' . $durationMinutes . 'M'));
+        return ['starts_at' => $start->format('Y-m-d H:i:s'), 'ends_at' => $end->format('Y-m-d H:i:s')];
+    }
+
+    private function dateFromIntent(array $intent, DateTimeImmutable $now): DateTimeImmutable
+    {
+        $preferredDate = (string) ($intent['preferred_date'] ?? '');
+        if ($preferredDate !== '') {
+            try {
+                return new DateTimeImmutable($preferredDate . ' 12:00:00', $now->getTimezone());
+            } catch (Throwable) {
+                // segue para dia textual
+            }
+        }
+        return $this->dateFromDay((string) ($intent['preferred_day'] ?? ''), $now);
+    }
+
+    private function dateFromDay(string $day, DateTimeImmutable $now): DateTimeImmutable
+    {
+        if ($day === 'hoje') {
+            return $now;
+        }
+        if ($day === 'amanhã') {
+            return $now->add(new DateInterval('P1D'));
+        }
+        $map = ['domingo' => 0, 'segunda-feira' => 1, 'terça-feira' => 2, 'quarta-feira' => 3, 'quinta-feira' => 4, 'sexta-feira' => 5, 'sábado' => 6];
+        if (isset($map[$day])) {
+            $current = (int) $now->format('w');
+            $target = $map[$day];
+            $days = ($target - $current + 7) % 7;
+            if ($days === 0) {
+                $days = 7;
+            }
+            return $now->add(new DateInterval('P' . $days . 'D'));
+        }
+        return $now->add(new DateInterval('P1D'));
+    }
+
+    private function timeFromText(string $text): string
+    {
+        if (preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', $text, $match)) {
+            return str_pad((string) (int) $match[1], 2, '0', STR_PAD_LEFT) . ':' . $match[2] . ':00';
+        }
+        return match ($text) {
+            'manhã' => '09:00:00',
+            'tarde' => '14:00:00',
+            'noite' => '19:00:00',
+            default => '09:00:00',
+        };
+    }
+
+    private function displayDay(array $intent): string
+    {
+        $date = (string) ($intent['preferred_date'] ?? '');
+        if ($date !== '') {
+            try {
+                return (new DateTimeImmutable($date))->format('d/m/Y');
+            } catch (Throwable) {
+                return $date;
+            }
+        }
+        return (string) ($intent['preferred_day'] ?? '');
+    }
+
+    private function displayTime(array $intent): string
+    {
+        return (string) ($intent['preferred_time'] ?? '');
+    }
+
+    private function markConversationIntent(PDO $pdo, int $tenantId, int $conversationId, array $intent): void
+    {
+        if (!$this->hasColumn($pdo, 'conversations', 'agenda_intent_detected')) {
+            return;
+        }
+        $note = trim(implode(' | ', array_filter([
+            'Dia: ' . ($this->displayDay($intent) ?: 'não informado'),
+            'Horário: ' . ($this->displayTime($intent) ?: 'não informado'),
+            'Modalidade: ' . ($intent['modality'] ?: 'não informada'),
+        ])));
+        $pdo->prepare(
+            'UPDATE conversations
+             SET agenda_intent_detected = 1,
+                 agenda_intent_at = NOW(),
+                 agenda_intent_note = :note
+             WHERE id = :id AND tenant_id = :tenant_id'
+        )->execute(['note' => mb_substr($note, 0, 500), 'id' => $conversationId, 'tenant_id' => $tenantId]);
+    }
+
+    private function findContact(PDO $pdo, int $tenantId, int $contactId): array
+    {
+        $statement = $pdo->prepare('SELECT id, name, phone, email FROM contacts WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+        $statement->execute(['id' => $contactId, 'tenant_id' => $tenantId]);
+        return $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    private function hasColumn(PDO $pdo, string $table, string $column): bool
+    {
+        try {
+            $statement = $pdo->prepare(
+                'SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
+            );
+            $statement->execute(['table' => $table, 'column' => $column]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /** @return array<string,mixed> */
+    public function requestAvailabilityIfNeeded(int $tenantId, int $appointmentId): array
+    {
+        return $this->tryAutoRequestAvailability($tenantId, $appointmentId);
+    }
+
+    /** @return array<string,mixed> */
+    private function tryAutoRequestAvailability(int $tenantId, int $appointmentId): array
+    {
+        if ($tenantId < 1 || $appointmentId < 1) {
+            return ['ok' => false, 'message' => 'Empresa ou pré-agendamento inválido.'];
+        }
+        try {
+            $service = new CalendarAvailabilityService();
+            $settings = $service->settings($tenantId);
+            if (empty($settings['enabled']) || empty($settings['auto_request_on_pre_schedule'])) {
+                return ['ok' => false, 'skipped' => true, 'message' => 'Consulta automática de disponibilidade desativada.'];
+            }
+            $appointment = $this->appointmentById(Database::connection(), $tenantId, $appointmentId);
+            $modality = is_array($appointment) ? $this->appointmentSchedulingModality($appointment) : 'indefinida';
+            if (!$this->isAvailabilityModality($modality)) {
+                return [
+                    'ok' => false,
+                    'skipped' => true,
+                    'code' => 'modality_required',
+                    'message' => 'Defina se o atendimento é online ou presencial antes de consultar disponibilidade.',
+                ];
+            }
+            $result = $service->requestForAppointment($tenantId, $appointmentId, 'pre_schedule_ai');
+            if (empty($result['ok'])) {
+                $this->notifyAvailabilityFailure(
+                    $tenantId,
+                    $appointmentId,
+                    0,
+                    (string) ($result['message'] ?? 'O fluxo n8n não recebeu a nova consulta de disponibilidade.')
+                );
+            }
+            return $result;
+        } catch (Throwable $exception) {
+            $message = 'Falha ao iniciar a consulta de disponibilidade: ' . $exception->getMessage();
+            try {
+                Database::connection()->prepare(
+                    'UPDATE calendar_appointments
+                     SET availability_status = "failed", availability_error = :error, updated_at = CURRENT_TIMESTAMP
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute([
+                    'error' => mb_substr($message, 0, 700),
+                    'id' => $appointmentId,
+                    'tenant_id' => $tenantId,
+                ]);
+            } catch (Throwable) {
+            }
+            $this->notifyAvailabilityFailure($tenantId, $appointmentId, 0, $message);
+            return ['ok' => false, 'message' => $message];
+        }
+    }
+
+    private function tableExists(string $table): bool
+    {
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table'
+            );
+            $statement->execute(['table' => $table]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+}

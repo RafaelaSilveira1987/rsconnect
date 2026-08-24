@@ -1,0 +1,528 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Controllers;
+
+use App\Core\Database;
+use App\Core\Env;
+use App\Core\Router;
+use App\Core\RequestSecurity;
+use App\Core\View;
+use App\Services\SecurityService;
+use PDO;
+use Throwable;
+
+final class N8nTemplateController
+{
+    private const TEMPLATES = [
+        'agenda-google-calendar' => [
+            'title' => 'Agenda Google Calendar',
+            'segment' => 'Agenda',
+            'file' => 'template-agenda-google-calendar.json',
+            'events' => ['calendar.appointment.created'],
+            'description' => 'Cria evento no Google somente para compromissos reais do RS Connect com início e fim definidos. Mensagens, consultas de disponibilidade e mudanças de status não criam novos eventos.',
+        ],
+        'crm-google-sheets' => [
+            'title' => 'CRM para Google Sheets',
+            'segment' => 'CRM',
+            'file' => 'template-crm-google-sheets.json',
+            'events' => ['crm.lead.created', 'crm.lead.updated', 'crm.lead.moved', 'message.received'],
+            'description' => 'Espelha contatos, oportunidades e mensagens em uma planilha por cliente sem transformar a planilha em fonte principal.',
+        ],
+        'followup-alerta' => [
+            'title' => 'Retorno e Alertas',
+            'segment' => 'Operação',
+            'file' => 'template-followup-alerta.json',
+            'events' => ['task.created', 'followup.due', 'crm.lead.updated'],
+            'description' => 'Dispara lembretes internos para equipe comercial ou atendimento quando um retorno precisa de ação.',
+        ],
+        'billing-cron' => [
+            'title' => 'Cron da régua de cobrança',
+            'segment' => 'Financeiro',
+            'file' => 'template-billing-cron.json',
+            'events' => ['billing.reminders.run', 'cron.daily'],
+            'description' => 'Executa todos os dias a URL do cron do RS Connect para processar regras de cobrança sem ação manual.',
+        ],
+        'billing-disparo-mensagens' => [
+            'title' => 'Disparo de cobrança por mensagem',
+            'segment' => 'Financeiro',
+            'file' => 'template-billing-whatsapp-email.json',
+            'events' => ['billing.reminder.before_due', 'billing.reminder.due_today', 'billing.reminder.overdue', 'billing.subscription.suspended'],
+            'description' => 'Recebe eventos billing.* por empresa, normaliza a cobrança, dispara mensagem externa e registra callback no RS Connect.',
+        ],
+        'backup-rsconnect' => [
+            'title' => 'Backup automático RS Connect',
+            'segment' => 'Operação',
+            'file' => 'template-backup-rsconnect.json',
+            'events' => ['operations.backup.requested', 'cron.daily'],
+            'description' => 'Gera backup do banco via bash/SSH, salva o arquivo no destino configurado, registra o callback e sinaliza falha real também no n8n.',
+        ],
+        'monitor-operacional' => [
+            'title' => 'Monitor operacional RS Connect',
+            'segment' => 'Operação',
+            'file' => 'template-monitor-operacional.json',
+            'events' => ['operations.health.check', 'cron.every_15_minutes'],
+            'description' => 'Executa a verificação operacional a cada 15 minutos para abrir/encerrar incidentes e também retomar, no próximo horário válido, conversas preservadas fora do expediente sem duplicar respostas.',
+        ],
+        'ai-reprocessamento-agendado' => [
+            'title' => 'Fila rápida da IA',
+            'segment' => 'Operação',
+            'file' => 'template-fila-rapida-ia.json',
+            'events' => ['ai.queue.check', 'cron.every_minute'],
+            'description' => 'Reavalia a fila da IA a cada minuto para respeitar o intervalo mínimo entre respostas sem perder mensagens. A rotina diária permanece como contingência para falhas e pendências antigas.',
+        ],
+        'message-retention' => [
+            'title' => 'Retenção diária de mensagens',
+            'segment' => 'Privacidade',
+            'file' => 'template-message-retention.json',
+            'events' => ['messages.retention.run', 'cron.daily'],
+            'description' => 'Executa diariamente a política de retenção de cada empresa, removendo conteúdo e payloads vencidos sem apagar métricas de auditoria.',
+        ],
+        'calendar-maintenance' => [
+            'title' => 'Manutenção automática da agenda',
+            'segment' => 'Agenda',
+            'file' => 'template-calendar-maintenance.json',
+            'events' => ['calendar.maintenance.run', 'cron.every_10_minutes'],
+            'description' => 'Executa a manutenção técnica da agenda a cada 10 minutos: libera pré-reservas vencidas, encerra callbacks antigos e tenta sincronizações pendentes sem depender de ação manual.',
+        ],
+        'agenda-disponibilidade' => [
+            'title' => 'Agenda inteligente — simulação/fallback',
+            'segment' => 'Agenda',
+            'file' => 'template-agenda-disponibilidade.json',
+            'events' => ['calendar.availability.requested'],
+            'description' => 'Template do ZIP 27 com horários de exemplo. Útil apenas para validar a comunicação e o fallback, sem consulta real ao Google Agenda.',
+        ],
+        'agenda-google-espacos-livres' => [
+            'title' => 'Agenda Google — espaços livres',
+            'segment' => 'Agenda',
+            'file' => 'template-agenda-google-espacos-livres.json',
+            'events' => ['calendar.availability.requested'],
+            'description' => 'Consulta os eventos reais do Google Agenda, ignora os marcados como disponível/transparent quando configurado e devolve os horários livres dentro das regras da empresa.',
+        ],
+        'agenda-google-eventos-vago' => [
+            'title' => 'Agenda Google — eventos VAGO',
+            'segment' => 'Agenda',
+            'file' => 'template-agenda-google-eventos-vago.json',
+            'events' => ['calendar.availability.requested', 'calendar.marked_slot.*'],
+            'description' => 'Exige modalidade definida na conversa, localiza somente VAGO — ONLINE ou VAGO — PRESENCIAL correspondente e atualiza o mesmo evento ao pré-reservar, confirmar ou liberar o horário.',
+        ],
+        'agenda-google-ciclo-completo' => [
+            'title' => 'Agenda Google — ciclo completo',
+            'segment' => 'Agenda',
+            'file' => 'template-agenda-google-ciclo-completo.json',
+            'events' => ['calendar.free_slot.create', 'calendar.free_slot.update', 'calendar.free_slot.delete'],
+            'description' => 'Cria, atualiza e remove o evento confirmado no modo Espaços livres, usando uma chave idempotente para evitar duplicidade.',
+        ],
+    ];
+
+    public function index(): void
+    {
+        $callbackUrl = Router::url('/webhooks/n8n/callback');
+        $samplePayloads = $this->samplePayloads();
+        $callbacks = [];
+
+        try {
+            $callbacks = Database::connection()->query(
+                'SELECT c.*, t.name AS tenant_name, f.name AS flow_name
+                 FROM n8n_flow_callback_logs c
+                 LEFT JOIN tenants t ON t.id = c.tenant_id
+                 LEFT JOIN n8n_tenant_flows f ON f.id = c.flow_id
+                 ORDER BY c.created_at DESC
+                 LIMIT 80'
+            )->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable) {
+            // Permite abrir a tela antes de rodar a migration 011.
+        }
+
+        View::render('n8n_templates.index', [
+            'title' => 'Templates n8n',
+            'templates' => self::TEMPLATES,
+            'callbackUrl' => $callbackUrl,
+            'callbackTokenConfigured' => trim((string) Env::get('N8N_CALLBACK_TOKEN', '')) !== '',
+            'samplePayloads' => $samplePayloads,
+            'callbacks' => $callbacks,
+        ]);
+    }
+
+    public function download(): void
+    {
+        $key = trim((string) ($_GET['template'] ?? ''));
+        $template = self::TEMPLATES[$key] ?? null;
+        if ($template === null) {
+            http_response_code(404);
+            echo 'Template não encontrado.';
+            return;
+        }
+
+        $path = dirname(__DIR__, 2) . '/docs/n8n_templates/' . $template['file'];
+        if (!is_file($path)) {
+            http_response_code(404);
+            echo 'Arquivo do template não encontrado.';
+            return;
+        }
+
+        $contents = (string) file_get_contents($path);
+        if ($key === 'billing-cron') {
+            $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+            $billingToken = trim((string) Env::get('BILLING_CRON_TOKEN', ''));
+            if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+                http_response_code(409);
+                echo 'Configure APP_URL com a URL pública HTTPS do RS Connect antes de baixar o cron.';
+                return;
+            }
+            if ($billingToken === '') {
+                http_response_code(409);
+                echo 'Configure BILLING_CRON_TOKEN no ambiente e reinicie o RS Connect antes de baixar o cron.';
+                return;
+            }
+            $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
+            $contents = str_replace('SEU_BILLING_CRON_TOKEN', rawurlencode($billingToken), $contents);
+        }
+
+        if ($key === 'ai-reprocessamento-agendado') {
+            $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+            $aiToken = trim((string) Env::get('AI_REPROCESS_CRON_TOKEN', ''));
+            if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+                http_response_code(409);
+                echo 'Configure APP_URL com a URL pública HTTPS do RS Connect antes de baixar a fila rápida da IA.';
+                return;
+            }
+            if ($aiToken === '') {
+                http_response_code(409);
+                echo 'Configure AI_REPROCESS_CRON_TOKEN no ambiente e reinicie o RS Connect antes de baixar a fila rápida da IA.';
+                return;
+            }
+            $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
+            $contents = str_replace('SEU_AI_REPROCESS_CRON_TOKEN', $aiToken, $contents);
+        }
+
+        if ($key === 'message-retention') {
+            $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+            $retentionToken = trim((string) Env::get('MESSAGE_RETENTION_TOKEN', ''));
+            if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+                http_response_code(409);
+                echo 'Configure APP_URL com a URL pública HTTPS do RS Connect antes de baixar a retenção de mensagens.';
+                return;
+            }
+            if ($retentionToken === '') {
+                http_response_code(409);
+                echo 'Configure MESSAGE_RETENTION_TOKEN no ambiente e reinicie o RS Connect antes de baixar a retenção de mensagens.';
+                return;
+            }
+            $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
+            $contents = str_replace('SEU_MESSAGE_RETENTION_TOKEN', $retentionToken, $contents);
+        }
+
+        if ($key === 'calendar-maintenance') {
+            $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+            $calendarToken = trim((string) Env::get('CALENDAR_MAINTENANCE_TOKEN', ''));
+            if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+                http_response_code(409);
+                echo 'Configure APP_URL com a URL pública HTTPS do RS Connect antes de baixar a manutenção automática da agenda.';
+                return;
+            }
+            if ($calendarToken === '') {
+                http_response_code(409);
+                echo 'Configure CALENDAR_MAINTENANCE_TOKEN no ambiente e reinicie o RS Connect antes de baixar a manutenção automática da agenda.';
+                return;
+            }
+            $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
+            $contents = str_replace('SEU_CALENDAR_MAINTENANCE_TOKEN', $calendarToken, $contents);
+        }
+
+        if ($key === 'monitor-operacional') {
+            $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+            $monitorToken = $this->monitorToken();
+            if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+                http_response_code(409);
+                echo 'Configure APP_URL com a URL pública HTTPS do RS Connect antes de baixar o monitor operacional.';
+                return;
+            }
+            if ($monitorToken === '') {
+                http_response_code(409);
+                echo 'Configure OPERATIONS_MONITOR_TOKEN (ou OPERATIONS_BACKUP_TOKEN) e reinicie o RS Connect antes de baixar o monitor operacional.';
+                return;
+            }
+
+            $contents = str_replace('https://SEU_DOMINIO_RS_CONNECT', $appUrl, $contents);
+            $contents = str_replace('SEU_OPERATIONS_MONITOR_TOKEN', $monitorToken, $contents);
+        }
+
+        if ($key === 'backup-rsconnect') {
+            $appUrl = rtrim(trim((string) Env::get('APP_URL', '')), '/');
+            $backupToken = $this->backupToken();
+            if ($appUrl === '' || !str_starts_with($appUrl, 'https://')) {
+                http_response_code(409);
+                echo 'Configure APP_URL com a URL pública HTTPS do RS Connect antes de baixar o template de backup.';
+                return;
+            }
+            if ($backupToken === '') {
+                http_response_code(409);
+                echo 'Configure OPERATIONS_BACKUP_TOKEN (ou BACKUP_WEBHOOK_TOKEN) e reinicie o RS Connect antes de baixar o template de backup.';
+                return;
+            }
+
+            $decoded = json_decode($contents, true);
+            if (!is_array($decoded)) {
+                http_response_code(500);
+                echo 'O template de backup está inválido.';
+                return;
+            }
+
+            foreach (($decoded['nodes'] ?? []) as &$node) {
+                $name = (string) ($node['name'] ?? '');
+                if ($name === 'Solicitar rotinas vencidas') {
+                    $node['parameters']['url'] = $appUrl . '/webhooks/operations/backups/dispatch';
+                    if (isset($node['parameters']['headerParameters']['parameters'][0])) {
+                        $node['parameters']['headerParameters']['parameters'][0]['value'] = $backupToken;
+                    }
+                }
+                if ($name === 'Validar e normalizar') {
+                    $js = (string) ($node['parameters']['jsCode'] ?? '');
+                    $node['parameters']['jsCode'] = str_replace('__RS_BACKUP_TOKEN__', addslashes($backupToken), $js);
+                }
+            }
+            unset($node);
+
+            $prepared = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (!is_string($prepared)) {
+                http_response_code(500);
+                echo 'Não foi possível preparar o template de backup.';
+                return;
+            }
+            $contents = $prepared;
+        }
+
+        header('Content-Type: application/json; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . basename($path) . '"');
+        echo $contents;
+    }
+
+    public function callback(): void
+    {
+        $raw = file_get_contents('php://input') ?: '';
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $configuredToken = trim((string) Env::get('N8N_CALLBACK_TOKEN', ''));
+        $providedToken = trim((string) (
+            $_SERVER['HTTP_X_RS_CONNECT_TOKEN']
+            ?? $_SERVER['HTTP_X_WEBHOOK_TOKEN']
+            ?? $payload['token']
+            ?? RequestSecurity::bearerToken()
+        ));
+        if (!(new SecurityService())->verifyWebhookToken('n8n.callback', $providedToken, $configuredToken)) {
+            http_response_code(401);
+            $this->json(['ok' => false, 'error' => 'Token de callback inválido.']);
+            return;
+        }
+
+        $tenantId = isset($payload['tenant_id']) ? (int) $payload['tenant_id'] : null;
+        $flowId = isset($payload['flow_id']) ? (int) $payload['flow_id'] : null;
+        $event = trim((string) ($payload['event'] ?? 'n8n.callback'));
+        $status = (string) ($payload['status'] ?? 'info');
+        if (!in_array($status, ['success', 'error', 'info'], true)) {
+            $status = 'info';
+        }
+        $message = mb_substr((string) ($payload['message'] ?? $payload['detail'] ?? ''), 0, 700);
+        $externalId = mb_substr((string) ($payload['external_id'] ?? $payload['google_event_id'] ?? ''), 0, 190);
+
+        try {
+            Database::connection()->prepare(
+                'INSERT INTO n8n_flow_callback_logs
+                    (tenant_id, flow_id, event, status, external_id, message, metadata_json)
+                 VALUES
+                    (:tenant_id, :flow_id, :event, :status, :external_id, :message, :metadata_json)'
+            )->execute([
+                'tenant_id' => $tenantId && $tenantId > 0 ? $tenantId : null,
+                'flow_id' => $flowId && $flowId > 0 ? $flowId : null,
+                'event' => $event,
+                'status' => $status,
+                'external_id' => $externalId !== '' ? $externalId : null,
+                'message' => $message !== '' ? $message : null,
+                'metadata_json' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+        } catch (Throwable $exception) {
+            http_response_code(500);
+            $this->json(['ok' => false, 'error' => $exception->getMessage()]);
+            return;
+        }
+
+        $this->json(['ok' => true, 'logged' => true]);
+    }
+
+    private function monitorToken(): string
+    {
+        foreach (['OPERATIONS_MONITOR_TOKEN', 'OPERATIONS_BACKUP_TOKEN', 'BACKUP_WEBHOOK_TOKEN'] as $key) {
+            $value = trim((string) Env::get($key, ''));
+            if ($value !== '') {
+                return $value;
+            }
+            $serverValue = $_SERVER[$key] ?? $_ENV[$key] ?? getenv($key);
+            if (is_string($serverValue) && trim($serverValue) !== '') {
+                return trim($serverValue);
+            }
+        }
+        return '';
+    }
+
+    /** @return array<string,mixed> */
+    private function backupToken(): string
+    {
+        foreach (['OPERATIONS_BACKUP_TOKEN', 'BACKUP_WEBHOOK_TOKEN'] as $key) {
+            $value = trim((string) Env::get($key, ''));
+            if ($value !== '') {
+                return $value;
+            }
+            $serverValue = $_SERVER[$key] ?? $_ENV[$key] ?? getenv($key);
+            if (is_string($serverValue) && trim($serverValue) !== '') {
+                return trim($serverValue);
+            }
+        }
+        return '';
+    }
+
+    private function samplePayloads(): array
+    {
+        return [
+            'calendar.appointment.created' => [
+                'event' => 'calendar.appointment.created',
+                'source' => 'rs-connect',
+                'tenant_id' => 1,
+                'flow_id' => 1,
+                'payload' => [
+                    'tenant_id' => 1,
+                    'contract' => [
+                        'type' => 'calendar_appointment_v1',
+                        'appointment_id' => 15,
+                        'event' => 'calendar.appointment.created',
+                    ],
+                    'appointment' => [
+                        'id' => 15,
+                        'title' => 'Reunião com lead',
+                        'contact' => ['name' => 'Rafaela', 'phone' => '5532999999999'],
+                        'starts_at' => '2026-07-15 10:00:00',
+                        'ends_at' => '2026-07-15 10:50:00',
+                        'timezone' => 'America/Sao_Paulo',
+                        'meeting_url' => 'https://meet.google.com/xxx-yyyy-zzz',
+                    ],
+                ],
+                'callback' => ['url' => Router::url('/webhooks/n8n/callback')],
+            ],
+            'crm.lead.created' => [
+                'event' => 'crm.lead.created',
+                'source' => 'rs-connect',
+                'tenant_id' => 1,
+                'flow_id' => 2,
+                'payload' => [
+                    'tenant_id' => 1,
+                    'lead_id' => 30,
+                    'stage' => 'Novo',
+                    'value' => 0,
+                    'contact' => ['name' => 'Lead Teste', 'phone' => '5532988887777'],
+                    'summary' => 'Lead pediu orçamento pelo WhatsApp.',
+                ],
+                'callback' => ['url' => Router::url('/webhooks/n8n/callback')],
+            ],
+            'billing.reminder.overdue' => [
+                'event' => 'billing.reminder.overdue',
+                'source' => 'rs-connect',
+                'tenant_id' => 1,
+                'flow_id' => 4,
+                'tenant' => ['id' => 1, 'name' => 'Cliente Teste', 'email' => 'financeiro@cliente.com.br', 'phone' => '5532999999999'],
+                'invoice' => ['id' => 50, 'number' => 'RS-202607-64550', 'amount' => 297.00, 'due_date' => '2026-07-08', 'status' => 'overdue', 'payment_url' => 'https://link-de-pagamento.example/checkout'],
+                'rule' => ['label' => '2 dias após vencimento', 'days_from_due' => 2, 'event' => 'billing.reminder.overdue', 'channel' => 'whatsapp'],
+                'message' => 'Olá, Cliente Teste. Identificamos que a cobrança RS-202607-64550 está em aberto há 2 dias. Link: https://link-de-pagamento.example/checkout',
+                'callback' => ['url' => Router::url('/webhooks/n8n/callback')],
+            ],
+            'calendar.availability.requested' => [
+                'event' => 'calendar.availability.requested',
+                'source' => 'rs-connect',
+                'tenant_id' => 1,
+                'request_id' => 25,
+                'mode' => 'free_slots',
+                'payload' => [
+                    'tenant_id' => 1,
+                    'appointment_id' => 15,
+                    'request_id' => 25,
+                    'request_token' => 'REQUEST_TOKEN',
+                    'appointment' => [
+                        'title' => 'Pré-agendamento - Cliente',
+                        'customer_name' => 'Cliente Teste',
+                        'preferred_day_text' => 'sexta-feira',
+                        'preferred_time_text' => '09:00',
+                        'modality' => 'online',
+                    ],
+                    'search' => [
+                        'start_at' => '2026-07-16 00:00:00',
+                        'end_at' => '2026-07-30 23:59:59',
+                        'duration_minutes' => 60,
+                        'slot_interval_minutes' => 60,
+                        'timezone' => 'America/Sao_Paulo',
+                        'utc_offset' => '-03:00',
+                        'max_suggestions' => 5,
+                    ],
+                    'rules' => [
+                        'working_days' => [1, 2, 3, 4, 5],
+                        'work_start' => '08:00',
+                        'work_end' => '18:00',
+                        'min_notice_hours' => 2,
+                        'buffer_minutes' => 0,
+                    ],
+                    'google' => [
+                        'calendar_id' => 'primary',
+                        'ignore_transparent_events' => true,
+                        'online_title' => 'VAGO — ONLINE',
+                        'presential_title' => 'VAGO — PRESENCIAL',
+                    ],
+                    'callback' => ['url' => Router::url('/webhooks/calendar/availability'), 'token' => 'REQUEST_TOKEN'],
+                ],
+            ],
+            'calendar.free_slot.create' => [
+                'event' => 'calendar.free_slot.create',
+                'source' => 'rs-connect',
+                'tenant_id' => 1,
+                'payload' => [
+                    'tenant_id' => 1,
+                    'action' => 'create',
+                    'request_id' => 40,
+                    'request_token' => 'REQUEST_TOKEN',
+                    'appointment_id' => 15,
+                    'idempotency_key' => 'rsconnect-1-15',
+                    'calendar_id' => 'primary',
+                    'title' => 'Atendimento confirmado',
+                    'start' => '2026-07-20 14:00:00',
+                    'end' => '2026-07-20 15:00:00',
+                    'timezone' => 'America/Sao_Paulo',
+                    'customer' => ['name' => 'Cliente Teste', 'phone' => '5532999999999'],
+                    'callback' => ['url' => Router::url('/webhooks/calendar/availability'), 'token' => 'REQUEST_TOKEN'],
+                ],
+            ],
+            'operations.backup.requested' => [
+                'event' => 'operations.backup.requested',
+                'source' => 'rs-connect',
+                'routine_id' => 1,
+                'backup_job_id' => 10,
+                'trigger_type' => 'manual',
+                'backup' => [
+                    'database' => 'rs_connect',
+                    'storage_type' => 'server',
+                    'storage_path' => '/backups/rs-connect',
+                    'retention_days' => 14,
+                    'max_age_hours' => 24,
+                ],
+                'callback' => ['url' => Router::url('/webhooks/operations/backups'), 'token' => 'SEU_OPERATIONS_BACKUP_TOKEN'],
+            ],
+        ];
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function json(array $payload): void
+    {
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+}

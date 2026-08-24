@@ -1,0 +1,6 @@
+{
+  "id": "CHECKOUT_123456",
+  "reference_id": "INV-2026-0001",
+  "status": "PAID",
+  "event": "CHECKOUT.PAID"
+}

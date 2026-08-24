@@ -1,0 +1,84 @@
+{
+  "version": "36.6.12",
+  "purpose": "Validate separation between message volume, delivered AI interactions, RS quota, provider calls and tokens.",
+  "scenarios": [
+    {
+      "name": "incoming_message_only",
+      "expected": {
+        "messages_total_delta": 1,
+        "ai_interactions_delta": 0,
+        "rs_quota_delta": 0,
+        "provider_calls_delta": 0
+      }
+    },
+    {
+      "name": "human_reply",
+      "expected": {
+        "messages_total_delta": 1,
+        "ai_interactions_delta": 0,
+        "rs_quota_delta": 0,
+        "provider_calls_delta": 0
+      }
+    },
+    {
+      "name": "rs_ai_delivered",
+      "expected": {
+        "messages_total_delta": 1,
+        "ai_interactions_delta": 1,
+        "rs_quota_delta": 1,
+        "tenant_ai_delta": 0,
+        "provider_calls_min_delta": 1,
+        "delivery_status": "delivered"
+      }
+    },
+    {
+      "name": "tenant_ai_delivered",
+      "expected": {
+        "messages_total_delta": 1,
+        "ai_interactions_delta": 1,
+        "rs_quota_delta": 0,
+        "tenant_ai_delta": 1,
+        "provider_calls_min_delta": 1,
+        "delivery_status": "delivered"
+      }
+    },
+    {
+      "name": "provider_failure",
+      "expected": {
+        "ai_interactions_delta": 0,
+        "rs_quota_delta": 0,
+        "delivery_status": "not_delivered",
+        "technical_failure_delta": 1
+      }
+    },
+    {
+      "name": "human_takeover_after_generation",
+      "expected": {
+        "ai_interactions_delta": 0,
+        "rs_quota_delta": 0,
+        "delivery_status": "not_delivered",
+        "provider_calls_min_delta": 1,
+        "status": "cancelled"
+      }
+    },
+    {
+      "name": "evolution_failure_after_generation",
+      "expected": {
+        "ai_interactions_delta": 0,
+        "rs_quota_delta": 0,
+        "delivery_status": "not_delivered",
+        "provider_calls_min_delta": 1,
+        "status": "failed"
+      }
+    },
+    {
+      "name": "manual_suggestion",
+      "expected": {
+        "ai_interactions_delta": 0,
+        "rs_quota_delta": 0,
+        "provider_calls_min_delta": 1,
+        "delivery_status": "not_applicable"
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "backup_type": "automatic",
+  "file_name": "rs-connect-2026-07-13.sql.gz",
+  "location": "s3://backups-rs-connect/rs-connect-2026-07-13.sql.gz",
+  "size_bytes": 1234567,
+  "checksum": "sha256:exemplo",
+  "notes": "Backup diário concluído com sucesso pelo cron externo.",
+  "started_at": "2026-07-13 03:00:00",
+  "finished_at": "2026-07-13 03:02:00"
+}

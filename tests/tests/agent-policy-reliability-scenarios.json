@@ -1,0 +1,73 @@
+{
+  "version": "36.6.15",
+  "suite": "Confiabilidade das regras operacionais do agente",
+  "priority": [
+    "configuracao_operacional",
+    "modo_conversa",
+    "cadastro_contato",
+    "contexto_fluxo",
+    "prompt_agente"
+  ],
+  "scenarios": [
+    {
+      "id": "hours_strict_sunday",
+      "given": "Agente com responder somente no horario configurado ativo, segunda a sexta 08:00-18:00",
+      "when": "Mensagem chega no domingo",
+      "expect": "Agenda, selecao de horarios e n8n conversacional nao respondem; IA registra pendencia e pode enviar somente a mensagem de ausencia configurada uma vez"
+    },
+    {
+      "id": "prompt_24h_cannot_override_strict_hours",
+      "given": "Prompt diz que a assistente pode qualificar 24h, mas a restricao de horario do RS Connect esta ativa",
+      "when": "Mensagem chega fora do expediente",
+      "expect": "A configuracao operacional prevalece e a assistente nao continua a conversa"
+    },
+    {
+      "id": "casual_time_not_schedule",
+      "given": "Conversa geral sem contexto de agenda",
+      "when": "Contato diz: Vou tentar configurar hoje a tarde/noite",
+      "expect": "Nao inicia pre-agendamento e nao injeta regras de agenda no prompt"
+    },
+    {
+      "id": "opening_hours_not_schedule",
+      "given": "Conversa geral",
+      "when": "Contato pergunta: Qual o horario de atendimento de voces?",
+      "expect": "Responde como informacao; nao inicia agenda"
+    },
+    {
+      "id": "explicit_schedule",
+      "given": "Conversa elegivel para agenda",
+      "when": "Contato diz: Quero agendar uma reuniao amanha a tarde",
+      "expect": "Intencao de agenda e detectada e o fluxo de agenda pode iniciar"
+    },
+    {
+      "id": "schedule_preference_only_continuation",
+      "given": "Mensagem sem contexto anterior de agenda",
+      "when": "Contato diz: Pode ser terca as 15h",
+      "expect": "Nao abre agenda isoladamente; so e preferencia de horario se a conversa ja estiver em contexto recente de agenda"
+    },
+    {
+      "id": "existing_customer",
+      "given": "Contato classificado como Cliente ou Paciente atual",
+      "when": "Inicia nova conversa ou solicita horario/remarcacao",
+      "expect": "Nao reinicia triagem nem exige novamente motivo/queixa; cadastro e tags sao tratados como fonte de verdade"
+    },
+    {
+      "id": "human_takeover",
+      "given": "Conversa em modo Humano ou Pausado",
+      "when": "Chega mensagem com palavras de agenda",
+      "expect": "Nenhuma automacao conversacional responde"
+    },
+    {
+      "id": "stale_schedule_state",
+      "given": "Existe pre-agendamento antigo sem atividade recente",
+      "when": "Contato volta dias depois com assunto geral",
+      "expect": "Estado antigo nao sequestra a conversa para agenda"
+    },
+    {
+      "id": "delayed_calendar_callback",
+      "given": "Consulta de disponibilidade foi iniciada e o callback chega depois do encerramento do expediente",
+      "when": "n8n devolve slots fora do horario",
+      "expect": "Nenhuma opcao e enviada nem pre-reservada fora do horario; demanda volta para recuperacao posterior"
+    }
+  ]
+}

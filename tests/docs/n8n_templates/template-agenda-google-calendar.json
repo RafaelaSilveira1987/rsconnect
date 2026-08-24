@@ -1,0 +1,223 @@
+{
+  "name": "RS Connect - Agenda Google Calendar por Empresa v36.6.23",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rsconnect-agenda-cliente",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -620,
+        0
+      ],
+      "id": "webhook_agenda",
+      "name": "Webhook RS Connect"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nconst payload = body.payload || {};\nconst appointment = payload.appointment || {};\nconst contract = payload.contract || {};\nconst event = String(body.event || '').trim();\nconst appointmentId = Number(appointment.id || contract.appointment_id || 0);\nconst title = String(appointment.title || '').trim();\nconst start = appointment.start_time || appointment.starts_at || appointment.start || '';\nconst end = appointment.end_time || appointment.ends_at || appointment.end || '';\nconst appointmentStatus = String(appointment.status || '').trim();\nconst approvalStatus = String(appointment.approval_status || '').trim();\nconst isPreSchedule = Number(appointment.is_pre_schedule || 0) === 1;\nconst validContract = contract.type === 'calendar_appointment_v1'\n  && Number(contract.appointment_id || 0) > 0\n  && Number(contract.appointment_id || 0) === appointmentId\n  && contract.event === event\n  && appointmentStatus === 'confirmed'\n  && (!isPreSchedule || approvalStatus === 'approved');\nconst should_create = event === 'calendar.appointment.created'\n  && validContract\n  && appointmentId > 0\n  && title !== ''\n  && Boolean(start)\n  && Boolean(end);\nlet ignored_reason = '';\nif (!should_create) {\n  if (event !== 'calendar.appointment.created') ignored_reason = 'evento_nao_cria_compromisso';\n  else if (!validContract) ignored_reason = 'contrato_rs_connect_ausente_ou_invalido';\n  else if (appointmentStatus !== 'confirmed') ignored_reason = 'compromisso_ainda_nao_confirmado';\n  else if (isPreSchedule && approvalStatus !== 'approved') ignored_reason = 'pre_agendamento_sem_aprovacao';\n  else if (!appointmentId) ignored_reason = 'appointment_id_ausente';\n  else if (!title) ignored_reason = 'titulo_ausente';\n  else ignored_reason = 'inicio_ou_fim_ausente';\n}\nreturn [{ json: {\n  event, tenant_id: body.tenant_id || payload.tenant_id, flow_id: body.flow_id,\n  callback_url: body.callback?.url, callback_token: body.callback?.token,\n  should_create, ignored_reason,\n  appointment_id: appointmentId,\n  contract_type: contract.type || '',\n  appointment_status: appointmentStatus,\n  approval_status: approvalStatus,\n  is_pre_schedule: isPreSchedule,\n  title,\n  description: appointment.description || appointment.notes || '',\n  start, end,\n  location: appointment.meeting_url || appointment.location || '',\n  contact_name: appointment.contact?.name || payload.contact?.name || '',\n  contact_phone: appointment.contact?.phone || payload.contact?.phone || ''\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -380,
+        0
+      ],
+      "id": "normalize_agenda",
+      "name": "Normalizar Agenda"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "id"
+        },
+        "start": "={{ $json.start }}",
+        "end": "={{ $json.end }}",
+        "useDefaultReminders": true,
+        "additionalFields": {
+          "summary": "={{ $json.title }}",
+          "description": "={{ 'Contato: ' + $json.contact_name + ' - ' + $json.contact_phone + '\\n' + $json.description }}",
+          "location": "={{ $json.location }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        20,
+        -80
+      ],
+      "id": "google_calendar_create",
+      "name": "Criar evento Google Calendar"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Normalizar Agenda').first().json.callback_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-RS-Connect-Token",
+              "value": "={{ $('Normalizar Agenda').first().json.callback_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { tenant_id: $('Normalizar Agenda').first().json.tenant_id, flow_id: $('Normalizar Agenda').first().json.flow_id, event: $('Normalizar Agenda').first().json.event, status: 'success', external_id: $json.id, message: 'Evento criado no Google Calendar', google_event: $json } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        -80
+      ],
+      "id": "callback_success",
+      "name": "Callback RS Connect"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, message: 'Fluxo agenda executado' } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        520,
+        -80
+      ],
+      "id": "respond",
+      "name": "Responder Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e2b152bd-7bf5-4bb0-b2d3-cf5dbaa4facd",
+              "leftValue": "={{ $json.should_create }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "if_real_appointment",
+      "name": "É compromisso real?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, ignored: true, reason: $json.ignored_reason, event: $json.event } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        20,
+        160
+      ],
+      "id": "respond_ignored",
+      "name": "Ignorar evento sem agenda"
+    }
+  ],
+  "connections": {
+    "Webhook RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Agenda": {
+      "main": [
+        [
+          {
+            "node": "É compromisso real?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar evento Google Calendar": {
+      "main": [
+        [
+          {
+            "node": "Callback RS Connect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É compromisso real?": {
+      "main": [
+        [
+          {
+            "node": "Criar evento Google Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar evento sem agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "rs-connect-template"
+  }
+}

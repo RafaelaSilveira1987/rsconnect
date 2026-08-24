@@ -1,0 +1,69 @@
+{
+  "name": "RS Connect — InfinitePay — Status normalizado",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rsconnect-infinitepay-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-620, 0],
+      "id": "webhook_infinitepay",
+      "name": "Receber status externo"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nconst source = body.payload || body;\nconst statusMap = { pago:'paid', paga:'paid', paid:'paid', aprovado:'paid', approved:'paid', pendente:'open', pending:'open', aberta:'open', open:'open', vencida:'overdue', overdue:'overdue', cancelada:'cancelled', cancelled:'cancelled', canceled:'cancelled', expirada:'cancelled', expired:'cancelled' };\nconst rawStatus = String(source.status || source.situacao || source.event || 'open').toLowerCase().trim();\nreturn [{json:{\n  token: source.token || 'CONFIGURE_O_TOKEN_DO_GATEWAY',\n  invoice_number: source.invoice_number || source.reference_id || source.referencia || '',\n  external_id: source.external_id || source.charge_id || source.id || '',\n  status: statusMap[rawStatus] || rawStatus,\n  checkout_url: source.checkout_url || source.payment_url || source.link || ''\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-380, 0],
+      "id": "normalize_infinitepay",
+      "name": "Normalizar cobrança"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://SEU_DOMINIO_RS_CONNECT/webhooks/payments/infinitepay",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "X-RS-Payment-Token", "value": "={{ $json.token }}"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { invoice_number: $json.invoice_number, external_id: $json.external_id, status: $json.status, checkout_url: $json.checkout_url } }}",
+        "options": {"timeout": 60000}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-120, 0],
+      "id": "callback_rsconnect",
+      "name": "Atualizar RS Connect"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, message: 'Status encaminhado ao RS Connect', result: $json } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [140, 0],
+      "id": "respond_infinitepay",
+      "name": "Responder"
+    }
+  ],
+  "connections": {
+    "Receber status externo": {"main": [[{"node": "Normalizar cobrança", "type": "main", "index": 0}]]},
+    "Normalizar cobrança": {"main": [[{"node": "Atualizar RS Connect", "type": "main", "index": 0}]]},
+    "Atualizar RS Connect": {"main": [[{"node": "Responder", "type": "main", "index": 0}]]}
+  },
+  "pinData": {},
+  "meta": {"templateCredsSetupCompleted": false, "instanceId": "rs-connect-template"}
+}

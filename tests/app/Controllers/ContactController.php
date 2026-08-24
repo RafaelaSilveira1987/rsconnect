@@ -1,0 +1,391 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Controllers;
+
+use App\Core\Audit;
+use App\Core\Auth;
+use App\Core\Database;
+use App\Core\Flash;
+use App\Core\Router;
+use App\Core\View;
+use PDO;
+use Throwable;
+use App\Services\ConversationOwnershipService;
+
+final class ContactController
+{
+    public function index(): void
+    {
+        $pdo = Database::connection();
+        $filters = [
+            'search' => trim((string) ($_GET['search'] ?? '')),
+            'status' => trim((string) ($_GET['status'] ?? '')),
+            'contact_group' => trim((string) ($_GET['contact_group'] ?? '')),
+            'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
+        ];
+
+        $conditions = [];
+        $params = [];
+        if (Auth::isSuperAdmin()) {
+            if ($filters['tenant_id'] > 0) {
+                $conditions[] = 'ct.tenant_id = :tenant_id';
+                $params['tenant_id'] = $filters['tenant_id'];
+            }
+        } else {
+            $conditions[] = 'ct.tenant_id = :tenant_id';
+            $params['tenant_id'] = Auth::tenantId();
+        }
+
+        if ($filters['search'] !== '') {
+            $searchTokens = preg_split('/\s+/u', $filters['search'], -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            foreach (array_values($searchTokens) as $index => $token) {
+                $like = '%' . $token . '%';
+                $tokenConditions = [
+                    'ct.name LIKE :search_name_' . $index,
+                    'ct.email LIKE :search_email_' . $index,
+                    'ct.company LIKE :search_company_' . $index,
+                    'ct.notes LIKE :search_notes_' . $index,
+                    'CAST(ct.tags_json AS CHAR) LIKE :search_tags_' . $index,
+                ];
+                $params['search_name_' . $index] = $like;
+                $params['search_email_' . $index] = $like;
+                $params['search_company_' . $index] = $like;
+                $params['search_notes_' . $index] = $like;
+                $params['search_tags_' . $index] = $like;
+
+                $digits = preg_replace('/\D+/', '', $token) ?: '';
+                if ($digits !== '') {
+                    $tokenConditions[] = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ct.phone, '+', ''), '(', ''), ')', ''), '-', ''), ' ', '') LIKE :search_phone_{$index}";
+                    $params['search_phone_' . $index] = '%' . $digits . '%';
+                } else {
+                    $tokenConditions[] = 'ct.phone LIKE :search_phone_text_' . $index;
+                    $params['search_phone_text_' . $index] = $like;
+                }
+
+                $conditions[] = '(' . implode(' OR ', $tokenConditions) . ')';
+            }
+        }
+
+        if (in_array($filters['status'], ['lead', 'customer', 'inactive'], true)) {
+            $conditions[] = 'ct.status = :status';
+            $params['status'] = $filters['status'];
+        }
+
+        if (array_key_exists($filters['contact_group'], \App\Services\ConversationFlowService::GROUPS)) {
+            $conditions[] = 'ct.contact_group = :contact_group';
+            $params['contact_group'] = $filters['contact_group'];
+        }
+
+        $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+        $statement = $pdo->prepare(
+            'SELECT ct.*, t.name AS tenant_name, i.name AS instance_name,
+                    pref.name AS preferred_user_name,
+                    COUNT(DISTINCT c.id) AS conversations_count,
+                    COUNT(DISTINCT l.id) AS leads_count,
+                    MAX(c.last_message_at) AS last_interaction_at
+             FROM contacts ct
+             INNER JOIN tenants t ON t.id = ct.tenant_id
+             LEFT JOIN evolution_instances i ON i.id = ct.evolution_instance_id
+             LEFT JOIN users pref ON pref.id = ct.preferred_user_id AND pref.tenant_id = ct.tenant_id
+             LEFT JOIN conversations c ON c.contact_id = ct.id
+             LEFT JOIN crm_leads l ON l.contact_id = ct.id
+             ' . $where . '
+             GROUP BY ct.id
+             ORDER BY COALESCE(MAX(c.last_message_at), ct.updated_at) DESC
+             LIMIT 250'
+        );
+        $statement->execute($params);
+        $contacts = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+        $selected = null;
+        $selectedId = (int) ($_GET['contact_id'] ?? 0);
+        if ($selectedId > 0) {
+            $selected = $this->findContact($selectedId);
+        }
+
+        if (Auth::isSuperAdmin()) {
+            $tenants = $pdo->query('SELECT id, name FROM tenants WHERE status = "active" ORDER BY name')->fetchAll(PDO::FETCH_ASSOC);
+            $instances = $pdo->query(
+                'SELECT i.id, i.tenant_id, i.name, t.name AS tenant_name
+                 FROM evolution_instances i
+                 INNER JOIN tenants t ON t.id = i.tenant_id
+                 ORDER BY t.name, i.name'
+            )->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            $tenants = [];
+            $instanceStatement = $pdo->prepare(
+                'SELECT id, tenant_id, name FROM evolution_instances WHERE tenant_id = :tenant_id ORDER BY name'
+            );
+            $instanceStatement->execute(['tenant_id' => Auth::tenantId()]);
+            $instances = $instanceStatement->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        $professionalService = new ConversationOwnershipService();
+        $teamTenantId = $selected
+            ? (int) $selected['tenant_id']
+            : (int) ($filters['tenant_id'] ?? 0);
+        $professionalAssignmentSettings = $teamTenantId > 0
+            ? $professionalService->settingsForTenant($pdo, $teamTenantId)
+            : ['enabled' => false, 'lock_enabled' => true, 'auto_assign_enabled' => false];
+        $teamMembers = $teamTenantId > 0
+            ? $professionalService->teamForTenant($pdo, $teamTenantId)
+            : [];
+
+        View::render('contacts.index', [
+            'title' => 'Contatos',
+            'contacts' => $contacts,
+            'selected' => $selected,
+            'filters' => $filters,
+            'tenants' => $tenants,
+            'instances' => $instances,
+            'canManage' => Auth::can('contacts.manage'),
+            'teamMembers' => $teamMembers,
+            'professionalAssignmentSettings' => $professionalAssignmentSettings,
+        ]);
+    }
+
+    public function store(): void
+    {
+        $tenantId = $this->postedTenantId();
+        $name = trim((string) ($_POST['name'] ?? ''));
+        $phone = preg_replace('/\D+/', '', (string) ($_POST['phone'] ?? '')) ?: '';
+        $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
+        $company = trim((string) ($_POST['company'] ?? ''));
+        $instanceId = (int) ($_POST['evolution_instance_id'] ?? 0);
+        $status = (string) ($_POST['status'] ?? 'lead');
+        $contactGroup = (string) ($_POST['contact_group'] ?? 'unclassified');
+        $notes = trim((string) ($_POST['notes'] ?? ''));
+        $tags = $this->normalizeTags((string) ($_POST['tags'] ?? ''));
+        $preferredUserId = (int) ($_POST['preferred_user_id'] ?? 0) ?: null;
+
+        if ($tenantId < 1 || strlen($phone) < 10) {
+            Flash::set('error', 'Informe a empresa e um telefone completo com DDI e DDD.');
+            $this->redirect('/contacts');
+        }
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            Flash::set('error', 'O e-mail informado é inválido.');
+            $this->redirect('/contacts');
+        }
+        if (!in_array($status, ['lead', 'customer', 'inactive'], true)) {
+            $status = 'lead';
+        }
+        if (!array_key_exists($contactGroup, \App\Services\ConversationFlowService::GROUPS)) {
+            $contactGroup = 'unclassified';
+        }
+        $contactGroup = $this->normalizeGroupForStatus($status, $contactGroup);
+        if ($instanceId > 0 && !$this->instanceBelongsToTenant($instanceId, $tenantId)) {
+            Flash::set('error', 'A instância selecionada não pertence à empresa.');
+            $this->redirect('/contacts');
+        }
+        if ($preferredUserId !== null && !$this->userBelongsToTenant($preferredUserId, $tenantId)) {
+            Flash::set('error', 'O profissional preferido não pertence à empresa ou está inativo.');
+            $this->redirect('/contacts');
+        }
+
+        try {
+            $statement = Database::connection()->prepare(
+                'INSERT INTO contacts
+                    (tenant_id, evolution_instance_id, phone, name, name_source, whatsapp_name_candidate, whatsapp_name_seen_count,
+                     email, company, notes, tags_json, status, contact_group,
+                     preferred_user_id, preferred_user_assigned_at, preferred_user_assigned_by_user_id)
+                 VALUES
+                    (:tenant_id, :instance_id, :phone, :name, :name_source, NULL, 0,
+                     :email, :company, :notes, :tags_json, :status, :contact_group,
+                     :preferred_user_id, :preferred_user_assigned_at, :preferred_user_assigned_by_user_id)'
+            );
+            $statement->execute([
+                'tenant_id' => $tenantId,
+                'instance_id' => $instanceId > 0 ? $instanceId : null,
+                'phone' => $phone,
+                'name' => $name !== '' ? $name : null,
+                'name_source' => $name !== '' ? 'manual' : 'unknown',
+                'email' => $email !== '' ? $email : null,
+                'company' => $company !== '' ? $company : null,
+                'notes' => $notes !== '' ? $notes : null,
+                'tags_json' => $tags ? json_encode($tags, JSON_UNESCAPED_UNICODE) : null,
+                'status' => $status,
+                'contact_group' => $contactGroup,
+                'preferred_user_id' => $preferredUserId,
+                'preferred_user_assigned_at' => $preferredUserId !== null ? \App\Core\Clock::nowUtc() : null,
+                'preferred_user_assigned_by_user_id' => $preferredUserId !== null ? Auth::id() : null,
+            ]);
+            $contactId = (int) Database::connection()->lastInsertId();
+            Audit::log('contact.created', ['contact_id' => $contactId, 'phone' => $phone], $tenantId);
+            Flash::set('success', 'Contato cadastrado.');
+            $this->redirect('/contacts?contact_id=' . $contactId);
+        } catch (Throwable $exception) {
+            $duplicate = str_contains($exception->getMessage(), 'uq_contacts_tenant_phone')
+                || str_contains($exception->getMessage(), 'Duplicate entry');
+            Flash::set('error', $duplicate
+                ? 'Esse telefone já está cadastrado para a empresa.'
+                : 'Não foi possível cadastrar o contato.');
+            $this->redirect('/contacts');
+        }
+    }
+
+    public function update(): void
+    {
+        $contactId = (int) ($_POST['contact_id'] ?? 0);
+        $contact = $this->findContact($contactId);
+        if (!$contact) {
+            Flash::set('error', 'Contato não encontrado.');
+            $this->redirect('/contacts');
+        }
+
+        $name = trim((string) ($_POST['name'] ?? ''));
+        $phone = preg_replace('/\D+/', '', (string) ($_POST['phone'] ?? '')) ?: '';
+        $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
+        $company = trim((string) ($_POST['company'] ?? ''));
+        $status = (string) ($_POST['status'] ?? 'lead');
+        $contactGroup = (string) ($_POST['contact_group'] ?? 'unclassified');
+        $notes = trim((string) ($_POST['notes'] ?? ''));
+        $tags = $this->normalizeTags((string) ($_POST['tags'] ?? ''));
+        $preferredUserId = array_key_exists('preferred_user_id', $_POST)
+            ? ((int) $_POST['preferred_user_id'] ?: null)
+            : ((int) ($contact['preferred_user_id'] ?? 0) ?: null);
+        $preferredChanged = $preferredUserId !== ((int) ($contact['preferred_user_id'] ?? 0) ?: null);
+
+        if (strlen($phone) < 10 || ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))) {
+            Flash::set('error', 'Confira telefone e e-mail.');
+            $this->redirect('/contacts?contact_id=' . $contactId);
+        }
+        if (!in_array($status, ['lead', 'customer', 'inactive'], true)) {
+            $status = 'lead';
+        }
+        if (!array_key_exists($contactGroup, \App\Services\ConversationFlowService::GROUPS)) {
+            $contactGroup = 'unclassified';
+        }
+        $contactGroup = $this->normalizeGroupForStatus($status, $contactGroup);
+        if ($preferredUserId !== null && !$this->userBelongsToTenant($preferredUserId, (int) $contact['tenant_id'])) {
+            Flash::set('error', 'O profissional preferido não pertence à empresa ou está inativo.');
+            $this->redirect('/contacts?contact_id=' . $contactId);
+        }
+
+        try {
+            $statement = Database::connection()->prepare(
+                'UPDATE contacts
+                 SET name = :name,
+                     name_source = :name_source,
+                     whatsapp_name_candidate = NULL,
+                     whatsapp_name_seen_count = 0,
+                     phone = :phone, email = :email, company = :company,
+                     notes = :notes, tags_json = :tags_json, status = :status, contact_group = :contact_group,
+                     preferred_user_id = :preferred_user_id,
+                     preferred_user_assigned_at = :preferred_user_assigned_at,
+                     preferred_user_assigned_by_user_id = :preferred_user_assigned_by_user_id
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            );
+            $statement->execute([
+                'name' => $name !== '' ? $name : null,
+                'name_source' => $name !== '' ? 'manual' : 'unknown',
+                'phone' => $phone,
+                'email' => $email !== '' ? $email : null,
+                'company' => $company !== '' ? $company : null,
+                'notes' => $notes !== '' ? $notes : null,
+                'tags_json' => $tags ? json_encode($tags, JSON_UNESCAPED_UNICODE) : null,
+                'status' => $status,
+                'contact_group' => $contactGroup,
+                'preferred_user_id' => $preferredUserId,
+                'preferred_user_assigned_at' => $preferredUserId === null
+                    ? null
+                    : ($preferredChanged ? \App\Core\Clock::nowUtc() : ($contact['preferred_user_assigned_at'] ?? null)),
+                'preferred_user_assigned_by_user_id' => $preferredUserId === null
+                    ? null
+                    : ($preferredChanged ? Auth::id() : ($contact['preferred_user_assigned_by_user_id'] ?? null)),
+                'id' => $contactId,
+                'tenant_id' => $contact['tenant_id'],
+            ]);
+            (new \App\Services\ConversationFlowService())->refreshContactContext(
+                Database::connection(),
+                (int) $contact['tenant_id'],
+                $contactId
+            );
+            Audit::log('contact.updated', [
+                'contact_id' => $contactId,
+                'status' => $status,
+                'contact_group' => $contactGroup,
+                'tags' => $tags,
+            ], (int) $contact['tenant_id']);
+            Flash::set('success', 'Contato atualizado. O assistente usará a classificação, o grupo e as tags na próxima resposta.');
+        } catch (Throwable $exception) {
+            Flash::set('error', str_contains($exception->getMessage(), 'Duplicate entry')
+                ? 'Esse telefone já pertence a outro contato da empresa.'
+                : 'Não foi possível atualizar o contato.');
+        }
+
+        $this->redirect('/contacts?contact_id=' . $contactId);
+    }
+
+    private function findContact(int $contactId): ?array
+    {
+        if ($contactId < 1) {
+            return null;
+        }
+        $sql = 'SELECT ct.*, t.name AS tenant_name, i.name AS instance_name, pref.name AS preferred_user_name
+                FROM contacts ct
+                INNER JOIN tenants t ON t.id = ct.tenant_id
+                LEFT JOIN evolution_instances i ON i.id = ct.evolution_instance_id
+                LEFT JOIN users pref ON pref.id = ct.preferred_user_id AND pref.tenant_id = ct.tenant_id
+                WHERE ct.id = :id';
+        $params = ['id' => $contactId];
+        if (!Auth::isSuperAdmin()) {
+            $sql .= ' AND ct.tenant_id = :tenant_id';
+            $params['tenant_id'] = Auth::tenantId();
+        }
+        $statement = Database::connection()->prepare($sql . ' LIMIT 1');
+        $statement->execute($params);
+        $contact = $statement->fetch(PDO::FETCH_ASSOC);
+        return $contact ?: null;
+    }
+
+    private function postedTenantId(): int
+    {
+        return Auth::isSuperAdmin()
+            ? (int) ($_POST['tenant_id'] ?? 0)
+            : (int) Auth::tenantId();
+    }
+
+    private function instanceBelongsToTenant(int $instanceId, int $tenantId): bool
+    {
+        $statement = Database::connection()->prepare(
+            'SELECT COUNT(*) FROM evolution_instances WHERE id = :id AND tenant_id = :tenant_id'
+        );
+        $statement->execute(['id' => $instanceId, 'tenant_id' => $tenantId]);
+        return (int) $statement->fetchColumn() > 0;
+    }
+
+    private function userBelongsToTenant(int $userId, int $tenantId): bool
+    {
+        $statement = Database::connection()->prepare(
+            'SELECT COUNT(*) FROM users WHERE id = :id AND tenant_id = :tenant_id AND status = "active"'
+        );
+        $statement->execute(['id' => $userId, 'tenant_id' => $tenantId]);
+        return (int) $statement->fetchColumn() > 0;
+    }
+
+    private function normalizeGroupForStatus(string $status, string $group): string
+    {
+        if ($status === 'customer' && in_array($group, ['unclassified', 'interested'], true)) {
+            return 'customer';
+        }
+        if ($status !== 'customer' && $group === 'customer') {
+            return $status === 'lead' ? 'interested' : 'unclassified';
+        }
+        return $group;
+    }
+
+    private function normalizeTags(string $raw): array
+    {
+        $tags = array_map('trim', explode(',', $raw));
+        $tags = array_filter($tags, static fn (string $tag): bool => $tag !== '');
+        return array_values(array_unique(array_slice($tags, 0, 12)));
+    }
+
+    private function redirect(string $path): never
+    {
+        header('Location: ' . Router::url($path));
+        exit;
+    }
+}

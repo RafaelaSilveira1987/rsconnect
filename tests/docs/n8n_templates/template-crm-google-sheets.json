@@ -1,0 +1,170 @@
+{
+  "name": "RS Connect - CRM Google Sheets por Empresa",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rsconnect-crm-cliente",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -620,
+        0
+      ],
+      "id": "webhook_crm",
+      "name": "Webhook RS Connect"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nconst payload = body.payload || {};\nconst contact = payload.contact || {};\nreturn [{ json: {\n  event: body.event, tenant_id: body.tenant_id || payload.tenant_id, flow_id: body.flow_id, callback_url: body.callback?.url, callback_token: body.callback?.token,\n  date: new Date().toISOString(), lead_id: payload.lead_id || payload.id || '', name: contact.name || payload.name || '', phone: contact.phone || payload.phone || '',\n  stage: payload.stage || payload.stage_name || '', value: payload.value || 0, summary: payload.summary || payload.last_message || ''\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        0
+      ],
+      "id": "normalize_crm",
+      "name": "Normalizar CRM"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "COLE_ID_DA_PLANILHA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Data": "={{ $json.date }}",
+            "Evento": "={{ $json.event }}",
+            "Lead ID": "={{ $json.lead_id }}",
+            "Nome": "={{ $json.name }}",
+            "Telefone": "={{ $json.phone }}",
+            "Etapa": "={{ $json.stage }}",
+            "Valor": "={{ $json.value }}",
+            "Resumo": "={{ $json.summary }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -100,
+        0
+      ],
+      "id": "append_sheet",
+      "name": "Adicionar linha na planilha"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Normalizar CRM').first().json.callback_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-RS-Connect-Token",
+              "value": "={{ $('Normalizar CRM').first().json.callback_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { tenant_id: $('Normalizar CRM').first().json.tenant_id, flow_id: $('Normalizar CRM').first().json.flow_id, event: $('Normalizar CRM').first().json.event, status: 'success', message: 'Lead enviado para Google Sheets' } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        0
+      ],
+      "id": "callback",
+      "name": "Callback RS Connect"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, message: 'Fluxo CRM executado' } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        400,
+        0
+      ],
+      "id": "respond",
+      "name": "Responder Webhook"
+    }
+  ],
+  "connections": {
+    "Webhook RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Normalizar CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar CRM": {
+      "main": [
+        [
+          {
+            "node": "Adicionar linha na planilha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adicionar linha na planilha": {
+      "main": [
+        [
+          {
+            "node": "Callback RS Connect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "rs-connect-template"
+  }
+}

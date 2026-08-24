@@ -1,0 +1,166 @@
+{
+  "name": "RS Connect - Disparo de cobrança por mensagem",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rsconnect-billing-messages",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -760,
+        0
+      ],
+      "id": "webhook_billing",
+      "name": "Webhook RS Connect"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nconst payload = body.payload || body;\nconst tenant = payload.tenant || {};\nconst invoice = payload.invoice || {};\nconst rule = payload.rule || {};\nfunction digits(v){ return String(v || '').replace(/\\D/g, ''); }\nconst phone = digits(tenant.phone || payload.phone || '');\nconst paymentUrl = invoice.payment_url || payload.payment_url || '';\nconst message = payload.message || `Olá, ${tenant.name || 'cliente'}. Existe uma cobrança em aberto no RS Connect. ${paymentUrl ? 'Link: ' + paymentUrl : ''}`;\nreturn [{ json: {\n  event: body.event || payload.event || rule.event || 'billing.reminder',\n  tenant_id: body.tenant_id || payload.tenant_id || tenant.id,\n  flow_id: body.flow_id || payload.flow_id || null,\n  callback_url: body.callback?.url || payload.callback?.url || body.callback_url || payload.callback_url || '',\n  callback_token: body.callback?.token || payload.callback?.token || body.callback_token || payload.callback_token || '',\n  company_name: tenant.name || '', email: tenant.email || '', phone,\n  invoice_number: invoice.number || '', amount: invoice.amount || 0, due_date: invoice.due_date || '', payment_url: paymentUrl, message\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -500,
+        0
+      ],
+      "id": "normalize_billing",
+      "name": "Normalizar cobrança"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://SEU_EVOLUTION_URL/message/sendText/SUA_INSTANCIA",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "SUA_API_KEY_EVOLUTION"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { number: $json.phone, text: $json.message } }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "send_message",
+      "name": "Enviar mensagem externa"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Normalizar cobrança').first().json.callback_url || 'https://SEU_DOMINIO_RS_CONNECT/webhooks/n8n/callback' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-RS-Connect-Token",
+              "value": "={{ $('Normalizar cobrança').first().json.callback_token || '' }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { tenant_id: $('Normalizar cobrança').first().json.tenant_id, flow_id: $('Normalizar cobrança').first().json.flow_id, event: $('Normalizar cobrança').first().json.event, status: 'success', external_id: $('Normalizar cobrança').first().json.invoice_number, message: 'Mensagem de cobrança disparada pelo n8n' } }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        20,
+        0
+      ],
+      "id": "callback",
+      "name": "Callback RS Connect"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, message: 'Fluxo de cobrança executado' } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        0
+      ],
+      "id": "respond",
+      "name": "Responder Webhook"
+    }
+  ],
+  "connections": {
+    "Webhook RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Normalizar cobrança",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar cobrança": {
+      "main": [
+        [
+          {
+            "node": "Enviar mensagem externa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar mensagem externa": {
+      "main": [
+        [
+          {
+            "node": "Callback RS Connect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "rs-connect-template"
+  }
+}
