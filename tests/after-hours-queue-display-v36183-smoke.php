@@ -35,8 +35,8 @@ $checks = [
         && str_contains($css, '.after-hours-queue-banner')
         && str_contains($css, '.after-hours-operation-card'),
     'versão e assets atualizados' => str_contains($version, 'RS Connect 36.18.6')
-        && str_contains($layout, 'app.css?v=36.19.3')
-        && str_contains($layout, 'app.js?v=36.19.3'),
+        && str_contains($layout, 'app.css?v=36.20.0')
+        && str_contains($layout, 'app.js?v=36.20.0'),
 ];
 
 $failed = [];

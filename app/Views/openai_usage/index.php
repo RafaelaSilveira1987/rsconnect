@@ -77,6 +77,7 @@ $refreshUrl = Router::url('/openai-usage') . '?' . http_build_query($queryBase +
     </div>
     <div class="openai-usage-hero-actions">
         <a class="btn btn-outline" href="<?= View::e(Router::url('/ai-credentials')) ?>">Credenciais</a>
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/ai-profitability')) ?>">Rentabilidade</a>
         <a class="btn btn-primary" href="<?= View::e($refreshUrl) ?>">Atualizar agora</a>
     </div>
 </section>

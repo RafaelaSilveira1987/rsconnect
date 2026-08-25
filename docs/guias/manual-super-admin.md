@@ -59,3 +59,7 @@ Em **Consumo OpenAI**, filtre uma empresa para configurar seu orçamento de IA c
 ## Margem comercial da IA — v36.19.3
 
 Em **Consumo OpenAI**, selecione uma empresa para comparar receita de referência, custo projetado da IA RS, demais custos informados e margem conhecida. Use o indicador como apoio comercial, não como lucro líquido. Contratos customizados podem usar receita manual e cotação USD/BRL específica.
+
+## Rentabilidade histórica e planos — v36.20.0
+
+Em **Rentabilidade IA**, acompanhe MRR de referência, contribuição conhecida e evolução mensal por empresa. Ao abrir um cliente, revise a origem da receita, a tendência de margem e a simulação dos planos. A sugestão considera capacidade e margem-alvo, mas nunca altera assinatura automaticamente.

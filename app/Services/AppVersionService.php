@@ -30,10 +30,11 @@ final class AppVersionService
     // RS Connect 36.19.1 — atribuição financeira de consumo OpenAI por empresa e assistente.
     // RS Connect 36.19.2 — orçamento de IA por empresa, alertas e proteção automática de consumo.
     // RS Connect 36.19.3 — margem comercial, receita de referência e preço recomendado da franquia de IA.
-    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql e 083_ai_commercial_margin.sql.
-    public const VERSION_LABEL = 'Beta Comercial 1.3';
-    public const PACKAGE_LABEL = 'RS Connect 36.19.3 — Gestão comercial da franquia de IA';
-    public const REQUIRED_MIGRATION = '083_ai_commercial_margin.sql';
+    // RS Connect 36.20.0 — rentabilidade histórica, MRR, tendência mensal e simulação comercial de planos.
+    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql e 084_ai_profitability_history.sql.
+    public const VERSION_LABEL = 'Beta Comercial 1.4';
+    public const PACKAGE_LABEL = 'RS Connect 36.20.0 — Rentabilidade histórica e simulação comercial';
+    public const REQUIRED_MIGRATION = '084_ai_profitability_history.sql';
 
     private PDO $pdo;
 
@@ -360,6 +361,18 @@ final class AppVersionService
                 ? 'Receita de referência, custo projetado, margem conhecida e preço mínimo por empresa estão disponíveis.'
                 : 'A estrutura de margem comercial por empresa ainda não foi aplicada.',
             'Executar database/migrations/083_ai_commercial_margin.sql.'
+        );
+
+        $aiProfitabilityReady = $this->tableExists('tenant_ai_profitability_snapshots')
+            && $this->tableExists('tenant_ai_commercial_policy_history')
+            && class_exists(AiProfitabilityHistoryService::class);
+        $checks[] = $this->check(
+            'Rentabilidade histórica da IA',
+            $aiProfitabilityReady ? 'ok' : 'blocked',
+            $aiProfitabilityReady
+                ? 'MRR, histórico mensal, tendência e simulação de planos estão disponíveis por empresa.'
+                : 'A camada histórica de rentabilidade e simulação comercial ainda não foi aplicada.',
+            'Executar database/migrations/084_ai_profitability_history.sql.'
         );
 
         $contactAvatarReady = $this->columnExists('contacts', 'avatar_checked_at');

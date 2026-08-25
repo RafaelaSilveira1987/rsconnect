@@ -161,6 +161,7 @@ final class CommercialBetaService
     {
         return [
             ['version' => '36.19.3', 'title' => 'Margem comercial da franquia de IA', 'summary' => 'Cruza assinatura, custo projetado de IA, demais custos informados e margem-alvo para indicar contribuição conhecida, risco comercial e receita mínima de referência por empresa.'],
+            ['version' => '36.20.0', 'title' => 'Rentabilidade histórica e simulação comercial', 'summary' => 'Consolida MRR de referência, histórico mensal de contribuição, tendência de margem e simulação de planos considerando capacidade e margem-alvo.'],
             ['version' => '36.19.2', 'title' => 'Orçamento de IA por empresa', 'summary' => 'Adiciona orçamento por empresa para IA custeada pela RS Connect, alertas de atenção/crítico/limite e ações automáticas de modo Econômico ou bloqueio apenas das chamadas com credencial RS.'],
             ['version' => '36.19.1', 'title' => 'Consumo OpenAI atribuído por empresa', 'summary' => 'Corrige o custo zerado no ranking por empresa/assistente, aplica tarifas padrão OpenAI aos modelos de texto conhecidos e mantém AI_COST_RATES_JSON como sobrescrita administrativa.'],
             ['version' => '36.19.0', 'title' => 'Inteligência de IA e memória progressiva', 'summary' => 'Evolui o painel OpenAI com orçamento, projeção, telemetria interna, chamadas e tokens evitados, ranking por empresa/assistente e adiciona resumo progressivo e memória estruturada por contato, preservada entre conversas.'],

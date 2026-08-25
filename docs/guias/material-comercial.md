@@ -43,3 +43,8 @@ A RS Connect permite acompanhar e proteger o custo de IA individualmente por cli
 ## Gestão comercial da franquia de IA — v36.19.3
 
 A RS Connect transforma telemetria técnica em decisão comercial: mostra custo projetado da IA por cliente, compara com a receita contratada e indica a margem de contribuição conhecida e o valor mínimo de referência para a margem desejada. Isso ajuda a identificar operações saudáveis e contratos que merecem revisão sem misturar custo técnico com faturamento de outros clientes.
+
+
+## Rentabilidade histórica e inteligência de planos — v36.20.0
+
+A RS Connect acompanha a evolução mensal do custo de IA e da contribuição conhecida por cliente, identifica MRR abaixo da margem desejada e simula cenários de plano considerando preço, margem e capacidade operacional. A plataforma apoia a decisão comercial sem reajustar ou trocar contratos automaticamente.

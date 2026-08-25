@@ -6,6 +6,7 @@ use App\Controllers\AccessController;
 use App\Controllers\AgentController;
 use App\Controllers\AdminCrmController;
 use App\Controllers\AiCredentialController;
+use App\Controllers\AiProfitabilityController;
 use App\Controllers\AiReprocessController;
 use App\Controllers\AutomationController;
 use App\Controllers\BillingController;
@@ -264,6 +265,7 @@ return static function (Router $router): void {
     $router->get('/agents', [AgentController::class, 'index'], ['auth', 'permission:agents.view']);
     $router->get('/ai-credentials', [AiCredentialController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/openai-usage', [OpenAiUsageController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/ai-profitability', [AiProfitabilityController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/openai-usage/budget', [OpenAiUsageController::class, 'saveBudgetPolicy'], ['auth', 'super_admin', 'csrf']);
     $router->post('/openai-usage/commercial', [OpenAiUsageController::class, 'saveCommercialPolicy'], ['auth', 'super_admin', 'csrf']);
     $router->post('/ai-credentials/save', [AiCredentialController::class, 'save'], ['auth', 'super_admin', 'csrf']);

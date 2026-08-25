@@ -1,41 +1,37 @@
-# RS Connect — v36.19.3
+# RS Connect — v36.20.0
 
-Esta versão transforma o consumo de IA por empresa em **gestão comercial da franquia**. O Super Admin passa a comparar receita de referência, custo projetado, demais custos informados e margem de contribuição conhecida por cliente.
+Esta versão adiciona **rentabilidade histórica e simulação comercial da IA** ao Super Admin. O RS Connect passa a acompanhar MRR de referência, contribuição conhecida, margem mês a mês e cenários de plano por capacidade e margem-alvo.
 
 ## Destaques
 
-- Receita de referência baseada na assinatura atual ou em valor manual.
-- Conversão de assinaturas trimestrais, semestrais e anuais para equivalente mensal.
-- Custo atual e projeção de IA custeada pela RS em USD e BRL.
-- Campo opcional para outros custos mensais atribuídos ao cliente.
-- Margem-alvo e margem de atenção configuráveis por empresa.
-- Identificação visual de operação saudável, em atenção, com margem baixa ou prejuízo conhecido.
-- Cálculo da receita mínima de referência para sustentar a margem-alvo.
-- Cotação USD/BRL por empresa com fallback para `OPENAI_USAGE_USD_BRL`.
-- Integração com orçamento e governança da v36.19.2 sem alteração automática de planos/preços.
-- Auditoria da política comercial.
-- Documentação operacional e comercial atualizada (ponto 9).
+- Nova tela **Rentabilidade IA**.
+- MRR de referência e MRR sob revisão.
+- Histórico mensal por empresa e da carteira.
+- Receita histórica baseada em fatura, assinatura ou política manual.
+- Snapshots mensais para preservar a leitura calculada.
+- Tendência de receita, custo de IA e margem.
+- Simulação dos planos ativos considerando capacidade real de uso.
+- Mensalidade customizada simulável sem alterar contratos.
+- Recomendação comercial explicável: manter, otimizar primeiro, revisar plano ou usar condição customizada.
+- Script CLI opcional para snapshot diário.
+- Documentação do ponto 9 atualizada.
 
 ## Atualização
 
-Atualizando a partir da v36.19.2, execute:
+Execute:
 
 ```text
-database/migrations/083_ai_commercial_margin.sql
+database/migrations/084_ai_profitability_history.sql
 ```
 
 Depois valide:
 
 ```text
-database/diagnostics/ai_commercial_margin_v36.19.3.sql
+database/diagnostics/ai_profitability_history_v36.20.0.sql
 ```
 
 O primeiro resultado deve retornar `OK`.
 
-Não existem novas variáveis obrigatórias no `.env`. Para valores em reais, mantenha `OPENAI_USAGE_USD_BRL` configurada ou informe uma cotação específica na política da empresa.
+Não existem novas variáveis obrigatórias no `.env`.
 
-## Importante
-
-A margem apresentada é uma **margem de contribuição conhecida**, não lucro líquido. Custos não informados no campo de outros custos mensais não entram no cálculo.
-
-Consulte `INSTRUCOES-v36.19.3.md` e `docs/guias/README.md`.
+Consulte `INSTRUCOES-v36.20.0.md` e `docs/guias/README.md`.

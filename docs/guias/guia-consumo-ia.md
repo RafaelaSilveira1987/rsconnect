@@ -117,3 +117,8 @@ Para configuração detalhada, consulte `guia-governanca-orcamento-ia.md`.
 ## Margem comercial por empresa — v36.19.3
 
 O painel passa a cruzar custo técnico com a receita de referência da empresa. A origem pode ser a assinatura mensal equivalente ou um valor manual. Também é possível informar outros custos mensais e margem-alvo. Consulte `guia-margem-comercial-ia.md` para interpretação e boas práticas.
+
+
+## Rentabilidade histórica — v36.20.0
+
+A tela **Rentabilidade IA** usa a mesma telemetria atribuída por empresa para acompanhar evolução mensal, MRR de referência, contribuição conhecida e simulação de planos. Consulte `guia-rentabilidade-historica-ia.md` para a metodologia completa.

@@ -105,6 +105,16 @@ final class AiCommercialMarginService
             'usd_brl_rate' => $usdBrl !== null ? round($usdBrl, 6) : null,
             'updated_by_user_id' => $userId && $userId > 0 ? $userId : null,
         ]);
+
+        $this->recordPolicyHistory($tenantId, [
+            'enabled' => $enabled,
+            'revenue_source' => $source,
+            'monthly_revenue_brl' => $manualRevenue,
+            'other_monthly_cost_brl' => round($otherCost, 2),
+            'target_margin_percent' => round($target, 2),
+            'warning_margin_percent' => round($warning, 2),
+            'usd_brl_rate' => $usdBrl !== null ? round($usdBrl, 6) : null,
+        ], $userId);
     }
 
     /** @return array<string,mixed> */
@@ -258,6 +268,33 @@ final class AiCommercialMarginService
             ];
         } catch (Throwable) {
             return $defaults;
+        }
+    }
+
+    /** @param array<string,mixed> $policy */
+    private function recordPolicyHistory(int $tenantId, array $policy, ?int $userId): void
+    {
+        try {
+            Database::connection()->prepare(
+                'INSERT INTO tenant_ai_commercial_policy_history
+                    (tenant_id, effective_at, enabled, revenue_source, monthly_revenue_brl, other_monthly_cost_brl,
+                     target_margin_percent, warning_margin_percent, usd_brl_rate, changed_by_user_id, source)
+                 VALUES
+                    (:tenant_id, NOW(), :enabled, :revenue_source, :monthly_revenue_brl, :other_monthly_cost_brl,
+                     :target_margin_percent, :warning_margin_percent, :usd_brl_rate, :changed_by_user_id, "user")'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'enabled' => (int) ($policy['enabled'] ?? 1),
+                'revenue_source' => (string) ($policy['revenue_source'] ?? 'subscription'),
+                'monthly_revenue_brl' => $policy['monthly_revenue_brl'] ?? null,
+                'other_monthly_cost_brl' => (float) ($policy['other_monthly_cost_brl'] ?? 0),
+                'target_margin_percent' => (float) ($policy['target_margin_percent'] ?? 60),
+                'warning_margin_percent' => (float) ($policy['warning_margin_percent'] ?? 40),
+                'usd_brl_rate' => $policy['usd_brl_rate'] ?? null,
+                'changed_by_user_id' => $userId && $userId > 0 ? $userId : null,
+            ]);
+        } catch (Throwable) {
+            // Compatibilidade durante deploy: a política atual continua sendo salva antes da migration 084.
         }
     }
 
