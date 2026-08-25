@@ -10,16 +10,18 @@ Este índice reúne a documentação operacional, técnica, de implantação e c
 
 ## WhatsApp, IA e atendimento
 
-- [Guia de criação da instância Evolution](guia-criacao-instancia.md)
+- [Guia para criar uma conexão do WhatsApp](guia-criacao-instancia.md)
 - [Guia de conexão pelo QR Code](guia-conexao-qrcode.md)
-- [Guia de exclusão assistida de instâncias](guia-exclusao-assistida-instancia.md)
+- [Guia para excluir uma conexão sem perder dados](guia-exclusao-assistida-instancia.md)
 - [Guia de configuração dos assistentes](guia-configuracao-assistentes.md)
 - [Guia de filas e atendimento humano](guia-filas-atendimento-humano.md)
 - [Guia de consumo e economia de IA](guia-consumo-ia.md)
-- [Guia de governança e orçamento de IA por empresa](guia-governanca-orcamento-ia.md)
-- [Guia de margem comercial da franquia de IA](guia-margem-comercial-ia.md)
-- [Guia de rentabilidade histórica e simulação comercial da IA](guia-rentabilidade-historica-ia.md)
-- [Guia de memória progressiva e continuidade do contato](guia-memoria-progressiva.md)
+- [Guia de limite de gasto e proteção da IA por empresa](guia-governanca-orcamento-ia.md)
+- [Guia de margem e preço mínimo por cliente](guia-margem-comercial-ia.md)
+- [Guia de histórico de resultados e simulação de planos](guia-rentabilidade-historica-ia.md)
+- [Guia de memória da conversa](guia-memoria-progressiva.md)
+- [Guia de linguagem simples](guia-linguagem-simples.md)
+- [Relatório da revisão de linguagem v36.20.1](relatorio-revisao-linguagem-v36.20.1.md)
 
 ## Implantação e validação
 
@@ -29,6 +31,6 @@ Este índice reúne a documentação operacional, técnica, de implantação e c
 
 > Atualize estes documentos sempre que uma versão alterar regras, permissões ou fluxos operacionais.
 
-## Atualização v36.20.0
+## Atualização v36.20.1
 
-O pacote documental acompanha governança financeira, margem comercial, histórico de rentabilidade, simulação de planos, painel OpenAI 2.0 e memória progressiva. Para implantação desta versão, use também `INSTRUCOES-v36.20.0.md` na raiz do projeto.
+A documentação passou a adotar os mesmos nomes simples exibidos no sistema. Termos técnicos ficam concentrados nos detalhes avançados e materiais de suporte. Para implantação, consulte `INSTRUCOES-v36.20.1.md` na raiz do projeto.

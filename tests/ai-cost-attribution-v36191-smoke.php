@@ -25,9 +25,9 @@ $checks = [
         && str_contains($calculator, "Env::get('AI_COST_RATES_JSON'"),
     'telemetria usa o novo calculador' => str_contains($usage, 'new AiCostCalculatorService()'),
     'ranking de empresa e assistente considera OpenAI' => substr_count($dashboard, 'AND e.provider = "openai"') >= 2,
-    'painel exibe cobertura e modelos sem tarifa' => str_contains($view, 'Cobertura de tarifação')
-        && str_contains($view, 'Modelos sem tarifa automática')
-        && str_contains($view, 'Consumo por empresa'),
+    'painel exibe cobertura e modelos sem tarifa' => str_contains($view, 'Uso com preço conhecido')
+        && str_contains($view, 'Modelos sem preço cadastrado')
+        && str_contains($view, 'Uso por empresa'),
     'migration recalcula histórico conhecido' => str_contains($migration, "estimated_cost_currency = 'USD'")
         && str_contains($migration, "gpt-4o-mini")
         && str_contains($migration, "gpt-5.6-luna"),

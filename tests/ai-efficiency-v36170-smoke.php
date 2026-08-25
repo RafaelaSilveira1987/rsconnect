@@ -73,7 +73,7 @@ $checks = [
     'controller salva política' => str_contains($controller, 'ai_efficiency_mode')
         && str_contains($controller, 'ai_knowledge_budget_chars'),
     'assinatura soma tokens evitados' => str_contains($subscription, 'estimated_input_tokens_avoided')
-        && str_contains($billing, 'Entrada evitada'),
+        && str_contains($billing, 'Uso economizado'),
     'migration idempotente disponível' => str_contains($migration, "COLUMN_NAME = 'ai_efficiency_mode'")
         && str_contains($migration, 'idx_ai_usage_efficiency'),
     'diagnóstico disponível' => str_contains($diagnostic, 'tokens_entrada_evitados_estimados'),

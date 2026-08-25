@@ -74,7 +74,7 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
                 <div><span>Última liberação</span><strong><?= View::e((string) ($calendarAccessSettings['smart_calendar_released_at'] ?? 'Não liberada')) ?></strong></div>
             </div>
         </div>
-        <div class="message-info"><strong>Responsabilidade da RS</strong><span>Antes de liberar, configure e valide n8n, Google Calendar, callbacks, tokens, eventos VAGO e manutenção. O cliente não recebe acesso a esses dados técnicos.</span></div>
+        <div class="message-info"><strong>Responsabilidade da RS</strong><span>Antes de liberar, configure e valide n8n, Google Calendar, retornos automáticos, chaves de segurança, horários disponíveis e manutenção. O cliente não recebe acesso a esses dados técnicos.</span></div>
     </section>
 
 
@@ -102,11 +102,11 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
                 <option value="ephemeral" <?= ($messageGovernanceSettings['message_retention_mode'] ?? 'reduced') === 'ephemeral' ? 'selected' : '' ?>>Efêmera</option>
             </select><small>Metadados de auditoria permanecem; o conteúdo textual é removido conforme a regra.</small></label>
             <label class="field"><span>Conteúdo no modo reduzido</span><div class="input-with-suffix"><input type="number" min="1" max="3650" name="message_retention_days" value="<?= (int) ($messageGovernanceSettings['message_retention_days'] ?? 90) ?>"><span>dias</span></div></label>
-            <label class="field"><span>Payload técnico</span><div class="input-with-suffix"><input type="number" min="1" max="3650" name="message_raw_payload_days" value="<?= (int) ($messageGovernanceSettings['message_raw_payload_days'] ?? 30) ?>"><span>dias</span></div></label>
+            <label class="field"><span>Dados técnicos</span><div class="input-with-suffix"><input type="number" min="1" max="3650" name="message_raw_payload_days" value="<?= (int) ($messageGovernanceSettings['message_raw_payload_days'] ?? 30) ?>"><span>dias</span></div></label>
             <label class="field"><span>Conteúdo no modo efêmero</span><div class="input-with-suffix"><input type="number" min="1" max="720" name="message_ephemeral_hours" value="<?= (int) ($messageGovernanceSettings['message_ephemeral_hours'] ?? 24) ?>"><span>horas</span></div></label>
             <div class="readonly-grid compact-readonly-grid"><div><span>Última limpeza</span><strong><?= View::e((string) ($messageGovernanceSettings['message_retention_last_run_at'] ?? 'Ainda não executada')) ?></strong></div></div>
         </div>
-        <div class="message-info"><strong>Modo efêmero</strong><span>Preserva mensagens enquanto a conversa está ativa. Depois da janela configurada, remove conteúdo e payload, mantendo data, remetente, status e métricas.</span></div>
+        <div class="message-info"><strong>Modo efêmero</strong><span>Preserva mensagens enquanto a conversa está ativa. Depois da janela configurada, remove o conteúdo e os dados técnicos, mantendo data, remetente, status e métricas.</span></div>
     </section>
 
     <section class="settings-block professional-assignment-settings">
@@ -365,11 +365,11 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
                 <option value="ephemeral" <?= ($messageGovernanceSettings['message_retention_mode'] ?? 'reduced') === 'ephemeral' ? 'selected' : '' ?>>Efêmera</option>
             </select><small>Metadados de auditoria permanecem; o conteúdo textual é removido conforme a regra.</small></label>
             <label class="field"><span>Conteúdo no modo reduzido</span><div class="input-with-suffix"><input type="number" min="1" max="3650" name="message_retention_days" value="<?= (int) ($messageGovernanceSettings['message_retention_days'] ?? 90) ?>"><span>dias</span></div></label>
-            <label class="field"><span>Payload técnico</span><div class="input-with-suffix"><input type="number" min="1" max="3650" name="message_raw_payload_days" value="<?= (int) ($messageGovernanceSettings['message_raw_payload_days'] ?? 30) ?>"><span>dias</span></div></label>
+            <label class="field"><span>Dados técnicos</span><div class="input-with-suffix"><input type="number" min="1" max="3650" name="message_raw_payload_days" value="<?= (int) ($messageGovernanceSettings['message_raw_payload_days'] ?? 30) ?>"><span>dias</span></div></label>
             <label class="field"><span>Conteúdo no modo efêmero</span><div class="input-with-suffix"><input type="number" min="1" max="720" name="message_ephemeral_hours" value="<?= (int) ($messageGovernanceSettings['message_ephemeral_hours'] ?? 24) ?>"><span>horas</span></div></label>
             <div class="readonly-grid compact-readonly-grid"><div><span>Última limpeza</span><strong><?= View::e((string) ($messageGovernanceSettings['message_retention_last_run_at'] ?? 'Ainda não executada')) ?></strong></div></div>
         </div>
-        <div class="message-info"><strong>Modo efêmero</strong><span>Preserva mensagens enquanto a conversa está ativa. Depois da janela configurada, remove conteúdo e payload, mantendo data, remetente, status e métricas.</span></div>
+        <div class="message-info"><strong>Modo efêmero</strong><span>Preserva mensagens enquanto a conversa está ativa. Depois da janela configurada, remove o conteúdo e os dados técnicos, mantendo data, remetente, status e métricas.</span></div>
     </section>
 
     <section class="card client-settings-card professional-assignment-settings">

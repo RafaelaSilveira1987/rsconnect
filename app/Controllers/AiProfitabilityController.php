@@ -26,7 +26,7 @@ final class AiProfitabilityController
             : [];
 
         View::render('ai_profitability.index', [
-            'title' => 'Rentabilidade IA',
+            'title' => 'Resultados por cliente',
             'tenantOptions' => $service->tenantOptions(),
             'selectedTenantId' => $tenantId,
             'historyMonths' => $months,

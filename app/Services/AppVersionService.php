@@ -31,9 +31,10 @@ final class AppVersionService
     // RS Connect 36.19.2 — orçamento de IA por empresa, alertas e proteção automática de consumo.
     // RS Connect 36.19.3 — margem comercial, receita de referência e preço recomendado da franquia de IA.
     // RS Connect 36.20.0 — rentabilidade histórica, MRR, tendência mensal e simulação comercial de planos.
+    // RS Connect 36.20.1 — linguagem simples e acessível em menus, telas, alertas e formulários.
     // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql e 084_ai_profitability_history.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.4';
-    public const PACKAGE_LABEL = 'RS Connect 36.20.0 — Rentabilidade histórica e simulação comercial';
+    public const PACKAGE_LABEL = 'RS Connect 36.20.1 — Linguagem simples e acessível';
     public const REQUIRED_MIGRATION = '084_ai_profitability_history.sql';
 
     private PDO $pdo;

@@ -105,7 +105,7 @@ $statusClass = static fn (?string $status): string => preg_replace('/[^a-z0-9_-]
                 <?php endif; ?>
                 <label class="field"><span>Nome da campanha</span><input name="name" required placeholder="Ex.: Retorno de leads da semana"></label>
                 <label class="field"><span>Descrição</span><input name="description" placeholder="Uso interno"></label>
-                <label class="field"><span>Instância WhatsApp</span>
+                <label class="field"><span>Conexão do WhatsApp</span>
                     <select name="evolution_instance_id" required>
                         <option value="">Selecione</option>
                         <?php foreach ($instances as $instance): ?>
@@ -160,7 +160,7 @@ $statusClass = static fn (?string $status): string => preg_replace('/[^a-z0-9_-]
                 <h3>Resumo</h3>
                 <dl class="detail-list">
                     <dt>Empresa</dt><dd><?= View::e($selected['tenant_name']) ?></dd>
-                    <dt>Instância</dt><dd><?= View::e($selected['instance_name']) ?></dd>
+                    <dt>Conexão do WhatsApp</dt><dd><?= View::e($selected['instance_name']) ?></dd>
                     <dt>Audiência</dt><dd><?= View::e($selected['audience_filter']) ?><?= $selected['tag_filter'] ? ' · ' . View::e($selected['tag_filter']) : '' ?></dd>
                     <dt>Agendada para</dt><dd><?= View::e($formatDate($selected['scheduled_at'])) ?></dd>
                     <dt>Último disparo</dt><dd><?= View::e($formatDate($selected['last_dispatched_at'])) ?></dd>

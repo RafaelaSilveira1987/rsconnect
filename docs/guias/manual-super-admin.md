@@ -29,12 +29,12 @@ O Super Admin mantém a operação global, presta suporte, acompanha integraçõ
 - Verificar franquia, credencial e consumo da IA.
 - Registrar causa, ação e resultado na auditoria.
 
-## OpenAI 2.0 e governança de consumo
+## Uso, custo e limite da IA
 
 A área **Consumo OpenAI** passa a reunir dois pontos de vista:
 
 - **Oficial:** Usage/Costs da organização OpenAI, quando a Admin API Key estiver configurada.
-- **Interno:** telemetria do RS Connect por empresa, assistente, estratégia e conversa.
+- **Por cliente:** dados de uso registrados pelo RS Connect para cada empresa, assistente e conversa.
 
 O Super Admin deve usar a comparação para identificar consumo não atribuído, chamadas fora da plataforma e assistentes com custo anormal. Se houver filtro por projeto na API oficial, a comparação só é válida dentro do mesmo escopo.
 
@@ -60,6 +60,11 @@ Em **Consumo OpenAI**, filtre uma empresa para configurar seu orçamento de IA c
 
 Em **Consumo OpenAI**, selecione uma empresa para comparar receita de referência, custo projetado da IA RS, demais custos informados e margem conhecida. Use o indicador como apoio comercial, não como lucro líquido. Contratos customizados podem usar receita manual e cotação USD/BRL específica.
 
-## Rentabilidade histórica e planos — v36.20.0
+## Histórico de resultados e planos — v36.20.0
 
-Em **Rentabilidade IA**, acompanhe MRR de referência, contribuição conhecida e evolução mensal por empresa. Ao abrir um cliente, revise a origem da receita, a tendência de margem e a simulação dos planos. A sugestão considera capacidade e margem-alvo, mas nunca altera assinatura automaticamente.
+Em **Resultados por cliente**, acompanhe a receita mensal, o custo da IA, quanto sobra após os custos informados e a evolução por mês. Ao abrir um cliente, confira de onde veio a receita e simule planos ou outro valor mensal. O sistema apenas sugere; ele nunca altera a assinatura automaticamente.
+
+
+## Linguagem simples — v36.20.1
+
+Use os nomes exibidos na tela ao orientar clientes e atendentes. Abra **Detalhes avançados** somente quando precisar de informações para suporte técnico. Uma pessoa iniciante deve compreender a ação sem conhecer programação, OpenAI ou Evolution API.

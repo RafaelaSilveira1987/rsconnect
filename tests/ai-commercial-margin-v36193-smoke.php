@@ -30,10 +30,10 @@ $checks = [
     'controller e rota salvam política comercial' => str_contains($controller, 'saveCommercialPolicy')
         && str_contains($controller, 'ai.commercial_policy.updated')
         && str_contains($routes, '/openai-usage/commercial'),
-    'painel exibe margem e preço de referência' => str_contains($view, 'Margem, custo e preço de referência')
-        && str_contains($view, 'Receita mínima p/ alvo')
-        && str_contains($view, 'Salvar política comercial'),
-    'painel não chama margem de lucro líquido' => str_contains($view, 'não lucro líquido contábil')
+    'painel exibe margem e preço de referência' => str_contains($view, 'Quanto sobra depois dos custos informados')
+        && str_contains($view, 'Valor mínimo sugerido')
+        && str_contains($view, 'Salvar análise financeira'),
+    'painel não chama margem de lucro líquido' => str_contains($view, 'não é o lucro líquido')
         && str_contains($docs, 'não é lucro líquido'),
     'diagnóstico e documentação presentes' => str_contains($diagnostic, 'estrutura_margem_comercial_ia')
         && str_contains($docs, 'Receita de referência')

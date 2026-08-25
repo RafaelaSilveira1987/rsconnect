@@ -29,11 +29,19 @@ $qualityLabel = static fn (string $quality): string => match ($quality) {
     'estimated' => 'Estimado',
     default => 'Sem base',
 };
+$businessStatusLabel = static fn (string $value): string => match ($value) {
+    'healthy' => 'Dentro do esperado',
+    'attention' => 'Precisa de atenção',
+    'critical' => 'Margem baixa',
+    'loss' => 'Custos acima da receita',
+    'unconfigured' => 'Dados incompletos',
+    default => 'Dados incompletos',
+};
 $recommendationLabel = static fn (string $value): string => match ($value) {
     'keep' => 'Manter condição atual',
     'optimize_first' => 'Otimizar antes de reajustar',
     'review_plan' => 'Revisar plano/condição',
-    'custom_price' => 'Condição customizada',
+    'custom_price' => 'Usar um valor personalizado',
     default => 'Configurar análise',
 };
 
@@ -57,12 +65,12 @@ foreach ($portfolioHistory as $row) {
 
 <section class="ai-credentials-hero profitability-hero">
     <div>
-        <span class="eyebrow">Inteligência comercial</span>
-        <h2>Rentabilidade da IA por cliente</h2>
-        <p>Acompanhe MRR de referência, custo de IA, contribuição conhecida, tendência mensal e cenários de plano sem alterar contratos automaticamente.</p>
+        <span class="eyebrow">Resultados por cliente</span>
+        <h2>Receita, custos e resultado da IA</h2>
+        <p>Veja quanto cada cliente paga, quanto a IA custa e se o plano ou o valor mensal precisam de atenção.</p>
     </div>
     <div class="openai-usage-hero-actions">
-        <a class="btn btn-outline" href="<?= View::e(Router::url('/openai-usage')) ?>">Consumo OpenAI</a>
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/openai-usage')) ?>">Uso e custo da IA</a>
         <a class="btn btn-primary" href="<?= View::e((string) ($refreshUrl ?? Router::url('/ai-profitability'))) ?>">Atualizar histórico</a>
     </div>
 </section>
@@ -73,23 +81,23 @@ foreach ($portfolioHistory as $row) {
         <label><span>Histórico</span><select name="months"><?php foreach ([3,6,12,24] as $option): ?><option value="<?= $option ?>" <?= $months === $option ? 'selected' : '' ?>><?= $option ?> meses</option><?php endforeach; ?></select></label>
         <button class="btn btn-outline btn-small" type="submit">Aplicar</button>
     </form>
-    <small>Receita histórica prioriza faturamento do período; quando não existe, usa assinatura ou política comercial como referência.</small>
+    <small>Para cada mês, o sistema usa primeiro o valor realmente cobrado. Se não houver, usa o plano ou o valor informado.</small>
 </section>
 
 <section class="profitability-kpi-grid">
-    <article class="profitability-kpi is-dark"><span>MRR de referência</span><strong><?= View::e($brl((float) ($portfolio['mrr_brl'] ?? 0))) ?></strong><small><?= (int) ($portfolio['configured_tenants'] ?? 0) ?> empresa(s) analisadas</small></article>
-    <article class="profitability-kpi is-teal"><span>IA projetada</span><strong><?= View::e($brl((float) ($portfolio['projected_ai_cost_brl'] ?? 0))) ?></strong><small>custeada pela RS Connect</small></article>
-    <article class="profitability-kpi is-green"><span>Contribuição conhecida</span><strong><?= View::e($brl((float) ($portfolio['contribution_brl'] ?? 0))) ?></strong><small>antes de custos não informados</small></article>
-    <article class="profitability-kpi is-blue"><span>Margem consolidada</span><strong><?= View::e($percent(isset($portfolio['margin_rate']) ? (float) $portfolio['margin_rate'] : null)) ?></strong><small>ponderada pela receita</small></article>
-    <article class="profitability-kpi is-orange"><span>MRR sob revisão</span><strong><?= View::e($brl((float) ($portfolio['mrr_under_target_brl'] ?? 0))) ?></strong><small><?= View::e($percent((float) ($portfolio['mrr_under_target_rate'] ?? 0))) ?> do MRR configurado</small></article>
-    <article class="profitability-kpi is-purple"><span>Clientes para revisar</span><strong><?= number_format((int) ($portfolio['review_tenants'] ?? 0),0,',','.') ?></strong><small><?= number_format((int) ($portfolio['healthy_tenants'] ?? 0),0,',','.') ?> saudável(is)</small></article>
+    <article class="profitability-kpi is-dark"><span>Receita mensal analisada</span><strong><?= View::e($brl((float) ($portfolio['mrr_brl'] ?? 0))) ?></strong><small><?= (int) ($portfolio['configured_tenants'] ?? 0) ?> empresa(s) analisadas</small></article>
+    <article class="profitability-kpi is-teal"><span>Custo previsto da IA</span><strong><?= View::e($brl((float) ($portfolio['projected_ai_cost_brl'] ?? 0))) ?></strong><small>estimativa até o fim do mês</small></article>
+    <article class="profitability-kpi is-green"><span>Valor que sobra</span><strong><?= View::e($brl((float) ($portfolio['contribution_brl'] ?? 0))) ?></strong><small>depois dos custos informados</small></article>
+    <article class="profitability-kpi is-blue"><span>Percentual que sobra</span><strong><?= View::e($percent(isset($portfolio['margin_rate']) ? (float) $portfolio['margin_rate'] : null)) ?></strong><small>média considerando o valor de cada cliente</small></article>
+    <article class="profitability-kpi is-orange"><span>Receita que precisa de atenção</span><strong><?= View::e($brl((float) ($portfolio['mrr_under_target_brl'] ?? 0))) ?></strong><small><?= View::e($percent((float) ($portfolio['mrr_under_target_rate'] ?? 0))) ?> da receita mensal analisada</small></article>
+    <article class="profitability-kpi is-purple"><span>Clientes que precisam de atenção</span><strong><?= number_format((int) ($portfolio['review_tenants'] ?? 0),0,',','.') ?></strong><small><?= number_format((int) ($portfolio['healthy_tenants'] ?? 0),0,',','.') ?> dentro do esperado</small></article>
 </section>
 
 <section class="card profitability-history-panel">
     <div class="section-heading">
-        <div><span class="eyebrow">Portfólio</span><h2>Evolução mensal da contribuição conhecida</h2><p>Receita, custos conhecidos e margem calculados com a melhor fonte disponível em cada mês.</p></div>
+        <div><span class="eyebrow">Visão geral</span><h2>Evolução mensal do valor que sobra</h2><p>Compare o valor recebido, os custos informados e o percentual que sobra em cada mês.</p></div>
     </div>
-    <div class="profitability-history-chart" aria-label="Histórico de rentabilidade do portfólio">
+    <div class="profitability-history-chart" aria-label="Histórico dos resultados de todos os clientes">
         <?php foreach ($portfolioHistory as $row):
             $revenue = (float) ($row['revenue_brl'] ?? 0);
             $cost = (float) ($row['known_cost_brl'] ?? 0);
@@ -104,22 +112,22 @@ foreach ($portfolioHistory as $row) {
             <small><?= View::e($percent($margin !== null ? (float) $margin : null)) ?></small>
         </div>
         <?php endforeach; ?>
-        <?php if (!$portfolioHistory): ?><div class="empty-state">O histórico será construído após aplicar a migration 084.</div><?php endif; ?>
+        <?php if (!$portfolioHistory): ?><div class="empty-state">O histórico aparecerá depois que a atualização do banco desta versão for concluída.</div><?php endif; ?>
     </div>
-    <div class="profitability-chart-legend"><span><i class="is-revenue"></i> Receita</span><span><i class="is-cost"></i> Custos conhecidos</span></div>
+    <div class="profitability-chart-legend"><span><i class="is-revenue"></i> Receita</span><span><i class="is-cost"></i> Custos informados</span></div>
 </section>
 
 <section class="card profitability-portfolio-table">
-    <div class="section-heading"><div><span class="eyebrow">Carteira</span><h2>Rentabilidade atual por empresa</h2><p>Ordenada pela análise comercial já configurada no RS Connect.</p></div></div>
+    <div class="section-heading"><div><span class="eyebrow">Clientes</span><h2>Resultado atual por empresa</h2><p>Os clientes que precisam de mais atenção aparecem primeiro.</p></div></div>
     <div class="profitability-table-wrap">
         <table class="data-table profitability-table">
-            <thead><tr><th>Empresa</th><th>Plano</th><th>Receita</th><th>IA projetada</th><th>Margem</th><th>Preço p/ alvo</th><th></th></tr></thead>
+            <thead><tr><th>Empresa</th><th>Plano</th><th>Valor mensal</th><th>Custo previsto da IA</th><th>Percentual que sobra</th><th>Valor mínimo sugerido</th><th></th></tr></thead>
             <tbody>
             <?php foreach (($portfolio['rows'] ?? []) as $row):
                 $tenantUrl = Router::url('/ai-profitability') . '?' . http_build_query(['tenant_id' => (int) ($row['tenant_id'] ?? 0), 'months' => $months]);
             ?>
                 <tr>
-                    <td><strong><?= View::e((string) ($row['tenant_name'] ?? 'Empresa')) ?></strong><small><?= View::e((string) ($row['status'] ?? '')) ?></small></td>
+                    <td><strong><?= View::e((string) ($row['tenant_name'] ?? 'Empresa')) ?></strong><small><?= View::e($businessStatusLabel((string) ($row['status'] ?? 'unconfigured'))) ?></small></td>
                     <td><?= View::e((string) ($row['subscription']['plan_name'] ?? 'Sem plano')) ?></td>
                     <td><?= View::e($brl((float) ($row['revenue_brl'] ?? 0))) ?></td>
                     <td><?= View::e($brl((float) ($row['projected_ai_cost_brl'] ?? 0))) ?></td>
@@ -137,11 +145,11 @@ foreach ($portfolioHistory as $row) {
 <?php if ($selectedTenant > 0 && $selected): ?>
 <section class="card profitability-tenant-panel">
     <div class="section-heading">
-        <div><span class="eyebrow">Empresa selecionada</span><h2><?= View::e($selectedTenantName !== '' ? $selectedTenantName : 'Empresa') ?></h2><p>Histórico mensal, tendência e origem dos dados usados na análise.</p></div>
+        <div><span class="eyebrow">Empresa selecionada</span><h2><?= View::e($selectedTenantName !== '' ? $selectedTenantName : 'Empresa') ?></h2><p>Veja a mudança do valor recebido, do custo da IA e do percentual que sobra.</p></div>
         <div class="profitability-trend-badges">
             <span>Receita <?= View::e($delta(isset($trends['revenue_delta_rate']) ? $trends['revenue_delta_rate'] : null)) ?></span>
-            <span>Custo IA <?= View::e($delta(isset($trends['ai_cost_delta_rate']) ? $trends['ai_cost_delta_rate'] : null)) ?></span>
-            <span>Margem <?= View::e($delta(isset($trends['margin_delta']) ? $trends['margin_delta'] : null)) ?></span>
+            <span>Custo da IA <?= View::e($delta(isset($trends['ai_cost_delta_rate']) ? $trends['ai_cost_delta_rate'] : null)) ?></span>
+            <span>Percentual que sobra <?= View::e($delta(isset($trends['margin_delta']) ? $trends['margin_delta'] : null)) ?></span>
         </div>
     </div>
 
@@ -166,11 +174,11 @@ foreach ($portfolioHistory as $row) {
         <article>
             <div><strong><?= View::e((string) ($row['label'] ?? '')) ?></strong><small><?= View::e($qualityLabel((string) ($row['revenue_quality'] ?? 'missing'))) ?> · <?= View::e((string) ($row['plan_name'] ?? 'Sem plano')) ?></small></div>
             <span>Receita<strong><?= View::e($brl((float) ($row['revenue_brl'] ?? 0))) ?></strong></span>
-            <span>IA<strong><?= View::e($brl((float) ($row['ai_cost_brl'] ?? 0))) ?></strong></span>
+            <span>Custo da IA<strong><?= View::e($brl((float) ($row['ai_cost_brl'] ?? 0))) ?></strong></span>
             <span>Outros custos<strong><?= View::e($brl((float) ($row['other_cost_brl'] ?? 0))) ?></strong></span>
-            <span>Contribuição<strong><?= View::e($brl((float) ($row['contribution_brl'] ?? 0))) ?></strong></span>
-            <span>Margem<strong><?= View::e($percent(($row['margin_rate'] ?? null) !== null ? (float) $row['margin_rate'] : null)) ?></strong></span>
-            <span>Chamadas<strong><?= number_format((int) ($row['provider_calls'] ?? 0),0,',','.') ?></strong></span>
+            <span>Valor que sobra<strong><?= View::e($brl((float) ($row['contribution_brl'] ?? 0))) ?></strong></span>
+            <span>Percentual que sobra<strong><?= View::e($percent(($row['margin_rate'] ?? null) !== null ? (float) $row['margin_rate'] : null)) ?></strong></span>
+            <span>Chamadas à IA<strong><?= number_format((int) ($row['provider_calls'] ?? 0),0,',','.') ?></strong></span>
         </article>
         <?php endforeach; ?>
     </div>
@@ -178,7 +186,7 @@ foreach ($portfolioHistory as $row) {
 
 <section class="card profitability-simulator-panel">
     <div class="section-heading">
-        <div><span class="eyebrow">Simulação</span><h2>Plano, capacidade e margem</h2><p>Compara os planos ativos com o uso atual e a margem-alvo. A recomendação é apenas apoio à decisão e nunca altera a assinatura automaticamente.</p></div>
+        <div><span class="eyebrow">Simulação</span><h2>Comparar planos e valores</h2><p>Veja quais planos comportam o uso atual e qual percentual sobraria. Nada é alterado automaticamente.</p></div>
         <span class="badge"><?= View::e($recommendationLabel((string) ($simulation['recommendation'] ?? 'configure'))) ?></span>
     </div>
     <div class="operations-alert is-info profitability-recommendation"><strong><?= View::e($recommendationLabel((string) ($simulation['recommendation'] ?? 'configure'))) ?></strong><p><?= View::e((string) ($simulation['recommendation_message'] ?? '')) ?></p></div>
@@ -186,18 +194,18 @@ foreach ($portfolioHistory as $row) {
     <div class="profitability-simulation-kpis">
         <div><span>Plano atual</span><strong><?= View::e((string) ($simulation['current_plan_name'] ?? 'Sem plano')) ?></strong></div>
         <div><span>Receita atual</span><strong><?= View::e($brl((float) ($simulation['current_revenue_brl'] ?? 0))) ?></strong></div>
-        <div><span>Custos conhecidos</span><strong><?= View::e($brl((float) ($simulation['known_cost_brl'] ?? 0))) ?></strong></div>
-        <div><span>Receita mínima alvo</span><strong><?= View::e($brl((float) ($simulation['recommended_revenue_brl'] ?? 0))) ?></strong></div>
-        <div><span>IA / receita</span><strong><?= View::e($percent((float) ($simulation['ai_cost_share_rate'] ?? 0))) ?></strong></div>
-        <div><span>Chamadas evitadas</span><strong><?= View::e($percent((float) ($simulation['avoidance_rate'] ?? 0))) ?></strong></div>
+        <div><span>Custos informados</span><strong><?= View::e($brl((float) ($simulation['known_cost_brl'] ?? 0))) ?></strong></div>
+        <div><span>Valor mínimo para a meta</span><strong><?= View::e($brl((float) ($simulation['recommended_revenue_brl'] ?? 0))) ?></strong></div>
+        <div><span>Quanto a IA pesa no valor mensal</span><strong><?= View::e($percent((float) ($simulation['ai_cost_share_rate'] ?? 0))) ?></strong></div>
+        <div><span>Chamadas economizadas</span><strong><?= View::e($percent((float) ($simulation['avoidance_rate'] ?? 0))) ?></strong></div>
     </div>
 
     <div class="profitability-plan-grid">
         <?php foreach ($plans as $plan): ?>
         <article class="profitability-plan<?= !empty($plan['recommended']) ? ' is-recommended' : '' ?><?= (string) ($plan['plan_key'] ?? '') === (string) ($simulation['current_plan_key'] ?? '') ? ' is-current' : '' ?>">
             <div class="profitability-plan-head"><div><strong><?= View::e((string) ($plan['name'] ?? 'Plano')) ?></strong><small><?= (string) ($plan['plan_key'] ?? '') === (string) ($simulation['current_plan_key'] ?? '') ? 'Plano atual' : (!empty($plan['recommended']) ? 'Referência recomendada' : 'Cenário') ?></small></div><span><?= View::e($brl((float) ($plan['monthly_price_brl'] ?? 0))) ?>/mês</span></div>
-            <div class="profitability-plan-metrics"><span>Margem<strong><?= View::e($percent(($plan['projected_margin_rate'] ?? null) !== null ? (float) $plan['projected_margin_rate'] : null)) ?></strong></span><span>Capacidade<strong><?= !empty($plan['capacity_ok']) ? 'Compatível' : 'Insuficiente' ?></strong></span></div>
-            <?php if (!empty($plan['capacity_issues'])): ?><details><summary>Ver limites excedidos</summary><ul><?php foreach ($plan['capacity_issues'] as $issue): ?><li><?= View::e((string) $issue) ?></li><?php endforeach; ?></ul></details><?php endif; ?>
+            <div class="profitability-plan-metrics"><span>Percentual que sobra<strong><?= View::e($percent(($plan['projected_margin_rate'] ?? null) !== null ? (float) $plan['projected_margin_rate'] : null)) ?></strong></span><span>O plano comporta o uso?<strong><?= !empty($plan['capacity_ok']) ? 'Compatível' : 'Insuficiente' ?></strong></span></div>
+            <?php if (!empty($plan['capacity_issues'])): ?><details><summary>Ver por que o plano não comporta o uso</summary><ul><?php foreach ($plan['capacity_issues'] as $issue): ?><li><?= View::e((string) $issue) ?></li><?php endforeach; ?></ul></details><?php endif; ?>
         </article>
         <?php endforeach; ?>
         <?php if (!$plans): ?><div class="empty-state">Nenhum plano ativo encontrado.</div><?php endif; ?>
@@ -205,22 +213,22 @@ foreach ($portfolioHistory as $row) {
 
     <form class="profitability-custom-sim" method="get" action="<?= View::e(Router::url('/ai-profitability')) ?>">
         <input type="hidden" name="tenant_id" value="<?= $selectedTenant ?>"><input type="hidden" name="months" value="<?= $months ?>">
-        <label><span>Simular mensalidade customizada</span><input type="number" name="simulated_revenue_brl" min="0" step="0.01" value="<?= $simulatedRevenueBrl !== null ? View::e(number_format((float) $simulatedRevenueBrl,2,'.','')) : '' ?>" placeholder="Ex.: 249,00"></label>
+        <label><span>Simular outro valor mensal</span><input type="number" name="simulated_revenue_brl" min="0" step="0.01" value="<?= $simulatedRevenueBrl !== null ? View::e(number_format((float) $simulatedRevenueBrl,2,'.','')) : '' ?>" placeholder="Ex.: 249,00"></label>
         <button class="btn btn-outline" type="submit">Simular</button>
-        <?php if (($simulation['custom_revenue_brl'] ?? null) !== null): ?><div class="profitability-custom-result"><span>Margem simulada</span><strong><?= View::e($percent(($simulation['custom_margin_rate'] ?? null) !== null ? (float) $simulation['custom_margin_rate'] : null)) ?></strong><small><?= !empty($simulation['custom_meets_margin']) ? 'atinge a margem-alvo' : 'abaixo da margem-alvo' ?></small></div><?php endif; ?>
+        <?php if (($simulation['custom_revenue_brl'] ?? null) !== null): ?><div class="profitability-custom-result"><span>Percentual que sobraria</span><strong><?= View::e($percent(($simulation['custom_margin_rate'] ?? null) !== null ? (float) $simulation['custom_margin_rate'] : null)) ?></strong><small><?= !empty($simulation['custom_meets_margin']) ? 'atinge a meta definida' : 'fica abaixo da meta definida' ?></small></div><?php endif; ?>
     </form>
 </section>
 <?php else: ?>
-<section class="card profitability-select-note"><strong>Selecione uma empresa</strong><p>Abra uma empresa para visualizar histórico mensal, tendência de margem e simulação de plano/capacidade.</p></section>
+<section class="card profitability-select-note"><strong>Selecione uma empresa</strong><p>Abra um cliente para ver o histórico, entender as mudanças e comparar planos ou valores mensais.</p></section>
 <?php endif; ?>
 
 <section class="card profitability-method-note">
-    <div><span class="eyebrow">Metodologia</span><h2>De onde vêm os números</h2></div>
+    <div><span class="eyebrow">Entenda os valores</span><h2>Como os números são calculados</h2></div>
     <div class="profitability-method-grid">
-        <span><strong>Receita</strong> faturas do período → assinatura → política manual</span>
-        <span><strong>IA</strong> telemetria <code>ai_usage_events</code> custeada pela RS</span>
-        <span><strong>Histórico</strong> snapshots mensais preservam a leitura já calculada</span>
-        <span><strong>Recomendação</strong> considera margem-alvo e capacidade dos planos atuais</span>
+        <span><strong>Valor recebido</strong> usa primeiro as cobranças do mês; se não houver, usa o plano ou o valor informado.</span>
+        <span><strong>Custo da IA</strong> soma o uso de IA registrado para cada empresa.</span>
+        <span><strong>Histórico</strong> guarda um registro de cada mês para não alterar os resultados antigos.</span>
+        <span><strong>Sugestão</strong> compara o valor recebido, os custos e os limites de cada plano.</span>
     </div>
-    <p>Os indicadores representam contribuição conhecida e referência comercial. Custos não informados continuam fora da análise.</p>
+    <p>O valor que sobra considera somente os custos cadastrados. Gastos que não foram informados não entram no cálculo.</p>
 </section>

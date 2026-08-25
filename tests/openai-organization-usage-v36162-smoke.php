@@ -70,12 +70,12 @@ $checks = [
     'mantém duas barras diárias' => count($summary['daily'] ?? []) === 2,
     'controller consulta serviço oficial' => str_contains($controller, 'OpenAiOrganizationUsageService')
         && str_contains($controller, 'refresh_usage'),
-    'tela exibe consumo oficial' => str_contains($view, 'Consumo diário da OpenAI')
-        && str_contains($view, 'Tokens processados')
+    'tela exibe consumo oficial' => str_contains($view, 'Uso diário da OpenAI')
+        && str_contains($view, 'Informações processadas')
         && str_contains($view, 'Custo oficial'),
     'admin key separada da chave de inferência' => str_contains($env, 'OPENAI_ADMIN_API_KEY=')
         && str_contains($env, 'OPENAI_USAGE_PROJECT_IDS='),
-    'pacote atualizado' => preg_match('/RS Connect 36\.(16\.2|16\.3|17\.0|19\.0)/', $version) === 1,
+    'pacote atualizado' => preg_match('/RS Connect 36\.(16\.2|16\.3|17\.0|19\.0|20\.1)/', $version) === 1,
 ];
 
 $failed = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

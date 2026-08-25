@@ -10,7 +10,7 @@ use App\Core\View;
     </div>
 </section>
 <section class="card" style="max-width:760px;margin:0 auto">
-    <div class="section-heading"><div><span class="eyebrow">Última etapa</span><h2>Execute a migration 037</h2></div></div>
+    <div class="section-heading"><div><span class="eyebrow">Última etapa</span><h2>Conclua a atualização do banco indicada</h2></div></div>
     <p>No Adminer, abra o banco do RS Connect e execute:</p>
     <pre><?= View::e($migration ?? 'database/migrations/037_admin_commercial_crm_reports.sql') ?></pre>
     <p>Depois atualize a página. Nenhuma oportunidade do CRM das empresas clientes será alterada.</p>

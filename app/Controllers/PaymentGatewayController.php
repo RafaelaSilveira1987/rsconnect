@@ -43,7 +43,7 @@ final class PaymentGatewayController
         )->fetchAll(PDO::FETCH_ASSOC);
 
         View::render('payment_gateways.index', [
-            'title' => 'Gateways de pagamento',
+            'title' => 'Meios de pagamento',
             'gateways' => $gateways,
             'invoices' => $invoices,
             'events' => $events,

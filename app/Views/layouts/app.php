@@ -128,7 +128,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.1')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -139,7 +139,7 @@ $svgIcon = static function (string $name): string {
         </a>
 
         <nav class="sidebar-nav" aria-label="Navegação principal">
-            <a class="nav-link<?= $isActive('/') ?>" href="<?= View::e(Router::url('/')) ?>"><?= $svgIcon('dashboard') ?><span>Dashboard</span></a>
+            <a class="nav-link<?= $isActive('/') ?>" href="<?= View::e(Router::url('/')) ?>"><?= $svgIcon('dashboard') ?><span>Visão geral</span></a>
 
             <?php if (!Auth::isSuperAdmin() && Auth::can('onboarding.manage')): ?>
                 <a class="nav-link<?= $isActive('/onboarding') ?>" href="<?= View::e(Router::url('/onboarding')) ?>"><?= $svgIcon('check') ?><span>Primeiros passos</span></a>
@@ -168,23 +168,23 @@ $svgIcon = static function (string $name): string {
             <?php endif; ?>
 
             <?php if (Auth::isSuperAdmin()): ?>
-                <span class="nav-caption">Automação e integrações</span>
+                <span class="nav-caption">WhatsApp e inteligência artificial</span>
                 <?php if (Auth::can('instances.view')): ?>
                     <a class="nav-link<?= $isActive('/instances') ?>" href="<?= View::e(Router::url('/instances')) ?>"><?= $svgIcon('instance') ?><span>Canais WhatsApp</span></a>
                 <?php endif; ?>
-                <a class="nav-link<?= $isActive('/ai-credentials') ?>" href="<?= View::e(Router::url('/ai-credentials')) ?>"><?= $svgIcon('lock') ?><span>IA e credenciais</span></a>
-                <a class="nav-link<?= $isActive('/openai-usage') ?>" href="<?= View::e(Router::url('/openai-usage')) ?>"><?= $svgIcon('reports') ?><span>Consumo OpenAI</span></a>
-                <a class="nav-link<?= $isActive('/ai-profitability') ?>" href="<?= View::e(Router::url('/ai-profitability')) ?>"><?= $svgIcon('billing') ?><span>Rentabilidade IA</span></a>
-                <a class="nav-link<?= $isAnyActive(['/n8n', '/n8n-flows', '/n8n-templates']) ?>" href="<?= View::e(Router::url('/n8n')) ?>"><?= $svgIcon('flow') ?><span>n8n</span></a>
+                <a class="nav-link<?= $isActive('/ai-credentials') ?>" href="<?= View::e(Router::url('/ai-credentials')) ?>"><?= $svgIcon('lock') ?><span>Assistentes e chaves de acesso</span></a>
+                <a class="nav-link<?= $isActive('/openai-usage') ?>" href="<?= View::e(Router::url('/openai-usage')) ?>"><?= $svgIcon('reports') ?><span>Uso e custo da IA</span></a>
+                <a class="nav-link<?= $isActive('/ai-profitability') ?>" href="<?= View::e(Router::url('/ai-profitability')) ?>"><?= $svgIcon('billing') ?><span>Resultados por cliente</span></a>
+                <a class="nav-link<?= $isAnyActive(['/n8n', '/n8n-flows', '/n8n-templates']) ?>" href="<?= View::e(Router::url('/n8n')) ?>"><?= $svgIcon('flow') ?><span>Automações (n8n)</span></a>
 
                 <span class="nav-caption">Financeiro</span>
                 <a class="nav-link<?= $isActive('/billing') ?>" href="<?= View::e(Router::url('/billing')) ?>"><?= $svgIcon('billing') ?><span>Planos e cobrança</span></a>
-                <a class="nav-link<?= $isActive('/payment-gateways') ?>" href="<?= View::e(Router::url('/payment-gateways')) ?>"><?= $svgIcon('card') ?><span>Gateways de pagamento</span></a>
-                <a class="nav-link<?= $isActive('/billing-reminders') ?>" href="<?= View::e(Router::url('/billing-reminders')) ?>"><?= $svgIcon('bell') ?><span>Régua de cobrança</span></a>
+                <a class="nav-link<?= $isActive('/payment-gateways') ?>" href="<?= View::e(Router::url('/payment-gateways')) ?>"><?= $svgIcon('card') ?><span>Meios de pagamento</span></a>
+                <a class="nav-link<?= $isActive('/billing-reminders') ?>" href="<?= View::e(Router::url('/billing-reminders')) ?>"><?= $svgIcon('bell') ?><span>Lembretes de cobrança</span></a>
 
                 <span class="nav-caption">Operação RS</span>
                 <a class="nav-link<?= $isAnyActive(['/painel-operacional', '/operacao-rs']) ?>" href="<?= View::e(Router::url('/painel-operacional')) ?>"><?= $svgIcon('operations') ?><span>Painel operacional</span></a>
-                <a class="nav-link<?= $isAnyActive(['/central-operacao', '/security', '/seguranca', '/operations', '/monitoramento', '/backup-automatico', '/operations/backups/automation', '/operations/ai-reprocess', '/beta-comercial', '/status-sistema']) ?>" href="<?= View::e(Router::url('/central-operacao')) ?>"><?= $svgIcon('operations') ?><span>Central de operação</span></a>
+                <a class="nav-link<?= $isAnyActive(['/central-operacao', '/security', '/seguranca', '/operations', '/monitoramento', '/backup-automatico', '/operations/backups/automation', '/operations/ai-reprocess', '/beta-comercial', '/status-sistema']) ?>" href="<?= View::e(Router::url('/central-operacao')) ?>"><?= $svgIcon('operations') ?><span>Saúde do sistema</span></a>
                 <a class="nav-link<?= $isActive('/operacao-alertas') ?>" href="<?= View::e(Router::url('/operacao-alertas')) ?>"><?= $svgIcon('bell') ?><span>Avisos do sistema</span><?= $notificationBadge($notificationUnread) ?></a>
                 <a class="nav-link<?= $isActive('/comunicados') ?>" href="<?= View::e(Router::url('/comunicados')) ?>"><?= $svgIcon('chat') ?><span>Comunicados</span></a>
                 <a class="nav-link<?= $isActive('/implementation') ?>" href="<?= View::e(Router::url('/implementation')) ?>"><?= $svgIcon('implementation') ?><span>Implantação</span></a>
@@ -267,7 +267,7 @@ $svgIcon = static function (string $name): string {
                 <span class="topbar-search-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
                 </span>
-                <input type="search" placeholder="Buscar módulo..." autocomplete="off" aria-label="Buscar módulo" data-module-search-input>
+                <input type="search" placeholder="Buscar página ou função..." autocomplete="off" aria-label="Buscar página ou função" data-module-search-input>
                 <kbd>Ctrl K</kbd>
                 <div class="topbar-search-results" data-module-search-results hidden></div>
             </div>
@@ -365,6 +365,6 @@ $svgIcon = static function (string $name): string {
 <button class="back-to-top" type="button" data-back-to-top aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
 </button>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.1')) ?>" defer></script>
 </body>
 </html>

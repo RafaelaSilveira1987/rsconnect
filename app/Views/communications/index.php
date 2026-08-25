@@ -169,7 +169,7 @@ $externalStatusLabel = static function (array $row, string $channel, string $lab
                 <p class="communication-section-help">A entrega dentro do RS Connect é imediata. Canais externos permanecem preparados para integração.</p>
                 <div class="communication-channels communication-channels-v3">
                     <label class="is-fixed"><input type="checkbox" checked disabled><span><?= $icon('inbox') ?><span><strong>RS Connect</strong><small>Caixa de mensagens, contador e histórico.</small></span></span></label>
-                    <label><input type="checkbox" name="channel_whatsapp" value="1"><span><?= $icon('mail') ?><span><strong>WhatsApp administrativo</strong><small>Aguardará configuração do provedor externo.</small></span></span></label>
+                    <label><input type="checkbox" name="channel_whatsapp" value="1"><span><?= $icon('mail') ?><span><strong>WhatsApp administrativo</strong><small>Aguardará configuração do serviço externo.</small></span></span></label>
                     <label><input type="checkbox" name="channel_email" value="1"><span><?= $icon('mail') ?><span><strong>E-mail</strong><small>Aguardará configuração do transportador.</small></span></span></label>
                 </div>
                 <div class="form-grid two communication-validity-row">
@@ -208,7 +208,7 @@ $externalStatusLabel = static function (array $row, string $channel, string $lab
             <span class="eyebrow">Antes de enviar</span>
             <h3 class="communication-guidance-title">Comunicação clara e acionável</h3>
             <div class="communication-guidance-list">
-                <div><?= $icon('alert') ?><span><strong>Fale sobre impacto</strong><small>Evite tokens, nomes de serviços internos e mensagens técnicas.</small></span></div>
+                <div><?= $icon('alert') ?><span><strong>Fale sobre impacto</strong><small>Evite códigos, nomes internos e mensagens difíceis de entender.</small></span></div>
                 <div><?= $icon('eye') ?><span><strong>Leitura é explícita</strong><small>Minimizar a caixa não transforma o comunicado em lido.</small></span></div>
                 <div><?= $icon('reply') ?><span><strong>Resposta é opcional</strong><small>Use conversa apenas quando realmente precisar de retorno do cliente.</small></span></div>
             </div>

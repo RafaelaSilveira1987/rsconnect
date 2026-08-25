@@ -477,6 +477,17 @@ final class OperationalLanguageService
             '/HTTP\s*404/iu' => 'endereço não encontrado',
             '/HTTP\s*429/iu' => 'limite temporário atingido',
             '/HTTP\s*5\d\d/iu' => 'serviço temporariamente indisponível',
+            '/SQLSTATE\[[^\]]+\][^:]*:?/iu' => 'Não foi possível salvar os dados:',
+            '/invalid parameter number/iu' => 'os dados enviados não puderam ser processados',
+            '/bad request/iu' => 'solicitação não aceita',
+            '/instance is not connected/iu' => 'o WhatsApp está desconectado',
+            '/\binstance\b/iu' => 'conexão',
+            '/\btenant\b/iu' => 'empresa',
+            '/\bpayload\b/iu' => 'informações enviadas',
+            '/\bworker\b/iu' => 'rotina automática',
+            '/\bqueue\b/iu' => 'fila',
+            '/\btelemetria\b/iu' => 'dados de uso',
+            '/\bsnapshots?\b/iu' => 'registros mensais',
         ];
         $result = preg_replace(array_keys($replacements), array_values($replacements), $text) ?? $text;
         return trim(preg_replace('/\s+/', ' ', strip_tags($result)) ?? $result);

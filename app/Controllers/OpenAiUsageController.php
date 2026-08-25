@@ -41,7 +41,7 @@ final class OpenAiUsageController
         $selectedCommercialAnalysis = $tenantId > 0 ? $commercialService->analysis($tenantId) : [];
 
         View::render('openai_usage.index', [
-            'title' => 'Consumo OpenAI',
+            'title' => 'Uso e custo da IA',
             'openAiUsage' => $usage,
             'aiEfficiency' => $efficiency,
             'aiBudgetOverview' => $budgetOverview,

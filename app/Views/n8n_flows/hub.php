@@ -20,7 +20,7 @@ require __DIR__ . '/_nav.php';
     <article class="<?= (int) ($metrics['errors_24h'] ?? 0) > 0 ? 'is-warning' : 'is-success' ?>"><span>Execuções 24h</span><strong><?= (int) ($metrics['executions_24h'] ?? 0) ?></strong><small><?= (int) ($metrics['success_24h'] ?? 0) ?> sucesso(s) · <?= (int) ($metrics['errors_24h'] ?? 0) ?> erro(s)</small></article>
 </section>
 <div class="n8n-hub-grid">
-    <a class="card n8n-hub-card" href="<?= View::e(Router::url('/n8n-flows')) ?>"><span class="eyebrow">Operação</span><h3>Fluxos por empresa</h3><p>Cadastre webhooks, eventos, tokens e teste cada integração diretamente pelo RS Connect.</p><strong>Abrir fluxos →</strong></a>
+    <a class="card n8n-hub-card" href="<?= View::e(Router::url('/n8n-flows')) ?>"><span class="eyebrow">Operação</span><h3>Fluxos por empresa</h3><p>Cadastre os endereços de recebimento, eventos e chaves de segurança e teste cada automação diretamente pelo RS Connect.</p><strong>Abrir fluxos →</strong></a>
     <a class="card n8n-hub-card" href="<?= View::e(Router::url('/n8n-templates')) ?>"><span class="eyebrow">Biblioteca</span><h3>Templates n8n</h3><p>Agenda, cobrança, backup e rotinas prontas para importar e adaptar no n8n.</p><strong>Abrir templates →</strong></a>
 </div>
 <section class="card n8n-hub-history">

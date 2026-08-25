@@ -137,13 +137,13 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
 
 <section class="card client-subscription-usage">
     <div class="section-heading client-section-heading">
-        <div><span class="eyebrow">Uso do plano</span><h2>Uso da plataforma e da IA</h2><p>Mensagens mostram o movimento real do atendimento. A franquia comercial é separada: somente respostas automáticas entregues com IA custeada pela RS Connect reduzem o limite do plano.</p></div>
+        <div><span class="eyebrow">Uso do plano</span><h2>Uso do sistema e da inteligência artificial</h2><p>Mensagens mostram o movimento real do atendimento. O limite do plano considera apenas respostas automáticas pagas pela RS Connect.</p></div>
     </div>
     <div class="ai-usage-origin-summary">
-        <div><span>Mensagens movimentadas</span><strong><?= number_format((int) ($aiUsage['messages']['total'] ?? 0), 0, ',', '.') ?></strong><small>mensagens recebidas e enviadas no WhatsApp; esta métrica não consome franquia de IA</small></div>
-        <div><span>Interações automáticas de IA</span><strong><?= number_format((int) ($aiUsage['total'] ?? 0), 0, ',', '.') ?></strong><small>respostas automáticas de IA efetivamente entregues aos clientes, usando qualquer origem de credencial</small></div>
-        <div><span>Franquia de IA RS</span><strong><?= number_format((int) ($aiUsage['rs_connect'] ?? 0), 0, ',', '.') ?><?= ($aiUsage['billable_limit'] ?? null) !== null ? ' / ' . number_format((int) $aiUsage['billable_limit'], 0, ',', '.') : '' ?></strong><small>somente interações cuja IA é custeada pela RS Connect reduzem este limite</small></div>
-        <div><span>IA com credencial própria</span><strong><?= number_format((int) ($aiUsage['tenant'] ?? 0), 0, ',', '.') ?></strong><small>é contabilizada para acompanhamento de uso, mas não reduz a franquia fornecida pela RS</small></div>
+        <div><span>Mensagens movimentadas</span><strong><?= number_format((int) ($aiUsage['messages']['total'] ?? 0), 0, ',', '.') ?></strong><small>mensagens recebidas e enviadas no WhatsApp; este número não reduz o limite de IA do plano</small></div>
+        <div><span>Respostas automáticas da IA</span><strong><?= number_format((int) ($aiUsage['total'] ?? 0), 0, ',', '.') ?></strong><small>respostas automáticas de IA efetivamente entregues aos clientes, usando uma chave da RS ou do próprio cliente</small></div>
+        <div><span>Limite de IA pago pela RS</span><strong><?= number_format((int) ($aiUsage['rs_connect'] ?? 0), 0, ',', '.') ?><?= ($aiUsage['billable_limit'] ?? null) !== null ? ' / ' . number_format((int) $aiUsage['billable_limit'], 0, ',', '.') : '' ?></strong><small>somente interações cuja IA é custeada pela RS Connect reduzem este limite</small></div>
+        <div><span>IA com chave própria do cliente</span><strong><?= number_format((int) ($aiUsage['tenant'] ?? 0), 0, ',', '.') ?></strong><small>é contabilizada para acompanhamento de uso, mas não reduz a limite de IA pago pela RS</small></div>
     </div>
     <div class="ai-usage-explainer">
         <span><strong>Recebidas:</strong> <?= number_format((int) ($aiUsage['messages']['incoming'] ?? 0), 0, ',', '.') ?></span>
@@ -182,20 +182,20 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
 
     <details class="client-ai-telemetry-details">
         <summary>
-            <span><strong>Como a IA está sendo contabilizada</strong><small>Interação comercial, chamadas ao provedor e tokens são métricas diferentes.</small></span>
+            <span><strong>Como o uso da IA é contado</strong><small>Respostas entregues, chamadas ao serviço de IA e quantidade de uso são números diferentes.</small></span>
             <span class="drawer-chevron" aria-hidden="true"></span>
         </summary>
         <div class="client-ai-telemetry-grid">
             <div><span>Interações entregues</span><strong><?= number_format((int) ($aiUsage['total'] ?? 0), 0, ',', '.') ?></strong><small>respostas automáticas efetivamente entregues</small></div>
-            <div><span>Chamadas ao provedor</span><strong><?= number_format((int) ($aiUsage['technical']['provider_calls'] ?? 0), 0, ',', '.') ?></strong><small>inclui chamadas técnicas, falhas e outros usos de IA</small></div>
-            <div><span>Chamadas evitadas</span><strong><?= number_format((int) ($aiUsage['technical']['provider_calls_avoided'] ?? 0), 0, ',', '.') ?></strong><small>respostas locais ou reutilizadas sem acessar o provedor</small></div>
-            <div><span>Tokens de entrada</span><strong><?= number_format((int) ($aiUsage['technical']['input_tokens'] ?? 0), 0, ',', '.') ?></strong><small>contexto e instruções enviados ao modelo</small></div>
-            <div><span>Tokens de saída</span><strong><?= number_format((int) ($aiUsage['technical']['output_tokens'] ?? 0), 0, ',', '.') ?></strong><small>conteúdo produzido pelo modelo</small></div>
-            <div><span>Total de tokens</span><strong><?= number_format((int) ($aiUsage['technical']['total_tokens'] ?? 0), 0, ',', '.') ?></strong><small>telemetria registrada pela RS Connect no período</small></div>
-            <div><span>Entrada evitada</span><strong><?= number_format((int) ($aiUsage['technical']['estimated_input_tokens_avoided'] ?? 0), 0, ',', '.') ?></strong><small>estimativa de tokens que deixaram de ser reenviados pelo contexto enxuto</small></div>
-            <div><span>Falhas técnicas</span><strong><?= number_format((int) ($aiUsage['technical']['failed_events'] ?? 0), 0, ',', '.') ?></strong><small>não reduzem franquia quando não há entrega</small></div>
+            <div><span>Chamadas ao serviço de IA</span><strong><?= number_format((int) ($aiUsage['technical']['provider_calls'] ?? 0), 0, ',', '.') ?></strong><small>inclui tentativas, problemas e outros usos do serviço de IA</small></div>
+            <div><span>Chamadas economizadas</span><strong><?= number_format((int) ($aiUsage['technical']['provider_calls_avoided'] ?? 0), 0, ',', '.') ?></strong><small>respostas prontas ou reaproveitadas sem chamar o serviço de IA</small></div>
+            <div><span>Informações processadas</span><strong><?= number_format((int) ($aiUsage['technical']['input_tokens'] ?? 0), 0, ',', '.') ?></strong><small>conteúdo e instruções enviados à IA</small></div>
+            <div><span>Respostas geradas</span><strong><?= number_format((int) ($aiUsage['technical']['output_tokens'] ?? 0), 0, ',', '.') ?></strong><small>conteúdo produzido pela IA</small></div>
+            <div><span>Uso total da IA</span><strong><?= number_format((int) ($aiUsage['technical']['total_tokens'] ?? 0), 0, ',', '.') ?></strong><small>dados de uso registrados pelo RS Connect no período</small></div>
+            <div><span>Uso economizado</span><strong><?= number_format((int) ($aiUsage['technical']['estimated_input_tokens_avoided'] ?? 0), 0, ',', '.') ?></strong><small>estimativa de informações que não precisaram ser enviadas novamente</small></div>
+            <div><span>Falhas técnicas</span><strong><?= number_format((int) ($aiUsage['technical']['failed_events'] ?? 0), 0, ',', '.') ?></strong><small>não reduzem o limite quando não há entrega</small></div>
         </div>
-        <p class="client-ai-telemetry-note">A franquia considera somente respostas automáticas entregues com IA custeada pela RS Connect. “Entrada evitada” é uma estimativa baseada no histórico e na base que o roteador deixou de reenviar. O número de requisições exibido pelo provedor pode ser maior porque inclui chamadas técnicas, testes, falhas e outros usos.</p>
+        <p class="client-ai-telemetry-note">O limite considera somente respostas automáticas entregues com IA custeada pela RS Connect. “Uso economizado” é uma estimativa baseada no histórico e na base que o roteador deixou de reenviar. O número de requisições exibido pelo serviço de IA pode ser maior porque inclui chamadas técnicas, testes, falhas e outros usos.</p>
     </details>
 </section>
 

@@ -1343,7 +1343,7 @@ final class OperationsService
             ['title' => 'Evolution não recebe mensagens', 'steps' => ['Conferir status da instância no RS Connect.', 'Revalidar webhook da instância na Evolution.', 'Enviar mensagem teste pelo WhatsApp e revisar logs de Conversas.']],
             ['title' => 'IA parou de responder', 'steps' => ['Verificar Respostas e integrações.', 'Conferir chave/base URL em Credenciais de IA.', 'Revisar horário, modo da conversa e intervalo mínimo; use Reprocessar IA quando houver mensagem pendente.']],
             ['title' => 'n8n não executa fluxo', 'steps' => ['Testar fluxo em Fluxos n8n.', 'Conferir URL do webhook, evento cadastrado e token de callback.', 'Abrir logs do n8n e logs de callback no RS Connect.']],
-            ['title' => 'Pagamento não confirma', 'steps' => ['Conferir webhook do gateway.', 'Revisar logs em Gateways de pagamento.', 'Atualizar manualmente a cobrança se o gateway confirmou fora do sistema.']],
+            ['title' => 'Pagamento não confirma', 'steps' => ['Conferir se o meio de pagamento está enviando atualizações.', 'Revisar os registros em Meios de pagamento.', 'Atualizar manualmente a cobrança se o serviço de pagamento confirmou fora do sistema.']],
             ['title' => 'Backup atrasado', 'steps' => ['Executar backup no provedor/VPS.', 'Registrar backup manual no painel.', 'Configurar rotina externa usando /webhooks/operations/backups.']],
             ['title' => 'Backup local precisa ser conferido', 'steps' => ['Confirme se o arquivo existe no computador indicado.', 'Registre caminho completo ou observação que permita encontrar o arquivo.', 'Quando possível, use servidor/VPS, Google Drive ou S3/MinIO para validação futura.']],
         ];

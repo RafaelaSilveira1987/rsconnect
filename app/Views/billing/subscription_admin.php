@@ -54,12 +54,12 @@ $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['extern
 </section>
 
 <section class="card table-card subscription-usage-card">
-    <div class="section-heading"><div><span class="eyebrow">Uso do ciclo</span><h2>Uso da plataforma e franquia</h2><p>Mensagem, interação e chamada ao provedor são métricas diferentes. A franquia comercial só considera respostas automáticas entregues com IA custeada pela RS Connect.</p></div></div>
+    <div class="section-heading"><div><span class="eyebrow">Uso do ciclo</span><h2>Uso do sistema e limite da IA</h2><p>Mensagens, respostas entregues e chamadas ao serviço de IA são números diferentes. O limite do plano considera apenas respostas pagas pela RS Connect.</p></div></div>
     <div class="ai-usage-origin-summary">
-        <div><span>Mensagens movimentadas</span><strong><?= $count($aiUsage['messages']['total'] ?? 0) ?></strong><small>recebidas + enviadas; mede volume operacional e não reduz franquia de IA</small></div>
+        <div><span>Mensagens movimentadas</span><strong><?= $count($aiUsage['messages']['total'] ?? 0) ?></strong><small>recebidas + enviadas; mede volume operacional e não reduz o limite de IA</small></div>
         <div><span>Interações automáticas</span><strong><?= $count($aiUsage['total'] ?? 0) ?></strong><small>respostas automáticas de IA efetivamente entregues aos clientes</small></div>
-        <div><span>Franquia IA RS</span><strong><?= $count($aiUsage['rs_connect'] ?? 0) ?><?= ($aiUsage['billable_limit'] ?? null) !== null ? ' / ' . $count($aiUsage['billable_limit']) : '' ?></strong><small>somente interações custeadas pela RS Connect consomem o limite comercial</small></div>
-        <div><span>Credencial própria</span><strong><?= $count($aiUsage['tenant'] ?? 0) ?></strong><small>uso medido normalmente, sem reduzir a franquia de IA fornecida pela RS</small></div>
+        <div><span>Limite de IA pago pela RS</span><strong><?= $count($aiUsage['rs_connect'] ?? 0) ?><?= ($aiUsage['billable_limit'] ?? null) !== null ? ' / ' . $count($aiUsage['billable_limit']) : '' ?></strong><small>somente interações custeadas pela RS Connect consomem o limite comercial</small></div>
+        <div><span>IA paga pelo cliente</span><strong><?= $count($aiUsage['tenant'] ?? 0) ?></strong><small>uso medido normalmente, sem reduzir a limite de IA pago pela RS</small></div>
     </div>
     <div class="ai-usage-explainer">
         <span><strong>Recebidas:</strong> <?= $count($aiUsage['messages']['incoming'] ?? 0) ?></span>
@@ -81,36 +81,36 @@ $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['extern
 
 <section class="card table-card ai-technical-usage-card">
     <div class="section-heading">
-        <div><span class="eyebrow">Operação RS</span><h2>Telemetria técnica da IA</h2><p>Visão administrativa de chamadas, tokens, falhas e custo estimado. Estes números não são a unidade comercial do plano.</p></div>
+        <div><span class="eyebrow">Operação RS</span><h2>Dados detalhados de uso da IA</h2><p>Visão administrativa das chamadas, do uso, dos problemas e do custo estimado. Esses números são diferentes do limite comercial do plano.</p></div>
         <span class="badge"><?= $count($aiUsage['technical']['provider_calls'] ?? 0) ?> chamada(s)</span>
     </div>
     <div class="ai-technical-summary">
-        <div><span>Chamadas ao provedor</span><strong><?= $count($aiUsage['technical']['provider_calls'] ?? 0) ?></strong><small>inclui respostas, sugestões e tentativas que chegaram ao provedor</small></div>
-        <div><span>Chamadas evitadas</span><strong><?= $count($aiUsage['technical']['provider_calls_avoided'] ?? 0) ?></strong><small>respostas locais e cache exato entregues sem custo de provedor</small></div>
-        <div><span>Tokens de entrada</span><strong><?= $count($aiUsage['technical']['input_tokens'] ?? 0) ?></strong><small>contexto e instruções processados pelos modelos</small></div>
-        <div><span>Tokens de saída</span><strong><?= $count($aiUsage['technical']['output_tokens'] ?? 0) ?></strong><small>conteúdo produzido pelos modelos</small></div>
-        <div><span>Tokens em cache</span><strong><?= $count($aiUsage['technical']['cached_tokens'] ?? 0) ?></strong><small>informados pelo provedor quando disponíveis</small></div>
-        <div><span>Total de tokens</span><strong><?= $count($aiUsage['technical']['total_tokens'] ?? 0) ?></strong><small>soma técnica registrada no período</small></div>
-        <div><span>Entrada evitada</span><strong><?= $count($aiUsage['technical']['estimated_input_tokens_avoided'] ?? 0) ?></strong><small>estimativa de contexto que deixou de ser enviado ao provedor</small></div>
+        <div><span>Chamadas ao serviço de IA</span><strong><?= $count($aiUsage['technical']['provider_calls'] ?? 0) ?></strong><small>inclui respostas, sugestões e tentativas enviadas ao serviço de IA</small></div>
+        <div><span>Chamadas economizadas</span><strong><?= $count($aiUsage['technical']['provider_calls_avoided'] ?? 0) ?></strong><small>respostas prontas e reaproveitadas sem nova cobrança de IA</small></div>
+        <div><span>Informações processadas</span><strong><?= $count($aiUsage['technical']['input_tokens'] ?? 0) ?></strong><small>instruções e conteúdo enviados para a IA</small></div>
+        <div><span>Respostas geradas</span><strong><?= $count($aiUsage['technical']['output_tokens'] ?? 0) ?></strong><small>conteúdo produzido pela IA</small></div>
+        <div><span>Informações reaproveitadas</span><strong><?= $count($aiUsage['technical']['cached_tokens'] ?? 0) ?></strong><small>informadas pelo serviço de IA quando disponíveis</small></div>
+        <div><span>Uso total da IA</span><strong><?= $count($aiUsage['technical']['total_tokens'] ?? 0) ?></strong><small>soma do uso registrado no período</small></div>
+        <div><span>Uso economizado</span><strong><?= $count($aiUsage['technical']['estimated_input_tokens_avoided'] ?? 0) ?></strong><small>estimativa de informações que não precisaram ser enviadas novamente</small></div>
         <div><span>Falhas técnicas</span><strong><?= $count($aiUsage['technical']['failed_events'] ?? 0) ?></strong><small>não consomem interação comercial se a resposta não foi entregue</small></div>
     </div>
 
     <div class="ai-cost-summary">
-        <strong>Custo estimado do provedor</strong>
+        <strong>Custo estimado do serviço de IA</strong>
         <?php if (!empty($aiUsage['costs']['rs_connect']) || !empty($aiUsage['costs']['tenant'])): ?>
             <div class="ai-cost-groups">
                 <div><span>Pago pela RS Connect</span><div class="pill-list"><?php if (!empty($aiUsage['costs']['rs_connect'])): ?><?php foreach ($aiUsage['costs']['rs_connect'] as $currency => $value): ?><span class="tag-pill"><?= View::e($costLabel((string) $currency, (float) $value)) ?></span><?php endforeach; ?><?php else: ?><small>Sem custo estimado registrado.</small><?php endif; ?></div></div>
-                <div><span>Credencial própria do cliente</span><div class="pill-list"><?php if (!empty($aiUsage['costs']['tenant'])): ?><?php foreach ($aiUsage['costs']['tenant'] as $currency => $value): ?><span class="tag-pill"><?= View::e($costLabel((string) $currency, (float) $value)) ?></span><?php endforeach; ?><?php else: ?><small>Sem custo estimado registrado.</small><?php endif; ?></div></div>
+                <div><span>IA paga pelo cliente</span><div class="pill-list"><?php if (!empty($aiUsage['costs']['tenant'])): ?><?php foreach ($aiUsage['costs']['tenant'] as $currency => $value): ?><span class="tag-pill"><?= View::e($costLabel((string) $currency, (float) $value)) ?></span><?php endforeach; ?><?php else: ?><small>Sem custo estimado registrado.</small><?php endif; ?></div></div>
             </div>
-            <small>O primeiro grupo representa o custo de provedor potencialmente suportado pela RS. O segundo é apenas referência de uso, pois a conta do provedor pertence ao cliente. Valores dependem das tarifas configuradas em <code>AI_COST_RATES_JSON</code>.</small>
+            <small>O primeiro grupo mostra o custo que pode ser pago pela RS. O segundo serve apenas para acompanhamento, pois a conta pertence ao cliente. Valores dependem das tarifas configuradas em <code>AI_COST_RATES_JSON</code>.</small>
         <?php else: ?>
-            <small>Sem estimativa configurada. Tokens e chamadas continuam sendo registrados normalmente.</small>
+            <small>Sem estimativa de custo configurada. O uso e as chamadas continuam sendo registrados.</small>
         <?php endif; ?>
     </div>
 
     <div class="table-wrap">
         <table class="clean-table">
-            <thead><tr><th>Assistente</th><th>Origem</th><th>Provedor / modelo</th><th>Interações</th><th>Chamadas</th><th>Evitadas</th><th>Tokens</th><th>Entrada evitada</th><th>Falhas</th><th>Custo estimado</th></tr></thead>
+            <thead><tr><th>Assistente</th><th>Origem</th><th>Serviço / modelo</th><th>Interações</th><th>Chamadas</th><th>Evitadas</th><th>Uso da IA</th><th>Uso economizado</th><th>Falhas</th><th>Custo estimado</th></tr></thead>
             <tbody>
             <?php foreach (($aiUsage['agents'] ?? []) as $agentUsage): ?>
                 <tr>
@@ -121,12 +121,12 @@ $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['extern
                     <td><?= $count($agentUsage['provider_calls'] ?? 0) ?></td>
                     <td><?= $count($agentUsage['provider_calls_avoided'] ?? 0) ?></td>
                     <td><?= $count($agentUsage['total_tokens'] ?? 0) ?><br><small>entrada <?= $count($agentUsage['input_tokens'] ?? 0) ?> · saída <?= $count($agentUsage['output_tokens'] ?? 0) ?></small></td>
-                    <td><?= $count($agentUsage['estimated_input_tokens_avoided'] ?? 0) ?><br><small>estimativa do contexto compactado</small></td>
+                    <td><?= $count($agentUsage['estimated_input_tokens_avoided'] ?? 0) ?><br><small>estimativa das informações reduzidas</small></td>
                     <td><?= $count($agentUsage['failed_events'] ?? 0) ?></td>
                     <td><?php if (!empty($agentUsage['costs'])): ?><?php foreach ($agentUsage['costs'] as $currency => $value): ?><span class="usage-cost-line"><?= View::e($costLabel((string) $currency, (float) $value)) ?></span><?php endforeach; ?><?php else: ?>—<?php endif; ?></td>
                 </tr>
             <?php endforeach; ?>
-            <?php if (empty($aiUsage['agents'])): ?><tr><td colspan="10"><div class="empty-state">Ainda não há telemetria técnica detalhada neste ciclo.</div></td></tr><?php endif; ?>
+            <?php if (empty($aiUsage['agents'])): ?><tr><td colspan="10"><div class="empty-state">Ainda não há dados detalhados de uso neste período.</div></td></tr><?php endif; ?>
             </tbody>
         </table>
     </div>

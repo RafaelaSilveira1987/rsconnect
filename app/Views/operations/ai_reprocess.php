@@ -67,14 +67,14 @@ $statusLabel = static function (string $status): string {
     <article class="<?= (int) ($afterHours['errors'] ?? 0) > 0 ? 'is-warning' : ((int) ($afterHours['total'] ?? 0) > 0 ? 'is-blue' : 'is-success') ?>">
         <span>Fora do horário</span>
         <strong><?= (int) ($afterHours['total'] ?? 0) ?> pendência(s)</strong>
-        <small><?php if ((int) ($afterHours['blocked_plan'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_plan'] ?> aguardando franquia · <?php endif; ?><?php if ((int) ($afterHours['blocked_human'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_human'] ?> aguardando equipe · <?php endif; ?><?= (int) ($afterHours['errors'] ?? 0) ?> com atenção</small>
+        <small><?php if ((int) ($afterHours['blocked_plan'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_plan'] ?> aguardando limite de IA · <?php endif; ?><?php if ((int) ($afterHours['blocked_human'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_human'] ?> aguardando equipe · <?php endif; ?><?= (int) ($afterHours['errors'] ?? 0) ?> com atenção</small>
     </article>
 </section>
 
 <section class="card" style="margin-bottom:16px">
-    <div class="section-heading"><div><span class="eyebrow">Recursos 36.6.8+</span><h2>Onde validar consumo e continuidade</h2><p>Atalhos para os pontos de franquia, custeio da credencial e recuperação pós-horário.</p></div></div>
+    <div class="section-heading"><div><span class="eyebrow">Recursos 36.6.8+</span><h2>Onde validar consumo e continuidade</h2><p>Atalhos para os pontos de limite de IA, responsável pelo pagamento da chave e recuperação pós-horário.</p></div></div>
     <div class="action-row">
-        <a class="btn btn-outline" href="<?= View::e(Router::url('/billing')) ?>">Franquia do assistente virtual</a>
+        <a class="btn btn-outline" href="<?= View::e(Router::url('/billing')) ?>">Limite do assistente virtual</a>
         <a class="btn btn-outline" href="<?= View::e(Router::url('/ai-credentials')) ?>">Responsável pelo assistente virtual</a>
         <a class="btn btn-outline" href="#after-hours-recovery">Mensagens fora do horário</a>
         <a class="btn btn-outline" href="<?= View::e(Router::url('/operacao-alertas')) ?>">Avisos do sistema</a>
@@ -141,14 +141,14 @@ $statusLabel = static function (string $status): string {
         <div>
             <span class="eyebrow">Continuidade do atendimento</span>
             <h2>Mensagens fora do horário</h2>
-            <p>Mensagens recebidas fora do expediente ficam preservadas e voltam a ser avaliadas no próximo período válido. Várias mensagens da mesma conversa são tratadas como uma única demanda, sem consumir franquia enquanto aguardam.</p>
+            <p>Mensagens recebidas fora do expediente ficam preservadas e voltam a ser avaliadas no próximo período válido. Várias mensagens da mesma conversa são tratadas como uma única demanda, sem reduzir o limite enquanto aguardam.</p>
         </div>
         <span class="badge <?= (int) ($afterHours['errors'] ?? 0) > 0 ? 'badge-warning' : ((int) ($afterHours['total'] ?? 0) > 0 ? 'badge-info' : 'badge-success') ?>"><?= (int) ($afterHours['total'] ?? 0) ?> pendente(s)</span>
     </div>
     <div class="operations-alert <?= (int) ($afterHours['errors'] ?? 0) > 0 ? 'is-warning' : 'is-ok' ?>">
         <strong>Proteções ativas</strong>
-        <p>A retomada só responde quando a empresa já está no horário de atendimento, a conversa continua em modo IA, ninguém da equipe respondeu manualmente, o WhatsApp está disponível e — quando a credencial é custeada pela RS Connect — ainda existe franquia no plano.</p>
-        <?php if ((int) ($afterHours['blocked_plan'] ?? 0) > 0): ?><small><?= (int) $afterHours['blocked_plan'] ?> conversa(s) estão preservadas aguardando renovação/aumento da franquia.</small><?php endif; ?>
+        <p>A retomada só responde quando a empresa já está no horário de atendimento, a conversa continua em modo IA, ninguém da equipe respondeu manualmente, o WhatsApp está disponível e — quando a chave de acesso é paga pela RS Connect — ainda existe franquia no plano.</p>
+        <?php if ((int) ($afterHours['blocked_plan'] ?? 0) > 0): ?><small><?= (int) $afterHours['blocked_plan'] ?> conversa(s) estão preservadas aguardando renovação ou aumento do limite.</small><?php endif; ?>
         <?php if ((int) ($afterHours['blocked_human'] ?? 0) > 0): ?><small><?= (int) $afterHours['blocked_human'] ?> conversa(s) foram recebidas fora do horário e estão sob responsabilidade da equipe humana ou com a IA pausada.</small><?php endif; ?>
     </div>
     <?php if ($afterHoursItems): ?>
@@ -198,7 +198,7 @@ $statusLabel = static function (string $status): string {
                     <?php elseif ($pendingStatus === 'blocked_human'): ?>
                         <div class="after-hours-operation-note">A conversa está preservada e destacada para a equipe humana; nenhuma resposta automática será enviada.</div>
                     <?php elseif ($pendingStatus === 'blocked_plan'): ?>
-                        <div class="after-hours-operation-note">A conversa permanece preservada até a franquia estar disponível.</div>
+                        <div class="after-hours-operation-note">A conversa permanece preservada até o limite estar disponível.</div>
                     <?php else: ?>
                         <div class="after-hours-operation-note">A demanda será retomada sem repetir respostas já enviadas.</div>
                     <?php endif; ?>
@@ -231,7 +231,7 @@ $statusLabel = static function (string $status): string {
                     <small>
                         <?= View::e($formatDate($failure['created_at'] ?? null)) ?>
                         · Assistente: <?= View::e((string) ($failure['agent_name'] ?? 'não identificado')) ?>
-                        · Instância: <?= View::e((string) (($failure['instance_label'] ?? '') ?: ($failure['instance_name'] ?? 'não identificada'))) ?><?= !empty($failure['connection_state']) ? ' (' . View::e((string) $failure['connection_state']) . ')' : '' ?>
+                        · Conexão: <?= View::e((string) (($failure['instance_label'] ?? '') ?: ($failure['instance_name'] ?? 'não identificada'))) ?><?= !empty($failure['connection_state']) ? ' (' . View::e((string) $failure['connection_state']) . ')' : '' ?>
                         · Contato: <?= View::e((string) (($failure['contact_name'] ?? '') ?: ($failure['contact_phone'] ?? 'não identificado'))) ?>
                     </small>
                 </div>

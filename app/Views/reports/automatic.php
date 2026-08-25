@@ -42,7 +42,7 @@ $frequencyLabel = static fn (string $value): string => match ($value) {
     <?php if (empty($data['cron_token_configured'])): ?>
         <div class="flash warning">
             <strong>Execução automática ainda não configurada.</strong>
-            <span>Defina <code>SCHEDULED_REPORTS_CRON_TOKEN</code> no EasyPanel e use o endpoint seguro no n8n.</span>
+            <span>Defina <code>SCHEDULED_REPORTS_CRON_TOKEN</code> no EasyPanel e use o endereço protegido no n8n.</span>
         </div>
     <?php endif; ?>
 
@@ -348,7 +348,7 @@ $frequencyLabel = static fn (string $value): string => match ($value) {
         <h2>Execução recorrente</h2>
         <p>Programe uma chamada a cada 15 minutos. A RS Connect só gera programações que estiverem vencidas e impede duplicidade pelo período.</p>
         <code>POST <?= View::e(Router::url('/webhooks/reports/scheduled/run')) ?></code>
-        <small>Header: <strong>X-RS-Connect-Token</strong> com o valor de <strong>SCHEDULED_REPORTS_CRON_TOKEN</strong>.</small>
+        <small>Cabeçalho técnico: <strong>X-RS-Connect-Token</strong> com o valor de <strong>SCHEDULED_REPORTS_CRON_TOKEN</strong>.</small>
     </section>
 </div>
 

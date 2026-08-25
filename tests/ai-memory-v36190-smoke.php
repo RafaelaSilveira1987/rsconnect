@@ -46,7 +46,7 @@ $checks = [
         && str_contains($automation, 'ai.memory.refreshed'),
     'assistente permite controlar a memória' => str_contains($agentController, 'ai_progressive_memory_enabled')
         && str_contains($agentController, 'ai_memory_refresh_messages')
-        && str_contains($agentView, 'Memória progressiva da conversa'),
+        && str_contains($agentView, 'Memória da conversa'),
     'conversa mostra memória com compatibilidade pré-migration' => str_contains($conversationController, "hasTable(\$pdo, 'conversation_ai_memory')")
         && str_contains($conversationView, 'Memória da IA')
         && str_contains($conversationView, 'Próximo passo:')
@@ -55,7 +55,7 @@ $checks = [
         && str_contains($env, 'AI_MEMORY_MODEL_GOOGLE='),
     'versão e migration corretas' => str_contains($version, 'RS Connect 36.19.0')
         && str_contains($version, '080_ai_memory_and_usage_intelligence.sql')
-        && str_contains($layout, 'app.css?v=36.20.0')
+        && str_contains($layout, 'app.css?v=36.20.1')
         && str_contains($version, '081_ai_cost_attribution.sql')
         && str_contains($version, '082_ai_budget_governance.sql'),
 ];

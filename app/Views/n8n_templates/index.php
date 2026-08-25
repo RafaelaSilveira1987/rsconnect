@@ -23,7 +23,7 @@ $statusLabel = ['success' => 'Sucesso', 'error' => 'Erro', 'info' => 'Info'];
             </div>
             <span class="badge"><?= count($templates) ?> templates</span>
         </div>
-        <p class="muted">Use estes modelos como ponto de partida. No RS Connect, cada empresa deve ter seu próprio fluxo cadastrado em <strong>Fluxos n8n</strong>, com webhook e credenciais separadas.</p>
+        <p class="muted">Use estes modelos como ponto de partida. No RS Connect, cada empresa deve ter seu próprio fluxo cadastrado em <strong>Fluxos n8n</strong>, com endereço de recebimento e chaves separadas.</p>
 
         <div class="template-grid">
             <?php foreach ($templates as $key => $template): ?>
@@ -43,9 +43,9 @@ $statusLabel = ['success' => 'Sucesso', 'error' => 'Erro', 'info' => 'Info'];
     <aside class="stack">
         <section class="card sticky-card">
             <div class="section-heading"><div><span class="eyebrow">Callback</span><h2>Retorno do n8n</h2></div></div>
-            <p class="muted">Use este endpoint no final do fluxo n8n para registrar sucesso ou erro dentro do RS Connect.</p>
+            <p class="muted">Use este endereço no final do fluxo n8n para registrar sucesso ou erro dentro do RS Connect.</p>
             <label class="field"><span>URL de callback</span><input readonly value="<?= View::e($callbackUrl) ?>"></label>
-            <p class="field-hint">Token configurado: <strong><?= !empty($callbackTokenConfigured) ? 'Sim' : 'Não' ?></strong>. Se usar <code>N8N_CALLBACK_TOKEN</code>, envie em <code>X-RS-Connect-Token</code> ou <code>Authorization: Bearer</code>.</p>
+            <p class="field-hint">Chave configurada: <strong><?= !empty($callbackTokenConfigured) ? 'Sim' : 'Não' ?></strong>. Se usar <code>N8N_CALLBACK_TOKEN</code>, envie em <code>X-RS-Connect-Token</code> ou <code>Authorization: Bearer</code>.</p>
             <pre class="code-block"><code>{
   "tenant_id": 1,
   "flow_id": 1,
@@ -59,7 +59,7 @@ $statusLabel = ['success' => 'Sucesso', 'error' => 'Erro', 'info' => 'Info'];
 </div>
 
 <section class="card">
-    <div class="section-heading"><div><span class="eyebrow">Payloads</span><h2>Exemplos enviados pelo RS Connect</h2></div></div>
+    <div class="section-heading"><div><span class="eyebrow">Exemplos de dados enviados</span><h2>Exemplos enviados pelo RS Connect</h2></div></div>
     <div class="template-grid two-columns">
         <?php foreach ($samplePayloads as $event => $payload): ?>
             <article class="template-card">
@@ -87,7 +87,7 @@ $statusLabel = ['success' => 'Sucesso', 'error' => 'Erro', 'info' => 'Info'];
                     <td><?= View::e($callback['message'] ?? '—') ?></td>
                 </tr>
             <?php endforeach; ?>
-            <?php if (!$callbacks): ?><tr><td colspan="7"><div class="empty-state">Nenhum callback registrado. Rode a migration 011 e teste um fluxo n8n.</div></td></tr><?php endif; ?>
+            <?php if (!$callbacks): ?><tr><td colspan="7"><div class="empty-state">Nenhum callback registrado. Execute a atualização 011 do banco e teste um fluxo n8n.</div></td></tr><?php endif; ?>
             </tbody>
         </table>
     </div>

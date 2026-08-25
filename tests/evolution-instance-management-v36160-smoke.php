@@ -37,10 +37,10 @@ $checks = [
         && str_contains($routes, "'/instances/settings'")
         && str_contains($routes, "'/instances/action'")
         && substr_count($routes, "['auth', 'permission:instances.manage', 'csrf']") >= 6,
-    'tela possui criação e configuração nativas' => str_contains($view, 'Criar automaticamente na Evolution')
-        && str_contains($view, 'Configurar Evolution')
+    'tela possui criação e configuração nativas' => str_contains($view, 'Criar a conexão automaticamente')
+        && str_contains($view, 'Configurar WhatsApp')
         && str_contains($view, 'Ignorar grupos')
-        && str_contains($view, 'Excluir também na Evolution API'),
+        && str_contains($view, 'Excluir também do serviço do WhatsApp'),
     'javascript preenche configurações e preserva instância gerenciada' => str_contains($javascript, 'data-instance-settings-field')
         && str_contains($javascript, "button.dataset.managementMode === 'managed'")
         && str_contains($javascript, 'deleteRemote.checked = managed'),

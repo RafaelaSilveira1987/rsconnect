@@ -29,7 +29,7 @@ $checks = [
     'tela completa depende de instances.manage e não de super admin' => str_contains($view, 'if (!$canManage)')
         && !str_contains($view, 'if (!$isSuperAdmin) {' . "\n" . "    require __DIR__ . '/_client.php';"),
     'cliente cria conexão com credenciais protegidas' => str_contains($view, 'Conexão independente')
-        && str_contains($view, 'As credenciais da Evolution permanecem protegidas')
+        && str_contains($view, 'As chaves de acesso permanecem protegidas')
         && str_contains($view, 'type="hidden" name="api_key"'),
     'backend força credenciais do ambiente para cliente' => str_contains($controller, '$baseUrl = $isSuperAdmin')
         && str_contains($controller, "Env::get('EVOLUTION_DEFAULT_API_KEY'")
@@ -40,8 +40,8 @@ $checks = [
         && str_contains($controller, '$instanceName = (string) $source[\'instance_name\'];')
         && str_contains($controller, '$baseUrl = (string) $source[\'base_url\'];'),
     'super admin continua com recursos técnicos' => str_contains($view, '<?php if ($isSuperAdmin): ?>')
-        && str_contains($view, 'Criar ou vincular na Evolution')
-        && str_contains($view, 'API Key global'),
+        && str_contains($view, 'Criar ou ligar uma conexão existente')
+        && str_contains($view, 'Acesso técnico protegido'),
     'pacote e documentação atualizados' => preg_match('/RS Connect 36\.(16\.[1-3]|17\.0)/', $version) === 1
         && str_contains($instructions, 'Administrador do cliente')
         && str_contains($instructions, 'instances.manage'),

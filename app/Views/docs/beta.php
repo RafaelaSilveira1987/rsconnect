@@ -38,7 +38,7 @@ $metrics = $dashboard['metrics'] ?? [];
 <div class="report-kpi-grid implementation-kpis" style="margin-top:16px">
     <article class="card report-kpi"><span>Empresas ativas</span><strong><?= (int) ($metrics['active_tenants'] ?? 0) ?></strong><small>Total: <?= (int) ($metrics['tenants'] ?? 0) ?></small></article>
     <article class="card report-kpi"><span>Implantação média</span><strong><?= (int) ($metrics['implementation_avg'] ?? 0) ?>%</strong><small>Clientes em teste/operação: <?= (int) ($metrics['implementation_testing'] ?? 0) ?></small></article>
-    <article class="card report-kpi"><span>Mensagens 24h</span><strong><?= (int) ($metrics['conversations_24h'] ?? 0) ?></strong><small>Valida webhooks e atendimento</small></article>
+    <article class="card report-kpi"><span>Mensagens 24h</span><strong><?= (int) ($metrics['conversations_24h'] ?? 0) ?></strong><small>Valida recebimento de mensagens e atendimento</small></article>
     <article class="card report-kpi"><span>Backups automáticos</span><strong><?= (int) ($metrics['automatic_backups'] ?? 0) ?></strong><small>Último: <?= View::e($metrics['last_backup'] ?? 'sem registro') ?></small></article>
 </div>
 
@@ -76,7 +76,7 @@ $metrics = $dashboard['metrics'] ?? [];
 
 <div class="operations-grid" style="margin-top:16px">
     <section class="card">
-        <div class="section-heading"><div><span class="eyebrow">Rotina</span><h2>Governança operacional</h2></div></div>
+        <div class="section-heading"><div><span class="eyebrow">Rotina</span><h2>Controle da operação</h2></div></div>
         <div class="docs-timeline">
             <?php foreach (($dashboard['operational_routine'] ?? []) as $period => $items): ?>
                 <div>

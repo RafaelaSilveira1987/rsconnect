@@ -38,8 +38,8 @@ $assert(str_contains($result['prompt'], 'Use o histórico e não repita a triage
 $assert(is_array($result['warnings']), 'Geração deve retornar validações.');
 $assert(str_contains($migration, 'ai_agent_prompt_versions'), 'Migration deve criar histórico de versões.');
 $assert(str_contains($migration, 'ai_prompt_studio_drafts'), 'Migration deve criar rascunhos do Prompt Studio.');
-$assert(str_contains($view, 'Gerar prompt estruturado'), 'Tela deve oferecer geração guiada.');
-$assert(str_contains($view, 'Histórico do prompt'), 'Tela deve mostrar histórico restaurável.');
+$assert(str_contains($view, 'Criar instruções organizadas'), 'Tela deve oferecer geração guiada.');
+$assert(str_contains($view, 'Histórico das instruções'), 'Tela deve mostrar histórico restaurável.');
 $assert(str_contains($controller, 'prompt_studio.generated'), 'Geração deve ser auditada.');
 $assert(str_contains($agentController, 'createVersion'), 'Criação e edição do agente devem versionar o prompt.');
 $assert(str_contains($appVersion, '062_prompt_studio_and_versions.sql'), 'Painel deve exigir migration 062.');

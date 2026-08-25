@@ -97,7 +97,7 @@ $logoBackground = $raw('brand_logo_background', 'light');
                         </select>
                     </label>
                     <label class="field">
-                        <span>Texto fallback do ícone</span>
+                        <span>Texto mostrado quando o ícone não carregar</span>
                         <input name="brand_icon_text" maxlength="4" value="<?= $active('brand_icon_text', 'RS') ?>" placeholder="Ex.: MB">
                     </label>
                 </div>

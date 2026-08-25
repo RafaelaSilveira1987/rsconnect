@@ -82,7 +82,7 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
     <div class="hero-actions operations-hero-actions">
         <a class="btn btn-primary" href="<?= View::e((string) ($settings['template_url'] ?? Router::url('/n8n-templates'))) ?>">Baixar automação atualizada</a>
         <span class="badge <?= !empty($settings['backup_token_configured']) ? 'badge-success' : 'badge-warning' ?>">
-            Token: <?= !empty($settings['backup_token_configured']) ? 'configurado' : 'pendente' ?>
+            Chave de segurança: <?= !empty($settings['backup_token_configured']) ? 'configurado' : 'pendente' ?>
         </span>
     </div>
 </section>
@@ -243,7 +243,7 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
                     <label>Armazenamento</label>
                     <select name="storage_type">
                         <option value="server" <?= ($primaryRoutine['storage_type'] ?? 'server') === 'server' ? 'selected' : '' ?>>Servidor/VPS</option>
-                        <option value="easypanel" <?= ($primaryRoutine['storage_type'] ?? '') === 'easypanel' ? 'selected' : '' ?>>EasyPanel/Provedor</option>
+                        <option value="easypanel" <?= ($primaryRoutine['storage_type'] ?? '') === 'easypanel' ? 'selected' : '' ?>>EasyPanel/Serviço de hospedagem</option>
                         <option value="google_drive" <?= ($primaryRoutine['storage_type'] ?? '') === 'google_drive' ? 'selected' : '' ?>>Google Drive</option>
                         <option value="s3_minio" <?= ($primaryRoutine['storage_type'] ?? '') === 's3_minio' ? 'selected' : '' ?>>S3/MinIO</option>
                         <option value="dropbox" <?= ($primaryRoutine['storage_type'] ?? '') === 'dropbox' ? 'selected' : '' ?>>Dropbox</option>
@@ -311,7 +311,7 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
 
 <details class="card backup-advanced-card">
     <summary>
-        <span><span class="eyebrow">Configuração avançada</span><strong>Integração técnica e endpoints</strong></span>
+        <span><span class="eyebrow">Configuração avançada</span><strong>Integração técnica e endereços</strong></span>
         <span>Expandir</span>
     </summary>
     <div class="backup-advanced-content">
@@ -320,7 +320,7 @@ $routineId = (int) ($primaryRoutine['id'] ?? 0);
             <div><span>Confirmação técnica final</span><code><?= View::e((string) ($settings['callback_url'] ?? '')) ?></code></div>
             <div><span>Despacho das rotinas vencidas</span><code><?= View::e((string) ($settings['dispatch_url'] ?? '')) ?></code></div>
         </div>
-        <p class="muted-text">Envie o token no cabeçalho <code>X-RS-Connect-Token</code>. O fluxo atualizado já utiliza esse formato.</p>
+        <p class="muted-text">Envie a chave de segurança no cabeçalho <code>X-RS-Connect-Token</code>. O fluxo atualizado já utiliza esse formato.</p>
     </div>
 </details>
 

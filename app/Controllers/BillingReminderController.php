@@ -19,7 +19,7 @@ final class BillingReminderController
     {
         $service = new BillingReminderService();
         View::render('billing_reminders.index', [
-            'title' => 'Régua de cobrança',
+            'title' => 'Lembretes de cobrança',
             'rules' => $service->rules(),
             'logs' => $service->logs(),
             'preview' => $service->preview(),

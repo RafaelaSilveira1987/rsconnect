@@ -72,7 +72,7 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
 <?php if (($filters['tenant_id'] ?? 0) < 1): ?>
     <div class="card empty-state">Selecione uma empresa para visualizar o CRM.</div>
 <?php elseif (!$stages): ?>
-    <div class="card empty-state">Nenhum funil foi encontrado. Execute a migration 004 para criar o funil padrão.</div>
+    <div class="card empty-state">Nenhum funil foi encontrado. Conclua a atualização inicial do banco para criar o funil padrão.</div>
 <?php else: ?>
 <div class="crm-shell<?= $selected ? ' has-detail' : '' ?>">
     <section class="kanban-scroll" aria-label="Oportunidades comerciais">

@@ -3136,3 +3136,133 @@ document.addEventListener('change', (event) => {
         primaryInput.checked = false;
     }
 });
+
+// RS Connect 36.20.1 — camada de linguagem simples para textos estáticos e conteúdos carregados dinamicamente.
+(() => {
+  const exactLabels = new Map([
+    ['attention', 'Precisa de atenção'],
+    ['healthy', 'Dentro do esperado'],
+    ['critical', 'Atenção urgente'],
+    ['loss', 'Custos acima da receita'],
+    ['unconfigured', 'Dados incompletos'],
+    ['Fallback geral', 'Assistente de apoio'],
+    ['Webhook', 'Atualizações automáticas'],
+    ['Webhooks', 'Atualizações automáticas'],
+    ['Prompt', 'Instruções do assistente'],
+    ['Tokens', 'Unidades de uso da IA'],
+    ['Token', 'Chave de segurança'],
+    ['Credenciais', 'Chaves de acesso'],
+    ['Credencial', 'Chave de acesso'],
+    ['Provedor', 'Serviço'],
+    ['Gateway', 'Meio de pagamento'],
+    ['Gateways', 'Meios de pagamento'],
+    ['Instância', 'Conexão'],
+    ['Instâncias', 'Conexões'],
+    ['Governança', 'Controle'],
+    ['Rentabilidade', 'Resultado financeiro'],
+    ['MRR estimado', 'Receita mensal estimada'],
+    ['MRR', 'Receita mensal'],
+  ]);
+
+  const phraseReplacements = [
+    [/\btelemetria técnica\b/giu, 'dados detalhados de uso'],
+    [/\btelemetria\b/giu, 'dados de uso'],
+    [/\bgovernança\b/giu, 'controle'],
+    [/\brentabilidade\b/giu, 'resultado financeiro'],
+    [/\bMRR\b/g, 'receita mensal'],
+    [/\bfallback geral\b/giu, 'assistente de apoio'],
+    [/\bfallback interno\b/giu, 'opção interna de apoio'],
+    [/\bfallback\b/giu, 'opção de apoio'],
+    [/\bwebhooks?\b/giu, 'atualizações automáticas'],
+    [/\bAdmin API Key\b/giu, 'chave administrativa'],
+    [/\bAPI Key\b/giu, 'chave de acesso'],
+    [/\bcredenciais?\b/giu, 'chaves de acesso'],
+    [/\bprovedores\b/giu, 'serviços'],
+    [/\bprovedor\b/giu, 'serviço'],
+    [/\bgateways?\b/giu, 'meios de pagamento'],
+    [/\bprompt studio\b/giu, 'criador de instruções'],
+    [/\bprompts?\b/giu, 'instruções do assistente'],
+    [/\btokens de entrada\b/giu, 'informações processadas'],
+    [/\btokens de saída\b/giu, 'respostas geradas'],
+    [/\btokens em cache\b/giu, 'informações reaproveitadas'],
+    [/\btotal de tokens\b/giu, 'uso total da IA'],
+    [/\btokens?\b/giu, 'unidades de uso da IA'],
+    [/\bcache exato\b/giu, 'respostas reaproveitadas'],
+    [/\bcache\b/giu, 'dados reaproveitados'],
+    [/\bmigrations?\b/giu, 'atualizações do banco'],
+    [/\bcron\b/giu, 'rotina automática'],
+    [/\bendpoints?\b/giu, 'endereços do serviço'],
+    [/\bpayloads?\b/giu, 'dados enviados'],
+    [/\btenant_id\b/giu, 'identificador da empresa'],
+    [/\btenants?\b/giu, 'empresas'],
+    [/\bworkers?\b/giu, 'rotinas automáticas'],
+    [/\bruntime\b/giu, 'execução'],
+    [/\bthresholds?\b/giu, 'limites'],
+    [/\bthroughput\b/giu, 'volume processado'],
+    [/\bprovisionamento\b/giu, 'criação da conexão'],
+    [/\binstâncias?\b/giu, 'conexões'],
+    [/\bfranquia de IA\b/giu, 'limite de respostas de IA'],
+    [/\bfranquia RS\b/giu, 'limite de IA pago pela RS'],
+  ];
+
+  const shouldSkip = (node) => {
+    const parent = node.parentElement;
+    return !parent || Boolean(parent.closest('code, pre, script, style, textarea, [data-keep-technical-language]'));
+  };
+
+  const translateText = (value) => {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) return value;
+    if (exactLabels.has(trimmed)) {
+      return String(value).replace(trimmed, exactLabels.get(trimmed));
+    }
+    let translated = String(value);
+    phraseReplacements.forEach(([pattern, replacement]) => {
+      translated = translated.replace(pattern, replacement);
+    });
+    return translated;
+  };
+
+  const translateAttributes = (root) => {
+    const elements = [];
+    if (root instanceof Element) elements.push(root);
+    if (root instanceof Document || root instanceof DocumentFragment || root instanceof Element) {
+      elements.push(...root.querySelectorAll('[placeholder], [title], [aria-label]'));
+    }
+    elements.forEach((element) => {
+      ['placeholder', 'title', 'aria-label'].forEach((attribute) => {
+        if (!element.hasAttribute(attribute) || element.closest('[data-keep-technical-language]')) return;
+        const current = element.getAttribute(attribute) || '';
+        const translated = translateText(current);
+        if (translated !== current) element.setAttribute(attribute, translated);
+      });
+    });
+  };
+
+  const applyToRoot = (root) => {
+    if (!(root instanceof Node)) return;
+    translateAttributes(root);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach((node) => {
+      if (shouldSkip(node)) return;
+      const translated = translateText(node.nodeValue);
+      if (translated !== node.nodeValue) node.nodeValue = translated;
+    });
+  };
+
+  const start = () => {
+    applyToRoot(document.body);
+    const observer = new MutationObserver((records) => {
+      records.forEach((record) => {
+        if (record.type === 'characterData') applyToRoot(record.target.parentElement || record.target);
+        record.addedNodes.forEach(applyToRoot);
+      });
+    });
+    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+  else start();
+})();

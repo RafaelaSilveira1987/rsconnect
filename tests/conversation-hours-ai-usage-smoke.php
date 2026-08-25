@@ -10,7 +10,7 @@ $checks = [
     'app/Controllers/AgentController.php' => ['business_day_enabled', 'business_day_start', 'business_day_end'],
     'app/Views/agents/index.php' => ['business-hours-editor', 'business_day_enabled['],
     'app/Services/SubscriptionService.php' => ['usage_type = "auto_reply" AND plan_billable = 1 AND status = "success" AND delivery_status = "delivered"'],
-    'app/Views/billing/subscription.php' => ['Como a IA está sendo contabilizada', 'Tokens de entrada', 'Chamadas ao provedor'],
+    'app/Views/billing/subscription.php' => ['Como o uso da IA é contado', 'Informações processadas', 'Chamadas ao serviço de IA'],
     'app/Views/privacy/accept.php' => ['privacy-accept-checkbox'],
     'app/Views/contacts/index.php' => ['<svg viewBox="0 0 24 24"'],
 ];

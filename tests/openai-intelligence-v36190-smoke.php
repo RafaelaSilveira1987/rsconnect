@@ -25,12 +25,12 @@ $checks = [
     'painel calcula orçamento e projeção' => str_contains($controller, 'OPENAI_MONTHLY_BUDGET_USD')
         && str_contains($controller, 'projected_cost_usd')
         && str_contains($controller, 'tracking_coverage_rate'),
-    'painel exibe governança e eficiência' => str_contains($view, 'OpenAI + eficiência do RS Connect')
-        && str_contains($view, 'Chamadas evitadas')
-        && str_contains($view, 'Tokens evitados')
-        && str_contains($view, 'Oficial x RS Connect'),
-    'ranking de empresa e assistente disponível' => str_contains($view, 'Consumo por empresa')
-        && str_contains($view, 'Consumo por assistente'),
+    'painel exibe governança e eficiência' => str_contains($view, 'Quanto o sistema economizou')
+        && str_contains($view, 'Respostas sem nova chamada')
+        && str_contains($view, 'Uso economizado')
+        && str_contains($view, 'Conferência dos dados'),
+    'ranking de empresa e assistente disponível' => str_contains($view, 'Uso por empresa')
+        && str_contains($view, 'Uso por assistente'),
     'telemetria técnica respeita modelo efetivamente chamado' => str_contains($usageService, "\$provider = (string) (\$telemetry['provider']")
         && str_contains($usageService, "\$model = (string) (\$telemetry['model']"),
     'estilos v2 presentes' => str_contains($css, 'RS Connect 36.19.0')

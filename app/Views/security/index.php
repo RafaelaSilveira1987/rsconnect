@@ -87,7 +87,7 @@ $eventLabel = static function (string $event): string {
         </div>
         <div class="security-credentials-block">
             <div class="security-credentials-heading">
-                <div><span class="eyebrow">Integrações</span><strong>Credenciais e tokens</strong><small>O painel diferencia o que é obrigatório, opcional e atendido por credenciais próprias de cada empresa.</small></div>
+                <div><span class="eyebrow">Integrações</span><strong>Chaves de acesso e segurança</strong><small>O painel diferencia o que é obrigatório, opcional e atendido por credenciais próprias de cada empresa.</small></div>
             </div>
             <div class="security-credential-list" data-collapsible-list="3">
                 <?php foreach ($credentialReview as $credential): ?>

@@ -36,12 +36,12 @@ $checks = [
         && str_contains($service, "'capacity_ok'")
         && str_contains($service, "'meets_margin'"),
     'rota e menu da rentabilidade existem' => str_contains($routes, '/ai-profitability')
-        && str_contains($layout, 'Rentabilidade IA')
-        && str_contains($layout, 'app.css?v=36.20.0'),
-    'painel exibe histórico, MRR e simulador' => str_contains($view, 'MRR de referência')
-        && str_contains($view, 'Evolução mensal da contribuição conhecida')
-        && str_contains($view, 'Plano, capacidade e margem')
-        && str_contains($view, 'Simular mensalidade customizada'),
+        && str_contains($layout, 'Resultados por cliente')
+        && str_contains($layout, 'app.css?v=36.20.1'),
+    'painel exibe histórico e simulador em linguagem simples' => str_contains($view, 'Receita mensal analisada')
+        && str_contains($view, 'Evolução mensal do valor que sobra')
+        && str_contains($view, 'Comparar planos e valores')
+        && str_contains($view, 'Simular outro valor mensal'),
     'snapshot CLI disponível' => str_contains($script, 'AiProfitabilityHistoryService')
         && str_contains($script, 'monthMetrics'),
     'diagnóstico e documentação presentes' => str_contains($diagnostic, 'estrutura_rentabilidade_historica')
@@ -49,7 +49,7 @@ $checks = [
         && str_contains($docs, 'Simulação de plano'),
     'versão exige migration 084' => str_contains($version, 'RS Connect 36.20.0')
         && str_contains($version, '084_ai_profitability_history.sql')
-        && str_contains($css, 'RS Connect 36.20.0'),
+        && str_contains($css, 'RS Connect 36.20.1'),
 ];
 
 $failed = [];

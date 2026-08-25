@@ -53,3 +53,8 @@ A memória não substitui o histórico da conversa e não autoriza a IA a invent
 O administrador deve acompanhar o consumo da própria operação pelos indicadores disponíveis ao seu perfil, com atenção especial a respostas locais, cache e quantidade de chamadas ao provedor. Alterações de modelo devem ser feitas somente depois de medir a linha de base de qualidade e consumo.
 
 A memória consolidada também acompanha o contato entre conversas. Isso evita recomeçar do zero quando um novo atendimento é aberto para uma pessoa já conhecida.
+
+
+## Como interpretar os nomes da tela
+
+O sistema usa nomes simples para as tarefas do dia a dia. Por exemplo, **Conexão do WhatsApp** representa a configuração técnica do número; **Chave de acesso** representa a senha usada por um serviço; e **Memória da conversa** representa o resumo que ajuda o assistente a lembrar do atendimento. Os detalhes técnicos ficam em áreas avançadas.

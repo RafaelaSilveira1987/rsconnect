@@ -90,8 +90,8 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
         </select>
     <?php endif; ?>
 
-    <select name="instance_id" aria-label="Filtrar por instância">
-        <option value="">Todas as instâncias</option>
+    <select name="instance_id" aria-label="Filtrar por conexão do WhatsApp">
+        <option value="">Todas as conexões</option>
         <?php foreach ($instances as $instance): ?>
             <?php
             if (Auth::isSuperAdmin() && (int) ($filters['tenant_id'] ?? 0) < 1) continue;
@@ -143,7 +143,7 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                         <small>Pesquise um contato já cadastrado ou informe um novo número. A Caixa de Entrada permanece no mesmo ponto enquanto você inicia o atendimento.</small>
                     </div>
                     <div class="new-conversation-form-body">
-                        <label class="field"><span>Instância</span>
+                        <label class="field"><span>Conexão de WhatsApp</span>
                             <select name="instance_id" required data-new-conversation-instance>
                                 <option value="">Selecione</option>
                                 <?php foreach ($instances as $instance): ?>
@@ -288,7 +288,7 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                         <span>Por segurança, o Super Admin não carrega conversas de todos os clientes automaticamente.</span>
                     <?php else: ?>
                         <strong>Nenhuma conversa encontrada.</strong>
-                        <span>Configure o webhook da Evolution para receber mensagens.</span>
+                        <span>Ative o recebimento automático da conexão do WhatsApp para que as mensagens apareçam aqui.</span>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
@@ -415,7 +415,7 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                                 ? 'A conversa já está com a equipe. A pendência será encerrada após uma resposta humana.'
                                 : 'A automação só voltará a responder quando a conversa retornar ao modo IA.' ?></div>
                         <?php else: ?>
-                            <div class="after-hours-queue-note">As mensagens ficam reunidas em uma única demanda e não consomem tokens enquanto aguardam.</div>
+                            <div class="after-hours-queue-note">As mensagens ficam reunidas em um único atendimento e não geram custo de IA enquanto aguardam.</div>
                         <?php endif; ?>
                     </div>
                     <?php if ($canOperateSelected && (string) ($selected['attendance_mode'] ?? '') !== 'human'): ?>
@@ -534,7 +534,7 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                     </article>
                 <?php endforeach; ?>
                 <?php if (!$messages): ?>
-                    <div class="chat-empty"><span class="empty-symbol"></span><strong>Histórico vazio</strong><p>As novas mensagens recebidas pelo webhook aparecerão aqui.</p></div>
+                    <div class="chat-empty"><span class="empty-symbol"></span><strong>Histórico vazio</strong><p>As novas mensagens recebidas automaticamente aparecerão aqui.</p></div>
                 <?php endif; ?>
             </div>
 
@@ -734,7 +734,7 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                             <div>
                                 <span class="eyebrow">Validação efetiva</span>
                                 <h3>Regras aplicadas agora</h3>
-                                <small>Este resumo mostra o contexto técnico que prevalece sobre o prompt livre do assistente.</small>
+                                <small>Este resumo mostra as regras que têm prioridade sobre as instruções livres do assistente.</small>
                             </div>
                         </div>
                         <div class="drawer-form-grid">

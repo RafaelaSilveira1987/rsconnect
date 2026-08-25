@@ -103,7 +103,7 @@ foreach ($professionals as $professional) {
     <?php elseif (empty($readiness['ready'])): ?>
         <section class="card team-report-empty-selection is-warning">
             <span class="eyebrow">Base histórica pendente</span>
-            <h2>Execute as migrations até a 071</h2>
+            <h2>Execute as atualizações do banco até a 071</h2>
             <p>Sem os históricos, ciclos persistentes e o contrato UTC, o sistema não consegue filtrar períodos e atribuir primeiras respostas, transferências, encerramentos e mudanças da agenda com segurança.</p>
             <?php if (!empty($readiness['missing'])): ?><small>Pendente: <?= View::e(implode(', ', $readiness['missing'])) ?></small><?php endif; ?>
         </section>

@@ -57,3 +57,17 @@
 - Corrigir um fato na conversa e confirmar que a próxima atualização substitui o fato superado.
 - Confirmar que a telemetria registra `usage_type = summary` sem reduzir uma nova interação comercial da franquia.
 - Desativar a memória no assistente e confirmar fallback para contexto recente.
+
+
+## Teste de linguagem simples — v36.20.1
+
+Convide uma pessoa que não participou do desenvolvimento e peça que execute tarefas comuns sem explicação prévia. Registre qualquer palavra que ela não entenda.
+
+Critérios:
+
+- entende o título e a finalidade da página;
+- sabe qual empresa e período estão selecionados;
+- entende os valores e percentuais;
+- identifica o botão correto;
+- compreende a mensagem de erro e a próxima ação;
+- não precisa conhecer termos como webhook, tenant, telemetria, snapshot ou MRR.

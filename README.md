@@ -1,37 +1,42 @@
-# RS Connect — v36.20.0
+# RS Connect — v36.20.1
 
-Esta versão adiciona **rentabilidade histórica e simulação comercial da IA** ao Super Admin. O RS Connect passa a acompanhar MRR de referência, contribuição conhecida, margem mês a mês e cenários de plano por capacidade e margem-alvo.
+Esta versão revisa a linguagem da aplicação para que pessoas sem conhecimento técnico consigam entender as telas e tomar decisões com segurança.
 
-## Destaques
+## O que mudou
 
-- Nova tela **Rentabilidade IA**.
-- MRR de referência e MRR sob revisão.
-- Histórico mensal por empresa e da carteira.
-- Receita histórica baseada em fatura, assinatura ou política manual.
-- Snapshots mensais para preservar a leitura calculada.
-- Tendência de receita, custo de IA e margem.
-- Simulação dos planos ativos considerando capacidade real de uso.
-- Mensalidade customizada simulável sem alterar contratos.
-- Recomendação comercial explicável: manter, otimizar primeiro, revisar plano ou usar condição customizada.
-- Script CLI opcional para snapshot diário.
-- Documentação do ponto 9 atualizada.
+- Menus e títulos com nomes mais claros.
+- Estados em inglês, como `healthy` e `attention`, convertidos para **Dentro do esperado** e **Precisa de atenção**.
+- Termos técnicos substituídos por explicações simples nas telas de uso diário.
+- Campos, botões, mensagens de erro, filtros e textos de ajuda revisados.
+- Detalhes técnicos preservados apenas em áreas avançadas, logs e documentação de suporte.
+- Camada de proteção no navegador para traduzir conteúdos carregados dinamicamente.
+- Nova regra de experiência: uma pessoa adolescente ou iniciante deve entender o que a tela faz e qual ação tomar.
+
+## Exemplos
+
+| Antes | Agora |
+|---|---|
+| Governança de orçamento | Limite de gasto e proteção |
+| Telemetria | Dados de uso |
+| Rentabilidade IA | Resultados por cliente |
+| Memória progressiva | Memória da conversa |
+| MRR | Receita mensal |
+| Snapshot | Registro mensal |
+| Takeover | Assumir atendimento |
+| Gateway | Meio de pagamento |
+| Credencial | Chave de acesso |
+| Prompt | Instruções do assistente |
 
 ## Atualização
 
-Execute:
+Não existe migration nova nesta versão.
+
+A última migration obrigatória continua sendo:
 
 ```text
 database/migrations/084_ai_profitability_history.sql
 ```
 
-Depois valide:
+Depois do deploy, faça um rebuild completo e use `Ctrl + F5` para evitar que o navegador carregue textos antigos do cache.
 
-```text
-database/diagnostics/ai_profitability_history_v36.20.0.sql
-```
-
-O primeiro resultado deve retornar `OK`.
-
-Não existem novas variáveis obrigatórias no `.env`.
-
-Consulte `INSTRUCOES-v36.20.0.md` e `docs/guias/README.md`.
+Consulte `INSTRUCOES-v36.20.1.md` e `docs/guias/guia-linguagem-simples.md`.

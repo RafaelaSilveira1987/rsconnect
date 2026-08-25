@@ -36,7 +36,7 @@ $statusBadge = static fn (string $status): string => match ($status) {
 
 <section class="hero-card privacy-hero-clean">
     <div>
-        <span class="eyebrow">Governança de dados</span>
+        <span class="eyebrow">Controle e proteção dos dados</span>
         <h2>Privacidade, solicitações LGPD e aceite da empresa.</h2>
         <p>Controle políticas, termos, aceite dos usuários vinculados à empresa e solicitações de exportação, exclusão ou anonimização de dados.</p>
     </div>

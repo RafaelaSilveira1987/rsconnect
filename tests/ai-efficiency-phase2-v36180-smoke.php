@@ -27,7 +27,7 @@ $checks = [
         < strpos((string) file_get_contents($root . '/app/Services/AiAutomationService.php'), 'reserveAutoReply'),
     'telemetria registra chamadas evitadas' => str_contains((string) file_get_contents($root . '/app/Services/AiUsageService.php'), 'recordAvoidedAutoReply')
         && str_contains((string) file_get_contents($root . '/database/migrations/079_ai_efficiency_phase2_and_report_cleanup.sql'), 'provider_calls_avoided'),
-    'configuração está disponível no assistente' => str_contains((string) file_get_contents($root . '/app/Views/agents/index.php'), 'Respostas sem consumir tokens')
+    'configuração está disponível no assistente' => str_contains((string) file_get_contents($root . '/app/Views/agents/index.php'), 'Respostas sem nova cobrança de IA')
         && str_contains((string) file_get_contents($root . '/app/Controllers/AgentController.php'), 'aiLocalAutomationFromPost'),
     'arquivos temporários removidos' => !is_file($root . '/app/Controllers.tmp') && !is_file($root . '/app/Controllers.tmp.php'),
     'pacote exige migration 079' => str_contains((string) file_get_contents($root . '/app/Services/AppVersionService.php'), "079_ai_efficiency_phase2_and_report_cleanup.sql"),

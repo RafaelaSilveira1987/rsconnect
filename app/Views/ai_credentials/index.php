@@ -18,7 +18,7 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
         <p>Organize as chaves de acesso usadas pelos assistentes de cada empresa sem expor informações sensíveis.</p>
     </div>
     <button class="btn btn-primary" type="button" data-ai-credential-open="new" data-toggle-panel="ai-credential-drawer">
-        Nova credencial
+        Nova chave de acesso
     </button>
 </section>
 
@@ -26,7 +26,7 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
     <article>
         <span>Total cadastrado</span>
         <strong><?= $totalCredentials ?></strong>
-        <small>credencial(is) protegida(s)</small>
+        <small>chave(s) protegida(s)</small>
     </article>
     <article class="is-success">
         <span>Ativas</span>
@@ -36,27 +36,27 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
     <article class="is-blue">
         <span>Credenciais do cliente</span>
         <strong><?= $tenantOwnedCredentials ?></strong>
-        <small>não consomem franquia RS</small>
+        <small>não usam o limite pago pela RS</small>
     </article>
     <article class="is-purple">
         <span>Custeadas pela RS</span>
         <strong><?= $rsOwnedCredentials ?></strong>
-        <small>consomem a franquia do plano</small>
+        <small>usam o limite de IA do plano</small>
     </article>
 </section>
 
 <section class="card openai-usage-shortcut" aria-label="Atalho para consumo da OpenAI">
     <div>
         <span class="eyebrow">Dados oficiais da organização</span>
-        <h2>Consumo OpenAI em página própria</h2>
-        <p>Acompanhe tokens, chamadas, modelos e custos no novo menu exclusivo do Super Admin.</p>
+        <h2>Uso e custo da IA em página própria</h2>
+        <p>Acompanhe quanto a IA foi usada, os modelos escolhidos e os custos na página Uso e custo da IA.</p>
     </div>
-    <a class="btn btn-outline" href="<?= View::e(Router::url('/openai-usage')) ?>">Abrir consumo OpenAI</a>
+    <a class="btn btn-outline" href="<?= View::e(Router::url('/openai-usage')) ?>">Abrir uso e custo da IA</a>
 </section>
 
 <div class="operations-alert is-info" style="margin-bottom:16px">
     <strong>Revise o custeio das chaves existentes</strong>
-    <p>Na atualização 36.6.8, credenciais já cadastradas são classificadas conservadoramente como <strong>Cliente</strong>. Marque como <strong>RS Connect</strong> as chaves que são pagas pela RS para que o consumo da franquia seja contabilizado corretamente. A chave global do ambiente é considerada RS automaticamente.</p>
+    <p>Chaves cadastradas anteriormente foram marcadas como <strong>Cliente</strong>. Escolha <strong>RS Connect</strong> para as chaves pagas pela RS, garantindo que o limite do plano seja calculado corretamente. A chave global do ambiente é considerada RS automaticamente.</p>
 </div>
 
 <section class="card ai-credentials-panel">
@@ -64,7 +64,7 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
         <div>
             <span class="eyebrow">Acessos configurados</span>
             <h2>Credenciais por empresa</h2>
-            <p>Use os filtros para localizar uma empresa, provedor ou situação.</p>
+            <p>Use os filtros para localizar uma empresa, serviço de IA ou situação.</p>
         </div>
         <span class="badge" data-ai-credential-visible-count><?= $totalCredentials ?> registro(s)</span>
     </div>
@@ -72,10 +72,10 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
     <div class="ai-credential-filters" data-ai-credential-filters>
         <label class="field ai-credential-search">
             <span>Buscar</span>
-            <input type="search" placeholder="Empresa, assistente ou nome da credencial" data-ai-credential-search>
+            <input type="search" placeholder="Empresa, assistente ou nome da chave" data-ai-credential-search>
         </label>
         <label class="field">
-            <span>Provedor</span>
+            <span>Serviço de IA</span>
             <select data-ai-credential-provider-filter>
                 <option value="">Todos</option>
                 <option value="openai">OpenAI</option>
@@ -159,11 +159,11 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
                 </div>
 
                 <dl class="ai-credential-details">
-                    <div><dt>Provedor</dt><dd><?= View::e($providerLabel) ?></dd></div>
+                    <div><dt>Serviço de IA</dt><dd><?= View::e($providerLabel) ?></dd></div>
                     <div><dt>Custeio</dt><dd><?= View::e($ownerLabel) ?></dd></div>
-                    <div><dt>Modelo</dt><dd><?= View::e((string) ($credential['default_model'] ?: 'Definido no assistente')) ?></dd></div>
-                    <div><dt>Chave</dt><dd><?= View::e((string) $credential['api_key_masked']) ?></dd></div>
-                    <div><dt>Endereço da API</dt><dd><?= View::e((string) ($credential['base_url'] ?: 'Padrão do provedor')) ?></dd></div>
+                    <div><dt>Modelo de IA</dt><dd><?= View::e((string) ($credential['default_model'] ?: 'Definido no assistente')) ?></dd></div>
+                    <div><dt>Chave protegida</dt><dd><?= View::e((string) $credential['api_key_masked']) ?></dd></div>
+                    <div><dt>Endereço do serviço</dt><dd><?= View::e((string) ($credential['base_url'] ?: 'Padrão do serviço')) ?></dd></div>
                 </dl>
 
                 <div class="ai-credential-card-actions">
@@ -183,7 +183,7 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
                         data-status="<?= View::e((string) $credential['status']) ?>"
                         data-is-default="<?= (int) $credential['is_default'] ?>"
                     >
-                        Editar credencial
+                        Editar chave
                     </button>
                 </div>
             </article>
@@ -191,22 +191,22 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
 
         <?php if (!$credentials): ?>
             <div class="empty-state ai-credential-empty">
-                <strong>Nenhuma credencial cadastrada.</strong>
-                <span>Crie uma credencial para liberar o uso da IA em uma empresa ou assistente.</span>
-                <button class="btn btn-primary" type="button" data-ai-credential-open="new" data-toggle-panel="ai-credential-drawer">Cadastrar primeira credencial</button>
+                <strong>Nenhuma chave de acesso cadastrada.</strong>
+                <span>Cadastre uma chave para permitir que uma empresa ou assistente use a IA.</span>
+                <button class="btn btn-primary" type="button" data-ai-credential-open="new" data-toggle-panel="ai-credential-drawer">Cadastrar primeira chave</button>
             </div>
         <?php endif; ?>
 
         <div class="empty-state ai-credential-filter-empty" data-ai-credential-filter-empty hidden>
-            Nenhuma credencial corresponde aos filtros selecionados.
+            Nenhuma chave corresponde aos filtros selecionados.
         </div>
     </div>
 </section>
 
-<aside class="conversation-details conversation-drawer ai-credential-drawer" id="ai-credential-drawer" aria-label="Configurar credencial de inteligência artificial" aria-modal="true" role="dialog">
+<aside class="conversation-details conversation-drawer ai-credential-drawer" id="ai-credential-drawer" aria-label="Configurar chave de acesso da inteligência artificial" aria-modal="true" role="dialog">
     <div class="conversation-drawer-header">
         <div>
-            <span class="eyebrow" data-ai-credential-drawer-eyebrow>Nova credencial</span>
+            <span class="eyebrow" data-ai-credential-drawer-eyebrow>Nova chave de acesso</span>
             <h2 data-ai-credential-drawer-title>Cadastrar acesso à IA</h2>
             <p data-ai-credential-drawer-description>Defina quem usará a chave e configure somente as informações necessárias.</p>
         </div>
@@ -223,7 +223,7 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
                     <div>
                         <span class="eyebrow">1. Quem vai usar</span>
                         <h3>Empresa e assistente</h3>
-                        <small>Escolha se a credencial será compartilhada pela empresa ou usada por apenas um assistente.</small>
+                        <small>Escolha se a chave será usada por todos os assistentes da empresa ou por apenas um.</small>
                     </div>
                 </div>
 
@@ -239,7 +239,7 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
                     </label>
 
                     <label class="field drawer-span">
-                        <span>Onde esta credencial será usada?</span>
+                        <span>Onde esta chave será usada?</span>
                         <select data-ai-credential-scope>
                             <option value="company">Em todos os assistentes da empresa</option>
                             <option value="agent">Somente em um assistente específico</option>
@@ -265,31 +265,31 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
                 <div class="drawer-section-title">
                     <div>
                         <span class="eyebrow">2. Identificação</span>
-                        <h3>Nome e provedor</h3>
+                        <h3>Nome e serviço de IA</h3>
                         <small>Use um nome fácil de reconhecer, como “OpenAI — Clínica Alfa”.</small>
                     </div>
                 </div>
 
                 <div class="drawer-form-grid">
                     <label class="field drawer-span">
-                        <span>Nome da credencial</span>
+                        <span>Nome para identificar a chave</span>
                         <input name="label" placeholder="OpenAI — Nome da empresa" required data-ai-field="label">
                     </label>
                     <label class="field">
-                        <span>Provedor</span>
+                        <span>Serviço de IA</span>
                         <select name="provider" data-ai-field="provider" data-ai-credential-provider>
                             <option value="openai">OpenAI</option>
                             <option value="google">Google Gemini</option>
-                            <option value="custom">Outro provedor</option>
+                            <option value="custom">Outro serviço</option>
                         </select>
                     </label>
                     <label class="field">
                         <span>Quem custeia esta IA?</span>
                         <select name="credential_owner" data-ai-field="credential_owner">
                             <option value="tenant">Cliente — chave/conta própria</option>
-                            <option value="rs_connect">RS Connect — consome franquia do plano</option>
+                            <option value="rs_connect">RS Connect — usa o limite de IA do plano</option>
                         </select>
-                        <small class="field-hint">Credencial do cliente é registrada para auditoria, mas não reduz as interações incluídas pela RS Connect.</small>
+                        <small class="field-hint">A chave paga pelo cliente fica registrada, mas não usa o limite de IA pago pela RS Connect.</small>
                     </label>
                     <label class="field">
                         <span>Situação</span>
@@ -304,7 +304,7 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
             <section class="drawer-section">
                 <div class="drawer-section-title">
                     <div>
-                        <span class="eyebrow">3. Chave e modelo</span>
+                        <span class="eyebrow">3. Acesso e modelo da IA</span>
                         <h3>Acesso seguro</h3>
                         <small>A chave é criptografada e não será exibida novamente depois de salvar.</small>
                     </div>
@@ -312,29 +312,29 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
 
                 <div class="drawer-form-grid">
                     <label class="field drawer-span">
-                        <span data-ai-api-key-label>API Key</span>
-                        <input name="api_key" type="password" autocomplete="new-password" placeholder="Cole a chave fornecida pelo provedor" data-ai-field="api_key">
+                        <span data-ai-api-key-label>Chave de acesso</span>
+                        <input name="api_key" type="password" autocomplete="new-password" placeholder="Cole a chave fornecida pelo serviço de IA" data-ai-field="api_key">
                         <small class="field-hint" data-ai-api-key-hint>Obrigatória ao criar. Na edição, deixe em branco para manter a chave atual.</small>
                     </label>
                     <label class="field">
-                        <span>Modelo padrão</span>
+                        <span>Modelo de IA padrão</span>
                         <input name="default_model" placeholder="gpt-4o-mini" data-ai-field="default_model">
                     </label>
                     <label class="field">
-                        <span>Endereço da API</span>
+                        <span>Endereço do serviço</span>
                         <input name="base_url" placeholder="Deixe vazio para usar o padrão" data-ai-field="base_url">
                         <small class="field-hint">Para OpenAI, deixe vazio para usar https://api.openai.com/v1.</small>
                     </label>
                     <label class="check-field drawer-span">
                         <input type="checkbox" name="is_default" value="1" checked data-ai-field="is_default">
-                        <span>Usar como credencial padrão neste escopo</span>
+                        <span>Usar como chave principal neste local</span>
                     </label>
                 </div>
             </section>
 
             <div class="drawer-savebar ai-credential-savebar">
                 <button class="btn btn-quiet" type="button" data-close-panel="ai-credential-drawer">Cancelar</button>
-                <button class="btn btn-primary" type="submit" data-ai-credential-submit>Salvar credencial</button>
+                <button class="btn btn-primary" type="submit" data-ai-credential-submit>Salvar chave</button>
             </div>
         </form>
     </div>

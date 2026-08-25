@@ -160,10 +160,10 @@ $statusClass = static fn (string $status): string => match ($status) {
                             <?php foreach ($instances as $instance): ?>
                                 <div class="mini-status-row"><strong><?= View::e($instance['name'] ?? $instance['instance_name'] ?? 'WhatsApp') ?></strong><span class="badge <?= ($instance['status'] ?? '') === 'connected' ? 'badge-success' : 'badge-warning' ?>"><?= View::e($instance['status'] ?? 'pendente') ?></span></div>
                             <?php endforeach; ?>
-                            <?php if (!$instances): ?><div class="empty-state compact-empty">Nenhuma instância cadastrada.</div><?php endif; ?>
+                            <?php if (!$instances): ?><div class="empty-state compact-empty">Nenhuma conexão de WhatsApp cadastrada.</div><?php endif; ?>
                         </div>
                         <div class="onboarding-actions-box">
-                            <a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/instances')) ?>">Abrir instâncias</a>
+                            <a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/instances')) ?>">Abrir conexões</a>
                         </div>
                     </div>
                 <?php elseif ($step['key'] === 'ai_agent'): ?>
@@ -219,7 +219,7 @@ $statusClass = static fn (string $status): string => match ($status) {
                         </div>
 
                         <section class="calendar-mode-panel" data-calendar-mode-panel="internal" <?= $calendarMode === 'internal' ? '' : 'hidden' ?>>
-                            <div class="section-heading compact"><div><span class="eyebrow">Agenda interna</span><h3>Disponibilidade da empresa</h3><p>Defina quando existem horários para atendimento. Esta agenda não chama workflows, webhooks ou Google Calendar.</p></div><span class="badge badge-success">Sem integração externa</span></div>
+                            <div class="section-heading compact"><div><span class="eyebrow">Agenda interna</span><h3>Disponibilidade da empresa</h3><p>Defina quando existem horários para atendimento. Esta agenda não chama automações externas nem endereços de atualização ou Google Calendar.</p></div><span class="badge badge-success">Sem integração externa</span></div>
                             <div class="internal-calendar-days">
                                 <?php foreach ($calendarDayLabels as $dayNumber => $dayLabel): ?>
                                     <?php $dayConfig = $internalHoursByDay[(string) $dayNumber]; ?>

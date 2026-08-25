@@ -39,9 +39,9 @@ $checks = [
     'rota e controller permitem salvar política' => str_contains($routes, "/openai-usage/budget")
         && str_contains($controller, 'saveBudgetPolicy')
         && str_contains($controller, "ai.budget_policy.updated"),
-    'painel possui configuração por empresa' => str_contains($view, 'Orçamento e proteção de consumo')
-        && str_contains($view, 'Bloquear novas chamadas custeadas pela RS')
-        && str_contains($view, 'Salvar política'),
+    'painel possui configuração por empresa' => str_contains($view, 'Limite e proteção de gasto')
+        && str_contains($view, 'bloquear IA RS')
+        && str_contains($view, 'Salvar limite e proteção'),
     'diagnóstico e documentação presentes' => str_contains($diagnostic, 'estrutura_orcamento_ia')
         && str_contains($docs, 'atendimento humano')
         && str_contains($docs, 'credencial própria'),

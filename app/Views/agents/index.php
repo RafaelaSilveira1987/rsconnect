@@ -49,8 +49,8 @@ $defaultCompanyKnowledge = implode("\n\n", $companyKnowledge);
 $aiModeLabels = ['economy' => 'Econômico', 'balanced' => 'Equilibrado', 'quality' => 'Qualidade máxima'];
 $aiModeHints = [
     'economy' => 'Até 6 mensagens recentes, base seletiva e respostas mais curtas.',
-    'balanced' => 'Até 10 mensagens recentes, contexto enxuto e boa cobertura.',
-    'quality' => 'Até 20 mensagens recentes e contexto ampliado quando necessário.',
+    'balanced' => 'Lembra até 10 mensagens recentes, com equilíbrio entre qualidade e economia.',
+    'quality' => 'Lembra até 20 mensagens recentes para respostas mais completas.',
 ];
 ?>
 <div class="agent-management-page <?= $isClientExperience ? 'agent-client-experience' : 'agent-admin-experience' ?>">
@@ -122,15 +122,15 @@ $aiModeHints = [
                     </div>
                     <div class="agent-data">
                         <div><span>Canais WhatsApp</span><strong><?= View::e(($agent['channel_names'] ?? '') !== '' ? $agent['channel_names'] : ($agent['instance_name'] ?? 'Não vinculado')) ?></strong><small><?= (int) ($agent['channel_count'] ?? 0) ?> canal(is) vinculado(s)</small></div>
-                        <div><span>Modelo de IA</span><strong><?= View::e($agent['credential_model'] ?: $agent['model_name']) ?></strong></div>
+                        <div><span>Modelo usado para responder</span><strong><?= View::e($agent['credential_model'] ?: $agent['model_name']) ?></strong></div>
                         <div><span>Acesso à IA</span><strong><?= View::e($agent['credential_label'] ?: 'Configuração da RS Connect') ?></strong></div>
                         <div><span>Memória configurada</span><strong><?= (int) ($agent['max_context_messages'] ?? 12) ?> mensagens</strong></div>
-                        <div><span>Estratégia de IA</span><strong><?= View::e($aiModeLabels[$agent['ai_efficiency_mode'] ?? 'balanced'] ?? 'Equilibrado') ?></strong><small><?= View::e($aiModeHints[$agent['ai_efficiency_mode'] ?? 'balanced'] ?? $aiModeHints['balanced']) ?></small></div>
+                        <div><span>Nível de economia</span><strong><?= View::e($aiModeLabels[$agent['ai_efficiency_mode'] ?? 'balanced'] ?? 'Equilibrado') ?></strong><small><?= View::e($aiModeHints[$agent['ai_efficiency_mode'] ?? 'balanced'] ?? $aiModeHints['balanced']) ?></small></div>
                     </div>
                     <div class="badge-row">
                         <span class="badge badge-<?= View::e($agent['status']) ?>"><?= $agent['status'] === 'active' ? 'Ativo' : 'Inativo' ?></span>
                         <span class="badge <?= (int) ($agent['auto_reply_enabled'] ?? 0) === 1 ? 'badge-success' : 'badge-muted' ?>"><?= (int) ($agent['auto_reply_enabled'] ?? 0) === 1 ? 'Respostas automáticas' : 'Resposta manual' ?></span>
-                        <?php if ((int) $agent['is_default'] === 1): ?><span class="badge">Fallback geral</span><?php endif; ?>
+                        <?php if ((int) $agent['is_default'] === 1): ?><span class="badge">Assistente de apoio</span><?php endif; ?>
                         <?php if ((int) ($agent['business_hours_enabled'] ?? 0) === 1): ?><span class="badge">Segue horário</span><?php endif; ?>
                     </div>
 
@@ -158,16 +158,16 @@ $aiModeHints = [
                         </details>
                         <?php $agentPromptVersions = $promptVersions[(int) $agent['id']] ?? []; ?>
                         <details class="agent-prompt prompt-version-history">
-                            <summary>Histórico do prompt <span class="badge"><?= count($agentPromptVersions) ?> versão(ões)</span></summary>
+                            <summary>Histórico das instruções <span class="badge"><?= count($agentPromptVersions) ?> versão(ões)</span></summary>
                             <div class="prompt-version-list">
                                 <?php foreach ($agentPromptVersions as $version): ?>
                                     <article class="prompt-version-item">
                                         <div>
                                             <strong>Versão <?= (int) ($version['version_number'] ?? 0) ?></strong>
-                                            <span><?= View::e($version['title'] ?? 'Prompt salvo') ?></span>
+                                            <span><?= View::e($version['title'] ?? 'Instruções salvas') ?></span>
                                             <small><?= View::e($version['created_by_name'] ?? 'Sistema') ?> · <?= View::e($version['created_at'] ?? '') ?> · <?= View::e($version['source'] ?? 'manual') ?></small>
                                         </div>
-                                        <form method="post" action="<?= View::e(Router::url('/prompt-studio/restore')) ?>" onsubmit="return confirm('Restaurar esta versão do prompt?');">
+                                        <form method="post" action="<?= View::e(Router::url('/prompt-studio/restore')) ?>" onsubmit="return confirm('Restaurar esta versão das instruções?');">
                                             <?= Csrf::input() ?>
                                             <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
                                             <input type="hidden" name="agent_id" value="<?= (int) $agent['id'] ?>">
@@ -176,7 +176,7 @@ $aiModeHints = [
                                         </form>
                                     </article>
                                 <?php endforeach; ?>
-                                <?php if (!$agentPromptVersions): ?><div class="empty-state compact-empty">O histórico será criado após aplicar a migration 062 ou salvar uma nova versão.</div><?php endif; ?>
+                                <?php if (!$agentPromptVersions): ?><div class="empty-state compact-empty">O histórico aparecerá depois que a atualização do banco for concluída ou uma nova versão for salva.</div><?php endif; ?>
                             </div>
                         </details>
                     <?php else: ?>
@@ -232,9 +232,9 @@ $aiModeHints = [
 
                             <div class="form-grid two">
                                 <label class="field compact-field"><span>Disponibilidade do assistente</span><select name="status"><option value="active" <?= $agent['status'] === 'active' ? 'selected' : '' ?>>Ativo</option><option value="inactive" <?= $agent['status'] === 'inactive' ? 'selected' : '' ?>>Inativo</option></select></label>
-                                <label class="field compact-field"><span>Estratégia de consumo</span><select name="ai_efficiency_mode"><option value="economy" <?= ($agent['ai_efficiency_mode'] ?? 'balanced') === 'economy' ? 'selected' : '' ?>>Econômico</option><option value="balanced" <?= ($agent['ai_efficiency_mode'] ?? 'balanced') === 'balanced' ? 'selected' : '' ?>>Equilibrado</option><option value="quality" <?= ($agent['ai_efficiency_mode'] ?? 'balanced') === 'quality' ? 'selected' : '' ?>>Qualidade máxima</option></select><small class="field-hint">Controla automaticamente histórico, base de conhecimento e tamanho da resposta.</small></label>
+                                <label class="field compact-field"><span>Nível de economia da IA</span><select name="ai_efficiency_mode"><option value="economy" <?= ($agent['ai_efficiency_mode'] ?? 'balanced') === 'economy' ? 'selected' : '' ?>>Econômico</option><option value="balanced" <?= ($agent['ai_efficiency_mode'] ?? 'balanced') === 'balanced' ? 'selected' : '' ?>>Equilibrado</option><option value="quality" <?= ($agent['ai_efficiency_mode'] ?? 'balanced') === 'quality' ? 'selected' : '' ?>>Qualidade máxima</option></select><small class="field-hint">Controla automaticamente histórico, base de conhecimento e tamanho da resposta.</small></label>
                                 <label class="field compact-field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="<?= (int) ($agent['max_context_messages'] ?? 12) ?>" min="4" max="30"><small class="field-hint">Funciona como teto. O modo Econômico usa no máximo 6 e o Equilibrado no máximo 10.</small></label>
-                                <label class="field compact-field"><span>Máximo de saída (tokens)</span><input type="number" name="ai_max_output_tokens" value="<?= View::e((string) ($agent['ai_max_output_tokens'] ?? '')) ?>" min="64" max="2000" placeholder="Automático pelo modo"><small class="field-hint">Vazio: Econômico 160 · Equilibrado 260 · Qualidade 420.</small></label>
+                                <label class="field compact-field"><span>Tamanho máximo da resposta</span><input type="number" name="ai_max_output_tokens" value="<?= View::e((string) ($agent['ai_max_output_tokens'] ?? '')) ?>" min="64" max="2000" placeholder="Automático pelo modo"><small class="field-hint">Se ficar vazio, o sistema usa um limite adequado ao nível de economia escolhido.</small></label>
                                 <label class="field compact-field"><span>Orçamento da base (caracteres)</span><input type="number" name="ai_knowledge_budget_chars" value="<?= View::e((string) ($agent['ai_knowledge_budget_chars'] ?? '')) ?>" min="1000" max="120000" placeholder="Automático pelo modo"><small class="field-hint">Limita quanto da base de conhecimento entra em cada chamada.</small></label>
                                 <label class="field compact-field">
                                     <span>Tempo de espera da IA (seg.)</span>
@@ -243,7 +243,7 @@ $aiModeHints = [
                                 </label>
                             </div>
                             <details class="ai-local-automation-card">
-                                <summary><span><strong>Respostas sem consumir tokens</strong><small>Saudações configuradas e cache exato opcional antes da chamada ao provedor.</small></span><span class="drawer-chevron"></span></summary>
+                                <summary><span><strong>Respostas sem nova cobrança de IA</strong><small>Saudações prontas e reaproveitamento opcional antes de chamar o serviço de IA.</small></span><span class="drawer-chevron"></span></summary>
                                 <div class="ai-local-automation-body">
                                     <div class="agent-toggle-grid">
                                         <label class="check-field compact-check"><input type="checkbox" name="ai_local_replies_enabled" value="1" <?= !array_key_exists('ai_local_replies_enabled', $agent) || (int) ($agent['ai_local_replies_enabled'] ?? 1) === 1 ? 'checked' : '' ?>><span>Usar respostas locais configuradas</span></label>
@@ -253,14 +253,14 @@ $aiModeHints = [
                                         <label class="field compact-field"><span>Resposta para saudação</span><input name="ai_greeting_reply" value="<?= View::e($agent['ai_greeting_reply'] ?? '') ?>" maxlength="500" placeholder="Olá! Como posso ajudar você hoje?"></label>
                                         <label class="field compact-field"><span>Resposta para agradecimento</span><input name="ai_gratitude_reply" value="<?= View::e($agent['ai_gratitude_reply'] ?? '') ?>" maxlength="500" placeholder="Por nada! Estou à disposição."></label>
                                         <label class="field compact-field"><span>Resposta para despedida</span><input name="ai_farewell_reply" value="<?= View::e($agent['ai_farewell_reply'] ?? '') ?>" maxlength="500" placeholder="Até mais! Quando precisar, fale com a gente."></label>
-                                        <label class="field compact-field"><span>Validade do cache (horas)</span><input type="number" name="ai_exact_cache_ttl_hours" value="<?= (int) ($agent['ai_exact_cache_ttl_hours'] ?? 168) ?>" min="1" max="720"><small class="field-hint">O cache é invalidado automaticamente ao mudar prompt, base ou modelo.</small></label>
+                                        <label class="field compact-field"><span>Por quantas horas uma resposta pode ser reaproveitada?</span><input type="number" name="ai_exact_cache_ttl_hours" value="<?= (int) ($agent['ai_exact_cache_ttl_hours'] ?? 168) ?>" min="1" max="720"><small class="field-hint">As respostas salvas são apagadas automaticamente quando as instruções, informações ou modelo mudam.</small></label>
                                     </div>
                                     <label class="field compact-field"><span>Resposta para menu/ajuda</span><textarea name="ai_menu_reply" rows="3" maxlength="4000" placeholder="Liste aqui as opções principais disponíveis."><?= View::e($agent['ai_menu_reply'] ?? '') ?></textarea></label>
-                                    <p class="field-hint">As regras locais só respondem mensagens exatas e curtas. O cache vem desativado por padrão e ignora perguntas pessoais, pedidos, agenda, números e links.</p>
+                                    <p class="field-hint">As respostas prontas atendem somente mensagens curtas e exatas. O reaproveitamento vem desligado por padrão e não é usado em dados pessoais, pedidos, agenda, números ou links.</p>
                                 </div>
                             </details>
                             <details class="ai-local-automation-card ai-memory-config-card">
-                                <summary><span><strong>Memória progressiva da conversa</strong><small>Resume o histórico periodicamente para manter contexto gastando menos tokens.</small></span><span class="drawer-chevron"></span></summary>
+                                <summary><span><strong>Memória da conversa</strong><small>Cria um resumo de tempos em tempos para lembrar o contexto usando menos IA.</small></span><span class="drawer-chevron"></span></summary>
                                 <div class="ai-local-automation-body">
                                     <label class="check-field compact-check"><input type="checkbox" name="ai_progressive_memory_enabled" value="1" <?= !array_key_exists('ai_progressive_memory_enabled', $agent) || (int) ($agent['ai_progressive_memory_enabled'] ?? 1) === 1 ? 'checked' : '' ?>><span>Ativar resumo progressivo e memória estruturada</span></label>
                                     <div class="form-grid two">
@@ -285,17 +285,17 @@ $aiModeHints = [
                                 <?php endforeach; ?>
                             </div>
                             <label class="field compact-field"><span>Mensagem fora do horário</span><input name="after_hours_message" value="<?= View::e($agent['after_hours_message'] ?? '') ?>" placeholder="Estamos fora do horário. Retornaremos em breve."></label>
-                            <label class="field compact-field"><span>Integração externa deste assistente</span><input name="n8n_webhook_url" value="<?= View::e($agent['n8n_webhook_url'] ?? '') ?>" placeholder="Preencha somente com orientação da equipe RS Connect"><small class="field-hint">Use apenas para uma integração conversacional própria do agente. Não cole aqui o webhook “Agenda Google Calendar por Empresa”; esse fluxo é acionado automaticamente apenas quando existe compromisso real.</small></label>
-                            <?php if (!empty($agent['n8n_calendar_conflict'])): ?><div class="message-warning"><strong>Configuração antiga incompatível:</strong> este assistente aponta diretamente para o workflow que cria eventos no Google Calendar. A 36.6.21 bloqueia esse disparo em runtime; remova a URL deste campo e mantenha a Agenda apenas em n8n → Fluxos por empresa.</div><?php endif; ?>
+                            <label class="field compact-field"><span>Automação externa deste assistente</span><input name="n8n_webhook_url" value="<?= View::e($agent['n8n_webhook_url'] ?? '') ?>" placeholder="Preencha somente com orientação da equipe RS Connect"><small class="field-hint">Use somente quando este assistente tiver uma automação própria. A Agenda Google é acionada automaticamente quando existe um compromisso real.</small></label>
+                            <?php if (!empty($agent['n8n_calendar_conflict'])): ?><div class="message-warning"><strong>Configuração antiga precisa ser corrigida:</strong> este assistente está ligado diretamente a uma automação antiga que cria eventos no Google Calendar. Para evitar agendamentos duplicados, remova o endereço deste campo e mantenha a Agenda somente em Automações (n8n) → Fluxos por empresa.</div><?php endif; ?>
                             <div class="agent-toggle-grid">
                                 <label class="check-field compact-check"><input type="checkbox" name="auto_reply_enabled" value="1" <?= (int) ($agent['auto_reply_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder automaticamente</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="business_hours_enabled" value="1" <?= (int) ($agent['business_hours_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder somente no horário configurado</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="n8n_enabled" value="1" <?= (int) ($agent['n8n_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Usar integração externa</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="reply_to_reactions" value="1" <?= (int) ($agent['reply_to_reactions'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder a reações em mensagens</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="ai_selective_knowledge" value="1" <?= !array_key_exists('ai_selective_knowledge', $agent) || (int) ($agent['ai_selective_knowledge'] ?? 1) === 1 ? 'checked' : '' ?>><span>Enviar somente trechos relevantes da base</span></label>
-                                <label class="check-field compact-check"><input type="checkbox" name="is_default" value="1" <?= (int) $agent['is_default'] === 1 ? 'checked' : '' ?>><span>Fallback geral</span></label>
+                                <label class="check-field compact-check"><input type="checkbox" name="is_default" value="1" <?= (int) $agent['is_default'] === 1 ? 'checked' : '' ?>><span>Assistente de apoio</span></label>
                             </div>
-                            <p class="field-hint"><strong>Horário é uma regra técnica.</strong> Quando “Responder somente no horário configurado” estiver ativo, IA, agenda, seleção de horários e automações conversacionais ficam bloqueadas fora do expediente, mesmo que o prompt diga para atender 24h.</p>
+                            <p class="field-hint"><strong>O horário configurado sempre tem prioridade.</strong> Quando “Responder somente no horário configurado” estiver ativo, IA, agenda, seleção de horários e automações conversacionais ficam bloqueadas fora do expediente, mesmo que as instruções do assistente digam para atender 24 horas.</p>
                             <button class="btn btn-outline" type="submit">Salvar configurações</button>
                         </form>
 
@@ -403,7 +403,7 @@ $aiModeHints = [
                 </div>
                 <div class="agent-create-behavior agent-friendly-toggles">
                     <label class="switch-card"><input type="checkbox" name="auto_reply_enabled" value="1" checked><span><strong>Responder automaticamente</strong><small>O assistente responde quando a conversa estiver no modo IA ativa.</small></span></label>
-                    <label class="switch-card"><input type="checkbox" name="is_default" value="1"><span><strong>Fallback geral</strong><small>Usado somente quando um canal ainda não tem roteamento próprio. O principal de cada WhatsApp é definido em Canais WhatsApp.</small></span></label>
+                    <label class="switch-card"><input type="checkbox" name="is_default" value="1"><span><strong>Assistente de apoio</strong><small>Usado apenas quando um número ainda não tem um assistente principal definido. O responsável de cada WhatsApp é escolhido em Canais WhatsApp.</small></span></label>
                 </div>
             </section>
 
@@ -416,14 +416,14 @@ $aiModeHints = [
 
             <section class="drawer-section agent-step-card prompt-studio-output">
                 <div class="drawer-section-title">
-                    <div><span class="eyebrow">Etapa 4</span><h3>Gerar e revisar o prompt</h3><p>O RS Connect organiza suas respostas em instruções estruturadas e verifica conflitos com horário, agenda e regras operacionais.</p></div>
+                    <div><span class="eyebrow">Etapa 4</span><h3>Criar e revisar as instruções</h3><p>O RS Connect organiza as orientações do assistente e verifica conflitos com horário, agenda e regras de atendimento.</p></div>
                 </div>
                 <div class="prompt-studio-toolbar">
-                    <button class="btn btn-outline" type="button" data-prompt-generate>Gerar prompt estruturado</button>
+                    <button class="btn btn-outline" type="button" data-prompt-generate>Criar instruções organizadas</button>
                     <span class="muted-text" data-prompt-status>Preencha as etapas anteriores e gere a primeira versão.</span>
                 </div>
                 <div class="prompt-studio-warnings" data-prompt-warnings hidden></div>
-                <label class="field"><span>Prompt final do assistente</span><textarea class="agent-prompt-textarea" name="system_prompt" rows="18" maxlength="60000" placeholder="O prompt estruturado aparecerá aqui. Você poderá revisar antes de criar o assistente." required></textarea><small class="field-hint">Você continua no controle: edite qualquer trecho antes de salvar.</small></label>
+                <label class="field"><span>Instruções finais do assistente</span><textarea class="agent-prompt-textarea" name="system_prompt" rows="18" maxlength="60000" placeholder="As instruções organizadas aparecerão aqui. Você poderá revisar antes de criar o assistente." required></textarea><small class="field-hint">Revise e altere qualquer parte antes de salvar.</small></label>
                 <input type="hidden" name="prompt_studio_generated" value="0" data-prompt-generated>
                 <input type="hidden" name="prompt_studio_answers_json" value="" data-prompt-answers>
                 <input type="hidden" name="prompt_studio_warnings_json" value="" data-prompt-warnings-json>
@@ -460,30 +460,30 @@ $aiModeHints = [
                         <div class="form-grid two">
                             <label class="field"><span>Modo</span><select name="ai_efficiency_mode"><option value="economy">Econômico</option><option value="balanced" selected>Equilibrado</option><option value="quality">Qualidade máxima</option></select></label>
                             <label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label>
-                            <label class="field"><span>Máx. saída (tokens)</span><input type="number" name="ai_max_output_tokens" min="64" max="2000" placeholder="Automático pelo modo"></label>
+                            <label class="field"><span>Tamanho máximo da resposta</span><input type="number" name="ai_max_output_tokens" min="64" max="2000" placeholder="Automático pelo modo"></label>
                             <label class="field"><span>Base por chamada (caracteres)</span><input type="number" name="ai_knowledge_budget_chars" min="1000" max="120000" placeholder="Automático pelo modo"></label>
                         </div>
                         <label class="check-field"><input type="checkbox" name="ai_selective_knowledge" value="1" checked><span>Enviar somente os trechos da base relacionados à conversa</span></label>
                     </div>
                     <details class="ai-local-automation-card">
-                        <summary><span><strong>Respostas sem consumir tokens</strong><small>Configure saudações locais. O cache exato é opcional.</small></span><span class="drawer-chevron"></span></summary>
+                        <summary><span><strong>Respostas sem nova cobrança de IA</strong><small>Configure respostas de saudação. O reaproveitamento de perguntas iguais é opcional.</small></span><span class="drawer-chevron"></span></summary>
                         <div class="ai-local-automation-body">
                             <label class="check-field"><input type="checkbox" name="ai_local_replies_enabled" value="1" checked><span>Usar respostas locais configuradas</span></label>
                             <div class="form-grid two">
                                 <label class="field"><span>Saudação</span><input name="ai_greeting_reply" maxlength="500" placeholder="Olá! Como posso ajudar você hoje?"></label>
                                 <label class="field"><span>Agradecimento</span><input name="ai_gratitude_reply" maxlength="500" placeholder="Por nada! Estou à disposição."></label>
                                 <label class="field"><span>Despedida</span><input name="ai_farewell_reply" maxlength="500" placeholder="Até mais! Quando precisar, fale com a gente."></label>
-                                <label class="field"><span>Validade do cache (horas)</span><input type="number" name="ai_exact_cache_ttl_hours" value="168" min="1" max="720"></label>
+                                <label class="field"><span>Por quantas horas uma resposta pode ser reaproveitada?</span><input type="number" name="ai_exact_cache_ttl_hours" value="168" min="1" max="720"></label>
                             </div>
                             <label class="field"><span>Menu/ajuda</span><textarea name="ai_menu_reply" rows="3" maxlength="4000" placeholder="Liste as opções principais disponíveis."></textarea></label>
                             <label class="check-field"><input type="checkbox" name="ai_exact_cache_enabled" value="1"><span>Reutilizar respostas para perguntas idênticas e elegíveis</span></label>
-                            <small class="field-hint">O cache não é aplicado a agenda, dados pessoais, números, links ou mensagens dependentes do histórico.</small>
+                            <small class="field-hint">Respostas reaproveitadas não são usadas para agenda, dados pessoais, números, links ou mensagens que dependem da conversa.</small>
                         </div>
                     </details>
                     <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se o cliente enviar outra mensagem, a contagem reinicia.</small></label>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
-                    <p class="field-hint">Quando ativado, este horário prevalece sobre o prompt e bloqueia IA, agenda e automações conversacionais fora do expediente.</p>
+                    <p class="field-hint">Quando ativado, este horário tem prioridade e pausa a IA, a agenda e outras automações fora do expediente.</p>
                     <label class="check-field"><input type="checkbox" name="n8n_enabled" value="1"><span>Usar integração externa neste assistente</span></label>
                     <label class="check-field"><input type="checkbox" name="reply_to_reactions" value="1"><span>Responder quando o contato reagir a uma mensagem</span><small class="field-hint">Desativado por padrão. Curtidas e emojis de reação não geram resposta automática.</small></label>
                 </div>
@@ -521,7 +521,7 @@ $aiModeHints = [
             </section>
 
             <section class="drawer-section prompt-studio-output">
-                <div class="drawer-section-title"><div><span class="eyebrow">2. Prompt Studio</span><h3>O que ele deve saber e fazer?</h3><p>Responda ao questionário e gere uma estrutura consistente antes de salvar.</p></div></div>
+                <div class="drawer-section-title"><div><span class="eyebrow">2. Criador de instruções</span><h3>O que ele deve saber e fazer?</h3><p>Responda ao questionário e gere uma estrutura consistente antes de salvar.</p></div></div>
                 <label class="field"><span>Objetivo do atendimento</span><textarea name="service_objective" rows="4" placeholder="Resultado esperado de cada conversa." required></textarea></label>
                 <div class="form-grid two">
                     <label class="field"><span>Tom de voz</span><select name="tone_of_voice"><option value="claro, cordial e profissional">Claro e profissional</option><option value="acolhedor, paciente e próximo">Acolhedor e próximo</option><option value="objetivo, direto e consultivo">Objetivo e consultivo</option></select></label>
@@ -537,9 +537,9 @@ $aiModeHints = [
                 <label class="field"><span>Transferência humana</span><textarea name="handoff_rules" rows="4"></textarea></label>
                 <label class="field"><span>Restrições</span><textarea name="forbidden_information" rows="4"></textarea></label>
                 <input type="hidden" name="response_style" value="mensagens curtas, naturais e com uma pergunta por vez">
-                <div class="prompt-studio-toolbar"><button class="btn btn-outline" type="button" data-prompt-generate>Gerar prompt estruturado</button><span class="muted-text" data-prompt-status>O prompt será validado contra as regras operacionais.</span></div>
+                <div class="prompt-studio-toolbar"><button class="btn btn-outline" type="button" data-prompt-generate>Criar instruções organizadas</button><span class="muted-text" data-prompt-status>As instruções serão comparadas com as regras de atendimento.</span></div>
                 <div class="prompt-studio-warnings" data-prompt-warnings hidden></div>
-                <label class="field"><span>Prompt final</span><textarea name="system_prompt" rows="16" maxlength="60000" required></textarea></label>
+                <label class="field"><span>Instruções finais</span><textarea name="system_prompt" rows="16" maxlength="60000" required></textarea></label>
                 <input type="hidden" name="prompt_studio_generated" value="0" data-prompt-generated>
                 <input type="hidden" name="prompt_studio_answers_json" value="" data-prompt-answers>
                 <input type="hidden" name="prompt_studio_warnings_json" value="" data-prompt-warnings-json>
@@ -549,7 +549,7 @@ $aiModeHints = [
             <section class="drawer-section agent-create-behavior">
                 <div class="drawer-section-title"><div><span class="eyebrow">3. Funcionamento</span><h3>Comportamento inicial</h3></div></div>
                 <label class="check-field"><input type="checkbox" name="auto_reply_enabled" value="1" checked><span>Responder automaticamente quando a conversa estiver com IA ativa</span></label>
-                <label class="check-field"><input type="checkbox" name="is_default" value="1"><span>Usar como fallback geral da empresa</span></label>
+                <label class="check-field"><input type="checkbox" name="is_default" value="1"><span>Usar como assistente de apoio da empresa</span></label>
             </section>
 
             <details class="drawer-section drawer-collapsed-card agent-advanced-settings">
@@ -562,7 +562,7 @@ $aiModeHints = [
                         <label class="field"><span>Serviço de IA</span><select name="model_provider"><option value="openai">OpenAI</option><option value="google">Google Gemini</option><option value="custom">Outro serviço</option></select></label>
                         <label class="field"><span>Estilo das respostas</span><select name="temperature"><option value="0.1">Mais objetivo</option><option value="0.2" selected>Equilibrado</option><option value="0.5">Mais criativo</option><option value="0.8">Bem criativo</option></select></label>
                     </div>
-                    <label class="field"><span>Modelo de IA</span><input name="model_name" value="gpt-4o-mini" required><small class="field-hint">A equipe RS Connect pode ajustar este campo conforme a credencial disponível.</small></label>
+                    <label class="field"><span>Modelo de IA</span><input name="model_name" value="gpt-4o-mini" required><small class="field-hint">A equipe RS Connect pode ajustar este campo conforme a chave e o modelo disponíveis.</small></label>
                     <label class="field"><span>Palavras que pedem atendimento humano</span><input name="handoff_keywords" value="humano, atendente, pessoa, suporte" placeholder="humano, atendente, pessoa"></label>
                     <label class="field"><span>Mensagem ao encaminhar para a equipe</span><input name="human_handoff_message" value="Vou encaminhar você para uma pessoa da nossa equipe. Aguarde um momento, por favor."></label>
                     <input type="hidden" name="handoff_action" value="paused">
@@ -583,30 +583,30 @@ $aiModeHints = [
                         <div class="form-grid two">
                             <label class="field"><span>Modo</span><select name="ai_efficiency_mode"><option value="economy">Econômico</option><option value="balanced" selected>Equilibrado</option><option value="quality">Qualidade máxima</option></select></label>
                             <label class="field"><span>Mensagens lembradas</span><input type="number" name="max_context_messages" value="12" min="4" max="30"></label>
-                            <label class="field"><span>Máx. saída (tokens)</span><input type="number" name="ai_max_output_tokens" min="64" max="2000" placeholder="Automático pelo modo"></label>
+                            <label class="field"><span>Tamanho máximo da resposta</span><input type="number" name="ai_max_output_tokens" min="64" max="2000" placeholder="Automático pelo modo"></label>
                             <label class="field"><span>Base por chamada (caracteres)</span><input type="number" name="ai_knowledge_budget_chars" min="1000" max="120000" placeholder="Automático pelo modo"></label>
                         </div>
                         <label class="check-field"><input type="checkbox" name="ai_selective_knowledge" value="1" checked><span>Enviar somente os trechos da base relacionados à conversa</span></label>
                     </div>
                     <details class="ai-local-automation-card">
-                        <summary><span><strong>Respostas sem consumir tokens</strong><small>Configure saudações locais. O cache exato é opcional.</small></span><span class="drawer-chevron"></span></summary>
+                        <summary><span><strong>Respostas sem nova cobrança de IA</strong><small>Configure respostas de saudação. O reaproveitamento de perguntas iguais é opcional.</small></span><span class="drawer-chevron"></span></summary>
                         <div class="ai-local-automation-body">
                             <label class="check-field"><input type="checkbox" name="ai_local_replies_enabled" value="1" checked><span>Usar respostas locais configuradas</span></label>
                             <div class="form-grid two">
                                 <label class="field"><span>Saudação</span><input name="ai_greeting_reply" maxlength="500" placeholder="Olá! Como posso ajudar você hoje?"></label>
                                 <label class="field"><span>Agradecimento</span><input name="ai_gratitude_reply" maxlength="500" placeholder="Por nada! Estou à disposição."></label>
                                 <label class="field"><span>Despedida</span><input name="ai_farewell_reply" maxlength="500" placeholder="Até mais! Quando precisar, fale com a gente."></label>
-                                <label class="field"><span>Validade do cache (horas)</span><input type="number" name="ai_exact_cache_ttl_hours" value="168" min="1" max="720"></label>
+                                <label class="field"><span>Por quantas horas uma resposta pode ser reaproveitada?</span><input type="number" name="ai_exact_cache_ttl_hours" value="168" min="1" max="720"></label>
                             </div>
                             <label class="field"><span>Menu/ajuda</span><textarea name="ai_menu_reply" rows="3" maxlength="4000" placeholder="Liste as opções principais disponíveis."></textarea></label>
                             <label class="check-field"><input type="checkbox" name="ai_exact_cache_enabled" value="1"><span>Reutilizar respostas para perguntas idênticas e elegíveis</span></label>
-                            <small class="field-hint">O cache não é aplicado a agenda, dados pessoais, números, links ou mensagens dependentes do histórico.</small>
+                            <small class="field-hint">Respostas reaproveitadas não são usadas para agenda, dados pessoais, números, links ou mensagens que dependem da conversa.</small>
                         </div>
                     </details>
                     <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se o cliente enviar outra mensagem, a contagem reinicia.</small></label>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
-                    <p class="field-hint">Quando ativado, este horário prevalece sobre o prompt e bloqueia IA, agenda e automações conversacionais fora do expediente.</p>
+                    <p class="field-hint">Quando ativado, este horário tem prioridade e pausa a IA, a agenda e outras automações fora do expediente.</p>
                     <label class="check-field"><input type="checkbox" name="n8n_enabled" value="1"><span>Usar integração externa neste assistente</span></label>
                     <label class="check-field"><input type="checkbox" name="reply_to_reactions" value="1"><span>Responder quando o contato reagir a uma mensagem</span><small class="field-hint">Desativado por padrão. Curtidas e emojis de reação não geram resposta automática.</small></label>
                 </div>
