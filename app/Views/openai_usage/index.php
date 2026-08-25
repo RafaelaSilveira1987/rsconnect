@@ -26,6 +26,16 @@ $selectedAgent = (int) ($filters['agent_id'] ?? 0);
 $budgetOverview = is_array($aiBudgetOverview ?? null) ? $aiBudgetOverview : [];
 $selectedBudgetPolicy = is_array($selectedAiBudgetPolicy ?? null) ? $selectedAiBudgetPolicy : [];
 $selectedBudgetDecision = is_array($selectedAiBudgetDecision ?? null) ? $selectedAiBudgetDecision : [];
+$commercialOverview = is_array($aiCommercialOverview ?? null) ? $aiCommercialOverview : [];
+$selectedCommercialPolicy = is_array($selectedAiCommercialPolicy ?? null) ? $selectedAiCommercialPolicy : [];
+$selectedCommercialAnalysis = is_array($selectedAiCommercialAnalysis ?? null) ? $selectedAiCommercialAnalysis : [];
+$commercialStatusLabel = static fn (string $status): string => match ($status) {
+    'healthy' => 'Saudável',
+    'attention' => 'Atenção',
+    'critical' => 'Margem baixa',
+    'loss' => 'Prejuízo conhecido',
+    default => 'Configurar',
+};
 $budgetActionLabel = static fn (string $action): string => match ($action) {
     'economy' => 'Forçar Econômico',
     'block_rs_ai' => 'Bloquear IA RS',
@@ -216,6 +226,71 @@ $refreshUrl = Router::url('/openai-usage') . '?' . http_build_query($queryBase +
     </form>
     <?php else: ?>
     <div class="openai-budget-select-note">Selecione uma empresa no filtro superior para editar orçamento, limites e ações automáticas.</div>
+    <?php endif; ?>
+</section>
+
+<section class="card openai-commercial-margin-panel">
+    <div class="section-heading">
+        <div><span class="eyebrow">Gestão comercial da IA</span><h2>Margem, custo e preço de referência</h2><p>Compara a receita contratada com o custo projetado da IA custeada pela RS e outros custos informados. A margem abaixo é de contribuição conhecida, não lucro líquido contábil.</p></div>
+        <span class="badge"><?= View::e(number_format(count(array_filter($commercialOverview, static fn(array $row): bool => !empty($row['configured']))),0,',','.')) ?> empresa(s) configurada(s)</span>
+    </div>
+
+    <div class="openai-commercial-summary">
+        <?php foreach (array_slice($commercialOverview, 0, 30) as $commercialRow):
+            $statusKey = (string) ($commercialRow['status'] ?? 'unconfigured');
+            $margin = $commercialRow['projected_margin_rate'] ?? null;
+            $commercialUrl = Router::url('/openai-usage') . '?' . http_build_query(['usage_period' => 'month', 'tenant_id' => (int) ($commercialRow['tenant_id'] ?? 0)]);
+        ?>
+        <article class="openai-commercial-company is-<?= View::e($statusKey) ?>">
+            <div class="openai-commercial-company-head">
+                <div><strong><?= View::e((string) ($commercialRow['tenant_name'] ?? 'Empresa')) ?></strong><small><?= View::e((string) (($commercialRow['subscription']['plan_name'] ?? 'Sem plano'))) ?> · <?= View::e($commercialStatusLabel($statusKey)) ?></small></div>
+                <a href="<?= View::e($commercialUrl) ?>">Analisar</a>
+            </div>
+            <div class="openai-commercial-kpis">
+                <span>Receita ref.<strong><?= View::e($brl((float) ($commercialRow['revenue_brl'] ?? 0))) ?></strong></span>
+                <span>IA projetada<strong><?= (float) ($commercialRow['usd_brl_rate'] ?? 0) > 0 ? View::e($brl((float) ($commercialRow['projected_ai_cost_brl'] ?? 0))) : '—' ?></strong></span>
+                <span>Margem conhecida<strong><?= $margin !== null ? View::e($percent((float) $margin)) : '—' ?></strong></span>
+            </div>
+            <div class="openai-commercial-company-foot">
+                <?php if ((float) ($commercialRow['price_gap_brl'] ?? 0) > .009): ?>Preço de referência abaixo do alvo em <strong><?= View::e($brl((float) $commercialRow['price_gap_brl'])) ?></strong>.<?php elseif ($statusKey === 'healthy'): ?>Margem projetada acima do alvo configurado.<?php elseif (empty($commercialRow['configured'])): ?>Defina receita e cotação USD/BRL para calcular a margem.<?php else: ?>Margem abaixo do alvo; revise custo ou condição comercial.<?php endif; ?>
+            </div>
+        </article>
+        <?php endforeach; ?>
+        <?php if (!$commercialOverview): ?><div class="empty-state">A migration de gestão comercial ainda não foi aplicada ou não existem empresas ativas.</div><?php endif; ?>
+    </div>
+
+    <?php if ($selectedTenant > 0): ?>
+    <form class="openai-commercial-policy-form" method="post" action="<?= View::e(Router::url('/openai-usage/commercial')) ?>">
+        <?= \App\Core\Csrf::input() ?>
+        <input type="hidden" name="tenant_id" value="<?= $selectedTenant ?>">
+        <div class="openai-commercial-policy-title">
+            <div><span class="eyebrow">Empresa selecionada</span><h3>Política comercial da franquia de IA</h3><p>Use a assinatura atual como receita de referência ou informe manualmente quanto da mensalidade deve sustentar esta operação.</p></div>
+            <label class="check-field"><input type="checkbox" name="enabled" value="1" <?= !isset($selectedCommercialPolicy['enabled']) || !empty($selectedCommercialPolicy['enabled']) ? 'checked' : '' ?>><span>Ativar análise</span></label>
+        </div>
+
+        <div class="openai-commercial-current">
+            <div><span>Receita de referência</span><strong><?= View::e($brl((float) ($selectedCommercialAnalysis['revenue_brl'] ?? 0))) ?></strong><small><?= ($selectedCommercialAnalysis['revenue_source'] ?? 'subscription') === 'manual' ? 'valor manual' : 'assinatura mensal equivalente' ?></small></div>
+            <div><span>IA atual</span><strong><?= (float) ($selectedCommercialAnalysis['usd_brl_rate'] ?? 0) > 0 ? View::e($brl((float) ($selectedCommercialAnalysis['current_ai_cost_brl'] ?? 0))) : '—' ?></strong><small><?= View::e($usd((float) ($selectedCommercialAnalysis['current_ai_cost_usd'] ?? 0))) ?></small></div>
+            <div><span>IA projetada</span><strong><?= (float) ($selectedCommercialAnalysis['usd_brl_rate'] ?? 0) > 0 ? View::e($brl((float) ($selectedCommercialAnalysis['projected_ai_cost_brl'] ?? 0))) : '—' ?></strong><small>ritmo do mês atual</small></div>
+            <div><span>Margem conhecida</span><strong><?= ($selectedCommercialAnalysis['projected_margin_rate'] ?? null) !== null ? View::e($percent((float) $selectedCommercialAnalysis['projected_margin_rate'])) : '—' ?></strong><small>alvo <?= View::e($percent((float) ($selectedCommercialAnalysis['target_margin_rate'] ?? .60))) ?></small></div>
+            <div><span>Contribuição projetada</span><strong><?= View::e($brl((float) ($selectedCommercialAnalysis['projected_contribution_brl'] ?? 0))) ?></strong><small>antes de custos não informados</small></div>
+            <div><span>Receita mínima p/ alvo</span><strong><?= View::e($brl((float) ($selectedCommercialAnalysis['recommended_revenue_brl'] ?? 0))) ?></strong><small><?= (float) ($selectedCommercialAnalysis['price_gap_brl'] ?? 0) > 0 ? View::e('ajuste sugerido +' . $brl((float) $selectedCommercialAnalysis['price_gap_brl'])) : 'preço atual cobre o alvo conhecido' ?></small></div>
+        </div>
+
+        <div class="form-grid three openai-commercial-fields">
+            <label class="field"><span>Origem da receita</span><select name="revenue_source"><option value="subscription" <?= ($selectedCommercialPolicy['revenue_source'] ?? 'subscription') === 'subscription' ? 'selected' : '' ?>>Assinatura atual</option><option value="manual" <?= ($selectedCommercialPolicy['revenue_source'] ?? '') === 'manual' ? 'selected' : '' ?>>Valor manual de referência</option></select><small>Assinatura converte ciclos trimestral/semestral/anual para equivalente mensal.</small></label>
+            <label class="field"><span>Receita manual (R$/mês)</span><input type="number" name="monthly_revenue_brl" min="0" step="0.01" value="<?= View::e((string) ($selectedCommercialPolicy['monthly_revenue_brl'] ?? '')) ?>"><small>Usado somente quando a origem manual estiver selecionada.</small></label>
+            <label class="field"><span>Outros custos mensais (R$)</span><input type="number" name="other_monthly_cost_brl" min="0" step="0.01" value="<?= View::e((string) ($selectedCommercialPolicy['other_monthly_cost_brl'] ?? '0')) ?>"><small>Infra, suporte, WhatsApp, automações ou custos atribuídos ao cliente.</small></label>
+        </div>
+        <div class="form-grid three openai-commercial-fields">
+            <label class="field"><span>Margem alvo (%)</span><input type="number" name="target_margin_percent" min="5" max="95" step="0.1" value="<?= View::e((string) ($selectedCommercialPolicy['target_margin_percent'] ?? '60')) ?>"><small>Usada para calcular a receita mínima de referência.</small></label>
+            <label class="field"><span>Margem de atenção (%)</span><input type="number" name="warning_margin_percent" min="-100" max="94" step="0.1" value="<?= View::e((string) ($selectedCommercialPolicy['warning_margin_percent'] ?? '40')) ?>"><small>Abaixo deste ponto a empresa aparece como margem baixa.</small></label>
+            <label class="field"><span>Cotação USD → BRL</span><input type="number" name="usd_brl_rate" min="0" step="0.0001" value="<?= View::e((string) ($selectedCommercialPolicy['usd_brl_rate'] ?? '')) ?>"><small>Opcional. Vazio herda <code>OPENAI_USAGE_USD_BRL</code>. Atual: <?= (float) ($selectedCommercialAnalysis['usd_brl_rate'] ?? 0) > 0 ? View::e(number_format((float) $selectedCommercialAnalysis['usd_brl_rate'],4,',','.')) : 'não configurada' ?>.</small></label>
+        </div>
+        <div class="openai-commercial-savebar"><p><strong>Importante:</strong> esta é uma margem de contribuição conhecida. Para aproximar a rentabilidade real, informe os demais custos mensais atribuíveis ao cliente.</p><button class="btn btn-primary" type="submit">Salvar política comercial</button></div>
+    </form>
+    <?php else: ?>
+    <div class="openai-budget-select-note">Selecione uma empresa no filtro superior para analisar receita, custo projetado, margem e preço de referência.</div>
     <?php endif; ?>
 </section>
 

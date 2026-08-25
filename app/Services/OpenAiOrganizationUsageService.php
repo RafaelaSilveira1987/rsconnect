@@ -314,7 +314,7 @@ final class OpenAiOrganizationUsageService
         $headers = [
             'Authorization: Bearer ' . $apiKey,
             'Accept: application/json',
-            'User-Agent: RS-Connect-OpenAI-Usage/36.19.2',
+            'User-Agent: RS-Connect-OpenAI-Usage/36.19.3',
         ];
         $organizationId = trim((string) Env::get('OPENAI_ORGANIZATION_ID', ''));
         if ($organizationId !== '') {

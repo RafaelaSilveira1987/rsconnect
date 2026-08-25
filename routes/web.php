@@ -265,6 +265,7 @@ return static function (Router $router): void {
     $router->get('/ai-credentials', [AiCredentialController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/openai-usage', [OpenAiUsageController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/openai-usage/budget', [OpenAiUsageController::class, 'saveBudgetPolicy'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/openai-usage/commercial', [OpenAiUsageController::class, 'saveCommercialPolicy'], ['auth', 'super_admin', 'csrf']);
     $router->post('/ai-credentials/save', [AiCredentialController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/agents', [AgentController::class, 'store'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->post('/agents/status', [AgentController::class, 'updateStatus'], ['auth', 'permission:agents.manage', 'csrf']);

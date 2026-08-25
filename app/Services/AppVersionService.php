@@ -29,10 +29,11 @@ final class AppVersionService
     // RS Connect 36.19.0 — painel OpenAI 2.0, medição de economia, memória progressiva e fatos estruturados.
     // RS Connect 36.19.1 — atribuição financeira de consumo OpenAI por empresa e assistente.
     // RS Connect 36.19.2 — orçamento de IA por empresa, alertas e proteção automática de consumo.
-    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql e 082_ai_budget_governance.sql.
+    // RS Connect 36.19.3 — margem comercial, receita de referência e preço recomendado da franquia de IA.
+    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql e 083_ai_commercial_margin.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.3';
-    public const PACKAGE_LABEL = 'RS Connect 36.19.2 — Governança de orçamento de IA por empresa';
-    public const REQUIRED_MIGRATION = '082_ai_budget_governance.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.19.3 — Gestão comercial da franquia de IA';
+    public const REQUIRED_MIGRATION = '083_ai_commercial_margin.sql';
 
     private PDO $pdo;
 
@@ -348,6 +349,17 @@ final class AppVersionService
                 ? 'Orçamento por empresa, alertas e ações automáticas de proteção estão disponíveis.'
                 : 'A política financeira por empresa ainda não foi aplicada.',
             'Executar database/migrations/082_ai_budget_governance.sql.'
+        );
+
+        $aiCommercialMarginReady = $this->tableExists('tenant_ai_commercial_policies')
+            && class_exists(AiCommercialMarginService::class);
+        $checks[] = $this->check(
+            'Gestão comercial da IA',
+            $aiCommercialMarginReady ? 'ok' : 'blocked',
+            $aiCommercialMarginReady
+                ? 'Receita de referência, custo projetado, margem conhecida e preço mínimo por empresa estão disponíveis.'
+                : 'A estrutura de margem comercial por empresa ainda não foi aplicada.',
+            'Executar database/migrations/083_ai_commercial_margin.sql.'
         );
 
         $contactAvatarReady = $this->columnExists('contacts', 'avatar_checked_at');

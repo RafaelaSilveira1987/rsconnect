@@ -112,3 +112,8 @@ Depois que a v36.19.1 passou a atribuir custo por empresa, a v36.19.2 adiciona u
 A política é deliberadamente isolada da operação humana. Mesmo quando `block_rs_ai` estiver ativo, atendimento humano, regras locais, cache e credenciais próprias continuam funcionando.
 
 Para configuração detalhada, consulte `guia-governanca-orcamento-ia.md`.
+
+
+## Margem comercial por empresa — v36.19.3
+
+O painel passa a cruzar custo técnico com a receita de referência da empresa. A origem pode ser a assinatura mensal equivalente ou um valor manual. Também é possível informar outros custos mensais e margem-alvo. Consulte `guia-margem-comercial-ia.md` para interpretação e boas práticas.

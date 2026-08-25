@@ -11,6 +11,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AiBudgetPolicyService;
+use App\Services\AiCommercialMarginService;
 use App\Services\AiEfficiencyDashboardService;
 use App\Services\OpenAiOrganizationUsageService;
 use DateTimeImmutable;
@@ -34,6 +35,11 @@ final class OpenAiUsageController
         $selectedBudgetPolicy = $tenantId > 0 ? $budgetService->policy($tenantId) : [];
         $selectedBudgetDecision = $tenantId > 0 ? $budgetService->decision($tenantId) : [];
 
+        $commercialService = new AiCommercialMarginService();
+        $commercialOverview = $commercialService->overview();
+        $selectedCommercialPolicy = $tenantId > 0 ? $commercialService->policy($tenantId) : [];
+        $selectedCommercialAnalysis = $tenantId > 0 ? $commercialService->analysis($tenantId) : [];
+
         View::render('openai_usage.index', [
             'title' => 'Consumo OpenAI',
             'openAiUsage' => $usage,
@@ -41,6 +47,9 @@ final class OpenAiUsageController
             'aiBudgetOverview' => $budgetOverview,
             'selectedAiBudgetPolicy' => $selectedBudgetPolicy,
             'selectedAiBudgetDecision' => $selectedBudgetDecision,
+            'aiCommercialOverview' => $commercialOverview,
+            'selectedAiCommercialPolicy' => $selectedCommercialPolicy,
+            'selectedAiCommercialAnalysis' => $selectedCommercialAnalysis,
         ]);
     }
 
@@ -61,6 +70,30 @@ final class OpenAiUsageController
             Flash::set('success', 'Política de orçamento de IA salva.');
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível salvar a política de orçamento: ' . $exception->getMessage());
+        }
+
+        $query = http_build_query(['usage_period' => 'month', 'tenant_id' => $tenantId > 0 ? $tenantId : null]);
+        header('Location: ' . Router::url('/openai-usage') . ($query !== '' ? '?' . $query : ''));
+        exit;
+    }
+
+    public function saveCommercialPolicy(): void
+    {
+        $tenantId = max(0, (int) ($_POST['tenant_id'] ?? 0));
+        try {
+            (new AiCommercialMarginService())->save($tenantId, $_POST, Auth::id());
+            Audit::log('ai.commercial_policy.updated', [
+                'enabled' => !empty($_POST['enabled']),
+                'revenue_source' => $_POST['revenue_source'] ?? 'subscription',
+                'monthly_revenue_brl' => $_POST['monthly_revenue_brl'] ?? null,
+                'other_monthly_cost_brl' => $_POST['other_monthly_cost_brl'] ?? null,
+                'target_margin_percent' => $_POST['target_margin_percent'] ?? null,
+                'warning_margin_percent' => $_POST['warning_margin_percent'] ?? null,
+                'usd_brl_rate' => $_POST['usd_brl_rate'] ?? null,
+            ], $tenantId > 0 ? $tenantId : null);
+            Flash::set('success', 'Política comercial da IA salva.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar a política comercial: ' . $exception->getMessage());
         }
 
         $query = http_build_query(['usage_period' => 'month', 'tenant_id' => $tenantId > 0 ? $tenantId : null]);

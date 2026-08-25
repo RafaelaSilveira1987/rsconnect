@@ -17,6 +17,7 @@ Este índice reúne a documentação operacional, técnica, de implantação e c
 - [Guia de filas e atendimento humano](guia-filas-atendimento-humano.md)
 - [Guia de consumo e economia de IA](guia-consumo-ia.md)
 - [Guia de governança e orçamento de IA por empresa](guia-governanca-orcamento-ia.md)
+- [Guia de margem comercial da franquia de IA](guia-margem-comercial-ia.md)
 - [Guia de memória progressiva e continuidade do contato](guia-memoria-progressiva.md)
 
 ## Implantação e validação
@@ -27,6 +28,6 @@ Este índice reúne a documentação operacional, técnica, de implantação e c
 
 > Atualize estes documentos sempre que uma versão alterar regras, permissões ou fluxos operacionais.
 
-## Atualização v36.19.2
+## Atualização v36.19.3
 
-O pacote documental acompanha a governança financeira por empresa, o painel OpenAI 2.0 e a memória progressiva. Para implantação desta versão, use também `INSTRUCOES-v36.19.2.md` na raiz do projeto.
+O pacote documental acompanha governança financeira, margem comercial por empresa, painel OpenAI 2.0 e memória progressiva. Para implantação desta versão, use também `INSTRUCOES-v36.19.3.md` na raiz do projeto.

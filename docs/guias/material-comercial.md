@@ -15,6 +15,7 @@ O RS Connect centraliza WhatsApp, IA e equipe humana em uma operação organizad
 - Fotos, anexos, contatos, etiquetas e busca.
 - Agenda, relatórios, alertas e auditoria.
 - Controle de consumo, orçamento, projeção e economia de IA.
+- Visão comercial por cliente com receita de referência, custo projetado, margem conhecida e sinalização de contratos que precisam de revisão.
 - Memória progressiva que preserva contexto com menos histórico reenviado.
 - Isolamento de dados por empresa e administração própria do cliente.
 
@@ -37,3 +38,8 @@ O RS Connect centraliza WhatsApp, IA e equipe humana em uma operação organizad
 ## Controle financeiro de IA por empresa
 
 A RS Connect permite acompanhar e proteger o custo de IA individualmente por cliente. Além de medir tokens e custo atribuído, a plataforma pode alertar a operação, reduzir automaticamente o perfil de consumo e aplicar limite somente sobre a IA custeada pela RS, preservando atendimento humano e os demais recursos do canal.
+
+
+## Gestão comercial da franquia de IA — v36.19.3
+
+A RS Connect transforma telemetria técnica em decisão comercial: mostra custo projetado da IA por cliente, compara com a receita contratada e indica a margem de contribuição conhecida e o valor mínimo de referência para a margem desejada. Isso ajuda a identificar operações saudáveis e contratos que merecem revisão sem misturar custo técnico com faturamento de outros clientes.

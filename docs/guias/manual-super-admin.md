@@ -54,3 +54,8 @@ A v36.19.0 mantém `conversation_ai_memory` para o atendimento atual e `contact_
 ## Governança financeira da IA — v36.19.2
 
 Em **Consumo OpenAI**, filtre uma empresa para configurar seu orçamento de IA custeada pela RS Connect. A política pode somente alertar, forçar temporariamente o modo Econômico ou bloquear novas chamadas com credencial RS no limite. O bloqueio não afeta atendimento humano, regras locais, cache nem credencial própria do cliente.
+
+
+## Margem comercial da IA — v36.19.3
+
+Em **Consumo OpenAI**, selecione uma empresa para comparar receita de referência, custo projetado da IA RS, demais custos informados e margem conhecida. Use o indicador como apoio comercial, não como lucro líquido. Contratos customizados podem usar receita manual e cotação USD/BRL específica.
