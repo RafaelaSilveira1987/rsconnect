@@ -21,7 +21,7 @@ $checks = [
         && str_contains($conversationView, 'data-after-hours-list-slot'),
     'banner detalhado na conversa' => str_contains($conversationView, 'after-hours-queue-banner')
         && str_contains($conversationView, 'Retomada prevista')
-        && str_contains($conversationView, 'Assumir agora'),
+        && str_contains($conversationView, 'Assumir e retirar da fila'),
     'polling mantém estado da fila' => str_contains($javascript, 'afterHoursListMarkup')
         && str_contains($javascript, "row?.classList.toggle('has-after-hours-queue'")
         && str_contains($javascript, 'data-after-hours-queue-count'),
@@ -31,12 +31,12 @@ $checks = [
     'serviço calcula próxima abertura' => str_contains($service, 'business_hours_json')
         && str_contains($service, 'nextOpeningAt')
         && str_contains($service, "AS message_count"),
-    'estilos responsivos incluídos' => str_contains($css, 'RS Connect 36.18.3')
+    'estilos responsivos incluídos' => str_contains($css, 'RS Connect 36.18.5')
         && str_contains($css, '.after-hours-queue-banner')
         && str_contains($css, '.after-hours-operation-card'),
-    'versão e assets atualizados' => str_contains($version, 'RS Connect 36.18.3')
-        && str_contains($layout, 'app.css?v=36.18.3')
-        && str_contains($layout, 'app.js?v=36.18.3'),
+    'versão e assets atualizados' => str_contains($version, 'RS Connect 36.18.5')
+        && str_contains($layout, 'app.css?v=36.18.5')
+        && str_contains($layout, 'app.js?v=36.18.5'),
 ];
 
 $failed = [];

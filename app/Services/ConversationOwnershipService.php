@@ -169,6 +169,14 @@ final class ConversationOwnershipService
                 $conversation['assigned_user_name'] = (string) (Auth::user()['name'] ?? '');
             }
 
+            $conversation['after_hours_resolved'] = (new AiAfterHoursRecoveryService())->resolveForHumanTakeover(
+                $pdo,
+                $tenantId,
+                $conversationId,
+                $actorId,
+                'ownership_claim'
+            );
+
             if ($started) {
                 $pdo->commit();
             }
@@ -265,6 +273,17 @@ final class ConversationOwnershipService
             };
             $this->updateAssignment($pdo, $conversationId, $tenantId, $targetUserId, $source, $actorId);
 
+            $afterHoursResolved = 0;
+            if ($action !== 'release') {
+                $afterHoursResolved = (new AiAfterHoursRecoveryService())->resolveForHumanTakeover(
+                    $pdo,
+                    $tenantId,
+                    $conversationId,
+                    $actorId,
+                    'ownership_' . $action
+                );
+            }
+
             $name = '';
             if (($targetUserId ?? 0) > 0) {
                 $nameStatement = $pdo->prepare('SELECT name FROM users WHERE id = :id LIMIT 1');
@@ -283,6 +302,7 @@ final class ConversationOwnershipService
                 'assigned_user_id' => $targetUserId,
                 'assigned_user_name' => $name,
                 'action' => $action,
+                'after_hours_resolved' => $afterHoursResolved,
             ];
         } catch (Throwable $exception) {
             if ($started && $pdo->inTransaction()) {

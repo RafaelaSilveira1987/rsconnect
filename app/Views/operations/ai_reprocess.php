@@ -67,7 +67,7 @@ $statusLabel = static function (string $status): string {
     <article class="<?= (int) ($afterHours['errors'] ?? 0) > 0 ? 'is-warning' : ((int) ($afterHours['total'] ?? 0) > 0 ? 'is-blue' : 'is-success') ?>">
         <span>Fora do horário</span>
         <strong><?= (int) ($afterHours['total'] ?? 0) ?> pendência(s)</strong>
-        <small><?php if ((int) ($afterHours['blocked_plan'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_plan'] ?> aguardando franquia · <?php endif; ?><?php if ((int) ($afterHours['blocked_human'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_human'] ?> respeitando humano · <?php endif; ?><?= (int) ($afterHours['errors'] ?? 0) ?> com atenção</small>
+        <small><?php if ((int) ($afterHours['blocked_plan'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_plan'] ?> aguardando franquia · <?php endif; ?><?php if ((int) ($afterHours['blocked_human'] ?? 0) > 0): ?><?= (int) $afterHours['blocked_human'] ?> aguardando equipe · <?php endif; ?><?= (int) ($afterHours['errors'] ?? 0) ?> com atenção</small>
     </article>
 </section>
 
@@ -149,7 +149,7 @@ $statusLabel = static function (string $status): string {
         <strong>Proteções ativas</strong>
         <p>A retomada só responde quando a empresa já está no horário de atendimento, a conversa continua em modo IA, ninguém da equipe respondeu manualmente, o WhatsApp está disponível e — quando a credencial é custeada pela RS Connect — ainda existe franquia no plano.</p>
         <?php if ((int) ($afterHours['blocked_plan'] ?? 0) > 0): ?><small><?= (int) $afterHours['blocked_plan'] ?> conversa(s) estão preservadas aguardando renovação/aumento da franquia.</small><?php endif; ?>
-        <?php if ((int) ($afterHours['blocked_human'] ?? 0) > 0): ?><small><?= (int) $afterHours['blocked_human'] ?> conversa(s) não serão automatizadas enquanto estiverem sob atendimento humano ou assistente pausado.</small><?php endif; ?>
+        <?php if ((int) ($afterHours['blocked_human'] ?? 0) > 0): ?><small><?= (int) $afterHours['blocked_human'] ?> conversa(s) foram recebidas fora do horário e estão sob responsabilidade da equipe humana ou com a IA pausada.</small><?php endif; ?>
     </div>
     <?php if ($afterHoursItems): ?>
     <div class="after-hours-operations-list" data-collapsible-list="5">
@@ -160,7 +160,7 @@ $statusLabel = static function (string $status): string {
                     'pending' => 'Aguardando horário',
                     'processing' => 'Retomando agora',
                     'blocked_plan' => 'Aguardando franquia',
-                    'blocked_human' => 'Pausada para humano',
+                    'blocked_human' => 'Aguardando equipe',
                     'error' => 'Nova tentativa programada',
                 ][$pendingStatus] ?? ucfirst($pendingStatus);
                 $pendingClass = [
@@ -196,7 +196,7 @@ $statusLabel = static function (string $status): string {
                     <?php if (!empty($item['last_error'])): ?>
                         <div class="after-hours-operation-note is-error"><?= View::e(OperationalLanguageService::replaceTechnicalTerms((string) $item['last_error'])) ?></div>
                     <?php elseif ($pendingStatus === 'blocked_human'): ?>
-                        <div class="after-hours-operation-note">A automação está respeitando o atendimento humano ou a IA pausada.</div>
+                        <div class="after-hours-operation-note">A conversa está preservada e destacada para a equipe humana; nenhuma resposta automática será enviada.</div>
                     <?php elseif ($pendingStatus === 'blocked_plan'): ?>
                         <div class="after-hours-operation-note">A conversa permanece preservada até a franquia estar disponível.</div>
                     <?php else: ?>

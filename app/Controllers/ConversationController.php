@@ -14,6 +14,7 @@ use App\Core\PublicId;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AiAutomationService;
+use App\Services\AiAfterHoursRecoveryService;
 use App\Services\AgentRoutingService;
 use App\Services\AgentOperatingPolicyService;
 use App\Services\AiModelService;
@@ -613,7 +614,17 @@ final class ConversationController
                 ]);
             }
 
+            $resolvedAfterHours = (new AiAfterHoursRecoveryService())->resolveForHumanTakeover(
+                $pdo,
+                (int) $conversation['tenant_id'],
+                $conversationId,
+                (int) (Auth::id() ?? 0),
+                'human_reply'
+            );
             $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'message.sent', 'Mensagem enviada pelo painel.');
+            if ($resolvedAfterHours > 0) {
+                $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'after_hours.resolved_by_human', 'Fila fora do horário encerrada após resposta humana.');
+            }
             $pdo->commit();
 
             Audit::log('conversation.message_sent', [
@@ -789,7 +800,17 @@ final class ConversationController
                 ]);
             }
 
+            $resolvedAfterHours = (new AiAfterHoursRecoveryService())->resolveForHumanTakeover(
+                $pdo,
+                (int) $conversation['tenant_id'],
+                $conversationId,
+                (int) (Auth::id() ?? 0),
+                'human_attachment_reply'
+            );
             $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'attachment.sent', 'Anexo enviado pelo painel.');
+            if ($resolvedAfterHours > 0) {
+                $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'after_hours.resolved_by_human', 'Fila fora do horário encerrada após resposta humana com anexo.');
+            }
             $pdo->commit();
 
             Audit::log('conversation.attachment_sent', [
@@ -1131,7 +1152,11 @@ final class ConversationController
                 default => 'Responsável definido como ' . ($name !== '' ? $name : 'profissional selecionado') . '.',
             };
             $returnTenantId = (int) $result['tenant_id'];
+            $resolvedAfterHours = (int) ($result['after_hours_resolved'] ?? 0);
             $this->insertEvent($conversationId, $returnTenantId, 'ownership.' . $action, $description);
+            if ($resolvedAfterHours > 0) {
+                $this->insertEvent($conversationId, $returnTenantId, 'after_hours.human_takeover', 'Fila fora do horário encerrada porque a equipe assumiu a responsabilidade.');
+            }
             Audit::log('conversation.ownership_changed', $result, $returnTenantId);
             Flash::set('success', $description);
         } catch (Throwable $exception) {
@@ -1165,6 +1190,8 @@ final class ConversationController
         $ownershipService = new ConversationOwnershipService();
         $ownershipSettings = $ownershipService->settingsForTenant($pdo, (int) $conversation['tenant_id']);
 
+        $resolvedAfterHours = 0;
+
         try {
             $pdo->beginTransaction();
             if (!empty($ownershipSettings['enabled'])) {
@@ -1175,6 +1202,13 @@ final class ConversationController
                     $ownershipService->claimForHumanAction($pdo, $conversation);
                     $pdo->prepare('UPDATE conversations SET attendance_mode = "human" WHERE id = :id AND tenant_id = :tenant_id')
                         ->execute(['id' => $conversationId, 'tenant_id' => (int) $conversation['tenant_id']]);
+                    $resolvedAfterHours = (new AiAfterHoursRecoveryService())->resolveForHumanTakeover(
+                        $pdo,
+                        (int) $conversation['tenant_id'],
+                        $conversationId,
+                        (int) (Auth::id() ?? 0),
+                        'mode_human'
+                    );
                 } elseif ($mode === 'ai') {
                     if ((int) ($conversation['assigned_user_id'] ?? 0) > 0) {
                         $ownershipService->changeAssignment($pdo, $conversationId, null, 'release');
@@ -1214,6 +1248,15 @@ final class ConversationController
                     'status_changed_by_user_id' => Auth::id(),
                     'id' => $conversationId,
                 ]);
+                if ($mode === 'human') {
+                    $resolvedAfterHours = (new AiAfterHoursRecoveryService())->resolveForHumanTakeover(
+                        $pdo,
+                        (int) $conversation['tenant_id'],
+                        $conversationId,
+                        (int) (Auth::id() ?? 0),
+                        'mode_human'
+                    );
+                }
             }
             $pdo->commit();
         } catch (Throwable $exception) {
@@ -1247,7 +1290,14 @@ final class ConversationController
             'paused' => 'IA pausada nesta conversa.',
         ];
         $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'mode.' . $mode, $descriptions[$mode]);
-        Audit::log('conversation.mode_changed', ['conversation_id' => $conversationId, 'mode' => $mode], (int) $conversation['tenant_id']);
+        if ($resolvedAfterHours > 0) {
+            $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'after_hours.human_takeover', 'Fila fora do horário encerrada ao assumir o atendimento.');
+        }
+        Audit::log('conversation.mode_changed', [
+            'conversation_id' => $conversationId,
+            'mode' => $mode,
+            'after_hours_resolved' => $resolvedAfterHours,
+        ], (int) $conversation['tenant_id']);
 
         Flash::set('success', $descriptions[$mode]);
         $this->redirect('/conversations?conversation_id=' . $conversationId);

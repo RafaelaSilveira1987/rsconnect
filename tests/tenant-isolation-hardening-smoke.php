@@ -32,10 +32,10 @@ $checks = [
         && str_contains($diagnostic, 'crm lead x pipeline'),
     'histórico e versão atual preservados' => str_contains($version, 'RS Connect 36.15.1')
         && str_contains($version, 'RS Connect 36.18.0')
-        && str_contains($version, 'RS Connect 36.18.3')
+        && str_contains($version, 'RS Connect 36.18.5')
         && str_contains($version, 'Beta Comercial 1.2'),
-    'cache dos assets renovado' => str_contains($layout, 'app.css?v=36.18.3')
-        && str_contains($layout, 'app.js?v=36.18.3'),
+    'cache dos assets renovado' => str_contains($layout, 'app.css?v=36.18.5')
+        && str_contains($layout, 'app.js?v=36.18.5'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

@@ -734,7 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
       pending: { label: 'Aguardando horário', className: 'is-waiting' },
       processing: { label: 'Retomando agora', className: 'is-processing' },
       blocked_plan: { label: 'Aguardando franquia', className: 'is-blocked' },
-      blocked_human: { label: 'Pausada para humano', className: 'is-human' },
+      blocked_human: { label: 'Aguardando equipe', className: 'is-human' },
       error: { label: 'Nova tentativa programada', className: 'is-error' },
     };
     return map[normalized] || { label: 'Aguardando horário', className: 'is-waiting' };

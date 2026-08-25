@@ -10,6 +10,7 @@ use App\Core\Env;
 use App\Core\RequestSecurity;
 use App\Services\AccessControlService;
 use App\Services\AiAutomationService;
+use App\Services\AiAfterHoursRecoveryService;
 use App\Services\AiReplyTimingService;
 use App\Services\AgentRoutingService;
 use App\Services\AgentOperatingPolicyService;
@@ -337,6 +338,31 @@ final class EvolutionWebhookController
                     if (is_array($resolvedAgent)) {
                         $operatingPolicy = (new AgentOperatingPolicyService())->status($resolvedAgent);
                         $outsideBusinessHours = !empty($operatingPolicy['enforced']) && empty($operatingPolicy['inside']);
+
+                        // 36.18.4: a fila fora do horário é operacional, não exclusiva da IA.
+                        // Quando a conversa já está com a equipe humana (ou com a IA pausada),
+                        // preserva e destaca as mensagens da mesma forma, sem tentar automatizar.
+                        if ($outsideBusinessHours) {
+                            $modeStatement = $pdo->prepare(
+                                'SELECT attendance_mode FROM conversations WHERE id = :conversation_id AND tenant_id = :tenant_id LIMIT 1'
+                            );
+                            $modeStatement->execute([
+                                'conversation_id' => $conversationId,
+                                'tenant_id' => (int) $instance['tenant_id'],
+                            ]);
+                            $attendanceMode = (string) ($modeStatement->fetchColumn() ?: 'ai');
+                            if ($attendanceMode !== 'ai') {
+                                (new AiAfterHoursRecoveryService())->markPending(
+                                    $pdo,
+                                    (int) $instance['tenant_id'],
+                                    $conversationId,
+                                    (int) ($resolvedAgent['id'] ?? 0),
+                                    $storedMessageId > 0 ? $storedMessageId : null,
+                                    'blocked_human'
+                                );
+                            }
+                        }
+
                         if (!$outsideBusinessHours) {
                             $replyWaitRemaining = (new AiReplyTimingService())->remainingForConversation(
                                 $pdo,

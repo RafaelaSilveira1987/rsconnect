@@ -14,11 +14,15 @@ use Throwable;
 final class AiAfterHoursRecoveryService
 {
     /** @return array{pending_id:int,should_ack:bool} */
-    public function markPending(PDO $pdo, int $tenantId, int $conversationId, int $agentId, ?int $messageId): array
+    public function markPending(PDO $pdo, int $tenantId, int $conversationId, int $agentId, ?int $messageId, string $initialStatus = 'pending'): array
     {
         if ($tenantId < 1 || $conversationId < 1 || $agentId < 1) {
             return ['pending_id' => 0, 'should_ack' => true];
         }
+
+        $initialStatus = in_array($initialStatus, ['pending', 'blocked_human'], true)
+            ? $initialStatus
+            : 'pending';
 
         try {
             $message = null;
@@ -57,7 +61,7 @@ final class AiAfterHoursRecoveryService
                          first_received_at, last_received_at, status, next_attempt_at)
                      VALUES
                         (:tenant_id, :conversation_id, :agent_id, :message_id, :message_id_last,
-                         :first_received_at, :last_received_at, "pending", NOW())'
+                         :first_received_at, :last_received_at, :initial_status, NOW())'
                 );
                 $insert->execute([
                     'tenant_id' => $tenantId,
@@ -67,6 +71,7 @@ final class AiAfterHoursRecoveryService
                     'message_id_last' => $resolvedMessageId,
                     'first_received_at' => $receivedAt,
                     'last_received_at' => $receivedAt,
+                    'initial_status' => $initialStatus,
                 ]);
                 return ['pending_id' => (int) $pdo->lastInsertId(), 'should_ack' => true];
             }
@@ -91,7 +96,7 @@ final class AiAfterHoursRecoveryService
                      last_message_id = :last_message_id,
                      first_received_at = :first_received_at,
                      last_received_at = :last_received_at,
-                     status = "pending",
+                     status = :initial_status,
                      ack_sent_at = :ack_sent_at,
                      next_attempt_at = NOW(),
                      recovered_at = NULL,
@@ -107,6 +112,7 @@ final class AiAfterHoursRecoveryService
                 'first_received_at' => $newWindow ? $receivedAt : (string) ($row['first_received_at'] ?? $receivedAt),
                 'last_received_at' => $receivedAt,
                 'ack_sent_at' => ($newWindow || $newLocalDay) ? null : ($row['ack_sent_at'] ?? null),
+                'initial_status' => $initialStatus,
                 'id' => (int) $row['id'],
             ]);
 
@@ -114,6 +120,51 @@ final class AiAfterHoursRecoveryService
         } catch (Throwable) {
             // Antes da migration 052, mantém o comportamento antigo de mensagem de ausência.
             return ['pending_id' => 0, 'should_ack' => true];
+        }
+    }
+
+
+    /**
+     * Encerra imediatamente uma pendência pós-horário quando a equipe assume a conversa.
+     *
+     * A atualização usa o mesmo PDO/transaction do chamador para que modo humano,
+     * responsável e retirada da fila sejam confirmados juntos. O worker não deve
+     * reabrir uma pendência cancelada durante uma recuperação concorrente.
+     */
+    public function resolveForHumanTakeover(
+        PDO $pdo,
+        int $tenantId,
+        int $conversationId,
+        ?int $actorUserId = null,
+        string $source = 'human_takeover'
+    ): int {
+        if ($tenantId < 1 || $conversationId < 1) {
+            return 0;
+        }
+
+        $source = trim($source) !== '' ? trim($source) : 'human_takeover';
+        $source = mb_substr($source, 0, 80);
+
+        try {
+            $statement = $pdo->prepare(
+                'UPDATE ai_after_hours_pending
+                 SET status = "cancelled",
+                     next_attempt_at = NULL,
+                     recovery_source = :source,
+                     last_error = NULL
+                 WHERE tenant_id = :tenant_id
+                   AND conversation_id = :conversation_id
+                   AND status IN ("pending","processing","blocked_plan","blocked_human","error")'
+            );
+            $statement->execute([
+                'source' => $source,
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+            ]);
+            return $statement->rowCount();
+        } catch (Throwable) {
+            // Mantém compatibilidade com instalações que ainda não aplicaram a migration 052.
+            return 0;
         }
     }
 
@@ -235,12 +286,25 @@ final class AiAfterHoursRecoveryService
                 }
 
                 $attemptStartedAt = \App\Core\Clock::nowUtc();
-                $pdo->prepare('UPDATE ai_after_hours_pending SET status = "processing", recovery_attempts = recovery_attempts + 1, last_attempt_at = :attempt_started_at, recovery_source = :source, last_error = NULL WHERE id = :id')
-                    ->execute([
-                        'attempt_started_at' => $attemptStartedAt,
-                        'source' => mb_substr($source, 0, 80),
-                        'id' => $id,
-                    ]);
+                $processingClaim = $pdo->prepare(
+                    'UPDATE ai_after_hours_pending
+                     SET status = "processing",
+                         recovery_attempts = recovery_attempts + 1,
+                         last_attempt_at = :attempt_started_at,
+                         recovery_source = :source,
+                         last_error = NULL
+                     WHERE id = :id
+                       AND status IN ("pending","blocked_plan","blocked_human","error")'
+                );
+                $processingClaim->execute([
+                    'attempt_started_at' => $attemptStartedAt,
+                    'source' => mb_substr($source, 0, 80),
+                    'id' => $id,
+                ]);
+                if ($processingClaim->rowCount() < 1) {
+                    // A equipe pode ter assumido a conversa entre a leitura da fila e esta etapa.
+                    continue;
+                }
 
                 (new AiAutomationService())->handleIncoming(
                     $instance,
@@ -509,7 +573,8 @@ final class AiAfterHoursRecoveryService
             Database::connection()->prepare(
                 'UPDATE ai_after_hours_pending
                  SET status = :status, next_attempt_at = :next_attempt_at, last_error = :last_error
-                 WHERE id = :id'
+                 WHERE id = :id
+                   AND status <> "cancelled"'
             )->execute([
                 'status' => $status,
                 'next_attempt_at' => $next,
@@ -534,7 +599,8 @@ final class AiAfterHoursRecoveryService
                      next_attempt_at = NULL,
                      recovery_source = :source,
                      last_error = :last_error
-                 WHERE id = :id'
+                 WHERE id = :id
+                   AND status <> "cancelled"'
             )->execute([
                 'status' => $status,
                 'is_recovered' => $status === 'recovered' ? 1 : 0,

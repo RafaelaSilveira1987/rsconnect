@@ -1,0 +1,25 @@
+# Central de documentação — RS Connect
+
+Este índice reúne a documentação operacional, técnica, de implantação e comercial da plataforma.
+
+## Perfis e operação
+
+- [Manual do administrador do cliente](manual-administrador-cliente.md)
+- [Manual do Super Admin RS](manual-super-admin.md)
+- [Matriz de permissões](matriz-permissoes.md)
+
+## WhatsApp, IA e atendimento
+
+- [Guia de criação da instância Evolution](guia-criacao-instancia.md)
+- [Guia de conexão pelo QR Code](guia-conexao-qrcode.md)
+- [Guia de configuração dos assistentes](guia-configuracao-assistentes.md)
+- [Guia de filas e atendimento humano](guia-filas-atendimento-humano.md)
+- [Guia de consumo e economia de IA](guia-consumo-ia.md)
+
+## Implantação e validação
+
+- [Roteiro de implantação](roteiro-implantacao.md)
+- [Roteiro de homologação](roteiro-homologacao.md)
+- [Material comercial com funcionalidades reais](material-comercial.md)
+
+> Atualize estes documentos sempre que uma versão alterar regras, permissões ou fluxos operacionais.

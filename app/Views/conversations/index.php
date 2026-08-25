@@ -23,7 +23,7 @@ $afterHoursStatusLabels = [
     'pending' => 'Aguardando horário',
     'processing' => 'Retomando agora',
     'blocked_plan' => 'Aguardando franquia',
-    'blocked_human' => 'Pausada para humano',
+    'blocked_human' => 'Aguardando equipe',
     'error' => 'Nova tentativa programada',
 ];
 $afterHoursStatusClasses = [
@@ -380,7 +380,9 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                 $queueDescription = match ($selectedAfterHoursStatus) {
                     'processing' => 'A automação já iniciou a retomada desta conversa.',
                     'blocked_plan' => 'A mensagem está segura, mas a retomada automática depende da franquia de IA.',
-                    'blocked_human' => 'A mensagem está segura e a automação respeitará o atendimento humano ou a IA pausada.',
+                    'blocked_human' => (string) ($selected['attendance_mode'] ?? '') === 'human'
+                        ? 'A mensagem chegou fora do horário e permanece destacada para a equipe responsável.'
+                        : 'A mensagem está segura e a automação respeitará o atendimento humano ou a IA pausada.',
                     'error' => 'A mensagem está segura. O sistema fará uma nova tentativa sem duplicar respostas.',
                     default => $isOutsideConfiguredHours
                         ? 'A conversa será retomada automaticamente quando o expediente começar.'
@@ -404,12 +406,14 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                             <span><small>Primeiro contato</small><strong><?= View::e($receivedAt !== '' ? $formatDate($receivedAt, 'd/m H:i') : '—') ?></strong></span>
                             <span><small>Última mensagem</small><strong><?= View::e($lastReceivedAt !== '' ? $formatDate($lastReceivedAt, 'd/m H:i') : '—') ?></strong></span>
                             <span><small>Aviso de ausência</small><strong><?= $ackSent ? 'Enviado' : 'Não enviado' ?></strong></span>
-                            <span><small>Retomada prevista</small><strong><?= View::e($nextOpeningRaw !== '' ? $formatDate($nextOpeningRaw, 'd/m H:i') : ($isOutsideConfiguredHours ? 'Próximo expediente' : 'Em processamento')) ?></strong></span>
+                            <span><small><?= (string) ($selected['attendance_mode'] ?? '') === 'human' ? 'Próxima abertura' : 'Retomada prevista' ?></small><strong><?= View::e($nextOpeningRaw !== '' ? $formatDate($nextOpeningRaw, 'd/m H:i') : ($isOutsideConfiguredHours ? 'Próximo expediente' : 'Em processamento')) ?></strong></span>
                         </div>
                         <?php if (!empty($selectedAfterHoursPending['last_error'])): ?>
                             <div class="after-hours-queue-note is-error"><strong>Última tentativa:</strong> <?= View::e((string) $selectedAfterHoursPending['last_error']) ?></div>
                         <?php elseif ($selectedAfterHoursStatus === 'blocked_human'): ?>
-                            <div class="after-hours-queue-note">A automação só voltará a responder quando a conversa retornar ao modo IA.</div>
+                            <div class="after-hours-queue-note"><?= (string) ($selected['attendance_mode'] ?? '') === 'human'
+                                ? 'A conversa já está com a equipe. A pendência será encerrada após uma resposta humana.'
+                                : 'A automação só voltará a responder quando a conversa retornar ao modo IA.' ?></div>
                         <?php else: ?>
                             <div class="after-hours-queue-note">As mensagens ficam reunidas em uma única demanda e não consomem tokens enquanto aguardam.</div>
                         <?php endif; ?>
@@ -417,8 +421,8 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                     <?php if ($canOperateSelected && (string) ($selected['attendance_mode'] ?? '') !== 'human'): ?>
                         <form class="after-hours-queue-action" method="post" action="<?= View::e(Router::url('/conversations/mode')) ?>">
                             <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="mode" value="human">
-                            <button class="btn btn-outline btn-small" type="submit">Assumir agora</button>
-                            <small>Para responder antes da abertura.</small>
+                            <button class="btn btn-outline btn-small" type="submit">Assumir e retirar da fila</button>
+                            <small>A responsabilidade passa para você e a retomada automática é cancelada.</small>
                         </form>
                     <?php endif; ?>
                 </section>
@@ -438,7 +442,7 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                 <?php elseif ((int) ($selected['assigned_user_id'] ?? 0) === (int) (Auth::id() ?? 0)): ?>
                     <div class="conversation-ownership-banner is-mine" data-ownership-banner>
                         <strong>Você está responsável por este atendimento</strong>
-                        <span>Outros usuários não poderão interferir até a transferência, liberação ou encerramento.</span>
+                        <span>O bloqueio exclusivo está ativo. Outros usuários só podem acompanhar até a transferência, liberação ou encerramento.</span>
                     </div>
                 <?php endif; ?>
             <?php endif; ?>
@@ -642,7 +646,8 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                                 <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
                                 <input type="hidden" name="tenant_id" value="<?= (int) $selected['tenant_id'] ?>">
                                 <input type="hidden" name="action" value="release">
-                                <button class="btn btn-quiet btn-block" type="submit">Liberar conversa</button>
+                                <button class="btn btn-quiet btn-block" type="submit">Liberar para a equipe</button>
+                                <small class="field-hint">A conversa permanece no atendimento humano; a IA não retoma automaticamente.</small>
                             </form>
                         <?php endif; ?>
 

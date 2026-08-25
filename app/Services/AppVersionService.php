@@ -23,9 +23,11 @@ final class AppVersionService
     // RS Connect 36.18.1 — criação de instâncias corrigida e novo cabeçalho operacional.
     // RS Connect 36.18.2 — vínculo automático e edição manual dos canais por assistente.
     // RS Connect 36.18.3 — exibição operacional da fila de mensagens fora do horário.
+    // RS Connect 36.18.4 — fila fora do horário também para conversas em atendimento humano.
+    // RS Connect 36.18.5 — takeover humano atômico, bloqueio operacional e documentação consolidada.
     // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql e 079_ai_efficiency_phase2_and_report_cleanup.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.2';
-    public const PACKAGE_LABEL = 'RS Connect 36.18.3 — Fila fora do horário clara e acionável';
+    public const PACKAGE_LABEL = 'RS Connect 36.18.5 — Operação humana e documentação';
     public const REQUIRED_MIGRATION = '079_ai_efficiency_phase2_and_report_cleanup.sql';
 
     private PDO $pdo;

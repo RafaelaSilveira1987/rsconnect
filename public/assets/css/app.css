@@ -10760,7 +10760,7 @@ body.has-instance-create-drawer::before {
 }
 
 /* =========================================================
-   RS Connect 36.18.3 — fila fora do horário clara e acionável
+   RS Connect 36.18.5 — operação humana e documentação
    ========================================================= */
 .conversation-queue-filter{
   display:inline-flex;align-items:center;gap:5px;min-height:30px;padding:5px 9px;border:1px solid #d6e3ed;border-radius:999px;background:#f8fbfd;color:#52677b;font-size:.69rem;font-weight:850;text-decoration:none;transition:.18s ease
