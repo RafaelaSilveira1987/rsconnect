@@ -31,12 +31,12 @@ $checks = [
     'serviço calcula próxima abertura' => str_contains($service, 'business_hours_json')
         && str_contains($service, 'nextOpeningAt')
         && str_contains($service, "AS message_count"),
-    'estilos responsivos incluídos' => str_contains($css, 'RS Connect 36.18.5')
+    'estilos responsivos incluídos' => str_contains($css, 'RS Connect 36.18.6')
         && str_contains($css, '.after-hours-queue-banner')
         && str_contains($css, '.after-hours-operation-card'),
-    'versão e assets atualizados' => str_contains($version, 'RS Connect 36.18.5')
-        && str_contains($layout, 'app.css?v=36.18.5')
-        && str_contains($layout, 'app.js?v=36.18.5'),
+    'versão e assets atualizados' => str_contains($version, 'RS Connect 36.18.6')
+        && str_contains($layout, 'app.css?v=36.18.6')
+        && str_contains($layout, 'app.js?v=36.18.6'),
 ];
 
 $failed = [];

@@ -258,6 +258,7 @@ return static function (Router $router): void {
     $router->post('/instances/action', [InstanceController::class, 'remoteAction'], ['auth', 'permission:instances.manage', 'csrf']);
     $router->post('/instances/routing', [InstanceController::class, 'updateRouting'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->post('/instances/agent-update', [InstanceController::class, 'updateAgent'], ['auth', 'super_admin', 'csrf']);
+    $router->get('/instances/delete-preview', [InstanceController::class, 'deletePreview'], ['auth', 'permission:instances.manage']);
     $router->post('/instances/delete', [InstanceController::class, 'delete'], ['auth', 'permission:instances.manage', 'csrf']);
 
     $router->get('/agents', [AgentController::class, 'index'], ['auth', 'permission:agents.view']);

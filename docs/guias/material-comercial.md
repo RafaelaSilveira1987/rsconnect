@@ -7,7 +7,7 @@ O RS Connect centraliza WhatsApp, IA e equipe humana em uma operação organizad
 ## Capacidades disponíveis
 
 - Criação e gestão de conexões WhatsApp no próprio sistema.
-- QR Code, webhook, eventos e filtros por canal.
+- QR Code, webhook, eventos, filtros e exclusão assistida por canal.
 - Vários canais e assistentes por empresa.
 - Atendimento automático com base de conhecimento.
 - Transferência para humano, bloqueio por responsável e histórico preservado.

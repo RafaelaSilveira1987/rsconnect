@@ -29,9 +29,9 @@ $checks = [
         && str_contains($css, '#instance-drawer .instance-choice-card > input'),
     'responsividade disponível' => str_contains($css, '@media (max-width: 760px)')
         && str_contains($css, '@media (max-width: 460px)'),
-    'assets sem cache antigo' => preg_match('/app\.css\?v=36\.(17\.[12]|18\.[012345])/', $layout) === 1
-        && preg_match('/app\.js\?v=36\.(17\.[12]|18\.[012345])/', $layout) === 1,
-    'pacote identificado' => preg_match('/RS Connect 36\.(17\.[12]|18\.[012345])/', $version) === 1
+    'assets sem cache antigo' => preg_match('/app\.css\?v=36\.(17\.[12]|18\.[0123456])/', $layout) === 1
+        && preg_match('/app\.js\?v=36\.(17\.[12]|18\.[0123456])/', $layout) === 1,
+    'pacote identificado' => preg_match('/RS Connect 36\.(17\.[12]|18\.[0123456])/', $version) === 1
         && str_contains($version, '077_ai_efficiency_foundation.sql'),
     'instruções incluídas' => str_contains($instructions, 'Não há migration nova nesta versão.'),
 ];

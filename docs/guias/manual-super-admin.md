@@ -17,7 +17,7 @@ O Super Admin mantém a operação global, presta suporte, acompanha integraçõ
 1. Nunca alterar dados de outra empresa sem selecionar o tenant correto.
 2. Não assumir uma conversa apenas para inspecioná-la.
 3. Ao forçar transferência ou liberação, registrar o motivo.
-4. Não excluir uma instância com vínculos sem transferência assistida.
+4. Não excluir uma instância com vínculos sem transferência assistida e conferência da auditoria.
 5. Preservar `.env`, tokens e chaves administrativas somente no servidor.
 
 ## Checklist de incidente

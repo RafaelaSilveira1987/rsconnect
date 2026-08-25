@@ -1699,39 +1699,188 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  document.querySelectorAll('[data-instance-delete]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const form = document.querySelector('[data-instance-delete-form]');
-      if (!form) return;
-      const id = form.querySelector('[data-instance-delete-field="id"]');
-      const replacement = form.querySelector('[data-instance-delete-field="replacement"]');
-      const confirmation = form.querySelector('[data-instance-delete-field="confirmation"]');
-      const deleteRemote = form.querySelector('[data-instance-delete-field="delete_remote"]');
-      const name = document.querySelector('[data-instance-delete-name]');
-      const hint = document.querySelector('[data-instance-delete-hint]');
-      const description = document.querySelector('[data-instance-delete-description]');
-      const managed = button.dataset.managementMode === 'managed';
+  const instanceDeleteForm = document.querySelector('[data-instance-delete-form]');
+  if (instanceDeleteForm) {
+    const deleteField = (name) => instanceDeleteForm.querySelector(`[data-instance-delete-field="${name}"]`);
+    const deleteSubmit = instanceDeleteForm.querySelector('[data-instance-delete-submit]');
+    const deleteLoading = instanceDeleteForm.querySelector('[data-instance-delete-loading]');
+    const deleteImpact = instanceDeleteForm.querySelector('[data-instance-delete-impact]');
+    const deleteError = instanceDeleteForm.querySelector('[data-instance-delete-error]');
+    const deleteMergeNote = instanceDeleteForm.querySelector('[data-instance-delete-merge-note]');
+    const deleteReplacementHint = instanceDeleteForm.querySelector('[data-instance-delete-replacement-hint]');
+    const deleteRemoteAckRow = instanceDeleteForm.querySelector('[data-instance-delete-remote-ack]');
+    const deleteStatus = instanceDeleteForm.querySelector('[data-instance-delete-status]');
+    let deletePreviewState = null;
+    let deleteRequestSequence = 0;
 
-      if (id) id.value = button.dataset.id || '';
-      if (name) name.textContent = button.dataset.name || 'Conexão';
-      if (deleteRemote) deleteRemote.checked = managed;
-      if (description) description.textContent = managed
-        ? 'Esta instância foi criada pelo RS Connect. Por padrão, ela também será removida da Evolution.'
-        : 'Esta instância foi vinculada ao RS Connect. A exclusão remota fica desmarcada por segurança.';
-      if (confirmation) {
-        confirmation.value = '';
-        confirmation.placeholder = `EXCLUIR ${button.dataset.instanceName || ''}`;
+    const setDeleteMessage = (element, message, visible = true) => {
+      if (!element) return;
+      element.textContent = message || '';
+      element.hidden = !visible || !message;
+    };
+
+    const syncDeleteEligibility = () => {
+      const replacement = deleteField('replacement');
+      const confirmation = deleteField('confirmation');
+      const deleteRemote = deleteField('delete_remote');
+      const acknowledgeDependencies = deleteField('acknowledge_dependencies');
+      const acknowledgeRemote = deleteField('acknowledge_remote_active');
+      const expected = `EXCLUIR ${instanceDeleteForm.dataset.instanceName || ''}`;
+      const needsReplacement = Boolean(deletePreviewState?.requires_replacement);
+      const connectedWithoutRemoteDelete = deletePreviewState?.source?.status === 'connected' && !deleteRemote?.checked;
+
+      if (replacement) replacement.required = needsReplacement;
+      if (deleteRemoteAckRow) deleteRemoteAckRow.hidden = !connectedWithoutRemoteDelete;
+      if (acknowledgeRemote) {
+        acknowledgeRemote.required = connectedWithoutRemoteDelete;
+        if (!connectedWithoutRemoteDelete) acknowledgeRemote.checked = false;
       }
-      if (hint) hint.innerHTML = `Digite exatamente: <strong>EXCLUIR ${button.dataset.instanceName || ''}</strong>`;
-      Array.from(replacement?.options || []).forEach((option, index) => {
-        if (index === 0) return;
-        const visible = option.dataset.tenantId === button.dataset.tenantId && option.value !== button.dataset.id;
-        option.hidden = !visible;
-        option.disabled = !visible;
+
+      const ready = Boolean(deletePreviewState?.ok)
+        && (!needsReplacement || Boolean(replacement?.value))
+        && Boolean(acknowledgeDependencies?.checked)
+        && confirmation?.value.trim() === expected
+        && (!connectedWithoutRemoteDelete || Boolean(acknowledgeRemote?.checked));
+      if (deleteSubmit) deleteSubmit.disabled = !ready;
+    };
+
+    const renderDeletePreview = (payload) => {
+      deletePreviewState = payload;
+      if (deleteLoading) deleteLoading.hidden = true;
+      if (deleteImpact) deleteImpact.hidden = false;
+      setDeleteMessage(deleteError, '', false);
+
+      Object.entries(payload.counts || {}).forEach(([key, value]) => {
+        const target = instanceDeleteForm.querySelector(`[data-instance-delete-count="${key}"]`);
+        if (target) target.textContent = new Intl.NumberFormat('pt-BR').format(Number(value || 0));
       });
-      if (replacement) replacement.value = '';
+
+      if (deleteStatus) {
+        const labels = { connected: 'Conectada', disconnected: 'Desconectada', pending: 'Pendente' };
+        deleteStatus.textContent = labels[payload.source?.status] || payload.source?.status || 'Verificada';
+        deleteStatus.className = `badge badge-${payload.source?.status || 'warning'}`;
+      }
+
+      const conflicts = payload.conflicts || {};
+      const notes = [];
+      if (Number(conflicts.conversation_duplicates || 0) > 0) {
+        notes.push(`${conflicts.conversation_duplicates} conversa(s) já existem no destino e terão os históricos consolidados.`);
+      }
+      if (Number(conflicts.agent_binding_duplicates || 0) > 0) {
+        notes.push(`${conflicts.agent_binding_duplicates} vínculo(s) de assistente já existem no destino e serão unificados.`);
+      }
+      if (Number(payload.counts?.connection_events || 0) > 0) {
+        notes.push('Os eventos técnicos da conexão antiga serão resumidos na auditoria e removidos com o cadastro.');
+      }
+      if (deleteMergeNote) {
+        deleteMergeNote.textContent = notes.join(' ');
+        deleteMergeNote.hidden = notes.length === 0;
+      }
+      if (deleteReplacementHint) {
+        deleteReplacementHint.textContent = payload.requires_replacement
+          ? 'Obrigatório: existem dados operacionais que precisam de uma conexão substituta.'
+          : 'Opcional: esta conexão não possui vínculos operacionais que exijam transferência.';
+      }
+      syncDeleteEligibility();
+    };
+
+    const loadDeletePreview = async () => {
+      const instanceId = deleteField('id')?.value || '';
+      const replacementId = deleteField('replacement')?.value || '';
+      if (!instanceId) return;
+      const sequence = ++deleteRequestSequence;
+      deletePreviewState = null;
+      if (deleteSubmit) deleteSubmit.disabled = true;
+      if (deleteLoading) {
+        deleteLoading.hidden = false;
+        deleteLoading.textContent = 'Consultando os vínculos atuais...';
+      }
+      if (deleteImpact) deleteImpact.hidden = true;
+      setDeleteMessage(deleteError, '', false);
+      setDeleteMessage(deleteMergeNote, '', false);
+
+      try {
+        const url = new URL(instanceDeleteForm.dataset.previewEndpoint, window.location.origin);
+        url.searchParams.set('instance_id', instanceId);
+        if (replacementId) url.searchParams.set('replacement_instance_id', replacementId);
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin'
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (sequence !== deleteRequestSequence) return;
+        if (!response.ok || !payload.ok) throw new Error(payload.message || 'Não foi possível validar os vínculos.');
+        renderDeletePreview(payload);
+      } catch (error) {
+        if (sequence !== deleteRequestSequence) return;
+        if (deleteLoading) deleteLoading.hidden = true;
+        setDeleteMessage(deleteError, error.message || 'Não foi possível validar os vínculos.', true);
+        syncDeleteEligibility();
+      }
+    };
+
+    document.querySelectorAll('[data-instance-delete]').forEach((button) => {
+      button.addEventListener('click', () => {
+        instanceDeleteForm.reset();
+        deletePreviewState = null;
+        const id = deleteField('id');
+        const replacement = deleteField('replacement');
+        const confirmation = deleteField('confirmation');
+        const deleteRemote = deleteField('delete_remote');
+        const name = document.querySelector('[data-instance-delete-name]');
+        const hint = document.querySelector('[data-instance-delete-hint]');
+        const description = document.querySelector('[data-instance-delete-description]');
+        const managed = button.dataset.managementMode === 'managed';
+
+        if (id) id.value = button.dataset.id || '';
+        instanceDeleteForm.dataset.instanceName = button.dataset.instanceName || '';
+        if (name) name.textContent = button.dataset.name || 'Conexão';
+        if (deleteRemote) deleteRemote.checked = managed;
+        if (description) description.textContent = managed
+          ? 'Esta conexão foi criada pelo RS Connect. Revise os vínculos e confirme se a instância remota também deve ser removida.'
+          : 'Esta conexão foi vinculada ao RS Connect. A remoção na Evolution permanece opcional por segurança.';
+        if (confirmation) {
+          confirmation.value = '';
+          confirmation.placeholder = `EXCLUIR ${button.dataset.instanceName || ''}`;
+        }
+        if (hint) hint.innerHTML = `Digite exatamente: <strong>EXCLUIR ${button.dataset.instanceName || ''}</strong>`;
+        Array.from(replacement?.options || []).forEach((option, index) => {
+          if (index === 0) return;
+          const visible = option.dataset.tenantId === button.dataset.tenantId && option.value !== button.dataset.id;
+          option.hidden = !visible;
+          option.disabled = !visible;
+        });
+        if (replacement) replacement.value = '';
+        syncDeleteEligibility();
+        loadDeletePreview();
+      });
     });
-  });
+
+    deleteField('replacement')?.addEventListener('change', loadDeletePreview);
+    ['delete_remote', 'acknowledge_dependencies', 'acknowledge_remote_active', 'confirmation'].forEach((name) => {
+      const input = deleteField(name);
+      input?.addEventListener(input?.type === 'text' ? 'input' : 'change', syncDeleteEligibility);
+      if (name === 'confirmation') input?.addEventListener('input', syncDeleteEligibility);
+    });
+
+    instanceDeleteForm.addEventListener('submit', (event) => {
+      syncDeleteEligibility();
+      if (deleteSubmit?.disabled) {
+        event.preventDefault();
+        setDeleteMessage(deleteError, 'Revise os vínculos, a conexão substituta e as confirmações antes de excluir.', true);
+        return;
+      }
+      if (!window.confirm('Confirma a transferência dos vínculos e a exclusão definitiva desta conexão?')) {
+        event.preventDefault();
+        return;
+      }
+      if (deleteSubmit) {
+        deleteSubmit.disabled = true;
+        deleteSubmit.textContent = 'Transferindo e excluindo...';
+      }
+    });
+  }
 
   const setupSimpleDrawer = (config) => {
     const drawer=document.getElementById(config.drawer); const form=drawer?.querySelector(config.form); if(!drawer||!form)return;

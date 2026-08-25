@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.18.6', 'title' => 'Exclusão assistida de conexões', 'summary' => 'Evita exclusões manuais no banco, apresenta todos os vínculos, transfere os dados para uma conexão substituta e registra a operação para auditoria.'],
             ['version' => '36.18.5', 'title' => 'Takeover humano e documentação operacional', 'summary' => 'Retira imediatamente da fila pós-horário quando a equipe assume, impede reabertura concorrente pelo worker, reforça bloqueio, transferência e liberação e inclui manuais, matriz de permissões, implantação, homologação e material comercial.'],
             ['version' => '36.18.2', 'title' => 'Assistentes vinculados aos canais', 'summary' => 'Vincula automaticamente o único assistente ou fallback ao criar um WhatsApp e permite editar manualmente um ou vários canais diretamente no assistente.'],
             ['version' => '36.18.3', 'title' => 'Fila fora do horário mais clara', 'summary' => 'Destaca conversas preservadas fora do expediente, mostra quantidade de mensagens, previsão de retomada, aviso enviado e ações operacionais.'],

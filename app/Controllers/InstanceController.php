@@ -1031,24 +1031,100 @@ final class InstanceController
         $this->redirect('/instances');
     }
 
-    /** Exclui o cadastro local e, opcionalmente, a instância remota da Evolution. */
+    /** Retorna o impacto atualizado antes da exclusão assistida. */
+    public function deletePreview(): void
+    {
+        header('Content-Type: application/json; charset=UTF-8');
+
+        $instanceId = (int) ($_GET['instance_id'] ?? 0);
+        $replacementId = (int) ($_GET['replacement_instance_id'] ?? 0);
+        if ($instanceId < 1) {
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'message' => 'Selecione uma conexão válida.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            return;
+        }
+
+        try {
+            $pdo = Database::connection();
+            $source = $this->findInstance($pdo, $instanceId);
+            if (!$source) {
+                throw new \RuntimeException('Instância não encontrada para sua empresa.');
+            }
+
+            $replacement = null;
+            if ($replacementId > 0) {
+                if ($replacementId === $instanceId) {
+                    throw new \RuntimeException('A instância substituta deve ser diferente da conexão excluída.');
+                }
+                $replacement = $this->findInstance($pdo, $replacementId);
+                if (!$replacement || (int) $replacement['tenant_id'] !== (int) $source['tenant_id']) {
+                    throw new \RuntimeException('A instância substituta não pertence à mesma empresa.');
+                }
+            }
+
+            $counts = $this->dependencyCounts($pdo, $instanceId);
+            $conflicts = $replacement
+                ? $this->replacementConflicts($pdo, $instanceId, $replacementId, (int) $source['tenant_id'])
+                : ['conversation_duplicates' => 0, 'agent_binding_duplicates' => 0];
+
+            echo json_encode([
+                'ok' => true,
+                'source' => [
+                    'id' => (int) $source['id'],
+                    'name' => (string) $source['name'],
+                    'instance_name' => (string) $source['instance_name'],
+                    'status' => (string) ($source['status'] ?? 'pending'),
+                    'management_mode' => (string) ($source['management_mode'] ?? 'external'),
+                    'is_default' => (int) ($source['is_default'] ?? 0) === 1,
+                ],
+                'replacement' => $replacement ? [
+                    'id' => (int) $replacement['id'],
+                    'name' => (string) $replacement['name'],
+                    'instance_name' => (string) $replacement['instance_name'],
+                    'status' => (string) ($replacement['status'] ?? 'pending'),
+                ] : null,
+                'counts' => $counts,
+                'conflicts' => $conflicts,
+                'transferable_total' => $this->transferableDependencyTotal($counts),
+                'requires_replacement' => $this->transferableDependencyTotal($counts) > 0,
+                'requires_remote_ack' => (string) ($source['status'] ?? '') === 'connected',
+                'summary' => $this->dependencySummary($counts),
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        } catch (Throwable $exception) {
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'message' => $exception->getMessage()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+    }
+
+    /** Exclui a conexão com pré-validação, migração de vínculos e auditoria. */
     public function delete(): void
     {
         $instanceId = (int) ($_POST['instance_id'] ?? 0);
         $replacementId = (int) ($_POST['replacement_instance_id'] ?? 0);
         $confirmation = trim((string) ($_POST['confirmation'] ?? ''));
         $deleteRemote = isset($_POST['delete_remote']);
+        $acknowledgeDependencies = isset($_POST['acknowledge_dependencies']);
+        $acknowledgeRemoteActive = isset($_POST['acknowledge_remote_active']);
 
         $pdo = Database::connection();
+        $remoteDeleted = false;
+        $sourceSnapshot = null;
         try {
             $source = $this->findInstance($pdo, $instanceId);
             if (!$source) {
                 throw new \RuntimeException('Instância não encontrada.');
             }
+            $sourceSnapshot = $source;
 
             $expected = 'EXCLUIR ' . (string) $source['instance_name'];
             if (!hash_equals($expected, $confirmation)) {
                 throw new \RuntimeException('Confirmação inválida. Digite exatamente: ' . $expected);
+            }
+            if (!$acknowledgeDependencies) {
+                throw new \RuntimeException('Confirme que revisou os vínculos e o destino dos dados.');
+            }
+            if ((string) ($source['status'] ?? '') === 'connected' && !$deleteRemote && !$acknowledgeRemoteActive) {
+                throw new \RuntimeException('A conexão ainda está ativa. Confirme que entende que ela continuará existindo na Evolution ou marque a exclusão remota.');
             }
 
             $replacement = null;
@@ -1063,25 +1139,39 @@ final class InstanceController
             }
 
             $counts = $this->dependencyCounts($pdo, $instanceId);
-            $totalDependencies = array_sum($counts);
-            if ($totalDependencies > 0 && !$replacement) {
+            if ($this->transferableDependencyTotal($counts) > 0 && !$replacement) {
                 throw new \RuntimeException(
-                    'Essa instância possui vínculos (' . $this->dependencySummary($counts) . '). Selecione uma instância de substituição para preservar os dados.'
+                    'Essa instância possui vínculos transferíveis (' . $this->dependencySummary($counts) . '). Selecione uma instância substituta para preservar os dados.'
                 );
             }
 
-            if ($deleteRemote) {
-                $service = $this->evolutionServiceFor($source, 30);
-                try {
-                    $service->logoutInstance();
-                } catch (Throwable) {
-                    // Logout é apenas preparação; a exclusão remota continua sendo a ação obrigatória.
+            $pdo->beginTransaction();
+            $source = $this->findInstanceForUpdate($pdo, $instanceId);
+            if (!$source) {
+                throw new \RuntimeException('A instância deixou de existir durante a operação.');
+            }
+            if ($replacementId > 0) {
+                $replacement = $this->findInstanceForUpdate($pdo, $replacementId);
+                if (!$replacement || (int) $replacement['tenant_id'] !== (int) $source['tenant_id']) {
+                    throw new \RuntimeException('A instância substituta não está mais disponível para esta empresa.');
                 }
-                $service->deleteInstance();
             }
 
-            $pdo->beginTransaction();
-            $migrationStats = ['agents' => 0, 'agent_bindings' => 0, 'contacts' => 0, 'conversations' => 0, 'merged_conversations' => 0, 'campaigns' => 0];
+            $counts = $this->dependencyCounts($pdo, $instanceId);
+            if ($this->transferableDependencyTotal($counts) > 0 && !$replacement) {
+                throw new \RuntimeException('Novos vínculos foram encontrados. Selecione uma instância substituta e tente novamente.');
+            }
+
+            $migrationStats = [
+                'agents' => 0,
+                'agent_bindings' => 0,
+                'contacts' => 0,
+                'conversations' => 0,
+                'merged_conversations' => 0,
+                'campaigns' => 0,
+                'scheduled_reports' => 0,
+                'connection_events_removed' => (int) ($counts['connection_events'] ?? 0),
+            ];
 
             if ($replacement) {
                 $migrationStats['agents'] = $this->updateReference($pdo, 'ai_agents', 'instance_id', $instanceId, $replacementId);
@@ -1097,14 +1187,30 @@ final class InstanceController
                 if ($this->tableExists($pdo, 'message_campaigns')) {
                     $migrationStats['campaigns'] = $this->updateReference($pdo, 'message_campaigns', 'evolution_instance_id', $instanceId, $replacementId);
                 }
+                if ($this->tableExists($pdo, 'scheduled_reports')) {
+                    $migrationStats['scheduled_reports'] = $this->updateReference($pdo, 'scheduled_reports', 'evolution_instance_id', $instanceId, $replacementId);
+                }
                 $conversationStats = $this->migrateConversations($pdo, $instanceId, $replacementId, (int) $source['tenant_id']);
                 $migrationStats['conversations'] = $conversationStats['moved'];
                 $migrationStats['merged_conversations'] = $conversationStats['merged'];
 
                 if ((int) $source['is_default'] === 1) {
-                    $default = $pdo->prepare('UPDATE evolution_instances SET is_default = 1 WHERE id = :id');
-                    $default->execute(['id' => $replacementId]);
+                    $pdo->prepare('UPDATE evolution_instances SET is_default = 0 WHERE tenant_id = :tenant_id')
+                        ->execute(['tenant_id' => (int) $source['tenant_id']]);
+                    $pdo->prepare('UPDATE evolution_instances SET is_default = 1 WHERE id = :id')
+                        ->execute(['id' => $replacementId]);
                 }
+            }
+
+            if ($deleteRemote) {
+                $service = $this->evolutionServiceFor($source, 30);
+                try {
+                    $service->logoutInstance();
+                } catch (Throwable) {
+                    // O logout ajuda a encerrar a sessão, mas a exclusão remota é a operação definitiva.
+                }
+                $service->deleteInstance();
+                $remoteDeleted = true;
             }
 
             $delete = $pdo->prepare('DELETE FROM evolution_instances WHERE id = :id');
@@ -1117,20 +1223,42 @@ final class InstanceController
             $this->audit((int) $source['tenant_id'], 'evolution.instance_deleted', [
                 'instance_id' => $instanceId,
                 'instance_name' => (string) $source['instance_name'],
+                'source_snapshot' => [
+                    'name' => (string) $source['name'],
+                    'status' => (string) ($source['status'] ?? ''),
+                    'management_mode' => (string) ($source['management_mode'] ?? ''),
+                    'is_default' => (int) ($source['is_default'] ?? 0),
+                ],
+                'dependency_counts' => $counts,
                 'replacement_instance_id' => $replacementId > 0 ? $replacementId : null,
                 'migration_stats' => $migrationStats,
                 'remote_deleted' => $deleteRemote,
             ]);
+
             $successMessage = $replacement
-                ? 'Instância excluída do RS Connect e vínculos migrados para a substituta.'
-                : 'Instância sem vínculos excluída do RS Connect.';
+                ? 'Conexão excluída e vínculos transferidos com segurança para ' . (string) $replacement['name'] . '.'
+                : 'Conexão sem vínculos operacionais excluída do RS Connect.';
             if ($deleteRemote) {
                 $successMessage .= ' A instância também foi removida da Evolution.';
+            } elseif ((string) ($source['status'] ?? '') === 'connected') {
+                $successMessage .= ' A instância remota foi mantida ativa conforme sua confirmação.';
             }
             Flash::set('success', $successMessage);
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
+            }
+            if ($remoteDeleted && is_array($sourceSnapshot)) {
+                try {
+                    $this->audit((int) $sourceSnapshot['tenant_id'], 'evolution.instance_delete_inconsistent', [
+                        'instance_id' => $instanceId,
+                        'instance_name' => (string) ($sourceSnapshot['instance_name'] ?? ''),
+                        'remote_deleted' => true,
+                        'local_error' => $exception->getMessage(),
+                    ]);
+                } catch (Throwable) {
+                    // A falha principal continua sendo apresentada ao usuário.
+                }
             }
             Flash::set('error', 'Não foi possível excluir a instância: ' . $exception->getMessage());
         }
@@ -1655,14 +1783,22 @@ final class InstanceController
 
     private function moveConversationChildren(PDO $pdo, int $sourceConversationId, int $targetConversationId): void
     {
+        $this->mergeConversationFlowState($pdo, $sourceConversationId, $targetConversationId);
+        $this->mergeAfterHoursPending($pdo, $sourceConversationId, $targetConversationId);
+        $this->moveServiceCycles($pdo, $sourceConversationId, $targetConversationId);
+
         $references = [
             ['conversation_messages', 'conversation_id'],
             ['conversation_events', 'conversation_id'],
             ['ai_automation_logs', 'conversation_id'],
+            ['ai_usage_events', 'conversation_id'],
             ['calendar_appointments', 'conversation_id'],
             ['conversation_internal_notes', 'conversation_id'],
             ['privacy_consents', 'conversation_id'],
             ['crm_leads', 'source_conversation_id'],
+            ['conversation_assignment_history', 'conversation_id'],
+            ['conversation_status_history', 'conversation_id'],
+            ['conversation_message_attachments', 'conversation_id'],
         ];
 
         foreach ($references as [$table, $column]) {
@@ -1674,9 +1810,157 @@ final class InstanceController
         }
     }
 
+    private function mergeConversationFlowState(PDO $pdo, int $sourceConversationId, int $targetConversationId): void
+    {
+        if (!$this->tableExists($pdo, 'conversation_flow_states')) {
+            return;
+        }
+
+        $statement = $pdo->prepare(
+            'SELECT * FROM conversation_flow_states WHERE conversation_id IN (:source_id, :target_id) ORDER BY updated_at DESC, id DESC'
+        );
+        $statement->execute(['source_id' => $sourceConversationId, 'target_id' => $targetConversationId]);
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $source = null;
+        $target = null;
+        foreach ($rows as $row) {
+            if ((int) $row['conversation_id'] === $sourceConversationId) {
+                $source = $row;
+            } elseif ((int) $row['conversation_id'] === $targetConversationId) {
+                $target = $row;
+            }
+        }
+        if (!$source) {
+            return;
+        }
+        if (!$target) {
+            $pdo->prepare('UPDATE conversation_flow_states SET conversation_id = :target_id WHERE id = :id')
+                ->execute(['target_id' => $targetConversationId, 'id' => (int) $source['id']]);
+            return;
+        }
+
+        $sourceNewer = (string) ($source['updated_at'] ?? '') > (string) ($target['updated_at'] ?? '');
+        if ($sourceNewer) {
+            $pdo->prepare(
+                'UPDATE conversation_flow_states
+                 SET contact_id = :contact_id,
+                     stage = :stage,
+                     demand_status = :demand_status,
+                     demand_summary = :demand_summary,
+                     is_existing_patient = :is_existing_patient,
+                     last_intent = :last_intent,
+                     source = :source,
+                     metadata_json = :metadata_json,
+                     updated_at = :updated_at
+                 WHERE id = :id'
+            )->execute([
+                'contact_id' => $source['contact_id'],
+                'stage' => $source['stage'],
+                'demand_status' => $source['demand_status'],
+                'demand_summary' => $source['demand_summary'],
+                'is_existing_patient' => $source['is_existing_patient'],
+                'last_intent' => $source['last_intent'],
+                'source' => $source['source'],
+                'metadata_json' => $source['metadata_json'],
+                'updated_at' => $source['updated_at'],
+                'id' => (int) $target['id'],
+            ]);
+        }
+        $pdo->prepare('DELETE FROM conversation_flow_states WHERE id = :id')
+            ->execute(['id' => (int) $source['id']]);
+    }
+
+    private function mergeAfterHoursPending(PDO $pdo, int $sourceConversationId, int $targetConversationId): void
+    {
+        if (!$this->tableExists($pdo, 'ai_after_hours_pending')) {
+            return;
+        }
+
+        $statement = $pdo->prepare(
+            'SELECT * FROM ai_after_hours_pending WHERE conversation_id IN (:source_id, :target_id) ORDER BY updated_at DESC, id DESC'
+        );
+        $statement->execute(['source_id' => $sourceConversationId, 'target_id' => $targetConversationId]);
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $source = null;
+        $target = null;
+        foreach ($rows as $row) {
+            if ((int) $row['conversation_id'] === $sourceConversationId) {
+                $source = $row;
+            } elseif ((int) $row['conversation_id'] === $targetConversationId) {
+                $target = $row;
+            }
+        }
+        if (!$source) {
+            return;
+        }
+
+        if (!$target) {
+            $pdo->prepare(
+                'UPDATE ai_after_hours_pending
+                 SET conversation_id = :target_id,
+                     status = "cancelled",
+                     next_attempt_at = NULL,
+                     recovered_at = COALESCE(recovered_at, NOW()),
+                     recovery_source = "instance_migration",
+                     last_error = NULL
+                 WHERE id = :id'
+            )->execute(['target_id' => $targetConversationId, 'id' => (int) $source['id']]);
+            return;
+        }
+
+        $firstReceived = min((string) $source['first_received_at'], (string) $target['first_received_at']);
+        $lastReceived = max((string) $source['last_received_at'], (string) $target['last_received_at']);
+        $lastMessageId = (string) $source['last_received_at'] >= (string) $target['last_received_at']
+            ? $source['last_message_id']
+            : $target['last_message_id'];
+        $pdo->prepare(
+            'UPDATE ai_after_hours_pending
+             SET first_message_id = COALESCE(first_message_id, :first_message_id),
+                 last_message_id = :last_message_id,
+                 first_received_at = :first_received_at,
+                 last_received_at = :last_received_at,
+                 status = "cancelled",
+                 next_attempt_at = NULL,
+                 recovered_at = COALESCE(recovered_at, NOW()),
+                 recovery_source = "instance_migration",
+                 last_error = NULL
+             WHERE id = :id'
+        )->execute([
+            'first_message_id' => $source['first_message_id'],
+            'last_message_id' => $lastMessageId,
+            'first_received_at' => $firstReceived,
+            'last_received_at' => $lastReceived,
+            'id' => (int) $target['id'],
+        ]);
+        $pdo->prepare('DELETE FROM ai_after_hours_pending WHERE id = :id')
+            ->execute(['id' => (int) $source['id']]);
+    }
+
+    private function moveServiceCycles(PDO $pdo, int $sourceConversationId, int $targetConversationId): void
+    {
+        if (!$this->tableExists($pdo, 'conversation_service_cycles')) {
+            return;
+        }
+        $maximum = $pdo->prepare('SELECT COALESCE(MAX(cycle_number), 0) FROM conversation_service_cycles WHERE conversation_id = :id');
+        $maximum->execute(['id' => $targetConversationId]);
+        $offset = (int) $maximum->fetchColumn();
+        $move = $pdo->prepare(
+            'UPDATE conversation_service_cycles
+             SET conversation_id = :target_id,
+                 cycle_number = cycle_number + :cycle_offset,
+                 source = COALESCE(source, "instance_migration")
+             WHERE conversation_id = :source_id'
+        );
+        $move->execute([
+            'target_id' => $targetConversationId,
+            'cycle_offset' => $offset,
+            'source_id' => $sourceConversationId,
+        ]);
+    }
+
     private function dependencyCounts(PDO $pdo, int $instanceId): array
     {
-        $counts = [
+        return [
             'agents' => $this->referenceCount($pdo, 'ai_agents', 'instance_id', $instanceId),
             'agent_bindings' => $this->tableExists($pdo, 'ai_agent_instance_bindings')
                 ? $this->referenceCount($pdo, 'ai_agent_instance_bindings', 'instance_id', $instanceId)
@@ -1686,20 +1970,85 @@ final class InstanceController
             'campaigns' => $this->tableExists($pdo, 'message_campaigns')
                 ? $this->referenceCount($pdo, 'message_campaigns', 'evolution_instance_id', $instanceId)
                 : 0,
+            'scheduled_reports' => $this->tableExists($pdo, 'scheduled_reports')
+                ? $this->referenceCount($pdo, 'scheduled_reports', 'evolution_instance_id', $instanceId)
+                : 0,
+            'connection_events' => $this->tableExists($pdo, 'evolution_connection_events')
+                ? $this->referenceCount($pdo, 'evolution_connection_events', 'evolution_instance_id', $instanceId)
+                : 0,
         ];
-        return $counts;
+    }
+
+    private function transferableDependencyTotal(array $counts): int
+    {
+        return (int) ($counts['agents'] ?? 0)
+            + (int) ($counts['agent_bindings'] ?? 0)
+            + (int) ($counts['contacts'] ?? 0)
+            + (int) ($counts['conversations'] ?? 0)
+            + (int) ($counts['campaigns'] ?? 0)
+            + (int) ($counts['scheduled_reports'] ?? 0);
     }
 
     private function dependencySummary(array $counts): string
     {
         return sprintf(
-            '%d agente(s) legado, %d vínculo(s) de canal, %d contato(s), %d conversa(s), %d campanha(s)',
+            '%d agente(s) legado, %d vínculo(s) de canal, %d contato(s), %d conversa(s), %d campanha(s), %d relatório(s) agendado(s) e %d evento(s) técnico(s)',
             (int) ($counts['agents'] ?? 0),
             (int) ($counts['agent_bindings'] ?? 0),
             (int) ($counts['contacts'] ?? 0),
             (int) ($counts['conversations'] ?? 0),
-            (int) ($counts['campaigns'] ?? 0)
+            (int) ($counts['campaigns'] ?? 0),
+            (int) ($counts['scheduled_reports'] ?? 0),
+            (int) ($counts['connection_events'] ?? 0)
         );
+    }
+
+    private function replacementConflicts(PDO $pdo, int $sourceInstanceId, int $replacementInstanceId, int $tenantId): array
+    {
+        $conversationDuplicates = 0;
+        if ($this->tableExists($pdo, 'conversations')) {
+            $statement = $pdo->prepare(
+                'SELECT COUNT(*)
+                 FROM conversations source
+                 INNER JOIN conversations target
+                    ON target.tenant_id = source.tenant_id
+                   AND target.remote_jid = source.remote_jid
+                   AND target.evolution_instance_id = :replacement_id
+                 WHERE source.tenant_id = :tenant_id
+                   AND source.evolution_instance_id = :source_id'
+            );
+            $statement->execute([
+                'replacement_id' => $replacementInstanceId,
+                'tenant_id' => $tenantId,
+                'source_id' => $sourceInstanceId,
+            ]);
+            $conversationDuplicates = (int) $statement->fetchColumn();
+        }
+
+        $bindingDuplicates = 0;
+        if ($this->tableExists($pdo, 'ai_agent_instance_bindings')) {
+            $statement = $pdo->prepare(
+                'SELECT COUNT(*)
+                 FROM ai_agent_instance_bindings source
+                 INNER JOIN ai_agent_instance_bindings target
+                    ON target.tenant_id = source.tenant_id
+                   AND target.agent_id = source.agent_id
+                   AND target.instance_id = :replacement_id
+                 WHERE source.tenant_id = :tenant_id
+                   AND source.instance_id = :source_id'
+            );
+            $statement->execute([
+                'replacement_id' => $replacementInstanceId,
+                'tenant_id' => $tenantId,
+                'source_id' => $sourceInstanceId,
+            ]);
+            $bindingDuplicates = (int) $statement->fetchColumn();
+        }
+
+        return [
+            'conversation_duplicates' => $conversationDuplicates,
+            'agent_binding_duplicates' => $bindingDuplicates,
+        ];
     }
 
     private function updateReference(PDO $pdo, string $table, string $column, int $sourceId, int $replacementId): int
@@ -1728,6 +2077,20 @@ final class InstanceController
             $params['tenant_id'] = (int) Auth::tenantId();
         }
         $statement = $pdo->prepare($sql . ' LIMIT 1');
+        $statement->execute($params);
+        $instance = $statement->fetch(PDO::FETCH_ASSOC);
+        return $instance ?: null;
+    }
+
+    private function findInstanceForUpdate(PDO $pdo, int $instanceId): ?array
+    {
+        $sql = 'SELECT * FROM evolution_instances WHERE id = :id';
+        $params = ['id' => $instanceId];
+        if (!Auth::isSuperAdmin()) {
+            $sql .= ' AND tenant_id = :tenant_id';
+            $params['tenant_id'] = (int) Auth::tenantId();
+        }
+        $statement = $pdo->prepare($sql . ' LIMIT 1 FOR UPDATE');
         $statement->execute($params);
         $instance = $statement->fetch(PDO::FETCH_ASSOC);
         return $instance ?: null;

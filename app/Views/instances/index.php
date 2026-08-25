@@ -136,7 +136,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
                     <button class="btn btn-small btn-outline" type="button" data-toggle-panel="instance-drawer" data-instance-open="edit"
                         data-id="<?= (int) $instance['id'] ?>" data-name="<?= View::e($instance['name']) ?>" data-instance-name="<?= View::e($instance['instance_name']) ?>" data-base-url="<?= $isSuperAdmin ? View::e($instance['base_url']) : '' ?>" data-status="<?= View::e($instance['status']) ?>" data-is-default="<?= (int) $instance['is_default'] ?>" data-management-mode="<?= View::e((string) ($instance['management_mode'] ?? 'external')) ?>">Editar cadastro</button>
                     <button class="btn btn-small btn-danger-soft" type="button" data-toggle-panel="instance-delete-drawer" data-instance-delete
-                        data-id="<?= (int) $instance['id'] ?>" data-name="<?= View::e($instance['name']) ?>" data-instance-name="<?= View::e($instance['instance_name']) ?>" data-tenant-id="<?= (int) $instance['tenant_id'] ?>" data-management-mode="<?= View::e((string) ($instance['management_mode'] ?? 'external')) ?>">Excluir</button>
+                        data-id="<?= (int) $instance['id'] ?>" data-name="<?= View::e($instance['name']) ?>" data-instance-name="<?= View::e($instance['instance_name']) ?>" data-tenant-id="<?= (int) $instance['tenant_id'] ?>" data-status="<?= View::e((string) ($instance['status'] ?? 'pending')) ?>" data-management-mode="<?= View::e((string) ($instance['management_mode'] ?? 'external')) ?>">Excluir</button>
                 </div>
             </article>
         <?php endforeach; ?>
@@ -376,24 +376,52 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
     <div class="conversation-drawer-body"><form class="drawer-form" method="post" action="<?= View::e(Router::url('/instances/test')) ?>"><?= Csrf::input() ?><section class="drawer-section"><div class="drawer-form-grid"><label class="field drawer-span"><span>Conexão</span><select name="instance_id" required><option value="">Selecione</option><?php foreach ($instances as $instance): ?><option value="<?= (int) $instance['id'] ?>"><?= View::e($instance['name']) ?> — <?= View::e($instance['tenant_name']) ?></option><?php endforeach; ?></select></label><label class="field drawer-span"><span>Telefone com DDI</span><input name="phone" inputmode="numeric" placeholder="5511999999999" required></label><label class="field drawer-span"><span>Mensagem</span><textarea name="message" rows="5" required>Teste de integração do RS Connect.</textarea></label></div></section><div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="instance-test-drawer">Cancelar</button><button class="btn btn-primary" type="submit" <?= !$instances ? 'disabled' : '' ?>>Enviar teste</button></div></form></div>
 </aside>
 
-<aside class="conversation-details conversation-drawer admin-form-drawer" id="instance-delete-drawer" aria-label="Excluir conexão" aria-modal="true" role="dialog">
-    <div class="conversation-drawer-header"><div><span class="eyebrow text-danger">Ação restrita</span><h2>Excluir conexão</h2><p data-instance-delete-description>Remova o cadastro do RS Connect e escolha se a instância também deve ser apagada na Evolution.</p></div><button class="icon-button drawer-close" type="button" data-close-panel="instance-delete-drawer" aria-label="Fechar">×</button></div>
+<aside class="conversation-details conversation-drawer admin-form-drawer instance-delete-drawer" id="instance-delete-drawer" aria-label="Exclusão assistida de conexão" aria-modal="true" role="dialog">
+    <div class="conversation-drawer-header">
+        <div><span class="eyebrow text-danger">Exclusão assistida</span><h2>Remover conexão com segurança</h2><p data-instance-delete-description>Revise os vínculos, escolha o destino dos dados e confirme a remoção.</p></div>
+        <button class="icon-button drawer-close" type="button" data-close-panel="instance-delete-drawer" aria-label="Fechar">×</button>
+    </div>
     <div class="conversation-drawer-body">
-        <form class="drawer-form" method="post" action="<?= View::e(Router::url('/instances/delete')) ?>" data-instance-delete-form onsubmit="return confirm('Confirma a exclusão desta conexão?');">
+        <form class="drawer-form" method="post" action="<?= View::e(Router::url('/instances/delete')) ?>" data-instance-delete-form data-preview-endpoint="<?= View::e(Router::url('/instances/delete-preview')) ?>">
             <?= Csrf::input() ?><input type="hidden" name="instance_id" data-instance-delete-field="id">
-            <section class="drawer-section danger-zone">
-                <div class="drawer-form-grid">
-                    <div class="drawer-span admin-danger-message"><strong data-instance-delete-name>Conexão</strong><span>Selecione uma substituta quando existirem assistentes, contatos, conversas ou campanhas vinculadas.</span></div>
-                    <label class="field drawer-span"><span>Migrar vínculos para</span><select name="replacement_instance_id" data-instance-delete-field="replacement"><option value="">Nenhuma — somente se não houver vínculos</option><?php foreach ($instances as $replacement): ?><option value="<?= (int) $replacement['id'] ?>" data-tenant-id="<?= (int) $replacement['tenant_id'] ?>"><?= View::e($replacement['name']) ?> — <?= View::e($replacement['tenant_name']) ?></option><?php endforeach; ?></select></label>
-                    <label class="check-field drawer-check drawer-span" data-instance-delete-remote-row><input type="checkbox" name="delete_remote" value="1" data-instance-delete-field="delete_remote"><span><strong>Excluir também na Evolution API</strong><small>Esta ação remove a instância remota e exige uma nova criação para reconectar o número.</small></span></label>
-                    <label class="field drawer-span"><span>Confirmação</span><input name="confirmation" autocomplete="off" data-instance-delete-field="confirmation" required><small class="field-hint" data-instance-delete-hint></small></label>
+
+            <section class="drawer-section instance-delete-source">
+                <div class="drawer-section-title"><div><span class="eyebrow">1. Origem</span><h3 data-instance-delete-name>Conexão</h3><p>O cadastro abaixo será removido depois da transferência validada.</p></div><span class="badge badge-warning" data-instance-delete-status>Verificando</span></div>
+                <div class="instance-delete-loading" data-instance-delete-loading>Consultando os vínculos atuais...</div>
+                <div class="instance-delete-impact-grid" data-instance-delete-impact hidden>
+                    <?php foreach ([
+                        'agents' => 'Assistentes legado',
+                        'agent_bindings' => 'Vínculos de canal',
+                        'contacts' => 'Contatos',
+                        'conversations' => 'Conversas',
+                        'campaigns' => 'Campanhas',
+                        'scheduled_reports' => 'Relatórios',
+                        'connection_events' => 'Eventos técnicos',
+                    ] as $key => $label): ?>
+                        <article><span><?= View::e($label) ?></span><strong data-instance-delete-count="<?= View::e($key) ?>">0</strong></article>
+                    <?php endforeach; ?>
                 </div>
+                <div class="message-error" data-instance-delete-error hidden></div>
             </section>
-            <div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="instance-delete-drawer">Cancelar</button><button class="btn btn-danger" type="submit">Excluir conexão</button></div>
+
+            <section class="drawer-section">
+                <div class="drawer-section-title"><div><span class="eyebrow">2. Destino</span><h3>Preservar os dados operacionais</h3><p>Assistentes, contatos, conversas, campanhas e relatórios serão movidos para outra conexão da mesma empresa.</p></div></div>
+                <label class="field drawer-span"><span>Instância substituta</span><select name="replacement_instance_id" data-instance-delete-field="replacement"><option value="">Nenhuma — somente para conexão sem vínculos</option><?php foreach ($instances as $replacement): ?><option value="<?= (int) $replacement['id'] ?>" data-tenant-id="<?= (int) $replacement['tenant_id'] ?>"><?= View::e($replacement['name']) ?> — <?= View::e($replacement['instance_name']) ?></option><?php endforeach; ?></select><small class="field-hint" data-instance-delete-replacement-hint>Selecione a conexão que continuará o atendimento.</small></label>
+                <div class="instance-delete-merge-note" data-instance-delete-merge-note hidden></div>
+            </section>
+
+            <section class="drawer-section danger-zone">
+                <div class="drawer-section-title"><div><span class="eyebrow">3. Remoção</span><h3>Defina o que será apagado</h3></div></div>
+                <label class="check-field drawer-check drawer-span" data-instance-delete-remote-row><input type="checkbox" name="delete_remote" value="1" data-instance-delete-field="delete_remote"><span><strong>Excluir também na Evolution API</strong><small>Encerra a sessão e remove a instância remota. Para reconectar o número será necessário criar uma nova instância.</small></span></label>
+                <label class="check-field drawer-check drawer-span" data-instance-delete-remote-ack hidden><input type="checkbox" name="acknowledge_remote_active" value="1" data-instance-delete-field="acknowledge_remote_active"><span><strong>Entendo que a instância continuará ativa na Evolution</strong><small>Use somente quando deseja remover o canal do RS Connect sem apagar a instância remota.</small></span></label>
+                <label class="check-field drawer-check drawer-span is-required"><input type="checkbox" name="acknowledge_dependencies" value="1" data-instance-delete-field="acknowledge_dependencies" required><span><strong>Revisei os vínculos e o destino informado</strong><small>Confirmo que os dados operacionais devem ser transferidos ou que esta conexão não possui vínculos.</small></span></label>
+                <label class="field drawer-span"><span>Confirmação final</span><input name="confirmation" autocomplete="off" data-instance-delete-field="confirmation" required><small class="field-hint" data-instance-delete-hint></small></label>
+            </section>
+
+            <div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="instance-delete-drawer">Cancelar</button><button class="btn btn-danger" type="submit" data-instance-delete-submit disabled>Transferir e excluir</button></div>
         </form>
     </div>
 </aside>
-
 <?php if ($canGenerateQr): ?>
 <div class="qr-connection-modal" data-qr-code-modal hidden aria-hidden="true"><button class="qr-modal-backdrop" type="button" data-close-qr-modal aria-label="Fechar QR Code"></button><section class="qr-modal-card" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title"><div class="qr-modal-header"><div><span class="eyebrow">Conectar WhatsApp</span><h2 id="qr-modal-title">Escaneie o QR Code</h2></div><button class="icon-button" type="button" data-close-qr-modal aria-label="Fechar">×</button></div><div class="qr-modal-body"><div class="qr-loading" data-qr-loading>Gerando QR Code com segurança...</div><img data-qr-image alt="QR Code para conectar o WhatsApp" hidden><p data-qr-message>Abra o WhatsApp no celular, toque em <strong>Dispositivos conectados</strong> e depois em <strong>Conectar dispositivo</strong>.</p><div class="qr-error-message" data-qr-error hidden></div></div><div class="qr-modal-actions"><button class="btn btn-quiet" type="button" data-close-qr-modal>Fechar</button></div></section></div>
 <?php endif; ?>

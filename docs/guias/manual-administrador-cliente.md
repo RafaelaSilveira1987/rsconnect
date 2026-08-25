@@ -31,7 +31,7 @@ Permitir que a empresa opere o RS Connect sem depender do Super Admin da RS nas 
 
 ## Cuidados
 
-- Não exclua instâncias diretamente no banco.
+- Não exclua instâncias diretamente no banco. Use **Canais WhatsApp → Excluir** e selecione uma conexão substituta quando houver vínculos.
 - Não compartilhe chaves da Evolution ou OpenAI.
 - Confirme o vínculo entre canal e assistente após criar uma nova conexão.
 - Use o Super Admin apenas para suporte técnico ou ações globais.

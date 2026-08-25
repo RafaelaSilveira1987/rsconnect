@@ -12,6 +12,7 @@ Este índice reúne a documentação operacional, técnica, de implantação e c
 
 - [Guia de criação da instância Evolution](guia-criacao-instancia.md)
 - [Guia de conexão pelo QR Code](guia-conexao-qrcode.md)
+- [Guia de exclusão assistida de instâncias](guia-exclusao-assistida-instancia.md)
 - [Guia de configuração dos assistentes](guia-configuracao-assistentes.md)
 - [Guia de filas e atendimento humano](guia-filas-atendimento-humano.md)
 - [Guia de consumo e economia de IA](guia-consumo-ia.md)
