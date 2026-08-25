@@ -28,3 +28,25 @@ O Super Admin mantém a operação global, presta suporte, acompanha integraçõ
 - Verificar fila fora do horário e tentativas de recuperação.
 - Verificar franquia, credencial e consumo da IA.
 - Registrar causa, ação e resultado na auditoria.
+
+## OpenAI 2.0 e governança de consumo
+
+A área **Consumo OpenAI** passa a reunir dois pontos de vista:
+
+- **Oficial:** Usage/Costs da organização OpenAI, quando a Admin API Key estiver configurada.
+- **Interno:** telemetria do RS Connect por empresa, assistente, estratégia e conversa.
+
+O Super Admin deve usar a comparação para identificar consumo não atribuído, chamadas fora da plataforma e assistentes com custo anormal. Se houver filtro por projeto na API oficial, a comparação só é válida dentro do mesmo escopo.
+
+Configure orçamento e cotação de referência no servidor quando desejar projeções:
+
+```dotenv
+OPENAI_MONTHLY_BUDGET_USD=
+OPENAI_USAGE_USD_BRL=
+```
+
+## Memória progressiva
+
+A memória é atualizada depois da resposta principal e seu consumo é registrado como evento técnico `summary`, não como uma nova interação comercial de franquia. Em caso de falhas repetidas, consulte `conversation_ai_memory.status/last_error` e desative temporariamente a memória no assistente até corrigir a credencial ou o provedor.
+
+A v36.19.0 mantém `conversation_ai_memory` para o atendimento atual e `contact_ai_memory` para continuidade entre conversas do mesmo contato. Ambas respeitam `tenant_id` e não devem ser compartilhadas entre empresas.

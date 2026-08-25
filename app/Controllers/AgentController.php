@@ -324,6 +324,9 @@ final class AgentController
         $aiMaxOutputTokens = $this->nullableIntFromPost('ai_max_output_tokens', 64, 2000);
         $aiKnowledgeBudgetChars = $this->nullableIntFromPost('ai_knowledge_budget_chars', 1000, 120000);
         $aiSelectiveKnowledge = isset($_POST['ai_selective_knowledge']);
+        $memoryEnabled = isset($_POST['ai_progressive_memory_enabled']);
+        $memoryRefreshMessages = max(4, min(30, (int) ($_POST['ai_memory_refresh_messages'] ?? 8)));
+        $memoryMaxChars = max(800, min(6000, (int) ($_POST['ai_memory_max_chars'] ?? 2200)));
         $localAutomation = $this->aiLocalAutomationFromPost();
         $n8nWebhookUrl = trim((string) ($_POST['n8n_webhook_url'] ?? ''));
         $isDefault = isset($_POST['is_default']);
@@ -380,6 +383,9 @@ final class AgentController
                      ai_menu_reply = :ai_menu_reply,
                      ai_exact_cache_enabled = :ai_exact_cache_enabled,
                      ai_exact_cache_ttl_hours = :ai_exact_cache_ttl_hours,
+                     ai_progressive_memory_enabled = :ai_progressive_memory_enabled,
+                     ai_memory_refresh_messages = :ai_memory_refresh_messages,
+                     ai_memory_max_chars = :ai_memory_max_chars,
                      n8n_webhook_url = :n8n_webhook_url,
                      business_hours_enabled = :business_hours_enabled,
                      business_timezone = :business_timezone,
@@ -409,6 +415,9 @@ final class AgentController
                 'ai_menu_reply' => $localAutomation['menu'],
                 'ai_exact_cache_enabled' => $localAutomation['cache_enabled'],
                 'ai_exact_cache_ttl_hours' => $localAutomation['cache_ttl_hours'],
+                'ai_progressive_memory_enabled' => $memoryEnabled ? 1 : 0,
+                'ai_memory_refresh_messages' => $memoryRefreshMessages,
+                'ai_memory_max_chars' => $memoryMaxChars,
                 'n8n_webhook_url' => $n8nWebhookUrl !== '' ? $n8nWebhookUrl : null,
                 'business_hours_enabled' => $business['enabled'],
                 'business_timezone' => $business['timezone'],

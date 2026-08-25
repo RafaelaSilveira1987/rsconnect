@@ -815,6 +815,20 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                         <?php endif; ?>
                     </section>
 
+                    <?php if (!empty($selected['ai_memory_summary'])): ?>
+                        <?php $memoryFacts = json_decode((string) ($selected['ai_memory_facts_json'] ?? ''), true); $memoryFacts = is_array($memoryFacts) ? $memoryFacts : []; ?>
+                        <details class="drawer-section drawer-collapsed-card conversation-ai-memory-card">
+                            <summary><span><span class="eyebrow">Memória da IA</span><strong><?= ($selected['ai_memory_scope'] ?? '') === 'contact' ? 'Memória preservada do contato' : 'Resumo progressivo da conversa' ?></strong><small><?= (int) ($selected['ai_memory_refresh_count'] ?? 0) ?> atualização(ões)<?= !empty($selected['ai_memory_refreshed_at']) ? ' · ' . View::e($formatDate($selected['ai_memory_refreshed_at'], 'd/m H:i')) : '' ?><?= ($selected['ai_memory_scope'] ?? '') === 'contact' ? ' · conversa anterior' : '' ?></small></span><span class="drawer-chevron"></span></summary>
+                            <div class="conversation-ai-memory-body">
+                                <p><?= nl2br(View::e((string) $selected['ai_memory_summary'])) ?></p>
+                                <?php $memoryList = []; foreach (['interests' => 'Interesses','preferences' => 'Preferências','important_facts' => 'Fatos importantes','pending_items' => 'Pendências','commitments' => 'Compromissos','restrictions' => 'Restrições'] as $key => $label) { $values = is_array($memoryFacts[$key] ?? null) ? array_filter(array_map('strval', $memoryFacts[$key])) : []; if ($values) $memoryList[$label] = $values; } ?>
+                                <?php if ($memoryList): ?><div class="conversation-ai-memory-facts"><?php foreach ($memoryList as $label => $values): ?><div><strong><?= View::e($label) ?></strong><span><?= View::e(implode(' · ', $values)) ?></span></div><?php endforeach; ?></div><?php endif; ?>
+                                <?php if (!empty($memoryFacts['next_action'])): ?><div class="message-success"><strong>Próximo passo:</strong> <?= View::e((string) $memoryFacts['next_action']) ?></div><?php endif; ?>
+                                <small class="field-hint">A memória é usada para continuidade e economia de contexto. Mensagens recentes prevalecem se houver divergência.</small>
+                            </div>
+                        </details>
+                    <?php endif; ?>
+
                     <?php if ($canOperateSelected): ?>
                         <div class="drawer-savebar">
                             <button class="btn btn-primary btn-block" type="submit">Salvar alterações</button>

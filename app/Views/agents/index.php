@@ -259,6 +259,17 @@ $aiModeHints = [
                                     <p class="field-hint">As regras locais só respondem mensagens exatas e curtas. O cache vem desativado por padrão e ignora perguntas pessoais, pedidos, agenda, números e links.</p>
                                 </div>
                             </details>
+                            <details class="ai-local-automation-card ai-memory-config-card">
+                                <summary><span><strong>Memória progressiva da conversa</strong><small>Resume o histórico periodicamente para manter contexto gastando menos tokens.</small></span><span class="drawer-chevron"></span></summary>
+                                <div class="ai-local-automation-body">
+                                    <label class="check-field compact-check"><input type="checkbox" name="ai_progressive_memory_enabled" value="1" <?= !array_key_exists('ai_progressive_memory_enabled', $agent) || (int) ($agent['ai_progressive_memory_enabled'] ?? 1) === 1 ? 'checked' : '' ?>><span>Ativar resumo progressivo e memória estruturada</span></label>
+                                    <div class="form-grid two">
+                                        <label class="field compact-field"><span>Atualizar a cada N mensagens</span><input type="number" name="ai_memory_refresh_messages" value="<?= (int) ($agent['ai_memory_refresh_messages'] ?? 8) ?>" min="4" max="30"><small class="field-hint">Recomendado: 8. Evita gerar um resumo a cada resposta.</small></label>
+                                        <label class="field compact-field"><span>Tamanho máximo do resumo</span><input type="number" name="ai_memory_max_chars" value="<?= (int) ($agent['ai_memory_max_chars'] ?? 2200) ?>" min="800" max="6000"><small class="field-hint">O resumo substitui parte do histórico antigo no contexto.</small></label>
+                                    </div>
+                                    <p class="field-hint">A memória preserva pedidos, decisões, preferências, pendências e próximos passos. Mensagens recentes sempre prevalecem sobre o resumo.</p>
+                                </div>
+                            </details>
                             <label class="field compact-field"><span>Palavras que pedem atendimento humano</span><input name="handoff_keywords" value="<?= View::e($agent['handoff_keywords'] ?? '') ?>" placeholder="humano, atendente, pessoa"></label>
                             <label class="field compact-field"><span>Ao chamar uma pessoa</span><select name="handoff_action"><option value="paused" <?= ($agent['handoff_action'] ?? 'paused') === 'paused' ? 'selected' : '' ?>>Pausar respostas automáticas</option><option value="human" <?= ($agent['handoff_action'] ?? '') === 'human' ? 'selected' : '' ?>>Marcar atendimento humano</option></select></label>
                             <label class="field compact-field"><span>Mensagem ao encaminhar para a equipe</span><input name="human_handoff_message" value="<?= View::e($agent['human_handoff_message'] ?? '') ?>" placeholder="Vou encaminhar você para uma pessoa da equipe."></label>

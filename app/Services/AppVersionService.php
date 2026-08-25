@@ -26,10 +26,11 @@ final class AppVersionService
     // RS Connect 36.18.4 — fila fora do horário também para conversas em atendimento humano.
     // RS Connect 36.18.5 — takeover humano atômico, bloqueio operacional e documentação consolidada.
     // RS Connect 36.18.6 — exclusão assistida, transferência integral de vínculos e auditoria da remoção.
-    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql e 079_ai_efficiency_phase2_and_report_cleanup.sql.
-    public const VERSION_LABEL = 'Beta Comercial 1.2';
-    public const PACKAGE_LABEL = 'RS Connect 36.18.6 — Exclusão assistida de conexões';
-    public const REQUIRED_MIGRATION = '079_ai_efficiency_phase2_and_report_cleanup.sql';
+    // RS Connect 36.19.0 — painel OpenAI 2.0, medição de economia, memória progressiva e fatos estruturados.
+    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql.
+    public const VERSION_LABEL = 'Beta Comercial 1.3';
+    public const PACKAGE_LABEL = 'RS Connect 36.19.0 — Inteligência de IA e memória progressiva';
+    public const REQUIRED_MIGRATION = '080_ai_memory_and_usage_intelligence.sql';
 
     private PDO $pdo;
 
@@ -122,13 +123,15 @@ final class AppVersionService
             'security_rate_limits',
             'operational_monitor_runs',
             'conversation_message_attachments',
+            'conversation_ai_memory',
+            'contact_ai_memory',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as migrations pendentes até a 079, conforme o pacote implantado.'
+            'Rodar as migrations pendentes até a 080, conforme o pacote implantado.'
         );
 
         $monitoringReady = $this->tableExists('operational_monitor_runs')

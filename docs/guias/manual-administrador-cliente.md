@@ -35,3 +35,21 @@ Permitir que a empresa opere o RS Connect sem depender do Super Admin da RS nas 
 - Não compartilhe chaves da Evolution ou OpenAI.
 - Confirme o vínculo entre canal e assistente após criar uma nova conexão.
 - Use o Super Admin apenas para suporte técnico ou ações globais.
+
+## Memória progressiva da IA
+
+Em **Assistentes de IA**, o administrador pode manter ativa a memória progressiva para reduzir a repetição de histórico sem perder continuidade.
+
+Configuração inicial recomendada:
+
+- Memória progressiva: ativa.
+- Atualizar a cada: 8 mensagens.
+- Resumo máximo: 2.200 caracteres.
+
+A memória não substitui o histórico da conversa e não autoriza a IA a inventar dados. Ela mantém somente resumo e fatos explicitamente confirmados. Ao abrir uma conversa com memória, o bloco **Memória da IA** permite conferir o que está sendo reaproveitado no contexto.
+
+## Consumo e eficiência
+
+O administrador deve acompanhar o consumo da própria operação pelos indicadores disponíveis ao seu perfil, com atenção especial a respostas locais, cache e quantidade de chamadas ao provedor. Alterações de modelo devem ser feitas somente depois de medir a linha de base de qualidade e consumo.
+
+A memória consolidada também acompanha o contato entre conversas. Isso evita recomeçar do zero quando um novo atendimento é aberto para uma pessoa já conhecida.

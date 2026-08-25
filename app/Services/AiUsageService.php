@@ -376,6 +376,8 @@ final class AiUsageService
             $provider = $this->provider($agent);
             $model = $this->model($agent);
             $telemetry = $this->telemetry($usage, $provider, $model);
+            $provider = (string) ($telemetry['provider'] ?? $provider);
+            $model = (string) ($telemetry['model'] ?? $model);
             $pdo = Database::connection();
             try {
                 $pdo->prepare(
@@ -457,6 +459,8 @@ final class AiUsageService
             $provider = $this->provider($agent);
             $model = $this->model($agent);
             $telemetry = $this->telemetry($usage, $provider, $model);
+            $provider = (string) ($telemetry['provider'] ?? $provider);
+            $model = (string) ($telemetry['model'] ?? $model);
             Database::connection()->prepare(
                 'INSERT INTO ai_usage_events
                     (tenant_id, agent_id, conversation_id, credential_id, credential_owner,

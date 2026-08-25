@@ -1708,6 +1708,23 @@ final class ConversationController
                            LEFT JOIN crm_stages s ON s.id = l.stage_id AND s.tenant_id = c.tenant_id';
         }
 
+        $memorySelect = 'NULL AS ai_memory_summary, NULL AS ai_memory_facts_json, NULL AS ai_memory_refreshed_at, 0 AS ai_memory_refresh_count, NULL AS ai_memory_scope';
+        $memoryJoin = '';
+        $hasConversationMemory = $this->hasTable($pdo, 'conversation_ai_memory');
+        $hasContactMemory = $this->hasTable($pdo, 'contact_ai_memory');
+        if ($hasConversationMemory && $hasContactMemory) {
+            $memorySelect = 'COALESCE(mem.summary_text, cm.summary_text) AS ai_memory_summary,
+                             COALESCE(mem.facts_json, cm.facts_json) AS ai_memory_facts_json,
+                             COALESCE(mem.last_refreshed_at, cm.last_refreshed_at) AS ai_memory_refreshed_at,
+                             COALESCE(mem.refresh_count, cm.refresh_count, 0) AS ai_memory_refresh_count,
+                             CASE WHEN mem.summary_text IS NOT NULL THEN "conversation" WHEN cm.summary_text IS NOT NULL THEN "contact" ELSE NULL END AS ai_memory_scope';
+            $memoryJoin = ' LEFT JOIN conversation_ai_memory mem ON mem.conversation_id = c.id AND mem.tenant_id = c.tenant_id
+                            LEFT JOIN contact_ai_memory cm ON cm.contact_id = c.contact_id AND cm.tenant_id = c.tenant_id';
+        } elseif ($hasConversationMemory) {
+            $memorySelect = 'mem.summary_text AS ai_memory_summary, mem.facts_json AS ai_memory_facts_json, mem.last_refreshed_at AS ai_memory_refreshed_at, mem.refresh_count AS ai_memory_refresh_count, "conversation" AS ai_memory_scope';
+            $memoryJoin = ' LEFT JOIN conversation_ai_memory mem ON mem.conversation_id = c.id AND mem.tenant_id = c.tenant_id';
+        }
+
         $sql = 'SELECT c.*, ct.name AS contact_name, ct.phone, ct.email, ct.company, ct.notes,
                        ct.tags_json, ct.avatar_url, ct.status AS contact_status,
                        COALESCE(NULLIF(ct.contact_group, ""), "unclassified") AS contact_group,
@@ -1716,6 +1733,7 @@ final class ConversationController
                        fs.is_existing_patient, fs.last_intent,
                        i.name AS instance_label, i.instance_name, i.base_url, i.api_key_encrypted,
                        t.name AS tenant_name, u.name AS assigned_user_name,
+                       ' . $memorySelect . ',
                        ' . $leadSelect . '
                 FROM conversations c
                 INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
@@ -1724,6 +1742,7 @@ final class ConversationController
                 LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
                 LEFT JOIN users pref ON pref.id = ct.preferred_user_id AND pref.tenant_id = ct.tenant_id
                 LEFT JOIN conversation_flow_states fs ON fs.conversation_id = c.id AND fs.tenant_id = c.tenant_id
+                ' . $memoryJoin . '
                 ' . $leadJoins . '
                 WHERE c.id = :id';
         $params = ['id' => $id];

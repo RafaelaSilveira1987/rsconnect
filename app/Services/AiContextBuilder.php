@@ -29,7 +29,16 @@ final class AiContextBuilder
     public function build(PDO $pdo, array $agent, int $conversationId, string $incomingContent): array
     {
         $profile = $this->policy->profile($agent);
+        $memory = (new AiProgressiveMemoryService())->context($pdo, $conversationId);
         $historyLimit = (int) $profile['history_limit'];
+        if ($memory !== null) {
+            $memoryHistoryLimit = match ((string) ($profile['mode'] ?? 'balanced')) {
+                'economy' => 4,
+                'quality' => 10,
+                default => 6,
+            };
+            $historyLimit = min($historyLimit, $memoryHistoryLimit);
+        }
         $baselineHistoryLimit = max(4, min(30, (int) ($agent['max_context_messages'] ?? 12)));
 
         $aggregate = $pdo->prepare(
@@ -88,13 +97,22 @@ final class AiContextBuilder
         }
 
         $knowledgeSentChars = mb_strlen($knowledgeSent);
-        $removedChars = max(0, $baselineHistoryChars - $historySentChars)
+        $memorySummary = trim((string) ($memory['summary'] ?? ''));
+        $memoryFacts = is_array($memory['facts'] ?? null) ? $memory['facts'] : [];
+        $memoryChars = mb_strlen($memorySummary) + mb_strlen((string) json_encode($memoryFacts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $removedChars = max(0, $baselineHistoryChars - $historySentChars - $memoryChars)
             + max(0, $knowledgeTotalChars - $knowledgeSentChars);
 
         $preparedAgent = $agent;
         $preparedAgent['knowledge_base'] = $knowledgeSent;
         $preparedAgent['_ai_efficiency_mode'] = $profile['mode'];
         $preparedAgent['_ai_max_output_tokens'] = $profile['max_output_tokens'];
+        if ($memorySummary !== '') {
+            $preparedAgent['_conversation_memory_summary'] = $memorySummary;
+            $preparedAgent['_conversation_memory_facts'] = $memoryFacts;
+            $preparedAgent['_conversation_memory_refreshed_at'] = $memory['last_refreshed_at'] ?? null;
+            $preparedAgent['_conversation_memory_scope'] = $memory['scope'] ?? 'conversation';
+        }
 
         return [
             'messages' => $messages,
@@ -106,6 +124,10 @@ final class AiContextBuilder
                 'knowledge_chars_total' => $knowledgeTotalChars,
                 'knowledge_chars_sent' => $knowledgeSentChars,
                 'estimated_input_tokens_avoided' => (int) ceil($removedChars / 4),
+                'progressive_memory_used' => $memorySummary !== '',
+                'memory_chars_sent' => $memoryChars,
+                'memory_refresh_count' => (int) ($memory['refresh_count'] ?? 0),
+                'memory_scope' => (string) ($memory['scope'] ?? ''),
             ],
         ];
     }

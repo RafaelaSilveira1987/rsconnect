@@ -154,6 +154,91 @@ final class AiModelService
         return mb_substr($text, 0, (int) Env::get('AI_MAX_REPLY_CHARS', 1400));
     }
 
+    /**
+     * Executa uma tarefa curta de bastidor sem carregar prompt comercial, base de conhecimento
+     * ou histórico completo. Usado para memória progressiva e extrações estruturadas.
+     */
+    public function generateCompactTask(array $agent, string $instructions, string $input, int $maxOutputTokens = 280): string
+    {
+        $provider = $this->provider($agent);
+        $maxOutputTokens = max(96, min(700, $maxOutputTokens));
+        $this->lastUsage = [
+            'input_tokens' => null,
+            'output_tokens' => null,
+            'total_tokens' => null,
+            'cached_tokens' => null,
+            'provider_calls' => 1,
+            'provider' => $provider,
+            'model' => null,
+        ];
+
+        if ($provider === 'openai') {
+            $apiKey = $this->apiKey($agent, 'openai');
+            if ($apiKey === '') {
+                throw new RuntimeException('Configure uma credencial OpenAI para atualizar a memória da conversa.');
+            }
+            $configuredModel = trim((string) Env::get('AI_MEMORY_MODEL_OPENAI', ''));
+            $model = $configuredModel !== '' ? $configuredModel : $this->model($agent, 'gpt-4o-mini');
+            $url = $this->baseUrl($agent, 'OPENAI_API_BASE_URL', 'https://api.openai.com/v1') . '/responses';
+            $response = $this->postJson($url, [
+                'model' => $model,
+                'instructions' => trim($instructions),
+                'input' => [['role' => 'user', 'content' => trim($input)]],
+                'temperature' => 0.1,
+                'max_output_tokens' => $maxOutputTokens,
+            ], ['Authorization: Bearer ' . $apiKey]);
+            $usage = is_array($response['usage'] ?? null) ? $response['usage'] : [];
+            $details = is_array($usage['input_tokens_details'] ?? null) ? $usage['input_tokens_details'] : [];
+            $this->lastUsage = [
+                'input_tokens' => isset($usage['input_tokens']) ? max(0, (int) $usage['input_tokens']) : null,
+                'output_tokens' => isset($usage['output_tokens']) ? max(0, (int) $usage['output_tokens']) : null,
+                'total_tokens' => isset($usage['total_tokens']) ? max(0, (int) $usage['total_tokens']) : null,
+                'cached_tokens' => isset($details['cached_tokens']) ? max(0, (int) $details['cached_tokens']) : null,
+                'provider_calls' => 1,
+                'provider' => 'openai',
+                'model' => $model,
+            ];
+            $text = $this->extractOpenAiText($response);
+            if ($text === '') {
+                throw new RuntimeException('A OpenAI não retornou conteúdo para a memória da conversa.');
+            }
+            return trim($text);
+        }
+
+        if ($provider === 'google') {
+            $apiKey = $this->apiKey($agent, 'google');
+            if ($apiKey === '') {
+                throw new RuntimeException('Configure uma credencial Gemini para atualizar a memória da conversa.');
+            }
+            $configuredModel = trim((string) Env::get('AI_MEMORY_MODEL_GOOGLE', ''));
+            $model = $configuredModel !== '' ? $configuredModel : $this->model($agent, 'gemini-2.0-flash');
+            $url = $this->baseUrl($agent, 'GEMINI_API_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta')
+                . '/models/' . rawurlencode($model) . ':generateContent?key=' . rawurlencode($apiKey);
+            $response = $this->postJson($url, [
+                'systemInstruction' => ['parts' => [['text' => trim($instructions)]]],
+                'contents' => [['role' => 'user', 'parts' => [['text' => trim($input)]]]],
+                'generationConfig' => ['temperature' => 0.1, 'maxOutputTokens' => $maxOutputTokens],
+            ], []);
+            $usage = is_array($response['usageMetadata'] ?? null) ? $response['usageMetadata'] : [];
+            $this->lastUsage = [
+                'input_tokens' => isset($usage['promptTokenCount']) ? max(0, (int) $usage['promptTokenCount']) : null,
+                'output_tokens' => isset($usage['candidatesTokenCount']) ? max(0, (int) $usage['candidatesTokenCount']) : null,
+                'total_tokens' => isset($usage['totalTokenCount']) ? max(0, (int) $usage['totalTokenCount']) : null,
+                'cached_tokens' => isset($usage['cachedContentTokenCount']) ? max(0, (int) $usage['cachedContentTokenCount']) : null,
+                'provider_calls' => 1,
+                'provider' => 'google',
+                'model' => $model,
+            ];
+            $text = trim((string) ($response['candidates'][0]['content']['parts'][0]['text'] ?? ''));
+            if ($text === '') {
+                throw new RuntimeException('A IA não retornou conteúdo para a memória da conversa.');
+            }
+            return $text;
+        }
+
+        throw new RuntimeException('Provedor não suportado para memória progressiva: ' . $provider);
+    }
+
     /** @return array{input_tokens:?int,output_tokens:?int,total_tokens:?int,cached_tokens:?int,provider_calls:int,provider:?string,model:?string} */
     public function lastUsage(): array
     {
@@ -350,10 +435,27 @@ final class AiModelService
                 ? "- Esta conversa está em contexto de agenda. As regras do Grupo de atendimento têm prioridade para agenda e pré-agendamento; tags não liberam agenda quando a regra do grupo bloquear.\n\n"
                 : "- Esta conversa NÃO está em contexto de agenda. Não conduza o atendimento para agenda por iniciativa própria; siga o objetivo e o fluxo descritos no prompt do agente.\n\n");
 
+        $memorySummary = trim((string) ($agent['_conversation_memory_summary'] ?? ''));
+        $memoryFacts = is_array($agent['_conversation_memory_facts'] ?? null) ? $agent['_conversation_memory_facts'] : [];
+        $memoryScope = (string) ($agent['_conversation_memory_scope'] ?? 'conversation');
+        $memoryBlock = '';
+        if ($memorySummary !== '') {
+            $memoryBlock = ($memoryScope === 'contact'
+                ? "MEMÓRIA PRESERVADA DO CONTATO (de atendimento anterior):\n"
+                : "MEMÓRIA PROGRESSIVA DA CONVERSA (contexto histórico resumido):\n")
+                . $memorySummary . "\n";
+            if ($memoryFacts !== []) {
+                $memoryBlock .= "Fatos estruturados confirmados: "
+                    . json_encode($memoryFacts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+            }
+            $memoryBlock .= "Use esta memória para manter continuidade e não repetir perguntas. Se uma mensagem recente contradisser a memória, a mensagem recente prevalece.\n\n";
+        }
+
         return trim($base . "
 
 " .
             $structuredContext .
+            $memoryBlock .
             ($knowledge !== '' ? "Base de conhecimento:
 " . $knowledge . "
 

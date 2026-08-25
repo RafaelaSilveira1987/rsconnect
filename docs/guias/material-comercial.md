@@ -14,7 +14,8 @@ O RS Connect centraliza WhatsApp, IA e equipe humana em uma operação organizad
 - Filas fora do horário para IA e equipe.
 - Fotos, anexos, contatos, etiquetas e busca.
 - Agenda, relatórios, alertas e auditoria.
-- Controle de consumo e economia de IA.
+- Controle de consumo, orçamento, projeção e economia de IA.
+- Memória progressiva que preserva contexto com menos histórico reenviado.
 - Isolamento de dados por empresa e administração própria do cliente.
 
 ## Mensagem central
@@ -30,3 +31,5 @@ O RS Connect centraliza WhatsApp, IA e equipe humana em uma operação organizad
 5. Assumir como humano.
 6. Transferir para outro atendente.
 7. Mostrar fila, relatório e consumo.
+
+- Continuidade inteligente: o sistema preserva fatos confirmados do contato entre atendimentos, reduzindo repetição e contexto desperdiçado.

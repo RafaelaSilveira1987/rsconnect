@@ -37,3 +37,23 @@
 - Conferir consumo oficial e interno.
 - Validar respostas locais e cache.
 - Gerar PDF e executar relatório agendado.
+
+## OpenAI 2.0
+
+- Configurar Admin API Key e atualizar o painel oficial.
+- Confirmar custo, tokens, chamadas e modelos no mesmo período do painel da OpenAI.
+- Aplicar filtros por empresa e assistente na telemetria interna.
+- Conferir respostas locais, cache, chamadas evitadas e tokens evitados.
+- Validar projeção e alerta usando um orçamento de teste.
+- Conferir se a comparação oficial x RS Connect respeita o escopo de `OPENAI_USAGE_PROJECT_IDS`.
+
+## Memória progressiva
+
+- Ativar a memória em um assistente de teste.
+- Enviar mensagens suficientes para ultrapassar o intervalo de atualização.
+- Confirmar que a resposta ao cliente ocorre antes da atualização da memória.
+- Conferir `Memória da IA` na conversa.
+- Verificar que resumo e fatos não inventam informações ausentes.
+- Corrigir um fato na conversa e confirmar que a próxima atualização substitui o fato superado.
+- Confirmar que a telemetria registra `usage_type = summary` sem reduzir uma nova interação comercial da franquia.
+- Desativar a memória no assistente e confirmar fallback para contexto recente.

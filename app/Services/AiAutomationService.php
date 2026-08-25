@@ -487,6 +487,25 @@ final class AiAutomationService
                 $conversationLockAcquired = false;
             }
 
+            // Atualiza a memória depois da resposta já ter sido entregue e fora do lock da conversa.
+            // A falha dessa tarefa nunca interfere no atendimento principal.
+            try {
+                $memoryResult = (new AiProgressiveMemoryService())->refreshIfNeeded(
+                    $pdo,
+                    (int) $instance['tenant_id'],
+                    $agent,
+                    $this->conversation($pdo, $conversationId)
+                );
+                if (($memoryResult['status'] ?? '') === 'refreshed') {
+                    $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.memory.refreshed', 'success', null, null, [
+                        'source_message_id' => $memoryResult['source_message_id'] ?? null,
+                        'new_messages' => $memoryResult['new_messages'] ?? null,
+                    ]);
+                }
+            } catch (Throwable $memoryException) {
+                $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.memory.failed', 'error', $memoryException->getMessage(), null, []);
+            }
+
             if ((int) ($agent['n8n_enabled'] ?? 0) === 1) {
                 try {
                     $legacyUrl = trim((string) ($agent['n8n_webhook_url'] ?? ''));

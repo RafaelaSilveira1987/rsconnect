@@ -12,6 +12,7 @@ $required = [
     'guia-configuracao-assistentes.md',
     'guia-filas-atendimento-humano.md',
     'guia-consumo-ia.md',
+    'guia-memoria-progressiva.md',
     'matriz-permissoes.md',
     'roteiro-implantacao.md',
     'roteiro-homologacao.md',
