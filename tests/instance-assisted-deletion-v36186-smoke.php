@@ -40,8 +40,8 @@ $checks = [
     'estilos da exclusão assistida' => str_contains($css, 'RS Connect 36.18.6')
         && str_contains($css, '.instance-delete-impact-grid'),
     'versão e cache renovados' => str_contains($version, 'RS Connect 36.18.6')
-        && str_contains($layout, 'app.css?v=36.19.1')
-        && str_contains($layout, 'app.js?v=36.19.1'),
+        && str_contains($layout, 'app.css?v=36.19.2')
+        && str_contains($layout, 'app.js?v=36.19.2'),
 ];
 
 $failed = [];

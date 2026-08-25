@@ -158,6 +158,21 @@ final class AiProgressiveMemoryService
                 . 'Nos facts, mantenha somente informações explícitas ou fortemente confirmadas na conversa; não invente dados, diagnósticos, preços, datas ou preferências. '
                 . 'Remova fatos superados quando as novas mensagens os corrigirem.';
 
+            // A memória é uma chamada técnica e também respeita o orçamento quando
+            // utiliza credencial custeada pela RS Connect. Não faz sentido resumir
+            // consumindo mais saldo depois de um bloqueio financeiro.
+            if ($this->usage->credentialOwner($agent) === 'rs_connect') {
+                $budgetDecision = (new AiBudgetPolicyService())->decision($tenantId);
+                if (empty($budgetDecision['allowed'])) {
+                    return [
+                        'status' => 'budget_blocked',
+                        'new_messages' => count($messages),
+                        'budget_usd' => $budgetDecision['budget_usd'] ?? null,
+                        'used_usd' => $budgetDecision['used_usd'] ?? null,
+                    ];
+                }
+            }
+
             $raw = $this->model->generateCompactTask($agent, $instructions, $input, 360);
             $payload = $this->decodeJson($raw);
             $summary = trim((string) ($payload['summary'] ?? ''));

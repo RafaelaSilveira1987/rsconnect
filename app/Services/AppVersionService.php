@@ -28,10 +28,11 @@ final class AppVersionService
     // RS Connect 36.18.6 — exclusão assistida, transferência integral de vínculos e auditoria da remoção.
     // RS Connect 36.19.0 — painel OpenAI 2.0, medição de economia, memória progressiva e fatos estruturados.
     // RS Connect 36.19.1 — atribuição financeira de consumo OpenAI por empresa e assistente.
-    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql e 081_ai_cost_attribution.sql.
+    // RS Connect 36.19.2 — orçamento de IA por empresa, alertas e proteção automática de consumo.
+    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql e 082_ai_budget_governance.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.3';
-    public const PACKAGE_LABEL = 'RS Connect 36.19.1 — Consumo OpenAI atribuído por empresa';
-    public const REQUIRED_MIGRATION = '081_ai_cost_attribution.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.19.2 — Governança de orçamento de IA por empresa';
+    public const REQUIRED_MIGRATION = '082_ai_budget_governance.sql';
 
     private PDO $pdo;
 
@@ -336,6 +337,17 @@ final class AppVersionService
                 ? 'Regras locais e cache exato opcional podem responder sem chamar o provedor, com telemetria de chamadas evitadas.'
                 : 'A segunda fase da economia de IA ainda não foi aplicada.',
             'Executar database/migrations/079_ai_efficiency_phase2_and_report_cleanup.sql.'
+        );
+
+        $aiBudgetGovernanceReady = $this->tableExists('tenant_ai_budget_policies')
+            && $this->tableExists('ai_budget_threshold_events');
+        $checks[] = $this->check(
+            'Governança financeira da IA',
+            $aiBudgetGovernanceReady ? 'ok' : 'blocked',
+            $aiBudgetGovernanceReady
+                ? 'Orçamento por empresa, alertas e ações automáticas de proteção estão disponíveis.'
+                : 'A política financeira por empresa ainda não foi aplicada.',
+            'Executar database/migrations/082_ai_budget_governance.sql.'
         );
 
         $contactAvatarReady = $this->columnExists('contacts', 'avatar_checked_at');

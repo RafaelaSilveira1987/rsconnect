@@ -47,6 +47,23 @@ final class AiUsageService
             // Credencial própria do cliente não depende da franquia RS e não deve ser
             // interrompida por contenção da trava comercial de outra execução.
             if ($billable) {
+                $budgetDecision = (new AiBudgetPolicyService())->decision($tenantId);
+                if (empty($budgetDecision['allowed'])) {
+                    (new AiBudgetPolicyService())->evaluateAndNotify($tenantId);
+                    return [
+                        'allowed' => false,
+                        'event_id' => 0,
+                        'owner' => $owner,
+                        'billable' => true,
+                        'used' => 0,
+                        'limit' => null,
+                        'budget_blocked' => true,
+                        'budget_used_usd' => $budgetDecision['used_usd'] ?? null,
+                        'budget_usd' => $budgetDecision['budget_usd'] ?? null,
+                        'message' => (string) ($budgetDecision['message'] ?? 'Orçamento de IA atingido.'),
+                    ];
+                }
+
                 $lock = $pdo->prepare('SELECT GET_LOCK(:lock_name, 5)');
                 $lock->execute(['lock_name' => $lockName]);
                 $locked = (int) $lock->fetchColumn() === 1;
@@ -255,7 +272,9 @@ final class AiUsageService
             }
 
             if ((int) ($event['plan_billable'] ?? 0) === 1) {
-                $this->evaluateThresholds((int) ($event['tenant_id'] ?? 0));
+                $tenantId = (int) ($event['tenant_id'] ?? 0);
+                $this->evaluateThresholds($tenantId);
+                (new AiBudgetPolicyService())->evaluateAndNotify($tenantId);
             }
         } catch (Throwable) {
             // O envio ao cliente já aconteceu; falha de telemetria não pode duplicar mensagem.
@@ -361,6 +380,9 @@ final class AiUsageService
                     ]);
                 }
             }
+            if ((string) ($event['credential_owner'] ?? '') === 'rs_connect' && (int) ($telemetry['provider_calls'] ?? 0) > 0) {
+                (new AiBudgetPolicyService())->evaluateAndNotify((int) ($event['tenant_id'] ?? 0));
+            }
         } catch (Throwable) {
         }
     }
@@ -427,6 +449,9 @@ final class AiUsageService
                     'output_tokens' => $telemetry['output_tokens'],
                 ]);
             }
+            if ($owner === 'rs_connect' && (int) ($telemetry['provider_calls'] ?? 0) > 0) {
+                (new AiBudgetPolicyService())->evaluateAndNotify($tenantId);
+            }
         } catch (Throwable) {
         }
     }
@@ -491,6 +516,9 @@ final class AiUsageService
                 'estimated_cost_currency' => $telemetry['estimated_cost_currency'],
                 'error_message' => $errorMessage !== '' ? mb_substr($errorMessage, 0, 500) : null,
             ]);
+            if ($owner === 'rs_connect' && (int) ($telemetry['provider_calls'] ?? 0) > 0) {
+                (new AiBudgetPolicyService())->evaluateAndNotify($tenantId);
+            }
         } catch (Throwable) {
             // Telemetria nunca deve impedir o fluxo principal.
         }
@@ -574,7 +602,7 @@ final class AiUsageService
     private function eventIdentity(int $eventId): array
     {
         try {
-            $statement = Database::connection()->prepare('SELECT tenant_id, plan_billable, provider, model FROM ai_usage_events WHERE id = :id LIMIT 1');
+            $statement = Database::connection()->prepare('SELECT tenant_id, plan_billable, credential_owner, provider, model FROM ai_usage_events WHERE id = :id LIMIT 1');
             $statement->execute(['id' => $eventId]);
             return $statement->fetch(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {

@@ -23,6 +23,15 @@ $options = is_array($aiEfficiency['filter_options'] ?? null) ? $aiEfficiency['fi
 $filters = is_array($aiEfficiency['filters'] ?? null) ? $aiEfficiency['filters'] : [];
 $selectedTenant = (int) ($filters['tenant_id'] ?? 0);
 $selectedAgent = (int) ($filters['agent_id'] ?? 0);
+$budgetOverview = is_array($aiBudgetOverview ?? null) ? $aiBudgetOverview : [];
+$selectedBudgetPolicy = is_array($selectedAiBudgetPolicy ?? null) ? $selectedAiBudgetPolicy : [];
+$selectedBudgetDecision = is_array($selectedAiBudgetDecision ?? null) ? $selectedAiBudgetDecision : [];
+$budgetActionLabel = static fn (string $action): string => match ($action) {
+    'economy' => 'Forçar Econômico',
+    'block_rs_ai' => 'Bloquear IA RS',
+    'notify_only' => 'Somente alertar',
+    default => 'Sem ação automática',
+};
 
 $compact = static function (int|float $value): string {
     $absolute = abs((float) $value);
@@ -151,6 +160,63 @@ $refreshUrl = Router::url('/openai-usage') . '?' . http_build_query($queryBase +
 <section class="openai-v2-grid openai-ranking-grid">
     <article class="card openai-v2-panel"><div class="section-heading"><div><span class="eyebrow">Consumo por empresa</span><h2>Empresas que estão consumindo IA</h2><p>Valores financeiros são estimativas atribuídas pela telemetria do RS Connect; o custo oficial consolidado permanece no topo.</p></div></div><div class="openai-management-ranking"><?php foreach (array_slice($tenantRanking,0,10) as $row): ?><div><div><strong><?= View::e((string)$row['tenant_name']) ?></strong><small><?= View::e($compact((int)$row['conversations'])) ?> conversa(s) · <?= View::e($compact((int)$row['provider_calls'])) ?> chamada(s) · <?= View::e($compact((int)$row['avoided_calls'])) ?> evitada(s)</small></div><div><strong><?= (float)$row['estimated_cost'] > 0 ? View::e($usd((float)$row['estimated_cost'])) : '—' ?></strong><small><?= View::e($compact((int)$row['total_tokens'])) ?> tokens</small></div></div><?php endforeach; ?><?php if (!$tenantRanking): ?><div class="empty-state">Sem telemetria no período.</div><?php endif; ?></div></article>
     <article class="card openai-v2-panel"><div class="section-heading"><div><span class="eyebrow">Consumo por assistente</span><h2>Assistentes que mais consomem</h2><p>Ajuda a localizar prompts, modelos ou fluxos com maior impacto no custo.</p></div></div><div class="openai-management-ranking"><?php foreach (array_slice($agentRanking,0,10) as $row): ?><div><div><strong><?= View::e((string)$row['agent_name']) ?></strong><small><?= View::e((string)$row['tenant_name']) ?> · <?= View::e($compact((int)$row['provider_calls'])) ?> chamada(s) · <?= View::e($compact((int)$row['avoided_calls'])) ?> evitada(s)</small></div><div><strong><?= (float)$row['estimated_cost'] > 0 ? View::e($usd((float)$row['estimated_cost'])) : '—' ?></strong><small><?= View::e($compact((int)$row['total_tokens'])) ?> tokens</small></div></div><?php endforeach; ?><?php if (!$agentRanking): ?><div class="empty-state">Sem telemetria no período.</div><?php endif; ?></div></article>
+</section>
+
+<section class="card openai-budget-governance-panel">
+    <div class="section-heading">
+        <div><span class="eyebrow">Governança por empresa</span><h2>Orçamento e proteção de consumo</h2><p>Defina quanto a RS Connect pode custear por empresa e escolha o comportamento automático ao se aproximar ou atingir o limite.</p></div>
+        <span class="badge"><?= View::e(number_format(count(array_filter($budgetOverview, static fn(array $row): bool => !empty($row['enabled']))),0,',','.')) ?> política(s) ativa(s)</span>
+    </div>
+    <div class="openai-budget-company-list">
+        <?php foreach (array_slice($budgetOverview, 0, 30) as $budgetRow):
+            $budgetEnabled = !empty($budgetRow['enabled']) && (float) ($budgetRow['budget_usd'] ?? 0) > 0;
+            $budgetRate = max(0.0, (float) ($budgetRow['used_rate'] ?? 0));
+            $budgetPercent = min(100, (int) round($budgetRate * 100));
+            $budgetState = !empty($budgetRow['blocked']) ? 'is-danger' : (!empty($budgetRow['force_economy']) ? 'is-warning' : ($budgetRate >= .8 ? 'is-attention' : ''));
+            $budgetUrl = Router::url('/openai-usage') . '?' . http_build_query(['usage_period' => 'month', 'tenant_id' => (int) ($budgetRow['tenant_id'] ?? 0)]);
+        ?>
+        <article class="openai-budget-company <?= View::e($budgetState) ?>">
+            <div class="openai-budget-company-head"><div><strong><?= View::e((string) ($budgetRow['tenant_name'] ?? 'Empresa')) ?></strong><small><?= $budgetEnabled ? View::e($usd((float) ($budgetRow['used_usd'] ?? 0)) . ' de ' . $usd((float) ($budgetRow['budget_usd'] ?? 0))) : 'Sem orçamento configurado' ?></small></div><a href="<?= View::e($budgetUrl) ?>">Configurar</a></div>
+            <div class="openai-budget-progress"><span style="--budget-progress:<?= $budgetEnabled ? $budgetPercent : 0 ?>%"></span></div>
+            <div class="openai-budget-company-meta">
+                <span><?= $budgetEnabled ? View::e(number_format($budgetRate * 100, 1, ',', '.') . '% utilizado') : 'Monitoramento apenas' ?></span>
+                <span><?= View::e($compact((int) ($budgetRow['provider_calls'] ?? 0))) ?> chamada(s)</span>
+                <span><?= $budgetEnabled ? View::e($budgetActionLabel((string) (($budgetRate * 100) >= (float) ($budgetRow['hard_limit_percent'] ?? 100) ? ($budgetRow['hard_limit_action'] ?? 'notify_only') : ($budgetRow['warning_action'] ?? 'none')))) : 'Sem automação' ?></span>
+            </div>
+        </article>
+        <?php endforeach; ?>
+        <?php if (!$budgetOverview): ?><div class="empty-state">A migration de governança ainda não foi aplicada ou não existem empresas ativas.</div><?php endif; ?>
+    </div>
+
+    <?php if ($selectedTenant > 0): ?>
+    <form class="openai-budget-policy-form" method="post" action="<?= View::e(Router::url('/openai-usage/budget')) ?>">
+        <?= \App\Core\Csrf::input() ?>
+        <input type="hidden" name="tenant_id" value="<?= $selectedTenant ?>">
+        <div class="openai-budget-policy-title">
+            <div><span class="eyebrow">Política da empresa selecionada</span><h3>Limite financeiro da IA custeada pela RS</h3><p>O limite não interrompe atendimento humano, respostas locais, cache nem IA usada com credencial própria do cliente.</p></div>
+            <label class="check-field"><input type="checkbox" name="enabled" value="1" <?= !empty($selectedBudgetPolicy['enabled']) ? 'checked' : '' ?>><span>Ativar orçamento</span></label>
+        </div>
+        <div class="openai-budget-policy-current">
+            <div><span>Custo no ciclo</span><strong><?= View::e($usd((float) ($selectedBudgetDecision['used_usd'] ?? 0))) ?></strong></div>
+            <div><span>Orçamento</span><strong><?= (float) ($selectedBudgetDecision['budget_usd'] ?? 0) > 0 ? View::e($usd((float) $selectedBudgetDecision['budget_usd'])) : '—' ?></strong></div>
+            <div><span>Uso</span><strong><?= (float) ($selectedBudgetDecision['budget_usd'] ?? 0) > 0 ? View::e(number_format((float) ($selectedBudgetDecision['used_percent'] ?? 0), 1, ',', '.') . '%') : '—' ?></strong></div>
+            <div><span>Ação efetiva</span><strong><?= View::e($budgetActionLabel((string) ($selectedBudgetDecision['action'] ?? 'none'))) ?></strong></div>
+        </div>
+        <div class="form-grid four openai-budget-fields">
+            <label class="field"><span>Orçamento do ciclo (US$)</span><input type="number" name="monthly_budget_usd" min="0" step="0.0001" value="<?= View::e((string) ($selectedBudgetPolicy['monthly_budget_usd'] ?? '')) ?>"><small>Custo técnico estimado das chamadas com credencial RS.</small></label>
+            <label class="field"><span>Atenção (%)</span><input type="number" name="warning_percent" min="10" max="99" value="<?= (int) ($selectedBudgetPolicy['warning_percent'] ?? 80) ?>"><small>Primeiro alerta financeiro.</small></label>
+            <label class="field"><span>Crítico (%)</span><input type="number" name="critical_percent" min="11" max="100" value="<?= (int) ($selectedBudgetPolicy['critical_percent'] ?? 95) ?>"><small>Eleva a severidade do alerta.</small></label>
+            <label class="field"><span>Limite (%)</span><input type="number" name="hard_limit_percent" min="11" max="150" value="<?= (int) ($selectedBudgetPolicy['hard_limit_percent'] ?? 100) ?>"><small>Ponto da ação final.</small></label>
+        </div>
+        <div class="form-grid two openai-budget-fields">
+            <label class="field"><span>Ao atingir atenção</span><select name="warning_action"><option value="none" <?= ($selectedBudgetPolicy['warning_action'] ?? 'none') === 'none' ? 'selected' : '' ?>>Somente alertar</option><option value="economy" <?= ($selectedBudgetPolicy['warning_action'] ?? '') === 'economy' ? 'selected' : '' ?>>Forçar modo Econômico</option></select><small>O modo Econômico reduz contexto e saída sem trocar o atendimento humano.</small></label>
+            <label class="field"><span>Ao atingir o limite</span><select name="hard_limit_action"><option value="notify_only" <?= ($selectedBudgetPolicy['hard_limit_action'] ?? 'notify_only') === 'notify_only' ? 'selected' : '' ?>>Somente alertar</option><option value="economy" <?= ($selectedBudgetPolicy['hard_limit_action'] ?? '') === 'economy' ? 'selected' : '' ?>>Manter IA em modo Econômico</option><option value="block_rs_ai" <?= ($selectedBudgetPolicy['hard_limit_action'] ?? '') === 'block_rs_ai' ? 'selected' : '' ?>>Bloquear novas chamadas custeadas pela RS</option></select><small>Credenciais próprias do cliente continuam disponíveis mesmo no bloqueio.</small></label>
+        </div>
+        <div class="openai-budget-savebar"><p>Recomendação inicial: <strong>80% → Econômico</strong> e <strong>100% → bloquear IA RS</strong> somente após homologar os valores de custo.</p><button class="btn btn-primary" type="submit">Salvar política</button></div>
+    </form>
+    <?php else: ?>
+    <div class="openai-budget-select-note">Selecione uma empresa no filtro superior para editar orçamento, limites e ações automáticas.</div>
+    <?php endif; ?>
 </section>
 
 <section class="card openai-cost-attribution-note">

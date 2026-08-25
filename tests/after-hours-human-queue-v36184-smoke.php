@@ -24,8 +24,8 @@ $checks = [
         && str_contains($operations, 'sob responsabilidade da equipe humana'),
     'polling mantém o estado humano' => str_contains($javascript, "blocked_human: { label: 'Aguardando equipe'"),
     'versão e cache atualizados' => str_contains($version, 'RS Connect 36.18.6')
-        && str_contains($layout, 'app.css?v=36.19.1')
-        && str_contains($layout, 'app.js?v=36.19.1'),
+        && str_contains($layout, 'app.css?v=36.19.2')
+        && str_contains($layout, 'app.js?v=36.19.2'),
 ];
 
 $failed = [];

@@ -1527,7 +1527,20 @@ final class ConversationController
                 $this->redirect('/conversations?conversation_id=' . $conversationId);
             }
 
-            $messages = $this->recentMessages($pdo, (int) $conversation['tenant_id'], $conversationId, 14);
+            $tenantId = (int) $conversation['tenant_id'];
+            $usageService = new \App\Services\AiUsageService();
+            $budgetDecision = (new \App\Services\AiBudgetPolicyService())->decision($tenantId);
+            if ($usageService->credentialOwner($agent) === 'rs_connect' && empty($budgetDecision['allowed'])) {
+                Flash::set('error', 'A sugestão por IA está temporariamente indisponível porque o orçamento da IA custeada pela RS atingiu o limite. O atendimento humano continua normal.');
+                $this->redirect('/conversations?conversation_id=' . $conversationId);
+            }
+
+            $messageLimit = !empty($budgetDecision['force_economy']) && $usageService->credentialOwner($agent) === 'rs_connect' ? 6 : 14;
+            if ($messageLimit === 6) {
+                $agent['ai_efficiency_mode'] = 'economy';
+                $agent['_ai_max_output_tokens'] = 160;
+            }
+            $messages = $this->recentMessages($pdo, $tenantId, $conversationId, $messageLimit);
             $modelService = new AiModelService();
             $suggestion = $modelService->generateReply($agent, $messages, $conversation, $conversation);
             (new \App\Services\AiUsageService())->recordSuggestion((int) $conversation['tenant_id'], $agent, $conversationId, $modelService->lastUsage());

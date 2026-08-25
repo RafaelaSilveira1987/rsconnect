@@ -28,8 +28,8 @@ $assert(str_contains($instanceController, 'count($agents) === 1'), 'um único as
 $assert(str_contains($instanceController, 'count($defaults) === 1'), 'fallback geral único deve ser vinculado automaticamente');
 $assert(str_contains($css, 'agent-channel-selection-grid'), 'layout dos canais deve possuir estilos próprios');
 $assert(str_contains($js, 'primary_instance_ids[]') && str_contains($js, 'instance_ids[]'), 'editor deve manter principal e vínculo coerentes');
-$assert(str_contains($layout, 'app.css?v=36.19.1'), 'cache busting do CSS deve usar a versão atual');
-$assert(str_contains($layout, 'app.js?v=36.19.1'), 'cache busting do JS deve usar a versão atual');
+$assert(str_contains($layout, 'app.css?v=36.19.2'), 'cache busting do CSS deve usar a versão atual');
+$assert(str_contains($layout, 'app.js?v=36.19.2'), 'cache busting do JS deve usar a versão atual');
 
 if ($failures !== []) {
     fwrite(STDERR, "FALHAS:\n- " . implode("\n- ", $failures) . "\n");

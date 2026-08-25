@@ -356,8 +356,32 @@ final class AiAutomationService
                 }
             }
 
-            $aiRoute = (new AiRouterService())->route($agent, $conversation, $incomingContent);
-            $generationAgent = array_merge($agent, (array) ($aiRoute['agent_overrides'] ?? []));
+            // A governança financeira pode reduzir temporariamente o perfil para Econômico
+            // antes da chamada ao provedor. Regras locais/cache já foram avaliados acima e
+            // continuam disponíveis mesmo quando o orçamento bloqueia a IA custeada pela RS.
+            $budgetDecision = (new AiBudgetPolicyService())->decision((int) $instance['tenant_id']);
+            $routingAgent = $agent;
+            if (!empty($budgetDecision['force_economy'])) {
+                $routingAgent['ai_efficiency_mode'] = 'economy';
+                $routingAgent['_ai_budget_forced_economy'] = 1;
+                $this->log(
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    'ai.budget.economy',
+                    'success',
+                    (string) ($budgetDecision['message'] ?? 'Modo Econômico aplicado pela política de orçamento.'),
+                    null,
+                    [
+                        'budget_usd' => $budgetDecision['budget_usd'] ?? null,
+                        'used_usd' => $budgetDecision['used_usd'] ?? null,
+                        'used_percent' => $budgetDecision['used_percent'] ?? null,
+                    ]
+                );
+            }
+
+            $aiRoute = (new AiRouterService())->route($routingAgent, $conversation, $incomingContent);
+            $generationAgent = array_merge($routingAgent, (array) ($aiRoute['agent_overrides'] ?? []));
 
             $quota = $usageService->reserveAutoReply(
                 (int) $instance['tenant_id'],

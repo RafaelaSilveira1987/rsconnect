@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Audit;
+use App\Core\Auth;
 use App\Core\Env;
+use App\Core\Flash;
+use App\Core\Router;
 use App\Core\View;
+use App\Services\AiBudgetPolicyService;
 use App\Services\AiEfficiencyDashboardService;
 use App\Services\OpenAiOrganizationUsageService;
 use DateTimeImmutable;
+use Throwable;
 
 final class OpenAiUsageController
 {
@@ -23,11 +29,43 @@ final class OpenAiUsageController
         $efficiency = (new AiEfficiencyDashboardService())->dashboard($period, $tenantId, $agentId);
         $usage['insights'] = $this->insights($usage, $efficiency);
 
+        $budgetService = new AiBudgetPolicyService();
+        $budgetOverview = $budgetService->overview();
+        $selectedBudgetPolicy = $tenantId > 0 ? $budgetService->policy($tenantId) : [];
+        $selectedBudgetDecision = $tenantId > 0 ? $budgetService->decision($tenantId) : [];
+
         View::render('openai_usage.index', [
             'title' => 'Consumo OpenAI',
             'openAiUsage' => $usage,
             'aiEfficiency' => $efficiency,
+            'aiBudgetOverview' => $budgetOverview,
+            'selectedAiBudgetPolicy' => $selectedBudgetPolicy,
+            'selectedAiBudgetDecision' => $selectedBudgetDecision,
         ]);
+    }
+
+    public function saveBudgetPolicy(): void
+    {
+        $tenantId = max(0, (int) ($_POST['tenant_id'] ?? 0));
+        try {
+            (new AiBudgetPolicyService())->save($tenantId, $_POST, Auth::id());
+            Audit::log('ai.budget_policy.updated', [
+                'enabled' => !empty($_POST['enabled']),
+                'monthly_budget_usd' => $_POST['monthly_budget_usd'] ?? null,
+                'warning_percent' => $_POST['warning_percent'] ?? null,
+                'critical_percent' => $_POST['critical_percent'] ?? null,
+                'hard_limit_percent' => $_POST['hard_limit_percent'] ?? null,
+                'warning_action' => $_POST['warning_action'] ?? null,
+                'hard_limit_action' => $_POST['hard_limit_action'] ?? null,
+            ], $tenantId > 0 ? $tenantId : null);
+            Flash::set('success', 'Política de orçamento de IA salva.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar a política de orçamento: ' . $exception->getMessage());
+        }
+
+        $query = http_build_query(['usage_period' => 'month', 'tenant_id' => $tenantId > 0 ? $tenantId : null]);
+        header('Location: ' . Router::url('/openai-usage') . ($query !== '' ? '?' . $query : ''));
+        exit;
     }
 
     /** @return array<string,mixed> */

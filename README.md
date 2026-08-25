@@ -1,46 +1,49 @@
-# RS Connect — v36.19.0
+# RS Connect — v36.19.2
 
-Esta versão transforma a camada de IA em uma área de gestão: o painel OpenAI passa a cruzar consumo oficial com a telemetria do RS Connect, enquanto as conversas ganham memória progressiva para reduzir contexto repetido sem perder continuidade.
+Esta versão transforma o custo atribuído por empresa em **governança operacional**. O Super Admin pode definir orçamento de IA por empresa, receber alertas e escolher uma ação automática sem interromper atendimento humano ou credenciais próprias do cliente.
 
 ## Destaques
 
-- Painel **OpenAI 2.0** com custo oficial, projeção mensal, orçamento, conversão de referência para reais e comparação oficial x RS Connect.
-- Filtros internos por empresa e assistente, ranking de consumo e medição de chamadas/tokens evitados.
-- Indicadores de respostas locais, cache exato, custo estimado por conversa e atualizações de memória.
-- **Resumo progressivo por conversa**, atualizado somente a cada intervalo configurável de mensagens.
-- **Memória estruturada por contato** com fatos confirmados, interesses, preferências, pendências, compromissos, restrições, última intenção e próxima ação, reaproveitável em novas conversas.
-- Contexto recente ainda mais enxuto quando uma memória válida já existe.
-- Configuração da memória por assistente e visualização da memória dentro da conversa.
-- Modelos opcionais e mais econômicos para a tarefa de resumo, sem trocar o modelo principal do assistente.
-- Guias técnicos, operacionais e comerciais atualizados (ponto 9 do projeto).
+- Orçamento em dólar por empresa para IA custeada pela RS Connect.
+- Indicadores de custo utilizado, percentual do orçamento, chamadas e tokens no ciclo.
+- Alertas configuráveis em níveis de atenção, crítico e limite.
+- Ação automática opcional ao atingir atenção: **forçar modo Econômico**.
+- Ação final configurável: apenas alertar, manter modo Econômico ou **bloquear novas chamadas custeadas pela RS**.
+- Regras locais, cache exato, atendimento humano e credenciais próprias continuam funcionando mesmo no bloqueio.
+- Configuração diretamente em **Consumo OpenAI**, filtrando uma empresa.
+- Auditoria de mudanças da política e histórico de thresholds disparados.
+- Documentação operacional e comercial atualizada (ponto 9).
 
 ## Atualização
 
-A partir da v36.18.6, execute obrigatoriamente:
+Atualizando a partir da v36.19.1, execute:
 
 ```text
-database/migrations/080_ai_memory_and_usage_intelligence.sql
+database/migrations/082_ai_budget_governance.sql
 ```
 
 Depois valide:
 
 ```text
-database/diagnostics/ai_memory_usage_v36.19.0.sql
+database/diagnostics/ai_budget_governance_v36.19.2.sql
 ```
 
-Não existem novas variáveis obrigatórias. Para aproveitar o painel gerencial e otimizar a memória, podem ser configuradas:
+O primeiro resultado deve retornar `OK`.
 
-```dotenv
-OPENAI_MONTHLY_BUDGET_USD=
-OPENAI_USAGE_USD_BRL=
-AI_MEMORY_MODEL_OPENAI=
-AI_MEMORY_MODEL_GOOGLE=
+Não existem novas variáveis obrigatórias no `.env`.
+
+## Política recomendada para homologação
+
+Comece sem bloqueio automático:
+
+```text
+Atenção: 80%
+Ação em atenção: Forçar modo Econômico
+Crítico: 95%
+Limite: 100%
+Ação no limite: Somente alertar
 ```
 
-A consulta oficial da organização continua usando `OPENAI_ADMIN_API_KEY` e, opcionalmente, `OPENAI_USAGE_PROJECT_IDS`.
+Depois de validar a cobertura de tarifação e o custo por empresa, a ação final pode ser alterada para **Bloquear IA RS**.
 
-Consulte `INSTRUCOES-v36.19.0.md` e `docs/guias/README.md`.
-
-### v36.19.1 — atribuição de custo por empresa
-
-Corrige o custo interno zerado do painel OpenAI quando as tarifas não estavam definidas manualmente. Inclui catálogo padrão para modelos OpenAI de texto conhecidos, backfill de telemetria histórica registrada e indicadores de cobertura de tarifação.
+Consulte `INSTRUCOES-v36.19.2.md` e `docs/guias/README.md`.

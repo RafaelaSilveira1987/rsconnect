@@ -104,3 +104,11 @@ Na tela, compare sempre:
 - **Consumo por empresa**: fonte RS Connect, atribuído por `tenant_id`;
 - **Cobertura**: quanto do consumo oficial também aparece na telemetria interna;
 - **Diferença não atribuída**: chamadas de outros sistemas, períodos anteriores à telemetria, outros fluxos ou uso externo ao RS Connect.
+
+## Governança por empresa — v36.19.2
+
+Depois que a v36.19.1 passou a atribuir custo por empresa, a v36.19.2 adiciona uma camada de proteção financeira. Cada empresa pode ter orçamento próprio para IA custeada pela RS Connect, com níveis de atenção, crítico e limite.
+
+A política é deliberadamente isolada da operação humana. Mesmo quando `block_rs_ai` estiver ativo, atendimento humano, regras locais, cache e credenciais próprias continuam funcionando.
+
+Para configuração detalhada, consulte `guia-governanca-orcamento-ia.md`.

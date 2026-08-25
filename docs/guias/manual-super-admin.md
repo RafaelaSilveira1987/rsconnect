@@ -50,3 +50,7 @@ OPENAI_USAGE_USD_BRL=
 A memória é atualizada depois da resposta principal e seu consumo é registrado como evento técnico `summary`, não como uma nova interação comercial de franquia. Em caso de falhas repetidas, consulte `conversation_ai_memory.status/last_error` e desative temporariamente a memória no assistente até corrigir a credencial ou o provedor.
 
 A v36.19.0 mantém `conversation_ai_memory` para o atendimento atual e `contact_ai_memory` para continuidade entre conversas do mesmo contato. Ambas respeitam `tenant_id` e não devem ser compartilhadas entre empresas.
+
+## Governança financeira da IA — v36.19.2
+
+Em **Consumo OpenAI**, filtre uma empresa para configurar seu orçamento de IA custeada pela RS Connect. A política pode somente alertar, forçar temporariamente o modo Econômico ou bloquear novas chamadas com credencial RS no limite. O bloqueio não afeta atendimento humano, regras locais, cache nem credencial própria do cliente.
