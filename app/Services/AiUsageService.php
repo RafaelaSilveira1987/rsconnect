@@ -624,47 +624,11 @@ final class AiUsageService
     /** @return array{cost:?float,currency:?string} */
     private function estimateCost(string $provider, string $model, ?int $input, ?int $output, ?int $cached): array
     {
-        if ($provider === '' || $model === '' || ($input === null && $output === null)) {
-            return ['cost' => null, 'currency' => null];
-        }
-
-        $raw = trim((string) Env::get('AI_COST_RATES_JSON', ''));
-        if ($raw === '') {
-            return ['cost' => null, 'currency' => null];
-        }
-
-        $rates = json_decode($raw, true);
-        if (!is_array($rates)) {
-            return ['cost' => null, 'currency' => null];
-        }
-
-        $providerRates = $rates[strtolower($provider)] ?? null;
-        if (!is_array($providerRates)) {
-            return ['cost' => null, 'currency' => null];
-        }
-
-        $rate = $providerRates[$model] ?? $providerRates['*'] ?? null;
-        if (!is_array($rate)) {
-            return ['cost' => null, 'currency' => null];
-        }
-
-        $inputRate = max(0.0, (float) ($rate['input_per_million'] ?? 0));
-        $outputRate = max(0.0, (float) ($rate['output_per_million'] ?? 0));
-        $cachedRate = array_key_exists('cached_input_per_million', $rate)
-            ? max(0.0, (float) $rate['cached_input_per_million'])
-            : $inputRate;
-        $currency = strtoupper(trim((string) ($rate['currency'] ?? 'USD')));
-        $currency = preg_match('/^[A-Z]{3}$/', $currency) ? $currency : 'USD';
-
-        $inputTokens = max(0, (int) ($input ?? 0));
-        $cachedTokens = min($inputTokens, max(0, (int) ($cached ?? 0)));
-        $nonCachedInput = max(0, $inputTokens - $cachedTokens);
-        $outputTokens = max(0, (int) ($output ?? 0));
-        $estimated = (($nonCachedInput / 1_000_000) * $inputRate)
-            + (($cachedTokens / 1_000_000) * $cachedRate)
-            + (($outputTokens / 1_000_000) * $outputRate);
-
-        return ['cost' => round($estimated, 8), 'currency' => $currency];
+        $estimated = (new AiCostCalculatorService())->estimate($provider, $model, $input, $output, $cached);
+        return [
+            'cost' => $estimated['cost'],
+            'currency' => $estimated['currency'],
+        ];
     }
 
     private function evaluateThresholds(int $tenantId): void

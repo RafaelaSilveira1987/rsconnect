@@ -160,6 +160,7 @@ final class CommercialBetaService
     private function releaseNotes(): array
     {
         return [
+            ['version' => '36.19.1', 'title' => 'Consumo OpenAI atribuído por empresa', 'summary' => 'Corrige o custo zerado no ranking por empresa/assistente, aplica tarifas padrão OpenAI aos modelos de texto conhecidos e mantém AI_COST_RATES_JSON como sobrescrita administrativa.'],
             ['version' => '36.19.0', 'title' => 'Inteligência de IA e memória progressiva', 'summary' => 'Evolui o painel OpenAI com orçamento, projeção, telemetria interna, chamadas e tokens evitados, ranking por empresa/assistente e adiciona resumo progressivo e memória estruturada por contato, preservada entre conversas.'],
             ['version' => '36.18.6', 'title' => 'Exclusão assistida de conexões', 'summary' => 'Evita exclusões manuais no banco, apresenta todos os vínculos, transfere os dados para uma conexão substituta e registra a operação para auditoria.'],
             ['version' => '36.18.5', 'title' => 'Takeover humano e documentação operacional', 'summary' => 'Retira imediatamente da fila pós-horário quando a equipe assume, impede reabertura concorrente pelo worker, reforça bloqueio, transferência e liberação e inclui manuais, matriz de permissões, implantação, homologação e material comercial.'],

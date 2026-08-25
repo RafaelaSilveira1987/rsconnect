@@ -29,8 +29,8 @@ $checks = [
         && str_contains($view, 'Chamadas evitadas')
         && str_contains($view, 'Tokens evitados')
         && str_contains($view, 'Oficial x RS Connect'),
-    'ranking de empresa e assistente disponível' => str_contains($view, 'Custo por empresa')
-        && str_contains($view, 'Custo por assistente'),
+    'ranking de empresa e assistente disponível' => str_contains($view, 'Consumo por empresa')
+        && str_contains($view, 'Consumo por assistente'),
     'telemetria técnica respeita modelo efetivamente chamado' => str_contains($usageService, "\$provider = (string) (\$telemetry['provider']")
         && str_contains($usageService, "\$model = (string) (\$telemetry['model']"),
     'estilos v2 presentes' => str_contains($css, 'RS Connect 36.19.0')

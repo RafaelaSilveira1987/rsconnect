@@ -55,7 +55,8 @@ $checks = [
         && str_contains($env, 'AI_MEMORY_MODEL_GOOGLE='),
     'versão e migration corretas' => str_contains($version, 'RS Connect 36.19.0')
         && str_contains($version, '080_ai_memory_and_usage_intelligence.sql')
-        && str_contains($layout, 'app.css?v=36.19.0'),
+        && str_contains($layout, 'app.css?v=36.19.1')
+        && str_contains($version, '081_ai_cost_attribution.sql'),
 ];
 
 $failed = [];

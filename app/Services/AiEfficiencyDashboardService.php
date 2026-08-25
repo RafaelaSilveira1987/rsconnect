@@ -41,7 +41,9 @@ final class AiEfficiencyDashboardService
                         SUM(CASE WHEN execution_strategy = "exact_cache" AND status = "success" THEN 1 ELSE 0 END) AS exact_cache_replies,
                         SUM(CASE WHEN usage_type = "summary" AND status = "success" THEN 1 ELSE 0 END) AS memory_refreshes,
                         SUM(CASE WHEN execution_strategy = "provider_ai" AND usage_type = "auto_reply" AND status = "success" THEN 1 ELSE 0 END) AS provider_replies,
-                        SUM(CASE WHEN execution_strategy = "provider_ai" AND usage_type = "auto_reply" AND status = "success" THEN COALESCE(total_tokens,0) ELSE 0 END) AS provider_reply_tokens
+                        SUM(CASE WHEN execution_strategy = "provider_ai" AND usage_type = "auto_reply" AND status = "success" THEN COALESCE(total_tokens,0) ELSE 0 END) AS provider_reply_tokens,
+                        SUM(CASE WHEN COALESCE(provider_calls,0) > 0 AND COALESCE(total_tokens,0) > 0 THEN COALESCE(total_tokens,0) ELSE 0 END) AS costable_tokens,
+                        SUM(CASE WHEN COALESCE(provider_calls,0) > 0 AND COALESCE(total_tokens,0) > 0 AND estimated_cost IS NOT NULL THEN COALESCE(total_tokens,0) ELSE 0 END) AS priced_tokens
                  FROM ai_usage_events e ' . $where
             );
             $summary->execute($params);
@@ -63,6 +65,9 @@ final class AiEfficiencyDashboardService
             $totals['non_ai_reply_rate'] = $automaticReplies > 0 ? $avoidedCalls / $automaticReplies : 0.0;
             $totals['avg_tokens_per_provider_reply'] = $providerReplies > 0 ? (int) round((int) ($totals['provider_reply_tokens'] ?? 0) / $providerReplies) : 0;
             $totals['avg_cost_per_conversation'] = $conversations > 0 ? (float) ($totals['estimated_cost'] ?? 0) / $conversations : 0.0;
+            $costableTokens = (int) ($totals['costable_tokens'] ?? 0);
+            $pricedTokens = (int) ($totals['priced_tokens'] ?? 0);
+            $totals['cost_pricing_coverage_rate'] = $costableTokens > 0 ? min(1.0, $pricedTokens / $costableTokens) : 0.0;
 
             $dailyStmt = $pdo->prepare(
                 'SELECT DATE(created_at) AS day,
@@ -88,6 +93,7 @@ final class AiEfficiencyDashboardService
                         COUNT(DISTINCT e.conversation_id) AS conversations
                  FROM ai_usage_events e
                  LEFT JOIN tenants t ON t.id = e.tenant_id ' . $where . '
+                   AND e.provider = "openai"
                  GROUP BY e.tenant_id, t.name
                  ORDER BY estimated_cost DESC, total_tokens DESC
                  LIMIT 20'
@@ -106,12 +112,27 @@ final class AiEfficiencyDashboardService
                  FROM ai_usage_events e
                  LEFT JOIN ai_agents a ON a.id = e.agent_id
                  LEFT JOIN tenants t ON t.id = e.tenant_id ' . $where . '
+                   AND e.provider = "openai"
                  GROUP BY e.agent_id, a.name, t.name
                  ORDER BY estimated_cost DESC, total_tokens DESC
                  LIMIT 20'
             );
             $agentStmt->execute($params);
             $agents = $agentStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+            $unpricedStmt = $pdo->prepare(
+                'SELECT provider, COALESCE(NULLIF(model, ""), "Não identificado") AS model,
+                        SUM(COALESCE(total_tokens,0)) AS total_tokens
+                 FROM ai_usage_events e ' . $where . '
+                   AND COALESCE(provider_calls,0) > 0
+                   AND COALESCE(total_tokens,0) > 0
+                   AND estimated_cost IS NULL
+                 GROUP BY provider, model
+                 ORDER BY total_tokens DESC
+                 LIMIT 12'
+            );
+            $unpricedStmt->execute($params);
+            $unpricedModels = $unpricedStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
             $memory = ['rows' => 0, 'contact_rows' => 0, 'refreshes' => 0, 'errors' => 0];
             try {
@@ -138,10 +159,12 @@ final class AiEfficiencyDashboardService
                 'status' => 'ok', 'period' => $range['period'], 'range' => $range,
                 'filters' => ['tenant_id' => $tenantId, 'agent_id' => $agentId],
                 'totals' => $totals, 'daily' => $daily, 'tenants' => $tenants, 'agents' => $agents, 'memory' => $memory,
+                'unpriced_models' => $unpricedModels,
+                'pricing_snapshot' => AiCostCalculatorService::DEFAULT_PRICING_SNAPSHOT,
                 'filter_options' => $this->filterOptions($pdo),
             ];
         } catch (Throwable $exception) {
-            return ['status' => 'error', 'period' => $period, 'range' => $range, 'totals' => [], 'daily' => [], 'tenants' => [], 'agents' => [], 'memory' => [], 'filter_options' => [], 'error' => $exception->getMessage()];
+            return ['status' => 'error', 'period' => $period, 'range' => $range, 'totals' => [], 'daily' => [], 'tenants' => [], 'agents' => [], 'memory' => [], 'unpriced_models' => [], 'pricing_snapshot' => AiCostCalculatorService::DEFAULT_PRICING_SNAPSHOT, 'filter_options' => [], 'error' => $exception->getMessage()];
         }
     }
 

@@ -87,3 +87,20 @@ A atualização da memória é registrada como consumo técnico do tipo `summary
 - Não altere modelo, prompt e política de contexto simultaneamente durante a primeira medição.
 
 A memória estruturada também é consolidada por contato, permitindo continuidade em novas conversas sem reenviar o histórico antigo.
+
+## Atribuição de custo por empresa — v36.19.1
+
+A OpenAI devolve o custo oficial da organização/projeto, mas não conhece o identificador interno da empresa (`tenant_id`) do RS Connect. Por isso, o ranking por empresa e assistente usa a telemetria registrada em `ai_usage_events` para atribuir cada chamada ao cliente correto.
+
+A partir da v36.19.1, o custo não depende mais de `AI_COST_RATES_JSON` estar preenchido para os principais modelos OpenAI de texto. O sistema possui um catálogo padrão com snapshot de 25/08/2026 para modelos conhecidos, incluindo GPT-4o mini, GPT-4o, GPT-4.1, GPT-5 e GPT-5.6 Luna/Terra/Sol.
+
+`AI_COST_RATES_JSON` continua disponível e tem prioridade sobre o catálogo interno quando a RS Connect quiser usar uma tarifa negociada, uma tarifa futura ou um modelo não contemplado.
+
+A migration `081_ai_cost_attribution.sql` recalcula os eventos históricos já registrados pelo RS Connect que tinham tokens, mas estavam sem custo estimado. Ela não consegue atribuir a uma empresa chamadas antigas que existam somente no painel oficial da OpenAI e nunca tenham passado pela telemetria do RS Connect.
+
+Na tela, compare sempre:
+
+- **Custo oficial**: fonte OpenAI, consolidado pela organização/projeto;
+- **Consumo por empresa**: fonte RS Connect, atribuído por `tenant_id`;
+- **Cobertura**: quanto do consumo oficial também aparece na telemetria interna;
+- **Diferença não atribuída**: chamadas de outros sistemas, períodos anteriores à telemetria, outros fluxos ou uso externo ao RS Connect.

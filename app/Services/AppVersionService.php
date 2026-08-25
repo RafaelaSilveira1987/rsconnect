@@ -27,10 +27,11 @@ final class AppVersionService
     // RS Connect 36.18.5 — takeover humano atômico, bloqueio operacional e documentação consolidada.
     // RS Connect 36.18.6 — exclusão assistida, transferência integral de vínculos e auditoria da remoção.
     // RS Connect 36.19.0 — painel OpenAI 2.0, medição de economia, memória progressiva e fatos estruturados.
-    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql.
+    // RS Connect 36.19.1 — atribuição financeira de consumo OpenAI por empresa e assistente.
+    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql e 081_ai_cost_attribution.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.3';
-    public const PACKAGE_LABEL = 'RS Connect 36.19.0 — Inteligência de IA e memória progressiva';
-    public const REQUIRED_MIGRATION = '080_ai_memory_and_usage_intelligence.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.19.1 — Consumo OpenAI atribuído por empresa';
+    public const REQUIRED_MIGRATION = '081_ai_cost_attribution.sql';
 
     private PDO $pdo;
 

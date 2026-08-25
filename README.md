@@ -40,3 +40,7 @@ AI_MEMORY_MODEL_GOOGLE=
 A consulta oficial da organização continua usando `OPENAI_ADMIN_API_KEY` e, opcionalmente, `OPENAI_USAGE_PROJECT_IDS`.
 
 Consulte `INSTRUCOES-v36.19.0.md` e `docs/guias/README.md`.
+
+### v36.19.1 — atribuição de custo por empresa
+
+Corrige o custo interno zerado do painel OpenAI quando as tarifas não estavam definidas manualmente. Inclui catálogo padrão para modelos OpenAI de texto conhecidos, backfill de telemetria histórica registrada e indicadores de cobertura de tarifação.
