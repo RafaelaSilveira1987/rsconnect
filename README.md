@@ -1,42 +1,52 @@
-# RS Connect — v36.20.1
+# RS Connect — v36.20.2
 
-Esta versão revisa a linguagem da aplicação para que pessoas sem conhecimento técnico consigam entender as telas e tomar decisões com segurança.
+Esta versão transforma os dados de custo, margem, plano e limite de gasto em uma lista simples de clientes que precisam de atenção.
 
-## O que mudou
-
-- Menus e títulos com nomes mais claros.
-- Estados em inglês, como `healthy` e `attention`, convertidos para **Dentro do esperado** e **Precisa de atenção**.
-- Termos técnicos substituídos por explicações simples nas telas de uso diário.
-- Campos, botões, mensagens de erro, filtros e textos de ajuda revisados.
-- Detalhes técnicos preservados apenas em áreas avançadas, logs e documentação de suporte.
-- Camada de proteção no navegador para traduzir conteúdos carregados dinamicamente.
-- Nova regra de experiência: uma pessoa adolescente ou iniciante deve entender o que a tela faz e qual ação tomar.
-
-## Exemplos
-
-| Antes | Agora |
-|---|---|
-| Governança de orçamento | Limite de gasto e proteção |
-| Telemetria | Dados de uso |
-| Rentabilidade IA | Resultados por cliente |
-| Memória progressiva | Memória da conversa |
-| MRR | Receita mensal |
-| Snapshot | Registro mensal |
-| Takeover | Assumir atendimento |
-| Gateway | Meio de pagamento |
-| Credencial | Chave de acesso |
-| Prompt | Instruções do assistente |
-
-## Atualização
-
-Não existe migration nova nesta versão.
-
-A última migration obrigatória continua sendo:
+## Nova área
 
 ```text
-database/migrations/084_ai_profitability_history.sql
+WhatsApp e inteligência artificial
+└── Clientes que precisam de atenção
 ```
 
-Depois do deploy, faça um rebuild completo e use `Ctrl + F5` para evitar que o navegador carregue textos antigos do cache.
+A tela mostra:
 
-Consulte `INSTRUCOES-v36.20.1.md` e `docs/guias/guia-linguagem-simples.md`.
+- quem precisa de revisão;
+- por que o cliente aparece na lista;
+- qual ação é sugerida;
+- prioridade em palavras simples;
+- anotação e data da próxima revisão;
+- situação do acompanhamento.
+
+## Prioridades
+
+- **Ver agora**
+- **Revisar nesta semana**
+- **Acompanhar**
+- **Concluído**
+
+## Exemplos de motivos
+
+- O valor mensal pode estar abaixo do necessário.
+- O custo da IA aumentou.
+- O gasto está perto do limite.
+- O plano atual pode não comportar o uso.
+- Faltam informações para calcular o resultado.
+
+Nenhum preço, plano ou contrato é alterado automaticamente.
+
+## Atualização obrigatória
+
+Execute:
+
+```text
+database/migrations/085_ai_commercial_attention_queue.sql
+```
+
+Depois:
+
+```text
+database/diagnostics/ai_commercial_attention_v36.20.2.sql
+```
+
+Consulte `INSTRUCOES-v36.20.2.md` e `docs/guias/guia-clientes-que-precisam-atencao.md`.

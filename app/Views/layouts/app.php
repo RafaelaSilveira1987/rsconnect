@@ -128,7 +128,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.1')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.2')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -175,6 +175,7 @@ $svgIcon = static function (string $name): string {
                 <a class="nav-link<?= $isActive('/ai-credentials') ?>" href="<?= View::e(Router::url('/ai-credentials')) ?>"><?= $svgIcon('lock') ?><span>Assistentes e chaves de acesso</span></a>
                 <a class="nav-link<?= $isActive('/openai-usage') ?>" href="<?= View::e(Router::url('/openai-usage')) ?>"><?= $svgIcon('reports') ?><span>Uso e custo da IA</span></a>
                 <a class="nav-link<?= $isActive('/ai-profitability') ?>" href="<?= View::e(Router::url('/ai-profitability')) ?>"><?= $svgIcon('billing') ?><span>Resultados por cliente</span></a>
+                <a class="nav-link<?= $isActive('/client-attention') ?>" href="<?= View::e(Router::url('/client-attention')) ?>"><?= $svgIcon('bell') ?><span>Clientes que precisam de atenção</span></a>
                 <a class="nav-link<?= $isAnyActive(['/n8n', '/n8n-flows', '/n8n-templates']) ?>" href="<?= View::e(Router::url('/n8n')) ?>"><?= $svgIcon('flow') ?><span>Automações (n8n)</span></a>
 
                 <span class="nav-caption">Financeiro</span>
@@ -365,6 +366,6 @@ $svgIcon = static function (string $name): string {
 <button class="back-to-top" type="button" data-back-to-top aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
 </button>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.1')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.2')) ?>" defer></script>
 </body>
 </html>

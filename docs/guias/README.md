@@ -34,3 +34,5 @@ Este índice reúne a documentação operacional, técnica, de implantação e c
 ## Atualização v36.20.1
 
 A documentação passou a adotar os mesmos nomes simples exibidos no sistema. Termos técnicos ficam concentrados nos detalhes avançados e materiais de suporte. Para implantação, consulte `INSTRUCOES-v36.20.1.md` na raiz do projeto.
+
+- [Guia de clientes que precisam de atenção](guia-clientes-que-precisam-atencao.md)

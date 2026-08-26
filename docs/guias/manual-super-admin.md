@@ -68,3 +68,8 @@ Em **Resultados por cliente**, acompanhe a receita mensal, o custo da IA, quanto
 ## Linguagem simples — v36.20.1
 
 Use os nomes exibidos na tela ao orientar clientes e atendentes. Abra **Detalhes avançados** somente quando precisar de informações para suporte técnico. Uma pessoa iniciante deve compreender a ação sem conhecer programação, OpenAI ou Evolution API.
+
+
+## Clientes que precisam de atenção
+
+A tela **Clientes que precisam de atenção** reúne situações de margem, custo, limite e plano em uma fila simples. Use a prioridade, os motivos e o próximo passo sugerido para organizar a revisão. Registre a situação, uma anotação e a próxima data de acompanhamento. Nenhum contrato é alterado automaticamente.

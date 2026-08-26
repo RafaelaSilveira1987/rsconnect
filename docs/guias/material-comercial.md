@@ -53,3 +53,5 @@ A RS Connect acompanha mês a mês o custo da IA e o valor que sobra por cliente
 ## Fácil de aprender — v36.20.1
 
 Menus, indicadores e mensagens foram escritos para pessoas sem conhecimento técnico. A plataforma explica o que aconteceu, o possível impacto e a próxima ação, mantendo códigos e nomes técnicos apenas nos detalhes de suporte.
+
+- Lista inteligente de clientes que precisam de atenção, com motivo explicado, prioridade e próximo passo sugerido.

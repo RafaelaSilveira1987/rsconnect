@@ -35,7 +35,8 @@ $checks = [
         && str_contains($language, 'o WhatsApp está desconectado')
         && str_contains($language, 'dados de uso'),
     'versão e documentação foram atualizadas' => str_contains($version, 'RS Connect 36.20.1')
-        && str_contains($version, 'Linguagem simples e acessível')
+        && str_contains($version, 'linguagem simples e acessível')
+        && str_contains($version, 'RS Connect 36.20.2')
         && str_contains($docs, 'Regra das três respostas')
         && str_contains($docs, 'pessoa adolescente'),
 ];

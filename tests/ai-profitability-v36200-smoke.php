@@ -37,7 +37,7 @@ $checks = [
         && str_contains($service, "'meets_margin'"),
     'rota e menu da rentabilidade existem' => str_contains($routes, '/ai-profitability')
         && str_contains($layout, 'Resultados por cliente')
-        && str_contains($layout, 'app.css?v=36.20.1'),
+        && str_contains($layout, 'app.css?v=36.20.2'),
     'painel exibe histórico e simulador em linguagem simples' => str_contains($view, 'Receita mensal analisada')
         && str_contains($view, 'Evolução mensal do valor que sobra')
         && str_contains($view, 'Comparar planos e valores')
