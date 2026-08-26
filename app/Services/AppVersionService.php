@@ -38,9 +38,16 @@ final class AppVersionService
     // RS Connect 36.20.5 — ajuda contextual, onboarding simplificado e recursos de acessibilidade.
     // RS Connect 36.20.6 — exclusão assistida idempotente quando a conexão externa já foi removida.
     // RS Connect 36.20.7 — fluxo visual coerente para exclusão local, com transferência segura quando houver vínculos.
+<<<<<<< HEAD
     // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql e 085_ai_commercial_attention_queue.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.4';
     public const PACKAGE_LABEL = 'RS Connect 36.20.7 — exclusão local clara e segura';
+=======
+    // RS Connect 36.20.8 — prévia de exclusão liberada do polling e do bloqueio da sessão PHP.
+    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql e 085_ai_commercial_attention_queue.sql.
+    public const VERSION_LABEL = 'Beta Comercial 1.4';
+    public const PACKAGE_LABEL = 'RS Connect 36.20.8 — exclusão assistida sem bloqueio';
+>>>>>>> 03b6cbd (Cooreção evolution II)
     public const REQUIRED_MIGRATION = '085_ai_commercial_attention_queue.sql';
 
     private PDO $pdo;

@@ -1863,6 +1863,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const acknowledgeDependencies = deleteField('acknowledge_dependencies');
       const acknowledgeRemote = deleteField('acknowledge_remote_active');
       const expected = `EXCLUIR ${instanceDeleteForm.dataset.instanceName || ''}`;
+      if (!deletePreviewState) {
+        if (deleteSubmit) {
+          deleteSubmit.disabled = true;
+          deleteSubmit.textContent = deleteLoading && !deleteLoading.hidden
+            ? 'Aguarde a verificação...'
+            : 'Verificação necessária';
+        }
+        return;
+      }
       const needsReplacement = Boolean(deletePreviewState?.requires_replacement);
       const remoteMissing = deletePreviewState?.remote?.exists === false;
       const remoteCheckUnavailable = deletePreviewState?.remote?.checked === false;
@@ -1976,7 +1985,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!instanceId) return;
       const sequence = ++deleteRequestSequence;
       deletePreviewState = null;
-      if (deleteSubmit) deleteSubmit.disabled = true;
+      if (deleteSubmit) {
+        deleteSubmit.disabled = true;
+        deleteSubmit.textContent = 'Aguarde a verificação...';
+      }
       if (deleteLoading) {
         deleteLoading.hidden = false;
         deleteLoading.textContent = 'Consultando os vínculos atuais...';
@@ -1985,24 +1997,43 @@ document.addEventListener('DOMContentLoaded', () => {
       setDeleteMessage(deleteError, '', false);
       setDeleteMessage(deleteMergeNote, '', false);
 
+      const requestController = new AbortController();
+      const requestTimeout = window.setTimeout(() => requestController.abort(), 20000);
       try {
         const url = new URL(instanceDeleteForm.dataset.previewEndpoint, window.location.origin);
         url.searchParams.set('instance_id', instanceId);
         if (replacementId) url.searchParams.set('replacement_instance_id', replacementId);
         const response = await fetch(url.toString(), {
           method: 'GET',
-          headers: { Accept: 'application/json' },
-          credentials: 'same-origin'
+          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin',
+          cache: 'no-store',
+          signal: requestController.signal
         });
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (!contentType.includes('application/json')) {
+          throw new Error(response.redirected
+            ? 'A sessão foi redirecionada. Atualize a página e tente novamente.'
+            : 'O servidor não retornou a validação da exclusão em formato JSON.');
+        }
         const payload = await response.json().catch(() => ({}));
         if (sequence !== deleteRequestSequence) return;
         if (!response.ok || !payload.ok) throw new Error(payload.message || 'Não foi possível validar os vínculos.');
         renderDeletePreview(payload);
       } catch (error) {
         if (sequence !== deleteRequestSequence) return;
+        const message = error?.name === 'AbortError'
+          ? 'A verificação demorou mais que o esperado. Tente novamente em alguns segundos.'
+          : (error?.message || 'Não foi possível validar os vínculos.');
         if (deleteLoading) deleteLoading.hidden = true;
-        setDeleteMessage(deleteError, error.message || 'Não foi possível validar os vínculos.', true);
+        if (deleteRemoteState) {
+          deleteRemoteState.className = 'instance-delete-remote-state is-warning';
+          deleteRemoteState.textContent = message;
+        }
+        setDeleteMessage(deleteError, message, true);
         syncDeleteEligibility();
+      } finally {
+        window.clearTimeout(requestTimeout);
       }
     };
 
@@ -3048,7 +3079,8 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   async function poll() {
-    if (running || document.hidden) return;
+    const deleteDrawer = document.getElementById('instance-delete-drawer');
+    if (running || document.hidden || deleteDrawer?.classList.contains('is-open')) return;
     running = true;
     try {
       const response = await fetch(statusEndpoint, {
@@ -3600,6 +3632,11 @@ document.addEventListener('change', (event) => {
 
 // RS Connect 36.20.7 — exclusão local clara, com transferência segura quando houver vínculos.
 
+<<<<<<< HEAD
+=======
+// RS Connect 36.20.8 — prévia de exclusão sem bloqueio de sessão e com timeout visível.
+
+>>>>>>> 03b6cbd (Cooreção evolution II)
 // Marcador histórico da v36.20.6: botão "Remover do RS Connect" substituído por textos mais claros na v36.20.7.
 
 // Marcador histórico v36.20.6: 'Remover do RS Connect'.

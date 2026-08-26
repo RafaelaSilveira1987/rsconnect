@@ -165,6 +165,13 @@ final class InstanceController
         $tenantId = Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) (Auth::tenantId() ?? 0);
         $instanceId = (int) ($_GET['instance_id'] ?? 0);
 
+        // O status em tempo real pode aguardar a Evolution por alguns segundos.
+        // Libera a sessão PHP antes da chamada externa para não bloquear outros
+        // pedidos da mesma tela, especialmente a prévia de exclusão assistida.
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+
         $conditions = [];
         $params = [];
         if (!Auth::isSuperAdmin()) {
@@ -1062,6 +1069,12 @@ final class InstanceController
                 }
             }
 
+            // A autorização já foi validada. A consulta à Evolution não deve
+            // manter a sessão bloqueada nem impedir o polling da própria tela.
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_write_close();
+            }
+
             $counts = $this->dependencyCounts($pdo, $instanceId);
             $conflicts = $replacement
                 ? $this->replacementConflicts($pdo, $instanceId, $replacementId, (int) $source['tenant_id'])
@@ -1648,11 +1661,18 @@ final class InstanceController
 
         $missingText = str_contains($message, 'not found')
             || str_contains($message, 'does not exist')
+            || str_contains($message, 'doesn\'t exist')
+            || str_contains($message, 'instance does not exist')
+            || str_contains($message, 'instance not found')
             || str_contains($message, 'não encontrada')
+            || str_contains($message, 'não encontrado')
             || str_contains($message, 'não existe')
             || str_contains($message, 'instance missing');
+        $missingStatus = str_contains($message, 'connectionstate http 404')
+            || str_contains($message, 'connectionstate http 400')
+            || str_contains($message, 'deleteinstance http 404');
 
-        return $missingText && (str_contains($message, 'http 404') || str_contains($message, 'http 400'));
+        return $missingStatus || ($missingText && (str_contains($message, 'http 404') || str_contains($message, 'http 400')));
     }
 
     private function isRemoteInstanceDisconnectedException(Throwable $exception): bool
