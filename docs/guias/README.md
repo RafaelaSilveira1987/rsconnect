@@ -44,5 +44,6 @@ Este índice reúne a documentação operacional, técnica, de implantação e c
 - A v36.20.4 corrigiu sobreposições e reorganizou painéis administrativos.
 - A v36.20.5 adicionou ajuda em cada página, atalhos e preferências de acessibilidade.
 - A v36.20.6 corrigiu a exclusão quando a conexão externa já foi removida.
+- A v36.20.7 separou visualmente a exclusão local da exclusão externa e manteve a transferência obrigatória dos vínculos.
 
 - [Guia de clientes que precisam de atenção](guia-clientes-que-precisam-atencao.md)

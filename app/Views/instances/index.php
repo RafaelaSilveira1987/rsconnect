@@ -378,7 +378,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
 
 <aside class="conversation-details conversation-drawer admin-form-drawer instance-delete-drawer" id="instance-delete-drawer" aria-label="Exclusão assistida de conexão" aria-modal="true" role="dialog">
     <div class="conversation-drawer-header">
-        <div><span class="eyebrow text-danger">Exclusão assistida</span><h2>Remover conexão com segurança</h2><p data-instance-delete-description>Revise os vínculos, escolha o destino dos dados e confirme a remoção.</p></div>
+        <div><span class="eyebrow text-danger" data-instance-delete-eyebrow>Exclusão assistida</span><h2 data-instance-delete-title>Remover conexão com segurança</h2><p data-instance-delete-description>Revise os vínculos, escolha o destino dos dados e confirme a remoção.</p></div>
         <button class="icon-button drawer-close" type="button" data-close-panel="instance-delete-drawer" aria-label="Fechar">×</button>
     </div>
     <div class="conversation-drawer-body">
@@ -386,7 +386,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
             <?= Csrf::input() ?><input type="hidden" name="instance_id" data-instance-delete-field="id">
 
             <section class="drawer-section instance-delete-source">
-                <div class="drawer-section-title"><div><span class="eyebrow">1. Origem</span><h3 data-instance-delete-name>Conexão</h3><p>O cadastro abaixo será removido depois da transferência validada.</p></div><span class="badge badge-warning" data-instance-delete-status>Verificando</span></div>
+                <div class="drawer-section-title"><div><span class="eyebrow">1. Origem</span><h3 data-instance-delete-name>Conexão</h3><p data-instance-delete-source-note>O cadastro abaixo será removido depois da transferência validada.</p></div><span class="badge badge-warning" data-instance-delete-status>Verificando</span></div>
                 <div class="instance-delete-loading" data-instance-delete-loading>Consultando os vínculos atuais...</div>
                 <div class="instance-delete-impact-grid" data-instance-delete-impact hidden>
                     <?php foreach ([
@@ -404,18 +404,18 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
                 <div class="message-error" data-instance-delete-error hidden></div>
             </section>
 
-            <section class="drawer-section">
-                <div class="drawer-section-title"><div><span class="eyebrow">2. Destino</span><h3>Preservar os dados operacionais</h3><p>Assistentes, contatos, conversas, campanhas e relatórios serão movidos para outra conexão da mesma empresa.</p></div></div>
+            <section class="drawer-section" data-instance-delete-destination-section>
+                <div class="drawer-section-title"><div><span class="eyebrow">2. Destino</span><h3 data-instance-delete-destination-title>Preservar os dados operacionais</h3><p data-instance-delete-destination-description>Assistentes, contatos, conversas, campanhas e relatórios serão movidos para outra conexão da mesma empresa.</p></div></div>
                 <label class="field drawer-span"><span>Conexão substituta</span><select name="replacement_instance_id" data-instance-delete-field="replacement"><option value="">Nenhuma — somente para conexão sem vínculos</option><?php foreach ($instances as $replacement): ?><option value="<?= (int) $replacement['id'] ?>" data-tenant-id="<?= (int) $replacement['tenant_id'] ?>"><?= View::e($replacement['name']) ?> — <?= View::e($replacement['instance_name']) ?></option><?php endforeach; ?></select><small class="field-hint" data-instance-delete-replacement-hint>Selecione a conexão que continuará o atendimento.</small></label>
                 <div class="instance-delete-merge-note" data-instance-delete-merge-note hidden></div>
             </section>
 
             <section class="drawer-section danger-zone">
-                <div class="drawer-section-title"><div><span class="eyebrow">3. Remoção</span><h3>Defina o que será apagado</h3><p>O RS Connect confirma primeiro se essa conexão ainda existe no serviço externo do WhatsApp.</p></div></div>
+                <div class="drawer-section-title"><div><span class="eyebrow">3. Remoção</span><h3 data-instance-delete-removal-title>Defina o que será apagado</h3><p data-instance-delete-removal-description>O RS Connect confirma primeiro se essa conexão ainda existe no serviço externo do WhatsApp.</p></div></div>
                 <div class="instance-delete-remote-state" data-instance-delete-remote-state role="status">Verificando a conexão externa...</div>
                 <label class="check-field drawer-check drawer-span" data-instance-delete-remote-row><input type="checkbox" name="delete_remote" value="1" data-instance-delete-field="delete_remote"><span><strong>Excluir também do serviço do WhatsApp</strong><small>Remove a conexão fora do RS Connect. Para usar o número novamente será necessário criar outra conexão.</small></span></label>
                 <label class="check-field drawer-check drawer-span" data-instance-delete-remote-ack hidden><input type="checkbox" name="acknowledge_remote_active" value="1" data-instance-delete-field="acknowledge_remote_active"><span><strong>Entendo que a conexão continuará ativa fora do RS Connect</strong><small>Use somente quando quiser remover o canal do RS Connect sem apagar a conexão externa.</small></span></label>
-                <label class="check-field drawer-check drawer-span is-required"><input type="checkbox" name="acknowledge_dependencies" value="1" data-instance-delete-field="acknowledge_dependencies" required><span><strong>Revisei os vínculos e o destino informado</strong><small>Confirmo que os dados operacionais devem ser transferidos ou que esta conexão não possui vínculos.</small></span></label>
+                <label class="check-field drawer-check drawer-span is-required" data-instance-delete-dependency-ack><input type="checkbox" name="acknowledge_dependencies" value="1" data-instance-delete-field="acknowledge_dependencies" required><span><strong data-instance-delete-dependency-title>Revisei os vínculos e o destino informado</strong><small data-instance-delete-dependency-description>Confirmo que os dados operacionais devem ser transferidos ou que esta conexão não possui vínculos.</small></span></label>
                 <label class="field drawer-span"><span>Confirmação final</span><input name="confirmation" autocomplete="off" data-instance-delete-field="confirmation" required><small class="field-hint" data-instance-delete-hint></small></label>
             </section>
 

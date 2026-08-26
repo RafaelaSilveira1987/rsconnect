@@ -42,6 +42,7 @@ Pendências pós-horário migradas são canceladas para evitar que o worker resp
 
 - **Excluir também na Evolution:** remove a instância local e remota.
 - **Manter na Evolution:** remove apenas o cadastro do RS Connect. Se a conexão ainda estiver ativa, uma confirmação adicional é obrigatória.
+- **Conexão externa já ausente:** o modal passa para exclusão local. Se houver vínculos, a transferência para outra conexão continua obrigatória; sem vínculos, a etapa de destino é ocultada.
 
 ## Auditoria
 

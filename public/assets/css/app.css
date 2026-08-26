@@ -11820,3 +11820,29 @@ html.reduce-motion *::after {
 [data-instance-delete-remote-ack][hidden] {
     display: none !important;
 }
+
+/* RS Connect 36.20.7 — fluxo claro para exclusão somente local */
+[data-instance-delete-destination-section][hidden] {
+    display: none !important;
+}
+[data-instance-delete-form].is-local-only .danger-zone,
+[data-instance-delete-form].is-local-transfer .danger-zone {
+    border-color: #efc7c4;
+    background: linear-gradient(180deg, #fffafa 0%, #fff 100%);
+}
+[data-instance-delete-form].is-local-only [data-instance-delete-dependency-ack],
+[data-instance-delete-form].is-local-transfer [data-instance-delete-dependency-ack] {
+    border-color: #e7b8b5;
+    background: #fff8f7;
+}
+[data-instance-delete-form].is-local-only [data-instance-delete-submit],
+[data-instance-delete-form].is-local-transfer [data-instance-delete-submit] {
+    min-width: 238px;
+}
+@media (max-width: 640px) {
+    [data-instance-delete-form].is-local-only [data-instance-delete-submit],
+    [data-instance-delete-form].is-local-transfer [data-instance-delete-submit] {
+        width: 100%;
+        min-width: 0;
+    }
+}

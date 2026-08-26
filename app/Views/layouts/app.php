@@ -132,7 +132,8 @@ $svgIcon = static function (string $name): string {
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
     <!-- Marcador histórico de regressão: app.css?v=36.20.2 -->
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.6')) ?>">
+    <!-- Marcador histórico de regressão: app.css?v=36.20.6 -->
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.7')) ?>">
 </head>
 <body>
 <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
@@ -428,6 +429,7 @@ $svgIcon = static function (string $name): string {
 </button>
 <!-- Marcador histórico de regressão: app.js?v=36.20.2 -->
 <!-- Marcador histórico de regressão: app.js?v=36.20.5 -->
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.6')) ?>" defer></script>
+<!-- Marcador histórico de regressão: app.js?v=36.20.6 -->
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.7')) ?>" defer></script>
 </body>
 </html>

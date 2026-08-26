@@ -1066,7 +1066,10 @@ final class InstanceController
             $conflicts = $replacement
                 ? $this->replacementConflicts($pdo, $instanceId, $replacementId, (int) $source['tenant_id'])
                 : ['conversation_duplicates' => 0, 'agent_binding_duplicates' => 0];
+            $transferableTotal = $this->transferableDependencyTotal($counts);
+            $requiresReplacement = $transferableTotal > 0;
             $remote = $this->inspectRemoteInstance($source, 12);
+            $remoteMissing = ($remote['exists'] ?? null) === false;
 
             echo json_encode([
                 'ok' => true,
@@ -1086,8 +1089,11 @@ final class InstanceController
                 ] : null,
                 'counts' => $counts,
                 'conflicts' => $conflicts,
-                'transferable_total' => $this->transferableDependencyTotal($counts),
-                'requires_replacement' => $this->transferableDependencyTotal($counts) > 0,
+                'transferable_total' => $transferableTotal,
+                'requires_replacement' => $requiresReplacement,
+                'deletion_mode' => $remoteMissing
+                    ? ($requiresReplacement ? 'local_transfer' : 'local_only')
+                    : 'assisted',
                 'remote' => $remote,
                 'requires_remote_ack' => (bool) ($remote['exists'] ?? false)
                     && (bool) ($remote['connected'] ?? false),
@@ -1266,17 +1272,24 @@ final class InstanceController
                 'remote_deleted' => $remoteDeleted,
                 'remote_already_missing' => $remoteAlreadyMissing,
                 'remote_inspection' => $remoteInspection,
+                'deletion_mode' => $remoteAlreadyMissing
+                    ? ($replacement ? 'local_transfer' : 'local_only')
+                    : 'assisted',
             ]);
 
-            $successMessage = $replacement
-                ? 'Conexão excluída e vínculos transferidos com segurança para ' . (string) $replacement['name'] . '.'
-                : 'Conexão sem vínculos operacionais excluída do RS Connect.';
-            if ($remoteDeleted) {
-                $successMessage .= ' A conexão também foi removida do serviço externo do WhatsApp.';
-            } elseif ($remoteAlreadyMissing) {
-                $successMessage .= ' A conexão externa já não existia; somente o cadastro do RS Connect foi removido.';
-            } elseif (($remoteInspection['exists'] ?? null) === true && (bool) ($remoteInspection['connected'] ?? false)) {
-                $successMessage .= ' A conexão externa foi mantida ativa conforme sua confirmação.';
+            if ($remoteAlreadyMissing) {
+                $successMessage = $replacement
+                    ? 'Dados transferidos com segurança para ' . (string) $replacement['name'] . ' e cadastro local excluído do RS Connect.'
+                    : 'Cadastro local excluído do RS Connect. A conexão externa já não existia.';
+            } else {
+                $successMessage = $replacement
+                    ? 'Conexão excluída e vínculos transferidos com segurança para ' . (string) $replacement['name'] . '.'
+                    : 'Conexão sem vínculos operacionais excluída do RS Connect.';
+                if ($remoteDeleted) {
+                    $successMessage .= ' A conexão também foi removida do serviço externo do WhatsApp.';
+                } elseif (($remoteInspection['exists'] ?? null) === true && (bool) ($remoteInspection['connected'] ?? false)) {
+                    $successMessage .= ' A conexão externa foi mantida ativa conforme sua confirmação.';
+                }
             }
             Flash::set('success', $successMessage);
         } catch (Throwable $exception) {
