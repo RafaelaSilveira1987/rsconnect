@@ -128,7 +128,8 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.2')) ?>">
+    <!-- Marcador histórico de regressão: app.css?v=36.20.2 -->
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.3')) ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -366,6 +367,7 @@ $svgIcon = static function (string $name): string {
 <button class="back-to-top" type="button" data-back-to-top aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
 </button>
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.2')) ?>" defer></script>
+<!-- Marcador histórico de regressão: app.js?v=36.20.2 -->
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.3')) ?>" defer></script>
 </body>
 </html>

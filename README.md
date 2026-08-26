@@ -1,52 +1,25 @@
-# RS Connect — v36.20.2
+# RS Connect — v36.20.3
 
-Esta versão transforma os dados de custo, margem, plano e limite de gasto em uma lista simples de clientes que precisam de atenção.
+Esta versão revisa a experiência visual da plataforma diretamente no código, com foco em formulários, gavetas laterais, checkboxes, barras de ação, legibilidade e uso em telas menores.
 
-## Nova área
+## Principais correções
 
-```text
-WhatsApp e inteligência artificial
-└── Clientes que precisam de atenção
-```
+- formulário de acompanhamento comercial reorganizado;
+- botão de salvar mantido dentro do card e alinhado;
+- tela de edição das chaves de IA reorganizada;
+- correção global dos checkboxes gigantes;
+- campos, rótulos, textos de ajuda e foco com padrão único;
+- barras de ação das gavetas sem sobrepor o conteúdo;
+- fontes pequenas dos painéis financeiros ampliadas;
+- comportamento responsivo para desktop, tablet e celular;
+- navegação por teclado e foco visível melhorados.
 
-A tela mostra:
+## Banco de dados
 
-- quem precisa de revisão;
-- por que o cliente aparece na lista;
-- qual ação é sugerida;
-- prioridade em palavras simples;
-- anotação e data da próxima revisão;
-- situação do acompanhamento.
-
-## Prioridades
-
-- **Ver agora**
-- **Revisar nesta semana**
-- **Acompanhar**
-- **Concluído**
-
-## Exemplos de motivos
-
-- O valor mensal pode estar abaixo do necessário.
-- O custo da IA aumentou.
-- O gasto está perto do limite.
-- O plano atual pode não comportar o uso.
-- Faltam informações para calcular o resultado.
-
-Nenhum preço, plano ou contrato é alterado automaticamente.
-
-## Atualização obrigatória
-
-Execute:
+Não há migration nova. A última migration obrigatória continua sendo:
 
 ```text
 database/migrations/085_ai_commercial_attention_queue.sql
 ```
 
-Depois:
-
-```text
-database/diagnostics/ai_commercial_attention_v36.20.2.sql
-```
-
-Consulte `INSTRUCOES-v36.20.2.md` e `docs/guias/guia-clientes-que-precisam-atencao.md`.
+Consulte `INSTRUCOES-v36.20.3.md` e `docs/guias/relatorio-ui-ux-v36.20.3.md`.

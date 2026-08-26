@@ -107,21 +107,29 @@ $trackingLabel = static fn (string $value): string => match ($value) {
         </div>
 
         <details class="attention-followup"<?= $status !== 'resolved' && ((string) ($row['tracking_note'] ?? '') !== '' || !empty($row['due_at'])) ? ' open' : '' ?>>
-            <summary>Registrar acompanhamento</summary>
-            <form method="post" action="<?= View::e(Router::url('/client-attention/save')) ?>">
+            <summary>
+                <span>Registrar próxima ação</span>
+                <small>Defina quem precisa agir, uma data e uma anotação curta.</small>
+            </summary>
+            <form class="attention-followup-form" method="post" action="<?= View::e(Router::url('/client-attention/save')) ?>">
                 <?= \App\Core\Csrf::input() ?>
                 <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
                 <input type="hidden" name="return_filter" value="<?= View::e($filter) ?>">
                 <input type="hidden" name="return_search" value="<?= View::e($search) ?>">
-                <label><span>Situação</span><select name="status">
-                    <option value="open" <?= $status === 'open' ? 'selected' : '' ?>>Precisa de ação</option>
-                    <option value="reviewing" <?= $status === 'reviewing' ? 'selected' : '' ?>>Em análise</option>
-                    <option value="waiting" <?= $status === 'waiting' ? 'selected' : '' ?>>Aguardando retorno</option>
-                    <option value="resolved" <?= $status === 'resolved' ? 'selected' : '' ?>>Concluído</option>
-                </select></label>
-                <label><span>Próxima revisão</span><input type="date" name="due_at" value="<?= View::e((string) ($row['due_at'] ?? '')) ?>"></label>
-                <label class="is-wide"><span>Anotação</span><textarea name="note" rows="3" placeholder="Ex.: revisar o plano com o cliente na próxima reunião"><?= View::e((string) ($row['tracking_note'] ?? '')) ?></textarea></label>
-                <button class="btn btn-primary" type="submit">Salvar acompanhamento</button>
+                <div class="attention-followup-grid">
+                    <label class="field"><span>Situação atual</span><select name="status">
+                        <option value="open" <?= $status === 'open' ? 'selected' : '' ?>>Precisa de ação</option>
+                        <option value="reviewing" <?= $status === 'reviewing' ? 'selected' : '' ?>>Em análise</option>
+                        <option value="waiting" <?= $status === 'waiting' ? 'selected' : '' ?>>Aguardando retorno</option>
+                        <option value="resolved" <?= $status === 'resolved' ? 'selected' : '' ?>>Concluído</option>
+                    </select></label>
+                    <label class="field"><span>Revisar novamente em</span><input type="date" name="due_at" value="<?= View::e((string) ($row['due_at'] ?? '')) ?>"></label>
+                    <label class="field is-wide"><span>O que precisa ser feito?</span><textarea name="note" rows="3" placeholder="Ex.: conversar com o cliente sobre o plano na próxima reunião"><?= View::e((string) ($row['tracking_note'] ?? '')) ?></textarea><small class="field-hint">Escreva uma orientação curta que qualquer pessoa da equipe consiga entender.</small></label>
+                </div>
+                <div class="attention-followup-actions">
+                    <small>Salvar não altera preço, plano ou limite automaticamente.</small>
+                    <button class="btn btn-primary" type="submit">Salvar próxima ação</button>
+                </div>
             </form>
         </details>
     </article>

@@ -10865,3 +10865,397 @@ body.has-instance-create-drawer::before {
 @media(max-width:1150px){.attention-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.attention-client-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.attention-method-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.attention-followup form{grid-template-columns:1fr 1fr}.attention-followup .is-wide{grid-column:1/-1}}
 @media(max-width:760px){.attention-hero,.attention-client-head{flex-direction:column;align-items:stretch}.attention-summary-grid{grid-template-columns:1fr 1fr}.attention-filter-card form{grid-template-columns:1fr}.attention-client-body{grid-template-columns:1fr}.attention-followup form{grid-template-columns:1fr}.attention-client-actions .btn{flex:1}.attention-method-grid{grid-template-columns:1fr}}
 @media(max-width:460px){.attention-summary-grid,.attention-client-kpis{grid-template-columns:1fr}}
+
+/* RS Connect 36.20.3 — revisão de UI/UX, formulários e gavetas. */
+:root {
+  --rs-control-height: 46px;
+  --rs-control-radius: 13px;
+  --rs-field-gap: 7px;
+}
+
+/* Controles nativos nunca devem herdar largura total de campos de texto. */
+input[type="checkbox"],
+input[type="radio"],
+.drawer-form input[type="checkbox"],
+.drawer-form input[type="radio"],
+.admin-form-drawer input[type="checkbox"],
+.admin-form-drawer input[type="radio"],
+#ai-credential-drawer input[type="checkbox"],
+#ai-credential-drawer input[type="radio"] {
+  width: 18px !important;
+  min-width: 18px !important;
+  max-width: 18px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  padding: 0 !important;
+  margin: 1px 0 0 !important;
+  flex: 0 0 18px !important;
+  accent-color: var(--rs-teal);
+  box-shadow: none !important;
+}
+
+/* Campos e rótulos com altura, espaçamento e foco consistentes. */
+.field,
+.drawer-form .field,
+.attention-followup .field {
+  min-width: 0;
+  gap: var(--rs-field-gap);
+}
+.drawer-form-grid {
+  row-gap: 16px !important;
+}
+.drawer-form-grid > .field,
+.drawer-form-grid > .check-field {
+  margin-bottom: 0 !important;
+}
+.drawer-form .field > span,
+.attention-followup .field > span {
+  color: #435268;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .025em;
+  text-transform: none;
+}
+.drawer-form input:not([type="checkbox"]):not([type="radio"]),
+.drawer-form select,
+.drawer-form textarea,
+.attention-followup input:not([type="checkbox"]):not([type="radio"]),
+.attention-followup select,
+.attention-followup textarea {
+  min-height: var(--rs-control-height);
+  padding: 11px 13px;
+  border: 1px solid #d6e0e8;
+  border-radius: var(--rs-control-radius) !important;
+  background: #fff !important;
+  box-shadow: 0 1px 2px rgba(15,23,42,.025);
+}
+.drawer-form textarea,
+.attention-followup textarea {
+  min-height: 104px;
+  line-height: 1.5;
+}
+.drawer-form input:focus,
+.drawer-form select:focus,
+.drawer-form textarea:focus,
+.attention-followup input:focus,
+.attention-followup select:focus,
+.attention-followup textarea:focus {
+  border-color: #32a9a1;
+  box-shadow: 0 0 0 4px rgba(2,148,142,.11);
+}
+.drawer-form .field-hint,
+.attention-followup .field-hint {
+  display: block;
+  margin: 0;
+  color: #788697;
+  font-size: .69rem;
+  line-height: 1.45;
+}
+
+/* Checkbox simples ou em card: alinhamento previsível em qualquer gaveta. */
+.check-field {
+  align-items: flex-start;
+  min-width: 0;
+  line-height: 1.35;
+}
+.check-field > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: #455569;
+}
+.check-field > span > strong {
+  color: var(--rs-text);
+  font-size: .79rem;
+}
+.check-field > span > small {
+  color: var(--rs-muted);
+  font-size: .69rem;
+  line-height: 1.45;
+}
+.check-card {
+  margin: 0;
+  padding: 13px 14px;
+  border: 1px solid #dbe6eb;
+  border-radius: 14px;
+  background: #f8fbfc;
+}
+.check-card:has(input:checked) {
+  border-color: #9bd6d0;
+  background: linear-gradient(135deg, #eefaf8, #f7fbfd);
+  box-shadow: inset 0 0 0 1px rgba(2,148,142,.06);
+}
+
+/* Gavetas: rolagem estável e barra de ações sem sobrepor o formulário. */
+.conversation-drawer-body {
+  scrollbar-gutter: stable;
+}
+.drawer-savebar,
+.ai-credential-savebar {
+  position: sticky !important;
+  bottom: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 20px -20px -18px !important;
+  padding: 14px 20px 16px !important;
+  border-top: 1px solid rgba(214,224,232,.95);
+  background: rgba(255,255,255,.96);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 -12px 28px rgba(15,23,42,.055);
+  z-index: 4;
+}
+
+/* Tela de chaves de IA. */
+#ai-credential-drawer .ai-credential-access-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  column-gap: 14px !important;
+  row-gap: 16px !important;
+}
+#ai-credential-drawer .ai-credential-default-option {
+  align-items: flex-start;
+}
+#ai-credential-drawer .drawer-section {
+  overflow: visible;
+}
+#ai-credential-drawer .drawer-section-title small {
+  display: block;
+  max-width: 560px;
+  line-height: 1.45;
+}
+
+/* Tela de clientes que precisam de atenção. */
+.attention-followup {
+  padding: 0 20px 20px;
+  background: linear-gradient(180deg, #fff, #fbfcfd);
+}
+.attention-followup summary {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 15px 0 13px;
+  list-style: none;
+}
+.attention-followup summary::-webkit-details-marker { display: none; }
+.attention-followup summary::before {
+  content: "+";
+  display: inline-grid;
+  place-items: center;
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  margin-top: -1px;
+  border-radius: 7px;
+  color: #256574;
+  background: #eaf5f6;
+  font-size: .92rem;
+  font-weight: 800;
+}
+.attention-followup[open] summary::before { content: "−"; }
+.attention-followup summary > span,
+.attention-followup summary > small {
+  margin-left: 29px;
+}
+.attention-followup summary > span {
+  color: #29495a;
+  font-size: .78rem;
+  font-weight: 850;
+}
+.attention-followup summary > small {
+  color: var(--rs-muted);
+  font-size: .66rem;
+  font-weight: 500;
+}
+.attention-followup-form {
+  display: grid !important;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #dce7ec;
+  border-radius: 16px;
+  background: #fff;
+}
+.attention-followup-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, .6fr) minmax(220px, .6fr);
+  gap: 14px;
+}
+.attention-followup-grid .is-wide {
+  grid-column: 1 / -1;
+}
+.attention-followup-grid .field {
+  margin: 0;
+}
+.attention-followup-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding-top: 13px;
+  border-top: 1px solid #e5ecef;
+}
+.attention-followup-actions > small {
+  max-width: 540px;
+  color: var(--rs-muted);
+  font-size: .67rem;
+  line-height: 1.45;
+}
+.attention-followup-actions .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* Regras gerais de responsividade para formulários administrativos. */
+@media (max-width: 900px) {
+  .drawer-form-grid,
+  .admin-form-drawer .drawer-form-grid,
+  #ai-credential-drawer .ai-credential-access-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .drawer-span,
+  .attention-followup-grid .is-wide {
+    grid-column: auto !important;
+  }
+  .attention-followup-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 620px) {
+  .conversation-drawer-header {
+    padding: 19px 18px 15px;
+  }
+  .conversation-drawer-body {
+    padding: 14px 14px 88px;
+  }
+  .drawer-section {
+    padding: 15px;
+    border-radius: 17px;
+  }
+  .drawer-savebar,
+  .ai-credential-savebar {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    margin: 18px -14px -14px !important;
+    padding: 13px 14px 15px !important;
+  }
+  .drawer-savebar .btn,
+  .ai-credential-savebar .btn,
+  .attention-followup-actions .btn {
+    width: 100%;
+  }
+  .attention-followup {
+    padding-inline: 14px;
+  }
+  .attention-followup-form {
+    padding: 13px;
+  }
+  .attention-followup-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+/* Acessibilidade de teclado e feedback visual comuns. */
+:where(.btn, .icon-button, summary, input, select, textarea):focus-visible {
+  outline: 3px solid rgba(20,100,152,.22);
+  outline-offset: 2px;
+}
+
+/* Leitura confortável nos painéis financeiros e operacionais. */
+.profitability-command-bar label > span,
+.profitability-kpi > span,
+.profitability-simulation-kpis span,
+.profitability-custom-sim label > span,
+.openai-budget-policy-current span,
+.attention-client-kpis small,
+.attention-next-step > span {
+  font-size: .68rem !important;
+  line-height: 1.35;
+}
+.profitability-command-bar > small,
+.profitability-kpi > small,
+.profitability-history-month > small,
+.profitability-table td small,
+.profitability-month-list article > div small,
+.profitability-month-list article > span,
+.profitability-plan-head small,
+.profitability-plan-metrics span,
+.profitability-plan details,
+.profitability-custom-result span,
+.profitability-custom-result small,
+.profitability-method-grid span,
+.profitability-method-note > p,
+.attention-reasons li span,
+.attention-next-step p {
+  font-size: .7rem !important;
+  line-height: 1.48;
+}
+.profitability-table td strong,
+.profitability-month-list article > div strong,
+.profitability-month-list article > span strong,
+.profitability-plan-head strong,
+.profitability-plan-metrics strong {
+  font-size: .78rem !important;
+}
+.profitability-table th,
+.profitability-table td {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.profitability-table tbody tr:hover {
+  background: #f8fbfc;
+}
+.profitability-method-grid span,
+.attention-method-grid span {
+  min-height: 88px;
+}
+
+@media (max-width: 760px) {
+  .profitability-table-wrap {
+    margin-inline: -4px;
+    padding-bottom: 4px;
+  }
+  .profitability-table {
+    min-width: 850px;
+  }
+}
+
+/* Legibilidade mínima para indicadores e áreas operacionais. */
+.openai-executive-card span,
+.openai-efficiency-kpis span,
+.openai-official-metrics span,
+.openai-budget-policy-current span,
+.openai-commercial-kpis span,
+.openai-commercial-current span,
+.after-hours-queue-details small,
+.after-hours-operation-metrics small,
+.instance-delete-impact-grid span {
+  font-size: .68rem !important;
+  line-height: 1.35;
+}
+.openai-executive-card small,
+.openai-efficiency-kpis small,
+.openai-management-ranking small,
+.openai-official-metrics small,
+.openai-budget-company-head small,
+.openai-budget-company-meta,
+.openai-budget-fields .field small,
+.openai-commercial-company-head small,
+.openai-commercial-company-foot,
+.openai-commercial-current small,
+.openai-commercial-fields .field small,
+.after-hours-queue-action small,
+.after-hours-operation-actions small {
+  font-size: .69rem !important;
+  line-height: 1.45;
+}
+.openai-v2-day small,
+.openai-efficiency-day small {
+  font-size: .62rem !important;
+}
+.after-hours-queue-details strong,
+.after-hours-operation-metrics strong,
+.openai-commercial-kpis strong {
+  font-size: .78rem !important;
+}
+.attention-followup summary { position: relative; }

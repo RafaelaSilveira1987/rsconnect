@@ -310,24 +310,25 @@ $rsOwnedCredentials = count(array_filter($credentials, static fn (array $credent
                     </div>
                 </div>
 
-                <div class="drawer-form-grid">
+                <div class="drawer-form-grid ai-credential-access-grid">
                     <label class="field drawer-span">
                         <span data-ai-api-key-label>Chave de acesso</span>
-                        <input name="api_key" type="password" autocomplete="new-password" placeholder="Cole a chave fornecida pelo serviço de IA" data-ai-field="api_key">
-                        <small class="field-hint" data-ai-api-key-hint>Obrigatória ao criar. Na edição, deixe em branco para manter a chave atual.</small>
+                        <input name="api_key" type="password" autocomplete="new-password" placeholder="Cole aqui a chave fornecida pelo serviço de IA" data-ai-field="api_key">
+                        <small class="field-hint" data-ai-api-key-hint>Obrigatória ao criar. Na edição, deixe em branco para continuar usando a chave atual.</small>
                     </label>
                     <label class="field">
-                        <span>Modelo de IA padrão</span>
-                        <input name="default_model" placeholder="gpt-4o-mini" data-ai-field="default_model">
+                        <span>Modelo usado por padrão</span>
+                        <input name="default_model" placeholder="Ex.: gpt-4o-mini" data-ai-field="default_model">
+                        <small class="field-hint">Será usado quando o assistente não tiver um modelo específico.</small>
                     </label>
                     <label class="field">
-                        <span>Endereço do serviço</span>
-                        <input name="base_url" placeholder="Deixe vazio para usar o padrão" data-ai-field="base_url">
-                        <small class="field-hint">Para OpenAI, deixe vazio para usar https://api.openai.com/v1.</small>
+                        <span>Endereço do serviço (opcional)</span>
+                        <input name="base_url" placeholder="Use o endereço padrão" data-ai-field="base_url">
+                        <small class="field-hint">Na OpenAI, normalmente este campo pode ficar vazio.</small>
                     </label>
-                    <label class="check-field drawer-span">
+                    <label class="check-field check-card drawer-span ai-credential-default-option">
                         <input type="checkbox" name="is_default" value="1" checked data-ai-field="is_default">
-                        <span>Usar como chave principal neste local</span>
+                        <span><strong>Usar como chave principal desta empresa</strong><small>Quando não houver outra chave escolhida, o sistema usará esta.</small></span>
                     </label>
                 </div>
             </section>

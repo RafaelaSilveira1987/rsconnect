@@ -33,9 +33,10 @@ final class AppVersionService
     // RS Connect 36.20.0 — rentabilidade histórica, MRR, tendência mensal e simulação comercial de planos.
     // RS Connect 36.20.1 — linguagem simples e acessível em menus, telas, alertas e formulários.
     // RS Connect 36.20.2 — lista ativa de clientes que precisam de atenção, motivos e acompanhamento.
+    // RS Connect 36.20.3 — revisão ampla de UI/UX, formulários, gavetas, checkboxes e responsividade.
     // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql e 085_ai_commercial_attention_queue.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.4';
-    public const PACKAGE_LABEL = 'RS Connect 36.20.2 — Clientes que precisam de atenção';
+    public const PACKAGE_LABEL = 'RS Connect 36.20.3 — UI/UX consistente e responsiva';
     public const REQUIRED_MIGRATION = '085_ai_commercial_attention_queue.sql';
 
     private PDO $pdo;
