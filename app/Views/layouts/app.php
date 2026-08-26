@@ -132,13 +132,8 @@ $svgIcon = static function (string $name): string {
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
     <!-- Marcador histórico de regressão: app.css?v=36.20.2 -->
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
-<<<<<<< HEAD
-    <!-- Marcador histórico de regressão: app.css?v=36.20.6 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.7')) ?>">
-=======
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 -->
     <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.8')) ?>">
->>>>>>> 03b6cbd (Cooreção evolution II)
 </head>
 <body>
 <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
@@ -434,12 +429,7 @@ $svgIcon = static function (string $name): string {
 </button>
 <!-- Marcador histórico de regressão: app.js?v=36.20.2 -->
 <!-- Marcador histórico de regressão: app.js?v=36.20.5 -->
-<<<<<<< HEAD
-<!-- Marcador histórico de regressão: app.js?v=36.20.6 -->
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.7')) ?>" defer></script>
-=======
 <!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 -->
 <script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.8')) ?>" defer></script>
->>>>>>> 03b6cbd (Cooreção evolution II)
 </body>
 </html>

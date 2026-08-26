@@ -3632,11 +3632,8 @@ document.addEventListener('change', (event) => {
 
 // RS Connect 36.20.7 — exclusão local clara, com transferência segura quando houver vínculos.
 
-<<<<<<< HEAD
-=======
 // RS Connect 36.20.8 — prévia de exclusão sem bloqueio de sessão e com timeout visível.
 
->>>>>>> 03b6cbd (Cooreção evolution II)
 // Marcador histórico da v36.20.6: botão "Remover do RS Connect" substituído por textos mais claros na v36.20.7.
 
 // Marcador histórico v36.20.6: 'Remover do RS Connect'.
