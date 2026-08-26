@@ -11259,3 +11259,311 @@ input[type="radio"],
   font-size: .78rem !important;
 }
 .attention-followup summary { position: relative; }
+
+/* =========================================================
+   RS Connect 36.20.4 — correção estrutural de UI/UX
+   Rodapés sem sobreposição, formulários previsíveis e painéis
+   administrativos com melhor aproveitamento do espaço.
+   ========================================================= */
+
+/*
+ * Os botões de salvar passam a fazer parte do fluxo normal do formulário.
+ * Isso evita que a barra cubra campos enquanto a pessoa rola a gaveta.
+ */
+.admin-form-drawer .conversation-drawer-body,
+#ai-credential-drawer .conversation-drawer-body {
+  padding-bottom: 20px !important;
+  overflow-y: auto !important;
+}
+.admin-form-drawer .drawer-form,
+#ai-credential-drawer .drawer-form {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 100%;
+  gap: 16px;
+}
+.admin-form-drawer .drawer-section,
+#ai-credential-drawer .drawer-section {
+  flex: 0 0 auto;
+  margin-bottom: 0 !important;
+}
+.drawer-savebar,
+.ai-credential-savebar,
+.admin-form-drawer .drawer-savebar,
+#ai-credential-drawer .ai-credential-savebar {
+  position: static !important;
+  inset: auto !important;
+  flex: 0 0 auto;
+  margin: 2px -20px -20px !important;
+  padding: 16px 20px 18px !important;
+  border-top: 1px solid #d8e2e9;
+  background: #fff;
+  box-shadow: none;
+  backdrop-filter: none;
+  z-index: auto;
+}
+
+/* Evita que a barra de ações fique visualmente colada ao último campo. */
+.drawer-savebar::before,
+.ai-credential-savebar::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+/* Gavetas largas, mas com leitura confortável e sem conteúdo cortado. */
+.admin-form-drawer,
+#ai-credential-drawer {
+  width: min(760px, 96vw) !important;
+  max-width: 760px !important;
+}
+.admin-form-drawer .drawer-section,
+#ai-credential-drawer .drawer-section {
+  overflow: visible !important;
+}
+.admin-form-drawer .drawer-form-grid,
+#ai-credential-drawer .drawer-form-grid {
+  align-items: start;
+}
+
+/*
+ * Clientes que precisam de atenção:
+ * neutraliza a grade antiga aplicada diretamente ao <form>.
+ */
+.attention-followup form.attention-followup-form {
+  display: block !important;
+  grid-template-columns: 1fr !important;
+  align-items: stretch !important;
+  width: 100%;
+  min-width: 0;
+  padding: 16px !important;
+}
+.attention-followup .attention-followup-grid {
+  display: grid !important;
+  grid-template-columns: minmax(190px, 240px) minmax(190px, 240px) !important;
+  gap: 14px !important;
+  align-items: start !important;
+}
+.attention-followup .attention-followup-grid .is-wide {
+  grid-column: 1 / -1 !important;
+}
+.attention-followup .attention-followup-grid textarea {
+  display: block;
+  width: 100% !important;
+  min-height: 112px !important;
+  resize: vertical;
+}
+.attention-followup .attention-followup-actions {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 16px !important;
+  width: 100%;
+  margin-top: 14px;
+  padding-top: 14px;
+}
+.attention-followup .attention-followup-actions > small {
+  max-width: none;
+  margin: 0;
+}
+.attention-followup .attention-followup-actions .btn {
+  min-width: 180px;
+  justify-self: end;
+}
+
+/* Filtros de atenção: controles com alturas e proporções consistentes. */
+.attention-filter-card form {
+  grid-template-columns: minmax(300px, 1.5fr) minmax(260px, .7fr) auto !important;
+  gap: 14px !important;
+}
+.attention-filter-card input,
+.attention-filter-card select {
+  min-height: 46px;
+}
+.attention-filter-card .btn {
+  min-width: 100px;
+  min-height: 46px;
+}
+
+/*
+ * CRM: a agenda deixa de roubar largura do funil.
+ * Ela aparece acima do quadro e usa cards horizontais quando houver itens.
+ */
+.admin-crm-layout {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+}
+.admin-crm-board-wrap {
+  order: 2;
+  width: 100%;
+}
+.admin-crm-agenda {
+  order: 1;
+  position: static !important;
+  width: 100%;
+  min-height: 0;
+  padding: 16px 18px !important;
+}
+.admin-crm-agenda .section-heading {
+  margin-bottom: 12px;
+}
+.admin-crm-agenda .admin-crm-activity-list {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+.admin-crm-agenda .empty-state {
+  min-height: 0;
+  padding: 20px 16px;
+  border: 1px dashed #d7e2e8;
+  border-radius: 14px;
+  background: #fbfcfd;
+}
+.admin-crm-toolbar {
+  grid-template-columns: minmax(260px, 1.55fr) repeat(3, minmax(150px, .72fr)) auto !important;
+}
+.admin-crm-toolbar input,
+.admin-crm-toolbar select,
+.admin-crm-toolbar .btn {
+  min-height: 46px;
+}
+
+/* Cobranças: situação com rótulo, largura suficiente e botão alinhado. */
+.billing-invoice-actions {
+  justify-content: space-between;
+  gap: 12px;
+}
+.billing-invoice-actions > form:first-of-type,
+.billing-invoice-actions > .btn:first-child {
+  flex: 0 0 auto;
+}
+.billing-invoice-actions .billing-status-form {
+  display: grid !important;
+  grid-template-columns: minmax(170px, 210px) auto;
+  align-items: end;
+  gap: 9px;
+  margin-left: auto;
+}
+.billing-status-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.billing-status-field > span {
+  color: #5c6d80;
+  font-size: .65rem;
+  font-weight: 800;
+}
+.billing-status-field select {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 42px;
+}
+.billing-status-form .btn {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+/* Botões das gavetas mantêm tamanho e alinhamento previsíveis. */
+.drawer-savebar .btn,
+.ai-credential-savebar .btn {
+  min-width: 132px;
+}
+.drawer-savebar .btn-primary,
+.ai-credential-savebar .btn-primary {
+  min-width: 160px;
+}
+
+/* Campo de ajuda nunca invade o próximo controle. */
+.drawer-form .field-hint,
+.attention-followup .field-hint {
+  position: static !important;
+  width: auto !important;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 980px) {
+  .admin-crm-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .admin-crm-toolbar .admin-crm-search {
+    grid-column: 1 / -1 !important;
+  }
+  .admin-crm-toolbar-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 760px) {
+  .attention-followup .attention-followup-grid,
+  .attention-filter-card form,
+  .admin-crm-toolbar {
+    grid-template-columns: 1fr !important;
+  }
+  .attention-followup .attention-followup-grid .is-wide,
+  .admin-crm-toolbar .admin-crm-search,
+  .admin-crm-toolbar-actions {
+    grid-column: auto !important;
+  }
+  .attention-followup .attention-followup-actions {
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+  }
+  .attention-followup .attention-followup-actions .btn {
+    width: 100%;
+    min-width: 0;
+    justify-self: stretch;
+  }
+  .attention-filter-card .btn,
+  .admin-crm-toolbar-actions,
+  .admin-crm-toolbar-actions .btn {
+    width: 100%;
+  }
+  .admin-crm-toolbar-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .billing-invoice-actions .billing-status-form {
+    width: 100%;
+    grid-template-columns: 1fr auto;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-form-drawer,
+  #ai-credential-drawer {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    border-radius: 0 !important;
+  }
+  .admin-form-drawer .conversation-drawer-body,
+  #ai-credential-drawer .conversation-drawer-body {
+    padding: 14px !important;
+  }
+  .drawer-savebar,
+  .ai-credential-savebar,
+  .admin-form-drawer .drawer-savebar,
+  #ai-credential-drawer .ai-credential-savebar {
+    flex-direction: column-reverse;
+    margin: 2px -14px -14px !important;
+    padding: 14px !important;
+  }
+  .drawer-savebar .btn,
+  .ai-credential-savebar .btn {
+    width: 100%;
+    min-width: 0;
+  }
+  .admin-crm-toolbar-actions {
+    grid-template-columns: 1fr;
+  }
+  .billing-invoice-actions .billing-status-form {
+    grid-template-columns: 1fr;
+  }
+  .billing-status-form .btn {
+    width: 100%;
+  }
+}
