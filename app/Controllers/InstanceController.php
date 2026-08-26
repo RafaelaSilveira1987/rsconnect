@@ -1125,7 +1125,9 @@ final class InstanceController
         $replacementId = (int) ($_POST['replacement_instance_id'] ?? 0);
         $confirmation = trim((string) ($_POST['confirmation'] ?? ''));
         $deleteRemote = isset($_POST['delete_remote']);
+        $discardDependencies = isset($_POST['discard_dependencies']);
         $acknowledgeDependencies = isset($_POST['acknowledge_dependencies']);
+        $acknowledgeDiscard = isset($_POST['acknowledge_discard']);
         $acknowledgeRemoteActive = isset($_POST['acknowledge_remote_active']);
 
         $pdo = Database::connection();
@@ -1147,6 +1149,12 @@ final class InstanceController
             }
             if (!$acknowledgeDependencies) {
                 throw new \RuntimeException('Confirme que revisou os vínculos e o destino dos dados.');
+            }
+            if ($replacementId > 0 && $discardDependencies) {
+                throw new \RuntimeException('Escolha apenas uma opção: transferir os dados ou removê-los definitivamente.');
+            }
+            if ($discardDependencies && !$acknowledgeDiscard) {
+                throw new \RuntimeException('Confirme que entende a remoção definitiva dos dados vinculados.');
             }
 
             $remoteInspection = $this->inspectRemoteInstance($source, 12);
@@ -1177,9 +1185,9 @@ final class InstanceController
             }
 
             $counts = $this->dependencyCounts($pdo, $instanceId);
-            if ($this->transferableDependencyTotal($counts) > 0 && !$replacement) {
+            if ($this->transferableDependencyTotal($counts) > 0 && !$replacement && !$discardDependencies) {
                 throw new \RuntimeException(
-                    'Essa instância possui vínculos transferíveis (' . $this->dependencySummary($counts) . '). Selecione uma instância substituta para preservar os dados.'
+                    'Essa instância possui vínculos (' . $this->dependencySummary($counts) . '). Selecione uma conexão substituta ou confirme a remoção definitiva dos dados vinculados.'
                 );
             }
 
@@ -1196,8 +1204,8 @@ final class InstanceController
             }
 
             $counts = $this->dependencyCounts($pdo, $instanceId);
-            if ($this->transferableDependencyTotal($counts) > 0 && !$replacement) {
-                throw new \RuntimeException('Novos vínculos foram encontrados. Selecione uma instância substituta e tente novamente.');
+            if ($this->transferableDependencyTotal($counts) > 0 && !$replacement && !$discardDependencies) {
+                throw new \RuntimeException('Novos vínculos foram encontrados. Selecione uma conexão substituta ou confirme a remoção definitiva dos dados vinculados.');
             }
 
             $migrationStats = [
@@ -1209,6 +1217,15 @@ final class InstanceController
                 'campaigns' => 0,
                 'scheduled_reports' => 0,
                 'connection_events_removed' => (int) ($counts['connection_events'] ?? 0),
+            ];
+            $discardStats = [
+                'agents_detached' => 0,
+                'contacts_detached' => 0,
+                'scheduled_reports_detached' => 0,
+                'agent_bindings_removed' => 0,
+                'conversations_removed' => 0,
+                'campaigns_removed' => 0,
+                'connection_events_removed' => 0,
             ];
 
             if ($replacement) {
@@ -1238,6 +1255,12 @@ final class InstanceController
                     $pdo->prepare('UPDATE evolution_instances SET is_default = 1 WHERE id = :id')
                         ->execute(['id' => $replacementId]);
                 }
+            } elseif ($discardDependencies) {
+                $discardStats = $this->discardInstanceDependencies($pdo, $instanceId);
+            }
+
+            if (!$replacement && (int) $source['is_default'] === 1) {
+                $this->promoteAnotherDefaultInstance($pdo, (int) $source['tenant_id'], $instanceId);
             }
 
             if ($deleteRemote) {
@@ -1280,24 +1303,34 @@ final class InstanceController
                 ],
                 'dependency_counts' => $counts,
                 'replacement_instance_id' => $replacementId > 0 ? $replacementId : null,
+                'discard_dependencies' => $discardDependencies,
                 'migration_stats' => $migrationStats,
+                'discard_stats' => $discardStats,
                 'remote_delete_requested' => $deleteRemoteRequested,
                 'remote_deleted' => $remoteDeleted,
                 'remote_already_missing' => $remoteAlreadyMissing,
                 'remote_inspection' => $remoteInspection,
                 'deletion_mode' => $remoteAlreadyMissing
-                    ? ($replacement ? 'local_transfer' : 'local_only')
-                    : 'assisted',
+                    ? ($replacement ? 'local_transfer' : ($discardDependencies ? 'local_discard' : 'local_only'))
+                    : ($replacement ? 'assisted_transfer' : ($discardDependencies ? 'assisted_discard' : 'assisted')),
             ]);
 
             if ($remoteAlreadyMissing) {
-                $successMessage = $replacement
-                    ? 'Dados transferidos com segurança para ' . (string) $replacement['name'] . ' e cadastro local excluído do RS Connect.'
-                    : 'Cadastro local excluído do RS Connect. A conexão externa já não existia.';
+                if ($replacement) {
+                    $successMessage = 'Dados transferidos com segurança para ' . (string) $replacement['name'] . ' e cadastro local excluído do RS Connect.';
+                } elseif ($discardDependencies) {
+                    $successMessage = 'Cadastro local excluído do RS Connect. Os dados que dependiam exclusivamente desta conexão foram removidos e os cadastros reutilizáveis ficaram desvinculados.';
+                } else {
+                    $successMessage = 'Cadastro local excluído do RS Connect. A conexão externa já não existia.';
+                }
             } else {
-                $successMessage = $replacement
-                    ? 'Conexão excluída e vínculos transferidos com segurança para ' . (string) $replacement['name'] . '.'
-                    : 'Conexão sem vínculos operacionais excluída do RS Connect.';
+                if ($replacement) {
+                    $successMessage = 'Conexão excluída e vínculos transferidos com segurança para ' . (string) $replacement['name'] . '.';
+                } elseif ($discardDependencies) {
+                    $successMessage = 'Conexão excluída. Os dados que dependiam exclusivamente dela foram removidos e os cadastros reutilizáveis ficaram desvinculados.';
+                } else {
+                    $successMessage = 'Conexão sem vínculos operacionais excluída do RS Connect.';
+                }
                 if ($remoteDeleted) {
                     $successMessage .= ' A conexão também foi removida do serviço externo do WhatsApp.';
                 } elseif (($remoteInspection['exists'] ?? null) === true && (bool) ($remoteInspection['connected'] ?? false)) {
@@ -2102,6 +2135,94 @@ final class InstanceController
             'cycle_offset' => $offset,
             'source_id' => $sourceConversationId,
         ]);
+    }
+
+    /**
+     * Remove os dados que não podem existir sem a conexão e desvincula os
+     * cadastros reutilizáveis quando o cliente não possui instância substituta.
+     */
+    private function discardInstanceDependencies(PDO $pdo, int $instanceId): array
+    {
+        $stats = [
+            'agents_detached' => 0,
+            'contacts_detached' => 0,
+            'scheduled_reports_detached' => 0,
+            'agent_bindings_removed' => 0,
+            'conversations_removed' => 0,
+            'campaigns_removed' => 0,
+            'connection_events_removed' => 0,
+        ];
+
+        if ($this->tableExists($pdo, 'ai_agent_instance_bindings')) {
+            $statement = $pdo->prepare('DELETE FROM ai_agent_instance_bindings WHERE instance_id = :instance_id');
+            $statement->execute(['instance_id' => $instanceId]);
+            $stats['agent_bindings_removed'] = $statement->rowCount();
+        }
+
+        if ($this->tableExists($pdo, 'message_campaigns')) {
+            $statement = $pdo->prepare('DELETE FROM message_campaigns WHERE evolution_instance_id = :instance_id');
+            $statement->execute(['instance_id' => $instanceId]);
+            $stats['campaigns_removed'] = $statement->rowCount();
+        }
+
+        if ($this->tableExists($pdo, 'conversations')) {
+            $statement = $pdo->prepare('DELETE FROM conversations WHERE evolution_instance_id = :instance_id');
+            $statement->execute(['instance_id' => $instanceId]);
+            $stats['conversations_removed'] = $statement->rowCount();
+        }
+
+        if ($this->tableExists($pdo, 'evolution_connection_events')) {
+            $statement = $pdo->prepare('DELETE FROM evolution_connection_events WHERE evolution_instance_id = :instance_id');
+            $statement->execute(['instance_id' => $instanceId]);
+            $stats['connection_events_removed'] = $statement->rowCount();
+        }
+
+        if ($this->tableExists($pdo, 'ai_agents')) {
+            $statement = $pdo->prepare('UPDATE ai_agents SET instance_id = NULL WHERE instance_id = :instance_id');
+            $statement->execute(['instance_id' => $instanceId]);
+            $stats['agents_detached'] = $statement->rowCount();
+        }
+
+        if ($this->tableExists($pdo, 'contacts')) {
+            $statement = $pdo->prepare('UPDATE contacts SET evolution_instance_id = NULL WHERE evolution_instance_id = :instance_id');
+            $statement->execute(['instance_id' => $instanceId]);
+            $stats['contacts_detached'] = $statement->rowCount();
+        }
+
+        if ($this->tableExists($pdo, 'scheduled_reports')) {
+            $statement = $pdo->prepare('UPDATE scheduled_reports SET evolution_instance_id = NULL WHERE evolution_instance_id = :instance_id');
+            $statement->execute(['instance_id' => $instanceId]);
+            $stats['scheduled_reports_detached'] = $statement->rowCount();
+        }
+
+        return $stats;
+    }
+
+    /** Define outra conexão como padrão quando a conexão padrão é removida sem substituta. */
+    private function promoteAnotherDefaultInstance(PDO $pdo, int $tenantId, int $excludedInstanceId): void
+    {
+        $candidate = $pdo->prepare(
+            'SELECT id
+             FROM evolution_instances
+             WHERE tenant_id = :tenant_id
+               AND id <> :excluded_id
+             ORDER BY CASE WHEN status = "connected" THEN 0 ELSE 1 END, id ASC
+             LIMIT 1
+             FOR UPDATE'
+        );
+        $candidate->execute([
+            'tenant_id' => $tenantId,
+            'excluded_id' => $excludedInstanceId,
+        ]);
+        $candidateId = (int) ($candidate->fetchColumn() ?: 0);
+        if ($candidateId < 1) {
+            return;
+        }
+
+        $pdo->prepare('UPDATE evolution_instances SET is_default = 0 WHERE tenant_id = :tenant_id AND id <> :excluded_id')
+            ->execute(['tenant_id' => $tenantId, 'excluded_id' => $excludedInstanceId]);
+        $pdo->prepare('UPDATE evolution_instances SET is_default = 1 WHERE id = :id')
+            ->execute(['id' => $candidateId]);
     }
 
     private function dependencyCounts(PDO $pdo, int $instanceId): array

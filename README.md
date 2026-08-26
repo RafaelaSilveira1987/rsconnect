@@ -1,16 +1,17 @@
-# RS Connect — v36.20.8
+# RS Connect — v36.20.9
 
-Esta versão corrige o botão da exclusão assistida que podia permanecer bloqueado em **Verificando a conexão externa...** enquanto o polling de status consultava a Evolution.
+Esta versão conclui o fluxo de exclusão assistida quando a empresa não possui outra conexão para receber os dados vinculados.
 
 ## O que foi corrigido
 
-- o endpoint de status em tempo real libera a sessão PHP antes de consultar a Evolution;
-- a prévia de exclusão também libera a sessão antes da chamada externa;
-- o polling de status pausa enquanto a gaveta de exclusão estiver aberta;
-- a prévia usa timeout de 20 segundos e mostra uma mensagem clara em vez de ficar indefinidamente em verificação;
-- respostas redirecionadas para login ou fora do formato JSON são identificadas;
-- erros `connectionState HTTP 404/400` passam a ser reconhecidos como conexão externa ausente;
-- quando a Evolution não possui mais a instância, o fluxo muda para **Transferir dados e excluir cadastro** ou **Excluir cadastro do RS Connect**.
+- a conexão substituta deixa de ser a única alternativa quando existem vínculos;
+- o usuário pode escolher **Não tenho outra conexão — remover os dados vinculados**;
+- a opção destrutiva exige uma confirmação adicional e mantém o botão bloqueado até todas as validações serem concluídas;
+- assistentes, contatos e relatórios agendados são preservados e ficam sem conexão vinculada;
+- conversas, campanhas, vínculos de canal e eventos técnicos exclusivos da conexão são removidos definitivamente;
+- a auditoria registra o modo `local_discard` ou `assisted_discard` e os totais desvinculados/removidos;
+- se a conexão removida era a padrão, outra conexão disponível passa a ser padrão automaticamente;
+- continuam disponíveis os modos de transferência para outra conexão e exclusão local sem vínculos.
 
 ## Banco de dados
 
@@ -20,4 +21,4 @@ Não há migration nova. A última migration obrigatória continua sendo:
 database/migrations/085_ai_commercial_attention_queue.sql
 ```
 
-Consulte `INSTRUCOES-v36.20.8.md`.
+Consulte `INSTRUCOES-v36.20.9.md`.

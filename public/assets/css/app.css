@@ -11846,3 +11846,34 @@ html.reduce-motion *::after {
         min-width: 0;
     }
 }
+
+/* RS Connect 36.20.9 — exclusão sem conexão substituta */
+[data-instance-delete-discard-row][hidden],
+[data-instance-delete-discard-ack][hidden] {
+    display: none !important;
+}
+.instance-delete-discard-option {
+    border-color: #edcf8e !important;
+    background: #fff9eb !important;
+}
+.instance-delete-discard-option strong,
+.instance-delete-discard-ack strong {
+    color: #8a4e12;
+}
+.instance-delete-discard-ack {
+    border-color: #e4a9ae !important;
+    background: #fff4f5 !important;
+}
+[data-instance-delete-form].is-local-discard .danger-zone {
+    border-color: #e4a9ae;
+    background: linear-gradient(180deg, #fff5f6 0%, #fff 100%);
+}
+[data-instance-delete-form].is-local-discard [data-instance-delete-submit] {
+    min-width: 270px;
+}
+@media (max-width: 640px) {
+    [data-instance-delete-form].is-local-discard [data-instance-delete-submit] {
+        width: 100%;
+        min-width: 0;
+    }
+}

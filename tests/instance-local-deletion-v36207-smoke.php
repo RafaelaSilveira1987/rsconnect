@@ -25,7 +25,7 @@ $checks = [
         && str_contains($javascript, "'local-only'")
         && str_contains($javascript, 'Transferir dados e excluir cadastro')
         && str_contains($javascript, 'Excluir cadastro do RS Connect'),
-    'destino some somente quando não há vínculos' => str_contains($javascript, 'deleteDestinationSection.hidden = !needsReplacement'),
+    'destino some somente quando não há vínculos' => (str_contains($javascript, 'deleteDestinationSection.hidden = !needsReplacement') || str_contains($javascript, 'deleteDestinationSection.hidden = !hasDependencies')),
     'opção externa continua oculta quando ausente' => str_contains($javascript, 'deleteRemoteRow.hidden = true')
         && str_contains($javascript, 'deleteRemote.disabled = true'),
     'estilo respeita o atributo hidden' => str_contains($css, 'RS Connect 36.20.7')

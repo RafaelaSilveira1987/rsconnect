@@ -1749,6 +1749,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteError = instanceDeleteForm.querySelector('[data-instance-delete-error]');
     const deleteMergeNote = instanceDeleteForm.querySelector('[data-instance-delete-merge-note]');
     const deleteReplacementHint = instanceDeleteForm.querySelector('[data-instance-delete-replacement-hint]');
+    const deleteDiscardRow = instanceDeleteForm.querySelector('[data-instance-delete-discard-row]');
+    const deleteDiscardAckRow = instanceDeleteForm.querySelector('[data-instance-delete-discard-ack]');
     const deleteRemoteRow = instanceDeleteForm.querySelector('[data-instance-delete-remote-row]');
     const deleteRemoteAckRow = instanceDeleteForm.querySelector('[data-instance-delete-remote-ack]');
     const deleteRemoteState = instanceDeleteForm.querySelector('[data-instance-delete-remote-state]');
@@ -1779,7 +1781,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const resetDeletePresentation = (managed = false) => {
       instanceDeleteForm.dataset.deleteMode = 'assisted';
-      instanceDeleteForm.classList.remove('is-local-only', 'is-local-transfer');
+      instanceDeleteForm.classList.remove('is-local-only', 'is-local-transfer', 'is-local-discard');
       if (deleteDrawer) deleteDrawer.setAttribute('aria-label', 'Exclusão assistida de conexão');
       setDeleteText(deleteEyebrow, 'Exclusão assistida');
       setDeleteText(deleteTitle, 'Remover conexão com segurança');
@@ -1797,67 +1799,86 @@ document.addEventListener('DOMContentLoaded', () => {
       setDeleteText(deleteRemovalDescription, 'O RS Connect confirma primeiro se essa conexão ainda existe no serviço externo do WhatsApp.');
       setDeleteText(deleteDependencyTitle, 'Revisei os vínculos e o destino informado');
       setDeleteText(deleteDependencyDescription, 'Confirmo que os dados operacionais devem ser transferidos ou que esta conexão não possui vínculos.');
+      if (deleteDiscardRow) deleteDiscardRow.hidden = true;
+      if (deleteDiscardAckRow) deleteDiscardAckRow.hidden = true;
+      const discard = deleteField('discard_dependencies');
+      const acknowledgeDiscard = deleteField('acknowledge_discard');
+      if (discard) discard.checked = false;
+      if (acknowledgeDiscard) {
+        acknowledgeDiscard.checked = false;
+        acknowledgeDiscard.required = false;
+      }
+    };
+
+    const availableReplacementCount = () => {
+      const replacement = deleteField('replacement');
+      return Array.from(replacement?.options || []).filter((option, index) => (
+        index > 0 && !option.hidden && !option.disabled
+      )).length;
     };
 
     const applyDeletePresentation = (payload) => {
       const remoteMissing = payload?.remote?.exists === false;
-      const needsReplacement = Boolean(payload?.requires_replacement);
+      const hasDependencies = Boolean(payload?.requires_replacement);
+
+      if (deleteDiscardRow) deleteDiscardRow.hidden = !hasDependencies;
 
       if (!remoteMissing) {
         instanceDeleteForm.dataset.deleteMode = 'assisted';
-        instanceDeleteForm.classList.remove('is-local-only', 'is-local-transfer');
+        instanceDeleteForm.classList.remove('is-local-only', 'is-local-transfer', 'is-local-discard');
         if (deleteDrawer) deleteDrawer.setAttribute('aria-label', 'Exclusão assistida de conexão');
         setDeleteText(deleteEyebrow, 'Exclusão assistida');
-        setDeleteText(deleteTitle, 'Remover conexão com segurança');
-        setDeleteText(deleteSourceNote, 'O cadastro abaixo será removido depois da transferência validada.');
-        if (deleteDestinationSection) deleteDestinationSection.hidden = false;
-        setDeleteText(deleteDestinationTitle, 'Preservar os dados operacionais');
-        setDeleteText(deleteDestinationDescription, 'Assistentes, contatos, conversas, campanhas e relatórios serão movidos para outra conexão da mesma empresa.');
+        setDeleteText(deleteTitle, hasDependencies ? 'Definir destino dos dados e remover conexão' : 'Remover conexão com segurança');
+        setDeleteText(deleteSourceNote, 'O cadastro abaixo será removido depois da validação dos dados vinculados.');
+        if (deleteDestinationSection) deleteDestinationSection.hidden = !hasDependencies;
+        setDeleteText(deleteDestinationTitle, 'Escolha como tratar os dados vinculados');
+        setDeleteText(deleteDestinationDescription, 'Transfira para outra conexão ou, caso não exista outra disponível, confirme a remoção definitiva dos dados dependentes.');
         setDeleteText(deleteRemovalTitle, 'Defina o que será apagado');
         setDeleteText(deleteRemovalDescription, 'O RS Connect confirmou a situação externa. Escolha se a conexão também será removida do serviço do WhatsApp.');
-        setDeleteText(deleteDependencyTitle, 'Revisei os vínculos e o destino informado');
-        setDeleteText(deleteDependencyDescription, 'Confirmo que os dados operacionais devem ser transferidos ou que esta conexão não possui vínculos.');
+        setDeleteText(deleteDependencyTitle, 'Revisei os vínculos e a opção escolhida');
+        setDeleteText(deleteDependencyDescription, 'Confirmo a transferência para outra conexão ou a remoção dos dados vinculados.');
         return;
       }
 
-      const localMode = needsReplacement ? 'local-transfer' : 'local-only';
-      instanceDeleteForm.dataset.deleteMode = localMode;
-      instanceDeleteForm.classList.toggle('is-local-transfer', needsReplacement);
-      instanceDeleteForm.classList.toggle('is-local-only', !needsReplacement);
+      instanceDeleteForm.dataset.deleteMode = hasDependencies ? 'local-decision' : 'local-only';
+      instanceDeleteForm.classList.remove('is-local-transfer', 'is-local-discard');
+      instanceDeleteForm.classList.toggle('is-local-only', !hasDependencies);
       if (deleteDrawer) deleteDrawer.setAttribute('aria-label', 'Excluir cadastro local da conexão');
-      setDeleteText(deleteEyebrow, needsReplacement ? 'Exclusão local assistida' : 'Exclusão somente local');
-      setDeleteText(deleteTitle, needsReplacement ? 'Transferir dados e excluir cadastro' : 'Excluir cadastro do RS Connect');
+      setDeleteText(deleteEyebrow, hasDependencies ? 'Exclusão local assistida' : 'Exclusão somente local');
+      setDeleteText(deleteTitle, hasDependencies ? 'Definir destino dos dados e excluir cadastro' : 'Excluir cadastro do RS Connect');
       setDeleteText(
         deleteDescription,
-        needsReplacement
-          ? 'A conexão já não existe fora da plataforma. Escolha onde os dados vinculados continuarão antes de excluir o cadastro local.'
+        hasDependencies
+          ? 'A conexão já não existe fora da plataforma. Transfira os dados para outra conexão ou confirme a remoção dos dados vinculados.'
           : 'A conexão já não existe fora da plataforma. Será excluído somente o cadastro que permaneceu no RS Connect.'
       );
       setDeleteText(
         deleteSourceNote,
-        needsReplacement
-          ? 'A conexão externa já foi removida, mas este cadastro ainda possui dados que precisam ser preservados.'
+        hasDependencies
+          ? 'A conexão externa já foi removida, mas este cadastro ainda possui dados operacionais vinculados.'
           : 'A conexão externa já foi removida e não existem vínculos operacionais que exijam transferência.'
       );
-      if (deleteDestinationSection) deleteDestinationSection.hidden = !needsReplacement;
-      setDeleteText(deleteDestinationTitle, 'Escolha a conexão que receberá os dados');
-      setDeleteText(deleteDestinationDescription, 'Os dados operacionais serão transferidos antes da exclusão do cadastro local.');
+      if (deleteDestinationSection) deleteDestinationSection.hidden = !hasDependencies;
+      setDeleteText(deleteDestinationTitle, 'Escolha como tratar os dados vinculados');
+      setDeleteText(deleteDestinationDescription, 'Transfira os dados para outra conexão ou use a opção de remoção definitiva quando não houver uma conexão substituta.');
       setDeleteText(deleteRemovalTitle, 'Excluir somente do RS Connect');
       setDeleteText(deleteRemovalDescription, 'Nenhuma exclusão será enviada ao serviço externo porque a conexão já não existe lá.');
       setDeleteText(
         deleteDependencyTitle,
-        needsReplacement ? 'Revisei os vínculos e a conexão substituta' : 'Confirmo a exclusão do cadastro local'
+        hasDependencies ? 'Revisei os vínculos e a opção escolhida' : 'Confirmo a exclusão do cadastro local'
       );
       setDeleteText(
         deleteDependencyDescription,
-        needsReplacement
-          ? 'Confirmo que os dados vinculados devem ser transferidos para a conexão escolhida antes da exclusão.'
+        hasDependencies
+          ? 'Confirmo a transferência para outra conexão ou a remoção definitiva dos dados vinculados.'
           : 'Confirmo que a conexão externa já não existe e que será removido somente o cadastro do RS Connect.'
       );
     };
 
     const syncDeleteEligibility = () => {
       const replacement = deleteField('replacement');
+      const discardDependencies = deleteField('discard_dependencies');
+      const acknowledgeDiscard = deleteField('acknowledge_discard');
       const confirmation = deleteField('confirmation');
       const deleteRemote = deleteField('delete_remote');
       const acknowledgeDependencies = deleteField('acknowledge_dependencies');
@@ -1872,16 +1893,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return;
       }
-      const needsReplacement = Boolean(deletePreviewState?.requires_replacement);
+
+      const hasDependencies = Boolean(deletePreviewState?.requires_replacement);
       const remoteMissing = deletePreviewState?.remote?.exists === false;
       const remoteCheckUnavailable = deletePreviewState?.remote?.checked === false;
+      const discarding = hasDependencies && Boolean(discardDependencies?.checked);
+      const transferring = hasDependencies && Boolean(replacement?.value) && !discarding;
       const connectedWithoutRemoteDelete = Boolean(deletePreviewState?.requires_remote_ack)
         && !deleteRemote?.checked;
       const fallbackConnectedWithoutRemoteDelete = remoteCheckUnavailable
         && deletePreviewState?.source?.status === 'connected'
         && !deleteRemote?.checked;
 
-      if (replacement) replacement.required = needsReplacement;
+      if (replacement) {
+        replacement.disabled = discarding;
+        replacement.required = hasDependencies && !discarding;
+      }
+      if (deleteDiscardAckRow) deleteDiscardAckRow.hidden = !discarding;
+      if (acknowledgeDiscard) {
+        acknowledgeDiscard.required = discarding;
+        if (!discarding) acknowledgeDiscard.checked = false;
+      }
+
       const needsRemoteAcknowledgement = !remoteMissing
         && (connectedWithoutRemoteDelete || fallbackConnectedWithoutRemoteDelete);
       if (deleteRemoteAckRow) deleteRemoteAckRow.hidden = !needsRemoteAcknowledgement;
@@ -1890,16 +1923,54 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!needsRemoteAcknowledgement) acknowledgeRemote.checked = false;
       }
 
+      const strategySelected = !hasDependencies || transferring || discarding;
       const ready = Boolean(deletePreviewState?.ok)
-        && (!needsReplacement || Boolean(replacement?.value))
+        && strategySelected
         && Boolean(acknowledgeDependencies?.checked)
         && confirmation?.value.trim() === expected
+        && (!discarding || Boolean(acknowledgeDiscard?.checked))
         && (!needsRemoteAcknowledgement || Boolean(acknowledgeRemote?.checked));
+
+      instanceDeleteForm.classList.toggle('is-local-transfer', remoteMissing && transferring);
+      instanceDeleteForm.classList.toggle('is-local-discard', remoteMissing && discarding);
+      instanceDeleteForm.classList.toggle('is-local-only', remoteMissing && !hasDependencies);
+      instanceDeleteForm.dataset.deleteMode = remoteMissing
+        ? (discarding ? 'local-discard' : transferring ? 'local-transfer' : hasDependencies ? 'local-decision' : 'local-only')
+        : (discarding ? 'assisted-discard' : transferring ? 'assisted-transfer' : 'assisted');
+
+      if (hasDependencies) {
+        if (discarding) {
+          setDeleteText(deleteTitle, remoteMissing ? 'Excluir cadastro e remover dados vinculados' : 'Excluir conexão e remover dados vinculados');
+          setDeleteText(deleteDependencyTitle, 'Confirmo a remoção definitiva dos dados vinculados');
+          setDeleteText(deleteDependencyDescription, 'Assistentes, contatos e relatórios serão desvinculados; conversas, campanhas, vínculos de canal e eventos técnicos serão excluídos.');
+        } else if (transferring) {
+          setDeleteText(deleteTitle, remoteMissing ? 'Transferir dados e excluir cadastro' : 'Transferir dados e excluir conexão');
+          setDeleteText(deleteDependencyTitle, 'Revisei os vínculos e a conexão substituta');
+          setDeleteText(deleteDependencyDescription, 'Confirmo que os dados vinculados devem ser transferidos para a conexão escolhida antes da exclusão.');
+        } else {
+          setDeleteText(deleteTitle, remoteMissing ? 'Definir destino dos dados e excluir cadastro' : 'Definir destino dos dados e remover conexão');
+          setDeleteText(deleteDependencyTitle, 'Escolha como tratar os dados vinculados');
+          setDeleteText(deleteDependencyDescription, 'Selecione uma conexão substituta ou marque a opção de remover os dados vinculados.');
+        }
+      }
+
       if (deleteSubmit) {
         deleteSubmit.disabled = !ready;
         deleteSubmit.textContent = remoteMissing
-          ? (needsReplacement ? 'Transferir dados e excluir cadastro' : 'Excluir cadastro do RS Connect')
-          : (needsReplacement ? 'Transferir e excluir conexão' : 'Excluir conexão');
+          ? (discarding
+            ? 'Excluir cadastro e dados vinculados'
+            : transferring
+              ? 'Transferir dados e excluir cadastro'
+              : hasDependencies
+                ? 'Escolha o destino dos dados'
+                : 'Excluir cadastro do RS Connect')
+          : (discarding
+            ? 'Excluir conexão e dados vinculados'
+            : transferring
+              ? 'Transferir e excluir conexão'
+              : hasDependencies
+                ? 'Escolha o destino dos dados'
+                : 'Excluir conexão');
       }
     };
 
@@ -1972,9 +2043,13 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteMergeNote.hidden = notes.length === 0;
       }
       if (deleteReplacementHint) {
-        deleteReplacementHint.textContent = payload.requires_replacement
-          ? 'Obrigatório: existem dados operacionais que precisam de uma conexão substituta.'
-          : 'Não há vínculos operacionais que exijam transferência.';
+        if (!payload.requires_replacement) {
+          deleteReplacementHint.textContent = 'Não há vínculos operacionais que exijam transferência.';
+        } else if (availableReplacementCount() > 0) {
+          deleteReplacementHint.textContent = 'Selecione uma conexão substituta ou marque a opção de remover os dados vinculados.';
+        } else {
+          deleteReplacementHint.textContent = 'Não há outra conexão disponível. Marque a opção abaixo para remover os dados vinculados e continuar.';
+        }
       }
       syncDeleteEligibility();
     };
@@ -2043,6 +2118,8 @@ document.addEventListener('DOMContentLoaded', () => {
         deletePreviewState = null;
         const id = deleteField('id');
         const replacement = deleteField('replacement');
+        const discardDependencies = deleteField('discard_dependencies');
+        const acknowledgeDiscard = deleteField('acknowledge_discard');
         const confirmation = deleteField('confirmation');
         const deleteRemote = deleteField('delete_remote');
         const name = document.querySelector('[data-instance-delete-name]');
@@ -2077,14 +2154,41 @@ document.addEventListener('DOMContentLoaded', () => {
         if (replacement) {
           replacement.value = '';
           replacement.required = false;
+          replacement.disabled = false;
         }
+        if (discardDependencies) discardDependencies.checked = false;
+        if (acknowledgeDiscard) {
+          acknowledgeDiscard.checked = false;
+          acknowledgeDiscard.required = false;
+        }
+        if (deleteDiscardRow) deleteDiscardRow.hidden = true;
+        if (deleteDiscardAckRow) deleteDiscardAckRow.hidden = true;
         syncDeleteEligibility();
         loadDeletePreview();
       });
     });
 
-    deleteField('replacement')?.addEventListener('change', loadDeletePreview);
-    ['delete_remote', 'acknowledge_dependencies', 'acknowledge_remote_active', 'confirmation'].forEach((name) => {
+    deleteField('replacement')?.addEventListener('change', () => {
+      const replacement = deleteField('replacement');
+      const discardDependencies = deleteField('discard_dependencies');
+      const acknowledgeDiscard = deleteField('acknowledge_discard');
+      if (replacement?.value && discardDependencies) {
+        discardDependencies.checked = false;
+        if (acknowledgeDiscard) acknowledgeDiscard.checked = false;
+      }
+      syncDeleteEligibility();
+      loadDeletePreview();
+    });
+    deleteField('discard_dependencies')?.addEventListener('change', () => {
+      const replacement = deleteField('replacement');
+      const discardDependencies = deleteField('discard_dependencies');
+      const acknowledgeDiscard = deleteField('acknowledge_discard');
+      if (discardDependencies?.checked && replacement) replacement.value = '';
+      if (!discardDependencies?.checked && acknowledgeDiscard) acknowledgeDiscard.checked = false;
+      syncDeleteEligibility();
+      loadDeletePreview();
+    });
+    ['delete_remote', 'acknowledge_dependencies', 'acknowledge_remote_active', 'acknowledge_discard', 'confirmation'].forEach((name) => {
       const input = deleteField(name);
       input?.addEventListener(input?.type === 'text' ? 'input' : 'change', syncDeleteEligibility);
       if (name === 'confirmation') input?.addEventListener('input', syncDeleteEligibility);
@@ -2094,27 +2198,35 @@ document.addEventListener('DOMContentLoaded', () => {
       syncDeleteEligibility();
       if (deleteSubmit?.disabled) {
         event.preventDefault();
-        setDeleteMessage(deleteError, 'Revise os vínculos, a conexão substituta e as confirmações antes de excluir.', true);
+        setDeleteMessage(deleteError, 'Escolha como tratar os dados vinculados e conclua todas as confirmações antes de excluir.', true);
         return;
       }
       const remoteMissing = deletePreviewState?.remote?.exists === false;
-      const needsReplacement = Boolean(deletePreviewState?.requires_replacement);
-      const confirmationMessage = remoteMissing
-        ? (needsReplacement
-          ? 'Confirma a transferência dos dados e a exclusão somente do cadastro desta conexão no RS Connect?'
-          : 'Confirma a exclusão somente do cadastro desta conexão no RS Connect?')
-        : (needsReplacement
-          ? 'Confirma a transferência dos dados e a exclusão definitiva desta conexão?'
-          : 'Confirma a exclusão definitiva desta conexão?');
+      const hasDependencies = Boolean(deletePreviewState?.requires_replacement);
+      const discarding = hasDependencies && Boolean(deleteField('discard_dependencies')?.checked);
+      const transferring = hasDependencies && Boolean(deleteField('replacement')?.value) && !discarding;
+      const confirmationMessage = discarding
+        ? (remoteMissing
+          ? 'Confirma a exclusão do cadastro local e a remoção definitiva das conversas, campanhas, vínculos e eventos desta conexão?'
+          : 'Confirma a exclusão da conexão e a remoção definitiva das conversas, campanhas, vínculos e eventos vinculados?')
+        : remoteMissing
+          ? (transferring
+            ? 'Confirma a transferência dos dados e a exclusão somente do cadastro desta conexão no RS Connect?'
+            : 'Confirma a exclusão somente do cadastro desta conexão no RS Connect?')
+          : (transferring
+            ? 'Confirma a transferência dos dados e a exclusão definitiva desta conexão?'
+            : 'Confirma a exclusão definitiva desta conexão?');
       if (!window.confirm(confirmationMessage)) {
         event.preventDefault();
         return;
       }
       if (deleteSubmit) {
         deleteSubmit.disabled = true;
-        deleteSubmit.textContent = remoteMissing
-          ? (needsReplacement ? 'Transferindo dados...' : 'Excluindo cadastro...')
-          : (needsReplacement ? 'Transferindo e excluindo...' : 'Excluindo conexão...');
+        deleteSubmit.textContent = discarding
+          ? 'Removendo dados e cadastro...'
+          : remoteMissing
+            ? (transferring ? 'Transferindo dados...' : 'Excluindo cadastro...')
+            : (transferring ? 'Transferindo e excluindo...' : 'Excluindo conexão...');
       }
     });
   }
@@ -3633,6 +3745,7 @@ document.addEventListener('change', (event) => {
 // RS Connect 36.20.7 — exclusão local clara, com transferência segura quando houver vínculos.
 
 // RS Connect 36.20.8 — prévia de exclusão sem bloqueio de sessão e com timeout visível.
+// RS Connect 36.20.9 — exclusão sem conexão substituta com confirmação destrutiva explícita.
 
 // Marcador histórico da v36.20.6: botão "Remover do RS Connect" substituído por textos mais claros na v36.20.7.
 
