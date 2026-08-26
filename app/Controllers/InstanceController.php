@@ -1066,6 +1066,7 @@ final class InstanceController
             $conflicts = $replacement
                 ? $this->replacementConflicts($pdo, $instanceId, $replacementId, (int) $source['tenant_id'])
                 : ['conversation_duplicates' => 0, 'agent_binding_duplicates' => 0];
+            $remote = $this->inspectRemoteInstance($source, 12);
 
             echo json_encode([
                 'ok' => true,
@@ -1087,7 +1088,9 @@ final class InstanceController
                 'conflicts' => $conflicts,
                 'transferable_total' => $this->transferableDependencyTotal($counts),
                 'requires_replacement' => $this->transferableDependencyTotal($counts) > 0,
-                'requires_remote_ack' => (string) ($source['status'] ?? '') === 'connected',
+                'remote' => $remote,
+                'requires_remote_ack' => (bool) ($remote['exists'] ?? false)
+                    && (bool) ($remote['connected'] ?? false),
                 'summary' => $this->dependencySummary($counts),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         } catch (Throwable $exception) {
@@ -1108,6 +1111,9 @@ final class InstanceController
 
         $pdo = Database::connection();
         $remoteDeleted = false;
+        $remoteAlreadyMissing = false;
+        $remoteInspection = null;
+        $deleteRemoteRequested = $deleteRemote;
         $sourceSnapshot = null;
         try {
             $source = $this->findInstance($pdo, $instanceId);
@@ -1123,8 +1129,21 @@ final class InstanceController
             if (!$acknowledgeDependencies) {
                 throw new \RuntimeException('Confirme que revisou os vínculos e o destino dos dados.');
             }
-            if ((string) ($source['status'] ?? '') === 'connected' && !$deleteRemote && !$acknowledgeRemoteActive) {
-                throw new \RuntimeException('A conexão ainda está ativa. Confirme que entende que ela continuará existindo na Evolution ou marque a exclusão remota.');
+
+            $remoteInspection = $this->inspectRemoteInstance($source, 12);
+            if (($remoteInspection['exists'] ?? null) === false) {
+                // A conexão já foi removida externamente. A exclusão local deve continuar
+                // sem exigir confirmações que não fazem mais sentido.
+                $deleteRemote = false;
+                $remoteAlreadyMissing = true;
+            }
+            $remoteConnected = ($remoteInspection['exists'] ?? null) === true
+                && (bool) ($remoteInspection['connected'] ?? false);
+            $remoteCheckUnavailable = ($remoteInspection['checked'] ?? false) !== true;
+            $fallbackConnected = $remoteCheckUnavailable
+                && (string) ($source['status'] ?? '') === 'connected';
+            if (($remoteConnected || $fallbackConnected) && !$deleteRemote && !$acknowledgeRemoteActive) {
+                throw new \RuntimeException('A conexão externa ainda pode estar ativa. Confirme que deseja mantê-la fora do RS Connect ou marque a exclusão externa.');
             }
 
             $replacement = null;
@@ -1209,8 +1228,19 @@ final class InstanceController
                 } catch (Throwable) {
                     // O logout ajuda a encerrar a sessão, mas a exclusão remota é a operação definitiva.
                 }
-                $service->deleteInstance();
-                $remoteDeleted = true;
+                try {
+                    $service->deleteInstance();
+                    $remoteDeleted = true;
+                } catch (Throwable $remoteException) {
+                    if ($this->isRemoteInstanceMissingException($remoteException)) {
+                        // Exclusão idempotente: se a conexão já não existe na Evolution,
+                        // removemos apenas o cadastro local e registramos o fato na auditoria.
+                        $remoteAlreadyMissing = true;
+                        $deleteRemote = false;
+                    } else {
+                        throw $remoteException;
+                    }
+                }
             }
 
             $delete = $pdo->prepare('DELETE FROM evolution_instances WHERE id = :id');
@@ -1232,16 +1262,21 @@ final class InstanceController
                 'dependency_counts' => $counts,
                 'replacement_instance_id' => $replacementId > 0 ? $replacementId : null,
                 'migration_stats' => $migrationStats,
-                'remote_deleted' => $deleteRemote,
+                'remote_delete_requested' => $deleteRemoteRequested,
+                'remote_deleted' => $remoteDeleted,
+                'remote_already_missing' => $remoteAlreadyMissing,
+                'remote_inspection' => $remoteInspection,
             ]);
 
             $successMessage = $replacement
                 ? 'Conexão excluída e vínculos transferidos com segurança para ' . (string) $replacement['name'] . '.'
                 : 'Conexão sem vínculos operacionais excluída do RS Connect.';
-            if ($deleteRemote) {
-                $successMessage .= ' A instância também foi removida da Evolution.';
-            } elseif ((string) ($source['status'] ?? '') === 'connected') {
-                $successMessage .= ' A instância remota foi mantida ativa conforme sua confirmação.';
+            if ($remoteDeleted) {
+                $successMessage .= ' A conexão também foi removida do serviço externo do WhatsApp.';
+            } elseif ($remoteAlreadyMissing) {
+                $successMessage .= ' A conexão externa já não existia; somente o cadastro do RS Connect foi removido.';
+            } elseif (($remoteInspection['exists'] ?? null) === true && (bool) ($remoteInspection['connected'] ?? false)) {
+                $successMessage .= ' A conexão externa foi mantida ativa conforme sua confirmação.';
             }
             Flash::set('success', $successMessage);
         } catch (Throwable $exception) {
@@ -1535,6 +1570,84 @@ final class InstanceController
     {
         $caBundle = trim((string) Env::get('EVOLUTION_CA_BUNDLE', ''));
         return $caBundle !== '' ? $caBundle : null;
+    }
+
+    /**
+     * Confirma se a conexão ainda existe no serviço externo antes da exclusão.
+     * A situação salva no banco pode ficar desatualizada quando a conexão é
+     * removida diretamente na Evolution.
+     *
+     * @param array<string,mixed> $instance
+     * @return array{checked:bool,exists:?bool,connected:bool,state:string,message:string}
+     */
+    private function inspectRemoteInstance(array $instance, int $timeout = 12): array
+    {
+        try {
+            $live = $this->evolutionServiceFor($instance, $timeout)->connectionState();
+            $state = mb_strtolower(trim((string) ($live['state'] ?? 'unknown')));
+            $connected = in_array($state, ['open', 'connected', 'online', 'active'], true);
+
+            return [
+                'checked' => true,
+                'exists' => true,
+                'connected' => $connected,
+                'state' => $state !== '' ? $state : 'unknown',
+                'message' => $connected
+                    ? 'A conexão ainda existe e está ativa no serviço do WhatsApp.'
+                    : 'A conexão ainda existe no serviço do WhatsApp, mas não está conectada.',
+            ];
+        } catch (Throwable $exception) {
+            if ($this->isRemoteInstanceMissingException($exception)) {
+                return [
+                    'checked' => true,
+                    'exists' => false,
+                    'connected' => false,
+                    'state' => 'missing',
+                    'message' => 'A conexão externa não foi encontrada. Será removido somente o cadastro do RS Connect.',
+                ];
+            }
+            if ($this->isRemoteInstanceDisconnectedException($exception)) {
+                return [
+                    'checked' => true,
+                    'exists' => true,
+                    'connected' => false,
+                    'state' => 'disconnected',
+                    'message' => 'A conexão ainda existe no serviço do WhatsApp, mas está desconectada.',
+                ];
+            }
+
+            return [
+                'checked' => false,
+                'exists' => null,
+                'connected' => (string) ($instance['status'] ?? '') === 'connected',
+                'state' => 'unavailable',
+                'message' => 'Não foi possível confirmar a situação externa agora. A exclusão continuará com as confirmações de segurança.',
+            ];
+        }
+    }
+
+    private function isRemoteInstanceMissingException(Throwable $exception): bool
+    {
+        $message = mb_strtolower($exception->getMessage());
+        if (str_contains($message, 'not connected') || str_contains($message, 'não está conectada')) {
+            return false;
+        }
+
+        $missingText = str_contains($message, 'not found')
+            || str_contains($message, 'does not exist')
+            || str_contains($message, 'não encontrada')
+            || str_contains($message, 'não existe')
+            || str_contains($message, 'instance missing');
+
+        return $missingText && (str_contains($message, 'http 404') || str_contains($message, 'http 400'));
+    }
+
+    private function isRemoteInstanceDisconnectedException(Throwable $exception): bool
+    {
+        $message = mb_strtolower($exception->getMessage());
+        return str_contains($message, 'not connected')
+            || str_contains($message, 'não está conectada')
+            || str_contains($message, 'instance is disconnected');
     }
 
     /** @param array<string,mixed> $instance */

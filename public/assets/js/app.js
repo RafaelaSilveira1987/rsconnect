@@ -1748,8 +1748,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteError = instanceDeleteForm.querySelector('[data-instance-delete-error]');
     const deleteMergeNote = instanceDeleteForm.querySelector('[data-instance-delete-merge-note]');
     const deleteReplacementHint = instanceDeleteForm.querySelector('[data-instance-delete-replacement-hint]');
+    const deleteRemoteRow = instanceDeleteForm.querySelector('[data-instance-delete-remote-row]');
     const deleteRemoteAckRow = instanceDeleteForm.querySelector('[data-instance-delete-remote-ack]');
+    const deleteRemoteState = instanceDeleteForm.querySelector('[data-instance-delete-remote-state]');
     const deleteStatus = instanceDeleteForm.querySelector('[data-instance-delete-status]');
+    const deleteDescription = document.querySelector('[data-instance-delete-description]');
     let deletePreviewState = null;
     let deleteRequestSequence = 0;
 
@@ -1767,21 +1770,33 @@ document.addEventListener('DOMContentLoaded', () => {
       const acknowledgeRemote = deleteField('acknowledge_remote_active');
       const expected = `EXCLUIR ${instanceDeleteForm.dataset.instanceName || ''}`;
       const needsReplacement = Boolean(deletePreviewState?.requires_replacement);
-      const connectedWithoutRemoteDelete = deletePreviewState?.source?.status === 'connected' && !deleteRemote?.checked;
+      const remoteCheckUnavailable = deletePreviewState?.remote?.checked === false;
+      const connectedWithoutRemoteDelete = Boolean(deletePreviewState?.requires_remote_ack)
+        && !deleteRemote?.checked;
+      const fallbackConnectedWithoutRemoteDelete = remoteCheckUnavailable
+        && deletePreviewState?.source?.status === 'connected'
+        && !deleteRemote?.checked;
 
       if (replacement) replacement.required = needsReplacement;
-      if (deleteRemoteAckRow) deleteRemoteAckRow.hidden = !connectedWithoutRemoteDelete;
+      const needsRemoteAcknowledgement = connectedWithoutRemoteDelete || fallbackConnectedWithoutRemoteDelete;
+      if (deleteRemoteAckRow) deleteRemoteAckRow.hidden = !needsRemoteAcknowledgement;
       if (acknowledgeRemote) {
-        acknowledgeRemote.required = connectedWithoutRemoteDelete;
-        if (!connectedWithoutRemoteDelete) acknowledgeRemote.checked = false;
+        acknowledgeRemote.required = needsRemoteAcknowledgement;
+        if (!needsRemoteAcknowledgement) acknowledgeRemote.checked = false;
       }
 
       const ready = Boolean(deletePreviewState?.ok)
         && (!needsReplacement || Boolean(replacement?.value))
         && Boolean(acknowledgeDependencies?.checked)
         && confirmation?.value.trim() === expected
-        && (!connectedWithoutRemoteDelete || Boolean(acknowledgeRemote?.checked));
-      if (deleteSubmit) deleteSubmit.disabled = !ready;
+        && (!needsRemoteAcknowledgement || Boolean(acknowledgeRemote?.checked));
+      if (deleteSubmit) {
+        deleteSubmit.disabled = !ready;
+        const remoteMissing = deletePreviewState?.remote?.exists === false;
+        deleteSubmit.textContent = remoteMissing
+          ? (needsReplacement ? 'Transferir e remover' : 'Remover do RS Connect')
+          : (needsReplacement ? 'Transferir e excluir' : 'Excluir conexão');
+      }
     };
 
     const renderDeletePreview = (payload) => {
@@ -1799,6 +1814,43 @@ document.addEventListener('DOMContentLoaded', () => {
         const labels = { connected: 'Conectada', disconnected: 'Desconectada', pending: 'Pendente' };
         deleteStatus.textContent = labels[payload.source?.status] || payload.source?.status || 'Verificada';
         deleteStatus.className = `badge badge-${payload.source?.status || 'warning'}`;
+      }
+
+      const remote = payload.remote || {};
+      const deleteRemote = deleteField('delete_remote');
+      if (remote.exists === false) {
+        if (deleteStatus) {
+          deleteStatus.textContent = 'Somente no RS Connect';
+          deleteStatus.className = 'badge badge-warning';
+        }
+        if (deleteRemote) {
+          deleteRemote.checked = false;
+          deleteRemote.disabled = true;
+        }
+        if (deleteRemoteRow) deleteRemoteRow.hidden = true;
+        if (deleteRemoteState) {
+          deleteRemoteState.className = 'instance-delete-remote-state is-success';
+          deleteRemoteState.textContent = remote.message || 'A conexão externa já não existe. Será removido somente o cadastro do RS Connect.';
+        }
+        if (deleteDescription) {
+          deleteDescription.textContent = 'A conexão externa já não existe. Revise os vínculos e remova somente o cadastro que permaneceu no RS Connect.';
+        }
+      } else {
+        const unavailable = remote.checked === false;
+        const connected = remote.connected === true;
+        if (deleteStatus && remote.checked === true) {
+          deleteStatus.textContent = connected ? 'Ativa fora do RS Connect' : 'Desconectada fora';
+          deleteStatus.className = `badge ${connected ? 'badge-danger' : 'badge-warning'}`;
+        } else if (deleteStatus && unavailable) {
+          deleteStatus.textContent = 'Situação não confirmada';
+          deleteStatus.className = 'badge badge-warning';
+        }
+        if (deleteRemote) deleteRemote.disabled = false;
+        if (deleteRemoteRow) deleteRemoteRow.hidden = false;
+        if (deleteRemoteState) {
+          deleteRemoteState.className = `instance-delete-remote-state ${unavailable ? 'is-warning' : connected ? 'is-danger' : 'is-info'}`;
+          deleteRemoteState.textContent = remote.message || 'A situação externa foi verificada.';
+        }
       }
 
       const conflicts = payload.conflicts || {};
@@ -1870,16 +1922,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const deleteRemote = deleteField('delete_remote');
         const name = document.querySelector('[data-instance-delete-name]');
         const hint = document.querySelector('[data-instance-delete-hint]');
-        const description = document.querySelector('[data-instance-delete-description]');
         const managed = button.dataset.managementMode === 'managed';
 
         if (id) id.value = button.dataset.id || '';
         instanceDeleteForm.dataset.instanceName = button.dataset.instanceName || '';
         if (name) name.textContent = button.dataset.name || 'Conexão';
-        if (deleteRemote) deleteRemote.checked = managed;
-        if (description) description.textContent = managed
-          ? 'Esta conexão foi criada pelo RS Connect. Revise os vínculos e confirme se a instância remota também deve ser removida.'
-          : 'Esta conexão foi vinculada ao RS Connect. A remoção na Evolution permanece opcional por segurança.';
+        if (deleteRemote) {
+          deleteRemote.checked = managed;
+          deleteRemote.disabled = false;
+        }
+        if (deleteRemoteRow) deleteRemoteRow.hidden = false;
+        if (deleteRemoteState) {
+          deleteRemoteState.className = 'instance-delete-remote-state';
+          deleteRemoteState.textContent = 'Verificando a conexão externa...';
+        }
+        if (deleteDescription) deleteDescription.textContent = managed
+          ? 'Esta conexão foi criada pelo RS Connect. O sistema verificará se ela ainda existe fora da plataforma.'
+          : 'Esta conexão foi vinculada ao RS Connect. O sistema verificará se ela ainda existe fora da plataforma.';
         if (confirmation) {
           confirmation.value = '';
           confirmation.placeholder = `EXCLUIR ${button.dataset.instanceName || ''}`;
@@ -1911,13 +1970,17 @@ document.addEventListener('DOMContentLoaded', () => {
         setDeleteMessage(deleteError, 'Revise os vínculos, a conexão substituta e as confirmações antes de excluir.', true);
         return;
       }
-      if (!window.confirm('Confirma a transferência dos vínculos e a exclusão definitiva desta conexão?')) {
+      const remoteMissing = deletePreviewState?.remote?.exists === false;
+      const confirmationMessage = remoteMissing
+        ? 'Confirma a transferência dos vínculos e a remoção do cadastro desta conexão no RS Connect?'
+        : 'Confirma a transferência dos vínculos e a exclusão definitiva desta conexão?';
+      if (!window.confirm(confirmationMessage)) {
         event.preventDefault();
         return;
       }
       if (deleteSubmit) {
         deleteSubmit.disabled = true;
-        deleteSubmit.textContent = 'Transferindo e excluindo...';
+        deleteSubmit.textContent = remoteMissing ? 'Removendo cadastro...' : 'Transferindo e excluindo...';
       }
     });
   }
@@ -3429,3 +3492,5 @@ document.addEventListener('change', (event) => {
     } catch (_) {}
   });
 })();
+
+// RS Connect 36.20.6 — exclusão assistida detecta conexão externa ausente.

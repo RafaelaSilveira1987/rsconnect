@@ -11755,3 +11755,68 @@ html.reduce-motion *::after {
   .context-help-footer .btn { width: 100%; }
   .docs-quick-start-grid { grid-template-columns: 1fr; }
 }
+
+/* RS Connect 36.20.6 — exclusão assistida reconhece conexão externa já removida */
+.instance-delete-remote-state {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid #dbe5ec;
+    border-radius: 13px;
+    background: #f8fafc;
+    color: #526174;
+    font-size: .72rem;
+    font-weight: 700;
+    line-height: 1.45;
+}
+.instance-delete-remote-state::before {
+    content: "";
+    flex: 0 0 9px;
+    width: 9px;
+    height: 9px;
+    margin-top: 4px;
+    border-radius: 999px;
+    background: #94a3b8;
+    box-shadow: 0 0 0 4px rgba(148, 163, 184, .14);
+}
+.instance-delete-remote-state.is-success {
+    border-color: #a9dfcf;
+    background: #effaf6;
+    color: #176b58;
+}
+.instance-delete-remote-state.is-success::before {
+    background: #16a085;
+    box-shadow: 0 0 0 4px rgba(22, 160, 133, .13);
+}
+.instance-delete-remote-state.is-info {
+    border-color: #b9d9e9;
+    background: #f0f8fc;
+    color: #315f7d;
+}
+.instance-delete-remote-state.is-info::before {
+    background: #3186b8;
+    box-shadow: 0 0 0 4px rgba(49, 134, 184, .13);
+}
+.instance-delete-remote-state.is-warning {
+    border-color: #edcf8e;
+    background: #fff9eb;
+    color: #815b16;
+}
+.instance-delete-remote-state.is-warning::before {
+    background: #d6971d;
+    box-shadow: 0 0 0 4px rgba(214, 151, 29, .13);
+}
+.instance-delete-remote-state.is-danger {
+    border-color: #edb8bd;
+    background: #fff4f5;
+    color: #9f303a;
+}
+.instance-delete-remote-state.is-danger::before {
+    background: #c74450;
+    box-shadow: 0 0 0 4px rgba(199, 68, 80, .13);
+}
+[data-instance-delete-remote-row][hidden],
+[data-instance-delete-remote-ack][hidden] {
+    display: none !important;
+}

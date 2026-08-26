@@ -13,6 +13,7 @@ Este índice reúne a documentação operacional, técnica, de implantação e c
 - [Guia para criar uma conexão do WhatsApp](guia-criacao-instancia.md)
 - [Guia de conexão pelo QR Code](guia-conexao-qrcode.md)
 - [Guia para excluir uma conexão sem perder dados](guia-exclusao-assistida-instancia.md)
+- [Excluir cadastro quando a conexão externa já não existe](correcao-exclusao-conexao-ausente.md)
 - [Guia de configuração dos assistentes](guia-configuracao-assistentes.md)
 - [Guia de filas e atendimento humano](guia-filas-atendimento-humano.md)
 - [Guia de consumo e economia de IA](guia-consumo-ia.md)
@@ -42,5 +43,6 @@ Este índice reúne a documentação operacional, técnica, de implantação e c
 - A v36.20.3 padronizou formulários, gavetas, controles e responsividade.
 - A v36.20.4 corrigiu sobreposições e reorganizou painéis administrativos.
 - A v36.20.5 adicionou ajuda em cada página, atalhos e preferências de acessibilidade.
+- A v36.20.6 corrigiu a exclusão quando a conexão externa já foi removida.
 
 - [Guia de clientes que precisam de atenção](guia-clientes-que-precisam-atencao.md)

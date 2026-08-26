@@ -411,14 +411,15 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
             </section>
 
             <section class="drawer-section danger-zone">
-                <div class="drawer-section-title"><div><span class="eyebrow">3. Remoção</span><h3>Defina o que será apagado</h3></div></div>
-                <label class="check-field drawer-check drawer-span" data-instance-delete-remote-row><input type="checkbox" name="delete_remote" value="1" data-instance-delete-field="delete_remote"><span><strong>Excluir também do serviço do WhatsApp</strong><small>Desconecta o número e remove a conexão fora do RS Connect. Para usar o número novamente será necessário criar outra conexão.</small></span></label>
+                <div class="drawer-section-title"><div><span class="eyebrow">3. Remoção</span><h3>Defina o que será apagado</h3><p>O RS Connect confirma primeiro se essa conexão ainda existe no serviço externo do WhatsApp.</p></div></div>
+                <div class="instance-delete-remote-state" data-instance-delete-remote-state role="status">Verificando a conexão externa...</div>
+                <label class="check-field drawer-check drawer-span" data-instance-delete-remote-row><input type="checkbox" name="delete_remote" value="1" data-instance-delete-field="delete_remote"><span><strong>Excluir também do serviço do WhatsApp</strong><small>Remove a conexão fora do RS Connect. Para usar o número novamente será necessário criar outra conexão.</small></span></label>
                 <label class="check-field drawer-check drawer-span" data-instance-delete-remote-ack hidden><input type="checkbox" name="acknowledge_remote_active" value="1" data-instance-delete-field="acknowledge_remote_active"><span><strong>Entendo que a conexão continuará ativa fora do RS Connect</strong><small>Use somente quando quiser remover o canal do RS Connect sem apagar a conexão externa.</small></span></label>
                 <label class="check-field drawer-check drawer-span is-required"><input type="checkbox" name="acknowledge_dependencies" value="1" data-instance-delete-field="acknowledge_dependencies" required><span><strong>Revisei os vínculos e o destino informado</strong><small>Confirmo que os dados operacionais devem ser transferidos ou que esta conexão não possui vínculos.</small></span></label>
                 <label class="field drawer-span"><span>Confirmação final</span><input name="confirmation" autocomplete="off" data-instance-delete-field="confirmation" required><small class="field-hint" data-instance-delete-hint></small></label>
             </section>
 
-            <div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="instance-delete-drawer">Cancelar</button><button class="btn btn-danger" type="submit" data-instance-delete-submit disabled>Transferir e excluir</button></div>
+            <div class="drawer-savebar"><button class="btn btn-quiet" type="button" data-close-panel="instance-delete-drawer">Cancelar</button><button class="btn btn-danger" type="submit" data-instance-delete-submit disabled>Revisar e remover</button></div>
         </form>
     </div>
 </aside>

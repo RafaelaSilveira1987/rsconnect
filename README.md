@@ -1,17 +1,15 @@
-# RS Connect — v36.20.5
+# RS Connect — v36.20.6
 
-Esta versão acrescenta ajuda contextual, onboarding com linguagem simples e recursos de acessibilidade para tornar a plataforma mais fácil de aprender.
+Esta versão corrige a exclusão assistida quando o cadastro ainda existe no RS Connect, mas a conexão já foi removida diretamente no serviço externo do WhatsApp.
 
 ## Principais melhorias
 
-- botão de ajuda específico para cada página;
-- atalho `?` para abrir a ajuda;
-- passo a passo, dicas e explicação de termos;
-- texto maior e redução de movimentos;
-- navegação por teclado e foco visível;
-- link para pular ao conteúdo principal;
-- Primeiros passos com nomes mais claros;
-- atalhos documentados na Central de ajuda.
+- verifica a existência real da conexão externa antes de exigir confirmações;
+- permite remover somente o cadastro local quando a conexão externa já não existe;
+- oculta a opção de exclusão externa quando ela não se aplica;
+- trata exclusão externa já realizada como uma operação concluída, não como erro;
+- mantém a transferência segura de assistentes, contatos, conversas, campanhas e relatórios;
+- registra na auditoria se a conexão foi removida agora ou já estava ausente.
 
 ## Banco de dados
 
@@ -21,4 +19,4 @@ Não há migration nova. A última migration obrigatória continua sendo:
 database/migrations/085_ai_commercial_attention_queue.sql
 ```
 
-Consulte `INSTRUCOES-v36.20.5.md`, `docs/guias/guia-ajuda-contextual-acessibilidade.md` e `docs/guias/relatorio-usabilidade-v36.20.5.md`.
+Consulte `INSTRUCOES-v36.20.6.md` e `docs/guias/correcao-exclusao-conexao-ausente.md`.
