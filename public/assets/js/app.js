@@ -116,26 +116,66 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 
-  const closePanel = (panel) => panel?.classList.remove('is-open');
+  const panelFocusOrigins = new WeakMap();
+  const panelFocusable = (panel) => Array.from(panel?.querySelectorAll?.(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+  ) || []).filter((element) => !element.hidden && element.offsetParent !== null);
+  const openPanel = (panel, trigger = null) => {
+    if (!panel) return;
+    if (trigger instanceof HTMLElement) panelFocusOrigins.set(panel, trigger);
+    panel.classList.add('is-open');
+    panel.setAttribute('role', panel.getAttribute('role') || 'dialog');
+    panel.setAttribute('aria-modal', panel.getAttribute('aria-modal') || 'true');
+    panel.setAttribute('aria-hidden', 'false');
+    window.requestAnimationFrame(() => panelFocusable(panel)[0]?.focus());
+  };
+  const closePanel = (panel) => {
+    if (!panel) return;
+    panel.classList.remove('is-open');
+    panel.setAttribute('aria-hidden', 'true');
+    const origin = panelFocusOrigins.get(panel);
+    origin?.focus?.();
+  };
+  document.querySelectorAll('.conversation-details').forEach((panel) => {
+    panel.setAttribute('aria-hidden', panel.classList.contains('is-open') ? 'false' : 'true');
+  });
   document.querySelectorAll('[data-toggle-panel]').forEach((button) => {
     button.addEventListener('click', () => {
       const panel = document.getElementById(button.dataset.togglePanel || '');
-      panel?.classList.toggle('is-open');
+      if (!panel) return;
+      if (panel.classList.contains('is-open')) closePanel(panel);
+      else openPanel(panel, button);
     });
   });
   document.querySelectorAll('[data-close-panel]').forEach((button) => {
     button.addEventListener('click', () => closePanel(document.getElementById(button.dataset.closePanel || '')));
   });
   document.addEventListener('keydown', (event) => {
+    const openPanels = Array.from(document.querySelectorAll('.conversation-details.is-open'));
+    const activePanel = openPanels[openPanels.length - 1];
     if (event.key === 'Escape') {
       closeSidebar();
-      document.querySelectorAll('.conversation-details.is-open').forEach((panel) => panel.classList.remove('is-open'));
+      openPanels.forEach((panel) => closePanel(panel));
+      return;
+    }
+    if (event.key === 'Tab' && activePanel) {
+      const items = panelFocusable(activePanel);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
   });
   document.addEventListener('click', (event) => {
     document.querySelectorAll('.conversation-details.is-open').forEach((panel) => {
       const toggleClicked = event.target.closest?.('[data-toggle-panel="' + panel.id + '"]');
-      if (!panel.contains(event.target) && !toggleClicked) panel.classList.remove('is-open');
+      if (!panel.contains(event.target) && !toggleClicked) closePanel(panel);
     });
   });
 
@@ -3265,4 +3305,127 @@ document.addEventListener('change', (event) => {
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
   else start();
+})();
+
+// RS Connect 36.20.5 — ajuda contextual, onboarding e acessibilidade.
+(function () {
+  const ready = (callback) => {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', callback, { once: true });
+    else callback();
+  };
+
+  ready(() => {
+    const drawer = document.querySelector('[data-context-help-drawer]');
+    const backdrop = document.querySelector('[data-context-help-backdrop]');
+    const openButtons = document.querySelectorAll('[data-context-help-open]');
+    const closeButtons = document.querySelectorAll('[data-context-help-close]');
+    const live = document.querySelector('[data-app-live-region]');
+    const main = document.getElementById('main-content');
+    const readingButton = document.querySelector('[data-reading-mode-toggle]');
+    const motionButton = document.querySelector('[data-reduced-motion-toggle]');
+    let lastFocused = null;
+
+    const announce = (message) => {
+      if (!live) return;
+      live.textContent = '';
+      window.setTimeout(() => { live.textContent = message; }, 20);
+    };
+
+    const focusable = () => drawer
+      ? Array.from(drawer.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+        .filter((element) => !element.hidden && element.offsetParent !== null)
+      : [];
+
+    const openHelp = () => {
+      if (!drawer || !backdrop) return;
+      lastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      drawer.hidden = false;
+      backdrop.hidden = false;
+      document.body.classList.add('context-help-open');
+      window.requestAnimationFrame(() => {
+        drawer.classList.add('is-open');
+        backdrop.classList.add('is-open');
+        focusable()[0]?.focus();
+      });
+      announce('Ajuda desta página aberta.');
+      try { window.localStorage.setItem('rs-context-help-seen', '1'); } catch (_) {}
+    };
+
+    const closeHelp = () => {
+      if (!drawer || !backdrop || drawer.hidden) return;
+      drawer.classList.remove('is-open');
+      backdrop.classList.remove('is-open');
+      document.body.classList.remove('context-help-open');
+      window.setTimeout(() => {
+        drawer.hidden = true;
+        backdrop.hidden = true;
+      }, 180);
+      lastFocused?.focus?.();
+      announce('Ajuda fechada.');
+    };
+
+    openButtons.forEach((button) => button.addEventListener('click', openHelp));
+    closeButtons.forEach((button) => button.addEventListener('click', closeHelp));
+    backdrop?.addEventListener('click', closeHelp);
+
+    document.addEventListener('keydown', (event) => {
+      const target = event.target;
+      const editing = target instanceof HTMLElement && Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+      if (event.key === '?' && !editing && drawer?.hidden) {
+        event.preventDefault();
+        openHelp();
+        return;
+      }
+      if (event.key === 'Escape' && drawer && !drawer.hidden) {
+        event.preventDefault();
+        closeHelp();
+        return;
+      }
+      if (event.key === 'Tab' && drawer && !drawer.hidden) {
+        const items = focusable();
+        if (!items.length) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    });
+
+    document.querySelectorAll('.nav-link.is-active').forEach((link) => link.setAttribute('aria-current', 'page'));
+    document.querySelector('.skip-link')?.addEventListener('click', () => window.setTimeout(() => main?.focus(), 10));
+
+    const applyPreference = (button, storageKey, htmlClass) => {
+      if (!button) return;
+      let active = false;
+      try { active = window.localStorage.getItem(storageKey) === '1'; } catch (_) {}
+      const render = () => {
+        document.documentElement.classList.toggle(htmlClass, active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      };
+      button.addEventListener('click', () => {
+        active = !active;
+        try { window.localStorage.setItem(storageKey, active ? '1' : '0'); } catch (_) {}
+        render();
+        announce(active ? 'Preferência ativada.' : 'Preferência desativada.');
+      });
+      render();
+    };
+
+    applyPreference(readingButton, 'rs-reading-comfort', 'reading-comfort');
+    applyPreference(motionButton, 'rs-reduce-motion', 'reduce-motion');
+
+    // Pequena orientação exibida apenas uma vez, sem bloquear o trabalho.
+    try {
+      if (openButtons.length && window.localStorage.getItem('rs-context-help-seen') !== '1') {
+        const button = openButtons[0];
+        button.classList.add('has-help-hint');
+        button.setAttribute('title', 'Ajuda desta página — clique aqui ou pressione ?');
+      }
+    } catch (_) {}
+  });
 })();

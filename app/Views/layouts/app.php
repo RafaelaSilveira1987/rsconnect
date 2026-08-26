@@ -13,6 +13,7 @@ use App\Services\OperationalAlertService;
 use App\Services\OperationalLanguageService;
 use App\Services\TenantModuleService;
 use App\Services\ClientCommunicationService;
+use App\Services\PageHelpService;
 
 $user = Auth::user();
 $flashes = Flash::all();
@@ -63,6 +64,7 @@ $communicationUnread = (int) ($communicationInbox['unread'] ?? 0);
 $communicationLatest = is_array($communicationInbox['latest'] ?? null) ? $communicationInbox['latest'] : null;
 $tenantAccessStatus = is_array($_SESSION['tenant_access_status'] ?? null) ? $_SESSION['tenant_access_status'] : [];
 $trialStatus = is_array($tenantAccessStatus['trial'] ?? null) ? $tenantAccessStatus['trial'] : [];
+$pageHelp = (new PageHelpService())->forPath($_SERVER['REQUEST_URI'] ?? '/', Auth::isSuperAdmin());
 
 $conversationUnread = 0;
 if (Auth::check() && Auth::can('conversations.view')) {
@@ -129,9 +131,11 @@ $svgIcon = static function (string $name): string {
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
     <!-- Marcador histórico de regressão: app.css?v=36.20.2 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.4')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.5')) ?>">
 </head>
 <body>
+<a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
+<div class="sr-only" aria-live="polite" aria-atomic="true" data-app-live-region></div>
 <div class="app-shell">
     <aside class="sidebar" id="sidebar">
         <a class="brand" href="<?= View::e(Router::url('/')) ?>">
@@ -258,7 +262,7 @@ $svgIcon = static function (string $name): string {
     </aside>
     <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="Fechar menu"></button>
 
-    <main class="main-content">
+    <main class="main-content" id="main-content" tabindex="-1">
         <header class="topbar topbar-v36181">
             <a class="topbar-home" href="<?= View::e(Router::url('/')) ?>" aria-label="Ir para o início"><?= $svgIcon('dashboard') ?></a>
             <div class="topbar-title-block">
@@ -274,7 +278,7 @@ $svgIcon = static function (string $name): string {
                 <div class="topbar-search-results" data-module-search-results hidden></div>
             </div>
             <div class="topbar-actions">
-                <a class="topbar-action-button" href="<?= View::e(Router::url('/ajuda')) ?>" aria-label="Central de ajuda"><?= $svgIcon('help') ?></a>
+                <button class="topbar-action-button" type="button" data-context-help-open aria-label="Abrir ajuda desta página" title="Ajuda desta página — tecla ?"><?= $svgIcon('help') ?></button>
                 <?php if (Auth::isSuperAdmin()): ?>
                     <a class="topbar-notification" href="<?= View::e(Router::url('/operacao-alertas')) ?>" aria-label="Avisos do sistema" data-notification-link data-count-url="<?= View::e(Router::url('/operacao-alertas/count')) ?>">
                         <?= $svgIcon('bell') ?>
@@ -318,6 +322,60 @@ $svgIcon = static function (string $name): string {
         <section class="page-content"><?= $content ?></section>
     </main>
 </div>
+<div class="context-help-backdrop" data-context-help-backdrop hidden></div>
+<aside class="context-help-drawer" data-context-help-drawer hidden role="dialog" aria-modal="true" aria-labelledby="context-help-title">
+    <header class="context-help-header">
+        <div>
+            <span class="eyebrow">Ajuda desta página</span>
+            <h2 id="context-help-title"><?= View::e((string) ($pageHelp['title'] ?? 'Ajuda desta página')) ?></h2>
+            <p><?= View::e((string) ($pageHelp['summary'] ?? '')) ?></p>
+        </div>
+        <button class="icon-button" type="button" data-context-help-close aria-label="Fechar ajuda">×</button>
+    </header>
+    <div class="context-help-body">
+        <?php if (!empty($pageHelp['steps'])): ?>
+            <section class="context-help-section">
+                <span class="eyebrow">Como usar</span>
+                <ol class="context-help-steps">
+                    <?php foreach ((array) $pageHelp['steps'] as $step): ?><li><?= View::e((string) $step) ?></li><?php endforeach; ?>
+                </ol>
+            </section>
+        <?php endif; ?>
+        <?php if (!empty($pageHelp['tips'])): ?>
+            <section class="context-help-section is-tip">
+                <span class="eyebrow">Dicas importantes</span>
+                <ul class="context-help-tips">
+                    <?php foreach ((array) $pageHelp['tips'] as $tip): ?><li><?= View::e((string) $tip) ?></li><?php endforeach; ?>
+                </ul>
+            </section>
+        <?php endif; ?>
+        <?php if (!empty($pageHelp['terms'])): ?>
+            <section class="context-help-section">
+                <span class="eyebrow">O que estes nomes significam?</span>
+                <dl class="context-help-terms">
+                    <?php foreach ((array) $pageHelp['terms'] as $term => $meaning): ?><div><dt><?= View::e((string) $term) ?></dt><dd><?= View::e((string) $meaning) ?></dd></div><?php endforeach; ?>
+                </dl>
+            </section>
+        <?php endif; ?>
+        <section class="context-help-section context-help-accessibility">
+            <span class="eyebrow">Conforto de leitura</span>
+            <button class="context-help-setting" type="button" data-reading-mode-toggle aria-pressed="false">
+                <span><strong>Texto um pouco maior</strong><small>Aumenta textos e campos sem alterar os dados.</small></span>
+                <i aria-hidden="true"></i>
+            </button>
+            <button class="context-help-setting" type="button" data-reduced-motion-toggle aria-pressed="false">
+                <span><strong>Reduzir movimentos</strong><small>Diminui animações e transições da interface.</small></span>
+                <i aria-hidden="true"></i>
+            </button>
+        </section>
+    </div>
+    <footer class="context-help-footer">
+        <a class="btn btn-outline" href="<?= View::e(Router::url((string) ($pageHelp['manual_url'] ?? '/ajuda'))) ?>">Abrir manual completo</a>
+        <?php if (!empty($pageHelp['primary_url']) && !empty($pageHelp['primary_label'])): ?>
+            <a class="btn btn-primary" href="<?= View::e(Router::url((string) $pageHelp['primary_url'])) ?>"><?= View::e((string) $pageHelp['primary_label']) ?></a>
+        <?php endif; ?>
+    </footer>
+</aside>
 <button class="icon-button global-sidebar-toggle" id="sidebarToggle" type="button" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false"><?= $svgIcon('menu') ?></button>
 <?php if (!Auth::isSuperAdmin() && Auth::tenantId()): ?>
 <div class="rs-communication-hub"
@@ -368,6 +426,6 @@ $svgIcon = static function (string $name): string {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
 </button>
 <!-- Marcador histórico de regressão: app.js?v=36.20.2 -->
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.4')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.5')) ?>" defer></script>
 </body>
 </html>

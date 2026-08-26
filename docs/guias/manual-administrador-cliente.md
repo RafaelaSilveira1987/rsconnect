@@ -58,3 +58,7 @@ A memória consolidada também acompanha o contato entre conversas. Isso evita r
 ## Como interpretar os nomes da tela
 
 O sistema usa nomes simples para as tarefas do dia a dia. Por exemplo, **Conexão do WhatsApp** representa a configuração técnica do número; **Chave de acesso** representa a senha usada por um serviço; e **Memória da conversa** representa o resumo que ajuda o assistente a lembrar do atendimento. Os detalhes técnicos ficam em áreas avançadas.
+
+## Ajuda em cada página
+
+Use o botão de ajuda no topo ou pressione `?` para abrir um passo a passo curto da página atual. A lateral também permite aumentar o texto, reduzir movimentos e abrir o manual completo.

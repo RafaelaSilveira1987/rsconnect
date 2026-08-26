@@ -32,6 +32,7 @@ $checks = [
     'assets e versão foram atualizados' => (
         (str_contains($layout, 'app.css?v=36.20.3') && str_contains($layout, 'app.js?v=36.20.3') && str_contains($version, 'RS Connect 36.20.3'))
         || (str_contains($layout, 'app.css?v=36.20.4') && str_contains($layout, 'app.js?v=36.20.4') && str_contains($version, 'RS Connect 36.20.4'))
+        || (str_contains($layout, 'app.css?v=36.20.5') && str_contains($layout, 'app.js?v=36.20.5') && str_contains($version, 'RS Connect 36.20.5'))
     ),
     'relatório de auditoria existe' => str_contains($docs, 'Problemas encontrados')
         && str_contains($docs, 'Regra para novas telas'),

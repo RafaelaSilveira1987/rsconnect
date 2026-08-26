@@ -420,11 +420,11 @@ final class OnboardingGuideService
     {
         return [
             ['key' => 'company_profile', 'title' => 'Cadastro da empresa', 'short' => 'Cadastro', 'subtitle' => 'Etapa 1', 'description' => 'Confira a identificação da empresa e complete os dados operacionais de contato.', 'action_label' => 'Revisar dados', 'action_url' => '/onboarding', 'icon' => 'company'],
-            ['key' => 'lgpd_acceptance', 'title' => 'LGPD e termos', 'short' => 'LGPD', 'subtitle' => 'Etapa 2', 'description' => 'Leia os termos e registre o aceite vinculado ao usuário e à versão vigente da política.', 'action_label' => 'Ler e aceitar', 'action_url' => '/privacy/accept', 'icon' => 'privacy'],
+            ['key' => 'lgpd_acceptance', 'title' => 'Privacidade e termos', 'short' => 'Privacidade', 'subtitle' => 'Etapa 2', 'description' => 'Leia os termos e registre o aceite vinculado ao usuário e à versão vigente da política.', 'action_label' => 'Ler e aceitar', 'action_url' => '/privacy/accept', 'icon' => 'privacy'],
             ['key' => 'attendance_rules', 'title' => 'Como será o atendimento', 'short' => 'Atendimento', 'subtitle' => 'Etapa 3', 'description' => 'Defina horários, tempo de espera, mensagem fora do expediente e transferência para humano antes de criar o agente.', 'action_label' => 'Configurar atendimento', 'action_url' => '#attendance-rules', 'icon' => 'support'],
             ['key' => 'agenda_setup', 'title' => 'Agenda', 'short' => 'Agenda', 'subtitle' => 'Etapa 4', 'description' => 'Escolha se a empresa usará agenda interna, integração configurada ou se esta etapa não se aplica.', 'action_label' => 'Configurar agenda', 'action_url' => '#agenda-setup', 'icon' => 'calendar'],
-            ['key' => 'whatsapp_connection', 'title' => 'Conectar WhatsApp', 'short' => 'WhatsApp', 'subtitle' => 'Etapa 5', 'description' => 'Conecte o canal de atendimento e valide o status da instância antes de criar o agente.', 'action_label' => 'Abrir instâncias', 'action_url' => '/instances', 'icon' => 'whatsapp'],
-            ['key' => 'ai_agent', 'title' => 'Criar agente de IA', 'short' => 'Agente', 'subtitle' => 'Etapa 6', 'description' => 'Use o Prompt Studio para criar instruções consistentes, vincule o WhatsApp e aplique as regras operacionais configuradas nas etapas anteriores.', 'action_label' => 'Abrir agentes', 'action_url' => '/agents', 'icon' => 'ai'],
+            ['key' => 'whatsapp_connection', 'title' => 'Conectar o WhatsApp', 'short' => 'WhatsApp', 'subtitle' => 'Etapa 5', 'description' => 'Conecte o número de atendimento e confirme que ele está pronto antes de criar o assistente.', 'action_label' => 'Abrir conexões', 'action_url' => '/instances', 'icon' => 'whatsapp'],
+            ['key' => 'ai_agent', 'title' => 'Criar o assistente virtual', 'short' => 'Assistente', 'subtitle' => 'Etapa 6', 'description' => 'Escreva instruções claras, escolha em qual número o assistente atuará e use as regras definidas nas etapas anteriores.', 'action_label' => 'Abrir assistentes', 'action_url' => '/agents', 'icon' => 'ai'],
             ['key' => 'final_test', 'title' => 'Teste final', 'short' => 'Teste', 'subtitle' => 'Etapa 7', 'description' => 'Valide uma conversa real, pausa humana, horário e agenda quando aplicável antes de liberar o painel completo.', 'action_label' => 'Executar teste', 'action_url' => '/conversations', 'icon' => 'check'],
         ];
     }
@@ -503,14 +503,14 @@ final class OnboardingGuideService
     {
         $instances = $this->instances($tenantId);
         if (!$instances) {
-            return ['status' => 'pending', 'message' => 'Nenhuma instância WhatsApp cadastrada.'];
+            return ['status' => 'pending', 'message' => 'Nenhuma conexão do WhatsApp foi criada.'];
         }
         foreach ($instances as $instance) {
             if (($instance['status'] ?? '') === 'connected') {
-                return ['status' => 'complete', 'message' => 'Instância conectada: ' . ($instance['name'] ?? $instance['instance_name'] ?? 'WhatsApp') . '.'];
+                return ['status' => 'complete', 'message' => 'WhatsApp conectado: ' . ($instance['name'] ?? $instance['instance_name'] ?? 'WhatsApp') . '.'];
             }
         }
-        return ['status' => 'attention', 'message' => 'Instância criada, mas ainda não está conectada.'];
+        return ['status' => 'attention', 'message' => 'A conexão foi criada, mas o WhatsApp ainda precisa ler o QR Code.'];
     }
 
     /** @return array<string, mixed> */
@@ -518,17 +518,17 @@ final class OnboardingGuideService
     {
         $agents = $this->agents($tenantId);
         if (!$agents) {
-            return ['status' => 'pending', 'message' => 'Nenhum agente IA criado.'];
+            return ['status' => 'pending', 'message' => 'Nenhum assistente virtual foi criado.'];
         }
         $active = array_filter($agents, static fn (array $agent): bool => ($agent['status'] ?? '') === 'active');
         if (!$active) {
-            return ['status' => 'attention', 'message' => 'Agente existe, mas não está ativo.'];
+            return ['status' => 'attention', 'message' => 'O assistente foi criado, mas ainda está desativado.'];
         }
         $credentialOk = $this->aiCredentialOk($tenantId);
         if (!$credentialOk) {
-            return ['status' => 'attention', 'message' => 'Agente ativo, mas revise a credencial de IA.'];
+            return ['status' => 'attention', 'message' => 'O assistente está ativo, mas falta revisar a chave de acesso da IA.'];
         }
-        return ['status' => 'complete', 'message' => 'Agente ativo e credencial de IA encontrada.'];
+        return ['status' => 'complete', 'message' => 'O assistente está ativo e a chave de acesso foi encontrada.'];
     }
 
     /** @return array<string, mixed> */
@@ -730,10 +730,10 @@ final class OnboardingGuideService
     {
         return [
             ['label' => 'Conversas', 'url' => '/conversations'],
-            ['label' => 'Conexões WhatsApp', 'url' => '/instances'],
-            ['label' => 'Agentes IA', 'url' => '/agents'],
+            ['label' => 'Conexões do WhatsApp', 'url' => '/instances'],
+            ['label' => 'Assistentes virtuais', 'url' => '/agents'],
             ['label' => 'Agenda', 'url' => '/calendar'],
-            ['label' => 'Privacidade/LGPD', 'url' => '/privacy'],
+            ['label' => 'Privacidade e termos', 'url' => '/privacy'],
             ['label' => 'Minha assinatura', 'url' => '/subscription'],
         ];
     }

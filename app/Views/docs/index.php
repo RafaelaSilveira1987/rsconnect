@@ -315,6 +315,22 @@ $troubleshooting = [
     </div>
 </section>
 
+<section class="card docs-quick-start" aria-labelledby="docs-quick-start-title">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Comece sem medo</span>
+            <h2 id="docs-quick-start-title">Atalhos e recursos para facilitar o uso</h2>
+            <p>Esses recursos funcionam em todas as páginas e ajudam quem está começando.</p>
+        </div>
+    </div>
+    <div class="docs-quick-start-grid">
+        <article><kbd>Ctrl K</kbd><div><strong>Encontrar uma página</strong><span>Abre a busca do topo para localizar uma função.</span></div></article>
+        <article><kbd>?</kbd><div><strong>Ajuda da página atual</strong><span>Mostra um passo a passo curto sem sair da tela.</span></div></article>
+        <article><kbd>Esc</kbd><div><strong>Fechar painéis</strong><span>Fecha ajuda, menus e janelas abertas quando possível.</span></div></article>
+        <article><kbd>Tab</kbd><div><strong>Navegar pelo teclado</strong><span>Passa por campos, links e botões sem usar o mouse.</span></div></article>
+    </div>
+</section>
+
 <section class="docs-manual-section" style="margin-top:16px">
     <div class="section-heading docs-manual-heading">
         <div>
@@ -326,7 +342,7 @@ $troubleshooting = [
 
     <div class="docs-grid docs-manual-grid">
         <?php foreach ($manuals as $manual): ?>
-            <article class="card docs-card docs-module-card">
+            <article class="card docs-card docs-module-card" id="<?= View::e($manual['slug']) ?>">
                 <div class="docs-card-head">
                     <span class="docs-icon" aria-hidden="true"><?= View::e($manual['code']) ?></span>
                     <div>

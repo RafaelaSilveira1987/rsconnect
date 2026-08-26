@@ -27,9 +27,10 @@ $checks = [
         && str_contains($billing, 'Salvar situação'),
     'meio de pagamento usa linguagem simples' => str_contains($payments, 'Meios de pagamento')
         && str_contains($payments, 'Salvar meio de pagamento'),
-    'assets foram atualizados' => str_contains($layout, 'app.css?v=36.20.4')
-        && str_contains($layout, 'app.js?v=36.20.4')
-        && str_contains($version, 'RS Connect 36.20.4'),
+    'assets foram atualizados' => (
+        (str_contains($layout, 'app.css?v=36.20.4') && str_contains($layout, 'app.js?v=36.20.4') && str_contains($version, 'RS Connect 36.20.4'))
+        || (str_contains($layout, 'app.css?v=36.20.5') && str_contains($layout, 'app.js?v=36.20.5') && str_contains($version, 'RS Connect 36.20.5'))
+    ),
     'documentação foi incluída' => str_contains($docs, 'Problemas observados')
         && str_contains($docs, 'Regra para novas telas'),
 ];

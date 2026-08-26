@@ -21,8 +21,11 @@ Este índice reúne a documentação operacional, técnica, de implantação e c
 - [Guia de histórico de resultados e simulação de planos](guia-rentabilidade-historica-ia.md)
 - [Guia de memória da conversa](guia-memoria-progressiva.md)
 - [Guia de linguagem simples](guia-linguagem-simples.md)
+- [Guia de ajuda contextual e acessibilidade](guia-ajuda-contextual-acessibilidade.md)
 - [Relatório da revisão de linguagem v36.20.1](relatorio-revisao-linguagem-v36.20.1.md)
 - [Relatório da revisão de UI/UX v36.20.3](relatorio-ui-ux-v36.20.3.md)
+- [Relatório da revisão estrutural de UI/UX v36.20.4](relatorio-ui-ux-v36.20.4.md)
+- [Relatório de usabilidade v36.20.5](relatorio-usabilidade-v36.20.5.md)
 
 ## Implantação e validação
 
@@ -37,5 +40,7 @@ Este índice reúne a documentação operacional, técnica, de implantação e c
 - A v36.20.1 adotou linguagem simples nas telas e mensagens.
 - A v36.20.2 criou a lista de clientes que precisam de atenção.
 - A v36.20.3 padronizou formulários, gavetas, controles e responsividade.
+- A v36.20.4 corrigiu sobreposições e reorganizou painéis administrativos.
+- A v36.20.5 adicionou ajuda em cada página, atalhos e preferências de acessibilidade.
 
 - [Guia de clientes que precisam de atenção](guia-clientes-que-precisam-atencao.md)

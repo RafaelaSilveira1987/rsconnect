@@ -73,3 +73,7 @@ Use os nomes exibidos na tela ao orientar clientes e atendentes. Abra **Detalhes
 ## Clientes que precisam de atenção
 
 A tela **Clientes que precisam de atenção** reúne situações de margem, custo, limite e plano em uma fila simples. Use a prioridade, os motivos e o próximo passo sugerido para organizar a revisão. Registre a situação, uma anotação e a próxima data de acompanhamento. Nenhum contrato é alterado automaticamente.
+
+## Ajuda em cada página
+
+Use o botão de ajuda no topo ou pressione `?` para abrir um passo a passo curto da página atual. A lateral também permite aumentar o texto, reduzir movimentos e abrir o manual completo.

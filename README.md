@@ -1,17 +1,17 @@
-# RS Connect — v36.20.4
+# RS Connect — v36.20.5
 
-Esta versão corrige problemas estruturais de UI/UX encontrados no uso real da plataforma, principalmente barras de ação cobrindo campos, formulários desalinhados e painéis que desperdiçavam espaço.
+Esta versão acrescenta ajuda contextual, onboarding com linguagem simples e recursos de acessibilidade para tornar a plataforma mais fácil de aprender.
 
-## Principais correções
+## Principais melhorias
 
-- rodapés de gavetas deixam de cobrir os campos;
-- formulários administrativos usam rolagem e espaçamento previsíveis;
-- acompanhamento de clientes reorganizado sem textos ou botões sobrepostos;
-- agenda comercial movida para não reduzir a largura do funil;
-- alteração de situação da cobrança com rótulo e botão claros;
-- meios de pagamento com nomes mais simples;
-- filtros e botões reorganizados para desktop, tablet e celular;
-- foco, tamanhos de controles e textos de ajuda mantidos consistentes.
+- botão de ajuda específico para cada página;
+- atalho `?` para abrir a ajuda;
+- passo a passo, dicas e explicação de termos;
+- texto maior e redução de movimentos;
+- navegação por teclado e foco visível;
+- link para pular ao conteúdo principal;
+- Primeiros passos com nomes mais claros;
+- atalhos documentados na Central de ajuda.
 
 ## Banco de dados
 
@@ -21,4 +21,4 @@ Não há migration nova. A última migration obrigatória continua sendo:
 database/migrations/085_ai_commercial_attention_queue.sql
 ```
 
-Consulte `INSTRUCOES-v36.20.4.md` e `docs/guias/relatorio-ui-ux-v36.20.4.md`.
+Consulte `INSTRUCOES-v36.20.5.md`, `docs/guias/guia-ajuda-contextual-acessibilidade.md` e `docs/guias/relatorio-usabilidade-v36.20.5.md`.
