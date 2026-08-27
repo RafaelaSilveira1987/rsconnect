@@ -327,6 +327,8 @@ final class EvolutionWebhookController
             $resolvedAgent = null;
             $operatingPolicy = ['enforced' => false, 'inside' => true, 'reason' => 'agent_not_resolved'];
             $outsideBusinessHours = false;
+            $afterHoursPending = ['pending_id' => 0, 'should_ack' => false];
+            $afterHoursAcknowledgement = ['sent' => false, 'reason' => 'not_required'];
             $replyWaitRemaining = 0;
             $waitingReplyWindow = false;
 
@@ -339,9 +341,9 @@ final class EvolutionWebhookController
                         $operatingPolicy = (new AgentOperatingPolicyService())->status($resolvedAgent);
                         $outsideBusinessHours = !empty($operatingPolicy['enforced']) && empty($operatingPolicy['inside']);
 
-                        // 36.18.4: a fila fora do horário é operacional, não exclusiva da IA.
-                        // Quando a conversa já está com a equipe humana (ou com a IA pausada),
-                        // preserva e destaca as mensagens da mesma forma, sem tentar automatizar.
+                        // 36.20.10: a fila e o aviso fora do horário são operacionais.
+                        // A mensagem fixa deve ser enviada tanto em modo IA quanto em modo humano,
+                        // sem chamar o provedor de IA e sem duplicar o aviso no mesmo dia local.
                         if ($outsideBusinessHours) {
                             $modeStatement = $pdo->prepare(
                                 'SELECT attendance_mode FROM conversations WHERE id = :conversation_id AND tenant_id = :tenant_id LIMIT 1'
@@ -351,15 +353,39 @@ final class EvolutionWebhookController
                                 'tenant_id' => (int) $instance['tenant_id'],
                             ]);
                             $attendanceMode = (string) ($modeStatement->fetchColumn() ?: 'ai');
-                            if ($attendanceMode !== 'ai') {
-                                (new AiAfterHoursRecoveryService())->markPending(
-                                    $pdo,
-                                    (int) $instance['tenant_id'],
-                                    $conversationId,
-                                    (int) ($resolvedAgent['id'] ?? 0),
-                                    $storedMessageId > 0 ? $storedMessageId : null,
-                                    'blocked_human'
-                                );
+                            $afterHoursPending = (new AiAfterHoursRecoveryService())->markPending(
+                                $pdo,
+                                (int) $instance['tenant_id'],
+                                $conversationId,
+                                (int) ($resolvedAgent['id'] ?? 0),
+                                $storedMessageId > 0 ? $storedMessageId : null,
+                                $attendanceMode === 'ai' ? 'pending' : 'blocked_human'
+                            );
+
+                            if (!empty($afterHoursPending['should_ack'])) {
+                                try {
+                                    $afterHoursAcknowledgement = (new AiAutomationService())->sendAfterHoursAcknowledgement(
+                                        $pdo,
+                                        $instance,
+                                        $conversationId,
+                                        $resolvedAgent,
+                                        (int) ($afterHoursPending['pending_id'] ?? 0),
+                                        $storedMessageId > 0 ? $storedMessageId : null
+                                    );
+                                } catch (Throwable $exception) {
+                                    $afterHoursAcknowledgement = ['sent' => false, 'reason' => 'send_failed'];
+                                    $processingWarnings[] = 'after_hours_ack';
+                                    $this->logWebhookFailure($exception, [
+                                        'phase' => 'after_hours_ack',
+                                        'event' => $event,
+                                        'instance_id' => (int) ($instance['id'] ?? 0),
+                                        'conversation_id' => $conversationId,
+                                        'stored_message_id' => $storedMessageId,
+                                        'pending_id' => (int) ($afterHoursPending['pending_id'] ?? 0),
+                                    ]);
+                                }
+                            } else {
+                                $afterHoursAcknowledgement = ['sent' => false, 'reason' => 'already_acknowledged'];
                             }
                         }
 
@@ -423,13 +449,16 @@ final class EvolutionWebhookController
 
                 try {
                     if ($outsideBusinessHours) {
-                        // A IA principal ainda será chamada abaixo para registrar a pendência e,
-                        // quando configurado, enviar a mensagem diária de ausência. Agenda/seleção não atua.
+                        // A fila e o aviso já foram tratados na camada operacional acima.
+                        // Nenhuma chamada ao provedor de IA deve ocorrer enquanto a empresa está fechada.
                         $preScheduleResult = [
-                            'skip_ai' => false,
-                            'handled' => false,
+                            'skip_ai' => true,
+                            'handled' => true,
                             'outside_business_hours' => true,
                             'operating_policy' => $operatingPolicy,
+                            'after_hours_pending_id' => (int) ($afterHoursPending['pending_id'] ?? 0),
+                            'after_hours_ack_sent' => !empty($afterHoursAcknowledgement['sent']),
+                            'after_hours_ack_reason' => (string) ($afterHoursAcknowledgement['reason'] ?? ''),
                         ];
                     } elseif ($waitingReplyWindow) {
                         // A mensagem já está persistida. Agenda e respostas fixas esperam o mesmo

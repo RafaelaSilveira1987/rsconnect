@@ -23,6 +23,158 @@ final class AiAutomationService
     ) {
     }
 
+    /**
+     * Envia a mensagem fixa de ausência sem depender do modo IA da conversa.
+     *
+     * A fila fora do horário é operacional: uma conversa em modo humano também
+     * pode avisar o contato que a empresa está fechada. O lock e a releitura do
+     * ack_sent_at impedem respostas duplicadas quando chegam várias mensagens
+     * quase ao mesmo tempo.
+     *
+     * @return array{sent:bool,reason:string}
+     */
+    public function sendAfterHoursAcknowledgement(
+        PDO $pdo,
+        array $instance,
+        int $conversationId,
+        array $agent,
+        int $pendingId = 0,
+        ?int $incomingMessageId = null
+    ): array {
+        $message = trim((string) ($agent['after_hours_message'] ?? ''));
+        if ($message === '') {
+            try {
+                $fallbackStatement = $pdo->prepare(
+                    'SELECT after_hours_message
+                     FROM tenant_onboarding_settings
+                     WHERE tenant_id = :tenant_id
+                     LIMIT 1'
+                );
+                $fallbackStatement->execute(['tenant_id' => (int) ($instance['tenant_id'] ?? 0)]);
+                $message = trim((string) $fallbackStatement->fetchColumn());
+            } catch (Throwable) {
+                // Instalações antigas podem não possuir as configurações do onboarding.
+            }
+        }
+        if ($message === '') {
+            $message = 'No momento estamos fora do horário de atendimento. Assim que retornarmos, daremos continuidade por aqui.';
+        }
+
+        $conversation = $this->conversation($pdo, $conversationId);
+        if (!$conversation || (string) ($conversation['status'] ?? '') === 'closed') {
+            return ['sent' => false, 'reason' => 'conversation_unavailable'];
+        }
+
+        $recipientBlock = $this->nonReplyableRecipientReason($conversation);
+        if ($recipientBlock !== null) {
+            $this->log(
+                (int) ($instance['tenant_id'] ?? 0),
+                $conversationId,
+                (int) ($agent['id'] ?? 0) ?: null,
+                'ai.after_hours',
+                'skipped',
+                $recipientBlock,
+                null,
+                ['acknowledgement' => true, 'non_retryable' => true]
+            );
+            return ['sent' => false, 'reason' => 'recipient_unavailable'];
+        }
+
+        $previousIncomingMessageId = $this->currentIncomingMessageId;
+        $this->currentIncomingMessageId = $incomingMessageId !== null && $incomingMessageId > 0
+            ? $incomingMessageId
+            : $previousIncomingMessageId;
+        $lockName = mb_substr('rs_after_hours_ack_' . $conversationId, 0, 64);
+        $lockAcquired = false;
+
+        try {
+            $lockStatement = $pdo->prepare('SELECT GET_LOCK(:lock_name, 5)');
+            $lockStatement->execute(['lock_name' => $lockName]);
+            $lockAcquired = (int) $lockStatement->fetchColumn() === 1;
+            if (!$lockAcquired) {
+                return ['sent' => false, 'reason' => 'ack_lock_busy'];
+            }
+
+            if ($pendingId > 0) {
+                $pendingStatement = $pdo->prepare(
+                    'SELECT status, ack_sent_at
+                     FROM ai_after_hours_pending
+                     WHERE id = :id AND conversation_id = :conversation_id
+                     LIMIT 1'
+                );
+                $pendingStatement->execute([
+                    'id' => $pendingId,
+                    'conversation_id' => $conversationId,
+                ]);
+                $pending = $pendingStatement->fetch(PDO::FETCH_ASSOC) ?: null;
+                if (is_array($pending)) {
+                    if (!empty($pending['ack_sent_at'])) {
+                        return ['sent' => false, 'reason' => 'already_acknowledged'];
+                    }
+                    if (in_array((string) ($pending['status'] ?? ''), ['recovered', 'cancelled'], true)) {
+                        return ['sent' => false, 'reason' => 'pending_inactive'];
+                    }
+                }
+            }
+
+            $this->sendAutomatedMessage(
+                $pdo,
+                $instance,
+                $conversation,
+                $conversationId,
+                $message,
+                'ai.after_hours',
+                'Mensagem de ausência fora do horário enviada pela automação.'
+            );
+
+            if ($pendingId > 0) {
+                $pdo->prepare(
+                    'UPDATE ai_after_hours_pending
+                     SET ack_sent_at = COALESCE(ack_sent_at, :ack_sent_at)
+                     WHERE id = :id'
+                )->execute([
+                    'ack_sent_at' => \App\Core\Clock::nowUtc(),
+                    'id' => $pendingId,
+                ]);
+            }
+
+            $this->log(
+                (int) ($instance['tenant_id'] ?? 0),
+                $conversationId,
+                (int) ($agent['id'] ?? 0) ?: null,
+                'ai.after_hours',
+                'success',
+                null,
+                $message,
+                [
+                    'pending_recovery' => true,
+                    'acknowledgement' => true,
+                    'attendance_mode' => (string) ($conversation['attendance_mode'] ?? ''),
+                    'agent_name' => (string) ($agent['name'] ?? ''),
+                ]
+            );
+
+            return ['sent' => true, 'reason' => 'sent'];
+        } catch (Throwable $exception) {
+            $this->log(
+                (int) ($instance['tenant_id'] ?? 0),
+                $conversationId,
+                (int) ($agent['id'] ?? 0) ?: null,
+                'ai.after_hours',
+                'error',
+                $exception->getMessage(),
+                null,
+                ['pending_recovery' => true, 'acknowledgement' => true]
+            );
+            throw $exception;
+        } finally {
+            if ($lockAcquired) {
+                $this->releaseConversationLock($pdo, $lockName);
+            }
+            $this->currentIncomingMessageId = $previousIncomingMessageId;
+        }
+    }
+
     public function handleIncoming(array $instance, int $conversationId, string $incomingContent, array $payload): void
     {
         $candidateMessageId = $payload['stored_message_id'] ?? $payload['message_id'] ?? null;

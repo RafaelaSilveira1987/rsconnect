@@ -40,15 +40,29 @@ final class AiAfterHoursRecoveryService
             $resolvedMessageId = (int) ($message['id'] ?? 0) ?: null;
             $receivedAt = (string) ($message['sent_at'] ?? \App\Core\Clock::nowUtc());
             $businessTimezone = (string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo');
+            $agentSchedule = [];
+            $nextAttemptAt = \App\Core\Clock::nowUtc();
             try {
-                $timezoneStatement = $pdo->prepare('SELECT business_timezone FROM ai_agents WHERE id = :agent_id AND tenant_id = :tenant_id LIMIT 1');
+                $timezoneStatement = $pdo->prepare(
+                    'SELECT business_hours_enabled, business_timezone, business_hours_json
+                     FROM ai_agents
+                     WHERE id = :agent_id AND tenant_id = :tenant_id
+                     LIMIT 1'
+                );
                 $timezoneStatement->execute(['agent_id' => $agentId, 'tenant_id' => $tenantId]);
-                $configuredTimezone = trim((string) $timezoneStatement->fetchColumn());
+                $agentSchedule = $timezoneStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+                $configuredTimezone = trim((string) ($agentSchedule['business_timezone'] ?? ''));
                 if ($configuredTimezone !== '') {
                     $businessTimezone = $configuredTimezone;
                 }
+                $nextOpening = (new AgentOperatingPolicyService())->nextOpeningAt($agentSchedule);
+                if ($nextOpening !== null) {
+                    $nextAttemptAt = $nextOpening
+                        ->setTimezone(new \DateTimeZone(\App\Core\Clock::STORAGE_TIMEZONE))
+                        ->format('Y-m-d H:i:s');
+                }
             } catch (Throwable) {
-                // Mantém o fuso padrão do app.
+                // Mantém o fuso padrão e permite tentativa imediata como contingência.
             }
             $existing = $pdo->prepare('SELECT * FROM ai_after_hours_pending WHERE conversation_id = :conversation_id LIMIT 1');
             $existing->execute(['conversation_id' => $conversationId]);
@@ -61,7 +75,7 @@ final class AiAfterHoursRecoveryService
                          first_received_at, last_received_at, status, next_attempt_at)
                      VALUES
                         (:tenant_id, :conversation_id, :agent_id, :message_id, :message_id_last,
-                         :first_received_at, :last_received_at, :initial_status, NOW())'
+                         :first_received_at, :last_received_at, :initial_status, :next_attempt_at)'
                 );
                 $insert->execute([
                     'tenant_id' => $tenantId,
@@ -72,6 +86,7 @@ final class AiAfterHoursRecoveryService
                     'first_received_at' => $receivedAt,
                     'last_received_at' => $receivedAt,
                     'initial_status' => $initialStatus,
+                    'next_attempt_at' => $nextAttemptAt,
                 ]);
                 return ['pending_id' => (int) $pdo->lastInsertId(), 'should_ack' => true];
             }
@@ -98,7 +113,7 @@ final class AiAfterHoursRecoveryService
                      last_received_at = :last_received_at,
                      status = :initial_status,
                      ack_sent_at = :ack_sent_at,
-                     next_attempt_at = NOW(),
+                     next_attempt_at = :next_attempt_at,
                      recovered_at = NULL,
                      recovery_source = NULL,
                      last_error = NULL
@@ -112,6 +127,7 @@ final class AiAfterHoursRecoveryService
                 'first_received_at' => $newWindow ? $receivedAt : (string) ($row['first_received_at'] ?? $receivedAt),
                 'last_received_at' => $receivedAt,
                 'ack_sent_at' => ($newWindow || $newLocalDay) ? null : ($row['ack_sent_at'] ?? null),
+                'next_attempt_at' => $nextAttemptAt,
                 'initial_status' => $initialStatus,
                 'id' => (int) $row['id'],
             ]);
@@ -257,7 +273,19 @@ final class AiAfterHoursRecoveryService
                 }
 
                 if (!$this->insideBusinessHours($row)) {
-                    $this->defer($id, 'pending', null, '+15 minutes');
+                    $nextOpening = (new AgentOperatingPolicyService())->nextOpeningAt($row);
+                    if ($nextOpening !== null) {
+                        $this->deferUntil(
+                            $id,
+                            'pending',
+                            null,
+                            $nextOpening
+                                ->setTimezone(new \DateTimeZone(\App\Core\Clock::STORAGE_TIMEZONE))
+                                ->format('Y-m-d H:i:s')
+                        );
+                    } else {
+                        $this->defer($id, 'pending', null, '+15 minutes');
+                    }
                     $summary['waiting_hours']++;
                     continue;
                 }
@@ -566,9 +594,29 @@ final class AiAfterHoursRecoveryService
         }
     }
 
+    private function deferUntil(int $id, string $status, ?string $error, string $nextAttemptAt): void
+    {
+        try {
+            Database::connection()->prepare(
+                'UPDATE ai_after_hours_pending
+                 SET status = :status, next_attempt_at = :next_attempt_at, last_error = :last_error
+                 WHERE id = :id
+                   AND status <> "cancelled"'
+            )->execute([
+                'status' => $status,
+                'next_attempt_at' => $nextAttemptAt,
+                'last_error' => $error !== null ? mb_substr($error, 0, 500) : null,
+                'id' => $id,
+            ]);
+        } catch (Throwable) {
+        }
+    }
+
     private function defer(int $id, string $status, ?string $error, string $relative): void
     {
-        $next = (new DateTimeImmutable('now'))->modify($relative)->format('Y-m-d H:i:s');
+        $next = (new DateTimeImmutable('now', new \DateTimeZone(\App\Core\Clock::STORAGE_TIMEZONE)))
+            ->modify($relative)
+            ->format('Y-m-d H:i:s');
         try {
             Database::connection()->prepare(
                 'UPDATE ai_after_hours_pending
