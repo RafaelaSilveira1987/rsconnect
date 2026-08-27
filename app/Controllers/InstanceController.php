@@ -14,6 +14,7 @@ use App\Core\View;
 use App\Services\EvolutionService;
 use App\Services\AgentRoutingService;
 use App\Services\SubscriptionService;
+use App\Services\WebhookSecurityService;
 use PDO;
 use Throwable;
 
@@ -1551,10 +1552,10 @@ final class InstanceController
         }
 
         $token = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
-        $webhookUrl = Router::url('/webhooks/evolution?instance_id=' . $instanceId);
-        if ($token !== '') {
-            $webhookUrl .= '&token=' . rawurlencode($token);
+        if ($enabled) {
+            (new WebhookSecurityService())->assertSecretConfigured('evolution', $token, 24);
         }
+        $webhookUrl = Router::url('/webhooks/evolution?instance_id=' . $instanceId);
         $headers = $token !== '' ? ['X-RS-Connect-Token' => $token] : [];
 
         $service->setWebhook(

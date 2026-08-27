@@ -76,13 +76,21 @@
             },
             {
               "name": "X-RS-Connect-Token",
-              "value": "={{ $('Normalizar cobrança').first().json.callback_token || '' }}"
+              "value": "={{ $json.callback_token }}"
+            },
+            {
+              "name": "X-RS-Timestamp",
+              "value": "={{ $json.callback_timestamp }}"
+            },
+            {
+              "name": "X-RS-Signature",
+              "value": "={{ $json.callback_signature }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { tenant_id: $('Normalizar cobrança').first().json.tenant_id, flow_id: $('Normalizar cobrança').first().json.flow_id, event: $('Normalizar cobrança').first().json.event, status: 'success', external_id: $('Normalizar cobrança').first().json.invoice_number, message: 'Mensagem de cobrança disparada pelo n8n' } }}",
+        "jsonBody": "={{ $json.callback_body }}",
         "options": {
           "timeout": 60000
         }
@@ -110,6 +118,19 @@
       ],
       "id": "respond",
       "name": "Responder Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('Normalizar cobrança').first().json;\nconst callbackToken = String(source.callback_token || '');\nif (!callbackToken) throw new Error('callback_token não configurado.');\nconst callbackBody = {\n  tenant_id: source.tenant_id,\n  flow_id: source.flow_id,\n  event: source.event,\n  status: 'success',\n  external_id: source.invoice_number,\n  message: 'Mensagem de cobrança disparada pelo n8n',\n  idempotency_key: `${source.event || 'billing'}:${source.invoice_number || ''}:success`,\n};\nconst rawBody = JSON.stringify(callbackBody);\nconst callbackTimestamp = Math.floor(Date.now() / 1000).toString();\nconst encoder = new TextEncoder();\nconst key = await crypto.subtle.importKey(\n  'raw', encoder.encode(callbackToken),\n  { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']\n);\nconst signature = await crypto.subtle.sign(\n  'HMAC', key, encoder.encode(`${callbackTimestamp}.${rawBody}`)\n);\nconst callbackSignature = Array.from(new Uint8Array(signature))\n  .map((byte) => byte.toString(16).padStart(2, '0')).join('');\nreturn [{ json: { callback_body: callbackBody, callback_token: callbackToken, callback_timestamp: callbackTimestamp, callback_signature: callbackSignature } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -210,
+        0
+      ],
+      "id": "sign-callback-rsconnect",
+      "name": "Assinar callback RS Connect"
     }
   ],
   "connections": {
@@ -139,7 +160,7 @@
       "main": [
         [
           {
-            "node": "Callback RS Connect",
+            "node": "Assinar callback RS Connect",
             "type": "main",
             "index": 0
           }
@@ -151,6 +172,17 @@
         [
           {
             "node": "Responder Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assinar callback RS Connect": {
+      "main": [
+        [
+          {
+            "node": "Callback RS Connect",
             "type": "main",
             "index": 0
           }

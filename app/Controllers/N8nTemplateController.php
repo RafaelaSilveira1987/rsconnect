@@ -7,9 +7,8 @@ namespace App\Controllers;
 use App\Core\Database;
 use App\Core\Env;
 use App\Core\Router;
-use App\Core\RequestSecurity;
 use App\Core\View;
-use App\Services\SecurityService;
+use App\Services\WebhookSecurityService;
 use PDO;
 use Throwable;
 
@@ -307,30 +306,71 @@ final class N8nTemplateController
             $payload = $_POST;
         }
 
-        $configuredToken = trim((string) Env::get('N8N_CALLBACK_TOKEN', ''));
-        $providedToken = trim((string) (
-            $_SERVER['HTTP_X_RS_CONNECT_TOKEN']
-            ?? $_SERVER['HTTP_X_WEBHOOK_TOKEN']
-            ?? $payload['token']
-            ?? RequestSecurity::bearerToken()
-        ));
-        if (!(new SecurityService())->verifyWebhookToken('n8n.callback', $providedToken, $configuredToken)) {
-            http_response_code(401);
-            $this->json(['ok' => false, 'error' => 'Token de callback inválido.']);
-            return;
+        $headers = function_exists('getallheaders') ? (getallheaders() ?: []) : [];
+        if ($headers === []) {
+            $headers = [
+                'X-RS-Connect-Token' => (string) ($_SERVER['HTTP_X_RS_CONNECT_TOKEN'] ?? ''),
+                'X-RS-Timestamp' => (string) ($_SERVER['HTTP_X_RS_TIMESTAMP'] ?? ''),
+                'X-RS-Signature' => (string) ($_SERVER['HTTP_X_RS_SIGNATURE'] ?? ''),
+                'Authorization' => (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? ''),
+            ];
         }
 
-        $tenantId = isset($payload['tenant_id']) ? (int) $payload['tenant_id'] : null;
-        $flowId = isset($payload['flow_id']) ? (int) $payload['flow_id'] : null;
-        $event = trim((string) ($payload['event'] ?? 'n8n.callback'));
-        $status = (string) ($payload['status'] ?? 'info');
-        if (!in_array($status, ['success', 'error', 'info'], true)) {
-            $status = 'info';
-        }
-        $message = mb_substr((string) ($payload['message'] ?? $payload['detail'] ?? ''), 0, 700);
-        $externalId = mb_substr((string) ($payload['external_id'] ?? $payload['google_event_id'] ?? ''), 0, 190);
-
+        $security = new WebhookSecurityService();
+        $claimId = 0;
         try {
+            $configuredToken = trim((string) Env::get('N8N_CALLBACK_TOKEN', ''));
+            $providedToken = $security->header($headers, ['x-rs-connect-token', 'x-webhook-token']);
+            if ($providedToken === '') {
+                $authorization = $security->header($headers, ['authorization']);
+                if (preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches) === 1) {
+                    $providedToken = trim((string) ($matches[1] ?? ''));
+                }
+            }
+            $security->verifyStaticToken(
+                'n8n.callback',
+                $configuredToken,
+                ['x-rs-connect-token' => $providedToken],
+                ['x-rs-connect-token'],
+                24
+            );
+            $security->verifyInternalHmac(
+                'n8n.callback',
+                $raw,
+                $configuredToken,
+                $headers,
+                max(30, (int) Env::get('N8N_WEBHOOK_MAX_AGE_SECONDS', 300))
+            );
+
+            $event = trim((string) ($payload['event'] ?? 'n8n.callback'));
+            $externalId = mb_substr((string) ($payload['external_id'] ?? $payload['google_event_id'] ?? ''), 0, 190);
+            $eventKey = $security->eventKey('n8n', [
+                trim((string) ($payload['idempotency_key'] ?? '')),
+                trim((string) ($payload['event_id'] ?? '')),
+                $externalId !== '' ? $event . '|' . $externalId . '|' . (string) ($payload['tenant_id'] ?? '') : '',
+            ], $raw);
+            $claim = $security->claim('n8n.callback', $eventKey, $raw, [
+                'event' => $event,
+                'tenant_id' => isset($payload['tenant_id']) ? (int) $payload['tenant_id'] : null,
+                'flow_id' => isset($payload['flow_id']) ? (int) $payload['flow_id'] : null,
+                'external_id' => $externalId,
+            ]);
+            if (!empty($claim['duplicate'])) {
+                http_response_code(200);
+                $this->json(['ok' => true, 'logged' => false, 'duplicate' => true]);
+                return;
+            }
+            $claimId = (int) ($claim['id'] ?? 0);
+
+            $tenantId = isset($payload['tenant_id']) ? (int) $payload['tenant_id'] : null;
+            $flowId = isset($payload['flow_id']) ? (int) $payload['flow_id'] : null;
+            $status = (string) ($payload['status'] ?? 'info');
+            if (!in_array($status, ['success', 'error', 'info'], true)) {
+                $status = 'info';
+            }
+            $message = mb_substr((string) ($payload['message'] ?? $payload['detail'] ?? ''), 0, 700);
+            $metadata = $security->sanitize($payload);
+
             Database::connection()->prepare(
                 'INSERT INTO n8n_flow_callback_logs
                     (tenant_id, flow_id, event, status, external_id, message, metadata_json)
@@ -342,16 +382,25 @@ final class N8nTemplateController
                 'event' => $event,
                 'status' => $status,
                 'external_id' => $externalId !== '' ? $externalId : null,
-                'message' => $message !== '' ? $message : null,
-                'metadata_json' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'message' => $message !== '' ? $security->redactText($message) : null,
+                'metadata_json' => json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ]);
-        } catch (Throwable $exception) {
-            http_response_code(500);
-            $this->json(['ok' => false, 'error' => $exception->getMessage()]);
-            return;
-        }
 
-        $this->json(['ok' => true, 'logged' => true]);
+            $security->markProcessed($claimId, 200, ['logged' => true, 'event' => $event]);
+            $this->json(['ok' => true, 'logged' => true]);
+        } catch (Throwable $exception) {
+            $status = $exception->getCode() >= 400 && $exception->getCode() <= 599
+                ? (int) $exception->getCode()
+                : 500;
+            if ($claimId > 0) {
+                $security->markFailed($claimId, $status, $exception);
+            }
+            http_response_code($status);
+            $message = $status === 500
+                ? 'Não foi possível registrar o callback do n8n.'
+                : $security->redactText($exception->getMessage());
+            $this->json(['ok' => false, 'error' => $message]);
+        }
     }
 
     private function monitorToken(): string

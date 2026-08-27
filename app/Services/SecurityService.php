@@ -660,7 +660,7 @@ final class SecurityService
         }
 
         $headers = filter_var(Env::get('SECURITY_HEADERS_ENABLED', true), FILTER_VALIDATE_BOOL);
-        $strict = filter_var(Env::get('SECURITY_WEBHOOK_STRICT', false), FILTER_VALIDATE_BOOL);
+        $strict = (new WebhookSecurityService())->strictMode();
         $checks[] = ['label' => 'Headers de segurança', 'status' => $headers ? 'ok' : 'warning', 'detail' => $headers ? 'Configurados para todas as respostas.' : 'Desativados no ambiente.'];
         $checks[] = ['label' => 'Sessão PHP em modo estrito', 'status' => ini_get('session.use_strict_mode') === '1' ? 'ok' : 'error', 'detail' => ini_get('session.use_strict_mode') === '1' ? 'IDs de sessão não inicializados são recusados.' : 'Ative session.use_strict_mode.'];
         $checks[] = ['label' => 'Cookie de sessão protegido', 'status' => (ini_get('session.cookie_httponly') === '1' && ini_get('session.use_only_cookies') === '1') ? 'ok' : 'error', 'detail' => 'HttpOnly e uso exclusivo de cookies devem permanecer ativos.'];
@@ -696,14 +696,11 @@ final class SecurityService
 
     public function verifyWebhookToken(string $type, ?string $providedToken, ?string $expectedToken): bool
     {
-        $strict = filter_var(Env::get('SECURITY_WEBHOOK_STRICT', false), FILTER_VALIDATE_BOOL);
+        $strict = (new WebhookSecurityService())->strictMode();
         $expected = trim((string) $expectedToken);
         if ($expected === '') {
-            if ($strict) {
-                $this->recordEvent('webhook.token_missing_config', 'error', ['type' => $type]);
-                return false;
-            }
-            return true;
+            $this->recordEvent('webhook.token_missing_config', 'error', ['type' => $type]);
+            return !$strict && (new WebhookSecurityService())->allowInsecureLocal();
         }
 
         $provided = trim((string) $providedToken);

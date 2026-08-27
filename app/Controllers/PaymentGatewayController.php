@@ -82,6 +82,32 @@ final class PaymentGatewayController
         }
 
         $pdo = Database::connection();
+        $existing = [];
+        if ($id > 0) {
+            $current = $pdo->prepare(
+                'SELECT api_key_encrypted, webhook_secret_encrypted FROM payment_gateways WHERE id = :id LIMIT 1'
+            );
+            $current->execute(['id' => $id]);
+            $existing = $current->fetch(PDO::FETCH_ASSOC) ?: [];
+        }
+
+        $apiRequiredProviders = ['asaas', 'mercadopago', 'stripe', 'pagbank'];
+        $webhookSecretProviders = ['asaas', 'mercadopago', 'stripe', 'infinitepay', 'external'];
+        $hasStoredApiKey = trim((string) ($existing['api_key_encrypted'] ?? '')) !== '';
+        $hasStoredWebhookSecret = trim((string) ($existing['webhook_secret_encrypted'] ?? '')) !== '';
+        if ($status === 'active' && in_array($provider, $apiRequiredProviders, true) && $apiKey === '' && !$hasStoredApiKey) {
+            Flash::set('error', 'Informe a chave de acesso do provedor antes de ativar o gateway.');
+            $this->redirect('/payment-gateways');
+        }
+        if ($status === 'active' && in_array($provider, $webhookSecretProviders, true) && $webhookSecret === '' && !$hasStoredWebhookSecret) {
+            Flash::set('error', 'Informe o segredo/token de autenticação do webhook antes de ativar o gateway.');
+            $this->redirect('/payment-gateways');
+        }
+        if ($provider === 'pagbank') {
+            // O PagBank valida x-authenticity-token usando o próprio Token da API.
+            $webhookSecret = '';
+        }
+
         try {
             $pdo->beginTransaction();
             if ($isDefault === 1) {
@@ -89,9 +115,6 @@ final class PaymentGatewayController
             }
 
             if ($id > 0) {
-                $current = $pdo->prepare('SELECT api_key_encrypted, webhook_secret_encrypted FROM payment_gateways WHERE id = :id LIMIT 1');
-                $current->execute(['id' => $id]);
-                $existing = $current->fetch(PDO::FETCH_ASSOC) ?: [];
                 $statement = $pdo->prepare(
                     'UPDATE payment_gateways
                      SET label = :label, provider = :provider, environment = :environment, api_base_url = :api_base_url,
@@ -103,7 +126,9 @@ final class PaymentGatewayController
                 );
                 $params = ['id' => $id];
                 $apiKeyEncrypted = $apiKey !== '' ? Crypto::encrypt($apiKey) : (string) ($existing['api_key_encrypted'] ?? '');
-                $webhookSecretEncrypted = $webhookSecret !== '' ? Crypto::encrypt($webhookSecret) : (string) ($existing['webhook_secret_encrypted'] ?? '');
+                $webhookSecretEncrypted = $provider === 'pagbank'
+                    ? ''
+                    : ($webhookSecret !== '' ? Crypto::encrypt($webhookSecret) : (string) ($existing['webhook_secret_encrypted'] ?? ''));
                 $action = 'payment.gateway_updated';
             } else {
                 $statement = $pdo->prepare(
@@ -116,7 +141,9 @@ final class PaymentGatewayController
                 );
                 $params = [];
                 $apiKeyEncrypted = $apiKey !== '' ? Crypto::encrypt($apiKey) : '';
-                $webhookSecretEncrypted = $webhookSecret !== '' ? Crypto::encrypt($webhookSecret) : '';
+                $webhookSecretEncrypted = $provider === 'pagbank'
+                    ? ''
+                    : ($webhookSecret !== '' ? Crypto::encrypt($webhookSecret) : '');
                 $action = 'payment.gateway_created';
             }
 
@@ -254,9 +281,15 @@ final class PaymentGatewayController
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['ok' => true] + $result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         } catch (Throwable $exception) {
-            http_response_code(401);
+            $status = $exception->getCode() >= 400 && $exception->getCode() <= 599
+                ? (int) $exception->getCode()
+                : 500;
+            http_response_code($status);
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['ok' => false, 'error' => $exception->getMessage()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $message = $status === 500
+                ? 'Não foi possível processar o webhook de pagamento.'
+                : $exception->getMessage();
+            echo json_encode(['ok' => false, 'error' => $message], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
         exit;
     }

@@ -15,6 +15,7 @@ $authController = $read('app/Controllers/AuthController.php');
 $evolution = $read('app/Controllers/EvolutionWebhookController.php');
 $n8n = $read('app/Controllers/N8nTemplateController.php');
 $payments = $read('app/Services/PaymentGatewayService.php');
+$webhookSecurity = $read('app/Services/WebhookSecurityService.php');
 $routes = $read('routes/web.php');
 $migration = $read('database/migrations/072_security_session_webhook_hardening.sql');
 $diagnostic = $read('database/diagnostics/security_hardening_v36.11.1.sql');
@@ -62,19 +63,25 @@ $checks = [
         && str_contains($security, 'security_rate_limits')
         && str_contains($router, "header('Retry-After: '")
         && str_contains($security, "'status' => 429"),
-    'Evolution usa verificação central de token' => str_contains($evolution, "verifyWebhookToken('evolution'")
-        && str_contains($evolution, 'RequestSecurity::bearerToken()'),
-    'callback n8n usa verificação central de token' => str_contains($n8n, "verifyWebhookToken('n8n.callback'")
-        && str_contains($n8n, 'RequestSecurity::bearerToken()'),
-    'gateways exigem segredo no modo estrito' => str_contains($payments, "Env::get('SECURITY_WEBHOOK_STRICT'")
-        && str_contains($payments, 'return !$strict;'),
+    'Evolution usa verificação central de token' => str_contains($evolution, 'WebhookSecurityService')
+        && str_contains($evolution, "verifyStaticToken(")
+        && !str_contains($evolution, "\$_GET['token']"),
+    'callback n8n usa verificação central de token' => str_contains($n8n, 'WebhookSecurityService')
+        && str_contains($n8n, 'verifyInternalHmac')
+        && str_contains($n8n, 'X-RS-Timestamp'),
+    'gateways exigem autenticação específica e fail-closed' => str_contains($payments, 'authenticatePaymentWebhook')
+        && str_contains($payments, 'verifyPagBank')
+        && str_contains($payments, 'verifyStripe')
+        && str_contains($webhookSecurity, 'public function strictMode')
+        && str_contains($webhookSecurity, 'return $this->isProduction()')
+        && str_contains($webhookSecurity, "Env::get('SECURITY_WEBHOOK_STRICT', true)"),
     'migration cria buckets de rate limit' => str_contains($migration, 'CREATE TABLE IF NOT EXISTS `security_rate_limits`')
         && str_contains($migration, 'PRIMARY KEY (`bucket_key`)'),
     'diagnóstico cobre novos eventos' => str_contains($diagnostic, 'webhook.rate_limited')
         && str_contains($diagnostic, 'auth.session_absolute_expired'),
-    'produção usa cookie seguro e ativação progressiva do modo estrito' => str_contains($envVps, 'SESSION_COOKIE_SECURE=true')
-        && str_contains($envVps, 'SECURITY_WEBHOOK_STRICT=false')
-        && str_contains($envVps, 'Após confirmar os tokens'),
+    'produção usa cookie seguro e webhooks fail-closed' => str_contains($envVps, 'SESSION_COOKIE_SECURE=true')
+        && str_contains($envVps, 'SECURITY_WEBHOOK_STRICT=true')
+        && str_contains($envVps, 'SECURITY_WEBHOOK_ALLOW_INSECURE_LOCAL=false'),
     'versão e migration foram atualizadas' => str_contains($version, 'RS Connect 36.15.1')
         && str_contains($version, '075_scheduled_reports_and_deliveries.sql'),
     'cache de assets foi renovado' => str_contains($layout, 'app.css?v=36.15.1')
@@ -100,4 +107,4 @@ if ($failures !== []) {
     exit(1);
 }
 
-echo "OK - sessão, CSRF, login e webhooks reforçados na v36.11.1.\n";
+echo "OK - sessão, CSRF, login e webhooks reforçados e compatíveis com a ENT-028.\n";

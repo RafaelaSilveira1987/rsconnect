@@ -1,0 +1,24 @@
+# ENT-028 — arquivos alterados em relação à v36.20.12
+Files /mnt/data/rsconnect_ent026_base/.env.example and /mnt/data/rsconnect_ent028_work/.env.example differ
+Files /mnt/data/rsconnect_ent026_base/.env.local.example and /mnt/data/rsconnect_ent028_work/.env.local.example differ
+Files /mnt/data/rsconnect_ent026_base/.env.vps.example and /mnt/data/rsconnect_ent028_work/.env.vps.example differ
+Only in /mnt/data/rsconnect_ent028_work: INSTRUCOES-v36.20.13.md
+Files /mnt/data/rsconnect_ent026_base/README.md and /mnt/data/rsconnect_ent028_work/README.md differ
+Files /mnt/data/rsconnect_ent026_base/app/Controllers/EvolutionWebhookController.php and /mnt/data/rsconnect_ent028_work/app/Controllers/EvolutionWebhookController.php differ
+Files /mnt/data/rsconnect_ent026_base/app/Controllers/InstanceController.php and /mnt/data/rsconnect_ent028_work/app/Controllers/InstanceController.php differ
+Files /mnt/data/rsconnect_ent026_base/app/Controllers/N8nTemplateController.php and /mnt/data/rsconnect_ent028_work/app/Controllers/N8nTemplateController.php differ
+Files /mnt/data/rsconnect_ent026_base/app/Controllers/PaymentGatewayController.php and /mnt/data/rsconnect_ent028_work/app/Controllers/PaymentGatewayController.php differ
+Files /mnt/data/rsconnect_ent026_base/app/Services/AppVersionService.php and /mnt/data/rsconnect_ent028_work/app/Services/AppVersionService.php differ
+Files /mnt/data/rsconnect_ent026_base/app/Services/PaymentGatewayService.php and /mnt/data/rsconnect_ent028_work/app/Services/PaymentGatewayService.php differ
+Files /mnt/data/rsconnect_ent026_base/app/Services/SecurityService.php and /mnt/data/rsconnect_ent028_work/app/Services/SecurityService.php differ
+Only in /mnt/data/rsconnect_ent028_work/app/Services: WebhookSecurityService.php
+Files /mnt/data/rsconnect_ent026_base/app/Views/instances/index.php and /mnt/data/rsconnect_ent028_work/app/Views/instances/index.php differ
+Files /mnt/data/rsconnect_ent026_base/app/Views/payment_gateways/index.php and /mnt/data/rsconnect_ent028_work/app/Views/payment_gateways/index.php differ
+Files /mnt/data/rsconnect_ent026_base/composer.json and /mnt/data/rsconnect_ent028_work/composer.json differ
+Only in /mnt/data/rsconnect_ent028_work/database/migrations: 087_webhook_security_events.sql
+Only in /mnt/data/rsconnect_ent028_work/docs: ATUALIZACAO-v36.20.13.md
+Only in /mnt/data/rsconnect_ent028_work/docs/diagnostics: ENT-028-WEBHOOK-SECURITY-v36.20.13.md
+Files /mnt/data/rsconnect_ent026_base/docs/n8n_templates/template-billing-whatsapp-email.json and /mnt/data/rsconnect_ent028_work/docs/n8n_templates/template-billing-whatsapp-email.json differ
+Files /mnt/data/rsconnect_ent026_base/public/assets/js/app.js and /mnt/data/rsconnect_ent028_work/public/assets/js/app.js differ
+Only in /mnt/data/rsconnect_ent028_work/tests/Feature: ent028-webhook-security-smoke.php
+Files /mnt/data/rsconnect_ent026_base/tests/Feature/security-session-webhook-hardening-smoke.php and /mnt/data/rsconnect_ent028_work/tests/Feature/security-session-webhook-hardening-smoke.php differ

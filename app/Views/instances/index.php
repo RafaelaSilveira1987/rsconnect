@@ -2,7 +2,6 @@
 
 use App\Core\Auth;
 use App\Core\Csrf;
-use App\Core\Env;
 use App\Core\Router;
 use App\Core\View;
 
@@ -41,7 +40,6 @@ $connected = count(array_filter($instances, static fn (array $item): bool => ($i
 $pending = count(array_filter($instances, static fn (array $item): bool => in_array(($item['status'] ?? ''), ['pending', 'disconnected'], true)));
 $linkedAgents = array_sum(array_map(static fn (array $item): int => (int) ($item['agents_count'] ?? 0), $instances));
 $statusLabels = ['connected' => 'Conectada', 'disconnected' => 'Desconectada', 'pending' => 'Pendente'];
-$webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
 ?>
 
 <section class="admin-module-hero">
@@ -77,7 +75,7 @@ $webhookToken = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
     <div class="admin-module-card-list" data-admin-card-list>
         <?php foreach ($instances as $instance): ?>
             <?php
-            $webhookUrl = $isSuperAdmin ? Router::url('/webhooks/evolution?instance_id=' . (int) $instance['id'] . ($webhookToken !== '' ? '&token=' . rawurlencode($webhookToken) : '')) : '';
+            $webhookUrl = $isSuperAdmin ? Router::url('/webhooks/evolution?instance_id=' . (int) $instance['id']) : '';
             $searchParts = [$instance['name'], $instance['instance_name']];
             if ($isSuperAdmin) {
                 $searchParts[] = $instance['tenant_name'];

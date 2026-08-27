@@ -18,7 +18,7 @@ final class PaymentGatewayService
         'asaas' => 'Asaas',
         'mercadopago' => 'Mercado Pago',
         'stripe' => 'Stripe',
-        'pagbank' => 'PagBank',
+        'pagbank' => 'PagBank / PagSeguro',
         'infinitepay' => 'InfinitePay — cobrança existente',
         'external' => 'Outro provedor externo',
         'manual' => 'Manual / externo',
@@ -136,8 +136,14 @@ final class PaymentGatewayService
 
     public function handleWebhook(string $provider, array $payload, array $headers = [], string $rawBody = ''): array
     {
-        $provider = strtolower($provider);
+        $provider = strtolower(trim($provider));
         $gateway = $this->gatewayByProvider($provider);
+        if (!$gateway) {
+            throw new RuntimeException('Gateway ativo não configurado para o webhook ' . $provider . '.', 503);
+        }
+
+        $security = new WebhookSecurityService();
+        $claimId = 0;
         $tenantId = null;
         $status = 'ignored';
         $message = 'Evento recebido, mas nenhuma cobrança foi alterada.';
@@ -145,100 +151,129 @@ final class PaymentGatewayService
         $externalId = null;
         $mappedStatus = null;
 
-        if ($gateway && !$this->passesInternalWebhookToken($gateway, $headers, $payload)) {
-            $this->logEvent(null, (int) $gateway['id'], 'payment.webhook_denied', 'error', ['provider' => $provider, 'payload' => $payload]);
-            throw new RuntimeException('Token de webhook inválido.');
-        }
-        if (in_array($provider, ['infinitepay', 'external'], true) && !$gateway) {
-            throw new RuntimeException('Configure um gateway ativo para receber atualizações externas com segurança.');
-        }
+        try {
+            $this->authenticatePaymentWebhook($provider, $gateway, $payload, $headers, $rawBody, $security);
+            $eventKey = $this->paymentWebhookEventKey($provider, $payload, $headers, $rawBody, $security);
+            $claim = $security->claim('payment.' . $provider, $eventKey, $rawBody, [
+                'provider' => $provider,
+                'gateway_id' => (int) $gateway['id'],
+                'event_id' => $this->paymentWebhookExternalEventId($provider, $payload, $headers),
+            ]);
+            if (!empty($claim['duplicate'])) {
+                return [
+                    'status' => 'duplicate',
+                    'message' => 'Evento já processado anteriormente.',
+                    'duplicate' => true,
+                ];
+            }
+            $claimId = (int) ($claim['id'] ?? 0);
 
-        if ($provider === 'asaas') {
-            $event = (string) ($payload['event'] ?? '');
-            $payment = is_array($payload['payment'] ?? null) ? $payload['payment'] : $payload;
-            $invoiceNumber = (string) ($payment['externalReference'] ?? $payload['externalReference'] ?? '');
-            $externalId = (string) ($payment['id'] ?? $payload['id'] ?? '');
-            $mappedStatus = $this->mapAsaasStatus($event, (string) ($payment['status'] ?? ''));
-        } elseif ($provider === 'mercadopago') {
-            $data = is_array($payload['data'] ?? null) ? $payload['data'] : [];
-            $externalId = (string) ($data['id'] ?? $payload['id'] ?? '');
-            $invoiceNumber = (string) ($payload['external_reference'] ?? $payload['externalReference'] ?? '');
-            $mappedStatus = $this->mapMercadoPagoStatus((string) ($payload['status'] ?? $payload['action'] ?? ''));
-            if ($gateway && $externalId !== '' && $invoiceNumber === '') {
-                try {
-                    $details = $this->requestJson('GET', rtrim($this->baseUrl($gateway), '/') . '/v1/payments/' . rawurlencode($externalId), [
-                        'Authorization: Bearer ' . $this->apiKey($gateway),
-                    ]);
-                    $invoiceNumber = (string) ($details['external_reference'] ?? '');
-                    $mappedStatus = $this->mapMercadoPagoStatus((string) ($details['status'] ?? ''));
-                } catch (Throwable) {
-                    // Se a consulta falhar, registra o payload bruto e deixa como ignored.
+            if ($provider === 'asaas') {
+                $event = (string) ($payload['event'] ?? '');
+                $payment = is_array($payload['payment'] ?? null) ? $payload['payment'] : $payload;
+                $invoiceNumber = (string) ($payment['externalReference'] ?? $payload['externalReference'] ?? '');
+                $externalId = (string) ($payment['id'] ?? $payload['id'] ?? '');
+                $mappedStatus = $this->mapAsaasStatus($event, (string) ($payment['status'] ?? ''));
+            } elseif ($provider === 'mercadopago') {
+                $data = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+                $externalId = (string) ($data['id'] ?? $payload['id'] ?? '');
+                $invoiceNumber = (string) ($payload['external_reference'] ?? $payload['externalReference'] ?? '');
+                $mappedStatus = $this->mapMercadoPagoStatus((string) ($payload['status'] ?? $payload['action'] ?? ''));
+                if ($externalId !== '' && $invoiceNumber === '') {
+                    try {
+                        $details = $this->requestJson('GET', rtrim($this->baseUrl($gateway), '/') . '/v1/payments/' . rawurlencode($externalId), [
+                            'Authorization: Bearer ' . $this->apiKey($gateway),
+                        ]);
+                        $invoiceNumber = (string) ($details['external_reference'] ?? '');
+                        $mappedStatus = $this->mapMercadoPagoStatus((string) ($details['status'] ?? ''));
+                    } catch (Throwable) {
+                        // O evento autenticado permanece registrado como ignorado para nova conciliação.
+                    }
+                }
+            } elseif ($provider === 'stripe') {
+                $type = (string) ($payload['type'] ?? '');
+                $object = is_array($payload['data']['object'] ?? null) ? $payload['data']['object'] : $payload;
+                $invoiceNumber = (string) ($object['client_reference_id'] ?? ($object['metadata']['invoice_number'] ?? ''));
+                $externalId = (string) ($object['id'] ?? '');
+                $mappedStatus = $type === 'checkout.session.completed' || (($object['payment_status'] ?? '') === 'paid') ? 'paid' : null;
+            } elseif ($provider === 'pagbank') {
+                $checkout = is_array($payload['checkout'] ?? null) ? $payload['checkout'] : [];
+                $order = is_array($payload['order'] ?? null) ? $payload['order'] : [];
+                $charge = is_array($payload['charges'][0] ?? null) ? $payload['charges'][0] : [];
+                $payment = is_array($payload['payment'] ?? null) ? $payload['payment'] : [];
+
+                $invoiceNumber = (string) (
+                    $payload['reference_id']
+                    ?? $checkout['reference_id']
+                    ?? $order['reference_id']
+                    ?? $charge['reference_id']
+                    ?? $payment['reference_id']
+                    ?? ''
+                );
+                $externalId = (string) (
+                    $payload['id']
+                    ?? $payload['checkout_id']
+                    ?? $checkout['id']
+                    ?? $order['id']
+                    ?? $charge['id']
+                    ?? $payment['id']
+                    ?? ''
+                );
+                $mappedStatus = $this->mapPagBankStatus((string) (
+                    $payload['status']
+                    ?? $checkout['status']
+                    ?? $order['status']
+                    ?? $charge['status']
+                    ?? $payment['status']
+                    ?? $payload['event']
+                    ?? ''
+                ));
+            } elseif (in_array($provider, ['infinitepay', 'external'], true)) {
+                $invoiceNumber = (string) ($payload['invoice_number'] ?? $payload['reference_id'] ?? $payload['external_reference'] ?? '');
+                $externalId = (string) ($payload['external_id'] ?? $payload['charge_id'] ?? $payload['id'] ?? '');
+                $mappedStatus = $this->mapExternalStatus((string) ($payload['status'] ?? $payload['event'] ?? ''));
+            }
+
+            if ($invoiceNumber !== '' || $externalId !== '') {
+                $invoice = $this->findInvoice($invoiceNumber, $externalId);
+                if ($invoice && $mappedStatus) {
+                    $tenantId = (int) $invoice['tenant_id'];
+                    $this->updateInvoiceStatus((int) $invoice['id'], $mappedStatus, $externalId, $payload);
+                    $status = 'success';
+                    $message = 'Cobrança atualizada para ' . $mappedStatus . '.';
                 }
             }
-        } elseif ($provider === 'stripe') {
-            $type = (string) ($payload['type'] ?? '');
-            $object = is_array($payload['data']['object'] ?? null) ? $payload['data']['object'] : $payload;
-            $invoiceNumber = (string) ($object['client_reference_id'] ?? ($object['metadata']['invoice_number'] ?? ''));
-            $externalId = (string) ($object['id'] ?? '');
-            $mappedStatus = $type === 'checkout.session.completed' || (($object['payment_status'] ?? '') === 'paid') ? 'paid' : null;
-        } elseif ($provider === 'pagbank') {
-            $checkout = is_array($payload['checkout'] ?? null) ? $payload['checkout'] : [];
-            $order = is_array($payload['order'] ?? null) ? $payload['order'] : [];
-            $charge = is_array($payload['charges'][0] ?? null) ? $payload['charges'][0] : [];
-            $payment = is_array($payload['payment'] ?? null) ? $payload['payment'] : [];
 
-            $invoiceNumber = (string) (
-                $payload['reference_id']
-                ?? $checkout['reference_id']
-                ?? $order['reference_id']
-                ?? $charge['reference_id']
-                ?? $payment['reference_id']
-                ?? ''
-            );
-            $externalId = (string) (
-                $payload['id']
-                ?? $payload['checkout_id']
-                ?? $checkout['id']
-                ?? $order['id']
-                ?? $charge['id']
-                ?? $payment['id']
-                ?? ''
-            );
-            $mappedStatus = $this->mapPagBankStatus((string) (
-                $payload['status']
-                ?? $checkout['status']
-                ?? $order['status']
-                ?? $charge['status']
-                ?? $payment['status']
-                ?? $payload['event']
-                ?? ''
-            ));
-        } elseif (in_array($provider, ['infinitepay', 'external'], true)) {
-            $invoiceNumber = (string) ($payload['invoice_number'] ?? $payload['reference_id'] ?? $payload['external_reference'] ?? '');
-            $externalId = (string) ($payload['external_id'] ?? $payload['charge_id'] ?? $payload['id'] ?? '');
-            $mappedStatus = $this->mapExternalStatus((string) ($payload['status'] ?? $payload['event'] ?? ''));
-        }
+            $safeLog = [
+                'provider' => $provider,
+                'invoice_number' => $invoiceNumber,
+                'external_id' => $externalId,
+                'mapped_status' => $mappedStatus,
+                'event_id' => $this->paymentWebhookExternalEventId($provider, $payload, $headers),
+            ];
+            $this->logEvent($tenantId, (int) $gateway['id'], 'payment.webhook.' . $provider, $status, $safeLog);
+            $security->markProcessed($claimId, 200, [
+                'provider' => $provider,
+                'status' => $status,
+                'invoice_number' => $invoiceNumber,
+                'external_id' => $externalId,
+            ]);
 
-        if ($invoiceNumber !== '' || $externalId !== '') {
-            $invoice = $this->findInvoice($invoiceNumber, $externalId);
-            if ($invoice && $mappedStatus) {
-                $tenantId = (int) $invoice['tenant_id'];
-                $this->updateInvoiceStatus((int) $invoice['id'], $mappedStatus, $externalId, $payload);
-                $status = 'success';
-                $message = 'Cobrança atualizada para ' . $mappedStatus . '.';
+            return ['status' => $status, 'message' => $message, 'duplicate' => false];
+        } catch (Throwable $exception) {
+            $httpStatus = $exception->getCode() >= 400 && $exception->getCode() <= 599
+                ? (int) $exception->getCode()
+                : 500;
+            if ($claimId > 0) {
+                $security->markFailed($claimId, $httpStatus, $exception);
             }
+            $this->logEvent(null, (int) $gateway['id'], 'payment.webhook_denied.' . $provider, 'error', [
+                'provider' => $provider,
+                'http_status' => $httpStatus,
+                'reason' => $security->redactText($exception->getMessage()),
+            ]);
+            throw $exception;
         }
-
-        $this->logEvent($tenantId, $gateway ? (int) $gateway['id'] : null, 'payment.webhook.' . $provider, $status, [
-            'provider' => $provider,
-            'invoice_number' => $invoiceNumber,
-            'external_id' => $externalId,
-            'mapped_status' => $mappedStatus,
-            'payload' => $payload,
-            'raw' => $rawBody,
-        ]);
-
-        return ['status' => $status, 'message' => $message];
     }
 
     public function importExternalCharge(array $data): array
@@ -920,30 +955,118 @@ final class PaymentGatewayService
         return $encrypted !== '' ? Crypto::decrypt($encrypted) : '';
     }
 
-    private function passesInternalWebhookToken(array $gateway, array $headers, array $payload): bool
-    {
-        $secret = trim($this->webhookSecret($gateway));
-        $strict = filter_var(Env::get('SECURITY_WEBHOOK_STRICT', false), FILTER_VALIDATE_BOOL);
-        if ($secret === '') {
-            return !$strict;
+    /** @param array<string,mixed> $gateway @param array<string,mixed> $payload @param array<string,mixed> $headers */
+    private function authenticatePaymentWebhook(
+        string $provider,
+        array $gateway,
+        array $payload,
+        array $headers,
+        string $rawBody,
+        WebhookSecurityService $security
+    ): void {
+        $maxAge = max(30, (int) Env::get('SECURITY_WEBHOOK_MAX_AGE_SECONDS', 300));
+        if ($provider === 'pagbank') {
+            // PagBank assina com SHA-256(Token da API + "-" + payload bruto).
+            $security->verifyPagBank($rawBody, $this->apiKey($gateway), $headers);
+            return;
         }
-
-        $token = trim((string) ($payload['token'] ?? $_GET['token'] ?? ''));
-        foreach ($headers as $key => $value) {
-            $normalized = strtolower((string) $key);
-            if (in_array($normalized, ['x-rs-payment-token', 'x-webhook-token', 'x-rs-connect-token'], true)) {
-                $token = trim(is_array($value) ? (string) reset($value) : (string) $value);
-                break;
-            }
-            if ($normalized === 'authorization') {
-                $authorization = trim(is_array($value) ? (string) reset($value) : (string) $value);
+        if ($provider === 'stripe') {
+            $security->verifyStripe($rawBody, $this->webhookSecret($gateway), $headers, $maxAge);
+            return;
+        }
+        if ($provider === 'mercadopago') {
+            $data = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+            $dataId = trim((string) (
+                $_GET['data_id']
+                ?? $_GET['data.id']
+                ?? $data['id']
+                ?? $payload['id']
+                ?? ''
+            ));
+            $security->verifyMercadoPago($this->webhookSecret($gateway), $headers, $dataId, $maxAge);
+            return;
+        }
+        if ($provider === 'asaas') {
+            $security->verifyStaticToken(
+                'payment.asaas',
+                $this->webhookSecret($gateway),
+                $headers,
+                ['asaas-access-token'],
+                32
+            );
+            return;
+        }
+        if (in_array($provider, ['infinitepay', 'external'], true)) {
+            $provided = $security->header($headers, ['x-rs-payment-token', 'x-webhook-token', 'x-rs-connect-token']);
+            if ($provided === '') {
+                $authorization = $security->header($headers, ['authorization']);
                 if (preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches) === 1) {
-                    $token = trim((string) ($matches[1] ?? ''));
-                    break;
+                    $provided = trim((string) ($matches[1] ?? ''));
                 }
             }
+            $security->verifyStaticToken(
+                'payment.' . $provider,
+                $this->webhookSecret($gateway),
+                ['x-rs-payment-token' => $provided],
+                ['x-rs-payment-token'],
+                32
+            );
+            return;
         }
-        return $token !== '' && hash_equals($secret, $token);
+
+        throw new RuntimeException('Provedor de webhook não suportado.', 400);
+    }
+
+    /** @param array<string,mixed> $payload @param array<string,mixed> $headers */
+    private function paymentWebhookEventKey(
+        string $provider,
+        array $payload,
+        array $headers,
+        string $rawBody,
+        WebhookSecurityService $security
+    ): string {
+        $eventId = $this->paymentWebhookExternalEventId($provider, $payload, $headers);
+        $status = trim((string) (
+            $payload['status']
+            ?? $payload['event']
+            ?? $payload['action']
+            ?? ($payload['charges'][0]['status'] ?? '')
+            ?? ''
+        ));
+        $occurredAt = trim((string) (
+            $payload['created_at']
+            ?? $payload['updated_at']
+            ?? $payload['dateCreated']
+            ?? $payload['date_created']
+            ?? ''
+        ));
+
+        // Em PagBank, o campo id normalmente identifica a cobrança e pode reaparecer
+        // quando o status muda. Status/data/hash impedem que uma atualização legítima
+        // seja confundida com replay de um evento anterior.
+        $stableCandidate = $provider === 'pagbank'
+            ? implode('|', array_filter([$eventId, $status, $occurredAt, hash('sha256', $rawBody)]))
+            : $eventId;
+
+        return $security->eventKey('payment.' . $provider, [
+            $stableCandidate,
+            trim((string) ($payload['idempotency_key'] ?? '')),
+        ], $rawBody);
+    }
+
+    /** @param array<string,mixed> $payload @param array<string,mixed> $headers */
+    private function paymentWebhookExternalEventId(string $provider, array $payload, array $headers): string
+    {
+        $security = new WebhookSecurityService();
+        return trim((string) match ($provider) {
+            'asaas' => $payload['id'] ?? '',
+            'stripe' => $payload['id'] ?? '',
+            'mercadopago' => $security->header($headers, ['x-request-id'])
+                ?: ($payload['id'] ?? ($payload['data']['id'] ?? '')),
+            'pagbank' => $security->header($headers, ['x-request-id'])
+                ?: ($payload['event_id'] ?? $payload['id'] ?? $payload['checkout_id'] ?? ''),
+            default => $payload['event_id'] ?? $payload['idempotency_key'] ?? $payload['id'] ?? '',
+        });
     }
 
     private function invoiceDescription(array $invoice): string
@@ -1134,13 +1257,18 @@ final class PaymentGatewayService
                  VALUES
                     (:tenant_id, :gateway_id, :event, :status, :external_id, :payload)'
             );
+            $security = new WebhookSecurityService();
+            $safePayload = $security->sanitize($payload);
+            if (isset($safePayload['reason']) && is_string($safePayload['reason'])) {
+                $safePayload['reason'] = $security->redactText($safePayload['reason']);
+            }
             $statement->execute([
                 'tenant_id' => $tenantId,
                 'gateway_id' => $gatewayId,
                 'event' => $event,
                 'status' => $status,
-                'external_id' => (string) ($payload['external_id'] ?? ''),
-                'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'external_id' => mb_substr((string) ($payload['external_id'] ?? $payload['event_id'] ?? ''), 0, 190),
+                'payload' => json_encode($safePayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ]);
         } catch (Throwable) {
             // Log financeiro não deve derrubar webhook.

@@ -1,58 +1,63 @@
-# RS Connect — v36.20.12
+# RS Connect — v36.20.13
 
-Esta versão executa a **ENT-026 / PA-001**, removendo a aplicação duplicada que existia dentro de `tests/` e organizando a suíte de validação em uma estrutura única e segura.
+Esta versão executa a **ENT-028 / PA-002 — Blindagem dos webhooks** e adiciona a configuração completa para gerar cobranças por **PagBank / PagSeguro**.
 
-A matriz comercial, os planos e todas as funcionalidades entregues na v36.20.11 permanecem preservados.
+A base homologada da v36.20.12 foi preservada: `tests/` continua sem uma segunda cópia da aplicação.
 
-## Saneamento da suíte de testes
+## Principais alterações
 
-- 570 arquivos espelhados foram identificados dentro de `tests/`;
-- 465 eram cópias idênticas da aplicação;
-- 105 eram cópias divergentes, principalmente do snapshot v36.18.4;
-- 83 smoke tests foram preservados em `tests/Feature/`;
-- 29 contratos e cenários JSON foram preservados em `tests/Contract/Fixtures/`;
-- a restauração lógica da árvore anterior está documentada por hashes SHA-256.
+- produção opera em modo fail-closed, independentemente de `SECURITY_WEBHOOK_STRICT=false`;
+- segredos ausentes ou com valor de exemplo geram erro de configuração;
+- Evolution API usa token exclusivamente no header, sem token na URL;
+- callback do n8n exige token, timestamp e HMAC-SHA256;
+- PagBank valida `x-authenticity-token` com o Token da API e o payload bruto;
+- Stripe valida `Stripe-Signature` e rejeita timestamps expirados;
+- Mercado Pago valida `x-signature` e `x-request-id`;
+- Asaas valida `asaas-access-token`;
+- eventos críticos usam idempotência persistente em `webhook_security_events`;
+- payloads completos, tokens e dados financeiros deixam de ser gravados nos logs de gateway;
+- o painel de meios de pagamento orienta a configuração PagBank/PagSeguro;
+- o Checkout PagBank gera links para Pix, boleto ou cartão, conforme o método selecionado.
 
-Execute `php tests/Support/run-smoke-tests.php` para rodar a suíte.
+## Migration obrigatória
 
-## Funcionalidades comerciais preservadas
-
-## Matriz comercial padrão
-
-| Plano | IA própria do cliente | IA RS Connect | Canais | Agentes | Usuários |
-|---|---:|---:|---:|---:|---:|
-| Inicial | R$ 69/mês | R$ 99/mês | 1 | 1 | 3 |
-| Profissional | R$ 129/mês | R$ 179/mês | 2 | 2 | 6 |
-| Empresarial | R$ 259/mês | R$ 349/mês | 5 | 5 | 15 |
-
-## Fidelidade
-
-- 3 meses: preço padrão;
-- 6 meses: 8% de desconto mensal;
-- 12 meses: 15% de desconto mensal.
-
-O ciclo de cobrança continua independente do prazo mínimo. É possível, por exemplo, cobrar mensalmente um contrato com permanência mínima de 6 ou 12 meses.
-
-## O que mudou
-
-- seletor entre **IA RS Connect** e **IA própria do cliente**;
-- preços dos cartões recalculados sem recarregar a página;
-- cálculo do valor por canal e do total mínimo do contrato;
-- franquia de respostas exibida somente na modalidade IA RS Connect;
-- edição de dois preços por plano;
-- descontos de 6 e 12 meses configuráveis;
-- assinatura armazena modalidade de IA, fidelidade e término do compromisso;
-- valor mensal sugerido automaticamente ao vincular um plano;
-- limites padrão atualizados para 3 usuários no Inicial, 2 agentes no Profissional e 5 agentes no Empresarial.
-
-## Banco de dados
-
-Execute:
+Execute **antes de publicar o código**:
 
 ```text
-database/migrations/086_plan_ai_mode_and_commitment.sql
+database/migrations/087_webhook_security_events.sql
 ```
 
-A migration é idempotente e preserva assinaturas existentes. O preço legado `monthly_price` passa a acompanhar o valor com IA RS Connect para manter compatibilidade com rotinas antigas.
+Sem a migration, os webhooks críticos retornam erro `503` em vez de operar sem proteção contra replay.
 
-Consulte `INSTRUCOES-v36.20.12.md`, `docs/ATUALIZACAO-v36.20.12.md` e `docs/diagnostics/ENT-026-TESTS-SANITIZATION-v36.20.12.md`.
+## Configuração mínima de produção
+
+```dotenv
+APP_ENV=production
+SECURITY_WEBHOOK_STRICT=true
+SECURITY_WEBHOOK_ALLOW_INSECURE_LOCAL=false
+SECURITY_WEBHOOK_MAX_AGE_SECONDS=300
+SECURITY_WEBHOOK_PROCESSING_STALE_SECONDS=900
+
+EVOLUTION_WEBHOOK_TOKEN=GERE_UM_TOKEN_FORTE_COM_32_OU_MAIS_CARACTERES
+EVOLUTION_WEBHOOK_MAX_AGE_SECONDS=86400
+
+N8N_CALLBACK_TOKEN=GERE_OUTRO_TOKEN_FORTE_COM_32_OU_MAIS_CARACTERES
+N8N_WEBHOOK_MAX_AGE_SECONDS=300
+```
+
+## Testes
+
+```bash
+php tests/Feature/ent026-tests-sanitization-smoke.php
+php tests/Feature/ent028-webhook-security-smoke.php
+php tests/Support/run-smoke-tests.php
+```
+
+## Implantação
+
+Consulte:
+
+- `INSTRUCOES-v36.20.13.md`;
+- `docs/ATUALIZACAO-v36.20.13.md`;
+- `docs/diagnostics/ENT-028-WEBHOOK-SECURITY-v36.20.13.md`;
+- `docs/diagnostics/ENT-028-VALIDATION-v36.20.13.md`.

@@ -23,12 +23,15 @@ use App\Services\ConversationAttachmentService;
 use App\Services\EvolutionService;
 use App\Services\NotificationService;
 use App\Services\PreSchedulingService;
-use App\Services\SecurityService;
+use App\Services\WebhookSecurityService;
 use PDO;
 use Throwable;
 
 final class EvolutionWebhookController
 {
+    private ?WebhookSecurityService $webhookSecurity = null;
+    private ?int $webhookSecurityEventId = null;
+
     public function handle(): void
     {
         header('Content-Type: application/json; charset=UTF-8');
@@ -50,6 +53,7 @@ final class EvolutionWebhookController
             }
 
             $event = $this->normalizeEvent((string) ($payload['event'] ?? ''));
+            $this->reserveWebhookEvent($event, $payload, $raw);
 
             // SEND_MESSAGE é um eco gerado pela própria Evolution após um envio pela API.
             // Ele não representa uma nova mensagem recebida do contato e nunca deve acionar IA,
@@ -799,13 +803,12 @@ final class EvolutionWebhookController
                 mkdir($logDir, 0775, true);
             }
 
+            $security = $this->webhookSecurity ??= new WebhookSecurityService();
             $record = [
                 'at' => date(DATE_ATOM),
-                'message' => $exception->getMessage(),
+                'message' => $security->redactText($exception->getMessage()),
                 'exception' => get_class($exception),
-                'file' => $exception->getFile(),
-                'line' => $exception->getLine(),
-                'context' => $context,
+                'context' => $security->sanitize($context),
             ];
             error_log(
                 json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
@@ -830,16 +833,83 @@ final class EvolutionWebhookController
     private function validateToken(): void
     {
         $expected = trim((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', ''));
-        $received = trim((string) (
-            $_SERVER['HTTP_X_WEBHOOK_TOKEN']
-            ?? $_SERVER['HTTP_X_RS_CONNECT_TOKEN']
-            ?? $_GET['token']
-            ?? RequestSecurity::bearerToken()
-        ));
-
-        if (!(new SecurityService())->verifyWebhookToken('evolution', $received, $expected)) {
-            throw new \RuntimeException('Webhook não autorizado.', 401);
+        $headers = function_exists('getallheaders') ? (getallheaders() ?: []) : [];
+        if ($headers === []) {
+            $headers = [
+                'X-RS-Connect-Token' => (string) ($_SERVER['HTTP_X_RS_CONNECT_TOKEN'] ?? ''),
+                'X-Webhook-Token' => (string) ($_SERVER['HTTP_X_WEBHOOK_TOKEN'] ?? ''),
+                'Authorization' => (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? ''),
+            ];
         }
+
+        $security = $this->webhookSecurity ??= new WebhookSecurityService();
+        $provided = $security->header($headers, ['x-rs-connect-token', 'x-webhook-token']);
+        if ($provided === '') {
+            $authorization = $security->header($headers, ['authorization']);
+            if (preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches) === 1) {
+                $provided = trim((string) ($matches[1] ?? ''));
+            }
+        }
+        $security->verifyStaticToken(
+            'evolution',
+            $expected,
+            ['x-rs-connect-token' => $provided],
+            ['x-rs-connect-token'],
+            24
+        );
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function reserveWebhookEvent(string $event, array $payload, string $rawBody): void
+    {
+        $security = $this->webhookSecurity ??= new WebhookSecurityService();
+        if (str_contains($event, 'messages.upsert')) {
+            $data = $payload['data'] ?? $payload;
+            if (isset($data[0]) && is_array($data[0])) {
+                $data = $data[0];
+            }
+            if (is_array($data)) {
+                $timestamp = $data['messageTimestamp']
+                    ?? $data['message_timestamp']
+                    ?? $data['timestamp']
+                    ?? null;
+                if ($timestamp !== null && $timestamp !== '') {
+                    $security->validateOptionalPayloadTimestamp(
+                        $timestamp,
+                        max(300, (int) Env::get('EVOLUTION_WEBHOOK_MAX_AGE_SECONDS', 86400))
+                    );
+                }
+            }
+        }
+
+        $data = $payload['data'] ?? $payload;
+        if (isset($data[0]) && is_array($data[0])) {
+            $data = $data[0];
+        }
+        $key = is_array($data) && is_array($data['key'] ?? null) ? $data['key'] : [];
+        $instance = trim((string) ($payload['instance'] ?? ($payload['data']['instance'] ?? '') ?? ''));
+        $externalId = trim((string) ($key['id'] ?? (is_array($data) ? ($data['id'] ?? '') : '') ?? ''));
+        $eventId = trim((string) ($payload['event_id'] ?? $payload['id'] ?? ''));
+        $eventKey = $security->eventKey('evolution', [
+            $eventId,
+            $externalId !== '' ? $event . '|' . $instance . '|' . $externalId : '',
+            $event !== '' && $instance !== '' ? $event . '|' . $instance . '|' . hash('sha256', $rawBody) : '',
+        ], $rawBody);
+
+        $claim = $security->claim('evolution', $eventKey, $rawBody, [
+            'event' => $event,
+            'instance' => $instance,
+            'instance_id' => (int) ($_GET['instance_id'] ?? 0),
+            'external_id' => $externalId,
+        ]);
+        if (!empty($claim['duplicate'])) {
+            $this->respond(200, [
+                'ok' => true,
+                'duplicate' => true,
+                'event' => $event,
+            ]);
+        }
+        $this->webhookSecurityEventId = (int) ($claim['id'] ?? 0);
     }
 
     private function resolveInstance(array $payload): array
@@ -1974,6 +2044,20 @@ final class EvolutionWebhookController
 
     private function respond(int $status, array $body): never
     {
+        if ($this->webhookSecurityEventId !== null && $this->webhookSecurityEventId > 0) {
+            $security = $this->webhookSecurity ??= new WebhookSecurityService();
+            if ($status >= 500) {
+                $security->markFailed(
+                    $this->webhookSecurityEventId,
+                    $status,
+                    (string) ($body['error'] ?? 'Falha interna no webhook Evolution.')
+                );
+            } else {
+                $security->markProcessed($this->webhookSecurityEventId, $status, $body);
+            }
+            $this->webhookSecurityEventId = null;
+        }
+
         http_response_code($status);
         echo json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
