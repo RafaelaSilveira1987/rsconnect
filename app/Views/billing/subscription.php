@@ -43,6 +43,8 @@ $trialBehaviorLabel = [
     'activate' => 'Converter para assinatura ativa',
     'suspend' => 'Suspender o acesso',
 ];
+$aiBillingModeLabel = ($plan['ai_billing_mode'] ?? 'rs_connect') === 'tenant' ? 'IA própria do cliente' : 'IA RS Connect';
+$commitmentMonths = (int) ($plan['commitment_months'] ?? 3);
 $whatsappNumber = '5532987073537';
 $whatsappMessage = rawurlencode('Olá! Gostaria de conhecer as opções para melhorar meu plano no RS Connect. Minha empresa é ' . (string) ($tenant['name'] ?? '') . '.');
 $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
@@ -101,6 +103,10 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
     <article class="client-subscription-summary-card">
         <span class="client-summary-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6 9 17l-5-5"/></svg></span>
         <div><span>Situação do plano</span><strong><?= View::e($statusLabel[$billingStatus] ?? ucfirst($billingStatus)) ?></strong><small><?= $billingStatus === 'active' ? 'Todos os recursos contratados estão disponíveis' : 'Consulte os detalhes abaixo' ?></small></div>
+    </article>
+    <article class="client-subscription-summary-card">
+        <span class="client-summary-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M4 8h16M4 16h16"/></svg></span>
+        <div><span>Modalidade e contrato</span><strong><?= View::e($aiBillingModeLabel) ?></strong><small><?= $commitmentMonths ?> meses · até <?= View::e($date($plan['commitment_ends_at'] ?? null)) ?></small></div>
     </article>
 </div>
 

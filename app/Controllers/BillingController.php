@@ -25,12 +25,23 @@ final class BillingController
         foreach ($plans as &$plan) {
             $plan['limits'] = json_decode((string) ($plan['limits_json'] ?? '{}'), true) ?: [];
             $plan['features'] = json_decode((string) ($plan['features_json'] ?? '[]'), true) ?: [];
+            $plan['own_ai_monthly_price'] = (float) ($plan['own_ai_monthly_price'] ?? $plan['monthly_price'] ?? 0);
+            $plan['rs_ai_monthly_price'] = (float) ($plan['rs_ai_monthly_price'] ?? $plan['monthly_price'] ?? 0);
+            $discounts = json_decode((string) ($plan['commitment_discounts_json'] ?? '{}'), true);
+            $plan['commitment_discounts'] = is_array($discounts)
+                ? $discounts
+                : ['3' => 0, '6' => 8, '12' => 15];
+            $plan['commitment_discounts'] += ['3' => 0, '6' => 8, '12' => 15];
         }
         unset($plan);
 
+        $subscriptionCommercialColumns = $this->tableColumnExists('tenant_subscriptions', 'ai_billing_mode')
+            ? 'ts.ai_billing_mode, ts.commitment_months, ts.commitment_ends_at,'
+            : '"rs_connect" AS ai_billing_mode, 3 AS commitment_months, NULL AS commitment_ends_at,';
         $tenants = $pdo->query(
             'SELECT t.id, t.name, t.plan, t.status,
                     ts.id AS subscription_id, ts.plan_id, ts.billing_cycle, ts.billing_status,
+                    ' . $subscriptionCommercialColumns . '
                     ts.starts_at, ts.trial_ends_at, ts.trial_days, ts.trial_end_behavior, ts.trial_grace_days,
                     ts.current_period_starts_at, ts.current_period_ends_at, ts.next_billing_at, ts.amount, ts.notes,
                     sp.name AS plan_name, sp.plan_key
@@ -124,7 +135,14 @@ final class BillingController
         $planKey = $this->slug(trim((string) ($_POST['plan_key'] ?? '')));
         $name = trim((string) ($_POST['name'] ?? ''));
         $description = trim((string) ($_POST['description'] ?? ''));
-        $monthlyPrice = $this->money((string) ($_POST['monthly_price'] ?? '0'));
+        $ownAiMonthlyPrice = $this->money((string) ($_POST['own_ai_monthly_price'] ?? $_POST['monthly_price'] ?? '0'));
+        $rsAiMonthlyPrice = $this->money((string) ($_POST['rs_ai_monthly_price'] ?? $_POST['monthly_price'] ?? '0'));
+        $monthlyPrice = $rsAiMonthlyPrice > 0 ? $rsAiMonthlyPrice : $ownAiMonthlyPrice;
+        $commitmentDiscounts = [
+            '3' => 0,
+            '6' => max(0, min(50, (float) ($_POST['commitment_discount_6'] ?? 8))),
+            '12' => max(0, min(50, (float) ($_POST['commitment_discount_12'] ?? 15))),
+        ];
         $status = in_array($_POST['status'] ?? 'active', ['active', 'inactive'], true) ? (string) $_POST['status'] : 'active';
         $sortOrder = max(1, (int) ($_POST['sort_order'] ?? 10));
         $limits = [];
@@ -141,26 +159,42 @@ final class BillingController
 
         $pdo = Database::connection();
         try {
+            $commercialColumnsAvailable = $this->tableColumnExists('saas_plans', 'own_ai_monthly_price');
             if ($id > 0) {
-                $statement = $pdo->prepare(
-                    'UPDATE saas_plans
-                     SET plan_key = :plan_key, name = :name, description = :description, monthly_price = :monthly_price,
-                         limits_json = :limits_json, features_json = :features_json, status = :status, sort_order = :sort_order
-                     WHERE id = :id'
-                );
+                $statement = $pdo->prepare($commercialColumnsAvailable
+                    ? 'UPDATE saas_plans
+                       SET plan_key = :plan_key, name = :name, description = :description, monthly_price = :monthly_price,
+                           own_ai_monthly_price = :own_ai_monthly_price, rs_ai_monthly_price = :rs_ai_monthly_price,
+                           commitment_discounts_json = :commitment_discounts_json,
+                           limits_json = :limits_json, features_json = :features_json, status = :status, sort_order = :sort_order
+                       WHERE id = :id'
+                    : 'UPDATE saas_plans
+                       SET plan_key = :plan_key, name = :name, description = :description, monthly_price = :monthly_price,
+                           limits_json = :limits_json, features_json = :features_json, status = :status, sort_order = :sort_order
+                       WHERE id = :id');
                 $params = ['id' => $id];
                 $action = 'billing.plan_updated';
             } else {
-                $statement = $pdo->prepare(
-                    'INSERT INTO saas_plans
-                        (plan_key, name, description, monthly_price, limits_json, features_json, status, sort_order)
-                     VALUES
-                        (:plan_key, :name, :description, :monthly_price, :limits_json, :features_json, :status, :sort_order)'
-                );
+                $statement = $pdo->prepare($commercialColumnsAvailable
+                    ? 'INSERT INTO saas_plans
+                          (plan_key, name, description, monthly_price, own_ai_monthly_price, rs_ai_monthly_price,
+                           commitment_discounts_json, limits_json, features_json, status, sort_order)
+                       VALUES
+                          (:plan_key, :name, :description, :monthly_price, :own_ai_monthly_price, :rs_ai_monthly_price,
+                           :commitment_discounts_json, :limits_json, :features_json, :status, :sort_order)'
+                    : 'INSERT INTO saas_plans
+                          (plan_key, name, description, monthly_price, limits_json, features_json, status, sort_order)
+                       VALUES
+                          (:plan_key, :name, :description, :monthly_price, :limits_json, :features_json, :status, :sort_order)');
                 $params = [];
                 $action = 'billing.plan_created';
             }
-            $statement->execute($params + [
+            $commercialParams = $commercialColumnsAvailable ? [
+                'own_ai_monthly_price' => $ownAiMonthlyPrice,
+                'rs_ai_monthly_price' => $rsAiMonthlyPrice,
+                'commitment_discounts_json' => json_encode($commitmentDiscounts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ] : [];
+            $statement->execute($params + $commercialParams + [
                 'plan_key' => $planKey,
                 'name' => $name,
                 'description' => $description !== '' ? $description : null,
@@ -185,7 +219,14 @@ final class BillingController
         $planId = (int) ($_POST['plan_id'] ?? 0);
         $billingStatus = (string) ($_POST['billing_status'] ?? 'active');
         $billingCycle = (string) ($_POST['billing_cycle'] ?? 'monthly');
-        $amount = $this->money((string) ($_POST['amount'] ?? '0'));
+        $aiBillingMode = in_array((string) ($_POST['ai_billing_mode'] ?? 'rs_connect'), ['tenant', 'rs_connect'], true)
+            ? (string) $_POST['ai_billing_mode']
+            : 'rs_connect';
+        $commitmentMonths = in_array((int) ($_POST['commitment_months'] ?? 3), [3, 6, 12], true)
+            ? (int) $_POST['commitment_months']
+            : 3;
+        $amountInput = trim((string) ($_POST['amount'] ?? ''));
+        $amount = $amountInput === '' ? $this->planMonthlyPrice($planId, $aiBillingMode, $commitmentMonths) : $this->money($amountInput);
         $currentPeriodStartsAt = $this->dateOrNull((string) ($_POST['current_period_starts_at'] ?? '')) ?: date('Y-m-d');
         $currentPeriodEndsAt = $this->dateOrNull((string) ($_POST['current_period_ends_at'] ?? '')) ?: date('Y-m-t');
         $nextBillingAt = $this->dateOrNull((string) ($_POST['next_billing_at'] ?? ''));
@@ -194,6 +235,10 @@ final class BillingController
         $trialEndBehavior = (string) ($_POST['trial_end_behavior'] ?? 'await_payment');
         $trialGraceDays = max(0, min(30, (int) ($_POST['trial_grace_days'] ?? 3)));
         $notes = trim((string) ($_POST['notes'] ?? ''));
+        $commitmentEndsAt = (new \DateTimeImmutable($currentPeriodStartsAt))
+            ->modify('+' . $commitmentMonths . ' months')
+            ->modify('-1 day')
+            ->format('Y-m-d');
 
         if ($tenantId < 1 || $planId < 1 || !in_array($billingStatus, ['trialing', 'active', 'overdue', 'suspended', 'canceled'], true)) {
             Flash::set('error', 'Informe empresa, plano e status de cobrança.');
@@ -238,10 +283,14 @@ final class BillingController
                     throw new \RuntimeException('A assinatura selecionada não pertence à empresa informada.');
                 }
 
+                $subscriptionCommercialColumnsAvailable = $this->tableColumnExists('tenant_subscriptions', 'ai_billing_mode');
                 $statement = $pdo->prepare(
                     'UPDATE tenant_subscriptions
                      SET plan_id = :plan_id,
-                         billing_cycle = :billing_cycle,
+                         billing_cycle = :billing_cycle,'
+                         . ($subscriptionCommercialColumnsAvailable
+                            ? ' ai_billing_mode = :ai_billing_mode, commitment_months = :commitment_months, commitment_ends_at = :commitment_ends_at,'
+                            : '') . '
                          billing_status = :billing_status,
                          starts_at = :starts_at,
                          trial_ends_at = :trial_ends_at,
@@ -258,7 +307,12 @@ final class BillingController
                          cancel_at = CASE WHEN :reactivated = 1 THEN NULL ELSE cancel_at END
                      WHERE id = :id'
                 );
-                $statement->execute([
+                $subscriptionCommercialParams = $subscriptionCommercialColumnsAvailable ? [
+                    'ai_billing_mode' => $aiBillingMode,
+                    'commitment_months' => $commitmentMonths,
+                    'commitment_ends_at' => $commitmentEndsAt,
+                ] : [];
+                $statement->execute($subscriptionCommercialParams + [
                     'plan_id' => $planId,
                     'billing_cycle' => $billingCycle,
                     'billing_status' => $billingStatus,
@@ -282,17 +336,30 @@ final class BillingController
                 $old = $pdo->prepare('UPDATE tenant_subscriptions SET billing_status = "canceled", cancel_at = NOW() WHERE tenant_id = :tenant_id AND billing_status IN ("trialing", "active", "overdue", "suspended")');
                 $old->execute(['tenant_id' => $tenantId]);
 
-                $statement = $pdo->prepare(
-                    'INSERT INTO tenant_subscriptions
-                        (tenant_id, plan_id, billing_cycle, billing_status, starts_at, trial_ends_at,
-                         trial_days, trial_end_behavior, trial_grace_days,
-                         current_period_starts_at, current_period_ends_at, next_billing_at, amount, notes)
-                     VALUES
-                        (:tenant_id, :plan_id, :billing_cycle, :billing_status, :starts_at, :trial_ends_at,
-                         :trial_days, :trial_end_behavior, :trial_grace_days,
-                         :current_period_starts_at, :current_period_ends_at, :next_billing_at, :amount, :notes)'
-                );
-                $statement->execute([
+                $subscriptionCommercialColumnsAvailable = $this->tableColumnExists('tenant_subscriptions', 'ai_billing_mode');
+                $statement = $pdo->prepare($subscriptionCommercialColumnsAvailable
+                    ? 'INSERT INTO tenant_subscriptions
+                          (tenant_id, plan_id, billing_cycle, ai_billing_mode, commitment_months, commitment_ends_at,
+                           billing_status, starts_at, trial_ends_at, trial_days, trial_end_behavior, trial_grace_days,
+                           current_period_starts_at, current_period_ends_at, next_billing_at, amount, notes)
+                       VALUES
+                          (:tenant_id, :plan_id, :billing_cycle, :ai_billing_mode, :commitment_months, :commitment_ends_at,
+                           :billing_status, :starts_at, :trial_ends_at, :trial_days, :trial_end_behavior, :trial_grace_days,
+                           :current_period_starts_at, :current_period_ends_at, :next_billing_at, :amount, :notes)'
+                    : 'INSERT INTO tenant_subscriptions
+                          (tenant_id, plan_id, billing_cycle, billing_status, starts_at, trial_ends_at,
+                           trial_days, trial_end_behavior, trial_grace_days,
+                           current_period_starts_at, current_period_ends_at, next_billing_at, amount, notes)
+                       VALUES
+                          (:tenant_id, :plan_id, :billing_cycle, :billing_status, :starts_at, :trial_ends_at,
+                           :trial_days, :trial_end_behavior, :trial_grace_days,
+                           :current_period_starts_at, :current_period_ends_at, :next_billing_at, :amount, :notes)');
+                $subscriptionCommercialParams = $subscriptionCommercialColumnsAvailable ? [
+                    'ai_billing_mode' => $aiBillingMode,
+                    'commitment_months' => $commitmentMonths,
+                    'commitment_ends_at' => $commitmentEndsAt,
+                ] : [];
+                $statement->execute($subscriptionCommercialParams + [
                     'tenant_id' => $tenantId,
                     'plan_id' => $planId,
                     'billing_cycle' => $billingCycle,
@@ -326,6 +393,10 @@ final class BillingController
                 'current_period_ends_at' => $currentPeriodEndsAt,
                 'trial_days' => $trialDays,
                 'trial_end_behavior' => $trialEndBehavior,
+                'ai_billing_mode' => $aiBillingMode,
+                'commitment_months' => $commitmentMonths,
+                'commitment_ends_at' => $commitmentEndsAt,
+                'amount' => $amount,
             ], $tenantId);
 
             $accessStatus = (new AccessControlService())->statusForTenant($tenantId);
@@ -410,6 +481,43 @@ final class BillingController
             Flash::set('error', 'Não foi possível atualizar a cobrança: ' . $exception->getMessage());
         }
         $this->redirect('/billing');
+    }
+
+    private function tableColumnExists(string $table, string $column): bool
+    {
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name'
+            );
+            $statement->execute(['table_name' => $table, 'column_name' => $column]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function planMonthlyPrice(int $planId, string $aiBillingMode, int $commitmentMonths): float
+    {
+        try {
+            $commercialColumnsAvailable = $this->tableColumnExists('saas_plans', 'own_ai_monthly_price');
+            $columns = $commercialColumnsAvailable
+                ? 'monthly_price, own_ai_monthly_price, rs_ai_monthly_price, commitment_discounts_json'
+                : 'monthly_price';
+            $statement = Database::connection()->prepare('SELECT ' . $columns . ' FROM saas_plans WHERE id = :id LIMIT 1');
+            $statement->execute(['id' => $planId]);
+            $plan = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+            $base = $commercialColumnsAvailable
+                ? (float) ($aiBillingMode === 'tenant'
+                    ? ($plan['own_ai_monthly_price'] ?? $plan['monthly_price'] ?? 0)
+                    : ($plan['rs_ai_monthly_price'] ?? $plan['monthly_price'] ?? 0))
+                : (float) ($plan['monthly_price'] ?? 0);
+            $discounts = json_decode((string) ($plan['commitment_discounts_json'] ?? '{}'), true);
+            $discount = is_array($discounts) ? (float) ($discounts[(string) $commitmentMonths] ?? 0) : 0.0;
+            return round($base * (1 - max(0, min(50, $discount)) / 100), 2);
+        } catch (Throwable) {
+            return 0.0;
+        }
     }
 
     private function money(string $value): float

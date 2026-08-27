@@ -1,38 +1,43 @@
-# RS Connect — v36.20.10
+# RS Connect — v36.20.11
 
-Esta versão corrige o ciclo de mensagens recebidas fora do horário de atendimento.
+Esta versão reorganiza a tela **Planos e cobranças** para separar o preço da plataforma conforme a origem da inteligência artificial e o prazo mínimo contratado.
 
-## O que foi corrigido
+## Matriz comercial padrão
 
-- o aviso de ausência passa a ser enviado tanto em conversas sob responsabilidade da IA quanto em modo humano;
-- a mensagem informativa é operacional e não consome tokens de IA;
-- várias mensagens recebidas no mesmo dia não geram avisos duplicados;
-- quando o agente não possui uma mensagem própria, o sistema usa a configuração da empresa e, por último, uma mensagem padrão segura;
-- a pendência é programada para a próxima abertura exata do agente, em vez de aguardar blocos de 15 minutos;
-- ao iniciar o expediente, a **Fila rápida da IA** pode retomar a conversa na primeira execução do minuto;
-- conversas em modo humano continuam apenas sinalizadas na fila e não são respondidas automaticamente.
+| Plano | IA própria do cliente | IA RS Connect | Canais | Agentes | Usuários |
+|---|---:|---:|---:|---:|---:|
+| Inicial | R$ 69/mês | R$ 99/mês | 1 | 1 | 3 |
+| Profissional | R$ 129/mês | R$ 179/mês | 2 | 2 | 6 |
+| Empresarial | R$ 259/mês | R$ 349/mês | 5 | 5 | 15 |
 
-## Automação necessária
+## Fidelidade
 
-Para a retomada automática funcionar mesmo sem ninguém com o painel aberto, mantenha ativo no n8n o template:
+- 3 meses: preço padrão;
+- 6 meses: 8% de desconto mensal;
+- 12 meses: 15% de desconto mensal.
 
-```text
-docs/n8n_templates/template-fila-rapida-ia.json
-```
+O ciclo de cobrança continua independente do prazo mínimo. É possível, por exemplo, cobrar mensalmente um contrato com permanência mínima de 6 ou 12 meses.
 
-Ele chama a cada minuto:
+## O que mudou
 
-```text
-POST /webhooks/ai-reprocess/queue
-Header: X-RS-AI-Reprocess-Token
-```
+- seletor entre **IA RS Connect** e **IA própria do cliente**;
+- preços dos cartões recalculados sem recarregar a página;
+- cálculo do valor por canal e do total mínimo do contrato;
+- franquia de respostas exibida somente na modalidade IA RS Connect;
+- edição de dois preços por plano;
+- descontos de 6 e 12 meses configuráveis;
+- assinatura armazena modalidade de IA, fidelidade e término do compromisso;
+- valor mensal sugerido automaticamente ao vincular um plano;
+- limites padrão atualizados para 3 usuários no Inicial, 2 agentes no Profissional e 5 agentes no Empresarial.
 
 ## Banco de dados
 
-Não há migration nova. A última migration obrigatória continua sendo:
+Execute:
 
 ```text
-database/migrations/085_ai_commercial_attention_queue.sql
+database/migrations/086_plan_ai_mode_and_commitment.sql
 ```
 
-Consulte `INSTRUCOES-v36.20.10.md`.
+A migration é idempotente e preserva assinaturas existentes. O preço legado `monthly_price` passa a acompanhar o valor com IA RS Connect para manter compatibilidade com rotinas antigas.
+
+Consulte `INSTRUCOES-v36.20.11.md` e `docs/ATUALIZACAO-v36.20.11.md`.

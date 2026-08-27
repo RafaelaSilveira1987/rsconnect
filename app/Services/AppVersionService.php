@@ -41,10 +41,11 @@ final class AppVersionService
     // RS Connect 36.20.8 — prévia de exclusão liberada do polling e do bloqueio da sessão PHP.
     // RS Connect 36.20.9 — exclusão segura sem conexão substituta, com descarte explícito dos dados dependentes.
     // RS Connect 36.20.10 — aviso fora do horário para IA/humano e retomada agendada na abertura exata.
-    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql e 085_ai_commercial_attention_queue.sql.
+    // RS Connect 36.20.11 — preços por origem da IA, fidelidade e nova apresentação comercial dos planos.
+    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql, 085_ai_commercial_attention_queue.sql e 086_plan_ai_mode_and_commitment.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.4';
-    public const PACKAGE_LABEL = 'RS Connect 36.20.10 — aviso fora do horário e retomada na abertura';
-    public const REQUIRED_MIGRATION = '085_ai_commercial_attention_queue.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.20.11 — planos por origem da IA e fidelidade';
+    public const REQUIRED_MIGRATION = '086_plan_ai_mode_and_commitment.sql';
 
     private PDO $pdo;
 

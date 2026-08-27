@@ -2237,12 +2237,106 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll(config.buttons).forEach((button)=>button.addEventListener('click',()=>config.fill({button,drawer,form,field})));
   };
   setupSimpleDrawer({drawer:'n8n-flow-drawer',form:'[data-n8n-form]',buttons:'[data-n8n-open]',attr:'data-n8n-field',fill:({button,drawer,form,field})=>{form.reset();field('id').value='0';field('status').value='active';form.querySelectorAll('input[name="events[]"]').forEach((input)=>{input.checked=input.value==='*';});const edit=button.dataset.n8nOpen==='edit';if(edit){field('id').value=button.dataset.id||'0';field('tenant_id').value=button.dataset.tenantId||'';field('flow_key').value=button.dataset.flowKey||'';field('name').value=button.dataset.name||'';field('description').value=button.dataset.description||'';field('status').value=button.dataset.status||'active';try{const events=JSON.parse(decodeURIComponent(button.dataset.events||'%5B%5D'));form.querySelectorAll('input[name="events[]"]').forEach((input)=>input.checked=events.includes(input.value));}catch(e){} drawer.querySelector('[data-n8n-eyebrow]').textContent='Editar fluxo';drawer.querySelector('[data-n8n-title]').textContent=button.dataset.name||'Atualizar automação';drawer.querySelector('[data-n8n-description]').textContent='A URL e o token atuais serão mantidos quando os campos ficarem vazios.';drawer.querySelector('[data-n8n-url-hint]').textContent='Deixe em branco para manter a URL atual.';drawer.querySelector('[data-n8n-submit]').textContent='Salvar alterações';}else{drawer.querySelector('[data-n8n-eyebrow]').textContent='Novo fluxo';drawer.querySelector('[data-n8n-title]').textContent='Configurar automação';drawer.querySelector('[data-n8n-description]').textContent='Defina a empresa, o webhook e quando este fluxo deve ser acionado.';drawer.querySelector('[data-n8n-url-hint]').textContent='Obrigatória no primeiro cadastro.';drawer.querySelector('[data-n8n-submit]').textContent='Salvar fluxo';}}});
-  setupSimpleDrawer({drawer:'plan-drawer',form:'[data-plan-form]',buttons:'[data-plan-open]',attr:'data-plan-field',fill:({button,drawer,form,field})=>{form.reset();field('id').value='0';field('status').value='active';field('sort_order').value='50';form.querySelectorAll('[data-plan-limit]').forEach((input)=>input.value='');const edit=button.dataset.planOpen==='edit';if(edit){field('id').value=button.dataset.id||'0';field('plan_key').value=button.dataset.planKey||'';field('name').value=button.dataset.name||'';field('description').value=button.dataset.description||'';field('monthly_price').value=button.dataset.price||'';field('status').value=button.dataset.status||'active';field('sort_order').value=button.dataset.sortOrder||'50';field('features').value=decodeURIComponent(button.dataset.features||'');try{const limits=JSON.parse(decodeURIComponent(button.dataset.limits||'%7B%7D'));Object.entries(limits).forEach(([key,value])=>{const input=form.querySelector(`[data-plan-limit="${CSS.escape(key)}"]`);if(input)input.value=value??'';});}catch(e){}drawer.querySelector('[data-plan-eyebrow]').textContent='Editar plano';drawer.querySelector('[data-plan-title]').textContent=button.dataset.name||'Atualizar plano';drawer.querySelector('[data-plan-submit]').textContent='Salvar alterações';}else{drawer.querySelector('[data-plan-eyebrow]').textContent='Novo plano';drawer.querySelector('[data-plan-title]').textContent='Criar pacote comercial';drawer.querySelector('[data-plan-submit]').textContent='Salvar plano';}}});
+  setupSimpleDrawer({drawer:'plan-drawer',form:'[data-plan-form]',buttons:'[data-plan-open]',attr:'data-plan-field',fill:({button,drawer,form,field})=>{
+    form.reset();
+    field('id').value='0';
+    field('status').value='active';
+    field('sort_order').value='50';
+    field('commitment_discount_6').value='8';
+    field('commitment_discount_12').value='15';
+    form.querySelectorAll('[data-plan-limit]').forEach((input)=>input.value='');
+    const edit=button.dataset.planOpen==='edit';
+    if(edit){
+      field('id').value=button.dataset.id||'0';
+      field('plan_key').value=button.dataset.planKey||'';
+      field('name').value=button.dataset.name||'';
+      field('description').value=button.dataset.description||'';
+      field('own_ai_monthly_price').value=button.dataset.ownPrice||button.dataset.price||'';
+      field('rs_ai_monthly_price').value=button.dataset.rsPrice||button.dataset.price||'';
+      field('monthly_price').value=button.dataset.rsPrice||button.dataset.price||'';
+      field('commitment_discount_6').value=button.dataset.discount6||'8';
+      field('commitment_discount_12').value=button.dataset.discount12||'15';
+      field('status').value=button.dataset.status||'active';
+      field('sort_order').value=button.dataset.sortOrder||'50';
+      field('features').value=decodeURIComponent(button.dataset.features||'');
+      try{
+        const limits=JSON.parse(decodeURIComponent(button.dataset.limits||'%7B%7D'));
+        Object.entries(limits).forEach(([key,value])=>{const input=form.querySelector(`[data-plan-limit="${CSS.escape(key)}"]`);if(input)input.value=value??'';});
+      }catch(e){}
+      drawer.querySelector('[data-plan-eyebrow]').textContent='Editar plano';
+      drawer.querySelector('[data-plan-title]').textContent=button.dataset.name||'Atualizar plano';
+      drawer.querySelector('[data-plan-submit]').textContent='Salvar alterações';
+    }else{
+      drawer.querySelector('[data-plan-eyebrow]').textContent='Novo plano';
+      drawer.querySelector('[data-plan-title]').textContent='Criar pacote comercial';
+      drawer.querySelector('[data-plan-submit]').textContent='Salvar plano';
+    }
+    const syncLegacyPrice=()=>{if(field('monthly_price'))field('monthly_price').value=field('rs_ai_monthly_price')?.value||field('own_ai_monthly_price')?.value||'0';};
+    field('own_ai_monthly_price')?.addEventListener('input',syncLegacyPrice,{once:true});
+    field('rs_ai_monthly_price')?.addEventListener('input',syncLegacyPrice,{once:true});
+    syncLegacyPrice();
+  }});
+
+  const commercialPricing=document.querySelector('[data-commercial-pricing]');
+  if(commercialPricing){
+    let mode='rs_connect';
+    let term='3';
+    const money=(value)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(value||0));
+    const update=()=>{
+      commercialPricing.querySelectorAll('[data-pricing-mode]').forEach((button)=>button.classList.toggle('is-active',button.dataset.pricingMode===mode));
+      commercialPricing.querySelectorAll('[data-pricing-term]').forEach((button)=>button.classList.toggle('is-active',button.dataset.pricingTerm===term));
+      const modeHelp=commercialPricing.querySelector('[data-pricing-mode-help]');
+      const termHelp=commercialPricing.querySelector('[data-pricing-term-help]');
+      const summary=commercialPricing.querySelector('[data-commercial-pricing-summary]');
+      if(modeHelp)modeHelp.textContent=mode==='tenant'?'O cliente informa a própria chave e paga o consumo diretamente ao provedor.':'A RS Connect fornece a chave e inclui uma franquia mensal de respostas.';
+      if(termHelp)termHelp.textContent=term==='3'?'Valor padrão com permanência mínima de 3 meses.':term==='6'?'8% de desconto mensal com permanência mínima de 6 meses.':'15% de desconto mensal com permanência mínima de 12 meses.';
+      if(summary)summary.textContent=`${mode==='tenant'?'IA própria do cliente':'IA RS Connect'} · contrato mínimo de ${term} meses · cobrança mensal`;
+      document.querySelectorAll('[data-commercial-plan]').forEach((card)=>{
+        if(card.dataset.customQuote==='1')return;
+        const base=Number(mode==='tenant'?card.dataset.ownPrice:card.dataset.rsPrice)||0;
+        const discount=Number(card.dataset[`discount${term}`]||0);
+        const monthly=Math.round(base*(1-discount/100)*100)/100;
+        const channels=Math.max(1,Number(card.dataset.channels)||1);
+        const total=Math.round(monthly*Number(term)*100)/100;
+        const price=card.querySelector('[data-plan-price]');
+        const termText=card.querySelector('[data-plan-term]');
+        const unit=card.querySelector('[data-plan-unit]');
+        const totalText=card.querySelector('[data-plan-total]');
+        if(price)price.textContent=money(monthly);
+        if(termText)termText.textContent=`Contrato mínimo de ${term} meses${discount>0?` · ${discount}% de desconto`:''}`;
+        if(unit)unit.textContent=`${money(monthly/channels)} por canal`;
+        if(totalText)totalText.textContent=`Total mínimo do contrato: ${money(total)}`;
+        const aiLabel=card.querySelector('[data-plan-ai-label]');
+        const aiValue=card.querySelector('[data-plan-ai-value]');
+        const aiHint=card.querySelector('[data-plan-ai-hint]');
+        const noteTitle=card.querySelector('[data-plan-ai-note-title]');
+        const noteBody=card.querySelector('[data-plan-ai-note-body]');
+        if(mode==='tenant'){
+          if(aiLabel)aiLabel.textContent='Consumo da IA';
+          if(aiValue)aiValue.textContent='Chave própria';
+          if(aiHint)aiHint.textContent='cobrado diretamente pelo provedor';
+          if(noteTitle)noteTitle.textContent='IA própria do cliente';
+          if(noteBody)noteBody.textContent='A RS Connect monitora o uso, mas o custo dos tokens é pago pelo cliente ao provedor.';
+        }else{
+          if(aiLabel)aiLabel.textContent='Franquia de IA RS Connect';
+          if(aiValue)aiValue.textContent=(Number(card.dataset.aiLimit)||0).toLocaleString('pt-BR');
+          if(aiHint)aiHint.textContent='respostas automáticas por mês';
+          if(noteTitle)noteTitle.textContent='IA fornecida pela RS Connect';
+          if(noteBody)noteBody.textContent='A chave, o consumo e a franquia mensal ficam sob gestão da plataforma.';
+        }
+      });
+    };
+    commercialPricing.querySelectorAll('[data-pricing-mode]').forEach((button)=>button.addEventListener('click',()=>{mode=button.dataset.pricingMode||'rs_connect';update();}));
+    commercialPricing.querySelectorAll('[data-pricing-term]').forEach((button)=>button.addEventListener('click',()=>{term=button.dataset.pricingTerm||'3';update();}));
+    update();
+  }
   setupSimpleDrawer({drawer:'subscription-drawer',form:'[data-subscription-form]',buttons:'[data-subscription-open]',attr:'data-subscription-field',fill:({button,drawer,form,field})=>{
     form.reset();
     field('subscription_id').value='0';
     field('billing_status').value='active';
     field('billing_cycle').value='monthly';
+    field('ai_billing_mode').value='rs_connect';
+    field('commitment_months').value='3';
     field('trial_days').value='7';
     field('trial_end_behavior').value='await_payment';
     field('trial_grace_days').value='3';
@@ -2262,6 +2356,8 @@ document.addEventListener('DOMContentLoaded', () => {
       field('plan_id').value=button.dataset.planId||'';
       field('billing_status').value=button.dataset.billingStatus||'active';
       field('billing_cycle').value=button.dataset.billingCycle||'monthly';
+      field('ai_billing_mode').value=button.dataset.aiBillingMode||'rs_connect';
+      field('commitment_months').value=button.dataset.commitmentMonths||'3';
       field('amount').value=button.dataset.amount||'';
       field('current_period_starts_at').value=button.dataset.periodStart||first;
       field('current_period_ends_at').value=button.dataset.periodEnd||last;
@@ -2291,6 +2387,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const trialSummary=subscriptionForm.querySelector('[data-trial-summary]');
     const addDays=(iso,days)=>{if(!iso)return'';const [y,m,d]=iso.split('-').map(Number);const date=new Date(y,m-1,d);date.setDate(date.getDate()+days);return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;};
     const formatDate=(iso)=>{if(!iso)return'—';const [y,m,d]=iso.split('-');return `${d}/${m}/${y}`;};
+    const commercialSummary=subscriptionForm.querySelector('[data-subscription-commercial-summary]');
+    const money=(value)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(value||0));
+    const refreshCommercial=(overwriteAmount=true)=>{
+      const planSelect=subField('plan_id');
+      const option=planSelect?.selectedOptions?.[0];
+      const mode=subField('ai_billing_mode')?.value||'rs_connect';
+      const months=String(subField('commitment_months')?.value||'3');
+      if(!option||!option.value){if(commercialSummary)commercialSummary.textContent='Selecione um plano para calcular o valor.';return;}
+      const base=Number(mode==='tenant'?option.dataset.ownPrice:option.dataset.rsPrice)||0;
+      const discount=Number(option.dataset[`discount${months}`]||0);
+      const monthly=Math.round(base*(1-discount/100)*100)/100;
+      if(overwriteAmount&&subField('amount'))subField('amount').value=monthly.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      if(commercialSummary){
+        const label=mode==='tenant'?'IA própria do cliente':'IA RS Connect';
+        commercialSummary.innerHTML=`<strong>${label}</strong><span>${money(monthly)}/mês · fidelidade de ${months} meses${discount>0?` · ${discount}% de desconto`:''} · total mínimo ${money(monthly*Number(months))}</span>`;
+      }
+    };
     const refreshTrial=()=>{
       const isTrial=subField('billing_status')?.value==='trialing';
       if(trialSettings)trialSettings.hidden=!isTrial;
@@ -2309,12 +2422,16 @@ document.addEventListener('DOMContentLoaded', () => {
         trialSummary.textContent=`Teste de ${days} dia(s): ${formatDate(start)} a ${formatDate(end)}. Primeira cobrança em ${formatDate(billing)}. Depois: ${behaviorText}${behavior==='await_payment'&&grace>0?` com ${grace} dia(s) de tolerância`:''}.`;
       }
     };
+    ['plan_id','ai_billing_mode','commitment_months'].forEach((name)=>{
+      subField(name)?.addEventListener('change',()=>refreshCommercial(true));
+    });
     ['billing_status','current_period_starts_at','trial_days','trial_end_behavior','trial_grace_days'].forEach((name)=>{
       subField(name)?.addEventListener('input',refreshTrial);
       subField(name)?.addEventListener('change',refreshTrial);
     });
-    document.querySelectorAll('[data-subscription-open]').forEach((button)=>button.addEventListener('click',()=>window.setTimeout(refreshTrial,0)));
+    document.querySelectorAll('[data-subscription-open]').forEach((button)=>button.addEventListener('click',()=>window.setTimeout(()=>{refreshTrial();refreshCommercial(button.dataset.subscriptionOpen!=='edit');},0)));
     refreshTrial();
+    refreshCommercial(false);
   }
 
   const autoSubscription=document.querySelector('[data-subscription-auto-open="1"]');

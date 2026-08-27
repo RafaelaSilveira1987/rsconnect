@@ -41,7 +41,8 @@ final class SubscriptionService
             $statement = $pdo->prepare(
                 'SELECT sp.*, ts.id AS subscription_id, ts.billing_status, ts.current_period_starts_at,
                         ts.current_period_ends_at, ts.next_billing_at, ts.amount AS subscription_amount,
-                        ts.billing_cycle, ts.trial_ends_at, ts.trial_days, ts.trial_end_behavior, ts.trial_grace_days
+                        ts.billing_cycle, ts.ai_billing_mode, ts.commitment_months, ts.commitment_ends_at,
+                        ts.trial_ends_at, ts.trial_days, ts.trial_end_behavior, ts.trial_grace_days
                  FROM tenant_subscriptions ts
                  INNER JOIN saas_plans sp ON sp.id = ts.plan_id
                  WHERE ts.tenant_id = :tenant_id
@@ -460,6 +461,9 @@ final class SubscriptionService
             'monthly_price' => (float) ($plan['subscription_amount'] ?? $plan['monthly_price'] ?? 0),
             'billing_status' => (string) ($plan['billing_status'] ?? 'active'),
             'billing_cycle' => (string) ($plan['billing_cycle'] ?? 'monthly'),
+            'ai_billing_mode' => (string) ($plan['ai_billing_mode'] ?? 'rs_connect'),
+            'commitment_months' => isset($plan['commitment_months']) ? (int) $plan['commitment_months'] : 3,
+            'commitment_ends_at' => $plan['commitment_ends_at'] ?? null,
             'current_period_starts_at' => $plan['current_period_starts_at'] ?? null,
             'current_period_ends_at' => $plan['current_period_ends_at'] ?? null,
             'next_billing_at' => $plan['next_billing_at'] ?? null,

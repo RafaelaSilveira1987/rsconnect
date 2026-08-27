@@ -39,6 +39,7 @@ $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['extern
         <article class="subscription-summary-card"><span>Valor do plano</span><strong><?= View::e($money($plan['monthly_price'])) ?></strong><small><?= View::e($cycleLabel[$plan['billing_cycle']] ?? $plan['billing_cycle']) ?></small></article>
         <article class="subscription-summary-card"><span>Período atual</span><strong><?= View::e($date($plan['current_period_starts_at'])) ?></strong><small>até <?= View::e($date($plan['current_period_ends_at'])) ?></small></article>
         <article class="subscription-summary-card"><span>Próxima cobrança</span><strong><?= View::e($date($plan['next_billing_at'])) ?></strong><small>Fim do teste: <?= View::e($date($plan['trial_ends_at'])) ?></small></article>
+        <article class="subscription-summary-card"><span>Modalidade de IA</span><strong><?= ($plan['ai_billing_mode'] ?? 'rs_connect') === 'tenant' ? 'IA própria do cliente' : 'IA RS Connect' ?></strong><small>Contrato mínimo de <?= (int) ($plan['commitment_months'] ?? 3) ?> meses · até <?= View::e($date($plan['commitment_ends_at'] ?? null)) ?></small></article>
     </div>
 
     <?php if (!empty($plan['features'])): ?>
