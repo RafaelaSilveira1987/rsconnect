@@ -17,6 +17,7 @@
   "scripts": {
     "test": "php tests/Support/run-smoke-tests.php",
     "test:ent026": "php tests/Feature/ent026-tests-sanitization-smoke.php",
-    "test:ent028": "php tests/Feature/ent028-webhook-security-smoke.php"
+    "test:ent028": "php tests/Feature/ent028-webhook-security-smoke.php",
+    "test:ent028-schema": "php tests/Feature/ent028-pagbank-schema-hotfix-smoke.php"
   }
 }

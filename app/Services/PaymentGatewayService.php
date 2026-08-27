@@ -14,6 +14,9 @@ use Throwable;
 
 final class PaymentGatewayService
 {
+    /** @var array<string, bool> */
+    private array $columnAvailability = [];
+
     public const PROVIDER_LABELS = [
         'asaas' => 'Asaas',
         'mercadopago' => 'Mercado Pago',
@@ -331,9 +334,10 @@ final class PaymentGatewayService
                  external_invoice_url = :checkout_url_b,
                  external_status = :external_status,
                  payment_payload_json = :payload,
-                 payment_link_created_at = COALESCE(payment_link_created_at, NOW()),
-                 external_imported_at = NOW(),
-                 payment_status_checked_at = NOW()
+                 payment_link_created_at = COALESCE(payment_link_created_at, NOW())'
+            . $this->optionalInvoiceTimestampSql('external_imported_at')
+            . $this->optionalInvoiceTimestampSql('payment_status_checked_at')
+            . '
              WHERE id = :id'
         );
         $statement->execute([
@@ -837,6 +841,51 @@ final class PaymentGatewayService
         return $invoice ?: null;
     }
 
+    private function optionalInvoiceTimestampSql(string $column): string
+    {
+        if (preg_match('/^[A-Za-z0-9_]+$/', $column) !== 1) {
+            return '';
+        }
+
+        return $this->columnExists('tenant_invoices', $column)
+            ? ",\n                 {$column} = NOW()"
+            : '';
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        if (
+            preg_match('/^[A-Za-z0-9_]+$/', $table) !== 1
+            || preg_match('/^[A-Za-z0-9_]+$/', $column) !== 1
+        ) {
+            return false;
+        }
+
+        $cacheKey = $table . '.' . $column;
+        if (array_key_exists($cacheKey, $this->columnAvailability)) {
+            return $this->columnAvailability[$cacheKey];
+        }
+
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT COUNT(*)
+                 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = :table_name
+                   AND COLUMN_NAME = :column_name'
+            );
+            $statement->execute([
+                'table_name' => $table,
+                'column_name' => $column,
+            ]);
+            return $this->columnAvailability[$cacheKey] = (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            // Compatibilidade transitória: a criação da cobrança não deve ser perdida
+            // apenas porque o banco ainda não recebeu a migration de auditoria temporal.
+            return $this->columnAvailability[$cacheKey] = false;
+        }
+    }
+
     private function loadGateway(?int $gatewayId): ?array
     {
         if ($gatewayId && $gatewayId > 0) {
@@ -893,8 +942,9 @@ final class PaymentGatewayService
                  external_invoice_url = :invoice_url,
                  external_status = :external_status,
                  payment_payload_json = :payload,
-                 payment_link_created_at = NOW(),
-                 payment_status_checked_at = NOW()
+                 payment_link_created_at = NOW()'
+            . $this->optionalInvoiceTimestampSql('payment_status_checked_at')
+            . '
              WHERE id = :id'
         );
         $statement->execute([
@@ -924,8 +974,9 @@ final class PaymentGatewayService
                  external_checkout_url = COALESCE(NULLIF(:checkout_url_a, ""), external_checkout_url),
                  external_invoice_url = COALESCE(NULLIF(:checkout_url_b, ""), external_invoice_url),
                  external_status = :external_status,
-                 payment_payload_json = :payload,
-                 payment_status_checked_at = NOW()
+                 payment_payload_json = :payload'
+            . $this->optionalInvoiceTimestampSql('payment_status_checked_at')
+            . '
              WHERE id = :id'
         );
         $statement->execute([
@@ -987,8 +1038,10 @@ final class PaymentGatewayService
                 }
                 Database::connection()->prepare('UPDATE tenants SET status = "active" WHERE id = :tenant_id')
                     ->execute(['tenant_id' => $tenantId]);
-                Database::connection()->prepare('UPDATE tenant_invoices SET access_released_at = NOW() WHERE id = :id')
-                    ->execute(['id' => $invoiceId]);
+                if ($this->columnExists('tenant_invoices', 'access_released_at')) {
+                    Database::connection()->prepare('UPDATE tenant_invoices SET access_released_at = NOW() WHERE id = :id')
+                        ->execute(['id' => $invoiceId]);
+                }
             }
         } elseif ($status === 'overdue' && $tenantId > 0) {
             Database::connection()->prepare(

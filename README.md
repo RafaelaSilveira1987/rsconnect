@@ -1,4 +1,13 @@
-# RS Connect — v36.20.13.2
+# RS Connect — v36.20.13.3
+
+
+## Hotfix v36.20.13.3 — persistência de cobrança PagBank
+
+- corrige o erro `Unknown column payment_status_checked_at` ao salvar um Checkout criado;
+- adiciona a migration idempotente `088_payment_reconciliation_schema_compat.sql`;
+- restaura as colunas operacionais previstas na migration 042 quando o banco recebeu uma atualização parcial;
+- mantém fallback compatível para não perder o link de cobrança durante a janela entre deploy e migration;
+- não altera valores, planos, assinaturas ou regras de cobrança.
 
 Esta versão consolida a **ENT-028 / PA-002 — Blindagem dos webhooks** e aplica hotfixes de autenticação e dados do comprador no **PagBank / PagSeguro**.
 
@@ -67,6 +76,8 @@ php tests/Support/run-smoke-tests.php
 Consulte:
 
 - `INSTRUCOES-v36.20.13.2.md`;
+- `INSTRUCOES-v36.20.13.3.md`;
 - `docs/ATUALIZACAO-v36.20.13.2.md`;
+- `docs/ATUALIZACAO-v36.20.13.3.md`;
 - `docs/diagnostics/ENT-028-WEBHOOK-SECURITY-v36.20.13.md`;
 - `docs/diagnostics/ENT-028-VALIDATION-v36.20.13.md`.
