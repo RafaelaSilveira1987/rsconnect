@@ -62,8 +62,8 @@ Configurar `Tempo de espera da IA = 60`:
 ## 8. Smoke tests do pacote
 
 ```bash
-php tests/agent-policy-reliability-smoke.php
-php tests/after-hours-reply-timing-smoke.php
+php tests/Feature/agent-policy-reliability-smoke.php
+php tests/Feature/after-hours-reply-timing-smoke.php
 ```
 
 Os dois devem encerrar com `OK`.

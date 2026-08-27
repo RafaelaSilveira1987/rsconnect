@@ -131,7 +131,7 @@ Esses dados devem coincidir com a configuração real antes de avaliar a respost
 Opcionalmente execute no container da aplicação:
 
 ```bash
-php tests/agent-policy-reliability-smoke.php
+php tests/Feature/agent-policy-reliability-smoke.php
 ```
 
 Esperado:

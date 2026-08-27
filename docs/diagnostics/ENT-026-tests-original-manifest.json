@@ -1,0 +1,4788 @@
+{
+  "demand": "ENT-026 / PA-001",
+  "source_archive": "rs-connect-vps-ready(5).zip",
+  "source_archive_sha256": "56eda5267f129801057c7b0105158aa58e023b55a902e606ac45698cd99b66f4",
+  "original_tests_file_count": 682,
+  "classifications": {
+    "mirrored-divergent": 105,
+    "mirrored-identical": 465,
+    "test-artifact": 112
+  },
+  "restore_note": "The original uploaded archive is the authoritative binary backup. This manifest preserves path, size, SHA-256, classification and counterpart mapping for every removed or relocated tests/ file.",
+  "entries": [
+    {
+      "path": "tests/.env.example",
+      "size": 5915,
+      "sha256": "6a49d724c66eaf1053665435bf8b4a5eced09c1b85979b4fe6e36ba7c171a015",
+      "classification": "mirrored-divergent",
+      "counterpart": ".env.example"
+    },
+    {
+      "path": "tests/.env.local.example",
+      "size": 5507,
+      "sha256": "af6847d7d461c3794186fe856f9b382af7ef414217424b5fb533363ade025660",
+      "classification": "mirrored-divergent",
+      "counterpart": ".env.local.example"
+    },
+    {
+      "path": "tests/.env.vps.example",
+      "size": 5975,
+      "sha256": "68d4afd4b2bcc0b29fcdf9ef44cbbbd68efb3122ad3834fa4221254eaf8de878",
+      "classification": "mirrored-divergent",
+      "counterpart": ".env.vps.example"
+    },
+    {
+      "path": "tests/.env.zip28.example",
+      "size": 289,
+      "sha256": "8d3c1239d7674e76c3accc34e918a357ff9cad2d39e743615a07b870c6627565",
+      "classification": "mirrored-identical",
+      "counterpart": ".env.zip28.example"
+    },
+    {
+      "path": "tests/Dockerfile",
+      "size": 1206,
+      "sha256": "2ebd2efdaf7a392f504af9a7486cc5944823bfc9fd6f70f8eb81966deadd0716",
+      "classification": "mirrored-identical",
+      "counterpart": "Dockerfile"
+    },
+    {
+      "path": "tests/README.md",
+      "size": 2276,
+      "sha256": "bf94e172d7889b81a8f021dcf9bb9944ed116bffba4df9782a3b3ce4430cea6d",
+      "classification": "mirrored-divergent",
+      "counterpart": "README.md"
+    },
+    {
+      "path": "tests/admin-executive-report-v36140-smoke.php",
+      "size": 2310,
+      "sha256": "17454fc25187e996971b00e31af900eae777d269510dd442686a6f01d3416d48",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/after-hours-ack-and-opening-v362010-smoke.php",
+      "size": 2335,
+      "sha256": "2cf19dfb3b500585d8d82904324739807544ebf241573e5237b7b3e52112f9b6",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/after-hours-calendar-recovery-smoke.php",
+      "size": 3338,
+      "sha256": "d2881481e1fe9783cc831f665eed92a1bc3ea12006b5f19aa9cd2910b961ff82",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/after-hours-human-queue-v36184-smoke.php",
+      "size": 1953,
+      "sha256": "8a67b57b24cd0e50b6f483a8f4603983caab96d8ed7be95dc6c023b689a8e7b4",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/after-hours-human-takeover-v36185-smoke.php",
+      "size": 1777,
+      "sha256": "ec03aaf5fe2b94c9d0e9cb798ad61941406633c21db7d0e1ca0762bc4f43d1cb",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/after-hours-queue-display-v36183-smoke.php",
+      "size": 2819,
+      "sha256": "8dbf1c1041f4abd93f29b418761c0fad1dc8e9c1ba4c4a1479e69ee076cb1a5b",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/after-hours-reply-timing-smoke.php",
+      "size": 2862,
+      "sha256": "180f98c98885d8f01492a241a4a0ff9cbbd29a54349e4c0998e320f4610edd6d",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/agenda-backup-contract-smoke.php",
+      "size": 5476,
+      "sha256": "221b560b9390dce57fb0e705d597024ded008a7e24ec8177e4e6ee889d47a5bd",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/agent-instance-linking-v36182-smoke.php",
+      "size": 2663,
+      "sha256": "a4ad25f4586768af70dd686a88a749b1f45de316920d00ba127aa174b2fc5e5d",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/agent-policy-reliability-scenarios.json",
+      "size": 3101,
+      "sha256": "72a48a02d968f194678cbda5e01aacedb229c60529efe55d48154f04c934fa90",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/agent-policy-reliability-smoke.php",
+      "size": 5950,
+      "sha256": "66cb21329cd534f99ae67661c0c6952870b1d177cc0026485adf595c1183226f",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/ai-budget-governance-v36192-smoke.php",
+      "size": 3054,
+      "sha256": "6789f9dd683ba8d53a76378cab26cbfe239785529c249e6fe5fc4bebc2c837e2",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/ai-commercial-attention-v36202-smoke.php",
+      "size": 2720,
+      "sha256": "2a0ad95a243e445ac6c1afcae3cd33ebef7bf2d4de94e9510cb9aa29107d9e30",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/ai-commercial-margin-v36193-smoke.php",
+      "size": 2736,
+      "sha256": "acb988e40a6437d6807e9c09557dded09b02f91e9a96ba43ac3d419ae3c0be49",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/ai-cost-attribution-v36191-smoke.php",
+      "size": 2298,
+      "sha256": "c5b27ccbbe54a2a3105d3c01f774d9dc6d2c843772c22b4c656cec20e54fbe86",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/ai-efficiency-phase2-v36180-smoke.php",
+      "size": 2722,
+      "sha256": "aa2a7e190af1947ed697b4cebe789093c1fb2be7b3fb72d1ba43008aa21598a9",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/ai-efficiency-v36170-smoke.php",
+      "size": 4632,
+      "sha256": "021878244e6b5fe1a087059581439758d1a2e7b549832ef2ab0fc51577267889",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/ai-memory-v36190-smoke.php",
+      "size": 3946,
+      "sha256": "963b2b223e72d7fdfdf235692bfdde7b8c87badcfa172304c88abb862dd7ea96",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/ai-metrics-accounting-scenarios.json",
+      "size": 2139,
+      "sha256": "65e10c5121a88c6831503e6789ed136820f0a2e3e153bd7073e5110eda92b58c",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/ai-profitability-v36200-smoke.php",
+      "size": 3370,
+      "sha256": "44e60a3512e5922b66557c882171681d9c73b1857c6807dbc9f9f4fe312fb7cb",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/ai-quota-template-validation-scenarios.json",
+      "size": 770,
+      "sha256": "d50b1524f01927464f7a65ee70971650a6e746bdb587fd8944a5662175eea2ee",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/ai-usage-after-hours-scenarios.json",
+      "size": 3086,
+      "sha256": "ea3ba2c32ae4835a43fda627d727597285b2c315d5527c1f88a7ec41bcdb493d",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/app/Controllers/AccessController.php",
+      "size": 881,
+      "sha256": "ce7249f53b73b4347f0db1bf484321162a24877aca6e7106d85afd34365ab179",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/AccessController.php"
+    },
+    {
+      "path": "tests/app/Controllers/AdminCrmController.php",
+      "size": 27275,
+      "sha256": "c6db7639bde76509f38f23d885975db020a39023505cc438d25b26ef31d2f5df",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/AdminCrmController.php"
+    },
+    {
+      "path": "tests/app/Controllers/AgentController.php",
+      "size": 48463,
+      "sha256": "1a5e8f87014a25ec322f65184d16267ec8aa9844963477ebe84228ab66976e05",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Controllers/AgentController.php"
+    },
+    {
+      "path": "tests/app/Controllers/AiCredentialController.php",
+      "size": 7830,
+      "sha256": "25b561b5c43b5de287d43e885849157e4820cba93f5bdb7ef41a687fe0a0ae33",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/AiCredentialController.php"
+    },
+    {
+      "path": "tests/app/Controllers/AiReprocessController.php",
+      "size": 5581,
+      "sha256": "96fc012a08d455d242bef3829807c4be7a52c95f1b0a5983faec8455caded647",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/AiReprocessController.php"
+    },
+    {
+      "path": "tests/app/Controllers/AuthController.php",
+      "size": 4227,
+      "sha256": "881ce69c736283cc0bb20fb63650cb3668b02bb6e30a659248d6baee917a8801",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/AuthController.php"
+    },
+    {
+      "path": "tests/app/Controllers/AutomationController.php",
+      "size": 2683,
+      "sha256": "18feb5b7536607d8fcd56f3730a58d62f5d24c3e1a2760c7fe163345f290151d",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/AutomationController.php"
+    },
+    {
+      "path": "tests/app/Controllers/BackupAutomationController.php",
+      "size": 3741,
+      "sha256": "60a5b8692ac8199fd8705595d13c0feb946aa138daad1fd42241ef5e449ebc30",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/BackupAutomationController.php"
+    },
+    {
+      "path": "tests/app/Controllers/BillingController.php",
+      "size": 22268,
+      "sha256": "2d253063fb85abae344664c1cea18b29a86c7b6892279607d92de1a63260358b",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Controllers/BillingController.php"
+    },
+    {
+      "path": "tests/app/Controllers/BillingReminderController.php",
+      "size": 4320,
+      "sha256": "6912b07e6a673c381cf1866fcff5013576ddaa6d91b7033d812bc4cb02f75e60",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Controllers/BillingReminderController.php"
+    },
+    {
+      "path": "tests/app/Controllers/CalendarAvailabilityController.php",
+      "size": 13874,
+      "sha256": "6026ae81bfbe1819e9aa13d287b8fd0995f8be6d6b5db8ffbf2b1bf1ad496e6b",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/CalendarAvailabilityController.php"
+    },
+    {
+      "path": "tests/app/Controllers/CalendarController.php",
+      "size": 55696,
+      "sha256": "8ebe57bb588d1e7f86b37912f6ea64aa078c3880ea85ad29c924b5e16df3e74d",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/CalendarController.php"
+    },
+    {
+      "path": "tests/app/Controllers/CampaignController.php",
+      "size": 30715,
+      "sha256": "7b46e780fe7b874bc9a5a9067134b0ec324716195d69956139a7560da86a75f5",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/CampaignController.php"
+    },
+    {
+      "path": "tests/app/Controllers/CommunicationsController.php",
+      "size": 5291,
+      "sha256": "c0a13c98d7dc223a31b27691f3eeb45edc58f0b26b9b1534d243ffd4c5bb585c",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/CommunicationsController.php"
+    },
+    {
+      "path": "tests/app/Controllers/CompanyController.php",
+      "size": 28518,
+      "sha256": "7e9b20a325cf1d46a2c05b93332c05ba14f4771bd028cac2f1d86dcab62b622f",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/CompanyController.php"
+    },
+    {
+      "path": "tests/app/Controllers/ContactController.php",
+      "size": 18320,
+      "sha256": "79a81ee77bc7fb78a657af24fe5c2d6faa1649f13691b91d1af12bcb5abe077c",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/ContactController.php"
+    },
+    {
+      "path": "tests/app/Controllers/ConversationController.php",
+      "size": 115313,
+      "sha256": "d46c9a3e48a4247444bf462e5eaf957131db5af3ffd09b879995dc222e77a5cf",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Controllers/ConversationController.php"
+    },
+    {
+      "path": "tests/app/Controllers/CrmController.php",
+      "size": 21375,
+      "sha256": "e35d5250c5019caa6729e5f64ffecbadbf8e04449e904d56e4b94171d5cd0ede",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/CrmController.php"
+    },
+    {
+      "path": "tests/app/Controllers/DashboardController.php",
+      "size": 5044,
+      "sha256": "77296c6d1754ad05e07f8246bbaea209048e27d529a5d6845c27687b5961b21c",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/DashboardController.php"
+    },
+    {
+      "path": "tests/app/Controllers/DocumentationController.php",
+      "size": 594,
+      "sha256": "0b4ef749c50efd7135d70b71e68f2d82b08649677c2b56a8b867d96901035d57",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/DocumentationController.php"
+    },
+    {
+      "path": "tests/app/Controllers/EvolutionWebhookController.php",
+      "size": 86131,
+      "sha256": "ec97b96a7f86618b3106a9f0ce01e4a2e37e1a58e66f4bd854bb495fedc0cf11",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Controllers/EvolutionWebhookController.php"
+    },
+    {
+      "path": "tests/app/Controllers/ImplementationController.php",
+      "size": 3030,
+      "sha256": "8b19d33a0db13fd17bec5c387c92f66a86a1bf739c5bd4a60741dcbe56bc1289",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/ImplementationController.php"
+    },
+    {
+      "path": "tests/app/Controllers/InstanceController.php",
+      "size": 83319,
+      "sha256": "9e0ca6e2cfdebf6aafb40186c2d378b8ae7053c79fca3116e69f3b3d8a0978e1",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Controllers/InstanceController.php"
+    },
+    {
+      "path": "tests/app/Controllers/MessageGovernanceController.php",
+      "size": 2212,
+      "sha256": "840cfecede401bd18f1d3b864176de1deb448e089e7099dff34187ad05d89829",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/MessageGovernanceController.php"
+    },
+    {
+      "path": "tests/app/Controllers/N8nFlowController.php",
+      "size": 13071,
+      "sha256": "9159a02775446657688c6196c472e2b93f72303829eca7f88ca96b69ef62b010",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/N8nFlowController.php"
+    },
+    {
+      "path": "tests/app/Controllers/N8nTemplateController.php",
+      "size": 25796,
+      "sha256": "f2ba699369f4d0029e5824fab0a5467dd58d655272e6e16c667a7912435f1ccd",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/N8nTemplateController.php"
+    },
+    {
+      "path": "tests/app/Controllers/NotificationsController.php",
+      "size": 3458,
+      "sha256": "50b4ecfca6088e6981069ad12356256d226151f25c088989ee8a5faf3ee23e81",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/NotificationsController.php"
+    },
+    {
+      "path": "tests/app/Controllers/OnboardingController.php",
+      "size": 15096,
+      "sha256": "2f4c3756012103852667d581e2a618df0ada6405fa68620fca86cf207a3775bc",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/OnboardingController.php"
+    },
+    {
+      "path": "tests/app/Controllers/OpenAiUsageController.php",
+      "size": 603,
+      "sha256": "f34df1b4298647faa111424e3cef863b54027a6e8ff8ca34c50e26b876b3eb98",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Controllers/OpenAiUsageController.php"
+    },
+    {
+      "path": "tests/app/Controllers/OperationalAlertsController.php",
+      "size": 3575,
+      "sha256": "cb5e6bb0b888c6c5ed5261ebea90b6f5a6c7ce2e2c467aa353d03994ca574d85",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/OperationalAlertsController.php"
+    },
+    {
+      "path": "tests/app/Controllers/OperationalPanelController.php",
+      "size": 385,
+      "sha256": "bf24503a3d342afc6f2c4746790421bab90f01e9ec99ad5b6a349ea16b7a91f3",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/OperationalPanelController.php"
+    },
+    {
+      "path": "tests/app/Controllers/OperationsCenterController.php",
+      "size": 2345,
+      "sha256": "0d96ee7c1f711de87b56de5c57889a5ae38dd340562f0229fa8c7ba72a82835f",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/OperationsCenterController.php"
+    },
+    {
+      "path": "tests/app/Controllers/OperationsController.php",
+      "size": 7122,
+      "sha256": "d53564973b19383e14c780da3bfe6465ce099b3220217ef4edef3bdd5cf7f9e0",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/OperationsController.php"
+    },
+    {
+      "path": "tests/app/Controllers/PaymentGatewayController.php",
+      "size": 11438,
+      "sha256": "7a6ecddc4378b3a77346aebaf32d95a9c4faa0e5030554d624425fccf2eb8132",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Controllers/PaymentGatewayController.php"
+    },
+    {
+      "path": "tests/app/Controllers/PermissionController.php",
+      "size": 2886,
+      "sha256": "5861d7fa40654ba57f35065fe3b6725bb81327f2a96997c4a4b9263e1826e16d",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/PermissionController.php"
+    },
+    {
+      "path": "tests/app/Controllers/PrivacyController.php",
+      "size": 8045,
+      "sha256": "77ee94f5b83085b5e7231e964467a8f92b9cb811b09100f2f2e4a0de1ce86e87",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/PrivacyController.php"
+    },
+    {
+      "path": "tests/app/Controllers/PromptStudioController.php",
+      "size": 4661,
+      "sha256": "b29700f66edc5c967dd3586fd007b78367a4f0c16e08ed00a43b3613f9032ad1",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/PromptStudioController.php"
+    },
+    {
+      "path": "tests/app/Controllers/QueueController.php",
+      "size": 16178,
+      "sha256": "84cbac4f632725a60786b722e6458764549e199ba57520959c0148b0ac5307c6",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/QueueController.php"
+    },
+    {
+      "path": "tests/app/Controllers/ReportController.php",
+      "size": 18112,
+      "sha256": "d90dafd656cbf3feabe8e34cf74a112693cd7f200acd37f37cf76be48d2cf39c",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/ReportController.php"
+    },
+    {
+      "path": "tests/app/Controllers/ScheduledReportController.php",
+      "size": 6011,
+      "sha256": "fd15becf953c0b77798c116c15083f7000bddfcadd087ba8ebffbda1f1632a21",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/ScheduledReportController.php"
+    },
+    {
+      "path": "tests/app/Controllers/SecurityController.php",
+      "size": 1912,
+      "sha256": "448a2d690f79fa4c4ef0f7457e4ac42b5c5bb258a774fea34bc2d0d24ad6f61e",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/SecurityController.php"
+    },
+    {
+      "path": "tests/app/Controllers/TaskController.php",
+      "size": 12060,
+      "sha256": "366d37f76e15ed8a9930c7209711dc1a2dc681611c6abcf3d74eafac72e78b4a",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/TaskController.php"
+    },
+    {
+      "path": "tests/app/Controllers/TenantHealthController.php",
+      "size": 6035,
+      "sha256": "f54f3cf5c06ec2c323793da4bafb3b91d1dc664beeb558d4aa14aae7c917e4f7",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/TenantHealthController.php"
+    },
+    {
+      "path": "tests/app/Controllers/UserController.php",
+      "size": 8644,
+      "sha256": "b48f48737f07c88e003ffdd707b73ad4360514396a70a23384486c6cc0a3917e",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/UserController.php"
+    },
+    {
+      "path": "tests/app/Controllers/VersionController.php",
+      "size": 378,
+      "sha256": "260a6545a628e1b1c0ea66fd788dfc08894cd2d90ee17a9b9ffa30a197568556",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/VersionController.php"
+    },
+    {
+      "path": "tests/app/Controllers/WhiteLabelController.php",
+      "size": 13356,
+      "sha256": "fce6d8d420659287460667300d3f2813dee943051d6fc75948d9d063bdb7ac95",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Controllers/WhiteLabelController.php"
+    },
+    {
+      "path": "tests/app/Core/Audit.php",
+      "size": 812,
+      "sha256": "d08015436f3fcbc0af6f8633aabc610aecce67256961d490fdc4ea5e9f49a970",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Core/Audit.php"
+    },
+    {
+      "path": "tests/app/Core/Auth.php",
+      "size": 5163,
+      "sha256": "c282bd5d2b8b66c93d8b2762521b17974f834ad6f40777de2be1352ee1cd71ca",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Core/Auth.php"
+    },
+    {
+      "path": "tests/app/Core/Autoloader.php",
+      "size": 699,
+      "sha256": "864e067a5391e6334c79b95d1acf397f152eb9493d012b450793bf81c6e0c080",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Core/Autoloader.php"
+    },
+    {
+      "path": "tests/app/Core/Clock.php",
+      "size": 3512,
+      "sha256": "04daf5d9d3638bc2f4b74bd5f2b647103a848ffc67980dc028e96fbf949a7c95",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Core/Clock.php"
+    },
+    {
+      "path": "tests/app/Core/Crypto.php",
+      "size": 2169,
+      "sha256": "4dcf90c62637b12b3113057efcd455cf417ee6facf5f1dbd8bde86bdd316ff1d",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Core/Crypto.php"
+    },
+    {
+      "path": "tests/app/Core/Csrf.php",
+      "size": 4281,
+      "sha256": "a15c0ba99e10e984f413f250ed2a48f298364017a9de454fdd35f0fd16ebd3d7",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Core/Csrf.php"
+    },
+    {
+      "path": "tests/app/Core/Database.php",
+      "size": 1630,
+      "sha256": "b1b5960233983161147cb1be48178adec6a6f567108bcba2c64a2a00b48ca72f",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Core/Database.php"
+    },
+    {
+      "path": "tests/app/Core/Env.php",
+      "size": 1783,
+      "sha256": "f5716e1083470254dce320943cca510f67f4fff81d450721a65c8ce69906d9ec",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Core/Env.php"
+    },
+    {
+      "path": "tests/app/Core/Flash.php",
+      "size": 378,
+      "sha256": "71885941df78c70c346c3f7c6c0ada731fa7ea479dce439f2ac003c217e6c9cf",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Core/Flash.php"
+    },
+    {
+      "path": "tests/app/Core/PublicId.php",
+      "size": 19885,
+      "sha256": "67f8e8d3fdb1d3ae987be61ff9a3b3711ac58d27a6eb070c9ed52ad9d04fdf64",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Core/PublicId.php"
+    },
+    {
+      "path": "tests/app/Core/RequestSecurity.php",
+      "size": 4931,
+      "sha256": "70312ef72391baae1e8718c45d5bf42b7e17476a839e3b6b41ac7f7a64b61428",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Core/RequestSecurity.php"
+    },
+    {
+      "path": "tests/app/Core/Router.php",
+      "size": 13333,
+      "sha256": "4c69d2b8a9f00efc7004ac67d0948fdf47f4ff9abaf3f45e21e953390d65591e",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Core/Router.php"
+    },
+    {
+      "path": "tests/app/Core/View.php",
+      "size": 832,
+      "sha256": "91cdddaad74640a59e643d9691d252ebd9f63bfa4760faef49c44ce6ef4e0033",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Core/View.php"
+    },
+    {
+      "path": "tests/app/Services/AccessControlService.php",
+      "size": 13416,
+      "sha256": "7de8fa3035afb522b7e3059f3a246210bcc2a66b68728fd6f65b9a1481a3ba43",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AccessControlService.php"
+    },
+    {
+      "path": "tests/app/Services/AdminDashboardService.php",
+      "size": 37919,
+      "sha256": "9c673da384b1ccb3daa11f5cd45d0ff1b50711d7ba8e9323a18ea382ff4f3235",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AdminDashboardService.php"
+    },
+    {
+      "path": "tests/app/Services/AdminExecutiveDashboardService.php",
+      "size": 21524,
+      "sha256": "2b8c6e3e7efc9c582d54aa8f4e52adfa81febb4c8045afe47c0a1eadb6ffb951",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AdminExecutiveDashboardService.php"
+    },
+    {
+      "path": "tests/app/Services/AdminExecutiveReportService.php",
+      "size": 36283,
+      "sha256": "c0fa8b93a1527fa544f5bfd9cc661f3c9d10f5937b3e99fcec1580f52f3f8f3c",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AdminExecutiveReportService.php"
+    },
+    {
+      "path": "tests/app/Services/AfterHoursAcknowledgementPolicyService.php",
+      "size": 1416,
+      "sha256": "c2728813cab5a078c44b0fe58b139d97ee04051271927efec45731358266933c",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AfterHoursAcknowledgementPolicyService.php"
+    },
+    {
+      "path": "tests/app/Services/AgentOperatingPolicyService.php",
+      "size": 6149,
+      "sha256": "41d2f581e5906320b894749a642d0b83e95e091699b9ec2ba0691b05a1cd9498",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AgentOperatingPolicyService.php"
+    },
+    {
+      "path": "tests/app/Services/AgentRoutingService.php",
+      "size": 17166,
+      "sha256": "5cdb55bf55800c38af222497e0cd237ec8e4e32d9fe5b1ff9dd6ce9915d47494",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AgentRoutingService.php"
+    },
+    {
+      "path": "tests/app/Services/AiAfterHoursRecoveryService.php",
+      "size": 26281,
+      "sha256": "b7466ad5e34bb43c2fd8b212b1b5359fa9cf2c93ce0d4afc917054567755ed0e",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/AiAfterHoursRecoveryService.php"
+    },
+    {
+      "path": "tests/app/Services/AiAutomationService.php",
+      "size": 75726,
+      "sha256": "e5496797f07239dc951beedde59defc37689e6fda8b00cc748b8d4d7eaf6327b",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/AiAutomationService.php"
+    },
+    {
+      "path": "tests/app/Services/AiContextBuilder.php",
+      "size": 7933,
+      "sha256": "b20a8532eb0b972c6e70e580038c896a220cfc4f39e08b32b14ccc2710690a82",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/AiContextBuilder.php"
+    },
+    {
+      "path": "tests/app/Services/AiEfficiencyPolicyService.php",
+      "size": 3153,
+      "sha256": "dc6be686ae980fa98f9b1f3bc78beb7d649ed0629663c4666063b63ca82d7058",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AiEfficiencyPolicyService.php"
+    },
+    {
+      "path": "tests/app/Services/AiExactCacheService.php",
+      "size": 6544,
+      "sha256": "e6631b5987c9ede8bc0369a1d8f484778554010fc2a4869f6709fd4bfbb3eac9",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AiExactCacheService.php"
+    },
+    {
+      "path": "tests/app/Services/AiLocalReplyService.php",
+      "size": 2691,
+      "sha256": "9dd01739f9886ad6d582b42cf2b0334fb6666ce2a44ea4709144ea8a270277c7",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AiLocalReplyService.php"
+    },
+    {
+      "path": "tests/app/Services/AiModelService.php",
+      "size": 25586,
+      "sha256": "fb9bdc2160d019b6bab76927c0af334950e91bfd1d0ebfc9b8875914ee9167ee",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/AiModelService.php"
+    },
+    {
+      "path": "tests/app/Services/AiReplyTimingService.php",
+      "size": 3263,
+      "sha256": "0b2f0f4c29d39c1f399faa4100dcca2e7c5622c2f96545b70c6931b2b1152500",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AiReplyTimingService.php"
+    },
+    {
+      "path": "tests/app/Services/AiReprocessService.php",
+      "size": 39650,
+      "sha256": "dac2e3a1a6940fb6176fbaba540db37a7ba7aaac8b69978e7e5c7b43ba5493b3",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AiReprocessService.php"
+    },
+    {
+      "path": "tests/app/Services/AiRouterService.php",
+      "size": 1902,
+      "sha256": "d73181c7c18f1585050d3f611b49303ced38528adb42ea46ad9cc05858f1f01a",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AiRouterService.php"
+    },
+    {
+      "path": "tests/app/Services/AiUsageService.php",
+      "size": 41055,
+      "sha256": "9b51dee68b421c3e778684c1f09e104c29c75a97631aeffe7aa80596d2433ab4",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/AiUsageService.php"
+    },
+    {
+      "path": "tests/app/Services/AppVersionService.php",
+      "size": 46969,
+      "sha256": "9cd4bf74c066c4b07e76abc965b0efce0a0bd28d2d227be28efd3f4c824a7b49",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/AppVersionService.php"
+    },
+    {
+      "path": "tests/app/Services/AutomationWebhookService.php",
+      "size": 19512,
+      "sha256": "827a1e1fb703b1ffa5cc9f663219e6116c7c043852661bbaa8b7514e73b715f6",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/AutomationWebhookService.php"
+    },
+    {
+      "path": "tests/app/Services/BackupAutomationService.php",
+      "size": 44563,
+      "sha256": "1980cb493d0e0464cdcbeb155b5aea8739c318f78bd0aafd0c8acc6dc5e8f335",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/BackupAutomationService.php"
+    },
+    {
+      "path": "tests/app/Services/BackupSchedulePolicyService.php",
+      "size": 5097,
+      "sha256": "ec4c8036b556935456fe05933de8074d1020866d3f256f203943dcfaf7be9b74",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/BackupSchedulePolicyService.php"
+    },
+    {
+      "path": "tests/app/Services/BillingReminderService.php",
+      "size": 14921,
+      "sha256": "97dfc002e8a346fa8896fea84aa0c0cc5bc1d85832a4ae92b9a9fffa035326c6",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/BillingReminderService.php"
+    },
+    {
+      "path": "tests/app/Services/BrandingService.php",
+      "size": 8676,
+      "sha256": "dabef855b665e59c2435849dc9bdd717adad45d63b2998f71c5f22e346bd0a37",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/BrandingService.php"
+    },
+    {
+      "path": "tests/app/Services/CalendarAvailabilityService.php",
+      "size": 118614,
+      "sha256": "785512a0c491d1609d178d3ebf675f811ac8dc2e3c85e0088b8c25b1bc6b53c6",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/CalendarAvailabilityService.php"
+    },
+    {
+      "path": "tests/app/Services/CalendarConversationService.php",
+      "size": 52198,
+      "sha256": "829aad3981ea852df08ac8d22c661b459ebcfb7f6261e9712bc09f5570356c0a",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/CalendarConversationService.php"
+    },
+    {
+      "path": "tests/app/Services/CalendarGoogleLifecycleService.php",
+      "size": 48568,
+      "sha256": "3d923c738aa62ca7339c84fc79b7769de7d108a9d38deb0a1cb116b1c6c959aa",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/CalendarGoogleLifecycleService.php"
+    },
+    {
+      "path": "tests/app/Services/ClientCommunicationService.php",
+      "size": 31737,
+      "sha256": "83f0f28b9f43ab4c2a21c5faa15500fccd5e51fd59b91161418971c50a910c15",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/ClientCommunicationService.php"
+    },
+    {
+      "path": "tests/app/Services/CommercialBetaService.php",
+      "size": 33420,
+      "sha256": "f32ca7db6776cdbe7445aaa7556864685bc6fd020f36fa2a9583ae8d515d1d35",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/CommercialBetaService.php"
+    },
+    {
+      "path": "tests/app/Services/ConversationAttachmentService.php",
+      "size": 16278,
+      "sha256": "05232dffd0036f0df0bc0d35add77648496fec5ba83a486ebd83416bf30c25f9",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/ConversationAttachmentService.php"
+    },
+    {
+      "path": "tests/app/Services/ConversationCycleService.php",
+      "size": 6875,
+      "sha256": "afd668e10e7bb9dd1d38bb67fed06c8a5be9ddfa00705a81a630757e966fe1d7",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/ConversationCycleService.php"
+    },
+    {
+      "path": "tests/app/Services/ConversationFlowService.php",
+      "size": 32371,
+      "sha256": "32145836e3de1945bba6abdc8b935ec7ab30d630eac976d2b4c54a4d02a11ce5",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/ConversationFlowService.php"
+    },
+    {
+      "path": "tests/app/Services/ConversationOwnershipService.php",
+      "size": 20745,
+      "sha256": "69aa969cb9d8d7faf7d9b0da12005a4957f392a050a0c7f52465b40b14f1e47b",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/ConversationOwnershipService.php"
+    },
+    {
+      "path": "tests/app/Services/CrmAutoService.php",
+      "size": 13394,
+      "sha256": "0b3cb4e9722fe7af97d9bf18498d3f4e190958e6de8056c65fb15f4e94339e31",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/CrmAutoService.php"
+    },
+    {
+      "path": "tests/app/Services/EvolutionService.php",
+      "size": 14265,
+      "sha256": "77ad1d7a288bcbf93611ca55a38bd2fc40bc80d289e454273d05960fac2b67e4",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/EvolutionService.php"
+    },
+    {
+      "path": "tests/app/Services/ExecutiveMetricsPolicyService.php",
+      "size": 3582,
+      "sha256": "1fb313fd8ed04ecc8c32dfada65664bbdf84cdd7c00631d6c915e2439233a04e",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/ExecutiveMetricsPolicyService.php"
+    },
+    {
+      "path": "tests/app/Services/ExecutiveReportPdfService.php",
+      "size": 32163,
+      "sha256": "c58bde3e7fa3b77c7681f90b1722d4eef091129d177798068e5835f9cdca805f",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/ExecutiveReportPdfService.php"
+    },
+    {
+      "path": "tests/app/Services/FreeTrialService.php",
+      "size": 5607,
+      "sha256": "0b913bf53bcda56afb6e088b273c59b20105883bc43d3653216b37ca4bd6f6db",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/FreeTrialService.php"
+    },
+    {
+      "path": "tests/app/Services/ImplementationChecklistService.php",
+      "size": 31988,
+      "sha256": "eff817426c47514c4eea068be4cb8e8c3e9c0c0805c09bf195e3bf2fd5cfc523",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/ImplementationChecklistService.php"
+    },
+    {
+      "path": "tests/app/Services/MessageGovernanceService.php",
+      "size": 11980,
+      "sha256": "88b5b8073258158d526b479a3c29f840fe2b22fb2e696f03754bed474fae7390",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/MessageGovernanceService.php"
+    },
+    {
+      "path": "tests/app/Services/NotificationService.php",
+      "size": 14348,
+      "sha256": "6eb58412668219a1e6f78902d525783eab56c6f7bbfe9b05c272ec60561a0428",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/NotificationService.php"
+    },
+    {
+      "path": "tests/app/Services/OnboardingGuideService.php",
+      "size": 45897,
+      "sha256": "437b647592c556ad44629c714b75b4cf7d078ddb7b7f12eb57e92aae2735f502",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/OnboardingGuideService.php"
+    },
+    {
+      "path": "tests/app/Services/OpenAiOrganizationUsageService.php",
+      "size": 18828,
+      "sha256": "9b5d21261c50d8d39d69fafd5da05d79d92c412f8e2e197731f98a3b9aed35fd",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/OpenAiOrganizationUsageService.php"
+    },
+    {
+      "path": "tests/app/Services/OperationalAlertService.php",
+      "size": 32185,
+      "sha256": "3c01a360d8b53a561df7d0c512718236a2feff7888bd003d863462a5464d2c88",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/OperationalAlertService.php"
+    },
+    {
+      "path": "tests/app/Services/OperationalHealthService.php",
+      "size": 41222,
+      "sha256": "fb1ea42171dee4f62ff28903c484bfa39d8db3cc94514035fd6db16cd2d81afb",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/OperationalHealthService.php"
+    },
+    {
+      "path": "tests/app/Services/OperationalLanguageService.php",
+      "size": 36449,
+      "sha256": "12da180252931655ac23068dff61994baed3d684bc3b4642a2b9829a47694583",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/OperationalLanguageService.php"
+    },
+    {
+      "path": "tests/app/Services/OperationalOverviewService.php",
+      "size": 365,
+      "sha256": "a47ed943cbdd9f615002871f98209d5edc7781e9eda6f6de25b650212f3dd175",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/OperationalOverviewService.php"
+    },
+    {
+      "path": "tests/app/Services/OperationalPlaybookService.php",
+      "size": 14003,
+      "sha256": "158688a2590d113012ecade753971eefe130d894ce487775be0712657ce16973",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/OperationalPlaybookService.php"
+    },
+    {
+      "path": "tests/app/Services/OperationsService.php",
+      "size": 68244,
+      "sha256": "c40f4607e2d8ab91697fa28444215186e662a958243fe5aa4172d0349fbd543f",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/OperationsService.php"
+    },
+    {
+      "path": "tests/app/Services/PaymentGatewayService.php",
+      "size": 50455,
+      "sha256": "b0c1ddc0ff13699d6655f49efad37c3fee1e7e7c7bbbdb5de0808530f1d3d0eb",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/PaymentGatewayService.php"
+    },
+    {
+      "path": "tests/app/Services/PreSchedulingService.php",
+      "size": 83249,
+      "sha256": "8a2ddb3a0bbf3ee5f1c1af7942532bdef2e91406c7a598544933a6fe5e0e82b2",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/PreSchedulingService.php"
+    },
+    {
+      "path": "tests/app/Services/PrivacyService.php",
+      "size": 17410,
+      "sha256": "20749fd706af20d93682e9cf720531d823f9f1d8c473b882834aa1bb536eb99a",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/PrivacyService.php"
+    },
+    {
+      "path": "tests/app/Services/ProfessionalCalendarService.php",
+      "size": 24945,
+      "sha256": "83525f5ab9d30fdf9a27af0993d6c360ac200b6d29b7fb9e054cfc2b36b5e5d6",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/ProfessionalCalendarService.php"
+    },
+    {
+      "path": "tests/app/Services/PromptStudioService.php",
+      "size": 15039,
+      "sha256": "602626a3603723a0e6bd6f11b798c3ced3f4c5bdee310bb8fba6dd5189f0caf7",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/PromptStudioService.php"
+    },
+    {
+      "path": "tests/app/Services/ReportingAggregationService.php",
+      "size": 21144,
+      "sha256": "e1505e01d126ab733851c369057f8c1bc6504ad82111b3916c17157d9b3d1367",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/ReportingAggregationService.php"
+    },
+    {
+      "path": "tests/app/Services/ScheduledReportService.php",
+      "size": 52992,
+      "sha256": "65dbb4ea60fc681fd8d9a055071714f08b573288f643f978f9fcee7121884c47",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/ScheduledReportService.php"
+    },
+    {
+      "path": "tests/app/Services/SecurityService.php",
+      "size": 42307,
+      "sha256": "ccbe9abb7517394982416dd3cd679e1e6b5be3267d5ec77375149fdb91916ebf",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/SecurityService.php"
+    },
+    {
+      "path": "tests/app/Services/SimplePdfDocument.php",
+      "size": 10810,
+      "sha256": "76a6a1c17525c25b9bca7b33e0d26051c3907696a86c8b243362db8efc7c7621",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/SimplePdfDocument.php"
+    },
+    {
+      "path": "tests/app/Services/SubscriptionService.php",
+      "size": 23507,
+      "sha256": "ca85b782bcaa83b387aea6dd2fa48732410bf65cdc392dc095b5f89a65a2a60b",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Services/SubscriptionService.php"
+    },
+    {
+      "path": "tests/app/Services/TeamMetricsFoundationService.php",
+      "size": 5229,
+      "sha256": "63ceed6597d96359714b7b1dd386022af9c5baae67ebdf9c6b2c48a86ae06d5c",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/TeamMetricsFoundationService.php"
+    },
+    {
+      "path": "tests/app/Services/TeamProfessionalReportService.php",
+      "size": 47385,
+      "sha256": "6948ebbfff9e2ce545879166b74c5e3a6412fb226f68628328d72924a5b78cab",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/TeamProfessionalReportService.php"
+    },
+    {
+      "path": "tests/app/Services/TenantExecutiveReportService.php",
+      "size": 33453,
+      "sha256": "fad0f99ab150d9df4c9baf3df0c6ff0473c8b775422e3ef3b32a998d3cac951a",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/TenantExecutiveReportService.php"
+    },
+    {
+      "path": "tests/app/Services/TenantHealthService.php",
+      "size": 102892,
+      "sha256": "6b9e6d2122faaefa311b4b25c797f38196a34f0c510bd608d91c06236a4807a7",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/TenantHealthService.php"
+    },
+    {
+      "path": "tests/app/Services/TenantIsolationService.php",
+      "size": 6582,
+      "sha256": "b8c919c20c09a7be8483619f215262fd77e466e2b51fb25d293e9d2860edb0b5",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/TenantIsolationService.php"
+    },
+    {
+      "path": "tests/app/Services/TenantModuleService.php",
+      "size": 11619,
+      "sha256": "d81a80e2410d76dad68f1040cca14d567b539407086aa599cda1beb29b390532",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Services/TenantModuleService.php"
+    },
+    {
+      "path": "tests/app/Views/access/restricted.php",
+      "size": 2452,
+      "sha256": "e52bc6f57c62684cbfedd567491a121fbd458db932b81cebdfd57a14e8ee9e9c",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/access/restricted.php"
+    },
+    {
+      "path": "tests/app/Views/agents/index.php",
+      "size": 66936,
+      "sha256": "c22811de040e99e6e0a787a75bde307b476f2a03991dd0bce0a572e764eb85a0",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/agents/index.php"
+    },
+    {
+      "path": "tests/app/Views/ai_credentials/index.php",
+      "size": 18497,
+      "sha256": "fd7fece105b1d4baebaf12ab4e12b43bee336e5945660fd3d496cc143745967e",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/ai_credentials/index.php"
+    },
+    {
+      "path": "tests/app/Views/auth/login.php",
+      "size": 6577,
+      "sha256": "6f08e62136ed4833e1cca16828acf188dc7a5dcfd3379ec0f019a8caa8255605",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/auth/login.php"
+    },
+    {
+      "path": "tests/app/Views/automations/index.php",
+      "size": 9883,
+      "sha256": "7edccab30cbdf51b41b9bb4f04618205786e67bdeda0779d26282b06544e87bf",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/automations/index.php"
+    },
+    {
+      "path": "tests/app/Views/billing/index.php",
+      "size": 38934,
+      "sha256": "925efcb7c9c91d8bb3e1e81949ff9acdd6c2a654cffe4b09ddae2acd480a3efc",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/billing/index.php"
+    },
+    {
+      "path": "tests/app/Views/billing/subscription.php",
+      "size": 18011,
+      "sha256": "1c62d4ca16497f6bc562ae2e59680808c5395a02b29869fe26c9944303ca72a1",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/billing/subscription.php"
+    },
+    {
+      "path": "tests/app/Views/billing/subscription_admin.php",
+      "size": 13376,
+      "sha256": "b19f4be9181f564b1d1d8fca2300779645173f935411f0ce5cf47200384696c5",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/billing/subscription_admin.php"
+    },
+    {
+      "path": "tests/app/Views/billing_reminders/index.php",
+      "size": 9377,
+      "sha256": "e579ebefc3c1a5290d0af6c74f072371c89aa64a61a5d159cf8e7624a8b72b00",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/billing_reminders/index.php"
+    },
+    {
+      "path": "tests/app/Views/calendar/index.php",
+      "size": 32614,
+      "sha256": "51f31afea731c959479b808525a47dafbeaca11cca13f4f1ba667274bd866d20",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/calendar/index.php"
+    },
+    {
+      "path": "tests/app/Views/calendar_availability/index.php",
+      "size": 51804,
+      "sha256": "13804200144cdfe09ef432d92529b847ad2f7eb010f77626b5d038c7754be83e",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/calendar_availability/index.php"
+    },
+    {
+      "path": "tests/app/Views/campaigns/index.php",
+      "size": 13756,
+      "sha256": "a50842f5ecedae5371cc9b1a788435721be9ffc2372dd76dbb68c66ea4a0f7b4",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/campaigns/index.php"
+    },
+    {
+      "path": "tests/app/Views/communications/index.php",
+      "size": 19944,
+      "sha256": "70d85c4ea8f0ee5f576a10735c6f209e4e852704bab7516f907f474b509841fb",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/communications/index.php"
+    },
+    {
+      "path": "tests/app/Views/companies/_account_tabs.php",
+      "size": 1841,
+      "sha256": "aebc1eba66568a85460da59dc6d742ef86b8defd98e044b3e824fe0ff53e618a",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/companies/_account_tabs.php"
+    },
+    {
+      "path": "tests/app/Views/companies/_create_form.php",
+      "size": 2769,
+      "sha256": "994bbf34e417cb513686944b29584d55644e1943ad06bdd36bd4ba9d1540975d",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/companies/_create_form.php"
+    },
+    {
+      "path": "tests/app/Views/companies/health.php",
+      "size": 30204,
+      "sha256": "c59b2b64b4b23ade742374fe39934d2dcaa4eca7fdd4081654dd85c53cd25d46",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/companies/health.php"
+    },
+    {
+      "path": "tests/app/Views/companies/index.php",
+      "size": 16624,
+      "sha256": "ef681d407f5f12a2e1eb2c711777a9af8448dd4d44dc914d1cfd0349a82be0b5",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/companies/index.php"
+    },
+    {
+      "path": "tests/app/Views/companies/overview.php",
+      "size": 17296,
+      "sha256": "a5929afeb2daad8a1e87ad56835487aeb1e16d76a25855cd28d82cb586509e51",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/companies/overview.php"
+    },
+    {
+      "path": "tests/app/Views/companies/settings.php",
+      "size": 45449,
+      "sha256": "fe813c99fa2396cf031d72846dbff1013dd63aba237fa536bd9e1ad3cb853c08",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/companies/settings.php"
+    },
+    {
+      "path": "tests/app/Views/contacts/index.php",
+      "size": 18043,
+      "sha256": "637995d8a36ec16613181a2a787f3aeed03ef0dc31d41e569997a1273f872478",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/contacts/index.php"
+    },
+    {
+      "path": "tests/app/Views/conversations/index.php",
+      "size": 70121,
+      "sha256": "2d3dbe586ea930496ca07f8e3d1e009b84e46d7da8897809a12705dfb443cea5",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/conversations/index.php"
+    },
+    {
+      "path": "tests/app/Views/crm/admin.php",
+      "size": 21508,
+      "sha256": "51fb1bf6681a0e879afc89590803e6dde574c51dd782b193328700d7bf035a3b",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/crm/admin.php"
+    },
+    {
+      "path": "tests/app/Views/crm/admin_setup.php",
+      "size": 941,
+      "sha256": "b4c057576760e725acddf966ab3fa32e4aa3bcf223a5c649921ea9e970b84b42",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/crm/admin_setup.php"
+    },
+    {
+      "path": "tests/app/Views/crm/pipeline.php",
+      "size": 18509,
+      "sha256": "79c901a7bf72f22b2bc42f9ccd2fc89ea5293b7dc70673e1112908af4a819728",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/crm/pipeline.php"
+    },
+    {
+      "path": "tests/app/Views/dashboard/admin.php",
+      "size": 14123,
+      "sha256": "b8d96f111b633eb6a45a8fad7b353df1acd0f10544bfe45ae82095e9aeb3c286",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/dashboard/admin.php"
+    },
+    {
+      "path": "tests/app/Views/dashboard/client.php",
+      "size": 7625,
+      "sha256": "5bd4ce10fe9517e3fa1cec647b4131107231b2eb3956583af119797ad30b3a01",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/dashboard/client.php"
+    },
+    {
+      "path": "tests/app/Views/docs/beta.php",
+      "size": 5925,
+      "sha256": "04097d4ce170f5b7979858512530fb2616c513143d239ce3c8a4e1676029da21",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/docs/beta.php"
+    },
+    {
+      "path": "tests/app/Views/docs/index.php",
+      "size": 23281,
+      "sha256": "3a38feedae12b60585318740cece7e267e78f7429622d0b772e6e5f08bba522e",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/docs/index.php"
+    },
+    {
+      "path": "tests/app/Views/docs/status.php",
+      "size": 7180,
+      "sha256": "fd2f117d483b917139393bb02768c492ec14d1a4aa028b8c7bf725aa9a44050a",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/docs/status.php"
+    },
+    {
+      "path": "tests/app/Views/errors/404.php",
+      "size": 333,
+      "sha256": "e4d79eb032b6d92796a69ee8a172a3c2c73ac949dd9e318c40fb8b9805b5c37b",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/errors/404.php"
+    },
+    {
+      "path": "tests/app/Views/implementation/index.php",
+      "size": 4547,
+      "sha256": "c3123327a2e7e74fc8d5b95c407cbf7e44b2aa3715293ef585441d751977c525",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/implementation/index.php"
+    },
+    {
+      "path": "tests/app/Views/implementation/show.php",
+      "size": 5515,
+      "sha256": "c73c9ff89ae867198446a710527246fbff87ffa8f8a5172b88ae1b5e5e8d9340",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/implementation/show.php"
+    },
+    {
+      "path": "tests/app/Views/implementations/index.php",
+      "size": 7181,
+      "sha256": "5c4cfd53658634fe70d00021cbdc1316fb14da83d8809a94687a651bb2955b0a",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/implementations/index.php"
+    },
+    {
+      "path": "tests/app/Views/instances/_client.php",
+      "size": 6940,
+      "sha256": "7e19130c45f5d8359aa971fdd4818bc799fcb42cc6e5bc9853c6ac1c268217b1",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/instances/_client.php"
+    },
+    {
+      "path": "tests/app/Views/instances/_routing.php",
+      "size": 4987,
+      "sha256": "dc9743c6b0aedf080724becc18387f9e897c42e7e37e72c7ae5bfb99b18e0ff6",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/instances/_routing.php"
+    },
+    {
+      "path": "tests/app/Views/instances/index.php",
+      "size": 51037,
+      "sha256": "33594a4fed0594aaafe435700e1048a3a31b1ca67d104f2eb9748f3376da46a4",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/instances/index.php"
+    },
+    {
+      "path": "tests/app/Views/layouts/app.php",
+      "size": 27862,
+      "sha256": "e15d52ef33165d7f9295d3ff46d1ecb5045138ee0960b8f9d5246272edc01e44",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/layouts/app.php"
+    },
+    {
+      "path": "tests/app/Views/layouts/guest.php",
+      "size": 918,
+      "sha256": "a5a16a7ff3ad18fde517e6e9175a350e85937f662c309411c0b3d592dfb93cbd",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/layouts/guest.php"
+    },
+    {
+      "path": "tests/app/Views/layouts/restricted.php",
+      "size": 918,
+      "sha256": "40639876009a8e3918efd695d1ed173f74cb47a2d7aa9bec566646595db86f75",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/layouts/restricted.php"
+    },
+    {
+      "path": "tests/app/Views/n8n_flows/_nav.php",
+      "size": 651,
+      "sha256": "c2dd3e3877988cd66431f00b18714186ba6323196537b5e43b0895ed4836a241",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/n8n_flows/_nav.php"
+    },
+    {
+      "path": "tests/app/Views/n8n_flows/hub.php",
+      "size": 3385,
+      "sha256": "fb10b4e08da3d16fd40d67120e3aa1dbcc9321709c6096878b08e85aec53c41a",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/n8n_flows/hub.php"
+    },
+    {
+      "path": "tests/app/Views/n8n_flows/index.php",
+      "size": 10027,
+      "sha256": "679d958653696483c40feaabb4d7af0bf8a9e36d2ada52066ffb46739f11a4f1",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/n8n_flows/index.php"
+    },
+    {
+      "path": "tests/app/Views/n8n_templates/index.php",
+      "size": 4870,
+      "sha256": "83160d7a4f2b258dd27a7ef5fbd232a15fee9ac889915f765222e06605aa8062",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/n8n_templates/index.php"
+    },
+    {
+      "path": "tests/app/Views/notifications/index.php",
+      "size": 8856,
+      "sha256": "887a8c9f312650d5ce56eb203511708fbc6cdecfc55be6d451714ed238c084ad",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/notifications/index.php"
+    },
+    {
+      "path": "tests/app/Views/onboarding/index.php",
+      "size": 28387,
+      "sha256": "92bc88743c341910f65db74e3f630546d2f2b45976e97f7713cf8a30baa7741e",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/onboarding/index.php"
+    },
+    {
+      "path": "tests/app/Views/openai_usage/index.php",
+      "size": 11837,
+      "sha256": "c19207be302b7f9a5344c7d0ecf010f4e3938cfef396c9be0274d8507dd2e0aa",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/openai_usage/index.php"
+    },
+    {
+      "path": "tests/app/Views/operations/ai_reprocess.php",
+      "size": 23719,
+      "sha256": "709db38d875ac6c8eca7dded5ed7b118c99ef1b6b34e367875d84eacda32c0e2",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/operations/ai_reprocess.php"
+    },
+    {
+      "path": "tests/app/Views/operations/alerts.php",
+      "size": 19997,
+      "sha256": "da66dbba992c90d6ed3ee65ca8f9335a196723a9868340f6ef3600e82eaac545",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/operations/alerts.php"
+    },
+    {
+      "path": "tests/app/Views/operations/backup_automation.php",
+      "size": 24746,
+      "sha256": "60fc1a4773b0f219ccca7e02122b6146d959c28410864af41b2a632de8a6d119",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/operations/backup_automation.php"
+    },
+    {
+      "path": "tests/app/Views/operations/center.php",
+      "size": 5258,
+      "sha256": "d75377b5dfbf5e9bcdc7a59f4d712c3b2226ebb495efdb5d4c0b2a5067197929",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/operations/center.php"
+    },
+    {
+      "path": "tests/app/Views/operations/index.php",
+      "size": 22312,
+      "sha256": "fee1f1da215a7e77d0b52143a66183fe1c0cd1a773298d16114052de45a8f19e",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/operations/index.php"
+    },
+    {
+      "path": "tests/app/Views/operations/overview.php",
+      "size": 17374,
+      "sha256": "1da1e2ec6eb201e86b2b6ea9fee0f38ed3a1f0331f8359f5cfd72171f74e1739",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/operations/overview.php"
+    },
+    {
+      "path": "tests/app/Views/payment_gateways/index.php",
+      "size": 10389,
+      "sha256": "508e466aead8453b474118a84a2bffd93b9393f72b3f0ca02a2ac9901a51d67d",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/payment_gateways/index.php"
+    },
+    {
+      "path": "tests/app/Views/permissions/admin.php",
+      "size": 4800,
+      "sha256": "9d38b4deb1da8386d800281651bf267df00fdf4da2c1ddfdd075449a4bd20525",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/permissions/admin.php"
+    },
+    {
+      "path": "tests/app/Views/permissions/index.php",
+      "size": 7802,
+      "sha256": "5bd688ead31b5139283a29c618caa95c2d5672350411cff5bc48aad6447e06f1",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/permissions/index.php"
+    },
+    {
+      "path": "tests/app/Views/privacy/accept.php",
+      "size": 2083,
+      "sha256": "7265f0cc459041ed3b170a5abd12870cb57aba92a9ec2eee99e50ff946e37909",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/privacy/accept.php"
+    },
+    {
+      "path": "tests/app/Views/privacy/admin.php",
+      "size": 15735,
+      "sha256": "8a1fe30813f5cee49eba984ece9306f49f8d0499c8f9a862e8d2a9ecb8a62ec5",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/privacy/admin.php"
+    },
+    {
+      "path": "tests/app/Views/privacy/index.php",
+      "size": 18394,
+      "sha256": "90b2053f04c8e0202374571db989c60a7c6d777d2505e6a75cb4f2d46ce0ba79",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/privacy/index.php"
+    },
+    {
+      "path": "tests/app/Views/queue/index.php",
+      "size": 10000,
+      "sha256": "5fc88c02de341c04686fd70dc47118887f8298b977cb8a1e4636538506ef5313",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/queue/index.php"
+    },
+    {
+      "path": "tests/app/Views/reports/admin.php",
+      "size": 34074,
+      "sha256": "06c2717757cb111321b94446d2409976d9c9e372e892c3a29719975d05daa823",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/reports/admin.php"
+    },
+    {
+      "path": "tests/app/Views/reports/automatic.php",
+      "size": 21327,
+      "sha256": "531758b4f91d628e4ecaba3645f81f11c0dc4afce3e293c4f566f49acaa52e3b",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/reports/automatic.php"
+    },
+    {
+      "path": "tests/app/Views/reports/index.php",
+      "size": 35144,
+      "sha256": "4cde48a697d1c8ea9715ec62340d8e7b1fecc8fbf7e5b569cf055d988d201432",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/reports/index.php"
+    },
+    {
+      "path": "tests/app/Views/reports/team.php",
+      "size": 23406,
+      "sha256": "c379756c59e2ebf383f65ca1257e1e42154c87fa3396514a003f6f188c8df6b9",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/reports/team.php"
+    },
+    {
+      "path": "tests/app/Views/security/index.php",
+      "size": 13775,
+      "sha256": "fa1e65de3992bea5f9ac41094c100fae0c737b249e444d6a100fba1239d15fda",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/security/index.php"
+    },
+    {
+      "path": "tests/app/Views/tasks/index.php",
+      "size": 8629,
+      "sha256": "f362d3e694b812c77e7eccf6decdd25b40cd1d801d199fbf7f6f3c77c96bcda7",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/tasks/index.php"
+    },
+    {
+      "path": "tests/app/Views/users/_client.php",
+      "size": 12236,
+      "sha256": "d2a25825f303aa82eddd6bd5a6b236c0a9ae6c0975c3179946abb8745cdcd259",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/users/_client.php"
+    },
+    {
+      "path": "tests/app/Views/users/index.php",
+      "size": 8558,
+      "sha256": "4a906f7969b5f2c8c77a923fd6350990aad97085250364db6d541c201fd846e5",
+      "classification": "mirrored-identical",
+      "counterpart": "app/Views/users/index.php"
+    },
+    {
+      "path": "tests/app/Views/white_label/index.php",
+      "size": 18031,
+      "sha256": "2e32f4be188e8a0a2108b715bd21e008eb1d00597bcb4f8269a74bb88eb3251b",
+      "classification": "mirrored-divergent",
+      "counterpart": "app/Views/white_label/index.php"
+    },
+    {
+      "path": "tests/backup-dispatch-retry-smoke.php",
+      "size": 3939,
+      "sha256": "e16236719e9ffce437559df5c86e82323cb45225dfd49a8e4b836e43682ec71a",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/billing-cron-response-example.json",
+      "size": 83,
+      "sha256": "201e5cd220b8bc4cb73809594eac2b49afc0319a8eb63adc43150a81e07ad2cb",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/billing-plan-pricing-v362011-smoke.php",
+      "size": 2162,
+      "sha256": "71af4e7b2583ccc0081f8bc64cfc1ddf3745191cbd9ea86baa1972ae7a194a3d",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/billing-reminder-n8n-payload.json",
+      "size": 535,
+      "sha256": "c058d7e691041ff90e1f061a2abff38ee0189e04e46fbae8ea28da8a72e1b2fb",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/bin/ai-reprocess.php",
+      "size": 541,
+      "sha256": "eef61c9b839785ba23126e8fcfec8b12b47aa9538e92c101fcd90efb142e602f",
+      "classification": "mirrored-identical",
+      "counterpart": "bin/ai-reprocess.php"
+    },
+    {
+      "path": "tests/bin/calendar-maintenance.php",
+      "size": 431,
+      "sha256": "3c14b973b781b7739e714897cb74af1f47d1d616dae1ba6a2a810d2d10d8d237",
+      "classification": "mirrored-identical",
+      "counterpart": "bin/calendar-maintenance.php"
+    },
+    {
+      "path": "tests/bin/check-requirements.php",
+      "size": 518,
+      "sha256": "aa60a44cf028ea4d2ce2bf92ce538320cb5bd335d36dc03df83d2958536ec7a7",
+      "classification": "mirrored-identical",
+      "counterpart": "bin/check-requirements.php"
+    },
+    {
+      "path": "tests/bin/generate-key.php",
+      "size": 198,
+      "sha256": "9190f0196430d3f4e58f04282d0af80c10040438bc7a977c16f9ed814f6bf96b",
+      "classification": "mirrored-identical",
+      "counterpart": "bin/generate-key.php"
+    },
+    {
+      "path": "tests/bin/operations-monitor.php",
+      "size": 895,
+      "sha256": "bfa3ae2f885cbba3088bf26450b981d0011a4ad903946ba5533103f8d16f2443",
+      "classification": "mirrored-identical",
+      "counterpart": "bin/operations-monitor.php"
+    },
+    {
+      "path": "tests/bin/scheduled-reports.php",
+      "size": 818,
+      "sha256": "55a969daff72c5a9c4322f86b38fee3a2af6df97439da7b0de6cbd2e510e717b",
+      "classification": "mirrored-identical",
+      "counterpart": "bin/scheduled-reports.php"
+    },
+    {
+      "path": "tests/bin/tenant-health-check.php",
+      "size": 325,
+      "sha256": "a7a04f26e9eaf021317b931775fba4962390e2cf833f5e8e365b6b1acc66f6b8",
+      "classification": "mirrored-identical",
+      "counterpart": "bin/tenant-health-check.php"
+    },
+    {
+      "path": "tests/bootstrap.php",
+      "size": 3553,
+      "sha256": "b92e9f174c9272eef64e7310aa38c32062b1003e4039c469019cf85e344477a3",
+      "classification": "mirrored-identical",
+      "counterpart": "bootstrap.php"
+    },
+    {
+      "path": "tests/calendar-conversation-choice-scenarios.json",
+      "size": 598,
+      "sha256": "775f79dac5a59611b2876f621fb5b86cf7a0f5436d25fe4f7d3d16ac60c0905f",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/calendar-google-confirmed-only-smoke.php",
+      "size": 1968,
+      "sha256": "6e09d1331c914c6c6771de5f07daefcca0918de0a50a861c5ec07ea8444ec3a3",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/calendar-google-free-slots-callback.json",
+      "size": 455,
+      "sha256": "1e4ba6f14a5bdddab80489ae2729741a9be5612d6538461248740fb96422ab15",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/calendar-google-lifecycle-action.json",
+      "size": 1125,
+      "sha256": "5b2ecf06b1df7aa87b5e40ce0b3ba617d85ed4350fe4a70dbccbb79d7f3084d5",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/calendar-google-lifecycle-create-callback.json",
+      "size": 469,
+      "sha256": "a4cd9b7f18e084ae9c2c90e3e222bcab721e19fd5dec196fd817e12ce264552c",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/calendar-google-lifecycle-delete-callback.json",
+      "size": 260,
+      "sha256": "ee5647a59dc6230969949983a08ed0fdddb874a6bba150f849544174649abcd9",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/calendar-google-marked-delete-callback.json",
+      "size": 477,
+      "sha256": "a6235568532bdc0308a6b89d62e93c137d16dae567d0d918021e02fd7dcb17c5",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/calendar-google-marked-slots-callback.json",
+      "size": 642,
+      "sha256": "0991765bf98967b243b41c3e0905ec472c454b9216c0550fb3febda567378b23",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/calendar-google-marked-update-callback.json",
+      "size": 515,
+      "sha256": "b646291b8f870c3596924b69ea43371a6afcdb7a9ec5680891470e9019983fe1",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/calendar-maintenance-auditability-smoke.php",
+      "size": 2101,
+      "sha256": "729fbb2d7b24de89bfb3052d3d820fbc5792fc583eaa7abc96077e3c472002cb",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/calendar-maintenance-response-example.json",
+      "size": 307,
+      "sha256": "cf3b2441f87c59b3401206cf198bd23c074cd79b8d643d3eb742313d1dda83e4",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/calendar-modality-before-availability-smoke.php",
+      "size": 2550,
+      "sha256": "a3de237746912c77dd69ab6cd688c1cd181f4f5ecb286c1454c9fce5993af1d6",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/calendar-recovery-contact-identity-smoke.php",
+      "size": 3082,
+      "sha256": "b8437a55026b265130d5b3cdc7b46550e04859b1196cf5425b65ee8c0aae4bfe",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/calendar-visualization-smoke.php",
+      "size": 2536,
+      "sha256": "4872f12436975e94510e5c0721ee4e56a0fd897e2013832c4854dc8e8835ae28",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/client-communication-center-smoke.php",
+      "size": 4511,
+      "sha256": "a09a2c8370f0d7257ada39dbe583ac67d299d45e7b5bb26b29564cd6c0c938ea",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/client-executive-report-v36150-smoke.php",
+      "size": 2908,
+      "sha256": "8f6a22127a1dd039c7b96112cd328857d433f87a026717fcec794b66da32b5aa",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/composer.json",
+      "size": 319,
+      "sha256": "e22e06b0aa2be08d170153754576f247852c1412575a691500e43537f8ee5c4f",
+      "classification": "mirrored-identical",
+      "counterpart": "composer.json"
+    },
+    {
+      "path": "tests/contact-avatar-refresh-v36172-smoke.php",
+      "size": 1781,
+      "sha256": "f46b3e840ed9e73aae22106310983c3acb38d0ff694cd296685d01cd861b9a0f",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/contact-page-search-smoke.php",
+      "size": 1136,
+      "sha256": "e2c8857c5a52d822aa06b3c5a6170c36872096ba1bd6f3b1a1977e5849a3907a",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/contact-schedule-overlap-smoke.php",
+      "size": 2616,
+      "sha256": "b618dda98c00f4acb0f4037bdcd842cbad7b807ec4d4713393ecd4f9f7982f33",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/conversation-attachments-smoke.php",
+      "size": 3464,
+      "sha256": "8c4a7a98e3aa149b3d28453c0c688ffea79c24b72720951de6dd80018490d805",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/conversation-cycle-status-sync-smoke.php",
+      "size": 2955,
+      "sha256": "0c63bda151cc958c12c29faed7f4ac39fee36bc4d3b9690d120d527e65f83e1d",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/conversation-explicit-selection-smoke.php",
+      "size": 2084,
+      "sha256": "ddc20641b84f6d4265605733c05d81408b999cbdc9e9414fe4605adb172e9c1e",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/conversation-flow-scenarios.json",
+      "size": 896,
+      "sha256": "eb504b100775b0f7777f57c78b03f98474443bccc8f864363fc11f2a72e0511b",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/conversation-hours-ai-usage-smoke.php",
+      "size": 1768,
+      "sha256": "f923714006028e520edc9cfcae801da2f38811f30c3df1f0d0d1b3c4fbc98e18",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/conversation-search-avatar-smoke.php",
+      "size": 2446,
+      "sha256": "67f2c6a7cbe8dd1732531206ca2baf624e2bc356f338d0a46b16d97e72c60207",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/conversation-status-colors-smoke.php",
+      "size": 2480,
+      "sha256": "2496a3f9df7b77c4fb3ab272c98cbb8e9d7410ed0ac8a0f7f5a07ebbe4c02702",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/cooldown-conversation-ui-scenarios.json",
+      "size": 1843,
+      "sha256": "795c334fe3c95749816cec8110b1ab4ba53d08c5d2b6d22dac7ccca584cca554",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/database/073_hotfix_indice_fk_operational_alert_delivery.sql",
+      "size": 2121,
+      "sha256": "d961936c656d78eccec1bd5c866ae3938674435f62670b8765077a2b56d32f9e",
+      "classification": "mirrored-identical",
+      "counterpart": "database/073_hotfix_indice_fk_operational_alert_delivery.sql"
+    },
+    {
+      "path": "tests/database/HOTFIX-11.1-REPARAR-ASSINATURAS.sql",
+      "size": 2286,
+      "sha256": "d026e58321490464667590b5049217e3eff1b7db527818cf19ebfd940333055e",
+      "classification": "mirrored-identical",
+      "counterpart": "database/HOTFIX-11.1-REPARAR-ASSINATURAS.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/admin_commercial_crm_reports_check.sql",
+      "size": 826,
+      "sha256": "a69516961342bff0d31cdace24c495509ad3f194427cdba6730104cff8651d87",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/admin_commercial_crm_reports_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/admin_dashboard_counts.sql",
+      "size": 1518,
+      "sha256": "df1253d60e7616455c83472c99686579cbd2b65886d31c7cd76bb5804556ea5b",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/admin_dashboard_counts.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/admin_executive_report_v36.14.0.sql",
+      "size": 2018,
+      "sha256": "d1367c3e607e0485f9b6f04334a3bba60cc709f3a3787fd73440059076fd87aa",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/admin_executive_report_v36.14.0.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/agent_instance_links_v36.18.2.sql",
+      "size": 1387,
+      "sha256": "01f770590df1014f669c7f77c6df1fe2726a7d04a1c65d02e279e08d2ea320c0",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/agent_instance_links_v36.18.2.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/ai_contact_context_check.sql",
+      "size": 1783,
+      "sha256": "a933702d48716e419d7d4c104d4fac625074053db5c45e14fddf4e49636cc412",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/ai_contact_context_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/ai_efficiency_phase2_v36.18.0.sql",
+      "size": 1233,
+      "sha256": "20c528b85091286ba80af198688c5d8bf3e5d3570b4bc3c77a766f8b91547c06",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/ai_efficiency_phase2_v36.18.0.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/ai_efficiency_v36.17.0.sql",
+      "size": 2183,
+      "sha256": "8688878d054840ccad5c66c3bdcd44bfc5b060ad6885c4ce181c3725b92f278d",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/ai_efficiency_v36.17.0.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/ai_pending_responses_and_timezone_check.sql",
+      "size": 5035,
+      "sha256": "f091b0533c38b771ce82760869a8587c91b3e5ea546b0508018aa1298c433484",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/ai_pending_responses_and_timezone_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/ai_reactions_and_response_flow_check.sql",
+      "size": 1364,
+      "sha256": "84a0d469febff2cf3ced4b6d31bbb756ea1aa076c425a57570ccb43e6ce2035a",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/ai_reactions_and_response_flow_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/ai_webhook_422_and_queue_check.sql",
+      "size": 1864,
+      "sha256": "61d61a6c7c754f6534db810fbbb492f083817237c087f5ea3e2744618f15e981",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/ai_webhook_422_and_queue_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/calendar_callback_timeout_race_check.sql",
+      "size": 998,
+      "sha256": "1dd8a73cfa93260d5ecbea95dc9ac8580fb3f4d9aa66de6f65544104ae56dc53",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/calendar_callback_timeout_race_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/calendar_conversational_flow_check.sql",
+      "size": 3432,
+      "sha256": "b39531fed5fe3779ce237f71b17cd3cea6649b3d566d0da67e6be25addb8cd98",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/calendar_conversational_flow_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/calendar_delete_google_check.sql",
+      "size": 784,
+      "sha256": "607319e8c737ec055612a00aaee2c2c198599495a1dc3d75e981f79cc3543f62",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/calendar_delete_google_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/calendar_demand_gate_ai_isolation_check.sql",
+      "size": 1957,
+      "sha256": "9186a1374d7cbbd66ab90996e8dbfc6881f2882f9fa4d7ea5ab67996cefb5b15",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/calendar_demand_gate_ai_isolation_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/calendar_google_full_cycle_check.sql",
+      "size": 1523,
+      "sha256": "95cdfa7e94f27240aa6ddf1833844dec9a0dcfc3d45fb69be8194418dd450255",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/calendar_google_full_cycle_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/calendar_new_preference_fresh_request_check.sql",
+      "size": 1546,
+      "sha256": "80e4e504ab03d050e379fca4dd1b36d1f6a14b7d112fb1d81317db6ea3e52549",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/calendar_new_preference_fresh_request_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/calendar_selection_ai_isolation_check.sql",
+      "size": 796,
+      "sha256": "36d9b6dd7a1c1ee2010dab0e78bc9f4ac3dab71642bb7d6b5cf38da605e3192d",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/calendar_selection_ai_isolation_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/contact_avatar_refresh_v36.17.2.sql",
+      "size": 691,
+      "sha256": "51e86725a0d3dbe46b63f5cbe6bc9af3bd16c3871d690e67c61150633641e80a",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/contact_avatar_refresh_v36.17.2.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/contact_schedule_overlap_v36.8.1.sql",
+      "size": 2152,
+      "sha256": "415604643a848f2bdd3b63dd395b6aa40285c6b3baa9cd827eeaec8f11f1312b",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/contact_schedule_overlap_v36.8.1.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/conversation_attachments_v36.13.0.sql",
+      "size": 2314,
+      "sha256": "efa50052d7a9a757694bb17f918863a1ff92d3de4dbdb62728beeb2fd33b846c",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/conversation_attachments_v36.13.0.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/conversation_cycle_status_sync_v36.10.3.sql",
+      "size": 1668,
+      "sha256": "a44e445d39e4328538605fadb0a4adff004d49db348b9275f36f479636efaf12",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/conversation_cycle_status_sync_v36.10.3.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/conversation_flow_contact_groups_check.sql",
+      "size": 895,
+      "sha256": "c23cba048359294e6abd39cd8b7af5d6083d174b510b1676d7cd1d068ce117a7",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/conversation_flow_contact_groups_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/conversations_sort_memory_check.sql",
+      "size": 625,
+      "sha256": "69982b2e5c79b38fcb3440ca824ae8d759692b25bcd1ad8f25e63ece06b47cca",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/conversations_sort_memory_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/conversations_tenant_check.sql",
+      "size": 1107,
+      "sha256": "94c690c595aa67a67c2b17fb5c3fb9af798da46b4186c7d3d059a45475744859",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/conversations_tenant_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/diagnostic_reporting_metrics_048.sql",
+      "size": 1117,
+      "sha256": "22f6e7a482d1f04783457d46f2dc6a5a20be7cb99774320bcd3017fdc35db0ec",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/diagnostic_reporting_metrics_048.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/evolution_instance_management_v36.16.0.sql",
+      "size": 1933,
+      "sha256": "39faf7fc25fc364c67fae6e56bd1adf85ae8dd42f700b280c618f2a47d5ee974",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/evolution_instance_management_v36.16.0.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/evolution_status_v36.6.38.sql",
+      "size": 1422,
+      "sha256": "5e70b49db0ec6d351ac6e8f256a93d45ed3cc26c72cf146e42047410383062cc",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/evolution_status_v36.6.38.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/executive_metrics_consistency_v36.15.0-r1.sql",
+      "size": 1842,
+      "sha256": "36a69de9b3f815df59cca28372ca1a911f2db2f9bd3a2e1db3139da386be943e",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/executive_metrics_consistency_v36.15.0-r1.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/human_signature_delivery_v36.6.39.sql",
+      "size": 1086,
+      "sha256": "7f4ae3dc51a1109b792d065e243e1492536d364505901c870da1449da4dcf65a",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/human_signature_delivery_v36.6.39.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/meta_ai_lid_protection_v36.15.1-r2.sql",
+      "size": 1067,
+      "sha256": "f0b45910b12680ac587b6e2c669c726b4e7d8ced063330dbcbf852de6984c250",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/meta_ai_lid_protection_v36.15.1-r2.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/operational_history_metrics_v36.9.1.sql",
+      "size": 2491,
+      "sha256": "af3713b8dec7a1269247ddb805696d6797f6a237c7ebbaf4c30182bdcb64bb5b",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/operational_history_metrics_v36.9.1.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/operational_monitoring_v36.12.0.sql",
+      "size": 5668,
+      "sha256": "502ddc0d73ba706c09a20178a3d8549fc9071c397e1dc42cde32c12171338a01",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/operational_monitoring_v36.12.0.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/pagbank_checkout_link_check.sql",
+      "size": 662,
+      "sha256": "dbf473584c1ebdd877eea923dbfcd9be562b693aeaa7c46f49cfddf2eaa43eca",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/pagbank_checkout_link_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/payment_reconciliation_check.sql",
+      "size": 526,
+      "sha256": "a4154abbede43e990c8f5aea9d4f5e349f77e98389e93d3fdf44b912640d907e",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/payment_reconciliation_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/professional_assignment_v36.7.0.sql",
+      "size": 1525,
+      "sha256": "5bf94b14123264bf2b4a674bb68f7e364da74ef286079b1fc540ab7cede92dbf",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/professional_assignment_v36.7.0.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/professional_calendar_v36.8.0.sql",
+      "size": 1755,
+      "sha256": "cfb201dc957dce9f7cd61a4fee3c21d4f7012332aeb115ab61382bd0ec7d03e6",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/professional_calendar_v36.8.0.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/scheduled_reports_hy093_recovery_v36.15.1-r1.sql",
+      "size": 750,
+      "sha256": "1df3b2f9aef8b41e19082ced718d23fd4c0732a73a9b5f84de764240a7b1c794",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/scheduled_reports_hy093_recovery_v36.15.1-r1.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/scheduled_reports_v36.15.1.sql",
+      "size": 1403,
+      "sha256": "7ee45383a53d636af5db1719a7a0b74b9c64b2bf80e4b62eeff91273c09d5bd1",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/scheduled_reports_v36.15.1.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/security_access_enforcement_check.sql",
+      "size": 2652,
+      "sha256": "2f85e6d7353b00a93d7a694cdef6b67add70dfaeb1a6305504f4784cc96d0e6a",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/security_access_enforcement_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/security_hardening_v36.11.1.sql",
+      "size": 1231,
+      "sha256": "f5b87e87de34c7a8a5bd97f7c98bf2c580859e8e47e4bce60e328f59493ff37c",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/security_hardening_v36.11.1.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/service_cycle_recovery_v36.10.1.sql",
+      "size": 2308,
+      "sha256": "b6e099c7333a111a09001a86d17bdcee0a9522ea368e1dec76c4b13579d2609e",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/service_cycle_recovery_v36.10.1.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/team_metrics_provenance_v36.11.2.sql",
+      "size": 4210,
+      "sha256": "bfaccb2ba23315768c6951397301801b880e92dfc45585184a8111ebcb22cf00",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/team_metrics_provenance_v36.11.2.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/team_professional_reports_v36.10.0.sql",
+      "size": 3484,
+      "sha256": "fec36f401e9492d7c0060caab06d9c960ef9dde263b254f8759dfac0a9649f99",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/team_professional_reports_v36.10.0.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/team_report_audit_v36.10.6.sql",
+      "size": 2949,
+      "sha256": "5b3fccefbdd359fa4fbdbab9c0a7635b2f1dc2cfca5905a37ac1bc834f4a5d80",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/team_report_audit_v36.10.6.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/tenant_health_diagnostics_check.sql",
+      "size": 860,
+      "sha256": "d9d11301ccfc6e13bfcc9836ef980b72a9fb1e05381933dd8b6fd6c9e211d42a",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/tenant_health_diagnostics_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/tenant_health_occurrences_check.sql",
+      "size": 775,
+      "sha256": "9bd24f114a8934704b574029ee30adcce00dd162e9c08f6c3bd151cee7211525",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/tenant_health_occurrences_check.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/tenant_isolation_v36.11.0.sql",
+      "size": 3026,
+      "sha256": "f9f9c197d8563aaa9341713f25b2f875dc2f7fcea25eed0db0fe5749c1638557",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/tenant_isolation_v36.11.0.sql"
+    },
+    {
+      "path": "tests/database/diagnostics/utc_datetime_contract_v36.10.4.sql",
+      "size": 1905,
+      "sha256": "d008fcc3a28aef71ba44563157ac1d41ce682fa65635fb3433052c3852e4c007",
+      "classification": "mirrored-identical",
+      "counterpart": "database/diagnostics/utc_datetime_contract_v36.10.4.sql"
+    },
+    {
+      "path": "tests/database/migrations/002_companies_users_onboarding.sql",
+      "size": 4426,
+      "sha256": "bac029d0358ea3e520a082e273916fd1f5f9e9a573b5ba03749d4d0b4e82f34e",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/002_companies_users_onboarding.sql"
+    },
+    {
+      "path": "tests/database/migrations/003_conversations.sql",
+      "size": 5888,
+      "sha256": "1a530d3a9584de967e02ad390fb2f489575ebb9cd6a9ce9631b74ea6c5464217",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/003_conversations.sql"
+    },
+    {
+      "path": "tests/database/migrations/004_crm.sql",
+      "size": 8260,
+      "sha256": "f2959a37109514ce0afc3541b5d5ee1dbf876ab7e9cfaf2928dc20fdfb9ab9a5",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/004_crm.sql"
+    },
+    {
+      "path": "tests/database/migrations/005_ai_automations.sql",
+      "size": 4552,
+      "sha256": "09007ee2d01147390187a2217abd80cca9590aae3439773d81ba3a57eb48f44c",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/005_ai_automations.sql"
+    },
+    {
+      "path": "tests/database/migrations/006_switch_active_agents_to_openai.sql",
+      "size": 421,
+      "sha256": "8782a780e72cb946b1ef74c8276fdd93fbc86efa3ac9755f23f19e7d83d55068",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/006_switch_active_agents_to_openai.sql"
+    },
+    {
+      "path": "tests/database/migrations/007_ai_commercial_rules.sql",
+      "size": 4693,
+      "sha256": "374fc9efff5d6f9b37af15a29fa0fb36064654fb16ba539c0166bdc8e10d6220",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/007_ai_commercial_rules.sql"
+    },
+    {
+      "path": "tests/database/migrations/008_conversations_pro_crm_auto.sql",
+      "size": 2833,
+      "sha256": "bdd7a686bb0cba3b882b95e5afdb941c8abeadfc4c492ada06e39de9879ad28e",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/008_conversations_pro_crm_auto.sql"
+    },
+    {
+      "path": "tests/database/migrations/009_calendar_appointments.sql",
+      "size": 3790,
+      "sha256": "fabb7dae9312253050d98a886ba02eb7eecd8550cc303b6ac0571ccb3b4ee06c",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/009_calendar_appointments.sql"
+    },
+    {
+      "path": "tests/database/migrations/010_n8n_tenant_flows.sql",
+      "size": 2530,
+      "sha256": "898ec3cd8f14d790c6de39f6d2c44ae2a4e8a0d2e9c467810a3aec888438aec1",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/010_n8n_tenant_flows.sql"
+    },
+    {
+      "path": "tests/database/migrations/011_n8n_templates_callbacks.sql",
+      "size": 1542,
+      "sha256": "4bb72f1c946b9160bbbe654dd0d0fb465360a2c8b822ea75490e90875effcd24",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/011_n8n_templates_callbacks.sql"
+    },
+    {
+      "path": "tests/database/migrations/012_saas_billing_plans.sql",
+      "size": 7729,
+      "sha256": "039a50b1ececc211da33e2a5a942dfc7f838d277e3d869df46e21f4f9f408f02",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/012_saas_billing_plans.sql"
+    },
+    {
+      "path": "tests/database/migrations/013_payment_gateways.sql",
+      "size": 6765,
+      "sha256": "c8c4ea080f6a292c3d49ce2fde7cadebcd1281974805954d67c4b2b896b41a05",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/013_payment_gateways.sql"
+    },
+    {
+      "path": "tests/database/migrations/014_pagbank_billing_reminders.sql",
+      "size": 3850,
+      "sha256": "88a1d053546808064af0e1bd58d6aeb57fec614d2e5fbe11ebc49b2ab585c0bd",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/014_pagbank_billing_reminders.sql"
+    },
+    {
+      "path": "tests/database/migrations/015_notifications_frontend_billing_templates.sql",
+      "size": 2336,
+      "sha256": "801ea840affe60a9ac91b56c8a4cb765da53242d8e78148a0f72a5e2aac0ec0b",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/015_notifications_frontend_billing_templates.sql"
+    },
+    {
+      "path": "tests/database/migrations/016_reports_realtime_conversations.sql",
+      "size": 965,
+      "sha256": "2198e0b336a1919e66d074292407ce16fc6dc5a7232cfe2dde390b75ea1b4639",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/016_reports_realtime_conversations.sql"
+    },
+    {
+      "path": "tests/database/migrations/017_evolution_qrcode_status.sql",
+      "size": 2937,
+      "sha256": "ccca90d4b3fa283cc72880237c6380cafb98babdc60feb966ec2eb4710ef9909",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/017_evolution_qrcode_status.sql"
+    },
+    {
+      "path": "tests/database/migrations/017_pre_scheduling_tenant_menus.sql",
+      "size": 7760,
+      "sha256": "df02b4b181d34ae472e8f3782091accb98b10afa478dbcdb2add6bc28730964b",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/017_pre_scheduling_tenant_menus.sql"
+    },
+    {
+      "path": "tests/database/migrations/018_onboarding_prompt_builder.sql",
+      "size": 1385,
+      "sha256": "635a885c347525efa28a24f83f82052fdee9203a13946f97061a4f34ef62557b",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/018_onboarding_prompt_builder.sql"
+    },
+    {
+      "path": "tests/database/migrations/018_pre_schedule_messages_confirmation.sql",
+      "size": 2601,
+      "sha256": "55f5aad2bd2feae9ef089c2d8fa2c77af8ed4dc19377aa0c719c992232cb697f",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/018_pre_schedule_messages_confirmation.sql"
+    },
+    {
+      "path": "tests/database/migrations/019_implementation_checklist.sql",
+      "size": 2108,
+      "sha256": "6fd9d930f84bc9af6e6fe5b4f310fd3d471a474aa09db6649c24677786c002d3",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/019_implementation_checklist.sql"
+    },
+    {
+      "path": "tests/database/migrations/019_pre_schedule_confirmation_rules.sql",
+      "size": 638,
+      "sha256": "72a2167651afc60eb48a2bbeb6c050961c36e97d7b82c9f5ae3b60fd5fca0d63",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/019_pre_schedule_confirmation_rules.sql"
+    },
+    {
+      "path": "tests/database/migrations/020_pre_schedule_reliable_capture.sql",
+      "size": 1064,
+      "sha256": "bb84096fcd7d9dfab01624343ac06d1c372acefbb379d4234fcb6db9fda95e48",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/020_pre_schedule_reliable_capture.sql"
+    },
+    {
+      "path": "tests/database/migrations/020_queue_team_distribution.sql",
+      "size": 7064,
+      "sha256": "f2f04a1b595fcabd2b5c8f17bd4196ffc448bf702e17acd85f950089c1d68958",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/020_queue_team_distribution.sql"
+    },
+    {
+      "path": "tests/database/migrations/021_campaigns_controlled_broadcasts.sql",
+      "size": 6901,
+      "sha256": "b22b7f68dbe6fa713f0a1ce48f2095820224da15993c9933f7ae72dd4dca4f09",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/021_campaigns_controlled_broadcasts.sql"
+    },
+    {
+      "path": "tests/database/migrations/021_security_system.sql",
+      "size": 4118,
+      "sha256": "53837365a5997e54d2cb73eb211e36f4df494f6131f81d9ac63cfec1c85f46e1",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/021_security_system.sql"
+    },
+    {
+      "path": "tests/database/migrations/022_lgpd_privacy_acceptance.sql",
+      "size": 7357,
+      "sha256": "ec229ee1164211c32ca27e429079e89749cd31d18bead6cd1738af7e4e10c6ce",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/022_lgpd_privacy_acceptance.sql"
+    },
+    {
+      "path": "tests/database/migrations/022_white_label_basic.sql",
+      "size": 5956,
+      "sha256": "69220ac9266a1f8bfab2df80f8bc11dca782461ab3d8bd07005b09469ebdf73c",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/022_white_label_basic.sql"
+    },
+    {
+      "path": "tests/database/migrations/023_operations_monitoring_backup.sql",
+      "size": 3512,
+      "sha256": "8dc2ca68fb30d843e167221a1fa9e1cff7a6d3ce74e90520c9533f97433acdfa",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/023_operations_monitoring_backup.sql"
+    },
+    {
+      "path": "tests/database/migrations/023_white_label_pro.sql",
+      "size": 4269,
+      "sha256": "e535329f7486b88f4bf959323f747ab804732a71816c9d0ad82c317c91d0952c",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/023_white_label_pro.sql"
+    },
+    {
+      "path": "tests/database/migrations/024_operations_alerts_backup_details.sql",
+      "size": 3132,
+      "sha256": "e9327ffef9229c10ef485ddf3e5e4a03516240ae22357ef64156fbd25ad88b97",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/024_operations_alerts_backup_details.sql"
+    },
+    {
+      "path": "tests/database/migrations/025_commercial_implementation_checklist.sql",
+      "size": 3154,
+      "sha256": "bc51688a5051e2db3d4fdd56468cd210e3834466cb06274c7baf72255b7d9142",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/025_commercial_implementation_checklist.sql"
+    },
+    {
+      "path": "tests/database/migrations/026_fix_implementation_manual_checklist_table.sql",
+      "size": 1304,
+      "sha256": "16bd3b3a3c1e02e6d16cc1f6f94887a5f8c094127bc8fe38b72a974050cc37e9",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/026_fix_implementation_manual_checklist_table.sql"
+    },
+    {
+      "path": "tests/database/migrations/027_guided_client_onboarding.sql",
+      "size": 2417,
+      "sha256": "ddd3a81dd0dc62eb0d1bcbb364985033ef0869e349829cb9ab0d3397af6a4759",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/027_guided_client_onboarding.sql"
+    },
+    {
+      "path": "tests/database/migrations/028_backup_automation_n8n.sql",
+      "size": 2681,
+      "sha256": "fb5ccf849f838f1108207fc879f105b891d9b3066671d01e42f9b13b3d33a553",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/028_backup_automation_n8n.sql"
+    },
+    {
+      "path": "tests/database/migrations/029_smart_calendar_availability_n8n.sql",
+      "size": 7028,
+      "sha256": "dad99c0b0defb1ebdb04d00dadb19d710f6eee2a95d582728eb238fea59c630d",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/029_smart_calendar_availability_n8n.sql"
+    },
+    {
+      "path": "tests/database/migrations/030_google_calendar_availability_modes.sql",
+      "size": 9136,
+      "sha256": "fca60b4ac08efbb5a81b48f59306341dd97a87b8e34431e9889bcfb6882ae29b",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/030_google_calendar_availability_modes.sql"
+    },
+    {
+      "path": "tests/database/migrations/030_google_calendar_availability_modes_rollback.sql",
+      "size": 201,
+      "sha256": "84650c271b8149ad352557394a71e198f92ed0a842fb53b96bc68f489b866b2f",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/030_google_calendar_availability_modes_rollback.sql"
+    },
+    {
+      "path": "tests/database/migrations/031_optimize_conversation_messages_index.sql",
+      "size": 736,
+      "sha256": "cce66a516b49b2414553d14595da7d685bd5ed8edd7cfbf2454e1b18e47354cd",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/031_optimize_conversation_messages_index.sql"
+    },
+    {
+      "path": "tests/database/migrations/032_conversation_messages_compact_index.sql",
+      "size": 1827,
+      "sha256": "90e2a20ad1828a8f131ad8dab65fc8f5a99e5c881196d81580e1965041d6edba",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/032_conversation_messages_compact_index.sql"
+    },
+    {
+      "path": "tests/database/migrations/033_customer_company_profile.sql",
+      "size": 4650,
+      "sha256": "0609ba4fdee907238fb796f010aa31c9e75fb8c26b23c4b4dbfa07455512a6c5",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/033_customer_company_profile.sql"
+    },
+    {
+      "path": "tests/database/migrations/034_notification_preferences_and_alerts.sql",
+      "size": 1201,
+      "sha256": "c649520db2e2ed6d1d73058e31591050d2a133d5a8664c725d7e874d1111b115",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/034_notification_preferences_and_alerts.sql"
+    },
+    {
+      "path": "tests/database/migrations/035_admin_company_tracking.sql",
+      "size": 1110,
+      "sha256": "9808606f24899edc8496936b4077a70ec89cca9bf415d18834ada8be8396ae8e",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/035_admin_company_tracking.sql"
+    },
+    {
+      "path": "tests/database/migrations/036_security_access_enforcement.sql",
+      "size": 2166,
+      "sha256": "8477f3c2f6072ce91ac1a66695f3fa79915e98f929251e949282c02863df79e7",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/036_security_access_enforcement.sql"
+    },
+    {
+      "path": "tests/database/migrations/037_admin_commercial_crm_reports.sql",
+      "size": 5225,
+      "sha256": "a89fc18cbddcfbaaee9630955ec4a1dac25685ec74c7b5a8b20254ac75db75f6",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/037_admin_commercial_crm_reports.sql"
+    },
+    {
+      "path": "tests/database/migrations/038_ai_reaction_preferences.sql",
+      "size": 629,
+      "sha256": "5acc5c2e963f23e76d2f2112f03000d9dac9f9c75ce481a8dba0d3136d098abf",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/038_ai_reaction_preferences.sql"
+    },
+    {
+      "path": "tests/database/migrations/039_tenant_health_diagnostics.sql",
+      "size": 5175,
+      "sha256": "1a066cd6adf893c5209a2a34e5c93a5bd7c50db572084dfd7bbb38a4c65d97fa",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/039_tenant_health_diagnostics.sql"
+    },
+    {
+      "path": "tests/database/migrations/040_conversation_flow_contact_groups.sql",
+      "size": 3472,
+      "sha256": "79bb1c5f9ae6dba0cd6ee6ecff90ba442537a281847234afbe30ee933b2f7b0b",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/040_conversation_flow_contact_groups.sql"
+    },
+    {
+      "path": "tests/database/migrations/041_calendar_google_full_cycle.sql",
+      "size": 6828,
+      "sha256": "d48a589569b3356fd0bc98f5b8680742948ad8bb10a525eb03336b07e8f6a697",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/041_calendar_google_full_cycle.sql"
+    },
+    {
+      "path": "tests/database/migrations/042_payment_reconciliation_external_providers.sql",
+      "size": 1884,
+      "sha256": "a2709844b45ac392d674d51426e4d96ecd7ccd1cda44ed7fd8798cf8f5e8ff43",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/042_payment_reconciliation_external_providers.sql"
+    },
+    {
+      "path": "tests/database/migrations/043_ai_reprocess_schedule.sql",
+      "size": 2316,
+      "sha256": "f8424b74040920afa0b641af5891eab4ae00d9434f91269f93b771a1df3528c5",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/043_ai_reprocess_schedule.sql"
+    },
+    {
+      "path": "tests/database/migrations/044_ai_pending_failures_message_link.sql",
+      "size": 1726,
+      "sha256": "c5fdbc695654fcc152593aec0e92b9475e6501254692e7796776048702e7800a",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/044_ai_pending_failures_message_link.sql"
+    },
+    {
+      "path": "tests/database/migrations/045_ai_webhook_ingestion_resilience.sql",
+      "size": 2815,
+      "sha256": "a4c5722505bca6cf04e331320107d0fb6fe747cce03fb2f83b923d861764404f",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/045_ai_webhook_ingestion_resilience.sql"
+    },
+    {
+      "path": "tests/database/migrations/046_calendar_conversational_slot_selection.sql",
+      "size": 5057,
+      "sha256": "ebfde1248d379275740f7c1782c9b7dfb48d86bbf39f4299786b52f27eca81ad",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/046_calendar_conversational_slot_selection.sql"
+    },
+    {
+      "path": "tests/database/migrations/047_backup_automation_reliability.sql",
+      "size": 9427,
+      "sha256": "62d661d6bd82eff9bfcc3199f08d523ba176b425dfd458e69b25754527b3f4a8",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/047_backup_automation_reliability.sql"
+    },
+    {
+      "path": "tests/database/migrations/048_reporting_metrics_foundation.sql",
+      "size": 3587,
+      "sha256": "68b52933250f5877bc797d8a10b1996d8781650a65f5b950abe960a5f670c906",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/048_reporting_metrics_foundation.sql"
+    },
+    {
+      "path": "tests/database/migrations/049_operational_resolution_communications.sql",
+      "size": 7329,
+      "sha256": "3e6e590faac714abeaad7b650d084a7cc9c4835cb2b58a5e4c8db4b4ec83ea66",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/049_operational_resolution_communications.sql"
+    },
+    {
+      "path": "tests/database/migrations/050_human_takeover_customer_context.sql",
+      "size": 1474,
+      "sha256": "848820be3c82b3b519ee15bc814ab7ef4ef6702ed41914659e5e2fcd5fbc193a",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/050_human_takeover_customer_context.sql"
+    },
+    {
+      "path": "tests/database/migrations/051_operational_evidence_status.sql",
+      "size": 284,
+      "sha256": "8d2dea8fa8fce07ee2d0e96e85e1e102fd9db854ec8966cae2a3ab3a3121906d",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/051_operational_evidence_status.sql"
+    },
+    {
+      "path": "tests/database/migrations/052_ai_usage_and_after_hours_recovery.sql",
+      "size": 7087,
+      "sha256": "440deeec67d3682af7e38545a5b90e9ff6333dae1effd8769fedf15d30181844",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/052_ai_usage_and_after_hours_recovery.sql"
+    },
+    {
+      "path": "tests/database/migrations/053_ai_quota_limit_repair.sql",
+      "size": 1411,
+      "sha256": "74545755ba294b4f719e5b86dd24dd8a1f3dc0fdf236a30b46f213d75d5ae2d3",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/053_ai_quota_limit_repair.sql"
+    },
+    {
+      "path": "tests/database/migrations/054_ai_metrics_and_delivery_telemetry.sql",
+      "size": 3880,
+      "sha256": "628f41a80ebe4688589c78efce0789fff9d972e596ae4cdfde9616ac1794a79d",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/054_ai_metrics_and_delivery_telemetry.sql"
+    },
+    {
+      "path": "tests/database/migrations/055_multi_whatsapp_agent_routing.sql",
+      "size": 5474,
+      "sha256": "de29cd5e4106208378aa42c22350c82d56292fea4ef747de5ac0e1c7802dad39",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/055_multi_whatsapp_agent_routing.sql"
+    },
+    {
+      "path": "tests/database/migrations/056_n8n_agenda_event_contract.sql",
+      "size": 589,
+      "sha256": "3e7786ee342384420749a6fdc03c65fa982d1728a2c256c7ed640a1104f5c878",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/056_n8n_agenda_event_contract.sql"
+    },
+    {
+      "path": "tests/database/migrations/057_calendar_modality_before_availability.sql",
+      "size": 1972,
+      "sha256": "05978afc7e5ec165c393cbaa3250b814ad9f4c916ea97a4c803e83c33ac45edd",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/057_calendar_modality_before_availability.sql"
+    },
+    {
+      "path": "tests/database/migrations/058_client_communication_center.sql",
+      "size": 5679,
+      "sha256": "9a1fcb12366a3c6fd0deb6593e6bfe294cb22a432094cead60d86bde2b871cd0",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/058_client_communication_center.sql"
+    },
+    {
+      "path": "tests/database/migrations/059_contact_identity_confidence.sql",
+      "size": 1753,
+      "sha256": "6c22a5c6e091d0c3f4f08e75f123f3cc4243e825c1105cff3607c7afcf8a8075",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/059_contact_identity_confidence.sql"
+    },
+    {
+      "path": "tests/database/migrations/060_free_trial_guided_first_access.sql",
+      "size": 4691,
+      "sha256": "5c7a36dcd09107fa9c48af2c5dc536f92439f29d4349c8150084a91d6246cd8f",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/060_free_trial_guided_first_access.sql"
+    },
+    {
+      "path": "tests/database/migrations/061_onboarding_calendar_modes.sql",
+      "size": 2548,
+      "sha256": "a4d5d9d67a205747ef8ae69eea05c7e05fb7e3219184c17821916cf0c96d5390",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/061_onboarding_calendar_modes.sql"
+    },
+    {
+      "path": "tests/database/migrations/062_prompt_studio_and_versions.sql",
+      "size": 2710,
+      "sha256": "630d7c22e3031648b35a8740afc85d32a9b4638dff84acfdb78fc501cda72204",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/062_prompt_studio_and_versions.sql"
+    },
+    {
+      "path": "tests/database/migrations/063_message_governance_evolution_realtime.sql",
+      "size": 5716,
+      "sha256": "7d0f3618b1db0222c5168116a89b844a2d56780e5c8d4cf79baad3778a9559c4",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/063_message_governance_evolution_realtime.sql"
+    },
+    {
+      "path": "tests/database/migrations/063_message_governance_evolution_realtime_compat.sql",
+      "size": 15835,
+      "sha256": "ad594e060d560990dc4f4d17f1b0169f77ab0d0cbd85bb88f9ff6bf77e73d758",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/063_message_governance_evolution_realtime_compat.sql"
+    },
+    {
+      "path": "tests/database/migrations/064_professional_conversation_assignment_compat.sql",
+      "size": 6792,
+      "sha256": "e3c2aba1732bcbf3de544c5bed2b81edcba80574c9c17a859a09c3e74ba610d7",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/064_professional_conversation_assignment_compat.sql"
+    },
+    {
+      "path": "tests/database/migrations/065_professional_calendar_profiles_compat.sql",
+      "size": 3052,
+      "sha256": "d8b94a8ab2608be368f311ea60cd2c5708c942152adfd114a6365c6fe2a0cabf",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/065_professional_calendar_profiles_compat.sql"
+    },
+    {
+      "path": "tests/database/migrations/066_contact_schedule_overlap_guard_compat.sql",
+      "size": 797,
+      "sha256": "3492bc7b4b34172f39483a3f69d696d9bd2cb507dccbec783d4e87d700adf8aa",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/066_contact_schedule_overlap_guard_compat.sql"
+    },
+    {
+      "path": "tests/database/migrations/067_operational_history_metrics_compat.sql",
+      "size": 29583,
+      "sha256": "cd9386f6c737494cfdb17c8e255d68a743c4692ae2b45352fb184934b9901224",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/067_operational_history_metrics_compat.sql"
+    },
+    {
+      "path": "tests/database/migrations/068_conversation_service_cycles_compat.sql",
+      "size": 9935,
+      "sha256": "fbefbf21f699f68afc32e8f2e6b2e80d9416acc4e936f86650a0f505b768f083",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/068_conversation_service_cycles_compat.sql"
+    },
+    {
+      "path": "tests/database/migrations/069_service_cycle_recovery_compat.sql",
+      "size": 11241,
+      "sha256": "76ac20a2ad493e0d65779719d217c0b5d53f284526cd100cafed34981c6857cf",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/069_service_cycle_recovery_compat.sql"
+    },
+    {
+      "path": "tests/database/migrations/070_conversation_cycle_status_sync_compat.sql",
+      "size": 9685,
+      "sha256": "785962ca80d37d3912d83c120cb4d05f0b8513b95fb344e8a0a1a353b2905520",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/070_conversation_cycle_status_sync_compat.sql"
+    },
+    {
+      "path": "tests/database/migrations/071_utc_datetime_contract_compat.sql",
+      "size": 23511,
+      "sha256": "9a9694854a8e7acdfe01d1484cdaf7d937ff28014905fe2b7963a54d24c6d487",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/071_utc_datetime_contract_compat.sql"
+    },
+    {
+      "path": "tests/database/migrations/072_security_session_webhook_hardening.sql",
+      "size": 1546,
+      "sha256": "85d585f81f6d7db79fb581193cf9e8426b23ff9346aab5116e5676e1f429ae5c",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/072_security_session_webhook_hardening.sql"
+    },
+    {
+      "path": "tests/database/migrations/073_operational_monitoring_alert_delivery.sql",
+      "size": 10809,
+      "sha256": "60f91e1ed3b139d9b0535852812e345e5751ab8067d3e15ed1f2f95220d5858d",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/073_operational_monitoring_alert_delivery.sql"
+    },
+    {
+      "path": "tests/database/migrations/074_conversation_message_attachments.sql",
+      "size": 2121,
+      "sha256": "52568076bc183a6b4ef89971d8231a285bcf7c44c3a2fc72f0e611cf7f679f16",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/074_conversation_message_attachments.sql"
+    },
+    {
+      "path": "tests/database/migrations/075_scheduled_reports_and_deliveries.sql",
+      "size": 6791,
+      "sha256": "b2ad8794238e6b5a94a6a58880143256d346dd070396aa554c390a3cbb03e464",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/075_scheduled_reports_and_deliveries.sql"
+    },
+    {
+      "path": "tests/database/migrations/076_evolution_instance_management.sql",
+      "size": 8328,
+      "sha256": "9830e62bd7a70bcbed2971074468264677321f0f691b7d4bb485645531229104",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/076_evolution_instance_management.sql"
+    },
+    {
+      "path": "tests/database/migrations/077_ai_efficiency_foundation.sql",
+      "size": 4640,
+      "sha256": "06d0656a2a4a18cd7508ab807b8a76a54aa9efe9fa0e785f2c75ce194227363d",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/077_ai_efficiency_foundation.sql"
+    },
+    {
+      "path": "tests/database/migrations/078_contact_avatar_refresh.sql",
+      "size": 851,
+      "sha256": "a8b970530cd22ab2e93f6641cc545e662c5b1474620a3e8dc027194c55ae8bdd",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/078_contact_avatar_refresh.sql"
+    },
+    {
+      "path": "tests/database/migrations/079_ai_efficiency_phase2_and_report_cleanup.sql",
+      "size": 5428,
+      "sha256": "2e69c048f57bd8e2ce008892e1076851f2128acdf49f78261eb354d9ecb611fb",
+      "classification": "mirrored-identical",
+      "counterpart": "database/migrations/079_ai_efficiency_phase2_and_report_cleanup.sql"
+    },
+    {
+      "path": "tests/database/schema.sql",
+      "size": 30757,
+      "sha256": "adfcfbc9738fff284865b10afe45ec10ea7b584a230693d1bdd4158a355e7a31",
+      "classification": "mirrored-divergent",
+      "counterpart": "database/schema.sql"
+    },
+    {
+      "path": "tests/database/seed.sql",
+      "size": 4895,
+      "sha256": "fc53fd75abe51b08ce7b45f4fe957eda4a3419e6413fcefc56d22b09e4d48c51",
+      "classification": "mirrored-identical",
+      "counterpart": "database/seed.sql"
+    },
+    {
+      "path": "tests/database/vps_fresh_install.sql",
+      "size": 35292,
+      "sha256": "854b9b9e18a85eace0e8b6d6bf5092cfe5f318de0c75be418e3bc8ac669d4702",
+      "classification": "mirrored-divergent",
+      "counterpart": "database/vps_fresh_install.sql"
+    },
+    {
+      "path": "tests/docker-compose.yml",
+      "size": 1389,
+      "sha256": "9760aa539102fd5afc0328c523262a6d8700c0dfbe8f1b966af656449dd33b8e",
+      "classification": "mirrored-identical",
+      "counterpart": "docker-compose.yml"
+    },
+    {
+      "path": "tests/docs/AGENDA-CONVERSACIONAL-ZIP-36.2.md",
+      "size": 1933,
+      "sha256": "52fa9875a6c3589ec37bfbe7619f1a41a497af726790c72a23290ae2c393b58e",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/AGENDA-CONVERSACIONAL-ZIP-36.2.md"
+    },
+    {
+      "path": "tests/docs/AGENDA-GOOGLE-ZIP-28.md",
+      "size": 2003,
+      "sha256": "bbfa58bb091cdb638bb906a1d44fed3dc695a15211aad524b223ac50eac55114",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/AGENDA-GOOGLE-ZIP-28.md"
+    },
+    {
+      "path": "tests/docs/AGENDA-GOOGLE-ZIP-35.md",
+      "size": 3532,
+      "sha256": "6e6901095c63f95313e6a9c0bce20bf15c3118bcc61a5f40070b440141170206",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/AGENDA-GOOGLE-ZIP-35.md"
+    },
+    {
+      "path": "tests/docs/AI-REPROCESSAMENTO-AGENDADO.md",
+      "size": 2362,
+      "sha256": "bb1741698ed31646531003747271f1c07f8fb041127c29c1a511c375a6b2e362",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/AI-REPROCESSAMENTO-AGENDADO.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.10.0.md",
+      "size": 1554,
+      "sha256": "311485b5163b0eb4278a8054b4aebd5e3272e16565818e9a83c570d83b8b8588",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.10.0.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.10.2.md",
+      "size": 633,
+      "sha256": "69e9465dd5407f27363d6f4ec5fc770b6a7346b78524f54f487c618bce5a740f",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.10.2.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.10.3.md",
+      "size": 1002,
+      "sha256": "5ef860f3d5a5b2f2bd0bb06e377e192206f209ec22820ad91decacbdbaf70038",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.10.3.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.10.4.md",
+      "size": 2099,
+      "sha256": "067d386111d86f7a4181a4c0a8bba12c8171c8eb26c3274a7d8534f7e778c9f8",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.10.4.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.10.6.md",
+      "size": 1222,
+      "sha256": "913da614abc5c6a723e4fe2b34489a78cb4da5ce1f8012a8b94f6121c7036f4e",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.10.6.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.10.7.md",
+      "size": 1129,
+      "sha256": "94d24744e318d74edc6cf4bc308718deca9b81bb83db44b00f9412662ee46fc4",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.10.7.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.10.md",
+      "size": 2611,
+      "sha256": "cc0ed1b48f4448f2256c8f0972a37cf24342ab7e5f5bbed6af6e39e53c5f1199",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.10.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.11.md",
+      "size": 984,
+      "sha256": "868c8f2f58490d04357c95b2140d696d937530632228b736617ef378607ea7c7",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.11.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.12.md",
+      "size": 3555,
+      "sha256": "c5429636c9356d6548b356466f8244aeec21e6a4f63c6f30671951717e101361",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.12.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.13.md",
+      "size": 3794,
+      "sha256": "b06ac75217aed7bcfb47c65519a0fd424e690a328472d69c71daf92057d5c24f",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.13.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.14.md",
+      "size": 1324,
+      "sha256": "d4fc5480bbead0f087bbfc2d0363abeecedbbd47e273ab4033f78a789bba469a",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.14.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.15.md",
+      "size": 3828,
+      "sha256": "355c655a21a3d7a153770dd13a92d1492a740fb25f732de7df33d5b970565a82",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.15.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.16.md",
+      "size": 3382,
+      "sha256": "3b63420508a30d127134c4b07383629cd277954c489bfd2d5bd382a7bf3fcae6",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.16.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.17.md",
+      "size": 1106,
+      "sha256": "995950390da87fbd033a90e2401d664978cee421108b68edcc8840e812a63379",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.17.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.18.md",
+      "size": 1115,
+      "sha256": "23e7248df35df50896ff80e7aa04a30d2ba2ef9b297f5c0c993cc51e346e4f3e",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.18.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.19.md",
+      "size": 1230,
+      "sha256": "d9ea511e4d51b41ec9ff09cd7cf53aaab8f3f79e764b15c91e28bb0a78f80803",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.19.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.20.md",
+      "size": 3610,
+      "sha256": "035a1777f567d5d6e06540c0b89a2a95f8a65bbd4275b3375148712148b883d6",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.20.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.21.md",
+      "size": 2994,
+      "sha256": "47889aefa8c11491911c6d29204d39704d4d2b03f1eacd1a5246dd35669bf37d",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.21.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.22.md",
+      "size": 704,
+      "sha256": "3e427eb2bdbf9c91d58cedbb021342843562a4a6b0844e6345641582e22a9702",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.22.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.25.md",
+      "size": 1797,
+      "sha256": "4506c64d5f2d217395f53402c0321270ea19a247239a5c9a0da736dea8787267",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.25.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.26.md",
+      "size": 2418,
+      "sha256": "8fe60d780cdacb8f799b6725a9f65cf983c22375b470bf4ad52ff77310651af2",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.26.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.27.md",
+      "size": 3194,
+      "sha256": "6f33ca9d6692de31cd5022e90e2c18a5295c88545e2f11b29ee36bcef880fe87",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.27.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.34.2.md",
+      "size": 1998,
+      "sha256": "89ee911bf8faf41bb7cfad55375e5873b6de2aa4e4d6a4ab7395bbcf5a0e62ff",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.34.2.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.34.md",
+      "size": 2899,
+      "sha256": "29fec80908e73bd3cb2d21fbb7021a7ab9fd05adb582e3a9310a5ed80966a8a9",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.34.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.35.md",
+      "size": 1363,
+      "sha256": "072eb80d081f3f5eaa54e9732d3a1b4e3c36f86e041f68b3b6241444fbe308ef",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.35.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.36.md",
+      "size": 4392,
+      "sha256": "de4c6c5daec339bfe1f038acd3bc7dd51716eeeb847a6f1836d29b862aa5cc82",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.36.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.37.md",
+      "size": 1410,
+      "sha256": "926934c8c9869c009b6c67ec97724b6fbfa0f033551e4c5a47015d2b50d8ab11",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.37.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.38.md",
+      "size": 1448,
+      "sha256": "7b855429d649c7a1a3535dc5508bb92b6ed1e11afbe2826e4b4a597d1cbc6f6f",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.38.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.39.md",
+      "size": 2259,
+      "sha256": "4824ba8bfec49918c91cfa400b081119389a69a0776eaf378d68b011407d00d6",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.39.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.5.md",
+      "size": 1651,
+      "sha256": "ab6dab96dc98aec48afcf16655e6354b83cf09ab6523c61a9630f746e70d59ac",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.5.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.6.md",
+      "size": 1866,
+      "sha256": "cc4fd7e8d2db405845ba0be6c65acdcebafa0989f33c6efc5a2e477c5f30a9d5",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.6.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.7.md",
+      "size": 1625,
+      "sha256": "fba6e373523224f73f2f20bf6ee4f30f6311768beffbf571875ca5287d50adf5",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.7.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.8.md",
+      "size": 4839,
+      "sha256": "79d5e274543ea79d9d335594e64a733ba928baf6ba9411553708962c81acb9e9",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.8.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.6.9.md",
+      "size": 3787,
+      "sha256": "afc004b3af5b491d10e67841508090439cab57f69d19839a7d554d5d68a0dacd",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.6.9.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.7.0.md",
+      "size": 4216,
+      "sha256": "c057b8227c4ec0718f703857b3efecbffce006201723a1b17948c1cb8d6a8ad1",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.7.0.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.7.1.md",
+      "size": 1797,
+      "sha256": "14929dd7d1eece187368852aabd9f3f1a8032afe07f59e636cad8349ff29e9a7",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.7.1.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.8.0.md",
+      "size": 4685,
+      "sha256": "c96504ae6a612ec2b9cd87e86ec18550e5a0d1025b6cdf6c30ca218dbd9e8d14",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.8.0.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.8.1.md",
+      "size": 1735,
+      "sha256": "a7555ed40db98a10e8232a462335b67e89d5472d92b1ec33a2545ce872cb209b",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.8.1.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.8.2.md",
+      "size": 1527,
+      "sha256": "932e2e0c7a697eb5275469b08180a2c5c923642556c5d27924805d08b11883c7",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.8.2.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.9.0.md",
+      "size": 2149,
+      "sha256": "4fa998744b1c0ec330cacdf31be2e58ad846ee585bd8135ebd550bfb0e2a940f",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.9.0.md"
+    },
+    {
+      "path": "tests/docs/ATUALIZACAO-v36.9.1.md",
+      "size": 2119,
+      "sha256": "d9a17d3be2cfd950a8200d46cde1ba084d42c50c5a3135af92fe13d3adc575e7",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/ATUALIZACAO-v36.9.1.md"
+    },
+    {
+      "path": "tests/docs/CONTRATO-WEBHOOKS.md",
+      "size": 1548,
+      "sha256": "0fa3a5c81544b3234aafc6345b62237a25a18b8f16be39b0f6412a3974586ab6",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/CONTRATO-WEBHOOKS.md"
+    },
+    {
+      "path": "tests/docs/GUIA_OPERACIONAL_RS_CONNECT.md",
+      "size": 772,
+      "sha256": "87ec090f93918cde01d35ef8b322d40caebec169e413f7a3b84f3d7c7e6941f3",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/GUIA_OPERACIONAL_RS_CONNECT.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.10.6.md",
+      "size": 1024,
+      "sha256": "6c85079309e1ad724c87d80552f0aba2f4a1afde7317c7abf0a9743fc59d73d2",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.10.6.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.5.6.md",
+      "size": 3048,
+      "sha256": "94214cfeaa96f3629e52ace092de7cea56b40c5b6264d3ea425c686b1ef19f63",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.5.6.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.5.7.md",
+      "size": 3707,
+      "sha256": "17ed87fdd9935895da407922e3db1868615fc0a69d30261b94c89d5ba03be383",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.5.7.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.5.8.md",
+      "size": 2139,
+      "sha256": "7d7a6a00a523c33df025ceed7bcc871912d699c31a73b3c22fb706fce3bfd71e",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.5.8.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.5.9.md",
+      "size": 2956,
+      "sha256": "86627db17f583175c82e3dd4347ec0ca1499d00eb8ea5f37f62766018b68c51e",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.5.9.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.0.md",
+      "size": 2615,
+      "sha256": "54c18eff7d71c52598bde49bc1ba5e9af534b3c58ff0cbbaa1abf97cdb630dad",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.0.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.1.md",
+      "size": 2002,
+      "sha256": "fa37aad6b91a9bd6848b7d6b65c81a6a111b5bf4e79bcf185e0cc87bc8cd7c65",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.1.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.10.md",
+      "size": 2049,
+      "sha256": "05b46d8b226a0d98c5e8630715af475516eaa4674f1cd227e1b37e5480f6c24d",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.10.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.11.md",
+      "size": 870,
+      "sha256": "48ba5113966e6163b158a82acc1c04df144773e23e90326e8813ade066357d33",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.11.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.12.md",
+      "size": 2217,
+      "sha256": "e0ac4f4bb1595ea4ef4d160c927d56e65fe637b9b32ec3656c02354e6afdc9db",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.12.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.13.md",
+      "size": 3607,
+      "sha256": "628b4368223d995589762ab5269c318b721594c1ead4d622e73613ca7b88561f",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.13.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.14.md",
+      "size": 1019,
+      "sha256": "e3760dfb0f5305e09245a2c5aaac4e9ee21cd3a3159bfe6d63d0ec40c2f8abc8",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.14.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.15.md",
+      "size": 3613,
+      "sha256": "2c2226288ba084775d77b3532c69cb975963b0f41dd4961d0cc2c1107041cef9",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.15.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.16.md",
+      "size": 2714,
+      "sha256": "d30f6ffc9b8bf96abde50c58a6b9f6a0f26f0f154c66435d97cb189aee3a9596",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.16.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.17.md",
+      "size": 826,
+      "sha256": "38375b03282250bdb2f6970d822a647ad0f88653c6ad1ca8220c1bc1f1b3cbcb",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.17.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.18.md",
+      "size": 1168,
+      "sha256": "4bbae94b4872b4535b60c7e3d703b380ebfbc17f741486c7ea57dca81f491ae1",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.18.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.19.md",
+      "size": 706,
+      "sha256": "226e6e9952ad207e832e5da6712b59733bc45683e87a8e66c63d23d11b5b9a43",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.19.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.2.md",
+      "size": 1088,
+      "sha256": "3e7285e449949e5a0d037b2bc9b013ae17e927a75f95fe050958b77a14593c2f",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.2.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.20.md",
+      "size": 1395,
+      "sha256": "4968c55b90a40cf79d87a821513661658e277edeb7cca6f797ca75003943ddf2",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.20.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.21.md",
+      "size": 2131,
+      "sha256": "7f064e35fd7e741ea0bf94abb124197fcc59daedcaa258653ec0f9f6845477f6",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.21.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.22.md",
+      "size": 488,
+      "sha256": "4273a72fb3a5fe0701d9c03931bc9ebc6fc76553efc7a99f9cd91e7617355c41",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.22.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.25.md",
+      "size": 1608,
+      "sha256": "c8a947dea6bf94158f5eaa5ba3b20487c01ddae88cdbc7b1ce2c073b45e231f3",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.25.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.26.md",
+      "size": 2279,
+      "sha256": "008df517be187f3ec9f9fd58518411b58f86e1f4697f7465315905b2b8f44b21",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.26.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.27.md",
+      "size": 2542,
+      "sha256": "309886ae688d6fa884292f2b780e99876fd73609eeed41c1dfbbe5ff06ef4757",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.27.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.3.md",
+      "size": 2373,
+      "sha256": "8a031cb80aca6d122e0778a451ef1613918e26fd1df81f67c02d07ae8e333dc9",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.3.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.34.2.md",
+      "size": 2023,
+      "sha256": "dbd0bd0041afc2963c4fe04715491429be822f5ed974435bafeff7e746ff2221",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.34.2.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.34.md",
+      "size": 1979,
+      "sha256": "66eb28c6d0867832192f0ee6348bb0d723856e549a7e92662ba403bdc4aa8396",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.34.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.35.md",
+      "size": 1181,
+      "sha256": "73e2d6671b50b8db08d50cbf5597686fbe2c9ff78dbd788162c863ea14528f66",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.35.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.36.md",
+      "size": 4392,
+      "sha256": "a402cd9d295d84736b01633b09a4bad3231c2c56c68041b51ed8b0a455794457",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.36.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.4.md",
+      "size": 1220,
+      "sha256": "1a3e63a0971f9031e593ce5f0be644820acaf3e663af033c9238209692359b22",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.4.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.5.md",
+      "size": 2880,
+      "sha256": "dd8a525e975eed257cbc8a6fb355b23a9daf8e6d452970621167c62864d5dded",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.5.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.6.md",
+      "size": 1169,
+      "sha256": "b6be3f26c29a882fdf84bb06af0e5a79b2c834f75e2fd51426ea22aed7aac036",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.6.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.7.md",
+      "size": 1230,
+      "sha256": "2e6b97f2073a855add79b61094dd6589b2c31a48de1a05d1d9d3ee35d6b6bd31",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.7.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.8.md",
+      "size": 4795,
+      "sha256": "6f16a0cb1bc0d62f51322b721eae23e4ee0ee477b3643b496be772f6fcf90436",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.8.md"
+    },
+    {
+      "path": "tests/docs/HOMOLOGACAO-FINAL-v36.6.9.md",
+      "size": 3171,
+      "sha256": "071b06a942f177f72ee1e49032730ec86162837a7366ece189661ed14a0a25ae",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/HOMOLOGACAO-FINAL-v36.6.9.md"
+    },
+    {
+      "path": "tests/docs/INSTALACAO-E-TESTES.md",
+      "size": 3252,
+      "sha256": "b5523ae67776688f332708a06ff89d0b06d03c1a96f7ebae36986be9925a86ab",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/INSTALACAO-E-TESTES.md"
+    },
+    {
+      "path": "tests/docs/Manual_RS_Connect_Funcionalidades_e_Implantacao.docx",
+      "size": 43807,
+      "sha256": "cea7ece06e5a05f81172b70ce67a3d6dd2f067123c16050e2898294847860d4b",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/Manual_RS_Connect_Funcionalidades_e_Implantacao.docx"
+    },
+    {
+      "path": "tests/docs/PAGAMENTOS-ZIP-36.0.md",
+      "size": 1514,
+      "sha256": "4ecd008911791fd7fe0b337793a0fe8530ce29c158a4e28aea4f2254d9bfde05",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/PAGAMENTOS-ZIP-36.0.md"
+    },
+    {
+      "path": "tests/docs/RS_CONNECT_BETA_COMERCIAL.md",
+      "size": 747,
+      "sha256": "250ad423a3b53cfc2bf89751c18450df52304e789b890a3a210f0ecd86aa89e5",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/RS_CONNECT_BETA_COMERCIAL.md"
+    },
+    {
+      "path": "tests/docs/diagnostics/SECURITY-HARDENING-VALIDATION-v36.11.1.md",
+      "size": 4040,
+      "sha256": "aacb887dafb4efaab85bbe540f4a59b1274882efe5cea1678d0ab89e8fa3782f",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/diagnostics/SECURITY-HARDENING-VALIDATION-v36.11.1.md"
+    },
+    {
+      "path": "tests/docs/diagnostics/TEAM-METRICS-PROVENANCE-VALIDATION-v36.11.2.md",
+      "size": 1967,
+      "sha256": "8368bbe0be2ff98819062a72fa71d67c870b41a31adec87bf4414fdc43c93cb7",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/diagnostics/TEAM-METRICS-PROVENANCE-VALIDATION-v36.11.2.md"
+    },
+    {
+      "path": "tests/docs/diagnostics/TENANT-ISOLATION-VALIDATION-v36.11.0.md",
+      "size": 2499,
+      "sha256": "4719cec5dd8dfefbd54edf1e397e69905d3059b30542f57e34ac4dd4b395b071",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/diagnostics/TENANT-ISOLATION-VALIDATION-v36.11.0.md"
+    },
+    {
+      "path": "tests/docs/diagnostics/backup-v36.3.0.sql",
+      "size": 1385,
+      "sha256": "3d80a5835bd134b52a992a07a0ab89ff5c988227a2bc5e7ed4eac41edab9cf84",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/diagnostics/backup-v36.3.0.sql"
+    },
+    {
+      "path": "tests/docs/n8n_templates/payloads-agenda-google-exemplo.json",
+      "size": 1884,
+      "sha256": "09ee9f1c812ed7ad6f4a643b09d21faf59994e482a23e87d3bb8ec003f78ac85",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/payloads-agenda-google-exemplo.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/payloads-exemplo.json",
+      "size": 2930,
+      "sha256": "916465c11ec78825eac865809e901a688a4211bfd446da0c4e25de2709cdc25e",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/payloads-exemplo.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-agenda-disponibilidade.json",
+      "size": 4586,
+      "sha256": "8b90ae707faaa9a83ed26fbd9f74c5e273fbac5cfc45b40d0ec7372a7f662b91",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-agenda-disponibilidade.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-agenda-google-calendar.json",
+      "size": 7969,
+      "sha256": "bb1abfe4c06846f6e790095a8286b3a78d03e45d3b6ea2ef20596eeb27a07c5b",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-agenda-google-calendar.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-agenda-google-ciclo-completo.json",
+      "size": 19653,
+      "sha256": "8b1521fab1b4a79dc7b6a177cbc06f62af7014753e92c8e67fc414df58f1286d",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-agenda-google-ciclo-completo.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-agenda-google-espacos-livres.json",
+      "size": 13730,
+      "sha256": "8ecc081b69e29c94ac99d0d89105d42c415d9addd1dc9cfb4d4925b3f43a25de",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-agenda-google-espacos-livres.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-agenda-google-eventos-vago-36.2.2.json",
+      "size": 30069,
+      "sha256": "3baa48f98634caa3dbc6d911fc79e597f5ea2276b2e76a3d1a9872159c910a9e",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-agenda-google-eventos-vago-36.2.2.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-agenda-google-eventos-vago-36.2.6-ordem-callback.json",
+      "size": 30352,
+      "sha256": "2128e16114a090b560017ef692604c2b7299236a7638cff74333e2e24810ffa5",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-agenda-google-eventos-vago-36.2.6-ordem-callback.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-agenda-google-eventos-vago.json",
+      "size": 30319,
+      "sha256": "f75fe418885519b5e54342977da7ad03719c95018c5805c24a07a52f2d796931",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-agenda-google-eventos-vago.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-ai-reprocessamento-agendado.json",
+      "size": 1433,
+      "sha256": "e73c574e525d84029eaa08f8fc12927d7f0e23e165a26d32721ed390cf3468cc",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-ai-reprocessamento-agendado.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-backup-rsconnect.json",
+      "size": 11338,
+      "sha256": "1b0b0f839cb530ae70d440bb16f62e39b57c4d90cc96ca1377d4238c0f4b98d1",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-backup-rsconnect.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-billing-cron.json",
+      "size": 2040,
+      "sha256": "6c49017ed24d7d4b9aaa6baa735a97e4c42d0cfd52879952bd6d2abbed07367a",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-billing-cron.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-billing-whatsapp-email.json",
+      "size": 5283,
+      "sha256": "f260e5a28441d5ef9878996be042499814e5df33a18d8bb781db44122eb35703",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-billing-whatsapp-email.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-calendar-maintenance.json",
+      "size": 3046,
+      "sha256": "986403f9076bf8d96af62f8caa97b18d4316c05bf7e743aee1ce4f822b3fbbf5",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-calendar-maintenance.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-crm-google-sheets.json",
+      "size": 4629,
+      "sha256": "2e6a31d03b505bb49c825e57dee86c26cde0fd9b7cfd7622a2dd15cc44f61ee1",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-crm-google-sheets.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-fila-rapida-ia.json",
+      "size": 1459,
+      "sha256": "37a497f7e7da974e02393c18df7a7892d0ba8945196dd13d695ebff9d8229eb8",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-fila-rapida-ia.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-followup-alerta.json",
+      "size": 4132,
+      "sha256": "25f4dfba29060459a7e6c30d4586e933a17d0b8b993912cb60a7b2663360eaa8",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-followup-alerta.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-infinitepay-status-normalizado.json",
+      "size": 3144,
+      "sha256": "962cc8156ce3a7fb695a9c5dca6b523df8d33eede6a3babd447ec0525cbb437b",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-infinitepay-status-normalizado.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-message-retention.json",
+      "size": 2373,
+      "sha256": "5413d2db74d1cc0d7882c979e7399ecc9d1e94fba29a0a6a119f1d2df59bd133",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-message-retention.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-monitor-operacional.json",
+      "size": 1543,
+      "sha256": "8093811a0d3fbb6502b0c207b22810048622ad6b01b187b71b15800d27245059",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-monitor-operacional.json"
+    },
+    {
+      "path": "tests/docs/n8n_templates/template-relatorios-automaticos.json",
+      "size": 1611,
+      "sha256": "aeee5bc8e058b1d03890b79daaf9f39eef29e7e448efdc8b6d05d5678a01f1ac",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/n8n_templates/template-relatorios-automaticos.json"
+    },
+    {
+      "path": "tests/docs/teste-webhook-rsconnect.json",
+      "size": 383,
+      "sha256": "73ea534b5b4896a13585eaf6827ba6320df7a555a3000d06177622c4c52d195f",
+      "classification": "mirrored-identical",
+      "counterpart": "docs/teste-webhook-rsconnect.json"
+    },
+    {
+      "path": "tests/documentation-pack-v36185-smoke.php",
+      "size": 791,
+      "sha256": "c055bc3a12544dd10a758c42ad8b207e05f4e4a1d39dae6861ad5573ef47c1fc",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/evolution-client-admin-v36161-smoke.php",
+      "size": 3270,
+      "sha256": "573e79bde568041feb24ec81cd208765a2de6d2e0bebd04bf8782eb4d240b7dd",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/evolution-instance-management-v36160-smoke.php",
+      "size": 4164,
+      "sha256": "1873ad6fb6d51fcd28442719160af2bed6cf1670a8ccf0ee2be107fbf4ae6e5e",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/evolution-live-status-smoke.php",
+      "size": 1488,
+      "sha256": "f6e8ecd35a60e0dd825292c457484e74151692d0588c8c678b0f213f9b07c126",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/evolution-reaction-message.json",
+      "size": 543,
+      "sha256": "5ffca2415b20cb805701690dfdf299e33164fb627045f0f3a81408e6ae06b737",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/evolution-send-message-outgoing-ignored.json",
+      "size": 389,
+      "sha256": "a14f5e20e8b0298339ab9986778c18d06e09abc8e8b93356b2c78a28e2ec7acb",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/evolution-set-webhook.json",
+      "size": 352,
+      "sha256": "7e00e1bf1252f003d418d2f4b6dc59b9bb37ab892ea971a2ce40cef2c2e183a4",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/executive-metrics-consistency-smoke.php",
+      "size": 2064,
+      "sha256": "7b18f56b2c0d0f71cdb84cb8717482db208e1558593328c8e03090a2887314ca",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/free-trial-guided-onboarding-smoke.php",
+      "size": 3505,
+      "sha256": "679442ebac32c510db2790c59979de15cea12734d00adda0aefedf95b1216fcf",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/human-signature-delivery-smoke.php",
+      "size": 1262,
+      "sha256": "cfa99aa53f407f26f416cca076a905b3e61a0294506784adb100426431d26ca6",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/instance-assisted-deletion-v36186-smoke.php",
+      "size": 3016,
+      "sha256": "178aa04ad6f4781e0a8dce23cf5252d72f4aeb23766a4f71681c4355112be332",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/instance-create-layout-v36171-smoke.php",
+      "size": 2393,
+      "sha256": "7b282e914a6d85d9de491b051106815fc9c200103648de90a99a067def25c3fd",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/instance-delete-preview-session-v36208-smoke.php",
+      "size": 1341,
+      "sha256": "b6515244120f8461f894e62269fd1b821146019e5c4b07f8084ad85481b5e8cd",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/instance-delete-without-replacement-v36209-smoke.php",
+      "size": 2967,
+      "sha256": "518589b520800cb1fc1ca8d92844e63041f793b9f8cf08a16493bfa658611482",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/instance-local-deletion-v36207-smoke.php",
+      "size": 2875,
+      "sha256": "871090a0893965bc15e21e6b7d2439cdc43f8e33f171349f585a4e3dcedba75e",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/instance-remote-missing-deletion-v36206-smoke.php",
+      "size": 2471,
+      "sha256": "8e7d0f15f8f25cbb70e07cb7ac038a3faaf0dbbb000e400d654608490552a0b7",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/login-greeting-message-direction-smoke.php",
+      "size": 1897,
+      "sha256": "b1fbddbb669433ee47ca1a187e387a68e2c2d2b0ec0e07c73c72554a781d11db",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/login-session-redirect-smoke.php",
+      "size": 2125,
+      "sha256": "52cc7a53811328d8dd8515314ba494d93ed6a6aff602e652698d35dde4bea476",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/message-governance-evolution-realtime-smoke.php",
+      "size": 3571,
+      "sha256": "d6489c19bedc84a8a3e9e0e100277583ff37947d3b5b1b7fb20f99c40c861758",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/meta-ai-lid-protection-smoke.php",
+      "size": 3790,
+      "sha256": "d2ac1673353491459d1159c2df76698400fba3e9f4bdfbee7edba75c397bb914",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/multi-whatsapp-agent-routing-scenarios.json",
+      "size": 2300,
+      "sha256": "866c5d80f925c11353b24d8c7e53be71a7971088b489d5c9c40e42b775e74d96",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/n8n-callback-test-payload.json",
+      "size": 258,
+      "sha256": "87d1d7a156680bf5f84172900bb0eb32ba25578e42ae5e28087e7752e4859c83",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/n8n-flow-test-payload.json",
+      "size": 264,
+      "sha256": "030a9d6b42705d6165e96088206be32912d9c6cfe386e529a3709a4efef034c8",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/new-conversation-drawer-smoke.php",
+      "size": 1046,
+      "sha256": "1b24b7206266eef547ed46aa899039d6da4e9d6539058692bf851cb02d31ae04",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/onboarding-calendar-modes-smoke.php",
+      "size": 3151,
+      "sha256": "6faba6cd0384bffeccf995297b6ca42dd0ea5f422b208291d9f68eb3155a2717",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/openai-intelligence-v36190-smoke.php",
+      "size": 2676,
+      "sha256": "60558be2a24e6877cf7af180d63b4b3c83d41160aa64a67f236b0417c942adad",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/openai-organization-usage-v36162-smoke.php",
+      "size": 3770,
+      "sha256": "f53148e62f02d8f039ec27b3c1a3ca544e66f844ef6a32780804af84ef63f9dd",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/openai-usage-menu-v36163-smoke.php",
+      "size": 2087,
+      "sha256": "ec10eb0830dd074ed81f2e4f66484bc5ad074db54d2de153b900ca284e94f9b3",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/operational-friendly-language-smoke.php",
+      "size": 4750,
+      "sha256": "c23c89da337f639de8979bbc85a3c5eeebbc2f561a63efc6068d4fb0d0cd440e",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/operational-history-metrics-smoke.php",
+      "size": 4044,
+      "sha256": "91e72b65b207280caa77d5d4f29f703dd021106b901a6306ef7f735b4cd969c7",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/operational-monitoring-alerts-smoke.php",
+      "size": 5925,
+      "sha256": "b5d4df0de8722a5d060ca9224627f4caac92ce050e6739ca8118aecf41f679fe",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/operations-backup-request-payload.json",
+      "size": 521,
+      "sha256": "e87078bfbd39a5149351107959cb5f23f12f1b1c594037ad40c4995c2f6d014e",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/operations-backup-webhook-payload.json",
+      "size": 380,
+      "sha256": "2ba054679ea7c128b55cb557203ce6d8262c812807c999b6da046c30096b8e8f",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/pagbank-webhook-payment.json",
+      "size": 113,
+      "sha256": "d23311ae5f79a75e85f12f4747de5e28b5e72e5d2b051a1de0ee77d75038790c",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/payment-external-webhook.json",
+      "size": 172,
+      "sha256": "93dc80609551b9d2930c6c8a9d5def31433151251c60744d424a3dc64a04c3d8",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/plain-language-v36201-smoke.php",
+      "size": 2733,
+      "sha256": "a76c2dcb36080736fa9f74fccbe99f2948db0f718390ea8e59897f8e9e85c614",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/professional-assignment-smoke.php",
+      "size": 2667,
+      "sha256": "96adf24bb289826f5d58dc4057cc64989c110a71ac6b8500f1aa814e84fe58c5",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/professional-calendar-smoke.php",
+      "size": 2479,
+      "sha256": "911841ad4c021aa37f930d088ecca380e32f3efd59d20ed59c11b72cc53404ce",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/prompt-studio-smoke.php",
+      "size": 2979,
+      "sha256": "a54dcb87544318f4382e74248fb1b7846869e88ad688a0ecd8781e3946f4da52",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/public/.htaccess",
+      "size": 196,
+      "sha256": "c835b907d8eb7381a72224cfdc8b688ffbb9a7676f4f05f7bc84d18c4f61324e",
+      "classification": "mirrored-identical",
+      "counterpart": "public/.htaccess"
+    },
+    {
+      "path": "tests/public/assets/css/app.css",
+      "size": 513029,
+      "sha256": "d43f7bff9f42aab0d724cac92332027371f647ef32f8bd896a524bfee6f3bc6e",
+      "classification": "mirrored-divergent",
+      "counterpart": "public/assets/css/app.css"
+    },
+    {
+      "path": "tests/public/assets/css/reports.css",
+      "size": 77475,
+      "sha256": "5938352018fb7e9bec55da3fa9f8edfd923b923e078703548880d978bf922b2e",
+      "classification": "mirrored-identical",
+      "counterpart": "public/assets/css/reports.css"
+    },
+    {
+      "path": "tests/public/assets/img/RS_Connect_horizontal_transparente.png",
+      "size": 236070,
+      "sha256": "eb9bc52f13a9bd152bfa27d7c522830ec59fdc580dd043a293531392c628cd70",
+      "classification": "mirrored-identical",
+      "counterpart": "public/assets/img/RS_Connect_horizontal_transparente.png"
+    },
+    {
+      "path": "tests/public/assets/img/RS_Connect_horizontal_vetor.svg",
+      "size": 270052,
+      "sha256": "8845f4643d846dc948141fb4de0df0bc1bb98124bf74913e664c792d1b2c07ab",
+      "classification": "mirrored-identical",
+      "counterpart": "public/assets/img/RS_Connect_horizontal_vetor.svg"
+    },
+    {
+      "path": "tests/public/assets/img/RS_Connect_vertical_transparente.png",
+      "size": 263683,
+      "sha256": "21daa1fe458991b72d42704ec590cd59e7fdddb11991a0f9f402e3a065c133d2",
+      "classification": "mirrored-identical",
+      "counterpart": "public/assets/img/RS_Connect_vertical_transparente.png"
+    },
+    {
+      "path": "tests/public/assets/img/rs-connect-mark.png",
+      "size": 253417,
+      "sha256": "e66fc5d2a230fa640104ac2370e09b6311388482db2ebd8f98d590ff3db642d9",
+      "classification": "mirrored-identical",
+      "counterpart": "public/assets/img/rs-connect-mark.png"
+    },
+    {
+      "path": "tests/public/assets/img/rs-connect-report-mark.jpg",
+      "size": 427933,
+      "sha256": "fecb9b583424227bc0e1a48936808e8a9be42d0c7a3573feb0f1e4498bbe9668",
+      "classification": "mirrored-identical",
+      "counterpart": "public/assets/img/rs-connect-report-mark.jpg"
+    },
+    {
+      "path": "tests/public/assets/img/rs-digital-lab-report.jpg",
+      "size": 138215,
+      "sha256": "00fb8db54d6e8e2cd085489e742109048ba0caa8c045177c08dc6d1ecd0cf0d1",
+      "classification": "mirrored-identical",
+      "counterpart": "public/assets/img/rs-digital-lab-report.jpg"
+    },
+    {
+      "path": "tests/public/assets/js/app.js",
+      "size": 149718,
+      "sha256": "b225bddb3bd1cbdde604e8ba1b27813777e9078ca5d55baadb034d43135869f2",
+      "classification": "mirrored-divergent",
+      "counterpart": "public/assets/js/app.js"
+    },
+    {
+      "path": "tests/public/assets/js/company-settings.js",
+      "size": 4087,
+      "sha256": "bd3f28a610989ec4d99f29030753678612cbdc06c871a7832045a20580af2b84",
+      "classification": "mirrored-identical",
+      "counterpart": "public/assets/js/company-settings.js"
+    },
+    {
+      "path": "tests/public/assets/js/reports.js",
+      "size": 11185,
+      "sha256": "0d4628aea6d0e3531e368406d0d44ab4f970afae6970558fac1694cb3d2d293a",
+      "classification": "mirrored-identical",
+      "counterpart": "public/assets/js/reports.js"
+    },
+    {
+      "path": "tests/public/health.php",
+      "size": 463,
+      "sha256": "99b9f96fbe229564dedf3925bc988be542cdeb949e83fcd9d23ae9fb164ff99f",
+      "classification": "mirrored-identical",
+      "counterpart": "public/health.php"
+    },
+    {
+      "path": "tests/public/index.php",
+      "size": 309,
+      "sha256": "88e77f68fd08baca09f35773ce5ffc0ab86b7544a363c2c4ee97e9eb5a46d7dc",
+      "classification": "mirrored-identical",
+      "counterpart": "public/index.php"
+    },
+    {
+      "path": "tests/public/router.php",
+      "size": 223,
+      "sha256": "a948f92cb1741187f5b4bb53eb78c7f2d90934d1862439c800d8c6c22131ff9d",
+      "classification": "mirrored-identical",
+      "counterpart": "public/router.php"
+    },
+    {
+      "path": "tests/public-uuid-routing-smoke.php",
+      "size": 6392,
+      "sha256": "bcb1785aa5ca6bb6078cc5144c7b187ea36371c96310bbf3fc479b2eed912b66",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/reports-consistency-v36151r3-smoke.php",
+      "size": 2569,
+      "sha256": "27443f2437833c8189c4f9fa1856de7b81c69131aa5bf62bb84d3bdbc981b264",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/reports-pdf-brand-v36151r4-smoke.php",
+      "size": 1983,
+      "sha256": "16078aca5b5c426f53b274b4103cc9871b100d22ba4af6ebc02ff6d81d8d6d4a",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/reports-pdf-logo-v36151r6-smoke.php",
+      "size": 1039,
+      "sha256": "780c32f879f8505f838081feceb9229c4757646c3b1b08f4371926ebf5ac1ee5",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/reports-pdf-polish-v36151r5-smoke.php",
+      "size": 1790,
+      "sha256": "184e12c7975bc63b7ad21d24a732aff5a0886f26e0d802127500b0b55fee720a",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/reports-pdf-runtime-v36180-smoke.php",
+      "size": 2314,
+      "sha256": "f6e32681f73fb2600962bef2e0eb4e82bf53b177a5b849c3cd6583a7fac5f1c8",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/routes/web.php",
+      "size": 29554,
+      "sha256": "c41d2815c38f2d875c72738dba450e61a0862b87bd20c46bae63d8901b7d9ed7",
+      "classification": "mirrored-divergent",
+      "counterpart": "routes/web.php"
+    },
+    {
+      "path": "tests/scheduled-reports-pdo-placeholders-smoke.php",
+      "size": 1583,
+      "sha256": "c73434055030810255dc5367a8561ad9fde9774b20b9c9f8a246c756cbb28996",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/scheduled-reports-v36151-smoke.php",
+      "size": 4949,
+      "sha256": "90a85122ce397e42f834c1d74879d92b619236cedcc308272ed289a16c9c2568",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/scripts/reporting-metrics.php",
+      "size": 1320,
+      "sha256": "001f25947ba78ce68c1c115892c52635cb497e0234cc32ca4ebf234cc6a94c1c",
+      "classification": "mirrored-identical",
+      "counterpart": "scripts/reporting-metrics.php"
+    },
+    {
+      "path": "tests/scripts/rsconnect-backup.sh",
+      "size": 4215,
+      "sha256": "1d45cd6ba43772052bfa1a163bd2afa69c930a4902f836aaf4a409a4f8045e1f",
+      "classification": "mirrored-identical",
+      "counterpart": "scripts/rsconnect-backup.sh"
+    },
+    {
+      "path": "tests/security-session-webhook-hardening-smoke.php",
+      "size": 6450,
+      "sha256": "57e5e263d720e2f948859293c065562bbac13be02896e570f0193672e5143588",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/service-cycle-recovery-smoke.php",
+      "size": 2485,
+      "sha256": "b2c3b3e41a07c979afd8af0a4d1ada0d470f62ef8a246b7def01fac890e05e44",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/team-metrics-provenance-smoke.php",
+      "size": 3439,
+      "sha256": "35cbdf6357aeee2e2910da6715cd0fb5ea5b8772506f6b7ba9b3e2392d778a15",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/team-professional-reports-smoke.php",
+      "size": 4593,
+      "sha256": "38656103e1f35ea8e311a1c86963b4a9f0f11ea3805b93865d8a936f1a67c39f",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/team-report-audit-smoke.php",
+      "size": 2601,
+      "sha256": "8bfc278b0067d516e5f99fc8c0af8e71ba159f5c8e9b03e1a2cdacc9ff43cb38",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/tenant-isolation-hardening-smoke.php",
+      "size": 3092,
+      "sha256": "de3dd36ac64e253e9faa834d0e2bac3f846ad866d977a035edf91b385d1438b7",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/tests/admin-executive-report-v36140-smoke.php",
+      "size": 2357,
+      "sha256": "5b3942c8745114948ed1c961ca6d04138c95b7d8521c52565e25720b1eacbf40",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/admin-executive-report-v36140-smoke.php"
+    },
+    {
+      "path": "tests/tests/after-hours-calendar-recovery-smoke.php",
+      "size": 3338,
+      "sha256": "d2881481e1fe9783cc831f665eed92a1bc3ea12006b5f19aa9cd2910b961ff82",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/after-hours-calendar-recovery-smoke.php"
+    },
+    {
+      "path": "tests/tests/after-hours-human-queue-v36184-smoke.php",
+      "size": 1953,
+      "sha256": "459bfac414789a3239dcfd0dd217405cb37f6b6bd1495d28a44df3d7bf5df696",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/after-hours-human-queue-v36184-smoke.php"
+    },
+    {
+      "path": "tests/tests/after-hours-queue-display-v36183-smoke.php",
+      "size": 2807,
+      "sha256": "d788c2a61400d40e67cfb54dc3e98d6cc0ee8c7c1122788605a104bd223c6b3a",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/after-hours-queue-display-v36183-smoke.php"
+    },
+    {
+      "path": "tests/tests/after-hours-reply-timing-smoke.php",
+      "size": 2862,
+      "sha256": "180f98c98885d8f01492a241a4a0ff9cbbd29a54349e4c0998e320f4610edd6d",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/after-hours-reply-timing-smoke.php"
+    },
+    {
+      "path": "tests/tests/agenda-backup-contract-smoke.php",
+      "size": 5476,
+      "sha256": "221b560b9390dce57fb0e705d597024ded008a7e24ec8177e4e6ee889d47a5bd",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/agenda-backup-contract-smoke.php"
+    },
+    {
+      "path": "tests/tests/agent-instance-linking-v36182-smoke.php",
+      "size": 2647,
+      "sha256": "53e46024eea704b22321417c1ed232219486c0b571f7fc64d8d26b2f4256ef0f",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/agent-instance-linking-v36182-smoke.php"
+    },
+    {
+      "path": "tests/tests/agent-policy-reliability-scenarios.json",
+      "size": 3101,
+      "sha256": "72a48a02d968f194678cbda5e01aacedb229c60529efe55d48154f04c934fa90",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/agent-policy-reliability-scenarios.json"
+    },
+    {
+      "path": "tests/tests/agent-policy-reliability-smoke.php",
+      "size": 5950,
+      "sha256": "66cb21329cd534f99ae67661c0c6952870b1d177cc0026485adf595c1183226f",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/agent-policy-reliability-smoke.php"
+    },
+    {
+      "path": "tests/tests/ai-efficiency-phase2-v36180-smoke.php",
+      "size": 2717,
+      "sha256": "639fc5d3f608ff0ca7c77347737c01cdb7e141bd732d1933404888985df2920d",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/ai-efficiency-phase2-v36180-smoke.php"
+    },
+    {
+      "path": "tests/tests/ai-efficiency-v36170-smoke.php",
+      "size": 4632,
+      "sha256": "ca5387240ebd3a5e063c97681f31005a828ea0a47ee4a016911f21e803f5d440",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/ai-efficiency-v36170-smoke.php"
+    },
+    {
+      "path": "tests/tests/ai-metrics-accounting-scenarios.json",
+      "size": 2139,
+      "sha256": "65e10c5121a88c6831503e6789ed136820f0a2e3e153bd7073e5110eda92b58c",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/ai-metrics-accounting-scenarios.json"
+    },
+    {
+      "path": "tests/tests/ai-quota-template-validation-scenarios.json",
+      "size": 770,
+      "sha256": "d50b1524f01927464f7a65ee70971650a6e746bdb587fd8944a5662175eea2ee",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/ai-quota-template-validation-scenarios.json"
+    },
+    {
+      "path": "tests/tests/ai-usage-after-hours-scenarios.json",
+      "size": 3086,
+      "sha256": "ea3ba2c32ae4835a43fda627d727597285b2c315d5527c1f88a7ec41bcdb493d",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/ai-usage-after-hours-scenarios.json"
+    },
+    {
+      "path": "tests/tests/backup-dispatch-retry-smoke.php",
+      "size": 3939,
+      "sha256": "e16236719e9ffce437559df5c86e82323cb45225dfd49a8e4b836e43682ec71a",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/backup-dispatch-retry-smoke.php"
+    },
+    {
+      "path": "tests/tests/billing-cron-response-example.json",
+      "size": 83,
+      "sha256": "201e5cd220b8bc4cb73809594eac2b49afc0319a8eb63adc43150a81e07ad2cb",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/billing-cron-response-example.json"
+    },
+    {
+      "path": "tests/tests/billing-reminder-n8n-payload.json",
+      "size": 535,
+      "sha256": "c058d7e691041ff90e1f061a2abff38ee0189e04e46fbae8ea28da8a72e1b2fb",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/billing-reminder-n8n-payload.json"
+    },
+    {
+      "path": "tests/tests/calendar-conversation-choice-scenarios.json",
+      "size": 598,
+      "sha256": "775f79dac5a59611b2876f621fb5b86cf7a0f5436d25fe4f7d3d16ac60c0905f",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/calendar-conversation-choice-scenarios.json"
+    },
+    {
+      "path": "tests/tests/calendar-google-confirmed-only-smoke.php",
+      "size": 1968,
+      "sha256": "6e09d1331c914c6c6771de5f07daefcca0918de0a50a861c5ec07ea8444ec3a3",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/calendar-google-confirmed-only-smoke.php"
+    },
+    {
+      "path": "tests/tests/calendar-google-free-slots-callback.json",
+      "size": 455,
+      "sha256": "1e4ba6f14a5bdddab80489ae2729741a9be5612d6538461248740fb96422ab15",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/calendar-google-free-slots-callback.json"
+    },
+    {
+      "path": "tests/tests/calendar-google-lifecycle-action.json",
+      "size": 1125,
+      "sha256": "5b2ecf06b1df7aa87b5e40ce0b3ba617d85ed4350fe4a70dbccbb79d7f3084d5",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/calendar-google-lifecycle-action.json"
+    },
+    {
+      "path": "tests/tests/calendar-google-lifecycle-create-callback.json",
+      "size": 469,
+      "sha256": "a4cd9b7f18e084ae9c2c90e3e222bcab721e19fd5dec196fd817e12ce264552c",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/calendar-google-lifecycle-create-callback.json"
+    },
+    {
+      "path": "tests/tests/calendar-google-lifecycle-delete-callback.json",
+      "size": 260,
+      "sha256": "ee5647a59dc6230969949983a08ed0fdddb874a6bba150f849544174649abcd9",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/calendar-google-lifecycle-delete-callback.json"
+    },
+    {
+      "path": "tests/tests/calendar-google-marked-delete-callback.json",
+      "size": 477,
+      "sha256": "a6235568532bdc0308a6b89d62e93c137d16dae567d0d918021e02fd7dcb17c5",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/calendar-google-marked-delete-callback.json"
+    },
+    {
+      "path": "tests/tests/calendar-google-marked-slots-callback.json",
+      "size": 642,
+      "sha256": "0991765bf98967b243b41c3e0905ec472c454b9216c0550fb3febda567378b23",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/calendar-google-marked-slots-callback.json"
+    },
+    {
+      "path": "tests/tests/calendar-google-marked-update-callback.json",
+      "size": 515,
+      "sha256": "b646291b8f870c3596924b69ea43371a6afcdb7a9ec5680891470e9019983fe1",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/calendar-google-marked-update-callback.json"
+    },
+    {
+      "path": "tests/tests/calendar-maintenance-auditability-smoke.php",
+      "size": 2101,
+      "sha256": "729fbb2d7b24de89bfb3052d3d820fbc5792fc583eaa7abc96077e3c472002cb",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/calendar-maintenance-auditability-smoke.php"
+    },
+    {
+      "path": "tests/tests/calendar-maintenance-response-example.json",
+      "size": 307,
+      "sha256": "cf3b2441f87c59b3401206cf198bd23c074cd79b8d643d3eb742313d1dda83e4",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/calendar-maintenance-response-example.json"
+    },
+    {
+      "path": "tests/tests/calendar-modality-before-availability-smoke.php",
+      "size": 2550,
+      "sha256": "a3de237746912c77dd69ab6cd688c1cd181f4f5ecb286c1454c9fce5993af1d6",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/calendar-modality-before-availability-smoke.php"
+    },
+    {
+      "path": "tests/tests/calendar-recovery-contact-identity-smoke.php",
+      "size": 3082,
+      "sha256": "b8437a55026b265130d5b3cdc7b46550e04859b1196cf5425b65ee8c0aae4bfe",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/calendar-recovery-contact-identity-smoke.php"
+    },
+    {
+      "path": "tests/tests/calendar-visualization-smoke.php",
+      "size": 2580,
+      "sha256": "ec2a8a5623f042a13217cb8c7b1235a0aa4e6cc6cd7c6ef9141347c6f8faa2ea",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/calendar-visualization-smoke.php"
+    },
+    {
+      "path": "tests/tests/client-communication-center-smoke.php",
+      "size": 4511,
+      "sha256": "a09a2c8370f0d7257ada39dbe583ac67d299d45e7b5bb26b29564cd6c0c938ea",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/client-communication-center-smoke.php"
+    },
+    {
+      "path": "tests/tests/client-executive-report-v36150-smoke.php",
+      "size": 2964,
+      "sha256": "5ce42481c599194897f3a3e89589b37cef0107aede0a5204109f080a65f1b86f",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/client-executive-report-v36150-smoke.php"
+    },
+    {
+      "path": "tests/tests/contact-avatar-refresh-v36172-smoke.php",
+      "size": 1781,
+      "sha256": "f46b3e840ed9e73aae22106310983c3acb38d0ff694cd296685d01cd861b9a0f",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/contact-avatar-refresh-v36172-smoke.php"
+    },
+    {
+      "path": "tests/tests/contact-page-search-smoke.php",
+      "size": 1136,
+      "sha256": "e2c8857c5a52d822aa06b3c5a6170c36872096ba1bd6f3b1a1977e5849a3907a",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/contact-page-search-smoke.php"
+    },
+    {
+      "path": "tests/tests/contact-schedule-overlap-smoke.php",
+      "size": 2653,
+      "sha256": "744b5cb8dda29929509687b2d404a2b39fb8d1ef009a947600c3a87ea22d2529",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/contact-schedule-overlap-smoke.php"
+    },
+    {
+      "path": "tests/tests/conversation-attachments-smoke.php",
+      "size": 3529,
+      "sha256": "16da2247321b2f2471647c012e0796fcf12c9296da6a5be3435d55501c21f11e",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/conversation-attachments-smoke.php"
+    },
+    {
+      "path": "tests/tests/conversation-cycle-status-sync-smoke.php",
+      "size": 3000,
+      "sha256": "8e0fd8d5241975c313568a314efe04e7f5a0586207ac4365b627c1492022bfb2",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/conversation-cycle-status-sync-smoke.php"
+    },
+    {
+      "path": "tests/tests/conversation-explicit-selection-smoke.php",
+      "size": 2137,
+      "sha256": "f622e289a4fac3c25536401303a4c14ca23547816b85941d7387b24610114419",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/conversation-explicit-selection-smoke.php"
+    },
+    {
+      "path": "tests/tests/conversation-flow-scenarios.json",
+      "size": 896,
+      "sha256": "eb504b100775b0f7777f57c78b03f98474443bccc8f864363fc11f2a72e0511b",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/conversation-flow-scenarios.json"
+    },
+    {
+      "path": "tests/tests/conversation-hours-ai-usage-smoke.php",
+      "size": 1762,
+      "sha256": "5d2dffd804026e15ed9d5354c6528245f9ba249defaaf58eaf2e29e42fbc7511",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/conversation-hours-ai-usage-smoke.php"
+    },
+    {
+      "path": "tests/tests/conversation-search-avatar-smoke.php",
+      "size": 2446,
+      "sha256": "67f2c6a7cbe8dd1732531206ca2baf624e2bc356f338d0a46b16d97e72c60207",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/conversation-search-avatar-smoke.php"
+    },
+    {
+      "path": "tests/tests/conversation-status-colors-smoke.php",
+      "size": 2522,
+      "sha256": "5613c9e89c98a9d9b744ca083115f4af899d2e44f14c3377f46919542683b025",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/conversation-status-colors-smoke.php"
+    },
+    {
+      "path": "tests/tests/cooldown-conversation-ui-scenarios.json",
+      "size": 1843,
+      "sha256": "795c334fe3c95749816cec8110b1ab4ba53d08c5d2b6d22dac7ccca584cca554",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/cooldown-conversation-ui-scenarios.json"
+    },
+    {
+      "path": "tests/tests/evolution-client-admin-v36161-smoke.php",
+      "size": 3260,
+      "sha256": "a9ac679bfbd9fedf5cfb28cf1301dba6826c65cca509f3b0716161d06635e5cb",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/evolution-client-admin-v36161-smoke.php"
+    },
+    {
+      "path": "tests/tests/evolution-instance-management-v36160-smoke.php",
+      "size": 4160,
+      "sha256": "57e8b1b35a89dbedccce27b83560233a01ebd786bbcb87a24132b91922b23c27",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/evolution-instance-management-v36160-smoke.php"
+    },
+    {
+      "path": "tests/tests/evolution-live-status-smoke.php",
+      "size": 1488,
+      "sha256": "f6e8ecd35a60e0dd825292c457484e74151692d0588c8c678b0f213f9b07c126",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/evolution-live-status-smoke.php"
+    },
+    {
+      "path": "tests/tests/evolution-reaction-message.json",
+      "size": 543,
+      "sha256": "5ffca2415b20cb805701690dfdf299e33164fb627045f0f3a81408e6ae06b737",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/evolution-reaction-message.json"
+    },
+    {
+      "path": "tests/tests/evolution-send-message-outgoing-ignored.json",
+      "size": 389,
+      "sha256": "a14f5e20e8b0298339ab9986778c18d06e09abc8e8b93356b2c78a28e2ec7acb",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/evolution-send-message-outgoing-ignored.json"
+    },
+    {
+      "path": "tests/tests/evolution-set-webhook.json",
+      "size": 352,
+      "sha256": "7e00e1bf1252f003d418d2f4b6dc59b9bb37ab892ea971a2ce40cef2c2e183a4",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/evolution-set-webhook.json"
+    },
+    {
+      "path": "tests/tests/executive-metrics-consistency-smoke.php",
+      "size": 2106,
+      "sha256": "8e27316489593c3526db2540fe2a70236a1e2d03a92c3104b239f9f79624ae2a",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/executive-metrics-consistency-smoke.php"
+    },
+    {
+      "path": "tests/tests/free-trial-guided-onboarding-smoke.php",
+      "size": 3505,
+      "sha256": "679442ebac32c510db2790c59979de15cea12734d00adda0aefedf95b1216fcf",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/free-trial-guided-onboarding-smoke.php"
+    },
+    {
+      "path": "tests/tests/human-signature-delivery-smoke.php",
+      "size": 1287,
+      "sha256": "e2646a22abda5431ad2bd8df9932bef29a741b58d71548240ef2bf2425cd5bd5",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/human-signature-delivery-smoke.php"
+    },
+    {
+      "path": "tests/tests/instance-create-layout-v36171-smoke.php",
+      "size": 2324,
+      "sha256": "10a369f926f26153508598486cc96ab31bf152153b1017dac3a8c2d3a0cb54c4",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/instance-create-layout-v36171-smoke.php"
+    },
+    {
+      "path": "tests/tests/login-greeting-message-direction-smoke.php",
+      "size": 1928,
+      "sha256": "4224e78dc11a2eee2071bee8f6d28aa4f37f67ef6f62290175dbf4df8fe92ff6",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/login-greeting-message-direction-smoke.php"
+    },
+    {
+      "path": "tests/tests/login-session-redirect-smoke.php",
+      "size": 2125,
+      "sha256": "52cc7a53811328d8dd8515314ba494d93ed6a6aff602e652698d35dde4bea476",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/login-session-redirect-smoke.php"
+    },
+    {
+      "path": "tests/tests/message-governance-evolution-realtime-smoke.php",
+      "size": 3571,
+      "sha256": "d6489c19bedc84a8a3e9e0e100277583ff37947d3b5b1b7fb20f99c40c861758",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/message-governance-evolution-realtime-smoke.php"
+    },
+    {
+      "path": "tests/tests/meta-ai-lid-protection-smoke.php",
+      "size": 3860,
+      "sha256": "5d06ba040dcbe6206be323b45dbc3963a696b6105b7cbd322ae5dbde2fadda3c",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/meta-ai-lid-protection-smoke.php"
+    },
+    {
+      "path": "tests/tests/multi-whatsapp-agent-routing-scenarios.json",
+      "size": 2300,
+      "sha256": "866c5d80f925c11353b24d8c7e53be71a7971088b489d5c9c40e42b775e74d96",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/multi-whatsapp-agent-routing-scenarios.json"
+    },
+    {
+      "path": "tests/tests/n8n-callback-test-payload.json",
+      "size": 258,
+      "sha256": "87d1d7a156680bf5f84172900bb0eb32ba25578e42ae5e28087e7752e4859c83",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/n8n-callback-test-payload.json"
+    },
+    {
+      "path": "tests/tests/n8n-flow-test-payload.json",
+      "size": 264,
+      "sha256": "030a9d6b42705d6165e96088206be32912d9c6cfe386e529a3709a4efef034c8",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/n8n-flow-test-payload.json"
+    },
+    {
+      "path": "tests/tests/new-conversation-drawer-smoke.php",
+      "size": 1046,
+      "sha256": "1b24b7206266eef547ed46aa899039d6da4e9d6539058692bf851cb02d31ae04",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/new-conversation-drawer-smoke.php"
+    },
+    {
+      "path": "tests/tests/onboarding-calendar-modes-smoke.php",
+      "size": 3151,
+      "sha256": "6faba6cd0384bffeccf995297b6ca42dd0ea5f422b208291d9f68eb3155a2717",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/onboarding-calendar-modes-smoke.php"
+    },
+    {
+      "path": "tests/tests/openai-organization-usage-v36162-smoke.php",
+      "size": 3749,
+      "sha256": "9660bca126785a56e60f3a548cac6981ee0c9732a26392fd797b7ae92b2f42b5",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/openai-organization-usage-v36162-smoke.php"
+    },
+    {
+      "path": "tests/tests/openai-usage-menu-v36163-smoke.php",
+      "size": 2016,
+      "sha256": "d60c78e85b3e8d480e8e5aaa05ff297291640ef6f00d189b06d65e924d479c32",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/openai-usage-menu-v36163-smoke.php"
+    },
+    {
+      "path": "tests/tests/operational-friendly-language-smoke.php",
+      "size": 4826,
+      "sha256": "a21dedb5fedaa197a381baa5c2799f9e897ebf748a780b90f184ceb503b45dd0",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/operational-friendly-language-smoke.php"
+    },
+    {
+      "path": "tests/tests/operational-history-metrics-smoke.php",
+      "size": 4100,
+      "sha256": "865500faf94183f9b725cd381a8988adeee50d7d44cbd2b8d766a0c048c51fcc",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/operational-history-metrics-smoke.php"
+    },
+    {
+      "path": "tests/tests/operational-monitoring-alerts-smoke.php",
+      "size": 6018,
+      "sha256": "508df74aa31f3ca1a85eba89e0732dd219faf81543787b06970497d0962131b5",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/operational-monitoring-alerts-smoke.php"
+    },
+    {
+      "path": "tests/tests/operations-backup-request-payload.json",
+      "size": 521,
+      "sha256": "e87078bfbd39a5149351107959cb5f23f12f1b1c594037ad40c4995c2f6d014e",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/operations-backup-request-payload.json"
+    },
+    {
+      "path": "tests/tests/operations-backup-webhook-payload.json",
+      "size": 380,
+      "sha256": "2ba054679ea7c128b55cb557203ce6d8262c812807c999b6da046c30096b8e8f",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/operations-backup-webhook-payload.json"
+    },
+    {
+      "path": "tests/tests/pagbank-webhook-payment.json",
+      "size": 113,
+      "sha256": "d23311ae5f79a75e85f12f4747de5e28b5e72e5d2b051a1de0ee77d75038790c",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/pagbank-webhook-payment.json"
+    },
+    {
+      "path": "tests/tests/payment-external-webhook.json",
+      "size": 172,
+      "sha256": "93dc80609551b9d2930c6c8a9d5def31433151251c60744d424a3dc64a04c3d8",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/payment-external-webhook.json"
+    },
+    {
+      "path": "tests/tests/professional-assignment-smoke.php",
+      "size": 2707,
+      "sha256": "b5e88c9c414097e503f8d0e918733507e7116bac0fda545b3a23ec43fdb2341f",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/professional-assignment-smoke.php"
+    },
+    {
+      "path": "tests/tests/professional-calendar-smoke.php",
+      "size": 2515,
+      "sha256": "ff2bf7b5a608451bb36f109ca29b4c357563427fe2b661ac1690d9a5ee8d8c27",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/professional-calendar-smoke.php"
+    },
+    {
+      "path": "tests/tests/prompt-studio-smoke.php",
+      "size": 2966,
+      "sha256": "e8c6f797c53a359a73752419d20190ebc7c6b6fa8e6842c748dfad2927444def",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/prompt-studio-smoke.php"
+    },
+    {
+      "path": "tests/tests/public-uuid-routing-smoke.php",
+      "size": 6500,
+      "sha256": "96bf491d4eb46fa3ce91958d46406920a2364952862e84c57600611f63f74795",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/public-uuid-routing-smoke.php"
+    },
+    {
+      "path": "tests/tests/reports-consistency-v36151r3-smoke.php",
+      "size": 2612,
+      "sha256": "ec61fe667e1cfec473ee537665c1f033abfa1f4ffd4b1dea80710373e6141777",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/reports-consistency-v36151r3-smoke.php"
+    },
+    {
+      "path": "tests/tests/reports-pdf-brand-v36151r4-smoke.php",
+      "size": 2021,
+      "sha256": "5f9255e66de6fda4295e9e95de7d7342c4e385d0e59697ea593463118b857869",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/reports-pdf-brand-v36151r4-smoke.php"
+    },
+    {
+      "path": "tests/tests/reports-pdf-logo-v36151r6-smoke.php",
+      "size": 1063,
+      "sha256": "0a0939d1c4f6a25dde9512233a42364482dc35a369f056b1ce9160ab466ac422",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/reports-pdf-logo-v36151r6-smoke.php"
+    },
+    {
+      "path": "tests/tests/reports-pdf-polish-v36151r5-smoke.php",
+      "size": 1824,
+      "sha256": "9d2613d1503693b6d5f1f4793366fb163b0135e7970ff67c1f8eb54a6380906f",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/reports-pdf-polish-v36151r5-smoke.php"
+    },
+    {
+      "path": "tests/tests/reports-pdf-runtime-v36180-smoke.php",
+      "size": 2314,
+      "sha256": "f6e32681f73fb2600962bef2e0eb4e82bf53b177a5b849c3cd6583a7fac5f1c8",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/reports-pdf-runtime-v36180-smoke.php"
+    },
+    {
+      "path": "tests/tests/scheduled-reports-pdo-placeholders-smoke.php",
+      "size": 1640,
+      "sha256": "61b20dc42b3832ac5d62b9c503e8e08f4745c277b030e1b16c7917e4a60f2141",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/scheduled-reports-pdo-placeholders-smoke.php"
+    },
+    {
+      "path": "tests/tests/scheduled-reports-v36151-smoke.php",
+      "size": 5031,
+      "sha256": "b4fd28e5538c5c8bdabb329878f0ec397c5f2370fc82b0ec7843b4deb2531406",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/scheduled-reports-v36151-smoke.php"
+    },
+    {
+      "path": "tests/tests/security-session-webhook-hardening-smoke.php",
+      "size": 6553,
+      "sha256": "019fce2fe5cf3c943bb099616b2fde49120389ce32d3d24885b4c82d126825e0",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/security-session-webhook-hardening-smoke.php"
+    },
+    {
+      "path": "tests/tests/service-cycle-recovery-smoke.php",
+      "size": 2525,
+      "sha256": "8a8d06dc1d93e2760628827e8f310f7ca4d1220312c1e20340890160e8a8c980",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/service-cycle-recovery-smoke.php"
+    },
+    {
+      "path": "tests/tests/team-metrics-provenance-smoke.php",
+      "size": 3494,
+      "sha256": "634ff3684b9a06f33409b62c1cbaed172852362a3a88fd3d94a2adcd19141179",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/team-metrics-provenance-smoke.php"
+    },
+    {
+      "path": "tests/tests/team-professional-reports-smoke.php",
+      "size": 4665,
+      "sha256": "2789f6a9c2c647bb78f70746e4776185edd5723e1961d6d5d04d878af3dde2c7",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/team-professional-reports-smoke.php"
+    },
+    {
+      "path": "tests/tests/team-report-audit-smoke.php",
+      "size": 2647,
+      "sha256": "07551c543235870d3ed27eb5af924a95bde56cd8c0c19eced6ad95f25f170620",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/team-report-audit-smoke.php"
+    },
+    {
+      "path": "tests/tests/tenant-isolation-hardening-smoke.php",
+      "size": 3092,
+      "sha256": "46c7f5e2fe8bfc85d5a234b2328de7496534967e875e28767884ed9a092ffcea",
+      "classification": "mirrored-divergent",
+      "counterpart": "tests/tenant-isolation-hardening-smoke.php"
+    },
+    {
+      "path": "tests/tests/usage-menu-notifications-scenarios.json",
+      "size": 1264,
+      "sha256": "88d60a9d624d8bfcf2c6247c8e8845b39c3b85486249e5a8986a88ae86c108d7",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/usage-menu-notifications-scenarios.json"
+    },
+    {
+      "path": "tests/tests/utc-datetime-contract-smoke.php",
+      "size": 2275,
+      "sha256": "af4769e13bd1e1278826a45a2a786d355956b5a93a2d747702da9927c259530a",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/utc-datetime-contract-smoke.php"
+    },
+    {
+      "path": "tests/tests/webhook-messages-upsert.json",
+      "size": 425,
+      "sha256": "5f76bbc281c92f00c29d2b004bca8d769b59c2767521d6b00f7a9627d895f6aa",
+      "classification": "mirrored-identical",
+      "counterpart": "tests/webhook-messages-upsert.json"
+    },
+    {
+      "path": "tests/ui-ux-v36203-smoke.php",
+      "size": 2486,
+      "sha256": "c2ad50e0cca50b35644a4751ced5465f6bcfc554cbca6271c44a58dd0a445630",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/ui-ux-v36204-smoke.php",
+      "size": 2151,
+      "sha256": "8434ea86fc056fd1542a67c5f23e84808c5bf1518e7b261442842f7a0b09db50",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/usability-v36205-smoke.php",
+      "size": 2367,
+      "sha256": "b18c582c8912c9d57d720d7cc853c1455a242167cd4231efa3d69b51ff7edf5e",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/usage-menu-notifications-scenarios.json",
+      "size": 1264,
+      "sha256": "88d60a9d624d8bfcf2c6247c8e8845b39c3b85486249e5a8986a88ae86c108d7",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/utc-datetime-contract-smoke.php",
+      "size": 2275,
+      "sha256": "af4769e13bd1e1278826a45a2a786d355956b5a93a2d747702da9927c259530a",
+      "classification": "test-artifact",
+      "counterpart": null
+    },
+    {
+      "path": "tests/webhook-messages-upsert.json",
+      "size": 425,
+      "sha256": "5f76bbc281c92f00c29d2b004bca8d769b59c2767521d6b00f7a9627d895f6aa",
+      "classification": "test-artifact",
+      "counterpart": null
+    }
+  ]
+}

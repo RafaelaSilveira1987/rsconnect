@@ -1,0 +1,11 @@
+{
+  "event": "calendar.free_slot.updated",
+  "action": "delete",
+  "state": "deleted",
+  "tenant_id": 2,
+  "request_id": 102,
+  "request_token": "REQUEST_TOKEN",
+  "appointment_id": 55,
+  "google_calendar_id": "primary",
+  "google_event_id": "rsconnect2a1n"
+}

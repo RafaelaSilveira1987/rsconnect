@@ -1,0 +1,24 @@
+{
+  "event": "messages.upsert",
+  "instance": "rsautomacao",
+  "data": {
+    "key": {
+      "remoteJid": "5532999999999@s.whatsapp.net",
+      "fromMe": false,
+      "id": "REACTION_TEST_001"
+    },
+    "pushName": "Cliente Teste",
+    "messageType": "reactionMessage",
+    "message": {
+      "reactionMessage": {
+        "key": {
+          "remoteJid": "5532999999999@s.whatsapp.net",
+          "fromMe": true,
+          "id": "ORIGINAL_MESSAGE_001"
+        },
+        "text": "❤️"
+      }
+    },
+    "messageTimestamp": 1784300000
+  }
+}

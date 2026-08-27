@@ -1,6 +1,21 @@
-# RS Connect — v36.20.11
+# RS Connect — v36.20.12
 
-Esta versão reorganiza a tela **Planos e cobranças** para separar o preço da plataforma conforme a origem da inteligência artificial e o prazo mínimo contratado.
+Esta versão executa a **ENT-026 / PA-001**, removendo a aplicação duplicada que existia dentro de `tests/` e organizando a suíte de validação em uma estrutura única e segura.
+
+A matriz comercial, os planos e todas as funcionalidades entregues na v36.20.11 permanecem preservados.
+
+## Saneamento da suíte de testes
+
+- 570 arquivos espelhados foram identificados dentro de `tests/`;
+- 465 eram cópias idênticas da aplicação;
+- 105 eram cópias divergentes, principalmente do snapshot v36.18.4;
+- 83 smoke tests foram preservados em `tests/Feature/`;
+- 29 contratos e cenários JSON foram preservados em `tests/Contract/Fixtures/`;
+- a restauração lógica da árvore anterior está documentada por hashes SHA-256.
+
+Execute `php tests/Support/run-smoke-tests.php` para rodar a suíte.
+
+## Funcionalidades comerciais preservadas
 
 ## Matriz comercial padrão
 
@@ -40,4 +55,4 @@ database/migrations/086_plan_ai_mode_and_commitment.sql
 
 A migration é idempotente e preserva assinaturas existentes. O preço legado `monthly_price` passa a acompanhar o valor com IA RS Connect para manter compatibilidade com rotinas antigas.
 
-Consulte `INSTRUCOES-v36.20.11.md` e `docs/ATUALIZACAO-v36.20.11.md`.
+Consulte `INSTRUCOES-v36.20.12.md`, `docs/ATUALIZACAO-v36.20.12.md` e `docs/diagnostics/ENT-026-TESTS-SANITIZATION-v36.20.12.md`.

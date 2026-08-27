@@ -1,0 +1,22 @@
+{
+  "event": "billing.reminder.before_due",
+  "source": "rs-connect",
+  "tenant_id": 2,
+  "payload": {
+    "tenant": {
+      "id": 2,
+      "name": "Cliente Teste",
+      "email": "cliente@exemplo.com",
+      "phone": "5532999999999"
+    },
+    "invoice": {
+      "id": 10,
+      "number": "INV-2026-0001",
+      "amount": 297.0,
+      "due_date": "2026-07-10",
+      "status": "open",
+      "payment_url": "https://link-de-pagamento"
+    },
+    "message": "Olá, Cliente Teste. Sua cobrança INV-2026-0001 vence em 10/07/2026."
+  }
+}

@@ -100,4 +100,4 @@ A migration 052:
 2. Abra **IA e credenciais** e classifique cada chave como **Custeio RS** ou **Custeio cliente**.
 3. Abra a assinatura de uma empresa e confira o bloco **Uso da IA**.
 4. Confirme que o workflow n8n **Monitor operacional RS Connect** está ativo.
-5. Execute os cenários de `tests/ai-usage-after-hours-scenarios.json`.
+5. Execute os cenários de `tests/Contract/Fixtures/ai-usage-after-hours-scenarios.json`.

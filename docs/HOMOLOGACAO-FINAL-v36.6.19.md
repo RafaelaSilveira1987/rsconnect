@@ -7,4 +7,4 @@
 5. Após o cooldown, executar novamente: a rotina deve voltar a ficar elegível no mesmo dia.
 6. Após callback de sucesso real, executar novamente: esperar `reason=covered` e nenhum novo disparo.
 7. Confirmar que o monitor operacional deixa de alertar após o novo backup verificado.
-8. Rodar `php tests/backup-dispatch-retry-smoke.php`.
+8. Rodar `php tests/Feature/backup-dispatch-retry-smoke.php`.

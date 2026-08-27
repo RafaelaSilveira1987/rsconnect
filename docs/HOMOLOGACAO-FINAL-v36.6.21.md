@@ -76,8 +76,8 @@ Esperado no node Normalizar Agenda:
 ## 7. Smoke tests do pacote
 
 ```bash
-php tests/agent-policy-reliability-smoke.php
-php tests/agenda-backup-contract-smoke.php
+php tests/Feature/agent-policy-reliability-smoke.php
+php tests/Feature/agenda-backup-contract-smoke.php
 ```
 
 Ambos devem retornar `OK`.

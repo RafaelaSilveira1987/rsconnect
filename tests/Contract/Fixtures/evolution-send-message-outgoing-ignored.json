@@ -1,0 +1,18 @@
+{
+  "event": "SEND_MESSAGE",
+  "instance": "rsautomacao",
+  "data": {
+    "key": {
+      "remoteJid": "5532999999999@s.whatsapp.net",
+      "id": "OUTGOING_TEST_36_2_1"
+    },
+    "message": {
+      "conversation": "Perfeito. Pré-reservei o horário escolhido."
+    }
+  },
+  "expected": {
+    "http_status": 202,
+    "ignored": "outgoing_send_message_event",
+    "ai_called": false
+  }
+}

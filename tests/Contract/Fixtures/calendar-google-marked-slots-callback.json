@@ -1,0 +1,23 @@
+{
+  "event": "calendar.availability.result",
+  "ok": true,
+  "tenant_id": 1,
+  "appointment_id": 15,
+  "request_id": 25,
+  "request_token": "SUBSTITUA_PELO_TOKEN_DA_SOLICITACAO",
+  "source": "google_marked_slots",
+  "google_calendar_id": "primary",
+  "slots": [
+    {
+      "start": "2026-07-18 14:00:00",
+      "end": "2026-07-18 15:00:00",
+      "label": "18/07/2026 14:00 · Online",
+      "modality": "online",
+      "google_event_id": "GOOGLE_EVENT_ID",
+      "google_event_etag": "GOOGLE_EVENT_ETAG",
+      "event_summary": "VAGO — ONLINE",
+      "event_transparency": "transparent",
+      "source": "google_marked_slots"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "event": "calendar.free_slot.create",
+  "source": "rs-connect",
+  "tenant_id": 2,
+  "flow_id": null,
+  "payload": {
+    "tenant_id": 2,
+    "event": "calendar.free_slot.action",
+    "action": "create",
+    "availability_mode": "free_slots",
+    "request_id": 101,
+    "request_token": "REQUEST_TOKEN",
+    "appointment_id": 55,
+    "idempotency_key": "rsconnect-2-55",
+    "calendar_id": "primary",
+    "google_event_id": null,
+    "title": "Atendimento confirmado — Cliente Teste",
+    "description": "Resumo do atendimento.",
+    "start": "2026-07-21 14:00:00",
+    "end": "2026-07-21 15:00:00",
+    "timezone": "America/Sao_Paulo",
+    "location_type": "online",
+    "meeting_url": "https://meet.google.com/exemplo",
+    "customer": {
+      "name": "Cliente Teste",
+      "phone": "5532999999999",
+      "email": "cliente@example.com"
+    },
+    "rules": {
+      "revalidate_before_create": true,
+      "avoid_duplicates": true,
+      "idempotency_key": "rsconnect-2-55"
+    },
+    "callback": {
+      "url": "https://rsconnect.example.com/webhooks/calendar/availability",
+      "token": "REQUEST_TOKEN"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "event": "MESSAGES_UPSERT",
+  "instance": "rsautomacao",
+  "data": {
+    "key": {
+      "id": "TESTE_RS_CONNECT_ZIP05_001",
+      "remoteJid": "5532999999999@s.whatsapp.net",
+      "fromMe": false
+    },
+    "pushName": "Lead Teste ZIP 05",
+    "messageType": "conversation",
+    "message": {
+      "conversation": "Olá, quero saber mais sobre o atendimento automático."
+    },
+    "messageTimestamp": 1783468313
+  }
+}
