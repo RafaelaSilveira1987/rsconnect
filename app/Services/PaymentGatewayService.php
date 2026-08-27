@@ -551,10 +551,10 @@ final class PaymentGatewayService
             ]];
         }
 
-        $document = preg_replace('/\D+/', '', (string) ($invoice['tenant_document'] ?? ''));
-        if (!in_array(strlen($document), [11, 14], true)) {
-            $document = '';
-        }
+        // O PagBank rejeita CPF/CNPJ com dígitos verificadores inválidos. Como o
+        // checkout permanece editável, um documento inválido ou ausente é omitido
+        // para que o próprio comprador informe o dado correto na página do PagBank.
+        $document = $this->normalizeBrazilianTaxId((string) ($invoice['tenant_document'] ?? ''));
 
         $customer = array_filter([
             'name' => trim((string) ($invoice['tenant_legal_name'] ?: $invoice['tenant_name'])),
@@ -566,10 +566,31 @@ final class PaymentGatewayService
             $payload['customer'] = $customer;
         }
 
-        $response = $this->requestJson('POST', rtrim($this->baseUrl($gateway), '/') . '/checkouts', [
+        $endpoint = rtrim($this->baseUrl($gateway), '/') . '/checkouts';
+        $headers = [
             'Content-Type: application/json',
             'Authorization: Bearer ' . $this->apiKey($gateway),
-        ], $payload);
+        ];
+
+        try {
+            $response = $this->requestJson('POST', $endpoint, $headers, $payload);
+        } catch (RuntimeException $exception) {
+            // Proteção adicional para cadastros legados: se o provedor ainda
+            // recusar especificamente customer.tax_id, repete uma única vez sem
+            // o documento. O cliente poderá preenchê-lo no checkout editável.
+            if (
+                isset($payload['customer']['tax_id'])
+                && str_contains(mb_strtolower($exception->getMessage()), 'customer.tax_id')
+            ) {
+                unset($payload['customer']['tax_id']);
+                if (($payload['customer'] ?? []) === []) {
+                    unset($payload['customer']);
+                }
+                $response = $this->requestJson('POST', $endpoint, $headers, $payload);
+            } else {
+                throw $exception;
+            }
+        }
 
         $checkoutUrl = $this->extractPagBankCheckoutUrl($response);
 
@@ -580,6 +601,62 @@ final class PaymentGatewayService
             'external_status' => (string) ($response['status'] ?? 'created'),
             'payload' => $response,
         ];
+    }
+
+    private function normalizeBrazilianTaxId(string $value): string
+    {
+        $digits = preg_replace('/\D+/', '', $value) ?? '';
+        $length = strlen($digits);
+        if (!in_array($length, [11, 14], true) || preg_match('/^(\d)\1+$/', $digits) === 1) {
+            return '';
+        }
+
+        if ($length === 11) {
+            return $this->isValidCpf($digits) ? $digits : '';
+        }
+
+        return $this->isValidCnpj($digits) ? $digits : '';
+    }
+
+    private function isValidCpf(string $cpf): bool
+    {
+        for ($position = 9; $position <= 10; $position++) {
+            $sum = 0;
+            for ($index = 0; $index < $position; $index++) {
+                $sum += ((int) $cpf[$index]) * (($position + 1) - $index);
+            }
+            $digit = (10 * $sum) % 11;
+            if ($digit === 10) {
+                $digit = 0;
+            }
+            if ($digit !== (int) $cpf[$position]) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function isValidCnpj(string $cnpj): bool
+    {
+        $weights = [
+            [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2],
+            [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2],
+        ];
+
+        foreach ($weights as $round => $roundWeights) {
+            $sum = 0;
+            foreach ($roundWeights as $index => $weight) {
+                $sum += ((int) $cnpj[$index]) * $weight;
+            }
+            $remainder = $sum % 11;
+            $digit = $remainder < 2 ? 0 : 11 - $remainder;
+            if ($digit !== (int) $cnpj[12 + $round]) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function createStripeCheckoutSession(array $gateway, array $invoice): array

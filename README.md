@@ -1,6 +1,6 @@
-# RS Connect — v36.20.13.1
+# RS Connect — v36.20.13.2
 
-Esta versão consolida a **ENT-028 / PA-002 — Blindagem dos webhooks** e aplica um hotfix na autenticação do **PagBank / PagSeguro**.
+Esta versão consolida a **ENT-028 / PA-002 — Blindagem dos webhooks** e aplica hotfixes de autenticação e dados do comprador no **PagBank / PagSeguro**.
 
 A base homologada da v36.20.12 foi preservada: `tests/` continua sem uma segunda cópia da aplicação.
 
@@ -22,6 +22,9 @@ A base homologada da v36.20.12 foi preservada: `tests/` continua sem uma segunda
 - Token PagBank aceita colagem com `Bearer` ou `Authorization:` e salva apenas a credencial;
 - ambiente Sandbox/Produção é validado antes da chamada externa;
 - erros de autenticação da infraestrutura AWS são convertidos em orientação operacional clara.
+- CPF/CNPJ é validado pelos dígitos verificadores antes do envio ao PagBank;
+- documento inválido é omitido do checkout editável para o comprador informar o dado correto;
+- recusa específica de `customer.tax_id` aciona uma única nova tentativa sem o documento.
 
 ## Migration obrigatória
 
@@ -55,6 +58,7 @@ N8N_WEBHOOK_MAX_AGE_SECONDS=300
 php tests/Feature/ent026-tests-sanitization-smoke.php
 php tests/Feature/ent028-webhook-security-smoke.php
 php tests/Feature/ent028-pagbank-auth-hotfix-smoke.php
+php tests/Feature/ent028-pagbank-taxid-hotfix-smoke.php
 php tests/Support/run-smoke-tests.php
 ```
 
@@ -62,7 +66,7 @@ php tests/Support/run-smoke-tests.php
 
 Consulte:
 
-- `INSTRUCOES-v36.20.13.1.md`;
-- `docs/ATUALIZACAO-v36.20.13.1.md`;
+- `INSTRUCOES-v36.20.13.2.md`;
+- `docs/ATUALIZACAO-v36.20.13.2.md`;
 - `docs/diagnostics/ENT-028-WEBHOOK-SECURITY-v36.20.13.md`;
 - `docs/diagnostics/ENT-028-VALIDATION-v36.20.13.md`.
