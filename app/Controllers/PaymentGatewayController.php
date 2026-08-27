@@ -81,6 +81,16 @@ final class PaymentGatewayController
             $defaultPaymentMethod = 'UNDEFINED';
         }
 
+        if ($provider === 'pagbank') {
+            $apiKey = $this->normalizePagBankApiKey($apiKey);
+            try {
+                $apiBaseUrl = $this->normalizePagBankBaseUrl($apiBaseUrl, $environment);
+            } catch (\RuntimeException $exception) {
+                Flash::set('error', $exception->getMessage());
+                $this->redirect('/payment-gateways');
+            }
+        }
+
         $pdo = Database::connection();
         $existing = [];
         if ($id > 0) {
@@ -292,6 +302,36 @@ final class PaymentGatewayController
             echo json_encode(['ok' => false, 'error' => $message], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
         exit;
+    }
+
+    private function normalizePagBankApiKey(string $apiKey): string
+    {
+        $apiKey = trim($apiKey);
+        $apiKey = (string) preg_replace('/^Authorization\s*:\s*/i', '', $apiKey);
+        $apiKey = (string) preg_replace('/^Bearer\s+/i', '', $apiKey);
+        return trim($apiKey, " \t\n\r\0\x0B\"'");
+    }
+
+    private function normalizePagBankBaseUrl(string $apiBaseUrl, string $environment): string
+    {
+        $apiBaseUrl = trim($apiBaseUrl);
+        if ($apiBaseUrl === '') {
+            return '';
+        }
+        if (!preg_match('#^https?://#i', $apiBaseUrl)) {
+            $apiBaseUrl = 'https://' . $apiBaseUrl;
+        }
+        $parts = parse_url($apiBaseUrl);
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $expectedHost = $environment === 'sandbox'
+            ? 'sandbox.api.pagseguro.com'
+            : 'api.pagseguro.com';
+        if ($host !== $expectedHost) {
+            throw new \RuntimeException(
+                'URL base PagBank incompatível com o ambiente selecionado. Deixe o campo vazio ou use https://' . $expectedHost . '.'
+            );
+        }
+        return 'https://' . $expectedHost;
     }
 
     private function redirect(string $path): never

@@ -925,7 +925,10 @@ final class PaymentGatewayService
     {
         $configured = trim((string) ($gateway['api_base_url'] ?? ''));
         if ($configured !== '') {
-            return $configured;
+            if ((string) ($gateway['provider'] ?? '') === 'pagbank') {
+                return $this->normalizePagBankBaseUrl($configured, (string) ($gateway['environment'] ?? 'production'));
+            }
+            return rtrim($configured, '/');
         }
         return match ((string) $gateway['provider']) {
             'asaas' => ($gateway['environment'] ?? '') === 'sandbox'
@@ -946,7 +949,34 @@ final class PaymentGatewayService
         if ($encrypted === '') {
             throw new RuntimeException('API Key não configurada para o gateway ' . ($gateway['label'] ?? ''));
         }
-        return Crypto::decrypt($encrypted);
+        $apiKey = trim(Crypto::decrypt($encrypted));
+        if ((string) ($gateway['provider'] ?? '') === 'pagbank') {
+            $apiKey = (string) preg_replace('/^Authorization\s*:\s*/i', '', $apiKey);
+            $apiKey = (string) preg_replace('/^Bearer\s+/i', '', $apiKey);
+            $apiKey = trim($apiKey, " \t\n\r\0\x0B\"'");
+        }
+        if ($apiKey === '' || preg_match('/[\r\n]/', $apiKey)) {
+            throw new RuntimeException('A chave de acesso do gateway está vazia ou possui formato inválido.');
+        }
+        return $apiKey;
+    }
+
+    private function normalizePagBankBaseUrl(string $configured, string $environment): string
+    {
+        if (!preg_match('#^https?://#i', $configured)) {
+            $configured = 'https://' . $configured;
+        }
+        $parts = parse_url($configured);
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $expectedHost = $environment === 'sandbox'
+            ? 'sandbox.api.pagseguro.com'
+            : 'api.pagseguro.com';
+        if ($host !== $expectedHost) {
+            throw new RuntimeException(
+                'URL base PagBank incompatível com o ambiente selecionado. Deixe o campo vazio ou use https://' . $expectedHost . '.'
+            );
+        }
+        return 'https://' . $expectedHost;
     }
 
     private function webhookSecret(array $gateway): string
@@ -1239,6 +1269,11 @@ final class PaymentGatewayService
                 ?? ('HTTP ' . $status)
             );
             $parameter = trim((string) ($pagBankError['parameter_name'] ?? ''));
+            if (str_contains($description, 'Invalid key=value pair') && str_contains($description, 'Authorization header')) {
+                throw new RuntimeException(
+                    'PagBank recusou a autenticação. Em Meios de pagamento, deixe a URL base vazia e informe somente o Token da API, sem os textos Authorization: ou Bearer. Confirme também se o token pertence ao ambiente Sandbox ou Produção selecionado.'
+                );
+            }
             $message = $parameter !== ''
                 ? $description . ' Campo recusado: ' . $parameter . '.'
                 : $description;

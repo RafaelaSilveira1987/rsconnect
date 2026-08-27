@@ -2449,6 +2449,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const keyLabel=drawer.querySelector('[data-gateway-key-label]');
     const keyHint=drawer.querySelector('[data-gateway-key-hint]');
     const providerHint=drawer.querySelector('[data-gateway-provider-hint]');
+    const baseUrlHint=drawer.querySelector('[data-gateway-base-url-hint]');
+    const baseUrlInput=drawer.querySelector('[data-gateway-field="api_base_url"]');
     const webhookField=drawer.querySelector('[data-gateway-webhook-field]');
     const webhookLabel=drawer.querySelector('[data-gateway-webhook-label]');
     const webhookHint=drawer.querySelector('[data-gateway-webhook-hint]');
@@ -2457,11 +2459,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const isPagBank=provider==='pagbank';
     if(keyLabel)keyLabel.textContent=isPagBank?'Token da API PagBank / PagSeguro':'Chave de acesso / Access Token';
     if(keyHint)keyHint.textContent=isPagBank
-      ?(editing?'Deixe em branco para manter o Token da API atual.':'Informe o Token da API obtido no PagBank.')
+      ?(editing?'Deixe em branco para manter o token atual. Ao trocar, cole somente o Token da API, sem Authorization: ou Bearer.':'Cole somente o Token da API obtido no PagBank, sem Authorization: ou Bearer.')
       :(editing?'Deixe em branco para manter a chave atual.':'Informe a chave do provedor.');
     if(providerHint)providerHint.textContent=isPagBank
       ?'Gera links de cobrança por Pix, boleto ou cartão no Checkout PagBank.'
       :'Configure as credenciais e a autenticação do webhook deste serviço.';
+    if(baseUrlHint)baseUrlHint.textContent=isPagBank
+      ?'Deixe vazio. O sistema usa automaticamente a URL oficial do ambiente selecionado.'
+      :'Use somente quando o provedor exigir uma URL personalizada.';
+    if(baseUrlInput&&isPagBank)baseUrlInput.placeholder='Deixe vazio para usar a URL oficial do PagBank';
     if(webhookField)webhookField.hidden=isPagBank;
     if(pagBankHelp)pagBankHelp.hidden=!isPagBank;
     if(webhookInput){webhookInput.disabled=isPagBank;if(isPagBank)webhookInput.value='';}
