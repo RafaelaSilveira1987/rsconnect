@@ -3948,3 +3948,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+/* RS Connect 36.20.15.2 — prévia de cores do White Label sem handlers inline. */
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.querySelector('[data-white-label-form]');
+  const preview = document.querySelector('.white-label-preview-card');
+  if (!(form instanceof HTMLFormElement) || !(preview instanceof HTMLElement)) return;
+
+  form.querySelectorAll('input[type="color"][data-preview-color]').forEach((field) => {
+    if (!(field instanceof HTMLInputElement)) return;
+    const output = field.closest('.white-label-color-card')?.querySelector('output');
+    const refresh = () => {
+      const value = String(field.value || '').toUpperCase();
+      if (output instanceof HTMLOutputElement) output.value = value;
+      const property = field.dataset.previewColor || '';
+      if (property) preview.style.setProperty(property, field.value);
+    };
+    field.addEventListener('input', refresh);
+    field.addEventListener('change', refresh);
+    refresh();
+  });
+});

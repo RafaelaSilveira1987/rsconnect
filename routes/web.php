@@ -231,6 +231,7 @@ return static function (Router $router): void {
     $router->get('/webhooks/tenant-health/run', [TenantHealthController::class, 'cron']);
     $router->post('/webhooks/tenant-health/run', [TenantHealthController::class, 'cron']);
     // White label: rota canônica e aliases legados com sublinhado.
+    $router->get('/white-label/asset', [WhiteLabelController::class, 'asset']);
     $router->get('/white-label', [WhiteLabelController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/white-label/save', [WhiteLabelController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->get('/white-label/preview', [WhiteLabelController::class, 'preview'], ['auth', 'super_admin']);

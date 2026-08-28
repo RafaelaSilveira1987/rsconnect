@@ -33,16 +33,16 @@ $logoBackground = $raw('brand_logo_background', 'light');
 </section>
 
 <div class="content-grid two-columns white-label-layout white-label-pro-layout">
-    <section class="card">
-        <div class="section-heading">
+    <section class="card white-label-config-card">
+        <div class="section-heading white-label-company-heading">
             <div>
                 <span class="eyebrow">Empresa</span>
                 <h2>Selecionar cliente</h2>
             </div>
         </div>
 
-        <form method="get" action="<?= View::e(Router::url('/white-label')) ?>" class="inline-form-panel">
-            <label class="field" style="margin:0">
+        <form method="get" action="<?= View::e(Router::url('/white-label')) ?>" class="inline-form-panel white-label-company-picker">
+            <label class="field white-label-company-field">
                 <span>Cliente</span>
                 <select name="tenant_id" data-auto-submit>
                     <?php foreach ($companies as $company): ?>
@@ -57,7 +57,7 @@ $logoBackground = $raw('brand_logo_background', 'light');
         <?php if (!$selected): ?>
             <p class="empty-state">Cadastre uma empresa antes de configurar white label.</p>
         <?php else: ?>
-            <form method="post" action="<?= View::e(Router::url('/white-label/save')) ?>" class="white-label-form" enctype="multipart/form-data">
+            <form method="post" action="<?= View::e(Router::url('/white-label/save')) ?>" class="white-label-form" data-white-label-form enctype="multipart/form-data">
                 <?= Csrf::input() ?>
                 <input type="hidden" name="tenant_id" value="<?= (int) $selected['id'] ?>">
 
@@ -103,36 +103,55 @@ $logoBackground = $raw('brand_logo_background', 'light');
                 </div>
 
                 <div class="form-divider">Arquivos da marca</div>
+                <p class="white-label-section-intro">Envie arquivos PNG, JPG ou WEBP de até 2 MB. As imagens ficam no armazenamento persistente da aplicação.</p>
                 <div class="white-label-upload-preview-grid">
-                    <label class="field upload-field">
-                        <span>Logo principal</span>
-                        <input type="file" name="brand_logo_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
-                        <small class="field-hint">Use a logo horizontal quando existir. Ela aparece no login e prévias.</small>
-                        <?php if ($previewLogoUrl !== ''): ?>
-                            <label class="mini-check"><input type="checkbox" name="remove_logo" value="1"> Remover logo atual</label>
-                        <?php endif; ?>
-                    </label>
-                    <label class="field upload-field">
-                        <span>Ícone reduzido</span>
-                        <input type="file" name="brand_icon_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
-                        <small class="field-hint">Ideal para sidebar, card de login e espaços quadrados.</small>
-                        <?php if ($previewIconUrl !== ''): ?>
-                            <label class="mini-check"><input type="checkbox" name="remove_icon" value="1"> Remover ícone atual</label>
-                        <?php endif; ?>
-                    </label>
-                    <label class="field upload-field">
-                        <span>Favicon</span>
-                        <input type="file" name="brand_favicon_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
-                        <small class="field-hint">Ideal: PNG, JPG ou WEBP quadrado para a aba do navegador.</small>
-                        <?php if ($previewFaviconUrl !== ''): ?>
-                            <label class="mini-check"><input type="checkbox" name="remove_favicon" value="1"> Remover favicon atual</label>
-                        <?php endif; ?>
-                    </label>
+                    <article class="white-label-upload-card">
+                        <div class="white-label-upload-head">
+                            <div><span class="eyebrow">Principal</span><strong>Logo horizontal</strong></div>
+                            <span class="white-label-upload-thumb is-horizontal">
+                                <?php if ($previewLogoUrl !== ''): ?><img src="<?= View::e($previewLogoUrl) ?>" alt="Logo atual"><?php else: ?><b>LOGO</b><?php endif; ?>
+                            </span>
+                        </div>
+                        <label class="field upload-field">
+                            <span>Selecionar nova logo</span>
+                            <input type="file" name="brand_logo_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+                        </label>
+                        <small class="field-hint">Recomendada para login, cabeçalho e materiais de apresentação.</small>
+                        <?php if ($previewLogoUrl !== ''): ?><label class="mini-check"><input type="checkbox" name="remove_logo" value="1"> Remover logo atual</label><?php endif; ?>
+                    </article>
+                    <article class="white-label-upload-card">
+                        <div class="white-label-upload-head">
+                            <div><span class="eyebrow">Compacto</span><strong>Ícone reduzido</strong></div>
+                            <span class="white-label-upload-thumb is-square">
+                                <?php if ($previewIconUrl !== ''): ?><img src="<?= View::e($previewIconUrl) ?>" alt="Ícone atual"><?php else: ?><b><?= View::e($iconText) ?></b><?php endif; ?>
+                            </span>
+                        </div>
+                        <label class="field upload-field">
+                            <span>Selecionar novo ícone</span>
+                            <input type="file" name="brand_icon_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+                        </label>
+                        <small class="field-hint">Use uma imagem quadrada para menu lateral e cards compactos.</small>
+                        <?php if ($previewIconUrl !== ''): ?><label class="mini-check"><input type="checkbox" name="remove_icon" value="1"> Remover ícone atual</label><?php endif; ?>
+                    </article>
+                    <article class="white-label-upload-card">
+                        <div class="white-label-upload-head">
+                            <div><span class="eyebrow">Navegador</span><strong>Favicon</strong></div>
+                            <span class="white-label-upload-thumb is-favicon">
+                                <?php if ($previewFaviconUrl !== ''): ?><img src="<?= View::e($previewFaviconUrl) ?>" alt="Favicon atual"><?php else: ?><b>16</b><?php endif; ?>
+                            </span>
+                        </div>
+                        <label class="field upload-field">
+                            <span>Selecionar novo favicon</span>
+                            <input type="file" name="brand_favicon_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+                        </label>
+                        <small class="field-hint">Prefira uma imagem quadrada e simples, legível em tamanho pequeno.</small>
+                        <?php if ($previewFaviconUrl !== ''): ?><label class="mini-check"><input type="checkbox" name="remove_favicon" value="1"> Remover favicon atual</label><?php endif; ?>
+                    </article>
                 </div>
 
                 <details class="advanced-fields">
                     <summary>Usar imagens por URL externa</summary>
-                    <div class="form-grid three" style="margin-top:12px">
+                    <div class="form-grid three advanced-url-grid">
                         <label class="field">
                             <span>URL da logo principal</span>
                             <input name="brand_logo_url" value="<?= $active('brand_logo_url') ?>" placeholder="https://.../logo.png ou /uploads/...">
@@ -148,27 +167,33 @@ $logoBackground = $raw('brand_logo_background', 'light');
                     </div>
                 </details>
 
-                <div class="form-divider">Cores</div>
-                <div class="form-grid five color-grid">
-                    <label class="field color-field">
+                <div class="form-divider">Paleta de cores</div>
+                <p class="white-label-section-intro">Clique na amostra para escolher a cor. A prévia ao lado é atualizada imediatamente.</p>
+                <div class="white-label-color-grid" data-white-label-colors>
+                    <label class="white-label-color-card">
                         <span>Primária</span>
-                        <input type="color" name="brand_primary_color" value="<?= $active('brand_primary_color', '#146498') ?>">
+                        <div><input type="color" name="brand_primary_color" value="<?= $active('brand_primary_color', '#146498') ?>" data-preview-color="--preview-primary"><output><?= $active('brand_primary_color', '#146498') ?></output></div>
+                        <small>Botões e ações principais</small>
                     </label>
-                    <label class="field color-field">
+                    <label class="white-label-color-card">
                         <span>Secundária</span>
-                        <input type="color" name="brand_secondary_color" value="<?= $active('brand_secondary_color', '#631b7c') ?>">
+                        <div><input type="color" name="brand_secondary_color" value="<?= $active('brand_secondary_color', '#631b7c') ?>" data-preview-color="--preview-secondary"><output><?= $active('brand_secondary_color', '#631b7c') ?></output></div>
+                        <small>Gradientes e elementos de apoio</small>
                     </label>
-                    <label class="field color-field">
+                    <label class="white-label-color-card">
                         <span>Destaque</span>
-                        <input type="color" name="brand_accent_color" value="<?= $active('brand_accent_color', '#01c5b6') ?>">
+                        <div><input type="color" name="brand_accent_color" value="<?= $active('brand_accent_color', '#01c5b6') ?>" data-preview-color="--preview-accent"><output><?= $active('brand_accent_color', '#01c5b6') ?></output></div>
+                        <small>Indicadores e detalhes</small>
                     </label>
-                    <label class="field color-field">
-                        <span>Fundo login</span>
-                        <input type="color" name="login_background_color" value="<?= $active('login_background_color', '#07111f') ?>">
+                    <label class="white-label-color-card">
+                        <span>Fundo do login</span>
+                        <div><input type="color" name="login_background_color" value="<?= $active('login_background_color', '#07111f') ?>" data-preview-color="--preview-login-bg"><output><?= $active('login_background_color', '#07111f') ?></output></div>
+                        <small>Painel visual da tela de acesso</small>
                     </label>
-                    <label class="field color-field">
-                        <span>Texto login</span>
-                        <input type="color" name="login_text_color" value="<?= $active('login_text_color', '#ffffff') ?>">
+                    <label class="white-label-color-card">
+                        <span>Texto do login</span>
+                        <div><input type="color" name="login_text_color" value="<?= $active('login_text_color', '#ffffff') ?>" data-preview-color="--preview-login-text"><output><?= $active('login_text_color', '#ffffff') ?></output></div>
+                        <small>Contraste dos textos no login</small>
                     </label>
                 </div>
 
@@ -233,7 +258,7 @@ $logoBackground = $raw('brand_logo_background', 'light');
         <?php endif; ?>
     </section>
 
-    <aside class="stack">
+    <aside class="stack white-label-side-panel">
         <section class="card white-label-preview-card" style="--preview-primary: <?= View::e($primary) ?>; --preview-secondary: <?= View::e($secondary) ?>; --preview-accent: <?= View::e($accent) ?>; --preview-login-bg: <?= View::e($loginBg) ?>; --preview-login-text: <?= View::e($loginText) ?>;">
             <div class="section-heading">
                 <div>

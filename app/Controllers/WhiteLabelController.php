@@ -211,6 +211,42 @@ final class WhiteLabelController
         $this->redirect('/white-label?tenant_id=' . $tenantId);
     }
 
+    public function asset(): void
+    {
+        $tenantId = (int) ($_GET['scope'] ?? 0);
+        $filename = basename(trim((string) ($_GET['file'] ?? '')));
+
+        if ($tenantId < 1 || preg_match('/^(?:logo|icon|favicon)-\d{14}-[a-f0-9]{8}\.(?:png|jpg|webp)$/D', $filename) !== 1) {
+            $this->assetNotFound();
+        }
+
+        $path = $this->brandStorageDirectory($tenantId) . '/' . $filename;
+        if (!is_file($path) || !is_readable($path)) {
+            $this->assetNotFound();
+        }
+
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mime = strtolower((string) $finfo->file($path));
+        $allowed = [
+            'image/png' => 'png',
+            'image/jpeg' => 'jpg',
+            'image/webp' => 'webp',
+        ];
+        $extension = strtolower((string) pathinfo($filename, PATHINFO_EXTENSION));
+        if (!isset($allowed[$mime]) || $allowed[$mime] !== $extension) {
+            $this->assetNotFound();
+        }
+
+        header('Content-Type: ' . $mime);
+        header('Content-Length: ' . (string) filesize($path));
+        header('Content-Disposition: inline; filename="' . $filename . '"');
+        header('Cache-Control: public, max-age=86400, immutable');
+        header('X-Content-Type-Options: nosniff');
+        header("Content-Security-Policy: default-src 'none'; img-src 'self'; sandbox");
+        readfile($path);
+        exit;
+    }
+
     public function preview(): void
     {
         $tenantId = (int) ($_GET['tenant_id'] ?? 0);
@@ -267,21 +303,23 @@ final class WhiteLabelController
             throw new \RuntimeException('A imagem deve ter dimensões válidas de até 4096 × 4096 pixels.');
         }
 
-        $publicPath = dirname(__DIR__, 2) . '/public';
-        $uploadDir = $publicPath . '/uploads/white-label/tenant-' . $tenantId;
+        $uploadDir = $this->brandStorageDirectory($tenantId);
         if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
-            throw new \RuntimeException('Não foi possível criar a pasta de upload.');
+            throw new \RuntimeException('Não foi possível preparar o armazenamento de imagens. Verifique a permissão de escrita em storage/app.');
+        }
+        if (!is_writable($uploadDir)) {
+            throw new \RuntimeException('O armazenamento de imagens não permite gravação. Verifique a permissão de escrita em storage/app.');
         }
 
         $filename = $prefix . '-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $extensions[$mime];
         $destination = $uploadDir . '/' . $filename;
 
         if (!move_uploaded_file($tmpName, $destination)) {
-            throw new \RuntimeException('Não foi possível salvar a imagem enviada.');
+            throw new \RuntimeException('Não foi possível salvar a imagem enviada no armazenamento persistente.');
         }
         @chmod($destination, 0644);
 
-        return '/uploads/white-label/tenant-' . $tenantId . '/' . $filename;
+        return '/white-label/asset?scope=' . $tenantId . '&file=' . rawurlencode($filename);
     }
 
     private function isSafeBrandAssetUrl(string $url): bool
@@ -293,6 +331,16 @@ final class WhiteLabelController
 
         if (preg_match('/^(?:javascript|data|file|vbscript):/i', $url) === 1) {
             return false;
+        }
+
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        if ($path === '/white-label/asset') {
+            $query = [];
+            parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+            $tenantId = (int) ($query['scope'] ?? 0);
+            $filename = basename((string) ($query['file'] ?? ''));
+            return $tenantId > 0
+                && preg_match('/^(?:logo|icon|favicon)-\d{14}-[a-f0-9]{8}\.(?:png|jpg|webp)$/D', $filename) === 1;
         }
 
         if (str_starts_with($url, '/uploads/')) {
@@ -311,6 +359,21 @@ final class WhiteLabelController
 
         $path = strtolower((string) parse_url($url, PHP_URL_PATH));
         return preg_match('/\.(?:png|jpe?g|webp)$/', $path) === 1;
+    }
+
+    private function brandStorageDirectory(int $tenantId): string
+    {
+        return dirname(__DIR__, 2) . '/storage/app/white-label/tenant-' . $tenantId;
+    }
+
+    private function assetNotFound(): never
+    {
+        http_response_code(404);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        header('X-Content-Type-Options: nosniff');
+        echo '{"status":"not_found"}';
+        exit;
     }
 
     private function color(string $value, string $fallback): string

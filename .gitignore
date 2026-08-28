@@ -1,17 +1,20 @@
-/.env
-/storage/logs/*.log
-/storage/cache/*
-/storage/conversation-attachments/*
-!/storage/logs/.gitkeep
-!/storage/cache/.gitkeep
-/vendor/
-.idea/
-.vscode/
-.DS_Store
+# Opcional: use como fallback global; a configuração principal deve ser por empresa.
+CALENDAR_CALLBACK_TOKEN=
+CALENDAR_DEFAULT_TIMEZONE=America/Sao_Paulo
+CALENDAR_DEFAULT_UTC_OFFSET=-03:00
 
-# Pacotes de distribuição não devem ir para a branch de produção
-*.zip
-*.tar
-*.tar.gz
-/backups/
-/tmp/
+# Bloqueio de acesso após fatura vencida
+BILLING_ACCESS_GRACE_DAYS=5
+
+OPERATIONS_MONITOR_TOKEN=
+
+# Arquivos de ambiente e segredos
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Arquivos gerados em execu��o
+storage/logs/*.log
+storage/app/white-label/*
+!storage/app/white-label/.gitkeep

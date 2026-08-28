@@ -72,6 +72,16 @@ final class BrandingService
 
         $normalized = '/' . ltrim($path, '/');
         $assetPath = strtolower((string) parse_url($normalized, PHP_URL_PATH));
+        if ($assetPath === '/white-label/asset') {
+            $query = [];
+            parse_str((string) parse_url($normalized, PHP_URL_QUERY), $query);
+            $tenantId = (int) ($query['scope'] ?? 0);
+            $filename = basename((string) ($query['file'] ?? ''));
+            if ($tenantId < 1 || preg_match('/^(?:logo|icon|favicon)-\d{14}-[a-f0-9]{8}\.(?:png|jpg|webp)$/D', $filename) !== 1) {
+                return '';
+            }
+            return $normalized;
+        }
         if (str_starts_with($assetPath, '/uploads/') && preg_match('/\.(?:png|jpe?g|webp)$/', $assetPath) !== 1) {
             return '';
         }

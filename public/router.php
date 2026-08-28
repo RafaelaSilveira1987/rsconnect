@@ -19,4 +19,9 @@ if ($path !== '/' && is_file($file)) {
     return false;
 }
 
+// O servidor embutido informa a própria rota como SCRIPT_NAME. Normalize para
+// que o Router não remova indevidamente o primeiro segmento da URL.
+$_SERVER['SCRIPT_NAME'] = '/index.php';
+$_SERVER['PHP_SELF'] = '/index.php';
+
 require __DIR__ . '/index.php';
