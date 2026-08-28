@@ -108,6 +108,7 @@ $svgIcon = static function (string $name): string {
         'automation' => '<path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/>',
         'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
         'company' => '<path d="M4 21V5h10v16M14 9h6v12M8 9h2M8 13h2M8 17h2M17 13h1M17 17h1"/>',
+        'palette' => '<path d="M12 3a9 9 0 1 0 0 18h1.5a1.5 1.5 0 0 0 0-3H12a2 2 0 0 1 0-4h4a5 5 0 0 0 5-5c0-3.3-4-6-9-6Z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="14" cy="7" r="1"/><circle cx="16.5" cy="10.5" r="1"/>',
         'users' => '<path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
         'permissions' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
         'security' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>',
@@ -199,6 +200,7 @@ $svgIcon = static function (string $name): string {
 
                 <span class="nav-caption">Administração RS</span>
                 <a class="nav-link<?= $isAnyActive(['/companies', '/companies/overview', '/companies/health', '/company-settings']) ?>" href="<?= View::e(Router::url('/companies')) ?>"><?= $svgIcon('company') ?><span>Empresas</span></a>
+                <a class="nav-link<?= $isAnyActive(['/white-label', '/white_label']) ?>" href="<?= View::e(Router::url('/white-label')) ?>"><?= $svgIcon('palette') ?><span>Marca dos clientes</span></a>
                 <?php if (Auth::can('users.view')): ?>
                     <a class="nav-link<?= $isActive('/users') ?>" href="<?= View::e(Router::url('/users')) ?>"><?= $svgIcon('users') ?><span>Usuários</span></a>
                 <?php endif; ?>

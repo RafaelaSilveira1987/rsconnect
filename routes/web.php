@@ -48,6 +48,7 @@ use App\Controllers\TaskController;
 use App\Controllers\TenantHealthController;
 use App\Controllers\UserController;
 use App\Controllers\VersionController;
+use App\Controllers\WhiteLabelController;
 use App\Core\Router;
 
 return static function (Router $router): void {
@@ -229,6 +230,14 @@ return static function (Router $router): void {
     $router->post('/companies/health/reprocess-ai', [TenantHealthController::class, 'reprocessAi'], ['auth', 'super_admin', 'csrf']);
     $router->get('/webhooks/tenant-health/run', [TenantHealthController::class, 'cron']);
     $router->post('/webhooks/tenant-health/run', [TenantHealthController::class, 'cron']);
+    // White label: rota canônica e aliases legados com sublinhado.
+    $router->get('/white-label', [WhiteLabelController::class, 'index'], ['auth', 'super_admin']);
+    $router->post('/white-label/save', [WhiteLabelController::class, 'save'], ['auth', 'super_admin', 'csrf']);
+    $router->get('/white-label/preview', [WhiteLabelController::class, 'preview'], ['auth', 'super_admin']);
+    $router->get('/white_label', [WhiteLabelController::class, 'index'], ['auth', 'super_admin']);
+    $router->post('/white_label/save', [WhiteLabelController::class, 'save'], ['auth', 'super_admin', 'csrf']);
+    $router->get('/white_label/preview', [WhiteLabelController::class, 'preview'], ['auth', 'super_admin']);
+
     $router->get('/companies', [CompanyController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/companies/overview', [CompanyController::class, 'overview'], ['auth', 'super_admin']);
     $router->post('/companies', [CompanyController::class, 'store'], ['auth', 'super_admin', 'csrf']);

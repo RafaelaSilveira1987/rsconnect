@@ -1,3 +1,16 @@
+# RS Connect — v36.20.15.1
+
+## Hotfix — rotas White Label
+
+- restaura a rota canônica `/white-label`;
+- mantém compatibilidade com o endereço antigo `/white_label`;
+- restaura as rotas de salvar e pré-visualizar;
+- adiciona o acesso **Marca dos clientes** ao menu do Super Admin;
+- mantém autenticação, CSRF e restrição de Super Admin;
+- preserva integralmente as proteções XSS, SVG e CSP da v36.20.15.
+
+Nenhuma migration nova é necessária. A migration vigente permanece `088_payment_reconciliation_schema_compat.sql`.
+
 # RS Connect — v36.20.15
 
 ## ENT-030 — proteção contra XSS, SVG e CSP
