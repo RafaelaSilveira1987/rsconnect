@@ -10,6 +10,7 @@ use App\Core\Env;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Services\AiReprocessService;
+use App\Services\AfterHoursMonitorService;
 use Throwable;
 
 final class AiReprocessController
@@ -113,6 +114,75 @@ final class AiReprocessController
             echo json_encode([
                 'ok' => false,
                 'message' => 'Falha ao verificar a fila rápida da IA.',
+                'error' => Env::get('APP_DEBUG', false) ? $exception->getMessage() : null,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+    }
+
+
+    public function saveAfterHoursMonitor(): void
+    {
+        try {
+            $settings = (new AfterHoursMonitorService())->save(
+                isset($_POST['enabled']) && (string) $_POST['enabled'] === '1',
+                (int) ($_POST['interval_minutes'] ?? 15),
+                (int) ($_POST['max_items_per_run'] ?? 50),
+                Auth::id()
+            );
+            Audit::log('ai.after_hours_monitor.settings_saved', [
+                'enabled' => (int) ($settings['enabled'] ?? 0),
+                'interval_minutes' => (int) ($settings['interval_minutes'] ?? 15),
+                'max_items_per_run' => (int) ($settings['max_items_per_run'] ?? 50),
+            ]);
+            Flash::set('success', 'Monitor pós-horário atualizado.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar o monitor pós-horário: ' . $exception->getMessage());
+        }
+
+        $this->redirect('/operations/ai-reprocess#after-hours-monitor');
+    }
+
+    public function runAfterHoursMonitor(): void
+    {
+        try {
+            $result = (new AfterHoursMonitorService())->run(true, 'manual_after_hours_monitor');
+            Audit::log('ai.after_hours_monitor.manual_run', $result);
+            $summary = is_array($result['summary'] ?? null) ? $result['summary'] : [];
+            $recovered = (int) ($summary['recovered'] ?? 0);
+            $errors = (int) ($summary['errors'] ?? 0);
+            if ($recovered > 0) {
+                Flash::set('success', $recovered . ' conversa(s) pós-horário retomada(s).');
+            } elseif ($errors > 0) {
+                Flash::set('warning', 'A verificação terminou com pendências que precisam de nova tentativa.');
+            } else {
+                Flash::set('info', 'Monitor executado. Nenhuma conversa estava pronta para retomada.');
+            }
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível executar o monitor pós-horário: ' . $exception->getMessage());
+        }
+
+        $this->redirect('/operations/ai-reprocess#after-hours-monitor');
+    }
+
+    public function afterHoursCron(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        $token = trim((string) ($_GET['token'] ?? $_POST['token'] ?? ($_SERVER['HTTP_X_RS_AFTER_HOURS_TOKEN'] ?? '')));
+        $service = new AfterHoursMonitorService();
+        if (!$service->validToken($token)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'message' => 'Token inválido.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        try {
+            $result = $service->run(false, 'after_hours_cron');
+            echo json_encode(['ok' => true, 'result' => $result], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        } catch (Throwable $exception) {
+            http_response_code(500);
+            echo json_encode([
+                'ok' => false,
+                'message' => 'Falha ao executar o monitor pós-horário.',
                 'error' => Env::get('APP_DEBUG', false) ? $exception->getMessage() : null,
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }

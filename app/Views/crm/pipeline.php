@@ -25,6 +25,8 @@ $automationSettings = is_array($automationSettings ?? null) ? $automationSetting
 $automationSuggestions = is_array($automationSuggestions ?? null) ? $automationSuggestions : [];
 $automationHistory = is_array($automationHistory ?? null) ? $automationHistory : [];
 $selectedAutomationState = is_array($selectedAutomationState ?? null) ? $selectedAutomationState : ['locked' => false, 'snoozed_until' => null];
+$commercialRequestSettings = is_array($commercialRequestSettings ?? null) ? $commercialRequestSettings : [];
+$commercialRequestByLead = is_array($commercialRequestByLead ?? null) ? $commercialRequestByLead : [];
 $automationActionLabels = [
     'suggested' => 'Sugestão criada', 'moved' => 'Movido automaticamente', 'approved' => 'Sugestão aprovada',
     'rejected' => 'Sugestão ignorada', 'blocked' => 'Movimentação bloqueada', 'manual' => 'Movimentação manual',
@@ -118,6 +120,59 @@ $automationActionLabels = [
         </details>
     <?php endif; ?>
 </section>
+
+<section class="card crm-commercial-request-panel<?= !empty($commercialRequestSettings['enabled']) ? ' is-enabled' : '' ?>" id="commercial-request-settings">
+    <div class="crm-automation-summary">
+        <div class="crm-automation-title">
+            <span class="crm-commercial-request-symbol" aria-hidden="true">$</span>
+            <div>
+                <span class="eyebrow">Pendência acompanhável</span>
+                <h3>Solicitações de orçamento</h3>
+                <p><?= !empty($commercialRequestSettings['enabled'])
+                    ? 'Pedidos de orçamento são registrados, destacados na conversa e acompanhados até a conclusão.'
+                    : 'Ative para impedir que pedidos de orçamento fiquem apenas na promessa da IA.' ?></p>
+            </div>
+        </div>
+        <span class="crm-automation-status<?= !empty($commercialRequestSettings['enabled']) ? ' is-on' : '' ?>"><?= !empty($commercialRequestSettings['enabled']) ? 'Ativada' : 'Desativada' ?></span>
+    </div>
+
+    <?php if (empty($commercialRequestSettings['ready'])): ?>
+        <div class="inline-warning">Execute a migration <strong>091_after_hours_monitor_and_quote_requests.sql</strong> para liberar esta configuração.</div>
+    <?php elseif ($canManage): ?>
+        <details class="crm-automation-config" <?= !empty($commercialRequestSettings['enabled']) ? 'open' : '' ?>>
+            <summary>Configurar pedidos de orçamento</summary>
+            <form class="form-stack" method="post" action="<?= View::e(Router::url('/crm/commercial-requests/settings')) ?>">
+                <?= Csrf::input() ?>
+                <input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>">
+                <input type="hidden" name="pipeline_id_return" value="<?= (int) ($filters['pipeline_id'] ?? 0) ?>">
+                <label class="switch-field">
+                    <input type="checkbox" name="enabled" value="1" <?= !empty($commercialRequestSettings['enabled']) ? 'checked' : '' ?>>
+                    <span class="switch-control" aria-hidden="true"></span>
+                    <span><strong>Ativar identificação de orçamentos</strong><small>Reconhece pedidos diretos e respostas contextuais como “sim, por favor”.</small></span>
+                </label>
+                <input type="hidden" name="detect_quote_requests" value="1">
+                <div class="form-grid three">
+                    <label class="field"><span>Prazo de retorno</span><div class="confidence-input"><input type="number" name="response_sla_minutes" min="5" max="1440" step="5" value="<?= (int) ($commercialRequestSettings['response_sla_minutes'] ?? 30) ?>"><strong>min</strong></div><small>Fora do expediente, o prazo começa na próxima abertura.</small></label>
+                    <label class="field"><span>Responsável padrão</span><select name="default_assignee_user_id"><option value="">Equipe comercial</option><?php foreach ($team as $member): ?><option value="<?= (int) $member['id'] ?>" <?= (int) ($commercialRequestSettings['default_assignee_user_id'] ?? 0) === (int) $member['id'] ? 'selected' : '' ?>><?= View::e($member['name']) ?></option><?php endforeach; ?></select></label>
+                    <label class="field"><span>Movimentação do card</span><select name="move_stage_mode">
+                        <option value="none" <?= ($commercialRequestSettings['move_stage_mode'] ?? '') === 'none' ? 'selected' : '' ?>>Não movimentar</option>
+                        <option value="follow_crm" <?= ($commercialRequestSettings['move_stage_mode'] ?? 'follow_crm') === 'follow_crm' ? 'selected' : '' ?>>Seguir automação do Comercial</option>
+                        <option value="suggest" <?= ($commercialRequestSettings['move_stage_mode'] ?? '') === 'suggest' ? 'selected' : '' ?>>Sempre sugerir</option>
+                        <option value="automatic" <?= ($commercialRequestSettings['move_stage_mode'] ?? '') === 'automatic' ? 'selected' : '' ?>>Mover automaticamente</option>
+                    </select><small>A movimentação exige que a Automação do Comercial esteja ativa.</small></label>
+                </div>
+                <label class="field"><span>Etapa para orçamento/proposta</span><select name="target_stage_id"><option value="">Detectar etapa Proposta automaticamente</option><?php foreach ($stages as $stage): ?><?php if (($stage['stage_type'] ?? 'open') === 'open'): ?><option value="<?= (int) $stage['id'] ?>" <?= (int) ($commercialRequestSettings['target_stage_id'] ?? 0) === (int) $stage['id'] ? 'selected' : '' ?>><?= View::e($stage['name']) ?></option><?php endif; ?><?php endforeach; ?></select></label>
+                <div class="crm-automation-checks">
+                    <label><input type="checkbox" name="create_task" value="1" <?= !array_key_exists('create_task', $commercialRequestSettings) || !empty($commercialRequestSettings['create_task']) ? 'checked' : '' ?>> Criar tarefa de retorno no CRM</label>
+                    <label><input type="checkbox" name="show_conversation_alert" value="1" <?= !array_key_exists('show_conversation_alert', $commercialRequestSettings) || !empty($commercialRequestSettings['show_conversation_alert']) ? 'checked' : '' ?>> Exibir alerta dentro da conversa</label>
+                    <label><input type="checkbox" name="notify_team" value="1" <?= !array_key_exists('notify_team', $commercialRequestSettings) || !empty($commercialRequestSettings['notify_team']) ? 'checked' : '' ?>> Enviar notificação para a equipe</label>
+                </div>
+                <div class="crm-automation-note">Uma solicitação permanece pendente até a equipe concluir a tarefa ou marcar o alerta como atendido. Novas confirmações atualizam a mesma pendência, sem criar duplicatas.</div>
+                <button class="btn btn-primary" type="submit">Salvar automação de orçamentos</button>
+            </form>
+        </details>
+    <?php endif; ?>
+</section>
 <?php endif; ?>
 
 <div class="metric-grid metric-grid-compact">
@@ -167,6 +222,8 @@ $automationActionLabels = [
                                     <strong><?= View::e($lead['title']) ?></strong>
                                     <?php $suggestion = $automationSuggestions[(int) $lead['id']] ?? null; ?>
                                     <?php if ($suggestion): ?><span class="deal-automation-suggestion">✦ Sugestão: <?= View::e($suggestion['target_stage_name'] ?? 'nova etapa') ?> · <?= (int) round(((float) ($suggestion['confidence'] ?? 0)) * 100) ?>%</span><?php endif; ?>
+                                    <?php $quoteRequest = $commercialRequestByLead[(int) $lead['id']] ?? null; ?>
+                                    <?php if ($quoteRequest): ?><span class="deal-quote-pending">Orçamento pendente<?php if (!empty($quoteRequest['due_at'])): ?> · até <?= View::e($date($quoteRequest['due_at'], 'd/m H:i')) ?><?php endif; ?></span><?php endif; ?>
                                     <span class="deal-contact"><?= View::e($lead['contact_name'] ?: $lead['phone']) ?></span>
                                     <span class="deal-value"><?= View::e($money($lead['value'])) ?></span>
                                     <footer><span><?= View::e($lead['owner_name'] ?: 'Sem responsável') ?></span><?php if ((int) $lead['pending_tasks'] > 0): ?><span class="pending-tasks"><?= (int) $lead['pending_tasks'] ?> tarefa(s)</span><?php endif; ?></footer>

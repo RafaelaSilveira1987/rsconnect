@@ -11,6 +11,7 @@ $open = (int) ($conversations['open_count'] ?? 0);
 $unread = (int) ($conversations['unread_count'] ?? 0);
 $human = (int) ($conversations['human_count'] ?? 0);
 $pendingAgenda = (int) ($agendaIntent['pending_pre_schedules'] ?? 0);
+$pendingQuotes = (int) ($pendingQuotes ?? 0);
 $connected = (int) ($instances['connected'] ?? 0);
 $totalInstances = (int) ($instances['total'] ?? 0);
 ?>
@@ -48,8 +49,8 @@ $totalInstances = (int) ($instances['total'] ?? 0);
     <a class="client-dashboard-kpi" href="<?= View::e(Router::url('/calendar')) ?>">
         <span>Agenda pendente</span><strong><?= $pendingAgenda ?></strong><small>pré-agendamentos para revisar</small>
     </a>
-    <a class="client-dashboard-kpi" href="<?= View::e(Router::url('/conversations?attendance_mode=human')) ?>">
-        <span>Com a equipe</span><strong><?= $human ?></strong><small>conversas em atendimento humano</small>
+    <a class="client-dashboard-kpi <?= $pendingQuotes > 0 ? 'has-attention' : '' ?>" href="<?= View::e(Router::url('/conversations?queue=quote_pending')) ?>">
+        <span>Orçamentos pendentes</span><strong><?= $pendingQuotes ?></strong><small>solicitações aguardando retorno</small>
     </a>
 </div>
 
@@ -62,6 +63,9 @@ $totalInstances = (int) ($instances['total'] ?? 0);
         <div class="client-action-list">
             <a href="<?= View::e(Router::url('/conversations?filter=unread')) ?>" class="client-action-item <?= $unread > 0 ? 'is-warning' : 'is-ok' ?>">
                 <span class="client-action-dot"></span><div><strong><?= $unread > 0 ? $unread . ' mensagem(ns) não lida(s)' : 'Caixa de entrada em dia' ?></strong><small><?= $unread > 0 ? 'Abra as conversas e priorize quem está aguardando.' : 'Nenhuma mensagem aguardando leitura.' ?></small></div><b>›</b>
+            </a>
+            <a href="<?= View::e(Router::url('/conversations?queue=quote_pending')) ?>" class="client-action-item <?= $pendingQuotes > 0 ? 'is-warning' : 'is-ok' ?>">
+                <span class="client-action-dot"></span><div><strong><?= $pendingQuotes > 0 ? $pendingQuotes . ' orçamento(s) aguardando retorno' : 'Nenhum orçamento pendente' ?></strong><small><?= $pendingQuotes > 0 ? 'Abra a conversa, prepare a proposta e marque a solicitação como atendida.' : 'As solicitações comerciais estão em dia.' ?></small></div><b>›</b>
             </a>
             <a href="<?= View::e(Router::url('/calendar?section=availability')) ?>" class="client-action-item <?= $pendingAgenda > 0 ? 'is-warning' : 'is-ok' ?>">
                 <span class="client-action-dot"></span><div><strong><?= $pendingAgenda > 0 ? $pendingAgenda . ' pré-agendamento(s) pendente(s)' : 'Agenda sem pendências' ?></strong><small><?= $pendingAgenda > 0 ? 'Valide horários e confirme os próximos compromissos.' : 'Nenhuma validação de horário aguardando.' ?></small></div><b>›</b>
@@ -79,6 +83,7 @@ $totalInstances = (int) ($instances['total'] ?? 0);
             <div><span>Assistentes virtuais</span><strong class="<?= (int) $activeAgents > 0 ? 'is-ok' : 'is-warning' ?>"><?= (int) $activeAgents ?> ativo(s)</strong></div>
             <div><span>Equipe</span><strong><?= (int) $activeUsers ?> usuário(s)</strong></div>
             <div><span>Agenda automática</span><strong class="<?= $pendingAgenda > 0 ? 'is-warning' : 'is-ok' ?>"><?= $pendingAgenda > 0 ? 'Revisar' : 'Em dia' ?></strong></div>
+            <div><span>Orçamentos</span><strong class="<?= $pendingQuotes > 0 ? 'is-warning' : 'is-ok' ?>"><?= $pendingQuotes > 0 ? $pendingQuotes . ' pendente(s)' : 'Em dia' ?></strong></div>
         </div>
     </section>
 </div>

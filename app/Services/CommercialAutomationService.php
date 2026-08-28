@@ -228,6 +228,104 @@ final class CommercialAutomationService
         return ['handled' => true, 'action' => 'moved', 'event_id' => $eventId, 'stage_id' => (int) $target['id']];
     }
 
+    public function handleQuoteRequest(
+        PDO $pdo,
+        array $instance,
+        int $leadId,
+        int $conversationId,
+        string $excerpt,
+        ?int $incomingMessageId,
+        string $requestedMode,
+        ?int $targetStageId,
+        float $confidence,
+        string $reason
+    ): array {
+        $tenantId = (int) ($instance['tenant_id'] ?? 0);
+        if ($tenantId < 1 || $leadId < 1 || $conversationId < 1 || $requestedMode === 'none') {
+            return ['handled' => false, 'reason' => 'disabled'];
+        }
+        if (!$this->hasTable($pdo, 'tenant_crm_automation_settings') || !$this->hasTable($pdo, 'crm_automation_events')) {
+            return ['handled' => false, 'reason' => 'migration_pending'];
+        }
+
+        $settings = $this->settingsFromPdo($pdo, $tenantId);
+        if (empty($settings['enabled'])) {
+            return ['handled' => false, 'reason' => 'crm_automation_disabled'];
+        }
+        $lead = $this->lead($pdo, $tenantId, $leadId);
+        if (!$lead || (int) ($lead['automation_locked'] ?? 0) === 1) {
+            return ['handled' => false, 'reason' => $lead ? 'lead_locked' : 'lead_missing'];
+        }
+        if (!empty($lead['automation_snoozed_until']) && strtotime((string) $lead['automation_snoozed_until']) > time()) {
+            return ['handled' => false, 'reason' => 'lead_snoozed'];
+        }
+        if (!empty($settings['pipeline_id']) && (int) $settings['pipeline_id'] !== (int) $lead['pipeline_id']) {
+            return ['handled' => false, 'reason' => 'pipeline_not_selected'];
+        }
+
+        $stages = $this->stages($pdo, $tenantId, (int) $lead['pipeline_id']);
+        $target = null;
+        if ($targetStageId && $targetStageId > 0) {
+            $candidate = $this->stageById($stages, $targetStageId);
+            if ($candidate) {
+                $target = $candidate;
+            }
+        }
+        $target ??= $this->resolveTargetStage($stages, 'proposal');
+        if (!$target) {
+            return ['handled' => false, 'reason' => 'proposal_stage_missing'];
+        }
+
+        $currentStageId = (int) $lead['stage_id'];
+        if ((int) $target['id'] === $currentStageId) {
+            return ['handled' => false, 'reason' => 'already_in_stage'];
+        }
+        $current = $this->stageById($stages, $currentStageId);
+        if ($current && (int) $target['position'] < (int) $current['position'] && empty($settings['allow_backward_movement'])) {
+            return ['handled' => false, 'reason' => 'backward_blocked'];
+        }
+
+        $mode = $requestedMode === 'follow_crm' ? (string) ($settings['mode'] ?? 'suggest') : $requestedMode;
+        $mode = in_array($mode, ['suggest', 'automatic'], true) ? $mode : 'suggest';
+        $confidence = max(0.0, min(1.0, $confidence));
+        $automatic = $mode === 'automatic' && $confidence >= (float) ($settings['confidence_threshold'] ?? .85);
+        $eventData = [
+            'tenant_id' => $tenantId,
+            'lead_id' => $leadId,
+            'conversation_id' => $conversationId,
+            'incoming_message_id' => $incomingMessageId,
+            'previous_stage_id' => $currentStageId,
+            'target_stage_id' => (int) $target['id'],
+            'confidence' => $confidence,
+            'reason' => $this->preview($reason, 490),
+            'excerpt' => $this->preview($excerpt, 680),
+            'classifier_engine' => 'quote_request',
+            'metadata' => ['request_type' => 'quote'],
+        ];
+
+        if (!$automatic) {
+            if ($this->hasPendingSuggestion($pdo, $tenantId, $leadId, (int) $target['id'])) {
+                return ['handled' => false, 'reason' => 'duplicate_suggestion'];
+            }
+            $eventData['action'] = 'suggested';
+            $eventId = $this->insertEvent($pdo, $eventData);
+            $this->notify($settings, $tenantId, $leadId, 'Orçamento pendente no Comercial',
+                'O cliente pediu um orçamento. Foi sugerido mover o negócio para “' . (string) $target['name'] . '”.',
+                'crm.quote_stage_suggested', $eventId);
+            return ['handled' => true, 'action' => 'suggested', 'event_id' => $eventId, 'stage_id' => (int) $target['id']];
+        }
+
+        $this->moveLead($pdo, $tenantId, $leadId, $target);
+        $eventData['action'] = 'moved';
+        $eventId = $this->insertEvent($pdo, $eventData);
+        $this->addSystemNote($pdo, $tenantId, (int) $lead['contact_id'], $leadId,
+            'Solicitação de orçamento detectada: negócio movido para “' . (string) $target['name'] . '”. ' . $reason);
+        $this->notify($settings, $tenantId, $leadId, 'Orçamento pendente no Comercial',
+            'O cliente pediu um orçamento e o negócio foi movido para “' . (string) $target['name'] . '”.',
+            'crm.quote_stage_moved', $eventId);
+        return ['handled' => true, 'action' => 'moved', 'event_id' => $eventId, 'stage_id' => (int) $target['id']];
+    }
+
     public function pendingSuggestions(int $tenantId, array $leadIds): array
     {
         $leadIds = array_values(array_unique(array_filter(array_map('intval', $leadIds), static fn (int $id): bool => $id > 0)));
@@ -453,6 +551,15 @@ final class CommercialAutomationService
         if ((str_contains($transcript, 'enviei a proposta') || str_contains($transcript, 'segue a proposta') || str_contains($transcript, 'proposta comercial'))
             && preg_match('/\b(recebi|vou analisar|estou analisando|achei interessante|gostei)\b/u', $incoming)) {
             return ['stage_key' => 'proposal', 'confidence' => 0.92, 'reason' => 'A proposta já aparece na conversa e o lead confirmou o recebimento ou a análise.'];
+        }
+
+        $affirmative = preg_match('/^(sim|sim por favor|pode|pode sim|claro|quero|por favor|ok|com certeza|isso)$/u', $incoming) === 1;
+        $quotePromptInContext = $this->containsAny($transcript, [
+            'encaminhar sua solicitacao de orcamento', 'encaminhar o orcamento', 'preparar um orcamento',
+            'enviar uma proposta', 'receber uma proposta', 'solicitacao de orcamento', 'gostaria de um orcamento'
+        ]);
+        if ($affirmative && $quotePromptInContext) {
+            return ['stage_key' => 'proposal', 'confidence' => 0.97, 'reason' => 'O lead confirmou, no contexto da conversa, que deseja receber orçamento ou proposta.'];
         }
 
         $qualificationSignals = [

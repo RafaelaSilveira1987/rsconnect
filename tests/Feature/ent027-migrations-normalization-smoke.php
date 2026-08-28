@@ -34,7 +34,7 @@ $operations = (string) file_get_contents($root . '/app/Services/OperationsServic
 $health = (string) file_get_contents($root . '/app/Services/HealthCheckService.php');
 $migrationService = (string) file_get_contents($root . '/app/Services/MigrationService.php');
 
-$check(($result['files'] ?? 0) === 97, 'manifesto possui 97 migrations de subida');
+$check(($result['files'] ?? 0) === 98, 'manifesto possui 98 migrations de subida');
 $check(($result['rollbacks'] ?? []) === ['030_google_calendar_availability_modes_rollback.sql'], 'rollback fica isolado do fluxo de subida');
 $check(isset($result['duplicate_numbers']['017'], $result['duplicate_numbers']['063']), 'numerações históricas duplicadas são inventariadas');
 $check(($manifest['schema_snapshot']['through'] ?? '') === '004_crm.sql', 'snapshot declara o baseline executável até a migration 004');
@@ -50,7 +50,7 @@ $finalSeedPos = is_int($migrationPos) ? strpos($migrationService, "executeSqlFil
 $check(is_int($bootstrapPos) && is_int($migrationPos) && is_int($finalSeedPos) && $bootstrapPos < $migrationPos && $migrationPos < $finalSeedPos, 'instalação executa seed inicial, migrations e reconciliação final na ordem correta');
 $check(str_contains($operations, 'schema_migrations') && str_contains($operations, 'checksum divergente'), 'monitoramento operacional usa o registro canônico');
 $check(str_contains($health, "'name' => 'migrations'") && str_contains($health, '089_schema_migrations_registry.sql') && str_contains($health, '090_crm_conversation_automation.sql'), 'readiness bloqueia tráfego quando o schema está pendente');
-$check(str_contains($version, 'RS Connect 36.20.16') && str_contains($version, 'RS Connect 36.21.0') && str_contains($version, '090_crm_conversation_automation.sql'), 'versão e migration obrigatória foram atualizadas');
+$check(str_contains($version, 'RS Connect 36.20.16') && str_contains($version, 'RS Connect 36.21.0') && str_contains($version, '090_crm_conversation_automation.sql') && str_contains($version, '091_after_hours_monitor_and_quote_requests.sql'), 'versão e migrations obrigatórias foram atualizadas');
 
 $sample = <<<'SQL'
 CREATE TABLE test_parser (id INT);

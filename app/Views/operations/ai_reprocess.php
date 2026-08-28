@@ -16,6 +16,7 @@ $blockedLast = (int) ($lastSummary['blocked'] ?? 0);
 $pendingBlocked = (int) ($data['pending_blocked_total'] ?? 0);
 $afterHours = $data['after_hours'] ?? ['total' => 0, 'blocked_plan' => 0, 'blocked_human' => 0, 'errors' => 0];
 $afterHoursItems = $data['after_hours_items'] ?? [];
+$afterHoursMonitor = is_array($data['after_hours_monitor'] ?? null) ? $data['after_hours_monitor'] : [];
 $formatDate = static function (?string $value): string {
     if (!$value || !($timestamp = strtotime($value))) return 'Ainda não executado';
     return date('d/m/Y H:i', $timestamp);
@@ -135,6 +136,63 @@ $statusLabel = static function (string $status): string {
         </div>
     </section>
 </div>
+
+<section class="card after-hours-monitor-card" id="after-hours-monitor" style="margin-top:16px">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Monitor automático</span>
+            <h2>Retomada pós-horário</h2>
+            <p>Esta é a rotina que verifica periodicamente se o expediente já abriu e libera as conversas preservadas para a IA responder.</p>
+        </div>
+        <span class="badge <?= !empty($afterHoursMonitor['enabled']) ? 'badge-success' : 'badge-warning' ?>"><?= !empty($afterHoursMonitor['enabled']) ? 'Ativo' : 'Desativado' ?></span>
+    </div>
+
+    <?php if (empty($afterHoursMonitor['ready'])): ?>
+        <div class="operations-alert is-warning">
+            <strong>Atualização necessária</strong>
+            <p>Execute a migration <code>091_after_hours_monitor_and_quote_requests.sql</code> para liberar o monitor configurável.</p>
+        </div>
+    <?php else: ?>
+        <div class="after-hours-monitor-grid">
+            <form method="post" action="<?= View::e(Router::url('/operations/ai-after-hours/save')) ?>" class="form-stack after-hours-monitor-settings">
+                <?= Csrf::input() ?>
+                <label class="switch-card">
+                    <input type="checkbox" name="enabled" value="1" <?= !empty($afterHoursMonitor['enabled']) ? 'checked' : '' ?>>
+                    <span><strong>Ativar recuperação pós-horário</strong><small>A rotina continua respeitando modo humano, horário, conexão e limite da IA.</small></span>
+                </label>
+                <div class="form-grid two">
+                    <label class="field"><span>Intervalo de verificação</span><select name="interval_minutes">
+                        <?php foreach ([5,10,15,30,60] as $minutes): ?><option value="<?= $minutes ?>" <?= (int) ($afterHoursMonitor['interval_minutes'] ?? 15) === $minutes ? 'selected' : '' ?>>A cada <?= $minutes ?> minuto(s)</option><?php endforeach; ?>
+                    </select></label>
+                    <label class="field"><span>Limite por execução</span><input type="number" name="max_items_per_run" min="1" max="200" value="<?= (int) ($afterHoursMonitor['max_items_per_run'] ?? 50) ?>"></label>
+                </div>
+                <button class="btn btn-primary" type="submit">Salvar monitor</button>
+            </form>
+
+            <div class="after-hours-monitor-status">
+                <div class="after-hours-monitor-status-grid">
+                    <span><small>Última execução</small><strong><?= View::e($formatDate($afterHoursMonitor['last_run_at'] ?? null)) ?></strong></span>
+                    <span><small>Resultado</small><strong><?= View::e($statusLabel((string) ($afterHoursMonitor['last_run_status'] ?? ''))) ?></strong></span>
+                    <span><small>Pendências atuais</small><strong><?= (int) (($afterHoursMonitor['pending']['total'] ?? $afterHours['total'] ?? 0)) ?></strong></span>
+                    <span><small>Intervalo</small><strong><?= (int) ($afterHoursMonitor['interval_minutes'] ?? 15) ?> min</strong></span>
+                </div>
+                <?php if (!empty($afterHoursMonitor['last_error'])): ?><div class="operations-alert is-warning"><strong>Última falha</strong><p><?= View::e((string) $afterHoursMonitor['last_error']) ?></p></div><?php endif; ?>
+                <form method="post" action="<?= View::e(Router::url('/operations/ai-after-hours/run')) ?>" data-confirm="Executar agora a recuperação das conversas pós-horário?">
+                    <?= Csrf::input() ?><button class="btn btn-outline" type="submit">Executar monitor agora</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="operations-alert <?= !empty($afterHoursMonitor['token_configured']) ? 'is-ok' : 'is-warning' ?>" style="margin-top:16px">
+            <strong>Agendamento no EasyPanel</strong>
+            <p>Crie uma tarefa agendada para executar a cada 5 minutos. O próprio sistema respeita o intervalo salvo acima e evita execuções duplicadas.</p>
+            <small>Comando recomendado dentro do serviço da aplicação:</small>
+            <code class="operations-command">php /var/www/html/bin/ai-after-hours-recovery.php</code>
+            <small>Alternativa por HTTP: <code><?= View::e((string) ($afterHoursMonitor['cron_url'] ?? '')) ?>?token=SEU_TOKEN</code></small>
+            <small><?= !empty($afterHoursMonitor['token_configured']) ? 'Token configurado no ambiente.' : 'Configure AFTER_HOURS_MONITOR_TOKEN ou reutilize AI_REPROCESS_CRON_TOKEN.' ?></small>
+        </div>
+    <?php endif; ?>
+</section>
 
 <section class="card" id="after-hours-recovery" style="margin-top:16px">
     <div class="section-heading">

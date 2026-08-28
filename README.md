@@ -1,3 +1,39 @@
+# RS Connect — v36.22.0
+
+## Monitor pós-horário e orçamentos pendentes
+
+- adiciona uma rotina dedicada, visível e configurável para retomar conversas preservadas depois da reabertura do expediente;
+- oferece execução manual, status da última rodada, quantidade pendente, trava contra concorrência e comando CLI para agendamento no EasyPanel;
+- identifica pedidos diretos de orçamento e confirmações contextuais como “sim, por favor” após a oferta da IA;
+- cria uma única pendência comercial por conversa, tarefa no CRM, alerta na conversa, notificação interna, tag no contato e contador no dashboard;
+- permite definir responsável, prazo útil, etapa do funil e modo de movimentação do card;
+- mantém o recurso comercial desativado por padrão para cada empresa.
+
+### Atualização do banco
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php status
+php bin/migrate.php up
+php bin/migrate.php status
+```
+
+Migration adicionada:
+
+```text
+database/migrations/091_after_hours_monitor_and_quote_requests.sql
+```
+
+### Agendamento no EasyPanel
+
+Crie uma tarefa agendada no serviço da aplicação, preferencialmente a cada 5 minutos:
+
+```bash
+php /var/www/html/bin/ai-after-hours-recovery.php
+```
+
+O intervalo efetivo é controlado em **Saúde do sistema > Fila/IA > Retomada pós-horário**. O padrão é 15 minutos e o sistema impede execuções simultâneas.
+
 # RS Connect — v36.21.2
 
 ## Retomada automática da IA

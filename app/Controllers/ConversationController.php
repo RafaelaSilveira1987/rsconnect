@@ -22,6 +22,7 @@ use App\Services\ConversationFlowService;
 use App\Services\ConversationCycleService;
 use App\Services\ConversationOwnershipService;
 use App\Services\ConversationAttachmentService;
+use App\Services\CommercialRequestService;
 use App\Services\MessageGovernanceService;
 use App\Services\EvolutionService;
 use PDO;
@@ -90,8 +91,20 @@ final class ConversationController
         if (($filters['queue'] ?? '') === 'after_hours') {
             $conditions[] = 'EXISTS (SELECT 1 FROM ai_after_hours_pending ah_filter WHERE ah_filter.conversation_id = c.id AND ah_filter.status IN ("pending","processing","blocked_plan","blocked_human","error"))';
         }
+        $commercialRequestTableReady = $this->hasTable($pdo, 'crm_commercial_requests');
+        if (($filters['queue'] ?? '') === 'quote_pending') {
+            $conditions[] = $commercialRequestTableReady
+                ? 'EXISTS (SELECT 1 FROM crm_commercial_requests cr_filter WHERE cr_filter.conversation_id = c.id AND cr_filter.tenant_id = c.tenant_id AND cr_filter.status = "pending")'
+                : '1 = 0';
+        }
 
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+        $commercialRequestSelect = $commercialRequestTableReady
+            ? ', cr.id AS commercial_request_id, cr.due_at AS commercial_request_due_at, cr.status AS commercial_request_status'
+            : ', NULL AS commercial_request_id, NULL AS commercial_request_due_at, NULL AS commercial_request_status';
+        $commercialRequestJoin = $commercialRequestTableReady
+            ? ' LEFT JOIN crm_commercial_requests cr ON cr.id = (SELECT MAX(cr_latest.id) FROM crm_commercial_requests cr_latest WHERE cr_latest.conversation_id = c.id AND cr_latest.tenant_id = c.tenant_id AND cr_latest.status = "pending")'
+            : '';
         $statement = $pdo->prepare(
             'SELECT c.*, ct.name AS contact_name, ct.phone, ct.email, ct.company, ct.notes, ct.tags_json, ct.avatar_url,
                     ct.status AS contact_status, ct.preferred_user_id, pref.name AS preferred_user_name,
@@ -104,7 +117,7 @@ final class ConversationController
                     ah.recovery_attempts AS after_hours_recovery_attempts,
                     ah.last_attempt_at AS after_hours_last_attempt_at,
                     ah.next_attempt_at AS after_hours_next_attempt_at,
-                    ah.last_error AS after_hours_last_error,
+                    ah.last_error AS after_hours_last_error' . $commercialRequestSelect . ',
                     CASE
                         WHEN ah.id IS NULL OR ah.first_message_id IS NULL OR ah.last_message_id IS NULL THEN 0
                         ELSE (
@@ -123,6 +136,7 @@ final class ConversationController
              LEFT JOIN users pref ON pref.id = ct.preferred_user_id AND pref.tenant_id = ct.tenant_id
              LEFT JOIN ai_after_hours_pending ah ON ah.conversation_id = c.id
                 AND ah.status IN ("pending","processing","blocked_plan","blocked_human","error")
+             ' . $commercialRequestJoin . '
              ' . $where . '
              ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
              LIMIT 100'
@@ -141,6 +155,8 @@ final class ConversationController
         $conversationAgents = [];
         $selectedRuleSnapshot = null;
         $selectedAfterHoursPending = null;
+        $selectedCommercialRequest = null;
+        $commercialRequestSettings = ['ready' => false, 'enabled' => false, 'show_conversation_alert' => false];
         $professionalAssignmentSettings = ['enabled' => false, 'lock_enabled' => true, 'auto_assign_enabled' => false];
         $ownershipSnapshot = ['enabled' => false, 'can_interact' => true, 'locked_by_other' => false];
 
@@ -253,6 +269,18 @@ final class ConversationController
                 } catch (Throwable) {
                     $selectedAfterHoursPending = null;
                 }
+
+                try {
+                    $commercialRequestService = new CommercialRequestService();
+                    $commercialRequestSettings = $commercialRequestService->settings((int) $selected['tenant_id']);
+                    $selectedCommercialRequest = $commercialRequestService->activeForConversation(
+                        (int) $selected['tenant_id'],
+                        (int) $selected['id']
+                    );
+                } catch (Throwable) {
+                    $selectedCommercialRequest = null;
+                    $commercialRequestSettings = ['ready' => false, 'enabled' => false, 'show_conversation_alert' => false];
+                }
             }
         }
 
@@ -282,6 +310,8 @@ final class ConversationController
             'conversationAgents' => $conversationAgents,
             'selectedRuleSnapshot' => $selectedRuleSnapshot,
             'selectedAfterHoursPending' => $selectedAfterHoursPending,
+            'selectedCommercialRequest' => $selectedCommercialRequest,
+            'commercialRequestSettings' => $commercialRequestSettings,
             'professionalAssignmentSettings' => $professionalAssignmentSettings,
             'ownershipSnapshot' => $ownershipSnapshot,
             'instances' => $instances,
@@ -289,6 +319,47 @@ final class ConversationController
             'filters' => $filters,
             'attachmentMaxLabel' => (new ConversationAttachmentService())->humanSize((new ConversationAttachmentService())->maxBytes()),
         ]);
+    }
+
+    public function resolveCommercialRequest(): void
+    {
+        $conversationId = (int) ($_POST['conversation_id'] ?? 0);
+        $requestId = (int) ($_POST['request_id'] ?? 0);
+        $decision = (string) ($_POST['decision'] ?? 'resolved');
+        if ($conversationId < 1 || $requestId < 1 || !in_array($decision, ['resolved', 'dismissed'], true)) {
+            Flash::set('error', 'Solicitação comercial inválida.');
+            $this->redirect('/conversations');
+        }
+
+        $conversation = $this->findConversation($conversationId, Auth::isSuperAdmin() ? null : (int) (Auth::tenantId() ?? 0));
+        if (!$conversation) {
+            Flash::set('error', 'Conversa não encontrada.');
+            $this->redirect('/conversations');
+        }
+
+        try {
+            $result = (new CommercialRequestService())->resolve(
+                (int) $conversation['tenant_id'],
+                $requestId,
+                (int) (Auth::id() ?? 0),
+                $decision,
+                $conversationId
+            );
+            Audit::log('crm.commercial_request_' . $decision, [
+                'request_id' => $requestId,
+                'conversation_id' => $conversationId,
+                'lead_id' => (int) ($result['lead_id'] ?? 0),
+            ], (int) $conversation['tenant_id']);
+            Flash::set('success', $decision === 'resolved' ? 'Orçamento marcado como atendido.' : 'Alerta de orçamento dispensado.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível atualizar o orçamento pendente: ' . $exception->getMessage());
+        }
+
+        $query = ['conversation_id' => $conversationId];
+        if (Auth::isSuperAdmin()) {
+            $query['tenant_id'] = (int) $conversation['tenant_id'];
+        }
+        $this->redirect('/conversations?' . http_build_query($query));
     }
 
     public function start(): void
@@ -2397,8 +2468,20 @@ final class ConversationController
         if (($filters['queue'] ?? '') === 'after_hours') {
             $conditions[] = 'EXISTS (SELECT 1 FROM ai_after_hours_pending ah_filter WHERE ah_filter.conversation_id = c.id AND ah_filter.status IN ("pending","processing","blocked_plan","blocked_human","error"))';
         }
+        $commercialRequestTableReady = $this->hasTable($pdo, 'crm_commercial_requests');
+        if (($filters['queue'] ?? '') === 'quote_pending') {
+            $conditions[] = $commercialRequestTableReady
+                ? 'EXISTS (SELECT 1 FROM crm_commercial_requests cr_filter WHERE cr_filter.conversation_id = c.id AND cr_filter.tenant_id = c.tenant_id AND cr_filter.status = "pending")'
+                : '1 = 0';
+        }
 
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+        $commercialRequestSelect = $commercialRequestTableReady
+            ? ', cr.id AS commercial_request_id, cr.due_at AS commercial_request_due_at, cr.status AS commercial_request_status'
+            : ', NULL AS commercial_request_id, NULL AS commercial_request_due_at, NULL AS commercial_request_status';
+        $commercialRequestJoin = $commercialRequestTableReady
+            ? ' LEFT JOIN crm_commercial_requests cr ON cr.id = (SELECT MAX(cr_latest.id) FROM crm_commercial_requests cr_latest WHERE cr_latest.conversation_id = c.id AND cr_latest.tenant_id = c.tenant_id AND cr_latest.status = "pending")'
+            : '';
         $statement = $pdo->prepare(
             'SELECT c.id, c.status, c.attendance_mode, c.assigned_user_id, c.unread_count, c.last_message_at, c.last_message_preview,
                     ct.name AS contact_name, ct.phone, ct.avatar_url, i.name AS instance_label, i.instance_name,
@@ -2409,7 +2492,7 @@ final class ConversationController
                     ah.ack_sent_at AS after_hours_ack_sent_at,
                     ah.recovery_attempts AS after_hours_recovery_attempts,
                     ah.next_attempt_at AS after_hours_next_attempt_at,
-                    ah.last_error AS after_hours_last_error,
+                    ah.last_error AS after_hours_last_error' . $commercialRequestSelect . ',
                     CASE
                         WHEN ah.id IS NULL OR ah.first_message_id IS NULL OR ah.last_message_id IS NULL THEN 0
                         ELSE (
@@ -2427,6 +2510,7 @@ final class ConversationController
              LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
              LEFT JOIN ai_after_hours_pending ah ON ah.conversation_id = c.id
                 AND ah.status IN ("pending","processing","blocked_plan","blocked_human","error")
+             ' . $commercialRequestJoin . '
              ' . $where . '
              ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
              LIMIT 100'
@@ -2455,6 +2539,8 @@ final class ConversationController
             'assigned_user_id' => (int) ($conversation['assigned_user_id'] ?? 0),
             'assigned_user_name' => (string) ($conversation['assigned_user_name'] ?? ''),
             'after_hours' => $this->formatAfterHoursForJson($conversation),
+            'quote_pending' => (int) ($conversation['commercial_request_id'] ?? 0) > 0,
+            'quote_due_at' => (string) ($conversation['commercial_request_due_at'] ?? ''),
             'is_selected' => (int) $conversation['id'] === $selectedId,
         ];
     }

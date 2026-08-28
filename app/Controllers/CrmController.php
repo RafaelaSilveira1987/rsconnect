@@ -11,6 +11,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\CommercialAutomationService;
+use App\Services\CommercialRequestService;
 use PDO;
 use Throwable;
 
@@ -43,6 +44,9 @@ final class CrmController
         $automationSuggestions = [];
         $automationHistory = [];
         $selectedAutomationState = ['locked' => false, 'snoozed_until' => null];
+        $commercialRequestService = new CommercialRequestService();
+        $commercialRequestSettings = $commercialRequestService->settings($tenantId);
+        $commercialRequestByLead = [];
 
         $filters = [
             'tenant_id' => $tenantId,
@@ -103,10 +107,9 @@ final class CrmController
                 );
                 $leadStatement->execute($params);
                 $leads = $leadStatement->fetchAll(PDO::FETCH_ASSOC);
-                $automationSuggestions = $automationService->pendingSuggestions(
-                    $tenantId,
-                    array_map(static fn (array $lead): int => (int) $lead['id'], $leads)
-                );
+                $leadIds = array_map(static fn (array $lead): int => (int) $lead['id'], $leads);
+                $automationSuggestions = $automationService->pendingSuggestions($tenantId, $leadIds);
+                $commercialRequestByLead = $commercialRequestService->pendingForLeads($tenantId, $leadIds);
             }
 
             $contactStatement = $pdo->prepare(
@@ -182,10 +185,34 @@ final class CrmController
             'automationSuggestions' => $automationSuggestions,
             'automationHistory' => $automationHistory,
             'selectedAutomationState' => $selectedAutomationState,
+            'commercialRequestSettings' => $commercialRequestSettings,
+            'commercialRequestByLead' => $commercialRequestByLead,
             'filters' => $filters,
             'canManage' => Auth::can('crm.manage'),
             'canManageTasks' => Auth::can('tasks.manage'),
         ]);
+    }
+
+    public function saveCommercialRequestSettings(): void
+    {
+        $tenantId = $this->resolveTenantFromPost();
+        try {
+            (new CommercialRequestService())->saveSettings($tenantId, $_POST, Auth::id());
+            Audit::log('crm.commercial_request_settings_saved', [
+                'enabled' => !empty($_POST['enabled']),
+                'create_task' => !empty($_POST['create_task']),
+                'notify_team' => !empty($_POST['notify_team']),
+                'move_stage_mode' => (string) ($_POST['move_stage_mode'] ?? 'follow_crm'),
+            ], $tenantId);
+            Flash::set('success', 'Automação de solicitações comerciais atualizada.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar a automação de orçamentos: ' . $exception->getMessage());
+        }
+        $pipelineId = (int) ($_POST['pipeline_id_return'] ?? 0);
+        $this->redirect('/crm?' . http_build_query(array_filter([
+            'tenant_id' => $tenantId,
+            'pipeline_id' => $pipelineId,
+        ], static fn (int $value): bool => $value > 0)) . '#commercial-request-settings');
     }
 
     public function store(): void

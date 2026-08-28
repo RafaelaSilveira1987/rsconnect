@@ -11,6 +11,8 @@ $professionalAssignmentSettings = is_array($professionalAssignmentSettings ?? nu
 $ownershipSnapshot = is_array($ownershipSnapshot ?? null) ? $ownershipSnapshot : ['enabled' => false, 'can_interact' => true, 'locked_by_other' => false];
 $canOperateSelected = $canManage && !empty($ownershipSnapshot['can_interact']);
 $conversationAgents = is_array($conversationAgents ?? null) ? $conversationAgents : [];
+$commercialRequestSettings = is_array($commercialRequestSettings ?? null) ? $commercialRequestSettings : ['ready' => false, 'enabled' => false, 'show_conversation_alert' => false];
+$selectedCommercialRequest = is_array($selectedCommercialRequest ?? null) ? $selectedCommercialRequest : null;
 $formatDate = static function (?string $date, string $format = 'd/m/Y H:i'): string {
     if (!$date) {
         return '—';
@@ -72,6 +74,7 @@ $returnQuery = http_build_query($pollQuery);
 $publicPollQuery = (string) (parse_url(Router::url('/conversations?' . http_build_query($pollQuery)), PHP_URL_QUERY) ?? '');
 $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (int) $selected['id']) : '';
 $afterHoursQueueCount = count(array_filter($conversations, static fn (array $conversation): bool => trim((string) ($conversation['after_hours_status'] ?? '')) !== ''));
+$quotePendingQueueCount = count(array_filter($conversations, static fn (array $conversation): bool => (int) ($conversation['commercial_request_id'] ?? 0) > 0));
 ?>
 
 <form class="conversation-filters card" method="get" action="<?= View::e(Router::url('/conversations')) ?>">
@@ -117,7 +120,8 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
 
     <select name="queue" aria-label="Filtrar por fila operacional">
         <option value="">Todas as filas</option>
-        <option value="after_hours" <?= ($filters['queue'] ?? '') === 'after_hours' ? 'selected' : '' ?>>Aguardando horário</option>
+        <option value="after_hours" <?= ($filters['queue'] ?? '') === 'after_hours' ? 'selected' : '' ?>>Aguardando horário<?= $afterHoursQueueCount > 0 ? ' (' . $afterHoursQueueCount . ')' : '' ?></option>
+        <option value="quote_pending" <?= ($filters['queue'] ?? '') === 'quote_pending' ? 'selected' : '' ?>>Orçamentos pendentes<?= $quotePendingQueueCount > 0 ? ' (' . $quotePendingQueueCount . ')' : '' ?></option>
     </select>
 
     <?php if (($filters['intent'] ?? '') === 'agenda'): ?><span class="badge badge-info">Intenção de agenda</span><?php endif; ?>
@@ -184,6 +188,11 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                     <span><?= (int) $afterHoursQueueCount ?></span>
                 </a>
+                <?php $quoteFilterQuery = $currentQuery; $quoteFilterQuery['queue'] = 'quote_pending'; unset($quoteFilterQuery['conversation_id']); ?>
+                <a class="conversation-queue-filter is-quote<?= ($filters['queue'] ?? '') === 'quote_pending' ? ' is-active' : '' ?>" data-quote-pending-count href="<?= View::e(Router::url('/conversations?' . http_build_query($quoteFilterQuery))) ?>" title="Mostrar somente solicitações de orçamento pendentes" <?= $quotePendingQueueCount > 0 ? '' : 'hidden' ?>>
+                    <span class="quote-pending-icon" aria-hidden="true">$</span>
+                    <span><?= (int) $quotePendingQueueCount ?></span>
+                </a>
                 <span class="badge" data-conversation-count><?= count($conversations) ?></span>
                 <?php if ($canManage && $conversations): ?>
                     <button class="btn btn-outline btn-small conversation-select-toggle" type="button" data-toggle-bulk-read aria-expanded="false" aria-controls="conversation-bulk-read-form">
@@ -244,8 +253,10 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                 $afterHoursCount = max(1, (int) ($conversation['after_hours_message_count'] ?? 0));
                 $afterHoursClass = $afterHoursStatusClasses[$afterHoursStatus] ?? 'is-waiting';
                 $afterHoursLabel = $afterHoursStatusLabels[$afterHoursStatus] ?? 'Aguardando horário';
+                $hasQuotePending = (int) ($conversation['commercial_request_id'] ?? 0) > 0;
+                $quoteDueAt = trim((string) ($conversation['commercial_request_due_at'] ?? ''));
                 ?>
-                <div class="conversation-list-row status-<?= View::e($conversationStatus) ?><?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?><?= $afterHoursStatus !== '' ? ' has-after-hours-queue' : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>" data-conversation-public-id="<?= View::e($conversationPublicId) ?>" data-conversation-status="<?= View::e($conversationStatus) ?>" data-after-hours-status="<?= View::e($afterHoursStatus) ?>">
+                <div class="conversation-list-row status-<?= View::e($conversationStatus) ?><?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?><?= $afterHoursStatus !== '' ? ' has-after-hours-queue' : '' ?><?= $hasQuotePending ? ' has-quote-pending' : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>" data-conversation-public-id="<?= View::e($conversationPublicId) ?>" data-conversation-status="<?= View::e($conversationStatus) ?>" data-after-hours-status="<?= View::e($afterHoursStatus) ?>">
                     <?php if ($canManage): ?>
                         <label class="conversation-select-control" title="Selecionar <?= View::e($displayName) ?>">
                             <input type="checkbox" name="conversation_ids[]" value="<?= (int) $conversation['id'] ?>" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de <?= View::e($displayName) ?>">
@@ -268,6 +279,12 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                                 <span class="conversation-queue-state <?= View::e($afterHoursClass) ?>" data-after-hours-list-state>
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                                     <span><strong><?= View::e($afterHoursLabel) ?></strong><small><?= $afterHoursCount ?> <?= $afterHoursCount === 1 ? 'mensagem preservada' : 'mensagens preservadas' ?></small></span>
+                                </span>
+                            <?php endif; ?>
+                            <?php if ($hasQuotePending): ?>
+                                <span class="conversation-queue-state is-quote-pending">
+                                    <span class="quote-pending-icon" aria-hidden="true">$</span>
+                                    <span><strong>Orçamento pendente</strong><small><?= $quoteDueAt !== '' ? 'Retorno até ' . View::e($formatDate($quoteDueAt, 'd/m H:i')) : 'Equipe precisa retornar' ?></small></span>
                                 </span>
                             <?php endif; ?>
                         </span>
@@ -342,7 +359,7 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                 <span class="badge badge-<?= View::e($selectedStatus) ?>" data-conversation-status-badge><?= View::e($statusLabel[$selectedStatus]) ?></span>
                 <span class="mini-badge mode-<?= View::e($selected['attendance_mode']) ?>"><?= View::e($modeLabel[$selected['attendance_mode']] ?? $selected['attendance_mode']) ?></span>
                 <?php if ($selected['assigned_user_name']): ?><small>Responsável: <strong><?= View::e($selected['assigned_user_name']) ?></strong></small><?php endif; ?>
-                <?php if (!empty($professionalAssignmentSettings['enabled'])): ?>
+            <?php if (!empty($professionalAssignmentSettings['enabled'])): ?>
                     <small class="ownership-state <?= !empty($ownershipSnapshot['locked_by_other']) ? 'is-locked' : 'is-available' ?>">
                         <?= !empty($ownershipSnapshot['locked_by_other'])
                             ? 'Atendimento exclusivo em andamento'
@@ -427,6 +444,41 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                     <?php endif; ?>
                 </section>
             <?php endif; ?>
+
+        <?php if ($selectedCommercialRequest && !empty($commercialRequestSettings['enabled']) && !empty($commercialRequestSettings['show_conversation_alert'])): ?>
+        <?php
+            $quoteDueAt = trim((string) ($selectedCommercialRequest['due_at'] ?? ''));
+            $quoteOverdue = $quoteDueAt !== '' && (strtotime($quoteDueAt) ?: PHP_INT_MAX) < time();
+            $quoteLeadId = (int) ($selectedCommercialRequest['lead_id'] ?? 0);
+            ?>
+            <section class="commercial-request-banner<?= $quoteOverdue ? ' is-overdue' : '' ?>">
+                <div class="commercial-request-banner-icon" aria-hidden="true">$</div>
+                <div class="commercial-request-banner-content">
+                    <span class="eyebrow">Solicitação comercial pendente</span>
+                    <h3>O cliente pediu um orçamento</h3>
+                    <p><?= View::e((string) ($selectedCommercialRequest['reason'] ?? 'A conversa indicou solicitação de orçamento ou proposta.')) ?></p>
+                    <div class="commercial-request-banner-meta">
+                        <span><small>Prazo</small><strong><?= View::e($quoteDueAt !== '' ? $formatDate($quoteDueAt, 'd/m H:i') : 'Sem prazo') ?></strong></span>
+                        <span><small>Responsável</small><strong><?= View::e((string) (($selectedCommercialRequest['assigned_name'] ?? '') ?: 'Equipe comercial')) ?></strong></span>
+                        <span><small>Confiança</small><strong><?= (int) round(((float) ($selectedCommercialRequest['confidence'] ?? 0)) * 100) ?>%</strong></span>
+                    </div>
+                    <?php if (!empty($selectedCommercialRequest['excerpt'])): ?><blockquote>“<?= View::e((string) $selectedCommercialRequest['excerpt']) ?>”</blockquote><?php endif; ?>
+                </div>
+                <div class="commercial-request-banner-actions">
+                    <?php if ($quoteLeadId > 0 && Auth::can('crm.view')): ?><a class="btn btn-outline btn-small" href="<?= View::e(Router::url('/crm?lead_id=' . $quoteLeadId)) ?>">Abrir no Comercial</a><?php endif; ?>
+                    <?php if ($canOperateSelected): ?>
+                        <form method="post" action="<?= View::e(Router::url('/conversations/commercial-request/resolve')) ?>">
+                            <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="request_id" value="<?= (int) $selectedCommercialRequest['id'] ?>"><input type="hidden" name="decision" value="resolved">
+                            <button class="btn btn-primary btn-small" type="submit">Marcar orçamento atendido</button>
+                        </form>
+                        <form method="post" action="<?= View::e(Router::url('/conversations/commercial-request/resolve')) ?>" data-confirm="Dispensar este alerta sem marcar o orçamento como atendido?">
+                            <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="request_id" value="<?= (int) $selectedCommercialRequest['id'] ?>"><input type="hidden" name="decision" value="dismissed">
+                            <button class="btn btn-quiet btn-small" type="submit">Dispensar alerta</button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+            </section>
+        <?php endif; ?>
 
             <?php if (!empty($professionalAssignmentSettings['enabled'])): ?>
                 <?php if (!empty($ownershipSnapshot['locked_by_other'])): ?>

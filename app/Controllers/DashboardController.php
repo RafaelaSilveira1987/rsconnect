@@ -8,6 +8,7 @@ use App\Core\Auth;
 use App\Core\Database;
 use App\Core\View;
 use App\Services\AdminExecutiveDashboardService;
+use App\Services\CommercialRequestService;
 use App\Services\NotificationService;
 use PDO;
 
@@ -81,6 +82,7 @@ final class DashboardController
         }
 
         $notificationService = new NotificationService();
+        $pendingQuotes = $tenantId ? (new CommercialRequestService())->pendingCount((int) $tenantId) : 0;
 
         View::render('dashboard.client', [
             'title' => 'Dashboard',
@@ -92,6 +94,7 @@ final class DashboardController
             'notifications' => $tenantId ? $notificationService->latestForTenant((int) $tenantId, 5) : [],
             'notificationUnreadCount' => $tenantId ? $notificationService->unreadCount((int) $tenantId) : 0,
             'agendaIntent' => $agendaIntent,
+            'pendingQuotes' => $pendingQuotes,
         ]);
     }
 

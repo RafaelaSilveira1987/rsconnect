@@ -33,7 +33,7 @@ $checks = [
     'histórico e versão atual preservados' => str_contains($version, 'RS Connect 36.15.1')
         && str_contains($version, 'RS Connect 36.18.0')
         && str_contains($version, 'RS Connect 36.18.6')
-        && str_contains($version, 'Beta Comercial 1.4'),
+        && str_contains($version, 'Beta Comercial 1.5'),
     'cache dos assets renovado' => str_contains($layout, 'app.css?v=36.20.2')
         && str_contains($layout, 'app.js?v=36.20.2'),
 ];

@@ -110,5 +110,6 @@ return [
         ['sequence' => 95, 'file' => '088_payment_reconciliation_schema_compat.sql'],
         ['sequence' => 96, 'file' => '089_schema_migrations_registry.sql'],
         ['sequence' => 97, 'file' => '090_crm_conversation_automation.sql'],
+        ['sequence' => 98, 'file' => '091_after_hours_monitor_and_quote_requests.sql'],
     ],
 ];

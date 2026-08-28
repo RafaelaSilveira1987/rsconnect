@@ -11,6 +11,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use PDO;
+use App\Services\CommercialRequestService;
 
 final class TaskController
 {
@@ -226,6 +227,7 @@ final class TaskController
             Flash::set('error', 'Tarefa não encontrada.');
         } else {
             Audit::log('crm.task_status_updated', ['task_id' => $taskId, 'status' => $status], $tenantId);
+            (new CommercialRequestService())->syncFromTaskStatus($tenantId, $taskId, $status, Auth::id());
             Flash::set('success', $status === 'completed' ? 'Tarefa concluída.' : 'Status da tarefa atualizado.');
         }
 

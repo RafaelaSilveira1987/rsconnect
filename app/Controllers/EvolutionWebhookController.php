@@ -17,6 +17,7 @@ use App\Services\AgentOperatingPolicyService;
 use App\Services\AutomationWebhookService;
 use App\Services\CrmAutoService;
 use App\Services\CommercialAutomationService;
+use App\Services\CommercialRequestService;
 use App\Services\CalendarConversationService;
 use App\Services\ConversationFlowService;
 use App\Services\ConversationOwnershipService;
@@ -435,6 +436,7 @@ final class EvolutionWebhookController
                     ]);
                 }
 
+                $leadId = null;
                 try {
                     $leadId = (new CrmAutoService())->createFromConversation(
                         $pdo,
@@ -443,7 +445,40 @@ final class EvolutionWebhookController
                         $conversationId,
                         $content
                     );
-                    if ($leadId !== null && $leadId > 0) {
+                } catch (Throwable $exception) {
+                    $processingWarnings[] = 'crm_lead';
+                    $this->logWebhookFailure($exception, [
+                        'phase' => 'crm_lead',
+                        'event' => $event,
+                        'instance_id' => (int) ($instance['id'] ?? 0),
+                        'conversation_id' => $conversationId,
+                        'stored_message_id' => $storedMessageId,
+                    ]);
+                }
+
+                try {
+                    (new CommercialRequestService())->processIncoming(
+                        $pdo,
+                        $instance,
+                        $contactId,
+                        $conversationId,
+                        $leadId !== null && $leadId > 0 ? $leadId : null,
+                        $content,
+                        $storedMessageId > 0 ? $storedMessageId : null
+                    );
+                } catch (Throwable $exception) {
+                    $processingWarnings[] = 'commercial_request';
+                    $this->logWebhookFailure($exception, [
+                        'phase' => 'commercial_request',
+                        'event' => $event,
+                        'instance_id' => (int) ($instance['id'] ?? 0),
+                        'conversation_id' => $conversationId,
+                        'stored_message_id' => $storedMessageId,
+                    ]);
+                }
+
+                if ($leadId !== null && $leadId > 0) {
+                    try {
                         (new CommercialAutomationService())->processIncoming(
                             $pdo,
                             $instance,
@@ -452,16 +487,16 @@ final class EvolutionWebhookController
                             $content,
                             $storedMessageId > 0 ? $storedMessageId : null
                         );
+                    } catch (Throwable $exception) {
+                        $processingWarnings[] = 'crm_automation';
+                        $this->logWebhookFailure($exception, [
+                            'phase' => 'crm_automation',
+                            'event' => $event,
+                            'instance_id' => (int) ($instance['id'] ?? 0),
+                            'conversation_id' => $conversationId,
+                            'stored_message_id' => $storedMessageId,
+                        ]);
                     }
-                } catch (Throwable $exception) {
-                    $processingWarnings[] = 'crm';
-                    $this->logWebhookFailure($exception, [
-                        'phase' => 'crm',
-                        'event' => $event,
-                        'instance_id' => (int) ($instance['id'] ?? 0),
-                        'conversation_id' => $conversationId,
-                        'stored_message_id' => $storedMessageId,
-                    ]);
                 }
 
                 try {

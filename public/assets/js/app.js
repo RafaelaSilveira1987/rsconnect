@@ -489,6 +489,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.querySelector('[data-conversation-search]');
   const conversationCount = document.querySelector('[data-conversation-count]');
   const afterHoursQueueCount = document.querySelector('[data-after-hours-queue-count]');
+  const quotePendingQueueCount = document.querySelector('[data-quote-pending-count]');
   let searchTimer = null;
 
   function escapeHtml(value) {
@@ -791,6 +792,18 @@ document.addEventListener('DOMContentLoaded', () => {
     </span>`;
   }
 
+  function quotePendingMarkup(item) {
+    if (!item || !item.quote_pending) return '';
+    return `<span class="conversation-queue-state is-quote-pending" data-quote-pending-list-state>
+      <span class="quote-pending-icon" aria-hidden="true">$</span>
+      <span><strong>Orçamento pendente</strong><small>retorno comercial necessário</small></span>
+    </span>`;
+  }
+
+  function operationalQueueMarkup(item) {
+    return `${afterHoursListMarkup(item?.after_hours)}${quotePendingMarkup(item)}`;
+  }
+
   function renderConversationItem(item) {
     const unread = Number(item.unread_count || 0);
     const selectedClass = item.is_selected ? ' is-selected' : '';
@@ -801,7 +814,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const publicId = String(item.public_id || '');
     const hasAfterHoursQueue = Boolean(item.after_hours && item.after_hours.status);
     const afterHoursStatus = hasAfterHoursQueue ? String(item.after_hours.status) : '';
-    return `<div class="conversation-list-row status-${conversationStatus}${unread > 0 ? ' has-unread' : ''}${hasAfterHoursQueue ? ' has-after-hours-queue' : ''}" data-conversation-row data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}" data-conversation-status="${conversationStatus}" data-after-hours-status="${escapeHtml(afterHoursStatus)}">
+    const hasQuotePending = Boolean(item.quote_pending);
+    return `<div class="conversation-list-row status-${conversationStatus}${unread > 0 ? ' has-unread' : ''}${hasAfterHoursQueue ? ' has-after-hours-queue' : ''}${hasQuotePending ? ' has-quote-pending' : ''}" data-conversation-row data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}" data-conversation-status="${conversationStatus}" data-after-hours-status="${escapeHtml(afterHoursStatus)}">
       <label class="conversation-select-control" title="Selecionar ${escapeHtml(item.name || item.phone || 'conversa')}">
         <input type="checkbox" name="conversation_ids[]" value="${Number(item.id)}" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de ${escapeHtml(item.name || item.phone || 'contato')}">
         <span aria-hidden="true"></span>
@@ -814,7 +828,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <time data-conversation-time>${escapeHtml(item.last_message_label || '')}</time>
           </span>
           <span class="conversation-preview" data-conversation-preview>${escapeHtml(item.preview || 'Sem mensagens')}</span>
-          <span class="conversation-queue-slot" data-after-hours-list-slot>${afterHoursListMarkup(item.after_hours)}</span>
+          <span class="conversation-queue-slot" data-after-hours-list-slot>${operationalQueueMarkup(item)}</span>
           <span class="conversation-meta-row">
             <span class="mini-badge mode-${modeClass}">${escapeHtml(modeLabel)}</span>
             <span class="mini-badge conversation-status-badge status-${conversationStatus}" data-conversation-list-status>${escapeHtml(conversationStatusText(conversationStatus))}</span>
@@ -858,6 +872,7 @@ document.addEventListener('DOMContentLoaded', () => {
       row?.classList.toggle('has-unread', Number(item.unread_count || 0) > 0);
       const hasAfterHoursQueue = Boolean(item.after_hours && item.after_hours.status);
       row?.classList.toggle('has-after-hours-queue', hasAfterHoursQueue);
+      row?.classList.toggle('has-quote-pending', Boolean(item.quote_pending));
       if (row) row.dataset.afterHoursStatus = hasAfterHoursQueue ? String(item.after_hours.status) : '';
       const name = node.querySelector('[data-conversation-name]');
       const time = node.querySelector('[data-conversation-time]');
@@ -869,7 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (name) name.textContent = item.name || item.phone || 'Contato';
       if (time) time.textContent = item.last_message_label || '';
       if (preview) preview.textContent = item.preview || 'Sem mensagens';
-      if (afterHoursSlot) afterHoursSlot.innerHTML = afterHoursListMarkup(item.after_hours);
+      if (afterHoursSlot) afterHoursSlot.innerHTML = operationalQueueMarkup(item);
       updateAvatar(node, item);
       if (modeBadge) {
         const itemMode = ['ai', 'human', 'paused'].includes(item.mode) ? item.mode : 'ai';
@@ -899,6 +914,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const value = afterHoursQueueCount.querySelector('span');
       if (value) value.textContent = String(queueTotal);
       afterHoursQueueCount.hidden = queueTotal < 1;
+    }
+    if (quotePendingQueueCount) {
+      const quoteTotal = conversations.filter((item) => Boolean(item.quote_pending)).length;
+      const values = quotePendingQueueCount.querySelectorAll('span');
+      const value = values.length > 1 ? values[values.length - 1] : values[0];
+      if (value) value.textContent = String(quoteTotal);
+      quotePendingQueueCount.hidden = quoteTotal < 1;
     }
     wireAvatarImages(list);
     observeConversationAvatars(list);

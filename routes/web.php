@@ -109,6 +109,7 @@ return static function (Router $router): void {
     $router->post('/conversations/contact', [ConversationController::class, 'updateContact'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/suggest', [ConversationController::class, 'suggest'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/reprocess-ai', [ConversationController::class, 'reprocessAi'], ['auth', 'permission:conversations.manage', 'csrf']);
+    $router->post('/conversations/commercial-request/resolve', [ConversationController::class, 'resolveCommercialRequest'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/mark-read', [ConversationController::class, 'markRead'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/delete', [ConversationController::class, 'delete'], ['auth', 'permission:conversations.manage', 'csrf']);
 
@@ -122,6 +123,7 @@ return static function (Router $router): void {
     $router->post('/crm/leads/update', [CrmController::class, 'update'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/leads/move', [CrmController::class, 'move'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/automation/settings', [CrmController::class, 'saveAutomationSettings'], ['auth', 'permission:crm.manage', 'csrf']);
+    $router->post('/crm/commercial-requests/settings', [CrmController::class, 'saveCommercialRequestSettings'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/automation/suggestions/review', [CrmController::class, 'reviewAutomationSuggestion'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/automation/lead-lock', [CrmController::class, 'toggleAutomationLock'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/notes', [CrmController::class, 'addNote'], ['auth', 'permission:crm.manage', 'csrf']);
@@ -159,6 +161,8 @@ return static function (Router $router): void {
     $router->get('/operations/ai-reprocess', [OperationsCenterController::class, 'aiReprocess'], ['auth', 'super_admin']);
     $router->post('/operations/ai-reprocess/save', [AiReprocessController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/operations/ai-reprocess/run', [AiReprocessController::class, 'run'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/operations/ai-after-hours/save', [AiReprocessController::class, 'saveAfterHoursMonitor'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/operations/ai-after-hours/run', [AiReprocessController::class, 'runAfterHoursMonitor'], ['auth', 'super_admin', 'csrf']);
     $router->get('/monitoramento', [OperationsCenterController::class, 'monitoring'], ['auth', 'super_admin']);
     $router->post('/operations/checks/run', [OperationsController::class, 'runHealthChecks'], ['auth', 'super_admin', 'csrf']);
     $router->post('/webhooks/operations/checks/run', [OperationsController::class, 'runHealthChecksCron']);
@@ -182,6 +186,8 @@ return static function (Router $router): void {
     $router->post('/webhooks/ai-reprocess/run', [AiReprocessController::class, 'cron']);
     $router->get('/webhooks/ai-reprocess/queue', [AiReprocessController::class, 'queueCron']);
     $router->post('/webhooks/ai-reprocess/queue', [AiReprocessController::class, 'queueCron']);
+    $router->get('/webhooks/ai-after-hours-recovery', [AiReprocessController::class, 'afterHoursCron']);
+    $router->post('/webhooks/ai-after-hours-recovery', [AiReprocessController::class, 'afterHoursCron']);
     $router->post('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);
     $router->post('/webhooks/operations/backups/dispatch', [OperationsController::class, 'runBackupDispatch']);
     $router->get('/webhooks/operations/backups', [OperationsController::class, 'runBackupHook']);
