@@ -26,7 +26,8 @@ $assert(str_contains($calendarConversation, "return \$this->result(false, 'stale
 $assert(str_contains($webhook, 'whatsapp_name_seen_count'), 'Webhook rastreia consistência do nome WhatsApp.');
 $assert(str_contains($webhook, "\$fromMe ? '' : \$pushName"), 'Mensagens fromMe não contaminam nome do contato com o proprietário do WhatsApp.');
 $assert(str_contains($webhook, '$seen >= 2'), 'Um único pushName não é promovido para nome definitivo.');
-$assert(str_contains($webhook, 'whatsapp_name_candidate = :candidate OR (name_source = "whatsapp" AND name = :candidate)'), 'Webhook detecta colisão do mesmo nome entre números.');
+$assert(str_contains($webhook, 'whatsapp_name_candidate = :candidate_observed')
+    && str_contains($webhook, 'name = :candidate_promoted'), 'Webhook detecta colisão do mesmo nome entre números.');
 $assert(str_contains($webhook, "in_array(\$source, ['manual', 'legacy'], true)"), 'Webhook preserva nomes manuais/legados.');
 $assert(str_contains($contactController, "'name_source' => \$name !== '' ? 'manual' : 'unknown'"), 'Cadastro manual marca origem do nome.');
 $assert(str_contains($conversationController, 'name_source = :name_source'), 'Drawer da conversa marca nome editado como manual.');

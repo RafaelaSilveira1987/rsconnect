@@ -1341,14 +1341,18 @@ final class EvolutionWebhookController
              WHERE tenant_id = :tenant_id
                AND id <> :contact_id
                AND phone <> :phone
-               AND (whatsapp_name_candidate = :candidate OR (name_source = "whatsapp" AND name = :candidate))
+               AND (
+                    whatsapp_name_candidate = :candidate_observed
+                    OR (name_source = "whatsapp" AND name = :candidate_promoted)
+               )
              LIMIT 1'
         );
         $collisionStmt->execute([
             'tenant_id' => $tenantId,
             'contact_id' => $contactId,
             'phone' => $phone,
-            'candidate' => $candidate,
+            'candidate_observed' => $candidate,
+            'candidate_promoted' => $candidate,
         ]);
         if ($collisionStmt->fetchColumn()) {
             $pdo->prepare(

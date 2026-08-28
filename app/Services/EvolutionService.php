@@ -52,7 +52,29 @@ final class EvolutionService
             'text' => $message,
         ];
 
-        return $this->request('POST', $endpoint, $payload, 'sendText');
+        $maxAttempts = max(1, min(3, (int) Env::get('EVOLUTION_SEND_ATTEMPTS', 2)));
+        $lastException = null;
+        $recoveryAttempted = false;
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                $result = $this->request('POST', $endpoint, $payload, 'sendText');
+                $result['_delivery_attempts'] = $attempt;
+                $result['_connection_recovery_attempted'] = $recoveryAttempted;
+                return $result;
+            } catch (RuntimeException $exception) {
+                $lastException = $exception;
+                if ($attempt >= $maxAttempts || !$this->isTransientSendFailure($exception->getMessage())) {
+                    throw $exception;
+                }
+
+                $recoveryAttempted = true;
+                $this->recoverConnectionForSend();
+                usleep(750000 * $attempt);
+            }
+        }
+
+        throw $lastException ?? new RuntimeException('Não foi possível enviar a mensagem pela Evolution API.');
     }
 
     /**
@@ -305,6 +327,57 @@ final class EvolutionService
         }
 
         return $digits;
+    }
+
+    private function isTransientSendFailure(string $message): bool
+    {
+        $normalized = mb_strtolower(trim($message));
+
+        return str_contains($normalized, 'connection closed')
+            || str_contains($normalized, 'connection is closed')
+            || str_contains($normalized, 'socket closed')
+            || str_contains($normalized, 'socket hang up')
+            || str_contains($normalized, 'connection reset')
+            || str_contains($normalized, 'not connected')
+            || str_contains($normalized, 'disconnected')
+            || str_contains($normalized, 'sendtext http 500')
+            || str_contains($normalized, 'sendtext http 502')
+            || str_contains($normalized, 'sendtext http 503')
+            || str_contains($normalized, 'sendtext http 504');
+    }
+
+    private function recoverConnectionForSend(): void
+    {
+        $state = '';
+        try {
+            $state = strtolower(trim((string) ($this->connectionState()['state'] ?? '')));
+        } catch (RuntimeException) {
+            // A consulta pode falhar justamente porque a sessão Baileys ficou inconsistente.
+        }
+
+        $connectedStates = ['open', 'connected', 'active', 'online'];
+        if (in_array($state, $connectedStates, true)) {
+            // A Evolution pode manter estado antigo mesmo depois de o socket Baileys fechar.
+            // Reiniciar é seguro neste cenário e evita uma sequência infinita de HTTP 400/500.
+        }
+
+        try {
+            $this->restartInstance();
+        } catch (RuntimeException) {
+            return;
+        }
+
+        for ($poll = 0; $poll < 4; $poll++) {
+            usleep(750000);
+            try {
+                $liveState = strtolower(trim((string) ($this->connectionState()['state'] ?? '')));
+                if (in_array($liveState, $connectedStates, true)) {
+                    return;
+                }
+            } catch (RuntimeException) {
+                // Mantém a tentativa; o envio seguinte produzirá o erro definitivo se não recuperar.
+            }
+        }
     }
 
     private function request(string $method, string $url, ?array $payload = null, string $operation = 'request'): array

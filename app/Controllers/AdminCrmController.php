@@ -528,12 +528,13 @@ final class AdminCrmController
             'INSERT INTO tenant_subscriptions
              (tenant_id, plan_id, billing_cycle, billing_status, starts_at, current_period_starts_at,
               current_period_ends_at, next_billing_at, amount, notes, created_by_user_id)
-             VALUES (:tenant_id, :plan_id, "monthly", "active", :start, :start,
+             VALUES (:tenant_id, :plan_id, "monthly", "active", :starts_at, :period_starts_at,
                      :ends, :next, :amount, :notes, :user_id)'
         )->execute([
             'tenant_id' => $tenantId,
             'plan_id' => $plan['id'],
-            'start' => $start,
+            'starts_at' => $start,
+            'period_starts_at' => $start,
             'ends' => date('Y-m-d', strtotime('+1 month -1 day')),
             'next' => date('Y-m-d', strtotime('+1 month')),
             'amount' => $plan['monthly_price'] ?? 0,

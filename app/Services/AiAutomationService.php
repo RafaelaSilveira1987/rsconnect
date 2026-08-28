@@ -190,6 +190,7 @@ final class AiAutomationService
         $generationAgent = null;
         $efficiencyTelemetry = [];
         $aiRoute = null;
+        $reply = null;
 
         // Defesa adicional contra eco de mensagens enviadas pela própria Evolution.
         // Mesmo que outro chamador encaminhe SEND_MESSAGE ou fromMe=true por engano,
@@ -400,6 +401,39 @@ final class AiAutomationService
                     ]
                 );
                 return;
+            }
+
+            // Se a IA já gerou uma resposta e apenas a Evolution falhou, reaproveita
+            // exatamente a saída preservada. Isso evita gastar tokens de novo e mantém
+            // a conversa coerente depois que o WhatsApp for reconectado.
+            if ($storedMessageId > 0) {
+                $failedDelivery = $this->failedAutomatedMessageAfterIncoming($pdo, $conversationId, $storedMessageId);
+                if ($failedDelivery !== null) {
+                    $failurePhase = 'evolution.retry';
+                    $retryResult = $this->retryFailedAutomatedMessage(
+                        $pdo,
+                        $instance,
+                        $conversation,
+                        $conversationId,
+                        $failedDelivery
+                    );
+                    $this->log(
+                        (int) $instance['tenant_id'],
+                        $conversationId,
+                        (int) $agent['id'],
+                        'ai.delivery.retried',
+                        'success',
+                        null,
+                        (string) ($failedDelivery['content'] ?? ''),
+                        [
+                            'failed_message_id' => (int) ($failedDelivery['id'] ?? 0),
+                            'http_status' => $retryResult['status'] ?? null,
+                            'external_id' => $this->extractMessageId($retryResult['body'] ?? []),
+                            'provider_call_avoided' => true,
+                        ]
+                    );
+                    return;
+                }
             }
 
             if ($this->shouldHandoff($incomingContent, (string) ($agent['handoff_keywords'] ?? ''))) {
@@ -746,11 +780,18 @@ final class AiAutomationService
                 return;
             }
 
+            $evolutionFailure = str_starts_with($failurePhase, 'evolution.');
+            if ($evolutionFailure && $pdo instanceof PDO && $this->isClosedEvolutionConnectionError($exception->getMessage())) {
+                $this->updateEvolutionConnectionState($pdo, (int) ($instance['id'] ?? 0), 'closed');
+            }
+
             $this->log($tenantId, $conversationId, $agentId, 'ai.failed', 'error', $exception->getMessage(), null, [
                 'payload_event' => $payload['event'] ?? null,
                 'failure_phase' => $failurePhase,
                 'instance_id' => (int) ($instance['id'] ?? 0),
                 'instance_name' => (string) ($instance['instance_name'] ?? ''),
+                'pending_reprocess' => $evolutionFailure,
+                'generated_reply_preserved' => $evolutionFailure && is_string($reply) && trim($reply) !== '',
             ]);
 
             (new NotificationService())->createIfEnabled(
@@ -1594,6 +1635,16 @@ final class AiAutomationService
             if (!str_starts_with($message, 'Evolution ')) {
                 $message = 'Evolution sendText: ' . $message;
             }
+            $this->storeFailedAutomatedMessage(
+                $pdo,
+                (int) ($instance['tenant_id'] ?? 0),
+                $conversationId,
+                $reply,
+                $message
+            );
+            if ($this->isClosedEvolutionConnectionError($message)) {
+                $this->updateEvolutionConnectionState($pdo, (int) ($instance['id'] ?? 0), 'closed');
+            }
             throw new RuntimeException($message, 0, $exception);
         }
         $externalId = $this->extractMessageId($result['body'] ?? []);
@@ -1637,6 +1688,178 @@ final class AiAutomationService
         return $result;
     }
 
+    /** @return array<string,mixed>|null */
+    private function failedAutomatedMessageAfterIncoming(PDO $pdo, int $conversationId, int $incomingMessageId): ?array
+    {
+        try {
+            $statement = $pdo->prepare(
+                'SELECT failed.id, failed.content, failed.sent_at, failed.error_message
+                 FROM conversation_messages incoming
+                 INNER JOIN conversation_messages failed
+                    ON failed.conversation_id = incoming.conversation_id
+                   AND failed.direction = "outgoing"
+                   AND failed.sender_type = "ai"
+                   AND failed.status = "failed"
+                   AND (
+                        failed.sent_at > incoming.sent_at
+                        OR (failed.sent_at = incoming.sent_at AND failed.id > incoming.id)
+                   )
+                 WHERE incoming.id = :incoming_message_id
+                   AND incoming.conversation_id = :conversation_id
+                   AND incoming.direction = "incoming"
+                 ORDER BY failed.id DESC
+                 LIMIT 1'
+            );
+            $statement->execute([
+                'incoming_message_id' => $incomingMessageId,
+                'conversation_id' => $conversationId,
+            ]);
+            $row = $statement->fetch(PDO::FETCH_ASSOC);
+            return is_array($row) && trim((string) ($row['content'] ?? '')) !== '' ? $row : null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /** @param array<string,mixed> $failedMessage */
+    private function retryFailedAutomatedMessage(PDO $pdo, array $instance, array $conversation, int $conversationId, array $failedMessage): array
+    {
+        $phone = preg_replace('/\D+/', '', (string) ($conversation['phone'] ?? '')) ?: '';
+        if (strlen($phone) < 10 || strlen($phone) > 15) {
+            throw new RuntimeException('Evolution sendText bloqueado: telefone do contato inválido ou incompleto.');
+        }
+
+        try {
+            $result = $this->evolutionService($instance)->sendText($phone, (string) $failedMessage['content']);
+        } catch (Throwable $exception) {
+            $message = $exception->getMessage();
+            if (!str_starts_with($message, 'Evolution ')) {
+                $message = 'Evolution sendText: ' . $message;
+            }
+            $pdo->prepare(
+                'UPDATE conversation_messages
+                 SET error_message = :error_message,
+                     raw_payload_json = :raw_payload
+                 WHERE id = :id AND conversation_id = :conversation_id AND status = "failed"'
+            )->execute([
+                'error_message' => mb_substr($message, 0, 500),
+                'raw_payload' => json_encode(['error' => $message, 'retry_failed_at' => \App\Core\Clock::nowUtc()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'id' => (int) $failedMessage['id'],
+                'conversation_id' => $conversationId,
+            ]);
+            if ($this->isClosedEvolutionConnectionError($message)) {
+                $this->updateEvolutionConnectionState($pdo, (int) ($instance['id'] ?? 0), 'closed');
+            }
+            throw new RuntimeException($message, 0, $exception);
+        }
+
+        $externalId = $this->extractMessageId($result['body'] ?? []);
+        $sentAt = \App\Core\Clock::nowUtc();
+        $pdo->beginTransaction();
+        $pdo->prepare(
+            'UPDATE conversation_messages
+             SET evolution_message_id = :external_id,
+                 status = "sent",
+                 error_message = NULL,
+                 raw_payload_json = :raw_payload,
+                 sent_at = :sent_at
+             WHERE id = :id AND conversation_id = :conversation_id AND status = "failed"'
+        )->execute([
+            'external_id' => $externalId,
+            'raw_payload' => json_encode($result['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'sent_at' => $sentAt,
+            'id' => (int) $failedMessage['id'],
+            'conversation_id' => $conversationId,
+        ]);
+        $pdo->prepare(
+            'UPDATE conversations
+             SET last_message_at = :sent_at,
+                 last_message_preview = :preview,
+                 status = IF(status = "closed", "open", status)
+             WHERE id = :id'
+        )->execute([
+            'sent_at' => $sentAt,
+            'preview' => mb_substr((string) $failedMessage['content'], 0, 255),
+            'id' => $conversationId,
+        ]);
+        $this->insertEvent($pdo, (int) $instance['tenant_id'], $conversationId, 'ai.delivery.retried', 'Resposta já gerada pela IA foi reenviada após a reconexão do WhatsApp.');
+        $pdo->commit();
+
+        $result['_stored_message_id'] = (int) $failedMessage['id'];
+        return $result;
+    }
+
+    private function storeFailedAutomatedMessage(PDO $pdo, int $tenantId, int $conversationId, string $reply, string $error): int
+    {
+        try {
+            $incomingMessageId = (int) ($this->currentIncomingMessageId ?? 0);
+            $existingSql = 'SELECT id
+                 FROM conversation_messages
+                 WHERE tenant_id = :tenant_id
+                   AND conversation_id = :conversation_id
+                   AND direction = "outgoing"
+                   AND sender_type = "ai"
+                   AND status = "failed"
+                   AND content = :content';
+            $existingParams = [
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'content' => $reply,
+            ];
+            if ($incomingMessageId > 0) {
+                $existingSql .= ' AND id > :incoming_message_id';
+                $existingParams['incoming_message_id'] = $incomingMessageId;
+            }
+            $existing = $pdo->prepare($existingSql . ' ORDER BY id DESC LIMIT 1');
+            $existing->execute($existingParams);
+            $existingId = (int) ($existing->fetchColumn() ?: 0);
+            if ($existingId > 0) {
+                $pdo->prepare(
+                    'UPDATE conversation_messages
+                     SET error_message = :error_message,
+                         raw_payload_json = :raw_payload
+                     WHERE id = :id'
+                )->execute([
+                    'error_message' => mb_substr($error, 0, 500),
+                    'raw_payload' => json_encode(['error' => $error, 'failed_at' => \App\Core\Clock::nowUtc()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'id' => $existingId,
+                ]);
+                return $existingId;
+            }
+
+            $insert = $pdo->prepare(
+                'INSERT INTO conversation_messages
+                    (tenant_id, conversation_id, evolution_message_id, direction, sender_type,
+                     message_type, content, status, error_message, raw_payload_json, sent_at)
+                 VALUES
+                    (:tenant_id, :conversation_id, NULL, "outgoing", "ai",
+                     "text", :content, "failed", :error_message, :raw_payload, :sent_at)'
+            );
+            $insert->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'content' => $reply,
+                'error_message' => mb_substr($error, 0, 500),
+                'raw_payload' => json_encode(['error' => $error, 'failed_at' => \App\Core\Clock::nowUtc()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'sent_at' => \App\Core\Clock::nowUtc(),
+            ]);
+            return (int) $pdo->lastInsertId();
+        } catch (Throwable) {
+            return 0;
+        }
+    }
+
+    private function isClosedEvolutionConnectionError(string $message): bool
+    {
+        $normalized = mb_strtolower(trim($message));
+        return str_contains($normalized, 'connection closed')
+            || str_contains($normalized, 'connection is closed')
+            || str_contains($normalized, 'socket closed')
+            || str_contains($normalized, 'socket hang up')
+            || str_contains($normalized, 'not connected')
+            || str_contains($normalized, 'disconnected');
+    }
+
     private function updateEvolutionConnectionState(PDO $pdo, int $instanceId, string $state): void
     {
         if ($instanceId < 1) {
@@ -1650,13 +1873,14 @@ final class AiAutomationService
                  SET connection_state = :connection_state,
                      last_status_check_at = NOW(),
                      status = :status,
-                     connected_at = CASE WHEN :is_connected = 1 THEN COALESCE(connected_at, NOW()) ELSE connected_at END,
-                     disconnected_at = CASE WHEN :is_connected = 0 THEN NOW() ELSE disconnected_at END
+                     connected_at = CASE WHEN :mark_connected = 1 THEN COALESCE(connected_at, NOW()) ELSE connected_at END,
+                     disconnected_at = CASE WHEN :mark_disconnected = 1 THEN NOW() ELSE disconnected_at END
                  WHERE id = :id'
             )->execute([
                 'connection_state' => $state !== '' ? $state : 'unknown',
                 'status' => $connected ? 'connected' : 'disconnected',
-                'is_connected' => $connected ? 1 : 0,
+                'mark_connected' => $connected ? 1 : 0,
+                'mark_disconnected' => $connected ? 0 : 1,
                 'id' => $instanceId,
             ]);
         } catch (Throwable) {
@@ -1789,6 +2013,9 @@ final class AiAutomationService
     {
         $normalized = mb_strtolower($error);
 
+        if (str_contains($normalized, 'evolution') || str_contains($normalized, 'sendtext') || str_contains($normalized, 'connection closed')) {
+            return 'A resposta foi gerada, mas o WhatsApp perdeu a conexão. Reinicie ou reconecte a instância e depois use Reprocessar com IA; a resposta pendente será reaproveitada sem nova cobrança de tokens.';
+        }
         if (str_contains($normalized, '401') || str_contains($normalized, 'invalid api key') || str_contains($normalized, 'chave')) {
             return 'A chave de acesso da IA parece inválida ou expirou. Revise a credencial do assistente para voltar a responder.';
         }

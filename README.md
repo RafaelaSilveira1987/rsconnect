@@ -1,3 +1,13 @@
+# RS Connect — v36.22.1
+
+## Hotfix de recebimento Evolution/PDO
+
+- corrige o HTTP 500 `SQLSTATE[HY093]: Invalid parameter number` no webhook da Evolution;
+- permite que eventos `contacts.upsert`, `contacts.update` e `messages.upsert` sejam processados e salvos;
+- remove reutilização de placeholders nomeados incompatível com PDO nativo;
+- inclui proteção de regressão para outras consultas estáticas;
+- não adiciona migration.
+
 # RS Connect — v36.22.0
 
 ## Monitor pós-horário e orçamentos pendentes
