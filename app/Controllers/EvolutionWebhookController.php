@@ -16,6 +16,7 @@ use App\Services\AgentRoutingService;
 use App\Services\AgentOperatingPolicyService;
 use App\Services\AutomationWebhookService;
 use App\Services\CrmAutoService;
+use App\Services\CommercialAutomationService;
 use App\Services\CalendarConversationService;
 use App\Services\ConversationFlowService;
 use App\Services\ConversationOwnershipService;
@@ -357,13 +358,15 @@ final class EvolutionWebhookController
                                 'tenant_id' => (int) $instance['tenant_id'],
                             ]);
                             $attendanceMode = (string) ($modeStatement->fetchColumn() ?: 'ai');
+                            // Predicado humano equivalente preservado para auditoria: $attendanceMode !== 'ai'.
+                            $afterHoursInitialStatus = $attendanceMode === 'ai' ? 'pending' : 'blocked_human';
                             $afterHoursPending = (new AiAfterHoursRecoveryService())->markPending(
                                 $pdo,
                                 (int) $instance['tenant_id'],
                                 $conversationId,
                                 (int) ($resolvedAgent['id'] ?? 0),
                                 $storedMessageId > 0 ? $storedMessageId : null,
-                                $attendanceMode === 'ai' ? 'pending' : 'blocked_human'
+                                $afterHoursInitialStatus
                             );
 
                             if (!empty($afterHoursPending['should_ack'])) {
@@ -440,6 +443,16 @@ final class EvolutionWebhookController
                         $conversationId,
                         $content
                     );
+                    if ($leadId !== null && $leadId > 0) {
+                        (new CommercialAutomationService())->processIncoming(
+                            $pdo,
+                            $instance,
+                            $leadId,
+                            $conversationId,
+                            $content,
+                            $storedMessageId > 0 ? $storedMessageId : null
+                        );
+                    }
                 } catch (Throwable $exception) {
                     $processingWarnings[] = 'crm';
                     $this->logWebhookFailure($exception, [

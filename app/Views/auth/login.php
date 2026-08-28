@@ -110,6 +110,10 @@ $showPoweredBy = !empty($branding['show_powered_by']);
             </label>
 
             <button class="login-submit" type="submit"><?= View::e($loginButtonText) ?></button>
+            <button class="login-demo-trigger" type="button" data-login-demo-open aria-haspopup="dialog" aria-expanded="false">
+                <span class="login-demo-trigger-icon" aria-hidden="true">✦</span>
+                Testar a IA em uma demonstração
+            </button>
 
             <p class="login-security">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5 19 6v5.4c0 4.4-2.9 7.7-7 9.1-4.1-1.4-7-4.7-7-9.1V6l7-2.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -118,6 +122,56 @@ $showPoweredBy = !empty($branding['show_powered_by']);
         </form>
     </section>
 </div>
+<div class="login-demo-modal" data-login-demo-modal hidden>
+    <button class="login-demo-backdrop" type="button" data-login-demo-close aria-label="Fechar demonstração"></button>
+    <section class="login-demo-dialog" role="dialog" aria-modal="true" aria-labelledby="login-demo-title">
+        <header class="login-demo-dialog-header">
+            <div>
+                <span class="eyebrow">Experiência interativa</span>
+                <h2 id="login-demo-title">Veja a IA atendendo e qualificando um lead</h2>
+                <p>Escolha as respostas dentro do celular e acompanhe a oportunidade avançando no comercial.</p>
+            </div>
+            <button class="login-demo-close" type="button" data-login-demo-close aria-label="Fechar">×</button>
+        </header>
+
+        <div class="login-demo-experience">
+            <div class="demo-phone" aria-label="Simulação de conversa no WhatsApp">
+                <div class="demo-phone-speaker" aria-hidden="true"></div>
+                <header class="demo-chat-header">
+                    <span class="demo-chat-avatar">RS</span>
+                    <div><strong>Assistente RS Connect</strong><small><i></i> online agora</small></div>
+                </header>
+                <div class="demo-chat-body" data-demo-messages aria-live="polite"></div>
+                <div class="demo-chat-options" data-demo-options></div>
+                <footer class="demo-chat-footer"><span>Digite uma mensagem...</span><button type="button" aria-label="Enviar" disabled>➤</button></footer>
+            </div>
+
+            <aside class="demo-commercial-card">
+                <div class="demo-commercial-heading">
+                    <span class="demo-commercial-icon" aria-hidden="true">↗</span>
+                    <div><small>Automação comercial</small><strong>Oportunidade acompanhada</strong></div>
+                </div>
+                <div class="demo-lead-card">
+                    <span class="demo-lead-badge">Lead da demonstração</span>
+                    <h3>Empresa interessada em automação</h3>
+                    <p>Origem: demonstração da IA</p>
+                    <div class="demo-stage-row"><span>Etapa atual</span><strong data-demo-stage-label>Novo lead</strong></div>
+                    <div class="demo-stage-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="16"><span data-demo-stage-progress style="width:16%"></span></div>
+                    <p class="demo-stage-reason" data-demo-stage-reason>A conversa acabou de começar.</p>
+                </div>
+                <div class="demo-feature-list">
+                    <span><i>✓</i> Atendimento automático</span>
+                    <span><i>✓</i> Identificação de intenção</span>
+                    <span><i>✓</i> Sugestão ou movimentação do card</span>
+                    <span><i>✓</i> Transferência com contexto</span>
+                </div>
+                <button class="btn btn-secondary demo-restart" type="button" data-demo-restart>Reiniciar demonstração</button>
+            </aside>
+        </div>
+    </section>
+</div>
+<script src="<?= View::e(Router::url('/assets/js/login-demo.js?v=36.21.0')) ?>" defer></script>
+
 <script>
 (() => {
     const button = document.querySelector('.login-password-toggle');

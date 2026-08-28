@@ -1,3 +1,12 @@
+# RS Connect — v36.21.0
+
+## Novidades
+
+- Demonstração interativa da IA diretamente na tela de login.
+- Automação comercial opcional baseada na conversa do lead.
+- Modos de sugestão e movimentação automática, com confiança mínima e histórico.
+- Bloqueio por card e pausa de segurança após movimentações manuais.
+
 # RS Connect — v36.20.16
 
 ## ENT-027 / PA-005 — Normalização das migrations

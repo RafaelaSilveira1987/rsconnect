@@ -98,9 +98,12 @@ final class MigrationService
         )) {
             throw new RuntimeException('O marcador do baseline em database/schema.sql não corresponde ao manifesto.');
         }
-        $lastEntry = $entries[array_key_last($entries)] ?? null;
-        if (!is_array($lastEntry) || (string) ($lastEntry['file'] ?? '') !== self::REGISTRY_FILE) {
-            throw new RuntimeException('A migration de registro precisa ser a última entrada do manifesto atual.');
+        $registryEntries = array_values(array_filter(
+            $entries,
+            static fn (array $entry): bool => (string) ($entry['file'] ?? '') === self::REGISTRY_FILE
+        ));
+        if (count($registryEntries) !== 1) {
+            throw new RuntimeException('A migration de registro precisa existir uma única vez no manifesto.');
         }
         foreach ([$snapshot, $bootstrapSeed, $seed] as $relative) {
             $path = $this->root . '/' . ltrim($relative, '/');

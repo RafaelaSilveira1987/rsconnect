@@ -10,6 +10,7 @@ use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\CommercialAutomationService;
 use PDO;
 use Throwable;
 
@@ -37,6 +38,11 @@ final class CrmController
         $selected = null;
         $notes = [];
         $selectedTasks = [];
+        $automationService = new CommercialAutomationService();
+        $automationSettings = $automationService->settings($tenantId);
+        $automationSuggestions = [];
+        $automationHistory = [];
+        $selectedAutomationState = ['locked' => false, 'snoozed_until' => null];
 
         $filters = [
             'tenant_id' => $tenantId,
@@ -97,6 +103,10 @@ final class CrmController
                 );
                 $leadStatement->execute($params);
                 $leads = $leadStatement->fetchAll(PDO::FETCH_ASSOC);
+                $automationSuggestions = $automationService->pendingSuggestions(
+                    $tenantId,
+                    array_map(static fn (array $lead): int => (int) $lead['id'], $leads)
+                );
             }
 
             $contactStatement = $pdo->prepare(
@@ -150,6 +160,8 @@ final class CrmController
                     );
                     $taskStatement->execute(['lead_id' => $leadId, 'tenant_id' => $tenantId]);
                     $selectedTasks = $taskStatement->fetchAll(PDO::FETCH_ASSOC);
+                    $automationHistory = $automationService->historyForLead($tenantId, $leadId, 30);
+                    $selectedAutomationState = $automationService->leadState($tenantId, $leadId);
                 }
             }
         }
@@ -166,6 +178,10 @@ final class CrmController
             'selected' => $selected,
             'notes' => $notes,
             'selectedTasks' => $selectedTasks,
+            'automationSettings' => $automationSettings,
+            'automationSuggestions' => $automationSuggestions,
+            'automationHistory' => $automationHistory,
+            'selectedAutomationState' => $selectedAutomationState,
             'filters' => $filters,
             'canManage' => Auth::can('crm.manage'),
             'canManageTasks' => Auth::can('tasks.manage'),
@@ -309,6 +325,7 @@ final class CrmController
             'id' => $leadId,
             'tenant_id' => $tenantId,
         ]);
+        (new CommercialAutomationService())->snoozeAfterManualMove($tenantId, $leadId, 6);
         Audit::log('crm.lead_moved', [
             'lead_id' => $leadId,
             'stage_id' => $stageId,
@@ -327,6 +344,83 @@ final class CrmController
         }
         Flash::set('success', 'Negócio movido para ' . ($stage['name'] ?? 'a nova etapa') . '.');
         $lead['stage_id'] = $stageId;
+        $this->redirect($this->leadUrl($lead));
+    }
+
+    public function saveAutomationSettings(): void
+    {
+        $tenantId = $this->resolveTenantFromPost();
+        if ($tenantId < 1) {
+            Flash::set('error', 'Empresa inválida.');
+            $this->redirect('/crm');
+        }
+
+        try {
+            (new CommercialAutomationService())->saveSettings($tenantId, $_POST, Auth::id());
+            Audit::log('crm.automation_settings_updated', [
+                'enabled' => !empty($_POST['enabled']),
+                'mode' => (string) ($_POST['mode'] ?? 'suggest'),
+                'classifier_engine' => (string) ($_POST['classifier_engine'] ?? 'smart_rules'),
+            ], $tenantId);
+            Flash::set('success', !empty($_POST['enabled'])
+                ? 'Automação comercial ativada e configurada.'
+                : 'Automação comercial desativada. O funil continua disponível para uso manual.');
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+        }
+
+        $pipelineId = (int) ($_POST['pipeline_id'] ?? 0);
+        $this->redirect('/crm?tenant_id=' . $tenantId . ($pipelineId > 0 ? '&pipeline_id=' . $pipelineId : ''));
+    }
+
+    public function reviewAutomationSuggestion(): void
+    {
+        $tenantId = $this->resolveTenantFromPost();
+        $eventId = (int) ($_POST['event_id'] ?? 0);
+        $decision = (string) ($_POST['decision'] ?? 'reject');
+        if (!in_array($decision, ['approve', 'reject'], true)) {
+            $decision = 'reject';
+        }
+
+        try {
+            $result = (new CommercialAutomationService())->reviewSuggestion($tenantId, $eventId, $decision, (int) Auth::id());
+            Audit::log('crm.automation_suggestion_reviewed', [
+                'event_id' => $eventId,
+                'decision' => $decision,
+                'lead_id' => (int) ($result['lead_id'] ?? 0),
+            ], $tenantId);
+            Flash::set('success', $decision === 'approve'
+                ? 'Sugestão aprovada e negócio movido.'
+                : 'Sugestão ignorada. Nenhuma etapa foi alterada.');
+            $this->redirect('/crm?tenant_id=' . $tenantId
+                . '&pipeline_id=' . (int) ($result['pipeline_id'] ?? 0)
+                . '&lead_id=' . (int) ($result['lead_id'] ?? 0));
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+            $this->redirect('/crm?tenant_id=' . $tenantId);
+        }
+    }
+
+    public function toggleAutomationLock(): void
+    {
+        $tenantId = $this->resolveTenantFromPost();
+        $leadId = (int) ($_POST['lead_id'] ?? 0);
+        $locked = !empty($_POST['locked']);
+        $lead = $this->findLead($leadId, $tenantId);
+        if (!$lead) {
+            Flash::set('error', 'Negócio não encontrado.');
+            $this->redirect('/crm');
+        }
+
+        try {
+            (new CommercialAutomationService())->setLeadLock($tenantId, $leadId, $locked);
+            Audit::log('crm.automation_lead_lock_changed', ['lead_id' => $leadId, 'locked' => $locked], $tenantId);
+            Flash::set('success', $locked
+                ? 'Automação bloqueada para este negócio.'
+                : 'Automação liberada para este negócio.');
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+        }
         $this->redirect($this->leadUrl($lead));
     }
 

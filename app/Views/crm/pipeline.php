@@ -21,6 +21,15 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
     'owner_id' => (int) ($filters['owner_id'] ?? 0),
     'lead_id' => $selected['id'] ?? 0,
 ], static fn ($value) => $value !== '' && $value !== 0));
+$automationSettings = is_array($automationSettings ?? null) ? $automationSettings : [];
+$automationSuggestions = is_array($automationSuggestions ?? null) ? $automationSuggestions : [];
+$automationHistory = is_array($automationHistory ?? null) ? $automationHistory : [];
+$selectedAutomationState = is_array($selectedAutomationState ?? null) ? $selectedAutomationState : ['locked' => false, 'snoozed_until' => null];
+$automationActionLabels = [
+    'suggested' => 'Sugestão criada', 'moved' => 'Movido automaticamente', 'approved' => 'Sugestão aprovada',
+    'rejected' => 'Sugestão ignorada', 'blocked' => 'Movimentação bloqueada', 'manual' => 'Movimentação manual',
+    'error' => 'Falha na automação', 'kept' => 'Etapa mantida',
+];
 ?>
 
 <div class="page-heading">
@@ -51,6 +60,65 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
         </details>
     <?php endif; ?>
 </div>
+
+<?php if (($filters['tenant_id'] ?? 0) > 0): ?>
+<section class="card crm-automation-panel<?= !empty($automationSettings['enabled']) ? ' is-enabled' : '' ?>">
+    <div class="crm-automation-summary">
+        <div class="crm-automation-title">
+            <span class="crm-automation-symbol" aria-hidden="true">✦</span>
+            <div>
+                <span class="eyebrow">Recurso opcional</span>
+                <h3>Automação do Comercial</h3>
+                <p><?= !empty($automationSettings['enabled'])
+                    ? 'A conversa dos leads está sendo analisada para sugerir ou movimentar etapas.'
+                    : 'Ative apenas quando desejar usar a conversa para organizar automaticamente o funil.' ?></p>
+            </div>
+        </div>
+        <span class="crm-automation-status<?= !empty($automationSettings['enabled']) ? ' is-on' : '' ?>">
+            <?= !empty($automationSettings['enabled']) ? 'Ativada' : 'Desativada' ?>
+        </span>
+    </div>
+
+    <?php if (empty($automationSettings['ready'])): ?>
+        <div class="inline-warning">Execute a migration <strong>090_crm_conversation_automation.sql</strong> para liberar esta configuração.</div>
+    <?php elseif ($canManage): ?>
+        <details class="crm-automation-config" <?= !empty($automationSettings['enabled']) ? 'open' : '' ?>>
+            <summary>Configurar automação</summary>
+            <form class="form-stack" method="post" action="<?= View::e(Router::url('/crm/automation/settings')) ?>">
+                <?= Csrf::input() ?>
+                <input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>">
+                <div class="crm-automation-toggle-row">
+                    <label class="switch-field">
+                        <input type="checkbox" name="enabled" value="1" <?= !empty($automationSettings['enabled']) ? 'checked' : '' ?>>
+                        <span class="switch-control" aria-hidden="true"></span>
+                        <span><strong>Ativar para esta empresa</strong><small>Desativada, nenhuma conversa altera ou sugere etapas.</small></span>
+                    </label>
+                </div>
+                <div class="form-grid two">
+                    <label class="field"><span>Comportamento</span><select name="mode">
+                        <option value="suggest" <?= ($automationSettings['mode'] ?? 'suggest') === 'suggest' ? 'selected' : '' ?>>Apenas sugerir movimentações</option>
+                        <option value="automatic" <?= ($automationSettings['mode'] ?? '') === 'automatic' ? 'selected' : '' ?>>Movimentar automaticamente</option>
+                    </select><small>O modo sugestão exige aprovação humana antes de mover o card.</small></label>
+                    <label class="field"><span>Tipo de análise</span><select name="classifier_engine">
+                        <option value="smart_rules" <?= ($automationSettings['classifier_engine'] ?? 'smart_rules') === 'smart_rules' ? 'selected' : '' ?>>Análise inteligente econômica</option>
+                        <option value="ai_context" <?= ($automationSettings['classifier_engine'] ?? '') === 'ai_context' ? 'selected' : '' ?>>IA contextual da conversa</option>
+                    </select><small>A IA contextual usa a credencial do assistente e pode gerar consumo adicional.</small></label>
+                </div>
+                <div class="form-grid two">
+                    <label class="field"><span>Confiança mínima</span><div class="confidence-input"><input type="number" name="confidence_threshold" min="60" max="99" step="1" value="<?= (int) round(((float) ($automationSettings['confidence_threshold'] ?? .85)) * 100) ?>"><strong>%</strong></div><small>Movimentações abaixo desse valor ficam apenas como sugestão.</small></label>
+                    <label class="field"><span>Funil monitorado</span><select name="pipeline_id"><option value="">Funil atual/padrão</option><?php foreach ($pipelines as $pipeline): ?><option value="<?= (int) $pipeline['id'] ?>" <?= (int) ($automationSettings['pipeline_id'] ?? 0) === (int) $pipeline['id'] ? 'selected' : '' ?>><?= View::e($pipeline['name']) ?></option><?php endforeach; ?></select></label>
+                </div>
+                <div class="crm-automation-checks">
+                    <label><input type="checkbox" name="allow_backward_movement" value="1" <?= !empty($automationSettings['allow_backward_movement']) ? 'checked' : '' ?>> Permitir retornar cards para etapas anteriores</label>
+                    <label><input type="checkbox" name="notify_on_action" value="1" <?= !array_key_exists('notify_on_action', $automationSettings) || !empty($automationSettings['notify_on_action']) ? 'checked' : '' ?>> Notificar quando houver sugestão ou movimentação</label>
+                </div>
+                <div class="crm-automation-note">Movimentações manuais pausam a automação do negócio por 6 horas, evitando que o card volte imediatamente.</div>
+                <button class="btn btn-primary" type="submit">Salvar automação comercial</button>
+            </form>
+        </details>
+    <?php endif; ?>
+</section>
+<?php endif; ?>
 
 <div class="metric-grid metric-grid-compact">
     <article class="metric-card" data-crm-metric="open_count"><span>Negócios abertos</span><strong data-crm-metric-value><?= (int) ($metrics['open_count'] ?? 0) ?></strong><small>oportunidades em andamento</small></article>
@@ -97,6 +165,8 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
                                 <a class="deal-main" href="<?= View::e(Router::url($leadUrl)) ?>">
                                     <span class="priority-marker priority-<?= View::e($lead['priority']) ?>"></span>
                                     <strong><?= View::e($lead['title']) ?></strong>
+                                    <?php $suggestion = $automationSuggestions[(int) $lead['id']] ?? null; ?>
+                                    <?php if ($suggestion): ?><span class="deal-automation-suggestion">✦ Sugestão: <?= View::e($suggestion['target_stage_name'] ?? 'nova etapa') ?> · <?= (int) round(((float) ($suggestion['confidence'] ?? 0)) * 100) ?>%</span><?php endif; ?>
                                     <span class="deal-contact"><?= View::e($lead['contact_name'] ?: $lead['phone']) ?></span>
                                     <span class="deal-value"><?= View::e($money($lead['value'])) ?></span>
                                     <footer><span><?= View::e($lead['owner_name'] ?: 'Sem responsável') ?></span><?php if ((int) $lead['pending_tasks'] > 0): ?><span class="pending-tasks"><?= (int) $lead['pending_tasks'] ?> tarefa(s)</span><?php endif; ?></footer>
@@ -129,6 +199,7 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
             <button type="button" class="is-active" data-tab-target="overview">Resumo</button>
             <button type="button" data-tab-target="notes">Notas <span><?= count($notes) ?></span></button>
             <button type="button" data-tab-target="tasks">Atividades <span><?= count($selectedTasks) ?></span></button>
+            <button type="button" data-tab-target="automation">Automação <span><?= count($automationHistory) ?></span></button>
         </div>
 
         <section data-tab-panel="overview">
@@ -163,6 +234,54 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
                 <?php foreach ($selectedTasks as $task): ?><article class="task-mini <?= $task['status'] === 'completed' ? 'is-completed' : '' ?>"><div><span class="activity-icon activity-<?= View::e($task['task_type']) ?>" aria-hidden="true"></span><span><strong><?= View::e($task['title']) ?></strong><small><?= View::e($typeLabels[$task['task_type']] ?? $task['task_type']) ?> · <?= View::e($task['assigned_name'] ?: 'Sem responsável') ?> · <?= View::e($date($task['due_at'], 'd/m H:i')) ?></small></span></div><?php if ($canManageTasks && $task['status'] === 'pending'): ?><form method="post" action="<?= View::e(Router::url('/tasks/status')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="task_id" value="<?= (int) $task['id'] ?>"><input type="hidden" name="status" value="completed"><input type="hidden" name="return_to" value="<?= View::e($currentUrl) ?>"><button class="btn-icon-check" type="submit" title="Concluir"><span class="checkmark-icon" aria-hidden="true"></span></button></form><?php endif; ?></article><?php endforeach; ?>
                 <?php if (!$selectedTasks): ?><div class="empty-state">Nenhuma atividade vinculada.</div><?php endif; ?>
             </div>
+        </section>
+
+        <section data-tab-panel="automation" hidden>
+            <?php if (empty($automationSettings['ready'])): ?>
+                <div class="empty-state">Execute a migration 090 para ativar o histórico da automação.</div>
+            <?php else: ?>
+                <div class="lead-automation-control">
+                    <div>
+                        <strong>Automação neste negócio</strong>
+                        <p><?= !empty($selectedAutomationState['locked']) ? 'Bloqueada manualmente.' : 'Liberada para analisar novas mensagens.' ?></p>
+                        <?php if (!empty($selectedAutomationState['snoozed_until'])): ?><small>Pausada após movimentação manual até <?= View::e($date($selectedAutomationState['snoozed_until'], 'd/m/Y H:i')) ?>.</small><?php endif; ?>
+                    </div>
+                    <?php if ($canManage): ?><form method="post" action="<?= View::e(Router::url('/crm/automation/lead-lock')) ?>">
+                        <?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="lead_id" value="<?= (int) $selected['id'] ?>">
+                        <input type="hidden" name="locked" value="<?= !empty($selectedAutomationState['locked']) ? '0' : '1' ?>">
+                        <button class="btn <?= !empty($selectedAutomationState['locked']) ? 'btn-primary' : 'btn-secondary' ?> btn-small" type="submit"><?= !empty($selectedAutomationState['locked']) ? 'Liberar automação' : 'Bloquear neste card' ?></button>
+                    </form><?php endif; ?>
+                </div>
+
+                <?php $pendingSelected = $automationSuggestions[(int) $selected['id']] ?? null; ?>
+                <?php if ($pendingSelected): ?>
+                    <article class="automation-suggestion-card">
+                        <div class="automation-suggestion-head"><span>✦ Sugestão pendente</span><strong><?= (int) round(((float) ($pendingSelected['confidence'] ?? 0)) * 100) ?>% de confiança</strong></div>
+                        <h3>Mover para <?= View::e($pendingSelected['target_stage_name'] ?? 'nova etapa') ?></h3>
+                        <p><?= View::e($pendingSelected['reason'] ?? '') ?></p>
+                        <?php if (!empty($pendingSelected['excerpt'])): ?><blockquote>“<?= View::e($pendingSelected['excerpt']) ?>”</blockquote><?php endif; ?>
+                        <?php if ($canManage): ?><div class="automation-suggestion-actions">
+                            <form method="post" action="<?= View::e(Router::url('/crm/automation/suggestions/review')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="event_id" value="<?= (int) $pendingSelected['id'] ?>"><input type="hidden" name="decision" value="approve"><button class="btn btn-primary btn-small" type="submit">Aprovar e mover</button></form>
+                            <form method="post" action="<?= View::e(Router::url('/crm/automation/suggestions/review')) ?>"><?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>"><input type="hidden" name="event_id" value="<?= (int) $pendingSelected['id'] ?>"><input type="hidden" name="decision" value="reject"><button class="btn btn-secondary btn-small" type="submit">Ignorar sugestão</button></form>
+                        </div><?php endif; ?>
+                    </article>
+                <?php endif; ?>
+
+                <div class="automation-history">
+                    <div class="section-heading compact"><div><span class="eyebrow">Auditoria</span><h3>Histórico da automação</h3></div></div>
+                    <?php foreach ($automationHistory as $event): ?>
+                        <article class="automation-history-item is-<?= View::e($event['action'] ?? 'kept') ?>">
+                            <span class="automation-history-dot"></span>
+                            <div>
+                                <div><strong><?= View::e($automationActionLabels[$event['action']] ?? $event['action']) ?></strong><time><?= View::e($date($event['created_at'] ?? null, 'd/m/Y H:i')) ?></time></div>
+                                <?php if (!empty($event['target_stage_name'])): ?><small><?= View::e($event['previous_stage_name'] ?: 'Etapa anterior') ?> → <?= View::e($event['target_stage_name']) ?><?php if ($event['confidence'] !== null): ?> · <?= (int) round(((float) $event['confidence']) * 100) ?>%<?php endif; ?></small><?php endif; ?>
+                                <p><?= View::e($event['reason'] ?? '') ?></p>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                    <?php if (!$automationHistory): ?><div class="empty-state">Nenhuma análise comercial registrada para este negócio.</div><?php endif; ?>
+                </div>
+            <?php endif; ?>
         </section>
     </aside>
     <?php endif; ?>

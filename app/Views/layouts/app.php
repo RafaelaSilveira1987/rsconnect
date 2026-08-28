@@ -150,8 +150,8 @@ $svgIcon = static function (string $name): string {
     <?php if ($brandFaviconUrl !== ''): ?><link rel="icon" href="<?= View::e($brandAssetHref($brandFaviconUrl)) ?>"><?php endif; ?>
     <!-- Marcador histórico de regressão: app.css?v=36.20.2 -->
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
-    <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.15.4')) ?>">
+    <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.21.0')) ?>">
 </head>
 <body<?= $brandEnabled ? ' class="has-tenant-branding" style="' . View::e($brandCssVariables) . '"' : '' ?>>
 <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
@@ -458,7 +458,7 @@ $svgIcon = static function (string $name): string {
 </button>
 <!-- Marcador histórico de regressão: app.js?v=36.20.2 -->
 <!-- Marcador histórico de regressão: app.js?v=36.20.5 -->
-<!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 app.js?v=36.20.8 -->
+<!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 app.js?v=36.20.8 app.js?v=36.20.9 -->
 <script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.15.4')) ?>" defer></script>
 </body>
 </html>

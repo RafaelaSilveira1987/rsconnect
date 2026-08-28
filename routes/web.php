@@ -121,6 +121,9 @@ return static function (Router $router): void {
     $router->post('/crm/leads', [CrmController::class, 'store'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/leads/update', [CrmController::class, 'update'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/leads/move', [CrmController::class, 'move'], ['auth', 'permission:crm.manage', 'csrf']);
+    $router->post('/crm/automation/settings', [CrmController::class, 'saveAutomationSettings'], ['auth', 'permission:crm.manage', 'csrf']);
+    $router->post('/crm/automation/suggestions/review', [CrmController::class, 'reviewAutomationSuggestion'], ['auth', 'permission:crm.manage', 'csrf']);
+    $router->post('/crm/automation/lead-lock', [CrmController::class, 'toggleAutomationLock'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/notes', [CrmController::class, 'addNote'], ['auth', 'permission:crm.manage', 'csrf']);
     $router->post('/crm/admin/opportunities', [AdminCrmController::class, 'store'], ['auth', 'super_admin', 'csrf']);
     $router->post('/crm/admin/opportunities/update', [AdminCrmController::class, 'update'], ['auth', 'super_admin', 'csrf']);

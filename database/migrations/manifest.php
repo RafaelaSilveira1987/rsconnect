@@ -109,5 +109,6 @@ return [
         ['sequence' => 94, 'file' => '087_webhook_security_events.sql'],
         ['sequence' => 95, 'file' => '088_payment_reconciliation_schema_compat.sql'],
         ['sequence' => 96, 'file' => '089_schema_migrations_registry.sql'],
+        ['sequence' => 97, 'file' => '090_crm_conversation_automation.sql'],
     ],
 ];
