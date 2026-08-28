@@ -56,9 +56,10 @@ final class AppVersionService
     // RS Connect 36.20.15.4 — layout proporcional e aplicação real do White Label no painel e login do cliente.
     // RS Connect 36.20.16 — manifesto canônico, registro schema_migrations e executor seguro.
     // RS Connect 36.21.0 — demonstração interativa da IA e automação opcional do funil por conversa.
+    // RS Connect 36.21.1 — hotfix do executor de migrations para drenar resultados de PREPARE/EXECUTE.
     // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql, 085_ai_commercial_attention_queue.sql, 086_plan_ai_mode_and_commitment.sql, 087_webhook_security_events.sql, 088_payment_reconciliation_schema_compat.sql, 089_schema_migrations_registry.sql e 090_crm_conversation_automation.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.4';
-    public const PACKAGE_LABEL = 'RS Connect 36.21.0 — demonstração da IA e automação comercial por conversa';
+    public const PACKAGE_LABEL = 'RS Connect 36.21.1 — hotfix seguro do executor de migrations';
     public const REQUIRED_MIGRATION = '090_crm_conversation_automation.sql';
 
     private PDO $pdo;

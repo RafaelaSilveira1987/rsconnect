@@ -378,7 +378,18 @@ final class MigrationService
                 continue;
             }
             try {
-                $this->db()->exec($statement);
+                $cursor = $this->db()->query($statement);
+                if ($cursor !== false) {
+                    try {
+                        do {
+                            if ($cursor->columnCount() > 0) {
+                                $cursor->fetchAll();
+                            }
+                        } while ($cursor->nextRowset());
+                    } finally {
+                        $cursor->closeCursor();
+                    }
+                }
             } catch (Throwable $exception) {
                 throw new RuntimeException(
                     sprintf('Falha em %s, instrução %d. Revise o banco antes de repetir.', $label, $position + 1),

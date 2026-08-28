@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS crm_automation_events (
 SET @sql = (
     SELECT IF(COUNT(*) = 0,
         'ALTER TABLE crm_leads ADD COLUMN automation_locked TINYINT(1) NOT NULL DEFAULT 0 AFTER closed_at',
-        'SELECT 1'
+        'DO 0'
     )
     FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'crm_leads' AND COLUMN_NAME = 'automation_locked'
@@ -67,7 +67,7 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql = (
     SELECT IF(COUNT(*) = 0,
         'ALTER TABLE crm_leads ADD COLUMN automation_snoozed_until DATETIME NULL AFTER automation_locked',
-        'SELECT 1'
+        'DO 0'
     )
     FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'crm_leads' AND COLUMN_NAME = 'automation_snoozed_until'
@@ -77,7 +77,7 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql = (
     SELECT IF(COUNT(*) = 0,
         'ALTER TABLE crm_leads ADD KEY idx_crm_leads_automation (tenant_id, automation_locked, automation_snoozed_until)',
-        'SELECT 1'
+        'DO 0'
     )
     FROM information_schema.STATISTICS
     WHERE TABLE_SCHEMA = @database_name AND TABLE_NAME = 'crm_leads' AND INDEX_NAME = 'idx_crm_leads_automation'

@@ -1,3 +1,22 @@
+# RS Connect — v36.21.1
+
+## Hotfix do executor de migrations
+
+- corrige o erro MySQL `2014 Cannot execute queries while other unbuffered queries are active`;
+- consome e fecha todos os resultados produzidos por `PREPARE/EXECUTE`;
+- substitui os no-ops `SELECT 1` da migration 090 por `DO 0`;
+- permite reaplicar com segurança a migration 090 caso a tentativa anterior tenha criado parcialmente as tabelas ou colunas;
+- não exige novo baseline e não altera migrations históricas já registradas.
+
+Para atualizar um banco que mostra a migration 090 como pendente:
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php status
+php bin/migrate.php up
+php bin/migrate.php status
+```
+
 # RS Connect — v36.21.0
 
 ## Novidades
