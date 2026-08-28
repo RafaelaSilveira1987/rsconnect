@@ -1,4 +1,15 @@
-# RS Connect — v36.20.15.3
+# RS Connect — v36.20.15.4
+
+## Hotfix White Label — painel, login e layout proporcional
+
+- aplica a marca salva no painel autenticado do cliente;
+- aplica logo, cores, textos e favicon no login identificado por tenant;
+- corrige a prévia desproporcional;
+- limita e centraliza a tela administrativa;
+- preserva as proteções XSS, SVG, CSP, uploads persistentes e autoload;
+- não adiciona migration.
+
+## Histórico consolidado
 
 ## Hotfix de inicialização do autoload e Router
 

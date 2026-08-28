@@ -3,20 +3,41 @@
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\BrandingService;
+
+$branding = is_array($branding ?? null) ? $branding : BrandingService::forCurrentRequest();
+$brandEnabled = !empty($branding['enabled']);
+$brandName = (string) ($branding['app_name'] ?? 'RS Connect');
+$brandSubtitle = (string) ($branding['subtitle'] ?? 'Atendimento e CRM');
+$brandLogoUrl = (string) ($branding['logo_url'] ?? '');
+$brandIconUrl = (string) ($branding['icon_url'] ?? '');
+$brandAssetHref = static fn (string $url): string => preg_match('~^https://~i', $url) === 1 ? $url : Router::url($url);
+$brandMainImage = $brandLogoUrl !== '' ? $brandAssetHref($brandLogoUrl) : Router::url('/assets/img/rs-connect-mark.png');
+$brandCompactImage = ($brandIconUrl ?: $brandLogoUrl) !== '' ? $brandAssetHref($brandIconUrl ?: $brandLogoUrl) : Router::url('/assets/img/rs-connect-mark.png');
+$loginEyebrow = $brandEnabled ? (string) ($branding['login_eyebrow'] ?? $brandSubtitle) : 'Plataforma de atendimento inteligente';
+$loginTitle = $brandEnabled ? (string) ($branding['login_title'] ?? ('Acesse o painel da ' . $brandName)) : 'Atendimento, CRM e automação em um só lugar.';
+$loginSubtitle = $brandEnabled ? (string) ($branding['login_subtitle'] ?? '') : '';
+$loginButtonText = $brandEnabled ? (string) ($branding['login_button_text'] ?? 'Acessar painel') : 'Entrar no RS Connect';
+$loginSecurityText = (string) ($branding['login_security_text'] ?? 'Ambiente seguro para administradores, equipes e clientes.');
+$benefits = $brandEnabled ? array_values((array) ($branding['login_benefits'] ?? [])) : ['WhatsApp integrado', 'Assistentes virtuais', 'Agenda e CRM'];
+$benefits = array_pad(array_slice($benefits, 0, 3), 3, 'Operação integrada');
+$footerText = trim((string) ($branding['footer_text'] ?? ''));
+$showPoweredBy = !empty($branding['show_powered_by']);
 ?>
 <div class="login-grid login-grid-clean">
-    <section class="login-showcase" aria-label="Apresentação do RS Connect">
+    <section class="login-showcase" aria-label="Apresentação de <?= View::e($brandName) ?>">
         <div class="login-brand login-brand-main">
-            <img src="<?= View::e(Router::url('/assets/img/rs-connect-mark.png')) ?>" alt="RS Connect">
+            <img src="<?= View::e($brandMainImage) ?>" alt="<?= View::e($brandName) ?>">
             <div class="login-brand-copy">
-                <strong>CONNECT</strong>
+                <strong><?= View::e($brandEnabled ? $brandName : 'CONNECT') ?></strong>
                 <span aria-hidden="true"></span>
             </div>
         </div>
 
         <div class="login-showcase-content">
-            <p class="login-kicker">Plataforma de atendimento inteligente</p>
-            <h1>Atendimento, CRM e automação em um só lugar.</h1>
+            <p class="login-kicker"><?= View::e($loginEyebrow) ?></p>
+            <h1><?= View::e($loginTitle) ?></h1>
+            <?php if ($loginSubtitle !== ''): ?><p class="login-custom-subtitle"><?= View::e($loginSubtitle) ?></p><?php endif; ?>
             <div class="login-title-line" aria-hidden="true"></div>
 
             <div class="login-benefits">
@@ -24,28 +45,28 @@ use App\Core\View;
                     <span class="login-benefit-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" fill="none"><path d="M7.5 4.5h9a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3h-5.1L7 20v-3.5a3 3 0 0 1-2.5-3v-6a3 3 0 0 1 3-3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.5 9.3c.7 2 2.2 3.4 4.1 4.1.5.2 1-.1 1.2-.5l.4-.8c.2-.4.6-.6 1-.4l1.2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                     </span>
-                    <div><strong>WhatsApp integrado</strong><small>Converse, automatize e acompanhe.</small></div>
+                    <div><strong><?= View::e((string) $benefits[0]) ?></strong><small>Recursos organizados para sua operação.</small></div>
                 </article>
 
                 <article class="login-benefit">
                     <span class="login-benefit-icon is-purple" aria-hidden="true">
                         <svg viewBox="0 0 24 24" fill="none"><path d="M9 4.7A3.2 3.2 0 0 0 4.8 8a3 3 0 0 0 .4 5.7A3.2 3.2 0 0 0 9 18.9V4.7Zm6 0A3.2 3.2 0 0 1 19.2 8a3 3 0 0 1-.4 5.7A3.2 3.2 0 0 1 15 18.9V4.7Z" stroke="currentColor" stroke-width="1.8"/><path d="M9 8.5H7.5M9 13H6.8M15 8.5h1.5M15 13h2.2M9 11h6M12 7v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
                     </span>
-                    <div><strong>Assistentes virtuais</strong><small>Mais produtividade e respostas inteligentes.</small></div>
+                    <div><strong><?= View::e((string) $benefits[1]) ?></strong><small>Mais produtividade para sua equipe.</small></div>
                 </article>
 
                 <article class="login-benefit">
                     <span class="login-benefit-icon is-indigo" aria-hidden="true">
                         <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5.5" width="16" height="14" rx="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 3.8v3.4M16 3.8v3.4M4 9.5h16M8 13h3M13 13h3M8 16h3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
                     </span>
-                    <div><strong>Agenda e CRM</strong><small>Organize sua operação e acompanhe tudo.</small></div>
+                    <div><strong><?= View::e((string) $benefits[2]) ?></strong><small>Acompanhe tudo em um único ambiente.</small></div>
                 </article>
             </div>
         </div>
 
         <footer class="login-creator">
-            <span class="login-creator-mark">RS</span>
-            <span>Criado por <strong>RS Digital Lab</strong></span>
+            <span class="login-creator-mark"><?= View::e(mb_strtoupper(mb_substr($brandName, 0, 2))) ?></span>
+            <span><?= View::e($footerText !== '' ? $footerText : $brandName) ?><?php if ($showPoweredBy): ?> · <strong>Powered by RS Connect</strong><?php endif; ?></span>
         </footer>
     </section>
 
@@ -54,14 +75,14 @@ use App\Core\View;
             <?= Csrf::input() ?>
 
             <div class="login-card-brand">
-                <img src="<?= View::e(Router::url('/assets/img/rs-connect-mark.png')) ?>" alt="">
-                <strong>CONNECT</strong>
+                <img src="<?= View::e($brandCompactImage) ?>" alt="">
+                <strong><?= View::e($brandEnabled ? $brandName : 'CONNECT') ?></strong>
                 <span aria-hidden="true"></span>
             </div>
 
             <header class="login-card-header">
                 <h2>Entrar no painel</h2>
-                <p>Acesse sua operação com segurança.</p>
+                <p><?= View::e($brandEnabled ? ('Acesse o ambiente da ' . $brandName . '.') : 'Acesse sua operação com segurança.') ?></p>
             </header>
 
             <label class="login-field">
@@ -88,11 +109,11 @@ use App\Core\View;
                 <span>Lembrar de mim</span>
             </label>
 
-            <button class="login-submit" type="submit">Entrar no RS Connect</button>
+            <button class="login-submit" type="submit"><?= View::e($loginButtonText) ?></button>
 
             <p class="login-security">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5 19 6v5.4c0 4.4-2.9 7.7-7 9.1-4.1-1.4-7-4.7-7-9.1V6l7-2.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Ambiente seguro para administradores, equipes e clientes.
+                <?= View::e($loginSecurityText) ?>
             </p>
         </form>
     </section>

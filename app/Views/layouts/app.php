@@ -14,9 +14,25 @@ use App\Services\OperationalLanguageService;
 use App\Services\TenantModuleService;
 use App\Services\ClientCommunicationService;
 use App\Services\PageHelpService;
+use App\Services\BrandingService;
 
 $user = Auth::user();
 $flashes = Flash::all();
+$branding = Auth::isSuperAdmin() ? BrandingService::defaults() : BrandingService::forCurrentRequest();
+$brandEnabled = !Auth::isSuperAdmin() && !empty($branding['enabled']);
+$brandName = $brandEnabled ? (string) ($branding['app_name'] ?? 'RS Connect') : 'RS Connect';
+$brandSubtitle = $brandEnabled ? (string) ($branding['subtitle'] ?? 'Atendimento e CRM') : 'Atendimento e Comercial';
+$brandIconText = $brandEnabled ? (string) ($branding['icon_text'] ?? 'RS') : 'RS';
+$brandLogoUrl = $brandEnabled ? (string) ($branding['logo_url'] ?? '') : '';
+$brandIconUrl = $brandEnabled ? (string) ($branding['icon_url'] ?? '') : '';
+$brandFaviconUrl = $brandEnabled ? (string) ($branding['favicon_url'] ?? '') : '';
+$brandPrimary = $brandEnabled ? (string) ($branding['primary'] ?? '#146498') : '#146498';
+$brandSecondary = $brandEnabled ? (string) ($branding['secondary'] ?? '#631b7c') : '#631b7c';
+$brandAccent = $brandEnabled ? (string) ($branding['accent'] ?? '#01c5b6') : '#01c5b6';
+$brandFooterText = $brandEnabled ? trim((string) ($branding['footer_text'] ?? '')) : '';
+$brandShowPoweredBy = $brandEnabled && !empty($branding['show_powered_by']);
+$brandCssVariables = '--rs-blue:' . $brandPrimary . ';--rs-purple:' . $brandSecondary . ';--rs-cyan:' . $brandAccent . ';--rs-teal:' . $brandAccent . ';';
+$brandAssetHref = static fn (string $url): string => preg_match('~^https://~i', $url) === 1 ? $url : Router::url($url);
 $currentPath = rtrim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', '/');
 $isActive = static function (string $path) use ($currentPath): string {
     if ($path === '/') {
@@ -129,21 +145,26 @@ $svgIcon = static function (string $name): string {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f7f9fc">
-    <title><?= View::e($title ?? 'RS Connect') ?> — RS Connect</title>
+    <meta name="theme-color" content="<?= View::e($brandPrimary) ?>">
+    <title><?= View::e($title ?? $brandName) ?> — <?= View::e($brandName) ?></title>
+    <?php if ($brandFaviconUrl !== ''): ?><link rel="icon" href="<?= View::e($brandAssetHref($brandFaviconUrl)) ?>"><?php endif; ?>
     <!-- Marcador histórico de regressão: app.css?v=36.20.2 -->
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.11')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.20.15.4')) ?>">
 </head>
-<body>
+<body<?= $brandEnabled ? ' class="has-tenant-branding" style="' . View::e($brandCssVariables) . '"' : '' ?>>
 <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
 <div class="sr-only" aria-live="polite" aria-atomic="true" data-app-live-region></div>
 <div class="app-shell">
     <aside class="sidebar" id="sidebar">
-        <a class="brand" href="<?= View::e(Router::url('/')) ?>">
-            <span class="brand-mark">RS</span>
-            <span><strong>RS Connect</strong><small>Atendimento e Comercial</small></span>
+        <a class="brand<?= $brandEnabled ? ' is-custom-brand' : '' ?>" href="<?= View::e(Router::url('/')) ?>">
+            <?php if (($brandIconUrl ?: $brandLogoUrl) !== ''): ?>
+                <span class="brand-mark brand-mark-image"><img src="<?= View::e($brandAssetHref($brandIconUrl ?: $brandLogoUrl)) ?>" alt="<?= View::e($brandName) ?>"></span>
+            <?php else: ?>
+                <span class="brand-mark"><?= View::e($brandIconText) ?></span>
+            <?php endif; ?>
+            <span><strong><?= View::e($brandName) ?></strong><small><?= View::e($brandSubtitle) ?></small></span>
         </a>
 
         <nav class="sidebar-nav" aria-label="Navegação principal">
@@ -270,7 +291,7 @@ $svgIcon = static function (string $name): string {
         <header class="topbar topbar-v36181">
             <a class="topbar-home" href="<?= View::e(Router::url('/')) ?>" aria-label="Ir para o início"><?= $svgIcon('dashboard') ?></a>
             <div class="topbar-title-block">
-                <span class="eyebrow"><?= Auth::isSuperAdmin() ? 'Operação RS' : View::e($user['tenant_name'] ?? 'Cliente') ?></span>
+                <span class="eyebrow"><?= Auth::isSuperAdmin() ? 'Operação RS' : View::e($brandEnabled ? $brandName : ($user['tenant_name'] ?? 'Cliente')) ?></span>
                 <h1><?= View::e($title ?? 'RS Connect') ?></h1>
             </div>
             <div class="topbar-module-search" data-module-search>
@@ -324,6 +345,12 @@ $svgIcon = static function (string $name): string {
         <?php endif; ?>
 
         <section class="page-content"><?= $content ?></section>
+        <?php if ($brandEnabled && ($brandFooterText !== '' || $brandShowPoweredBy)): ?>
+            <footer class="tenant-brand-footer">
+                <span><?= View::e($brandFooterText !== '' ? $brandFooterText : $brandName) ?></span>
+                <?php if ($brandShowPoweredBy): ?><small>Powered by RS Connect</small><?php endif; ?>
+            </footer>
+        <?php endif; ?>
     </main>
 </div>
 <div class="context-help-backdrop" data-context-help-backdrop hidden></div>
@@ -432,6 +459,6 @@ $svgIcon = static function (string $name): string {
 <!-- Marcador histórico de regressão: app.js?v=36.20.2 -->
 <!-- Marcador histórico de regressão: app.js?v=36.20.5 -->
 <!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 app.js?v=36.20.8 -->
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.15')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.15.4')) ?>" defer></script>
 </body>
 </html>

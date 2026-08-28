@@ -23,7 +23,7 @@ $previewFaviconUrl = BrandingService::assetUrl((string) ($selected['brand_favico
 $logoVariant = $raw('brand_logo_variant', 'horizontal');
 $logoBackground = $raw('brand_logo_background', 'light');
 ?>
-<section class="hero-card compact-hero hero-admin">
+<section class="hero-card compact-hero hero-admin white-label-hero">
     <div>
         <span class="eyebrow light">Identidade visual por empresa</span>
         <h2>White label profissional para o painel do cliente</h2>
