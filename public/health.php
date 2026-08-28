@@ -2,20 +2,11 @@
 
 declare(strict_types=1);
 
-require dirname(__DIR__) . '/bootstrap.php';
+http_response_code(200);
+header('Content-Type: application/json; charset=UTF-8');
+header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+header('X-Robots-Tag: noindex, nofollow');
+header_remove('X-Powered-By');
 
-use App\Core\Database;
-
-header('Content-Type: text/plain; charset=UTF-8');
-
-echo "app: ok\n";
-
-try {
-    $pdo = Database::connection();
-    echo "database: ok\n";
-    echo "database_name: " . $pdo->query('SELECT DATABASE()')->fetchColumn() . "\n";
-} catch (Throwable $exception) {
-    http_response_code(500);
-    echo "database: error\n";
-    echo $exception->getMessage() . "\n";
-}
+echo '{"status":"ok"}';

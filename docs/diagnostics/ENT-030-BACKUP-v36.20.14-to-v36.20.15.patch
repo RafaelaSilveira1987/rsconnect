@@ -1,0 +1,1518 @@
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/INSTRUCOES-v36.20.15.md rsconnect_ent030_work/INSTRUCOES-v36.20.15.md
+--- /tmp/base030/INSTRUCOES-v36.20.15.md	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent030_work/INSTRUCOES-v36.20.15.md	2026-08-28 12:25:17.680864373 +0000
+@@ -0,0 +1,51 @@
++# RS Connect v36.20.15 — ENT-030 / PA-004
++
++## Proteção contra XSS, SVG e CSP
++
++Esta entrega bloqueia SVG e formatos ativos nos uploads de identidade visual, endurece a pasta pública de uploads e substitui JavaScript inline por uma política CSP baseada em nonce.
++
++## Publicação
++
++1. Faça backup da aplicação, do banco, do `.env`, de `storage` e dos volumes.
++2. Extraia a nova versão em uma pasta limpa.
++3. Preserve o `.env` e os arquivos persistentes.
++4. Faça rebuild/redeploy para atualizar o Apache e limpar o OPcache.
++5. Não execute migration nova.
++
++A migration vigente continua sendo:
++
++```text
++database/migrations/088_payment_reconciliation_schema_compat.sql
++```
++
++## Auditoria dos uploads existentes
++
++Antes ou logo após o deploy, execute:
++
++```bash
++php bin/audit-public-uploads.php
++```
++
++Resultado esperado:
++
++```text
++[OK] Nenhum arquivo público inseguro foi encontrado.
++```
++
++Caso o comando liste SVG, HTML, JavaScript, PHP ou arquivos com conteúdo incompatível, remova-os da pasta pública ou converta as imagens para PNG, JPEG ou WEBP.
++
++## Homologação
++
++1. Acesse o login e confirme que a tela carrega normalmente.
++2. Entre no painel e teste menu, busca, gavetas e confirmações.
++3. Acesse **White label**.
++4. Envie uma imagem PNG, JPG ou WEBP válida.
++5. Tente enviar um SVG e confirme a rejeição.
++6. Confira no navegador o header `Content-Security-Policy`.
++7. Confirme que `script-src` contém nonce e não contém `unsafe-inline`.
++8. Teste relatórios, gráficos, impressão e atualização de páginas.
++9. Teste reiniciar/desconectar instância, excluir agenda e outros formulários com confirmação.
++
++## Observação sobre estilos
++
++Os scripts inline foram eliminados da política. Alguns estilos dinâmicos usados em gráficos, barras de progresso e cores de departamentos continuam autorizados apenas pela diretiva específica `style-src-attr 'unsafe-inline'`, evitando quebra visual enquanto a modularização completa de CSS não é executada.
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/README.md rsconnect_ent030_work/README.md
+--- /tmp/base030/README.md	2026-08-28 11:45:03.000000000 +0000
++++ rsconnect_ent030_work/README.md	2026-08-28 12:25:18.913669126 +0000
+@@ -1,4 +1,16 @@
+-# RS Connect — v36.20.14
++# RS Connect — v36.20.15
++
++## ENT-030 — proteção contra XSS, SVG e CSP
++
++- uploads white label limitados a PNG, JPEG e WEBP;
++- SVG, ICO, HTML, JavaScript e executáveis bloqueados em `public/uploads`;
++- CSP com nonce e sem `unsafe-inline` em `script-src`;
++- handlers JavaScript inline removidos das views;
++- proteção adicional em inserções dinâmicas de HTML;
++- auditoria dos uploads públicos disponível por CLI;
++- endpoint legado de saúde reduzido a `{"status":"ok"}`.
++
++Não há migration nova. A última migration obrigatória permanece `088_payment_reconciliation_schema_compat.sql`.
+ 
+ ## ENT-029 / PA-003 — Health checks seguros
+ 
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Controllers/WhiteLabelController.php rsconnect_ent030_work/app/Controllers/WhiteLabelController.php
+--- /tmp/base030/app/Controllers/WhiteLabelController.php	2026-08-26 22:42:06.000000000 +0000
++++ rsconnect_ent030_work/app/Controllers/WhiteLabelController.php	2026-08-28 12:18:58.384928591 +0000
+@@ -125,8 +125,8 @@
+         }
+ 
+         foreach ([$brandLogoUrl, $brandIconUrl, $brandFaviconUrl] as $url) {
+-            if ($url !== '' && !str_starts_with($url, '/uploads/') && !filter_var($url, FILTER_VALIDATE_URL)) {
+-                Flash::set('error', 'Informe URLs completas para imagens ou envie arquivos locais.');
++            if (!$this->isSafeBrandAssetUrl($url)) {
++                Flash::set('error', 'Use uma imagem PNG, JPG ou WEBP por HTTPS, ou envie o arquivo diretamente. SVG, ICO e URLs ativas não são permitidos.');
+                 $this->redirect('/white-label?tenant_id=' . $tenantId);
+             }
+         }
+@@ -240,23 +240,31 @@
+         }
+ 
+         $tmpName = (string) ($file['tmp_name'] ?? '');
+-        $mime = '';
+-        if ($tmpName !== '' && is_file($tmpName)) {
+-            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+-            $mime = (string) $finfo->file($tmpName);
++        if ($tmpName === '' || !is_uploaded_file($tmpName)) {
++            throw new \RuntimeException('O arquivo enviado não pôde ser validado.');
+         }
+ 
++        $finfo = new \finfo(FILEINFO_MIME_TYPE);
++        $mime = strtolower((string) $finfo->file($tmpName));
+         $extensions = [
+             'image/png' => 'png',
+             'image/jpeg' => 'jpg',
+             'image/webp' => 'webp',
+-            'image/svg+xml' => 'svg',
+-            'image/x-icon' => 'ico',
+-            'image/vnd.microsoft.icon' => 'ico',
+         ];
+ 
+         if (!isset($extensions[$mime])) {
+-            throw new \RuntimeException('Envie uma imagem PNG, JPG, WEBP, SVG ou ICO.');
++            throw new \RuntimeException('Envie somente uma imagem PNG, JPG ou WEBP. Arquivos SVG e ICO não são aceitos por segurança.');
++        }
++
++        $imageInfo = @getimagesize($tmpName);
++        if (!is_array($imageInfo) || (string) ($imageInfo['mime'] ?? '') !== $mime) {
++            throw new \RuntimeException('O conteúdo do arquivo não corresponde a uma imagem válida.');
++        }
++
++        $width = (int) ($imageInfo[0] ?? 0);
++        $height = (int) ($imageInfo[1] ?? 0);
++        if ($width < 1 || $height < 1 || $width > 4096 || $height > 4096 || ($width * $height) > 16000000) {
++            throw new \RuntimeException('A imagem deve ter dimensões válidas de até 4096 × 4096 pixels.');
+         }
+ 
+         $publicPath = dirname(__DIR__, 2) . '/public';
+@@ -271,10 +279,40 @@
+         if (!move_uploaded_file($tmpName, $destination)) {
+             throw new \RuntimeException('Não foi possível salvar a imagem enviada.');
+         }
++        @chmod($destination, 0644);
+ 
+         return '/uploads/white-label/tenant-' . $tenantId . '/' . $filename;
+     }
+ 
++    private function isSafeBrandAssetUrl(string $url): bool
++    {
++        $url = trim($url);
++        if ($url === '') {
++            return true;
++        }
++
++        if (preg_match('/^(?:javascript|data|file|vbscript):/i', $url) === 1) {
++            return false;
++        }
++
++        if (str_starts_with($url, '/uploads/')) {
++            $path = strtolower((string) parse_url($url, PHP_URL_PATH));
++            return preg_match('/\.(?:png|jpe?g|webp)$/', $path) === 1;
++        }
++
++        if (!filter_var($url, FILTER_VALIDATE_URL)) {
++            return false;
++        }
++
++        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
++        if ($scheme !== 'https') {
++            return false;
++        }
++
++        $path = strtolower((string) parse_url($url, PHP_URL_PATH));
++        return preg_match('/\.(?:png|jpe?g|webp)$/', $path) === 1;
++    }
++
+     private function color(string $value, string $fallback): string
+     {
+         $value = trim($value);
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Core/ContentSecurityPolicy.php rsconnect_ent030_work/app/Core/ContentSecurityPolicy.php
+--- /tmp/base030/app/Core/ContentSecurityPolicy.php	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent030_work/app/Core/ContentSecurityPolicy.php	2026-08-28 12:18:35.067645035 +0000
+@@ -0,0 +1,65 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Core;
++
++final class ContentSecurityPolicy
++{
++    private static ?string $nonce = null;
++
++    public static function nonce(): string
++    {
++        if (self::$nonce === null) {
++            self::$nonce = rtrim(strtr(base64_encode(random_bytes(24)), '+/', '-_'), '=');
++        }
++
++        return self::$nonce;
++    }
++
++    public static function headerValue(bool $https = false): string
++    {
++        $nonce = self::nonce();
++        $directives = [
++            "default-src 'self'",
++            "base-uri 'self'",
++            "object-src 'none'",
++            "frame-ancestors 'self'",
++            "form-action 'self'",
++            "img-src 'self' data: blob: https:",
++            "font-src 'self' data:",
++            "style-src 'self'",
++            "style-src-elem 'self' 'nonce-{$nonce}'",
++            "style-src-attr 'unsafe-inline'",
++            "script-src 'self' 'nonce-{$nonce}'",
++            "script-src-elem 'self' 'nonce-{$nonce}'",
++            "script-src-attr 'none'",
++            "connect-src 'self'",
++            "media-src 'self' blob:",
++            "worker-src 'self' blob:",
++            "manifest-src 'self'",
++        ];
++
++        if ($https) {
++            $directives[] = 'upgrade-insecure-requests';
++        }
++
++        return implode('; ', $directives) . ';';
++    }
++
++    public static function addNonceToMarkup(string $html): string
++    {
++        if ($html === '') {
++            return $html;
++        }
++
++        $nonce = htmlspecialchars(self::nonce(), ENT_QUOTES, 'UTF-8');
++        $updated = preg_replace(
++            '/<(script|style)\b(?![^>]*\bnonce\s*=)/i',
++            '<$1 nonce="' . $nonce . '"',
++            $html
++        );
++
++        return is_string($updated) ? $updated : $html;
++    }
++}
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Core/View.php rsconnect_ent030_work/app/Core/View.php
+--- /tmp/base030/app/Core/View.php	2026-08-26 22:42:06.000000000 +0000
++++ rsconnect_ent030_work/app/Core/View.php	2026-08-28 12:18:36.276681669 +0000
+@@ -22,7 +22,12 @@
+         ob_start();
+         require $viewFile;
+         $content = (string) ob_get_clean();
++
++        ob_start();
+         require $layoutFile;
++        $html = (string) ob_get_clean();
++
++        echo ContentSecurityPolicy::addNonceToMarkup($html);
+     }
+ 
+     public static function e(mixed $value): string
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Services/AppVersionService.php rsconnect_ent030_work/app/Services/AppVersionService.php
+--- /tmp/base030/app/Services/AppVersionService.php	2026-08-28 11:44:31.000000000 +0000
++++ rsconnect_ent030_work/app/Services/AppVersionService.php	2026-08-28 12:22:12.196809574 +0000
+@@ -48,10 +48,11 @@
+     // RS Connect 36.20.13.2 — validação de CPF/CNPJ e recuperação automática do Checkout PagBank.
+     // RS Connect 36.20.13.3 — compatibilidade do schema de conciliação e persistência segura do Checkout PagBank.
+     // RS Connect 36.20.13.4 — correção dos rótulos comerciais em português e preparação operacional para produção.
+-    // RS Connect 36.20.14 — health checks separados, públicos mínimos e diagnóstico protegido.
++    // RS Connect 36.20.14 — health checks seguros, separados, públicos mínimos e diagnóstico protegido.
++    // RS Connect 36.20.15 — bloqueio de SVG em uploads, CSP com nonce e proteção XSS incremental.
+     // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql, 085_ai_commercial_attention_queue.sql e 086_plan_ai_mode_and_commitment.sql, 087_webhook_security_events.sql e 088_payment_reconciliation_schema_compat.sql.
+     public const VERSION_LABEL = 'Beta Comercial 1.4';
+-    public const PACKAGE_LABEL = 'RS Connect 36.20.14 — health checks seguros de liveness e readiness';
++    public const PACKAGE_LABEL = 'RS Connect 36.20.15 — proteção contra XSS, SVG e CSP';
+     public const REQUIRED_MIGRATION = '088_payment_reconciliation_schema_compat.sql';
+ 
+     private PDO $pdo;
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Services/BrandingService.php rsconnect_ent030_work/app/Services/BrandingService.php
+--- /tmp/base030/app/Services/BrandingService.php	2026-08-26 22:42:12.000000000 +0000
++++ rsconnect_ent030_work/app/Services/BrandingService.php	2026-08-28 12:18:59.619738728 +0000
+@@ -57,15 +57,26 @@
+     public static function assetUrl(string $path): string
+     {
+         $path = trim($path);
+-        if ($path === '') {
++        if ($path === '' || preg_match('/^(?:javascript|data|file|vbscript):/i', $path) === 1) {
+             return '';
+         }
+ 
+-        if (preg_match('/^https?:\/\//i', $path) === 1 || str_starts_with($path, 'data:')) {
++        if (preg_match('/^https?:\/\//i', $path) === 1) {
++            $scheme = strtolower((string) parse_url($path, PHP_URL_SCHEME));
++            $assetPath = strtolower((string) parse_url($path, PHP_URL_PATH));
++            if ($scheme !== 'https' || preg_match('/\.(?:svg|svgz|html?|js|xml)$/', $assetPath) === 1) {
++                return '';
++            }
+             return $path;
+         }
+ 
+-        return '/' . ltrim($path, '/');
++        $normalized = '/' . ltrim($path, '/');
++        $assetPath = strtolower((string) parse_url($normalized, PHP_URL_PATH));
++        if (str_starts_with($assetPath, '/uploads/') && preg_match('/\.(?:png|jpe?g|webp)$/', $assetPath) !== 1) {
++            return '';
++        }
++
++        return $normalized;
+     }
+ 
+     public static function defaults(): array
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/agents/index.php rsconnect_ent030_work/app/Views/agents/index.php
+--- /tmp/base030/app/Views/agents/index.php	2026-08-26 22:42:08.000000000 +0000
++++ rsconnect_ent030_work/app/Views/agents/index.php	2026-08-28 12:19:20.501809711 +0000
+@@ -76,7 +76,7 @@
+                 </div>
+                 <label class="field compact-field">
+                     <span>Empresa</span>
+-                    <select name="tenant_id" onchange="this.form.submit()" required>
++                    <select name="tenant_id" data-auto-submit required>
+                         <option value="">Selecione</option>
+                         <?php foreach ($tenants as $tenant): ?>
+                             <option value="<?= (int) $tenant['id'] ?>" <?= $selectedTenantId === (int) $tenant['id'] ? 'selected' : '' ?>>
+@@ -167,7 +167,7 @@
+                                             <span><?= View::e($version['title'] ?? 'Instruções salvas') ?></span>
+                                             <small><?= View::e($version['created_by_name'] ?? 'Sistema') ?> · <?= View::e($version['created_at'] ?? '') ?> · <?= View::e($version['source'] ?? 'manual') ?></small>
+                                         </div>
+-                                        <form method="post" action="<?= View::e(Router::url('/prompt-studio/restore')) ?>" onsubmit="return confirm('Restaurar esta versão das instruções?');">
++                                        <form method="post" action="<?= View::e(Router::url('/prompt-studio/restore')) ?>" data-confirm="Restaurar esta versão das instruções?">
+                                             <?= Csrf::input() ?>
+                                             <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
+                                             <input type="hidden" name="agent_id" value="<?= (int) $agent['id'] ?>">
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/calendar/index.php rsconnect_ent030_work/app/Views/calendar/index.php
+--- /tmp/base030/app/Views/calendar/index.php	2026-08-26 22:42:12.000000000 +0000
++++ rsconnect_ent030_work/app/Views/calendar/index.php	2026-08-28 12:19:20.495010027 +0000
+@@ -208,7 +208,7 @@
+     <input type="hidden" name="view" value="<?= View::e($calendarView) ?>">
+     <?php if ($calendarView !== 'list'): ?><input type="hidden" name="calendar_date" value="<?= View::e($calendarDate->format('Y-m-d')) ?>"><?php endif; ?>
+     <?php if (Auth::isSuperAdmin()): ?>
+-        <select name="tenant_id" onchange="this.form.submit()"><option value="">Selecione a empresa</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= (int) ($filters['tenant_id'] ?? 0) === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select>
++        <select name="tenant_id" data-auto-submit><option value="">Selecione a empresa</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= (int) ($filters['tenant_id'] ?? 0) === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select>
+     <?php endif; ?>
+     <select name="status"><option value="">Todos os status</option><?php foreach ($statusLabels as $value => $label): ?><option value="<?= View::e($value) ?>" <?= ($filters['status'] ?? '') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?></select>
+     <select name="owner_user_id"><option value="">Toda a equipe</option><?php foreach ($team as $member): ?><option value="<?= (int) $member['id'] ?>" <?= (int) ($filters['owner_user_id'] ?? 0) === (int) $member['id'] ? 'selected' : '' ?>><?= View::e($member['name']) ?></option><?php endforeach; ?></select>
+@@ -303,7 +303,7 @@
+                         <?php endif; ?>
+                     <?php endif; ?>
+                     <?php if ($canManage): ?>
+-                        <form class="calendar-delete-form" method="post" action="<?= View::e(Router::url('/calendar/delete')) ?>" onsubmit="return confirm('Excluir este agendamento do RS Connect? Nenhuma mensagem será enviada ao contato.');">
++                        <form class="calendar-delete-form" method="post" action="<?= View::e(Router::url('/calendar/delete')) ?>" data-confirm="Excluir este agendamento do RS Connect? Nenhuma mensagem será enviada ao contato.">
+                             <?= Csrf::input() ?>
+                             <input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>">
+                             <input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>">
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/calendar_availability/index.php rsconnect_ent030_work/app/Views/calendar_availability/index.php
+--- /tmp/base030/app/Views/calendar_availability/index.php	2026-08-26 22:42:10.000000000 +0000
++++ rsconnect_ent030_work/app/Views/calendar_availability/index.php	2026-08-28 12:19:20.487041048 +0000
+@@ -116,7 +116,7 @@
+     <form class="toolbar-card" method="get" action="<?= View::e(Router::url('/calendar')) ?>"><input type="hidden" name="section" value="availability">
+         <div class="field inline-field">
+             <label>Empresa</label>
+-            <select name="tenant_id" onchange="this.form.submit()">
++            <select name="tenant_id" data-auto-submit>
+                 <?php foreach ($tenants as $tenant): ?>
+                     <option value="<?= (int) $tenant['id'] ?>" <?= (int) $tenant['id'] === (int) $tenantId ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option>
+                 <?php endforeach; ?>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/campaigns/index.php rsconnect_ent030_work/app/Views/campaigns/index.php
+--- /tmp/base030/app/Views/campaigns/index.php	2026-08-26 22:42:10.000000000 +0000
++++ rsconnect_ent030_work/app/Views/campaigns/index.php	2026-08-28 12:19:20.485376667 +0000
+@@ -35,7 +35,7 @@
+ <form class="filter-bar card" method="get" action="<?= View::e(Router::url('/campaigns')) ?>">
+     <?php if (Auth::isSuperAdmin()): ?>
+         <label class="field compact-field"><span>Empresa</span>
+-            <select name="tenant_id" onchange="this.form.submit()">
++            <select name="tenant_id" data-auto-submit>
+                 <option value="">Todas</option>
+                 <?php foreach ($tenants as $tenant): ?>
+                     <option value="<?= (int) $tenant['id'] ?>" <?= $currentTenantId === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/companies/index.php rsconnect_ent030_work/app/Views/companies/index.php
+--- /tmp/base030/app/Views/companies/index.php	2026-08-27 19:45:03.000000000 +0000
++++ rsconnect_ent030_work/app/Views/companies/index.php	2026-08-28 12:19:20.502397313 +0000
+@@ -151,7 +151,7 @@
+                             <button class="btn btn-primary btn-block" type="submit">Salvar plano e acesso</button>
+                         </form>
+                     </details>
+-                    <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" onsubmit="return confirm('<?= $company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?' ?>');">
++                    <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" data-confirm="<?= View::e($company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?') ?>">
+                         <?= Csrf::input() ?>
+                         <input type="hidden" name="tenant_id" value="<?= (int) $company['id'] ?>">
+                         <input type="hidden" name="plan" value="<?= View::e((string) $company['plan']) ?>">
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/companies/overview.php rsconnect_ent030_work/app/Views/companies/overview.php
+--- /tmp/base030/app/Views/companies/overview.php	2026-08-27 19:45:03.000000000 +0000
++++ rsconnect_ent030_work/app/Views/companies/overview.php	2026-08-28 12:19:20.502580269 +0000
+@@ -64,7 +64,7 @@
+         <a class="btn btn-outline" href="<?= View::e(Router::url('/implementation?tenant_id=' . $tenantId)) ?>">Ver implantação</a>
+         <a class="btn btn-outline" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId)) ?>">Saúde e diagnóstico</a>
+         <a class="btn btn-quiet" href="<?= View::e(Router::url('/conversations?tenant_id=' . $tenantId)) ?>">Abrir conversas</a>
+-        <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" onsubmit="return confirm('<?= $company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?' ?>');">
++        <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" data-confirm="<?= View::e($company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?') ?>">
+             <?= Csrf::input() ?>
+             <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
+             <input type="hidden" name="return_to" value="/companies/overview?id=<?= $tenantId ?>">
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/companies/settings.php rsconnect_ent030_work/app/Views/companies/settings.php
+--- /tmp/base030/app/Views/companies/settings.php	2026-08-26 22:42:08.000000000 +0000
++++ rsconnect_ent030_work/app/Views/companies/settings.php	2026-08-28 12:19:20.499760345 +0000
+@@ -218,7 +218,7 @@
+ <section class="card retention-manual-card">
+     <div class="section-heading compact">
+         <div><span class="eyebrow">Execução manual</span><h2>Aplicar retenção agora</h2><p>Use para homologar a política desta empresa. A automação diária deve ser feita pelo template de retenção no n8n.</p></div>
+-        <form method="post" action="<?= View::e(Router::url('/messages/retention/run')) ?>" onsubmit="return confirm('Executar agora a política de retenção desta empresa? Conteúdos vencidos serão removidos.');">
++        <form method="post" action="<?= View::e(Router::url('/messages/retention/run')) ?>" data-confirm="Executar agora a política de retenção desta empresa? Conteúdos vencidos serão removidos.">
+             <?= Csrf::input() ?>
+             <input type="hidden" name="tenant_id" value="<?= (int) $company['id'] ?>">
+             <button class="btn btn-outline" type="submit">Executar retenção</button>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/conversations/index.php rsconnect_ent030_work/app/Views/conversations/index.php
+--- /tmp/base030/app/Views/conversations/index.php	2026-08-26 22:42:08.000000000 +0000
++++ rsconnect_ent030_work/app/Views/conversations/index.php	2026-08-28 12:19:20.495825928 +0000
+@@ -641,7 +641,7 @@
+                         <?php endif; ?>
+ 
+                         <?php if (!empty($ownershipSnapshot['can_release'])): ?>
+-                            <form method="post" action="<?= View::e(Router::url('/conversations/assignment')) ?>" onsubmit="return confirm('Liberar esta conversa para que outro profissional possa assumir?');">
++                            <form method="post" action="<?= View::e(Router::url('/conversations/assignment')) ?>" data-confirm="Liberar esta conversa para que outro profissional possa assumir?">
+                                 <?= Csrf::input() ?>
+                                 <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
+                                 <input type="hidden" name="tenant_id" value="<?= (int) $selected['tenant_id'] ?>">
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/crm/pipeline.php rsconnect_ent030_work/app/Views/crm/pipeline.php
+--- /tmp/base030/app/Views/crm/pipeline.php	2026-08-26 22:42:08.000000000 +0000
++++ rsconnect_ent030_work/app/Views/crm/pipeline.php	2026-08-28 12:19:20.489183269 +0000
+@@ -61,9 +61,9 @@
+ 
+ <form class="filter-bar" method="get" action="<?= View::e(Router::url('/crm')) ?>">
+     <?php if (Auth::isSuperAdmin()): ?>
+-        <select name="tenant_id" aria-label="Empresa" onchange="this.form.submit()"><option value="">Selecione a empresa</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= (int) ($filters['tenant_id'] ?? 0) === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select>
++        <select name="tenant_id" aria-label="Empresa" data-auto-submit><option value="">Selecione a empresa</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= (int) ($filters['tenant_id'] ?? 0) === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select>
+     <?php endif; ?>
+-    <select name="pipeline_id" aria-label="Funil" onchange="this.form.submit()"><?php foreach ($pipelines as $pipeline): ?><option value="<?= (int) $pipeline['id'] ?>" <?= (int) ($filters['pipeline_id'] ?? 0) === (int) $pipeline['id'] ? 'selected' : '' ?>><?= View::e($pipeline['name']) ?></option><?php endforeach; ?></select>
++    <select name="pipeline_id" aria-label="Funil" data-auto-submit><?php foreach ($pipelines as $pipeline): ?><option value="<?= (int) $pipeline['id'] ?>" <?= (int) ($filters['pipeline_id'] ?? 0) === (int) $pipeline['id'] ? 'selected' : '' ?>><?= View::e($pipeline['name']) ?></option><?php endforeach; ?></select>
+     <label class="filter-search"><span class="search-icon" aria-hidden="true"></span><input name="search" value="<?= View::e($filters['search'] ?? '') ?>" placeholder="Buscar negócio ou contato"></label>
+     <select name="owner_id" aria-label="Responsável"><option value="">Todos os responsáveis</option><?php foreach ($team as $member): ?><option value="<?= (int) $member['id'] ?>" <?= (int) ($filters['owner_id'] ?? 0) === (int) $member['id'] ? 'selected' : '' ?>><?= View::e($member['name']) ?></option><?php endforeach; ?></select>
+     <button class="btn btn-secondary" type="submit">Filtrar</button>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/instances/index.php rsconnect_ent030_work/app/Views/instances/index.php
+--- /tmp/base030/app/Views/instances/index.php	2026-08-27 18:03:34.000000000 +0000
++++ rsconnect_ent030_work/app/Views/instances/index.php	2026-08-28 12:19:20.490863894 +0000
+@@ -129,8 +129,8 @@
+                     <form method="post" action="<?= View::e(Router::url('/instances/qr')) ?>" data-qr-code-form <?= $instance['status'] === 'connected' ? 'hidden' : '' ?>><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><button class="btn btn-small btn-primary" type="submit" data-qr-code-button>Gerar QR Code</button></form>
+                     <button class="btn btn-small btn-outline" type="button" data-toggle-panel="instance-settings-drawer" data-instance-settings="<?= View::e($settingsData) ?>">Configurar WhatsApp</button>
+                     <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="sync"><button class="btn btn-small btn-outline" type="submit">Sincronizar</button></form>
+-                    <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>" onsubmit="return confirm('Reiniciar esta conexão do WhatsApp?');"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="restart"><button class="btn btn-small btn-outline" type="submit">Reiniciar</button></form>
+-                    <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>" onsubmit="return confirm('Desconectar o WhatsApp desta instância? Será necessário ler um novo QR Code.');"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="logout"><button class="btn btn-small btn-danger-soft" type="submit">Desconectar</button></form>
++                    <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>" data-confirm="Reiniciar esta conexão do WhatsApp?"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="restart"><button class="btn btn-small btn-outline" type="submit">Reiniciar</button></form>
++                    <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>" data-confirm="Desconectar o WhatsApp desta instância? Será necessário ler um novo QR Code."><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="logout"><button class="btn btn-small btn-danger-soft" type="submit">Desconectar</button></form>
+                     <button class="btn btn-small btn-outline" type="button" data-toggle-panel="instance-drawer" data-instance-open="edit"
+                         data-id="<?= (int) $instance['id'] ?>" data-name="<?= View::e($instance['name']) ?>" data-instance-name="<?= View::e($instance['instance_name']) ?>" data-base-url="<?= $isSuperAdmin ? View::e($instance['base_url']) : '' ?>" data-status="<?= View::e($instance['status']) ?>" data-is-default="<?= (int) $instance['is_default'] ?>" data-management-mode="<?= View::e((string) ($instance['management_mode'] ?? 'external')) ?>">Editar cadastro</button>
+                     <button class="btn btn-small btn-danger-soft" type="button" data-toggle-panel="instance-delete-drawer" data-instance-delete
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/layouts/app.php rsconnect_ent030_work/app/Views/layouts/app.php
+--- /tmp/base030/app/Views/layouts/app.php	2026-08-26 22:42:10.000000000 +0000
++++ rsconnect_ent030_work/app/Views/layouts/app.php	2026-08-28 12:23:02.744640767 +0000
+@@ -430,6 +430,6 @@
+ <!-- Marcador histórico de regressão: app.js?v=36.20.2 -->
+ <!-- Marcador histórico de regressão: app.js?v=36.20.5 -->
+ <!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 app.js?v=36.20.8 -->
+-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.11')) ?>" defer></script>
++<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.15')) ?>" defer></script>
+ </body>
+ </html>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/operations/ai_reprocess.php rsconnect_ent030_work/app/Views/operations/ai_reprocess.php
+--- /tmp/base030/app/Views/operations/ai_reprocess.php	2026-08-26 22:42:10.000000000 +0000
++++ rsconnect_ent030_work/app/Views/operations/ai_reprocess.php	2026-08-28 12:19:20.495695156 +0000
+@@ -122,7 +122,7 @@
+             <div><span class="eyebrow">Ação imediata</span><h2>Verificar agora</h2></div>
+         </div>
+         <p>Executa a mesma verificação segura em todas as empresas. Tentativas não concluídas continuam registradas e nenhuma mensagem é repetida quando a conversa já recebeu resposta.</p>
+-        <form method="post" action="<?= View::e(Router::url('/operations/ai-reprocess/run')) ?>" onsubmit="return confirm('Verificar agora as respostas automáticas pendentes de todas as empresas? Mensagens já respondidas não serão reenviadas.');">
++        <form method="post" action="<?= View::e(Router::url('/operations/ai-reprocess/run')) ?>" data-confirm="Verificar agora as respostas automáticas pendentes de todas as empresas? Mensagens já respondidas não serão reenviadas.">
+             <?= Csrf::input() ?>
+             <button class="btn btn-primary" type="submit">Tentar respostas pendentes agora</button>
+         </form>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/operations/alerts.php rsconnect_ent030_work/app/Views/operations/alerts.php
+--- /tmp/base030/app/Views/operations/alerts.php	2026-08-26 22:42:10.000000000 +0000
++++ rsconnect_ent030_work/app/Views/operations/alerts.php	2026-08-28 12:19:20.495420548 +0000
+@@ -173,7 +173,7 @@
+                             <button class="btn btn-outline" type="submit">Assumir análise</button>
+                         </form>
+                     <?php endif; ?>
+-                    <form method="post" action="<?= View::e(Router::url('/operacao-alertas/resolve')) ?>" onsubmit="return confirm('Confirmar que esta situação voltou ao normal?');">
++                    <form method="post" action="<?= View::e(Router::url('/operacao-alertas/resolve')) ?>" data-confirm="Confirmar que esta situação voltou ao normal?">
+                         <?= Csrf::input() ?>
+                         <input type="hidden" name="incident_id" value="<?= (int) ($incident['id'] ?? 0) ?>">
+                         <button class="btn btn-primary" type="submit">Marcar como normalizado</button>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/privacy/accept.php rsconnect_ent030_work/app/Views/privacy/accept.php
+--- /tmp/base030/app/Views/privacy/accept.php	2026-08-26 22:42:10.000000000 +0000
++++ rsconnect_ent030_work/app/Views/privacy/accept.php	2026-08-28 12:19:20.487616349 +0000
+@@ -33,7 +33,7 @@
+         </label>
+         <div class="form-actions">
+             <button class="btn btn-primary" type="submit">Aceitar e continuar</button>
+-            <a class="btn btn-quiet" href="<?= View::e(Router::url('/logout')) ?>" onclick="event.preventDefault(); document.getElementById('privacyLogout').submit();">Sair</a>
++            <a class="btn btn-quiet" href="<?= View::e(Router::url('/logout')) ?>" data-submit-form="privacyLogout">Sair</a>
+         </div>
+     </form>
+     <form id="privacyLogout" method="post" action="<?= View::e(Router::url('/logout')) ?>"><?= Csrf::input() ?></form>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/privacy/admin.php rsconnect_ent030_work/app/Views/privacy/admin.php
+--- /tmp/base030/app/Views/privacy/admin.php	2026-08-26 22:42:10.000000000 +0000
++++ rsconnect_ent030_work/app/Views/privacy/admin.php	2026-08-28 12:19:20.487448034 +0000
+@@ -59,7 +59,7 @@
+             <div><span class="eyebrow">Empresas</span><h2>Escopo de análise</h2></div>
+         </div>
+         <form class="filter-bar" method="get" action="<?= View::e(Router::url('/privacy')) ?>">
+-            <select name="tenant_id" onchange="this.form.submit()">
++            <select name="tenant_id" data-auto-submit>
+                 <option value="0">Visão geral de todas as empresas</option>
+                 <?php foreach ($companies as $company): ?>
+                     <option value="<?= (int) $company['id'] ?>" <?= $selectedTenantId === (int) $company['id'] ? 'selected' : '' ?>><?= View::e($company['name']) ?></option>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/queue/index.php rsconnect_ent030_work/app/Views/queue/index.php
+--- /tmp/base030/app/Views/queue/index.php	2026-08-26 22:42:10.000000000 +0000
++++ rsconnect_ent030_work/app/Views/queue/index.php	2026-08-28 12:19:20.485143512 +0000
+@@ -36,7 +36,7 @@
+ <form class="filter-bar queue-filter card" method="get" action="<?= View::e(Router::url('/queue')) ?>">
+     <?php if (Auth::isSuperAdmin()): ?>
+         <label class="field compact-field"><span>Empresa</span>
+-            <select name="tenant_id" onchange="this.form.submit()">
++            <select name="tenant_id" data-auto-submit>
+                 <option value="">Todas</option>
+                 <?php foreach ($tenants as $tenant): ?>
+                     <option value="<?= (int) $tenant['id'] ?>" <?= $currentTenantId === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/reports/admin.php rsconnect_ent030_work/app/Views/reports/admin.php
+--- /tmp/base030/app/Views/reports/admin.php	2026-08-26 22:42:10.000000000 +0000
++++ rsconnect_ent030_work/app/Views/reports/admin.php	2026-08-28 12:23:23.684378330 +0000
+@@ -112,7 +112,7 @@
+         <div class="rs-admin-report-header-actions">
+             <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/automatic')) ?>">Relatórios automáticos</a>
+             <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/team?' . http_build_query($queryBase))) ?>">Equipe e profissionais</a>
+-            <button class="btn btn-outline" type="button" onclick="window.location.reload()"><?= $icon('refresh') ?> Atualizar</button>
++            <button class="btn btn-outline" type="button" data-page-action="reload"><?= $icon('refresh') ?> Atualizar</button>
+             <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'companies']))) ?>"><?= $icon('download') ?> Exportar</a>
+         </div>
+     </header>
+@@ -234,5 +234,6 @@
+         <div class="report-funnel is-admin"><?php $commercialMax=$max($commercialStages); foreach ($commercialStages as $row): $width=max(18,min(100,((int)$row['total']/$commercialMax)*100)); ?><article><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= (int)$row['total'] ?></strong><small><?= $money($row['value']) ?></small></div></article><?php endforeach; ?><?php if (!$commercialStages): ?><div class="empty-state">Conclua a atualização do banco indicada para carregar a área comercial.</div><?php endif; ?></div>
+     </section>
+ </div>
+-<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.14.0')) ?>" defer></script>
++<!-- Marcador histórico de regressão: reports.js?v=36.14.0 -->
++<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.20.15')) ?>" defer></script>
+ </div>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/reports/index.php rsconnect_ent030_work/app/Views/reports/index.php
+--- /tmp/base030/app/Views/reports/index.php	2026-08-26 22:42:10.000000000 +0000
++++ rsconnect_ent030_work/app/Views/reports/index.php	2026-08-28 12:23:23.685093097 +0000
+@@ -1,249 +1,250 @@
+-<?php
+-
+-use App\Core\Auth;
+-use App\Core\Router;
+-use App\Core\View;
+-use App\Core\PublicId;
+-
+-$money = static fn (float|int|string $value): string => 'R$ ' . number_format((float) $value, 2, ',', '.');
+-$number = static fn (float|int|string $value): string => number_format((float) $value, 0, ',', '.');
+-$percent = static fn (float|int|string $value): string => number_format((float) $value, 1, ',', '.') . '%';
+-$duration = static function (int|float|string $seconds): string {
+-    $seconds = max(0, (int) round((float) $seconds));
+-    if ($seconds <= 0) return 'Sem dados';
+-    if ($seconds < 60) return $seconds . 's';
+-    if ($seconds < 3600) return intdiv($seconds, 60) . 'min ' . ($seconds % 60) . 's';
+-    return intdiv($seconds, 3600) . 'h ' . intdiv($seconds % 3600, 60) . 'min';
+-};
+-$trend = static function (?float $value, bool $inverse = false): array {
+-    if ($value === null) return ['class' => 'is-neutral', 'text' => 'Sem base anterior'];
+-    if (abs($value) < .05) return ['class' => 'is-neutral', 'text' => 'Estável vs. período anterior'];
+-    $positive = $value > 0;
+-    if ($inverse) $positive = !$positive;
+-    return [
+-        'class' => $positive ? 'is-up' : 'is-down',
+-        'text' => ($value > 0 ? '↑ ' : '↓ ') . number_format(abs($value), 1, ',', '.') . '% vs. período anterior',
+-    ];
+-};
+-$icon = static function (string $name): string {
+-    $paths = [
+-        'chat' => '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/>',
+-        'reply' => '<path d="m9 17-5-5 5-5"/><path d="M4 12h10a6 6 0 0 1 6 6v1"/>',
+-        'human' => '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+-        'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+-        'calendar' => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+-        'check' => '<circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/>',
+-        'spark' => '<path d="m12 3 1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="m18 15 .9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/>',
+-        'alert' => '<path d="M10.3 3.6 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+-        'download' => '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>',
+-        'refresh' => '<path d="M20 6v5h-5M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 11M5.5 15A7 7 0 0 0 18 17.5l2-4.5"/>',
+-        'filter' => '<path d="M4 5h16l-6 7v5l-4 2v-7z"/>',
+-        'report' => '<path d="M5 3h10l4 4v14H5z"/><path d="M14 3v5h5M8 13h8M8 17h6"/>',
+-    ];
+-    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' . ($paths[$name] ?? $paths['report']) . '</svg>';
+-};
+-$statusLabels = [
+-    'scheduled' => 'Agendado', 'confirmed' => 'Confirmado', 'completed' => 'Concluído',
+-    'cancelled' => 'Cancelado', 'no_show' => 'Não compareceu', 'rejected' => 'Rejeitado',
+-];
+-$weekdayLabels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+-$queryBase = array_filter([
+-    'start' => $filters['start'] ?? '',
+-    'end' => $filters['end'] ?? '',
+-], static fn ($value) => $value !== '');
+-$comparisons = $comparisons ?? [];
+-$heatmap = $heatmap ?? [];
+-$agendaAvailability = $agendaAvailability ?? [];
+-$agendaResults = $agendaResults ?? [];
+-$insights = $insights ?? [];
+-$warnings = $warnings ?? [];
+-$heatmapLookup = [];
+-$heatmapMax = 1;
+-foreach ($heatmap as $cell) {
+-    $key = ((int) ($cell['weekday_index'] ?? 0)) . ':' . ((int) ($cell['hour_index'] ?? 0));
+-    $heatmapLookup[$key] = (int) ($cell['total'] ?? 0);
+-    $heatmapMax = max($heatmapMax, (int) ($cell['total'] ?? 0));
+-}
+-$hours = range(7, 22);
+-$lineSeries = json_encode(array_map(static fn (array $row): array => [
+-    'label' => date('d/m', strtotime((string) $row['label'])),
+-    'total' => (int) ($row['total'] ?? 0),
+-    'incoming' => (int) ($row['incoming'] ?? 0),
+-    'ai' => (int) ($row['ai'] ?? 0),
+-], $byDay ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+-if (!is_string($lineSeries)) $lineSeries = '[]';
+-$lineSeriesB64 = base64_encode($lineSeries);
+-$responseDistribution = [
+-    ['label' => 'Recebidas', 'value' => (int) ($metrics['incoming_messages'] ?? 0)],
+-    ['label' => 'IA', 'value' => (int) ($metrics['ai_replies'] ?? 0)],
+-    ['label' => 'Equipe', 'value' => (int) ($metrics['human_replies'] ?? 0)],
+-    ['label' => 'Sistema', 'value' => (int) ($metrics['system_replies'] ?? 0)],
+-];
+-$responseSeries = json_encode($responseDistribution, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+-if (!is_string($responseSeries)) $responseSeries = '[]';
+-$donutSeries = json_encode([
+-    ['label' => 'IA', 'value' => (int) ($metrics['ai_replies'] ?? 0)],
+-    ['label' => 'Equipe', 'value' => (int) ($metrics['human_replies'] ?? 0)],
+-    ['label' => 'Automação/Sistema', 'value' => (int) ($metrics['system_replies'] ?? 0)],
+-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+-if (!is_string($donutSeries)) $donutSeries = '[]';
+-$donutSeriesB64 = base64_encode($donutSeries);
+-$periodLabel = date('d/m/Y', strtotime((string) ($filters['start'] ?? 'now'))) . ' — ' . date('d/m/Y', strtotime((string) ($filters['end'] ?? 'now')));
+-$teamReportUrl = (Auth::can('reports.team.view_own') || Auth::can('reports.team.view_all'))
+-    ? Router::url('/reports/team?' . http_build_query($queryBase))
+-    : '#client-report-team';
+-$hourMap = array_fill(0, 24, 0);
+-foreach (($byHour ?? []) as $row) $hourMap[(int) ($row['label'] ?? 0)] = (int) ($row['total'] ?? 0);
+-$hourMax = max(1, ...array_values($hourMap));
+-$quickReports = [
+-    ['name' => 'Conversas do período', 'type' => 'Atendimento', 'metric' => $number($metrics['active_conversations'] ?? 0) . ' atendidas', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'conversations']))],
+-    ['name' => 'Oportunidades comerciais', 'type' => 'CRM', 'metric' => $number($metrics['crm_leads'] ?? 0) . ' oportunidades', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'leads']))],
+-    ['name' => 'Cobranças da empresa', 'type' => 'Financeiro', 'metric' => $money($metrics['received_amount'] ?? 0) . ' recebido', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'billing']))],
+-];
+-?>
+-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.15.1')) ?>">
+-<div class="executive-report-page client-manager-report report-v3646 report-v3647 report-v36140 report-v36150">
+-    <header class="rs-admin-report-header rs-client-report-header">
+-        <div>
+-            <nav class="rs-report-breadcrumb" aria-label="Navegação"><span>Relatórios</span><b>/</b><strong>Visão geral</strong></nav>
+-            <h1>Painel executivo</h1>
+-            <p>Indicadores da sua empresa para acompanhar atendimento, equipe, automações, agenda e resultados em um só lugar.</p>
+-        </div>
+-        <div class="rs-admin-report-header-actions">
+-            <?php if (Auth::can('reports.schedule.manage')): ?><a class="btn btn-outline" href="<?= View::e(Router::url('/reports/automatic')) ?>">Relatórios automáticos</a><?php endif; ?>
+-            <?php if (Auth::can('reports.team.view_own') || Auth::can('reports.team.view_all')): ?><a class="btn btn-outline" href="<?= View::e($teamReportUrl) ?>">Equipe e profissionais</a><?php endif; ?>
+-            <button class="btn btn-outline" type="button" onclick="window.location.reload()"><?= $icon('refresh') ?> Atualizar</button>
+-            <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'conversations']))) ?>"><?= $icon('download') ?> Exportar</a>
+-        </div>
+-    </header>
+-
+-    <form class="card rs-admin-report-toolbar rs-client-report-toolbar" method="get" action="<?= View::e(Router::url('/reports')) ?>">
+-        <div class="rs-admin-date-range">
+-            <label><span>De</span><input type="date" name="start" value="<?= View::e($filters['start']) ?>"></label>
+-            <i>→</i>
+-            <label><span>Até</span><input type="date" name="end" value="<?= View::e($filters['end']) ?>"></label>
+-        </div>
+-        <div class="rs-client-filter-copy"><span>Período analisado</span><strong><?= View::e($periodLabel) ?></strong><small>Os indicadores respeitam o fuso e os dados da sua empresa.</small></div>
+-        <div class="rs-admin-toolbar-actions"><button class="btn btn-primary" type="submit"><?= $icon('filter') ?> Aplicar filtros</button><a class="btn btn-quiet" href="<?= View::e(Router::url('/reports')) ?>">Limpar</a></div>
+-    </form>
+-
+-    <?php if ($warnings): ?><div class="flash warning executive-report-warning"><strong>Alguns indicadores estão sendo atualizados.</strong><span><?= View::e(implode(' · ', $warnings)) ?></span></div><?php endif; ?>
+-
+-    <section class="rs-admin-kpi-grid" aria-label="Principais resultados">
+-        <?php $t = $trend($comparisons['active_conversations'] ?? null); ?>
+-        <a class="card rs-admin-kpi is-blue" href="<?= View::e(Router::url('/conversations')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('chat') ?></span><div><small>Conversas atendidas</small><strong><?= $number($metrics['active_conversations'] ?? 0) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= View::e($t['text']) ?> · <?= $number($metrics['conversations'] ?? 0) ?> nova(s)</em></div></a>
+-        <?php $t = $trend($comparisons['responded_conversations'] ?? null); ?>
+-        <a class="card rs-admin-kpi is-indigo" href="<?= View::e(Router::url('/conversations')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('reply') ?></span><div><small>Conversas respondidas</small><strong><?= $number($metrics['responded_conversations'] ?? 0) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= View::e($t['text']) ?></em></div></a>
+-        <?php $t = $trend($comparisons['human_conversations'] ?? null); ?>
+-        <a class="card rs-admin-kpi is-teal" href="<?= View::e($teamReportUrl) ?>"><span class="rs-admin-kpi-icon"><?= $icon('human') ?></span><div><small>Atendimentos humanos</small><strong><?= $number($metrics['human_conversations'] ?? 0) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= $number($metrics['human_replies'] ?? 0) ?> respostas da equipe</em></div></a>
+-        <a class="card rs-admin-kpi is-purple" href="<?= View::e($teamReportUrl) ?>"><span class="rs-admin-kpi-icon"><?= $icon('clock') ?></span><div><small>Tempo médio da 1ª resposta</small><strong><?= View::e($duration($metrics['avg_first_response_seconds'] ?? 0)) ?></strong><em><?= $number($metrics['first_responses_measured'] ?? 0) ?> respostas medidas</em></div></a>
+-        <a class="card rs-admin-kpi is-orange" href="<?= View::e(Router::url('/calendar')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('calendar') ?></span><div><small>Agendamentos</small><strong><?= $number($metrics['appointments'] ?? 0) ?></strong><em><?= $percent($metrics['agenda_conversion'] ?? 0) ?> confirmados/concluídos</em></div></a>
+-        <a class="card rs-admin-kpi is-green" href="<?= View::e(Router::url('/calendar')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('check') ?></span><div><small>Comparecimento</small><strong><?= $percent($metrics['attendance_rate'] ?? 0) ?></strong><em><?= $number($metrics['appointments_completed'] ?? 0) ?> concluído(s)</em></div></a>
+-        <?php $t = $trend($comparisons['ai_replies'] ?? null); ?>
+-        <a class="card rs-admin-kpi is-violet" href="#client-report-team"><span class="rs-admin-kpi-icon"><?= $icon('spark') ?></span><div><small>Uso da IA</small><strong><?= $number($metrics['ai_replies'] ?? 0) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= $percent($metrics['ai_share'] ?? 0) ?> das respostas</em></div></a>
+-        <a class="card rs-admin-kpi is-red" href="#client-report-attention"><span class="rs-admin-kpi-icon"><?= $icon('alert') ?></span><div><small>Conversas que precisam de atenção</small><strong><?= $number($metrics['attention_conversations'] ?? 0) ?></strong><em><?= $number($metrics['unread'] ?? 0) ?> mensagem(ns) não lida(s)</em></div></a>
+-    </section>
+-
+-    <section class="rs-admin-chart-grid rs-admin-chart-grid-primary">
+-        <article class="card rs-admin-dashboard-card rs-admin-chart-wide">
+-            <header><div><h2>Mensagens ao longo do tempo</h2><p>Mensagens recebidas, respostas enviadas e participação da IA.</p></div><span class="rs-admin-period-pill"><?= View::e($periodLabel) ?></span></header>
+-            <div class="report-svg-chart rs-admin-main-line-chart" data-report-line-chart data-series-b64="<?= View::e($lineSeriesB64) ?>"></div>
+-            <div class="report-chart-legend"><span><i class="is-total"></i>Total</span><span><i class="is-incoming"></i>Recebidas</span><span><i class="is-ai"></i>IA</span></div>
+-        </article>
+-        <article class="card rs-admin-dashboard-card">
+-            <header><div><h2>Distribuição das interações</h2><p>Entrada dos clientes e respostas enviadas.</p></div></header>
+-            <div class="rs-admin-donut-layout"><div class="report-donut" data-report-donut data-series="<?= View::e($responseSeries) ?>" data-center="<?= $number($metrics['total_messages'] ?? 0) ?>"></div><div class="rs-admin-donut-legend"><?php foreach ($responseDistribution as $index => $row): ?><div><i class="is-color-<?= ($index % 5) + 1 ?>"></i><span><?= View::e($row['label']) ?></span><strong><?= $number($row['value']) ?></strong></div><?php endforeach; ?></div></div>
+-        </article>
+-        <article class="card rs-admin-dashboard-card">
+-            <header><div><h2>Interações por horário</h2><p>Horários com maior procura pela sua empresa.</p></div></header>
+-            <div class="rs-admin-hour-chart" aria-label="Interações por horário"><?php foreach ($hourMap as $hour => $total): $height = max(3, min(100, ($total / $hourMax) * 100)); ?><article title="<?= str_pad((string)$hour,2,'0',STR_PAD_LEFT) ?>h — <?= $number($total) ?>"><span style="height:<?= $height ?>%"></span><small><?= ($hour % 2 === 0) ? str_pad((string)$hour,2,'0',STR_PAD_LEFT) : '' ?></small></article><?php endforeach; ?></div>
+-        </article>
+-    </section>
+-
+-    <section class="rs-admin-chart-grid rs-admin-chart-grid-secondary">
+-        <article class="card rs-admin-dashboard-card rs-admin-team-card">
+-            <header><div><h2>Desempenho da equipe</h2><p>Respostas enviadas e conversas atendidas por profissional.</p></div><a href="<?= View::e($teamReportUrl) ?>">Ver relatório completo →</a></header>
+-            <div class="table-wrap"><table class="rs-admin-compact-table"><thead><tr><th>Profissional</th><th>Respostas</th><th>Conversas</th></tr></thead><tbody><?php foreach (array_slice($teamPerformance ?? [],0,6) as $row): ?><tr><td><span class="rs-admin-person"><b><?= View::e(strtoupper(substr((string) $row['label'], 0, 1))) ?></b><span><strong><?= View::e($row['label']) ?></strong><small>Atendimento humano</small></span></span></td><td><?= $number($row['total']) ?></td><td><?= $number($row['conversations']) ?></td></tr><?php endforeach; ?><?php if (empty($teamPerformance)): ?><tr><td colspan="3"><div class="empty-state">Nenhuma resposta humana registrada no período.</div></td></tr><?php endif; ?></tbody></table></div>
+-        </article>
+-        <article class="card rs-admin-dashboard-card">
+-            <header><div><h2>Resultado da agenda</h2><p>Situação atual dos compromissos do período.</p></div><a href="<?= View::e(Router::url('/calendar')) ?>">Abrir agenda →</a></header>
+-            <div class="executive-bars rs-client-agenda-bars"><?php $agendaMax=max(1,...array_map(static fn($r)=>(int)($r['total']??0),$agendaResults?:[['total'=>1]])); foreach ($agendaResults as $row): ?><div><strong><?= View::e($row['label']) ?></strong><span><i style="width:<?= min(100,((int)$row['total']/$agendaMax)*100) ?>%"></i></span><b><?= $number($row['total']) ?></b></div><?php endforeach; ?><?php if (!$agendaResults): ?><div class="empty-state">Nenhum compromisso no período.</div><?php endif; ?></div>
+-        </article>
+-        <article class="card rs-admin-dashboard-card rs-admin-ai-summary">
+-            <header><div><h2>Uso da IA</h2><p>Participação da automação no atendimento.</p></div><a href="#client-report-team">Ver detalhes →</a></header>
+-            <div class="rs-admin-ai-ring" style="--ai-share:<?= min(100,max(0,(float)($metrics['ai_share']??0))) ?>%"><span><strong><?= $percent($metrics['ai_share'] ?? 0) ?></strong><small>das respostas</small></span></div>
+-            <dl><div><dt>Respostas da IA</dt><dd><?= $number($metrics['ai_replies'] ?? 0) ?></dd></div><div><dt>Respostas humanas</dt><dd><?= $number($metrics['human_replies'] ?? 0) ?></dd></div><div><dt>Não concluídas</dt><dd><?= $number($metrics['ai_errors'] ?? 0) ?></dd></div></dl>
+-        </article>
+-    </section>
+-
+-    <section class="card rs-client-attention-panel" id="client-report-attention">
+-        <header><div><span class="eyebrow">Acompanhamento</span><h2>Conversas que precisam de atenção</h2><p>Priorize mensagens não lidas e atendimentos humanos ainda em aberto.</p></div><a href="<?= View::e(Router::url('/conversations')) ?>">Abrir conversas →</a></header>
+-        <div class="rs-client-attention-grid"><?php foreach (array_slice($attention ?? [],0,6) as $row): ?><a href="<?= View::e(Router::url('/conversations?conversation_uuid=' . rawurlencode(PublicId::encode('conversation', (int) $row['id'])))) ?>"><span><strong><?= View::e((string)(($row['contact_name']??'') ?: ($row['phone']??'Contato'))) ?></strong><small><?= (int)($row['unread_count']??0) ?> não lida(s) · <?= ($row['attendance_mode']??'')==='human'?'atendimento humano':'acompanhamento' ?></small></span><b><?= !empty($row['last_message_at']) ? View::e(date('d/m H:i',strtotime((string)$row['last_message_at']))) : 'sem horário' ?></b></a><?php endforeach; ?><?php if (empty($attention)): ?><div class="empty-state">Nenhuma conversa exige ação imediata.</div><?php endif; ?></div>
+-    </section>
+-
+-    <section class="card rs-admin-ready-reports">
+-        <header><div><h2>Exportações detalhadas</h2><p>Baixe os dados do período para análise em planilha. Os PDFs ficam em Relatórios automáticos.</p></div><span><?= View::e($periodLabel) ?></span></header>
+-        <div class="table-wrap"><table><thead><tr><th>Nome do relatório</th><th>Tipo</th><th>Período</th><th>Indicador</th><th>Ações</th></tr></thead><tbody><?php foreach ($quickReports as $row): ?><tr><td><span class="rs-admin-report-name"><i><?= $icon('report') ?></i><strong><?= View::e($row['name']) ?></strong></span></td><td><span class="badge"><?= View::e($row['type']) ?></span></td><td><?= View::e($periodLabel) ?></td><td><?= View::e($row['metric']) ?></td><td><a class="rs-admin-download-action" href="<?= View::e($row['url']) ?>" aria-label="Exportar <?= View::e($row['name']) ?>"><?= $icon('download') ?></a></td></tr><?php endforeach; ?></tbody></table></div>
+-    </section>
+-
+-    <?php if ($insights): ?><section class="card rs-admin-insights-strip"><div><span class="eyebrow">Insights automáticos</span><h2>Leitura rápida do período</h2></div><div class="report-insights-grid is-compact"><?php foreach ($insights as $item): ?><article class="report-insight is-<?= View::e($item['tone'] ?? 'info') ?>"><span class="report-insight-dot"></span><div><strong><?= View::e($item['title'] ?? '') ?></strong><p><?= View::e($item['text'] ?? '') ?></p></div></article><?php endforeach; ?></div></section><?php endif; ?>
+-
+-    <div class="rs-admin-detailed-heading"><span class="eyebrow">Análises detalhadas</span><h2>Aprofunde cada resultado</h2><p>Os blocos abaixo mantêm os mapas de calor, a visão da equipe, o CRM e os detalhes da agenda.</p></div>
+-    <section class="card report-section-directory" id="client-report-directory" aria-label="Navegação do relatório gerencial">
+-        <div class="section-heading report-directory-heading"><div><span class="eyebrow">Leitura do período</span><h2>Explore os resultados por assunto</h2><p>Os blocos ficam abertos na mesma página para facilitar comparação, impressão e tomada de decisão.</p></div></div>
+-        <nav class="report-section-card-grid report-section-card-grid-client">
+-            <a class="report-section-link" href="#client-report-overview" data-report-section-link><span class="report-section-number">01</span><strong>Visão geral</strong><small>Volume diário e prioridades.</small></a>
+-            <a class="report-section-link" href="#client-report-service" data-report-section-link><span class="report-section-number">02</span><strong>Horários de pico</strong><small>Mapa de calor da demanda.</small></a>
+-            <a class="report-section-link" href="#client-report-team" data-report-section-link><span class="report-section-number">03</span><strong>IA e equipe</strong><small>Automação x atendimento humano.</small></a>
+-            <a class="report-section-link" href="#client-report-results" data-report-section-link><span class="report-section-number">04</span><strong>CRM e agenda</strong><small>Funis e conversão.</small></a>
+-        </nav>
+-    </section>
+-
+-    <div class="report-section-stack client-report-section-stack">
+-        <section class="card report-content-card client-report-panel" id="client-report-overview">
+-            <header class="report-content-card-header"><span class="report-section-number">01</span><div><span class="eyebrow">Visão geral</span><h2>Evolução do atendimento</h2><p>Compare volume total, mensagens recebidas e participação da IA ao longo dos dias.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
+-            <div class="report-chart-layout">
+-                <section class="report-chart-card"><div class="section-heading"><div><span class="eyebrow">Movimento diário</span><h2>Mensagens por dia</h2></div><span class="badge"><?= View::e(date('d/m', strtotime($filters['start']))) ?> → <?= View::e(date('d/m', strtotime($filters['end']))) ?></span></div><div class="report-svg-chart" data-report-line-chart data-series-b64="<?= View::e($lineSeriesB64) ?>" aria-label="Gráfico de mensagens por dia"></div><div class="report-chart-legend"><span><i class="is-total"></i>Total</span><span><i class="is-incoming"></i>Recebidas</span><span><i class="is-ai"></i>IA</span></div></section>
+-                <aside class="client-report-summary-card"><span class="eyebrow">Resumo</span><h3>Leitura rápida</h3><dl><div><dt>Total de mensagens</dt><dd><?= $number($metrics['total_messages'] ?? 0) ?></dd></div><div><dt>Média por conversa</dt><dd><?= number_format((float) ($metrics['avg_messages_per_conversation'] ?? 0), 1, ',', '.') ?></dd></div><div><dt>Encerradas</dt><dd><?= $number($metrics['closed_conversations'] ?? 0) ?></dd></div><div><dt>Mensagens não enviadas</dt><dd><?= $number($metrics['failed_messages'] ?? 0) ?></dd></div></dl><a class="btn btn-outline btn-block" href="<?= View::e(Router::url('/conversations')) ?>">Abrir conversas</a></aside>
+-            </div>
+-            <div class="client-report-priority-grid">
+-                <section><div class="section-heading"><div><span class="eyebrow">Atenção</span><h2>Conversas prioritárias</h2></div></div><div class="client-report-list"><?php foreach ($attention as $item): ?><a href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) $item['id'])) ?>"><span><strong><?= View::e($item['contact_name'] ?: $item['phone']) ?></strong><small><?= View::e($item['attendance_mode']) ?> · <?= View::e($item['last_message_at'] ?? '') ?></small></span><b><?= (int) $item['unread_count'] ?></b></a><?php endforeach; ?><?php if (!$attention): ?><div class="empty-state">Nenhuma conversa pendente neste momento.</div><?php endif; ?></div></section>
+-                <section><div class="section-heading"><div><span class="eyebrow">Relacionamento</span><h2>Contatos com mais interações</h2></div></div><div class="client-report-list"><?php foreach ($topContacts as $item): ?><a href="<?= View::e(Router::url('/contacts')) ?>"><span><strong><?= View::e($item['label']) ?></strong><small><?= View::e($item['phone']) ?> · última interação <?= View::e(date('d/m H:i', strtotime($item['last_message_at']))) ?></small></span><b><?= (int) $item['total'] ?></b></a><?php endforeach; ?><?php if (!$topContacts): ?><div class="empty-state">Nenhum contato com mensagens no período.</div><?php endif; ?></div></section>
+-            </div>
+-        </section>
+-
+-        <section class="card report-content-card client-report-panel" id="client-report-service">
+-            <header class="report-content-card-header"><span class="report-section-number">02</span><div><span class="eyebrow">Atendimento</span><h2>Quando seus clientes mais procuram você</h2><p>O mapa de calor mostra o volume de mensagens recebidas por dia da semana e horário.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
+-            <div class="client-report-two-columns report-heatmap-layout">
+-                <section class="report-heatmap-card"><div class="section-heading"><div><span class="eyebrow">Horários de pico</span><h2>Mapa de calor</h2></div></div><div class="report-heatmap-wrap"><div class="report-heatmap"><div class="report-heatmap-corner"></div><?php foreach ($hours as $hour): ?><div class="report-heatmap-hour"><?= str_pad((string) $hour, 2, '0', STR_PAD_LEFT) ?>h</div><?php endforeach; ?><?php foreach ($weekdayLabels as $dayIndex => $dayLabel): ?><div class="report-heatmap-day"><?= View::e($dayLabel) ?></div><?php foreach ($hours as $hour): $value = $heatmapLookup[$dayIndex . ':' . $hour] ?? 0; $level = $value > 0 ? max(.12, $value / $heatmapMax) : 0; ?><div class="report-heatmap-cell" style="--heat:<?= number_format($level, 3, '.', '') ?>" title="<?= View::e($dayLabel . ' ' . str_pad((string) $hour, 2, '0', STR_PAD_LEFT) . 'h: ' . $value . ' mensagem(ns)') ?>"><span><?= $value ?: '' ?></span></div><?php endforeach; ?><?php endforeach; ?></div></div><div class="report-heatmap-scale"><span>Menor demanda</span><i></i><span>Maior demanda</span></div></section>
+-                <aside class="client-report-summary-card"><span class="eyebrow">Eficiência</span><h3>Indicadores de atendimento</h3><dl><div><dt>Respostas enviadas</dt><dd><?= $number($metrics['outgoing_messages'] ?? 0) ?></dd></div><div><dt>Respostas humanas</dt><dd><?= $number($metrics['human_replies'] ?? 0) ?></dd></div><div><dt>Participação humana</dt><dd><?= $percent($metrics['human_share'] ?? 0) ?></dd></div><div><dt>Conversas abertas agora</dt><dd><?= $number($metrics['open_conversations'] ?? 0) ?></dd></div></dl></aside>
+-            </div>
+-        </section>
+-
+-        <section class="card report-content-card client-report-panel" id="client-report-team">
+-            <header class="report-content-card-header"><span class="report-section-number">03</span><div><span class="eyebrow">IA, equipe e sistema</span><h2>Quem respondeu seus clientes</h2><p>Separe respostas da IA, respostas humanas e mensagens automáticas do sistema para enxergar a automação com precisão.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
+-            <div class="report-ai-layout">
+-                <section class="report-donut-card"><div class="section-heading"><div><span class="eyebrow">Distribuição</span><h2>IA x equipe x sistema</h2></div></div><div class="report-donut" data-report-donut data-series-b64="<?= View::e($donutSeriesB64) ?>" data-center="<?= View::e($percent($metrics['ai_share'] ?? 0)) ?>"></div><div class="report-donut-summary"><div><span>IA</span><strong><?= $number($metrics['ai_replies'] ?? 0) ?></strong></div><div><span>Equipe</span><strong><?= $number($metrics['human_replies'] ?? 0) ?></strong></div><div><span>Automação/Sistema</span><strong><?= $number($metrics['system_replies'] ?? 0) ?></strong></div></div></section>
+-                <section><div class="section-heading"><div><span class="eyebrow">Equipe</span><h2>Respostas por responsável</h2></div></div><div class="executive-bars client-team-bars"><?php $teamMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $teamPerformance ?: [['total'=>1]])); foreach ($teamPerformance as $row): ?><div><strong><?= View::e($row['label']) ?></strong><span><i style="width:<?= min(100,((int)$row['total']/$teamMax)*100) ?>%"></i></span><b><?= (int)$row['total'] ?></b><small><?= (int)$row['conversations'] ?> conversa(s)</small></div><?php endforeach; ?><?php if (!$teamPerformance): ?><div class="empty-state">Nenhuma resposta humana registrada no período.</div><?php endif; ?></div></section>
+-                <aside class="client-report-summary-card"><span class="eyebrow">Assistente virtual</span><h3>Desempenho da IA</h3><dl><div><dt>Participação da IA</dt><dd><?= $percent($metrics['ai_share'] ?? 0) ?></dd></div><div><dt>Automação/Sistema</dt><dd><?= $percent($metrics['system_share'] ?? 0) ?></dd></div><div><dt>Execuções bem-sucedidas</dt><dd><?= $number($metrics['ai_success'] ?? 0) ?></dd></div><div><dt>Respostas não concluídas</dt><dd><?= $number($metrics['ai_errors'] ?? 0) ?></dd></div><div><dt>Agenda com atenção</dt><dd><?= $number($metrics['google_sync_errors'] ?? 0) ?></dd></div></dl></aside>
+-            </div>
+-        </section>
+-
+-        <section class="card report-content-card client-report-panel" id="client-report-results">
+-            <header class="report-content-card-header"><span class="report-section-number">04</span><div><span class="eyebrow">CRM e agenda</span><h2>Do interesse ao resultado</h2><p>Veja onde as oportunidades estão no funil e em qual etapa os agendamentos avançam ou param.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
+-            <div class="client-report-two-columns">
+-                <section><div class="section-heading"><div><span class="eyebrow">Comercial</span><h2>Oportunidades por etapa</h2></div><a class="table-link" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'leads']))) ?>">Exportar CRM</a></div><div class="report-funnel"><?php $crmMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $crmByStage ?: [['total'=>1]])); foreach ($crmByStage as $row): $width = max(18, min(100, ((int) $row['total'] / $crmMax) * 100)); ?><article><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= (int)$row['total'] ?></strong><small><?= $money($row['value']) ?></small></div></article><?php endforeach; ?><?php if (!$crmByStage): ?><div class="empty-state">Nenhuma oportunidade cadastrada.</div><?php endif; ?></div></section>
+-                <aside class="client-report-summary-card"><span class="eyebrow">CRM</span><h3>Resultado comercial</h3><dl><div><dt>Oportunidades criadas</dt><dd><?= $number($metrics['crm_leads'] ?? 0) ?></dd></div><div><dt>Ganhas</dt><dd><?= $number($metrics['crm_won'] ?? 0) ?></dd></div><div><dt>Perdidas</dt><dd><?= $number($metrics['crm_lost'] ?? 0) ?></dd></div><div><dt>Taxa de conversão</dt><dd><?= $percent($metrics['crm_conversion'] ?? 0) ?></dd></div></dl><a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/crm')) ?>">Abrir CRM</a></aside>
+-            </div>
+-            <div class="client-report-two-columns client-report-agenda-row">
+-                <section><div class="section-heading"><div><span class="eyebrow">Disponibilidade</span><h2>Uso da busca de horários</h2><p>Consultas e opções podem se repetir; por isso estes números mostram uso do recurso e não formam um funil de conversão.</p></div></div><div class="report-funnel is-agenda"><?php $agendaAvailabilityMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $agendaAvailability ?: [['total'=>1]])); foreach ($agendaAvailability as $row): $width=max(18,min(100,((int)$row['total']/$agendaAvailabilityMax)*100)); ?><article><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= $number($row['total']) ?></strong></div></article><?php endforeach; ?></div></section>
+-                <section><div class="section-heading"><div><span class="eyebrow">Agenda</span><h2>Resultado dos compromissos</h2><p>Status atual dos compromissos cuja data está dentro do período selecionado.</p></div></div><div class="report-funnel is-agenda"><?php $agendaResultsMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $agendaResults ?: [['total'=>1]])); foreach ($agendaResults as $row): $width=max(18,min(100,((int)$row['total']/$agendaResultsMax)*100)); ?><article class="is-<?= View::e((string)($row['tone'] ?? 'neutral')) ?>"><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= $number($row['total']) ?></strong></div></article><?php endforeach; ?></div></section>
+-            </div>
+-            <div class="client-report-two-columns client-report-agenda-row">
+-                <aside class="client-report-summary-card"><span class="eyebrow">Resumo da agenda</span><h3>Resultado do período</h3><dl><div><dt>Compromissos</dt><dd><?= $number($metrics['appointments'] ?? 0) ?></dd></div><div><dt>Aguardando confirmação</dt><dd><?= $number($metrics['appointments_pending'] ?? 0) ?></dd></div><div><dt>Agendados</dt><dd><?= $number($metrics['appointments_scheduled'] ?? 0) ?></dd></div><div><dt>Confirmados</dt><dd><?= $number($metrics['appointments_confirmed'] ?? 0) ?></dd></div><div><dt>Concluídos</dt><dd><?= $number($metrics['appointments_completed'] ?? 0) ?></dd></div><div><dt>Rejeitados</dt><dd><?= $number($metrics['appointments_rejected'] ?? 0) ?></dd></div><div><dt>Cancelados</dt><dd><?= $number($metrics['appointments_cancelled'] ?? 0) ?></dd></div><div><dt>Não compareceram</dt><dd><?= $number($metrics['appointments_no_show'] ?? 0) ?></dd></div><div><dt>Resultado positivo</dt><dd><?= $percent($metrics['agenda_conversion'] ?? 0) ?></dd></div></dl><a class="btn btn-outline btn-block" href="<?= View::e(Router::url('/calendar')) ?>">Abrir agenda</a></aside>
+-                <aside class="client-report-summary-card"><span class="eyebrow">Leitura correta</span><h3>Como interpretar</h3><p class="muted-text">A busca de disponibilidade mede interações com o motor de horários. Já os compromissos são medidos pelo status atual e pela data marcada. Eles podem ter origens diferentes, inclusive cadastro manual e agendamentos anteriores ao fluxo conversacional.</p></aside>
+-            </div>
+-        </section>
+-    </div>
+-<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.15.1')) ?>" defer></script>
+-</div>
++<?php
++
++use App\Core\Auth;
++use App\Core\Router;
++use App\Core\View;
++use App\Core\PublicId;
++
++$money = static fn (float|int|string $value): string => 'R$ ' . number_format((float) $value, 2, ',', '.');
++$number = static fn (float|int|string $value): string => number_format((float) $value, 0, ',', '.');
++$percent = static fn (float|int|string $value): string => number_format((float) $value, 1, ',', '.') . '%';
++$duration = static function (int|float|string $seconds): string {
++    $seconds = max(0, (int) round((float) $seconds));
++    if ($seconds <= 0) return 'Sem dados';
++    if ($seconds < 60) return $seconds . 's';
++    if ($seconds < 3600) return intdiv($seconds, 60) . 'min ' . ($seconds % 60) . 's';
++    return intdiv($seconds, 3600) . 'h ' . intdiv($seconds % 3600, 60) . 'min';
++};
++$trend = static function (?float $value, bool $inverse = false): array {
++    if ($value === null) return ['class' => 'is-neutral', 'text' => 'Sem base anterior'];
++    if (abs($value) < .05) return ['class' => 'is-neutral', 'text' => 'Estável vs. período anterior'];
++    $positive = $value > 0;
++    if ($inverse) $positive = !$positive;
++    return [
++        'class' => $positive ? 'is-up' : 'is-down',
++        'text' => ($value > 0 ? '↑ ' : '↓ ') . number_format(abs($value), 1, ',', '.') . '% vs. período anterior',
++    ];
++};
++$icon = static function (string $name): string {
++    $paths = [
++        'chat' => '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/>',
++        'reply' => '<path d="m9 17-5-5 5-5"/><path d="M4 12h10a6 6 0 0 1 6 6v1"/>',
++        'human' => '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
++        'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
++        'calendar' => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
++        'check' => '<circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/>',
++        'spark' => '<path d="m12 3 1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="m18 15 .9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/>',
++        'alert' => '<path d="M10.3 3.6 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
++        'download' => '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>',
++        'refresh' => '<path d="M20 6v5h-5M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 11M5.5 15A7 7 0 0 0 18 17.5l2-4.5"/>',
++        'filter' => '<path d="M4 5h16l-6 7v5l-4 2v-7z"/>',
++        'report' => '<path d="M5 3h10l4 4v14H5z"/><path d="M14 3v5h5M8 13h8M8 17h6"/>',
++    ];
++    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' . ($paths[$name] ?? $paths['report']) . '</svg>';
++};
++$statusLabels = [
++    'scheduled' => 'Agendado', 'confirmed' => 'Confirmado', 'completed' => 'Concluído',
++    'cancelled' => 'Cancelado', 'no_show' => 'Não compareceu', 'rejected' => 'Rejeitado',
++];
++$weekdayLabels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
++$queryBase = array_filter([
++    'start' => $filters['start'] ?? '',
++    'end' => $filters['end'] ?? '',
++], static fn ($value) => $value !== '');
++$comparisons = $comparisons ?? [];
++$heatmap = $heatmap ?? [];
++$agendaAvailability = $agendaAvailability ?? [];
++$agendaResults = $agendaResults ?? [];
++$insights = $insights ?? [];
++$warnings = $warnings ?? [];
++$heatmapLookup = [];
++$heatmapMax = 1;
++foreach ($heatmap as $cell) {
++    $key = ((int) ($cell['weekday_index'] ?? 0)) . ':' . ((int) ($cell['hour_index'] ?? 0));
++    $heatmapLookup[$key] = (int) ($cell['total'] ?? 0);
++    $heatmapMax = max($heatmapMax, (int) ($cell['total'] ?? 0));
++}
++$hours = range(7, 22);
++$lineSeries = json_encode(array_map(static fn (array $row): array => [
++    'label' => date('d/m', strtotime((string) $row['label'])),
++    'total' => (int) ($row['total'] ?? 0),
++    'incoming' => (int) ($row['incoming'] ?? 0),
++    'ai' => (int) ($row['ai'] ?? 0),
++], $byDay ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
++if (!is_string($lineSeries)) $lineSeries = '[]';
++$lineSeriesB64 = base64_encode($lineSeries);
++$responseDistribution = [
++    ['label' => 'Recebidas', 'value' => (int) ($metrics['incoming_messages'] ?? 0)],
++    ['label' => 'IA', 'value' => (int) ($metrics['ai_replies'] ?? 0)],
++    ['label' => 'Equipe', 'value' => (int) ($metrics['human_replies'] ?? 0)],
++    ['label' => 'Sistema', 'value' => (int) ($metrics['system_replies'] ?? 0)],
++];
++$responseSeries = json_encode($responseDistribution, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
++if (!is_string($responseSeries)) $responseSeries = '[]';
++$donutSeries = json_encode([
++    ['label' => 'IA', 'value' => (int) ($metrics['ai_replies'] ?? 0)],
++    ['label' => 'Equipe', 'value' => (int) ($metrics['human_replies'] ?? 0)],
++    ['label' => 'Automação/Sistema', 'value' => (int) ($metrics['system_replies'] ?? 0)],
++], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
++if (!is_string($donutSeries)) $donutSeries = '[]';
++$donutSeriesB64 = base64_encode($donutSeries);
++$periodLabel = date('d/m/Y', strtotime((string) ($filters['start'] ?? 'now'))) . ' — ' . date('d/m/Y', strtotime((string) ($filters['end'] ?? 'now')));
++$teamReportUrl = (Auth::can('reports.team.view_own') || Auth::can('reports.team.view_all'))
++    ? Router::url('/reports/team?' . http_build_query($queryBase))
++    : '#client-report-team';
++$hourMap = array_fill(0, 24, 0);
++foreach (($byHour ?? []) as $row) $hourMap[(int) ($row['label'] ?? 0)] = (int) ($row['total'] ?? 0);
++$hourMax = max(1, ...array_values($hourMap));
++$quickReports = [
++    ['name' => 'Conversas do período', 'type' => 'Atendimento', 'metric' => $number($metrics['active_conversations'] ?? 0) . ' atendidas', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'conversations']))],
++    ['name' => 'Oportunidades comerciais', 'type' => 'CRM', 'metric' => $number($metrics['crm_leads'] ?? 0) . ' oportunidades', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'leads']))],
++    ['name' => 'Cobranças da empresa', 'type' => 'Financeiro', 'metric' => $money($metrics['received_amount'] ?? 0) . ' recebido', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'billing']))],
++];
++?>
++<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.15.1')) ?>">
++<div class="executive-report-page client-manager-report report-v3646 report-v3647 report-v36140 report-v36150">
++    <header class="rs-admin-report-header rs-client-report-header">
++        <div>
++            <nav class="rs-report-breadcrumb" aria-label="Navegação"><span>Relatórios</span><b>/</b><strong>Visão geral</strong></nav>
++            <h1>Painel executivo</h1>
++            <p>Indicadores da sua empresa para acompanhar atendimento, equipe, automações, agenda e resultados em um só lugar.</p>
++        </div>
++        <div class="rs-admin-report-header-actions">
++            <?php if (Auth::can('reports.schedule.manage')): ?><a class="btn btn-outline" href="<?= View::e(Router::url('/reports/automatic')) ?>">Relatórios automáticos</a><?php endif; ?>
++            <?php if (Auth::can('reports.team.view_own') || Auth::can('reports.team.view_all')): ?><a class="btn btn-outline" href="<?= View::e($teamReportUrl) ?>">Equipe e profissionais</a><?php endif; ?>
++            <button class="btn btn-outline" type="button" data-page-action="reload"><?= $icon('refresh') ?> Atualizar</button>
++            <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'conversations']))) ?>"><?= $icon('download') ?> Exportar</a>
++        </div>
++    </header>
++
++    <form class="card rs-admin-report-toolbar rs-client-report-toolbar" method="get" action="<?= View::e(Router::url('/reports')) ?>">
++        <div class="rs-admin-date-range">
++            <label><span>De</span><input type="date" name="start" value="<?= View::e($filters['start']) ?>"></label>
++            <i>→</i>
++            <label><span>Até</span><input type="date" name="end" value="<?= View::e($filters['end']) ?>"></label>
++        </div>
++        <div class="rs-client-filter-copy"><span>Período analisado</span><strong><?= View::e($periodLabel) ?></strong><small>Os indicadores respeitam o fuso e os dados da sua empresa.</small></div>
++        <div class="rs-admin-toolbar-actions"><button class="btn btn-primary" type="submit"><?= $icon('filter') ?> Aplicar filtros</button><a class="btn btn-quiet" href="<?= View::e(Router::url('/reports')) ?>">Limpar</a></div>
++    </form>
++
++    <?php if ($warnings): ?><div class="flash warning executive-report-warning"><strong>Alguns indicadores estão sendo atualizados.</strong><span><?= View::e(implode(' · ', $warnings)) ?></span></div><?php endif; ?>
++
++    <section class="rs-admin-kpi-grid" aria-label="Principais resultados">
++        <?php $t = $trend($comparisons['active_conversations'] ?? null); ?>
++        <a class="card rs-admin-kpi is-blue" href="<?= View::e(Router::url('/conversations')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('chat') ?></span><div><small>Conversas atendidas</small><strong><?= $number($metrics['active_conversations'] ?? 0) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= View::e($t['text']) ?> · <?= $number($metrics['conversations'] ?? 0) ?> nova(s)</em></div></a>
++        <?php $t = $trend($comparisons['responded_conversations'] ?? null); ?>
++        <a class="card rs-admin-kpi is-indigo" href="<?= View::e(Router::url('/conversations')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('reply') ?></span><div><small>Conversas respondidas</small><strong><?= $number($metrics['responded_conversations'] ?? 0) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= View::e($t['text']) ?></em></div></a>
++        <?php $t = $trend($comparisons['human_conversations'] ?? null); ?>
++        <a class="card rs-admin-kpi is-teal" href="<?= View::e($teamReportUrl) ?>"><span class="rs-admin-kpi-icon"><?= $icon('human') ?></span><div><small>Atendimentos humanos</small><strong><?= $number($metrics['human_conversations'] ?? 0) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= $number($metrics['human_replies'] ?? 0) ?> respostas da equipe</em></div></a>
++        <a class="card rs-admin-kpi is-purple" href="<?= View::e($teamReportUrl) ?>"><span class="rs-admin-kpi-icon"><?= $icon('clock') ?></span><div><small>Tempo médio da 1ª resposta</small><strong><?= View::e($duration($metrics['avg_first_response_seconds'] ?? 0)) ?></strong><em><?= $number($metrics['first_responses_measured'] ?? 0) ?> respostas medidas</em></div></a>
++        <a class="card rs-admin-kpi is-orange" href="<?= View::e(Router::url('/calendar')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('calendar') ?></span><div><small>Agendamentos</small><strong><?= $number($metrics['appointments'] ?? 0) ?></strong><em><?= $percent($metrics['agenda_conversion'] ?? 0) ?> confirmados/concluídos</em></div></a>
++        <a class="card rs-admin-kpi is-green" href="<?= View::e(Router::url('/calendar')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('check') ?></span><div><small>Comparecimento</small><strong><?= $percent($metrics['attendance_rate'] ?? 0) ?></strong><em><?= $number($metrics['appointments_completed'] ?? 0) ?> concluído(s)</em></div></a>
++        <?php $t = $trend($comparisons['ai_replies'] ?? null); ?>
++        <a class="card rs-admin-kpi is-violet" href="#client-report-team"><span class="rs-admin-kpi-icon"><?= $icon('spark') ?></span><div><small>Uso da IA</small><strong><?= $number($metrics['ai_replies'] ?? 0) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= $percent($metrics['ai_share'] ?? 0) ?> das respostas</em></div></a>
++        <a class="card rs-admin-kpi is-red" href="#client-report-attention"><span class="rs-admin-kpi-icon"><?= $icon('alert') ?></span><div><small>Conversas que precisam de atenção</small><strong><?= $number($metrics['attention_conversations'] ?? 0) ?></strong><em><?= $number($metrics['unread'] ?? 0) ?> mensagem(ns) não lida(s)</em></div></a>
++    </section>
++
++    <section class="rs-admin-chart-grid rs-admin-chart-grid-primary">
++        <article class="card rs-admin-dashboard-card rs-admin-chart-wide">
++            <header><div><h2>Mensagens ao longo do tempo</h2><p>Mensagens recebidas, respostas enviadas e participação da IA.</p></div><span class="rs-admin-period-pill"><?= View::e($periodLabel) ?></span></header>
++            <div class="report-svg-chart rs-admin-main-line-chart" data-report-line-chart data-series-b64="<?= View::e($lineSeriesB64) ?>"></div>
++            <div class="report-chart-legend"><span><i class="is-total"></i>Total</span><span><i class="is-incoming"></i>Recebidas</span><span><i class="is-ai"></i>IA</span></div>
++        </article>
++        <article class="card rs-admin-dashboard-card">
++            <header><div><h2>Distribuição das interações</h2><p>Entrada dos clientes e respostas enviadas.</p></div></header>
++            <div class="rs-admin-donut-layout"><div class="report-donut" data-report-donut data-series="<?= View::e($responseSeries) ?>" data-center="<?= $number($metrics['total_messages'] ?? 0) ?>"></div><div class="rs-admin-donut-legend"><?php foreach ($responseDistribution as $index => $row): ?><div><i class="is-color-<?= ($index % 5) + 1 ?>"></i><span><?= View::e($row['label']) ?></span><strong><?= $number($row['value']) ?></strong></div><?php endforeach; ?></div></div>
++        </article>
++        <article class="card rs-admin-dashboard-card">
++            <header><div><h2>Interações por horário</h2><p>Horários com maior procura pela sua empresa.</p></div></header>
++            <div class="rs-admin-hour-chart" aria-label="Interações por horário"><?php foreach ($hourMap as $hour => $total): $height = max(3, min(100, ($total / $hourMax) * 100)); ?><article title="<?= str_pad((string)$hour,2,'0',STR_PAD_LEFT) ?>h — <?= $number($total) ?>"><span style="height:<?= $height ?>%"></span><small><?= ($hour % 2 === 0) ? str_pad((string)$hour,2,'0',STR_PAD_LEFT) : '' ?></small></article><?php endforeach; ?></div>
++        </article>
++    </section>
++
++    <section class="rs-admin-chart-grid rs-admin-chart-grid-secondary">
++        <article class="card rs-admin-dashboard-card rs-admin-team-card">
++            <header><div><h2>Desempenho da equipe</h2><p>Respostas enviadas e conversas atendidas por profissional.</p></div><a href="<?= View::e($teamReportUrl) ?>">Ver relatório completo →</a></header>
++            <div class="table-wrap"><table class="rs-admin-compact-table"><thead><tr><th>Profissional</th><th>Respostas</th><th>Conversas</th></tr></thead><tbody><?php foreach (array_slice($teamPerformance ?? [],0,6) as $row): ?><tr><td><span class="rs-admin-person"><b><?= View::e(strtoupper(substr((string) $row['label'], 0, 1))) ?></b><span><strong><?= View::e($row['label']) ?></strong><small>Atendimento humano</small></span></span></td><td><?= $number($row['total']) ?></td><td><?= $number($row['conversations']) ?></td></tr><?php endforeach; ?><?php if (empty($teamPerformance)): ?><tr><td colspan="3"><div class="empty-state">Nenhuma resposta humana registrada no período.</div></td></tr><?php endif; ?></tbody></table></div>
++        </article>
++        <article class="card rs-admin-dashboard-card">
++            <header><div><h2>Resultado da agenda</h2><p>Situação atual dos compromissos do período.</p></div><a href="<?= View::e(Router::url('/calendar')) ?>">Abrir agenda →</a></header>
++            <div class="executive-bars rs-client-agenda-bars"><?php $agendaMax=max(1,...array_map(static fn($r)=>(int)($r['total']??0),$agendaResults?:[['total'=>1]])); foreach ($agendaResults as $row): ?><div><strong><?= View::e($row['label']) ?></strong><span><i style="width:<?= min(100,((int)$row['total']/$agendaMax)*100) ?>%"></i></span><b><?= $number($row['total']) ?></b></div><?php endforeach; ?><?php if (!$agendaResults): ?><div class="empty-state">Nenhum compromisso no período.</div><?php endif; ?></div>
++        </article>
++        <article class="card rs-admin-dashboard-card rs-admin-ai-summary">
++            <header><div><h2>Uso da IA</h2><p>Participação da automação no atendimento.</p></div><a href="#client-report-team">Ver detalhes →</a></header>
++            <div class="rs-admin-ai-ring" style="--ai-share:<?= min(100,max(0,(float)($metrics['ai_share']??0))) ?>%"><span><strong><?= $percent($metrics['ai_share'] ?? 0) ?></strong><small>das respostas</small></span></div>
++            <dl><div><dt>Respostas da IA</dt><dd><?= $number($metrics['ai_replies'] ?? 0) ?></dd></div><div><dt>Respostas humanas</dt><dd><?= $number($metrics['human_replies'] ?? 0) ?></dd></div><div><dt>Não concluídas</dt><dd><?= $number($metrics['ai_errors'] ?? 0) ?></dd></div></dl>
++        </article>
++    </section>
++
++    <section class="card rs-client-attention-panel" id="client-report-attention">
++        <header><div><span class="eyebrow">Acompanhamento</span><h2>Conversas que precisam de atenção</h2><p>Priorize mensagens não lidas e atendimentos humanos ainda em aberto.</p></div><a href="<?= View::e(Router::url('/conversations')) ?>">Abrir conversas →</a></header>
++        <div class="rs-client-attention-grid"><?php foreach (array_slice($attention ?? [],0,6) as $row): ?><a href="<?= View::e(Router::url('/conversations?conversation_uuid=' . rawurlencode(PublicId::encode('conversation', (int) $row['id'])))) ?>"><span><strong><?= View::e((string)(($row['contact_name']??'') ?: ($row['phone']??'Contato'))) ?></strong><small><?= (int)($row['unread_count']??0) ?> não lida(s) · <?= ($row['attendance_mode']??'')==='human'?'atendimento humano':'acompanhamento' ?></small></span><b><?= !empty($row['last_message_at']) ? View::e(date('d/m H:i',strtotime((string)$row['last_message_at']))) : 'sem horário' ?></b></a><?php endforeach; ?><?php if (empty($attention)): ?><div class="empty-state">Nenhuma conversa exige ação imediata.</div><?php endif; ?></div>
++    </section>
++
++    <section class="card rs-admin-ready-reports">
++        <header><div><h2>Exportações detalhadas</h2><p>Baixe os dados do período para análise em planilha. Os PDFs ficam em Relatórios automáticos.</p></div><span><?= View::e($periodLabel) ?></span></header>
++        <div class="table-wrap"><table><thead><tr><th>Nome do relatório</th><th>Tipo</th><th>Período</th><th>Indicador</th><th>Ações</th></tr></thead><tbody><?php foreach ($quickReports as $row): ?><tr><td><span class="rs-admin-report-name"><i><?= $icon('report') ?></i><strong><?= View::e($row['name']) ?></strong></span></td><td><span class="badge"><?= View::e($row['type']) ?></span></td><td><?= View::e($periodLabel) ?></td><td><?= View::e($row['metric']) ?></td><td><a class="rs-admin-download-action" href="<?= View::e($row['url']) ?>" aria-label="Exportar <?= View::e($row['name']) ?>"><?= $icon('download') ?></a></td></tr><?php endforeach; ?></tbody></table></div>
++    </section>
++
++    <?php if ($insights): ?><section class="card rs-admin-insights-strip"><div><span class="eyebrow">Insights automáticos</span><h2>Leitura rápida do período</h2></div><div class="report-insights-grid is-compact"><?php foreach ($insights as $item): ?><article class="report-insight is-<?= View::e($item['tone'] ?? 'info') ?>"><span class="report-insight-dot"></span><div><strong><?= View::e($item['title'] ?? '') ?></strong><p><?= View::e($item['text'] ?? '') ?></p></div></article><?php endforeach; ?></div></section><?php endif; ?>
++
++    <div class="rs-admin-detailed-heading"><span class="eyebrow">Análises detalhadas</span><h2>Aprofunde cada resultado</h2><p>Os blocos abaixo mantêm os mapas de calor, a visão da equipe, o CRM e os detalhes da agenda.</p></div>
++    <section class="card report-section-directory" id="client-report-directory" aria-label="Navegação do relatório gerencial">
++        <div class="section-heading report-directory-heading"><div><span class="eyebrow">Leitura do período</span><h2>Explore os resultados por assunto</h2><p>Os blocos ficam abertos na mesma página para facilitar comparação, impressão e tomada de decisão.</p></div></div>
++        <nav class="report-section-card-grid report-section-card-grid-client">
++            <a class="report-section-link" href="#client-report-overview" data-report-section-link><span class="report-section-number">01</span><strong>Visão geral</strong><small>Volume diário e prioridades.</small></a>
++            <a class="report-section-link" href="#client-report-service" data-report-section-link><span class="report-section-number">02</span><strong>Horários de pico</strong><small>Mapa de calor da demanda.</small></a>
++            <a class="report-section-link" href="#client-report-team" data-report-section-link><span class="report-section-number">03</span><strong>IA e equipe</strong><small>Automação x atendimento humano.</small></a>
++            <a class="report-section-link" href="#client-report-results" data-report-section-link><span class="report-section-number">04</span><strong>CRM e agenda</strong><small>Funis e conversão.</small></a>
++        </nav>
++    </section>
++
++    <div class="report-section-stack client-report-section-stack">
++        <section class="card report-content-card client-report-panel" id="client-report-overview">
++            <header class="report-content-card-header"><span class="report-section-number">01</span><div><span class="eyebrow">Visão geral</span><h2>Evolução do atendimento</h2><p>Compare volume total, mensagens recebidas e participação da IA ao longo dos dias.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
++            <div class="report-chart-layout">
++                <section class="report-chart-card"><div class="section-heading"><div><span class="eyebrow">Movimento diário</span><h2>Mensagens por dia</h2></div><span class="badge"><?= View::e(date('d/m', strtotime($filters['start']))) ?> → <?= View::e(date('d/m', strtotime($filters['end']))) ?></span></div><div class="report-svg-chart" data-report-line-chart data-series-b64="<?= View::e($lineSeriesB64) ?>" aria-label="Gráfico de mensagens por dia"></div><div class="report-chart-legend"><span><i class="is-total"></i>Total</span><span><i class="is-incoming"></i>Recebidas</span><span><i class="is-ai"></i>IA</span></div></section>
++                <aside class="client-report-summary-card"><span class="eyebrow">Resumo</span><h3>Leitura rápida</h3><dl><div><dt>Total de mensagens</dt><dd><?= $number($metrics['total_messages'] ?? 0) ?></dd></div><div><dt>Média por conversa</dt><dd><?= number_format((float) ($metrics['avg_messages_per_conversation'] ?? 0), 1, ',', '.') ?></dd></div><div><dt>Encerradas</dt><dd><?= $number($metrics['closed_conversations'] ?? 0) ?></dd></div><div><dt>Mensagens não enviadas</dt><dd><?= $number($metrics['failed_messages'] ?? 0) ?></dd></div></dl><a class="btn btn-outline btn-block" href="<?= View::e(Router::url('/conversations')) ?>">Abrir conversas</a></aside>
++            </div>
++            <div class="client-report-priority-grid">
++                <section><div class="section-heading"><div><span class="eyebrow">Atenção</span><h2>Conversas prioritárias</h2></div></div><div class="client-report-list"><?php foreach ($attention as $item): ?><a href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) $item['id'])) ?>"><span><strong><?= View::e($item['contact_name'] ?: $item['phone']) ?></strong><small><?= View::e($item['attendance_mode']) ?> · <?= View::e($item['last_message_at'] ?? '') ?></small></span><b><?= (int) $item['unread_count'] ?></b></a><?php endforeach; ?><?php if (!$attention): ?><div class="empty-state">Nenhuma conversa pendente neste momento.</div><?php endif; ?></div></section>
++                <section><div class="section-heading"><div><span class="eyebrow">Relacionamento</span><h2>Contatos com mais interações</h2></div></div><div class="client-report-list"><?php foreach ($topContacts as $item): ?><a href="<?= View::e(Router::url('/contacts')) ?>"><span><strong><?= View::e($item['label']) ?></strong><small><?= View::e($item['phone']) ?> · última interação <?= View::e(date('d/m H:i', strtotime($item['last_message_at']))) ?></small></span><b><?= (int) $item['total'] ?></b></a><?php endforeach; ?><?php if (!$topContacts): ?><div class="empty-state">Nenhum contato com mensagens no período.</div><?php endif; ?></div></section>
++            </div>
++        </section>
++
++        <section class="card report-content-card client-report-panel" id="client-report-service">
++            <header class="report-content-card-header"><span class="report-section-number">02</span><div><span class="eyebrow">Atendimento</span><h2>Quando seus clientes mais procuram você</h2><p>O mapa de calor mostra o volume de mensagens recebidas por dia da semana e horário.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
++            <div class="client-report-two-columns report-heatmap-layout">
++                <section class="report-heatmap-card"><div class="section-heading"><div><span class="eyebrow">Horários de pico</span><h2>Mapa de calor</h2></div></div><div class="report-heatmap-wrap"><div class="report-heatmap"><div class="report-heatmap-corner"></div><?php foreach ($hours as $hour): ?><div class="report-heatmap-hour"><?= str_pad((string) $hour, 2, '0', STR_PAD_LEFT) ?>h</div><?php endforeach; ?><?php foreach ($weekdayLabels as $dayIndex => $dayLabel): ?><div class="report-heatmap-day"><?= View::e($dayLabel) ?></div><?php foreach ($hours as $hour): $value = $heatmapLookup[$dayIndex . ':' . $hour] ?? 0; $level = $value > 0 ? max(.12, $value / $heatmapMax) : 0; ?><div class="report-heatmap-cell" style="--heat:<?= number_format($level, 3, '.', '') ?>" title="<?= View::e($dayLabel . ' ' . str_pad((string) $hour, 2, '0', STR_PAD_LEFT) . 'h: ' . $value . ' mensagem(ns)') ?>"><span><?= $value ?: '' ?></span></div><?php endforeach; ?><?php endforeach; ?></div></div><div class="report-heatmap-scale"><span>Menor demanda</span><i></i><span>Maior demanda</span></div></section>
++                <aside class="client-report-summary-card"><span class="eyebrow">Eficiência</span><h3>Indicadores de atendimento</h3><dl><div><dt>Respostas enviadas</dt><dd><?= $number($metrics['outgoing_messages'] ?? 0) ?></dd></div><div><dt>Respostas humanas</dt><dd><?= $number($metrics['human_replies'] ?? 0) ?></dd></div><div><dt>Participação humana</dt><dd><?= $percent($metrics['human_share'] ?? 0) ?></dd></div><div><dt>Conversas abertas agora</dt><dd><?= $number($metrics['open_conversations'] ?? 0) ?></dd></div></dl></aside>
++            </div>
++        </section>
++
++        <section class="card report-content-card client-report-panel" id="client-report-team">
++            <header class="report-content-card-header"><span class="report-section-number">03</span><div><span class="eyebrow">IA, equipe e sistema</span><h2>Quem respondeu seus clientes</h2><p>Separe respostas da IA, respostas humanas e mensagens automáticas do sistema para enxergar a automação com precisão.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
++            <div class="report-ai-layout">
++                <section class="report-donut-card"><div class="section-heading"><div><span class="eyebrow">Distribuição</span><h2>IA x equipe x sistema</h2></div></div><div class="report-donut" data-report-donut data-series-b64="<?= View::e($donutSeriesB64) ?>" data-center="<?= View::e($percent($metrics['ai_share'] ?? 0)) ?>"></div><div class="report-donut-summary"><div><span>IA</span><strong><?= $number($metrics['ai_replies'] ?? 0) ?></strong></div><div><span>Equipe</span><strong><?= $number($metrics['human_replies'] ?? 0) ?></strong></div><div><span>Automação/Sistema</span><strong><?= $number($metrics['system_replies'] ?? 0) ?></strong></div></div></section>
++                <section><div class="section-heading"><div><span class="eyebrow">Equipe</span><h2>Respostas por responsável</h2></div></div><div class="executive-bars client-team-bars"><?php $teamMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $teamPerformance ?: [['total'=>1]])); foreach ($teamPerformance as $row): ?><div><strong><?= View::e($row['label']) ?></strong><span><i style="width:<?= min(100,((int)$row['total']/$teamMax)*100) ?>%"></i></span><b><?= (int)$row['total'] ?></b><small><?= (int)$row['conversations'] ?> conversa(s)</small></div><?php endforeach; ?><?php if (!$teamPerformance): ?><div class="empty-state">Nenhuma resposta humana registrada no período.</div><?php endif; ?></div></section>
++                <aside class="client-report-summary-card"><span class="eyebrow">Assistente virtual</span><h3>Desempenho da IA</h3><dl><div><dt>Participação da IA</dt><dd><?= $percent($metrics['ai_share'] ?? 0) ?></dd></div><div><dt>Automação/Sistema</dt><dd><?= $percent($metrics['system_share'] ?? 0) ?></dd></div><div><dt>Execuções bem-sucedidas</dt><dd><?= $number($metrics['ai_success'] ?? 0) ?></dd></div><div><dt>Respostas não concluídas</dt><dd><?= $number($metrics['ai_errors'] ?? 0) ?></dd></div><div><dt>Agenda com atenção</dt><dd><?= $number($metrics['google_sync_errors'] ?? 0) ?></dd></div></dl></aside>
++            </div>
++        </section>
++
++        <section class="card report-content-card client-report-panel" id="client-report-results">
++            <header class="report-content-card-header"><span class="report-section-number">04</span><div><span class="eyebrow">CRM e agenda</span><h2>Do interesse ao resultado</h2><p>Veja onde as oportunidades estão no funil e em qual etapa os agendamentos avançam ou param.</p></div><a class="report-back-link" href="#client-report-directory">Voltar ao índice</a></header>
++            <div class="client-report-two-columns">
++                <section><div class="section-heading"><div><span class="eyebrow">Comercial</span><h2>Oportunidades por etapa</h2></div><a class="table-link" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'leads']))) ?>">Exportar CRM</a></div><div class="report-funnel"><?php $crmMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $crmByStage ?: [['total'=>1]])); foreach ($crmByStage as $row): $width = max(18, min(100, ((int) $row['total'] / $crmMax) * 100)); ?><article><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= (int)$row['total'] ?></strong><small><?= $money($row['value']) ?></small></div></article><?php endforeach; ?><?php if (!$crmByStage): ?><div class="empty-state">Nenhuma oportunidade cadastrada.</div><?php endif; ?></div></section>
++                <aside class="client-report-summary-card"><span class="eyebrow">CRM</span><h3>Resultado comercial</h3><dl><div><dt>Oportunidades criadas</dt><dd><?= $number($metrics['crm_leads'] ?? 0) ?></dd></div><div><dt>Ganhas</dt><dd><?= $number($metrics['crm_won'] ?? 0) ?></dd></div><div><dt>Perdidas</dt><dd><?= $number($metrics['crm_lost'] ?? 0) ?></dd></div><div><dt>Taxa de conversão</dt><dd><?= $percent($metrics['crm_conversion'] ?? 0) ?></dd></div></dl><a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/crm')) ?>">Abrir CRM</a></aside>
++            </div>
++            <div class="client-report-two-columns client-report-agenda-row">
++                <section><div class="section-heading"><div><span class="eyebrow">Disponibilidade</span><h2>Uso da busca de horários</h2><p>Consultas e opções podem se repetir; por isso estes números mostram uso do recurso e não formam um funil de conversão.</p></div></div><div class="report-funnel is-agenda"><?php $agendaAvailabilityMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $agendaAvailability ?: [['total'=>1]])); foreach ($agendaAvailability as $row): $width=max(18,min(100,((int)$row['total']/$agendaAvailabilityMax)*100)); ?><article><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= $number($row['total']) ?></strong></div></article><?php endforeach; ?></div></section>
++                <section><div class="section-heading"><div><span class="eyebrow">Agenda</span><h2>Resultado dos compromissos</h2><p>Status atual dos compromissos cuja data está dentro do período selecionado.</p></div></div><div class="report-funnel is-agenda"><?php $agendaResultsMax = max(1, ...array_map(static fn($r) => (int) ($r['total'] ?? 0), $agendaResults ?: [['total'=>1]])); foreach ($agendaResults as $row): $width=max(18,min(100,((int)$row['total']/$agendaResultsMax)*100)); ?><article class="is-<?= View::e((string)($row['tone'] ?? 'neutral')) ?>"><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= $number($row['total']) ?></strong></div></article><?php endforeach; ?></div></section>
++            </div>
++            <div class="client-report-two-columns client-report-agenda-row">
++                <aside class="client-report-summary-card"><span class="eyebrow">Resumo da agenda</span><h3>Resultado do período</h3><dl><div><dt>Compromissos</dt><dd><?= $number($metrics['appointments'] ?? 0) ?></dd></div><div><dt>Aguardando confirmação</dt><dd><?= $number($metrics['appointments_pending'] ?? 0) ?></dd></div><div><dt>Agendados</dt><dd><?= $number($metrics['appointments_scheduled'] ?? 0) ?></dd></div><div><dt>Confirmados</dt><dd><?= $number($metrics['appointments_confirmed'] ?? 0) ?></dd></div><div><dt>Concluídos</dt><dd><?= $number($metrics['appointments_completed'] ?? 0) ?></dd></div><div><dt>Rejeitados</dt><dd><?= $number($metrics['appointments_rejected'] ?? 0) ?></dd></div><div><dt>Cancelados</dt><dd><?= $number($metrics['appointments_cancelled'] ?? 0) ?></dd></div><div><dt>Não compareceram</dt><dd><?= $number($metrics['appointments_no_show'] ?? 0) ?></dd></div><div><dt>Resultado positivo</dt><dd><?= $percent($metrics['agenda_conversion'] ?? 0) ?></dd></div></dl><a class="btn btn-outline btn-block" href="<?= View::e(Router::url('/calendar')) ?>">Abrir agenda</a></aside>
++                <aside class="client-report-summary-card"><span class="eyebrow">Leitura correta</span><h3>Como interpretar</h3><p class="muted-text">A busca de disponibilidade mede interações com o motor de horários. Já os compromissos são medidos pelo status atual e pela data marcada. Eles podem ter origens diferentes, inclusive cadastro manual e agendamentos anteriores ao fluxo conversacional.</p></aside>
++            </div>
++        </section>
++    </div>
++<!-- Marcador histórico de regressão: reports.js?v=36.15.1 -->
++<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.20.15')) ?>" defer></script>
++</div>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/reports/team.php rsconnect_ent030_work/app/Views/reports/team.php
+--- /tmp/base030/app/Views/reports/team.php	2026-08-26 22:42:10.000000000 +0000
++++ rsconnect_ent030_work/app/Views/reports/team.php	2026-08-28 12:19:20.488571785 +0000
+@@ -73,7 +73,7 @@
+                 <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/team/export?' . http_build_query($queryBase))) ?>">Exportar equipe</a>
+                 <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/team/export?' . http_build_query($queryBase + ['detail' => 'first_responses']))) ?>">Exportar 1ª respostas</a>
+             <?php endif; ?>
+-            <button class="btn btn-outline" type="button" onclick="window.print()">Imprimir</button>
++            <button class="btn btn-outline" type="button" data-page-action="print">Imprimir</button>
+         </div>
+     </section>
+ 
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/tasks/index.php rsconnect_ent030_work/app/Views/tasks/index.php
+--- /tmp/base030/app/Views/tasks/index.php	2026-08-26 22:42:10.000000000 +0000
++++ rsconnect_ent030_work/app/Views/tasks/index.php	2026-08-28 12:19:20.487219957 +0000
+@@ -54,7 +54,7 @@
+ </div>
+ 
+ <form class="filter-bar" method="get" action="<?= View::e(Router::url('/tasks')) ?>">
+-    <?php if (Auth::isSuperAdmin()): ?><select name="tenant_id" onchange="this.form.submit()"><option value="">Selecione a empresa</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= (int) ($filters['tenant_id'] ?? 0) === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select><?php endif; ?>
++    <?php if (Auth::isSuperAdmin()): ?><select name="tenant_id" data-auto-submit><option value="">Selecione a empresa</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= (int) ($filters['tenant_id'] ?? 0) === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select><?php endif; ?>
+     <select name="status"><option value="">Todos os status</option><?php foreach ($statusLabels as $value => $label): ?><option value="<?= View::e($value) ?>" <?= ($filters['status'] ?? '') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?></select>
+     <select name="type"><option value="">Todos os tipos</option><?php foreach ($typeLabels as $value => $label): ?><option value="<?= View::e($value) ?>" <?= ($filters['type'] ?? '') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?></select>
+     <select name="assigned_user_id"><option value="">Toda a equipe</option><?php foreach ($team as $member): ?><option value="<?= (int) $member['id'] ?>" <?= (int) ($filters['assigned_user_id'] ?? 0) === (int) $member['id'] ? 'selected' : '' ?>><?= View::e($member['name']) ?></option><?php endforeach; ?></select>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/app/Views/white_label/index.php rsconnect_ent030_work/app/Views/white_label/index.php
+--- /tmp/base030/app/Views/white_label/index.php	2026-08-26 22:42:08.000000000 +0000
++++ rsconnect_ent030_work/app/Views/white_label/index.php	2026-08-28 12:19:21.783856610 +0000
+@@ -44,7 +44,7 @@
+         <form method="get" action="<?= View::e(Router::url('/white-label')) ?>" class="inline-form-panel">
+             <label class="field" style="margin:0">
+                 <span>Cliente</span>
+-                <select name="tenant_id" onchange="this.form.submit()">
++                <select name="tenant_id" data-auto-submit>
+                     <?php foreach ($companies as $company): ?>
+                         <option value="<?= (int) $company['id'] ?>" <?= $selected && (int) $selected['id'] === (int) $company['id'] ? 'selected' : '' ?>>
+                             <?= View::e($company['name']) ?><?= (int) ($company['white_label_enabled'] ?? 0) === 1 ? ' — ativo' : '' ?>
+@@ -106,7 +106,7 @@
+                 <div class="white-label-upload-preview-grid">
+                     <label class="field upload-field">
+                         <span>Logo principal</span>
+-                        <input type="file" name="brand_logo_file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml">
++                        <input type="file" name="brand_logo_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+                         <small class="field-hint">Use a logo horizontal quando existir. Ela aparece no login e prévias.</small>
+                         <?php if ($previewLogoUrl !== ''): ?>
+                             <label class="mini-check"><input type="checkbox" name="remove_logo" value="1"> Remover logo atual</label>
+@@ -114,7 +114,7 @@
+                     </label>
+                     <label class="field upload-field">
+                         <span>Ícone reduzido</span>
+-                        <input type="file" name="brand_icon_file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml">
++                        <input type="file" name="brand_icon_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+                         <small class="field-hint">Ideal para sidebar, card de login e espaços quadrados.</small>
+                         <?php if ($previewIconUrl !== ''): ?>
+                             <label class="mini-check"><input type="checkbox" name="remove_icon" value="1"> Remover ícone atual</label>
+@@ -122,8 +122,8 @@
+                     </label>
+                     <label class="field upload-field">
+                         <span>Favicon</span>
+-                        <input type="file" name="brand_favicon_file" accept=".png,.jpg,.jpeg,.webp,.svg,.ico,image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon">
+-                        <small class="field-hint">Ideal: PNG/ICO quadrado para a aba do navegador.</small>
++                        <input type="file" name="brand_favicon_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
++                        <small class="field-hint">Ideal: PNG, JPG ou WEBP quadrado para a aba do navegador.</small>
+                         <?php if ($previewFaviconUrl !== ''): ?>
+                             <label class="mini-check"><input type="checkbox" name="remove_favicon" value="1"> Remover favicon atual</label>
+                         <?php endif; ?>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/bin/audit-public-uploads.php rsconnect_ent030_work/bin/audit-public-uploads.php
+--- /tmp/base030/bin/audit-public-uploads.php	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent030_work/bin/audit-public-uploads.php	2026-08-28 12:24:04.908360969 +0000
+@@ -0,0 +1,58 @@
++<?php
++
++declare(strict_types=1);
++
++$root = dirname(__DIR__) . '/public/uploads';
++if (!is_dir($root)) {
++    fwrite(STDERR, "Pasta public/uploads não encontrada.\n");
++    exit(2);
++}
++
++$allowedMime = [
++    'png' => 'image/png',
++    'jpg' => 'image/jpeg',
++    'jpeg' => 'image/jpeg',
++    'webp' => 'image/webp',
++];
++$ignored = ['.htaccess', '.gitkeep'];
++$problems = [];
++$total = 0;
++
++$iterator = new RecursiveIteratorIterator(
++    new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)
++);
++$finfo = new finfo(FILEINFO_MIME_TYPE);
++
++foreach ($iterator as $fileInfo) {
++    if (!$fileInfo->isFile()) {
++        continue;
++    }
++
++    $total++;
++    $name = $fileInfo->getFilename();
++    $relative = ltrim(str_replace($root, '', $fileInfo->getPathname()), DIRECTORY_SEPARATOR);
++    if (in_array($name, $ignored, true)) {
++        continue;
++    }
++
++    $extension = strtolower($fileInfo->getExtension());
++    if (!isset($allowedMime[$extension])) {
++        $problems[] = $relative . ' — extensão não permitida';
++        continue;
++    }
++
++    $mime = strtolower((string) $finfo->file($fileInfo->getPathname()));
++    $imageInfo = @getimagesize($fileInfo->getPathname());
++    if ($mime !== $allowedMime[$extension] || !is_array($imageInfo) || strtolower((string) ($imageInfo['mime'] ?? '')) !== $mime) {
++        $problems[] = $relative . ' — conteúdo não corresponde a uma imagem válida';
++    }
++}
++
++echo "Arquivos verificados: {$total}\n";
++if ($problems === []) {
++    echo "[OK] Nenhum arquivo público inseguro foi encontrado.\n";
++    exit(0);
++}
++
++fwrite(STDERR, "[ATENÇÃO] Arquivos que devem ser removidos ou convertidos:\n- " . implode("\n- ", $problems) . "\n");
++exit(1);
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/bootstrap.php rsconnect_ent030_work/bootstrap.php
+--- /tmp/base030/bootstrap.php	2026-08-28 11:44:09.000000000 +0000
++++ rsconnect_ent030_work/bootstrap.php	2026-08-28 12:26:13.849739410 +0000
+@@ -2,6 +2,7 @@
+ 
+ declare(strict_types=1);
+ 
++use App\Core\ContentSecurityPolicy;
+ use App\Core\Env;
+ use App\Core\RequestSecurity;
+ 
+@@ -52,6 +53,7 @@
+ }
+ 
+ if (!headers_sent() && filter_var(Env::get('SECURITY_HEADERS_ENABLED', true), FILTER_VALIDATE_BOOL)) {
++    header_remove('X-Powered-By');
+     header('X-Frame-Options: SAMEORIGIN');
+     header('X-Content-Type-Options: nosniff');
+     header('Referrer-Policy: strict-origin-when-cross-origin');
+@@ -60,7 +62,7 @@
+     header('X-Permitted-Cross-Domain-Policies: none');
+ 
+     if (filter_var(Env::get('SECURITY_CSP_ENABLED', true), FILTER_VALIDATE_BOOL)) {
+-        header("Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; img-src 'self' data: blob: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; media-src 'self' blob:");
++        header('Content-Security-Policy: ' . ContentSecurityPolicy::headerValue(RequestSecurity::isHttps()));
+     }
+ 
+     if (RequestSecurity::isHttps()) {
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/composer.json rsconnect_ent030_work/composer.json
+--- /tmp/base030/composer.json	2026-08-28 11:44:31.000000000 +0000
++++ rsconnect_ent030_work/composer.json	2026-08-28 12:25:17.377104350 +0000
+@@ -19,6 +19,7 @@
+     "test:ent026": "php tests/Feature/ent026-tests-sanitization-smoke.php",
+     "test:ent028": "php tests/Feature/ent028-webhook-security-smoke.php",
+     "test:ent028-schema": "php tests/Feature/ent028-pagbank-schema-hotfix-smoke.php",
+-    "test:ent029": "php tests/Feature/ent029-secure-health-checks-smoke.php"
++    "test:ent029": "php tests/Feature/ent029-secure-health-checks-smoke.php",
++    "test:ent030": "php tests/Feature/ent030-xss-svg-csp-smoke.php"
+   }
+ }
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/docs/ATUALIZACAO-v36.20.15.md rsconnect_ent030_work/docs/ATUALIZACAO-v36.20.15.md
+--- /tmp/base030/docs/ATUALIZACAO-v36.20.15.md	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent030_work/docs/ATUALIZACAO-v36.20.15.md	2026-08-28 12:25:17.692864403 +0000
+@@ -0,0 +1,16 @@
++# Atualização v36.20.15 — ENT-030
++
++## Entrega
++
++- bloqueio de SVG e ICO em uploads white label;
++- validação de MIME, estrutura, tamanho e dimensões reais de imagens;
++- pasta `public/uploads` limitada a PNG, JPEG e WEBP;
++- CSP com nonce para scripts e estilos embutidos;
++- remoção de handlers JavaScript inline das views;
++- correção de pontos de inserção dinâmica com risco de XSS;
++- auditoria CLI dos uploads públicos;
++- neutralização do endpoint legado `public/health.php` que ainda expunha detalhes técnicos.
++
++## Compatibilidade
++
++Não há alteração de banco. A aplicação mantém os SVGs estáticos confiáveis incluídos em `public/assets`, mas não permite novos SVGs enviados por usuários.
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/docs/diagnostics/ENT-030-VALIDATION-v36.20.15.md rsconnect_ent030_work/docs/diagnostics/ENT-030-VALIDATION-v36.20.15.md
+--- /tmp/base030/docs/diagnostics/ENT-030-VALIDATION-v36.20.15.md	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent030_work/docs/diagnostics/ENT-030-VALIDATION-v36.20.15.md	2026-08-28 12:25:17.710111811 +0000
+@@ -0,0 +1,10 @@
++# Validação — ENT-030 v36.20.15
++
++- sintaxe PHP: sem erros;
++- JavaScript: `node --check` sem erros;
++- teste ENT-030: 24 verificações aprovadas;
++- auditoria de uploads do pacote: aprovada;
++- suíte completa: 82 aprovações e 9 falhas históricas;
++- nenhuma migration nova;
++- nenhuma credencial incluída;
++- estrutura `tests/` continua sem aplicação duplicada.
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/docs/diagnostics/ENT-030-XSS-SVG-CSP-v36.20.15.md rsconnect_ent030_work/docs/diagnostics/ENT-030-XSS-SVG-CSP-v36.20.15.md
+--- /tmp/base030/docs/diagnostics/ENT-030-XSS-SVG-CSP-v36.20.15.md	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent030_work/docs/diagnostics/ENT-030-XSS-SVG-CSP-v36.20.15.md	2026-08-28 12:25:17.700864423 +0000
+@@ -0,0 +1,27 @@
++# Diagnóstico técnico — ENT-030 / PA-004
++
++## Achados
++
++1. O upload white label aceitava `image/svg+xml` e ICO e gravava diretamente em `public/uploads`.
++2. A pasta pública não possuía uma lista positiva de extensões servidas.
++3. A CSP global usava `script-src 'unsafe-inline'` e `style-src 'unsafe-inline'`.
++4. Existiam 24 handlers JavaScript inline em formulários, selects e botões.
++5. Um nome de instância era inserido com `innerHTML` sem escape explícito.
++6. Tooltips dos relatórios inseriam `row.label` em `innerHTML` sem escape.
++7. `public/health.php` ainda retornava nome do banco e mensagem de exceção.
++
++## Solução
++
++- uploads de marca aceitam somente PNG, JPEG e WEBP;
++- `finfo`, `getimagesize`, `is_uploaded_file`, limite de 2 MB, 4096 × 4096 e 16 milhões de pixels;
++- `.htaccess` em `public/uploads` nega qualquer arquivo fora da lista positiva;
++- `public/router.php` aplica a mesma proteção no servidor PHP local;
++- CSP gera nonce criptográfico por requisição;
++- `script-src-attr 'none'` bloqueia handlers embutidos;
++- ações foram migradas para `data-*` e listeners no `app.js`;
++- conteúdo dinâmico identificado foi migrado para `textContent` ou escape HTML;
++- auditoria read-only disponível em `bin/audit-public-uploads.php`.
++
++## Risco residual
++
++`style-src-attr 'unsafe-inline'` permanece necessário para barras, gráficos e variáveis CSS calculadas no servidor. A remoção completa será tratada em conjunto com a modularização de CSS/JavaScript prevista na ENT-038.
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/public/assets/js/app.js rsconnect_ent030_work/public/assets/js/app.js
+--- /tmp/base030/public/assets/js/app.js	2026-08-27 18:53:40.000000000 +0000
++++ rsconnect_ent030_work/public/assets/js/app.js	2026-08-28 12:20:29.401971934 +0000
+@@ -2144,7 +2144,12 @@
+           confirmation.value = '';
+           confirmation.placeholder = `EXCLUIR ${button.dataset.instanceName || ''}`;
+         }
+-        if (hint) hint.innerHTML = `Digite exatamente: <strong>EXCLUIR ${button.dataset.instanceName || ''}</strong>`;
++        if (hint) {
++          hint.textContent = 'Digite exatamente: ';
++          const strong = document.createElement('strong');
++          strong.textContent = `EXCLUIR ${button.dataset.instanceName || ''}`;
++          hint.appendChild(strong);
++        }
+         Array.from(replacement?.options || []).forEach((option, index) => {
+           if (index === 0) return;
+           const visible = option.dataset.tenantId === button.dataset.tenantId && option.value !== button.dataset.id;
+@@ -3907,3 +3912,39 @@
+ // Marcador histórico da v36.20.6: botão "Remover do RS Connect" substituído por textos mais claros na v36.20.7.
+ 
+ // Marcador histórico v36.20.6: 'Remover do RS Connect'.
++
++/* ENT-030 — ações declarativas compatíveis com CSP sem JavaScript inline. */
++document.addEventListener('DOMContentLoaded', () => {
++  document.addEventListener('submit', (event) => {
++    const form = event.target instanceof HTMLFormElement ? event.target : null;
++    if (!form || !form.dataset.confirm) return;
++    if (!window.confirm(form.dataset.confirm)) event.preventDefault();
++  }, true);
++
++  document.addEventListener('change', (event) => {
++    const field = event.target instanceof Element ? event.target.closest('[data-auto-submit]') : null;
++    if (!(field instanceof HTMLSelectElement) || !field.form) return;
++    if (typeof field.form.requestSubmit === 'function') field.form.requestSubmit();
++    else field.form.submit();
++  });
++
++  document.addEventListener('click', (event) => {
++    const actionTarget = event.target instanceof Element ? event.target.closest('[data-page-action]') : null;
++    if (actionTarget) {
++      event.preventDefault();
++      if (actionTarget.dataset.pageAction === 'reload') window.location.reload();
++      if (actionTarget.dataset.pageAction === 'print') window.print();
++      return;
++    }
++
++    const submitTarget = event.target instanceof Element ? event.target.closest('[data-submit-form]') : null;
++    if (!submitTarget) return;
++    const formId = submitTarget.dataset.submitForm || '';
++    const form = formId ? document.getElementById(formId) : null;
++    if (form instanceof HTMLFormElement) {
++      event.preventDefault();
++      if (typeof form.requestSubmit === 'function') form.requestSubmit();
++      else form.submit();
++    }
++  });
++});
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/public/assets/js/reports.js rsconnect_ent030_work/public/assets/js/reports.js
+--- /tmp/base030/public/assets/js/reports.js	2026-08-26 22:42:32.000000000 +0000
++++ rsconnect_ent030_work/public/assets/js/reports.js	2026-08-28 12:20:30.887943423 +0000
+@@ -51,11 +51,18 @@
+     return tooltip;
+   };
+ 
++  const escapeHtml = (value) => String(value ?? '')
++    .replace(/&/g, '&amp;')
++    .replace(/</g, '&lt;')
++    .replace(/>/g, '&gt;')
++    .replace(/"/g, '&quot;')
++    .replace(/'/g, '&#039;');
++
+   const tooltipHtml = (row, series) => {
+     const labels = { total: 'Total', incoming: 'Recebidas', ai: 'IA' };
+     return [
+-      `<strong>${String(row.label || '')}</strong>`,
+-      ...series.map((item) => `<span>${labels[item.key] || item.key}<b>${Number(row[item.key] || 0).toLocaleString('pt-BR')}</b></span>`),
++      `<strong>${escapeHtml(row.label || '')}</strong>`,
++      ...series.map((item) => `<span>${escapeHtml(labels[item.key] || item.key)}<b>${Number(row[item.key] || 0).toLocaleString('pt-BR')}</b></span>`),
+     ].join('');
+   };
+ 
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/public/health.php rsconnect_ent030_work/public/health.php
+--- /tmp/base030/public/health.php	2026-08-26 22:42:30.000000000 +0000
++++ rsconnect_ent030_work/public/health.php	2026-08-28 12:24:39.472773046 +0000
+@@ -2,20 +2,11 @@
+ 
+ declare(strict_types=1);
+ 
+-require dirname(__DIR__) . '/bootstrap.php';
++http_response_code(200);
++header('Content-Type: application/json; charset=UTF-8');
++header('Cache-Control: no-store');
++header('X-Content-Type-Options: nosniff');
++header('X-Robots-Tag: noindex, nofollow');
++header_remove('X-Powered-By');
+ 
+-use App\Core\Database;
+-
+-header('Content-Type: text/plain; charset=UTF-8');
+-
+-echo "app: ok\n";
+-
+-try {
+-    $pdo = Database::connection();
+-    echo "database: ok\n";
+-    echo "database_name: " . $pdo->query('SELECT DATABASE()')->fetchColumn() . "\n";
+-} catch (Throwable $exception) {
+-    http_response_code(500);
+-    echo "database: error\n";
+-    echo $exception->getMessage() . "\n";
+-}
++echo '{"status":"ok"}';
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/public/router.php rsconnect_ent030_work/public/router.php
+--- /tmp/base030/public/router.php	2026-08-26 22:42:30.000000000 +0000
++++ rsconnect_ent030_work/public/router.php	2026-08-28 12:24:04.715568095 +0000
+@@ -5,6 +5,16 @@
+ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+ $file = __DIR__ . $path;
+ 
++if (str_starts_with($path, '/uploads/') && $path !== '/uploads/') {
++    $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
++    if (!in_array($extension, ['png', 'jpg', 'jpeg', 'webp'], true)) {
++        http_response_code(404);
++        header('Content-Type: text/plain; charset=UTF-8');
++        header('X-Content-Type-Options: nosniff');
++        exit('Arquivo não encontrado.');
++    }
++}
++
+ if ($path !== '/' && is_file($file)) {
+     return false;
+ }
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/public/uploads/.htaccess rsconnect_ent030_work/public/uploads/.htaccess
+--- /tmp/base030/public/uploads/.htaccess	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent030_work/public/uploads/.htaccess	2026-08-28 12:24:03.552679019 +0000
+@@ -0,0 +1,15 @@
++Options -Indexes -ExecCGI
++
++RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .phtml .phar .cgi .pl .py .sh
++RemoveType .php .php3 .php4 .php5 .php7 .php8 .phtml .phar .cgi .pl .py .sh
++
++# Somente imagens rasterizadas podem ser servidas nesta pasta.
++<FilesMatch "^(?!.*\.(?:png|jpe?g|webp)$).*$">
++    Require all denied
++</FilesMatch>
++
++<IfModule mod_headers.c>
++    Header always set X-Content-Type-Options "nosniff"
++    Header always set Content-Security-Policy "default-src 'none'; sandbox"
++    Header always set Cache-Control "public, max-age=86400"
++</IfModule>
+diff -ruN '--exclude=ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch' /tmp/base030/tests/Feature/ent030-xss-svg-csp-smoke.php rsconnect_ent030_work/tests/Feature/ent030-xss-svg-csp-smoke.php
+--- /tmp/base030/tests/Feature/ent030-xss-svg-csp-smoke.php	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent030_work/tests/Feature/ent030-xss-svg-csp-smoke.php	2026-08-28 12:24:51.796384402 +0000
+@@ -0,0 +1,88 @@
++<?php
++
++declare(strict_types=1);
++
++$root = dirname(__DIR__, 2);
++require_once $root . '/app/Core/Autoloader.php';
++App\Core\Autoloader::register($root . '/app');
++
++use App\Controllers\WhiteLabelController;
++use App\Core\ContentSecurityPolicy;
++use App\Services\BrandingService;
++
++$failures = [];
++$passes = 0;
++$check = static function (bool $condition, string $label) use (&$failures, &$passes): void {
++    if ($condition) {
++        echo "[OK] {$label}\n";
++        $passes++;
++        return;
++    }
++
++    echo "[FAIL] {$label}\n";
++    $failures[] = $label;
++};
++
++$header = ContentSecurityPolicy::headerValue(true);
++$check(!str_contains($header, "script-src 'self' 'unsafe-inline'"), 'script-src não usa unsafe-inline');
++$check(str_contains($header, "script-src 'self' 'nonce-") && str_contains($header, "script-src-attr 'none'"), 'CSP usa nonce e bloqueia handlers inline');
++$check(str_contains($header, "style-src-elem 'self' 'nonce-") && str_contains($header, "style-src-attr 'unsafe-inline'"), 'estilos embutidos são limitados por diretiva específica');
++$check(str_contains($header, "object-src 'none'") && str_contains($header, "base-uri 'self'"), 'CSP bloqueia objetos e base URI externa');
++
++$markup = ContentSecurityPolicy::addNonceToMarkup('<style>.x{display:none}</style><script>window.ok=true;</script><script src="/app.js"></script>');
++$check(substr_count($markup, 'nonce="') === 3, 'nonce é aplicado a scripts e estilos renderizados');
++
++$whiteLabel = (string) file_get_contents($root . '/app/Controllers/WhiteLabelController.php');
++$whiteLabelView = (string) file_get_contents($root . '/app/Views/white_label/index.php');
++$branding = (string) file_get_contents($root . '/app/Services/BrandingService.php');
++$uploadsRules = (string) file_get_contents($root . '/public/uploads/.htaccess');
++$appJs = (string) file_get_contents($root . '/public/assets/js/app.js');
++$reportsJs = (string) file_get_contents($root . '/public/assets/js/reports.js');
++$version = (string) file_get_contents($root . '/app/Services/AppVersionService.php');
++
++$router = (string) file_get_contents($root . '/public/router.php');
++$auditScript = (string) file_get_contents($root . '/bin/audit-public-uploads.php');
++$legacyHealth = (string) file_get_contents($root . '/public/health.php');
++
++$check(!str_contains($whiteLabel, "'image/svg+xml'") && !str_contains($whiteLabel, "'image/x-icon'"), 'upload white label não aceita SVG nem ICO');
++$check(str_contains($whiteLabel, 'is_uploaded_file') && str_contains($whiteLabel, 'getimagesize'), 'upload valida origem, MIME e estrutura real da imagem');
++$check(str_contains($whiteLabel, '4096') && str_contains($whiteLabel, '16000000'), 'upload limita dimensões e quantidade de pixels');
++$check(!str_contains($whiteLabelView, '.svg') && !str_contains($whiteLabelView, '.ico'), 'formulário oferece somente PNG, JPG e WEBP');
++$check(str_contains($uploadsRules, 'png|jpe?g|webp') && str_contains($uploadsRules, 'Require all denied') && str_contains($uploadsRules, 'RemoveHandler .php'), 'pasta pública serve somente imagens rasterizadas e bloqueia executáveis');
++$check(str_contains($branding, "javascript|data|file|vbscript") && str_contains($branding, "'/uploads/'"), 'URLs de marca rejeitam esquemas ativos e uploads inseguros');
++$check(str_contains($router, "['png', 'jpg', 'jpeg', 'webp']") && str_contains($router, 'str_starts_with($path, \'/uploads/\')'), 'servidor local também bloqueia arquivos ativos em uploads');
++$check(str_contains($auditScript, 'RecursiveDirectoryIterator') && str_contains($auditScript, 'extensão não permitida'), 'auditoria de uploads públicos está disponível');
++$check(str_contains($legacyHealth, '{"status":"ok"}') && !str_contains($legacyHealth, 'SELECT DATABASE') && !str_contains($legacyHealth, 'getMessage'), 'health legado não expõe banco nem exceções');
++
++$inlineHandlers = [];
++$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root . '/app/Views'));
++foreach ($iterator as $fileInfo) {
++    if (!$fileInfo->isFile() || strtolower($fileInfo->getExtension()) !== 'php') {
++        continue;
++    }
++    $file = $fileInfo->getPathname();
++    $contents = (string) file_get_contents($file);
++    if (preg_match('/\son(?:click|change|submit|load|error|input|keyup|keydown|mouseover|focus|blur)\s*=/i', $contents) === 1) {
++        $inlineHandlers[] = str_replace($root . '/', '', $file);
++    }
++}
++$check($inlineHandlers === [], 'views não possuem handlers JavaScript inline');
++$check(str_contains($appJs, '[data-auto-submit]') && str_contains($appJs, 'form.dataset.confirm'), 'ações antigas foram migradas para listeners declarativos');
++$check(!str_contains($appJs, 'hint.innerHTML = `Digite exatamente:') && str_contains($appJs, "strong.textContent = `EXCLUIR"), 'nome da instância não é inserido como HTML');
++$check(str_contains($reportsJs, 'escapeHtml(row.label') && str_contains($reportsJs, 'escapeHtml(labels[item.key]'), 'tooltips de relatórios escapam conteúdo dinâmico');
++$check(str_contains($version, 'RS Connect 36.20.15') && str_contains($version, 'proteção contra XSS, SVG e CSP'), 'versão do pacote foi atualizada');
++
++$reflection = new ReflectionMethod(WhiteLabelController::class, 'isSafeBrandAssetUrl');
++$controller = new WhiteLabelController();
++$check($reflection->invoke($controller, 'https://cdn.exemplo.com/logo.png') === true, 'URL HTTPS de imagem rasterizada é aceita');
++$check($reflection->invoke($controller, 'https://cdn.exemplo.com/logo.svg') === false, 'URL SVG externa é rejeitada');
++$check($reflection->invoke($controller, 'javascript:alert(1)') === false, 'URL com esquema ativo é rejeitada');
++$check(BrandingService::assetUrl('/uploads/white-label/tenant-1/logo.svg') === '', 'SVG antigo em uploads não é renderizado');
++$check(BrandingService::assetUrl('/assets/img/RS_Connect_horizontal_vetor.svg') !== '', 'SVG estático confiável da aplicação permanece disponível');
++
++if ($failures !== []) {
++    fwrite(STDERR, "\nFALHAS:\n- " . implode("\n- ", $failures) . "\n");
++    exit(1);
++}
++
++echo "\nResumo ENT-030: {$passes} verificações aprovadas.\n";

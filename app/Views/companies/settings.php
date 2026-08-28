@@ -218,7 +218,7 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
 <section class="card retention-manual-card">
     <div class="section-heading compact">
         <div><span class="eyebrow">Execução manual</span><h2>Aplicar retenção agora</h2><p>Use para homologar a política desta empresa. A automação diária deve ser feita pelo template de retenção no n8n.</p></div>
-        <form method="post" action="<?= View::e(Router::url('/messages/retention/run')) ?>" onsubmit="return confirm('Executar agora a política de retenção desta empresa? Conteúdos vencidos serão removidos.');">
+        <form method="post" action="<?= View::e(Router::url('/messages/retention/run')) ?>" data-confirm="Executar agora a política de retenção desta empresa? Conteúdos vencidos serão removidos.">
             <?= Csrf::input() ?>
             <input type="hidden" name="tenant_id" value="<?= (int) $company['id'] ?>">
             <button class="btn btn-outline" type="submit">Executar retenção</button>

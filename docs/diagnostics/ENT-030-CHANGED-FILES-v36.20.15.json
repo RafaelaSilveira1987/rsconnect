@@ -1,0 +1,253 @@
+{
+  "base": "RS Connect 36.20.14",
+  "target": "RS Connect 36.20.15",
+  "changed_file_count": 41,
+  "files": [
+    {
+      "path": "INSTRUCOES-v36.20.15.md",
+      "status": "added",
+      "size": 1975,
+      "sha256": "35ee650c8e5e85067d4e86389f0bd2efb7a087486befd38e2f07b78212a85583"
+    },
+    {
+      "path": "README.md",
+      "status": "modified",
+      "size": 2283,
+      "sha256": "c4100e30f4e837dfa0a3d6ad19d9774ed827c7fccb0506987144324c10e3ed57"
+    },
+    {
+      "path": "app/Controllers/WhiteLabelController.php",
+      "status": "modified",
+      "size": 14824,
+      "sha256": "12d65d57404a869f95d7e6bf73f9fec98829d220953c45086ae22d6eed6a7c5d"
+    },
+    {
+      "path": "app/Core/ContentSecurityPolicy.php",
+      "status": "added",
+      "size": 1754,
+      "sha256": "9fa3ce847a0fec2c62ed855026b491539a205cbc09f4004d5efbe5990043a842"
+    },
+    {
+      "path": "app/Core/View.php",
+      "status": "modified",
+      "size": 956,
+      "sha256": "422bde33ad96add6f4cf983f9d19b41406e920fe87a620e7bf857208e19da8e0"
+    },
+    {
+      "path": "app/Services/AppVersionService.php",
+      "status": "modified",
+      "size": 52201,
+      "sha256": "9e99103cb2ff59bfb4f3849c4c618eca4037e96492a4e2e77fcbac1c64afa41c"
+    },
+    {
+      "path": "app/Services/BrandingService.php",
+      "status": "modified",
+      "size": 9275,
+      "sha256": "92f1d7f76c42b25f7dec173cf1c05226a07c87099d1dd78ed57cf3e41ab1d75c"
+    },
+    {
+      "path": "app/Views/agents/index.php",
+      "status": "modified",
+      "size": 69167,
+      "sha256": "276dff6940e59d4473b1e2463e835420d3ebb6333dc65dedda0097de580417ec"
+    },
+    {
+      "path": "app/Views/calendar/index.php",
+      "status": "modified",
+      "size": 32586,
+      "sha256": "f60280e07865cb375f3138179b7f1092a7530c66fb6099d5a783ab48b67ed6c2"
+    },
+    {
+      "path": "app/Views/calendar_availability/index.php",
+      "status": "modified",
+      "size": 51900,
+      "sha256": "e1098aa591122a7a2a61dc3a451f2b9e42156fd9c256dcc3a14c2f70d7512e01"
+    },
+    {
+      "path": "app/Views/campaigns/index.php",
+      "status": "modified",
+      "size": 13754,
+      "sha256": "7f76043acbec641833cc6b5be69c0b6b3df579dd0f48cfec693919b4597814f1"
+    },
+    {
+      "path": "app/Views/companies/index.php",
+      "status": "modified",
+      "size": 16624,
+      "sha256": "3620641a3586718b48a7a0025f9d23b93556d59548d115704c90e268b0c91a0b"
+    },
+    {
+      "path": "app/Views/companies/overview.php",
+      "status": "modified",
+      "size": 17293,
+      "sha256": "a7b9940677690387c3692f02b3f1bdf77481b4ff1ae3b11fb230b736e8182052"
+    },
+    {
+      "path": "app/Views/companies/settings.php",
+      "status": "modified",
+      "size": 45494,
+      "sha256": "b73f6267c791d8498887b310eccebabed607abe8efb23b17118b4f140579f472"
+    },
+    {
+      "path": "app/Views/conversations/index.php",
+      "status": "modified",
+      "size": 72784,
+      "sha256": "1873f5552165057f8985d8ea471cf526c23c7011b8de3c8dfae66964e972c2a5"
+    },
+    {
+      "path": "app/Views/crm/pipeline.php",
+      "status": "modified",
+      "size": 18500,
+      "sha256": "736c2e912c9580ac788add267ab49e96061b0e560487675775438704b5b30549"
+    },
+    {
+      "path": "app/Views/instances/index.php",
+      "status": "modified",
+      "size": 55639,
+      "sha256": "aa6258801adf425cf13e1ecad365796014c1a2b384e67b716dc248977cf671f9"
+    },
+    {
+      "path": "app/Views/layouts/app.php",
+      "status": "modified",
+      "size": 32443,
+      "sha256": "768271c284cee0f81b03f1c7a90c474788d56a4cf348bbe0eb2981c77118a91a"
+    },
+    {
+      "path": "app/Views/operations/ai_reprocess.php",
+      "status": "modified",
+      "size": 23722,
+      "sha256": "851aed4bd4bd24c5a521e4b0a8f1d7d638f442371af2a4b4c8eefbe97b16e8fe"
+    },
+    {
+      "path": "app/Views/operations/alerts.php",
+      "status": "modified",
+      "size": 19982,
+      "sha256": "7ac36176f5f27355477c5b06a5e5e4ea14a6712971935147a3bd6572e83177cf"
+    },
+    {
+      "path": "app/Views/privacy/accept.php",
+      "status": "modified",
+      "size": 2031,
+      "sha256": "b19cc2da2aa08d67e0475311f5c08eb58823c01ba5b263166392ef7b34c6a865"
+    },
+    {
+      "path": "app/Views/privacy/admin.php",
+      "status": "modified",
+      "size": 15733,
+      "sha256": "2b8ad3d53484cc3c9fd9418f1833895a45b6d86e29213706ad624912ec5af091"
+    },
+    {
+      "path": "app/Views/queue/index.php",
+      "status": "modified",
+      "size": 9987,
+      "sha256": "4b6129131859e1f290f393c66db0b7f59b1c4a5b4bef6778cf6311d6d83c6ded"
+    },
+    {
+      "path": "app/Views/reports/admin.php",
+      "status": "modified",
+      "size": 33924,
+      "sha256": "5f3f7c919572010aad528d5eee4eea111e4e6492663fa02c3e012583ecb9b1a1"
+    },
+    {
+      "path": "app/Views/reports/index.php",
+      "status": "modified",
+      "size": 34952,
+      "sha256": "8797601168cfa2861da3f6a04dd4df264f61f898f10b4753109a6cacf957e72f"
+    },
+    {
+      "path": "app/Views/reports/team.php",
+      "status": "modified",
+      "size": 23419,
+      "sha256": "7adec7e47f3cac47252b98baa5fd35ee1142791dcbce77fda67fc2e9da24f20a"
+    },
+    {
+      "path": "app/Views/tasks/index.php",
+      "status": "modified",
+      "size": 8616,
+      "sha256": "b10575c63d74319b7611a1a97fd304399deb012e4393e6b2dde4dfaea01dfcfb"
+    },
+    {
+      "path": "app/Views/white_label/index.php",
+      "status": "modified",
+      "size": 17972,
+      "sha256": "1d5d339b25e761fb19d43b9f0252c7ad95c83ff864ba2d874e5d21d28f7c1d58"
+    },
+    {
+      "path": "bin/audit-public-uploads.php",
+      "status": "added",
+      "size": 1674,
+      "sha256": "d79423b32959f360d2c1b96b3c2fc9f27316f9c8ceef477cf4a473b4cceb42bb"
+    },
+    {
+      "path": "bootstrap.php",
+      "status": "modified",
+      "size": 3540,
+      "sha256": "96260cea9b3ca5ce632f71e5f92ad64b6cb8ae770f06a1a1e486aaa1048f23c0"
+    },
+    {
+      "path": "composer.json",
+      "status": "modified",
+      "size": 774,
+      "sha256": "1d701ec41315562134d880d66fc49b283ab5e990df5559534c65ee3decd6e10a"
+    },
+    {
+      "path": "docs/ATUALIZACAO-v36.20.15.md",
+      "status": "added",
+      "size": 716,
+      "sha256": "bfadf0f0960b0114b3cfa981c89c95bbde6a98919dba77fb023d4aa5864217fb"
+    },
+    {
+      "path": "docs/diagnostics/ENT-030-BACKUP-v36.20.14-to-v36.20.15.patch",
+      "status": "added",
+      "size": 139304,
+      "sha256": "cfa6b96e9e938b149cccd6af3d6b35f1390a51a94946100478837ecaf4b52eb2"
+    },
+    {
+      "path": "docs/diagnostics/ENT-030-VALIDATION-v36.20.15.md",
+      "status": "added",
+      "size": 367,
+      "sha256": "fa7b771097c4669d3553bd4b13b0ae7a8aef0af2c39be8be92e9306a800e6d44"
+    },
+    {
+      "path": "docs/diagnostics/ENT-030-XSS-SVG-CSP-v36.20.15.md",
+      "status": "added",
+      "size": 1512,
+      "sha256": "b429fb247aeb0818c6636b039b5a93e26f026ab580eaa3410330128f6e96cfb5"
+    },
+    {
+      "path": "public/assets/js/app.js",
+      "status": "modified",
+      "size": 199731,
+      "sha256": "a35916ff3a6662ea20391ef82fbdbe092e1ac22c5d897bb05c4736cfb1b4ceac"
+    },
+    {
+      "path": "public/assets/js/reports.js",
+      "status": "modified",
+      "size": 11395,
+      "sha256": "880607a52fcd14e524d0509931b1958608a3299daccd0b4d7c1968c6d57f9f43"
+    },
+    {
+      "path": "public/health.php",
+      "status": "modified",
+      "size": 292,
+      "sha256": "d4518dbae875a6a9c7b99169714fa68df707532083ed8ce6637bb6988d173928"
+    },
+    {
+      "path": "public/router.php",
+      "status": "modified",
+      "size": 631,
+      "sha256": "708e07b5d19296a5fd0b598efd12b25564c0b58224de16721ead5bfb5884154a"
+    },
+    {
+      "path": "public/uploads/.htaccess",
+      "status": "added",
+      "size": 559,
+      "sha256": "2c1763635a364c917bec9a5ad06644fb33246abcbd8d17994e633845d0fe589f"
+    },
+    {
+      "path": "tests/Feature/ent030-xss-svg-csp-smoke.php",
+      "status": "added",
+      "size": 6071,
+      "sha256": "2b1e0e38393916684879844199ea8c00c1a8ccfd4efa0371ad1fc009f52c6b00"
+    }
+  ]
+}

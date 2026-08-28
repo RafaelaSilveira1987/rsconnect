@@ -22,7 +22,12 @@ final class View
         ob_start();
         require $viewFile;
         $content = (string) ob_get_clean();
+
+        ob_start();
         require $layoutFile;
+        $html = (string) ob_get_clean();
+
+        echo ContentSecurityPolicy::addNonceToMarkup($html);
     }
 
     public static function e(mixed $value): string

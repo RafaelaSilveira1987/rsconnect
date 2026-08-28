@@ -61,9 +61,9 @@ $currentUrl = '/crm?' . http_build_query(array_filter([
 
 <form class="filter-bar" method="get" action="<?= View::e(Router::url('/crm')) ?>">
     <?php if (Auth::isSuperAdmin()): ?>
-        <select name="tenant_id" aria-label="Empresa" onchange="this.form.submit()"><option value="">Selecione a empresa</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= (int) ($filters['tenant_id'] ?? 0) === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select>
+        <select name="tenant_id" aria-label="Empresa" data-auto-submit><option value="">Selecione a empresa</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= (int) ($filters['tenant_id'] ?? 0) === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select>
     <?php endif; ?>
-    <select name="pipeline_id" aria-label="Funil" onchange="this.form.submit()"><?php foreach ($pipelines as $pipeline): ?><option value="<?= (int) $pipeline['id'] ?>" <?= (int) ($filters['pipeline_id'] ?? 0) === (int) $pipeline['id'] ? 'selected' : '' ?>><?= View::e($pipeline['name']) ?></option><?php endforeach; ?></select>
+    <select name="pipeline_id" aria-label="Funil" data-auto-submit><?php foreach ($pipelines as $pipeline): ?><option value="<?= (int) $pipeline['id'] ?>" <?= (int) ($filters['pipeline_id'] ?? 0) === (int) $pipeline['id'] ? 'selected' : '' ?>><?= View::e($pipeline['name']) ?></option><?php endforeach; ?></select>
     <label class="filter-search"><span class="search-icon" aria-hidden="true"></span><input name="search" value="<?= View::e($filters['search'] ?? '') ?>" placeholder="Buscar negócio ou contato"></label>
     <select name="owner_id" aria-label="Responsável"><option value="">Todos os responsáveis</option><?php foreach ($team as $member): ?><option value="<?= (int) $member['id'] ?>" <?= (int) ($filters['owner_id'] ?? 0) === (int) $member['id'] ? 'selected' : '' ?>><?= View::e($member['name']) ?></option><?php endforeach; ?></select>
     <button class="btn btn-secondary" type="submit">Filtrar</button>

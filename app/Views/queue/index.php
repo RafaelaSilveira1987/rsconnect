@@ -36,7 +36,7 @@ $currentTenantId = (int) ($filters['tenant_id'] ?? 0);
 <form class="filter-bar queue-filter card" method="get" action="<?= View::e(Router::url('/queue')) ?>">
     <?php if (Auth::isSuperAdmin()): ?>
         <label class="field compact-field"><span>Empresa</span>
-            <select name="tenant_id" onchange="this.form.submit()">
+            <select name="tenant_id" data-auto-submit>
                 <option value="">Todas</option>
                 <?php foreach ($tenants as $tenant): ?>
                     <option value="<?= (int) $tenant['id'] ?>" <?= $currentTenantId === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option>

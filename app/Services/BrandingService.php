@@ -57,15 +57,26 @@ final class BrandingService
     public static function assetUrl(string $path): string
     {
         $path = trim($path);
-        if ($path === '') {
+        if ($path === '' || preg_match('/^(?:javascript|data|file|vbscript):/i', $path) === 1) {
             return '';
         }
 
-        if (preg_match('/^https?:\/\//i', $path) === 1 || str_starts_with($path, 'data:')) {
+        if (preg_match('/^https?:\/\//i', $path) === 1) {
+            $scheme = strtolower((string) parse_url($path, PHP_URL_SCHEME));
+            $assetPath = strtolower((string) parse_url($path, PHP_URL_PATH));
+            if ($scheme !== 'https' || preg_match('/\.(?:svg|svgz|html?|js|xml)$/', $assetPath) === 1) {
+                return '';
+            }
             return $path;
         }
 
-        return '/' . ltrim($path, '/');
+        $normalized = '/' . ltrim($path, '/');
+        $assetPath = strtolower((string) parse_url($normalized, PHP_URL_PATH));
+        if (str_starts_with($assetPath, '/uploads/') && preg_match('/\.(?:png|jpe?g|webp)$/', $assetPath) !== 1) {
+            return '';
+        }
+
+        return $normalized;
     }
 
     public static function defaults(): array

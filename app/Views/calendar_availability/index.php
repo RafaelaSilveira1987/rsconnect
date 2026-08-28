@@ -116,7 +116,7 @@ $requestInsight = static function (array $request): string {
     <form class="toolbar-card" method="get" action="<?= View::e(Router::url('/calendar')) ?>"><input type="hidden" name="section" value="availability">
         <div class="field inline-field">
             <label>Empresa</label>
-            <select name="tenant_id" onchange="this.form.submit()">
+            <select name="tenant_id" data-auto-submit>
                 <?php foreach ($tenants as $tenant): ?>
                     <option value="<?= (int) $tenant['id'] ?>" <?= (int) $tenant['id'] === (int) $tenantId ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option>
                 <?php endforeach; ?>

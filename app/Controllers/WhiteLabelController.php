@@ -125,8 +125,8 @@ final class WhiteLabelController
         }
 
         foreach ([$brandLogoUrl, $brandIconUrl, $brandFaviconUrl] as $url) {
-            if ($url !== '' && !str_starts_with($url, '/uploads/') && !filter_var($url, FILTER_VALIDATE_URL)) {
-                Flash::set('error', 'Informe URLs completas para imagens ou envie arquivos locais.');
+            if (!$this->isSafeBrandAssetUrl($url)) {
+                Flash::set('error', 'Use uma imagem PNG, JPG ou WEBP por HTTPS, ou envie o arquivo diretamente. SVG, ICO e URLs ativas não são permitidos.');
                 $this->redirect('/white-label?tenant_id=' . $tenantId);
             }
         }
@@ -240,23 +240,31 @@ final class WhiteLabelController
         }
 
         $tmpName = (string) ($file['tmp_name'] ?? '');
-        $mime = '';
-        if ($tmpName !== '' && is_file($tmpName)) {
-            $finfo = new \finfo(FILEINFO_MIME_TYPE);
-            $mime = (string) $finfo->file($tmpName);
+        if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+            throw new \RuntimeException('O arquivo enviado não pôde ser validado.');
         }
 
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mime = strtolower((string) $finfo->file($tmpName));
         $extensions = [
             'image/png' => 'png',
             'image/jpeg' => 'jpg',
             'image/webp' => 'webp',
-            'image/svg+xml' => 'svg',
-            'image/x-icon' => 'ico',
-            'image/vnd.microsoft.icon' => 'ico',
         ];
 
         if (!isset($extensions[$mime])) {
-            throw new \RuntimeException('Envie uma imagem PNG, JPG, WEBP, SVG ou ICO.');
+            throw new \RuntimeException('Envie somente uma imagem PNG, JPG ou WEBP. Arquivos SVG e ICO não são aceitos por segurança.');
+        }
+
+        $imageInfo = @getimagesize($tmpName);
+        if (!is_array($imageInfo) || (string) ($imageInfo['mime'] ?? '') !== $mime) {
+            throw new \RuntimeException('O conteúdo do arquivo não corresponde a uma imagem válida.');
+        }
+
+        $width = (int) ($imageInfo[0] ?? 0);
+        $height = (int) ($imageInfo[1] ?? 0);
+        if ($width < 1 || $height < 1 || $width > 4096 || $height > 4096 || ($width * $height) > 16000000) {
+            throw new \RuntimeException('A imagem deve ter dimensões válidas de até 4096 × 4096 pixels.');
         }
 
         $publicPath = dirname(__DIR__, 2) . '/public';
@@ -271,8 +279,38 @@ final class WhiteLabelController
         if (!move_uploaded_file($tmpName, $destination)) {
             throw new \RuntimeException('Não foi possível salvar a imagem enviada.');
         }
+        @chmod($destination, 0644);
 
         return '/uploads/white-label/tenant-' . $tenantId . '/' . $filename;
+    }
+
+    private function isSafeBrandAssetUrl(string $url): bool
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return true;
+        }
+
+        if (preg_match('/^(?:javascript|data|file|vbscript):/i', $url) === 1) {
+            return false;
+        }
+
+        if (str_starts_with($url, '/uploads/')) {
+            $path = strtolower((string) parse_url($url, PHP_URL_PATH));
+            return preg_match('/\.(?:png|jpe?g|webp)$/', $path) === 1;
+        }
+
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            return false;
+        }
+
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        if ($scheme !== 'https') {
+            return false;
+        }
+
+        $path = strtolower((string) parse_url($url, PHP_URL_PATH));
+        return preg_match('/\.(?:png|jpe?g|webp)$/', $path) === 1;
     }
 
     private function color(string $value, string $fallback): string

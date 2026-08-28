@@ -33,7 +33,7 @@ use App\Core\View;
         </label>
         <div class="form-actions">
             <button class="btn btn-primary" type="submit">Aceitar e continuar</button>
-            <a class="btn btn-quiet" href="<?= View::e(Router::url('/logout')) ?>" onclick="event.preventDefault(); document.getElementById('privacyLogout').submit();">Sair</a>
+            <a class="btn btn-quiet" href="<?= View::e(Router::url('/logout')) ?>" data-submit-form="privacyLogout">Sair</a>
         </div>
     </form>
     <form id="privacyLogout" method="post" action="<?= View::e(Router::url('/logout')) ?>"><?= Csrf::input() ?></form>

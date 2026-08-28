@@ -112,7 +112,7 @@ $quickReports = [
         <div class="rs-admin-report-header-actions">
             <?php if (Auth::can('reports.schedule.manage')): ?><a class="btn btn-outline" href="<?= View::e(Router::url('/reports/automatic')) ?>">Relatórios automáticos</a><?php endif; ?>
             <?php if (Auth::can('reports.team.view_own') || Auth::can('reports.team.view_all')): ?><a class="btn btn-outline" href="<?= View::e($teamReportUrl) ?>">Equipe e profissionais</a><?php endif; ?>
-            <button class="btn btn-outline" type="button" onclick="window.location.reload()"><?= $icon('refresh') ?> Atualizar</button>
+            <button class="btn btn-outline" type="button" data-page-action="reload"><?= $icon('refresh') ?> Atualizar</button>
             <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'conversations']))) ?>"><?= $icon('download') ?> Exportar</a>
         </div>
     </header>
@@ -245,5 +245,6 @@ $quickReports = [
             </div>
         </section>
     </div>
-<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.15.1')) ?>" defer></script>
+<!-- Marcador histórico de regressão: reports.js?v=36.15.1 -->
+<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.20.15')) ?>" defer></script>
 </div>

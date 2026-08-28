@@ -173,7 +173,7 @@ $channelLabel = static fn (string $channel): string => OperationalLanguageServic
                             <button class="btn btn-outline" type="submit">Assumir análise</button>
                         </form>
                     <?php endif; ?>
-                    <form method="post" action="<?= View::e(Router::url('/operacao-alertas/resolve')) ?>" onsubmit="return confirm('Confirmar que esta situação voltou ao normal?');">
+                    <form method="post" action="<?= View::e(Router::url('/operacao-alertas/resolve')) ?>" data-confirm="Confirmar que esta situação voltou ao normal?">
                         <?= Csrf::input() ?>
                         <input type="hidden" name="incident_id" value="<?= (int) ($incident['id'] ?? 0) ?>">
                         <button class="btn btn-primary" type="submit">Marcar como normalizado</button>

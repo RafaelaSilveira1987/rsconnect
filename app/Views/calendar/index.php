@@ -208,7 +208,7 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
     <input type="hidden" name="view" value="<?= View::e($calendarView) ?>">
     <?php if ($calendarView !== 'list'): ?><input type="hidden" name="calendar_date" value="<?= View::e($calendarDate->format('Y-m-d')) ?>"><?php endif; ?>
     <?php if (Auth::isSuperAdmin()): ?>
-        <select name="tenant_id" onchange="this.form.submit()"><option value="">Selecione a empresa</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= (int) ($filters['tenant_id'] ?? 0) === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select>
+        <select name="tenant_id" data-auto-submit><option value="">Selecione a empresa</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= (int) ($filters['tenant_id'] ?? 0) === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select>
     <?php endif; ?>
     <select name="status"><option value="">Todos os status</option><?php foreach ($statusLabels as $value => $label): ?><option value="<?= View::e($value) ?>" <?= ($filters['status'] ?? '') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?></select>
     <select name="owner_user_id"><option value="">Toda a equipe</option><?php foreach ($team as $member): ?><option value="<?= (int) $member['id'] ?>" <?= (int) ($filters['owner_user_id'] ?? 0) === (int) $member['id'] ? 'selected' : '' ?>><?= View::e($member['name']) ?></option><?php endforeach; ?></select>
@@ -303,7 +303,7 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
                         <?php endif; ?>
                     <?php endif; ?>
                     <?php if ($canManage): ?>
-                        <form class="calendar-delete-form" method="post" action="<?= View::e(Router::url('/calendar/delete')) ?>" onsubmit="return confirm('Excluir este agendamento do RS Connect? Nenhuma mensagem será enviada ao contato.');">
+                        <form class="calendar-delete-form" method="post" action="<?= View::e(Router::url('/calendar/delete')) ?>" data-confirm="Excluir este agendamento do RS Connect? Nenhuma mensagem será enviada ao contato.">
                             <?= Csrf::input() ?>
                             <input type="hidden" name="tenant_id" value="<?= (int) $filters['tenant_id'] ?>">
                             <input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>">

@@ -641,7 +641,7 @@ $afterHoursQueueCount = count(array_filter($conversations, static fn (array $con
                         <?php endif; ?>
 
                         <?php if (!empty($ownershipSnapshot['can_release'])): ?>
-                            <form method="post" action="<?= View::e(Router::url('/conversations/assignment')) ?>" onsubmit="return confirm('Liberar esta conversa para que outro profissional possa assumir?');">
+                            <form method="post" action="<?= View::e(Router::url('/conversations/assignment')) ?>" data-confirm="Liberar esta conversa para que outro profissional possa assumir?">
                                 <?= Csrf::input() ?>
                                 <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
                                 <input type="hidden" name="tenant_id" value="<?= (int) $selected['tenant_id'] ?>">

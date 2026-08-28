@@ -2144,7 +2144,12 @@ document.addEventListener('DOMContentLoaded', () => {
           confirmation.value = '';
           confirmation.placeholder = `EXCLUIR ${button.dataset.instanceName || ''}`;
         }
-        if (hint) hint.innerHTML = `Digite exatamente: <strong>EXCLUIR ${button.dataset.instanceName || ''}</strong>`;
+        if (hint) {
+          hint.textContent = 'Digite exatamente: ';
+          const strong = document.createElement('strong');
+          strong.textContent = `EXCLUIR ${button.dataset.instanceName || ''}`;
+          hint.appendChild(strong);
+        }
         Array.from(replacement?.options || []).forEach((option, index) => {
           if (index === 0) return;
           const visible = option.dataset.tenantId === button.dataset.tenantId && option.value !== button.dataset.id;
@@ -3907,3 +3912,39 @@ document.addEventListener('change', (event) => {
 // Marcador histórico da v36.20.6: botão "Remover do RS Connect" substituído por textos mais claros na v36.20.7.
 
 // Marcador histórico v36.20.6: 'Remover do RS Connect'.
+
+/* ENT-030 — ações declarativas compatíveis com CSP sem JavaScript inline. */
+document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('submit', (event) => {
+    const form = event.target instanceof HTMLFormElement ? event.target : null;
+    if (!form || !form.dataset.confirm) return;
+    if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+  }, true);
+
+  document.addEventListener('change', (event) => {
+    const field = event.target instanceof Element ? event.target.closest('[data-auto-submit]') : null;
+    if (!(field instanceof HTMLSelectElement) || !field.form) return;
+    if (typeof field.form.requestSubmit === 'function') field.form.requestSubmit();
+    else field.form.submit();
+  });
+
+  document.addEventListener('click', (event) => {
+    const actionTarget = event.target instanceof Element ? event.target.closest('[data-page-action]') : null;
+    if (actionTarget) {
+      event.preventDefault();
+      if (actionTarget.dataset.pageAction === 'reload') window.location.reload();
+      if (actionTarget.dataset.pageAction === 'print') window.print();
+      return;
+    }
+
+    const submitTarget = event.target instanceof Element ? event.target.closest('[data-submit-form]') : null;
+    if (!submitTarget) return;
+    const formId = submitTarget.dataset.submitForm || '';
+    const form = formId ? document.getElementById(formId) : null;
+    if (form instanceof HTMLFormElement) {
+      event.preventDefault();
+      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+      else form.submit();
+    }
+  });
+});

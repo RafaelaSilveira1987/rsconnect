@@ -64,7 +64,7 @@ $trackingNote = (string) ($tracking['note'] ?? '');
         <a class="btn btn-outline" href="<?= View::e(Router::url('/implementation?tenant_id=' . $tenantId)) ?>">Ver implantação</a>
         <a class="btn btn-outline" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId)) ?>">Saúde e diagnóstico</a>
         <a class="btn btn-quiet" href="<?= View::e(Router::url('/conversations?tenant_id=' . $tenantId)) ?>">Abrir conversas</a>
-        <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" onsubmit="return confirm('<?= $company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?' ?>');">
+        <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" data-confirm="<?= View::e($company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?') ?>">
             <?= Csrf::input() ?>
             <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
             <input type="hidden" name="return_to" value="/companies/overview?id=<?= $tenantId ?>">

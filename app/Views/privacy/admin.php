@@ -59,7 +59,7 @@ $statusBadge = static fn (string $status): string => match ($status) {
             <div><span class="eyebrow">Empresas</span><h2>Escopo de análise</h2></div>
         </div>
         <form class="filter-bar" method="get" action="<?= View::e(Router::url('/privacy')) ?>">
-            <select name="tenant_id" onchange="this.form.submit()">
+            <select name="tenant_id" data-auto-submit>
                 <option value="0">Visão geral de todas as empresas</option>
                 <?php foreach ($companies as $company): ?>
                     <option value="<?= (int) $company['id'] ?>" <?= $selectedTenantId === (int) $company['id'] ? 'selected' : '' ?>><?= View::e($company['name']) ?></option>

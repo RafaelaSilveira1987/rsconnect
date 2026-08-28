@@ -19,6 +19,7 @@
     "test:ent026": "php tests/Feature/ent026-tests-sanitization-smoke.php",
     "test:ent028": "php tests/Feature/ent028-webhook-security-smoke.php",
     "test:ent028-schema": "php tests/Feature/ent028-pagbank-schema-hotfix-smoke.php",
-    "test:ent029": "php tests/Feature/ent029-secure-health-checks-smoke.php"
+    "test:ent029": "php tests/Feature/ent029-secure-health-checks-smoke.php",
+    "test:ent030": "php tests/Feature/ent030-xss-svg-csp-smoke.php"
   }
 }

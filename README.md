@@ -1,4 +1,16 @@
-# RS Connect — v36.20.14
+# RS Connect — v36.20.15
+
+## ENT-030 — proteção contra XSS, SVG e CSP
+
+- uploads white label limitados a PNG, JPEG e WEBP;
+- SVG, ICO, HTML, JavaScript e executáveis bloqueados em `public/uploads`;
+- CSP com nonce e sem `unsafe-inline` em `script-src`;
+- handlers JavaScript inline removidos das views;
+- proteção adicional em inserções dinâmicas de HTML;
+- auditoria dos uploads públicos disponível por CLI;
+- endpoint legado de saúde reduzido a `{"status":"ok"}`.
+
+Não há migration nova. A última migration obrigatória permanece `088_payment_reconciliation_schema_compat.sql`.
 
 ## ENT-029 / PA-003 — Health checks seguros
 

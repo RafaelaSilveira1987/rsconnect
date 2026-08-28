@@ -1,0 +1,15 @@
+Options -Indexes -ExecCGI
+
+RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .phtml .phar .cgi .pl .py .sh
+RemoveType .php .php3 .php4 .php5 .php7 .php8 .phtml .phar .cgi .pl .py .sh
+
+# Somente imagens rasterizadas podem ser servidas nesta pasta.
+<FilesMatch "^(?!.*\.(?:png|jpe?g|webp)$).*$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Content-Security-Policy "default-src 'none'; sandbox"
+    Header always set Cache-Control "public, max-age=86400"
+</IfModule>

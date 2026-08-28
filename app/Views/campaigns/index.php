@@ -35,7 +35,7 @@ $statusClass = static fn (?string $status): string => preg_replace('/[^a-z0-9_-]
 <form class="filter-bar card" method="get" action="<?= View::e(Router::url('/campaigns')) ?>">
     <?php if (Auth::isSuperAdmin()): ?>
         <label class="field compact-field"><span>Empresa</span>
-            <select name="tenant_id" onchange="this.form.submit()">
+            <select name="tenant_id" data-auto-submit>
                 <option value="">Todas</option>
                 <?php foreach ($tenants as $tenant): ?>
                     <option value="<?= (int) $tenant['id'] ?>" <?= $currentTenantId === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option>

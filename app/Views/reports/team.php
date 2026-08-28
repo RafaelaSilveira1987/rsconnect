@@ -73,7 +73,7 @@ foreach ($professionals as $professional) {
                 <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/team/export?' . http_build_query($queryBase))) ?>">Exportar equipe</a>
                 <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/team/export?' . http_build_query($queryBase + ['detail' => 'first_responses']))) ?>">Exportar 1ª respostas</a>
             <?php endif; ?>
-            <button class="btn btn-outline" type="button" onclick="window.print()">Imprimir</button>
+            <button class="btn btn-outline" type="button" data-page-action="print">Imprimir</button>
         </div>
     </section>
 

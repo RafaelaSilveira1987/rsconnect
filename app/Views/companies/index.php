@@ -151,7 +151,7 @@ $subscriptionLabel = static fn (string $status): string => match ($status) {
                             <button class="btn btn-primary btn-block" type="submit">Salvar plano e acesso</button>
                         </form>
                     </details>
-                    <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" onsubmit="return confirm('<?= $company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?' ?>');">
+                    <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" data-confirm="<?= View::e($company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?') ?>">
                         <?= Csrf::input() ?>
                         <input type="hidden" name="tenant_id" value="<?= (int) $company['id'] ?>">
                         <input type="hidden" name="plan" value="<?= View::e((string) $company['plan']) ?>">

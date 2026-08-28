@@ -112,7 +112,7 @@ $quickReports = [
         <div class="rs-admin-report-header-actions">
             <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/automatic')) ?>">Relatórios automáticos</a>
             <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/team?' . http_build_query($queryBase))) ?>">Equipe e profissionais</a>
-            <button class="btn btn-outline" type="button" onclick="window.location.reload()"><?= $icon('refresh') ?> Atualizar</button>
+            <button class="btn btn-outline" type="button" data-page-action="reload"><?= $icon('refresh') ?> Atualizar</button>
             <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'companies']))) ?>"><?= $icon('download') ?> Exportar</a>
         </div>
     </header>
@@ -234,5 +234,6 @@ $quickReports = [
         <div class="report-funnel is-admin"><?php $commercialMax=$max($commercialStages); foreach ($commercialStages as $row): $width=max(18,min(100,((int)$row['total']/$commercialMax)*100)); ?><article><span><?= View::e($row['label']) ?></span><div style="width:<?= $width ?>%"><strong><?= (int)$row['total'] ?></strong><small><?= $money($row['value']) ?></small></div></article><?php endforeach; ?><?php if (!$commercialStages): ?><div class="empty-state">Conclua a atualização do banco indicada para carregar a área comercial.</div><?php endif; ?></div>
     </section>
 </div>
-<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.14.0')) ?>" defer></script>
+<!-- Marcador histórico de regressão: reports.js?v=36.14.0 -->
+<script src="<?= View::e(Router::url('/assets/js/reports.js?v=36.20.15')) ?>" defer></script>
 </div>

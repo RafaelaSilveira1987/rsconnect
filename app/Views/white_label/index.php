@@ -44,7 +44,7 @@ $logoBackground = $raw('brand_logo_background', 'light');
         <form method="get" action="<?= View::e(Router::url('/white-label')) ?>" class="inline-form-panel">
             <label class="field" style="margin:0">
                 <span>Cliente</span>
-                <select name="tenant_id" onchange="this.form.submit()">
+                <select name="tenant_id" data-auto-submit>
                     <?php foreach ($companies as $company): ?>
                         <option value="<?= (int) $company['id'] ?>" <?= $selected && (int) $selected['id'] === (int) $company['id'] ? 'selected' : '' ?>>
                             <?= View::e($company['name']) ?><?= (int) ($company['white_label_enabled'] ?? 0) === 1 ? ' — ativo' : '' ?>
@@ -106,7 +106,7 @@ $logoBackground = $raw('brand_logo_background', 'light');
                 <div class="white-label-upload-preview-grid">
                     <label class="field upload-field">
                         <span>Logo principal</span>
-                        <input type="file" name="brand_logo_file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml">
+                        <input type="file" name="brand_logo_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
                         <small class="field-hint">Use a logo horizontal quando existir. Ela aparece no login e prévias.</small>
                         <?php if ($previewLogoUrl !== ''): ?>
                             <label class="mini-check"><input type="checkbox" name="remove_logo" value="1"> Remover logo atual</label>
@@ -114,7 +114,7 @@ $logoBackground = $raw('brand_logo_background', 'light');
                     </label>
                     <label class="field upload-field">
                         <span>Ícone reduzido</span>
-                        <input type="file" name="brand_icon_file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml">
+                        <input type="file" name="brand_icon_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
                         <small class="field-hint">Ideal para sidebar, card de login e espaços quadrados.</small>
                         <?php if ($previewIconUrl !== ''): ?>
                             <label class="mini-check"><input type="checkbox" name="remove_icon" value="1"> Remover ícone atual</label>
@@ -122,8 +122,8 @@ $logoBackground = $raw('brand_logo_background', 'light');
                     </label>
                     <label class="field upload-field">
                         <span>Favicon</span>
-                        <input type="file" name="brand_favicon_file" accept=".png,.jpg,.jpeg,.webp,.svg,.ico,image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon">
-                        <small class="field-hint">Ideal: PNG/ICO quadrado para a aba do navegador.</small>
+                        <input type="file" name="brand_favicon_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+                        <small class="field-hint">Ideal: PNG, JPG ou WEBP quadrado para a aba do navegador.</small>
                         <?php if ($previewFaviconUrl !== ''): ?>
                             <label class="mini-check"><input type="checkbox" name="remove_favicon" value="1"> Remover favicon atual</label>
                         <?php endif; ?>

@@ -122,7 +122,7 @@ $statusLabel = static function (string $status): string {
             <div><span class="eyebrow">Ação imediata</span><h2>Verificar agora</h2></div>
         </div>
         <p>Executa a mesma verificação segura em todas as empresas. Tentativas não concluídas continuam registradas e nenhuma mensagem é repetida quando a conversa já recebeu resposta.</p>
-        <form method="post" action="<?= View::e(Router::url('/operations/ai-reprocess/run')) ?>" onsubmit="return confirm('Verificar agora as respostas automáticas pendentes de todas as empresas? Mensagens já respondidas não serão reenviadas.');">
+        <form method="post" action="<?= View::e(Router::url('/operations/ai-reprocess/run')) ?>" data-confirm="Verificar agora as respostas automáticas pendentes de todas as empresas? Mensagens já respondidas não serão reenviadas.">
             <?= Csrf::input() ?>
             <button class="btn btn-primary" type="submit">Tentar respostas pendentes agora</button>
         </form>

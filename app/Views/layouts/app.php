@@ -430,6 +430,6 @@ $svgIcon = static function (string $name): string {
 <!-- Marcador histórico de regressão: app.js?v=36.20.2 -->
 <!-- Marcador histórico de regressão: app.js?v=36.20.5 -->
 <!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 app.js?v=36.20.8 -->
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.11')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.20.15')) ?>" defer></script>
 </body>
 </html>

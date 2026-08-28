@@ -76,7 +76,7 @@ $aiModeHints = [
                 </div>
                 <label class="field compact-field">
                     <span>Empresa</span>
-                    <select name="tenant_id" onchange="this.form.submit()" required>
+                    <select name="tenant_id" data-auto-submit required>
                         <option value="">Selecione</option>
                         <?php foreach ($tenants as $tenant): ?>
                             <option value="<?= (int) $tenant['id'] ?>" <?= $selectedTenantId === (int) $tenant['id'] ? 'selected' : '' ?>>
@@ -167,7 +167,7 @@ $aiModeHints = [
                                             <span><?= View::e($version['title'] ?? 'Instruções salvas') ?></span>
                                             <small><?= View::e($version['created_by_name'] ?? 'Sistema') ?> · <?= View::e($version['created_at'] ?? '') ?> · <?= View::e($version['source'] ?? 'manual') ?></small>
                                         </div>
-                                        <form method="post" action="<?= View::e(Router::url('/prompt-studio/restore')) ?>" onsubmit="return confirm('Restaurar esta versão das instruções?');">
+                                        <form method="post" action="<?= View::e(Router::url('/prompt-studio/restore')) ?>" data-confirm="Restaurar esta versão das instruções?">
                                             <?= Csrf::input() ?>
                                             <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
                                             <input type="hidden" name="agent_id" value="<?= (int) $agent['id'] ?>">

@@ -51,11 +51,18 @@
     return tooltip;
   };
 
+  const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
   const tooltipHtml = (row, series) => {
     const labels = { total: 'Total', incoming: 'Recebidas', ai: 'IA' };
     return [
-      `<strong>${String(row.label || '')}</strong>`,
-      ...series.map((item) => `<span>${labels[item.key] || item.key}<b>${Number(row[item.key] || 0).toLocaleString('pt-BR')}</b></span>`),
+      `<strong>${escapeHtml(row.label || '')}</strong>`,
+      ...series.map((item) => `<span>${escapeHtml(labels[item.key] || item.key)}<b>${Number(row[item.key] || 0).toLocaleString('pt-BR')}</b></span>`),
     ].join('');
   };
 

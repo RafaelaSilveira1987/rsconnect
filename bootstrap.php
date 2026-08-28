@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Core\ContentSecurityPolicy;
 use App\Core\Env;
 use App\Core\RequestSecurity;
 
@@ -52,6 +53,7 @@ if (!$sessionlessHealthRequest && session_status() !== PHP_SESSION_ACTIVE) {
 }
 
 if (!headers_sent() && filter_var(Env::get('SECURITY_HEADERS_ENABLED', true), FILTER_VALIDATE_BOOL)) {
+    header_remove('X-Powered-By');
     header('X-Frame-Options: SAMEORIGIN');
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: strict-origin-when-cross-origin');
@@ -60,7 +62,7 @@ if (!headers_sent() && filter_var(Env::get('SECURITY_HEADERS_ENABLED', true), FI
     header('X-Permitted-Cross-Domain-Policies: none');
 
     if (filter_var(Env::get('SECURITY_CSP_ENABLED', true), FILTER_VALIDATE_BOOL)) {
-        header("Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; img-src 'self' data: blob: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; media-src 'self' blob:");
+        header('Content-Security-Policy: ' . ContentSecurityPolicy::headerValue(RequestSecurity::isHttps()));
     }
 
     if (RequestSecurity::isHttps()) {
