@@ -1,26 +1,19 @@
 .git
 .github
-.gitignore
-
 .env
 .env.*
 !.env.example
 !.env.*.example
 
-storage/logs/*.log
-storage/cache/*
-storage/app/white-label/*
-storage/conversation-attachments/*
-
+storage/logs/*
 !storage/logs/.gitkeep
+storage/cache/*
 !storage/cache/.gitkeep
+storage/app/white-label/*
 !storage/app/white-label/.gitkeep
-
-vendor/
-node_modules/
+storage/conversation-attachments/*
 
 *.zip
 *.tar
 *.tar.gz
-backups/
-tmp/
+node_modules

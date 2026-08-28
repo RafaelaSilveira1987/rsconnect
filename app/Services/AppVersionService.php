@@ -51,10 +51,11 @@ final class AppVersionService
     // RS Connect 36.20.14 — health checks seguros, separados, públicos mínimos e diagnóstico protegido.
     // RS Connect 36.20.15 — proteção contra XSS, SVG e CSP.
     // RS Connect 36.20.15.1 — restauração segura das rotas e do menu White Label.
+    // RS Connect 36.20.15.3 — inicialização resiliente do autoload e validação do Router no build.
     // RS Connect 36.20.15.2 — uploads persistentes e revisão do layout do White Label.
     // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql, 085_ai_commercial_attention_queue.sql e 086_plan_ai_mode_and_commitment.sql, 087_webhook_security_events.sql e 088_payment_reconciliation_schema_compat.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.4';
-    public const PACKAGE_LABEL = 'RS Connect 36.20.15.2 — uploads persistentes e novo layout do White Label';
+    public const PACKAGE_LABEL = 'RS Connect 36.20.15.3 — correção de inicialização do autoload e Router';
     public const REQUIRED_MIGRATION = '088_payment_reconciliation_schema_compat.sql';
 
     private PDO $pdo;
