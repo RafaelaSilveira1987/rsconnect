@@ -1,3 +1,30 @@
+# RS Connect — v36.20.16
+
+## ENT-027 / PA-005 — Normalização das migrations
+
+- cria `schema_migrations` com sequência, checksum, lote, origem e tempo de execução;
+- preserva todos os nomes históricos e resolve prefixos duplicados pelo `manifest.php`;
+- adiciona executor CLI com `verify`, `status`, `install`, `baseline`, `up`, `seed` e `bootstrap`;
+- centraliza a instalação Docker no serviço `migrate`;
+- impede readiness quando o histórico do banco estiver incompleto;
+- mantém a migration 089 aditiva, sem apagar dados comerciais.
+
+Para atualizar o banco atual já homologado até a 088:
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php baseline --through=088 --yes
+php bin/migrate.php status
+```
+
+A migration obrigatória desta versão é:
+
+```text
+database/migrations/089_schema_migrations_registry.sql
+```
+
+## Histórico consolidado
+
 # RS Connect — v36.20.15.4
 
 ## Hotfix White Label — painel, login e layout proporcional
@@ -8,8 +35,6 @@
 - limita e centraliza a tela administrativa;
 - preserva as proteções XSS, SVG, CSP, uploads persistentes e autoload;
 - não adiciona migration.
-
-## Histórico consolidado
 
 ## Hotfix de inicialização do autoload e Router
 

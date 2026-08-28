@@ -20,6 +20,7 @@ final class HealthCheckService
             $this->databaseCheck(),
             $this->storageCheck(),
             $this->applicationKeyCheck(),
+            $this->migrationsCheck(),
         ];
 
         $ready = count(array_filter(
@@ -76,6 +77,36 @@ final class HealthCheckService
 
         return [
             'name' => 'storage',
+            'status' => $ok ? 'ok' : 'unavailable',
+        ];
+    }
+
+    /** @return array{name:string,status:string} */
+    private function migrationsCheck(): array
+    {
+        try {
+            $manifestFile = dirname(__DIR__, 2) . '/database/migrations/manifest.php';
+            $manifest = is_file($manifestFile) ? require $manifestFile : [];
+            $expected = is_array($manifest) ? count($manifest['migrations'] ?? []) : 0;
+            if ($expected < 1) {
+                return ['name' => 'migrations', 'status' => 'unavailable'];
+            }
+
+            $statement = Database::connection()->query(
+                "SELECT COUNT(*) AS total,
+                        SUM(migration = '089_schema_migrations_registry.sql') AS registry_applied
+                 FROM schema_migrations"
+            );
+            $row = $statement !== false ? $statement->fetch() : false;
+            $ok = is_array($row)
+                && (int) ($row['total'] ?? 0) === $expected
+                && (int) ($row['registry_applied'] ?? 0) === 1;
+        } catch (Throwable) {
+            $ok = false;
+        }
+
+        return [
+            'name' => 'migrations',
             'status' => $ok ? 'ok' : 'unavailable',
         ];
     }

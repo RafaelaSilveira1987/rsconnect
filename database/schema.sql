@@ -611,3 +611,5 @@ CREATE TABLE IF NOT EXISTS tenant_ai_commercial_attention_tracking (
     CONSTRAINT fk_ai_commercial_attention_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
     CONSTRAINT fk_ai_commercial_attention_user FOREIGN KEY (updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- SCHEMA_EXECUTION_BASELINE_THROUGH: 004_crm.sql

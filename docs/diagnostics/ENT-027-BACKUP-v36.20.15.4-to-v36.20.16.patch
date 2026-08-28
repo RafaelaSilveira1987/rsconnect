@@ -1,0 +1,3024 @@
+diff -ruN rsconnect_ent027_base/.env.example rsconnect_ent027_work/.env.example
+--- rsconnect_ent027_base/.env.example	2026-08-27 17:59:22.000000000 +0000
++++ rsconnect_ent027_work/.env.example	2026-08-28 16:54:01.441001433 +0000
+@@ -174,3 +174,7 @@
+ SCHEDULED_REPORTS_CRON_TOKEN=
+ SCHEDULED_REPORTS_WHATSAPP_TIMEOUT=45
+ 
++
++# Executor de migrations (ENT-027)
++MIGRATIONS_LOCK_TIMEOUT=30
++MIGRATION_ACTOR=rs-connect-cli
+diff -ruN rsconnect_ent027_base/.env.local.example rsconnect_ent027_work/.env.local.example
+--- rsconnect_ent027_base/.env.local.example	2026-08-27 17:59:22.000000000 +0000
++++ rsconnect_ent027_work/.env.local.example	2026-08-28 16:54:01.453001565 +0000
+@@ -162,3 +162,7 @@
+ SCHEDULED_REPORTS_CRON_TOKEN=
+ SCHEDULED_REPORTS_WHATSAPP_TIMEOUT=45
+ 
++
++# Executor de migrations (ENT-027)
++MIGRATIONS_LOCK_TIMEOUT=30
++MIGRATION_ACTOR=rs-connect-cli
+diff -ruN rsconnect_ent027_base/.env.vps.example rsconnect_ent027_work/.env.vps.example
+--- rsconnect_ent027_base/.env.vps.example	2026-08-27 17:59:22.000000000 +0000
++++ rsconnect_ent027_work/.env.vps.example	2026-08-28 16:54:01.477001830 +0000
+@@ -172,3 +172,7 @@
+ SCHEDULED_REPORTS_CRON_TOKEN=
+ SCHEDULED_REPORTS_WHATSAPP_TIMEOUT=45
+ 
++
++# Executor de migrations (ENT-027)
++MIGRATIONS_LOCK_TIMEOUT=30
++MIGRATION_ACTOR=rs-connect-cli
+diff -ruN rsconnect_ent027_base/.env.zip28.example rsconnect_ent027_work/.env.zip28.example
+--- rsconnect_ent027_base/.env.zip28.example	2026-08-26 22:42:04.000000000 +0000
++++ rsconnect_ent027_work/.env.zip28.example	2026-08-28 16:54:01.497002050 +0000
+@@ -7,3 +7,7 @@
+ BILLING_ACCESS_GRACE_DAYS=5
+ 
+ OPERATIONS_MONITOR_TOKEN=
++
++# Executor de migrations (ENT-027)
++MIGRATIONS_LOCK_TIMEOUT=30
++MIGRATION_ACTOR=rs-connect-cli
+diff -ruN rsconnect_ent027_base/Dockerfile rsconnect_ent027_work/Dockerfile
+--- rsconnect_ent027_base/Dockerfile	2026-08-28 14:24:06.000000000 +0000
++++ rsconnect_ent027_work/Dockerfile	2026-08-28 16:53:24.750270197 +0000
+@@ -29,6 +29,7 @@
+     > /etc/apache2/sites-available/000-default.conf \
+     && mkdir -p /var/www/html/storage/logs /var/www/html/storage/cache /var/www/html/storage/conversation-attachments /var/www/html/storage/app/white-label \
+     && chown -R www-data:www-data /var/www/html/storage \
+-    && php -r "require '/var/www/html/app/Core/Autoloader.php'; App\\Core\\Autoloader::register('/var/www/html/app'); if (!class_exists('App\\Core\\Router')) { fwrite(STDERR, 'Router autoload validation failed.\n'); exit(1); }"
++    && php -r "require '/var/www/html/app/Core/Autoloader.php'; App\\Core\\Autoloader::register('/var/www/html/app'); if (!class_exists('App\\Core\\Router')) { fwrite(STDERR, 'Router autoload validation failed.\n'); exit(1); }" \
++    && php /var/www/html/bin/migrate.php verify
+ 
+ EXPOSE 80
+diff -ruN rsconnect_ent027_base/INSTRUCOES-v36.20.16.md rsconnect_ent027_work/INSTRUCOES-v36.20.16.md
+--- rsconnect_ent027_base/INSTRUCOES-v36.20.16.md	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/INSTRUCOES-v36.20.16.md	2026-08-28 17:05:38.440791566 +0000
+@@ -0,0 +1,89 @@
++# RS Connect v36.20.16 — ENT-027 / PA-005
++
++## Normalização das migrations
++
++Esta versão cria uma ordem canônica, registra checksums e impede que o Docker inicie a aplicação antes de concluir a preparação do banco.
++
++## Atualização da produção atual — banco já na migration 088
++
++1. Faça backup completo do banco.
++2. Preserve `.env`, `storage`, uploads e volumes persistentes.
++3. Publique o código da v36.20.16.
++4. Abra o Shell do contêiner no EasyPanel.
++5. Execute:
++
++```bash
++cd /var/www/html
++php bin/migrate.php verify
++php bin/migrate.php baseline --through=088 --yes
++php bin/migrate.php status
++```
++
++Resultado esperado:
++
++```text
++96 aplicada(s), 0 pendente(s), 0 divergente(s)
++```
++
++O comando `baseline` não reaplica as migrations 002–088. Ele valida tabelas, colunas e índices da versão atual, cria `schema_migrations` e registra o histórico existente.
++
++Se o baseline recusar alguma tabela, coluna ou índice, não force o registro. Corrija a estrutura indicada antes de continuar.
++
++## Instalação em banco vazio
++
++```bash
++php bin/migrate.php install --yes
++php bin/migrate.php status
++```
++
++O instalador executa:
++
++```text
++schema base até 004
++→ seed inicial
++→ migrations 005 a 088 na ordem do manifesto
++→ registro 089
++→ reconciliação final dos dados de referência
++```
++
++## Atualizações futuras
++
++```bash
++php bin/migrate.php verify
++php bin/migrate.php status
++php bin/migrate.php up --dry-run
++php bin/migrate.php up
++php bin/migrate.php status
++```
++
++## Docker Compose local
++
++O serviço `migrate` executa `bootstrap --yes` e precisa terminar com sucesso antes do serviço `app` iniciar.
++
++O MySQL não recebe mais dezenas de arquivos em `/docker-entrypoint-initdb.d`; a instalação passa por um único executor.
++
++## Readiness
++
++Enquanto o registro não estiver completo, `/health/ready` retorna HTTP 503 com resposta pública mínima. O liveness `/health/live` continua disponível.
++
++## Rollback
++
++A migration 089 é apenas aditiva. Em rollback de código:
++
++1. restaure a pasta da versão anterior;
++2. preserve o banco e a tabela `schema_migrations`;
++3. não apague dados nem execute o arquivo de rollback 030 automaticamente;
++4. restaure o banco apenas se uma migration futura tiver alterado dados e houver backup validado.
++
++## Comandos de diagnóstico
++
++```bash
++php bin/migrate.php verify
++php bin/migrate.php status
++```
++
++Para reconciliar somente dados de referência após uma instalação interrompida:
++
++```bash
++php bin/migrate.php seed --yes
++```
+diff -ruN rsconnect_ent027_base/README.md rsconnect_ent027_work/README.md
+--- rsconnect_ent027_base/README.md	2026-08-28 14:40:43.000000000 +0000
++++ rsconnect_ent027_work/README.md	2026-08-28 17:05:46.938890533 +0000
+@@ -1,3 +1,30 @@
++# RS Connect — v36.20.16
++
++## ENT-027 / PA-005 — Normalização das migrations
++
++- cria `schema_migrations` com sequência, checksum, lote, origem e tempo de execução;
++- preserva todos os nomes históricos e resolve prefixos duplicados pelo `manifest.php`;
++- adiciona executor CLI com `verify`, `status`, `install`, `baseline`, `up`, `seed` e `bootstrap`;
++- centraliza a instalação Docker no serviço `migrate`;
++- impede readiness quando o histórico do banco estiver incompleto;
++- mantém a migration 089 aditiva, sem apagar dados comerciais.
++
++Para atualizar o banco atual já homologado até a 088:
++
++```bash
++php bin/migrate.php verify
++php bin/migrate.php baseline --through=088 --yes
++php bin/migrate.php status
++```
++
++A migration obrigatória desta versão é:
++
++```text
++database/migrations/089_schema_migrations_registry.sql
++```
++
++## Histórico consolidado
++
+ # RS Connect — v36.20.15.4
+ 
+ ## Hotfix White Label — painel, login e layout proporcional
+@@ -9,8 +36,6 @@
+ - preserva as proteções XSS, SVG, CSP, uploads persistentes e autoload;
+ - não adiciona migration.
+ 
+-## Histórico consolidado
+-
+ ## Hotfix de inicialização do autoload e Router
+ 
+ - corrige a falha `Class App\Core\Router not found` após deploy;
+diff -ruN rsconnect_ent027_base/app/Services/AppVersionService.php rsconnect_ent027_work/app/Services/AppVersionService.php
+--- rsconnect_ent027_base/app/Services/AppVersionService.php	2026-08-28 14:39:30.000000000 +0000
++++ rsconnect_ent027_work/app/Services/AppVersionService.php	2026-08-28 17:09:15.334250025 +0000
+@@ -52,12 +52,13 @@
+     // RS Connect 36.20.15 — proteção contra XSS, SVG e CSP.
+     // RS Connect 36.20.15.1 — restauração segura das rotas e do menu White Label.
+     // RS Connect 36.20.15.3 — inicialização resiliente do autoload e validação do Router no build.
+-    // RS Connect 36.20.15.4 — layout proporcional e aplicação real do White Label no painel e login do cliente.
+     // RS Connect 36.20.15.2 — uploads persistentes e revisão do layout do White Label.
+-    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql, 085_ai_commercial_attention_queue.sql e 086_plan_ai_mode_and_commitment.sql, 087_webhook_security_events.sql e 088_payment_reconciliation_schema_compat.sql.
++    // RS Connect 36.20.15.4 — layout proporcional e aplicação real do White Label no painel e login do cliente.
++    // RS Connect 36.20.16 — manifesto canônico, registro schema_migrations e executor seguro.
++    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql, 085_ai_commercial_attention_queue.sql, 086_plan_ai_mode_and_commitment.sql, 087_webhook_security_events.sql, 088_payment_reconciliation_schema_compat.sql e 089_schema_migrations_registry.sql.
+     public const VERSION_LABEL = 'Beta Comercial 1.4';
+-    public const PACKAGE_LABEL = 'RS Connect 36.20.15.4 — White Label aplicado ao painel e login do cliente';
+-    public const REQUIRED_MIGRATION = '088_payment_reconciliation_schema_compat.sql';
++    public const PACKAGE_LABEL = 'RS Connect 36.20.16 — migrations normalizadas e rastreadas';
++    public const REQUIRED_MIGRATION = '089_schema_migrations_registry.sql';
+ 
+     private PDO $pdo;
+ 
+@@ -153,13 +154,14 @@
+             'conversation_ai_memory',
+             'contact_ai_memory',
+             'tenant_ai_commercial_attention_tracking',
++            'schema_migrations',
+         ];
+         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
+         $checks[] = $this->check(
+             'Migrations centrais',
+             count($missingTables) === 0 ? 'ok' : 'blocked',
+             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
+-            'Rodar as atualizações do banco pendentes até a 085, conforme o pacote implantado.'
++            'Executar php bin/migrate.php status e aplicar o baseline/up até a migration 089.'
+         );
+ 
+         $monitoringReady = $this->tableExists('operational_monitor_runs')
+diff -ruN rsconnect_ent027_base/app/Services/HealthCheckService.php rsconnect_ent027_work/app/Services/HealthCheckService.php
+--- rsconnect_ent027_base/app/Services/HealthCheckService.php	2026-08-28 11:44:01.000000000 +0000
++++ rsconnect_ent027_work/app/Services/HealthCheckService.php	2026-08-28 17:02:53.892670081 +0000
+@@ -20,6 +20,7 @@
+             $this->databaseCheck(),
+             $this->storageCheck(),
+             $this->applicationKeyCheck(),
++            $this->migrationsCheck(),
+         ];
+ 
+         $ready = count(array_filter(
+@@ -79,6 +80,36 @@
+             'status' => $ok ? 'ok' : 'unavailable',
+         ];
+     }
++
++    /** @return array{name:string,status:string} */
++    private function migrationsCheck(): array
++    {
++        try {
++            $manifestFile = dirname(__DIR__, 2) . '/database/migrations/manifest.php';
++            $manifest = is_file($manifestFile) ? require $manifestFile : [];
++            $expected = is_array($manifest) ? count($manifest['migrations'] ?? []) : 0;
++            if ($expected < 1) {
++                return ['name' => 'migrations', 'status' => 'unavailable'];
++            }
++
++            $statement = Database::connection()->query(
++                "SELECT COUNT(*) AS total,
++                        SUM(migration = '089_schema_migrations_registry.sql') AS registry_applied
++                 FROM schema_migrations"
++            );
++            $row = $statement !== false ? $statement->fetch() : false;
++            $ok = is_array($row)
++                && (int) ($row['total'] ?? 0) === $expected
++                && (int) ($row['registry_applied'] ?? 0) === 1;
++        } catch (Throwable) {
++            $ok = false;
++        }
++
++        return [
++            'name' => 'migrations',
++            'status' => $ok ? 'ok' : 'unavailable',
++        ];
++    }
+ 
+     /** @return array{name:string,status:string} */
+     private function applicationKeyCheck(): array
+diff -ruN rsconnect_ent027_base/app/Services/MigrationService.php rsconnect_ent027_work/app/Services/MigrationService.php
+--- rsconnect_ent027_base/app/Services/MigrationService.php	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/app/Services/MigrationService.php	2026-08-28 17:10:04.981458318 +0000
+@@ -0,0 +1,644 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Services;
++
++use PDO;
++use RuntimeException;
++use Throwable;
++
++final class MigrationService
++{
++    private const LOCK_NAME = 'rs_connect_schema_migrations_v1';
++    private const REGISTRY_FILE = '089_schema_migrations_registry.sql';
++
++    /** @var array<string,mixed> */
++    private array $manifest;
++
++    public function __construct(
++        private readonly ?PDO $pdo,
++        private readonly string $root,
++    ) {
++        $manifestFile = $this->root . '/database/migrations/manifest.php';
++        if (!is_file($manifestFile)) {
++            throw new RuntimeException('Manifesto de migrations não encontrado.');
++        }
++
++        $manifest = require $manifestFile;
++        if (!is_array($manifest)) {
++            throw new RuntimeException('Manifesto de migrations inválido.');
++        }
++        $this->manifest = $manifest;
++    }
++
++    /** @return array{files:int,statements:int,duplicate_numbers:array<string,list<string>>,rollbacks:list<string>} */
++    public function verifyOffline(): array
++    {
++        $entries = $this->entries();
++        $seenFiles = [];
++        $seenSequences = [];
++        $statements = 0;
++        $numbers = [];
++
++        foreach ($entries as $expectedSequence => $entry) {
++            $sequence = (int) ($entry['sequence'] ?? 0);
++            $file = (string) ($entry['file'] ?? '');
++            if ($sequence !== $expectedSequence + 1) {
++                throw new RuntimeException('Sequência não contínua no manifesto: ' . $file . '.');
++            }
++            if ($file === '' || isset($seenFiles[$file])) {
++                throw new RuntimeException('Migration duplicada no manifesto: ' . $file . '.');
++            }
++            if (isset($seenSequences[$sequence])) {
++                throw new RuntimeException('Número de sequência duplicado no manifesto: ' . $sequence . '.');
++            }
++
++            $path = $this->migrationPath($file);
++            if (!is_file($path)) {
++                throw new RuntimeException('Arquivo de migration ausente: ' . $file . '.');
++            }
++            $parsed = SqlScriptParser::parse((string) file_get_contents($path));
++            if ($parsed === []) {
++                throw new RuntimeException('Migration sem instruções executáveis: ' . $file . '.');
++            }
++            $statements += count($parsed);
++            $seenFiles[$file] = true;
++            $seenSequences[$sequence] = true;
++            $number = preg_match('/^(\d+)_/', $file, $matches) === 1 ? $matches[1] : 'sem-numero';
++            $numbers[$number][] = $file;
++        }
++
++        $rollbacks = array_values(array_map('strval', $this->manifest['rollbacks'] ?? []));
++        foreach ($rollbacks as $rollback) {
++            if (isset($seenFiles[$rollback])) {
++                throw new RuntimeException('Rollback não pode fazer parte do fluxo de subida: ' . $rollback . '.');
++            }
++            if (!is_file($this->migrationPath($rollback))) {
++                throw new RuntimeException('Rollback declarado não encontrado: ' . $rollback . '.');
++            }
++            SqlScriptParser::parse((string) file_get_contents($this->migrationPath($rollback)));
++        }
++
++        $known = array_fill_keys(array_merge(array_keys($seenFiles), $rollbacks), true);
++        foreach (glob($this->root . '/database/migrations/*.sql') ?: [] as $path) {
++            $file = basename($path);
++            if (!isset($known[$file])) {
++                throw new RuntimeException('Arquivo SQL sem classificação no manifesto: ' . $file . '.');
++            }
++        }
++
++        $snapshot = (string) ($this->manifest['schema_snapshot']['file'] ?? '');
++        $snapshotThrough = (string) ($this->manifest['schema_snapshot']['through'] ?? '');
++        $bootstrapSeed = (string) ($this->manifest['bootstrap_seed'] ?? '');
++        $seed = (string) ($this->manifest['seed'] ?? '');
++        if ($snapshotThrough === '' || !str_contains(
++            (string) file_get_contents($this->root . '/' . ltrim($snapshot, '/')),
++            'SCHEMA_EXECUTION_BASELINE_THROUGH: ' . $snapshotThrough
++        )) {
++            throw new RuntimeException('O marcador do baseline em database/schema.sql não corresponde ao manifesto.');
++        }
++        $lastEntry = $entries[array_key_last($entries)] ?? null;
++        if (!is_array($lastEntry) || (string) ($lastEntry['file'] ?? '') !== self::REGISTRY_FILE) {
++            throw new RuntimeException('A migration de registro precisa ser a última entrada do manifesto atual.');
++        }
++        foreach ([$snapshot, $bootstrapSeed, $seed] as $relative) {
++            $path = $this->root . '/' . ltrim($relative, '/');
++            if (!is_file($path)) {
++                throw new RuntimeException('Arquivo de instalação ausente: ' . $relative . '.');
++            }
++            $statements += count(SqlScriptParser::parse((string) file_get_contents($path)));
++        }
++
++        // O snapshot contém algumas tabelas já evoluídas para acelerar instalações.
++        // Se uma migration posterior declarar a mesma tabela, o snapshot precisa ser
++        // um superset para que CREATE TABLE IF NOT EXISTS não esconda colunas faltantes.
++        $schemaTables = self::tableColumnsFromSql((string) file_get_contents($this->root . '/' . ltrim($snapshot, '/')));
++        foreach ($entries as $entry) {
++            $migrationTables = self::tableColumnsFromSql((string) file_get_contents($this->migrationPath((string) $entry['file'])));
++            foreach ($migrationTables as $table => $columns) {
++                if (!isset($schemaTables[$table])) {
++                    continue;
++                }
++                $missingColumns = array_values(array_diff($columns, $schemaTables[$table]));
++                if ($missingColumns !== []) {
++                    throw new RuntimeException(
++                        'Snapshot incompleto para a tabela ' . $table . ': faltam ' . implode(', ', $missingColumns) . '.'
++                    );
++                }
++            }
++        }
++
++        $duplicates = [];
++        foreach ($numbers as $number => $files) {
++            if (count($files) > 1) {
++                $duplicates[$number] = $files;
++            }
++        }
++
++        return [
++            'files' => count($entries),
++            'statements' => $statements,
++            'duplicate_numbers' => $duplicates,
++            'rollbacks' => $rollbacks,
++        ];
++    }
++
++    /** @return array{registry:bool,applied:int,pending:int,drift:list<string>,rows:list<array<string,mixed>>} */
++    public function status(): array
++    {
++        $registry = $this->tableExists('schema_migrations');
++        $applied = $registry ? $this->appliedMap() : [];
++        $rows = [];
++        $drift = [];
++
++        foreach ($this->entries() as $entry) {
++            $file = (string) $entry['file'];
++            $checksum = $this->checksum($file);
++            $record = $applied[$file] ?? null;
++            $state = $record ? 'applied' : 'pending';
++            if ($record && (
++                !hash_equals((string) $record['checksum'], $checksum)
++                || (int) ($record['sequence_no'] ?? 0) !== (int) $entry['sequence']
++            )) {
++                $state = 'drift';
++                $drift[] = $file;
++            }
++            $rows[] = [
++                'sequence' => (int) $entry['sequence'],
++                'file' => $file,
++                'state' => $state,
++                'source' => $record['source'] ?? null,
++                'batch' => isset($record['batch']) ? (int) $record['batch'] : null,
++                'applied_at' => $record['applied_at'] ?? null,
++            ];
++        }
++
++        return [
++            'registry' => $registry,
++            'applied' => count($applied),
++            'pending' => count(array_filter($rows, static fn (array $row): bool => $row['state'] === 'pending')),
++            'drift' => $drift,
++            'rows' => $rows,
++        ];
++    }
++
++    /** @return list<string> */
++    public function up(bool $dryRun = false): array
++    {
++        return $this->withLock(function () use ($dryRun): array {
++            $this->ensureRegistry();
++            $applied = $this->appliedMap();
++            if ($this->applicationTableCount() === 0) {
++                throw new RuntimeException('Banco vazio. Use: php bin/migrate.php install --yes');
++            }
++            if ($applied === [] || (count($applied) === 1 && isset($applied[self::REGISTRY_FILE]))) {
++                throw new RuntimeException('Banco existente sem histórico. Execute primeiro: php bin/migrate.php baseline --through=088 --yes');
++            }
++            $this->assertNoDrift($applied);
++
++            $pending = array_values(array_filter(
++                $this->entries(),
++                static fn (array $entry): bool => !isset($applied[(string) $entry['file']])
++            ));
++            if ($dryRun) {
++                return array_map(static fn (array $entry): string => (string) $entry['file'], $pending);
++            }
++
++            $batch = $this->nextBatch();
++            $executed = [];
++            foreach ($pending as $entry) {
++                $file = (string) $entry['file'];
++                $elapsed = $this->executeMigration($file);
++                $this->record($entry, $batch, 'runner', $elapsed);
++                $executed[] = $file;
++            }
++            return $executed;
++        });
++    }
++
++    /** @return list<string> */
++    public function baseline(string $through): array
++    {
++        return $this->withLock(function () use ($through): array {
++            if ($this->applicationTableCount() === 0) {
++                throw new RuntimeException('O banco está vazio. Use o comando install em vez de baseline.');
++            }
++            $this->ensureRegistry();
++            $target = $this->resolveTarget($through);
++            $this->verifyBaselineStructure((string) $target['file']);
++
++            $existing = $this->appliedMap();
++            if ($existing !== []) {
++                $unexpected = array_diff(array_keys($existing), [self::REGISTRY_FILE]);
++                if ($unexpected !== []) {
++                    throw new RuntimeException('O banco já possui histórico de migrations. Use status ou up.');
++                }
++            }
++
++            $recorded = [];
++            foreach ($this->entries() as $entry) {
++                if ((int) $entry['sequence'] <= (int) $target['sequence'] || (string) $entry['file'] === self::REGISTRY_FILE) {
++                    if (!isset($existing[(string) $entry['file']])) {
++                        $this->record($entry, 0, (string) $entry['file'] === self::REGISTRY_FILE ? 'bootstrap' : 'baseline', 0);
++                        $recorded[] = (string) $entry['file'];
++                    }
++                }
++            }
++            return $recorded;
++        });
++    }
++
++    /** @return list<string> */
++    public function install(): array
++    {
++        return $this->withLock(function (): array {
++            if ($this->applicationTableCount() > 0) {
++                throw new RuntimeException('Instalação recusada: o banco já contém tabelas da aplicação.');
++            }
++
++            $snapshot = $this->root . '/' . ltrim((string) $this->manifest['schema_snapshot']['file'], '/');
++            $bootstrapSeed = $this->root . '/' . ltrim((string) $this->manifest['bootstrap_seed'], '/');
++            $seed = $this->root . '/' . ltrim((string) $this->manifest['seed'], '/');
++
++            // O snapshot contém o núcleo histórico até a migration 004. O seed
++            // inicial cria a empresa de demonstração antes dos backfills por tenant.
++            $this->executeSqlFile($snapshot, 'schema.sql');
++            $this->executeSqlFile($bootstrapSeed, 'seed.sql');
++            $this->ensureRegistry();
++
++            $baseline = $this->resolveTarget((string) $this->manifest['schema_snapshot']['through']);
++            $recorded = [];
++            foreach ($this->entries() as $entry) {
++                if ((int) $entry['sequence'] <= (int) $baseline['sequence'] || (string) $entry['file'] === self::REGISTRY_FILE) {
++                    $this->record(
++                        $entry,
++                        0,
++                        (string) $entry['file'] === self::REGISTRY_FILE ? 'bootstrap' : 'install',
++                        0
++                    );
++                    $recorded[] = (string) $entry['file'];
++                }
++            }
++
++            // Executa toda evolução posterior ao snapshot na ordem canônica.
++            $batch = 1;
++            foreach ($this->entries() as $entry) {
++                $file = (string) $entry['file'];
++                if ((int) $entry['sequence'] <= (int) $baseline['sequence'] || $file === self::REGISTRY_FILE) {
++                    continue;
++                }
++                $elapsed = $this->executeMigration($file);
++                $this->record($entry, $batch, 'install', $elapsed);
++                $recorded[] = $file;
++            }
++
++            // Reconcilia dados de referência somente depois que todas as tabelas
++            // e colunas da versão atual estiverem disponíveis.
++            $this->executeSqlFile($seed, 'seed.reference.sql');
++            return $recorded;
++        });
++    }
++
++    public function seed(): void
++    {
++        $this->withLock(function (): void {
++            $this->ensureRegistry();
++            $status = $this->status();
++            if ($status['drift'] !== []) {
++                throw new RuntimeException('Seed recusado: existem migrations com checksum ou sequência divergente.');
++            }
++            if ((int) $status['pending'] > 0) {
++                throw new RuntimeException('Seed recusado: aplique primeiro todas as migrations pendentes.');
++            }
++            $seed = $this->root . '/' . ltrim((string) $this->manifest['seed'], '/');
++            $this->executeSqlFile($seed, 'seed.reference.sql');
++        });
++    }
++
++    /** @return list<string> */
++    public function bootstrap(): array
++    {
++        if ($this->applicationTableCount() === 0) {
++            return $this->install();
++        }
++        if (!$this->tableExists('schema_migrations') || $this->appliedMap() === []) {
++            $this->baseline('088');
++        }
++        return $this->up();
++    }
++
++    /** @return list<array{sequence:int,file:string}> */
++    private function entries(): array
++    {
++        /** @var list<array{sequence:int,file:string}> $entries */
++        $entries = $this->manifest['migrations'] ?? [];
++        return $entries;
++    }
++
++    private function migrationPath(string $file): string
++    {
++        return $this->root . '/database/migrations/' . basename($file);
++    }
++
++    private function checksum(string $file): string
++    {
++        $checksum = hash_file('sha256', $this->migrationPath($file));
++        if (!is_string($checksum)) {
++            throw new RuntimeException('Não foi possível calcular checksum de ' . $file . '.');
++        }
++        return $checksum;
++    }
++
++    private function ensureRegistry(): void
++    {
++        if (!$this->tableExists('schema_migrations')) {
++            $this->executeSqlFile($this->migrationPath(self::REGISTRY_FILE), self::REGISTRY_FILE);
++        }
++    }
++
++    private function executeMigration(string $file): int
++    {
++        return $this->executeSqlFile($this->migrationPath($file), $file);
++    }
++
++    private function executeSqlFile(string $path, string $label): int
++    {
++        if (!is_file($path)) {
++            throw new RuntimeException('Arquivo SQL não encontrado: ' . $label . '.');
++        }
++        $statements = SqlScriptParser::parse((string) file_get_contents($path));
++        $started = microtime(true);
++        foreach ($statements as $position => $statement) {
++            $normalized = strtoupper(ltrim(self::withoutLeadingComments($statement)));
++            if (str_starts_with($normalized, 'USE ') || str_starts_with($normalized, 'CREATE DATABASE ')) {
++                continue;
++            }
++            try {
++                $this->db()->exec($statement);
++            } catch (Throwable $exception) {
++                throw new RuntimeException(
++                    sprintf('Falha em %s, instrução %d. Revise o banco antes de repetir.', $label, $position + 1),
++                    0,
++                    $exception
++                );
++            }
++        }
++        return (int) round((microtime(true) - $started) * 1000);
++    }
++
++    /** @param array{sequence:int,file:string} $entry */
++    private function record(array $entry, int $batch, string $source, int $executionMs): void
++    {
++        $statement = $this->db()->prepare(
++            'INSERT INTO schema_migrations
++                (sequence_no, migration, checksum, batch, source, execution_ms, applied_by, applied_at)
++             VALUES
++                (:sequence_no, :migration, :checksum, :batch, :source, :execution_ms, :applied_by, UTC_TIMESTAMP())'
++        );
++        $statement->execute([
++            'sequence_no' => (int) $entry['sequence'],
++            'migration' => (string) $entry['file'],
++            'checksum' => $this->checksum((string) $entry['file']),
++            'batch' => $batch,
++            'source' => $source,
++            'execution_ms' => max(0, $executionMs),
++            'applied_by' => substr((string) (getenv('MIGRATION_ACTOR') ?: gethostname() ?: 'cli'), 0, 190),
++        ]);
++    }
++
++    /** @return array<string,array<string,mixed>> */
++    private function appliedMap(): array
++    {
++        if (!$this->tableExists('schema_migrations')) {
++            return [];
++        }
++        $rows = $this->db()->query('SELECT sequence_no, migration, checksum, batch, source, applied_at FROM schema_migrations ORDER BY sequence_no')->fetchAll();
++        $map = [];
++        foreach ($rows as $row) {
++            $map[(string) $row['migration']] = $row;
++        }
++        return $map;
++    }
++
++    /** @param array<string,array<string,mixed>> $applied */
++    private function assertNoDrift(array $applied): void
++    {
++        foreach ($this->entries() as $entry) {
++            $file = (string) $entry['file'];
++            if (!isset($applied[$file])) {
++                continue;
++            }
++            if (!hash_equals((string) $applied[$file]['checksum'], $this->checksum($file))) {
++                throw new RuntimeException('Checksum divergente em migration aplicada: ' . $file . '. Não edite migrations históricas.');
++            }
++            if ((int) ($applied[$file]['sequence_no'] ?? 0) !== (int) $entry['sequence']) {
++                throw new RuntimeException('Sequência divergente em migration aplicada: ' . $file . '. Não reordene o manifesto histórico.');
++            }
++        }
++    }
++
++    private function nextBatch(): int
++    {
++        return (int) $this->db()->query('SELECT COALESCE(MAX(batch), 0) + 1 FROM schema_migrations')->fetchColumn();
++    }
++
++    /** @return array{sequence:int,file:string} */
++    private function resolveTarget(string $through): array
++    {
++        $through = trim($through);
++        if ($through === '' || strtolower($through) === 'latest') {
++            return $this->entries()[array_key_last($this->entries())];
++        }
++
++        $matches = [];
++        foreach ($this->entries() as $entry) {
++            $file = (string) $entry['file'];
++            if ($file === $through || preg_match('/^' . preg_quote(str_pad($through, 3, '0', STR_PAD_LEFT), '/') . '_/', $file) === 1) {
++                $matches[] = $entry;
++            }
++        }
++        if ($matches === []) {
++            throw new RuntimeException('Migration alvo não encontrada: ' . $through . '.');
++        }
++        if (count($matches) > 1) {
++            throw new RuntimeException('Número ambíguo. Informe o nome completo da migration: ' . implode(', ', array_column($matches, 'file')) . '.');
++        }
++        return $matches[0];
++    }
++
++    private function verifyBaselineStructure(string $targetFile): void
++    {
++        $target = $this->resolveTarget($targetFile);
++        if ((int) $target['sequence'] < (int) $this->resolveTarget('085')['sequence']) {
++            throw new RuntimeException('Baseline automático é suportado somente para bancos na migration 085 ou superior.');
++        }
++
++        $requiredTables = [
++            'tenants', 'users', 'evolution_instances', 'permissions', 'role_permissions',
++            'ai_agents', 'contacts', 'conversations', 'conversation_messages',
++            'crm_pipelines', 'crm_stages', 'crm_leads', 'crm_tasks',
++            'saas_plans', 'tenant_subscriptions', 'tenant_invoices', 'payment_gateways',
++            'tenant_implementation_status', 'tenant_implementation_checklist', 'tenant_implementation_checklists',
++            'tenant_onboarding_progress', 'tenant_onboarding_settings',
++            'operations_backup_routines', 'operations_backup_jobs', 'system_backups',
++            'system_health_checks', 'tenant_calendar_availability_settings',
++            'calendar_availability_requests', 'calendar_availability_slots',
++            'calendar_google_sync_logs', 'tenant_notification_preferences',
++            'tenant_admin_tracking', 'admin_crm_stages', 'admin_crm_opportunities',
++            'admin_crm_activities', 'tenant_health_snapshots', 'tenant_health_checks',
++            'tenant_health_incidents', 'tenant_health_incident_events',
++            'conversation_flow_states', 'ai_agent_group_rules', 'report_daily_metrics',
++            'operational_alert_preferences', 'admin_operational_notifications',
++            'operational_alert_deliveries', 'client_communications',
++            'client_communication_recipients', 'ai_usage_events',
++            'ai_usage_threshold_events', 'ai_after_hours_pending',
++            'ai_agent_instance_bindings', 'client_communication_replies',
++            'ai_prompt_studio_drafts', 'ai_agent_prompt_versions',
++            'evolution_connection_events', 'message_retention_runs',
++            'conversation_assignment_history', 'conversation_status_history',
++            'calendar_appointment_history', 'conversation_service_cycles',
++            'rs_datetime_contract', 'security_rate_limits', 'operational_monitor_runs',
++            'conversation_message_attachments', 'conversation_ai_memory',
++            'contact_ai_memory', 'tenant_ai_commercial_attention_tracking',
++        ];
++        foreach ($requiredTables as $table) {
++            if (!$this->tableExists($table)) {
++                throw new RuntimeException('Baseline recusado: tabela obrigatória ausente: ' . $table . '.');
++            }
++        }
++
++        if ((int) $target['sequence'] >= (int) $this->resolveTarget('086')['sequence']) {
++            foreach ([
++                ['saas_plans', 'own_ai_monthly_price'],
++                ['saas_plans', 'rs_ai_monthly_price'],
++                ['saas_plans', 'commitment_discounts_json'],
++                ['tenant_subscriptions', 'ai_billing_mode'],
++                ['tenant_subscriptions', 'commitment_months'],
++                ['tenant_subscriptions', 'commitment_ends_at'],
++            ] as [$table, $column]) {
++                if (!$this->columnExists($table, $column)) {
++                    throw new RuntimeException('Baseline recusado: coluna ausente ' . $table . '.' . $column . '.');
++                }
++            }
++        }
++
++        if ((int) $target['sequence'] >= (int) $this->resolveTarget('087')['sequence'] && !$this->tableExists('webhook_security_events')) {
++            throw new RuntimeException('Baseline recusado: tabela webhook_security_events ausente.');
++        }
++
++        if ((int) $target['sequence'] >= (int) $this->resolveTarget('088')['sequence']) {
++            foreach (['external_imported_at', 'payment_status_checked_at', 'access_released_at'] as $column) {
++                if (!$this->columnExists('tenant_invoices', $column)) {
++                    throw new RuntimeException('Baseline recusado: coluna tenant_invoices.' . $column . ' ausente.');
++                }
++            }
++            if (!$this->indexExists('tenant_invoices', 'idx_invoice_external_payment')) {
++                throw new RuntimeException('Baseline recusado: índice idx_invoice_external_payment ausente.');
++            }
++        }
++    }
++
++    private function tableExists(string $table): bool
++    {
++        $statement = $this->db()->prepare(
++            'SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table'
++        );
++        $statement->execute(['table' => $table]);
++        return (int) $statement->fetchColumn() > 0;
++    }
++
++    private function columnExists(string $table, string $column): bool
++    {
++        $statement = $this->db()->prepare(
++            'SELECT COUNT(*) FROM information_schema.COLUMNS
++             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
++        );
++        $statement->execute(['table' => $table, 'column' => $column]);
++        return (int) $statement->fetchColumn() > 0;
++    }
++
++    private function indexExists(string $table, string $index): bool
++    {
++        $statement = $this->db()->prepare(
++            'SELECT COUNT(*) FROM information_schema.STATISTICS
++             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND INDEX_NAME = :index_name'
++        );
++        $statement->execute(['table' => $table, 'index_name' => $index]);
++        return (int) $statement->fetchColumn() > 0;
++    }
++
++    private function applicationTableCount(): int
++    {
++        $statement = $this->db()->query(
++            "SELECT COUNT(*) FROM information_schema.TABLES
++             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME <> 'schema_migrations'"
++        );
++        return (int) $statement->fetchColumn();
++    }
++
++    /** @template T @param callable():T $callback @return T */
++    private function withLock(callable $callback): mixed
++    {
++        $timeout = max(1, min(120, (int) (getenv('MIGRATIONS_LOCK_TIMEOUT') ?: 30)));
++        $statement = $this->db()->prepare('SELECT GET_LOCK(:lock_name, :timeout)');
++        $statement->execute(['lock_name' => self::LOCK_NAME, 'timeout' => $timeout]);
++        if ((int) $statement->fetchColumn() !== 1) {
++            throw new RuntimeException('Outra execução de migrations está em andamento.');
++        }
++
++        try {
++            return $callback();
++        } finally {
++            $release = $this->db()->prepare('SELECT RELEASE_LOCK(:lock_name)');
++            $release->execute(['lock_name' => self::LOCK_NAME]);
++        }
++    }
++
++    /** @return array<string,list<string>> */
++    private static function tableColumnsFromSql(string $sql): array
++    {
++        $tables = [];
++        if (preg_match_all(
++            '/CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`?([A-Za-z0-9_]+)`?\s*\((.*?)\)\s*ENGINE/is',
++            $sql,
++            $matches,
++            PREG_SET_ORDER
++        ) !== false) {
++            foreach ($matches as $match) {
++                $table = (string) $match[1];
++                $columns = [];
++                foreach (preg_split('/\R/', (string) $match[2]) ?: [] as $line) {
++                    $line = trim($line, " \t\n\r\0\x0B,");
++                    if (preg_match('/^`?([A-Za-z0-9_]+)`?\s+/', $line, $columnMatch) !== 1) {
++                        continue;
++                    }
++                    $column = (string) $columnMatch[1];
++                    if (in_array(strtoupper($column), ['PRIMARY', 'UNIQUE', 'KEY', 'INDEX', 'CONSTRAINT', 'FOREIGN', 'CHECK'], true)) {
++                        continue;
++                    }
++                    $columns[] = $column;
++                }
++                $tables[$table] = array_values(array_unique($columns));
++            }
++        }
++        return $tables;
++    }
++
++    private function db(): PDO
++    {
++        if (!$this->pdo instanceof PDO) {
++            throw new RuntimeException('Conexão com o banco não foi inicializada para este comando.');
++        }
++        return $this->pdo;
++    }
++
++    private static function withoutLeadingComments(string $statement): string
++    {
++        do {
++            $before = $statement;
++            $statement = preg_replace('/^\s*(?:--(?=\s)[^\n]*(?:\n|$)|#[^\n]*(?:\n|$)|\/\*.*?\*\/)/s', '', $statement) ?? $statement;
++        } while ($statement !== $before);
++        return ltrim($statement);
++    }
++}
+diff -ruN rsconnect_ent027_base/app/Services/OperationsService.php rsconnect_ent027_work/app/Services/OperationsService.php
+--- rsconnect_ent027_base/app/Services/OperationsService.php	2026-08-26 22:42:14.000000000 +0000
++++ rsconnect_ent027_work/app/Services/OperationsService.php	2026-08-28 16:54:12.136876992 +0000
+@@ -630,17 +630,46 @@
+ 
+     private function checkMigrations(): array
+     {
+-        $requiredTables = ['conversation_flow_states', 'calendar_google_sync_logs', 'operations_backup_jobs', 'report_daily_metrics', 'ai_usage_events', 'ai_usage_threshold_events', 'ai_after_hours_pending', 'operational_monitor_runs'];
+-        $missing = [];
+-        foreach ($requiredTables as $table) {
+-            if ($this->count("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . str_replace("'", "''", $table) . "'") < 1) {
+-                $missing[] = $table;
++        try {
++            $service = new MigrationService(Database::connection(), dirname(__DIR__, 2));
++            $status = $service->status();
++
++            if (!$status['registry']) {
++                return [
++                    'status' => 'down',
++                    'message' => 'O registro schema_migrations ainda não foi criado. Execute o baseline seguro da ENT-027.',
++                    'latency_ms' => null,
++                ];
+             }
++
++            if ($status['drift'] !== []) {
++                return [
++                    'status' => 'down',
++                    'message' => 'Há migrations aplicadas com checksum divergente: ' . implode(', ', $status['drift']) . '.',
++                    'latency_ms' => null,
++                ];
++            }
++
++            if ((int) $status['pending'] > 0) {
++                return [
++                    'status' => 'warning',
++                    'message' => $status['pending'] . ' migration(s) pendente(s). Execute php bin/migrate.php up.',
++                    'latency_ms' => null,
++                ];
++            }
++
++            return [
++                'status' => 'ok',
++                'message' => $status['applied'] . ' migrations registradas, sem pendências ou alterações históricas.',
++                'latency_ms' => null,
++            ];
++        } catch (Throwable $exception) {
++            return [
++                'status' => 'down',
++                'message' => 'Não foi possível validar o histórico de migrations.',
++                'latency_ms' => null,
++            ];
+         }
+-        if ($missing !== []) {
+-            return ['status' => 'down', 'message' => 'Estruturas obrigatórias ausentes: ' . implode(', ', $missing) . '.', 'latency_ms' => null];
+-        }
+-        return ['status' => 'ok', 'message' => 'Estruturas principais, incluindo consumo de IA, recuperação pós-horário e monitoramento operacional, foram localizadas no banco.', 'latency_ms' => null];
+     }
+ 
+     private function checkBillingCron(): array
+diff -ruN rsconnect_ent027_base/app/Services/SqlScriptParser.php rsconnect_ent027_work/app/Services/SqlScriptParser.php
+--- rsconnect_ent027_base/app/Services/SqlScriptParser.php	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/app/Services/SqlScriptParser.php	2026-08-28 16:52:15.975874585 +0000
+@@ -0,0 +1,156 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Services;
++
++use RuntimeException;
++
++final class SqlScriptParser
++{
++    /**
++     * @return list<string>
++     */
++    public static function parse(string $sql): array
++    {
++        $sql = preg_replace('/^\xEF\xBB\xBF/', '', $sql) ?? $sql;
++        $delimiter = ';';
++        $buffer = '';
++        $statements = [];
++
++        $lines = preg_split('/\R/', $sql) ?: [];
++        foreach ($lines as $line) {
++            if (preg_match('/^\s*DELIMITER\s+(\S+)\s*$/i', $line, $matches) === 1) {
++                if (trim(self::stripComments($buffer)) !== '') {
++                    throw new RuntimeException('Diretiva DELIMITER encontrada no meio de uma instrução SQL.');
++                }
++                $buffer = '';
++                $delimiter = $matches[1];
++                continue;
++            }
++
++            $buffer .= $line . "\n";
++            [$complete, $buffer] = self::extract($buffer, $delimiter);
++            foreach ($complete as $statement) {
++                $statement = trim($statement);
++                if ($statement !== '' && trim(self::stripComments($statement)) !== '') {
++                    $statements[] = $statement;
++                }
++            }
++        }
++
++        if (trim(self::stripComments($buffer)) !== '') {
++            throw new RuntimeException('Arquivo SQL terminou com uma instrução incompleta.');
++        }
++
++        return $statements;
++    }
++
++    /**
++     * @return array{0:list<string>,1:string}
++     */
++    private static function extract(string $buffer, string $delimiter): array
++    {
++        $statements = [];
++        $start = 0;
++        $length = strlen($buffer);
++        $delimiterLength = strlen($delimiter);
++        $single = false;
++        $double = false;
++        $backtick = false;
++        $lineComment = false;
++        $blockComment = false;
++
++        for ($index = 0; $index < $length; $index++) {
++            $char = $buffer[$index];
++            $next = $index + 1 < $length ? $buffer[$index + 1] : '';
++
++            if ($lineComment) {
++                if ($char === "\n") {
++                    $lineComment = false;
++                }
++                continue;
++            }
++
++            if ($blockComment) {
++                if ($char === '*' && $next === '/') {
++                    $blockComment = false;
++                    $index++;
++                }
++                continue;
++            }
++
++            if (!$single && !$double && !$backtick) {
++                if ($char === '#') {
++                    $lineComment = true;
++                    continue;
++                }
++                if ($char === '-' && $next === '-' && ($index + 2 >= $length || ctype_space($buffer[$index + 2]))) {
++                    $lineComment = true;
++                    $index++;
++                    continue;
++                }
++                if ($char === '/' && $next === '*') {
++                    $blockComment = true;
++                    $index++;
++                    continue;
++                }
++            }
++
++            if (!$double && !$backtick && $char === "'") {
++                if ($single && $next === "'") {
++                    $index++;
++                    continue;
++                }
++                if (!self::isEscaped($buffer, $index)) {
++                    $single = !$single;
++                }
++                continue;
++            }
++
++            if (!$single && !$backtick && $char === '"') {
++                if ($double && $next === '"') {
++                    $index++;
++                    continue;
++                }
++                if (!self::isEscaped($buffer, $index)) {
++                    $double = !$double;
++                }
++                continue;
++            }
++
++            if (!$single && !$double && $char === '`') {
++                if ($backtick && $next === '`') {
++                    $index++;
++                    continue;
++                }
++                $backtick = !$backtick;
++                continue;
++            }
++
++            if (!$single && !$double && !$backtick && substr($buffer, $index, $delimiterLength) === $delimiter) {
++                $statements[] = substr($buffer, $start, $index - $start);
++                $index += $delimiterLength - 1;
++                $start = $index + 1;
++            }
++        }
++
++        return [$statements, substr($buffer, $start)];
++    }
++
++    private static function isEscaped(string $buffer, int $index): bool
++    {
++        $slashes = 0;
++        for ($cursor = $index - 1; $cursor >= 0 && $buffer[$cursor] === '\\'; $cursor--) {
++            $slashes++;
++        }
++        return $slashes % 2 === 1;
++    }
++
++    private static function stripComments(string $sql): string
++    {
++        $sql = preg_replace('/\/\*.*?\*\//s', '', $sql) ?? $sql;
++        $sql = preg_replace('/^\s*(?:--(?=\s)|#).*$/m', '', $sql) ?? $sql;
++        return $sql;
++    }
++}
+diff -ruN rsconnect_ent027_base/bin/migrate.php rsconnect_ent027_work/bin/migrate.php
+--- rsconnect_ent027_base/bin/migrate.php	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/bin/migrate.php	2026-08-28 17:04:57.486913513 +0000
+@@ -0,0 +1,142 @@
++#!/usr/bin/env php
++<?php
++
++declare(strict_types=1);
++
++use App\Core\Autoloader;
++use App\Core\Database;
++use App\Core\Env;
++use App\Services\MigrationService;
++
++$root = dirname(__DIR__);
++require_once $root . '/app/Core/Autoloader.php';
++Autoloader::register($root . '/app');
++Env::load($root . '/.env');
++date_default_timezone_set((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo'));
++
++$args = array_values(array_slice($argv, 1));
++$command = strtolower((string) ($args[0] ?? 'help'));
++$yes = in_array('--yes', $args, true) || in_array('-y', $args, true);
++$dryRun = in_array('--dry-run', $args, true);
++$through = 'latest';
++foreach ($args as $arg) {
++    if (str_starts_with($arg, '--through=')) {
++        $through = substr($arg, strlen('--through='));
++    }
++}
++
++$usage = static function (): void {
++    echo <<<'TXT'
++RS Connect — executor seguro de migrations
++
++Uso:
++  php bin/migrate.php verify
++  php bin/migrate.php status
++  php bin/migrate.php install --yes
++  php bin/migrate.php baseline --through=088 --yes
++  php bin/migrate.php up [--dry-run]
++  php bin/migrate.php seed --yes
++  php bin/migrate.php bootstrap --yes
++
++Comandos:
++  verify     Valida manifesto, ordem, checksums calculáveis e parser SQL sem acessar o banco.
++  status     Exibe migrations aplicadas, pendentes e divergências de checksum.
++  install    Instala schema + seed em banco vazio e registra o baseline completo.
++  baseline   Adota com segurança um banco existente sem histórico, após validar a estrutura.
++  up         Executa somente migrations pendentes registradas no manifesto.
++  seed       Reaplica dados de referência idempotentes após todas as migrations.
++  bootstrap  Para Docker dev: instala banco vazio, adota banco atual ou aplica pendências.
++TXT;
++};
++
++try {
++    if (in_array($command, ['help', '--help', '-h'], true)) {
++        $usage();
++        exit(0);
++    }
++
++    if ($command === 'verify') {
++        $service = new MigrationService(null, $root);
++        $result = $service->verifyOffline();
++        echo "[OK] Manifesto: {$result['files']} migrations de subida.\n";
++        echo "[OK] Parser SQL: {$result['statements']} instruções reconhecidas.\n";
++        echo "[OK] Rollbacks isolados: " . count($result['rollbacks']) . ".\n";
++        if ($result['duplicate_numbers'] !== []) {
++            echo "[INFO] Numerações históricas duplicadas, ordenadas pelo manifesto:\n";
++            foreach ($result['duplicate_numbers'] as $number => $files) {
++                echo '  ' . $number . ': ' . implode(' -> ', $files) . "\n";
++            }
++        }
++        exit(0);
++    }
++
++    $service = new MigrationService(Database::connection(), $root);
++
++    if ($command === 'status') {
++        $result = $service->status();
++        echo 'Registro schema_migrations: ' . ($result['registry'] ? 'disponível' : 'ausente') . "\n";
++        foreach ($result['rows'] as $row) {
++            $marker = match ($row['state']) {
++                'applied' => '[OK]',
++                'drift' => '[DRIFT]',
++                default => '[PENDING]',
++            };
++            echo sprintf(
++                "%s %03d %s%s\n",
++                $marker,
++                $row['sequence'],
++                $row['file'],
++                $row['source'] ? ' (' . $row['source'] . ')' : ''
++            );
++        }
++        echo "\nResumo: {$result['applied']} aplicada(s), {$result['pending']} pendente(s), " . count($result['drift']) . " divergente(s).\n";
++        exit($result['drift'] === [] ? 0 : 2);
++    }
++
++    if (in_array($command, ['install', 'baseline', 'seed', 'bootstrap'], true) && !$yes) {
++        throw new RuntimeException('Comando destrutivo/controlado exige confirmação explícita com --yes.');
++    }
++
++    if ($command === 'install') {
++        $files = $service->install();
++        echo '[OK] Instalação concluída. ' . count($files) . " migrations registradas.\n";
++        exit(0);
++    }
++
++    if ($command === 'baseline') {
++        $files = $service->baseline($through);
++        echo '[OK] Baseline registrado até ' . $through . '. ' . count($files) . " entradas adicionadas.\n";
++        exit(0);
++    }
++
++    if ($command === 'seed') {
++        $service->seed();
++        echo "[OK] Dados de referência reconciliados.\n";
++        exit(0);
++    }
++
++    if ($command === 'up') {
++        $files = $service->up($dryRun);
++        if ($dryRun) {
++            echo $files === [] ? "Nenhuma migration pendente.\n" : "Migrations que seriam executadas:\n- " . implode("\n- ", $files) . "\n";
++            exit(0);
++        }
++        echo $files === [] ? "[OK] Banco já atualizado.\n" : '[OK] ' . count($files) . " migration(s) executada(s):\n- " . implode("\n- ", $files) . "\n";
++        exit(0);
++    }
++
++    if ($command === 'bootstrap') {
++        $files = $service->bootstrap();
++        echo $files === [] ? "[OK] Banco já atualizado.\n" : '[OK] Bootstrap concluído. ' . count($files) . " ação(ões) registradas/executadas.\n";
++        exit(0);
++    }
++
++    $usage();
++    exit(1);
++} catch (Throwable $exception) {
++    fwrite(STDERR, '[ERRO] ' . $exception->getMessage() . "\n");
++    if (filter_var(Env::get('APP_DEBUG', false), FILTER_VALIDATE_BOOL) && $exception->getPrevious()) {
++        fwrite(STDERR, '[DEBUG] ' . $exception->getPrevious()->getMessage() . "\n");
++    }
++    exit(1);
++}
+diff -ruN rsconnect_ent027_base/composer.json rsconnect_ent027_work/composer.json
+--- rsconnect_ent027_base/composer.json	2026-08-28 12:25:17.000000000 +0000
++++ rsconnect_ent027_work/composer.json	2026-08-28 16:54:52.694209006 +0000
+@@ -20,6 +20,7 @@
+     "test:ent028": "php tests/Feature/ent028-webhook-security-smoke.php",
+     "test:ent028-schema": "php tests/Feature/ent028-pagbank-schema-hotfix-smoke.php",
+     "test:ent029": "php tests/Feature/ent029-secure-health-checks-smoke.php",
+-    "test:ent030": "php tests/Feature/ent030-xss-svg-csp-smoke.php"
++    "test:ent030": "php tests/Feature/ent030-xss-svg-csp-smoke.php",
++    "test:ent027": "php tests/Feature/ent027-migrations-normalization-smoke.php"
+   }
+ }
+diff -ruN rsconnect_ent027_base/database/migrations/089_schema_migrations_registry.sql rsconnect_ent027_work/database/migrations/089_schema_migrations_registry.sql
+--- rsconnect_ent027_base/database/migrations/089_schema_migrations_registry.sql	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/database/migrations/089_schema_migrations_registry.sql	2026-08-28 16:51:12.895156738 +0000
+@@ -0,0 +1,20 @@
++-- RS Connect v36.20.16 — ENT-027 / PA-005
++-- Registro canônico das migrations aplicadas.
++-- A tabela é aditiva e não altera dados comerciais.
++
++CREATE TABLE IF NOT EXISTS schema_migrations (
++    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
++    sequence_no INT UNSIGNED NOT NULL,
++    migration VARCHAR(190) NOT NULL,
++    checksum CHAR(64) NOT NULL,
++    batch INT UNSIGNED NOT NULL DEFAULT 0,
++    source ENUM('runner','baseline','install','bootstrap') NOT NULL DEFAULT 'runner',
++    execution_ms INT UNSIGNED NOT NULL DEFAULT 0,
++    applied_by VARCHAR(190) NULL,
++    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    PRIMARY KEY (id),
++    UNIQUE KEY uq_schema_migrations_migration (migration),
++    UNIQUE KEY uq_schema_migrations_sequence (sequence_no),
++    KEY idx_schema_migrations_batch (batch, sequence_no),
++    KEY idx_schema_migrations_applied_at (applied_at)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+diff -ruN rsconnect_ent027_base/database/migrations/README.md rsconnect_ent027_work/database/migrations/README.md
+--- rsconnect_ent027_base/database/migrations/README.md	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/database/migrations/README.md	2026-08-28 17:05:38.428791427 +0000
+@@ -0,0 +1,38 @@
++# Migrations da RS Connect
++
++A ordem oficial das migrations não é inferida apenas pelo prefixo numérico. O arquivo `manifest.php` é a fonte de verdade porque o histórico contém números repetidos.
++
++## Regras
++
++1. Nunca edite uma migration que já tenha sido aplicada em produção.
++2. Toda migration nova deve ser adicionada no final de `manifest.php`, com uma sequência única e crescente.
++3. Arquivos de rollback devem permanecer em `rollbacks` e não podem entrar no fluxo de subida.
++4. Novas migrations devem ser idempotentes sempre que possível.
++5. Evite `USE nome_do_banco`; o executor trabalha sempre sobre `DB_DATABASE`.
++6. Antes de publicar, execute:
++
++```bash
++php bin/migrate.php verify
++php bin/migrate.php status
++php bin/migrate.php up --dry-run
++```
++
++## Comandos
++
++```bash
++php bin/migrate.php verify
++php bin/migrate.php status
++php bin/migrate.php install --yes
++php bin/migrate.php baseline --through=088 --yes
++php bin/migrate.php up
++php bin/migrate.php seed --yes
++```
++
++- `install`: somente banco vazio.
++- `baseline`: adota um banco existente depois de validar sua estrutura.
++- `up`: executa somente migrations pendentes.
++- `seed`: reconcilia dados de referência depois de todas as migrations.
++
++## Observação MySQL
++
++DDL em MySQL pode realizar commit implícito. Em caso de falha no meio de uma migration, não repita cegamente: confira a instrução indicada, valide o schema e somente então execute novamente.
+diff -ruN rsconnect_ent027_base/database/migrations/manifest.php rsconnect_ent027_work/database/migrations/manifest.php
+--- rsconnect_ent027_base/database/migrations/manifest.php	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/database/migrations/manifest.php	2026-08-28 17:10:04.981192508 +0000
+@@ -0,0 +1,113 @@
++<?php
++
++declare(strict_types=1);
++
++return [
++    'schema_snapshot' => [
++        'file' => 'database/schema.sql',
++        'through' => '004_crm.sql',
++    ],
++    'bootstrap_seed' => 'database/seed.sql',
++    'seed' => 'database/seed.reference.sql',
++    'rollbacks' => [
++        '030_google_calendar_availability_modes_rollback.sql',
++    ],
++    'migrations' => [
++        ['sequence' => 1, 'file' => '002_companies_users_onboarding.sql'],
++        ['sequence' => 2, 'file' => '003_conversations.sql'],
++        ['sequence' => 3, 'file' => '004_crm.sql'],
++        ['sequence' => 4, 'file' => '005_ai_automations.sql'],
++        ['sequence' => 5, 'file' => '006_switch_active_agents_to_openai.sql'],
++        ['sequence' => 6, 'file' => '007_ai_commercial_rules.sql'],
++        ['sequence' => 7, 'file' => '008_conversations_pro_crm_auto.sql'],
++        ['sequence' => 8, 'file' => '009_calendar_appointments.sql'],
++        ['sequence' => 9, 'file' => '010_n8n_tenant_flows.sql'],
++        ['sequence' => 10, 'file' => '011_n8n_templates_callbacks.sql'],
++        ['sequence' => 11, 'file' => '012_saas_billing_plans.sql'],
++        ['sequence' => 12, 'file' => '013_payment_gateways.sql'],
++        ['sequence' => 13, 'file' => '014_pagbank_billing_reminders.sql'],
++        ['sequence' => 14, 'file' => '015_notifications_frontend_billing_templates.sql'],
++        ['sequence' => 15, 'file' => '016_reports_realtime_conversations.sql'],
++        ['sequence' => 16, 'file' => '017_evolution_qrcode_status.sql'],
++        ['sequence' => 17, 'file' => '017_pre_scheduling_tenant_menus.sql'],
++        ['sequence' => 18, 'file' => '018_onboarding_prompt_builder.sql'],
++        ['sequence' => 19, 'file' => '018_pre_schedule_messages_confirmation.sql'],
++        ['sequence' => 20, 'file' => '019_implementation_checklist.sql'],
++        ['sequence' => 21, 'file' => '019_pre_schedule_confirmation_rules.sql'],
++        ['sequence' => 22, 'file' => '020_pre_schedule_reliable_capture.sql'],
++        ['sequence' => 23, 'file' => '020_queue_team_distribution.sql'],
++        ['sequence' => 24, 'file' => '021_campaigns_controlled_broadcasts.sql'],
++        ['sequence' => 25, 'file' => '021_security_system.sql'],
++        ['sequence' => 26, 'file' => '022_lgpd_privacy_acceptance.sql'],
++        ['sequence' => 27, 'file' => '022_white_label_basic.sql'],
++        ['sequence' => 28, 'file' => '023_operations_monitoring_backup.sql'],
++        ['sequence' => 29, 'file' => '023_white_label_pro.sql'],
++        ['sequence' => 30, 'file' => '024_operations_alerts_backup_details.sql'],
++        ['sequence' => 31, 'file' => '025_commercial_implementation_checklist.sql'],
++        ['sequence' => 32, 'file' => '026_fix_implementation_manual_checklist_table.sql'],
++        ['sequence' => 33, 'file' => '027_guided_client_onboarding.sql'],
++        ['sequence' => 34, 'file' => '028_backup_automation_n8n.sql'],
++        ['sequence' => 35, 'file' => '029_smart_calendar_availability_n8n.sql'],
++        ['sequence' => 36, 'file' => '030_google_calendar_availability_modes.sql'],
++        ['sequence' => 37, 'file' => '031_optimize_conversation_messages_index.sql'],
++        ['sequence' => 38, 'file' => '032_conversation_messages_compact_index.sql'],
++        ['sequence' => 39, 'file' => '033_customer_company_profile.sql'],
++        ['sequence' => 40, 'file' => '034_notification_preferences_and_alerts.sql'],
++        ['sequence' => 41, 'file' => '035_admin_company_tracking.sql'],
++        ['sequence' => 42, 'file' => '036_security_access_enforcement.sql'],
++        ['sequence' => 43, 'file' => '037_admin_commercial_crm_reports.sql'],
++        ['sequence' => 44, 'file' => '038_ai_reaction_preferences.sql'],
++        ['sequence' => 45, 'file' => '039_tenant_health_diagnostics.sql'],
++        ['sequence' => 46, 'file' => '040_conversation_flow_contact_groups.sql'],
++        ['sequence' => 47, 'file' => '041_calendar_google_full_cycle.sql'],
++        ['sequence' => 48, 'file' => '042_payment_reconciliation_external_providers.sql'],
++        ['sequence' => 49, 'file' => '043_ai_reprocess_schedule.sql'],
++        ['sequence' => 50, 'file' => '044_ai_pending_failures_message_link.sql'],
++        ['sequence' => 51, 'file' => '045_ai_webhook_ingestion_resilience.sql'],
++        ['sequence' => 52, 'file' => '046_calendar_conversational_slot_selection.sql'],
++        ['sequence' => 53, 'file' => '047_backup_automation_reliability.sql'],
++        ['sequence' => 54, 'file' => '048_reporting_metrics_foundation.sql'],
++        ['sequence' => 55, 'file' => '049_operational_resolution_communications.sql'],
++        ['sequence' => 56, 'file' => '050_human_takeover_customer_context.sql'],
++        ['sequence' => 57, 'file' => '051_operational_evidence_status.sql'],
++        ['sequence' => 58, 'file' => '052_ai_usage_and_after_hours_recovery.sql'],
++        ['sequence' => 59, 'file' => '053_ai_quota_limit_repair.sql'],
++        ['sequence' => 60, 'file' => '054_ai_metrics_and_delivery_telemetry.sql'],
++        ['sequence' => 61, 'file' => '055_multi_whatsapp_agent_routing.sql'],
++        ['sequence' => 62, 'file' => '056_n8n_agenda_event_contract.sql'],
++        ['sequence' => 63, 'file' => '057_calendar_modality_before_availability.sql'],
++        ['sequence' => 64, 'file' => '058_client_communication_center.sql'],
++        ['sequence' => 65, 'file' => '059_contact_identity_confidence.sql'],
++        ['sequence' => 66, 'file' => '060_free_trial_guided_first_access.sql'],
++        ['sequence' => 67, 'file' => '061_onboarding_calendar_modes.sql'],
++        ['sequence' => 68, 'file' => '062_prompt_studio_and_versions.sql'],
++        ['sequence' => 69, 'file' => '063_message_governance_evolution_realtime.sql'],
++        ['sequence' => 70, 'file' => '063_message_governance_evolution_realtime_compat.sql'],
++        ['sequence' => 71, 'file' => '064_professional_conversation_assignment_compat.sql'],
++        ['sequence' => 72, 'file' => '065_professional_calendar_profiles_compat.sql'],
++        ['sequence' => 73, 'file' => '066_contact_schedule_overlap_guard_compat.sql'],
++        ['sequence' => 74, 'file' => '067_operational_history_metrics_compat.sql'],
++        ['sequence' => 75, 'file' => '068_conversation_service_cycles_compat.sql'],
++        ['sequence' => 76, 'file' => '069_service_cycle_recovery_compat.sql'],
++        ['sequence' => 77, 'file' => '070_conversation_cycle_status_sync_compat.sql'],
++        ['sequence' => 78, 'file' => '071_utc_datetime_contract_compat.sql'],
++        ['sequence' => 79, 'file' => '072_security_session_webhook_hardening.sql'],
++        ['sequence' => 80, 'file' => '073_operational_monitoring_alert_delivery.sql'],
++        ['sequence' => 81, 'file' => '074_conversation_message_attachments.sql'],
++        ['sequence' => 82, 'file' => '075_scheduled_reports_and_deliveries.sql'],
++        ['sequence' => 83, 'file' => '076_evolution_instance_management.sql'],
++        ['sequence' => 84, 'file' => '077_ai_efficiency_foundation.sql'],
++        ['sequence' => 85, 'file' => '078_contact_avatar_refresh.sql'],
++        ['sequence' => 86, 'file' => '079_ai_efficiency_phase2_and_report_cleanup.sql'],
++        ['sequence' => 87, 'file' => '080_ai_memory_and_usage_intelligence.sql'],
++        ['sequence' => 88, 'file' => '081_ai_cost_attribution.sql'],
++        ['sequence' => 89, 'file' => '082_ai_budget_governance.sql'],
++        ['sequence' => 90, 'file' => '083_ai_commercial_margin.sql'],
++        ['sequence' => 91, 'file' => '084_ai_profitability_history.sql'],
++        ['sequence' => 92, 'file' => '085_ai_commercial_attention_queue.sql'],
++        ['sequence' => 93, 'file' => '086_plan_ai_mode_and_commitment.sql'],
++        ['sequence' => 94, 'file' => '087_webhook_security_events.sql'],
++        ['sequence' => 95, 'file' => '088_payment_reconciliation_schema_compat.sql'],
++        ['sequence' => 96, 'file' => '089_schema_migrations_registry.sql'],
++    ],
++];
+diff -ruN rsconnect_ent027_base/database/schema.sql rsconnect_ent027_work/database/schema.sql
+--- rsconnect_ent027_base/database/schema.sql	2026-08-26 22:42:16.000000000 +0000
++++ rsconnect_ent027_work/database/schema.sql	2026-08-28 16:59:43.023969258 +0000
+@@ -611,3 +611,5 @@
+     CONSTRAINT fk_ai_commercial_attention_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+     CONSTRAINT fk_ai_commercial_attention_user FOREIGN KEY (updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
++
++-- SCHEMA_EXECUTION_BASELINE_THROUGH: 004_crm.sql
+diff -ruN rsconnect_ent027_base/database/seed.reference.sql rsconnect_ent027_work/database/seed.reference.sql
+--- rsconnect_ent027_base/database/seed.reference.sql	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/database/seed.reference.sql	2026-08-28 17:10:04.980858081 +0000
+@@ -0,0 +1,179 @@
++USE rs_connect;
++
++-- ============================================================================
++-- Snapshot de dados de referência v36.20.16
++-- Reconciliação idempotente para instalações novas ou recuperação controlada.
++-- ============================================================================
++
++INSERT INTO permissions (permission_key, name, description, category) VALUES
++    ('agents.manage', 'Gerenciar agentes', 'Cadastrar, ativar e definir o agente padrão.', 'Inteligência artificial'),
++    ('agents.view', 'Visualizar agentes', 'Consultar configurações dos agentes de IA.', 'Inteligência artificial'),
++    ('ai_credentials.manage', 'Gerenciar credenciais de IA', 'Cadastrar credenciais de IA por empresa/agente no painel RS.', 'Inteligência artificial'),
++    ('automations.view', 'Visualizar automações', 'Acessar logs e status das automações de IA.', 'Inteligência artificial'),
++    ('billing.manage', 'Gerenciar cobrança', 'Gerenciar planos, assinaturas e cobranças do SaaS.', 'Financeiro SaaS'),
++    ('billing.reminders.manage', 'Gerenciar régua de cobrança', 'Criar regras e processar notificações financeiras.', 'Financeiro SaaS'),
++    ('billing.reminders.view', 'Visualizar régua de cobrança', 'Consultar regras e histórico de notificações financeiras.', 'Financeiro SaaS'),
++    ('billing.view', 'Visualizar assinatura', 'Consultar plano, uso e cobranças da empresa.', 'Financeiro SaaS'),
++    ('calendar.manage', 'Gerenciar agenda', 'Criar, confirmar, concluir e cancelar agendamentos.', 'Agenda'),
++    ('calendar.view', 'Visualizar agenda', 'Acessar compromissos, reuniões e retornos agendados.', 'Agenda'),
++    ('campaigns.manage', 'Gerenciar campanhas', 'Criar campanhas, gerar audiência, aprovar e disparar lotes controlados.', 'Marketing'),
++    ('campaigns.view', 'Visualizar campanhas', 'Acessar campanhas, destinatários, status de disparo e resultados.', 'Marketing'),
++    ('company.manage', 'Editar empresa', 'Alterar os dados cadastrais da própria empresa.', 'Empresa'),
++    ('company.view', 'Visualizar empresa', 'Consultar os dados cadastrais da própria empresa.', 'Empresa'),
++    ('contacts.manage', 'Gerenciar contatos', 'Cadastrar e editar contatos da empresa.', 'CRM'),
++    ('contacts.view', 'Visualizar contatos', 'Consultar contatos, clientes e histórico básico do relacionamento.', 'CRM'),
++    ('conversations.manage', 'Gerenciar conversas', 'Enviar mensagens, assumir atendimentos, pausar IA e atualizar contatos.', 'Atendimento'),
++    ('conversations.view', 'Visualizar conversas', 'Acessar a caixa de entrada, histórico e dados básicos dos contatos.', 'Atendimento'),
++    ('crm.manage', 'Gerenciar CRM', 'Cadastrar negócios, movimentar o funil e registrar notas.', 'CRM'),
++    ('crm.view', 'Visualizar CRM', 'Acessar o funil de vendas, negócios, notas e indicadores.', 'CRM'),
++    ('dashboard.view', 'Visualizar dashboard', 'Acessar os indicadores principais da empresa.', 'Painel'),
++    ('implementation.manage', 'Gerenciar implantação', 'Recalcular e marcar itens do checklist de implantação.', 'Implantação'),
++    ('implementation.view', 'Visualizar implantação', 'Acessar checklist comercial de implantação dos clientes.', 'Implantação'),
++    ('implementations.manage', 'Gerenciar implantações', 'Atualizar checklist técnico de implantação dos clientes.', 'Implantação'),
++    ('implementations.view', 'Visualizar implantações', 'Acompanhar checklist de implantação dos clientes.', 'Implantação'),
++    ('instances.manage', 'Gerenciar instâncias', 'Cadastrar instâncias e enviar mensagens de teste.', 'WhatsApp'),
++    ('instances.view', 'Visualizar instâncias', 'Consultar conexões da Evolution da própria empresa.', 'WhatsApp'),
++    ('n8n.manage', 'Gerenciar fluxos n8n', 'Cadastrar, testar e inativar webhooks n8n por empresa.', 'Integrações'),
++    ('n8n.view', 'Visualizar fluxos n8n', 'Consultar integrações n8n configuradas por empresa.', 'Integrações'),
++    ('notifications.manage', 'Gerenciar notificações', 'Marcar notificações como lidas e administrar avisos da conta.', 'Atendimento'),
++    ('notifications.view', 'Visualizar notificações', 'Consultar alertas e avisos da conta cliente.', 'Atendimento'),
++    ('onboarding.manage', 'Executar onboarding', 'Acessar e concluir o onboarding guiado da empresa.', 'Implantação'),
++    ('operations.backup_automation', 'Gerenciar backup automático', 'Configurar e testar rotina de backup automático via n8n.', 'Operação'),
++    ('payments.manage', 'Gerenciar gateways de pagamento', 'Cadastrar gateways e gerar links de cobrança.', 'Financeiro SaaS'),
++    ('payments.view', 'Visualizar gateways de pagamento', 'Consultar gateways, links e webhooks de pagamento.', 'Financeiro SaaS'),
++    ('permissions.view', 'Visualizar permissões', 'Consultar a matriz de permissões dos perfis.', 'Usuários'),
++    ('pre_schedule.manage', 'Gerenciar pré-agendamentos', 'Aprovar, recusar e remarcar pré-agendamentos.', 'Agenda'),
++    ('pre_schedule.view', 'Visualizar pré-agendamentos', 'Acessar solicitações de pré-agendamento na agenda.', 'Agenda'),
++    ('privacy.manage', 'Gerenciar privacidade/LGPD', 'Editar políticas, registrar solicitações, concluir pedidos e configurar retenção.', 'Privacidade'),
++    ('privacy.view', 'Visualizar privacidade/LGPD', 'Acessar central de privacidade, políticas, solicitações e aceites.', 'Privacidade'),
++    ('queue.manage', 'Gerenciar fila de atendimento', 'Criar setores, distribuir conversas, alterar prioridade e status operacional.', 'Atendimento'),
++    ('queue.view', 'Visualizar fila de atendimento', 'Acessar a visão operacional de conversas por status, setor e responsável.', 'Atendimento'),
++    ('reports.schedule.manage', 'Gerenciar relatórios automáticos', 'Criar, pausar, gerar e enviar relatórios automáticos da própria empresa.', 'Relatórios'),
++    ('reports.team.view_all', 'Ver indicadores da equipe', 'Visualizar indicadores consolidados de todos os profissionais da empresa.', 'Relatórios'),
++    ('reports.team.view_own', 'Ver próprios indicadores', 'Visualizar indicadores de atendimento e agenda vinculados ao próprio usuário.', 'Relatórios'),
++    ('reports.view', 'Visualizar relatórios', 'Acessar dashboards, métricas e exportações operacionais.', 'Relatórios'),
++    ('security.manage', 'Gerenciar segurança', 'Revogar sessões e aplicar controles de segurança.', 'Segurança'),
++    ('security.view', 'Visualizar segurança', 'Acessar painel de segurança, auditoria e sessões.', 'Segurança'),
++    ('tasks.manage', 'Gerenciar tarefas', 'Cadastrar, concluir e cancelar tarefas e follow-ups.', 'CRM'),
++    ('tasks.view', 'Visualizar tarefas', 'Consultar tarefas, ligações, reuniões e follow-ups.', 'CRM'),
++    ('users.manage', 'Gerenciar usuários', 'Cadastrar, editar, inativar e redefinir senha de usuários.', 'Usuários'),
++    ('users.view', 'Visualizar usuários', 'Consultar os usuários da própria empresa.', 'Usuários')
++ON DUPLICATE KEY UPDATE
++    name = VALUES(name),
++    description = VALUES(description),
++    category = VALUES(category);
++
++INSERT INTO role_permissions (tenant_id, role, permission_id, allowed)
++SELECT NULL, 'client_admin', p.id, 1
++FROM permissions p
++WHERE NOT EXISTS (
++    SELECT 1 FROM role_permissions rp
++    WHERE rp.tenant_id IS NULL AND rp.role = 'client_admin' AND rp.permission_id = p.id
++);
++
++INSERT INTO role_permissions (tenant_id, role, permission_id, allowed)
++SELECT NULL, 'client_user', p.id, 1
++FROM permissions p
++WHERE p.permission_key IN (
++    'dashboard.view', 'company.view', 'permissions.view',
++    'instances.view', 'agents.view',
++    'conversations.view', 'conversations.manage',
++    'contacts.view', 'contacts.manage', 'crm.view', 'crm.manage',
++    'tasks.view', 'tasks.manage', 'calendar.view',
++    'reports.view', 'notifications.view', 'billing.view',
++    'pre_schedule.view', 'queue.view', 'privacy.view'
++)
++AND NOT EXISTS (
++    SELECT 1 FROM role_permissions rp
++    WHERE rp.tenant_id IS NULL AND rp.role = 'client_user' AND rp.permission_id = p.id
++);
++
++INSERT INTO saas_plans
++    (plan_key, name, description, monthly_price, own_ai_monthly_price, rs_ai_monthly_price,
++     commitment_discounts_json, limits_json, features_json, status, is_default, sort_order)
++VALUES
++('starter', 'Inicial', 'Plano inicial para automatizar um canal com atendimento, CRM, agenda e IA.',
++ 99.00, 69.00, 99.00, JSON_OBJECT('3', 0, '6', 8, '12', 15),
++ JSON_OBJECT('users', 3, 'instances', 1, 'agents', 1, 'n8n_flows', 1, 'contacts_month', 300, 'conversations_month', 300, 'messages_month', 1500, 'ai_replies_month', 600, 'appointments_month', 100, 'crm_leads_month', 300),
++ JSON_ARRAY('1 canal WhatsApp', '1 agente de IA', 'CRM essencial', 'Agenda interna', '1 automação integrada'),
++ 'active', 1, 10),
++('pro', 'Profissional', 'Plano recomendado para equipes com dois canais, agenda, CRM e automações.',
++ 179.00, 129.00, 179.00, JSON_OBJECT('3', 0, '6', 8, '12', 15),
++ JSON_OBJECT('users', 6, 'instances', 2, 'agents', 2, 'n8n_flows', 5, 'contacts_month', 1500, 'conversations_month', 1200, 'messages_month', 8000, 'ai_replies_month', 3500, 'appointments_month', 500, 'crm_leads_month', 1200),
++ JSON_ARRAY('2 canais WhatsApp', '2 agentes de IA', 'CRM completo', 'Agenda + Google Calendar', '5 automações integradas'),
++ 'active', 0, 20),
++('business', 'Empresarial', 'Plano para operações com vários números, áreas e agentes especializados.',
++ 349.00, 259.00, 349.00, JSON_OBJECT('3', 0, '6', 8, '12', 15),
++ JSON_OBJECT('users', 15, 'instances', 5, 'agents', 5, 'n8n_flows', 15, 'contacts_month', 8000, 'conversations_month', 5000, 'messages_month', 30000, 'ai_replies_month', 12000, 'appointments_month', 2000, 'crm_leads_month', 5000),
++ JSON_ARRAY('5 canais WhatsApp', '5 agentes de IA', 'Automações avançadas', 'Relatórios operacionais', '15 automações integradas'),
++ 'active', 0, 30),
++('custom', 'Personalizado', 'Plano sob medida para múltiplas unidades, volumes ou integrações próprias.',
++ 0.00, 0.00, 0.00, JSON_OBJECT('3', 0, '6', 8, '12', 15),
++ JSON_OBJECT('users', NULL, 'instances', NULL, 'agents', NULL, 'n8n_flows', NULL, 'contacts_month', NULL, 'conversations_month', NULL, 'messages_month', NULL, 'ai_replies_month', NULL, 'appointments_month', NULL, 'crm_leads_month', NULL),
++ JSON_ARRAY('Limites personalizados', 'Condições comerciais sob medida'),
++ 'active', 0, 99)
++ON DUPLICATE KEY UPDATE
++    name = VALUES(name),
++    description = VALUES(description),
++    monthly_price = VALUES(monthly_price),
++    own_ai_monthly_price = VALUES(own_ai_monthly_price),
++    rs_ai_monthly_price = VALUES(rs_ai_monthly_price),
++    commitment_discounts_json = VALUES(commitment_discounts_json),
++    limits_json = VALUES(limits_json),
++    features_json = VALUES(features_json),
++    status = VALUES(status),
++    sort_order = VALUES(sort_order);
++
++INSERT INTO tenant_subscriptions
++    (tenant_id, plan_id, billing_cycle, ai_billing_mode, commitment_months, commitment_ends_at,
++     billing_status, starts_at, current_period_starts_at, current_period_ends_at,
++     next_billing_at, amount, notes)
++SELECT
++    t.id,
++    COALESCE(sp.id, sp_default.id),
++    'monthly',
++    'rs_connect',
++    3,
++    DATE_SUB(DATE_ADD(CURDATE(), INTERVAL 3 MONTH), INTERVAL 1 DAY),
++    CASE WHEN t.status = 'suspended' THEN 'suspended' ELSE 'active' END,
++    CURDATE(),
++    DATE_FORMAT(CURDATE(), '%Y-%m-01'),
++    LAST_DAY(CURDATE()),
++    DATE_ADD(LAST_DAY(CURDATE()), INTERVAL 1 DAY),
++    COALESCE(sp.rs_ai_monthly_price, sp.monthly_price, sp_default.rs_ai_monthly_price, sp_default.monthly_price),
++    'Assinatura inicial criada pelo snapshot v36.20.16.'
++FROM tenants t
++LEFT JOIN saas_plans sp ON sp.plan_key = CONVERT(t.plan USING utf8mb4) COLLATE utf8mb4_unicode_ci
++INNER JOIN saas_plans sp_default ON sp_default.plan_key = 'starter'
++WHERE NOT EXISTS (SELECT 1 FROM tenant_subscriptions ts WHERE ts.tenant_id = t.id);
++
++INSERT IGNORE INTO billing_reminder_rules
++    (id, label, days_from_due, event_key, channel, auto_mark_overdue, auto_suspend, message_template, status)
++VALUES
++    (1, '3 dias antes do vencimento', -3, 'billing.reminder.before_due', 'n8n', 0, 0,
++     'Olá, {empresa}. A cobrança {invoice_number} no valor de {valor} vence em {vencimento}. Link: {link_pagamento}', 'active'),
++    (2, 'Aviso no dia do vencimento', 0, 'billing.reminder.due_today', 'n8n', 0, 0,
++     'Olá, {empresa}. Sua cobrança {invoice_number} vence hoje no valor de {valor}. Link: {link_pagamento}', 'active'),
++    (3, '2 dias após o vencimento', 2, 'billing.reminder.overdue', 'n8n', 1, 0,
++     'Olá, {empresa}. A cobrança {invoice_number} está em aberto há {dias} dia(s). Link: {link_pagamento}', 'active'),
++    (4, '7 dias após o vencimento — suspender', 7, 'billing.subscription.suspended', 'n8n', 1, 1,
++     'Olá, {empresa}. Sua assinatura foi sinalizada para suspensão pela cobrança {invoice_number}. Link: {link_pagamento}', 'inactive');
++
++INSERT INTO admin_crm_stages (stage_key, name, stage_type, color_key, position, probability) VALUES
++('new', 'Novo contato', 'open', 'blue', 1, 10),
++('demo', 'Demonstração', 'open', 'cyan', 2, 25),
++('proposal', 'Proposta enviada', 'open', 'violet', 3, 50),
++('negotiation', 'Negociação', 'open', 'amber', 4, 75),
++('implementation', 'Aguardando implantação', 'won', 'indigo', 5, 90),
++('active', 'Cliente ativo', 'active', 'green', 6, 100),
++('risk', 'Em risco', 'open', 'red', 7, 60),
++('cancelled', 'Cancelado', 'lost', 'slate', 8, 0)
++ON DUPLICATE KEY UPDATE
++    name = VALUES(name),
++    stage_type = VALUES(stage_type),
++    color_key = VALUES(color_key),
++    position = VALUES(position),
++    probability = VALUES(probability);
++
++-- SEED_SNAPSHOT_THROUGH: 089_schema_migrations_registry.sql
++
+diff -ruN rsconnect_ent027_base/database/seed.sql rsconnect_ent027_work/database/seed.sql
+--- rsconnect_ent027_base/database/seed.sql	2026-08-26 22:42:16.000000000 +0000
++++ rsconnect_ent027_work/database/seed.sql	2026-08-28 17:10:04.980417661 +0000
+@@ -38,20 +38,27 @@
+ ('tasks.manage', 'Gerenciar tarefas', 'Cadastrar, concluir e cancelar tarefas e follow-ups.', 'CRM')
+ ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description), category = VALUES(category);
+ 
+-DELETE FROM role_permissions WHERE tenant_id IS NULL AND role IN ('client_admin', 'client_user');
+-
+ INSERT INTO role_permissions (tenant_id, role, permission_id, allowed)
+-SELECT NULL, 'client_admin', id, 1 FROM permissions;
++SELECT NULL, 'client_admin', p.id, 1
++FROM permissions p
++WHERE NOT EXISTS (
++    SELECT 1 FROM role_permissions rp
++    WHERE rp.tenant_id IS NULL AND rp.role = 'client_admin' AND rp.permission_id = p.id
++);
+ 
+ INSERT INTO role_permissions (tenant_id, role, permission_id, allowed)
+-SELECT NULL, 'client_user', id, 1
+-FROM permissions
+-WHERE permission_key IN (
++SELECT NULL, 'client_user', p.id, 1
++FROM permissions p
++WHERE p.permission_key IN (
+     'dashboard.view', 'company.view', 'permissions.view',
+     'instances.view', 'agents.view',
+     'conversations.view', 'conversations.manage',
+     'contacts.view', 'contacts.manage', 'crm.view', 'crm.manage',
+     'tasks.view', 'tasks.manage'
++)
++AND NOT EXISTS (
++    SELECT 1 FROM role_permissions rp
++    WHERE rp.tenant_id IS NULL AND rp.role = 'client_user' AND rp.permission_id = p.id
+ );
+ 
+ INSERT INTO crm_pipelines (tenant_id, name, is_default)
+diff -ruN rsconnect_ent027_base/docker-compose.yml rsconnect_ent027_work/docker-compose.yml
+--- rsconnect_ent027_base/docker-compose.yml	2026-08-28 11:44:33.000000000 +0000
++++ rsconnect_ent027_work/docker-compose.yml	2026-08-28 17:00:24.582002517 +0000
+@@ -16,6 +16,8 @@
+     depends_on:
+       db:
+         condition: service_healthy
++      migrate:
++        condition: service_completed_successfully
+     healthcheck:
+       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/health/live >/dev/null || exit 1"]
+       interval: 30s
+@@ -23,6 +25,25 @@
+       retries: 3
+       start_period: 20s
+ 
++  migrate:
++    build: .
++    command: ["php", "bin/migrate.php", "bootstrap", "--yes"]
++    volumes:
++      - ./:/var/www/html
++    environment:
++      APP_ENV: local
++      APP_DEBUG: "false"
++      DB_HOST: db
++      DB_PORT: 3306
++      DB_DATABASE: rs_connect
++      DB_USERNAME: root
++      DB_PASSWORD: root
++      MIGRATIONS_LOCK_TIMEOUT: 30
++    depends_on:
++      db:
++        condition: service_healthy
++    restart: "no"
++
+   db:
+     image: mysql:8.4
+     restart: unless-stopped
+@@ -33,12 +54,6 @@
+       - "3307:3306"
+     volumes:
+       - mysql_data:/var/lib/mysql
+-      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+-      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+-      - ./database/migrations/002_companies_users_onboarding.sql:/docker-entrypoint-initdb.d/03-002.sql:ro
+-      - ./database/migrations/003_conversations.sql:/docker-entrypoint-initdb.d/04-003.sql:ro
+-      - ./database/migrations/004_crm.sql:/docker-entrypoint-initdb.d/05-004.sql:ro
+-      - ./database/migrations/005_ai_automations.sql:/docker-entrypoint-initdb.d/06-005.sql:ro
+     healthcheck:
+       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+       interval: 5s
+diff -ruN rsconnect_ent027_base/docs/ATUALIZACAO-v36.20.16.md rsconnect_ent027_work/docs/ATUALIZACAO-v36.20.16.md
+--- rsconnect_ent027_base/docs/ATUALIZACAO-v36.20.16.md	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/docs/ATUALIZACAO-v36.20.16.md	2026-08-28 17:05:38.452791706 +0000
+@@ -0,0 +1,19 @@
++# Atualização v36.20.16 — migrations normalizadas
++
++## Entrega
++
++- manifesto canônico com sequência única;
++- tabela `schema_migrations`;
++- checksum SHA-256 por migration;
++- lock MySQL contra execução concorrente;
++- comandos `verify`, `status`, `install`, `baseline`, `up`, `seed` e `bootstrap`;
++- parser compatível com `DELIMITER`, procedures e triggers;
++- instalação Docker centralizada em um serviço de migration;
++- readiness bloqueado quando o schema está incompleto;
++- monitoramento operacional de pendências e drift.
++
++## Compatibilidade
++
++Os nomes dos arquivos históricos foram preservados. Numerações repetidas não foram renomeadas, evitando divergência entre código e bancos já implantados.
++
++A ordem oficial passou a ser definida por `database/migrations/manifest.php`.
+diff -ruN rsconnect_ent027_base/docs/diagnostics/ENT-027-MIGRATIONS-INVENTORY-v36.20.16.json rsconnect_ent027_work/docs/diagnostics/ENT-027-MIGRATIONS-INVENTORY-v36.20.16.json
+--- rsconnect_ent027_base/docs/diagnostics/ENT-027-MIGRATIONS-INVENTORY-v36.20.16.json	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/docs/diagnostics/ENT-027-MIGRATIONS-INVENTORY-v36.20.16.json	2026-08-28 17:04:00.648368128 +0000
+@@ -0,0 +1,875 @@
++[
++  {
++    "sequence": 1,
++    "number": "002",
++    "file": "002_companies_users_onboarding.sql",
++    "kind": "up",
++    "size_bytes": 4426,
++    "statements": 9,
++    "sha256": "bac029d0358ea3e520a082e273916fd1f5f9e9a573b5ba03749d4d0b4e82f34e"
++  },
++  {
++    "sequence": 2,
++    "number": "003",
++    "file": "003_conversations.sql",
++    "kind": "up",
++    "size_bytes": 5888,
++    "statements": 8,
++    "sha256": "1a530d3a9584de967e02ad390fb2f489575ebb9cd6a9ce9631b74ea6c5464217"
++  },
++  {
++    "sequence": 3,
++    "number": "004",
++    "file": "004_crm.sql",
++    "kind": "up",
++    "size_bytes": 8260,
++    "statements": 11,
++    "sha256": "f2959a37109514ce0afc3541b5d5ee1dbf876ab7e9cfaf2928dc20fdfb9ab9a5"
++  },
++  {
++    "sequence": 4,
++    "number": "005",
++    "file": "005_ai_automations.sql",
++    "kind": "up",
++    "size_bytes": 4552,
++    "statements": 29,
++    "sha256": "09007ee2d01147390187a2217abd80cca9590aae3439773d81ba3a57eb48f44c"
++  },
++  {
++    "sequence": 5,
++    "number": "006",
++    "file": "006_switch_active_agents_to_openai.sql",
++    "kind": "up",
++    "size_bytes": 421,
++    "statements": 1,
++    "sha256": "8782a780e72cb946b1ef74c8276fdd93fbc86efa3ac9755f23f19e7d83d55068"
++  },
++  {
++    "sequence": 6,
++    "number": "007",
++    "file": "007_ai_commercial_rules.sql",
++    "kind": "up",
++    "size_bytes": 4693,
++    "statements": 31,
++    "sha256": "374fc9efff5d6f9b37af15a29fa0fb36064654fb16ba539c0166bdc8e10d6220"
++  },
++  {
++    "sequence": 7,
++    "number": "008",
++    "file": "008_conversations_pro_crm_auto.sql",
++    "kind": "up",
++    "size_bytes": 2833,
++    "statements": 18,
++    "sha256": "bdd7a686bb0cba3b882b95e5afdb941c8abeadfc4c492ada06e39de9879ad28e"
++  },
++  {
++    "sequence": 8,
++    "number": "009",
++    "file": "009_calendar_appointments.sql",
++    "kind": "up",
++    "size_bytes": 3790,
++    "statements": 4,
++    "sha256": "fabb7dae9312253050d98a886ba02eb7eecd8550cc303b6ac0571ccb3b4ee06c"
++  },
++  {
++    "sequence": 9,
++    "number": "010",
++    "file": "010_n8n_tenant_flows.sql",
++    "kind": "up",
++    "size_bytes": 2530,
++    "statements": 3,
++    "sha256": "898ec3cd8f14d790c6de39f6d2c44ae2a4e8a0d2e9c467810a3aec888438aec1"
++  },
++  {
++    "sequence": 10,
++    "number": "011",
++    "file": "011_n8n_templates_callbacks.sql",
++    "kind": "up",
++    "size_bytes": 1542,
++    "statements": 3,
++    "sha256": "4bb72f1c946b9160bbbe654dd0d0fb465360a2c8b822ea75490e90875effcd24"
++  },
++  {
++    "sequence": 11,
++    "number": "012",
++    "file": "012_saas_billing_plans.sql",
++    "kind": "up",
++    "size_bytes": 7729,
++    "statements": 8,
++    "sha256": "039a50b1ececc211da33e2a5a942dfc7f838d277e3d869df46e21f4f9f408f02"
++  },
++  {
++    "sequence": 12,
++    "number": "013",
++    "file": "013_payment_gateways.sql",
++    "kind": "up",
++    "size_bytes": 6765,
++    "statements": 40,
++    "sha256": "c8c4ea080f6a292c3d49ce2fde7cadebcd1281974805954d67c4b2b896b41a05"
++  },
++  {
++    "sequence": 13,
++    "number": "014",
++    "file": "014_pagbank_billing_reminders.sql",
++    "kind": "up",
++    "size_bytes": 3850,
++    "statements": 5,
++    "sha256": "88a1d053546808064af0e1bd58d6aeb57fec614d2e5fbe11ebc49b2ab585c0bd"
++  },
++  {
++    "sequence": 14,
++    "number": "015",
++    "file": "015_notifications_frontend_billing_templates.sql",
++    "kind": "up",
++    "size_bytes": 2336,
++    "statements": 4,
++    "sha256": "801ea840affe60a9ac91b56c8a4cb765da53242d8e78148a0f72a5e2aac0ec0b"
++  },
++  {
++    "sequence": 15,
++    "number": "016",
++    "file": "016_reports_realtime_conversations.sql",
++    "kind": "up",
++    "size_bytes": 965,
++    "statements": 3,
++    "sha256": "2198e0b336a1919e66d074292407ce16fc6dc5a7232cfe2dde390b75ea1b4639"
++  },
++  {
++    "sequence": 16,
++    "number": "017",
++    "file": "017_evolution_qrcode_status.sql",
++    "kind": "up",
++    "size_bytes": 2937,
++    "statements": 32,
++    "sha256": "ccca90d4b3fa283cc72880237c6380cafb98babdc60feb966ec2eb4710ef9909"
++  },
++  {
++    "sequence": 17,
++    "number": "017",
++    "file": "017_pre_scheduling_tenant_menus.sql",
++    "kind": "up",
++    "size_bytes": 7760,
++    "statements": 32,
++    "sha256": "df02b4b181d34ae472e8f3782091accb98b10afa478dbcdb2add6bc28730964b"
++  },
++  {
++    "sequence": 18,
++    "number": "018",
++    "file": "018_onboarding_prompt_builder.sql",
++    "kind": "up",
++    "size_bytes": 1385,
++    "statements": 11,
++    "sha256": "635a885c347525efa28a24f83f82052fdee9203a13946f97061a4f34ef62557b"
++  },
++  {
++    "sequence": 19,
++    "number": "018",
++    "file": "018_pre_schedule_messages_confirmation.sql",
++    "kind": "up",
++    "size_bytes": 2601,
++    "statements": 11,
++    "sha256": "55f5aad2bd2feae9ef089c2d8fa2c77af8ed4dc19377aa0c719c992232cb697f"
++  },
++  {
++    "sequence": 20,
++    "number": "019",
++    "file": "019_implementation_checklist.sql",
++    "kind": "up",
++    "size_bytes": 2108,
++    "statements": 3,
++    "sha256": "6fd9d930f84bc9af6e6fe5b4f310fd3d471a474aa09db6649c24677786c002d3"
++  },
++  {
++    "sequence": 21,
++    "number": "019",
++    "file": "019_pre_schedule_confirmation_rules.sql",
++    "kind": "up",
++    "size_bytes": 638,
++    "statements": 1,
++    "sha256": "72a2167651afc60eb48a2bbeb6c050961c36e97d7b82c9f5ae3b60fd5fca0d63"
++  },
++  {
++    "sequence": 22,
++    "number": "020",
++    "file": "020_pre_schedule_reliable_capture.sql",
++    "kind": "up",
++    "size_bytes": 1064,
++    "statements": 2,
++    "sha256": "bb84096fcd7d9dfab01624343ac06d1c372acefbb379d4234fcb6db9fda95e48"
++  },
++  {
++    "sequence": 23,
++    "number": "020",
++    "file": "020_queue_team_distribution.sql",
++    "kind": "up",
++    "size_bytes": 7064,
++    "statements": 41,
++    "sha256": "f2f04a1b595fcabd2b5c8f17bd4196ffc448bf702e17acd85f950089c1d68958"
++  },
++  {
++    "sequence": 24,
++    "number": "021",
++    "file": "021_campaigns_controlled_broadcasts.sql",
++    "kind": "up",
++    "size_bytes": 6901,
++    "statements": 18,
++    "sha256": "b22b7f68dbe6fa713f0a1ce48f2095820224da15993c9933f7ae72dd4dca4f09"
++  },
++  {
++    "sequence": 25,
++    "number": "021",
++    "file": "021_security_system.sql",
++    "kind": "up",
++    "size_bytes": 4118,
++    "statements": 7,
++    "sha256": "53837365a5997e54d2cb73eb211e36f4df494f6131f81d9ac63cfec1c85f46e1"
++  },
++  {
++    "sequence": 26,
++    "number": "022",
++    "file": "022_lgpd_privacy_acceptance.sql",
++    "kind": "up",
++    "size_bytes": 7357,
++    "statements": 10,
++    "sha256": "ec229ee1164211c32ca27e429079e89749cd31d18bead6cd1738af7e4e10c6ce"
++  },
++  {
++    "sequence": 27,
++    "number": "022",
++    "file": "022_white_label_basic.sql",
++    "kind": "up",
++    "size_bytes": 5956,
++    "statements": 67,
++    "sha256": "69220ac9266a1f8bfab2df80f8bc11dca782461ab3d8bd07005b09469ebdf73c"
++  },
++  {
++    "sequence": 28,
++    "number": "023",
++    "file": "023_operations_monitoring_backup.sql",
++    "kind": "up",
++    "size_bytes": 3512,
++    "statements": 8,
++    "sha256": "8dc2ca68fb30d843e167221a1fa9e1cff7a6d3ce74e90520c9533f97433acdfa"
++  },
++  {
++    "sequence": 29,
++    "number": "023",
++    "file": "023_white_label_pro.sql",
++    "kind": "up",
++    "size_bytes": 4269,
++    "statements": 48,
++    "sha256": "e535329f7486b88f4bf959323f747ab804732a71816c9d0ad82c317c91d0952c"
++  },
++  {
++    "sequence": 30,
++    "number": "024",
++    "file": "024_operations_alerts_backup_details.sql",
++    "kind": "up",
++    "size_bytes": 3132,
++    "statements": 20,
++    "sha256": "e9327ffef9229c10ef485ddf3e5e4a03516240ae22357ef64156fbd25ad88b97"
++  },
++  {
++    "sequence": 31,
++    "number": "025",
++    "file": "025_commercial_implementation_checklist.sql",
++    "kind": "up",
++    "size_bytes": 3154,
++    "statements": 5,
++    "sha256": "bc51688a5051e2db3d4fdd56468cd210e3834466cb06274c7baf72255b7d9142"
++  },
++  {
++    "sequence": 32,
++    "number": "026",
++    "file": "026_fix_implementation_manual_checklist_table.sql",
++    "kind": "up",
++    "size_bytes": 1304,
++    "statements": 1,
++    "sha256": "16bd3b3a3c1e02e6d16cc1f6f94887a5f8c094127bc8fe38b72a974050cc37e9"
++  },
++  {
++    "sequence": 33,
++    "number": "027",
++    "file": "027_guided_client_onboarding.sql",
++    "kind": "up",
++    "size_bytes": 2417,
++    "statements": 6,
++    "sha256": "ddd3a81dd0dc62eb0d1bcbb364985033ef0869e349829cb9ab0d3397af6a4759"
++  },
++  {
++    "sequence": 34,
++    "number": "028",
++    "file": "028_backup_automation_n8n.sql",
++    "kind": "up",
++    "size_bytes": 2681,
++    "statements": 3,
++    "sha256": "fb5ccf849f838f1108207fc879f105b891d9b3066671d01e42f9b13b3d33a553"
++  },
++  {
++    "sequence": 35,
++    "number": "029",
++    "file": "029_smart_calendar_availability_n8n.sql",
++    "kind": "up",
++    "size_bytes": 7028,
++    "statements": 16,
++    "sha256": "dad99c0b0defb1ebdb04d00dadb19d710f6eee2a95d582728eb238fea59c630d"
++  },
++  {
++    "sequence": 36,
++    "number": "030",
++    "file": "030_google_calendar_availability_modes.sql",
++    "kind": "up",
++    "size_bytes": 9136,
++    "statements": 42,
++    "sha256": "fca60b4ac08efbb5a81b48f59306341dd97a87b8e34431e9889bcfb6882ae29b"
++  },
++  {
++    "sequence": 37,
++    "number": "031",
++    "file": "031_optimize_conversation_messages_index.sql",
++    "kind": "up",
++    "size_bytes": 736,
++    "statements": 5,
++    "sha256": "cce66a516b49b2414553d14595da7d685bd5ed8edd7cfbf2454e1b18e47354cd"
++  },
++  {
++    "sequence": 38,
++    "number": "032",
++    "file": "032_conversation_messages_compact_index.sql",
++    "kind": "up",
++    "size_bytes": 1827,
++    "statements": 11,
++    "sha256": "90e2a20ad1828a8f131ad8dab65fc8f5a99e5c881196d81580e1965041d6edba"
++  },
++  {
++    "sequence": 39,
++    "number": "033",
++    "file": "033_customer_company_profile.sql",
++    "kind": "up",
++    "size_bytes": 4650,
++    "statements": 58,
++    "sha256": "0609ba4fdee907238fb796f010aa31c9e75fb8c26b23c4b4dbfa07455512a6c5"
++  },
++  {
++    "sequence": 40,
++    "number": "034",
++    "file": "034_notification_preferences_and_alerts.sql",
++    "kind": "up",
++    "size_bytes": 1201,
++    "statements": 3,
++    "sha256": "c649520db2e2ed6d1d73058e31591050d2a133d5a8664c725d7e874d1111b115"
++  },
++  {
++    "sequence": 41,
++    "number": "035",
++    "file": "035_admin_company_tracking.sql",
++    "kind": "up",
++    "size_bytes": 1110,
++    "statements": 1,
++    "sha256": "9808606f24899edc8496936b4077a70ec89cca9bf415d18834ada8be8396ae8e"
++  },
++  {
++    "sequence": 42,
++    "number": "036",
++    "file": "036_security_access_enforcement.sql",
++    "kind": "up",
++    "size_bytes": 2166,
++    "statements": 22,
++    "sha256": "8477f3c2f6072ce91ac1a66695f3fa79915e98f929251e949282c02863df79e7"
++  },
++  {
++    "sequence": 43,
++    "number": "037",
++    "file": "037_admin_commercial_crm_reports.sql",
++    "kind": "up",
++    "size_bytes": 5225,
++    "statements": 6,
++    "sha256": "a89fc18cbddcfbaaee9630955ec4a1dac25685ec74c7b5a8b20254ac75db75f6"
++  },
++  {
++    "sequence": 44,
++    "number": "038",
++    "file": "038_ai_reaction_preferences.sql",
++    "kind": "up",
++    "size_bytes": 629,
++    "statements": 5,
++    "sha256": "5acc5c2e963f23e76d2f2112f03000d9dac9f9c75ce481a8dba0d3136d098abf"
++  },
++  {
++    "sequence": 45,
++    "number": "039",
++    "file": "039_tenant_health_diagnostics.sql",
++    "kind": "up",
++    "size_bytes": 5175,
++    "statements": 4,
++    "sha256": "1a066cd6adf893c5209a2a34e5c93a5bd7c50db572084dfd7bbb38a4c65d97fa"
++  },
++  {
++    "sequence": 46,
++    "number": "040",
++    "file": "040_conversation_flow_contact_groups.sql",
++    "kind": "up",
++    "size_bytes": 3472,
++    "statements": 9,
++    "sha256": "79bb1c5f9ae6dba0cd6ee6ecff90ba442537a281847234afbe30ee933b2f7b0b"
++  },
++  {
++    "sequence": 47,
++    "number": "041",
++    "file": "041_calendar_google_full_cycle.sql",
++    "kind": "up",
++    "size_bytes": 6828,
++    "statements": 31,
++    "sha256": "d48a589569b3356fd0bc98f5b8680742948ad8bb10a525eb03336b07e8f6a697"
++  },
++  {
++    "sequence": 48,
++    "number": "042",
++    "file": "042_payment_reconciliation_external_providers.sql",
++    "kind": "up",
++    "size_bytes": 1884,
++    "statements": 18,
++    "sha256": "a2709844b45ac392d674d51426e4d96ecd7ccd1cda44ed7fd8798cf8f5e8ff43"
++  },
++  {
++    "sequence": 49,
++    "number": "043",
++    "file": "043_ai_reprocess_schedule.sql",
++    "kind": "up",
++    "size_bytes": 2316,
++    "statements": 3,
++    "sha256": "f8424b74040920afa0b641af5891eab4ae00d9434f91269f93b771a1df3528c5"
++  },
++  {
++    "sequence": 50,
++    "number": "044",
++    "file": "044_ai_pending_failures_message_link.sql",
++    "kind": "up",
++    "size_bytes": 1726,
++    "statements": 10,
++    "sha256": "c5fdbc695654fcc152593aec0e92b9475e6501254692e7796776048702e7800a"
++  },
++  {
++    "sequence": 51,
++    "number": "045",
++    "file": "045_ai_webhook_ingestion_resilience.sql",
++    "kind": "up",
++    "size_bytes": 2815,
++    "statements": 19,
++    "sha256": "a4c5722505bca6cf04e331320107d0fb6fe747cce03fb2f83b923d861764404f"
++  },
++  {
++    "sequence": 52,
++    "number": "046",
++    "file": "046_calendar_conversational_slot_selection.sql",
++    "kind": "up",
++    "size_bytes": 5057,
++    "statements": 22,
++    "sha256": "ebfde1248d379275740f7c1782c9b7dfb48d86bbf39f4299786b52f27eca81ad"
++  },
++  {
++    "sequence": 53,
++    "number": "047",
++    "file": "047_backup_automation_reliability.sql",
++    "kind": "up",
++    "size_bytes": 9427,
++    "statements": 75,
++    "sha256": "62d661d6bd82eff9bfcc3199f08d523ba176b425dfd458e69b25754527b3f4a8"
++  },
++  {
++    "sequence": 54,
++    "number": "048",
++    "file": "048_reporting_metrics_foundation.sql",
++    "kind": "up",
++    "size_bytes": 3587,
++    "statements": 8,
++    "sha256": "68b52933250f5877bc797d8a10b1996d8781650a65f5b950abe960a5f670c906"
++  },
++  {
++    "sequence": 55,
++    "number": "049",
++    "file": "049_operational_resolution_communications.sql",
++    "kind": "up",
++    "size_bytes": 7329,
++    "statements": 25,
++    "sha256": "3e6e590faac714abeaad7b650d084a7cc9c4835cb2b58a5e4c8db4b4ec83ea66"
++  },
++  {
++    "sequence": 56,
++    "number": "050",
++    "file": "050_human_takeover_customer_context.sql",
++    "kind": "up",
++    "size_bytes": 1474,
++    "statements": 2,
++    "sha256": "848820be3c82b3b519ee15bc814ab7ef4ef6702ed41914659e5e2fcd5fbc193a"
++  },
++  {
++    "sequence": 57,
++    "number": "051",
++    "file": "051_operational_evidence_status.sql",
++    "kind": "up",
++    "size_bytes": 284,
++    "statements": 1,
++    "sha256": "8d2dea8fa8fce07ee2d0e96e85e1e102fd9db854ec8966cae2a3ab3a3121906d"
++  },
++  {
++    "sequence": 58,
++    "number": "052",
++    "file": "052_ai_usage_and_after_hours_recovery.sql",
++    "kind": "up",
++    "size_bytes": 7087,
++    "statements": 10,
++    "sha256": "440deeec67d3682af7e38545a5b90e9ff6333dae1effd8769fedf15d30181844"
++  },
++  {
++    "sequence": 59,
++    "number": "053",
++    "file": "053_ai_quota_limit_repair.sql",
++    "kind": "up",
++    "size_bytes": 1411,
++    "statements": 2,
++    "sha256": "74545755ba294b4f719e5b86dd24dd8a1f3dc0fdf236a30b46f213d75d5ae2d3"
++  },
++  {
++    "sequence": 60,
++    "number": "054",
++    "file": "054_ai_metrics_and_delivery_telemetry.sql",
++    "kind": "up",
++    "size_bytes": 3880,
++    "statements": 30,
++    "sha256": "628f41a80ebe4688589c78efce0789fff9d972e596ae4cdfde9616ac1794a79d"
++  },
++  {
++    "sequence": 61,
++    "number": "055",
++    "file": "055_multi_whatsapp_agent_routing.sql",
++    "kind": "up",
++    "size_bytes": 5474,
++    "statements": 20,
++    "sha256": "de29cd5e4106208378aa42c22350c82d56292fea4ef747de5ac0e1c7802dad39"
++  },
++  {
++    "sequence": 62,
++    "number": "056",
++    "file": "056_n8n_agenda_event_contract.sql",
++    "kind": "up",
++    "size_bytes": 589,
++    "statements": 1,
++    "sha256": "3e7786ee342384420749a6fdc03c65fa982d1728a2c256c7ed640a1104f5c878"
++  },
++  {
++    "sequence": 63,
++    "number": "057",
++    "file": "057_calendar_modality_before_availability.sql",
++    "kind": "up",
++    "size_bytes": 1972,
++    "statements": 9,
++    "sha256": "05978afc7e5ec165c393cbaa3250b814ad9f4c916ea97a4c803e83c33ac45edd"
++  },
++  {
++    "sequence": 64,
++    "number": "058",
++    "file": "058_client_communication_center.sql",
++    "kind": "up",
++    "size_bytes": 5679,
++    "statements": 45,
++    "sha256": "9a1fcb12366a3c6fd0deb6593e6bfe294cb22a432094cead60d86bde2b871cd0"
++  },
++  {
++    "sequence": 65,
++    "number": "059",
++    "file": "059_contact_identity_confidence.sql",
++    "kind": "up",
++    "size_bytes": 1753,
++    "statements": 18,
++    "sha256": "6c22a5c6e091d0c3f4f08e75f123f3cc4243e825c1105cff3607c7afcf8a8075"
++  },
++  {
++    "sequence": 66,
++    "number": "060",
++    "file": "060_free_trial_guided_first_access.sql",
++    "kind": "up",
++    "size_bytes": 4691,
++    "statements": 26,
++    "sha256": "5c7a36dcd09107fa9c48af2c5dc536f92439f29d4349c8150084a91d6246cd8f"
++  },
++  {
++    "sequence": 67,
++    "number": "061",
++    "file": "061_onboarding_calendar_modes.sql",
++    "kind": "up",
++    "size_bytes": 2548,
++    "statements": 20,
++    "sha256": "a4d5d9d67a205747ef8ae69eea05c7e05fb7e3219184c17821916cf0c96d5390"
++  },
++  {
++    "sequence": 68,
++    "number": "062",
++    "file": "062_prompt_studio_and_versions.sql",
++    "kind": "up",
++    "size_bytes": 2710,
++    "statements": 4,
++    "sha256": "630d7c22e3031648b35a8740afc85d32a9b4638dff84acfdb78fc501cda72204"
++  },
++  {
++    "sequence": 69,
++    "number": "063",
++    "file": "063_message_governance_evolution_realtime.sql",
++    "kind": "up",
++    "size_bytes": 5716,
++    "statements": 20,
++    "sha256": "7d0f3618b1db0222c5168116a89b844a2d56780e5c8d4cf79baad3778a9559c4"
++  },
++  {
++    "sequence": 70,
++    "number": "063",
++    "file": "063_message_governance_evolution_realtime_compat.sql",
++    "kind": "up",
++    "size_bytes": 15835,
++    "statements": 136,
++    "sha256": "ad594e060d560990dc4f4d17f1b0169f77ab0d0cbd85bb88f9ff6bf77e73d758"
++  },
++  {
++    "sequence": 71,
++    "number": "064",
++    "file": "064_professional_conversation_assignment_compat.sql",
++    "kind": "up",
++    "size_bytes": 6792,
++    "statements": 72,
++    "sha256": "e3c2aba1732bcbf3de544c5bed2b81edcba80574c9c17a859a09c3e74ba610d7"
++  },
++  {
++    "sequence": 72,
++    "number": "065",
++    "file": "065_professional_calendar_profiles_compat.sql",
++    "kind": "up",
++    "size_bytes": 3052,
++    "statements": 18,
++    "sha256": "d8b94a8ab2608be368f311ea60cd2c5708c942152adfd114a6365c6fe2a0cabf"
++  },
++  {
++    "sequence": 73,
++    "number": "066",
++    "file": "066_contact_schedule_overlap_guard_compat.sql",
++    "kind": "up",
++    "size_bytes": 797,
++    "statements": 7,
++    "sha256": "3492bc7b4b34172f39483a3f69d696d9bd2cb507dccbec783d4e87d700adf8aa"
++  },
++  {
++    "sequence": 74,
++    "number": "067",
++    "file": "067_operational_history_metrics_compat.sql",
++    "kind": "up",
++    "size_bytes": 29583,
++    "statements": 126,
++    "sha256": "cd9386f6c737494cfdb17c8e255d68a743c4692ae2b45352fb184934b9901224"
++  },
++  {
++    "sequence": 75,
++    "number": "068",
++    "file": "068_conversation_service_cycles_compat.sql",
++    "kind": "up",
++    "size_bytes": 9935,
++    "statements": 10,
++    "sha256": "fbefbf21f699f68afc32e8f2e6b2e80d9416acc4e936f86650a0f505b768f083"
++  },
++  {
++    "sequence": 76,
++    "number": "069",
++    "file": "069_service_cycle_recovery_compat.sql",
++    "kind": "up",
++    "size_bytes": 11241,
++    "statements": 13,
++    "sha256": "76ac20a2ad493e0d65779719d217c0b5d53f284526cd100cafed34981c6857cf"
++  },
++  {
++    "sequence": 77,
++    "number": "070",
++    "file": "070_conversation_cycle_status_sync_compat.sql",
++    "kind": "up",
++    "size_bytes": 9685,
++    "statements": 8,
++    "sha256": "785962ca80d37d3912d83c120cb4d05f0b8513b95fb344e8a0a1a353b2905520"
++  },
++  {
++    "sequence": 78,
++    "number": "071",
++    "file": "071_utc_datetime_contract_compat.sql",
++    "kind": "up",
++    "size_bytes": 23511,
++    "statements": 43,
++    "sha256": "9a9694854a8e7acdfe01d1484cdaf7d937ff28014905fe2b7963a54d24c6d487"
++  },
++  {
++    "sequence": 79,
++    "number": "072",
++    "file": "072_security_session_webhook_hardening.sql",
++    "kind": "up",
++    "size_bytes": 1546,
++    "statements": 4,
++    "sha256": "85d585f81f6d7db79fb581193cf9e8426b23ff9346aab5116e5676e1f429ae5c"
++  },
++  {
++    "sequence": 80,
++    "number": "073",
++    "file": "073_operational_monitoring_alert_delivery.sql",
++    "kind": "up",
++    "size_bytes": 10809,
++    "statements": 90,
++    "sha256": "60f91e1ed3b139d9b0535852812e345e5751ab8067d3e15ed1f2f95220d5858d"
++  },
++  {
++    "sequence": 81,
++    "number": "074",
++    "file": "074_conversation_message_attachments.sql",
++    "kind": "up",
++    "size_bytes": 2121,
++    "statements": 2,
++    "sha256": "52568076bc183a6b4ef89971d8231a285bcf7c44c3a2fc72f0e611cf7f679f16"
++  },
++  {
++    "sequence": 82,
++    "number": "075",
++    "file": "075_scheduled_reports_and_deliveries.sql",
++    "kind": "up",
++    "size_bytes": 6791,
++    "statements": 8,
++    "sha256": "b2ad8794238e6b5a94a6a58880143256d346dd070396aa554c390a3cbb03e464"
++  },
++  {
++    "sequence": 83,
++    "number": "076",
++    "file": "076_evolution_instance_management.sql",
++    "kind": "up",
++    "size_bytes": 8328,
++    "statements": 107,
++    "sha256": "9830e62bd7a70bcbed2971074468264677321f0f691b7d4bb485645531229104"
++  },
++  {
++    "sequence": 84,
++    "number": "077",
++    "file": "077_ai_efficiency_foundation.sql",
++    "kind": "up",
++    "size_bytes": 4640,
++    "statements": 46,
++    "sha256": "06d0656a2a4a18cd7508ab807b8a76a54aa9efe9fa0e785f2c75ce194227363d"
++  },
++  {
++    "sequence": 85,
++    "number": "078",
++    "file": "078_contact_avatar_refresh.sql",
++    "kind": "up",
++    "size_bytes": 851,
++    "statements": 6,
++    "sha256": "a8b970530cd22ab2e93f6641cc545e662c5b1474620a3e8dc027194c55ae8bdd"
++  },
++  {
++    "sequence": 86,
++    "number": "079",
++    "file": "079_ai_efficiency_phase2_and_report_cleanup.sql",
++    "kind": "up",
++    "size_bytes": 5428,
++    "statements": 43,
++    "sha256": "2e69c048f57bd8e2ce008892e1076851f2128acdf49f78261eb354d9ecb611fb"
++  },
++  {
++    "sequence": 87,
++    "number": "080",
++    "file": "080_ai_memory_and_usage_intelligence.sql",
++    "kind": "up",
++    "size_bytes": 5002,
++    "statements": 15,
++    "sha256": "c3eb642b797cf49598197325839b823e961b9ed4823653a5a7bc2c6186b3521f"
++  },
++  {
++    "sequence": 88,
++    "number": "081",
++    "file": "081_ai_cost_attribution.sql",
++    "kind": "up",
++    "size_bytes": 4121,
++    "statements": 1,
++    "sha256": "520fee70e3a9744d5d3dd8e60505db621f3fdd53f8a0d8baac6d99c94595f284"
++  },
++  {
++    "sequence": 89,
++    "number": "082",
++    "file": "082_ai_budget_governance.sql",
++    "kind": "up",
++    "size_bytes": 2166,
++    "statements": 2,
++    "sha256": "cb7764b3f9057568b86fe4aa96babc559a1c1977dcd62cfcda3490d7c013e546"
++  },
++  {
++    "sequence": 90,
++    "number": "083",
++    "file": "083_ai_commercial_margin.sql",
++    "kind": "up",
++    "size_bytes": 1234,
++    "statements": 1,
++    "sha256": "305c45cf9b7dfaad12d746ff7206066082af8a3839dfeab252d2590a30751311"
++  },
++  {
++    "sequence": 91,
++    "number": "084",
++    "file": "084_ai_profitability_history.sql",
++    "kind": "up",
++    "size_bytes": 3957,
++    "statements": 3,
++    "sha256": "66c113be8ac950fe4cc0895e8285d56e0fe651e26fae47e80d73e4eedfb176f8"
++  },
++  {
++    "sequence": 92,
++    "number": "085",
++    "file": "085_ai_commercial_attention_queue.sql",
++    "kind": "up",
++    "size_bytes": 1166,
++    "statements": 1,
++    "sha256": "81fb76587dce8b3818df0cfd4e7b7921b31a894e8f39ce526cdaa7e44ebdc9ae"
++  },
++  {
++    "sequence": 93,
++    "number": "086",
++    "file": "086_plan_ai_mode_and_commitment.sql",
++    "kind": "up",
++    "size_bytes": 4075,
++    "statements": 27,
++    "sha256": "a5792e12d27a40f0ba37293c311399301f8b490cb40d240f7b7ff02db2bb2dab"
++  },
++  {
++    "sequence": 94,
++    "number": "087",
++    "file": "087_webhook_security_events.sql",
++    "kind": "up",
++    "size_bytes": 1220,
++    "statements": 1,
++    "sha256": "3756494dff3ff872f7a549528631dc22521480f8fd0003cf6a49e56c758aa496"
++  },
++  {
++    "sequence": 95,
++    "number": "088",
++    "file": "088_payment_reconciliation_schema_compat.sql",
++    "kind": "up",
++    "size_bytes": 1949,
++    "statements": 17,
++    "sha256": "5124ae77667c617b2ac98f6b5f9f2fc082106faa5e4ca03f7a343f2dc31e64c5"
++  },
++  {
++    "sequence": 96,
++    "number": "089",
++    "file": "089_schema_migrations_registry.sql",
++    "kind": "up",
++    "size_bytes": 946,
++    "statements": 1,
++    "sha256": "544019014962a7dc761ab92cdfc3e1d8a7bf566be3c56a2d37e9593c7d108237"
++  },
++  {
++    "sequence": null,
++    "number": "030",
++    "file": "030_google_calendar_availability_modes_rollback.sql",
++    "kind": "rollback",
++    "size_bytes": 201,
++    "statements": 1,
++    "sha256": "84650c271b8149ad352557394a71e198f92ed0a842fb53b96bc68f489b866b2f"
++  }
++]
+diff -ruN rsconnect_ent027_base/docs/diagnostics/ENT-027-MIGRATIONS-INVENTORY-v36.20.16.md rsconnect_ent027_work/docs/diagnostics/ENT-027-MIGRATIONS-INVENTORY-v36.20.16.md
+--- rsconnect_ent027_base/docs/diagnostics/ENT-027-MIGRATIONS-INVENTORY-v36.20.16.md	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/docs/diagnostics/ENT-027-MIGRATIONS-INVENTORY-v36.20.16.md	2026-08-28 17:04:00.649055300 +0000
+@@ -0,0 +1,123 @@
++# ENT-027 — Inventário canônico das migrations
++
++## Resumo
++
++- Migrations de subida: **96**
++- Rollbacks isolados: **1**
++- Baseline executável do snapshot: **004_crm.sql**
++- Registro canônico: **089_schema_migrations_registry.sql**
++- Ordem efetiva: campo `sequence` do `manifest.php`; o prefixo histórico não é mais usado isoladamente para ordenar.
++
++## Numerações históricas duplicadas
++
++- **017**: `017_evolution_qrcode_status.sql` → `017_pre_scheduling_tenant_menus.sql`
++- **018**: `018_onboarding_prompt_builder.sql` → `018_pre_schedule_messages_confirmation.sql`
++- **019**: `019_implementation_checklist.sql` → `019_pre_schedule_confirmation_rules.sql`
++- **020**: `020_pre_schedule_reliable_capture.sql` → `020_queue_team_distribution.sql`
++- **021**: `021_campaigns_controlled_broadcasts.sql` → `021_security_system.sql`
++- **022**: `022_lgpd_privacy_acceptance.sql` → `022_white_label_basic.sql`
++- **023**: `023_operations_monitoring_backup.sql` → `023_white_label_pro.sql`
++- **063**: `063_message_governance_evolution_realtime.sql` → `063_message_governance_evolution_realtime_compat.sql`
++- `030_google_calendar_availability_modes_rollback.sql` é rollback e não participa do fluxo de subida.
++
++## Inventário
++
++| Seq. | Nº histórico | Tipo | Arquivo | Instruções | SHA-256 |
++|---:|:---:|:---:|---|---:|---|
++| 1 | 002 | up | `002_companies_users_onboarding.sql` | 9 | `bac029d0358ea3e520a082e273916fd1f5f9e9a573b5ba03749d4d0b4e82f34e` |
++| 2 | 003 | up | `003_conversations.sql` | 8 | `1a530d3a9584de967e02ad390fb2f489575ebb9cd6a9ce9631b74ea6c5464217` |
++| 3 | 004 | up | `004_crm.sql` | 11 | `f2959a37109514ce0afc3541b5d5ee1dbf876ab7e9cfaf2928dc20fdfb9ab9a5` |
++| 4 | 005 | up | `005_ai_automations.sql` | 29 | `09007ee2d01147390187a2217abd80cca9590aae3439773d81ba3a57eb48f44c` |
++| 5 | 006 | up | `006_switch_active_agents_to_openai.sql` | 1 | `8782a780e72cb946b1ef74c8276fdd93fbc86efa3ac9755f23f19e7d83d55068` |
++| 6 | 007 | up | `007_ai_commercial_rules.sql` | 31 | `374fc9efff5d6f9b37af15a29fa0fb36064654fb16ba539c0166bdc8e10d6220` |
++| 7 | 008 | up | `008_conversations_pro_crm_auto.sql` | 18 | `bdd7a686bb0cba3b882b95e5afdb941c8abeadfc4c492ada06e39de9879ad28e` |
++| 8 | 009 | up | `009_calendar_appointments.sql` | 4 | `fabb7dae9312253050d98a886ba02eb7eecd8550cc303b6ac0571ccb3b4ee06c` |
++| 9 | 010 | up | `010_n8n_tenant_flows.sql` | 3 | `898ec3cd8f14d790c6de39f6d2c44ae2a4e8a0d2e9c467810a3aec888438aec1` |
++| 10 | 011 | up | `011_n8n_templates_callbacks.sql` | 3 | `4bb72f1c946b9160bbbe654dd0d0fb465360a2c8b822ea75490e90875effcd24` |
++| 11 | 012 | up | `012_saas_billing_plans.sql` | 8 | `039a50b1ececc211da33e2a5a942dfc7f838d277e3d869df46e21f4f9f408f02` |
++| 12 | 013 | up | `013_payment_gateways.sql` | 40 | `c8c4ea080f6a292c3d49ce2fde7cadebcd1281974805954d67c4b2b896b41a05` |
++| 13 | 014 | up | `014_pagbank_billing_reminders.sql` | 5 | `88a1d053546808064af0e1bd58d6aeb57fec614d2e5fbe11ebc49b2ab585c0bd` |
++| 14 | 015 | up | `015_notifications_frontend_billing_templates.sql` | 4 | `801ea840affe60a9ac91b56c8a4cb765da53242d8e78148a0f72a5e2aac0ec0b` |
++| 15 | 016 | up | `016_reports_realtime_conversations.sql` | 3 | `2198e0b336a1919e66d074292407ce16fc6dc5a7232cfe2dde390b75ea1b4639` |
++| 16 | 017 | up | `017_evolution_qrcode_status.sql` | 32 | `ccca90d4b3fa283cc72880237c6380cafb98babdc60feb966ec2eb4710ef9909` |
++| 17 | 017 | up | `017_pre_scheduling_tenant_menus.sql` | 32 | `df02b4b181d34ae472e8f3782091accb98b10afa478dbcdb2add6bc28730964b` |
++| 18 | 018 | up | `018_onboarding_prompt_builder.sql` | 11 | `635a885c347525efa28a24f83f82052fdee9203a13946f97061a4f34ef62557b` |
++| 19 | 018 | up | `018_pre_schedule_messages_confirmation.sql` | 11 | `55f5aad2bd2feae9ef089c2d8fa2c77af8ed4dc19377aa0c719c992232cb697f` |
++| 20 | 019 | up | `019_implementation_checklist.sql` | 3 | `6fd9d930f84bc9af6e6fe5b4f310fd3d471a474aa09db6649c24677786c002d3` |
++| 21 | 019 | up | `019_pre_schedule_confirmation_rules.sql` | 1 | `72a2167651afc60eb48a2bbeb6c050961c36e97d7b82c9f5ae3b60fd5fca0d63` |
++| 22 | 020 | up | `020_pre_schedule_reliable_capture.sql` | 2 | `bb84096fcd7d9dfab01624343ac06d1c372acefbb379d4234fcb6db9fda95e48` |
++| 23 | 020 | up | `020_queue_team_distribution.sql` | 41 | `f2f04a1b595fcabd2b5c8f17bd4196ffc448bf702e17acd85f950089c1d68958` |
++| 24 | 021 | up | `021_campaigns_controlled_broadcasts.sql` | 18 | `b22b7f68dbe6fa713f0a1ce48f2095820224da15993c9933f7ae72dd4dca4f09` |
++| 25 | 021 | up | `021_security_system.sql` | 7 | `53837365a5997e54d2cb73eb211e36f4df494f6131f81d9ac63cfec1c85f46e1` |
++| 26 | 022 | up | `022_lgpd_privacy_acceptance.sql` | 10 | `ec229ee1164211c32ca27e429079e89749cd31d18bead6cd1738af7e4e10c6ce` |
++| 27 | 022 | up | `022_white_label_basic.sql` | 67 | `69220ac9266a1f8bfab2df80f8bc11dca782461ab3d8bd07005b09469ebdf73c` |
++| 28 | 023 | up | `023_operations_monitoring_backup.sql` | 8 | `8dc2ca68fb30d843e167221a1fa9e1cff7a6d3ce74e90520c9533f97433acdfa` |
++| 29 | 023 | up | `023_white_label_pro.sql` | 48 | `e535329f7486b88f4bf959323f747ab804732a71816c9d0ad82c317c91d0952c` |
++| 30 | 024 | up | `024_operations_alerts_backup_details.sql` | 20 | `e9327ffef9229c10ef485ddf3e5e4a03516240ae22357ef64156fbd25ad88b97` |
++| 31 | 025 | up | `025_commercial_implementation_checklist.sql` | 5 | `bc51688a5051e2db3d4fdd56468cd210e3834466cb06274c7baf72255b7d9142` |
++| 32 | 026 | up | `026_fix_implementation_manual_checklist_table.sql` | 1 | `16bd3b3a3c1e02e6d16cc1f6f94887a5f8c094127bc8fe38b72a974050cc37e9` |
++| 33 | 027 | up | `027_guided_client_onboarding.sql` | 6 | `ddd3a81dd0dc62eb0d1bcbb364985033ef0869e349829cb9ab0d3397af6a4759` |
++| 34 | 028 | up | `028_backup_automation_n8n.sql` | 3 | `fb5ccf849f838f1108207fc879f105b891d9b3066671d01e42f9b13b3d33a553` |
++| 35 | 029 | up | `029_smart_calendar_availability_n8n.sql` | 16 | `dad99c0b0defb1ebdb04d00dadb19d710f6eee2a95d582728eb238fea59c630d` |
++| 36 | 030 | up | `030_google_calendar_availability_modes.sql` | 42 | `fca60b4ac08efbb5a81b48f59306341dd97a87b8e34431e9889bcfb6882ae29b` |
++| 37 | 031 | up | `031_optimize_conversation_messages_index.sql` | 5 | `cce66a516b49b2414553d14595da7d685bd5ed8edd7cfbf2454e1b18e47354cd` |
++| 38 | 032 | up | `032_conversation_messages_compact_index.sql` | 11 | `90e2a20ad1828a8f131ad8dab65fc8f5a99e5c881196d81580e1965041d6edba` |
++| 39 | 033 | up | `033_customer_company_profile.sql` | 58 | `0609ba4fdee907238fb796f010aa31c9e75fb8c26b23c4b4dbfa07455512a6c5` |
++| 40 | 034 | up | `034_notification_preferences_and_alerts.sql` | 3 | `c649520db2e2ed6d1d73058e31591050d2a133d5a8664c725d7e874d1111b115` |
++| 41 | 035 | up | `035_admin_company_tracking.sql` | 1 | `9808606f24899edc8496936b4077a70ec89cca9bf415d18834ada8be8396ae8e` |
++| 42 | 036 | up | `036_security_access_enforcement.sql` | 22 | `8477f3c2f6072ce91ac1a66695f3fa79915e98f929251e949282c02863df79e7` |
++| 43 | 037 | up | `037_admin_commercial_crm_reports.sql` | 6 | `a89fc18cbddcfbaaee9630955ec4a1dac25685ec74c7b5a8b20254ac75db75f6` |
++| 44 | 038 | up | `038_ai_reaction_preferences.sql` | 5 | `5acc5c2e963f23e76d2f2112f03000d9dac9f9c75ce481a8dba0d3136d098abf` |
++| 45 | 039 | up | `039_tenant_health_diagnostics.sql` | 4 | `1a066cd6adf893c5209a2a34e5c93a5bd7c50db572084dfd7bbb38a4c65d97fa` |
++| 46 | 040 | up | `040_conversation_flow_contact_groups.sql` | 9 | `79bb1c5f9ae6dba0cd6ee6ecff90ba442537a281847234afbe30ee933b2f7b0b` |
++| 47 | 041 | up | `041_calendar_google_full_cycle.sql` | 31 | `d48a589569b3356fd0bc98f5b8680742948ad8bb10a525eb03336b07e8f6a697` |
++| 48 | 042 | up | `042_payment_reconciliation_external_providers.sql` | 18 | `a2709844b45ac392d674d51426e4d96ecd7ccd1cda44ed7fd8798cf8f5e8ff43` |
++| 49 | 043 | up | `043_ai_reprocess_schedule.sql` | 3 | `f8424b74040920afa0b641af5891eab4ae00d9434f91269f93b771a1df3528c5` |
++| 50 | 044 | up | `044_ai_pending_failures_message_link.sql` | 10 | `c5fdbc695654fcc152593aec0e92b9475e6501254692e7796776048702e7800a` |
++| 51 | 045 | up | `045_ai_webhook_ingestion_resilience.sql` | 19 | `a4c5722505bca6cf04e331320107d0fb6fe747cce03fb2f83b923d861764404f` |
++| 52 | 046 | up | `046_calendar_conversational_slot_selection.sql` | 22 | `ebfde1248d379275740f7c1782c9b7dfb48d86bbf39f4299786b52f27eca81ad` |
++| 53 | 047 | up | `047_backup_automation_reliability.sql` | 75 | `62d661d6bd82eff9bfcc3199f08d523ba176b425dfd458e69b25754527b3f4a8` |
++| 54 | 048 | up | `048_reporting_metrics_foundation.sql` | 8 | `68b52933250f5877bc797d8a10b1996d8781650a65f5b950abe960a5f670c906` |
++| 55 | 049 | up | `049_operational_resolution_communications.sql` | 25 | `3e6e590faac714abeaad7b650d084a7cc9c4835cb2b58a5e4c8db4b4ec83ea66` |
++| 56 | 050 | up | `050_human_takeover_customer_context.sql` | 2 | `848820be3c82b3b519ee15bc814ab7ef4ef6702ed41914659e5e2fcd5fbc193a` |
++| 57 | 051 | up | `051_operational_evidence_status.sql` | 1 | `8d2dea8fa8fce07ee2d0e96e85e1e102fd9db854ec8966cae2a3ab3a3121906d` |
++| 58 | 052 | up | `052_ai_usage_and_after_hours_recovery.sql` | 10 | `440deeec67d3682af7e38545a5b90e9ff6333dae1effd8769fedf15d30181844` |
++| 59 | 053 | up | `053_ai_quota_limit_repair.sql` | 2 | `74545755ba294b4f719e5b86dd24dd8a1f3dc0fdf236a30b46f213d75d5ae2d3` |
++| 60 | 054 | up | `054_ai_metrics_and_delivery_telemetry.sql` | 30 | `628f41a80ebe4688589c78efce0789fff9d972e596ae4cdfde9616ac1794a79d` |
++| 61 | 055 | up | `055_multi_whatsapp_agent_routing.sql` | 20 | `de29cd5e4106208378aa42c22350c82d56292fea4ef747de5ac0e1c7802dad39` |
++| 62 | 056 | up | `056_n8n_agenda_event_contract.sql` | 1 | `3e7786ee342384420749a6fdc03c65fa982d1728a2c256c7ed640a1104f5c878` |
++| 63 | 057 | up | `057_calendar_modality_before_availability.sql` | 9 | `05978afc7e5ec165c393cbaa3250b814ad9f4c916ea97a4c803e83c33ac45edd` |
++| 64 | 058 | up | `058_client_communication_center.sql` | 45 | `9a1fcb12366a3c6fd0deb6593e6bfe294cb22a432094cead60d86bde2b871cd0` |
++| 65 | 059 | up | `059_contact_identity_confidence.sql` | 18 | `6c22a5c6e091d0c3f4f08e75f123f3cc4243e825c1105cff3607c7afcf8a8075` |
++| 66 | 060 | up | `060_free_trial_guided_first_access.sql` | 26 | `5c7a36dcd09107fa9c48af2c5dc536f92439f29d4349c8150084a91d6246cd8f` |
++| 67 | 061 | up | `061_onboarding_calendar_modes.sql` | 20 | `a4d5d9d67a205747ef8ae69eea05c7e05fb7e3219184c17821916cf0c96d5390` |
++| 68 | 062 | up | `062_prompt_studio_and_versions.sql` | 4 | `630d7c22e3031648b35a8740afc85d32a9b4638dff84acfdb78fc501cda72204` |
++| 69 | 063 | up | `063_message_governance_evolution_realtime.sql` | 20 | `7d0f3618b1db0222c5168116a89b844a2d56780e5c8d4cf79baad3778a9559c4` |
++| 70 | 063 | up | `063_message_governance_evolution_realtime_compat.sql` | 136 | `ad594e060d560990dc4f4d17f1b0169f77ab0d0cbd85bb88f9ff6bf77e73d758` |
++| 71 | 064 | up | `064_professional_conversation_assignment_compat.sql` | 72 | `e3c2aba1732bcbf3de544c5bed2b81edcba80574c9c17a859a09c3e74ba610d7` |
++| 72 | 065 | up | `065_professional_calendar_profiles_compat.sql` | 18 | `d8b94a8ab2608be368f311ea60cd2c5708c942152adfd114a6365c6fe2a0cabf` |
++| 73 | 066 | up | `066_contact_schedule_overlap_guard_compat.sql` | 7 | `3492bc7b4b34172f39483a3f69d696d9bd2cb507dccbec783d4e87d700adf8aa` |
++| 74 | 067 | up | `067_operational_history_metrics_compat.sql` | 126 | `cd9386f6c737494cfdb17c8e255d68a743c4692ae2b45352fb184934b9901224` |
++| 75 | 068 | up | `068_conversation_service_cycles_compat.sql` | 10 | `fbefbf21f699f68afc32e8f2e6b2e80d9416acc4e936f86650a0f505b768f083` |
++| 76 | 069 | up | `069_service_cycle_recovery_compat.sql` | 13 | `76ac20a2ad493e0d65779719d217c0b5d53f284526cd100cafed34981c6857cf` |
++| 77 | 070 | up | `070_conversation_cycle_status_sync_compat.sql` | 8 | `785962ca80d37d3912d83c120cb4d05f0b8513b95fb344e8a0a1a353b2905520` |
++| 78 | 071 | up | `071_utc_datetime_contract_compat.sql` | 43 | `9a9694854a8e7acdfe01d1484cdaf7d937ff28014905fe2b7963a54d24c6d487` |
++| 79 | 072 | up | `072_security_session_webhook_hardening.sql` | 4 | `85d585f81f6d7db79fb581193cf9e8426b23ff9346aab5116e5676e1f429ae5c` |
++| 80 | 073 | up | `073_operational_monitoring_alert_delivery.sql` | 90 | `60f91e1ed3b139d9b0535852812e345e5751ab8067d3e15ed1f2f95220d5858d` |
++| 81 | 074 | up | `074_conversation_message_attachments.sql` | 2 | `52568076bc183a6b4ef89971d8231a285bcf7c44c3a2fc72f0e611cf7f679f16` |
++| 82 | 075 | up | `075_scheduled_reports_and_deliveries.sql` | 8 | `b2ad8794238e6b5a94a6a58880143256d346dd070396aa554c390a3cbb03e464` |
++| 83 | 076 | up | `076_evolution_instance_management.sql` | 107 | `9830e62bd7a70bcbed2971074468264677321f0f691b7d4bb485645531229104` |
++| 84 | 077 | up | `077_ai_efficiency_foundation.sql` | 46 | `06d0656a2a4a18cd7508ab807b8a76a54aa9efe9fa0e785f2c75ce194227363d` |
++| 85 | 078 | up | `078_contact_avatar_refresh.sql` | 6 | `a8b970530cd22ab2e93f6641cc545e662c5b1474620a3e8dc027194c55ae8bdd` |
++| 86 | 079 | up | `079_ai_efficiency_phase2_and_report_cleanup.sql` | 43 | `2e69c048f57bd8e2ce008892e1076851f2128acdf49f78261eb354d9ecb611fb` |
++| 87 | 080 | up | `080_ai_memory_and_usage_intelligence.sql` | 15 | `c3eb642b797cf49598197325839b823e961b9ed4823653a5a7bc2c6186b3521f` |
++| 88 | 081 | up | `081_ai_cost_attribution.sql` | 1 | `520fee70e3a9744d5d3dd8e60505db621f3fdd53f8a0d8baac6d99c94595f284` |
++| 89 | 082 | up | `082_ai_budget_governance.sql` | 2 | `cb7764b3f9057568b86fe4aa96babc559a1c1977dcd62cfcda3490d7c013e546` |
++| 90 | 083 | up | `083_ai_commercial_margin.sql` | 1 | `305c45cf9b7dfaad12d746ff7206066082af8a3839dfeab252d2590a30751311` |
++| 91 | 084 | up | `084_ai_profitability_history.sql` | 3 | `66c113be8ac950fe4cc0895e8285d56e0fe651e26fae47e80d73e4eedfb176f8` |
++| 92 | 085 | up | `085_ai_commercial_attention_queue.sql` | 1 | `81fb76587dce8b3818df0cfd4e7b7921b31a894e8f39ce526cdaa7e44ebdc9ae` |
++| 93 | 086 | up | `086_plan_ai_mode_and_commitment.sql` | 27 | `a5792e12d27a40f0ba37293c311399301f8b490cb40d240f7b7ff02db2bb2dab` |
++| 94 | 087 | up | `087_webhook_security_events.sql` | 1 | `3756494dff3ff872f7a549528631dc22521480f8fd0003cf6a49e56c758aa496` |
++| 95 | 088 | up | `088_payment_reconciliation_schema_compat.sql` | 17 | `5124ae77667c617b2ac98f6b5f9f2fc082106faa5e4ca03f7a343f2dc31e64c5` |
++| 96 | 089 | up | `089_schema_migrations_registry.sql` | 1 | `544019014962a7dc761ab92cdfc3e1d8a7bf566be3c56a2d37e9593c7d108237` |
++| — | 030 | rollback | `030_google_calendar_availability_modes_rollback.sql` | 1 | `84650c271b8149ad352557394a71e198f92ed0a842fb53b96bc68f489b866b2f` |
+diff -ruN rsconnect_ent027_base/docs/diagnostics/ENT-027-MIGRATIONS-NORMALIZATION-v36.20.16.md rsconnect_ent027_work/docs/diagnostics/ENT-027-MIGRATIONS-NORMALIZATION-v36.20.16.md
+--- rsconnect_ent027_base/docs/diagnostics/ENT-027-MIGRATIONS-NORMALIZATION-v36.20.16.md	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/docs/diagnostics/ENT-027-MIGRATIONS-NORMALIZATION-v36.20.16.md	2026-08-28 17:07:09.989864892 +0000
+@@ -0,0 +1,65 @@
++# ENT-027 / PA-005 — Normalização das migrations
++
++## Problema confirmado
++
++O diretório possuía 97 arquivos SQL, sendo 96 migrations de subida e um rollback. O histórico continha prefixos repetidos em 017, 018, 019, 020, 021, 022, 023 e 063. O Docker executava apenas `schema.sql`, `seed.sql` e quatro migrations antigas, deixando instalações novas inconsistentes.
++
++Também não existia tabela oficial de controle. O sistema dependia de verificações dispersas de tabelas e de execução manual de arquivos.
++
++## Solução
++
++### Manifesto canônico
++
++`database/migrations/manifest.php` define uma sequência única de 1 a 96. Os nomes históricos não foram alterados.
++
++### Registro persistente
++
++A migration `089_schema_migrations_registry.sql` cria `schema_migrations` com:
++
++- sequência canônica;
++- nome do arquivo;
++- SHA-256;
++- lote;
++- origem;
++- tempo de execução;
++- executor;
++- data UTC.
++
++### Executor
++
++`bin/migrate.php` oferece:
++
++- `verify`;
++- `status`;
++- `install`;
++- `baseline`;
++- `up`;
++- `seed`;
++- `bootstrap`.
++
++O executor utiliza `GET_LOCK` no MySQL, recusa checksum ou sequência divergente, não muda de banco por comandos `USE` e para na primeira falha.
++
++### Banco existente
++
++O baseline automático é aceito apenas para estruturas na migration 085 ou superior. Para a produção atual, `--through=088` verifica as tabelas centrais, as colunas comerciais da 086, a tabela de webhook da 087 e as colunas/índice de conciliação da 088.
++
++### Banco vazio
++
++O snapshot executável representa o núcleo até a migration 004. A instalação cria o tenant de demonstração, executa 005–088 na ordem canônica, registra 089 e só então reconcilia os dados de referência.
++
++### Docker
++
++O MySQL não importa mais migrations isoladas via `/docker-entrypoint-initdb.d`. O serviço `migrate` é a única autoridade de instalação e precisa terminar antes do serviço web.
++
++### Readiness
++
++`/health/ready` passa a exigir todas as entradas do manifesto registradas. A resposta pública continua sem detalhes internos.
++
++## Segurança e preservação
++
++- nenhuma migration histórica foi renomeada;
++- nenhum dado real foi alterado durante o desenvolvimento;
++- a migration 089 é aditiva;
++- o rollback 030 continua isolado;
++- arquivos aplicados não podem ser editados sem gerar drift;
++- o baseline não executa novamente as migrations antigas.
+diff -ruN rsconnect_ent027_base/docs/diagnostics/ENT-027-VALIDATION-v36.20.16.md rsconnect_ent027_work/docs/diagnostics/ENT-027-VALIDATION-v36.20.16.md
+--- rsconnect_ent027_base/docs/diagnostics/ENT-027-VALIDATION-v36.20.16.md	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/docs/diagnostics/ENT-027-VALIDATION-v36.20.16.md	2026-08-28 17:10:25.280931769 +0000
+@@ -0,0 +1,55 @@
++# ENT-027 — Relatório de validação v36.20.16
++
++## Validações concluídas
++
++- manifesto com 96 migrations de subida;
++- um rollback isolado;
++- 8 prefixos históricos duplicados documentados;
++- parser validou **1.961 instruções** em migrations, schema e seeds;
++- tabelas antecipadas no snapshot foram comparadas com as declarações das migrations e não apresentaram colunas faltantes;
++- migration 089 idempotente;
++- Dockerfile executa validação offline durante o build;
++- Docker Compose aguarda o serviço de migration;
++- readiness verifica a conclusão do registro;
++- monitoramento verifica pendências, checksum e sequência;
++- PHP: **325 arquivos** sem erro de sintaxe;
++- JavaScript: **3 arquivos** sem erro;
++- JSON: **55 arquivos** válidos;
++- Docker Compose: YAML válido;
++- suíte ENT-027: **15 verificações aprovadas**;
++- suíte geral: **87 aprovações e 9 falhas históricas**.
++
++## Limitação do ambiente
++
++Não havia servidor MySQL/MariaDB disponível no ambiente de validação, e o acesso aos repositórios de pacotes estava indisponível. Por isso, a instalação completa precisa ser homologada na VPS ou em uma máquina com MySQL 8.4.
++
++A validação executada foi estática e comportamental sobre:
++
++- sintaxe PHP;
++- parser SQL;
++- ordem do manifesto;
++- integridade dos arquivos;
++- estrutura Docker;
++- testes de regressão existentes.
++
++## Roteiro de homologação obrigatório
++
++### Banco atual
++
++```bash
++php bin/migrate.php verify
++php bin/migrate.php baseline --through=088 --yes
++php bin/migrate.php status
++```
++
++### Banco vazio de teste
++
++1. crie um banco vazio;
++2. configure `DB_*`;
++3. execute `php bin/migrate.php install --yes`;
++4. execute `php bin/migrate.php status`;
++5. valide login, empresas, conversas, CRM, agenda, cobrança, relatórios e Evolution.
++
++### Concorrência
++
++Execute `php bin/migrate.php up` em dois terminais. Um processo deve obter o lock e o outro deve aguardar ou encerrar com mensagem de execução em andamento.
+diff -ruN rsconnect_ent027_base/tests/Feature/ent027-migrations-normalization-smoke.php rsconnect_ent027_work/tests/Feature/ent027-migrations-normalization-smoke.php
+--- rsconnect_ent027_base/tests/Feature/ent027-migrations-normalization-smoke.php	1970-01-01 00:00:00.000000000 +0000
++++ rsconnect_ent027_work/tests/Feature/ent027-migrations-normalization-smoke.php	2026-08-28 17:10:04.981672234 +0000
+@@ -0,0 +1,74 @@
++<?php
++
++declare(strict_types=1);
++
++$root = dirname(__DIR__, 2);
++require_once $root . '/app/Core/Autoloader.php';
++App\Core\Autoloader::register($root . '/app');
++
++use App\Services\MigrationService;
++use App\Services\SqlScriptParser;
++
++$failures = [];
++$passes = 0;
++$check = static function (bool $condition, string $label) use (&$failures, &$passes): void {
++    if ($condition) {
++        echo "[OK] {$label}\n";
++        $passes++;
++        return;
++    }
++    echo "[FAIL] {$label}\n";
++    $failures[] = $label;
++};
++
++$service = new MigrationService(null, $root);
++$result = $service->verifyOffline();
++$manifest = require $root . '/database/migrations/manifest.php';
++$compose = (string) file_get_contents($root . '/docker-compose.yml');
++$dockerfile = (string) file_get_contents($root . '/Dockerfile');
++$schema = (string) file_get_contents($root . '/database/schema.sql');
++$registry = (string) file_get_contents($root . '/database/migrations/089_schema_migrations_registry.sql');
++$version = (string) file_get_contents($root . '/app/Services/AppVersionService.php');
++$runner = (string) file_get_contents($root . '/bin/migrate.php');
++$operations = (string) file_get_contents($root . '/app/Services/OperationsService.php');
++$health = (string) file_get_contents($root . '/app/Services/HealthCheckService.php');
++$migrationService = (string) file_get_contents($root . '/app/Services/MigrationService.php');
++
++$check(($result['files'] ?? 0) === 96, 'manifesto possui 96 migrations de subida');
++$check(($result['rollbacks'] ?? []) === ['030_google_calendar_availability_modes_rollback.sql'], 'rollback fica isolado do fluxo de subida');
++$check(isset($result['duplicate_numbers']['017'], $result['duplicate_numbers']['063']), 'numerações históricas duplicadas são inventariadas');
++$check(($manifest['schema_snapshot']['through'] ?? '') === '004_crm.sql', 'snapshot declara o baseline executável até a migration 004');
++$check(str_contains($registry, 'CREATE TABLE IF NOT EXISTS schema_migrations') && str_contains($registry, 'UNIQUE KEY uq_schema_migrations_migration'), 'registro de migrations é idempotente e único');
++$check(str_contains($runner, "baseline --through=088 --yes") && str_contains($runner, "install --yes") && str_contains($runner, "up [--dry-run]") && str_contains($runner, "seed --yes"), 'CLI oferece install, baseline, status e execução incremental');
++$check(str_contains($dockerfile, 'php /var/www/html/bin/migrate.php verify'), 'build Docker valida o manifesto sem acessar o banco');
++$check(str_contains($compose, 'service_completed_successfully') && str_contains($compose, 'bin/migrate.php", "bootstrap"'), 'Docker aguarda o bootstrap do banco antes da aplicação');
++$check(!str_contains($compose, '/docker-entrypoint-initdb.d/') && str_contains($compose, 'bin/migrate.php", "bootstrap"'), 'Docker delega toda instalação ao runner canônico');
++$check(str_contains($schema, 'SCHEMA_EXECUTION_BASELINE_THROUGH: 004_crm.sql'), 'schema declara o baseline e deixa evoluções para o runner');
++$bootstrapPos = strpos($migrationService, "executeSqlFile(\$bootstrapSeed, 'seed.sql')");
++$migrationPos = is_int($bootstrapPos) ? strpos($migrationService, '$elapsed = $this->executeMigration($file)', $bootstrapPos) : false;
++$finalSeedPos = is_int($migrationPos) ? strpos($migrationService, "executeSqlFile(\$seed, 'seed.reference.sql')", $migrationPos) : false;
++$check(is_int($bootstrapPos) && is_int($migrationPos) && is_int($finalSeedPos) && $bootstrapPos < $migrationPos && $migrationPos < $finalSeedPos, 'instalação executa seed inicial, migrations e reconciliação final na ordem correta');
++$check(str_contains($operations, 'schema_migrations') && str_contains($operations, 'checksum divergente'), 'monitoramento operacional usa o registro canônico');
++$check(str_contains($health, "'name' => 'migrations'") && str_contains($health, '089_schema_migrations_registry.sql'), 'readiness bloqueia tráfego quando o schema está pendente');
++$check(str_contains($version, 'RS Connect 36.20.16') && str_contains($version, '089_schema_migrations_registry.sql'), 'versão e migration obrigatória foram atualizadas');
++
++$sample = <<<'SQL'
++CREATE TABLE test_parser (id INT);
++DELIMITER $$
++CREATE PROCEDURE test_proc()
++BEGIN
++    SELECT 'texto;interno';
++    SELECT 2;
++END$$
++DELIMITER ;
++INSERT INTO test_parser (id) VALUES (1);
++SQL;
++$parsed = SqlScriptParser::parse($sample);
++$check(count($parsed) === 3 && str_contains($parsed[1], 'CREATE PROCEDURE') && str_contains($parsed[1], "texto;interno"), 'parser preserva rotinas e delimitadores internos');
++
++if ($failures !== []) {
++    fwrite(STDERR, "\nFALHAS:\n- " . implode("\n- ", $failures) . "\n");
++    exit(1);
++}
++
++echo "\nResumo ENT-027: {$passes} verificações aprovadas.\n";
+diff -ruN rsconnect_ent027_base/tests/Feature/ent028-pagbank-schema-hotfix-smoke.php rsconnect_ent027_work/tests/Feature/ent028-pagbank-schema-hotfix-smoke.php
+--- rsconnect_ent027_base/tests/Feature/ent028-pagbank-schema-hotfix-smoke.php	2026-08-27 19:22:57.000000000 +0000
++++ rsconnect_ent027_work/tests/Feature/ent028-pagbank-schema-hotfix-smoke.php	2026-08-28 17:03:44.367705726 +0000
+@@ -36,7 +36,7 @@
+ $check(str_contains($migration, 'payment_status_checked_at'), 'migration cria payment_status_checked_at quando ausente');
+ $check(str_contains($migration, 'idx_invoice_external_payment'), 'migration garante índice de conciliação');
+ $check(str_contains($versionSource, 'RS Connect 36.20.13.3'), 'versão do hotfix foi atualizada');
+-$check(str_contains($versionSource, "REQUIRED_MIGRATION = '088_payment_reconciliation_schema_compat.sql'"), 'migration 088 é sinalizada como obrigatória');
++$check(str_contains($versionSource, '088_payment_reconciliation_schema_compat.sql') && str_contains($versionSource, "REQUIRED_MIGRATION = '089_schema_migrations_registry.sql'"), 'migration 088 permanece no histórico e o registro 089 é obrigatório');
+ 
+ if ($failures !== []) {
+     fwrite(STDERR, "\nFALHAS:\n- " . implode("\n- ", $failures) . "\n");
+diff -ruN rsconnect_ent027_base/tests/Feature/ent030-white-label-client-application-v3620154-smoke.php rsconnect_ent027_work/tests/Feature/ent030-white-label-client-application-v3620154-smoke.php
+--- rsconnect_ent027_base/tests/Feature/ent030-white-label-client-application-v3620154-smoke.php	2026-08-28 14:39:50.000000000 +0000
++++ rsconnect_ent027_work/tests/Feature/ent030-white-label-client-application-v3620154-smoke.php	2026-08-28 17:03:44.368128997 +0000
+@@ -36,7 +36,7 @@
+ $check(str_contains($css, 'grid-template-columns: minmax(0, 820px) minmax(320px, 390px)') && str_contains($css, 'width: min(1280px, 100%)'), 'layout administrativo possui proporção e largura máxima controladas');
+ $check(str_contains($css, '.brand-preview-shell') && str_contains($css, '.preview-brand-image img') && str_contains($css, 'object-fit: contain'), 'prévia limita e enquadra a logo sem deformação');
+ $check(str_contains($css, '.has-tenant-branding .sidebar') && str_contains($css, '.brand-mark-image img'), 'painel do cliente possui estilos específicos de marca');
+-$check(str_contains($version, 'RS Connect 36.20.15.4') && str_contains($version, 'White Label aplicado ao painel e login do cliente'), 'versão interna foi atualizada');
++$check(str_contains($version, 'RS Connect 36.20.15.4') && str_contains($version, 'RS Connect 36.20.16'), 'entrega White Label permanece registrada em versão posterior');
+ 
+ if ($failures !== []) {
+     fwrite(STDERR, "\nFALHAS:\n- " . implode("\n- ", $failures) . "\n");

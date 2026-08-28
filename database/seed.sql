@@ -38,20 +38,27 @@ INSERT INTO permissions (permission_key, name, description, category) VALUES
 ('tasks.manage', 'Gerenciar tarefas', 'Cadastrar, concluir e cancelar tarefas e follow-ups.', 'CRM')
 ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description), category = VALUES(category);
 
-DELETE FROM role_permissions WHERE tenant_id IS NULL AND role IN ('client_admin', 'client_user');
+INSERT INTO role_permissions (tenant_id, role, permission_id, allowed)
+SELECT NULL, 'client_admin', p.id, 1
+FROM permissions p
+WHERE NOT EXISTS (
+    SELECT 1 FROM role_permissions rp
+    WHERE rp.tenant_id IS NULL AND rp.role = 'client_admin' AND rp.permission_id = p.id
+);
 
 INSERT INTO role_permissions (tenant_id, role, permission_id, allowed)
-SELECT NULL, 'client_admin', id, 1 FROM permissions;
-
-INSERT INTO role_permissions (tenant_id, role, permission_id, allowed)
-SELECT NULL, 'client_user', id, 1
-FROM permissions
-WHERE permission_key IN (
+SELECT NULL, 'client_user', p.id, 1
+FROM permissions p
+WHERE p.permission_key IN (
     'dashboard.view', 'company.view', 'permissions.view',
     'instances.view', 'agents.view',
     'conversations.view', 'conversations.manage',
     'contacts.view', 'contacts.manage', 'crm.view', 'crm.manage',
     'tasks.view', 'tasks.manage'
+)
+AND NOT EXISTS (
+    SELECT 1 FROM role_permissions rp
+    WHERE rp.tenant_id IS NULL AND rp.role = 'client_user' AND rp.permission_id = p.id
 );
 
 INSERT INTO crm_pipelines (tenant_id, name, is_default)

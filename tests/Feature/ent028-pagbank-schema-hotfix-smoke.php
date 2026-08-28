@@ -36,7 +36,7 @@ $check(substr_count($migration, "information_schema.COLUMNS") >= 3, 'migration v
 $check(str_contains($migration, 'payment_status_checked_at'), 'migration cria payment_status_checked_at quando ausente');
 $check(str_contains($migration, 'idx_invoice_external_payment'), 'migration garante índice de conciliação');
 $check(str_contains($versionSource, 'RS Connect 36.20.13.3'), 'versão do hotfix foi atualizada');
-$check(str_contains($versionSource, "REQUIRED_MIGRATION = '088_payment_reconciliation_schema_compat.sql'"), 'migration 088 é sinalizada como obrigatória');
+$check(str_contains($versionSource, '088_payment_reconciliation_schema_compat.sql') && str_contains($versionSource, "REQUIRED_MIGRATION = '089_schema_migrations_registry.sql'"), 'migration 088 permanece no histórico e o registro 089 é obrigatório');
 
 if ($failures !== []) {
     fwrite(STDERR, "\nFALHAS:\n- " . implode("\n- ", $failures) . "\n");

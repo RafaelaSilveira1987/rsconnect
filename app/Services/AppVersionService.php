@@ -52,12 +52,13 @@ final class AppVersionService
     // RS Connect 36.20.15 — proteção contra XSS, SVG e CSP.
     // RS Connect 36.20.15.1 — restauração segura das rotas e do menu White Label.
     // RS Connect 36.20.15.3 — inicialização resiliente do autoload e validação do Router no build.
-    // RS Connect 36.20.15.4 — layout proporcional e aplicação real do White Label no painel e login do cliente.
     // RS Connect 36.20.15.2 — uploads persistentes e revisão do layout do White Label.
-    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql, 085_ai_commercial_attention_queue.sql e 086_plan_ai_mode_and_commitment.sql, 087_webhook_security_events.sql e 088_payment_reconciliation_schema_compat.sql.
+    // RS Connect 36.20.15.4 — layout proporcional e aplicação real do White Label no painel e login do cliente.
+    // RS Connect 36.20.16 — manifesto canônico, registro schema_migrations e executor seguro.
+    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql, 085_ai_commercial_attention_queue.sql, 086_plan_ai_mode_and_commitment.sql, 087_webhook_security_events.sql, 088_payment_reconciliation_schema_compat.sql e 089_schema_migrations_registry.sql.
     public const VERSION_LABEL = 'Beta Comercial 1.4';
-    public const PACKAGE_LABEL = 'RS Connect 36.20.15.4 — White Label aplicado ao painel e login do cliente';
-    public const REQUIRED_MIGRATION = '088_payment_reconciliation_schema_compat.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.20.16 — migrations normalizadas e rastreadas';
+    public const REQUIRED_MIGRATION = '089_schema_migrations_registry.sql';
 
     private PDO $pdo;
 
@@ -153,13 +154,14 @@ final class AppVersionService
             'conversation_ai_memory',
             'contact_ai_memory',
             'tenant_ai_commercial_attention_tracking',
+            'schema_migrations',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Rodar as atualizações do banco pendentes até a 085, conforme o pacote implantado.'
+            'Executar php bin/migrate.php status e aplicar o baseline/up até a migration 089.'
         );
 
         $monitoringReady = $this->tableExists('operational_monitor_runs')

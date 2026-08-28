@@ -36,7 +36,7 @@ $check(str_contains($whiteLabel, 'white-label-hero'), 'tela de configuração po
 $check(str_contains($css, 'grid-template-columns: minmax(0, 820px) minmax(320px, 390px)') && str_contains($css, 'width: min(1280px, 100%)'), 'layout administrativo possui proporção e largura máxima controladas');
 $check(str_contains($css, '.brand-preview-shell') && str_contains($css, '.preview-brand-image img') && str_contains($css, 'object-fit: contain'), 'prévia limita e enquadra a logo sem deformação');
 $check(str_contains($css, '.has-tenant-branding .sidebar') && str_contains($css, '.brand-mark-image img'), 'painel do cliente possui estilos específicos de marca');
-$check(str_contains($version, 'RS Connect 36.20.15.4') && str_contains($version, 'White Label aplicado ao painel e login do cliente'), 'versão interna foi atualizada');
+$check(str_contains($version, 'RS Connect 36.20.15.4') && str_contains($version, 'RS Connect 36.20.16'), 'entrega White Label permanece registrada em versão posterior');
 
 if ($failures !== []) {
     fwrite(STDERR, "\nFALHAS:\n- " . implode("\n- ", $failures) . "\n");

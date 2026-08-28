@@ -630,17 +630,46 @@ final class OperationsService
 
     private function checkMigrations(): array
     {
-        $requiredTables = ['conversation_flow_states', 'calendar_google_sync_logs', 'operations_backup_jobs', 'report_daily_metrics', 'ai_usage_events', 'ai_usage_threshold_events', 'ai_after_hours_pending', 'operational_monitor_runs'];
-        $missing = [];
-        foreach ($requiredTables as $table) {
-            if ($this->count("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . str_replace("'", "''", $table) . "'") < 1) {
-                $missing[] = $table;
+        try {
+            $service = new MigrationService(Database::connection(), dirname(__DIR__, 2));
+            $status = $service->status();
+
+            if (!$status['registry']) {
+                return [
+                    'status' => 'down',
+                    'message' => 'O registro schema_migrations ainda não foi criado. Execute o baseline seguro da ENT-027.',
+                    'latency_ms' => null,
+                ];
             }
+
+            if ($status['drift'] !== []) {
+                return [
+                    'status' => 'down',
+                    'message' => 'Há migrations aplicadas com checksum divergente: ' . implode(', ', $status['drift']) . '.',
+                    'latency_ms' => null,
+                ];
+            }
+
+            if ((int) $status['pending'] > 0) {
+                return [
+                    'status' => 'warning',
+                    'message' => $status['pending'] . ' migration(s) pendente(s). Execute php bin/migrate.php up.',
+                    'latency_ms' => null,
+                ];
+            }
+
+            return [
+                'status' => 'ok',
+                'message' => $status['applied'] . ' migrations registradas, sem pendências ou alterações históricas.',
+                'latency_ms' => null,
+            ];
+        } catch (Throwable $exception) {
+            return [
+                'status' => 'down',
+                'message' => 'Não foi possível validar o histórico de migrations.',
+                'latency_ms' => null,
+            ];
         }
-        if ($missing !== []) {
-            return ['status' => 'down', 'message' => 'Estruturas obrigatórias ausentes: ' . implode(', ', $missing) . '.', 'latency_ms' => null];
-        }
-        return ['status' => 'ok', 'message' => 'Estruturas principais, incluindo consumo de IA, recuperação pós-horário e monitoramento operacional, foram localizadas no banco.', 'latency_ms' => null];
     }
 
     private function checkBillingCron(): array
