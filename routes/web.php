@@ -24,6 +24,7 @@ use App\Controllers\DashboardController;
 use App\Controllers\DocumentationController;
 use App\Controllers\InstanceController;
 use App\Controllers\ImplementationController;
+use App\Controllers\HealthController;
 use App\Controllers\MessageGovernanceController;
 use App\Controllers\OnboardingController;
 use App\Controllers\OpenAiUsageController;
@@ -50,6 +51,10 @@ use App\Controllers\VersionController;
 use App\Core\Router;
 
 return static function (Router $router): void {
+    $router->get('/health/live', [HealthController::class, 'live']);
+    $router->get('/health/ready', [HealthController::class, 'ready']);
+    $router->get('/health/ready/details', [HealthController::class, 'readyDetails'], ['auth', 'super_admin']);
+
     $router->get('/login', [AuthController::class, 'showLogin'], ['guest']);
     $router->post('/login', [AuthController::class, 'login'], ['guest', 'csrf']);
     $router->post('/logout', [AuthController::class, 'logout'], ['auth', 'csrf']);

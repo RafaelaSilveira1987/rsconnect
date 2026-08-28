@@ -1,0 +1,868 @@
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/INSTRUCOES-v36.20.14.md /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/INSTRUCOES-v36.20.14.md
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/INSTRUCOES-v36.20.14.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/INSTRUCOES-v36.20.14.md	2026-08-28 11:44:51.593869166 +0000
+@@ -0,0 +1,73 @@
++# RS Connect v36.20.14 — Health checks seguros
++
++## Endpoints
++
++### Liveness público
++
++```text
++GET /health/live
++```
++
++Resposta esperada:
++
++```json
++{"status":"ok"}
++```
++
++Esse endpoint confirma apenas que o processo PHP e o roteamento da aplicação estão respondendo. Não consulta banco, storage ou integrações.
++
++### Readiness público
++
++```text
++GET /health/ready
++```
++
++Quando a aplicação está pronta:
++
++```json
++{"status":"ok"}
++```
++
++Código HTTP: `200`.
++
++Quando uma dependência crítica está indisponível:
++
++```json
++{"status":"unavailable"}
++```
++
++Código HTTP: `503`.
++
++O endpoint público nunca apresenta host, nome do banco, usuário, credenciais, exceções ou caminhos internos.
++
++### Diagnóstico detalhado protegido
++
++```text
++GET /health/ready/details
++```
++
++Requer sessão autenticada de **Super Admin RS**. O retorno contém somente o estado genérico dos componentes `database`, `storage` e `application_key`, sem valores de configuração ou mensagens de exceção.
++
++## Homologação
++
++```bash
++curl -i https://SEU_DOMINIO/health/live
++curl -i https://SEU_DOMINIO/health/ready
++```
++
++Para validar falha de readiness sem afetar produção, realize o teste em ambiente de homologação removendo temporariamente uma dependência crítica e confirme o HTTP `503` com corpo resumido.
++
++## EasyPanel / balanceador
++
++- Liveness: `/health/live`
++- Readiness: `/health/ready`
++- Intervalo recomendado: 30 segundos
++- Timeout recomendado: 5 segundos
++
++## Banco de dados
++
++Não existe migration nova nesta entrega. A migration obrigatória permanece:
++
++```text
++database/migrations/088_payment_reconciliation_schema_compat.sql
++```
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/README.md /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/README.md
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/README.md	2026-08-27 19:45:41.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/README.md	2026-08-28 11:45:03.402532090 +0000
+@@ -1,4 +1,13 @@
+-# RS Connect — v36.20.13.4
++# RS Connect — v36.20.14
++
++## ENT-029 / PA-003 — Health checks seguros
++
++- adiciona `/health/live` com resposta pública mínima `{"status":"ok"}`;
++- adiciona `/health/ready` com HTTP 200 ou 503 sem expor detalhes internos;
++- adiciona `/health/ready/details` protegido por autenticação de Super Admin;
++- evita criação de sessão nos health checks públicos;
++- adiciona healthcheck do contêiner apontando para o liveness;
++- não cria migration nova e preserva todos os recursos da ENT-028.
+ 
+ ## Hotfix v36.20.13.4 — rótulos em português e operação em produção
+ 
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/app/Controllers/HealthController.php /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/app/Controllers/HealthController.php
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/app/Controllers/HealthController.php	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/app/Controllers/HealthController.php	2026-08-28 11:44:01.085654577 +0000
+@@ -0,0 +1,49 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Controllers;
++
++use App\Services\HealthCheckService;
++
++final class HealthController
++{
++    public function live(): void
++    {
++        $this->json(['status' => 'ok'], 200);
++    }
++
++    public function ready(): void
++    {
++        $ready = (new HealthCheckService())->isReady();
++        $this->json(
++            ['status' => $ready ? 'ok' : 'unavailable'],
++            $ready ? 200 : 503,
++            !$ready ? 5 : null
++        );
++    }
++
++    public function readyDetails(): void
++    {
++        $details = (new HealthCheckService())->readinessDetails();
++        $this->json($details, $details['status'] === 'ok' ? 200 : 503);
++    }
++
++    private function json(array $payload, int $status, ?int $retryAfter = null): void
++    {
++        http_response_code($status);
++        if (!headers_sent()) {
++            header_remove('X-Powered-By');
++            header('Content-Type: application/json; charset=utf-8');
++            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
++            header('Pragma: no-cache');
++            header('X-Content-Type-Options: nosniff');
++            header('X-Robots-Tag: noindex, nofollow');
++            if ($retryAfter !== null) {
++                header('Retry-After: ' . $retryAfter);
++            }
++        }
++
++        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
++    }
++}
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/app/Services/AppVersionService.php /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/app/Services/AppVersionService.php
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/app/Services/AppVersionService.php	2026-08-27 19:45:22.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/app/Services/AppVersionService.php	2026-08-28 11:44:31.879882628 +0000
+@@ -48,9 +48,10 @@
+     // RS Connect 36.20.13.2 — validação de CPF/CNPJ e recuperação automática do Checkout PagBank.
+     // RS Connect 36.20.13.3 — compatibilidade do schema de conciliação e persistência segura do Checkout PagBank.
+     // RS Connect 36.20.13.4 — correção dos rótulos comerciais em português e preparação operacional para produção.
++    // RS Connect 36.20.14 — health checks separados, públicos mínimos e diagnóstico protegido.
+     // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql, 085_ai_commercial_attention_queue.sql e 086_plan_ai_mode_and_commitment.sql, 087_webhook_security_events.sql e 088_payment_reconciliation_schema_compat.sql.
+     public const VERSION_LABEL = 'Beta Comercial 1.4';
+-    public const PACKAGE_LABEL = 'RS Connect 36.20.13.4 — correção dos rótulos comerciais e orientação para produção';
++    public const PACKAGE_LABEL = 'RS Connect 36.20.14 — health checks seguros de liveness e readiness';
+     public const REQUIRED_MIGRATION = '088_payment_reconciliation_schema_compat.sql';
+ 
+     private PDO $pdo;
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/app/Services/HealthCheckService.php /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/app/Services/HealthCheckService.php
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/app/Services/HealthCheckService.php	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/app/Services/HealthCheckService.php	2026-08-28 11:44:01.081302384 +0000
+@@ -0,0 +1,96 @@
++<?php
++
++declare(strict_types=1);
++
++namespace App\Services;
++
++use App\Core\Clock;
++use App\Core\Database;
++use App\Core\Env;
++use Throwable;
++
++final class HealthCheckService
++{
++    /**
++     * @return array{status:string,checks:list<array{name:string,status:string}>,checked_at:string}
++     */
++    public function readinessDetails(): array
++    {
++        $checks = [
++            $this->databaseCheck(),
++            $this->storageCheck(),
++            $this->applicationKeyCheck(),
++        ];
++
++        $ready = count(array_filter(
++            $checks,
++            static fn (array $check): bool => ($check['status'] ?? '') !== 'ok'
++        )) === 0;
++
++        return [
++            'status' => $ready ? 'ok' : 'unavailable',
++            'checks' => $checks,
++            'checked_at' => Clock::nowUtcIso(),
++        ];
++    }
++
++    public function isReady(): bool
++    {
++        return $this->readinessDetails()['status'] === 'ok';
++    }
++
++    /** @return array{name:string,status:string} */
++    private function databaseCheck(): array
++    {
++        try {
++            $statement = Database::connection()->query('SELECT 1');
++            $ok = $statement !== false && (int) $statement->fetchColumn() === 1;
++        } catch (Throwable) {
++            $ok = false;
++        }
++
++        return [
++            'name' => 'database',
++            'status' => $ok ? 'ok' : 'unavailable',
++        ];
++    }
++
++    /** @return array{name:string,status:string} */
++    private function storageCheck(): array
++    {
++        $root = dirname(__DIR__, 2) . '/storage';
++        $directories = [
++            $root,
++            $root . '/app',
++            $root . '/cache',
++            $root . '/logs',
++        ];
++
++        $ok = true;
++        foreach ($directories as $directory) {
++            if (!is_dir($directory) || !is_writable($directory)) {
++                $ok = false;
++                break;
++            }
++        }
++
++        return [
++            'name' => 'storage',
++            'status' => $ok ? 'ok' : 'unavailable',
++        ];
++    }
++
++    /** @return array{name:string,status:string} */
++    private function applicationKeyCheck(): array
++    {
++        $appKey = trim((string) Env::get('APP_KEY', ''));
++        $placeholder = $appKey === ''
++            || str_contains(strtoupper($appKey), 'REPLACE_WITH')
++            || str_contains(strtoupper($appKey), 'SUA_APP_KEY');
++
++        return [
++            'name' => 'application_key',
++            'status' => $placeholder ? 'unavailable' : 'ok',
++        ];
++    }
++}
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/bootstrap.php /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/bootstrap.php
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/bootstrap.php	2026-08-26 22:42:04.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/bootstrap.php	2026-08-28 11:44:09.801222981 +0000
+@@ -12,11 +12,14 @@
+ 
+ date_default_timezone_set((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo'));
+ 
++$requestPath = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
++$sessionlessHealthRequest = in_array($requestPath, ['/health/live', '/health/ready'], true);
++
+ $debug = filter_var(Env::get('APP_DEBUG', false), FILTER_VALIDATE_BOOL);
+ ini_set('display_errors', $debug ? '1' : '0');
+ error_reporting(E_ALL);
+ 
+-if (session_status() !== PHP_SESSION_ACTIVE) {
++if (!$sessionlessHealthRequest && session_status() !== PHP_SESSION_ACTIVE) {
+     $lifetimeSeconds = max(300, (int) Env::get('SESSION_LIFETIME', 120) * 60);
+     $sameSite = ucfirst(strtolower(trim((string) Env::get('SESSION_SAMESITE', 'Lax'))));
+     if (!in_array($sameSite, ['Lax', 'Strict'], true)) {
+@@ -64,7 +67,6 @@
+         header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+     }
+ 
+-    $requestPath = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
+     if (!str_starts_with($requestPath, '/assets/') && !str_starts_with($requestPath, '/uploads/')) {
+         header('Cache-Control: no-store, private, max-age=0');
+         header('Pragma: no-cache');
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/composer.json /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/composer.json
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/composer.json	2026-08-27 19:22:59.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/composer.json	2026-08-28 11:44:31.880263759 +0000
+@@ -18,6 +18,7 @@
+     "test": "php tests/Support/run-smoke-tests.php",
+     "test:ent026": "php tests/Feature/ent026-tests-sanitization-smoke.php",
+     "test:ent028": "php tests/Feature/ent028-webhook-security-smoke.php",
+-    "test:ent028-schema": "php tests/Feature/ent028-pagbank-schema-hotfix-smoke.php"
++    "test:ent028-schema": "php tests/Feature/ent028-pagbank-schema-hotfix-smoke.php",
++    "test:ent029": "php tests/Feature/ent029-secure-health-checks-smoke.php"
+   }
+ }
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docker-compose.yml /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docker-compose.yml
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docker-compose.yml	2026-08-26 22:42:06.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docker-compose.yml	2026-08-28 11:44:33.338640686 +0000
+@@ -16,6 +16,12 @@
+     depends_on:
+       db:
+         condition: service_healthy
++    healthcheck:
++      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/health/live >/dev/null || exit 1"]
++      interval: 30s
++      timeout: 5s
++      retries: 3
++      start_period: 20s
+ 
+   db:
+     image: mysql:8.4
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/ATUALIZACAO-v36.20.14.md /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/ATUALIZACAO-v36.20.14.md
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/ATUALIZACAO-v36.20.14.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/ATUALIZACAO-v36.20.14.md	2026-08-28 11:44:51.601726919 +0000
+@@ -0,0 +1,13 @@
++# Atualização RS Connect v36.20.14
++
++Entrega da **ENT-029 / PA-003 — Health checks seguros**.
++
++## Alterações
++
++- criado `/health/live` para liveness público e mínimo;
++- criado `/health/ready` para readiness público sem detalhes internos;
++- criado `/health/ready/details`, protegido por autenticação e perfil Super Admin;
++- removida a criação de sessão nos endpoints públicos de health check;
++- adicionados cabeçalhos `no-store`, `nosniff`, `noindex` e remoção de `X-Powered-By`;
++- adicionado healthcheck do contêiner da aplicação apontando para `/health/live`;
++- nenhuma migration ou regra comercial foi alterada.
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt	2026-08-28 11:45:28.738160645 +0000
+@@ -0,0 +1,17 @@
++ENT-029 / PA-003 — arquivos criados ou alterados
++
++CRIADOS
++app/Controllers/HealthController.php
++app/Services/HealthCheckService.php
++tests/Feature/ent029-secure-health-checks-smoke.php
++INSTRUCOES-v36.20.14.md
++docs/ATUALIZACAO-v36.20.14.md
++docs/diagnostics/ENT-029-HEALTH-CHECKS-v36.20.14.md
++
++ALTERADOS
++routes/web.php
++bootstrap.php
++docker-compose.yml
++app/Services/AppVersionService.php
++composer.json
++README.md
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-HEALTH-CHECKS-v36.20.14.md /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-HEALTH-CHECKS-v36.20.14.md
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-HEALTH-CHECKS-v36.20.14.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-HEALTH-CHECKS-v36.20.14.md	2026-08-28 11:44:51.605869218 +0000
+@@ -0,0 +1,23 @@
++# Diagnóstico técnico — ENT-029 / PA-003
++
++## Risco anterior
++
++A aplicação não possuía endpoints independentes para diferenciar processo vivo de aplicação pronta. Ferramentas de deploy precisavam usar páginas autenticadas ou rotas funcionais, com risco de sessões desnecessárias e exposição de respostas internas.
++
++## Solução
++
++- `live`: não acessa banco nem serviços externos;
++- `ready`: verifica somente banco, diretórios persistentes e APP_KEY;
++- resposta pública limitada ao campo `status`;
++- detalhes disponíveis apenas para Super Admin autenticado;
++- exceções são capturadas e nunca retornadas ao cliente;
++- integrações Evolution, n8n, OpenAI e gateways não bloqueiam readiness, pois a interface principal continua capaz de operar e apresentar seus estados separadamente.
++
++## Dados que não são retornados
++
++- host, porta, nome e usuário do banco;
++- credenciais ou chaves;
++- mensagens e stack traces de exceção;
++- caminhos do filesystem;
++- estrutura interna de tabelas;
++- nomes de serviços externos configurados.
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-PATCH-v36.20.14.diff /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-PATCH-v36.20.14.diff
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-PATCH-v36.20.14.diff	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-PATCH-v36.20.14.diff	2026-08-28 11:45:28.866027545 +0000
+@@ -0,0 +1,383 @@
++diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/INSTRUCOES-v36.20.14.md /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/INSTRUCOES-v36.20.14.md
++--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/INSTRUCOES-v36.20.14.md	1970-01-01 00:00:00.000000000 +0000
+++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/INSTRUCOES-v36.20.14.md	2026-08-28 11:44:51.593869166 +0000
++@@ -0,0 +1,73 @@
+++# RS Connect v36.20.14 — Health checks seguros
+++
+++## Endpoints
+++
+++### Liveness público
+++
+++```text
+++GET /health/live
+++```
+++
+++Resposta esperada:
+++
+++```json
+++{"status":"ok"}
+++```
+++
+++Esse endpoint confirma apenas que o processo PHP e o roteamento da aplicação estão respondendo. Não consulta banco, storage ou integrações.
+++
+++### Readiness público
+++
+++```text
+++GET /health/ready
+++```
+++
+++Quando a aplicação está pronta:
+++
+++```json
+++{"status":"ok"}
+++```
+++
+++Código HTTP: `200`.
+++
+++Quando uma dependência crítica está indisponível:
+++
+++```json
+++{"status":"unavailable"}
+++```
+++
+++Código HTTP: `503`.
+++
+++O endpoint público nunca apresenta host, nome do banco, usuário, credenciais, exceções ou caminhos internos.
+++
+++### Diagnóstico detalhado protegido
+++
+++```text
+++GET /health/ready/details
+++```
+++
+++Requer sessão autenticada de **Super Admin RS**. O retorno contém somente o estado genérico dos componentes `database`, `storage` e `application_key`, sem valores de configuração ou mensagens de exceção.
+++
+++## Homologação
+++
+++```bash
+++curl -i https://SEU_DOMINIO/health/live
+++curl -i https://SEU_DOMINIO/health/ready
+++```
+++
+++Para validar falha de readiness sem afetar produção, realize o teste em ambiente de homologação removendo temporariamente uma dependência crítica e confirme o HTTP `503` com corpo resumido.
+++
+++## EasyPanel / balanceador
+++
+++- Liveness: `/health/live`
+++- Readiness: `/health/ready`
+++- Intervalo recomendado: 30 segundos
+++- Timeout recomendado: 5 segundos
+++
+++## Banco de dados
+++
+++Não existe migration nova nesta entrega. A migration obrigatória permanece:
+++
+++```text
+++database/migrations/088_payment_reconciliation_schema_compat.sql
+++```
++diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/README.md /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/README.md
++--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/README.md	2026-08-27 19:45:41.000000000 +0000
+++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/README.md	2026-08-28 11:45:03.402532090 +0000
++@@ -1,4 +1,13 @@
++-# RS Connect — v36.20.13.4
+++# RS Connect — v36.20.14
+++
+++## ENT-029 / PA-003 — Health checks seguros
+++
+++- adiciona `/health/live` com resposta pública mínima `{"status":"ok"}`;
+++- adiciona `/health/ready` com HTTP 200 ou 503 sem expor detalhes internos;
+++- adiciona `/health/ready/details` protegido por autenticação de Super Admin;
+++- evita criação de sessão nos health checks públicos;
+++- adiciona healthcheck do contêiner apontando para o liveness;
+++- não cria migration nova e preserva todos os recursos da ENT-028.
++ 
++ ## Hotfix v36.20.13.4 — rótulos em português e operação em produção
++ 
++diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/app/Controllers/HealthController.php /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/app/Controllers/HealthController.php
++--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/app/Controllers/HealthController.php	1970-01-01 00:00:00.000000000 +0000
+++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/app/Controllers/HealthController.php	2026-08-28 11:44:01.085654577 +0000
++@@ -0,0 +1,49 @@
+++<?php
+++
+++declare(strict_types=1);
+++
+++namespace App\Controllers;
+++
+++use App\Services\HealthCheckService;
+++
+++final class HealthController
+++{
+++    public function live(): void
+++    {
+++        $this->json(['status' => 'ok'], 200);
+++    }
+++
+++    public function ready(): void
+++    {
+++        $ready = (new HealthCheckService())->isReady();
+++        $this->json(
+++            ['status' => $ready ? 'ok' : 'unavailable'],
+++            $ready ? 200 : 503,
+++            !$ready ? 5 : null
+++        );
+++    }
+++
+++    public function readyDetails(): void
+++    {
+++        $details = (new HealthCheckService())->readinessDetails();
+++        $this->json($details, $details['status'] === 'ok' ? 200 : 503);
+++    }
+++
+++    private function json(array $payload, int $status, ?int $retryAfter = null): void
+++    {
+++        http_response_code($status);
+++        if (!headers_sent()) {
+++            header_remove('X-Powered-By');
+++            header('Content-Type: application/json; charset=utf-8');
+++            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+++            header('Pragma: no-cache');
+++            header('X-Content-Type-Options: nosniff');
+++            header('X-Robots-Tag: noindex, nofollow');
+++            if ($retryAfter !== null) {
+++                header('Retry-After: ' . $retryAfter);
+++            }
+++        }
+++
+++        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+++    }
+++}
++diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/app/Services/AppVersionService.php /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/app/Services/AppVersionService.php
++--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/app/Services/AppVersionService.php	2026-08-27 19:45:22.000000000 +0000
+++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/app/Services/AppVersionService.php	2026-08-28 11:44:31.879882628 +0000
++@@ -48,9 +48,10 @@
++     // RS Connect 36.20.13.2 — validação de CPF/CNPJ e recuperação automática do Checkout PagBank.
++     // RS Connect 36.20.13.3 — compatibilidade do schema de conciliação e persistência segura do Checkout PagBank.
++     // RS Connect 36.20.13.4 — correção dos rótulos comerciais em português e preparação operacional para produção.
+++    // RS Connect 36.20.14 — health checks separados, públicos mínimos e diagnóstico protegido.
++     // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql, 085_ai_commercial_attention_queue.sql e 086_plan_ai_mode_and_commitment.sql, 087_webhook_security_events.sql e 088_payment_reconciliation_schema_compat.sql.
++     public const VERSION_LABEL = 'Beta Comercial 1.4';
++-    public const PACKAGE_LABEL = 'RS Connect 36.20.13.4 — correção dos rótulos comerciais e orientação para produção';
+++    public const PACKAGE_LABEL = 'RS Connect 36.20.14 — health checks seguros de liveness e readiness';
++     public const REQUIRED_MIGRATION = '088_payment_reconciliation_schema_compat.sql';
++ 
++     private PDO $pdo;
++diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/app/Services/HealthCheckService.php /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/app/Services/HealthCheckService.php
++--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/app/Services/HealthCheckService.php	1970-01-01 00:00:00.000000000 +0000
+++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/app/Services/HealthCheckService.php	2026-08-28 11:44:01.081302384 +0000
++@@ -0,0 +1,96 @@
+++<?php
+++
+++declare(strict_types=1);
+++
+++namespace App\Services;
+++
+++use App\Core\Clock;
+++use App\Core\Database;
+++use App\Core\Env;
+++use Throwable;
+++
+++final class HealthCheckService
+++{
+++    /**
+++     * @return array{status:string,checks:list<array{name:string,status:string}>,checked_at:string}
+++     */
+++    public function readinessDetails(): array
+++    {
+++        $checks = [
+++            $this->databaseCheck(),
+++            $this->storageCheck(),
+++            $this->applicationKeyCheck(),
+++        ];
+++
+++        $ready = count(array_filter(
+++            $checks,
+++            static fn (array $check): bool => ($check['status'] ?? '') !== 'ok'
+++        )) === 0;
+++
+++        return [
+++            'status' => $ready ? 'ok' : 'unavailable',
+++            'checks' => $checks,
+++            'checked_at' => Clock::nowUtcIso(),
+++        ];
+++    }
+++
+++    public function isReady(): bool
+++    {
+++        return $this->readinessDetails()['status'] === 'ok';
+++    }
+++
+++    /** @return array{name:string,status:string} */
+++    private function databaseCheck(): array
+++    {
+++        try {
+++            $statement = Database::connection()->query('SELECT 1');
+++            $ok = $statement !== false && (int) $statement->fetchColumn() === 1;
+++        } catch (Throwable) {
+++            $ok = false;
+++        }
+++
+++        return [
+++            'name' => 'database',
+++            'status' => $ok ? 'ok' : 'unavailable',
+++        ];
+++    }
+++
+++    /** @return array{name:string,status:string} */
+++    private function storageCheck(): array
+++    {
+++        $root = dirname(__DIR__, 2) . '/storage';
+++        $directories = [
+++            $root,
+++            $root . '/app',
+++            $root . '/cache',
+++            $root . '/logs',
+++        ];
+++
+++        $ok = true;
+++        foreach ($directories as $directory) {
+++            if (!is_dir($directory) || !is_writable($directory)) {
+++                $ok = false;
+++                break;
+++            }
+++        }
+++
+++        return [
+++            'name' => 'storage',
+++            'status' => $ok ? 'ok' : 'unavailable',
+++        ];
+++    }
+++
+++    /** @return array{name:string,status:string} */
+++    private function applicationKeyCheck(): array
+++    {
+++        $appKey = trim((string) Env::get('APP_KEY', ''));
+++        $placeholder = $appKey === ''
+++            || str_contains(strtoupper($appKey), 'REPLACE_WITH')
+++            || str_contains(strtoupper($appKey), 'SUA_APP_KEY');
+++
+++        return [
+++            'name' => 'application_key',
+++            'status' => $placeholder ? 'unavailable' : 'ok',
+++        ];
+++    }
+++}
++diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/bootstrap.php /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/bootstrap.php
++--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/bootstrap.php	2026-08-26 22:42:04.000000000 +0000
+++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/bootstrap.php	2026-08-28 11:44:09.801222981 +0000
++@@ -12,11 +12,14 @@
++ 
++ date_default_timezone_set((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo'));
++ 
+++$requestPath = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
+++$sessionlessHealthRequest = in_array($requestPath, ['/health/live', '/health/ready'], true);
+++
++ $debug = filter_var(Env::get('APP_DEBUG', false), FILTER_VALIDATE_BOOL);
++ ini_set('display_errors', $debug ? '1' : '0');
++ error_reporting(E_ALL);
++ 
++-if (session_status() !== PHP_SESSION_ACTIVE) {
+++if (!$sessionlessHealthRequest && session_status() !== PHP_SESSION_ACTIVE) {
++     $lifetimeSeconds = max(300, (int) Env::get('SESSION_LIFETIME', 120) * 60);
++     $sameSite = ucfirst(strtolower(trim((string) Env::get('SESSION_SAMESITE', 'Lax'))));
++     if (!in_array($sameSite, ['Lax', 'Strict'], true)) {
++@@ -64,7 +67,6 @@
++         header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
++     }
++ 
++-    $requestPath = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
++     if (!str_starts_with($requestPath, '/assets/') && !str_starts_with($requestPath, '/uploads/')) {
++         header('Cache-Control: no-store, private, max-age=0');
++         header('Pragma: no-cache');
++diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/composer.json /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/composer.json
++--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/composer.json	2026-08-27 19:22:59.000000000 +0000
+++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/composer.json	2026-08-28 11:44:31.880263759 +0000
++@@ -18,6 +18,7 @@
++     "test": "php tests/Support/run-smoke-tests.php",
++     "test:ent026": "php tests/Feature/ent026-tests-sanitization-smoke.php",
++     "test:ent028": "php tests/Feature/ent028-webhook-security-smoke.php",
++-    "test:ent028-schema": "php tests/Feature/ent028-pagbank-schema-hotfix-smoke.php"
+++    "test:ent028-schema": "php tests/Feature/ent028-pagbank-schema-hotfix-smoke.php",
+++    "test:ent029": "php tests/Feature/ent029-secure-health-checks-smoke.php"
++   }
++ }
++diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docker-compose.yml /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docker-compose.yml
++--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docker-compose.yml	2026-08-26 22:42:06.000000000 +0000
+++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docker-compose.yml	2026-08-28 11:44:33.338640686 +0000
++@@ -16,6 +16,12 @@
++     depends_on:
++       db:
++         condition: service_healthy
+++    healthcheck:
+++      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/health/live >/dev/null || exit 1"]
+++      interval: 30s
+++      timeout: 5s
+++      retries: 3
+++      start_period: 20s
++ 
++   db:
++     image: mysql:8.4
++diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/ATUALIZACAO-v36.20.14.md /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/ATUALIZACAO-v36.20.14.md
++--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/ATUALIZACAO-v36.20.14.md	1970-01-01 00:00:00.000000000 +0000
+++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/ATUALIZACAO-v36.20.14.md	2026-08-28 11:44:51.601726919 +0000
++@@ -0,0 +1,13 @@
+++# Atualização RS Connect v36.20.14
+++
+++Entrega da **ENT-029 / PA-003 — Health checks seguros**.
+++
+++## Alterações
+++
+++- criado `/health/live` para liveness público e mínimo;
+++- criado `/health/ready` para readiness público sem detalhes internos;
+++- criado `/health/ready/details`, protegido por autenticação e perfil Super Admin;
+++- removida a criação de sessão nos endpoints públicos de health check;
+++- adicionados cabeçalhos `no-store`, `nosniff`, `noindex` e remoção de `X-Powered-By`;
+++- adicionado healthcheck do contêiner da aplicação apontando para `/health/live`;
+++- nenhuma migration ou regra comercial foi alterada.
++diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt
++--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt	1970-01-01 00:00:00.000000000 +0000
+++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt	2026-08-28 11:45:28.738160645 +0000
++@@ -0,0 +1,17 @@
+++ENT-029 / PA-003 — arquivos criados ou alterados
+++
+++CRIADOS
+++app/Controllers/HealthController.php
+++app/Services/HealthCheckService.php
+++tests/Feature/ent029-secure-health-checks-smoke.php
+++INSTRUCOES-v36.20.14.md
+++docs/ATUALIZACAO-v36.20.14.md
+++docs/diagnostics/ENT-029-HEALTH-CHECKS-v36.20.14.md
+++
+++ALTERADOS
+++routes/web.php
+++bootstrap.php
+++docker-compose.yml
+++app/Services/AppVersionService.php
+++composer.json
+++README.md
++diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-HEALTH-CHECKS-v36.20.14.md /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-HEALTH-CHECKS-v36.20.14.md
++--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-HEALTH-CHECKS-v36.20.14.md	1970-01-01 00:00:00.000000000 +0000
+++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-HEALTH-CHECKS-v36.20.14.md	2026-08-28 11:44:51.605869218 +0000
++@@ -0,0 +1,23 @@
+++# Diagnóstico técnico — ENT-029 / PA-003
+++
+++## Risco anterior
+++
+++A aplicação não possuía endpoints independentes para diferenciar processo vivo de aplicação pronta. Ferramentas de deploy precisavam usar páginas autenticadas ou rotas funcionais, com risco de sessões desnecessárias e exposição de respostas internas.
+++
+++## Solução
+++
+++- `live`: não acessa banco nem serviços externos;
+++- `ready`: verifica somente banco, diretórios persistentes e APP_KEY;
+++- resposta pública limitada ao campo `status`;
+++- detalhes disponíveis apenas para Super Admin autenticado;
+++- exceções são capturadas e nunca retornadas ao cliente;
+++- integrações Evolution, n8n, OpenAI e gateways não bloqueiam readiness, pois a interface principal continua capaz de operar e apresentar seus estados separadamente.
+++
+++## Dados que não são retornados
+++
+++- host, porta, nome e usuário do banco;
+++- credenciais ou chaves;
+++- mensagens e stack traces de exceção;
+++- caminhos do filesystem;
+++- estrutura interna de tabelas;
+++- nomes de serviços externos configurados.
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt	2026-08-28 11:45:28.838027428 +0000
+@@ -0,0 +1,16 @@
++ENT-029 / PA-003 — backup lógico dos arquivos anteriores (SHA-256)
++Base: RS Connect v36.20.13.4
++
++4512ba6ae70d5f24b33cb7a61ee391dfe36ed49afdb82aa869a44c2064c4e17e  routes/web.php
++b92e9f174c9272eef64e7310aa38c32062b1003e4039c469019cf85e344477a3  bootstrap.php
++9760aa539102fd5afc0328c523262a6d8700c0dfbe8f1b966af656449dd33b8e  docker-compose.yml
++f2cd4b66e19ec88dd1b2b81fe51c6eaa36beeaeac76d68567ebba4e9f58ab3d7  app/Services/AppVersionService.php
++bc5170727d90c36413667847fd7f581d02fc9d092b9682a394eac057ed107554  composer.json
++6b3253131d68e5853e95448a00ccb0959c2be26136952e2295e103a032613f8c  README.md
++
++NEW  app/Controllers/HealthController.php
++NEW  app/Services/HealthCheckService.php
++NEW  tests/Feature/ent029-secure-health-checks-smoke.php
++NEW  INSTRUCOES-v36.20.14.md
++NEW  docs/ATUALIZACAO-v36.20.14.md
++NEW  docs/diagnostics/ENT-029-HEALTH-CHECKS-v36.20.14.md
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/routes/web.php /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/routes/web.php
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/routes/web.php	2026-08-26 22:42:32.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/routes/web.php	2026-08-28 11:44:09.800980559 +0000
+@@ -24,6 +24,7 @@
+ use App\Controllers\DocumentationController;
+ use App\Controllers\InstanceController;
+ use App\Controllers\ImplementationController;
++use App\Controllers\HealthController;
+ use App\Controllers\MessageGovernanceController;
+ use App\Controllers\OnboardingController;
+ use App\Controllers\OpenAiUsageController;
+@@ -50,6 +51,10 @@
+ use App\Core\Router;
+ 
+ return static function (Router $router): void {
++    $router->get('/health/live', [HealthController::class, 'live']);
++    $router->get('/health/ready', [HealthController::class, 'ready']);
++    $router->get('/health/ready/details', [HealthController::class, 'readyDetails'], ['auth', 'super_admin']);
++
+     $router->get('/login', [AuthController::class, 'showLogin'], ['guest']);
+     $router->post('/login', [AuthController::class, 'login'], ['guest', 'csrf']);
+     $router->post('/logout', [AuthController::class, 'logout'], ['auth', 'csrf']);
+diff -ruN '--exclude=docs/diagnostics/ENT-029-PRECHANGE-SHA256-v36.20.13.4.txt' '--exclude=docs/diagnostics/ENT-029-CHANGED-FILES-v36.20.14.txt' /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/tests/Feature/ent029-secure-health-checks-smoke.php /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/tests/Feature/ent029-secure-health-checks-smoke.php
+--- /mnt/data/rsconnect_ent029_original/rsconnect_ent028_ptbr_hotfix/tests/Feature/ent029-secure-health-checks-smoke.php	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/rsconnect_ent029_work/rsconnect_ent028_ptbr_hotfix/tests/Feature/ent029-secure-health-checks-smoke.php	2026-08-28 11:45:16.922983233 +0000
+@@ -0,0 +1,52 @@
++<?php
++
++declare(strict_types=1);
++
++$root = dirname(__DIR__, 2);
++require_once $root . '/app/Core/Autoloader.php';
++App\Core\Autoloader::register($root . '/app');
++
++use App\Controllers\HealthController;
++
++$failures = [];
++$passes = 0;
++$check = static function (bool $condition, string $label) use (&$failures, &$passes): void {
++    if ($condition) {
++        echo "[OK] {$label}\n";
++        $passes++;
++        return;
++    }
++
++    echo "[FAIL] {$label}\n";
++    $failures[] = $label;
++};
++
++$routes = (string) file_get_contents($root . '/routes/web.php');
++$controller = (string) file_get_contents($root . '/app/Controllers/HealthController.php');
++$service = (string) file_get_contents($root . '/app/Services/HealthCheckService.php');
++$bootstrap = (string) file_get_contents($root . '/bootstrap.php');
++$compose = (string) file_get_contents($root . '/docker-compose.yml');
++$version = (string) file_get_contents($root . '/app/Services/AppVersionService.php');
++
++ob_start();
++(new HealthController())->live();
++$liveBody = (string) ob_get_clean();
++
++$check($liveBody === '{"status":"ok"}', 'liveness público retorna somente status ok');
++$check(str_contains($routes, "get('/health/live'") && str_contains($routes, "get('/health/ready'"), 'rotas de liveness e readiness foram separadas');
++$check(str_contains($routes, "get('/health/ready/details'") && str_contains($routes, "['auth', 'super_admin']"), 'readiness detalhado exige autenticação de super admin');
++$check(str_contains($controller, '[\'status\' => $ready ? \'ok\' : \'unavailable\']'), 'readiness público expõe somente o estado resumido');
++$check(!str_contains($controller, 'DB_HOST') && !str_contains($controller, 'DB_DATABASE') && !str_contains($controller, 'DB_USERNAME'), 'controller público não expõe configuração do banco');
++$check(str_contains($service, 'catch (Throwable)') && !str_contains($service, 'getMessage()'), 'falhas internas são ocultadas sem mensagem de exceção');
++$check(str_contains($service, "'name' => 'database'") && str_contains($service, "'name' => 'storage'") && str_contains($service, "'name' => 'application_key'"), 'diagnóstico autenticado usa nomes genéricos dos componentes');
++$check(str_contains($bootstrap, "['/health/live', '/health/ready']") && str_contains($bootstrap, '$sessionlessHealthRequest'), 'health checks públicos não criam sessão nem cookie');
++$check(str_contains($controller, "header_remove('X-Powered-By')") && str_contains($controller, 'Cache-Control: no-store'), 'respostas removem identificação PHP e desativam cache');
++$check(str_contains($compose, 'http://127.0.0.1/health/live'), 'Docker usa o endpoint de liveness sem dependências externas');
++$check(str_contains($version, 'RS Connect 36.20.14') && str_contains($version, 'health checks seguros'), 'versão interna foi atualizada');
++
++if ($failures !== []) {
++    fwrite(STDERR, "\nFALHAS:\n- " . implode("\n- ", $failures) . "\n");
++    exit(1);
++}
++
++echo "\nResumo ENT-029: {$passes} verificações aprovadas.\n";

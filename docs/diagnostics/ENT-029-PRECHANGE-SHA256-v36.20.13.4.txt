@@ -1,0 +1,16 @@
+ENT-029 / PA-003 — backup lógico dos arquivos anteriores (SHA-256)
+Base: RS Connect v36.20.13.4
+
+4512ba6ae70d5f24b33cb7a61ee391dfe36ed49afdb82aa869a44c2064c4e17e  routes/web.php
+b92e9f174c9272eef64e7310aa38c32062b1003e4039c469019cf85e344477a3  bootstrap.php
+9760aa539102fd5afc0328c523262a6d8700c0dfbe8f1b966af656449dd33b8e  docker-compose.yml
+f2cd4b66e19ec88dd1b2b81fe51c6eaa36beeaeac76d68567ebba4e9f58ab3d7  app/Services/AppVersionService.php
+bc5170727d90c36413667847fd7f581d02fc9d092b9682a394eac057ed107554  composer.json
+6b3253131d68e5853e95448a00ccb0959c2be26136952e2295e103a032613f8c  README.md
+
+NEW  app/Controllers/HealthController.php
+NEW  app/Services/HealthCheckService.php
+NEW  tests/Feature/ent029-secure-health-checks-smoke.php
+NEW  INSTRUCOES-v36.20.14.md
+NEW  docs/ATUALIZACAO-v36.20.14.md
+NEW  docs/diagnostics/ENT-029-HEALTH-CHECKS-v36.20.14.md

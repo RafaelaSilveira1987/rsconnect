@@ -12,11 +12,14 @@ Env::load(__DIR__ . '/.env');
 
 date_default_timezone_set((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo'));
 
+$requestPath = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
+$sessionlessHealthRequest = in_array($requestPath, ['/health/live', '/health/ready'], true);
+
 $debug = filter_var(Env::get('APP_DEBUG', false), FILTER_VALIDATE_BOOL);
 ini_set('display_errors', $debug ? '1' : '0');
 error_reporting(E_ALL);
 
-if (session_status() !== PHP_SESSION_ACTIVE) {
+if (!$sessionlessHealthRequest && session_status() !== PHP_SESSION_ACTIVE) {
     $lifetimeSeconds = max(300, (int) Env::get('SESSION_LIFETIME', 120) * 60);
     $sameSite = ucfirst(strtolower(trim((string) Env::get('SESSION_SAMESITE', 'Lax'))));
     if (!in_array($sameSite, ['Lax', 'Strict'], true)) {
@@ -64,7 +67,6 @@ if (!headers_sent() && filter_var(Env::get('SECURITY_HEADERS_ENABLED', true), FI
         header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
     }
 
-    $requestPath = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
     if (!str_starts_with($requestPath, '/assets/') && !str_starts_with($requestPath, '/uploads/')) {
         header('Cache-Control: no-store, private, max-age=0');
         header('Pragma: no-cache');

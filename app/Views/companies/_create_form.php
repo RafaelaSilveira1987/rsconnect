@@ -13,7 +13,7 @@ use App\Core\View;
             <label class="field drawer-span"><span>Nome da empresa</span><input name="name" placeholder="Clínica Exemplo" required></label>
             <label class="field drawer-span"><span>Razão social</span><input name="legal_name" placeholder="Clínica Exemplo Ltda."></label>
             <label class="field"><span>CNPJ/CPF</span><input name="document" placeholder="00.000.000/0001-00"></label>
-            <label class="field"><span>Plano inicial</span><select name="plan"><option value="starter">Starter</option><option value="pro">Profissional</option><option value="business">Business</option><option value="custom">Personalizado</option></select></label>
+            <label class="field"><span>Plano inicial</span><select name="plan"><option value="starter">Inicial</option><option value="pro">Profissional</option><option value="business">Empresarial</option><option value="custom">Personalizado</option></select></label>
             <label class="field drawer-span"><span>E-mail comercial</span><input type="email" name="email" placeholder="contato@empresa.com"></label>
             <label class="field"><span>Telefone</span><input name="phone" placeholder="(11) 99999-9999"></label>
             <label class="field"><span>Segmento</span><input name="segment" placeholder="Clínica, comércio, serviços..."></label>

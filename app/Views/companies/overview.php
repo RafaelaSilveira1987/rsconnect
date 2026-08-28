@@ -131,7 +131,7 @@ $trackingNote = (string) ($tracking['note'] ?? '');
             <summary>Alterar plano ou status</summary>
             <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>">
                 <?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= $tenantId ?>"><input type="hidden" name="return_to" value="/companies/overview?id=<?= $tenantId ?>">
-                <label class="field"><span>Plano</span><select name="plan"><?php foreach (['starter' => 'Starter', 'pro' => 'Profissional', 'business' => 'Business', 'custom' => 'Personalizado'] as $value => $label): ?><option value="<?= $value ?>" <?= $company['plan'] === $value ? 'selected' : '' ?>><?= $label ?></option><?php endforeach; ?></select></label>
+                <label class="field"><span>Plano</span><select name="plan"><?php foreach (['starter' => 'Inicial', 'pro' => 'Profissional', 'business' => 'Empresarial', 'custom' => 'Personalizado'] as $value => $label): ?><option value="<?= $value ?>" <?= $company['plan'] === $value ? 'selected' : '' ?>><?= $label ?></option><?php endforeach; ?></select></label>
                 <label class="field"><span>Status</span><select name="status"><?php foreach (['active' => 'Ativa', 'inactive' => 'Inativa', 'suspended' => 'Suspensa'] as $value => $label): ?><option value="<?= $value ?>" <?= $company['status'] === $value ? 'selected' : '' ?>><?= $label ?></option><?php endforeach; ?></select></label>
                 <button class="btn btn-primary" type="submit">Salvar</button>
             </form>

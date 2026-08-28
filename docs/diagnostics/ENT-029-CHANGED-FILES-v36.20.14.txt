@@ -1,0 +1,17 @@
+ENT-029 / PA-003 — arquivos criados ou alterados
+
+CRIADOS
+app/Controllers/HealthController.php
+app/Services/HealthCheckService.php
+tests/Feature/ent029-secure-health-checks-smoke.php
+INSTRUCOES-v36.20.14.md
+docs/ATUALIZACAO-v36.20.14.md
+docs/diagnostics/ENT-029-HEALTH-CHECKS-v36.20.14.md
+
+ALTERADOS
+routes/web.php
+bootstrap.php
+docker-compose.yml
+app/Services/AppVersionService.php
+composer.json
+README.md

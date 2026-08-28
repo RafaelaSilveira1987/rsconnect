@@ -15,6 +15,30 @@ $statusLabel = [
     'cancelled' => 'Cancelada', 'monthly' => 'Mensal', 'quarterly' => 'Trimestral',
     'semiannual' => 'Semestral', 'annual' => 'Anual',
 ];
+$planLabel = ['starter' => 'Inicial', 'pro' => 'Profissional', 'business' => 'Empresarial', 'custom' => 'Personalizado'];
+$externalStatusLabel = [
+    'active' => 'Ativo', 'inactive' => 'Inativo', 'created' => 'Criado', 'existing' => 'Existente',
+    'waiting' => 'Aguardando', 'pending' => 'Pendente', 'authorized' => 'Autorizado', 'paid' => 'Pago',
+    'available' => 'Disponível', 'cancelled' => 'Cancelado', 'canceled' => 'Cancelado',
+    'declined' => 'Recusado', 'expired' => 'Expirado', 'refunded' => 'Estornado',
+    'in_analysis' => 'Em análise', 'under_review' => 'Em análise', 'partially_paid' => 'Pago parcialmente',
+];
+$formatPlanName = static function (?string $value) use ($planLabel): string {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return 'Sem plano';
+    }
+    $normalized = mb_strtolower($value);
+    return $planLabel[$normalized] ?? $value;
+};
+$formatExternalStatus = static function (?string $value) use ($externalStatusLabel): string {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return '';
+    }
+    $normalized = mb_strtolower($value);
+    return $externalStatusLabel[$normalized] ?? str_replace('_', ' ', $value);
+};
 $aiModeLabel = ['rs_connect' => 'IA RS Connect', 'tenant' => 'IA própria do cliente'];
 $commitmentLabel = [3 => '3 meses', 6 => '6 meses', 12 => '12 meses'];
 $activeSubscriptions = count(array_filter($tenants, static fn (array $tenant): bool => in_array(($tenant['billing_status'] ?? ''), ['active', 'trialing', 'overdue'], true)));
@@ -70,7 +94,7 @@ $payableInvoices = array_values(array_filter($invoices, static fn (array $invoic
                 <?php $access = $tenant['access_status'] ?? ['allowed' => true, 'message' => 'Acesso liberado']; $isBlocked = empty($access['allowed']); ?>
                 <article class="billing-subscription-card <?= $isBlocked ? 'is-access-blocked' : '' ?>">
                     <header>
-                        <div><span class="eyebrow">Empresa</span><h3><?= View::e($tenant['name']) ?></h3><p><?= View::e($tenant['plan_name'] ?? $tenant['plan'] ?? 'Sem plano') ?></p></div>
+                        <div><span class="eyebrow">Empresa</span><h3><?= View::e($tenant['name']) ?></h3><p><?= View::e($formatPlanName((string) ($tenant['plan_name'] ?? $tenant['plan'] ?? 'Sem plano'))) ?></p></div>
                         <div class="billing-status-stack"><span class="badge badge-<?= View::e($tenant['billing_status'] ?? 'inactive') ?>"><?= View::e($statusLabel[$tenant['billing_status'] ?? 'inactive'] ?? ($tenant['billing_status'] ?? 'Sem assinatura')) ?></span><span class="badge <?= $isBlocked ? 'badge-suspended' : 'badge-active' ?>"><?= $isBlocked ? 'Acesso bloqueado' : 'Acesso liberado' ?></span></div>
                     </header>
                     <div class="billing-subscription-facts">
@@ -109,9 +133,9 @@ $payableInvoices = array_values(array_filter($invoices, static fn (array $invoic
             <?php foreach ($invoices as $invoice): ?>
                 <?php $paymentLink = (string) ($invoice['external_checkout_url'] ?? $invoice['external_invoice_url'] ?? ''); ?>
                 <article class="billing-invoice-card">
-                    <div class="billing-invoice-main"><span class="eyebrow">Cobrança</span><h3><?= View::e($invoice['invoice_number']) ?></h3><p><?= View::e($invoice['tenant_name']) ?> · <?= View::e($invoice['plan_name'] ?? 'Sem plano') ?></p></div>
+                    <div class="billing-invoice-main"><span class="eyebrow">Cobrança</span><h3><?= View::e($invoice['invoice_number']) ?></h3><p><?= View::e($invoice['tenant_name']) ?> · <?= View::e($formatPlanName((string) ($invoice['plan_name'] ?? 'Sem plano'))) ?></p></div>
                     <div class="billing-invoice-facts"><div><span>Valor</span><strong><?= View::e($money($invoice['amount'])) ?></strong></div><div><span>Vencimento</span><strong><?= View::e($date($invoice['due_date'])) ?></strong></div><div><span>Período</span><strong><?= View::e($date($invoice['period_start'])) ?> a <?= View::e($date($invoice['period_end'])) ?></strong></div></div>
-                    <div class="billing-invoice-status"><span class="badge badge-<?= View::e($invoice['status']) ?>"><?= View::e($statusLabel[$invoice['status']] ?? $invoice['status']) ?></span><?php if (!empty($invoice['gateway_provider'])): ?><small><?= View::e($invoice['gateway_label'] ?: ucfirst((string) $invoice['gateway_provider'])) ?><?= !empty($invoice['external_status']) ? ' · ' . View::e((string) $invoice['external_status']) : '' ?></small><?php endif; ?></div>
+                    <div class="billing-invoice-status"><span class="badge badge-<?= View::e($invoice['status']) ?>"><?= View::e($statusLabel[$invoice['status']] ?? $invoice['status']) ?></span><?php if (!empty($invoice['gateway_provider'])): ?><small><?= View::e($invoice['gateway_label'] ?: ucfirst((string) $invoice['gateway_provider'])) ?><?= !empty($invoice['external_status']) ? ' · ' . View::e($formatExternalStatus((string) $invoice['external_status'])) : '' ?></small><?php endif; ?></div>
                     <div class="billing-invoice-actions">
                         <?php if ($paymentLink): ?><a class="btn btn-small btn-primary" href="<?= View::e($paymentLink) ?>" target="_blank" rel="noopener">Abrir link</a><button class="btn btn-small btn-outline" type="button" data-copy-value="<?= View::e($paymentLink) ?>">Copiar link</button><?php elseif (in_array($invoice['status'], ['open', 'overdue'], true)): ?><button class="btn btn-small btn-primary" type="button" data-payment-link-open data-toggle-panel="payment-link-drawer" data-invoice-id="<?= (int) $invoice['id'] ?>">Gerar link</button><?php endif; ?>
                         <?php if (($invoice['gateway_provider'] ?? '') === 'pagbank' && !empty($invoice['external_payment_id'])): ?><form method="post" action="<?= View::e(Router::url('/payment-gateways/invoices/refresh-status')) ?>"><?= Csrf::input() ?><input type="hidden" name="invoice_id" value="<?= (int) $invoice['id'] ?>"><input type="hidden" name="return_to" value="/billing"><button class="btn btn-small btn-outline" type="submit">Consultar PagBank</button></form><?php endif; ?>
