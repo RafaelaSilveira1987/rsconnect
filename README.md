@@ -1,3 +1,14 @@
+# RS Connect — v36.21.2
+
+## Retomada automática da IA
+
+- corrige conversas que respondiam somente uma vez e depois dependiam de reprocessamento manual;
+- mantém o tempo de espera para agrupar mensagens do cliente;
+- responde ao webhook da Evolution antes da tarefa lenta;
+- inicia worker interno para retomar a última mensagem automaticamente;
+- impede respostas duplicadas quando chegam várias mensagens durante a espera;
+- não adiciona migration.
+
 # RS Connect — v36.21.1
 
 ## Hotfix do executor de migrations

@@ -650,7 +650,7 @@ final class EvolutionWebhookController
                 }
             }
 
-            $this->respond(200, [
+            $responseBody = [
                 'ok' => true,
                 'conversation_id' => $conversationId,
                 'message_inserted' => $inserted,
@@ -666,7 +666,32 @@ final class EvolutionWebhookController
                 'outside_business_hours' => $outsideBusinessHours,
                 'reply_wait_remaining' => $replyWaitRemaining,
                 'waiting_reply_window' => $waitingReplyWindow,
-            ]);
+                'deferred_ai_autoresume' => false,
+            ];
+
+            $shouldAutoResume = !$fromMe
+                && $inserted
+                && $automationAllowed
+                && $waitingReplyWindow
+                && !((bool) ($preScheduleResult['skip_ai'] ?? false))
+                && $storedMessageId > 0
+                && $conversationId > 0;
+
+            if ($shouldAutoResume) {
+                // Confirma o webhook para a Evolution antes da espera e da chamada ao provedor.
+                // Um processo CLI leve retoma somente a mensagem mais recente da conversa.
+                $responseBody['deferred_ai_autoresume'] = true;
+                $this->respondJsonAndContinue($responseBody, 200);
+                $this->dispatchDeferredAiReply(
+                    (int) ($instance['tenant_id'] ?? 0),
+                    $conversationId,
+                    $storedMessageId,
+                    $replyWaitRemaining
+                );
+                return;
+            }
+
+            $this->respond(200, $responseBody);
         } catch (Throwable $exception) {
             if ($pdo instanceof PDO && $pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -2055,22 +2080,126 @@ final class EvolutionWebhookController
         return \App\Core\Clock::nowUtc();
     }
 
-    private function respond(int $status, array $body): never
-    {
-        if ($this->webhookSecurityEventId !== null && $this->webhookSecurityEventId > 0) {
-            $security = $this->webhookSecurity ??= new WebhookSecurityService();
-            if ($status >= 500) {
-                $security->markFailed(
-                    $this->webhookSecurityEventId,
-                    $status,
-                    (string) ($body['error'] ?? 'Falha interna no webhook Evolution.')
-                );
-            } else {
-                $security->markProcessed($this->webhookSecurityEventId, $status, $body);
-            }
-            $this->webhookSecurityEventId = null;
+    private function dispatchDeferredAiReply(
+        int $tenantId,
+        int $conversationId,
+        int $messageId,
+        int $waitSeconds
+    ): void {
+        $waitSeconds = max(0, min(3600, $waitSeconds));
+        $script = dirname(__DIR__, 2) . '/bin/ai-deferred-reply.php';
+        $phpBinary = PHP_BINDIR . DIRECTORY_SEPARATOR . 'php';
+        if (!is_file($phpBinary)) {
+            $phpBinary = 'php';
         }
 
+        $disabledFunctions = array_filter(array_map(
+            'trim',
+            explode(',', (string) ini_get('disable_functions'))
+        ));
+        $canExec = PHP_OS_FAMILY !== 'Windows'
+            && function_exists('exec')
+            && !in_array('exec', $disabledFunctions, true)
+            && is_file($script);
+
+        if ($canExec) {
+            $command = 'nohup '
+                . escapeshellarg($phpBinary) . ' '
+                . escapeshellarg($script)
+                . ' --tenant=' . $tenantId
+                . ' --conversation=' . $conversationId
+                . ' --message=' . $messageId
+                . ' --wait=' . $waitSeconds
+                . ' > /dev/null 2>&1 & echo $!';
+            $output = [];
+            $exitCode = 1;
+            @exec($command, $output, $exitCode);
+            $pid = trim((string) end($output));
+            if ($exitCode === 0 && ctype_digit($pid) && (int) $pid > 0) {
+                return;
+            }
+        }
+
+        // Fallback para ambientes sem exec: o HTTP já foi entregue e fechado.
+        try {
+            ignore_user_abort(true);
+            @set_time_limit(max(90, $waitSeconds + 90));
+            (new AiAutomationService())->resumeDeferredIncoming(
+                $tenantId,
+                $conversationId,
+                $messageId,
+                $waitSeconds
+            );
+        } catch (Throwable $exception) {
+            $this->logWebhookFailure($exception, [
+                'phase' => 'ai_deferred_autoresume',
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'stored_message_id' => $messageId,
+                'wait_seconds' => $waitSeconds,
+            ]);
+        }
+    }
+
+    /** Entrega o HTTP antes de iniciar a retomada lenta da IA. */
+    private function respondJsonAndContinue(array $body, int $status): void
+    {
+        $json = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($json)) {
+            $body = ['ok' => false, 'error' => 'Falha ao montar resposta do webhook.'];
+            $json = '{"ok":false,"error":"Falha ao montar resposta do webhook."}';
+            $status = 500;
+        }
+        $this->finalizeWebhookSecurityResponse($status, $body);
+
+        ignore_user_abort(true);
+        @ini_set('zlib.output_compression', '0');
+        if (function_exists('apache_setenv')) {
+            @apache_setenv('no-gzip', '1');
+        }
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            @session_write_close();
+        }
+
+        http_response_code($status);
+        header('Content-Type: application/json; charset=UTF-8');
+        header('Content-Length: ' . strlen($json));
+        header('Connection: close');
+        echo $json;
+
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+            return;
+        }
+
+        while (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+        @flush();
+    }
+
+    private function finalizeWebhookSecurityResponse(int $status, array $body): void
+    {
+        if ($this->webhookSecurityEventId === null || $this->webhookSecurityEventId < 1) {
+            return;
+        }
+
+        $security = $this->webhookSecurity ??= new WebhookSecurityService();
+        if ($status >= 500) {
+            $security->markFailed(
+                $this->webhookSecurityEventId,
+                $status,
+                (string) ($body['error'] ?? 'Falha interna no webhook Evolution.')
+            );
+        } else {
+            $security->markProcessed($this->webhookSecurityEventId, $status, $body);
+        }
+        $this->webhookSecurityEventId = null;
+    }
+
+    private function respond(int $status, array $body): never
+    {
+        $this->finalizeWebhookSecurityResponse($status, $body);
         http_response_code($status);
         echo json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;

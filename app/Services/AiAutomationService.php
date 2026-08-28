@@ -779,6 +779,116 @@ final class AiAutomationService
     }
 
     /**
+     * Retoma automaticamente uma mensagem adiada pelo tempo de espera da IA.
+     *
+     * O processo é disparado fora da resposta HTTP da Evolution. Antes de responder,
+     * confirma que a mensagem ainda é a entrada mais recente da conversa. Assim, se o
+     * cliente enviar outra mensagem durante a espera, somente o último disparo continua.
+     *
+     * @return array{status:string,conversation_id:int,message_id:int}
+     */
+    public function resumeDeferredIncoming(
+        int $tenantId,
+        int $conversationId,
+        int $messageId,
+        int $waitSeconds = 0
+    ): array {
+        $waitSeconds = max(0, min(3600, $waitSeconds));
+        if ($waitSeconds > 0) {
+            sleep($waitSeconds);
+        }
+        // Pequena margem para bancos que persistem sent_at com precisão de segundos.
+        usleep(250000);
+
+        $pdo = Database::connection();
+        $latestStatement = $pdo->prepare(
+            'SELECT id
+             FROM conversation_messages
+             WHERE tenant_id = :tenant_id
+               AND conversation_id = :conversation_id
+               AND direction = "incoming"
+             ORDER BY sent_at DESC, id DESC
+             LIMIT 1'
+        );
+        $latestStatement->execute([
+            'tenant_id' => $tenantId,
+            'conversation_id' => $conversationId,
+        ]);
+        $latestMessageId = (int) ($latestStatement->fetchColumn() ?: 0);
+
+        if ($latestMessageId !== $messageId) {
+            return [
+                'status' => 'superseded',
+                'conversation_id' => $conversationId,
+                'message_id' => $messageId,
+            ];
+        }
+
+        if ($this->hasOutgoingAfterStoredMessage($pdo, $conversationId, $messageId)) {
+            return [
+                'status' => 'already_replied',
+                'conversation_id' => $conversationId,
+                'message_id' => $messageId,
+            ];
+        }
+
+        $messageStatement = $pdo->prepare(
+            'SELECT cm.content, ei.*
+             FROM conversation_messages cm
+             INNER JOIN conversations c
+                ON c.id = cm.conversation_id
+               AND c.tenant_id = cm.tenant_id
+             INNER JOIN evolution_instances ei
+                ON ei.id = c.evolution_instance_id
+               AND ei.tenant_id = c.tenant_id
+             WHERE cm.id = :message_id
+               AND cm.conversation_id = :conversation_id
+               AND cm.tenant_id = :tenant_id
+               AND cm.direction = "incoming"
+             LIMIT 1'
+        );
+        $messageStatement->execute([
+            'message_id' => $messageId,
+            'conversation_id' => $conversationId,
+            'tenant_id' => $tenantId,
+        ]);
+        $row = $messageStatement->fetch(PDO::FETCH_ASSOC) ?: null;
+        if (!is_array($row)) {
+            return [
+                'status' => 'unavailable',
+                'conversation_id' => $conversationId,
+                'message_id' => $messageId,
+            ];
+        }
+
+        $content = trim((string) ($row['content'] ?? ''));
+        unset($row['content']);
+        if ($content === '') {
+            return [
+                'status' => 'empty',
+                'conversation_id' => $conversationId,
+                'message_id' => $messageId,
+            ];
+        }
+
+        $this->handleIncoming($row, $conversationId, $content, [
+            'event' => 'ai.deferred.autoresume',
+            'stored_message_id' => $messageId,
+            'message_id' => $messageId,
+            'bypass_cooldown' => true,
+            'deferred_autoresume' => true,
+        ]);
+
+        return [
+            'status' => $this->hasOutgoingAfterStoredMessage($pdo, $conversationId, $messageId)
+                ? 'replied'
+                : 'processed',
+            'conversation_id' => $conversationId,
+            'message_id' => $messageId,
+        ];
+    }
+
+    /**
      * Reavalia a mensagem mais recente sem resposta, incluindo intervalo,
      * falha de IA/Evolution e execução interrompida antes do registro do log.
      *
