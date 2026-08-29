@@ -208,7 +208,11 @@ return static function (Router $router): void {
     $router->get('/notifications', [NotificationsController::class, 'index'], ['auth', 'permission:notifications.view']);
     $router->get('/notifications/count', [NotificationsController::class, 'count'], ['auth', 'permission:notifications.view']);
     $router->post('/notifications/preferences', [NotificationsController::class, 'savePreferences'], ['auth', 'permission:notifications.manage', 'csrf']);
+    $router->post('/notifications/rules', [NotificationsController::class, 'saveRules'], ['auth', 'permission:notifications.manage', 'csrf']);
+    $router->post('/notifications/process', [NotificationsController::class, 'processNow'], ['auth', 'permission:notifications.manage', 'csrf']);
     $router->post('/notifications/read-all', [NotificationsController::class, 'markAllRead'], ['auth', 'permission:notifications.view', 'csrf']);
+    $router->get('/webhooks/notifications/process', [NotificationsController::class, 'cron']);
+    $router->post('/webhooks/notifications/process', [NotificationsController::class, 'cron']);
 
     $router->get('/agenda-inteligente', [CalendarController::class, 'availability'], ['auth', 'permission:calendar.view']);
     $router->get('/agenda-disponibilidade', [CalendarController::class, 'availability'], ['auth', 'permission:calendar.view']);

@@ -209,20 +209,25 @@ final class CommercialRequestService
 
         $this->mergeContactTag($pdo, $tenantId, $contactId, 'orçamento-pendente', true);
         if (!empty($settings['notify_team'])) {
-            (new NotificationService())->createIfEnabled(
+            $notificationContext = [
+                'customer_name' => $this->contactLabel($contact),
+                'conversation_id' => $conversationId,
+                'lead_id' => $leadId,
+                'task_id' => $taskId ?? null,
+                'due_at' => $dueAt,
+                'excerpt' => $incomingContent,
+            ];
+            $notifications = new NotificationOrchestratorService();
+            $notifications->dispatch(
                 $tenantId,
-                'system',
-                'Orçamento pendente',
-                'O cliente ' . $this->contactLabel($contact) . ' solicitou um orçamento e precisa de retorno comercial.',
-                'warning',
-                '/conversations?conversation_id=' . $conversationId,
-                'commercial_request',
-                'commercial.quote_pending',
+                'commercial.quote.requested',
                 'crm_commercial_request',
                 $requestId,
-                ['conversation_id' => $conversationId, 'lead_id' => $leadId, 'task_id' => $taskId ?? null],
-                60
+                $notificationContext
             );
+            if ($dueAt !== null && trim($dueAt) !== '') {
+                $notifications->scheduleQuoteOverdue($tenantId, $requestId, $dueAt, $notificationContext);
+            }
         }
 
         $stageAction = ['handled' => false, 'reason' => 'not_requested'];

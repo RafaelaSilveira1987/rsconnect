@@ -17,6 +17,7 @@ use App\Services\CalendarAvailabilityService;
 use App\Services\CalendarGoogleLifecycleService;
 use App\Services\EvolutionService;
 use App\Services\NotificationService;
+use App\Services\NotificationOrchestratorService;
 use App\Services\PreSchedulingService;
 use App\Services\ProfessionalCalendarService;
 use App\Services\SubscriptionService;
@@ -349,18 +350,26 @@ final class CalendarController
         $appointmentId = (int) Database::connection()->lastInsertId();
         Audit::log('calendar.appointment_created', ['appointment_id' => $appointmentId], $tenantId);
         $this->trySyncToN8n($appointmentId, $tenantId, 'created');
-        (new NotificationService())->createIfEnabled(
+        $notificationContext = [
+            'customer_name' => $this->contactName($contactId, $tenantId),
+            'appointment_title' => $title,
+            'starts_at' => $normalized['starts_at'],
+            'status' => $initialStatus,
+            'conversation_id' => $conversationId,
+        ];
+        $notificationOrchestrator = new NotificationOrchestratorService();
+        $notificationOrchestrator->dispatch(
             $tenantId,
-            'calendar',
-            $isPreSchedule === 1 ? 'Novo pré-agendamento' : 'Novo agendamento',
-            $title . ' — ' . date('d/m/Y H:i', strtotime($normalized['starts_at'])),
-            'info',
-            '/calendar',
-            'calendar',
             'calendar.appointment.created',
             'appointment',
             $appointmentId,
-            ['status' => $initialStatus, 'starts_at' => $normalized['starts_at']]
+            $notificationContext
+        );
+        $notificationOrchestrator->scheduleAppointmentReminder(
+            $tenantId,
+            $appointmentId,
+            $normalized['starts_at'],
+            $notificationContext
         );
         Flash::set('success', $isPreSchedule === 1 ? 'Pré-agendamento criado para aprovação.' : 'Agendamento criado.');
         $this->redirect('/calendar?tenant_id=' . $tenantId);
@@ -652,19 +661,43 @@ final class CalendarController
                 'no_show' => 'Não compareceu',
                 default => ucfirst(str_replace('_', ' ', $status)),
             };
-            (new NotificationService())->createIfEnabled(
-                $tenantId,
-                'calendar',
-                'Agenda atualizada',
-                trim((string) ($appointmentBefore['title'] ?? 'Compromisso')) . ': ' . $statusLabel . '.',
-                in_array($status, ['cancelled', 'rejected', 'no_show'], true) ? 'warning' : 'info',
-                '/calendar',
-                'calendar',
-                'calendar.appointment.status_updated.' . $status,
-                'appointment',
-                $appointmentId,
-                ['status' => $status]
-            );
+            $notificationEvent = match ($status) {
+                'confirmed' => 'calendar.appointment.confirmed',
+                'cancelled', 'rejected' => 'calendar.appointment.cancelled',
+                'rescheduled' => 'calendar.appointment.rescheduled',
+                default => null,
+            };
+            if ($notificationEvent !== null) {
+                (new NotificationOrchestratorService())->dispatch(
+                    $tenantId,
+                    $notificationEvent,
+                    'appointment',
+                    $appointmentId,
+                    [
+                        'customer_name' => $this->contactName((int) ($appointmentBefore['contact_id'] ?? 0), $tenantId),
+                        'appointment_title' => trim((string) ($appointmentBefore['title'] ?? 'Compromisso')),
+                        'starts_at' => (string) ($appointmentBefore['starts_at'] ?? ''),
+                        'status' => $status,
+                        'conversation_id' => (int) ($appointmentBefore['conversation_id'] ?? 0),
+                    ],
+                    null,
+                    $status
+                );
+            } else {
+                (new NotificationService())->createIfEnabled(
+                    $tenantId,
+                    'calendar',
+                    'Agenda atualizada',
+                    trim((string) ($appointmentBefore['title'] ?? 'Compromisso')) . ': ' . $statusLabel . '.',
+                    in_array($status, ['no_show'], true) ? 'warning' : 'info',
+                    '/calendar',
+                    'calendar',
+                    'calendar.appointment.status_updated.' . $status,
+                    'appointment',
+                    $appointmentId,
+                    ['status' => $status]
+                );
+            }
             $messageResult = $this->trySendPreScheduleStatusMessage($appointmentId, $tenantId, $status);
             if ($status === 'confirmed' && $wasPreSchedule) {
                 Database::connection()->prepare(
@@ -851,6 +884,18 @@ final class CalendarController
         $statement->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
         $appointment = $statement->fetch(PDO::FETCH_ASSOC);
         return $appointment ?: null;
+    }
+
+    private function contactName(int $contactId, int $tenantId): string
+    {
+        if ($contactId < 1 || $tenantId < 1) {
+            return 'Cliente';
+        }
+        $statement = Database::connection()->prepare(
+            'SELECT COALESCE(NULLIF(name, ""), NULLIF(phone, ""), "Cliente") FROM contacts WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+        );
+        $statement->execute(['id' => $contactId, 'tenant_id' => $tenantId]);
+        return trim((string) $statement->fetchColumn()) ?: 'Cliente';
     }
 
     private function contactBelongsToTenant(int $contactId, int $tenantId): bool

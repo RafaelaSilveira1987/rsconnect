@@ -1415,6 +1415,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 })();
 
+(function () {
+  document.querySelectorAll('.notification-rule-card input[name$="[enabled]"]').forEach((input) => {
+    input.addEventListener('change', () => {
+      input.closest('.notification-rule-card')?.classList.toggle('is-enabled', input.checked);
+    });
+  });
+})();
+
 /* =========================================================
    ZIP 32.2 — Credenciais de IA com gaveta e filtros
    ========================================================= */

@@ -95,14 +95,16 @@ final class HealthCheckService
             $statement = Database::connection()->query(
                 "SELECT COUNT(*) AS total,
                         SUM(migration = '089_schema_migrations_registry.sql') AS registry_applied,
-                        SUM(migration = '090_crm_conversation_automation.sql') AS previous_applied,
-                        SUM(migration = '091_after_hours_monitor_and_quote_requests.sql') AS current_applied
+                        SUM(migration = '090_crm_conversation_automation.sql') AS crm_automation_applied,
+                        SUM(migration = '091_after_hours_monitor_and_quote_requests.sql') AS previous_applied,
+                        SUM(migration = '092_notification_orchestration.sql') AS current_applied
                  FROM schema_migrations"
             );
             $row = $statement !== false ? $statement->fetch() : false;
             $ok = is_array($row)
                 && (int) ($row['total'] ?? 0) === $expected
                 && (int) ($row['registry_applied'] ?? 0) === 1
+                && (int) ($row['crm_automation_applied'] ?? 0) === 1
                 && (int) ($row['previous_applied'] ?? 0) === 1
                 && (int) ($row['current_applied'] ?? 0) === 1;
         } catch (Throwable) {

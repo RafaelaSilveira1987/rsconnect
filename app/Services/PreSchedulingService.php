@@ -365,18 +365,14 @@ final class PreSchedulingService
         ];
 
         $preferenceLabel = trim($this->displayDay($intent) . ' ' . $this->displayTime($intent));
-        (new NotificationService())->createIfEnabled(
+        (new NotificationOrchestratorService())->dispatch(
             $tenantId,
-            'calendar',
-            'Novo pedido de agendamento',
-            $titleName . ($preferenceLabel !== '' ? ' informou preferência para ' . $preferenceLabel . '.' : ' iniciou um pedido de agendamento.'),
-            'info',
-            '/calendar',
-            'calendar',
-            'calendar.pre_schedule.created',
+            'calendar.appointment.created',
             'appointment',
             $appointmentId,
             [
+                'customer_name' => $titleName,
+                'appointment_title' => $preferenceLabel !== '' ? 'Preferência: ' . $preferenceLabel : 'Pedido de agendamento',
                 'conversation_id' => $conversationId,
                 'contact_id' => $contactId,
                 'modality' => $intentModality,

@@ -1129,6 +1129,20 @@ final class CalendarConversationService
                 'slot_id' => (int) ($slot['id'] ?? 0),
             ]
         );
+        $startsAt = trim((string) ($appointment['starts_at'] ?? $slot['starts_at'] ?? ''));
+        if ($startsAt !== '') {
+            (new NotificationOrchestratorService())->scheduleAppointmentReminder(
+                $tenantId,
+                (int) ($appointment['id'] ?? 0),
+                $startsAt,
+                [
+                    'customer_name' => $name,
+                    'appointment_title' => trim((string) ($appointment['title'] ?? 'Agendamento')),
+                    'starts_at' => $startsAt,
+                    'conversation_id' => (int) ($appointment['conversation_id'] ?? 0),
+                ]
+            );
+        }
     }
 
     private function notifyFailure(int $tenantId, array $appointment, string $error): void

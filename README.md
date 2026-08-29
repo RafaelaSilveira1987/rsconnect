@@ -1,3 +1,52 @@
+# RS Connect — v36.23.0
+
+## Notificações automáticas de agenda e orçamento
+
+- adiciona regras configuráveis por empresa em **Notificações > Notificações de agenda e orçamento**;
+- cria avisos internos imediatos para novos agendamentos, confirmações, cancelamentos, remarcações e pedidos de orçamento;
+- envia WhatsApp para o responsável ou equipe pelo número configurado;
+- agenda lembretes antes do compromisso e escalonamento de orçamento atrasado;
+- usa fila persistente com deduplicação, quatro tentativas e retomada após falhas transitórias;
+- cancela automaticamente lembretes e alertas que perderam validade;
+- impede envio para o próprio número conectado da Evolution;
+- exibe contadores de pendentes, novas tentativas, enviados e falhas;
+- permite processar a fila manualmente para homologação.
+
+### Atualização do banco
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php status
+php bin/migrate.php up
+php bin/migrate.php status
+```
+
+Migration adicionada:
+
+```text
+database/migrations/092_notification_orchestration.sql
+```
+
+### Processamento da fila
+
+Configure uma tarefa no EasyPanel para executar a cada minuto:
+
+```bash
+php /var/www/html/bin/process-notifications.php
+```
+
+Alternativa HTTP:
+
+```text
+GET /webhooks/notifications/process?token=SEU_TOKEN
+```
+
+Variável necessária para a alternativa HTTP:
+
+```env
+NOTIFICATION_CRON_TOKEN=troque-por-um-token-longo-e-aleatorio
+```
+
 # RS Connect — v36.22.1
 
 ## Hotfix de recebimento Evolution/PDO
