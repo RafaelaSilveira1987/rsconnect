@@ -1,3 +1,21 @@
+# RS Connect — v36.23.1
+
+## Hotfix da migration 092
+
+- corrige a ambiguidade do MySQL em `INSERT ... SELECT ... ON DUPLICATE KEY UPDATE`;
+- adiciona `WHERE 1 = 1` antes do `ON DUPLICATE KEY UPDATE`;
+- permite reaplicar a migration mesmo quando as tabelas já foram criadas parcialmente;
+- não cria uma nova migration e não altera as 98 migrations anteriores.
+
+### Atualização do banco
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php status
+php bin/migrate.php up
+php bin/migrate.php status
+```
+
 # RS Connect — v36.23.0
 
 ## Notificações automáticas de agenda e orçamento

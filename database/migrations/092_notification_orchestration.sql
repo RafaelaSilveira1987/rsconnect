@@ -64,4 +64,5 @@ CROSS JOIN (
     UNION ALL SELECT 'commercial.quote.requested', NULL, NULL
     UNION ALL SELECT 'commercial.quote.overdue', NULL, 30
 ) e
+WHERE 1 = 1
 ON DUPLICATE KEY UPDATE event_key = VALUES(event_key);
