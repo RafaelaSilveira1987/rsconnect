@@ -269,6 +269,9 @@ $svgIcon = static function (string $name): string {
                 <?php endif; ?>
                 <?php if (Auth::can('notifications.view') && $moduleVisible('notifications')): ?>
                     <a class="nav-link<?= $isActive('/notifications') ?>" href="<?= View::e(Router::url('/notifications')) ?>"><?= $svgIcon('bell') ?><span>Notificações</span><?= $notificationBadge($notificationUnread) ?></a>
+                    <?php if (Auth::can('notifications.manage')): ?>
+                        <a class="nav-link<?= $isActive('/settings/notifications') ?>" href="<?= View::e(Router::url('/settings/notifications')) ?>"><?= $svgIcon('bell') ?><span>Config. notificações</span></a>
+                    <?php endif; ?>
                 <?php endif; ?>
                 <a class="nav-link<?= $isActive('/ajuda') ?>" href="<?= View::e(Router::url('/ajuda')) ?>"><?= $svgIcon('help') ?><span>Central de ajuda</span></a>
             <?php endif; ?>

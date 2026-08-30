@@ -88,7 +88,7 @@ final class TenantModuleService
             'notifications' => [
                 'label' => 'Notificações',
                 'description' => 'Avisos internos e alertas financeiros.',
-                'paths' => ['/notifications'],
+                'paths' => ['/notifications', '/settings/notifications'],
                 'default_visible' => true,
                 'default_enabled' => true,
             ],

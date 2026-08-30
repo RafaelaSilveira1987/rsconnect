@@ -1,3 +1,22 @@
+# RS Connect — v36.23.2
+
+## Ajustes das notificações de agenda e orçamento
+
+- preserva o horário local de `calendar_appointments` nas mensagens enviadas por WhatsApp;
+- converte para UTC somente o instante técnico de execução dos lembretes;
+- processa notificações imediatas automaticamente após a criação do evento;
+- mantém o cron apenas para lembretes e escalonamentos futuros;
+- separa o histórico em **Notificações** e as regras em **Configurações > Config. notificações**;
+- não adiciona migration e mantém a migration 092 já aplicada.
+
+### Processamento de eventos futuros
+
+Para lembretes e alertas agendados, mantenha a tarefa do EasyPanel a cada minuto:
+
+```bash
+php /var/www/html/bin/process-notifications.php
+```
+
 # RS Connect — v36.23.1
 
 ## Hotfix da migration 092

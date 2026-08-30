@@ -1139,6 +1139,7 @@ final class CalendarConversationService
                     'customer_name' => $name,
                     'appointment_title' => trim((string) ($appointment['title'] ?? 'Agendamento')),
                     'starts_at' => $startsAt,
+                    'timezone' => (string) ($appointment['timezone'] ?? 'America/Sao_Paulo'),
                     'conversation_id' => (int) ($appointment['conversation_id'] ?? 0),
                 ]
             );

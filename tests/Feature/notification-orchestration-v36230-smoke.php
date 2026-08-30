@@ -16,7 +16,7 @@ $orchestrator = $read('app/Services/NotificationOrchestratorService.php');
 $delivery = $read('app/Services/NotificationDeliveryService.php');
 $controller = $read('app/Controllers/NotificationsController.php');
 $routes = $read('routes/web.php');
-$view = $read('app/Views/notifications/index.php');
+$view = $read('app/Views/notifications/settings.php');
 $calendar = $read('app/Controllers/CalendarController.php');
 $preSchedule = $read('app/Services/PreSchedulingService.php');
 $commercial = $read('app/Services/CommercialRequestService.php');
@@ -30,7 +30,7 @@ $check(str_contains($orchestrator, 'scheduleAppointmentReminder') && str_contain
 $check(str_contains($delivery, 'EvolutionService') && str_contains($delivery, 'status = "retry"'), 'processador entrega WhatsApp e possui retentativas');
 $check(str_contains($delivery, 'shouldSkip') && str_contains($delivery, 'crm_commercial_requests'), 'processador cancela alertas que já perderam validade');
 $check(str_contains($controller, 'saveRules') && str_contains($controller, 'processNow') && str_contains($controller, 'NOTIFICATION_CRON_TOKEN'), 'controller permite configurar, testar e processar por cron');
-$check(str_contains($routes, '/notifications/rules') && str_contains($routes, '/webhooks/notifications/process'), 'rotas de configuração e cron existem');
+$check(str_contains($routes, '/settings/notifications') && str_contains($routes, '/notifications/rules') && str_contains($routes, '/webhooks/notifications/process'), 'rotas de configuração e cron existem');
 $check(str_contains($view, 'Notificações de agenda e orçamento') && str_contains($view, 'WhatsApp para equipe'), 'tela expõe canais e regras por empresa');
 $check(str_contains($calendar, 'NotificationOrchestratorService') && str_contains($calendar, 'scheduleAppointmentReminder'), 'agenda manual dispara notificações e lembretes');
 $check(str_contains($preSchedule, 'calendar.appointment.created'), 'pré-agendamento conversacional dispara o mesmo motor');

@@ -204,19 +204,19 @@ final class NotificationOrchestratorService
             $queued = 0;
 
             if (!empty($rule['in_app_enabled'])) {
-            $queued += $this->enqueue(
-                $tenantId,
-                $eventKey,
-                $entityType,
-                $entityId,
-                'in_app',
-                null,
-                $rendered,
-                $context,
-                $scheduledAt,
-                $dedupeSuffix
-            );
-        }
+                $queued += $this->enqueue(
+                    $tenantId,
+                    $eventKey,
+                    $entityType,
+                    $entityId,
+                    'in_app',
+                    null,
+                    $rendered,
+                    $context,
+                    $scheduledAt,
+                    $dedupeSuffix
+                );
+            }
 
             if (!empty($rule['whatsapp_enabled'])) {
                 $recipient = $this->resolveRecipient($tenantId, (string) ($rule['recipient_phone'] ?? ''));
@@ -236,7 +236,22 @@ final class NotificationOrchestratorService
                 }
             }
 
-            return ['queued' => $queued, 'reason' => $queued > 0 ? 'queued' : 'no_channel'];
+            $delivery = null;
+            if ($queued > 0 && $scheduledAt <= Clock::nowUtc()) {
+                try {
+                    // Eventos imediatos não dependem do botão “Processar fila”.
+                    // O cron permanece necessário somente para lembretes e escalonamentos futuros.
+                    $delivery = (new NotificationDeliveryService())->process(20, $tenantId);
+                } catch (Throwable $deliveryException) {
+                    $delivery = ['error' => mb_substr($deliveryException->getMessage(), 0, 500)];
+                }
+            }
+
+            return [
+                'queued' => $queued,
+                'reason' => $queued > 0 ? 'queued' : 'no_channel',
+                'delivery' => $delivery,
+            ];
         } catch (Throwable $exception) {
             return ['queued' => 0, 'reason' => 'error', 'error' => mb_substr($exception->getMessage(), 0, 500)];
         }
@@ -251,7 +266,10 @@ final class NotificationOrchestratorService
                 return ['queued' => 0, 'reason' => 'disabled'];
             }
             $minutes = max(5, (int) ($rule['reminder_minutes'] ?? 120));
-            $start = new DateTimeImmutable($startsAt, new DateTimeZone('UTC'));
+            $timezone = Clock::safeTimezone((string) ($context['timezone'] ?? Clock::appTimezone()));
+            // Horários da agenda são persistidos no horário local do compromisso.
+            $start = (new DateTimeImmutable($startsAt, new DateTimeZone($timezone)))
+                ->setTimezone(new DateTimeZone('UTC'));
             $scheduled = $start->sub(new DateInterval('PT' . $minutes . 'M'));
             if ($scheduled <= new DateTimeImmutable('now', new DateTimeZone('UTC'))) {
                 return ['queued' => 0, 'reason' => 'past_due'];
@@ -462,7 +480,8 @@ final class NotificationOrchestratorService
         $customer = trim((string) ($context['customer_name'] ?? $context['contact_name'] ?? 'Cliente')) ?: 'Cliente';
         $appointment = trim((string) ($context['appointment_title'] ?? $context['title'] ?? 'Agendamento')) ?: 'Agendamento';
         $startsAt = trim((string) ($context['starts_at'] ?? ''));
-        $when = $startsAt !== '' ? Clock::formatUtc($startsAt, 'd/m/Y H:i') : 'data a confirmar';
+        $timezone = Clock::safeTimezone((string) ($context['timezone'] ?? Clock::appTimezone()));
+        $when = $startsAt !== '' ? $this->formatAppointmentLocal($startsAt, $timezone) : 'data a confirmar';
         $dueAt = trim((string) ($context['due_at'] ?? ''));
         $due = $dueAt !== '' ? Clock::formatUtc($dueAt, 'd/m/Y H:i') : 'sem prazo definido';
         $conversationId = (int) ($context['conversation_id'] ?? 0);
@@ -509,6 +528,16 @@ final class NotificationOrchestratorService
                 'severity' => 'info', 'action_url' => '/', 'type' => 'system',
             ],
         };
+    }
+
+    private function formatAppointmentLocal(string $value, string $timezone): string
+    {
+        try {
+            // calendar_appointments.starts_at representa o horário local do compromisso.
+            return (new DateTimeImmutable($value, new DateTimeZone($timezone)))->format('d/m/Y H:i');
+        } catch (Throwable) {
+            return $value;
+        }
     }
 
     private function resolveRecipient(int $tenantId, string $configured): string

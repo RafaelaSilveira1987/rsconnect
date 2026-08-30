@@ -26,11 +26,25 @@ final class NotificationsController
         }
 
         $service = new NotificationService();
-        $orchestrator = new NotificationOrchestratorService();
         View::render('notifications.index', [
             'title' => 'Notificações',
             'notifications' => $service->latestForTenant($tenantId, 80),
             'unreadCount' => $service->unreadCount($tenantId),
+        ]);
+    }
+
+    public function settings(): void
+    {
+        $tenantId = Auth::tenantId();
+        if (!$tenantId) {
+            Flash::set('warning', 'Configurações disponíveis apenas para empresas clientes.');
+            $this->redirect('/notifications');
+        }
+
+        $service = new NotificationService();
+        $orchestrator = new NotificationOrchestratorService();
+        View::render('notifications.settings', [
+            'title' => 'Configurações de notificações',
             'preferences' => $service->preferences($tenantId),
             'canManagePreferences' => Auth::can('notifications.manage'),
             'automationRules' => $orchestrator->rules($tenantId),
@@ -62,7 +76,7 @@ final class NotificationsController
             Flash::set('error', 'Não foi possível salvar as preferências: ' . $exception->getMessage());
         }
 
-        $this->redirect('/notifications');
+        $this->redirect('/settings/notifications');
     }
 
 
@@ -82,7 +96,7 @@ final class NotificationsController
             Flash::set('error', 'Não foi possível salvar as notificações automáticas: ' . $exception->getMessage());
         }
 
-        $this->redirect('/notifications#automatic-notifications');
+        $this->redirect('/settings/notifications#automatic-notifications');
     }
 
     public function processNow(): void
@@ -98,7 +112,7 @@ final class NotificationsController
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível processar a fila: ' . $exception->getMessage());
         }
-        $this->redirect('/notifications#automatic-notifications');
+        $this->redirect('/settings/notifications#automatic-notifications');
     }
 
     public function cron(): void

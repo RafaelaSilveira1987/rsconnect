@@ -206,6 +206,7 @@ return static function (Router $router): void {
     $router->post('/security/users/unlock', [SecurityController::class, 'unlockUser'], ['auth', 'super_admin', 'csrf']);
 
     $router->get('/notifications', [NotificationsController::class, 'index'], ['auth', 'permission:notifications.view']);
+    $router->get('/settings/notifications', [NotificationsController::class, 'settings'], ['auth', 'permission:notifications.manage']);
     $router->get('/notifications/count', [NotificationsController::class, 'count'], ['auth', 'permission:notifications.view']);
     $router->post('/notifications/preferences', [NotificationsController::class, 'savePreferences'], ['auth', 'permission:notifications.manage', 'csrf']);
     $router->post('/notifications/rules', [NotificationsController::class, 'saveRules'], ['auth', 'permission:notifications.manage', 'csrf']);

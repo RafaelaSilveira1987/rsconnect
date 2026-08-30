@@ -354,6 +354,7 @@ final class CalendarController
             'customer_name' => $this->contactName($contactId, $tenantId),
             'appointment_title' => $title,
             'starts_at' => $normalized['starts_at'],
+            'timezone' => $timezone !== '' ? $timezone : 'America/Sao_Paulo',
             'status' => $initialStatus,
             'conversation_id' => $conversationId,
         ];
@@ -677,6 +678,7 @@ final class CalendarController
                         'customer_name' => $this->contactName((int) ($appointmentBefore['contact_id'] ?? 0), $tenantId),
                         'appointment_title' => trim((string) ($appointmentBefore['title'] ?? 'Compromisso')),
                         'starts_at' => (string) ($appointmentBefore['starts_at'] ?? ''),
+                        'timezone' => (string) ($appointmentBefore['timezone'] ?? 'America/Sao_Paulo'),
                         'status' => $status,
                         'conversation_id' => (int) ($appointmentBefore['conversation_id'] ?? 0),
                     ],
