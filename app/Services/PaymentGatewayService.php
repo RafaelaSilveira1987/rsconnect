@@ -140,12 +140,12 @@ final class PaymentGatewayService
     public function handleWebhook(string $provider, array $payload, array $headers = [], string $rawBody = ''): array
     {
         $provider = strtolower(trim($provider));
-        $gateway = $this->gatewayByProvider($provider);
+        $security = new WebhookSecurityService();
+        $gateway = $this->gatewayForWebhook($provider, $headers, $security);
         if (!$gateway) {
             throw new RuntimeException('Gateway ativo não configurado para o webhook ' . $provider . '.', 503);
         }
 
-        $security = new WebhookSecurityService();
         $claimId = 0;
         $tenantId = null;
         $status = 'ignored';
@@ -170,6 +170,28 @@ final class PaymentGatewayService
                 ];
             }
             $claimId = (int) ($claim['id'] ?? 0);
+
+            if ($provider === 'asaas') {
+                $signupResult = (new PublicSignupService())->handleAsaasWebhook($payload, $gateway);
+                if (!empty($signupResult['handled'])) {
+                    $tenantId = isset($signupResult['tenant_id']) ? (int) $signupResult['tenant_id'] : null;
+                    $status = (string) ($signupResult['status'] ?? 'success');
+                    $message = (string) ($signupResult['message'] ?? 'Evento de inscrição pública processado.');
+                    $externalId = (string) ($signupResult['external_id'] ?? '');
+                    $invoiceNumber = (string) ($signupResult['reference'] ?? '');
+                    $safeLog = [
+                        'provider' => 'asaas',
+                        'flow' => 'public_signup',
+                        'reference' => $invoiceNumber,
+                        'external_id' => $externalId,
+                        'event' => (string) ($signupResult['event'] ?? ($payload['event'] ?? '')),
+                        'event_id' => $this->paymentWebhookExternalEventId($provider, $payload, $headers),
+                    ];
+                    $this->logEvent($tenantId, (int) $gateway['id'], 'payment.webhook.asaas.public_signup', $status === 'success' ? 'success' : 'ignored', $safeLog);
+                    $security->markProcessed($claimId, 200, $safeLog + ['status' => $status]);
+                    return ['status' => $status, 'message' => $message, 'duplicate' => false];
+                }
+            }
 
             if ($provider === 'asaas') {
                 $event = (string) ($payload['event'] ?? '');
@@ -910,6 +932,43 @@ final class PaymentGatewayService
         return $gateway ?: null;
     }
 
+    /** @param array<string,mixed> $headers */
+    private function gatewayForWebhook(
+        string $provider,
+        array $headers,
+        WebhookSecurityService $security
+    ): ?array {
+        if ($provider !== 'asaas') {
+            return $this->gatewayByProvider($provider);
+        }
+
+        $providedToken = $security->header($headers, ['asaas-access-token']);
+        if ($providedToken === '') {
+            return $this->gatewayByProvider($provider);
+        }
+
+        $statement = Database::connection()->prepare(
+            'SELECT * FROM payment_gateways
+             WHERE provider = :provider AND status = "active"
+             ORDER BY is_default DESC, id ASC'
+        );
+        $statement->execute(['provider' => $provider]);
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $gateway) {
+            try {
+                $expectedToken = $this->webhookSecret($gateway);
+            } catch (Throwable) {
+                continue;
+            }
+            if ($expectedToken !== '' && hash_equals($expectedToken, $providedToken)) {
+                return $gateway;
+            }
+        }
+
+        // Retorna o gateway padrão para que a validação central produza a resposta
+        // de autenticação uniforme, sem revelar quantos gateways existem.
+        return $this->gatewayByProvider($provider);
+    }
+
     private function findInvoice(string $invoiceNumber, string $externalId): ?array
     {
         $sql = 'SELECT * FROM tenant_invoices WHERE 1=1';
@@ -1062,7 +1121,7 @@ final class PaymentGatewayService
         }
         return match ((string) $gateway['provider']) {
             'asaas' => ($gateway['environment'] ?? '') === 'sandbox'
-                ? 'https://sandbox.asaas.com/api/v3'
+                ? 'https://api-sandbox.asaas.com/v3'
                 : 'https://api.asaas.com/v3',
             'mercadopago' => 'https://api.mercadopago.com',
             'stripe' => 'https://api.stripe.com',

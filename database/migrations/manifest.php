@@ -112,5 +112,6 @@ return [
         ['sequence' => 97, 'file' => '090_crm_conversation_automation.sql'],
         ['sequence' => 98, 'file' => '091_after_hours_monitor_and_quote_requests.sql'],
         ['sequence' => 99, 'file' => '092_notification_orchestration.sql'],
+        ['sequence' => 100, 'file' => '093_public_signup_asaas_trial.sql'],
     ],
 ];

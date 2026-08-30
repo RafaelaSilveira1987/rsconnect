@@ -1,4 +1,15 @@
-# RS Connect — v36.23.2
+# RS Connect — v36.24.0
+
+
+## Cadastro público com Asaas — v36.24.0
+
+- inscrição pública disponível apenas para o Plano Inicial com IA RS Connect;
+- cartão preenchido no Checkout hospedado do Asaas;
+- 7 dias grátis e primeira cobrança configurada para o fim do trial;
+- criação automática da empresa, administrador, assinatura e funil comercial após confirmação por webhook;
+- acompanhamento de checkout, assinatura e cobranças recorrentes;
+- planos Profissional e Empresarial direcionados ao comercial;
+- configuração em `Financeiro > Inscrição pública`.
 
 ## Ajustes das notificações de agenda e orçamento
 

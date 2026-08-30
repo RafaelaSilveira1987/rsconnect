@@ -151,7 +151,7 @@ $svgIcon = static function (string $name): string {
     <!-- Marcador histórico de regressão: app.css?v=36.20.2 -->
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.23.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.24.0')) ?>">
 </head>
 <body<?= $brandEnabled ? ' class="has-tenant-branding" style="' . View::e($brandCssVariables) . '"' : '' ?>>
 <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
@@ -210,6 +210,7 @@ $svgIcon = static function (string $name): string {
                 <span class="nav-caption">Financeiro</span>
                 <a class="nav-link<?= $isActive('/billing') ?>" href="<?= View::e(Router::url('/billing')) ?>"><?= $svgIcon('billing') ?><span>Planos e cobrança</span></a>
                 <a class="nav-link<?= $isActive('/payment-gateways') ?>" href="<?= View::e(Router::url('/payment-gateways')) ?>"><?= $svgIcon('card') ?><span>Meios de pagamento</span></a>
+                <a class="nav-link<?= $isActive('/settings/public-signup') ?>" href="<?= View::e(Router::url('/settings/public-signup')) ?>"><?= $svgIcon('users') ?><span>Inscrição pública</span></a>
                 <a class="nav-link<?= $isActive('/billing-reminders') ?>" href="<?= View::e(Router::url('/billing-reminders')) ?>"><?= $svgIcon('bell') ?><span>Lembretes de cobrança</span></a>
 
                 <span class="nav-caption">Operação RS</span>

@@ -115,6 +115,20 @@ $showPoweredBy = !empty($branding['show_powered_by']);
                 Testar a IA em uma demonstração
             </button>
 
+            <?php $signupOffer = is_array($signupOffer ?? null) ? $signupOffer : []; ?>
+            <?php if (!empty($signupOffer['enabled'])): ?>
+                <div class="login-signup-cta">
+                    <span>Ainda não possui uma conta?</span>
+                    <a href="<?= View::e(Router::url('/signup')) ?>">Começar <?= (int) ($signupOffer['trial_days'] ?? 7) ?> dias grátis <b aria-hidden="true">→</b></a>
+                    <small>Plano Inicial · cartão obrigatório · hoje R$ 0,00</small>
+                </div>
+            <?php elseif (!empty($signupOffer['commercial_url'])): ?>
+                <div class="login-signup-cta is-commercial">
+                    <span>Quer conhecer a RS Connect?</span>
+                    <a href="<?= View::e((string) $signupOffer['commercial_url']) ?>" target="_blank" rel="noopener noreferrer">Falar com o comercial <b aria-hidden="true">→</b></a>
+                </div>
+            <?php endif; ?>
+
             <p class="login-security">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5 19 6v5.4c0 4.4-2.9 7.7-7 9.1-4.1-1.4-7-4.7-7-9.1V6l7-2.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <?= View::e($loginSecurityText) ?>

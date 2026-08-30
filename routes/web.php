@@ -38,6 +38,7 @@ use App\Controllers\OperationalAlertsController;
 use App\Controllers\CommunicationsController;
 use App\Controllers\PaymentGatewayController;
 use App\Controllers\PrivacyController;
+use App\Controllers\PublicSignupController;
 use App\Controllers\ReportController;
 use App\Controllers\ScheduledReportController;
 use App\Controllers\SecurityController;
@@ -59,6 +60,14 @@ return static function (Router $router): void {
     $router->get('/login', [AuthController::class, 'showLogin'], ['guest']);
     $router->post('/login', [AuthController::class, 'login'], ['guest', 'csrf']);
     $router->post('/logout', [AuthController::class, 'logout'], ['auth', 'csrf']);
+    $router->get('/signup', [PublicSignupController::class, 'show'], ['guest']);
+    $router->post('/signup', [PublicSignupController::class, 'create'], ['guest', 'csrf']);
+    $router->get('/signup/success', [PublicSignupController::class, 'success']);
+    $router->get('/signup/cancelled', [PublicSignupController::class, 'cancelled']);
+    $router->get('/signup/expired', [PublicSignupController::class, 'expired']);
+    $router->get('/signup/status', [PublicSignupController::class, 'status']);
+    $router->get('/termos-de-uso', [PublicSignupController::class, 'terms']);
+    $router->get('/politica-de-privacidade', [PublicSignupController::class, 'privacy']);
     $router->get('/access-restricted', [AccessController::class, 'restricted'], ['auth']);
 
     $router->get('/', [DashboardController::class, 'index'], ['auth']);
@@ -316,6 +325,8 @@ return static function (Router $router): void {
     $router->post('/billing/invoices/create', [BillingController::class, 'createInvoice'], ['auth', 'super_admin', 'csrf']);
     $router->post('/billing/invoices/status', [BillingController::class, 'updateInvoice'], ['auth', 'super_admin', 'csrf']);
 
+    $router->get('/settings/public-signup', [PublicSignupController::class, 'settings'], ['auth', 'super_admin']);
+    $router->post('/settings/public-signup/save', [PublicSignupController::class, 'saveSettings'], ['auth', 'super_admin', 'csrf']);
     $router->get('/payment-gateways', [PaymentGatewayController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/billing-reminders', [BillingReminderController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/payment-gateways/save', [PaymentGatewayController::class, 'save'], ['auth', 'super_admin', 'csrf']);

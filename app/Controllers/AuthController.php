@@ -11,12 +11,16 @@ use App\Core\View;
 use App\Services\AccessControlService;
 use App\Services\SecurityService;
 use App\Services\OnboardingGuideService;
+use App\Services\PublicSignupService;
 
 final class AuthController
 {
     public function showLogin(): void
     {
-        View::render('auth.login', ['title' => 'Entrar'], 'guest');
+        View::render('auth.login', [
+            'title' => 'Entrar',
+            'signupOffer' => (new PublicSignupService())->offer(),
+        ], 'guest');
     }
 
     public function login(): void

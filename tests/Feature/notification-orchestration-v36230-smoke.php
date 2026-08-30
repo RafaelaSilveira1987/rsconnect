@@ -35,7 +35,7 @@ $check(str_contains($view, 'Notificações de agenda e orçamento') && str_conta
 $check(str_contains($calendar, 'NotificationOrchestratorService') && str_contains($calendar, 'scheduleAppointmentReminder'), 'agenda manual dispara notificações e lembretes');
 $check(str_contains($preSchedule, 'calendar.appointment.created'), 'pré-agendamento conversacional dispara o mesmo motor');
 $check(str_contains($commercial, 'commercial.quote.requested') && str_contains($commercial, 'scheduleQuoteOverdue'), 'orçamentos criam aviso imediato e escalonamento');
-$check(str_contains($version, 'RS Connect 36.23.0') && str_contains($version, "REQUIRED_MIGRATION = '092_notification_orchestration.sql'"), 'versão exige a migration 092');
+$check(str_contains($version, 'RS Connect 36.23.0') && str_contains($version, '092_notification_orchestration.sql'), 'versão preserva a migration 092 no histórico obrigatório');
 
 if ($failures !== []) {
     fwrite(STDERR, "FALHAS:\n- " . implode("\n- ", $failures) . "\n");
