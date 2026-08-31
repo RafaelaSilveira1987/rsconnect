@@ -1003,6 +1003,15 @@ final class AiAutomationService
             $agentSelectorSql = $this->hasColumn($pdo, 'conversations', 'ai_agent_id')
                 ? 'COALESCE(c.ai_agent_id, ' . $legacyAgentSelectorSql . ')'
                 : $legacyAgentSelectorSql;
+            $queueMonitoringSql = $this->hasColumn($pdo, 'evolution_instances', 'operational_alerts_enabled')
+                ? ' AND NOT EXISTS (
+                        SELECT 1
+                        FROM evolution_instances queue_i
+                        WHERE queue_i.id = c.evolution_instance_id
+                          AND queue_i.tenant_id = c.tenant_id
+                          AND COALESCE(queue_i.operational_alerts_enabled, 1) = 0
+                   )'
+                : '';
 
             $candidateSql = $hasMessageLink
                 ? 'SELECT cm.id AS message_id,
@@ -1019,7 +1028,8 @@ final class AiAutomationService
                  WHERE cm.tenant_id = :tenant_id
                    AND c.attendance_mode = "ai"
                    AND c.status <> "closed"
-                   AND cm.direction = "incoming"
+                   AND cm.direction = "incoming"'
+                   . $queueMonitoringSql . '
                    AND (:reply_to_reactions = 1 OR cm.message_type <> "reaction")
                    AND ' . $agentSelectorSql . ' = :selected_agent_id
                    AND NOT EXISTS (
@@ -1105,7 +1115,8 @@ final class AiAutomationService
                  WHERE cm.tenant_id = :tenant_id
                    AND c.attendance_mode = "ai"
                    AND c.status <> "closed"
-                   AND cm.direction = "incoming"
+                   AND cm.direction = "incoming"'
+                   . $queueMonitoringSql . '
                    AND (:reply_to_reactions = 1 OR cm.message_type <> "reaction")
                    AND ' . $agentSelectorSql . ' = :selected_agent_id
                    AND NOT EXISTS (
@@ -1176,8 +1187,12 @@ final class AiAutomationService
                 return ['status' => 'none'];
             }
 
+            $alertSelect = $this->hasColumn($pdo, 'evolution_instances', 'operational_alerts_enabled')
+                ? ', operational_alerts_enabled'
+                : ', 1 AS operational_alerts_enabled';
             $instanceStatement = $pdo->prepare(
-                'SELECT id, tenant_id, base_url, api_key_encrypted, instance_name, name, status, connection_state
+                'SELECT id, tenant_id, base_url, api_key_encrypted, instance_name, name, status, connection_state'
+                . $alertSelect . '
                  FROM evolution_instances
                  WHERE id = :instance_id
                    AND tenant_id = :tenant_id
@@ -1190,6 +1205,10 @@ final class AiAutomationService
             $instance = $instanceStatement->fetch(PDO::FETCH_ASSOC);
             if (!$instance) {
                 return ['status' => 'error', 'error' => 'A conexão WhatsApp vinculada à conversa não foi encontrada.'];
+            }
+            if ((int) ($instance['operational_alerts_enabled'] ?? 1) !== 1) {
+                // Pausa intencional: preserva a pendência sem consultar a Evolution e sem gerar nova falha.
+                return ['status' => 'none'];
             }
 
             $instanceLabel = trim((string) (($instance['name'] ?? '') ?: ($instance['instance_name'] ?? '')));

@@ -116,5 +116,6 @@ return [
         ['sequence' => 101, 'file' => '094_normalize_asaas_api_base_url.sql'],
         ['sequence' => 102, 'file' => '095_public_signup_pix_qrcode.sql'],
         ['sequence' => 103, 'file' => '096_public_signup_coupons.sql'],
+        ['sequence' => 104, 'file' => '097_evolution_operational_alert_suppression.sql'],
     ],
 ];

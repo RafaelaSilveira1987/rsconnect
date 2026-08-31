@@ -171,7 +171,9 @@ final class OperationalHealthService
             'history' => $history,
             'technical' => [
                 'pending_ai' => (int) ($ai['pending_total'] ?? 0),
+                'actionable_ai' => (int) ($ai['pending_actionable_total'] ?? $ai['pending_total'] ?? 0),
                 'blocked_ai' => (int) ($ai['pending_blocked_total'] ?? 0),
+                'paused_ai' => (int) ($ai['pending_paused_total'] ?? 0),
                 'raw_checks' => count($operations['checks'] ?? []),
             ],
         ];
@@ -299,6 +301,9 @@ final class OperationalHealthService
             if ($pendingCount < 1) {
                 continue;
             }
+            if (!empty($pending['monitoring_suppressed']) || (int) ($pending['operational_alerts_enabled'] ?? 1) !== 1) {
+                continue;
+            }
 
             $state = strtolower(trim((string) (($pending['connection_state'] ?? '') ?: ($pending['instance_status'] ?? ''))));
             if (in_array($state, ['open', 'connected', 'active', 'online'], true)) {
@@ -346,20 +351,29 @@ final class OperationalHealthService
             if (($services['evolution']['status'] ?? '') === 'operational') {
                 $services['evolution']['status'] = 'attention';
             }
-            $services['evolution']['evidence'] = count($blockedCompanies) . ' empresa(s) com conexão indisponível; ' . $blockedMessages . ' mensagem(ns) aguardam reconexão.';
-            $services['evolution']['impact'] = 'Parte dos atendimentos está bloqueada por uma dependência externa, embora o RS Connect continue operacional.';
+            $services['evolution']['evidence'] = count($blockedCompanies) . ' empresa(s) com conexão monitorada indisponível; ' . $blockedMessages . ' mensagem(ns) aguardam reconexão.';
+            $services['evolution']['impact'] = 'Parte dos atendimentos monitorados está bloqueada por uma dependência externa, embora o RS Connect continue operacional.';
             $services['evolution']['recommended_action'] = 'Reconectar as instâncias indicadas em “Problemas ativos”.';
         }
 
-        if (isset($services['ai_reprocess']) && (int) ($ai['pending_total'] ?? 0) > 0) {
-            $pending = (int) ($ai['pending_total'] ?? 0);
-            $blocked = (int) ($ai['pending_blocked_total'] ?? 0);
-            if ($pending > 0 && $blocked >= $pending) {
-                // A rotina não está quebrada: ela está corretamente preservando a fila.
+        $pending = (int) ($ai['pending_total'] ?? 0);
+        $actionable = (int) ($ai['pending_actionable_total'] ?? $pending);
+        $blocked = (int) ($ai['pending_blocked_total'] ?? 0);
+        $paused = (int) ($ai['pending_paused_total'] ?? 0);
+
+        if (isset($services['ai_reprocess']) && $pending > 0) {
+            if ($actionable === 0 && $paused > 0) {
                 if (($services['ai_reprocess']['status'] ?? '') !== 'unknown') {
                     $services['ai_reprocess']['status'] = 'operational';
                 }
-                $services['ai_reprocess']['evidence'] = $blocked . ' mensagem(ns) preservadas aguardando dependência externa; nenhuma tentativa repetida será feita enquanto a conexão estiver indisponível.';
+                $services['ai_reprocess']['evidence'] = $paused . ' mensagem(ns) preservadas em conexão(ões) pausada(s) pelo cliente. Alertas e novas tentativas estão suspensos até a reconexão.';
+                $services['ai_reprocess']['impact'] = 'A fila foi mantida com segurança e não representa falha operacional enquanto a conexão permanecer pausada.';
+                $services['ai_reprocess']['recommended_action'] = 'Nenhuma ação é necessária até o cliente decidir reconectar o WhatsApp.';
+            } elseif ($blocked > 0 && $blocked >= $actionable) {
+                if (($services['ai_reprocess']['status'] ?? '') !== 'unknown') {
+                    $services['ai_reprocess']['status'] = 'operational';
+                }
+                $services['ai_reprocess']['evidence'] = $blocked . ' mensagem(ns) preservadas aguardando dependência externa; nenhuma tentativa repetida será feita enquanto a conexão monitorada estiver indisponível.';
                 $services['ai_reprocess']['impact'] = 'Sem falha interna confirmada na rotina; o processamento depende da reconexão das instâncias afetadas.';
                 $services['ai_reprocess']['recommended_action'] = 'Acompanhar a reconexão do WhatsApp e reprocessar depois.';
             }
@@ -380,7 +394,10 @@ final class OperationalHealthService
             if ($key === 'evolution' && $externalBlocks !== []) {
                 continue;
             }
-            if ($key === 'ai_reprocess' && (int) ($ai['pending_total'] ?? 0) > 0 && (int) ($ai['pending_blocked_total'] ?? 0) >= (int) ($ai['pending_total'] ?? 0)) {
+            $pendingTotal = (int) ($ai['pending_total'] ?? 0);
+            $actionableTotal = (int) ($ai['pending_actionable_total'] ?? $pendingTotal);
+            $blockedTotal = (int) ($ai['pending_blocked_total'] ?? 0);
+            if ($key === 'ai_reprocess' && $pendingTotal > 0 && ($actionableTotal === 0 || ($blockedTotal > 0 && $blockedTotal >= $actionableTotal))) {
                 continue;
             }
 
@@ -566,6 +583,27 @@ final class OperationalHealthService
         }
     }
 
+    private function supportsEvolutionAlertSuppression(): bool
+    {
+        static $supported = null;
+        if ($supported !== null) {
+            return $supported;
+        }
+
+        try {
+            $statement = Database::connection()->query(
+                'SELECT COUNT(*)
+                 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = "evolution_instances"
+                   AND COLUMN_NAME = "operational_alerts_enabled"'
+            );
+            return $supported = (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return $supported = false;
+        }
+    }
+
     private function companyOverview(array $ai): array
     {
         $tenants = $this->fetchAll("SELECT id, name, status FROM tenants WHERE status IN ('active','trial','suspended') ORDER BY name");
@@ -573,8 +611,27 @@ final class OperationalHealthService
             return [];
         }
 
-        $instances = $this->groupRows('evolution_instances',
-            "SELECT tenant_id, COUNT(*) AS total,\n                    SUM(CASE WHEN COALESCE(NULLIF(connection_state,''), status) IN ('open','connected','active','online') THEN 1 ELSE 0 END) AS connected,\n                    MAX(last_status_check_at) AS last_checked_at\n             FROM evolution_instances GROUP BY tenant_id");
+        $supportsAlertPause = $this->supportsEvolutionAlertSuppression();
+        $instancesSql = $supportsAlertPause
+            ? "SELECT tenant_id,
+                      COUNT(*) AS total,
+                      SUM(CASE WHEN COALESCE(operational_alerts_enabled, 1) = 1 THEN 1 ELSE 0 END) AS monitored,
+                      SUM(CASE WHEN COALESCE(operational_alerts_enabled, 1) = 0 THEN 1 ELSE 0 END) AS paused,
+                      SUM(CASE WHEN COALESCE(operational_alerts_enabled, 1) = 1
+                                AND COALESCE(NULLIF(connection_state,''), status) IN ('open','connected','active','online')
+                               THEN 1 ELSE 0 END) AS connected,
+                      MAX(last_status_check_at) AS last_checked_at
+               FROM evolution_instances
+               GROUP BY tenant_id"
+            : "SELECT tenant_id,
+                      COUNT(*) AS total,
+                      COUNT(*) AS monitored,
+                      0 AS paused,
+                      SUM(CASE WHEN COALESCE(NULLIF(connection_state,''), status) IN ('open','connected','active','online') THEN 1 ELSE 0 END) AS connected,
+                      MAX(last_status_check_at) AS last_checked_at
+               FROM evolution_instances
+               GROUP BY tenant_id";
+        $instances = $this->groupRows('evolution_instances', $instancesSql);
         $agents = $this->groupRows('ai_agents',
             "SELECT tenant_id, COUNT(*) AS total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active FROM ai_agents GROUP BY tenant_id");
         $credentials = $this->groupRows('ai_provider_credentials',
@@ -589,12 +646,17 @@ final class OperationalHealthService
 
         $pending = [];
         $blocked = [];
+        $pausedPending = [];
         foreach (($ai['pending_instances'] ?? []) as $item) {
             $tenantId = (int) ($item['tenant_id'] ?? 0);
             if ($tenantId <= 0) {
                 continue;
             }
             $count = (int) ($item['pending_count'] ?? 0);
+            if (!empty($item['monitoring_suppressed']) || (int) ($item['operational_alerts_enabled'] ?? 1) !== 1) {
+                $pausedPending[$tenantId] = ($pausedPending[$tenantId] ?? 0) + $count;
+                continue;
+            }
             $pending[$tenantId] = ($pending[$tenantId] ?? 0) + $count;
             $state = strtolower(trim((string) (($item['connection_state'] ?? '') ?: ($item['instance_status'] ?? ''))));
             if (!in_array($state, ['open', 'connected', 'active', 'online'], true)) {
@@ -606,7 +668,7 @@ final class OperationalHealthService
         $result = [];
         foreach ($tenants as $tenant) {
             $id = (int) $tenant['id'];
-            $instance = $instances[$id] ?? ['total' => 0, 'connected' => 0, 'last_checked_at' => null];
+            $instance = $instances[$id] ?? ['total' => 0, 'monitored' => 0, 'paused' => 0, 'connected' => 0, 'last_checked_at' => null];
             $agent = $agents[$id] ?? ['total' => 0, 'active' => 0];
             $credential = $credentials[$id] ?? ['total' => 0, 'active' => 0];
             $success = $aiSuccess[$id] ?? ['last_success_at' => null];
@@ -616,16 +678,30 @@ final class OperationalHealthService
 
             $whatsapp = ['status' => 'neutral', 'label' => 'Não configurado', 'evidence' => ''];
             if ((int) $instance['total'] > 0) {
+                $monitored = (int) ($instance['monitored'] ?? $instance['total']);
+                $pausedConnections = (int) ($instance['paused'] ?? 0);
+                $connectedConnections = (int) ($instance['connected'] ?? 0);
                 $lastTs = strtotime((string) ($instance['last_checked_at'] ?? '')) ?: 0;
                 $recent = $lastTs > 0 && $lastTs >= time() - 900;
-                if (($blocked[$id] ?? 0) > 0) {
-                    $whatsapp = ['status' => 'blocked', 'label' => 'Aguardando conexão', 'evidence' => ($blocked[$id] ?? 0) . ' conversa(s) aguardando'];
+
+                if ($monitored === 0 && $pausedConnections > 0) {
+                    $whatsapp = [
+                        'status' => 'operational',
+                        'label' => $pausedConnections . ' pausada(s) pelo cliente',
+                        'evidence' => 'Alertas e filas vinculadas permanecem silenciados até a reconexão',
+                    ];
+                } elseif (($blocked[$id] ?? 0) > 0) {
+                    $whatsapp = ['status' => 'blocked', 'label' => 'Aguardando conexão', 'evidence' => ($blocked[$id] ?? 0) . ' conversa(s) monitorada(s) aguardando'];
                 } elseif (!$recent) {
-                    $whatsapp = ['status' => 'unknown', 'label' => 'Sem evidência recente', 'evidence' => 'Estado da instância não confirmado nos últimos 15 min'];
-                } elseif ((int) $instance['connected'] === (int) $instance['total']) {
-                    $whatsapp = ['status' => 'operational', 'label' => (int) $instance['connected'] . '/' . (int) $instance['total'] . ' conectada(s)', 'evidence' => 'Verificado ' . $this->ageLabel(max(0, time() - $lastTs))];
+                    $whatsapp = ['status' => 'unknown', 'label' => 'Sem evidência recente', 'evidence' => 'Estado das conexões monitoradas não confirmado nos últimos 15 min'];
+                } elseif ($connectedConnections === $monitored) {
+                    $label = $connectedConnections . '/' . $monitored . ' conectada(s)';
+                    if ($pausedConnections > 0) {
+                        $label .= ' · ' . $pausedConnections . ' pausada(s)';
+                    }
+                    $whatsapp = ['status' => 'operational', 'label' => $label, 'evidence' => 'Verificado ' . $this->ageLabel(max(0, time() - $lastTs))];
                 } else {
-                    $whatsapp = ['status' => 'attention', 'label' => (int) $instance['connected'] . '/' . (int) $instance['total'] . ' conectada(s)', 'evidence' => 'Há instância sem conexão confirmada'];
+                    $whatsapp = ['status' => 'attention', 'label' => $connectedConnections . '/' . $monitored . ' conectada(s)', 'evidence' => 'Há conexão monitorada sem confirmação'];
                 }
             }
 
@@ -635,7 +711,9 @@ final class OperationalHealthService
                 if (!$credentialReady) {
                     $ia = ['status' => 'attention', 'label' => 'Revisar credencial', 'evidence' => 'Assistente ativo sem credencial disponível'];
                 } elseif (($pending[$id] ?? 0) > 0 && ($blocked[$id] ?? 0) === 0) {
-                    $ia = ['status' => 'attention', 'label' => 'Fila pendente', 'evidence' => ($pending[$id] ?? 0) . ' conversa(s) aguardando'];
+                    $ia = ['status' => 'attention', 'label' => 'Fila pendente', 'evidence' => ($pending[$id] ?? 0) . ' conversa(s) monitorada(s) aguardando'];
+                } elseif (($pausedPending[$id] ?? 0) > 0) {
+                    $ia = ['status' => 'operational', 'label' => 'Fila pausada', 'evidence' => ($pausedPending[$id] ?? 0) . ' conversa(s) preservada(s) sem alerta'];
                 } else {
                     $successTs = strtotime((string) ($success['last_success_at'] ?? '')) ?: 0;
                     if ($successTs > 0 && $successTs >= time() - 86400) {

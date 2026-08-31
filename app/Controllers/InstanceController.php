@@ -187,11 +187,17 @@ final class InstanceController
             $params['instance_id'] = $instanceId;
         }
 
+        $pdo = Database::connection();
+        $alertSelect = $this->columnExists($pdo, 'evolution_instances', 'operational_alerts_enabled')
+            ? ', operational_alerts_enabled, operational_alerts_paused_at, operational_alerts_pause_reason'
+            : ', 1 AS operational_alerts_enabled, NULL AS operational_alerts_paused_at, NULL AS operational_alerts_pause_reason';
+
         $sql = 'SELECT id, tenant_id, name, instance_name, base_url, api_key_encrypted,
                        status, connection_state, connection_reason,
                        connection_updated_at, last_status_check_at, last_webhook_at,
                        profile_name, profile_phone, profile_picture_url,
-                       qrcode_base64, qrcode_updated_at, qrcode_expires_at
+                       qrcode_base64, qrcode_updated_at, qrcode_expires_at'
+                . $alertSelect . '
                 FROM evolution_instances';
         if ($conditions !== []) {
             $sql .= ' WHERE ' . implode(' AND ', $conditions);
@@ -199,7 +205,6 @@ final class InstanceController
         $sql .= ' ORDER BY id';
 
         try {
-            $pdo = Database::connection();
             $statement = $pdo->prepare($sql);
             $statement->execute($params);
             $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -249,6 +254,18 @@ final class InstanceController
                                       connection_updated_at = NOW()';
                     if ($connected) {
                         $updateSql .= ', qrcode_base64 = NULL, qrcode_expires_at = NULL';
+                        if ($this->columnExists($pdo, 'evolution_instances', 'operational_alerts_enabled')) {
+                            $updateSql .= ',
+                                operational_alerts_enabled = CASE
+                                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                                    THEN 1 ELSE operational_alerts_enabled END,
+                                operational_alerts_paused_at = CASE
+                                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                                    THEN NULL ELSE operational_alerts_paused_at END,
+                                operational_alerts_pause_reason = CASE
+                                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                                    THEN NULL ELSE operational_alerts_pause_reason END';
+                        }
                     }
                     $updateSql .= ' WHERE id = :id';
 
@@ -262,6 +279,11 @@ final class InstanceController
                     $row['connection_state'] = $state;
                     $row['status'] = $mappedStatus;
                     $row['connection_reason'] = '';
+                    if ($connected && in_array((string) ($row['operational_alerts_pause_reason'] ?? ''), ['client_logout', 'connection_logout'], true)) {
+                        $row['operational_alerts_enabled'] = 1;
+                        $row['operational_alerts_paused_at'] = null;
+                        $row['operational_alerts_pause_reason'] = null;
+                    }
                     $row['last_status_check_at'] = \App\Core\Clock::nowUtc();
                     $row['connection_updated_at'] = \App\Core\Clock::nowUtc();
                     $row['_live_check'] = 'updated';
@@ -307,7 +329,12 @@ final class InstanceController
                     'instance_name' => (string) $row['instance_name'],
                     'status' => (string) $row['status'],
                     'connection_state' => $state,
-                    'status_label' => $this->connectionLabel($state, (string) $row['status']),
+                    'status_label' => (int) ($row['operational_alerts_enabled'] ?? 1) !== 1
+                        ? 'Pausada pelo cliente'
+                        : $this->connectionLabel($state, (string) $row['status']),
+                    'operational_alerts_enabled' => (int) ($row['operational_alerts_enabled'] ?? 1),
+                    'operational_alerts_paused_at' => (string) ($row['operational_alerts_paused_at'] ?? ''),
+                    'operational_alerts_pause_reason' => (string) ($row['operational_alerts_pause_reason'] ?? ''),
                     'reason' => (string) ($row['connection_reason'] ?? ''),
                     'updated_at' => (string) (($row['connection_updated_at'] ?? '') ?: ($row['last_status_check_at'] ?? '') ?: ($row['last_webhook_at'] ?? '')),
                     'profile_name' => (string) ($row['profile_name'] ?? ''),
@@ -970,7 +997,7 @@ final class InstanceController
     {
         $instanceId = (int) ($_POST['instance_id'] ?? 0);
         $action = strtolower(trim((string) ($_POST['action'] ?? '')));
-        if (!in_array($action, ['restart', 'logout', 'sync'], true)) {
+        if (!in_array($action, ['restart', 'logout', 'sync', 'pause_alerts', 'resume_alerts'], true)) {
             Flash::set('error', 'Ação da Evolution inválida.');
             $this->redirect('/instances');
         }
@@ -981,25 +1008,61 @@ final class InstanceController
             if (!$instance) {
                 throw new \RuntimeException('Instância não encontrada.');
             }
-            $service = $this->evolutionServiceFor($instance, 30);
+            $supportsAlerts = $this->columnExists($pdo, 'evolution_instances', 'operational_alerts_enabled');
 
-            if ($action === 'restart') {
-                $service->restartInstance();
-                $pdo->prepare(
-                    'UPDATE evolution_instances SET status="pending", connection_state="restarting", connection_updated_at=NOW() WHERE id=:id'
-                )->execute(['id' => $instanceId]);
-                $message = 'Reinicialização solicitada à Evolution.';
-            } elseif ($action === 'logout') {
-                $service->logoutInstance();
+            if ($action === 'pause_alerts') {
+                if (!$supportsAlerts) {
+                    throw new \RuntimeException('A migration 097 precisa ser aplicada antes de pausar os alertas.');
+                }
                 $pdo->prepare(
                     'UPDATE evolution_instances
-                     SET status="disconnected", connection_state="logged_out", disconnected_at=NOW(),
-                         qrcode_base64=NULL, qrcode_expires_at=NULL, connection_updated_at=NOW()
-                     WHERE id=:id'
+                     SET operational_alerts_enabled = 0,
+                         operational_alerts_paused_at = NOW(),
+                         operational_alerts_pause_reason = "manual"
+                     WHERE id = :id'
                 )->execute(['id' => $instanceId]);
-                $message = 'WhatsApp desconectado. Gere um novo QR Code para reconectar.';
+                $message = 'Alertas operacionais pausados para esta conexão. As mensagens permanecem preservadas.';
+            } elseif ($action === 'resume_alerts') {
+                if (!$supportsAlerts) {
+                    throw new \RuntimeException('A migration 097 precisa ser aplicada antes de retomar os alertas.');
+                }
+                $pdo->prepare(
+                    'UPDATE evolution_instances
+                     SET operational_alerts_enabled = 1,
+                         operational_alerts_paused_at = NULL,
+                         operational_alerts_pause_reason = NULL
+                     WHERE id = :id'
+                )->execute(['id' => $instanceId]);
+                $message = 'Alertas operacionais retomados para esta conexão.';
             } else {
-                $storedSettings = [
+                $service = $this->evolutionServiceFor($instance, 30);
+
+                if ($action === 'restart') {
+                    $service->restartInstance();
+                    $pdo->prepare(
+                        'UPDATE evolution_instances SET status="pending", connection_state="restarting", connection_updated_at=NOW() WHERE id=:id'
+                    )->execute(['id' => $instanceId]);
+                    $message = 'Reinicialização solicitada à Evolution.';
+                } elseif ($action === 'logout') {
+                    $service->logoutInstance();
+                    $logoutSql = 'UPDATE evolution_instances
+                                  SET status="disconnected",
+                                      connection_state="logged_out",
+                                      disconnected_at=NOW(),
+                                      qrcode_base64=NULL,
+                                      qrcode_expires_at=NULL,
+                                      connection_updated_at=NOW()';
+                    if ($supportsAlerts) {
+                        $logoutSql .= ',
+                                      operational_alerts_enabled = 0,
+                                      operational_alerts_paused_at = NOW(),
+                                      operational_alerts_pause_reason = "client_logout"';
+                    }
+                    $logoutSql .= ' WHERE id=:id';
+                    $pdo->prepare($logoutSql)->execute(['id' => $instanceId]);
+                    $message = 'WhatsApp desconectado. Os alertas e as notificações da fila foram pausados até a reconexão.';
+                } else {
+                    $storedSettings = [
                     'receive_messages' => (int) ($instance['receive_messages'] ?? 1),
                     'ignore_groups' => (int) ($instance['ignore_groups'] ?? 1),
                     'ignore_status' => (int) ($instance['ignore_status'] ?? 1),
@@ -1022,15 +1085,23 @@ final class InstanceController
                     array_values(array_map('strval', $events)),
                     (int) ($instance['webhook_enabled'] ?? 1) === 1
                 );
-                $pdo->prepare('UPDATE evolution_instances SET last_settings_sync_at=NOW() WHERE id=:id')
-                    ->execute(['id' => $instanceId]);
-                $message = 'Webhook e configurações sincronizados novamente com a Evolution.';
+                    $pdo->prepare('UPDATE evolution_instances SET last_settings_sync_at=NOW() WHERE id=:id')
+                        ->execute(['id' => $instanceId]);
+                    $message = 'Webhook e configurações sincronizados novamente com a Evolution.';
+                }
             }
 
             $this->audit((int) $instance['tenant_id'], 'evolution.remote_action', [
                 'instance_id' => $instanceId,
                 'action' => $action,
             ]);
+            if (in_array($action, ['logout', 'pause_alerts', 'resume_alerts'], true)) {
+                try {
+                    (new \App\Services\OperationsService())->refreshMessagingChecks();
+                } catch (Throwable) {
+                    // O estado da conexão foi salvo; o monitor agendado fará a próxima reconciliação.
+                }
+            }
             Flash::set('success', $message);
         } catch (Throwable $exception) {
             Flash::set('error', 'A Evolution não concluiu a ação: ' . $exception->getMessage());

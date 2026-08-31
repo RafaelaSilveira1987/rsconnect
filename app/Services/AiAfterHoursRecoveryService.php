@@ -215,6 +215,15 @@ final class AiAfterHoursRecoveryService
 
         try {
             $pdo = Database::connection();
+            $supportsAlertSuppression = $this->supportsOperationalAlertSuppression($pdo);
+            $monitoringJoin = $supportsAlertSuppression
+                ? ' LEFT JOIN evolution_instances monitored_i
+                       ON monitored_i.id = c.evolution_instance_id
+                      AND monitored_i.tenant_id = c.tenant_id'
+                : '';
+            $monitoringCondition = $supportsAlertSuppression
+                ? ' AND (monitored_i.id IS NULL OR COALESCE(monitored_i.operational_alerts_enabled, 1) = 1)'
+                : '';
             // Execuções interrompidas voltam para a fila depois de 30 minutos.
             $pdo->exec('UPDATE ai_after_hours_pending SET status = "error", next_attempt_at = NOW(), last_error = "Execução anterior interrompida." WHERE status = "processing" AND last_attempt_at < DATE_SUB(NOW(), INTERVAL 30 MINUTE)');
 
@@ -224,9 +233,11 @@ final class AiAfterHoursRecoveryService
                         a.business_timezone, a.business_hours_json
                  FROM ai_after_hours_pending p
                  INNER JOIN conversations c ON c.id = p.conversation_id AND c.tenant_id = p.tenant_id
-                 LEFT JOIN ai_agents a ON a.id = p.agent_id AND a.tenant_id = p.tenant_id
+                 LEFT JOIN ai_agents a ON a.id = p.agent_id AND a.tenant_id = p.tenant_id'
+                 . $monitoringJoin . '
                  WHERE p.status IN ("pending","blocked_plan","blocked_human","error")
-                   AND (p.next_attempt_at IS NULL OR p.next_attempt_at <= NOW())
+                   AND (p.next_attempt_at IS NULL OR p.next_attempt_at <= NOW())'
+                 . $monitoringCondition . '
                  ORDER BY p.last_received_at ASC, p.id ASC
                  LIMIT ' . $limit
             );
@@ -304,12 +315,25 @@ final class AiAfterHoursRecoveryService
                     continue;
                 }
 
-                $instanceStatement = $pdo->prepare('SELECT id, tenant_id, base_url, api_key_encrypted, instance_name, name, status, connection_state FROM evolution_instances WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+                $alertSelect = $supportsAlertSuppression
+                    ? ', operational_alerts_enabled'
+                    : ', 1 AS operational_alerts_enabled';
+                $instanceStatement = $pdo->prepare(
+                    'SELECT id, tenant_id, base_url, api_key_encrypted, instance_name, name, status, connection_state'
+                    . $alertSelect . '
+                     FROM evolution_instances
+                     WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+                );
                 $instanceStatement->execute(['id' => (int) $row['evolution_instance_id'], 'tenant_id' => (int) $row['tenant_id']]);
                 $instance = $instanceStatement->fetch(PDO::FETCH_ASSOC);
                 if (!$instance) {
                     $this->finish($id, 'error', 'Conexão WhatsApp da conversa não foi encontrada.', '+30 minutes', $source);
                     $summary['errors']++;
+                    continue;
+                }
+                if ((int) ($instance['operational_alerts_enabled'] ?? 1) !== 1) {
+                    // A conexão foi pausada entre a leitura e o processamento. Preserva sem nova tentativa.
+                    $this->defer($id, 'pending', null, '+1 hour');
                     continue;
                 }
 
@@ -466,22 +490,64 @@ final class AiAfterHoursRecoveryService
     public function pendingCounts(): array
     {
         try {
-            $row = Database::connection()->query(
-                'SELECT COUNT(*) AS total,
-                        SUM(status = "blocked_plan") AS blocked_plan,
-                        SUM(status = "blocked_human") AS blocked_human,
-                        SUM(status = "error") AS errors
-                 FROM ai_after_hours_pending
-                 WHERE status IN ("pending","processing","blocked_plan","blocked_human","error")'
-            )->fetch(PDO::FETCH_ASSOC) ?: [];
+            $pdo = Database::connection();
+            if (!$this->supportsOperationalAlertSuppression($pdo)) {
+                $row = $pdo->query(
+                    'SELECT COUNT(*) AS total,
+                            COUNT(*) AS actionable,
+                            0 AS paused,
+                            SUM(status = "blocked_plan") AS blocked_plan,
+                            SUM(status = "blocked_human") AS blocked_human,
+                            SUM(status = "error") AS errors
+                     FROM ai_after_hours_pending
+                     WHERE status IN ("pending","processing","blocked_plan","blocked_human","error")'
+                )->fetch(PDO::FETCH_ASSOC) ?: [];
+            } else {
+                $row = $pdo->query(
+                    'SELECT COUNT(*) AS total,
+                            SUM(CASE WHEN i.id IS NULL OR COALESCE(i.operational_alerts_enabled, 1) = 1 THEN 1 ELSE 0 END) AS actionable,
+                            SUM(CASE WHEN i.id IS NOT NULL AND COALESCE(i.operational_alerts_enabled, 1) = 0 THEN 1 ELSE 0 END) AS paused,
+                            SUM(CASE WHEN p.status = "blocked_plan" AND (i.id IS NULL OR COALESCE(i.operational_alerts_enabled, 1) = 1) THEN 1 ELSE 0 END) AS blocked_plan,
+                            SUM(CASE WHEN p.status = "blocked_human" AND (i.id IS NULL OR COALESCE(i.operational_alerts_enabled, 1) = 1) THEN 1 ELSE 0 END) AS blocked_human,
+                            SUM(CASE WHEN p.status = "error" AND (i.id IS NULL OR COALESCE(i.operational_alerts_enabled, 1) = 1) THEN 1 ELSE 0 END) AS errors
+                     FROM ai_after_hours_pending p
+                     LEFT JOIN conversations c ON c.id = p.conversation_id AND c.tenant_id = p.tenant_id
+                     LEFT JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = p.tenant_id
+                     WHERE p.status IN ("pending","processing","blocked_plan","blocked_human","error")'
+                )->fetch(PDO::FETCH_ASSOC) ?: [];
+            }
             return [
                 'total' => (int) ($row['total'] ?? 0),
+                'actionable' => (int) ($row['actionable'] ?? $row['total'] ?? 0),
+                'paused' => (int) ($row['paused'] ?? 0),
                 'blocked_plan' => (int) ($row['blocked_plan'] ?? 0),
                 'blocked_human' => (int) ($row['blocked_human'] ?? 0),
                 'errors' => (int) ($row['errors'] ?? 0),
             ];
         } catch (Throwable) {
-            return ['total' => 0, 'blocked_plan' => 0, 'blocked_human' => 0, 'errors' => 0];
+            return ['total' => 0, 'actionable' => 0, 'paused' => 0, 'blocked_plan' => 0, 'blocked_human' => 0, 'errors' => 0];
+        }
+    }
+
+
+    private function supportsOperationalAlertSuppression(PDO $pdo): bool
+    {
+        static $supported = null;
+        if ($supported !== null) {
+            return $supported;
+        }
+
+        try {
+            $statement = $pdo->query(
+                'SELECT COUNT(*)
+                 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = "evolution_instances"
+                   AND COLUMN_NAME = "operational_alerts_enabled"'
+            );
+            return $supported = (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return $supported = false;
         }
     }
 

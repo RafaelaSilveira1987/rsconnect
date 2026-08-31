@@ -1,5 +1,7 @@
-## RS Connect 36.26.2
+## RS Connect 36.26.6
 
-Correção do monitor financeiro para diferenciar falhas atuais de falhas históricas já recuperadas.
+Silenciamento operacional por conexão WhatsApp desconectada ou pausada pelo cliente.
 
-O alerta de pagamentos deixa de retornar após uma confirmação bem-sucedida posterior ao erro. Consulte `INSTRUCOES-v36.26.2.md`.
+A fila de respostas permanece preservada, mas deixa de gerar alertas enquanto a conexão estiver pausada. O monitoramento retorna automaticamente após reconexão quando a pausa foi causada por logout.
+
+Consulte `INSTRUCOES-v36.26.6.md`.

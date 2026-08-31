@@ -306,6 +306,7 @@ final class TenantHealthService
             return [$this->check('WhatsApp', 'instances.none', 'Conexões WhatsApp', 'critical', 'Nenhuma conexão WhatsApp foi cadastrada.', [], '/instances', 20)];
         }
 
+        $supportsAlertSuppression = $this->columnExists('evolution_instances', 'operational_alerts_enabled');
         $checks = [];
         foreach ($instances as $instance) {
             $id = (int) $instance['id'];
@@ -313,6 +314,29 @@ final class TenantHealthService
             $status = in_array($dbStatus, ['connected', 'open', 'active', 'online'], true) ? 'ok' : 'critical';
             $details = ['Status salvo' => $dbStatus, 'Identificador Evolution' => (string) $instance['instance_name']];
             $summary = $status === 'ok' ? 'A conexão está marcada como operacional.' : 'A conexão está desconectada ou aguardando QR Code.';
+
+            $alertsPaused = $supportsAlertSuppression
+                && (int) ($instance['operational_alerts_enabled'] ?? 1) !== 1;
+            if ($alertsPaused) {
+                $details['Monitoramento operacional'] = 'Pausado pelo cliente';
+                $details['Pausado em'] = $this->formatDatabaseDate($instance['operational_alerts_paused_at'] ?? null, 'Não informado');
+                $details['Motivo'] = match ((string) ($instance['operational_alerts_pause_reason'] ?? '')) {
+                    'client_logout', 'connection_logout' => 'WhatsApp desconectado pelo cliente',
+                    'manual' => 'Pausa manual dos alertas',
+                    default => 'Pausa operacional',
+                };
+                $checks[] = $this->check(
+                    'WhatsApp',
+                    'instance.' . $id,
+                    'WhatsApp — ' . (string) $instance['name'],
+                    'info',
+                    'Conexão pausada pelo cliente. Alertas e notificações da fila estão silenciados; as mensagens permanecem preservadas.',
+                    $details,
+                    '/instances',
+                    20 + $id
+                );
+                continue;
+            }
 
             try {
                 $live = $this->evolutionRequest($instance, '/instance/connectionState/' . rawurlencode((string) $instance['instance_name']));
@@ -1170,6 +1194,15 @@ final class TenantHealthService
         } else {
             $selector = $legacySelector;
         }
+        $monitoringCondition = $this->columnExists('evolution_instances', 'operational_alerts_enabled')
+            ? ' AND NOT EXISTS (
+                    SELECT 1
+                    FROM evolution_instances monitored_i
+                    WHERE monitored_i.id = c.evolution_instance_id
+                      AND monitored_i.tenant_id = c.tenant_id
+                      AND COALESCE(monitored_i.operational_alerts_enabled, 1) = 0
+               )'
+            : '';
         $row = $this->row(
             'SELECT
                 COUNT(DISTINCT c.id) AS conversation_count,
@@ -1182,7 +1215,8 @@ final class TenantHealthService
              WHERE c.tenant_id = :tenant_id
                AND ' . $selector . ' = :selected_agent_id
                AND c.attendance_mode = "ai"
-               AND c.status <> "closed"
+               AND c.status <> "closed"'
+               . $monitoringCondition . '
                AND cm.direction = "incoming"
                AND (:reply_to_reactions = 1 OR cm.message_type <> "reaction")
                AND (
@@ -1454,6 +1488,9 @@ final class TenantHealthService
         $limit = max(10, min(200, $limit));
         $items = [];
 
+        $alertSelect = $this->columnExists('evolution_instances', 'operational_alerts_enabled')
+            ? ', i.operational_alerts_enabled'
+            : ', 1 AS operational_alerts_enabled';
         $aiRows = $this->all(
             'SELECT l.id, l.created_at, l.event, l.error_message, l.response_preview,
                     l.conversation_id, l.agent_id,
@@ -1461,7 +1498,8 @@ final class TenantHealthService
                     ct.name AS contact_name, ct.phone AS contact_phone,
                     c.evolution_instance_id,
                     i.name AS instance_label, i.instance_name,
-                    i.status AS instance_status, i.connection_state
+                    i.status AS instance_status, i.connection_state'
+                    . $alertSelect . '
              FROM ai_automation_logs l
              LEFT JOIN ai_agents a ON a.id = l.agent_id
              LEFT JOIN conversations c ON c.id = l.conversation_id
@@ -1483,6 +1521,12 @@ final class TenantHealthService
             $instanceState = strtolower(trim((string) (($row['connection_state'] ?? '') ?: ($row['instance_status'] ?? ''))));
             $instanceConnected = in_array($instanceState, ['open', 'connected', 'active', 'online'], true);
             $blockedByEvolution = $instanceId > 0 && !$instanceConnected;
+            $alertsPaused = (int) ($row['operational_alerts_enabled'] ?? 1) !== 1;
+            if ($blockedByEvolution && $alertsPaused) {
+                // A pendência está preservada por uma pausa intencional do cliente.
+                // Não deve alimentar badges ou incidentes até a reconexão/retomada.
+                continue;
+            }
             $instanceName = trim((string) (($row['instance_label'] ?? '') ?: ($row['instance_name'] ?? '')));
             $rawMessage = $this->valueOr($row['error_message'] ?? null, 'A execução da IA terminou com erro.');
 

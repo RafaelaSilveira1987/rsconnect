@@ -36,8 +36,14 @@ if (!$canManage) {
 }
 
 $total = count($instances);
+$alertsPausedFor = static fn (array $item): bool => (int) ($item['operational_alerts_enabled'] ?? 1) !== 1;
 $connected = count(array_filter($instances, static fn (array $item): bool => ($item['status'] ?? '') === 'connected'));
-$pending = count(array_filter($instances, static fn (array $item): bool => in_array(($item['status'] ?? ''), ['pending', 'disconnected'], true)));
+$pausedAlerts = count(array_filter($instances, $alertsPausedFor));
+$pending = count(array_filter(
+    $instances,
+    static fn (array $item): bool => (int) ($item['operational_alerts_enabled'] ?? 1) === 1
+        && in_array(($item['status'] ?? ''), ['pending', 'disconnected'], true)
+));
 $linkedAgents = array_sum(array_map(static fn (array $item): int => (int) ($item['agents_count'] ?? 0), $instances));
 $statusLabels = ['connected' => 'Conectada', 'disconnected' => 'Desconectada', 'pending' => 'Pendente'];
 ?>
@@ -57,7 +63,7 @@ $statusLabels = ['connected' => 'Conectada', 'disconnected' => 'Desconectada', '
 <section class="admin-module-summary" aria-label="Resumo das conexões">
     <article><span>Total</span><strong><?= $total ?></strong><small>conexões cadastradas</small></article>
     <article class="is-success"><span>Conectadas</span><strong><?= $connected ?></strong><small>prontas para atendimento</small></article>
-    <article class="is-warning"><span>Precisam de ação</span><strong><?= $pending ?></strong><small>pendentes ou desconectadas</small></article>
+    <article class="is-warning"><span>Precisam de ação</span><strong><?= $pending ?></strong><small><?= $pausedAlerts > 0 ? $pausedAlerts . ' conexão(ões) pausada(s) sem alerta' : 'pendentes ou desconectadas' ?></small></article>
     <article class="is-blue"><span>Assistentes vinculados</span><strong><?= $linkedAgents ?></strong><small>vínculos preservados</small></article>
 </section>
 
@@ -75,6 +81,7 @@ $statusLabels = ['connected' => 'Conectada', 'disconnected' => 'Desconectada', '
     <div class="admin-module-card-list" data-admin-card-list>
         <?php foreach ($instances as $instance): ?>
             <?php
+            $alertsPaused = (int) ($instance['operational_alerts_enabled'] ?? 1) !== 1;
             $webhookUrl = $isSuperAdmin ? Router::url('/webhooks/evolution?instance_id=' . (int) $instance['id']) : '';
             $searchParts = [$instance['name'], $instance['instance_name']];
             if ($isSuperAdmin) {
@@ -107,9 +114,9 @@ $statusLabels = ['connected' => 'Conectada', 'disconnected' => 'Desconectada', '
                     <div class="admin-record-copy">
                         <div class="admin-record-title-row">
                             <div><h3><?= View::e($instance['name']) ?></h3><p><?= $isSuperAdmin ? View::e($instance['tenant_name']) . ' · ' : '' ?><?= View::e($instance['instance_name']) ?></p></div>
-                            <div class="admin-record-badges"><span class="badge badge-<?= View::e($instance['status']) ?>" data-instance-status-badge><?= View::e($statusLabels[$instance['status']] ?? ucfirst((string) $instance['status'])) ?></span><span class="badge <?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'badge-success' : '' ?>"><?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'Criada pelo RS Connect' : 'Conexão criada fora do RS Connect' ?></span><?php if ((int) $instance['is_default'] === 1): ?><span class="badge">Padrão</span><?php endif; ?></div>
+                            <div class="admin-record-badges"><span class="badge badge-<?= View::e($instance['status']) ?>" data-instance-status-badge><?= View::e($alertsPaused ? 'Pausada pelo cliente' : ($statusLabels[$instance['status']] ?? ucfirst((string) $instance['status']))) ?></span><?php if ($alertsPaused): ?><span class="badge badge-warning">Alertas silenciados</span><?php endif; ?><span class="badge <?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'badge-success' : '' ?>"><?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'Criada pelo RS Connect' : 'Conexão criada fora do RS Connect' ?></span><?php if ((int) $instance['is_default'] === 1): ?><span class="badge">Padrão</span><?php endif; ?></div>
                         </div>
-                        <?php if ($isSuperAdmin): ?><small class="admin-record-muted"><?= View::e($instance['base_url']) ?></small><?php endif; ?><small class="admin-record-muted" data-instance-status-detail><?= View::e((string) (($instance['connection_state'] ?? '') ?: 'Aguardando atualização')) ?></small>
+                        <?php if ($isSuperAdmin): ?><small class="admin-record-muted"><?= View::e($instance['base_url']) ?></small><?php endif; ?><small class="admin-record-muted" data-instance-status-detail><?= View::e((string) (($instance['connection_state'] ?? '') ?: 'Aguardando atualização')) ?></small><?php if ($alertsPaused): ?><small class="admin-record-muted">As notificações operacionais e os alertas da fila estão pausados até a reconexão ou retomada manual.</small><?php endif; ?>
                     </div>
                 </div>
                 <dl class="admin-record-metrics">
@@ -130,7 +137,8 @@ $statusLabels = ['connected' => 'Conectada', 'disconnected' => 'Desconectada', '
                     <button class="btn btn-small btn-outline" type="button" data-toggle-panel="instance-settings-drawer" data-instance-settings="<?= View::e($settingsData) ?>">Configurar WhatsApp</button>
                     <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="sync"><button class="btn btn-small btn-outline" type="submit">Sincronizar</button></form>
                     <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>" data-confirm="Reiniciar esta conexão do WhatsApp?"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="restart"><button class="btn btn-small btn-outline" type="submit">Reiniciar</button></form>
-                    <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>" data-confirm="Desconectar o WhatsApp desta instância? Será necessário ler um novo QR Code."><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="logout"><button class="btn btn-small btn-danger-soft" type="submit">Desconectar</button></form>
+                    <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="<?= $alertsPaused ? 'resume_alerts' : 'pause_alerts' ?>"><button class="btn btn-small btn-outline" type="submit"><?= $alertsPaused ? 'Retomar alertas' : 'Pausar alertas' ?></button></form>
+                    <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>" data-confirm="Desconectar o WhatsApp desta instância? Será necessário ler um novo QR Code. Os alertas e notificações da fila serão pausados até a reconexão."><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="logout"><button class="btn btn-small btn-danger-soft" type="submit">Desconectar</button></form>
                     <button class="btn btn-small btn-outline" type="button" data-toggle-panel="instance-drawer" data-instance-open="edit"
                         data-id="<?= (int) $instance['id'] ?>" data-name="<?= View::e($instance['name']) ?>" data-instance-name="<?= View::e($instance['instance_name']) ?>" data-base-url="<?= $isSuperAdmin ? View::e($instance['base_url']) : '' ?>" data-status="<?= View::e($instance['status']) ?>" data-is-default="<?= (int) $instance['is_default'] ?>" data-management-mode="<?= View::e((string) ($instance['management_mode'] ?? 'external')) ?>">Editar cadastro</button>
                     <button class="btn btn-small btn-danger-soft" type="button" data-toggle-panel="instance-delete-drawer" data-instance-delete

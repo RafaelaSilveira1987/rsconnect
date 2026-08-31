@@ -30,12 +30,21 @@ final class AiReprocessService
 
             $pendingInstances = $this->refreshPendingInstanceStates($this->pendingByInstance());
             $blockedPending = 0;
-            foreach ($pendingInstances as $item) {
+            $pausedPending = 0;
+            foreach ($pendingInstances as &$item) {
+                $suppressed = (int) ($item['operational_alerts_enabled'] ?? 1) !== 1;
+                $item['monitoring_suppressed'] = $suppressed;
+                if ($suppressed) {
+                    $pausedPending += (int) ($item['pending_count'] ?? 0);
+                    continue;
+                }
+
                 $state = strtolower(trim((string) (($item['connection_state'] ?? '') ?: ($item['instance_status'] ?? ''))));
                 if (!in_array($state, ['open', 'connected', 'active', 'online'], true)) {
                     $blockedPending += (int) ($item['pending_count'] ?? 0);
                 }
             }
+            unset($item);
 
             $afterHoursService = new AiAfterHoursRecoveryService();
             $afterHours = $afterHoursService->pendingCounts();
@@ -50,7 +59,9 @@ final class AiReprocessService
                 'pending' => $this->pendingByTenant(),
                 'pending_instances' => $pendingInstances,
                 'pending_total' => $this->pendingTotal(),
+                'pending_actionable_total' => max(0, $this->pendingTotal() - $pausedPending),
                 'pending_blocked_total' => $blockedPending,
+                'pending_paused_total' => $pausedPending,
                 'after_hours' => $afterHours,
                 'after_hours_items' => $afterHoursItems,
                 'after_hours_monitor' => (new AfterHoursMonitorService())->dashboard(),
@@ -69,6 +80,9 @@ final class AiReprocessService
                 'pending' => [],
                 'pending_instances' => [],
                 'pending_total' => 0,
+                'pending_actionable_total' => 0,
+                'pending_blocked_total' => 0,
+                'pending_paused_total' => 0,
                 'after_hours' => ['total' => 0, 'blocked_plan' => 0, 'blocked_human' => 0, 'errors' => 0],
                 'after_hours_items' => [],
                 'after_hours_monitor' => (new AfterHoursMonitorService())->dashboard(),
@@ -394,6 +408,11 @@ final class AiReprocessService
     private function pendingByInstance(): array
     {
         $pdo = Database::connection();
+        $alertColumns = $this->supportsOperationalAlertSuppression($pdo);
+        $alertSelect = $alertColumns
+            ? 'i.operational_alerts_enabled, i.operational_alerts_paused_at, i.operational_alerts_pause_reason,'
+            : '1 AS operational_alerts_enabled, NULL AS operational_alerts_paused_at, NULL AS operational_alerts_pause_reason,';
+
         $statement = $pdo->query(
             'SELECT t.id AS tenant_id,
                     t.name AS tenant_name,
@@ -403,6 +422,7 @@ final class AiReprocessService
                     i.status AS instance_status,
                     i.connection_state,
                     i.last_status_check_at,
+                    ' . $alertSelect . '
                     a.id AS agent_id,
                     a.name AS agent_name,
                     COUNT(DISTINCT cm.conversation_id) AS pending_count,
@@ -441,7 +461,9 @@ final class AiReprocessService
                         LIMIT 1
                     ) AS last_error_at ' .
             $this->pendingBaseSql($this->hasIncomingMessageLink($pdo), (new AgentRoutingService())->supportsRouting($pdo)) .
-            ' GROUP BY t.id, t.name, c.evolution_instance_id, i.name, i.instance_name, i.status, i.connection_state, i.last_status_check_at, a.id, a.name
+            ' GROUP BY t.id, t.name, c.evolution_instance_id, i.name, i.instance_name, i.status, i.connection_state, i.last_status_check_at'
+                . ($alertColumns ? ', i.operational_alerts_enabled, i.operational_alerts_paused_at, i.operational_alerts_pause_reason' : '')
+                . ', a.id, a.name
               ORDER BY pending_count DESC, t.name, instance_label'
         );
 
@@ -456,12 +478,20 @@ final class AiReprocessService
             if ($instanceId < 1) {
                 continue;
             }
+            if ((int) ($item['operational_alerts_enabled'] ?? 1) !== 1) {
+                $item['monitoring_suppressed'] = true;
+                $item['live_state_checked'] = false;
+                continue;
+            }
 
             if (!array_key_exists($instanceId, $cache)) {
                 $cache[$instanceId] = null;
                 try {
                     $statement = Database::connection()->prepare(
-                        'SELECT id, tenant_id, base_url, api_key_encrypted, instance_name, name, status, connection_state
+                        'SELECT id, tenant_id, base_url, api_key_encrypted, instance_name, name, status, connection_state,
+                                ' . ($this->supportsOperationalAlertSuppression(Database::connection())
+                                    ? 'operational_alerts_enabled, operational_alerts_pause_reason'
+                                    : '1 AS operational_alerts_enabled, NULL AS operational_alerts_pause_reason') . '
                          FROM evolution_instances WHERE id = :id LIMIT 1'
                     );
                     $statement->execute(['id' => $instanceId]);
@@ -482,9 +512,25 @@ final class AiReprocessService
                         if ($state !== '') {
                             $connected = in_array($state, ['open', 'connected', 'active', 'online'], true);
                             try {
-                                Database::connection()->prepare(
-                                    'UPDATE evolution_instances SET connection_state = :state, status = :status, last_status_check_at = NOW() WHERE id = :id'
-                                )->execute([
+                                $supportsAlerts = $this->supportsOperationalAlertSuppression(Database::connection());
+                                $updateSql = 'UPDATE evolution_instances
+                                              SET connection_state = :state,
+                                                  status = :status,
+                                                  last_status_check_at = NOW()';
+                                if ($supportsAlerts && $connected) {
+                                    $updateSql .= ',
+                                                  operational_alerts_enabled = CASE
+                                                      WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                                                      THEN 1 ELSE operational_alerts_enabled END,
+                                                  operational_alerts_paused_at = CASE
+                                                      WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                                                      THEN NULL ELSE operational_alerts_paused_at END,
+                                                  operational_alerts_pause_reason = CASE
+                                                      WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                                                      THEN NULL ELSE operational_alerts_pause_reason END';
+                                }
+                                $updateSql .= ' WHERE id = :id';
+                                Database::connection()->prepare($updateSql)->execute([
                                     'state' => $state,
                                     'status' => $connected ? 'connected' : 'disconnected',
                                     'id' => $instanceId,
@@ -509,6 +555,27 @@ final class AiReprocessService
         }
         unset($item);
         return $items;
+    }
+
+    private function supportsOperationalAlertSuppression(PDO $pdo): bool
+    {
+        static $supported = null;
+        if ($supported !== null) {
+            return $supported;
+        }
+
+        try {
+            $statement = $pdo->query(
+                'SELECT COUNT(*)
+                 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = "evolution_instances"
+                   AND COLUMN_NAME = "operational_alerts_enabled"'
+            );
+            return $supported = (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return $supported = false;
+        }
     }
 
     private function pendingBaseSql(bool $hasMessageLink, bool $hasRouting = false): string

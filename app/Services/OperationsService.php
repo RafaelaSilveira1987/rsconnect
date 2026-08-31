@@ -106,6 +106,14 @@ final class OperationsService
         $this->recordCheck('billing_cron', 'Cron de cobrança', $this->checkBillingCron());
     }
 
+    public function refreshMessagingChecks(): void
+    {
+        $this->recordCheck('evolution', 'WhatsApp / Evolution', $this->checkEvolution());
+        $this->recordCheck('message_queue', 'Fila de mensagens', $this->checkMessageQueue());
+        $this->recordCheck('ai_reprocess', 'Rotina da fila da IA', $this->checkAiReprocess());
+        $this->syncBlockedEvolutionIncidents();
+    }
+
     public function registerManualBackup(
         string $type,
         string $storageType,
@@ -265,42 +273,114 @@ final class OperationsService
         }
     }
 
+    private function supportsEvolutionAlertSuppression(): bool
+    {
+        static $supported = null;
+        if ($supported !== null) {
+            return $supported;
+        }
+
+        try {
+            $statement = Database::connection()->query(
+                'SELECT COUNT(*)
+                 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = "evolution_instances"
+                   AND COLUMN_NAME = "operational_alerts_enabled"'
+            );
+            return $supported = (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return $supported = false;
+        }
+    }
+
+    private function evolutionAlertsEnabledSql(string $alias = ''): string
+    {
+        if (!$this->supportsEvolutionAlertSuppression()) {
+            return '1 = 1';
+        }
+
+        $prefix = $alias !== '' ? rtrim($alias, '.') . '.' : '';
+        return 'COALESCE(' . $prefix . 'operational_alerts_enabled, 1) = 1';
+    }
+
+    private function evolutionAlertsPausedSql(string $alias = ''): string
+    {
+        if (!$this->supportsEvolutionAlertSuppression()) {
+            return '1 = 0';
+        }
+
+        $prefix = $alias !== '' ? rtrim($alias, '.') . '.' : '';
+        return 'COALESCE(' . $prefix . 'operational_alerts_enabled, 1) = 0';
+    }
+
     private function checkEvolution(): array
     {
-        $instances = $this->count('SELECT COUNT(*) FROM evolution_instances');
-        $connected = $this->count("SELECT COUNT(*) FROM evolution_instances WHERE status IN ('connected','open','active','online')");
-        $incoming24 = $this->count("SELECT COUNT(*) FROM conversation_messages WHERE direction = 'incoming' AND created_at >= (NOW() - INTERVAL 24 HOUR)");
+        $alertsEnabled = $this->evolutionAlertsEnabledSql();
+        $alertsPaused = $this->evolutionAlertsPausedSql();
+        $instances = $this->count('SELECT COUNT(*) FROM evolution_instances WHERE ' . $alertsEnabled);
+        $paused = $this->count('SELECT COUNT(*) FROM evolution_instances WHERE ' . $alertsPaused);
+        $connected = $this->count(
+            "SELECT COUNT(*) FROM evolution_instances
+             WHERE " . $alertsEnabled . "
+               AND LOWER(COALESCE(NULLIF(connection_state, ''), status)) IN ('connected','open','active','online')"
+        );
+        $incoming24 = $this->count(
+            "SELECT COUNT(*)
+             FROM conversation_messages cm
+             LEFT JOIN conversations c ON c.id = cm.conversation_id AND c.tenant_id = cm.tenant_id
+             LEFT JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = cm.tenant_id
+             WHERE cm.direction = 'incoming'
+               AND cm.created_at >= (NOW() - INTERVAL 24 HOUR)
+               AND (i.id IS NULL OR " . $this->evolutionAlertsEnabledSql('i') . ")"
+        );
+
+        $pausedText = $paused > 0
+            ? '; ' . $paused . ' conexão(ões) pausada(s) pelo cliente, sem alertas operacionais'
+            : '';
+
+        if ($instances < 1 && $paused > 0) {
+            return [
+                'status' => 'ok',
+                'message' => 'Nenhuma conexão está sendo monitorada no momento; ' . $paused . ' conexão(ões) foi(ram) pausada(s) pelo cliente. As filas vinculadas permanecem preservadas sem gerar notificações.',
+                'latency_ms' => null,
+            ];
+        }
 
         if ($connected > 0) {
             $lastEvolutionFailure = $this->latestEvolutionFailure();
-            $lastSuccess = $this->fetchOne("SELECT created_at FROM ai_automation_logs WHERE event = 'ai.replied' AND status = 'success' ORDER BY id DESC LIMIT 1");
+            $lastSuccess = $this->latestEvolutionSuccess();
             $failureAt = strtotime((string) ($lastEvolutionFailure['created_at'] ?? '')) ?: 0;
             $successAt = strtotime((string) ($lastSuccess['created_at'] ?? '')) ?: 0;
             if ($failureAt > $successAt && $failureAt >= time() - 86400) {
                 return [
                     'status' => 'warning',
-                    'message' => $connected . '/' . max($instances, $connected) . ' instância(s) marcadas como conectadas, porém o envio mais recente falhou: ' . trim((string) ($lastEvolutionFailure['error_message'] ?? 'erro sem detalhe')) . '. Abra Fila da IA/WhatsApp para validar o estado ao vivo.',
+                    'message' => $connected . '/' . max($instances, $connected) . ' instância(s) monitorada(s) conectada(s), porém o envio mais recente falhou: ' . trim((string) ($lastEvolutionFailure['error_message'] ?? 'erro sem detalhe')) . '.' . $pausedText . ' Abra Fila da IA/WhatsApp para validar o estado ao vivo.',
                     'latency_ms' => null,
                 ];
             }
             return [
-                'status' => 'ok',
-                'message' => $connected . '/' . max($instances, $connected) . ' instância(s) conectada(s); ' . $incoming24 . ' mensagem(ns) recebida(s) nas últimas 24h.',
+                'status' => $connected === $instances ? 'ok' : 'warning',
+                'message' => $connected . '/' . max($instances, $connected) . ' instância(s) monitorada(s) conectada(s); ' . $incoming24 . ' mensagem(ns) recebida(s) nas últimas 24h' . $pausedText . '.',
                 'latency_ms' => null,
             ];
         }
 
         $url = trim((string) Env::get('EVOLUTION_DEFAULT_URL', ''));
-        if ($url !== '') {
+        if ($instances > 0 && $url !== '') {
             $endpoint = $this->checkHttpEndpoint($url, 'Evolution não configurada');
             return [
                 'status' => 'warning',
-                'message' => 'A API está configurada, mas nenhuma instância aparece conectada. ' . ($endpoint['message'] ?? ''),
+                'message' => 'Existem ' . $instances . ' conexão(ões) monitorada(s), mas nenhuma aparece conectada. ' . ($endpoint['message'] ?? '') . $pausedText,
                 'latency_ms' => $endpoint['latency_ms'] ?? null,
             ];
         }
 
-        return ['status' => 'warning', 'message' => 'Nenhuma instância Evolution conectada ou URL padrão configurada.', 'latency_ms' => null];
+        if ($instances > 0) {
+            return ['status' => 'warning', 'message' => 'Nenhuma instância monitorada está conectada ou a URL padrão não foi configurada.' . $pausedText, 'latency_ms' => null];
+        }
+
+        return ['status' => 'warning', 'message' => 'Nenhuma instância Evolution conectada ou configurada para monitoramento.', 'latency_ms' => null];
     }
 
     private function checkN8n(): array
@@ -438,8 +518,20 @@ final class OperationsService
     private function latestEvolutionFailure(): ?array
     {
         try {
+            $enabled = $this->evolutionAlertsEnabledSql('i');
             $rows = Database::connection()->query(
-                "SELECT created_at, error_message, raw_json FROM ai_automation_logs WHERE (event = 'ai.failed' OR status = 'error') ORDER BY id DESC LIMIT 40"
+                "SELECT al.created_at, al.error_message, al.raw_json
+                 FROM ai_automation_logs al
+                 LEFT JOIN conversations c
+                    ON c.id = al.conversation_id
+                   AND c.tenant_id = al.tenant_id
+                 LEFT JOIN evolution_instances i
+                    ON i.id = c.evolution_instance_id
+                   AND i.tenant_id = al.tenant_id
+                 WHERE (al.event = 'ai.failed' OR al.status = 'error')
+                   AND (i.id IS NULL OR " . $enabled . ")
+                 ORDER BY al.id DESC
+                 LIMIT 40"
             )->fetchAll(PDO::FETCH_ASSOC) ?: [];
             foreach ($rows as $row) {
                 $error = trim((string) ($row['error_message'] ?? ''));
@@ -457,6 +549,30 @@ final class OperationsService
         } catch (Throwable) {
         }
         return null;
+    }
+
+    private function latestEvolutionSuccess(): ?array
+    {
+        try {
+            $enabled = $this->evolutionAlertsEnabledSql('i');
+            return $this->fetchOne(
+                "SELECT al.created_at
+                 FROM ai_automation_logs al
+                 LEFT JOIN conversations c
+                    ON c.id = al.conversation_id
+                   AND c.tenant_id = al.tenant_id
+                 LEFT JOIN evolution_instances i
+                    ON i.id = c.evolution_instance_id
+                   AND i.tenant_id = al.tenant_id
+                 WHERE al.event = 'ai.replied'
+                   AND al.status = 'success'
+                   AND (i.id IS NULL OR " . $enabled . ")
+                 ORDER BY al.id DESC
+                 LIMIT 1"
+            );
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private function checkWebhooks(): array
@@ -628,14 +744,20 @@ final class OperationsService
         if ($lastAt === 0) {
             return ['status' => 'warning', 'message' => 'Rotina ativa para ' . substr((string) ($settings['run_time'] ?? '03:00'), 0, 5) . ', mas nenhuma execução foi registrada.', 'latency_ms' => null];
         }
-        $lastSummary = json_decode((string) ($settings['last_summary_json'] ?? ''), true);
-        $lastSummary = is_array($lastSummary) ? $lastSummary : [];
-        $blocked = (int) ($lastSummary['blocked'] ?? 0);
+
+        $dashboard = (new AiReprocessService())->dashboard();
+        $activeBlocked = (int) ($dashboard['pending_blocked_total'] ?? 0);
+        $pausedPending = (int) ($dashboard['pending_paused_total'] ?? 0);
+        $actionablePending = (int) ($dashboard['pending_actionable_total'] ?? $dashboard['pending_total'] ?? 0);
+
         if ($lastStatus === 'error') {
             return ['status' => 'warning', 'message' => 'A última execução da fila da IA falhou em ' . ($settings['last_run_at'] ?? '') . ': ' . trim((string) ($settings['last_error'] ?? 'consulte os detalhes da fila')), 'latency_ms' => null];
         }
-        if ($lastStatus === 'skipped' && $blocked > 0) {
-            return ['status' => 'warning', 'message' => $blocked . ' grupo(s) de pendência aguardam reconexão do WhatsApp/Evolution. A fila foi preservada sem repetir tentativas enquanto a instância estiver desconectada.', 'latency_ms' => null];
+        if ($activeBlocked > 0) {
+            return ['status' => 'warning', 'message' => $activeBlocked . ' grupo(s) de pendência aguardam reconexão de uma conexão monitorada. A fila foi preservada sem repetir tentativas enquanto a instância estiver desconectada.', 'latency_ms' => null];
+        }
+        if ($actionablePending === 0 && $pausedPending > 0) {
+            return ['status' => 'ok', 'message' => $pausedPending . ' pendência(s) estão vinculadas a conexões pausadas pelo cliente. A fila continua preservada e não gera alertas nem novas tentativas até a reconexão.', 'latency_ms' => null];
         }
         if ($lastAt < time() - 129600) {
             return ['status' => 'warning', 'message' => 'Rotina ativa, porém a última execução registrada ocorreu há mais de 36 horas: ' . ($settings['last_run_at'] ?? '') . '.', 'latency_ms' => null];
@@ -680,6 +802,10 @@ final class OperationsService
             $blockedHuman = (int) ($counts['blocked_human'] ?? 0);
             if ($blockedHuman > 0) {
                 $parts[] = $blockedHuman . ' respeitando atendimento humano/assistente pausado';
+            }
+            $pausedConnections = (int) ($counts['paused'] ?? 0);
+            if ($pausedConnections > 0) {
+                $parts[] = $pausedConnections . ' vinculada(s) a WhatsApp pausado, sem alertas ou reprocessamento';
             }
             $waiting = (int) ($summary['waiting_hours'] ?? 0);
             if ($waiting > 0) {
@@ -843,26 +969,53 @@ final class OperationsService
         $pendingMinutes = max(5, (int) Env::get('OPERATIONS_MESSAGE_PENDING_MINUTES', 15));
         $warningCount = max(1, (int) Env::get('OPERATIONS_MESSAGE_QUEUE_WARNING', 10));
         $criticalCount = max($warningCount + 1, (int) Env::get('OPERATIONS_MESSAGE_QUEUE_CRITICAL', 50));
+        $enabled = $this->evolutionAlertsEnabledSql('i');
+        $paused = $this->evolutionAlertsPausedSql('i');
+        $joins = ' FROM conversation_messages cm
+                   LEFT JOIN conversations c
+                     ON c.id = cm.conversation_id
+                    AND c.tenant_id = cm.tenant_id
+                   LEFT JOIN evolution_instances i
+                     ON i.id = c.evolution_instance_id
+                    AND i.tenant_id = cm.tenant_id ';
+
         $pending = $this->count(
-            "SELECT COUNT(*) FROM conversation_messages
-             WHERE direction = 'outgoing' AND status = 'pending'
-               AND created_at <= (NOW() - INTERVAL " . $pendingMinutes . " MINUTE)"
+            'SELECT COUNT(*)' . $joins .
+            "WHERE cm.direction = 'outgoing'
+               AND cm.status = 'pending'
+               AND cm.created_at <= (NOW() - INTERVAL " . $pendingMinutes . " MINUTE)
+               AND (i.id IS NULL OR " . $enabled . ')'
         );
         $failed24 = $this->count(
-            "SELECT COUNT(*) FROM conversation_messages
-             WHERE direction = 'outgoing' AND status = 'failed'
-               AND created_at >= (NOW() - INTERVAL 24 HOUR)"
+            'SELECT COUNT(*)' . $joins .
+            "WHERE cm.direction = 'outgoing'
+               AND cm.status = 'failed'
+               AND cm.created_at >= (NOW() - INTERVAL 24 HOUR)
+               AND (i.id IS NULL OR " . $enabled . ')'
+        );
+        $pausedPending = $this->count(
+            'SELECT COUNT(*)' . $joins .
+            "WHERE cm.direction = 'outgoing'
+               AND cm.status = 'pending'
+               AND cm.created_at <= (NOW() - INTERVAL " . $pendingMinutes . " MINUTE)
+               AND i.id IS NOT NULL
+               AND " . $paused
         );
         $oldest = $this->fetchOne(
-            "SELECT created_at FROM conversation_messages
-             WHERE direction = 'outgoing' AND status = 'pending'
-               AND created_at <= (NOW() - INTERVAL " . $pendingMinutes . " MINUTE)
-             ORDER BY created_at ASC LIMIT 1"
+            'SELECT cm.created_at' . $joins .
+            "WHERE cm.direction = 'outgoing'
+               AND cm.status = 'pending'
+               AND cm.created_at <= (NOW() - INTERVAL " . $pendingMinutes . " MINUTE)
+               AND (i.id IS NULL OR " . $enabled . ')
+             ORDER BY cm.created_at ASC LIMIT 1'
         );
-        $details = $pending . ' mensagem(ns) pendente(s) há mais de ' . $pendingMinutes . ' min; '
-            . $failed24 . ' falha(s) nas últimas 24h.';
+        $details = $pending . ' mensagem(ns) monitorada(s) pendente(s) há mais de ' . $pendingMinutes . ' min; '
+            . $failed24 . ' falha(s) monitorada(s) nas últimas 24h.';
+        if ($pausedPending > 0) {
+            $details .= ' ' . $pausedPending . ' mensagem(ns) preservada(s) em conexão(ões) pausada(s) pelo cliente, sem notificação.';
+        }
         if (!empty($oldest['created_at'])) {
-            $details .= ' Mais antiga: ' . $oldest['created_at'] . '.';
+            $details .= ' Mais antiga monitorada: ' . $oldest['created_at'] . '.';
         }
         if ($pending >= $criticalCount) {
             return ['status' => 'down', 'message' => $details, 'latency_ms' => null];
@@ -1044,6 +1197,7 @@ final class OperationsService
             foreach (($ai['pending_instances'] ?? []) as $item) {
                 $pending = (int) ($item['pending_count'] ?? 0);
                 if ($pending < 1) continue;
+                if (!empty($item['monitoring_suppressed']) || (int) ($item['operational_alerts_enabled'] ?? 1) !== 1) continue;
                 $state = strtolower(trim((string) (($item['connection_state'] ?? '') ?: ($item['instance_status'] ?? ''))));
                 if (in_array($state, ['open', 'connected', 'active', 'online'], true)) continue;
 

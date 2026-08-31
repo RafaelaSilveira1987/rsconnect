@@ -1083,8 +1083,11 @@ final class EvolutionWebhookController
             : (in_array($state, $pendingStates, true) ? 'pending' : 'disconnected');
 
         $pdo = Database::connection();
-        $pdo->prepare(
-            'UPDATE evolution_instances
+        $supportsAlerts = $this->columnExists($pdo, 'evolution_instances', 'operational_alerts_enabled');
+        $logoutStates = ['logged_out', 'logout', 'loggedout', 'user_logout', 'manual_logout'];
+        $isLogout = in_array($state, $logoutStates, true);
+
+        $updateSql = 'UPDATE evolution_instances
              SET status = :status,
                  connection_state = :state,
                  connection_reason = :reason,
@@ -1095,9 +1098,30 @@ final class EvolutionWebhookController
                  profile_phone = COALESCE(NULLIF(:profile_phone, ""), profile_phone),
                  profile_picture_url = COALESCE(NULLIF(:profile_picture, ""), profile_picture_url),
                  qrcode_base64 = CASE WHEN :clear_qr_code = 1 THEN NULL ELSE qrcode_base64 END,
-                 qrcode_expires_at = CASE WHEN :clear_qr_expiry = 1 THEN NULL ELSE qrcode_expires_at END
-             WHERE id = :id'
-        )->execute([
+                 qrcode_expires_at = CASE WHEN :clear_qr_expiry = 1 THEN NULL ELSE qrcode_expires_at END';
+
+        if ($supportsAlerts) {
+            if ($isLogout) {
+                $updateSql .= ',
+                 operational_alerts_enabled = 0,
+                 operational_alerts_paused_at = NOW(),
+                 operational_alerts_pause_reason = "connection_logout"';
+            } elseif ($status === 'connected') {
+                $updateSql .= ',
+                 operational_alerts_enabled = CASE
+                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                    THEN 1 ELSE operational_alerts_enabled END,
+                 operational_alerts_paused_at = CASE
+                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                    THEN NULL ELSE operational_alerts_paused_at END,
+                 operational_alerts_pause_reason = CASE
+                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                    THEN NULL ELSE operational_alerts_pause_reason END';
+            }
+        }
+
+        $updateSql .= ' WHERE id = :id';
+        $pdo->prepare($updateSql)->execute([
             'status' => $status,
             'state' => $state !== '' ? $state : 'unknown',
             'reason' => $reason !== '' ? mb_substr($reason, 0, 255) : null,
@@ -1110,6 +1134,15 @@ final class EvolutionWebhookController
         ]);
 
         $this->recordConnectionEvent($pdo, $instance, $event, $state, $reason, $profileName, $profilePhone, $payload);
+
+        if ($supportsAlerts && ($isLogout || $status === 'connected')) {
+            try {
+                (new \App\Services\OperationsService())->refreshMessagingChecks();
+            } catch (Throwable) {
+                // A atualização da conexão já foi persistida; o monitor agendado fará a reconciliação seguinte.
+            }
+        }
+
         return ['state' => $state, 'status' => $status, 'reason' => $reason, 'profile_name' => $profileName, 'profile_phone' => $profilePhone];
     }
 
