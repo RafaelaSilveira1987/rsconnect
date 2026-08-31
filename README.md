@@ -1,5 +1,5 @@
-## RS Connect 36.24.4
+## RS Connect 36.24.5
 
-Hotfix do cadastro público: IP real atrás do proxy, limites separados por e-mail/rede e falhas técnicas do Asaas fora da contagem.
+Hotfix do Checkout Asaas: remoção de `customerData` parcial e coleta do endereço diretamente no ambiente seguro do gateway.
 
-Consulte `INSTRUCOES-v36.24.4.md`.
+Consulte `INSTRUCOES-v36.24.5.md`.

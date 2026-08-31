@@ -20,8 +20,8 @@ $checks = [
         && str_contains($signup, 'Muitas inscrições iniciadas nesta rede'),
     'variáveis documentadas' => str_contains($env, 'PUBLIC_SIGNUP_EMAIL_LIMIT_PER_HOUR=5')
         && str_contains($env, 'PUBLIC_SIGNUP_IP_LIMIT_PER_HOUR=20'),
-    'versão atualizada' => str_contains($signup, "public const VERSION = '36.24.4';")
-        && str_contains($version, 'RS Connect 36.24.4'),
+    'versão atualizada' => str_contains($signup, "public const VERSION = '36.24.5';")
+        && str_contains($version, 'RS Connect 36.24.5'),
 ];
 
 $failed = [];
@@ -35,4 +35,4 @@ if ($failed !== []) {
     exit(1);
 }
 
-echo "OK - rate limit seguro do cadastro público v36.24.4 validado.\n";
+echo "OK - rate limit seguro do cadastro público v36.24.5 validado.\n";
