@@ -1,5 +1,19 @@
-## RS Connect 36.26.2
+.git
+.github
+.env
+.env.*
+!.env.example
+!.env.*.example
 
-Correção do monitor financeiro para diferenciar falhas atuais de falhas históricas já recuperadas.
+storage/logs/*
+!storage/logs/.gitkeep
+storage/cache/*
+!storage/cache/.gitkeep
+storage/app/white-label/*
+!storage/app/white-label/.gitkeep
+storage/conversation-attachments/*
 
-O alerta de pagamentos deixa de retornar após uma confirmação bem-sucedida posterior ao erro. Consulte `INSTRUCOES-v36.26.2.md`.
+*.zip
+*.tar
+*.tar.gz
+node_modules

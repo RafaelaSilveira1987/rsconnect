@@ -1,0 +1,26 @@
+{
+  "name": "rs-connect/fundacao-saas",
+  "description": "Fundação SaaS multiempresa do RS Connect",
+  "type": "project",
+  "require": {
+    "php": ">=8.2",
+    "ext-curl": "*",
+    "ext-openssl": "*",
+    "ext-pdo": "*",
+    "ext-pdo_mysql": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "app/"
+    }
+  },
+  "scripts": {
+    "test": "php tests/Support/run-smoke-tests.php",
+    "test:ent026": "php tests/Feature/ent026-tests-sanitization-smoke.php",
+    "test:ent028": "php tests/Feature/ent028-webhook-security-smoke.php",
+    "test:ent028-schema": "php tests/Feature/ent028-pagbank-schema-hotfix-smoke.php",
+    "test:ent029": "php tests/Feature/ent029-secure-health-checks-smoke.php",
+    "test:ent030": "php tests/Feature/ent030-xss-svg-csp-smoke.php",
+    "test:ent027": "php tests/Feature/ent027-migrations-normalization-smoke.php"
+  }
+}

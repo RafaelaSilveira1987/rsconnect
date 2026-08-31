@@ -1,110 +1,110 @@
-#!/usr/bin/env bash
-set -uo pipefail
+<?php
 
-# RS Connect v36.3.0 — backup real do MySQL em Docker Swarm/EasyPanel.
-# Uso:
-#   ./scripts/rsconnect-backup.sh /backups/rs-connect 5 rs_connect
-# Variável opcional:
-#   RS_CONNECT_MYSQL_SERVICE=sites_mysql
+declare(strict_types=1);
 
-STARTED_AT="$(date --iso-8601=seconds)"
-OUTPUT_DIR="${1:-/backups/rs-connect}"
-RETENTION_DAYS="${2:-5}"
-DATABASE_NAME="${3:-rs_connect}"
-MYSQL_SERVICE="${RS_CONNECT_MYSQL_SERVICE:-sites_mysql}"
-TEMP_SQL=""
-TEMP_GZ=""
-FINAL_PATH=""
+use App\Core\ContentSecurityPolicy;
+use App\Core\Env;
+use App\Core\RequestSecurity;
 
-json_escape() {
-  local value="${1:-}"
-  value=${value//\\/\\\\}
-  value=${value//\"/\\\"}
-  value=${value//$'\n'/\\n}
-  value=${value//$'\r'/\\r}
-  printf '%s' "$value"
+$composerAutoload = __DIR__ . '/vendor/autoload.php';
+$projectAutoloader = __DIR__ . '/app/Core/Autoloader.php';
+
+if (is_file($composerAutoload)) {
+    require_once $composerAutoload;
 }
 
-finish_error() {
-  local message="${1:-Falha desconhecida ao gerar o backup.}"
-  [[ -n "$TEMP_SQL" ]] && rm -f "$TEMP_SQL" 2>/dev/null || true
-  [[ -n "$TEMP_GZ" ]] && rm -f "$TEMP_GZ" 2>/dev/null || true
-  [[ -n "$FINAL_PATH" ]] && rm -f "$FINAL_PATH" 2>/dev/null || true
-  printf '{"status":"error","verified":false,"message":"%s","started_at":"%s","finished_at":"%s"}\n' \
-    "$(json_escape "$message")" "$STARTED_AT" "$(date --iso-8601=seconds)"
-  exit 0
+if (!class_exists(App\Core\Autoloader::class, false)) {
+    require_once $projectAutoloader;
 }
 
-[[ "$RETENTION_DAYS" =~ ^[0-9]+$ ]] || finish_error "Retenção inválida."
-(( RETENTION_DAYS >= 1 && RETENTION_DAYS <= 365 )) || finish_error "Retenção fora do intervalo permitido."
-[[ "$DATABASE_NAME" =~ ^[A-Za-z0-9_]+$ ]] || finish_error "Nome do banco inválido."
-[[ "$OUTPUT_DIR" == /* ]] || finish_error "O caminho do backup deve ser absoluto."
+App\Core\Autoloader::register(__DIR__ . '/app');
 
-CONTAINER_ID="$(docker ps \
-  --filter "label=com.docker.swarm.service.name=${MYSQL_SERVICE}" \
-  --format '{{.ID}}' 2>/dev/null | head -n 1)"
+Env::load(__DIR__ . '/.env');
 
-if [[ -z "$CONTAINER_ID" ]]; then
-  CONTAINER_ID="$(docker ps --format '{{.ID}} {{.Names}}' 2>/dev/null \
-    | awk -v service="$MYSQL_SERVICE" '$0 ~ service {print $1; exit}')"
-fi
+date_default_timezone_set((string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo'));
 
-[[ -n "$CONTAINER_ID" ]] || finish_error "Container MySQL do serviço ${MYSQL_SERVICE} não encontrado."
+$requestPath = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
+$sessionlessHealthRequest = in_array($requestPath, ['/health/live', '/health/ready'], true)
+    || $requestPath === '/white-label/asset';
 
-mkdir -p "$OUTPUT_DIR" || finish_error "Não foi possível criar o diretório ${OUTPUT_DIR}."
-chmod 750 "$OUTPUT_DIR" 2>/dev/null || true
+$debug = filter_var(Env::get('APP_DEBUG', false), FILTER_VALIDATE_BOOL);
+ini_set('display_errors', $debug ? '1' : '0');
+error_reporting(E_ALL);
 
-STAMP="$(date +%Y-%m-%d-%H%M%S)"
-FILE_NAME="rs-connect-${STAMP}.sql.gz"
-FINAL_PATH="${OUTPUT_DIR%/}/${FILE_NAME}"
-TEMP_SQL="${FINAL_PATH%.gz}.tmp.sql"
-TEMP_GZ="${FINAL_PATH}.tmp"
+if (!$sessionlessHealthRequest && session_status() !== PHP_SESSION_ACTIVE) {
+    $lifetimeSeconds = max(300, (int) Env::get('SESSION_LIFETIME', 120) * 60);
+    $sameSite = ucfirst(strtolower(trim((string) Env::get('SESSION_SAMESITE', 'Lax'))));
+    if (!in_array($sameSite, ['Lax', 'Strict'], true)) {
+        $sameSite = 'Lax';
+    }
 
-if ! docker exec "$CONTAINER_ID" sh -lc '
-  MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump \
-    -uroot \
-    --single-transaction \
-    --set-gtid-purged=OFF \
-    --routines \
-    --triggers \
-    --events \
-    "$1"
-' sh "$DATABASE_NAME" > "$TEMP_SQL"; then
-  finish_error "mysqldump falhou. Verifique o banco e as credenciais internas do container."
-fi
+    $secureSetting = strtolower(trim((string) Env::get('SESSION_COOKIE_SECURE', 'auto')));
+    $secureCookie = match ($secureSetting) {
+        '1', 'true', 'yes', 'on' => true,
+        '0', 'false', 'no', 'off' => false,
+        default => RequestSecurity::isHttps(),
+    };
 
-SQL_SIZE="$(stat -c%s "$TEMP_SQL" 2>/dev/null || echo 0)"
-(( SQL_SIZE >= 1024 )) || finish_error "O dump SQL ficou vazio ou pequeno demais (${SQL_SIZE} bytes)."
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.use_trans_sid', '0');
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.gc_maxlifetime', (string) $lifetimeSeconds);
+    session_cache_limiter('nocache');
 
-grep -q '^CREATE TABLE' "$TEMP_SQL" || finish_error "O dump não contém estruturas CREATE TABLE."
+    session_name((string) Env::get('SESSION_NAME', 'rs_connect_session'));
+    session_set_cookie_params([
+        'lifetime' => $lifetimeSeconds,
+        'path' => '/',
+        'secure' => $secureCookie,
+        'httponly' => true,
+        'samesite' => $sameSite,
+    ]);
+    session_start();
+}
 
-gzip -9 -c "$TEMP_SQL" > "$TEMP_GZ" || finish_error "Falha ao compactar o dump."
-gzip -t "$TEMP_GZ" || finish_error "A validação gzip falhou."
+if (!headers_sent() && filter_var(Env::get('SECURITY_HEADERS_ENABLED', true), FILTER_VALIDATE_BOOL)) {
+    header_remove('X-Powered-By');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()');
+    header('Cross-Origin-Opener-Policy: same-origin');
+    header('X-Permitted-Cross-Domain-Policies: none');
 
-mv -f "$TEMP_GZ" "$FINAL_PATH" || finish_error "Não foi possível publicar o arquivo final."
-rm -f "$TEMP_SQL"
-TEMP_SQL=""
-TEMP_GZ=""
-chmod 640 "$FINAL_PATH" 2>/dev/null || true
+    if (filter_var(Env::get('SECURITY_CSP_ENABLED', true), FILTER_VALIDATE_BOOL)) {
+        header('Content-Security-Policy: ' . ContentSecurityPolicy::headerValue(RequestSecurity::isHttps()));
+    }
 
-FILE_SIZE="$(stat -c%s "$FINAL_PATH" 2>/dev/null || echo 0)"
-(( FILE_SIZE >= 1024 )) || finish_error "O arquivo compactado ficou pequeno demais (${FILE_SIZE} bytes)."
+    if (RequestSecurity::isHttps()) {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
 
-CHECKSUM="$(sha256sum "$FINAL_PATH" | awk '{print $1}')"
-[[ "$CHECKSUM" =~ ^[a-f0-9]{64}$ ]] || finish_error "Não foi possível calcular o SHA-256."
+    if (!str_starts_with($requestPath, '/assets/') && !str_starts_with($requestPath, '/uploads/')) {
+        header('Cache-Control: no-store, private, max-age=0');
+        header('Pragma: no-cache');
+    }
+}
 
-TABLE_COUNT="$(gzip -cd "$FINAL_PATH" | grep -c '^CREATE TABLE' || true)"
-(( TABLE_COUNT > 0 )) || finish_error "O arquivo validado não contém tabelas."
+set_exception_handler(static function (Throwable $exception) use ($debug): void {
+    $logDir = __DIR__ . '/storage/logs';
+    if (!is_dir($logDir)) {
+        mkdir($logDir, 0775, true);
+    }
 
-# Retenção somente dos arquivos gerados por esta rotina.
-find "$OUTPUT_DIR" -maxdepth 1 -type f -name 'rs-connect-*.sql.gz' -mtime "+${RETENTION_DAYS}" -delete 2>/dev/null || true
+    error_log(
+        '[' . date('Y-m-d H:i:s') . '] ' . $exception . PHP_EOL,
+        3,
+        $logDir . '/app.log'
+    );
 
-printf '{"status":"success","verified":true,"file_name":"%s","location":"%s","size_bytes":%s,"checksum":"%s","table_count":%s,"database":"%s","started_at":"%s","finished_at":"%s"}\n' \
-  "$(json_escape "$FILE_NAME")" \
-  "$(json_escape "$FINAL_PATH")" \
-  "$FILE_SIZE" \
-  "$CHECKSUM" \
-  "$TABLE_COUNT" \
-  "$(json_escape "$DATABASE_NAME")" \
-  "$STARTED_AT" \
-  "$(date --iso-8601=seconds)"
+    http_response_code(500);
+    if ($debug) {
+        echo '<pre style="white-space:pre-wrap;font-family:monospace;padding:24px">' .
+            htmlspecialchars((string) $exception, ENT_QUOTES, 'UTF-8') .
+            '</pre>';
+        return;
+    }
+
+    echo 'Ocorreu um erro interno. Consulte storage/logs/app.log.';
+});

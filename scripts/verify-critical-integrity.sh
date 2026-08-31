@@ -33,13 +33,14 @@ check_php_file() {
   php -l "$file" >/dev/null || error "Sintaxe PHP inválida em $rel"
 }
 
+check_php_file 'bootstrap.php' 'App\Core\Autoloader::register'
 check_php_file 'bin/operations-monitor.php' 'new OperationsService'
 check_php_file 'app/Services/OperationsService.php' 'final class OperationsService'
 
 # Nenhum PHP da aplicação pode conter o script Bash de backup.
 while IFS= read -r file; do
   error "Script Bash encontrado dentro de PHP: ${file#$ROOT/}"
-done < <(grep -RIlE 'RS Connect v36\.3\.0.*backup real|(^|[[:space:]])set -uo pipefail' "$ROOT/app" "$ROOT/bin" --include='*.php' 2>/dev/null || true)
+done < <(grep -IlE 'RS Connect v36\.3\.0.*backup real|(^|[[:space:]])set -uo pipefail' "$ROOT/bootstrap.php" 2>/dev/null || true; grep -RIlE 'RS Connect v36\.3\.0.*backup real|(^|[[:space:]])set -uo pipefail' "$ROOT/app" "$ROOT/bin" --include='*.php' 2>/dev/null || true)
 
 # O autoload deve carregar a classe sem produzir qualquer saída lateral.
 AUTOLOAD_OUTPUT="$(php -d display_errors=1 -d opcache.enable_cli=0 -r "require '$ROOT/bootstrap.php'; echo class_exists('App\\\\Services\\\\OperationsService') ? 'CLASSE OK' : 'CLASSE AUSENTE';" 2>&1 || true)"
