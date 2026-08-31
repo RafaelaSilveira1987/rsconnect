@@ -24,7 +24,7 @@ $brandCssVariables = '--rs-blue:' . $brandPrimary . ';--rs-purple:' . $brandSeco
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= View::e($title ?? 'Entrar') ?> — <?= View::e($brandName) ?></title>
     <?php if ($brandFaviconUrl !== ''): ?><link rel="icon" href="<?= View::e($brandAssetHref($brandFaviconUrl)) ?>"><?php endif; ?>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.24.1')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.24.2')) ?>">
 </head>
 <body class="guest-page<?= !empty($branding['enabled']) ? ' has-tenant-branding' : '' ?>" style="<?= View::e($brandCssVariables) ?>">
     <main class="guest-shell">

@@ -17,7 +17,7 @@ use Throwable;
 
 final class PublicSignupService
 {
-    public const VERSION = '36.24.1';
+    public const VERSION = '36.24.2';
 
     /** @return array<string,mixed> */
     public function offer(): array
@@ -980,6 +980,7 @@ final class PublicSignupService
     /** @param list<string> $headers @param array<string,mixed> $payload @return array<string,mixed> */
     private function requestJson(string $method, string $url, array $headers, array $payload): array
     {
+        $headers = $this->withAsaasUserAgent($headers);
         $ch = curl_init($url);
         if ($ch === false) {
             throw new RuntimeException('Não foi possível iniciar a comunicação com o Asaas.');
@@ -1008,6 +1009,23 @@ final class PublicSignupService
             throw new RuntimeException('Asaas: ' . mb_substr($description, 0, 500));
         }
         return $decoded;
+    }
+
+    /** @param list<string> $headers @return list<string> */
+    private function withAsaasUserAgent(array $headers): array
+    {
+        foreach ($headers as $header) {
+            if (stripos($header, 'User-Agent:') === 0) {
+                return $headers;
+            }
+        }
+
+        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.24.2'));
+        if ($userAgent === '' || preg_match('/[\r\n]/', $userAgent)) {
+            $userAgent = 'RS-Connect/36.24.2';
+        }
+        $headers[] = 'User-Agent: ' . mb_substr($userAgent, 0, 255);
+        return $headers;
     }
 
     private function normalizePhone(string $phone): string

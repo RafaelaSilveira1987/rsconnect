@@ -1417,6 +1417,9 @@ final class PaymentGatewayService
         if ($url === '') {
             throw new RuntimeException('URL do gateway não configurada.');
         }
+        if ($this->isAsaasApiUrl($url)) {
+            $headers = $this->withAsaasUserAgent($headers);
+        }
         $ch = curl_init($url);
         if ($ch === false) {
             throw new RuntimeException('Não foi possível iniciar cURL.');
@@ -1476,6 +1479,29 @@ final class PaymentGatewayService
         }
 
         return $decoded;
+    }
+
+    private function isAsaasApiUrl(string $url): bool
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        return in_array($host, ['api.asaas.com', 'api-sandbox.asaas.com'], true);
+    }
+
+    /** @param list<string> $headers @return list<string> */
+    private function withAsaasUserAgent(array $headers): array
+    {
+        foreach ($headers as $header) {
+            if (stripos($header, 'User-Agent:') === 0) {
+                return $headers;
+            }
+        }
+
+        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.24.2'));
+        if ($userAgent === '' || preg_match('/[\r\n]/', $userAgent)) {
+            $userAgent = 'RS-Connect/36.24.2';
+        }
+        $headers[] = 'User-Agent: ' . mb_substr($userAgent, 0, 255);
+        return $headers;
     }
 
     private function logEvent(?int $tenantId, ?int $gatewayId, string $event, string $status, array $payload): void

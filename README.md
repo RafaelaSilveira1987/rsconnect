@@ -1,3 +1,7 @@
+## RS Connect 36.24.2
+
+Hotfix da integração Asaas: adiciona o cabeçalho HTTP obrigatório `User-Agent` no cadastro público e nas demais chamadas financeiras ao Asaas. O valor padrão é `RS-Connect/36.24.2` e pode ser sobrescrito pela variável opcional `ASAAS_USER_AGENT`.
+
 ## RS Connect 36.24.1
 
 Hotfix do cadastro público Asaas: remove URL interna legada (`rsconnect.local`), força os endpoints oficiais por ambiente e bloqueia configuração manual incorreta.
