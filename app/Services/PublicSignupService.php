@@ -17,7 +17,7 @@ use Throwable;
 
 final class PublicSignupService
 {
-    public const VERSION = '36.24.2';
+    public const VERSION = '36.24.3';
 
     /** @return array<string,mixed> */
     public function offer(): array
@@ -714,27 +714,47 @@ final class PublicSignupService
                 'expiredUrl' => Router::url('/signup/expired?token=' . rawurlencode((string) $data['token'])),
             ],
             'items' => [[
-                'name' => 'RS Connect — Plano Inicial',
-                'description' => 'Assinatura mensal com IA RS Connect e 7 dias grátis.',
+                'name' => 'RS Connect Plano Inicial',
+                'description' => 'Assinatura mensal com IA RS Connect e sete dias gratis.',
                 'quantity' => 1,
                 'value' => (float) $data['amount'],
             ]],
-            'customerData' => [
-                'name' => (string) $data['responsible_name'],
-                'cpfCnpj' => (string) $data['document'],
-                'email' => (string) $data['email'],
-                'phone' => $this->localPhone((string) $data['phone']),
-            ],
             'subscription' => [
                 'cycle' => 'MONTHLY',
                 'nextDueDate' => (string) $data['first_charge_at'] . ' 00:00:00',
             ],
         ];
 
-        $response = $this->requestJson('POST', $baseUrl . '/checkouts', [
+        $payerName = $this->asaasSafePersonName((string) $data['responsible_name']);
+        if ($payerName !== '') {
+            $payload['customerData'] = [
+                'name' => $payerName,
+                'cpfCnpj' => (string) $data['document'],
+                'email' => (string) $data['email'],
+                'phone' => $this->localPhone((string) $data['phone']),
+            ];
+        }
+
+        $headers = [
             'Content-Type: application/json',
             'access_token: ' . $this->gatewayApiKey($gateway),
-        ], $payload);
+        ];
+        try {
+            $response = $this->requestJson('POST', $baseUrl . '/checkouts', $headers, $payload);
+        } catch (RuntimeException $exception) {
+            // O Asaas pode recusar customerData.name quando o responsável foi
+            // informado com apenas um nome, emoji ou caractere não aceito. O
+            // checkout continua válido sem customerData e solicitará os dados
+            // diretamente ao pagador. Repetimos uma única vez, sem esconder
+            // qualquer outro erro de validação.
+            $message = $this->normalizeForComparison($exception->getMessage());
+            if (isset($payload['customerData']) && str_contains($message, 'campo name') && str_contains($message, 'invalido')) {
+                unset($payload['customerData']);
+                $response = $this->requestJson('POST', $baseUrl . '/checkouts', $headers, $payload);
+            } else {
+                throw $exception;
+            }
+        }
         $id = trim((string) ($response['id'] ?? ''));
         if ($id === '') {
             throw new RuntimeException('O Asaas não retornou o identificador do checkout.');
@@ -1020,12 +1040,34 @@ final class PublicSignupService
             }
         }
 
-        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.24.2'));
+        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.24.3'));
         if ($userAgent === '' || preg_match('/[\r\n]/', $userAgent)) {
-            $userAgent = 'RS-Connect/36.24.2';
+            $userAgent = 'RS-Connect/36.24.3';
         }
         $headers[] = 'User-Agent: ' . mb_substr($userAgent, 0, 255);
         return $headers;
+    }
+
+    private function asaasSafePersonName(string $name): string
+    {
+        $name = trim((string) preg_replace('/[^\p{L}\s]/u', ' ', $name));
+        $name = trim((string) preg_replace('/\s+/u', ' ', $name));
+        if ($name === '' || mb_strlen($name) < 3 || mb_strlen($name) > 100) {
+            return '';
+        }
+
+        // Nomes de uma única palavra são aceitos no RS Connect, mas o Asaas
+        // pode rejeitá-los no pré-preenchimento. Nesse caso, o checkout será
+        // criado sem customerData e o pagador preencherá o nome no Asaas.
+        $parts = preg_split('/\s+/u', $name) ?: [];
+        return count($parts) >= 2 ? $name : '';
+    }
+
+    private function normalizeForComparison(string $value): string
+    {
+        $value = mb_strtolower(trim($value));
+        $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+        return $ascii !== false ? $ascii : $value;
     }
 
     private function normalizePhone(string $phone): string
