@@ -16,8 +16,8 @@ $checks = [
         && str_contains($signup, "\$payload['customerData'] = ["),
     'retry remove somente customerData no erro de name' => str_contains($signup, "str_contains(\$message, 'campo name')")
         && str_contains($signup, "unset(\$payload['customerData']);"),
-    'versão atualizada' => str_contains($signup, "public const VERSION = '36.24.3';")
-        && str_contains($version, 'RS Connect 36.24.3'),
+    'versão atualizada' => str_contains($signup, "public const VERSION = '36.24.4';")
+        && str_contains($version, 'RS Connect 36.24.4'),
 ];
 
 $failed = [];
@@ -30,4 +30,4 @@ if ($failed !== []) {
     fwrite(STDERR, 'Falhas: ' . implode(', ', $failed) . PHP_EOL);
     exit(1);
 }
-echo "OK - compatibilidade do campo name no Checkout Asaas v36.24.3 validada.\n";
+echo "OK - compatibilidade do campo name no Checkout Asaas v36.24.4 validada.\n";

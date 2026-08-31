@@ -9,6 +9,7 @@ use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Env;
 use App\Core\Router;
+use App\Core\RequestSecurity;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
@@ -17,7 +18,7 @@ use Throwable;
 
 final class PublicSignupService
 {
-    public const VERSION = '36.24.3';
+    public const VERSION = '36.24.4';
 
     /** @return array<string,mixed> */
     public function offer(): array
@@ -221,7 +222,7 @@ final class PublicSignupService
             throw new RuntimeException('Já existe uma empresa cadastrada com este CPF ou CNPJ.');
         }
 
-        $ipHash = hash('sha256', (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        $ipHash = hash('sha256', RequestSecurity::clientIp());
         $this->assertRateLimit($email, $ipHash);
 
         $gateway = is_array($offer['gateway'] ?? null) ? $offer['gateway'] : [];
@@ -795,14 +796,27 @@ final class PublicSignupService
 
     private function assertRateLimit(string $email, string $ipHash): void
     {
+        // Falhas técnicas do gateway não podem bloquear o cliente. Somente sessões
+        // que realmente abriram ou concluíram um checkout entram no limite.
+        $emailLimit = max(1, min(20, (int) Env::get('PUBLIC_SIGNUP_EMAIL_LIMIT_PER_HOUR', 5)));
+        $ipLimit = max($emailLimit, min(100, (int) Env::get('PUBLIC_SIGNUP_IP_LIMIT_PER_HOUR', 20)));
+
         $statement = Database::connection()->prepare(
-            'SELECT COUNT(*) FROM public_signup_sessions
+            'SELECT
+                COALESCE(SUM(CASE WHEN email = :email THEN 1 ELSE 0 END), 0) AS email_attempts,
+                COALESCE(SUM(CASE WHEN ip_hash = :ip_hash THEN 1 ELSE 0 END), 0) AS ip_attempts
+             FROM public_signup_sessions
              WHERE created_at >= (UTC_TIMESTAMP() - INTERVAL 1 HOUR)
-               AND (email = :email OR ip_hash = :ip_hash)'
+               AND status IN ("started", "checkout_created", "checkout_completed")'
         );
         $statement->execute(['email' => $email, 'ip_hash' => $ipHash]);
-        if ((int) $statement->fetchColumn() >= 5) {
-            throw new RuntimeException('Muitas tentativas de cadastro. Aguarde uma hora e tente novamente.');
+        $counts = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        if ((int) ($counts['email_attempts'] ?? 0) >= $emailLimit) {
+            throw new RuntimeException('Muitas inscrições iniciadas para este e-mail. Aguarde uma hora ou retome o checkout já criado.');
+        }
+        if ((int) ($counts['ip_attempts'] ?? 0) >= $ipLimit) {
+            throw new RuntimeException('Muitas inscrições iniciadas nesta rede. Aguarde uma hora e tente novamente.');
         }
     }
 
@@ -1040,9 +1054,9 @@ final class PublicSignupService
             }
         }
 
-        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.24.3'));
+        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.24.4'));
         if ($userAgent === '' || preg_match('/[\r\n]/', $userAgent)) {
-            $userAgent = 'RS-Connect/36.24.3';
+            $userAgent = 'RS-Connect/36.24.4';
         }
         $headers[] = 'User-Agent: ' . mb_substr($userAgent, 0, 255);
         return $headers;

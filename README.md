@@ -1,5 +1,5 @@
-## RS Connect 36.24.3
+## RS Connect 36.24.4
 
-Hotfix do cadastro público Asaas: normaliza o campo `name`, remove caracteres de risco no nome do item e aplica fallback seguro sem `customerData` quando o Asaas rejeita o nome do pagador.
+Hotfix do cadastro público: IP real atrás do proxy, limites separados por e-mail/rede e falhas técnicas do Asaas fora da contagem.
 
-Consulte `INSTRUCOES-v36.24.3.md`.
+Consulte `INSTRUCOES-v36.24.4.md`.
