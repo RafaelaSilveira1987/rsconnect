@@ -130,6 +130,11 @@ final class BillingController
             'last_event_at' => '',
             'external_subscription_id' => '',
             'bonus_days' => 0,
+            'coupon_code' => '',
+            'original_amount' => null,
+            'discount_amount' => 0,
+            'discount_scope' => '',
+            'discount_restored_at' => '',
         ];
         $subscriptionId = (int) ($plan['subscription_id'] ?? 0);
         if ($subscriptionId > 0) {
@@ -151,7 +156,8 @@ final class BillingController
                 }
 
                 $signupStatement = $pdo->prepare(
-                    'SELECT payment_method, bonus_days, checkout_completed_at, provisioned_at
+                    'SELECT payment_method, bonus_days, checkout_completed_at, provisioned_at,
+                            coupon_code, original_amount, discount_amount, discount_scope, discount_restored_at
                      FROM public_signup_sessions
                      WHERE subscription_id = :subscription_id
                      ORDER BY id DESC

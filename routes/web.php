@@ -62,6 +62,7 @@ return static function (Router $router): void {
     $router->post('/logout', [AuthController::class, 'logout'], ['auth', 'csrf']);
     $router->get('/signup', [PublicSignupController::class, 'show'], ['guest']);
     $router->post('/signup', [PublicSignupController::class, 'create'], ['guest', 'csrf']);
+    $router->post('/signup/coupon/validate', [PublicSignupController::class, 'validateCoupon'], ['guest', 'csrf']);
     $router->get('/signup/checkout', [PublicSignupController::class, 'checkout']);
     $router->get('/signup/success', [PublicSignupController::class, 'success']);
     $router->get('/signup/cancelled', [PublicSignupController::class, 'cancelled']);
@@ -329,6 +330,8 @@ return static function (Router $router): void {
     $router->get('/settings/public-signup', [PublicSignupController::class, 'settings'], ['auth', 'super_admin']);
     $router->post('/settings/public-signup/save', [PublicSignupController::class, 'saveSettings'], ['auth', 'super_admin', 'csrf']);
     $router->post('/settings/public-signup/test-gateway', [PublicSignupController::class, 'testGateway'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/settings/public-signup/coupons/save', [PublicSignupController::class, 'saveCoupon'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/settings/public-signup/coupons/toggle', [PublicSignupController::class, 'toggleCoupon'], ['auth', 'super_admin', 'csrf']);
     $router->get('/payment-gateways', [PaymentGatewayController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/billing-reminders', [BillingReminderController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/payment-gateways/save', [PaymentGatewayController::class, 'save'], ['auth', 'super_admin', 'csrf']);

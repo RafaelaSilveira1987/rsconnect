@@ -9,6 +9,7 @@ use App\Core\Auth;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\PublicSignupCouponService;
 use App\Services\PublicSignupService;
 use Throwable;
 
@@ -52,6 +53,7 @@ final class PublicSignupController
                 'phone' => trim((string) ($_POST['phone'] ?? '')),
                 'document' => trim((string) ($_POST['document'] ?? '')),
                 'payment_method' => trim((string) ($_POST['payment_method'] ?? 'credit_card')),
+                'coupon_code' => trim((string) ($_POST['coupon_code'] ?? '')),
             ];
             Flash::set('error', $exception->getMessage());
             $this->redirect('/signup');
@@ -127,6 +129,55 @@ final class PublicSignupController
             'last_error' => in_array((string) $signup['status'], ['failed'], true) ? (string) ($signup['last_error'] ?? '') : '',
             'login_url' => Router::url('/login'),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    public function validateCoupon(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate');
+        try {
+            $coupon = (new PublicSignupService())->previewCoupon($_POST);
+            echo json_encode(['ok' => true, 'coupon' => $coupon], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        } catch (Throwable $exception) {
+            http_response_code(422);
+            echo json_encode([
+                'ok' => false,
+                'message' => $exception->getMessage(),
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+    }
+
+    public function saveCoupon(): void
+    {
+        try {
+            $id = (new PublicSignupCouponService())->save($_POST, Auth::id());
+            Audit::log('public_signup.coupon_saved', [
+                'coupon_id' => $id,
+                'code' => PublicSignupCouponService::normalizeCode((string) ($_POST['code'] ?? '')),
+                'active' => !empty($_POST['active']),
+            ]);
+            Flash::set('success', 'Cupom salvo com sucesso.');
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+        }
+        $this->redirect('/settings/public-signup#coupons');
+    }
+
+    public function toggleCoupon(): void
+    {
+        $id = (int) ($_POST['id'] ?? 0);
+        $active = !empty($_POST['active']);
+        try {
+            (new PublicSignupCouponService())->toggle($id, $active, Auth::id());
+            Audit::log('public_signup.coupon_toggled', [
+                'coupon_id' => $id,
+                'active' => $active,
+            ]);
+            Flash::set('success', $active ? 'Cupom ativado.' : 'Cupom pausado.');
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+        }
+        $this->redirect('/settings/public-signup#coupons');
     }
 
     public function settings(): void

@@ -75,6 +75,11 @@ $lastPaidAt = (string) ($invoiceSummary['last_paid_at'] ?? '');
 $lastPaidAmount = $invoiceSummary['last_paid_amount'] ?? null;
 $aiBillingModeLabel = ($plan['ai_billing_mode'] ?? 'rs_connect') === 'tenant' ? 'IA própria do cliente' : 'IA RS Connect';
 $commitmentMonths = (int) ($plan['commitment_months'] ?? 3);
+$couponCode = trim((string) ($billingProfile['coupon_code'] ?? ''));
+$couponOriginalAmount = (float) ($billingProfile['original_amount'] ?? 0);
+$couponDiscountAmount = (float) ($billingProfile['discount_amount'] ?? 0);
+$couponScope = (string) ($billingProfile['discount_scope'] ?? '');
+$couponRestored = !empty($billingProfile['discount_restored_at']);
 $whatsappNumber = '5532987073537';
 $whatsappMessage = rawurlencode('Olá! Gostaria de conhecer as opções para melhorar meu plano no RS Connect. Minha empresa é ' . (string) ($tenant['name'] ?? '') . '.');
 $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
@@ -125,6 +130,17 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
 <section class="client-billing-environment-alert" role="status">
     <strong>Assinatura em ambiente de homologação</strong>
     <span>Os dados abaixo pertencem ao Sandbox do Asaas e não representam uma cobrança real.</span>
+</section>
+<?php endif; ?>
+
+<?php if ($couponCode !== '' && $couponDiscountAmount > 0): ?>
+<section class="client-coupon-banner" role="status">
+    <div>
+        <span class="eyebrow">Benefício promocional</span>
+        <strong>Cupom <?= View::e($couponCode) ?></strong>
+        <small><?php if ($couponScope === 'recurring'): ?>Desconto de <?= View::e($money($couponDiscountAmount)) ?> aplicado em todas as mensalidades.<?php elseif ($couponRestored): ?>O desconto de <?= View::e($money($couponDiscountAmount)) ?> foi aplicado na primeira cobrança; as próximas seguem o valor normal.<?php else: ?>A primeira cobrança terá <?= View::e($money($couponDiscountAmount)) ?> de desconto. Depois, a mensalidade volta para <?= View::e($money($couponOriginalAmount)) ?>.<?php endif; ?></small>
+    </div>
+    <span><?= $couponScope === 'recurring' ? View::e($money((float) ($plan['monthly_price'] ?? 0))) . '/mês' : 'Promoção aplicada' ?></span>
 </section>
 <?php endif; ?>
 

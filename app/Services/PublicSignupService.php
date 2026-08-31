@@ -20,7 +20,8 @@ final class PublicSignupService
 {
     // Compatibilidade histórica: public const VERSION = '36.24.5';
     // Compatibilidade histórica: public const VERSION = '36.24.6';
-    public const VERSION = '36.25.1';
+    // Compatibilidade histórica: public const VERSION = '36.25.1';
+    public const VERSION = '36.26.0';
 
     /** @return array<string,mixed> */
     public function offer(): array
@@ -55,6 +56,12 @@ final class PublicSignupService
             $commercialUrl = $commercialPhone !== ''
                 ? 'https://wa.me/' . rawurlencode($commercialPhone) . '?text=' . rawurlencode($commercialMessage)
                 : '';
+            $couponMetrics = ['active' => 0];
+            try {
+                $couponMetrics = (new PublicSignupCouponService())->metrics();
+            } catch (Throwable) {
+                // Durante a janela entre deploy e migration, o cadastro principal continua disponível sem cupons.
+            }
 
             return [
                 'enabled' => !empty($settings['enabled']) && $gateway !== null && $plan !== [] && $price > 0,
@@ -65,6 +72,7 @@ final class PublicSignupService
                 'price' => $price,
                 'trial_days' => max(1, (int) ($settings['trial_days'] ?? 7)),
                 'pix_enabled' => !empty($settings['pix_enabled']),
+                'coupons_enabled' => (int) ($couponMetrics['active'] ?? 0) > 0,
                 'grace_days' => max(0, (int) ($settings['grace_days'] ?? 3)),
                 'features' => $features,
                 'limits' => $limits,
@@ -82,6 +90,7 @@ final class PublicSignupService
                 'price' => 0.0,
                 'trial_days' => 7,
                 'pix_enabled' => false,
+                'coupons_enabled' => false,
                 'grace_days' => 3,
                 'features' => [],
                 'limits' => [],
@@ -113,7 +122,14 @@ final class PublicSignupService
              LIMIT 80'
         )->fetchAll(PDO::FETCH_ASSOC);
 
-        return $offer + ['gateways' => $gateways, 'recent_signups' => $recent];
+        $couponService = new PublicSignupCouponService();
+
+        return $offer + [
+            'gateways' => $gateways,
+            'recent_signups' => $recent,
+            'coupons' => $couponService->adminList(),
+            'coupon_metrics' => $couponService->metrics(),
+        ];
     }
 
     /** @return array<string,mixed> */
@@ -220,6 +236,33 @@ final class PublicSignupService
         ]);
     }
 
+    /** @param array<string,mixed> $input @return array<string,mixed> */
+    public function previewCoupon(array $input): array
+    {
+        $offer = $this->offer();
+        if (empty($offer['enabled'])) {
+            throw new RuntimeException('As inscrições estão temporariamente indisponíveis.');
+        }
+        $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException('Informe um e-mail válido antes de aplicar o cupom.');
+        }
+        $paymentMethod = strtolower(trim((string) ($input['payment_method'] ?? 'credit_card')));
+        if (!in_array($paymentMethod, ['credit_card', 'pix'], true)) {
+            $paymentMethod = 'credit_card';
+        }
+        if ($paymentMethod === 'pix' && empty($offer['pix_enabled'])) {
+            throw new RuntimeException('O Pix ainda não está disponível neste cadastro.');
+        }
+
+        return (new PublicSignupCouponService())->apply(
+            (string) ($input['coupon_code'] ?? ''),
+            (float) ($offer['price'] ?? 0),
+            $email,
+            $paymentMethod
+        );
+    }
+
     /** @param array<string,mixed> $input @return array{token:string,checkout_url:string,reference:string} */
     public function start(array $input): array
     {
@@ -236,6 +279,7 @@ final class PublicSignupService
         $document = preg_replace('/\D+/', '', (string) ($input['document'] ?? '')) ?: '';
         $password = (string) ($input['password'] ?? '');
         $confirmation = (string) ($input['password_confirmation'] ?? '');
+        $couponCode = PublicSignupCouponService::normalizeCode((string) ($input['coupon_code'] ?? ''));
         $paymentMethod = strtolower(trim((string) ($input['payment_method'] ?? 'credit_card')));
         if (!in_array($paymentMethod, ['credit_card', 'pix'], true)) {
             $paymentMethod = 'credit_card';
@@ -285,6 +329,12 @@ final class PublicSignupService
         $gateway = is_array($offer['gateway'] ?? null) ? $offer['gateway'] : [];
         $plan = is_array($offer['plan'] ?? null) ? $offer['plan'] : [];
         $configuredTrialDays = (int) $offer['trial_days'];
+        $originalAmount = round((float) $offer['price'], 2);
+        $coupon = null;
+        if ($couponCode !== '') {
+            $coupon = (new PublicSignupCouponService())->apply($couponCode, $originalAmount, $email, $paymentMethod);
+        }
+        $finalAmount = $coupon ? (float) $coupon['final_amount'] : $originalAmount;
         $timezone = new DateTimeZone(Clock::appTimezone());
         $today = new DateTimeImmutable('today', $timezone);
         $isPix = $paymentMethod === 'pix';
@@ -311,12 +361,14 @@ final class PublicSignupService
         $statement = $pdo->prepare(
             'INSERT INTO public_signup_sessions
                 (token_hash, public_reference, gateway_id, plan_id, company_name, legal_name,
-                 responsible_name, email, phone, document, password_hash, amount, status,
+                 responsible_name, email, phone, document, password_hash, amount, original_amount,
+                 coupon_id, coupon_code, discount_amount, discount_scope, status,
                  payment_method, bonus_days, trial_days, trial_starts_at, trial_ends_at, first_charge_at,
                  accepted_terms_at, accepted_privacy_at, expires_at, ip_hash, user_agent_hash)
              VALUES
                 (:token_hash, :public_reference, :gateway_id, :plan_id, :company_name, :legal_name,
-                 :responsible_name, :email, :phone, :document, :password_hash, :amount, "started",
+                 :responsible_name, :email, :phone, :document, :password_hash, :amount, :original_amount,
+                 :coupon_id, :coupon_code, :discount_amount, :discount_scope, "started",
                  :payment_method, :bonus_days, :trial_days, :trial_starts_at, :trial_ends_at, :first_charge_at,
                  UTC_TIMESTAMP(), UTC_TIMESTAMP(), :expires_at, :ip_hash, :user_agent_hash)'
         );
@@ -332,7 +384,12 @@ final class PublicSignupService
             'phone' => $phone,
             'document' => $document,
             'password_hash' => $passwordHash,
-            'amount' => (float) $offer['price'],
+            'amount' => $finalAmount,
+            'original_amount' => $originalAmount,
+            'coupon_id' => $coupon['id'] ?? null,
+            'coupon_code' => $coupon['code'] ?? null,
+            'discount_amount' => $coupon['discount_amount'] ?? 0,
+            'discount_scope' => $coupon['duration'] ?? null,
             'payment_method' => $paymentMethod,
             'bonus_days' => $bonusDays,
             'trial_days' => $trialDays,
@@ -354,7 +411,10 @@ final class PublicSignupService
                 'email' => $email,
                 'phone' => $phone,
                 'document' => $document,
-                'amount' => (float) $offer['price'],
+                'amount' => $finalAmount,
+                'original_amount' => $originalAmount,
+                'coupon_code' => $coupon['code'] ?? '',
+                'discount_scope' => $coupon['duration'] ?? '',
                 'payment_method' => $paymentMethod,
                 'bonus_days' => $bonusDays,
                 'first_charge_at' => $firstCharge->format('Y-m-d'),
@@ -512,6 +572,7 @@ final class PublicSignupService
                 $fresh = $this->sessionById($sessionId);
                 if ($fresh) {
                     $this->syncPaymentEvent($fresh, $event, $payload);
+                    $this->restoreFirstChargeCouponAfterPayment($fresh, $gateway);
                 }
             }
             $renewalWarning = '';
@@ -548,6 +609,10 @@ final class PublicSignupService
 
         if (str_starts_with($event, 'PAYMENT_')) {
             $this->syncPaymentEvent($session, $event, $payload);
+            if ($isPaidPaymentEvent) {
+                $fresh = $this->sessionById($sessionId) ?: $session;
+                $this->restoreFirstChargeCouponAfterPayment($fresh, $gateway);
+            }
             if ($isPixSignup && $isPaidPaymentEvent) {
                 try {
                     $this->ensurePixRenewalSubscription($sessionId, $gateway, $payload);
@@ -633,6 +698,13 @@ final class PublicSignupService
             $notes = $isPix
                 ? 'Plano Inicial ativado por Pix. Primeiro ciclo com 30 dias mais ' . $bonusDays . ' dias adicionais; renovações mensais por cobrança com QR Code Pix.'
                 : 'Plano Inicial criado automaticamente pelo cadastro público com 7 dias grátis.';
+            if (!empty($session['coupon_code'])) {
+                $couponDuration = (string) ($session['discount_scope'] ?? '') === 'recurring'
+                    ? 'em todas as mensalidades'
+                    : 'na primeira cobrança';
+                $notes .= ' Cupom ' . (string) $session['coupon_code'] . ' aplicado ' . $couponDuration
+                    . ', com desconto de R$ ' . number_format((float) ($session['discount_amount'] ?? 0), 2, ',', '.') . '.';
+            }
             $subscription = $pdo->prepare(
                 'INSERT INTO tenant_subscriptions
                     (tenant_id, plan_id, billing_cycle, ai_billing_mode, commitment_months, commitment_ends_at,
@@ -696,6 +768,7 @@ final class PublicSignupService
                      subscription_id = :subscription_id, password_hash = NULL,
                      external_customer_id = COALESCE(NULLIF(:external_customer_id, ""), external_customer_id),
                      external_subscription_id = COALESCE(NULLIF(:external_subscription_id, ""), external_subscription_id),
+                     coupon_redeemed_at = CASE WHEN coupon_id IS NOT NULL THEN COALESCE(coupon_redeemed_at, UTC_TIMESTAMP()) ELSE coupon_redeemed_at END,
                      provisioned_at = UTC_TIMESTAMP(), last_error = NULL
                  WHERE id = :id'
             )->execute([
@@ -863,6 +936,61 @@ final class PublicSignupService
         return $row ?: null;
     }
 
+    /** @param array<string,mixed> $session @param array<string,mixed> $gateway */
+    private function restoreFirstChargeCouponAfterPayment(array $session, array $gateway): void
+    {
+        if ((string) ($session['payment_method'] ?? '') !== 'credit_card'
+            || (string) ($session['discount_scope'] ?? '') !== 'first_charge'
+            || empty($session['coupon_id'])
+            || !empty($session['discount_restored_at'])) {
+            return;
+        }
+
+        $originalAmount = (float) ($session['original_amount'] ?? 0);
+        $discountedAmount = (float) ($session['amount'] ?? 0);
+        $externalSubscriptionId = trim((string) ($session['external_subscription_id'] ?? ''));
+        if ($originalAmount <= $discountedAmount || $externalSubscriptionId === '') {
+            return;
+        }
+
+        try {
+            $response = $this->requestJson(
+                'PUT',
+                $this->asaasBaseUrl($gateway) . '/subscriptions/' . rawurlencode($externalSubscriptionId),
+                ['Content-Type: application/json', 'access_token: ' . $this->gatewayApiKey($gateway)],
+                ['value' => $originalAmount]
+            );
+
+            $pdo = Database::connection();
+            $pdo->prepare(
+                'UPDATE public_signup_sessions
+                 SET discount_restored_at = UTC_TIMESTAMP(), last_error = NULL
+                 WHERE id = :id AND discount_restored_at IS NULL'
+            )->execute(['id' => (int) $session['id']]);
+            if ((int) ($session['subscription_id'] ?? 0) > 0) {
+                $pdo->prepare('UPDATE tenant_subscriptions SET amount = :amount WHERE id = :id')
+                    ->execute(['amount' => $originalAmount, 'id' => (int) $session['subscription_id']]);
+                $pdo->prepare(
+                    'UPDATE tenant_subscription_gateways
+                     SET payload_json = :payload, last_event_at = UTC_TIMESTAMP()
+                     WHERE subscription_id = :subscription_id AND provider = "asaas"'
+                )->execute([
+                    'payload' => json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'subscription_id' => (int) $session['subscription_id'],
+                ]);
+            }
+        } catch (Throwable $exception) {
+            Database::connection()->prepare(
+                'UPDATE public_signup_sessions
+                 SET last_error = :error
+                 WHERE id = :id'
+            )->execute([
+                'error' => mb_substr('Pagamento confirmado, mas não foi possível restaurar o valor integral da próxima mensalidade: ' . $exception->getMessage(), 0, 2000),
+                'id' => (int) $session['id'],
+            ]);
+        }
+    }
+
     /** @param array<string,mixed> $gateway @param array<string,mixed> $payload */
     private function ensurePixRenewalSubscription(int $sessionId, array $gateway, array $payload): ?string
     {
@@ -898,7 +1026,9 @@ final class PublicSignupService
         ], [
             'customer' => $customerId,
             'billingType' => 'BOLETO',
-            'value' => (float) $session['amount'],
+            'value' => ((string) ($session['discount_scope'] ?? '') === 'first_charge' && (float) ($session['original_amount'] ?? 0) > 0)
+                ? (float) $session['original_amount']
+                : (float) $session['amount'],
             'nextDueDate' => $nextDueDate,
             'cycle' => 'MONTHLY',
             'description' => 'RS Connect Plano Inicial - renovacao mensal com QR Code Pix',
@@ -974,9 +1104,10 @@ final class PublicSignupService
             ],
             'items' => [[
                 'name' => 'RS Connect Plano Inicial',
-                'description' => $isPix
+                'description' => ($isPix
                     ? 'Primeiro ciclo mensal com dias adicionais, pago via Pix QR Code.'
-                    : 'Assinatura mensal com IA RS Connect e sete dias gratis.',
+                    : 'Assinatura mensal com IA RS Connect e sete dias gratis.')
+                    . (!empty($data['coupon_code']) ? ' Cupom ' . (string) $data['coupon_code'] . ' aplicado.' : ''),
                 'quantity' => 1,
                 'value' => (float) $data['amount'],
             ]],
@@ -1332,9 +1463,9 @@ final class PublicSignupService
             }
         }
 
-        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.25.1'));
+        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.26.0'));
         if ($userAgent === '' || preg_match('/[\r\n]/', $userAgent)) {
-            $userAgent = 'RS-Connect/36.25.1';
+            $userAgent = 'RS-Connect/36.26.0';
         }
         $headers[] = 'User-Agent: ' . mb_substr($userAgent, 0, 255);
         return $headers;

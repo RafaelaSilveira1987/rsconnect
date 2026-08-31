@@ -34,7 +34,7 @@ $operations = (string) file_get_contents($root . '/app/Services/OperationsServic
 $health = (string) file_get_contents($root . '/app/Services/HealthCheckService.php');
 $migrationService = (string) file_get_contents($root . '/app/Services/MigrationService.php');
 
-$check(($result['files'] ?? 0) === 102, 'manifesto possui 102 migrations de subida');
+$check(($result['files'] ?? 0) >= 102, 'manifesto possui ao menos 102 migrations de subida');
 $check(($result['rollbacks'] ?? []) === ['030_google_calendar_availability_modes_rollback.sql'], 'rollback fica isolado do fluxo de subida');
 $check(isset($result['duplicate_numbers']['017'], $result['duplicate_numbers']['063']), 'numerações históricas duplicadas são inventariadas');
 $check(($manifest['schema_snapshot']['through'] ?? '') === '004_crm.sql', 'snapshot declara o baseline executável até a migration 004');

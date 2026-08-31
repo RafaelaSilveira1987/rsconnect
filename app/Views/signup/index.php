@@ -11,6 +11,7 @@ unset($_SESSION['public_signup_old']);
 $price = (float) ($offer['price'] ?? 99);
 $trialDays = (int) ($offer['trial_days'] ?? 7);
 $pixEnabled = !empty($offer['pix_enabled']);
+$couponsEnabled = !empty($offer['coupons_enabled']);
 $features = is_array($offer['features'] ?? null) ? $offer['features'] : [];
 $limits = is_array($offer['limits'] ?? null) ? $offer['limits'] : [];
 $commercialUrl = (string) ($offer['commercial_url'] ?? '');
@@ -38,7 +39,10 @@ $gatewayEnvironment = (string) ($offer['gateway']['environment'] ?? '');
                     <div><small>Plano disponível no cadastro online</small><h2>Plano Inicial</h2></div>
                     <span>Mais escolhido para começar</span>
                 </div>
-                <div class="signup-price"><strong>R$ <?= View::e(number_format($price, 2, ',', '.')) ?></strong><span>/mês</span></div>
+                <div class="signup-price">
+                    <small data-signup-price-original hidden>R$ <?= View::e(number_format($price, 2, ',', '.')) ?></small>
+                    <strong data-signup-price>R$ <?= View::e(number_format($price, 2, ',', '.')) ?></strong><span>/mês</span>
+                </div>
                 <ul>
                     <li>1 canal de atendimento</li>
                     <li>Até <?= View::e((string) ($limits['users'] ?? 3)) ?> usuários</li>
@@ -114,6 +118,19 @@ $gatewayEnvironment = (string) ($offer['gateway']['environment'] ?? '');
                     <span>E-mail de acesso *</span>
                     <input type="email" name="email" maxlength="190" required value="<?= View::e($old['email'] ?? '') ?>" placeholder="voce@empresa.com.br">
                 </label>
+                <?php if ($couponsEnabled): ?>
+                <div class="signup-coupon signup-field-wide" data-signup-coupon>
+                    <div class="signup-coupon-heading">
+                        <div><strong>Possui um cupom?</strong><small>O desconto será validado antes de abrir o checkout.</small></div>
+                        <span aria-hidden="true">%</span>
+                    </div>
+                    <div class="signup-coupon-row">
+                        <input type="text" name="coupon_code" maxlength="50" value="<?= View::e($old['coupon_code'] ?? '') ?>" placeholder="DIGITE SEU CUPOM" autocomplete="off" data-coupon-code>
+                        <button type="button" class="btn btn-outline" data-coupon-apply>Aplicar</button>
+                    </div>
+                    <p class="signup-coupon-feedback" data-coupon-feedback aria-live="polite"></p>
+                </div>
+                <?php endif; ?>
                 <label class="signup-field">
                     <span>Senha *</span>
                     <input type="password" name="password" minlength="8" required autocomplete="new-password" placeholder="Mínimo 8 caracteres">
@@ -129,7 +146,7 @@ $gatewayEnvironment = (string) ($offer['gateway']['environment'] ?? '');
                 </div>
 
                 <button class="signup-submit" type="submit" data-signup-submit>
-                    Continuar para o pagamento
+                    <span data-signup-submit-label>Continuar para o pagamento</span>
                     <span aria-hidden="true">→</span>
                 </button>
                 <p class="signup-secure-note">🔒 O pagamento acontece no Asaas. O RS Connect não armazena dados completos de cartão nem credenciais bancárias.</p>
@@ -140,28 +157,121 @@ $gatewayEnvironment = (string) ($offer['gateway']['environment'] ?? '');
 
 <script>
 (() => {
+    const form = document.querySelector('.signup-form');
     const radios = document.querySelectorAll('input[name="payment_method"]');
     const label = document.querySelector('[data-signup-summary-label]');
     const value = document.querySelector('[data-signup-summary-value]');
     const text = document.querySelector('[data-signup-summary-text]');
-    const button = document.querySelector('[data-signup-submit]');
-    const price = <?= json_encode('R$ ' . number_format($price, 2, ',', '.')) ?>;
+    const buttonLabel = document.querySelector('[data-signup-submit-label]');
+    const priceNode = document.querySelector('[data-signup-price]');
+    const originalPriceNode = document.querySelector('[data-signup-price-original]');
+    const couponInput = document.querySelector('[data-coupon-code]');
+    const couponButton = document.querySelector('[data-coupon-apply]');
+    const couponFeedback = document.querySelector('[data-coupon-feedback]');
+    const emailInput = form?.querySelector('input[name="email"]');
+    const csrf = form?.querySelector('input[name="_token"]')?.value || '';
+    const basePrice = <?= json_encode(round($price, 2)) ?>;
     const trialDays = <?= (int) $trialDays ?>;
+    let coupon = null;
+
+    const money = (amount) => Number(amount || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+    const selectedMethod = () => document.querySelector('input[name="payment_method"]:checked')?.value || 'credit_card';
+
     const render = () => {
-        const selected = document.querySelector('input[name="payment_method"]:checked')?.value || 'credit_card';
-        if (selected === 'pix') {
-            if (label) label.textContent = 'Hoje no Pix';
-            if (value) value.textContent = price;
-            if (text) text.textContent = `Pagamento imediato com ${trialDays} dias adicionais no primeiro ciclo. A próxima renovação será por QR Code Pix.`;
-            if (button) button.firstChild.textContent = 'Continuar para o Pix ';
+        const method = selectedMethod();
+        const finalPrice = coupon ? Number(coupon.final_amount) : basePrice;
+        if (priceNode) priceNode.textContent = money(finalPrice);
+        if (originalPriceNode) {
+            originalPriceNode.hidden = !coupon;
+            originalPriceNode.textContent = money(basePrice);
+        }
+        if (method === 'pix') {
+            if (label) label.textContent = coupon ? 'Hoje no Pix com cupom' : 'Hoje no Pix';
+            if (value) value.textContent = money(finalPrice);
+            if (text) text.textContent = coupon
+                ? `${coupon.label}. Pagamento imediato com ${trialDays} dias adicionais no primeiro ciclo.`
+                : `Pagamento imediato com ${trialDays} dias adicionais no primeiro ciclo. A próxima renovação será por QR Code Pix.`;
+            if (buttonLabel) buttonLabel.textContent = 'Continuar para o Pix';
         } else {
             if (label) label.textContent = 'Hoje no cartão';
             if (value) value.textContent = 'R$ 0,00';
-            if (text) text.textContent = `A primeira cobrança será feita ${trialDays} dias após a conclusão do checkout.`;
-            if (button) button.firstChild.textContent = 'Continuar para o cartão ';
+            if (text) text.textContent = coupon
+                ? `A primeira cobrança será de ${money(finalPrice)} em ${trialDays} dias. ${coupon.duration === 'recurring' ? 'O desconto continua nas renovações.' : 'Depois, a mensalidade volta para ' + money(basePrice) + '.'}`
+                : `A primeira cobrança será feita ${trialDays} dias após a conclusão do checkout.`;
+            if (buttonLabel) buttonLabel.textContent = 'Continuar para o cartão';
         }
     };
-    radios.forEach((radio) => radio.addEventListener('change', render));
+
+    const clearCoupon = (message = '') => {
+        coupon = null;
+        if (couponFeedback) {
+            couponFeedback.className = 'signup-coupon-feedback';
+            couponFeedback.textContent = message;
+        }
+        render();
+    };
+
+    const applyCoupon = async () => {
+        const code = (couponInput?.value || '').trim().toUpperCase();
+        if (!code) {
+            clearCoupon('Digite um código para validar.');
+            couponInput?.focus();
+            return;
+        }
+        if (couponButton) {
+            couponButton.disabled = true;
+            couponButton.textContent = 'Validando...';
+        }
+        if (couponFeedback) {
+            couponFeedback.className = 'signup-coupon-feedback is-loading';
+            couponFeedback.textContent = 'Consultando o cupom...';
+        }
+        try {
+            const body = new URLSearchParams({
+                _token: csrf,
+                coupon_code: code,
+                email: emailInput?.value || '',
+                payment_method: selectedMethod(),
+            });
+            const response = await fetch(<?= json_encode(Router::url('/signup/coupon/validate')) ?>, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8', 'Accept': 'application/json'},
+                body,
+                credentials: 'same-origin',
+            });
+            const data = await response.json();
+            if (!response.ok || !data.ok) throw new Error(data.message || 'Cupom inválido.');
+            coupon = data.coupon;
+            if (couponInput) couponInput.value = coupon.code;
+            if (couponFeedback) {
+                couponFeedback.className = 'signup-coupon-feedback is-success';
+                couponFeedback.textContent = `Cupom ${coupon.code} aplicado: ${coupon.label}${coupon.duration === 'recurring' ? ' em todas as mensalidades.' : ' na primeira cobrança.'}`;
+            }
+            render();
+        } catch (error) {
+            clearCoupon(error instanceof Error ? error.message : 'Não foi possível validar o cupom.');
+            if (couponFeedback) couponFeedback.className = 'signup-coupon-feedback is-error';
+        } finally {
+            if (couponButton) {
+                couponButton.disabled = false;
+                couponButton.textContent = coupon ? 'Aplicado' : 'Aplicar';
+            }
+        }
+    };
+
+    couponButton?.addEventListener('click', applyCoupon);
+    couponInput?.addEventListener('input', () => {
+        if (coupon && couponInput.value.trim().toUpperCase() !== coupon.code) clearCoupon();
+    });
+    couponInput?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            applyCoupon();
+        }
+    });
+    radios.forEach((radio) => radio.addEventListener('change', () => {
+        if (coupon) applyCoupon(); else render();
+    }));
     render();
 })();
 </script>

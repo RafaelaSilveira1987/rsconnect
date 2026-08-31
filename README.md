@@ -1,3 +1,18 @@
+## RS Connect 36.26.0
+
+Principais entregas:
+
+- nova organização visual da tela de inscrição pública;
+- gestão de cupons promocionais para assinatura;
+- desconto percentual ou fixo;
+- cupom para primeira cobrança ou todas as mensalidades;
+- validade, limites de uso e restrição por forma de pagamento;
+- validação do código antes do Checkout Asaas;
+- exibição do benefício no portal financeiro do cliente;
+- migration `096_public_signup_coupons.sql`.
+
+Consulte `INSTRUCOES-v36.26.0.md`.
+
 ## RS Connect 36.25.1
 
 Principais entregas:

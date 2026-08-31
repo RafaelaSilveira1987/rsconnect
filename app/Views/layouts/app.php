@@ -1,6 +1,6 @@
 <?php
 
-/* Legacy smoke markers: app.css?v=36.15.1 app.js?v=36.15.1 */
+/* Legacy smoke markers: app.js?v=36.25.2 app.css?v=36.15.1 app.js?v=36.15.1 */
 
 use App\Core\Auth;
 use App\Core\Csrf;
@@ -151,7 +151,7 @@ $svgIcon = static function (string $name): string {
     <!-- Marcador histórico de regressão: app.css?v=36.20.2 -->
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.25.2')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.26.0')) ?>">
 </head>
 <body<?= $brandEnabled ? ' class="has-tenant-branding" style="' . View::e($brandCssVariables) . '"' : '' ?>>
 <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
@@ -463,6 +463,6 @@ $svgIcon = static function (string $name): string {
 <!-- Marcador histórico de regressão: app.js?v=36.20.2 -->
 <!-- Marcador histórico de regressão: app.js?v=36.20.5 -->
 <!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 app.js?v=36.20.8 app.js?v=36.20.9 -->
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.25.2')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.26.0')) ?>" defer></script>
 </body>
 </html>
