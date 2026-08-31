@@ -196,7 +196,7 @@ $gatewayEnvironment = (string) ($offer['gateway']['environment'] ?? '');
             if (label) label.textContent = 'Hoje no cartão';
             if (value) value.textContent = 'R$ 0,00';
             if (text) text.textContent = coupon
-                ? `A primeira cobrança será de ${money(finalPrice)} em ${trialDays} dias. ${coupon.duration === 'recurring' ? 'O desconto continua nas renovações.' : 'Depois, a mensalidade volta para ' + money(basePrice) + '.'}`
+                ? `A primeira cobrança será de ${money(finalPrice)} em ${trialDays} dias. ${coupon.duration === 'recurring' ? 'O desconto continua nas renovações.' : 'Depois, a mensalidade volta para ' + money(basePrice) + '.'}${coupon.minimum_adjusted ? ' Valor mínimo exigido pelo Asaas.' : ''}`
                 : `A primeira cobrança será feita ${trialDays} dias após a conclusão do checkout.`;
             if (buttonLabel) buttonLabel.textContent = 'Continuar para o cartão';
         }
@@ -244,8 +244,12 @@ $gatewayEnvironment = (string) ($offer['gateway']['environment'] ?? '');
             coupon = data.coupon;
             if (couponInput) couponInput.value = coupon.code;
             if (couponFeedback) {
-                couponFeedback.className = 'signup-coupon-feedback is-success';
-                couponFeedback.textContent = `Cupom ${coupon.code} aplicado: ${coupon.label}${coupon.duration === 'recurring' ? ' em todas as mensalidades.' : ' na primeira cobrança.'}`;
+                couponFeedback.className = coupon.minimum_adjusted
+                    ? 'signup-coupon-feedback is-warning'
+                    : 'signup-coupon-feedback is-success';
+                couponFeedback.textContent = coupon.minimum_adjusted
+                    ? `Cupom ${coupon.code} válido. ${coupon.minimum_message}`
+                    : `Cupom ${coupon.code} aplicado: ${coupon.label}${coupon.duration === 'recurring' ? ' em todas as mensalidades.' : ' na primeira cobrança.'}`;
             }
             render();
         } catch (error) {

@@ -21,7 +21,7 @@ final class PublicSignupService
     // Compatibilidade histórica: public const VERSION = '36.24.5';
     // Compatibilidade histórica: public const VERSION = '36.24.6';
     // Compatibilidade histórica: public const VERSION = '36.25.1';
-    public const VERSION = '36.26.0';
+    public const VERSION = '36.26.1';
 
     /** @return array<string,mixed> */
     public function offer(): array
@@ -335,6 +335,9 @@ final class PublicSignupService
             $coupon = (new PublicSignupCouponService())->apply($couponCode, $originalAmount, $email, $paymentMethod);
         }
         $finalAmount = $coupon ? (float) $coupon['final_amount'] : $originalAmount;
+        if ($finalAmount < PublicSignupCouponService::ASAAS_MINIMUM_CHARGE) {
+            $finalAmount = PublicSignupCouponService::ASAAS_MINIMUM_CHARGE;
+        }
         $timezone = new DateTimeZone(Clock::appTimezone());
         $today = new DateTimeImmutable('today', $timezone);
         $isPix = $paymentMethod === 'pix';
@@ -1463,9 +1466,9 @@ final class PublicSignupService
             }
         }
 
-        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.26.0'));
+        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.26.1'));
         if ($userAgent === '' || preg_match('/[\r\n]/', $userAgent)) {
-            $userAgent = 'RS-Connect/36.26.0';
+            $userAgent = 'RS-Connect/36.26.1';
         }
         $headers[] = 'User-Agent: ' . mb_substr($userAgent, 0, 255);
         return $headers;

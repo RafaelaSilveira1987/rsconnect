@@ -13,7 +13,9 @@ use RuntimeException;
 
 final class PublicSignupCouponService
 {
-    public const VERSION = '36.26.0';
+    // Compatibilidade histórica: public const VERSION = '36.26.0';
+    public const VERSION = '36.26.1';
+    public const ASAAS_MINIMUM_CHARGE = 5.00;
 
     /** @return list<array<string,mixed>> */
     public function adminList(): array
@@ -195,7 +197,7 @@ final class PublicSignupCouponService
     }
 
     /**
-     * @return array{id:int,code:string,name:string,description:string,discount_type:string,discount_value:float,duration:string,payment_method:string,original_amount:float,discount_amount:float,final_amount:float,label:string}
+     * @return array{id:int,code:string,name:string,description:string,discount_type:string,discount_value:float,duration:string,payment_method:string,original_amount:float,requested_discount_amount:float,requested_final_amount:float,discount_amount:float,final_amount:float,minimum_adjusted:bool,minimum_message:string,label:string}
      */
     public function apply(string $rawCode, float $baseAmount, string $email, string $paymentMethod): array
     {
@@ -254,18 +256,32 @@ final class PublicSignupCouponService
 
         $discountType = (string) $coupon['discount_type'];
         $discountValue = (float) $coupon['discount_value'];
-        $discountAmount = $discountType === 'percentage'
+        $requestedDiscountAmount = $discountType === 'percentage'
             ? round($baseAmount * ($discountValue / 100), 2)
             : round($discountValue, 2);
-        $discountAmount = min($discountAmount, max(0, $baseAmount - 1.00));
-        $finalAmount = round($baseAmount - $discountAmount, 2);
-        if ($discountAmount <= 0 || $finalAmount < 1.00) {
+        $requestedDiscountAmount = min($requestedDiscountAmount, max(0, $baseAmount - 1.00));
+        $requestedFinalAmount = round($baseAmount - $requestedDiscountAmount, 2);
+        if ($requestedDiscountAmount <= 0 || $requestedFinalAmount < 1.00) {
+            throw new RuntimeException('Este cupom não pode ser aplicado ao valor atual do plano.');
+        }
+
+        // O Checkout Asaas rejeita cobranças cujo valor líquido seja inferior a R$ 5,00.
+        // Mantemos o cupom válido, mas limitamos o valor efetivamente enviado ao gateway.
+        $minimumAdjusted = $requestedFinalAmount < self::ASAAS_MINIMUM_CHARGE;
+        $finalAmount = $minimumAdjusted ? self::ASAAS_MINIMUM_CHARGE : $requestedFinalAmount;
+        $discountAmount = round($baseAmount - $finalAmount, 2);
+        if ($discountAmount <= 0) {
             throw new RuntimeException('Este cupom não pode ser aplicado ao valor atual do plano.');
         }
 
         $label = $discountType === 'percentage'
             ? rtrim(rtrim(number_format($discountValue, 2, ',', '.'), '0'), ',') . '% de desconto'
-            : 'R$ ' . number_format($discountAmount, 2, ',', '.') . ' de desconto';
+            : 'R$ ' . number_format($requestedDiscountAmount, 2, ',', '.') . ' de desconto';
+        $minimumMessage = $minimumAdjusted
+            ? 'O Asaas exige cobrança mínima de R$ 5,00. O valor promocional solicitado de R$ '
+                . number_format($requestedFinalAmount, 2, ',', '.')
+                . ' foi ajustado para R$ 5,00 no checkout.'
+            : '';
 
         return [
             'id' => (int) $coupon['id'],
@@ -277,8 +293,12 @@ final class PublicSignupCouponService
             'duration' => (string) ($coupon['duration'] ?? 'first_charge'),
             'payment_method' => $allowedMethod,
             'original_amount' => round($baseAmount, 2),
+            'requested_discount_amount' => $requestedDiscountAmount,
+            'requested_final_amount' => $requestedFinalAmount,
             'discount_amount' => $discountAmount,
             'final_amount' => $finalAmount,
+            'minimum_adjusted' => $minimumAdjusted,
+            'minimum_message' => $minimumMessage,
             'label' => $label,
         ];
     }

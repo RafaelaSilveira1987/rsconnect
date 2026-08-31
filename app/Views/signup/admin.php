@@ -193,6 +193,11 @@ $couponStatus = static function (array $coupon): array {
         </form>
     </details>
 
+    <div class="notice notice-info public-coupon-minimum-notice">
+        <strong>Valor mínimo do Asaas</strong>
+        <p>O Asaas não aceita cobranças abaixo de R$ 5,00. Um cupom pode ser configurado para chegar a R$ 1,00, mas o checkout será ajustado automaticamente para R$ 5,00 e essa informação será mostrada ao cliente antes do pagamento.</p>
+    </div>
+
     <div class="public-coupon-list">
         <?php if ($coupons === []): ?>
             <div class="empty-state">Nenhum cupom criado. Use o formulário acima para iniciar sua primeira campanha.</div>

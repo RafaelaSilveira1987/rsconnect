@@ -162,10 +162,21 @@ final class OperationsService
         }
 
         try {
+            $incidentStatement = Database::connection()->prepare('SELECT event FROM system_incidents WHERE id = :id LIMIT 1');
+            $incidentStatement->execute(['id' => $id]);
+            $incident = $incidentStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+            $event = trim((string) ($incident['event'] ?? ''));
+
             $statement = Database::connection()->prepare('UPDATE system_incidents SET resolved_at = NOW() WHERE id = :id AND resolved_at IS NULL');
             $statement->execute(['id' => $id]);
             if ($statement->rowCount() > 0) {
                 (new OperationalAlertService())->dispatchRecovered($id);
+
+                // Ao resolver o alerta financeiro, atualiza a evidência imediatamente.
+                // Isso evita que a tela reutilize um health check antigo em estado warning.
+                if ($event === 'operations.alert.payments') {
+                    $this->recordCheck('payments', 'Gateways e pagamentos', $this->checkPayments());
+                }
             }
         } catch (Throwable) {
             // Mantém fluxo da tela mesmo se a migration ainda não foi aplicada.
@@ -489,18 +500,99 @@ final class OperationsService
     private function checkPayments(): array
     {
         $gateways = $this->count("SELECT COUNT(*) FROM payment_gateways WHERE status = 'active'");
-        $errors = $this->count("SELECT COUNT(*) FROM payment_gateway_events WHERE status IN ('error','failed') AND created_at >= (NOW() - INTERVAL 7 DAY)");
-        if ($errors > 0) {
-            return ['status' => 'warning', 'message' => $gateways . ' gateway(s) ativo(s); ' . $errors . ' falha(s) de pagamento nos últimos 7 dias.', 'latency_ms' => null];
-        }
-        $events = $this->count('SELECT COUNT(*) FROM payment_gateway_events WHERE created_at >= (NOW() - INTERVAL 7 DAY)');
         if ($gateways < 1) {
             return ['status' => 'warning', 'message' => 'Nenhum gateway de pagamento ativo foi encontrado.', 'latency_ms' => null];
         }
-        if ($events < 1) {
-            return ['status' => 'unknown', 'message' => $gateways . ' gateway(s) ativo(s). Não foram identificados eventos de pagamento nos últimos 7 dias para validar o fluxo automaticamente; isso não indica falha por si só.', 'latency_ms' => null];
+
+        try {
+            $rows = Database::connection()->query(
+                "SELECT pg.id,
+                        pg.label,
+                        pg.environment,
+                        COUNT(e.id) AS event_count,
+                        SUM(CASE WHEN e.status IN ('error','failed') THEN 1 ELSE 0 END) AS error_count,
+                        MAX(CASE WHEN e.status IN ('error','failed') THEN e.id END) AS last_error_id,
+                        MAX(CASE WHEN e.status = 'success' THEN e.id END) AS last_success_id,
+                        MAX(CASE WHEN e.status IN ('error','failed') THEN e.created_at END) AS last_error_at,
+                        MAX(CASE WHEN e.status = 'success' THEN e.created_at END) AS last_success_at
+                 FROM payment_gateways pg
+                 LEFT JOIN payment_gateway_events e
+                   ON e.gateway_id = pg.id
+                  AND e.created_at >= (NOW() - INTERVAL 7 DAY)
+                 WHERE pg.status = 'active'
+                 GROUP BY pg.id, pg.label, pg.environment
+                 ORDER BY pg.id"
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable $exception) {
+            return [
+                'status' => 'unknown',
+                'message' => 'Não foi possível comparar as últimas confirmações e falhas dos meios de pagamento.',
+                'latency_ms' => null,
+            ];
         }
-        return ['status' => 'ok', 'message' => $gateways . ' gateway(s) ativo(s); ' . $events . ' evento(s) de pagamento nos últimos 7 dias sem falha registrada.', 'latency_ms' => null];
+
+        $events = 0;
+        $historicalErrors = 0;
+        $activeFailures = [];
+        $lastSuccessAt = '';
+
+        foreach ($rows as $row) {
+            $events += (int) ($row['event_count'] ?? 0);
+            $historicalErrors += (int) ($row['error_count'] ?? 0);
+
+            $gatewayLastSuccess = trim((string) ($row['last_success_at'] ?? ''));
+            if ($gatewayLastSuccess !== '' && ($lastSuccessAt === '' || strcmp($gatewayLastSuccess, $lastSuccessAt) > 0)) {
+                $lastSuccessAt = $gatewayLastSuccess;
+            }
+
+            $lastErrorId = (int) ($row['last_error_id'] ?? 0);
+            $lastSuccessId = (int) ($row['last_success_id'] ?? 0);
+            if ($lastErrorId > 0 && $lastErrorId > $lastSuccessId) {
+                $activeFailures[] = [
+                    'label' => trim((string) ($row['label'] ?? 'Gateway')) ?: 'Gateway',
+                    'environment' => trim((string) ($row['environment'] ?? '')),
+                    'last_error_at' => trim((string) ($row['last_error_at'] ?? '')),
+                ];
+            }
+        }
+
+        if ($activeFailures !== []) {
+            $failure = $activeFailures[0];
+            $environment = ($failure['environment'] ?? '') === 'sandbox' ? 'Sandbox' : 'Produção';
+            $when = trim((string) ($failure['last_error_at'] ?? ''));
+            $detail = $when !== '' ? ' Última falha em ' . $when . '.' : '';
+
+            return [
+                'status' => 'warning',
+                'message' => count($activeFailures) . ' gateway(s) possui(em) falha sem confirmação posterior. '
+                    . ($failure['label'] ?? 'Gateway') . ' (' . $environment . ').' . $detail,
+                'latency_ms' => null,
+            ];
+        }
+
+        if ($events < 1) {
+            return [
+                'status' => 'unknown',
+                'message' => $gateways . ' gateway(s) ativo(s). Não foram identificados eventos de pagamento nos últimos 7 dias para validar o fluxo automaticamente; isso não indica falha por si só.',
+                'latency_ms' => null,
+            ];
+        }
+
+        if ($historicalErrors > 0) {
+            $confirmed = $lastSuccessAt !== '' ? ' Última confirmação bem-sucedida em ' . $lastSuccessAt . '.' : '';
+            return [
+                'status' => 'ok',
+                'message' => $gateways . ' gateway(s) ativo(s); ' . $historicalErrors
+                    . ' falha(s) histórica(s) foi(ram) recuperada(s).' . $confirmed . ' Nenhuma falha ativa.',
+                'latency_ms' => null,
+            ];
+        }
+
+        return [
+            'status' => 'ok',
+            'message' => $gateways . ' gateway(s) ativo(s); ' . $events . ' evento(s) de pagamento nos últimos 7 dias sem falha ativa.',
+            'latency_ms' => null,
+        ];
     }
 
     private function checkCalendar(): array

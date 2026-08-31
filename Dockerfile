@@ -1,35 +1,34 @@
-FROM php:8.3-apache
+# Validação — RS Connect v36.26.2
 
-ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+## Escopo
 
-RUN apt-get update \
-    && apt-get install -y libzip-dev libcurl4-openssl-dev libonig-dev unzip git \
-    && docker-php-ext-install pdo_mysql curl mbstring zip \
-    && printf 'upload_max_filesize=25M\npost_max_size=26M\nmax_file_uploads=5\n' > /usr/local/etc/php/conf.d/rs-connect-uploads.ini \
-    && a2enmod rewrite headers \
-    && rm -rf /var/lib/apt/lists/*
+Correção do monitor financeiro para impedir que falhas históricas já recuperadas reabram continuamente o alerta `operations.alert.payments`.
 
-COPY . /var/www/html
+## Comportamento validado
 
-RUN printf '%s\n' \
-    '<VirtualHost *:80>' \
-    '    ServerName localhost' \
-    '    DocumentRoot /var/www/html/public' \
-    '' \
-    '    <Directory /var/www/html/public>' \
-    '        Options -Indexes +FollowSymLinks' \
-    '        AllowOverride All' \
-    '        Require all granted' \
-    '        FallbackResource /index.php' \
-    '    </Directory>' \
-    '' \
-    '    ErrorLog ${APACHE_LOG_DIR}/error.log' \
-    '    CustomLog ${APACHE_LOG_DIR}/access.log combined' \
-    '</VirtualHost>' \
-    > /etc/apache2/sites-available/000-default.conf \
-    && mkdir -p /var/www/html/storage/logs /var/www/html/storage/cache /var/www/html/storage/conversation-attachments /var/www/html/storage/app/white-label \
-    && chown -R www-data:www-data /var/www/html/storage \
-    && php -r "require '/var/www/html/app/Core/Autoloader.php'; App\\Core\\Autoloader::register('/var/www/html/app'); if (!class_exists('App\\Core\\Router')) { fwrite(STDERR, 'Router autoload validation failed.\n'); exit(1); }" \
-    && php /var/www/html/bin/migrate.php verify
+- somente gateways atualmente ativos participam da verificação;
+- a última falha é comparada com a última confirmação bem-sucedida de cada gateway;
+- falha posterior ao último sucesso mantém o estado de atenção;
+- sucesso posterior à falha muda o check para `ok`;
+- falhas antigas permanecem no histórico sem reabrir incidente;
+- ao marcar o incidente financeiro como resolvido, o check financeiro é recalculado imediatamente;
+- não existe migration nova.
 
-EXPOSE 80
+## Resultados
+
+- 117 de 117 testes de fumaça aprovados;
+- 363 arquivos PHP com sintaxe válida;
+- 4 arquivos JavaScript com sintaxe válida;
+- manifesto com 103 migrations validado;
+- 2.051 instruções SQL reconhecidas pelo parser;
+- 1 rollback isolado preservado.
+
+## Publicação
+
+Depois de substituir os arquivos e reiniciar o serviço, execute:
+
+```bash
+php /var/www/html/bin/operations-monitor.php
+```
+
+Isso grava a nova evidência e encerra automaticamente o alerta antigo quando houver confirmação posterior às falhas.
