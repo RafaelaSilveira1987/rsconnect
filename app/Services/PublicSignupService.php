@@ -17,7 +17,7 @@ use Throwable;
 
 final class PublicSignupService
 {
-    public const VERSION = '36.24.0';
+    public const VERSION = '36.24.1';
 
     /** @return array<string,mixed> */
     public function offer(): array
@@ -955,11 +955,9 @@ final class PublicSignupService
     /** @param array<string,mixed> $gateway */
     private function asaasBaseUrl(array $gateway): string
     {
-        $configured = rtrim(trim((string) ($gateway['api_base_url'] ?? '')), '/');
-        if ($configured !== '') {
-            $configured = str_replace('https://sandbox.asaas.com/api/v3', 'https://api-sandbox.asaas.com/v3', $configured);
-            return $configured;
-        }
+        // O endpoint do Asaas é definido exclusivamente pelo ambiente. Valores
+        // antigos em api_base_url (por exemplo rsconnect.local ou APP_URL) são
+        // ignorados para evitar chamadas ao host errado e reduzir risco de SSRF.
         return (string) ($gateway['environment'] ?? 'production') === 'sandbox'
             ? 'https://api-sandbox.asaas.com/v3'
             : 'https://api.asaas.com/v3';

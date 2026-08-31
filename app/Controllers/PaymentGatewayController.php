@@ -81,6 +81,13 @@ final class PaymentGatewayController
             $defaultPaymentMethod = 'UNDEFINED';
         }
 
+        if ($provider === 'asaas') {
+            // O Asaas possui endpoints oficiais fixos por ambiente. Não aceitamos
+            // APP_URL, domínio interno ou URL personalizada neste campo, pois isso
+            // faria o servidor tentar enviar o checkout para o próprio RS Connect.
+            $apiBaseUrl = '';
+        }
+
         if ($provider === 'pagbank') {
             $apiKey = $this->normalizePagBankApiKey($apiKey);
             try {

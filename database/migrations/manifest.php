@@ -113,5 +113,6 @@ return [
         ['sequence' => 98, 'file' => '091_after_hours_monitor_and_quote_requests.sql'],
         ['sequence' => 99, 'file' => '092_notification_orchestration.sql'],
         ['sequence' => 100, 'file' => '093_public_signup_asaas_trial.sql'],
+        ['sequence' => 101, 'file' => '094_normalize_asaas_api_base_url.sql'],
     ],
 ];

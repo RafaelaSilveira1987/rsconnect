@@ -1112,17 +1112,23 @@ final class PaymentGatewayService
 
     private function baseUrl(array $gateway): string
     {
+        $provider = (string) ($gateway['provider'] ?? '');
+        if ($provider === 'asaas') {
+            // As URLs do Asaas são fixas por ambiente. Ignora qualquer valor
+            // legado/customizado salvo em api_base_url.
+            return ($gateway['environment'] ?? '') === 'sandbox'
+                ? 'https://api-sandbox.asaas.com/v3'
+                : 'https://api.asaas.com/v3';
+        }
+
         $configured = trim((string) ($gateway['api_base_url'] ?? ''));
         if ($configured !== '') {
-            if ((string) ($gateway['provider'] ?? '') === 'pagbank') {
+            if ($provider === 'pagbank') {
                 return $this->normalizePagBankBaseUrl($configured, (string) ($gateway['environment'] ?? 'production'));
             }
             return rtrim($configured, '/');
         }
-        return match ((string) $gateway['provider']) {
-            'asaas' => ($gateway['environment'] ?? '') === 'sandbox'
-                ? 'https://api-sandbox.asaas.com/v3'
-                : 'https://api.asaas.com/v3',
+        return match ($provider) {
             'mercadopago' => 'https://api.mercadopago.com',
             'stripe' => 'https://api.stripe.com',
             'pagbank' => ($gateway['environment'] ?? '') === 'sandbox'

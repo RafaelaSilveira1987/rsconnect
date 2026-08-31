@@ -2492,6 +2492,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pagBankHelp=drawer.querySelector('[data-gateway-pagbank-help]');
     const webhookInput=drawer.querySelector('[data-gateway-field="webhook_secret"]');
     const isPagBank=provider==='pagbank';
+    const isAsaas=provider==='asaas';
     if(keyLabel)keyLabel.textContent=isPagBank?'Token da API PagBank / PagSeguro':'Chave de acesso / Access Token';
     if(keyHint)keyHint.textContent=isPagBank
       ?(editing?'Deixe em branco para manter o token atual. Ao trocar, cole somente o Token da API, sem Authorization: ou Bearer.':'Cole somente o Token da API obtido no PagBank, sem Authorization: ou Bearer.')
@@ -2499,10 +2500,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if(providerHint)providerHint.textContent=isPagBank
       ?'Gera links de cobrança por Pix, boleto ou cartão no Checkout PagBank.'
       :'Configure as credenciais e a autenticação do webhook deste serviço.';
-    if(baseUrlHint)baseUrlHint.textContent=isPagBank
+    if(baseUrlHint)baseUrlHint.textContent=(isPagBank||isAsaas)
       ?'Deixe vazio. O sistema usa automaticamente a URL oficial do ambiente selecionado.'
       :'Use somente quando o provedor exigir uma URL personalizada.';
-    if(baseUrlInput&&isPagBank)baseUrlInput.placeholder='Deixe vazio para usar a URL oficial do PagBank';
+    if(baseUrlInput){
+      baseUrlInput.disabled=isAsaas;
+      if(isAsaas){baseUrlInput.value='';baseUrlInput.placeholder='URL oficial definida automaticamente pelo RS Connect';}
+      else if(isPagBank)baseUrlInput.placeholder='Deixe vazio para usar a URL oficial do PagBank';
+      else baseUrlInput.placeholder='Deixe vazio para usar o padrão';
+    }
     if(webhookField)webhookField.hidden=isPagBank;
     if(pagBankHelp)pagBankHelp.hidden=!isPagBank;
     if(webhookInput){webhookInput.disabled=isPagBank;if(isPagBank)webhookInput.value='';}

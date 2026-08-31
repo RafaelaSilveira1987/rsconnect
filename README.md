@@ -1,4 +1,8 @@
-# RS Connect — v36.24.0
+## RS Connect 36.24.1
+
+Hotfix do cadastro público Asaas: remove URL interna legada (`rsconnect.local`), força os endpoints oficiais por ambiente e bloqueia configuração manual incorreta.
+
+# RS Connect — v36.24.1
 
 
 ## Cadastro público com Asaas — v36.24.0
