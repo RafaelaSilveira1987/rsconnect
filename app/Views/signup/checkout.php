@@ -6,6 +6,8 @@ use App\Core\View;
 $checkout = is_array($checkout ?? null) ? $checkout : [];
 $checkoutUrl = (string) ($checkout['checkout_url'] ?? '');
 $companyName = (string) ($checkout['company_name'] ?? 'sua empresa');
+$paymentMethod = (string) ($checkout['payment_method'] ?? 'credit_card');
+$isPix = $paymentMethod === 'pix';
 $encodedUrl = json_encode(
     $checkoutUrl,
     JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
@@ -19,7 +21,7 @@ $encodedUrl = json_encode(
 
         <div class="signup-status-loader" aria-hidden="true"></div>
         <h1>Abrindo o checkout seguro</h1>
-        <p>O cadastro de <strong><?= View::e($companyName) ?></strong> foi iniciado. Você será direcionado ao ambiente do Asaas para informar endereço e cartão.</p>
+        <p>O cadastro de <strong><?= View::e($companyName) ?></strong> foi iniciado. Você será direcionado ao ambiente do Asaas para informar endereço e <?= $isPix ? 'pagar pelo QR Code Pix' : 'confirmar o cartão' ?>.</p>
 
         <a id="asaas-checkout-link" class="signup-status-primary" href="<?= View::e($checkoutUrl) ?>" rel="noopener noreferrer">
             Continuar para o Asaas

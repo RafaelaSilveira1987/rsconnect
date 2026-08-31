@@ -19,7 +19,8 @@ use Throwable;
 final class PublicSignupService
 {
     // Compatibilidade histórica: public const VERSION = '36.24.5';
-    public const VERSION = '36.24.6';
+    // Compatibilidade histórica: public const VERSION = '36.24.6';
+    public const VERSION = '36.25.1';
 
     /** @return array<string,mixed> */
     public function offer(): array
@@ -63,6 +64,7 @@ final class PublicSignupService
                 'gateway' => $gateway,
                 'price' => $price,
                 'trial_days' => max(1, (int) ($settings['trial_days'] ?? 7)),
+                'pix_enabled' => !empty($settings['pix_enabled']),
                 'grace_days' => max(0, (int) ($settings['grace_days'] ?? 3)),
                 'features' => $features,
                 'limits' => $limits,
@@ -79,6 +81,7 @@ final class PublicSignupService
                 'gateway' => null,
                 'price' => 0.0,
                 'trial_days' => 7,
+                'pix_enabled' => false,
                 'grace_days' => 3,
                 'features' => [],
                 'limits' => [],
@@ -113,11 +116,56 @@ final class PublicSignupService
         return $offer + ['gateways' => $gateways, 'recent_signups' => $recent];
     }
 
+    /** @return array<string,mixed> */
+    public function testGatewayConnection(int $gatewayId): array
+    {
+        if ($gatewayId < 1) {
+            throw new RuntimeException('Selecione um gateway Asaas para testar.');
+        }
+
+        $statement = Database::connection()->prepare(
+            'SELECT * FROM payment_gateways WHERE id = :id AND provider = "asaas" LIMIT 1'
+        );
+        $statement->execute(['id' => $gatewayId]);
+        $gateway = $statement->fetch(PDO::FETCH_ASSOC);
+        if (!$gateway) {
+            throw new RuntimeException('Gateway Asaas não encontrado.');
+        }
+        if ((string) ($gateway['status'] ?? '') !== 'active') {
+            throw new RuntimeException('Ative o gateway Asaas antes de testar a conexão.');
+        }
+
+        $response = $this->requestJson(
+            'GET',
+            $this->asaasBaseUrl($gateway) . '/myAccount/commercialInfo/',
+            ['Accept: application/json', 'access_token: ' . $this->gatewayApiKey($gateway)],
+            []
+        );
+
+        $accountName = '';
+        foreach (['commercialName', 'companyName', 'legalName', 'name'] as $field) {
+            $candidate = trim((string) ($response[$field] ?? ''));
+            if ($candidate !== '') {
+                $accountName = $candidate;
+                break;
+            }
+        }
+
+        return [
+            'ok' => true,
+            'gateway_id' => (int) $gateway['id'],
+            'gateway_label' => (string) ($gateway['label'] ?? 'Asaas'),
+            'environment' => (string) ($gateway['environment'] ?? 'production'),
+            'account_name' => $accountName,
+        ];
+    }
+
     /** @param array<string,mixed> $input */
     public function saveSettings(array $input, ?int $userId): void
     {
         $gatewayId = (int) ($input['gateway_id'] ?? 0);
         $enabled = !empty($input['enabled']) ? 1 : 0;
+        $pixEnabled = !empty($input['pix_enabled']) ? 1 : 0;
         $trialDays = max(1, min(30, (int) ($input['trial_days'] ?? 7)));
         $graceDays = max(0, min(30, (int) ($input['grace_days'] ?? 3)));
         $checkoutMinutes = max(10, min(1440, (int) ($input['checkout_minutes'] ?? 60)));
@@ -146,19 +194,20 @@ final class PublicSignupService
 
         $statement = Database::connection()->prepare(
             'INSERT INTO public_signup_settings
-                (id, enabled, gateway_id, plan_key, trial_days, grace_days, checkout_minutes,
+                (id, enabled, pix_enabled, gateway_id, plan_key, trial_days, grace_days, checkout_minutes,
                  commercial_whatsapp, commercial_message, terms_url, privacy_url, updated_by_user_id)
              VALUES
-                (1, :enabled, :gateway_id, "starter", :trial_days, :grace_days, :checkout_minutes,
+                (1, :enabled, :pix_enabled, :gateway_id, "starter", :trial_days, :grace_days, :checkout_minutes,
                  :commercial_whatsapp, :commercial_message, :terms_url, :privacy_url, :updated_by_user_id)
              ON DUPLICATE KEY UPDATE
-                enabled = VALUES(enabled), gateway_id = VALUES(gateway_id), plan_key = "starter",
+                enabled = VALUES(enabled), pix_enabled = VALUES(pix_enabled), gateway_id = VALUES(gateway_id), plan_key = "starter",
                 trial_days = VALUES(trial_days), grace_days = VALUES(grace_days), checkout_minutes = VALUES(checkout_minutes),
                 commercial_whatsapp = VALUES(commercial_whatsapp), commercial_message = VALUES(commercial_message),
                 terms_url = VALUES(terms_url), privacy_url = VALUES(privacy_url), updated_by_user_id = VALUES(updated_by_user_id)'
         );
         $statement->execute([
             'enabled' => $enabled,
+            'pix_enabled' => $pixEnabled,
             'gateway_id' => $gatewayId > 0 ? $gatewayId : null,
             'trial_days' => $trialDays,
             'grace_days' => $graceDays,
@@ -187,6 +236,13 @@ final class PublicSignupService
         $document = preg_replace('/\D+/', '', (string) ($input['document'] ?? '')) ?: '';
         $password = (string) ($input['password'] ?? '');
         $confirmation = (string) ($input['password_confirmation'] ?? '');
+        $paymentMethod = strtolower(trim((string) ($input['payment_method'] ?? 'credit_card')));
+        if (!in_array($paymentMethod, ['credit_card', 'pix'], true)) {
+            $paymentMethod = 'credit_card';
+        }
+        if ($paymentMethod === 'pix' && empty($offer['pix_enabled'])) {
+            throw new RuntimeException('O pagamento por Pix ainda não está habilitado para novas inscrições.');
+        }
 
         if (mb_strlen($companyName) < 2 || mb_strlen($responsibleName) < 3) {
             throw new RuntimeException('Informe o nome da empresa e o nome do responsável.');
@@ -228,11 +284,14 @@ final class PublicSignupService
 
         $gateway = is_array($offer['gateway'] ?? null) ? $offer['gateway'] : [];
         $plan = is_array($offer['plan'] ?? null) ? $offer['plan'] : [];
-        $trialDays = (int) $offer['trial_days'];
+        $configuredTrialDays = (int) $offer['trial_days'];
         $timezone = new DateTimeZone(Clock::appTimezone());
         $today = new DateTimeImmutable('today', $timezone);
-        $firstCharge = $today->modify('+' . $trialDays . ' days');
-        $trialEnds = $firstCharge->modify('-1 day');
+        $isPix = $paymentMethod === 'pix';
+        $trialDays = $isPix ? 0 : $configuredTrialDays;
+        $bonusDays = $isPix ? $configuredTrialDays : 0;
+        $firstCharge = $isPix ? $today : $today->modify('+' . $trialDays . ' days');
+        $trialEnds = $isPix ? null : $firstCharge->modify('-1 day');
         $expiresAt = (new DateTimeImmutable('now', new DateTimeZone('UTC')))
             ->modify('+' . max(10, (int) ($offer['settings']['checkout_minutes'] ?? 60)) . ' minutes')
             ->format('Y-m-d H:i:s');
@@ -253,12 +312,12 @@ final class PublicSignupService
             'INSERT INTO public_signup_sessions
                 (token_hash, public_reference, gateway_id, plan_id, company_name, legal_name,
                  responsible_name, email, phone, document, password_hash, amount, status,
-                 trial_days, trial_starts_at, trial_ends_at, first_charge_at,
+                 payment_method, bonus_days, trial_days, trial_starts_at, trial_ends_at, first_charge_at,
                  accepted_terms_at, accepted_privacy_at, expires_at, ip_hash, user_agent_hash)
              VALUES
                 (:token_hash, :public_reference, :gateway_id, :plan_id, :company_name, :legal_name,
                  :responsible_name, :email, :phone, :document, :password_hash, :amount, "started",
-                 :trial_days, :trial_starts_at, :trial_ends_at, :first_charge_at,
+                 :payment_method, :bonus_days, :trial_days, :trial_starts_at, :trial_ends_at, :first_charge_at,
                  UTC_TIMESTAMP(), UTC_TIMESTAMP(), :expires_at, :ip_hash, :user_agent_hash)'
         );
         $statement->execute([
@@ -274,9 +333,11 @@ final class PublicSignupService
             'document' => $document,
             'password_hash' => $passwordHash,
             'amount' => (float) $offer['price'],
+            'payment_method' => $paymentMethod,
+            'bonus_days' => $bonusDays,
             'trial_days' => $trialDays,
-            'trial_starts_at' => $today->format('Y-m-d'),
-            'trial_ends_at' => $trialEnds->format('Y-m-d'),
+            'trial_starts_at' => $isPix ? null : $today->format('Y-m-d'),
+            'trial_ends_at' => $trialEnds?->format('Y-m-d'),
             'first_charge_at' => $firstCharge->format('Y-m-d'),
             'expires_at' => $expiresAt,
             'ip_hash' => $ipHash,
@@ -294,6 +355,8 @@ final class PublicSignupService
                 'phone' => $phone,
                 'document' => $document,
                 'amount' => (float) $offer['price'],
+                'payment_method' => $paymentMethod,
+                'bonus_days' => $bonusDays,
                 'first_charge_at' => $firstCharge->format('Y-m-d'),
                 'minutes_to_expire' => max(10, min(1440, (int) ($offer['settings']['checkout_minutes'] ?? 60))),
             ]);
@@ -342,6 +405,7 @@ final class PublicSignupService
             'checkout_url' => $url,
             'company_name' => (string) ($signup['company_name'] ?? ''),
             'email' => (string) ($signup['email'] ?? ''),
+            'payment_method' => (string) ($signup['payment_method'] ?? 'credit_card'),
             'expires_at' => (string) ($signup['expires_at'] ?? ''),
             'last_error' => (string) ($signup['last_error'] ?? ''),
         ];
@@ -423,7 +487,20 @@ final class PublicSignupService
             return $this->webhookResult($session, $status, 'Checkout encerrado.', $event);
         }
 
-        if (in_array($event, ['CHECKOUT_PAID', 'SUBSCRIPTION_CREATED'], true)) {
+        // Compatibilidade histórica do fluxo original:
+        // in_array($event, ['CHECKOUT_PAID', 'SUBSCRIPTION_CREATED'], true)
+        $paymentMethod = (string) ($session['payment_method'] ?? 'credit_card');
+        $isPixSignup = $paymentMethod === 'pix';
+        $isPaidPaymentEvent = in_array($event, ['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'], true);
+
+        if ($event === 'SUBSCRIPTION_CREATED' && (int) ($session['tenant_id'] ?? 0) > 0) {
+            $this->syncSubscriptionEvent($session, $event, $payload, $subscriptionId, $customerId);
+            return $this->webhookResult($session, 'success', 'Renovação da assinatura sincronizada.', $event);
+        }
+
+        if ($event === 'CHECKOUT_PAID'
+            || ($event === 'SUBSCRIPTION_CREATED' && !$isPixSignup)
+            || ($isPixSignup && $isPaidPaymentEvent && (int) ($session['tenant_id'] ?? 0) < 1)) {
             Database::connection()->prepare(
                 'UPDATE public_signup_sessions
                  SET status = CASE WHEN status = "provisioned" THEN status ELSE "checkout_completed" END,
@@ -431,10 +508,32 @@ final class PublicSignupService
                  WHERE id = :id'
             )->execute(['id' => $sessionId]);
             $provisioned = $this->provision($sessionId, (int) $gateway['id'], $payload);
+            if ($isPaidPaymentEvent) {
+                $fresh = $this->sessionById($sessionId);
+                if ($fresh) {
+                    $this->syncPaymentEvent($fresh, $event, $payload);
+                }
+            }
+            $renewalWarning = '';
+            if ($isPixSignup) {
+                try {
+                    $this->ensurePixRenewalSubscription($sessionId, $gateway, $payload);
+                } catch (Throwable $exception) {
+                    $renewalWarning = ' A renovação mensal por Pix ficou pendente: ' . $exception->getMessage();
+                    Database::connection()->prepare(
+                        'UPDATE public_signup_sessions SET last_error = :error WHERE id = :id'
+                    )->execute([
+                        'error' => mb_substr('Conta ativa; renovação Pix pendente. ' . $exception->getMessage(), 0, 2000),
+                        'id' => $sessionId,
+                    ]);
+                }
+            }
             return [
                 'handled' => true,
                 'status' => 'success',
-                'message' => 'Conta criada e trial iniciado.',
+                'message' => $isPixSignup
+                    ? 'Pagamento Pix confirmado e conta criada.' . $renewalWarning
+                    : 'Conta criada e trial iniciado.',
                 'tenant_id' => (int) $provisioned['tenant_id'],
                 'external_id' => $checkoutId ?: $subscriptionId,
                 'reference' => (string) $session['public_reference'],
@@ -449,6 +548,18 @@ final class PublicSignupService
 
         if (str_starts_with($event, 'PAYMENT_')) {
             $this->syncPaymentEvent($session, $event, $payload);
+            if ($isPixSignup && $isPaidPaymentEvent) {
+                try {
+                    $this->ensurePixRenewalSubscription($sessionId, $gateway, $payload);
+                } catch (Throwable $exception) {
+                    Database::connection()->prepare(
+                        'UPDATE public_signup_sessions SET last_error = :error WHERE id = :id'
+                    )->execute([
+                        'error' => mb_substr('Renovação Pix pendente. ' . $exception->getMessage(), 0, 2000),
+                        'id' => $sessionId,
+                    ]);
+                }
+            }
             return $this->webhookResult($session, 'success', 'Cobrança da assinatura sincronizada.', $event);
         }
 
@@ -507,11 +618,21 @@ final class PublicSignupService
             ]);
             $userId = (int) $pdo->lastInsertId();
 
-            $startsAt = (string) $session['trial_starts_at'];
-            $trialEndsAt = (string) $session['trial_ends_at'];
+            $paymentMethod = (string) ($session['payment_method'] ?? 'credit_card');
+            $isPix = $paymentMethod === 'pix';
             $firstChargeAt = (string) $session['first_charge_at'];
-            $periodEnd = (new DateTimeImmutable($firstChargeAt))->modify('+1 month -1 day')->format('Y-m-d');
+            $startsAt = $isPix ? $firstChargeAt : (string) $session['trial_starts_at'];
+            $trialEndsAt = $isPix ? null : (string) $session['trial_ends_at'];
+            $bonusDays = max(0, (int) ($session['bonus_days'] ?? 0));
+            $nextBillingAt = $isPix
+                ? (new DateTimeImmutable($firstChargeAt))->modify('+1 month +' . $bonusDays . ' days')->format('Y-m-d')
+                : $firstChargeAt;
+            $periodEnd = (new DateTimeImmutable($nextBillingAt))->modify('-1 day')->format('Y-m-d');
             $commitmentEnd = (new DateTimeImmutable($startsAt))->modify('+3 months -1 day')->format('Y-m-d');
+            $billingStatus = $isPix ? 'active' : 'trialing';
+            $notes = $isPix
+                ? 'Plano Inicial ativado por Pix. Primeiro ciclo com 30 dias mais ' . $bonusDays . ' dias adicionais; renovações mensais por cobrança com QR Code Pix.'
+                : 'Plano Inicial criado automaticamente pelo cadastro público com 7 dias grátis.';
             $subscription = $pdo->prepare(
                 'INSERT INTO tenant_subscriptions
                     (tenant_id, plan_id, billing_cycle, ai_billing_mode, commitment_months, commitment_ends_at,
@@ -520,7 +641,7 @@ final class PublicSignupService
                      amount, notes, created_by_user_id)
                  VALUES
                     (:tenant_id, :plan_id, "monthly", "rs_connect", 3, :commitment_ends_at,
-                     "trialing", :starts_at, :trial_ends_at, :trial_days, "await_payment", :trial_grace_days,
+                     :billing_status, :starts_at, :trial_ends_at, :trial_days, "await_payment", :trial_grace_days,
                      :period_starts_at, :period_ends_at, :next_billing_at,
                      :amount, :notes, NULL)'
             );
@@ -528,15 +649,16 @@ final class PublicSignupService
                 'tenant_id' => $tenantId,
                 'plan_id' => $session['plan_id'],
                 'commitment_ends_at' => $commitmentEnd,
+                'billing_status' => $billingStatus,
                 'starts_at' => $startsAt,
                 'trial_ends_at' => $trialEndsAt,
-                'trial_days' => $session['trial_days'],
+                'trial_days' => $isPix ? 0 : $session['trial_days'],
                 'trial_grace_days' => $this->settingsGraceDays($pdo),
-                'period_starts_at' => $firstChargeAt,
+                'period_starts_at' => $startsAt,
                 'period_ends_at' => $periodEnd,
-                'next_billing_at' => $firstChargeAt,
+                'next_billing_at' => $nextBillingAt,
                 'amount' => $session['amount'],
-                'notes' => 'Plano Inicial criado automaticamente pelo cadastro público com 7 dias grátis.',
+                'notes' => $notes,
             ]);
             $subscriptionLocalId = (int) $pdo->lastInsertId();
 
@@ -563,8 +685,8 @@ final class PublicSignupService
                 'external_checkout_id' => $checkoutExternalId !== '' ? $checkoutExternalId : null,
                 'external_customer_id' => $customerExternalId !== '' ? $customerExternalId : null,
                 'external_subscription_id' => $subscriptionExternalId !== '' ? $subscriptionExternalId : null,
-                'status' => 'trialing',
-                'first_charge_at' => $firstChargeAt,
+                'status' => $billingStatus,
+                'first_charge_at' => $nextBillingAt,
                 'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ]);
 
@@ -644,6 +766,7 @@ final class PublicSignupService
             || str_contains($event . ' ' . $paymentStatus, 'PAYMENT_CONFIRMED')
             || in_array($paymentStatus, ['RECEIVED', 'CONFIRMED'], true);
         $overdue = str_contains($event . ' ' . $paymentStatus, 'OVERDUE');
+        $open = $event === 'PAYMENT_CREATED' || in_array($paymentStatus, ['PENDING', 'AWAITING_RISK_ANALYSIS'], true);
 
         if ($paid) {
             $start = new DateTimeImmutable((string) ($payment['paymentDate'] ?? $payment['confirmedDate'] ?? 'today'));
@@ -667,6 +790,8 @@ final class PublicSignupService
             Database::connection()->prepare('UPDATE tenant_subscriptions SET billing_status = "overdue" WHERE id = :id')
                 ->execute(['id' => $subscriptionId]);
             $this->upsertAsaasInvoice($session, $payment, 'overdue');
+        } elseif ($open && $externalPaymentId !== '') {
+            $this->upsertAsaasInvoice($session, $payment, 'open');
         }
 
         Database::connection()->prepare(
@@ -701,7 +826,7 @@ final class PublicSignupService
                  external_checkout_url, external_invoice_url, external_status, payment_payload_json)
              VALUES
                 (:tenant_id, :subscription_id, :invoice_number, :period_start, :period_end, :amount, :due_date,
-                 CASE WHEN :paid_flag = 1 THEN UTC_TIMESTAMP() ELSE NULL END, :status, "CREDIT_CARD", :gateway_id, "asaas",
+                 CASE WHEN :paid_flag = 1 THEN UTC_TIMESTAMP() ELSE NULL END, :status, :payment_method, :gateway_id, "asaas",
                  :external_reference, :external_customer_id, :external_payment_id,
                  :external_checkout_url, :external_invoice_url, :external_status, :payload)
              ON DUPLICATE KEY UPDATE
@@ -717,6 +842,7 @@ final class PublicSignupService
             'due_date' => $dueDate,
             'paid_flag' => $status === 'paid' ? 1 : 0,
             'status' => $status,
+            'payment_method' => (string) ($session['payment_method'] ?? 'credit_card') === 'pix' ? 'PIX' : 'CREDIT_CARD',
             'gateway_id' => $gatewayId,
             'external_reference' => (string) ($payment['externalReference'] ?? $session['public_reference']),
             'external_customer_id' => (string) ($payment['customer'] ?? $session['external_customer_id'] ?? ''),
@@ -728,13 +854,117 @@ final class PublicSignupService
         ]);
     }
 
+    /** @return array<string,mixed>|null */
+    private function sessionById(int $sessionId): ?array
+    {
+        $statement = Database::connection()->prepare('SELECT * FROM public_signup_sessions WHERE id = :id LIMIT 1');
+        $statement->execute(['id' => $sessionId]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    /** @param array<string,mixed> $gateway @param array<string,mixed> $payload */
+    private function ensurePixRenewalSubscription(int $sessionId, array $gateway, array $payload): ?string
+    {
+        $statement = Database::connection()->prepare('SELECT * FROM public_signup_sessions WHERE id = :id LIMIT 1');
+        $statement->execute(['id' => $sessionId]);
+        $session = $statement->fetch(PDO::FETCH_ASSOC);
+        if (!$session || (string) ($session['payment_method'] ?? '') !== 'pix') {
+            return null;
+        }
+
+        $existing = trim((string) ($session['external_subscription_id'] ?? ''));
+        if ($existing !== '') {
+            return $existing;
+        }
+
+        $customerId = $this->extractScalar($payload, ['customer']);
+        if ($customerId === '') {
+            $customerId = trim((string) ($session['external_customer_id'] ?? ''));
+        }
+        if ($customerId === '') {
+            throw new RuntimeException('O Asaas ainda não informou o cliente do pagamento Pix.');
+        }
+
+        $firstChargeAt = (string) $session['first_charge_at'];
+        $bonusDays = max(0, (int) ($session['bonus_days'] ?? 0));
+        $nextDueDate = (new DateTimeImmutable($firstChargeAt))
+            ->modify('+1 month +' . $bonusDays . ' days')
+            ->format('Y-m-d');
+
+        $response = $this->requestJson('POST', $this->asaasBaseUrl($gateway) . '/subscriptions', [
+            'Content-Type: application/json',
+            'access_token: ' . $this->gatewayApiKey($gateway),
+        ], [
+            'customer' => $customerId,
+            'billingType' => 'BOLETO',
+            'value' => (float) $session['amount'],
+            'nextDueDate' => $nextDueDate,
+            'cycle' => 'MONTHLY',
+            'description' => 'RS Connect Plano Inicial - renovacao mensal com QR Code Pix',
+            'externalReference' => 'signup-renewal:' . (string) $session['public_reference'],
+        ]);
+
+        $externalSubscriptionId = trim((string) ($response['id'] ?? ''));
+        if ($externalSubscriptionId === '') {
+            throw new RuntimeException('O Asaas não retornou o identificador da renovação Pix.');
+        }
+
+        $pdo = Database::connection();
+        $pdo->prepare(
+            'UPDATE public_signup_sessions
+             SET external_customer_id = :customer_id, external_subscription_id = :subscription_id,
+                 external_status = COALESCE(NULLIF(:status, ""), external_status), last_error = NULL
+             WHERE id = :id'
+        )->execute([
+            'customer_id' => $customerId,
+            'subscription_id' => $externalSubscriptionId,
+            'status' => (string) ($response['status'] ?? 'ACTIVE'),
+            'id' => $sessionId,
+        ]);
+
+        if ((int) ($session['subscription_id'] ?? 0) > 0) {
+            $pdo->prepare(
+                'UPDATE tenant_subscription_gateways
+                 SET external_customer_id = :customer_id, external_subscription_id = :subscription_id,
+                     status = :status, first_charge_at = :next_due_date,
+                     last_event_at = UTC_TIMESTAMP(), payload_json = :payload
+                 WHERE subscription_id = :local_subscription_id AND provider = "asaas"'
+            )->execute([
+                'customer_id' => $customerId,
+                'subscription_id' => $externalSubscriptionId,
+                'status' => (string) ($response['status'] ?? 'ACTIVE'),
+                'next_due_date' => $nextDueDate,
+                'payload' => json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'local_subscription_id' => (int) $session['subscription_id'],
+            ]);
+        }
+
+        return $externalSubscriptionId;
+    }
+
+    private function normalizeSignupReference(string $reference): string
+    {
+        foreach (['signup-renewal:', 'signup:'] as $prefix) {
+            if (str_starts_with($reference, $prefix)) {
+                return substr($reference, strlen($prefix));
+            }
+        }
+        return $reference;
+    }
+
     /** @param array<string,mixed> $gateway @param array<string,mixed> $data @return array{id:string,link:string,status:string,payload:array<string,mixed>} */
     private function createAsaasCheckout(array $gateway, array $data): array
     {
         $baseUrl = $this->asaasBaseUrl($gateway);
+        // Compatibilidade histórica do checkout original:
+        // 'billingTypes' => ['CREDIT_CARD']
+        // 'chargeTypes' => ['RECURRENT']
+        $paymentMethod = (string) ($data['payment_method'] ?? 'credit_card');
+        $isPix = $paymentMethod === 'pix';
         $payload = [
-            'billingTypes' => ['CREDIT_CARD'],
-            'chargeTypes' => ['RECURRENT'],
+            'billingTypes' => [$isPix ? 'PIX' : 'CREDIT_CARD'],
+            'chargeTypes' => [$isPix ? 'DETACHED' : 'RECURRENT'],
             'minutesToExpire' => (int) $data['minutes_to_expire'],
             'externalReference' => 'signup:' . (string) $data['reference'],
             'callback' => [
@@ -744,18 +974,22 @@ final class PublicSignupService
             ],
             'items' => [[
                 'name' => 'RS Connect Plano Inicial',
-                'description' => 'Assinatura mensal com IA RS Connect e sete dias gratis.',
+                'description' => $isPix
+                    ? 'Primeiro ciclo mensal com dias adicionais, pago via Pix QR Code.'
+                    : 'Assinatura mensal com IA RS Connect e sete dias gratis.',
                 'quantity' => 1,
                 'value' => (float) $data['amount'],
             ]],
-            'subscription' => [
+        ];
+        if (!$isPix) {
+            $payload['subscription'] = [
                 'cycle' => 'MONTHLY',
                 'nextDueDate' => (string) $data['first_charge_at'] . ' 00:00:00',
-            ],
-        ];
+            ];
+        }
 
         // Não enviamos customerData neste primeiro passo. No Checkout de
-        // cartão, o Asaas exige o endereço completo quando customerData é
+        // pagamento, o Asaas exige o endereço completo quando customerData é
         // informado. Como o cadastro público coleta somente os dados essenciais
         // da conta, o próprio pagador informa e confirma endereço e dados do
         // cartão diretamente no ambiente seguro do Asaas.
@@ -870,7 +1104,7 @@ final class PublicSignupService
         $params = [];
         if ($reference !== '') {
             $conditions[] = 'public_reference = :reference';
-            $params['reference'] = str_starts_with($reference, 'signup:') ? substr($reference, 7) : $reference;
+            $params['reference'] = $this->normalizeSignupReference($reference);
         }
         if ($checkoutId !== '') {
             $conditions[] = 'external_checkout_id = :checkout_id';
@@ -1053,18 +1287,23 @@ final class PublicSignupService
     private function requestJson(string $method, string $url, array $headers, array $payload): array
     {
         $headers = $this->withAsaasUserAgent($headers);
+        $method = strtoupper(trim($method));
         $ch = curl_init($url);
         if ($ch === false) {
             throw new RuntimeException('Não foi possível iniciar a comunicação com o Asaas.');
         }
-        curl_setopt_array($ch, [
+        $options = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CUSTOMREQUEST => $method,
             CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_TIMEOUT => max(15, (int) Env::get('PAYMENT_HTTP_TIMEOUT', 30)),
-        ]);
+        ];
+        // O Asaas exige corpo vazio em chamadas GET. Enviar JSON vazio pode gerar 403.
+        if (!in_array($method, ['GET', 'HEAD'], true)) {
+            $options[CURLOPT_POSTFIELDS] = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+        curl_setopt_array($ch, $options);
         $response = curl_exec($ch);
         $error = curl_error($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
@@ -1093,9 +1332,9 @@ final class PublicSignupService
             }
         }
 
-        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.24.6'));
+        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.25.1'));
         if ($userAgent === '' || preg_match('/[\r\n]/', $userAgent)) {
-            $userAgent = 'RS-Connect/36.24.6';
+            $userAgent = 'RS-Connect/36.25.1';
         }
         $headers[] = 'User-Agent: ' . mb_substr($userAgent, 0, 255);
         return $headers;

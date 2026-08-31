@@ -42,7 +42,8 @@ final class SubscriptionService
                 'SELECT sp.*, ts.id AS subscription_id, ts.billing_status, ts.current_period_starts_at,
                         ts.current_period_ends_at, ts.next_billing_at, ts.amount AS subscription_amount,
                         ts.billing_cycle, ts.ai_billing_mode, ts.commitment_months, ts.commitment_ends_at,
-                        ts.trial_ends_at, ts.trial_days, ts.trial_end_behavior, ts.trial_grace_days
+                        ts.starts_at, ts.trial_ends_at, ts.trial_days, ts.trial_end_behavior, ts.trial_grace_days,
+                        ts.trial_converted_at
                  FROM tenant_subscriptions ts
                  INNER JOIN saas_plans sp ON sp.id = ts.plan_id
                  WHERE ts.tenant_id = :tenant_id
@@ -464,6 +465,7 @@ final class SubscriptionService
             'ai_billing_mode' => (string) ($plan['ai_billing_mode'] ?? 'rs_connect'),
             'commitment_months' => isset($plan['commitment_months']) ? (int) $plan['commitment_months'] : 3,
             'commitment_ends_at' => $plan['commitment_ends_at'] ?? null,
+            'starts_at' => $plan['starts_at'] ?? null,
             'current_period_starts_at' => $plan['current_period_starts_at'] ?? null,
             'current_period_ends_at' => $plan['current_period_ends_at'] ?? null,
             'next_billing_at' => $plan['next_billing_at'] ?? null,
@@ -471,6 +473,7 @@ final class SubscriptionService
             'trial_days' => isset($plan['trial_days']) ? (int) $plan['trial_days'] : null,
             'trial_end_behavior' => $plan['trial_end_behavior'] ?? 'await_payment',
             'trial_grace_days' => isset($plan['trial_grace_days']) ? (int) $plan['trial_grace_days'] : 3,
+            'trial_converted_at' => $plan['trial_converted_at'] ?? null,
             'limits' => $limits,
             'features' => is_array($features) ? $features : [],
         ];

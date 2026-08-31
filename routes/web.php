@@ -328,6 +328,7 @@ return static function (Router $router): void {
 
     $router->get('/settings/public-signup', [PublicSignupController::class, 'settings'], ['auth', 'super_admin']);
     $router->post('/settings/public-signup/save', [PublicSignupController::class, 'saveSettings'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/settings/public-signup/test-gateway', [PublicSignupController::class, 'testGateway'], ['auth', 'super_admin', 'csrf']);
     $router->get('/payment-gateways', [PaymentGatewayController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/billing-reminders', [BillingReminderController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/payment-gateways/save', [PaymentGatewayController::class, 'save'], ['auth', 'super_admin', 'csrf']);

@@ -10,9 +10,11 @@ $old = is_array($_SESSION['public_signup_old'] ?? null) ? $_SESSION['public_sign
 unset($_SESSION['public_signup_old']);
 $price = (float) ($offer['price'] ?? 99);
 $trialDays = (int) ($offer['trial_days'] ?? 7);
+$pixEnabled = !empty($offer['pix_enabled']);
 $features = is_array($offer['features'] ?? null) ? $offer['features'] : [];
 $limits = is_array($offer['limits'] ?? null) ? $offer['limits'] : [];
 $commercialUrl = (string) ($offer['commercial_url'] ?? '');
+$gatewayEnvironment = (string) ($offer['gateway']['environment'] ?? '');
 ?>
 <div class="signup-page">
     <header class="signup-topbar">
@@ -24,16 +26,19 @@ $commercialUrl = (string) ($offer['commercial_url'] ?? '');
 
     <main class="signup-shell">
         <section class="signup-copy">
-            <span class="signup-eyebrow">Teste gratuito com cartão seguro</span>
+            <span class="signup-eyebrow">Cartão recorrente ou Pix QR Code</span>
+            <?php if ($gatewayEnvironment === 'sandbox'): ?>
+                <div class="signup-environment-warning"><strong>Ambiente de homologação</strong><span>Nenhuma cobrança real será realizada neste cadastro.</span></div>
+            <?php endif; ?>
             <h1>Comece a organizar seu atendimento em poucos minutos.</h1>
-            <p>Cadastre sua empresa, confirme o cartão no ambiente seguro do Asaas e use o Plano Inicial por <?= View::e($trialDays) ?> dias sem cobrança.</p>
+            <p>Escolha cartão para testar <?= View::e($trialDays) ?> dias sem cobrança ou Pix para ativar imediatamente com <?= View::e($trialDays) ?> dias adicionais no primeiro ciclo.</p>
 
             <article class="signup-plan-card">
                 <div class="signup-plan-head">
                     <div><small>Plano disponível no cadastro online</small><h2>Plano Inicial</h2></div>
                     <span>Mais escolhido para começar</span>
                 </div>
-                <div class="signup-price"><strong>R$ <?= View::e(number_format($price, 2, ',', '.')) ?></strong><span>/mês após o teste</span></div>
+                <div class="signup-price"><strong>R$ <?= View::e(number_format($price, 2, ',', '.')) ?></strong><span>/mês</span></div>
                 <ul>
                     <li>1 canal de atendimento</li>
                     <li>Até <?= View::e((string) ($limits['users'] ?? 3)) ?> usuários</li>
@@ -43,9 +48,9 @@ $commercialUrl = (string) ($offer['commercial_url'] ?? '');
                         <li><?= View::e((string) $feature) ?></li>
                     <?php endforeach; ?>
                 </ul>
-                <div class="signup-trial-summary">
-                    <span>Hoje</span><strong>R$ 0,00</strong>
-                    <small>A primeira cobrança será feita <?= View::e($trialDays) ?> dias após a conclusão do checkout.</small>
+                <div class="signup-trial-summary" data-signup-summary>
+                    <span data-signup-summary-label>Hoje no cartão</span><strong data-signup-summary-value>R$ 0,00</strong>
+                    <small data-signup-summary-text>A primeira cobrança será feita <?= View::e($trialDays) ?> dias após a conclusão do checkout.</small>
                 </div>
             </article>
 
@@ -61,16 +66,30 @@ $commercialUrl = (string) ($offer['commercial_url'] ?? '');
         <section class="signup-form-card">
             <div class="signup-steps" aria-label="Etapas do cadastro">
                 <span class="is-active">1 <small>Dados</small></span><i></i>
-                <span>2 <small>Cartão</small></span><i></i>
+                <span>2 <small>Pagamento</small></span><i></i>
                 <span>3 <small>Conta</small></span>
             </div>
             <header>
                 <h2>Crie sua conta</h2>
-                <p>Os dados do cartão serão preenchidos diretamente no checkout do Asaas.</p>
+                <p>O pagamento será concluído diretamente no ambiente seguro do Asaas.</p>
             </header>
 
             <form method="post" action="<?= View::e(Router::url('/signup')) ?>" class="signup-form" autocomplete="on">
                 <?= Csrf::input() ?>
+                <?php $selectedPayment = (string) ($old['payment_method'] ?? 'credit_card'); ?>
+                <fieldset class="signup-payment-methods signup-field-wide">
+                    <legend>Como deseja iniciar? *</legend>
+                    <label class="signup-payment-option">
+                        <input type="radio" name="payment_method" value="credit_card" <?= $selectedPayment !== 'pix' ? 'checked' : '' ?>>
+                        <span><strong>Cartão de crédito</strong><small><?= View::e($trialDays) ?> dias grátis e renovação automática mensal.</small></span>
+                    </label>
+                    <?php if ($pixEnabled): ?>
+                    <label class="signup-payment-option">
+                        <input type="radio" name="payment_method" value="pix" <?= $selectedPayment === 'pix' ? 'checked' : '' ?>>
+                        <span><strong>Pix QR Code</strong><small>R$ <?= View::e(number_format($price, 2, ',', '.')) ?> hoje e <?= View::e($trialDays) ?> dias adicionais no primeiro ciclo. Renovação mensal por QR Code Pix.</small></span>
+                    </label>
+                    <?php endif; ?>
+                </fieldset>
                 <label class="signup-field signup-field-wide">
                     <span>Nome da empresa *</span>
                     <input type="text" name="company_name" maxlength="150" required value="<?= View::e($old['company_name'] ?? '') ?>" placeholder="Ex.: Clínica Horizonte">
@@ -109,12 +128,40 @@ $commercialUrl = (string) ($offer['commercial_url'] ?? '');
                     <label><input type="checkbox" name="accept_privacy" value="1" required><span>Li e aceito a <a href="<?= View::e((string) $offer['privacy_url']) ?>" target="_blank" rel="noopener">Política de Privacidade</a>.</span></label>
                 </div>
 
-                <button class="signup-submit" type="submit">
-                    Continuar para o cartão
+                <button class="signup-submit" type="submit" data-signup-submit>
+                    Continuar para o pagamento
                     <span aria-hidden="true">→</span>
                 </button>
-                <p class="signup-secure-note">🔒 O RS Connect não armazena o número completo nem o código de segurança do cartão.</p>
+                <p class="signup-secure-note">🔒 O pagamento acontece no Asaas. O RS Connect não armazena dados completos de cartão nem credenciais bancárias.</p>
             </form>
         </section>
     </main>
 </div>
+
+<script>
+(() => {
+    const radios = document.querySelectorAll('input[name="payment_method"]');
+    const label = document.querySelector('[data-signup-summary-label]');
+    const value = document.querySelector('[data-signup-summary-value]');
+    const text = document.querySelector('[data-signup-summary-text]');
+    const button = document.querySelector('[data-signup-submit]');
+    const price = <?= json_encode('R$ ' . number_format($price, 2, ',', '.')) ?>;
+    const trialDays = <?= (int) $trialDays ?>;
+    const render = () => {
+        const selected = document.querySelector('input[name="payment_method"]:checked')?.value || 'credit_card';
+        if (selected === 'pix') {
+            if (label) label.textContent = 'Hoje no Pix';
+            if (value) value.textContent = price;
+            if (text) text.textContent = `Pagamento imediato com ${trialDays} dias adicionais no primeiro ciclo. A próxima renovação será por QR Code Pix.`;
+            if (button) button.firstChild.textContent = 'Continuar para o Pix ';
+        } else {
+            if (label) label.textContent = 'Hoje no cartão';
+            if (value) value.textContent = 'R$ 0,00';
+            if (text) text.textContent = `A primeira cobrança será feita ${trialDays} dias após a conclusão do checkout.`;
+            if (button) button.firstChild.textContent = 'Continuar para o cartão ';
+        }
+    };
+    radios.forEach((radio) => radio.addEventListener('change', render));
+    render();
+})();
+</script>

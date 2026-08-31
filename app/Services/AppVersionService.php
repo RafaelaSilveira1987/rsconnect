@@ -69,13 +69,15 @@ final class AppVersionService
     // RS Connect 36.24.4 — rate limit por IP real e falhas técnicas do Asaas fora da contagem.
     // RS Connect 36.24.5 — Checkout Asaas sem customerData parcial; endereço coletado no ambiente seguro.
     // RS Connect 36.24.6 — ponte interna segura para redirecionamento ao Checkout Asaas sob CSP estrita.
+    // RS Connect 36.25.1 — portal financeiro do cliente e validação segura do Asaas em Produção.
     // Compatibilidade histórica: REQUIRED_MIGRATION = '091_after_hours_monitor_and_quote_requests.sql'.
     // Compatibilidade histórica: REQUIRED_MIGRATION = '093_public_signup_asaas_trial.sql'.
-    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql, 085_ai_commercial_attention_queue.sql, 086_plan_ai_mode_and_commitment.sql, 087_webhook_security_events.sql, 088_payment_reconciliation_schema_compat.sql, 089_schema_migrations_registry.sql, 090_crm_conversation_automation.sql e 091_after_hours_monitor_and_quote_requests.sql, 092_notification_orchestration.sql, 093_public_signup_asaas_trial.sql e 094_normalize_asaas_api_base_url.sql.
+    // Compatibilidade histórica: REQUIRED_MIGRATION = '094_normalize_asaas_api_base_url.sql'.
+    // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql, 085_ai_commercial_attention_queue.sql, 086_plan_ai_mode_and_commitment.sql, 087_webhook_security_events.sql, 088_payment_reconciliation_schema_compat.sql, 089_schema_migrations_registry.sql, 090_crm_conversation_automation.sql e 091_after_hours_monitor_and_quote_requests.sql, 092_notification_orchestration.sql, 093_public_signup_asaas_trial.sql 094_normalize_asaas_api_base_url.sql e 095_public_signup_pix_qrcode.sql.
     // Identidade histórica preservada: Beta Comercial 1.5.
     public const VERSION_LABEL = 'Beta Comercial 1.6';
-    public const PACKAGE_LABEL = 'RS Connect 36.24.6 — redirecionamento seguro para o Checkout Asaas';
-    public const REQUIRED_MIGRATION = '094_normalize_asaas_api_base_url.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.25.1 — portal da assinatura e validação Asaas Produção';
+    public const REQUIRED_MIGRATION = '095_public_signup_pix_qrcode.sql';
 
     private PDO $pdo;
 

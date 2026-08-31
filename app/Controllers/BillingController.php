@@ -118,6 +118,87 @@ final class BillingController
 
         $invoicesStatement = $pdo->prepare('SELECT * FROM tenant_invoices WHERE tenant_id = :tenant_id ORDER BY created_at DESC LIMIT 24');
         $invoicesStatement->execute(['tenant_id' => $tenantId]);
+        $invoices = $invoicesStatement->fetchAll(PDO::FETCH_ASSOC);
+
+        $billingProfile = [
+            'provider' => '',
+            'gateway_label' => '',
+            'gateway_environment' => '',
+            'gateway_status' => '',
+            'payment_method' => '',
+            'first_charge_at' => '',
+            'last_event_at' => '',
+            'external_subscription_id' => '',
+            'bonus_days' => 0,
+        ];
+        $subscriptionId = (int) ($plan['subscription_id'] ?? 0);
+        if ($subscriptionId > 0) {
+            try {
+                $gatewayStatement = $pdo->prepare(
+                    'SELECT g.provider, g.status AS gateway_status, g.first_charge_at, g.last_event_at,
+                            g.external_subscription_id, pg.label AS gateway_label,
+                            pg.environment AS gateway_environment
+                     FROM tenant_subscription_gateways g
+                     INNER JOIN payment_gateways pg ON pg.id = g.gateway_id
+                     WHERE g.subscription_id = :subscription_id
+                     ORDER BY g.id DESC
+                     LIMIT 1'
+                );
+                $gatewayStatement->execute(['subscription_id' => $subscriptionId]);
+                $gatewayRow = $gatewayStatement->fetch(PDO::FETCH_ASSOC);
+                if ($gatewayRow) {
+                    $billingProfile = array_replace($billingProfile, $gatewayRow);
+                }
+
+                $signupStatement = $pdo->prepare(
+                    'SELECT payment_method, bonus_days, checkout_completed_at, provisioned_at
+                     FROM public_signup_sessions
+                     WHERE subscription_id = :subscription_id
+                     ORDER BY id DESC
+                     LIMIT 1'
+                );
+                $signupStatement->execute(['subscription_id' => $subscriptionId]);
+                $signupRow = $signupStatement->fetch(PDO::FETCH_ASSOC);
+                if ($signupRow) {
+                    $billingProfile = array_replace($billingProfile, $signupRow);
+                }
+            } catch (Throwable) {
+                // Instalações antigas continuam exibindo a assinatura sem os detalhes do gateway.
+            }
+        }
+
+        if (trim((string) ($billingProfile['payment_method'] ?? '')) === '') {
+            foreach ($invoices as $invoice) {
+                $method = trim((string) ($invoice['payment_method'] ?? ''));
+                if ($method !== '') {
+                    $billingProfile['payment_method'] = strtolower($method);
+                    break;
+                }
+            }
+        }
+
+        $invoiceSummary = [
+            'total' => count($invoices),
+            'paid' => 0,
+            'open' => 0,
+            'overdue' => 0,
+            'last_paid_at' => '',
+            'last_paid_amount' => null,
+        ];
+        foreach ($invoices as $invoice) {
+            $status = strtolower((string) ($invoice['status'] ?? ''));
+            if ($status === 'paid') {
+                $invoiceSummary['paid']++;
+                if ($invoiceSummary['last_paid_at'] === '' && !empty($invoice['paid_at'])) {
+                    $invoiceSummary['last_paid_at'] = (string) $invoice['paid_at'];
+                    $invoiceSummary['last_paid_amount'] = (float) ($invoice['amount'] ?? 0);
+                }
+            } elseif ($status === 'overdue') {
+                $invoiceSummary['overdue']++;
+            } elseif (in_array($status, ['open', 'pending'], true)) {
+                $invoiceSummary['open']++;
+            }
+        }
 
         View::render('billing.subscription', [
             'title' => 'Minha assinatura',
@@ -125,7 +206,9 @@ final class BillingController
             'plan' => $plan,
             'limitRows' => $limitRows,
             'aiUsage' => $aiUsage,
-            'invoices' => $invoicesStatement->fetchAll(PDO::FETCH_ASSOC),
+            'invoices' => $invoices,
+            'billingProfile' => $billingProfile,
+            'invoiceSummary' => $invoiceSummary,
         ]);
     }
 

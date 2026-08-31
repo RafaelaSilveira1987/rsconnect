@@ -7,6 +7,12 @@ $status = (string) ($signup['status'] ?? 'not_found');
 $email = (string) ($signup['email'] ?? '');
 $isReady = $status === 'provisioned';
 $isClosed = in_array($status, ['cancelled', 'expired'], true) || in_array((string) ($callbackState ?? ''), ['cancelled', 'expired'], true);
+$paymentMethod = (string) ($signup['payment_method'] ?? 'credit_card');
+$isPix = $paymentMethod === 'pix';
+$bonusDays = max(0, (int) ($signup['bonus_days'] ?? 0));
+$nextPixBilling = $isPix && !empty($signup['first_charge_at'])
+    ? (new DateTimeImmutable((string) $signup['first_charge_at']))->modify('+1 month +' . $bonusDays . ' days')->format('d/m/Y')
+    : '';
 ?>
 <div class="signup-status-page" data-signup-status-root data-token="<?= View::e((string) ($token ?? '')) ?>" data-ready="<?= $isReady ? '1' : '0' ?>">
     <section class="signup-status-card">
@@ -19,10 +25,15 @@ $isClosed = in_array($status, ['cancelled', 'expired'], true) || in_array((strin
         <?php elseif ($isReady): ?>
             <div class="signup-status-icon is-success">✓</div>
             <h1>Sua conta está pronta!</h1>
-            <p>O Plano Inicial foi liberado com o período gratuito. Use <strong><?= View::e($email) ?></strong> para entrar.</p>
+            <p><?= $isPix ? 'O pagamento Pix foi confirmado e o Plano Inicial foi liberado.' : 'O Plano Inicial foi liberado com o período gratuito.' ?> Use <strong><?= View::e($email) ?></strong> para entrar.</p>
             <div class="signup-status-details">
-                <span>Teste gratuito até <strong><?= View::e(date('d/m/Y', strtotime((string) $signup['trial_ends_at']))) ?></strong></span>
-                <span>Primeira cobrança em <strong><?= View::e(date('d/m/Y', strtotime((string) $signup['first_charge_at']))) ?></strong></span>
+                <?php if ($isPix): ?>
+                    <span>Pagamento <strong>Pix confirmado</strong></span>
+                    <span>Próxima renovação <strong><?= View::e($nextPixBilling) ?></strong></span>
+                <?php else: ?>
+                    <span>Teste gratuito até <strong><?= View::e(date('d/m/Y', strtotime((string) $signup['trial_ends_at']))) ?></strong></span>
+                    <span>Primeira cobrança em <strong><?= View::e(date('d/m/Y', strtotime((string) $signup['first_charge_at']))) ?></strong></span>
+                <?php endif; ?>
             </div>
             <a class="signup-status-primary" href="<?= View::e(Router::url('/login')) ?>">Entrar no RS Connect</a>
         <?php elseif ($isClosed): ?>
@@ -33,7 +44,7 @@ $isClosed = in_array($status, ['cancelled', 'expired'], true) || in_array((strin
         <?php else: ?>
             <div class="signup-status-loader" aria-hidden="true"></div>
             <h1 data-signup-status-title>Estamos confirmando seu cadastro</h1>
-            <p data-signup-status-message>O checkout foi concluído. Estamos aguardando a confirmação segura do Asaas para criar sua conta.</p>
+            <p data-signup-status-message><?= $isPix ? 'Estamos aguardando a confirmação do pagamento Pix pelo Asaas para criar sua conta.' : 'O checkout foi concluído. Estamos aguardando a confirmação segura do Asaas para criar sua conta.' ?></p>
             <div class="signup-status-details">
                 <span>E-mail <strong><?= View::e($email) ?></strong></span>
                 <span>Plano <strong>Inicial</strong></span>
@@ -60,7 +71,7 @@ $isClosed = in_array($status, ['cancelled', 'expired'], true) || in_array((strin
             const data = await response.json();
             if (data.ready) {
                 if (title) title.textContent = 'Sua conta está pronta!';
-                if (message) message.textContent = 'O período gratuito foi ativado. Você já pode entrar no RS Connect.';
+                if (message) message.textContent = data.payment_method === 'pix' ? 'O pagamento Pix foi confirmado. Você já pode entrar no RS Connect.' : 'O período gratuito foi ativado. Você já pode entrar no RS Connect.';
                 if (login) { login.hidden = false; login.href = data.login_url; }
                 return;
             }

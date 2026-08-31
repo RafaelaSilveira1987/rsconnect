@@ -51,6 +51,7 @@ final class PublicSignupController
                 'email' => trim((string) ($_POST['email'] ?? '')),
                 'phone' => trim((string) ($_POST['phone'] ?? '')),
                 'document' => trim((string) ($_POST['document'] ?? '')),
+                'payment_method' => trim((string) ($_POST['payment_method'] ?? 'credit_card')),
             ];
             Flash::set('error', $exception->getMessage());
             $this->redirect('/signup');
@@ -120,6 +121,7 @@ final class PublicSignupController
             'status' => (string) $signup['status'],
             'ready' => (string) $signup['status'] === 'provisioned',
             'email' => (string) $signup['email'],
+            'payment_method' => (string) ($signup['payment_method'] ?? 'credit_card'),
             'trial_ends_at' => (string) $signup['trial_ends_at'],
             'first_charge_at' => (string) $signup['first_charge_at'],
             'last_error' => in_array((string) $signup['status'], ['failed'], true) ? (string) ($signup['last_error'] ?? '') : '',
@@ -141,12 +143,38 @@ final class PublicSignupController
             (new PublicSignupService())->saveSettings($_POST, Auth::id());
             Audit::log('public_signup.settings_updated', [
                 'enabled' => !empty($_POST['enabled']),
+                'pix_enabled' => !empty($_POST['pix_enabled']),
                 'gateway_id' => (int) ($_POST['gateway_id'] ?? 0),
                 'trial_days' => (int) ($_POST['trial_days'] ?? 7),
             ]);
             Flash::set('success', 'Configurações da inscrição pública salvas.');
         } catch (Throwable $exception) {
             Flash::set('error', $exception->getMessage());
+        }
+        $this->redirect('/settings/public-signup');
+    }
+
+    public function testGateway(): void
+    {
+        $gatewayId = (int) ($_POST['gateway_id'] ?? 0);
+        try {
+            $result = (new PublicSignupService())->testGatewayConnection($gatewayId);
+            $environment = (string) ($result['environment'] ?? 'production') === 'production' ? 'Produção' : 'Sandbox';
+            $accountName = trim((string) ($result['account_name'] ?? ''));
+            $detail = $accountName !== '' ? ' Conta identificada: ' . $accountName . '.' : '';
+            Flash::set('success', 'Conexão com o Asaas ' . $environment . ' validada com sucesso.' . $detail);
+            Audit::log('public_signup.asaas_connection_tested', [
+                'gateway_id' => $gatewayId,
+                'environment' => (string) ($result['environment'] ?? ''),
+                'success' => true,
+            ]);
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+            Audit::log('public_signup.asaas_connection_tested', [
+                'gateway_id' => $gatewayId,
+                'success' => false,
+                'error' => mb_substr($exception->getMessage(), 0, 500),
+            ]);
         }
         $this->redirect('/settings/public-signup');
     }

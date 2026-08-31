@@ -26,7 +26,15 @@ $statusLabel = [
     'paid' => 'Pago',
     'cancelled' => 'Cancelado',
 ];
-$nextInvoice = $invoices[0] ?? null;
+$billingProfile = is_array($billingProfile ?? null) ? $billingProfile : [];
+$invoiceSummary = is_array($invoiceSummary ?? null) ? $invoiceSummary : [];
+$nextInvoice = null;
+foreach ($invoices as $candidateInvoice) {
+    if (in_array(strtolower((string) ($candidateInvoice['status'] ?? '')), ['open', 'pending', 'overdue'], true)) {
+        $nextInvoice = $candidateInvoice;
+        break;
+    }
+}
 $nextPaymentLink = $nextInvoice['external_checkout_url'] ?? $nextInvoice['external_invoice_url'] ?? '';
 $billingStatus = (string) ($plan['billing_status'] ?? 'active');
 $trialEndsAt = (string) ($plan['trial_ends_at'] ?? '');
@@ -43,6 +51,28 @@ $trialBehaviorLabel = [
     'activate' => 'Converter para assinatura ativa',
     'suspend' => 'Suspender o acesso',
 ];
+$paymentMethodKey = strtolower(trim((string) ($billingProfile['payment_method'] ?? '')));
+$paymentMethodLabel = match ($paymentMethodKey) {
+    'pix' => 'Pix QR Code',
+    'credit_card', 'credit card', 'cartao', 'cartão', 'credit_card_recurring' => 'Cartão de crédito',
+    'boleto' => 'Boleto / QR Code Pix',
+    default => 'Forma de pagamento não informada',
+};
+$providerLabel = strtolower((string) ($billingProfile['provider'] ?? '')) === 'asaas'
+    ? 'Asaas'
+    : (trim((string) ($billingProfile['gateway_label'] ?? '')) ?: 'Gateway não informado');
+$gatewayEnvironment = (string) ($billingProfile['gateway_environment'] ?? '');
+$gatewayStatus = strtolower((string) ($billingProfile['gateway_status'] ?? ''));
+$gatewayStatusLabel = [
+    'trialing' => 'Em período de teste',
+    'active' => 'Ativo',
+    'overdue' => 'Em atraso',
+    'suspended' => 'Suspenso',
+    'canceled' => 'Cancelado',
+][$gatewayStatus] ?? ($gatewayStatus !== '' ? ucfirst($gatewayStatus) : 'Aguardando sincronização');
+$firstChargeAt = (string) ($billingProfile['first_charge_at'] ?? $plan['next_billing_at'] ?? '');
+$lastPaidAt = (string) ($invoiceSummary['last_paid_at'] ?? '');
+$lastPaidAmount = $invoiceSummary['last_paid_amount'] ?? null;
 $aiBillingModeLabel = ($plan['ai_billing_mode'] ?? 'rs_connect') === 'tenant' ? 'IA própria do cliente' : 'IA RS Connect';
 $commitmentMonths = (int) ($plan['commitment_months'] ?? 3);
 $whatsappNumber = '5532987073537';
@@ -91,6 +121,13 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
 </section>
 <?php endif; ?>
 
+<?php if ($gatewayEnvironment === 'sandbox'): ?>
+<section class="client-billing-environment-alert" role="status">
+    <strong>Assinatura em ambiente de homologação</strong>
+    <span>Os dados abaixo pertencem ao Sandbox do Asaas e não representam uma cobrança real.</span>
+</section>
+<?php endif; ?>
+
 <div class="client-subscription-summary-grid">
     <article class="client-subscription-summary-card">
         <span class="client-summary-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3v4M17 3v4M4 9h16M5 5h14v16H5z"/></svg></span>
@@ -101,6 +138,10 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
         <div><span>Próxima cobrança</span><strong><?= View::e($date($plan['next_billing_at'] ?? null)) ?></strong><small><?= $billingStatus === 'trialing' ? 'Fim do teste: ' . View::e($date($plan['trial_ends_at'] ?? null)) : 'Você será avisado antes do vencimento' ?></small></div>
     </article>
     <article class="client-subscription-summary-card">
+        <span class="client-summary-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg></span>
+        <div><span>Forma de pagamento</span><strong><?= View::e($paymentMethodLabel) ?></strong><small><?= View::e($providerLabel) ?><?= $gatewayEnvironment === 'production' ? ' · Produção' : ($gatewayEnvironment === 'sandbox' ? ' · Sandbox' : '') ?></small></div>
+    </article>
+    <article class="client-subscription-summary-card">
         <span class="client-summary-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6 9 17l-5-5"/></svg></span>
         <div><span>Situação do plano</span><strong><?= View::e($statusLabel[$billingStatus] ?? ucfirst($billingStatus)) ?></strong><small><?= $billingStatus === 'active' ? 'Todos os recursos contratados estão disponíveis' : 'Consulte os detalhes abaixo' ?></small></div>
     </article>
@@ -109,6 +150,33 @@ $whatsappUrl = 'https://wa.me/' . $whatsappNumber . '?text=' . $whatsappMessage;
         <div><span>Modalidade e contrato</span><strong><?= View::e($aiBillingModeLabel) ?></strong><small><?= $commitmentMonths ?> meses · até <?= View::e($date($plan['commitment_ends_at'] ?? null)) ?></small></div>
     </article>
 </div>
+
+<section class="card client-billing-details-card">
+    <div class="section-heading client-section-heading">
+        <div>
+            <span class="eyebrow">Cobrança e renovação</span>
+            <h2>Detalhes da assinatura</h2>
+            <p>Acompanhe o período gratuito, a forma de pagamento e os últimos movimentos financeiros.</p>
+        </div>
+        <span class="badge badge-<?= View::e($gatewayStatus !== '' ? $gatewayStatus : $billingStatus) ?>"><?= View::e($gatewayStatusLabel) ?></span>
+    </div>
+    <div class="client-billing-details-grid">
+        <div><span>Provedor</span><strong><?= View::e($providerLabel) ?></strong><small><?= $gatewayEnvironment === 'production' ? 'Ambiente de produção' : ($gatewayEnvironment === 'sandbox' ? 'Ambiente de testes' : 'Ambiente não informado') ?></small></div>
+        <div><span>Forma de pagamento</span><strong><?= View::e($paymentMethodLabel) ?></strong><small><?= $paymentMethodKey === 'credit_card' ? 'Renovação mensal automática' : ($paymentMethodKey === 'pix' ? 'Pagamento mensal por QR Code' : 'Consulte a cobrança emitida') ?></small></div>
+        <div><span>Primeira cobrança</span><strong><?= View::e($date($firstChargeAt ?: null)) ?></strong><small><?= $billingStatus === 'trialing' ? 'Após o período gratuito' : 'Data registrada pelo gateway' ?></small></div>
+        <div><span>Último pagamento</span><strong><?= $lastPaidAt !== '' ? View::e($date($lastPaidAt)) : 'Ainda não registrado' ?></strong><small><?= $lastPaidAmount !== null ? View::e($money($lastPaidAmount)) : 'O histórico será atualizado por webhook' ?></small></div>
+        <div><span>Cobranças pagas</span><strong><?= number_format((int) ($invoiceSummary['paid'] ?? 0), 0, ',', '.') ?></strong><small><?= number_format((int) ($invoiceSummary['total'] ?? 0), 0, ',', '.') ?> cobrança(s) registrada(s)</small></div>
+        <div><span>Pendências</span><strong><?= number_format((int) (($invoiceSummary['open'] ?? 0) + ($invoiceSummary['overdue'] ?? 0)), 0, ',', '.') ?></strong><small><?= (int) ($invoiceSummary['overdue'] ?? 0) > 0 ? 'Há cobrança vencida' : 'Nenhuma cobrança vencida' ?></small></div>
+    </div>
+    <?php if ($billingStatus === 'trialing'): ?>
+        <div class="client-billing-timeline">
+            <div class="is-complete"><span>1</span><strong>Conta criada</strong><small><?= View::e($date($plan['starts_at'] ?? null)) ?></small></div>
+            <div class="is-current"><span>2</span><strong>Período gratuito</strong><small>Até <?= View::e($date($trialEndsAt ?: null)) ?></small></div>
+            <div><span>3</span><strong>Primeira cobrança</strong><small><?= View::e($date($firstChargeAt ?: null)) ?></small></div>
+            <div><span>4</span><strong>Renovação mensal</strong><small><?= View::e($money($plan['monthly_price'] ?? 0)) ?></small></div>
+        </div>
+    <?php endif; ?>
+</section>
 
 <div class="client-subscription-layout">
     <section class="card client-subscription-content-card">
