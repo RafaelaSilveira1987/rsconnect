@@ -38,7 +38,13 @@ final class PaymentGatewayService
     public function gateways(): array
     {
         return Database::connection()
-            ->query('SELECT * FROM payment_gateways ORDER BY is_default DESC, status, label')
+            ->query(
+                'SELECT pg.*,
+                        CASE WHEN pg.api_key_encrypted IS NOT NULL AND pg.api_key_encrypted <> "" THEN 1 ELSE 0 END AS has_api_key,
+                        CASE WHEN pg.webhook_secret_encrypted IS NOT NULL AND pg.webhook_secret_encrypted <> "" THEN 1 ELSE 0 END AS has_webhook_secret
+                 FROM payment_gateways pg
+                 ORDER BY pg.is_default DESC, pg.status, pg.label'
+            )
             ->fetchAll(PDO::FETCH_ASSOC);
     }
 

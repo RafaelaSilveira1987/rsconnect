@@ -2481,25 +2481,44 @@ document.addEventListener('DOMContentLoaded', () => {
   const refreshGatewayGuidance=(drawer,editing=false)=>{
     if(!drawer)return;
     const provider=drawer.querySelector('[data-gateway-field="provider"]')?.value||'manual';
+    const status=drawer.querySelector('[data-gateway-field="status"]')?.value||'inactive';
     const keyLabel=drawer.querySelector('[data-gateway-key-label]');
     const keyHint=drawer.querySelector('[data-gateway-key-hint]');
     const providerHint=drawer.querySelector('[data-gateway-provider-hint]');
     const baseUrlHint=drawer.querySelector('[data-gateway-base-url-hint]');
     const baseUrlInput=drawer.querySelector('[data-gateway-field="api_base_url"]');
+    const apiKeyInput=drawer.querySelector('[data-gateway-field="api_key"]');
+    const publicKeyField=drawer.querySelector('[data-gateway-public-key-field]');
     const webhookField=drawer.querySelector('[data-gateway-webhook-field]');
     const webhookLabel=drawer.querySelector('[data-gateway-webhook-label]');
     const webhookHint=drawer.querySelector('[data-gateway-webhook-hint]');
+    const credentialState=drawer.querySelector('[data-gateway-credential-state]');
     const pagBankHelp=drawer.querySelector('[data-gateway-pagbank-help]');
     const webhookInput=drawer.querySelector('[data-gateway-field="webhook_secret"]');
     const isPagBank=provider==='pagbank';
     const isAsaas=provider==='asaas';
-    if(keyLabel)keyLabel.textContent=isPagBank?'Token da API PagBank / PagSeguro':'Chave de acesso / Access Token';
+    const apiRequired=['asaas','mercadopago','stripe','pagbank'].includes(provider);
+    const webhookRequired=['asaas','mercadopago','stripe','infinitepay','external'].includes(provider);
+    const active=status==='active';
+    const hasStoredApiKey=editing&&drawer.dataset.hasApiKey==='1';
+    const hasStoredWebhookSecret=editing&&drawer.dataset.hasWebhookSecret==='1';
+
+    if(keyLabel)keyLabel.textContent=isPagBank?'Token da API PagBank / PagSeguro':isAsaas?'API Key do Asaas':'Chave de acesso / Access Token';
     if(keyHint)keyHint.textContent=isPagBank
-      ?(editing?'Deixe em branco para manter o token atual. Ao trocar, cole somente o Token da API, sem Authorization: ou Bearer.':'Cole somente o Token da API obtido no PagBank, sem Authorization: ou Bearer.')
-      :(editing?'Deixe em branco para manter a chave atual.':'Informe a chave do provedor.');
+      ?(hasStoredApiKey?'Token já configurado. Deixe em branco para manter ou cole outro para substituir.':'Cole somente o Token da API obtido no PagBank, sem Authorization: ou Bearer.')
+      :isAsaas
+        ?(hasStoredApiKey?'API Key já configurada. Deixe em branco para manter ou cole a chave de Produção para substituir.':'Cole a API Key correspondente ao ambiente selecionado no Asaas.')
+        :(hasStoredApiKey?'Chave já configurada. Deixe em branco para manter.':'Informe a chave do provedor.');
+    if(apiKeyInput){
+      apiKeyInput.required=active&&apiRequired&&!hasStoredApiKey;
+      apiKeyInput.placeholder=hasStoredApiKey?'Chave já cadastrada — deixe vazio para manter':(isAsaas?'Cole a API Key do Asaas':'Cole a chave secreta fornecida pelo serviço');
+      apiKeyInput.setCustomValidity('');
+    }
     if(providerHint)providerHint.textContent=isPagBank
       ?'Gera links de cobrança por Pix, boleto ou cartão no Checkout PagBank.'
-      :'Configure as credenciais e a autenticação do webhook deste serviço.';
+      :isAsaas
+        ?'Use uma conta separada para Sandbox e outra para Produção. Cada ambiente possui sua própria API Key.'
+        :'Configure as credenciais e a autenticação do webhook deste serviço.';
     if(baseUrlHint)baseUrlHint.textContent=(isPagBank||isAsaas)
       ?'Deixe vazio. O sistema usa automaticamente a URL oficial do ambiente selecionado.'
       :'Use somente quando o provedor exigir uma URL personalizada.';
@@ -2509,21 +2528,50 @@ document.addEventListener('DOMContentLoaded', () => {
       else if(isPagBank)baseUrlInput.placeholder='Deixe vazio para usar a URL oficial do PagBank';
       else baseUrlInput.placeholder='Deixe vazio para usar o padrão';
     }
+    if(publicKeyField)publicKeyField.hidden=isAsaas||isPagBank;
     if(webhookField)webhookField.hidden=isPagBank;
     if(pagBankHelp)pagBankHelp.hidden=!isPagBank;
-    if(webhookInput){webhookInput.disabled=isPagBank;if(isPagBank)webhookInput.value='';}
+    if(webhookInput){
+      webhookInput.disabled=isPagBank;
+      webhookInput.required=!isPagBank&&active&&webhookRequired&&!hasStoredWebhookSecret;
+      webhookInput.placeholder=hasStoredWebhookSecret?'Token já cadastrado — deixe vazio para manter':'Cole um token seguro para validar os webhooks';
+      webhookInput.setCustomValidity('');
+      if(isPagBank)webhookInput.value='';
+    }
     if(webhookLabel)webhookLabel.textContent=provider==='asaas'?'authToken do webhook Asaas':provider==='stripe'?'Signing secret do endpoint Stripe':provider==='mercadopago'?'Assinatura secreta do Mercado Pago':'Segredo/token do webhook';
-    if(webhookHint)webhookHint.textContent=editing?'Deixe vazio para manter o segredo atual.':'Obrigatório para validar notificações do provedor.';
+    if(webhookHint)webhookHint.textContent=hasStoredWebhookSecret?'Token já configurado. Deixe vazio para manter ou informe outro para substituir.':'Obrigatório para validar notificações do provedor.';
+    if(credentialState){
+      const missing=[];
+      if(active&&apiRequired&&!hasStoredApiKey&&!apiKeyInput?.value.trim())missing.push('API Key');
+      if(active&&webhookRequired&&!isPagBank&&!hasStoredWebhookSecret&&!webhookInput?.value.trim())missing.push('token do webhook');
+      credentialState.textContent=missing.length
+        ?`Para ativar, preencha: ${missing.join(' e ')}. Sem essas credenciais o registro será salvo como inativo.`
+        :'Credenciais obrigatórias atendidas. A chave existente será mantida quando o campo ficar vazio.';
+    }
   };
   setupSimpleDrawer({drawer:'gateway-drawer',form:'[data-gateway-form]',buttons:'[data-gateway-open]',attr:'data-gateway-field',fill:({button,drawer,form,field})=>{
-    form.reset();field('id').value='0';field('environment').value='production';field('status').value='active';field('is_default').checked=true;
+    form.reset();drawer.dataset.hasApiKey='0';drawer.dataset.hasWebhookSecret='0';field('id').value='0';field('environment').value='production';field('status').value='inactive';field('is_default').checked=false;
     const edit=button.dataset.gatewayOpen==='edit';
-    if(edit){field('id').value=button.dataset.id||'0';field('label').value=button.dataset.label||'';field('provider').value=button.dataset.provider||'manual';field('environment').value=button.dataset.environment||'production';field('status').value=button.dataset.status||'active';field('api_base_url').value=button.dataset.apiBaseUrl||'';field('public_key').value=button.dataset.publicKey||'';field('method').value=button.dataset.method||'UNDEFINED';field('is_default').checked=button.dataset.isDefault==='1';field('notes').value=decodeURIComponent(button.dataset.notes||'');field('api_key').value='';field('webhook_secret').value='';drawer.querySelector('[data-gateway-eyebrow]').textContent='Editar meio de pagamento';drawer.querySelector('[data-gateway-title]').textContent=button.dataset.label||'Atualizar pagamento';drawer.querySelector('[data-gateway-submit]').textContent='Salvar alterações';}
+    if(edit){field('id').value=button.dataset.id||'0';field('label').value=button.dataset.label||'';field('provider').value=button.dataset.provider||'manual';field('environment').value=button.dataset.environment||'production';field('status').value=button.dataset.status||'inactive';field('api_base_url').value=button.dataset.apiBaseUrl||'';field('public_key').value=button.dataset.publicKey||'';field('method').value=button.dataset.method||'UNDEFINED';field('is_default').checked=button.dataset.isDefault==='1';field('notes').value=decodeURIComponent(button.dataset.notes||'');field('api_key').value='';field('webhook_secret').value='';drawer.dataset.hasApiKey=button.dataset.hasApiKey||'0';drawer.dataset.hasWebhookSecret=button.dataset.hasWebhookSecret||'0';drawer.querySelector('[data-gateway-eyebrow]').textContent='Editar meio de pagamento';drawer.querySelector('[data-gateway-title]').textContent=button.dataset.label||'Atualizar pagamento';drawer.querySelector('[data-gateway-submit]').textContent='Salvar alterações';}
     else{drawer.querySelector('[data-gateway-eyebrow]').textContent='Novo meio de pagamento';drawer.querySelector('[data-gateway-title]').textContent='Configurar pagamento';drawer.querySelector('[data-gateway-submit]').textContent='Salvar meio de pagamento';}
     refreshGatewayGuidance(drawer,edit);
   }});
-  document.querySelector('[data-gateway-field="provider"]')?.addEventListener('change',(event)=>{
-    refreshGatewayGuidance(event.target.closest('#gateway-drawer'),Boolean(document.querySelector('[data-gateway-field="id"]')?.value&&document.querySelector('[data-gateway-field="id"]')?.value!=='0'));
+  ['provider','status','environment'].forEach((name)=>document.querySelector(`[data-gateway-field="${name}"]`)?.addEventListener('change',(event)=>{
+    const drawer=event.target.closest('#gateway-drawer');
+    refreshGatewayGuidance(drawer,Boolean(drawer?.querySelector('[data-gateway-field="id"]')?.value&&drawer.querySelector('[data-gateway-field="id"]')?.value!=='0'));
+  }));
+  ['api_key','webhook_secret'].forEach((name)=>document.querySelector(`[data-gateway-field="${name}"]`)?.addEventListener('input',(event)=>{
+    const drawer=event.target.closest('#gateway-drawer');
+    refreshGatewayGuidance(drawer,Boolean(drawer?.querySelector('[data-gateway-field="id"]')?.value&&drawer.querySelector('[data-gateway-field="id"]')?.value!=='0'));
+  }));
+  document.querySelector('[data-gateway-form]')?.addEventListener('submit',(event)=>{
+    const form=event.currentTarget;
+    const drawer=form.closest('#gateway-drawer');
+    refreshGatewayGuidance(drawer,Boolean(drawer?.querySelector('[data-gateway-field="id"]')?.value&&drawer.querySelector('[data-gateway-field="id"]')?.value!=='0'));
+    if(!form.checkValidity()){
+      event.preventDefault();
+      form.reportValidity();
+    }
   });
   setupSimpleDrawer({drawer:'reminder-drawer',form:'[data-reminder-form]',buttons:'[data-reminder-open]',attr:'data-reminder-field',fill:({button,drawer,form,field})=>{form.reset();field('id').value='0';field('days_from_due').value='-3';field('status').value='active';field('message_template').value='Olá, {{empresa}}. Sua cobrança {{invoice_number}} no valor de {{valor}} vence em {{vencimento}}. Link: {{link_pagamento}}';const edit=button.dataset.reminderOpen==='edit';if(edit){field('id').value=button.dataset.id||'0';field('label').value=button.dataset.label||'';field('days_from_due').value=button.dataset.days||'0';field('status').value=button.dataset.status||'active';field('event_key').value=button.dataset.eventKey||'';field('channel').value=button.dataset.channel||'';field('auto_mark_overdue').checked=button.dataset.autoOverdue==='1';field('auto_suspend').checked=button.dataset.autoSuspend==='1';field('message_template').value=decodeURIComponent(button.dataset.message||'');drawer.querySelector('[data-reminder-eyebrow]').textContent='Editar regra';drawer.querySelector('[data-reminder-title]').textContent=button.dataset.label||'Atualizar aviso';drawer.querySelector('[data-reminder-submit]').textContent='Salvar alterações';}else{drawer.querySelector('[data-reminder-eyebrow]').textContent='Nova regra';drawer.querySelector('[data-reminder-title]').textContent='Criar aviso automático';drawer.querySelector('[data-reminder-submit]').textContent='Salvar regra';}}});
   setupSimpleDrawer({drawer:'user-drawer',form:'[data-user-form]',buttons:'[data-user-open]',attr:'data-user-field',fill:({button,drawer,form,field})=>{form.reset();form.action=`${window.location.origin}/users`;field('id').value='0';field('tenant_id').value='global';field('role').value='super_admin';field('password').required=true;if(field('whatsapp_signature_enabled'))field('whatsapp_signature_enabled').checked=true;drawer.querySelector('[data-user-status-field]').hidden=true;const edit=button.dataset.userOpen==='edit';if(edit){form.action=`${window.location.origin}/users/update`;field('id').value=button.dataset.id||'0';field('tenant_id').value=button.dataset.tenantId||'global';field('name').value=button.dataset.name||'';field('email').value=button.dataset.email||'';field('whatsapp_display_name').value=button.dataset.whatsappDisplayName||'';field('whatsapp_role_label').value=button.dataset.whatsappRoleLabel||'';field('whatsapp_signature_enabled').checked=button.dataset.whatsappSignatureEnabled==='1';field('role').value=button.dataset.role||'client_user';field('status').value=button.dataset.status||'active';field('password').value='';field('password').required=false;drawer.querySelector('[data-user-status-field]').hidden=false;drawer.querySelector('[data-user-eyebrow]').textContent='Editar usuário';drawer.querySelector('[data-user-title]').textContent=button.dataset.name||'Atualizar acesso';drawer.querySelector('[data-user-description]').textContent='Altere perfil, situação ou senha sem recriar o usuário.';drawer.querySelector('[data-user-password-hint]').textContent='Deixe em branco para manter a senha atual.';drawer.querySelector('[data-user-submit]').textContent='Salvar alterações';}else{drawer.querySelector('[data-user-eyebrow]').textContent='Novo usuário';drawer.querySelector('[data-user-title]').textContent='Criar acesso';drawer.querySelector('[data-user-description]').textContent='Defina a empresa, o perfil e os dados de entrada.';drawer.querySelector('[data-user-password-hint]').textContent='Obrigatória no primeiro cadastro.';drawer.querySelector('[data-user-submit]').textContent='Salvar usuário';}}});

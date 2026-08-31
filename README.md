@@ -13,3 +13,6 @@ Principais entregas:
 O cadastro público continua oferecendo cartão recorrente com 7 dias grátis e Pix QR Code opcional.
 
 Consulte `INSTRUCOES-v36.25.1.md`.
+
+## v36.25.2
+Correção do cadastro e ativação dos meios de pagamento com credenciais protegidas.

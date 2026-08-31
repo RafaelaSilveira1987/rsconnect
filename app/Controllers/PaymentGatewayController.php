@@ -102,7 +102,7 @@ final class PaymentGatewayController
         $existing = [];
         if ($id > 0) {
             $current = $pdo->prepare(
-                'SELECT api_key_encrypted, webhook_secret_encrypted FROM payment_gateways WHERE id = :id LIMIT 1'
+                'SELECT provider, api_key_encrypted, webhook_secret_encrypted FROM payment_gateways WHERE id = :id LIMIT 1'
             );
             $current->execute(['id' => $id]);
             $existing = $current->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -110,15 +110,23 @@ final class PaymentGatewayController
 
         $apiRequiredProviders = ['asaas', 'mercadopago', 'stripe', 'pagbank'];
         $webhookSecretProviders = ['asaas', 'mercadopago', 'stripe', 'infinitepay', 'external'];
-        $hasStoredApiKey = trim((string) ($existing['api_key_encrypted'] ?? '')) !== '';
-        $hasStoredWebhookSecret = trim((string) ($existing['webhook_secret_encrypted'] ?? '')) !== '';
+        $sameProvider = $id > 0 && (string) ($existing['provider'] ?? '') === $provider;
+        $hasStoredApiKey = $sameProvider && trim((string) ($existing['api_key_encrypted'] ?? '')) !== '';
+        $hasStoredWebhookSecret = $sameProvider && trim((string) ($existing['webhook_secret_encrypted'] ?? '')) !== '';
+
+        // Não bloqueia o salvamento de uma configuração incompleta. Quando uma
+        // credencial obrigatória não chega no POST, o gateway é preservado como
+        // inativo para que o administrador possa concluir a configuração sem
+        // perder os demais dados preenchidos.
+        $credentialWarnings = [];
         if ($status === 'active' && in_array($provider, $apiRequiredProviders, true) && $apiKey === '' && !$hasStoredApiKey) {
-            Flash::set('error', 'Informe a chave de acesso do provedor antes de ativar o gateway.');
-            $this->redirect('/payment-gateways');
+            $credentialWarnings[] = 'chave de acesso/API Key';
         }
         if ($status === 'active' && in_array($provider, $webhookSecretProviders, true) && $webhookSecret === '' && !$hasStoredWebhookSecret) {
-            Flash::set('error', 'Informe o segredo/token de autenticação do webhook antes de ativar o gateway.');
-            $this->redirect('/payment-gateways');
+            $credentialWarnings[] = 'token de autenticação do webhook';
+        }
+        if ($credentialWarnings !== []) {
+            $status = 'inactive';
         }
         if ($provider === 'pagbank') {
             // O PagBank valida x-authenticity-token usando o próprio Token da API.
@@ -142,10 +150,14 @@ final class PaymentGatewayController
                      WHERE id = :id'
                 );
                 $params = ['id' => $id];
-                $apiKeyEncrypted = $apiKey !== '' ? Crypto::encrypt($apiKey) : (string) ($existing['api_key_encrypted'] ?? '');
+                $apiKeyEncrypted = $apiKey !== ''
+                    ? Crypto::encrypt($apiKey)
+                    : ($sameProvider ? (string) ($existing['api_key_encrypted'] ?? '') : '');
                 $webhookSecretEncrypted = $provider === 'pagbank'
                     ? ''
-                    : ($webhookSecret !== '' ? Crypto::encrypt($webhookSecret) : (string) ($existing['webhook_secret_encrypted'] ?? ''));
+                    : ($webhookSecret !== ''
+                        ? Crypto::encrypt($webhookSecret)
+                        : ($sameProvider ? (string) ($existing['webhook_secret_encrypted'] ?? '') : ''));
                 $action = 'payment.gateway_updated';
             } else {
                 $statement = $pdo->prepare(
@@ -180,8 +192,20 @@ final class PaymentGatewayController
             $gatewayId = $id > 0 ? $id : (int) $pdo->lastInsertId();
             $pdo->commit();
 
-            Audit::log($action, ['gateway_id' => $gatewayId, 'provider' => $provider]);
-            Flash::set('success', 'Gateway salvo.');
+            Audit::log($action, [
+                'gateway_id' => $gatewayId,
+                'provider' => $provider,
+                'status' => $status,
+                'credential_warning' => $credentialWarnings !== [],
+            ]);
+            if ($credentialWarnings !== []) {
+                Flash::set(
+                    'warning',
+                    'Meio de pagamento salvo como inativo. Para ativar, informe: ' . implode(' e ', $credentialWarnings) . '.'
+                );
+            } else {
+                Flash::set('success', 'Meio de pagamento salvo.');
+            }
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
