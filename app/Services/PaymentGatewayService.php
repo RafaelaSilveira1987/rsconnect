@@ -1490,15 +1490,16 @@ final class PaymentGatewayService
     /** @param list<string> $headers @return list<string> */
     private function withAsaasUserAgent(array $headers): array
     {
+        // Compatibilidade histórica: Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.24.5')
         foreach ($headers as $header) {
             if (stripos($header, 'User-Agent:') === 0) {
                 return $headers;
             }
         }
 
-        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.24.5'));
+        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.24.6'));
         if ($userAgent === '' || preg_match('/[\r\n]/', $userAgent)) {
-            $userAgent = 'RS-Connect/36.24.5';
+            $userAgent = 'RS-Connect/36.24.6';
         }
         $headers[] = 'User-Agent: ' . mb_substr($userAgent, 0, 255);
         return $headers;

@@ -32,7 +32,16 @@ final class PublicSignupController
         try {
             $result = (new PublicSignupService())->start($_POST);
             $_SESSION['public_signup_token'] = $result['token'];
-            header('Location: ' . $result['checkout_url']);
+
+            // O POST permanece no próprio domínio. A navegação externa para o
+            // Asaas acontece em uma página intermediária GET, evitando que a
+            // política CSP form-action 'self' bloqueie o redirecionamento após
+            // o envio do formulário.
+            header(
+                'Location: ' . Router::url('/signup/checkout?token=' . rawurlencode((string) $result['token'])),
+                true,
+                303
+            );
             exit;
         } catch (Throwable $exception) {
             $_SESSION['public_signup_old'] = [
@@ -46,6 +55,38 @@ final class PublicSignupController
             Flash::set('error', $exception->getMessage());
             $this->redirect('/signup');
         }
+    }
+
+
+    public function checkout(): void
+    {
+        header('Cache-Control: no-store, no-cache, must-revalidate');
+        header('Pragma: no-cache');
+
+        $token = $this->requestToken();
+        $checkout = (new PublicSignupService())->checkoutBridge($token);
+        if (!$checkout) {
+            Flash::set('error', 'Não foi possível localizar um checkout válido. Preencha o cadastro novamente.');
+            $this->redirect('/signup');
+        }
+
+        $status = (string) ($checkout['status'] ?? '');
+        if (in_array($status, ['checkout_completed', 'provisioned'], true)) {
+            $this->redirect('/signup/success?token=' . rawurlencode($token));
+        }
+        if (in_array($status, ['cancelled', 'expired'], true)) {
+            $this->redirect('/signup/' . $status . '?token=' . rawurlencode($token));
+        }
+        if ($status === 'failed') {
+            Flash::set('error', (string) ($checkout['last_error'] ?? 'O checkout não pôde ser iniciado. Tente novamente.'));
+            $this->redirect('/signup');
+        }
+
+        View::render('signup.checkout', [
+            'title' => 'Abrindo checkout seguro',
+            'checkout' => $checkout,
+            'token' => $token,
+        ], 'guest');
     }
 
     public function success(): void

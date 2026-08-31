@@ -1,5 +1,5 @@
-## RS Connect 36.24.5
+## RS Connect 36.24.6
 
-Hotfix do Checkout Asaas: remoção de `customerData` parcial e coleta do endereço diretamente no ambiente seguro do gateway.
+Redirecionamento seguro do cadastro público para o Checkout Asaas por uma ponte interna compatível com a CSP estrita da aplicação.
 
-Consulte `INSTRUCOES-v36.24.5.md`.
+Consulte `INSTRUCOES-v36.24.6.md`.

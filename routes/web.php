@@ -62,6 +62,7 @@ return static function (Router $router): void {
     $router->post('/logout', [AuthController::class, 'logout'], ['auth', 'csrf']);
     $router->get('/signup', [PublicSignupController::class, 'show'], ['guest']);
     $router->post('/signup', [PublicSignupController::class, 'create'], ['guest', 'csrf']);
+    $router->get('/signup/checkout', [PublicSignupController::class, 'checkout']);
     $router->get('/signup/success', [PublicSignupController::class, 'success']);
     $router->get('/signup/cancelled', [PublicSignupController::class, 'cancelled']);
     $router->get('/signup/expired', [PublicSignupController::class, 'expired']);

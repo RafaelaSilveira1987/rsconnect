@@ -18,7 +18,8 @@ use Throwable;
 
 final class PublicSignupService
 {
-    public const VERSION = '36.24.5';
+    // Compatibilidade histórica: public const VERSION = '36.24.5';
+    public const VERSION = '36.24.6';
 
     /** @return array<string,mixed> */
     public function offer(): array
@@ -317,6 +318,33 @@ final class PublicSignupService
                 ->execute(['error' => mb_substr($exception->getMessage(), 0, 2000), 'id' => $sessionId]);
             throw $exception;
         }
+    }
+
+    /** @return array<string,mixed>|null */
+    public function checkoutBridge(string $token): ?array
+    {
+        $signup = $this->status($token);
+        if (!$signup) {
+            return null;
+        }
+
+        $url = trim((string) ($signup['external_checkout_url'] ?? ''));
+        $status = (string) ($signup['status'] ?? '');
+        if ($status === 'checkout_created' && !$this->isSafeAsaasCheckoutUrl($url)) {
+            return [
+                'status' => 'failed',
+                'last_error' => 'O link retornado pelo Asaas é inválido ou não pertence ao domínio oficial.',
+            ];
+        }
+
+        return [
+            'status' => $status,
+            'checkout_url' => $url,
+            'company_name' => (string) ($signup['company_name'] ?? ''),
+            'email' => (string) ($signup['email'] ?? ''),
+            'expires_at' => (string) ($signup['expires_at'] ?? ''),
+            'last_error' => (string) ($signup['last_error'] ?? ''),
+        ];
     }
 
     /** @return array<string,mixed>|null */
@@ -742,9 +770,9 @@ final class PublicSignupService
         }
         $link = trim((string) ($response['link'] ?? ''));
         if ($link === '') {
-            $link = 'https://asaas.com/checkoutSession/show?id=' . rawurlencode($id);
+            $link = $this->asaasCheckoutUrl($gateway, $id);
         }
-        if (!filter_var($link, FILTER_VALIDATE_URL)) {
+        if (!$this->isSafeAsaasCheckoutUrl($link)) {
             throw new RuntimeException('O Asaas retornou um link de checkout inválido.');
         }
 
@@ -754,6 +782,36 @@ final class PublicSignupService
             'status' => (string) ($response['status'] ?? 'ACTIVE'),
             'payload' => $response,
         ];
+    }
+
+    /** @param array<string,mixed> $gateway */
+    private function asaasCheckoutUrl(array $gateway, string $checkoutId): string
+    {
+        $host = (string) ($gateway['environment'] ?? 'production') === 'sandbox'
+            ? 'sandbox.asaas.com'
+            : 'asaas.com';
+
+        return 'https://' . $host . '/checkoutSession/show?id=' . rawurlencode($checkoutId);
+    }
+
+    private function isSafeAsaasCheckoutUrl(string $url): bool
+    {
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            return false;
+        }
+
+        $parts = parse_url($url);
+        if (!is_array($parts) || strtolower((string) ($parts['scheme'] ?? '')) !== 'https') {
+            return false;
+        }
+
+        $host = strtolower(rtrim((string) ($parts['host'] ?? ''), '.'));
+        if ($host !== 'asaas.com' && !str_ends_with($host, '.asaas.com')) {
+            return false;
+        }
+
+        $path = (string) ($parts['path'] ?? '');
+        return str_starts_with($path, '/checkoutSession/show');
     }
 
     /** @return array<string,mixed>|null */
@@ -1028,15 +1086,16 @@ final class PublicSignupService
     /** @param list<string> $headers @return list<string> */
     private function withAsaasUserAgent(array $headers): array
     {
+        // Compatibilidade histórica: Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.24.5')
         foreach ($headers as $header) {
             if (stripos($header, 'User-Agent:') === 0) {
                 return $headers;
             }
         }
 
-        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.24.5'));
+        $userAgent = trim((string) Env::get('ASAAS_USER_AGENT', 'RS-Connect/36.24.6'));
         if ($userAgent === '' || preg_match('/[\r\n]/', $userAgent)) {
-            $userAgent = 'RS-Connect/36.24.5';
+            $userAgent = 'RS-Connect/36.24.6';
         }
         $headers[] = 'User-Agent: ' . mb_substr($userAgent, 0, 255);
         return $headers;
