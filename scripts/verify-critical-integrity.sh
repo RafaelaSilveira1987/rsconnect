@@ -2,41 +2,54 @@
 set -euo pipefail
 
 ROOT="${1:-/var/www/html}"
-fail=0
+FAIL=0
 
-check_php() {
-  local file="$1"
-  local needle="$2"
-  if [[ ! -f "$ROOT/$file" ]]; then
-    echo "[ERRO] Arquivo ausente: $file"
-    fail=1
-    return
-  fi
-  if grep -q "RS Connect v36.3.0 — backup real" "$ROOT/$file"; then
-    echo "[ERRO] Script de backup encontrado dentro de $file"
-    fail=1
-  fi
-  if ! grep -q "$needle" "$ROOT/$file"; then
-    echo "[ERRO] Marcador esperado ausente em $file: $needle"
-    fail=1
-  fi
-  php -l "$ROOT/$file" >/dev/null || fail=1
+error() {
+  printf '[ERRO] %s\n' "$1" >&2
+  FAIL=1
 }
 
-check_php "bin/operations-monitor.php" "new OperationsService"
-check_php "app/Services/OperationsService.php" "final class OperationsService"
+check_php_file() {
+  local rel="$1"
+  local marker="$2"
+  local file="$ROOT/$rel"
 
-if [[ ! -f "$ROOT/scripts/rsconnect-backup.sh" ]]; then
-  echo "[ERRO] Script de backup ausente."
-  fail=1
-elif ! grep -q '^#!/usr/bin/env bash' "$ROOT/scripts/rsconnect-backup.sh"; then
-  echo "[ERRO] Cabeçalho inválido no script de backup."
-  fail=1
+  [[ -f "$file" ]] || { error "Arquivo ausente: $rel"; return; }
+
+  local first_line
+  first_line="$(head -n 1 "$file" | tr -d '\r')"
+  if [[ "$rel" == bin/* ]]; then
+    [[ "$first_line" == '#!/usr/bin/env php' ]] || error "Cabeçalho inválido em $rel: $first_line"
+  else
+    [[ "$first_line" == '<?php' ]] || error "O arquivo $rel não começa com <?php."
+  fi
+
+  grep -Fq "$marker" "$file" || error "Marcador esperado ausente em $rel: $marker"
+
+  if grep -Eq '(^|[[:space:]])set -uo pipefail|RS Connect v36\.3\.0.*backup real|MYSQL_SERVICE=.*sites_mysql' "$file"; then
+    error "Conteúdo de shell/backup encontrado em $rel"
+  fi
+
+  php -l "$file" >/dev/null || error "Sintaxe PHP inválida em $rel"
+}
+
+check_php_file 'bin/operations-monitor.php' 'new OperationsService'
+check_php_file 'app/Services/OperationsService.php' 'final class OperationsService'
+
+# Nenhum PHP da aplicação pode conter o script Bash de backup.
+while IFS= read -r file; do
+  error "Script Bash encontrado dentro de PHP: ${file#$ROOT/}"
+done < <(grep -RIlE 'RS Connect v36\.3\.0.*backup real|(^|[[:space:]])set -uo pipefail' "$ROOT/app" "$ROOT/bin" --include='*.php' 2>/dev/null || true)
+
+# O autoload deve carregar a classe sem produzir qualquer saída lateral.
+AUTOLOAD_OUTPUT="$(php -d display_errors=1 -d opcache.enable_cli=0 -r "require '$ROOT/bootstrap.php'; echo class_exists('App\\\\Services\\\\OperationsService') ? 'CLASSE OK' : 'CLASSE AUSENTE';" 2>&1 || true)"
+if [[ "$AUTOLOAD_OUTPUT" != 'CLASSE OK' ]]; then
+  error "Falha no autoload. Saída recebida: ${AUTOLOAD_OUTPUT:0:500}"
 fi
 
-if [[ "$fail" -ne 0 ]]; then
-  echo "[FALHA] Integridade dos arquivos críticos inválida."
+if [[ "$FAIL" -ne 0 ]]; then
+  echo '[FALHA] Integridade dos arquivos críticos inválida.' >&2
   exit 1
 fi
 
-echo "[OK] Arquivos críticos íntegros."
+echo '[OK] Arquivos críticos íntegros e classe carregada sem saída indevida.'
