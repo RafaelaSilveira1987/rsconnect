@@ -1,0 +1,13 @@
+{
+    "date":  "2026-09-01",
+    "secrets_included":  false,
+    "database_migration_required":  false,
+    "excluded_scope":  [
+                           "gestaodetempo_reconnection",
+                           "gestaodetempo_real_message"
+                       ],
+    "changes":  [
+                    "daily_schedule_claim_after_success",
+                    "backup_failure_exit_code_1"
+                ]
+}

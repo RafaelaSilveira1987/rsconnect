@@ -1,0 +1,10 @@
+{
+  "package": "rsconnect-deploy-hardening-kit",
+  "date": "2026-09-01",
+  "purpose": "Persist validated fixes in a full RS Connect source ZIP",
+  "changes": [
+    "AiReprocessService.runScheduledIfDue",
+    "rsconnect-backup.finish_error exit code",
+    "post-deploy verification assets"
+  ]
+}

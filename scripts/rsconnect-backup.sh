@@ -32,7 +32,7 @@ finish_error() {
   [[ -n "$FINAL_PATH" ]] && rm -f "$FINAL_PATH" 2>/dev/null || true
   printf '{"status":"error","verified":false,"message":"%s","started_at":"%s","finished_at":"%s"}\n' \
     "$(json_escape "$message")" "$STARTED_AT" "$(date --iso-8601=seconds)"
-  exit 0
+  exit 1
 }
 
 [[ "$RETENTION_DAYS" =~ ^[0-9]+$ ]] || finish_error "Retenção inválida."

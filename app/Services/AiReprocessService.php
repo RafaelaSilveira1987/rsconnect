@@ -397,72 +397,174 @@ final class AiReprocessService
     {
         $settings = $this->settings();
         if ((int) ($settings['enabled'] ?? 0) !== 1) {
-            return ['status' => 'disabled', 'message' => 'Rotina automática desativada.'];
+            return [
+                'status' => 'disabled',
+                'message' => 'Rotina automática desativada.',
+            ];
         }
 
-        $timezone = new DateTimeZone((string) ($settings['timezone'] ?? 'America/Sao_Paulo'));
-        $now = ($now ?? new DateTimeImmutable('now', $timezone))->setTimezone($timezone);
+        $timezone = new DateTimeZone(
+            (string) (
+                $settings['timezone']
+                ?? 'America/Sao_Paulo'
+            )
+        );
+
+        $now = (
+            $now
+            ?? new DateTimeImmutable('now', $timezone)
+        )->setTimezone($timezone);
+
         $today = $now->format('Y-m-d');
-        $target = new DateTimeImmutable($today . ' ' . ($settings['run_time'] ?? '03:00'), $timezone);
+
+        $target = new DateTimeImmutable(
+            $today
+            . ' '
+            . ($settings['run_time'] ?? '03:00'),
+            $timezone
+        );
 
         if ($now < $target) {
             return [
                 'status' => 'not_due',
-                'message' => 'Ainda não chegou o horário configurado.',
+                'message' =>
+                    'Ainda não chegou o horário configurado.',
                 'scheduled_for' => $target->format(DATE_ATOM),
             ];
         }
 
-        if ((string) ($settings['last_scheduled_run_on'] ?? '') === $today) {
-            return ['status' => 'already_ran', 'message' => 'A rotina de hoje já foi executada.'];
+        if (
+            (string) (
+                $settings['last_scheduled_run_on']
+                ?? ''
+            ) === $today
+        ) {
+            return [
+                'status' => 'already_ran',
+                'message' =>
+                    'A rotina de hoje já foi executada.',
+            ];
         }
 
         $pdo = Database::connection();
         $claimLock = 'rs_ai_reprocess_schedule';
+
         if (!$this->acquireLock($pdo, $claimLock)) {
-            return ['status' => 'busy', 'message' => 'Outra verificação de agenda está em andamento.'];
+            return [
+                'status' => 'busy',
+                'message' =>
+                    'Outra verificação de agenda está em andamento.',
+            ];
         }
+
+        $claimRecorded = false;
 
         try {
             $pdo->beginTransaction();
-            $statement = $pdo->query('SELECT enabled, last_scheduled_run_on FROM ai_reprocess_settings WHERE id = 1 FOR UPDATE');
-            $current = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+
+            $statement = $pdo->query(
+                'SELECT
+                    enabled,
+                    last_scheduled_run_on,
+                    last_scheduled_claimed_at
+                 FROM ai_reprocess_settings
+                 WHERE id = 1
+                 FOR UPDATE'
+            );
+
+            $current = $statement->fetch(PDO::FETCH_ASSOC)
+                ?: [];
 
             if ((int) ($current['enabled'] ?? 0) !== 1) {
                 $pdo->rollBack();
-                return ['status' => 'disabled', 'message' => 'Rotina automática desativada.'];
-            }
-            if ((string) ($current['last_scheduled_run_on'] ?? '') === $today) {
-                $pdo->rollBack();
-                return ['status' => 'already_ran', 'message' => 'A rotina de hoje já foi executada.'];
+
+                return [
+                    'status' => 'disabled',
+                    'message' =>
+                        'Rotina automática desativada.',
+                ];
             }
 
-            $pdo->prepare(
+            if (
+                (string) (
+                    $current['last_scheduled_run_on']
+                    ?? ''
+                ) === $today
+            ) {
+                $pdo->rollBack();
+
+                return [
+                    'status' => 'already_ran',
+                    'message' =>
+                        'A rotina de hoje já foi executada.',
+                ];
+            }
+
+            $pdo->exec(
+                'UPDATE ai_reprocess_settings
+                 SET last_scheduled_claimed_at = NOW()
+                 WHERE id = 1'
+            );
+
+            $pdo->commit();
+            $claimRecorded = true;
+
+            $result = $this->runAll(
+                'scheduled',
+                null,
+                (int) (
+                    $settings['max_messages_per_run']
+                    ?? 100
+                )
+            );
+
+            if (($result['status'] ?? '') === 'busy') {
+                $pdo->exec(
+                    'UPDATE ai_reprocess_settings
+                     SET last_scheduled_claimed_at = NULL
+                     WHERE id = 1'
+                );
+
+                $claimRecorded = false;
+
+                return $result;
+            }
+
+            $statement = $pdo->prepare(
                 'UPDATE ai_reprocess_settings
                  SET last_scheduled_run_on = :run_on,
-                     last_scheduled_claimed_at = NOW()
+                     last_scheduled_claimed_at = NULL
                  WHERE id = 1'
-            )->execute(['run_on' => $today]);
-            $pdo->commit();
+            );
+
+            $statement->execute([
+                'run_on' => $today,
+            ]);
+
+            $claimRecorded = false;
+
+            return $result;
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
+
+            if ($claimRecorded) {
+                try {
+                    $pdo->exec(
+                        'UPDATE ai_reprocess_settings
+                         SET last_scheduled_claimed_at = NULL
+                         WHERE id = 1'
+                    );
+                } catch (Throwable) {
+                    // Preserva a exceção original.
+                }
+            }
+
             throw $exception;
         } finally {
             $this->releaseLock($pdo, $claimLock);
         }
-
-        $result = $this->runAll('scheduled', null, (int) ($settings['max_messages_per_run'] ?? 100));
-        if (($result['status'] ?? '') === 'busy') {
-            Database::connection()->prepare(
-                'UPDATE ai_reprocess_settings
-                 SET last_scheduled_run_on = NULL
-                 WHERE id = 1 AND last_scheduled_run_on = :run_on'
-            )->execute(['run_on' => $today]);
-        }
-
-        return $result;
     }
 
     public function validCronToken(string $token): bool
