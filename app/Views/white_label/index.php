@@ -11,11 +11,11 @@ $previewLogoUrl = BrandingService::assetUrl((string) ($selected['brand_logo_url'
 $hasLogo = $previewLogoUrl !== '';
 $previewBranding = $selected ? BrandingService::forTenantId((int) $selected['id']) : BrandingService::defaults();
 $previewInitials = (string) ($previewBranding['icon_text'] ?? 'EP');
+$previewLogoBackground = (string) ($previewBranding['logo_background'] ?? '#ffffff');
 ?>
 <style>
     .white-label-upload-thumb,
     .white-label-preview-mark {
-        background: linear-gradient(180deg, #f8fbfd 0%, #edf3f8 100%);
         border: 1px solid rgba(20, 100, 152, 0.14);
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), 0 10px 22px rgba(15, 23, 42, 0.08);
     }
@@ -79,7 +79,7 @@ $previewInitials = (string) ($previewBranding['icon_text'] ?? 'EP');
                             <span class="eyebrow">Arquivo principal</span>
                             <strong><?= $hasLogo ? 'Logo atual do cliente' : 'Nenhuma logo personalizada' ?></strong>
                         </div>
-                        <span class="white-label-upload-thumb is-horizontal">
+                        <span class="white-label-upload-thumb is-horizontal" style="background: <?= View::e($previewLogoBackground) ?>;">
                             <?php if ($hasLogo): ?>
                                 <img src="<?= View::e($previewLogoUrl) ?>" alt="Logo atual de <?= View::e((string) $selected['name']) ?>">
                             <?php else: ?>
@@ -93,6 +93,14 @@ $previewInitials = (string) ($previewBranding['icon_text'] ?? 'EP');
                         <input type="file" name="brand_logo_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
                     </label>
                     <small class="field-hint">Dimensão máxima: 4096 × 4096 pixels. Para melhor leitura, prefira uma logo horizontal com fundo transparente.</small>
+
+                    <label class="field" style="margin-top: 14px;">
+                        <span>Cor do fundo da logo</span>
+                        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                            <input type="color" name="brand_logo_background" value="<?= View::e($previewLogoBackground) ?>" style="width: 56px; height: 44px; padding: 4px; border-radius: 12px; border: 1px solid rgba(20,100,152,.16); background: #fff;">
+                            <span class="field-hint" style="margin:0;">Escolha a cor do fundo do quadro onde a logo será exibida no menu lateral.</span>
+                        </div>
+                    </label>
 
                     <?php if ($hasLogo): ?>
                         <label class="mini-check">
@@ -129,7 +137,7 @@ $previewInitials = (string) ($previewBranding['icon_text'] ?? 'EP');
         <div class="white-label-preview-shell">
             <div class="white-label-preview-sidebar">
                 <div class="white-label-preview-brand">
-                    <span class="white-label-preview-mark">
+                    <span class="white-label-preview-mark" style="background: <?= View::e($previewLogoBackground) ?>;">
                         <?php if ($hasLogo): ?>
                             <img src="<?= View::e($previewLogoUrl) ?>" alt="Prévia da logo">
                         <?php else: ?>
@@ -145,7 +153,7 @@ $previewInitials = (string) ($previewBranding['icon_text'] ?? 'EP');
             <div class="white-label-preview-content">
                 <span class="eyebrow">Painel do cliente</span>
                 <h3>Nome e logo da empresa no painel</h3>
-                <p>O nome é obtido do cadastro e a única imagem configurável é a logo.</p>
+                <p>O nome é obtido do cadastro, a imagem configurável é a logo e você também pode ajustar a cor do fundo desse quadro.</p>
                 <div class="white-label-preview-metrics">
                     <span></span><span></span><span></span>
                 </div>

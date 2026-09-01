@@ -20,7 +20,7 @@ final class WhiteLabelController
     {
         $pdo = Database::connection();
         $companies = $pdo->query(
-            'SELECT id, name, slug, status, white_label_enabled, brand_logo_url
+'SELECT id, name, slug, status, white_label_enabled, brand_logo_url, brand_logo_background
              FROM tenants
              ORDER BY name ASC'
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -30,7 +30,7 @@ final class WhiteLabelController
 
         if ($selectedId > 0) {
             $statement = $pdo->prepare(
-                'SELECT id, name, slug, status, white_label_enabled, brand_logo_url
+                'SELECT id, name, slug, status, white_label_enabled, brand_logo_url, brand_logo_background
                  FROM tenants
                  WHERE id = :id
                  LIMIT 1'
@@ -56,7 +56,7 @@ final class WhiteLabelController
 
         $pdo = Database::connection();
         $statement = $pdo->prepare(
-            'SELECT id, name, white_label_enabled, brand_logo_url
+            'SELECT id, name, white_label_enabled, brand_logo_url, brand_logo_background
              FROM tenants
              WHERE id = :id
              LIMIT 1'
@@ -71,7 +71,9 @@ final class WhiteLabelController
 
         $storedCurrentLogo = trim((string) ($current['brand_logo_url'] ?? ''));
         $currentLogo = BrandingService::assetUrl($storedCurrentLogo) !== '' ? $storedCurrentLogo : '';
+        $currentLogoBackground = $this->normalizeLogoBackground((string) ($current['brand_logo_background'] ?? '#ffffff'));
         $newLogo = $currentLogo;
+        $newLogoBackground = $this->normalizeLogoBackground((string) ($_POST['brand_logo_background'] ?? $currentLogoBackground));
         $uploadedLogo = null;
 
         try {
@@ -91,17 +93,19 @@ final class WhiteLabelController
             $update = $pdo->prepare(
                 'UPDATE tenants
                  SET white_label_enabled = :enabled,
-                     brand_logo_url = :brand_logo_url
+                     brand_logo_url = :brand_logo_url,
+                     brand_logo_background = :brand_logo_background
                  WHERE id = :tenant_id'
             );
             $update->execute([
                 'enabled' => $enabled,
                 'brand_logo_url' => $databaseLogo,
+                'brand_logo_background' => $newLogoBackground,
                 'tenant_id' => $tenantId,
             ]);
 
             $verify = $pdo->prepare(
-                'SELECT white_label_enabled, brand_logo_url
+                'SELECT white_label_enabled, brand_logo_url, brand_logo_background
                  FROM tenants
                  WHERE id = :tenant_id
                  LIMIT 1'
@@ -109,11 +113,13 @@ final class WhiteLabelController
             $verify->execute(['tenant_id' => $tenantId]);
             $persisted = $verify->fetch(PDO::FETCH_ASSOC) ?: null;
             $persistedLogo = trim((string) ($persisted['brand_logo_url'] ?? ''));
+            $persistedLogoBackground = $this->normalizeLogoBackground((string) ($persisted['brand_logo_background'] ?? ''));
 
             if (
                 !$persisted
                 || (int) ($persisted['white_label_enabled'] ?? 0) !== $enabled
                 || $persistedLogo !== ($databaseLogo ?? '')
+                || $persistedLogoBackground !== $newLogoBackground
             ) {
                 throw new RuntimeException('A logo foi recebida, mas o banco não confirmou a gravação. Nenhuma alteração foi mantida.');
             }
@@ -128,6 +134,7 @@ final class WhiteLabelController
                 'enabled' => $enabled,
                 'has_logo' => $newLogo !== '',
                 'logo_url' => $newLogo,
+                'logo_background' => $newLogoBackground,
             ], $tenantId);
 
             Flash::set(
@@ -203,6 +210,16 @@ final class WhiteLabelController
             'branding' => $branding,
             'isPreview' => true,
         ], 'guest');
+    }
+
+    private function normalizeLogoBackground(string $value): string
+    {
+        $value = trim($value);
+        if (preg_match('/^#[0-9a-fA-F]{6}$/', $value) === 1) {
+            return strtolower($value);
+        }
+
+        return '#ffffff';
     }
 
     private function uploadLogo(int $tenantId): ?string

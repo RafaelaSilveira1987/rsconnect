@@ -25,7 +25,8 @@ $brandName = $tenantIdentity ? (string) ($branding['app_name'] ?? 'Empresa') : '
 $brandSubtitle = $tenantIdentity ? (string) ($branding['subtitle'] ?? 'Atendimento e Comercial') : 'Atendimento e Comercial';
 $brandIconText = $tenantIdentity ? (string) ($branding['icon_text'] ?? 'EP') : 'RS';
 $brandLogoUrl = $brandEnabled ? (string) ($branding['logo_url'] ?? '') : '';
-$brandLogoMarkStyle = 'background: linear-gradient(180deg, #f8fbfd 0%, #edf3f8 100%); border: 1px solid rgba(20, 100, 152, 0.14); box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), 0 10px 22px rgba(15, 23, 42, 0.08); overflow: hidden; padding: 6px;';
+$brandLogoBackground = $tenantIdentity ? (string) ($branding['logo_background'] ?? '#ffffff') : '#ffffff';
+$brandLogoMarkStyle = 'background: ' . $brandLogoBackground . '; border: 1px solid rgba(20, 100, 152, 0.14); box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), 0 10px 22px rgba(15, 23, 42, 0.08); overflow: hidden; padding: 6px;';
 $brandLogoImageStyle = 'width: 100%; height: 100%; object-fit: contain; display: block;';
 $brandFaviconUrl = '';
 $brandPrimary = '#146498';
@@ -157,6 +158,7 @@ $svgIcon = static function (string $name): string {
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
             border-radius: 16px;
+            transition: background-color .2s ease;
         }
         .brand.is-custom-brand .brand-mark-client-logo img {
             border-radius: 10px;

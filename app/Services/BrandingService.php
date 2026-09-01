@@ -100,7 +100,7 @@ final class BrandingService
             'icon_url' => '',
             'favicon_url' => '',
             'logo_variant' => 'horizontal',
-            'logo_background' => 'transparent',
+            'logo_background' => '#ffffff',
             'primary' => '#146498',
             'secondary' => '#631b7c',
             'accent' => '#01c5b6',
@@ -133,6 +133,7 @@ final class BrandingService
         // O nome exibido vem do cadastro da empresa e não é um campo editável
         // do White Label. A única personalização enviada pelo administrador é a logo.
         $logoUrl = self::assetUrl((string) ($tenant['brand_logo_url'] ?? ''));
+        $logoBackground = self::normalizeLogoBackground((string) ($tenant['brand_logo_background'] ?? ''));
 
         return array_replace($default, [
             'enabled' => $logoUrl !== '',
@@ -142,7 +143,18 @@ final class BrandingService
             'subtitle' => 'Atendimento e Comercial',
             'icon_text' => self::initials($tenantName),
             'logo_url' => $logoUrl,
+            'logo_background' => $logoBackground,
         ]);
+    }
+
+    private static function normalizeLogoBackground(string $value): string
+    {
+        $value = trim($value);
+        if (preg_match('/^#[0-9a-fA-F]{6}$/', $value) === 1) {
+            return strtolower($value);
+        }
+
+        return '#ffffff';
     }
 
     private static function initials(string $name): string
