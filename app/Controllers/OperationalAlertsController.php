@@ -70,8 +70,22 @@ final class OperationalAlertsController
     {
         $this->requireCsrf();
         try {
-            (new OperationalAlertService())->resolveIncident((int) ($_POST['incident_id'] ?? 0));
-            $this->go('success', 'Incidente marcado como resolvido e recuperação comunicada.');
+            $releaseQueue = (string) ($_POST['release_queue'] ?? '') === '1';
+            $result = (new OperationalAlertService())->resolveIncident(
+                (int) ($_POST['incident_id'] ?? 0),
+                $releaseQueue
+            );
+            $cancelledTotal = (int) ($result['cancelled_messages'] ?? 0)
+                + (int) ($result['cancelled_ai_pending'] ?? 0)
+                + (int) ($result['cancelled_after_hours'] ?? 0);
+            $paused = (int) ($result['instances_paused'] ?? 0) > 0;
+            $message = $releaseQueue
+                ? 'Situação resolvida. ' . $cancelledTotal . ' pendência(s) retirada(s) da fila.'
+                    . ($paused ? ' Os alertas permanecerão silenciados até a reconexão.' : '')
+                : (!empty($result['messaging_incident'])
+                    ? 'Situação resolvida.' . ($paused ? ' Os alertas da conexão permanecerão silenciados até a reconexão.' : '')
+                    : 'Incidente marcado como resolvido e recuperação comunicada.');
+            $this->go('success', $message);
         } catch (Throwable $exception) {
             $this->go('error', $exception->getMessage());
         }

@@ -21,6 +21,15 @@ $formatDate = static function (?string $date, string $format = 'd/m/Y H:i'): str
 };
 $modeLabel = ['ai' => 'IA ativa', 'human' => 'Humano', 'paused' => 'IA pausada'];
 $statusLabel = ['open' => 'Aberta', 'pending' => 'Pendente', 'closed' => 'Encerrada'];
+$messageStatusLabels = [
+    'pending' => 'pendente',
+    'sent' => 'enviada',
+    'delivered' => 'entregue',
+    'read' => 'lida',
+    'failed' => 'falhou',
+    'received' => 'recebida',
+    'cancelled' => 'cancelada',
+];
 $afterHoursStatusLabels = [
     'pending' => 'Aguardando horário',
     'processing' => 'Retomando agora',
@@ -580,7 +589,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                                     <span><?= View::e($senderLabel) ?></span>
                                 <?php endif; ?>
                                 <time><?= View::e($formatDate($message['sent_at'], 'd/m H:i')) ?></time>
-                                <?php if ($outgoing): ?><span class="message-status"><?= View::e($message['status']) ?></span><?php endif; ?>
+                                <?php if ($outgoing): ?><span class="message-status"><?= View::e($messageStatusLabels[(string) ($message['status'] ?? '')] ?? (string) ($message['status'] ?? '')) ?></span><?php endif; ?>
                             </footer>
                         </div>
                     </article>

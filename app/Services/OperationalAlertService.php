@@ -172,20 +172,10 @@ final class OperationalAlertService
         }
     }
 
-    public function resolveIncident(int $incidentId): void
+    /** @return array<string,int|bool> */
+    public function resolveIncident(int $incidentId, bool $releaseQueue = false): array
     {
-        if ($incidentId < 1) {
-            throw new RuntimeException('Incidente inválido.');
-        }
-        $statement = Database::connection()->prepare(
-            'UPDATE system_incidents SET resolved_at = NOW(), last_seen_at = NOW()
-             WHERE id = :id AND resolved_at IS NULL'
-        );
-        $statement->execute(['id' => $incidentId]);
-        if ($statement->rowCount() < 1) {
-            throw new RuntimeException('O incidente já foi resolvido ou não foi encontrado.');
-        }
-        $this->dispatchRecovered($incidentId);
+        return (new OperationsService())->resolveIncident($incidentId, $releaseQueue);
     }
 
     /** @return array<string,array<string,mixed>> */

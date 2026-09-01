@@ -21,8 +21,8 @@ $checks = [
         && str_contains($migration, 'operational_alerts_pause_reason'),
     'logout do cliente pausa alertas automaticamente' => str_contains($controller, 'operational_alerts_pause_reason = "client_logout"')
         && str_contains($controller, 'notificações da fila foram pausados'),
-    'webhook de logout pausa e reconexão automática retoma somente pausas de logout' => str_contains($webhook, 'operational_alerts_pause_reason = "connection_logout"')
-        && str_contains($webhook, 'IN ("client_logout", "connection_logout")'),
+    'webhook de logout pausa e reconexão automática retoma pausas recuperáveis' => str_contains($webhook, 'operational_alerts_pause_reason = "connection_logout"')
+        && str_contains($webhook, 'IN ("client_logout", "connection_logout", "incident_resolved")'),
     'fila global exclui conexões pausadas dos limites de alerta' => str_contains($operations, 'evolutionAlertsEnabledSql')
         && str_contains($operations, 'mensagem(ns) preservada(s) em conexão(ões) pausada(s)')
         && str_contains($operations, 'syncBlockedEvolutionIncidents'),
@@ -41,8 +41,8 @@ $checks = [
         && str_contains($tenantHealth, 'if ($blockedByEvolution && $alertsPaused)'),
     'tela oferece pausa e retomada manual' => str_contains($view, "'resume_alerts' : 'pause_alerts'")
         && str_contains($view, 'Alertas silenciados'),
-    'pacote exige migration 097 e identifica a versão 36.26.6' => str_contains($version, 'RS Connect 36.26.6')
-        && str_contains($version, "REQUIRED_MIGRATION = '097_evolution_operational_alert_suppression.sql'"),
+    'pacote preserva a migration 097 e identifica a versão histórica 36.26.6' => str_contains($version, 'RS Connect 36.26.6')
+        && str_contains($version, '097_evolution_operational_alert_suppression.sql'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

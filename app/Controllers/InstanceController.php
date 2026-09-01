@@ -257,13 +257,13 @@ final class InstanceController
                         if ($this->columnExists($pdo, 'evolution_instances', 'operational_alerts_enabled')) {
                             $updateSql .= ',
                                 operational_alerts_enabled = CASE
-                                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout", "incident_resolved")
                                     THEN 1 ELSE operational_alerts_enabled END,
                                 operational_alerts_paused_at = CASE
-                                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout", "incident_resolved")
                                     THEN NULL ELSE operational_alerts_paused_at END,
                                 operational_alerts_pause_reason = CASE
-                                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout", "incident_resolved")
                                     THEN NULL ELSE operational_alerts_pause_reason END';
                         }
                     }
@@ -279,7 +279,7 @@ final class InstanceController
                     $row['connection_state'] = $state;
                     $row['status'] = $mappedStatus;
                     $row['connection_reason'] = '';
-                    if ($connected && in_array((string) ($row['operational_alerts_pause_reason'] ?? ''), ['client_logout', 'connection_logout'], true)) {
+                    if ($connected && in_array((string) ($row['operational_alerts_pause_reason'] ?? ''), ['client_logout', 'connection_logout', 'incident_resolved'], true)) {
                         $row['operational_alerts_enabled'] = 1;
                         $row['operational_alerts_paused_at'] = null;
                         $row['operational_alerts_pause_reason'] = null;

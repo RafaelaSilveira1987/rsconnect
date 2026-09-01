@@ -166,6 +166,98 @@ final class AiReprocessService
         return $this->settings();
     }
 
+    /**
+     * Retira da fila de reprocessamento as mensagens vinculadas às instâncias informadas,
+     * mantendo o histórico e registrando o cancelamento para impedir nova tentativa.
+     *
+     * @param list<int> $instanceIds
+     * @return array{pending_cancelled:int,after_hours_cancelled:int}
+     */
+    public function cancelPendingForInstances(array $instanceIds, string $reason, ?int $userId = null): array
+    {
+        $instanceIds = array_values(array_unique(array_filter(
+            array_map('intval', $instanceIds),
+            static fn (int $id): bool => $id > 0
+        )));
+        if ($instanceIds === []) {
+            return ['pending_cancelled' => 0, 'after_hours_cancelled' => 0];
+        }
+
+        $pdo = Database::connection();
+        $hasMessageLink = $this->hasIncomingMessageLink($pdo);
+        $supportsRouting = (new AgentRoutingService())->supportsRouting($pdo);
+        $placeholders = implode(',', array_fill(0, count($instanceIds), '?'));
+        $statement = $pdo->prepare(
+            'SELECT cm.id AS incoming_message_id,
+                    cm.tenant_id,
+                    cm.conversation_id,
+                    a.id AS agent_id,
+                    c.evolution_instance_id AS instance_id '
+            . $this->pendingBaseSql($hasMessageLink, $supportsRouting)
+            . ' AND c.evolution_instance_id IN (' . $placeholders . ')
+                ORDER BY cm.id'
+        );
+        $statement->execute($instanceIds);
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $reason = mb_substr(trim($reason) ?: 'Pendência cancelada manualmente.', 0, 500);
+        $cancelled = 0;
+        foreach ($rows as $row) {
+            $payload = [
+                'tenant_id' => (int) ($row['tenant_id'] ?? 0),
+                'conversation_id' => (int) ($row['conversation_id'] ?? 0),
+                'agent_id' => (int) ($row['agent_id'] ?? 0) ?: null,
+                'event' => 'ai.cancelled',
+                'status' => 'skipped',
+                'error_message' => $reason,
+                'raw_json' => json_encode([
+                    'source' => 'manual_queue_release',
+                    'user_id' => $userId,
+                    'instance_id' => (int) ($row['instance_id'] ?? 0),
+                    'cancelled_at' => \App\Core\Clock::nowUtc(),
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ];
+
+            if ($hasMessageLink) {
+                $payload['incoming_message_id'] = (int) ($row['incoming_message_id'] ?? 0);
+                $insert = $pdo->prepare(
+                    'INSERT INTO ai_automation_logs
+                        (tenant_id, conversation_id, agent_id, incoming_message_id, event, status, error_message, raw_json)
+                     VALUES
+                        (:tenant_id, :conversation_id, :agent_id, :incoming_message_id, :event, :status, :error_message, :raw_json)'
+                );
+            } else {
+                $insert = $pdo->prepare(
+                    'INSERT INTO ai_automation_logs
+                        (tenant_id, conversation_id, agent_id, event, status, error_message, raw_json)
+                     VALUES
+                        (:tenant_id, :conversation_id, :agent_id, :event, :status, :error_message, :raw_json)'
+                );
+            }
+            $insert->execute($payload);
+            $cancelled++;
+        }
+
+        $afterHours = $pdo->prepare(
+            'UPDATE ai_after_hours_pending p
+             INNER JOIN conversations c
+                ON c.id = p.conversation_id
+               AND c.tenant_id = p.tenant_id
+             SET p.status = "cancelled",
+                 p.recovered_at = NOW(),
+                 p.recovery_source = "manual_queue_release",
+                 p.last_error = ?
+             WHERE c.evolution_instance_id IN (' . $placeholders . ')
+               AND p.status IN ("pending","processing","blocked_plan","blocked_human","error")'
+        );
+        $afterHours->execute(array_merge([$reason], $instanceIds));
+
+        return [
+            'pending_cancelled' => $cancelled,
+            'after_hours_cancelled' => $afterHours->rowCount(),
+        ];
+    }
+
     public function runAll(string $source = 'manual', ?int $userId = null, ?int $limit = null): array
     {
         $pdo = Database::connection();
@@ -520,13 +612,13 @@ final class AiReprocessService
                                 if ($supportsAlerts && $connected) {
                                     $updateSql .= ',
                                                   operational_alerts_enabled = CASE
-                                                      WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                                                      WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout", "incident_resolved")
                                                       THEN 1 ELSE operational_alerts_enabled END,
                                                   operational_alerts_paused_at = CASE
-                                                      WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                                                      WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout", "incident_resolved")
                                                       THEN NULL ELSE operational_alerts_paused_at END,
                                                   operational_alerts_pause_reason = CASE
-                                                      WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                                                      WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout", "incident_resolved")
                                                       THEN NULL ELSE operational_alerts_pause_reason END';
                                 }
                                 $updateSql .= ' WHERE id = :id';

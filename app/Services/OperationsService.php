@@ -8,6 +8,7 @@ use App\Core\Auth;
 use App\Core\Database;
 use App\Core\Env;
 use PDO;
+use RuntimeException;
 use Throwable;
 
 final class OperationsService
@@ -163,32 +164,112 @@ final class OperationsService
         return $result;
     }
 
-    public function resolveIncident(int $id): void
+    /**
+     * Encerra um incidente e, para falhas de WhatsApp/fila, pode silenciar a conexão
+     * e cancelar as pendências preservadas para impedir reabertura e novos lembretes.
+     *
+     * @return array{resolved:bool,messaging_incident:bool,instances_paused:int,cancelled_messages:int,cancelled_ai_pending:int,cancelled_after_hours:int}
+     */
+    public function resolveIncident(int $id, bool $releaseQueue = false): array
     {
         if ($id <= 0) {
-            return;
+            throw new RuntimeException('Situação operacional inválida.');
+        }
+
+        $pdo = Database::connection();
+        $incidentStatement = $pdo->prepare('SELECT * FROM system_incidents WHERE id = :id LIMIT 1');
+        $incidentStatement->execute(['id' => $id]);
+        $incident = $incidentStatement->fetch(PDO::FETCH_ASSOC) ?: null;
+        if (!$incident) {
+            throw new RuntimeException('Situação operacional não encontrada.');
+        }
+        if (!empty($incident['resolved_at'])) {
+            throw new RuntimeException('Esta situação já foi normalizada.');
+        }
+
+        $event = trim((string) ($incident['event'] ?? ''));
+        $messagingIncident = $this->isMessagingIncidentEvent($event);
+        $summary = [
+            'resolved' => false,
+            'messaging_incident' => $messagingIncident,
+            'instances_paused' => 0,
+            'cancelled_messages' => 0,
+            'cancelled_ai_pending' => 0,
+            'cancelled_after_hours' => 0,
+        ];
+
+        $instanceIds = $messagingIncident ? $this->incidentInstanceIds($incident) : [];
+        $reason = 'Cancelada manualmente ao normalizar a situação operacional #' . $id . '.';
+
+        $pdo->beginTransaction();
+        try {
+            if ($messagingIncident && $instanceIds !== []) {
+                $summary['instances_paused'] = $this->pauseDisconnectedOperationalAlerts($pdo, $instanceIds);
+            }
+
+            if ($messagingIncident && $releaseQueue) {
+                if (!$this->conversationMessageCancellationSupported($pdo)) {
+                    throw new RuntimeException('A migration 098 precisa ser aplicada antes de liberar a fila.');
+                }
+
+                if ($instanceIds === []) {
+                    $instanceIds = $this->queuedInstanceIds((int) ($incident['tenant_id'] ?? 0));
+                    if ($instanceIds !== []) {
+                        $summary['instances_paused'] += $this->pauseDisconnectedOperationalAlerts($pdo, $instanceIds);
+                    }
+                }
+
+                if ($instanceIds !== []) {
+                    // A fila da IA é marcada como cancelada antes das mensagens de saída,
+                    // pois a seleção usa as falhas de entrega como uma das evidências da pendência.
+                    $cancelledAi = (new AiReprocessService())->cancelPendingForInstances(
+                        $instanceIds,
+                        $reason,
+                        Auth::id()
+                    );
+                    $summary['cancelled_ai_pending'] = (int) ($cancelledAi['pending_cancelled'] ?? 0);
+                    $summary['cancelled_after_hours'] = (int) ($cancelledAi['after_hours_cancelled'] ?? 0);
+                    $summary['cancelled_messages'] = $this->cancelOutgoingQueue($pdo, $instanceIds, $reason);
+                }
+            }
+
+            $statement = $pdo->prepare(
+                'UPDATE system_incidents SET resolved_at = NOW(), last_seen_at = NOW() '
+                . 'WHERE id = :id AND resolved_at IS NULL'
+            );
+            $statement->execute(['id' => $id]);
+            if ($statement->rowCount() < 1) {
+                throw new RuntimeException('A situação já foi normalizada por outra execução.');
+            }
+
+            $pdo->commit();
+            $summary['resolved'] = true;
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
         }
 
         try {
-            $incidentStatement = Database::connection()->prepare('SELECT event FROM system_incidents WHERE id = :id LIMIT 1');
-            $incidentStatement->execute(['id' => $id]);
-            $incident = $incidentStatement->fetch(PDO::FETCH_ASSOC) ?: [];
-            $event = trim((string) ($incident['event'] ?? ''));
+            (new OperationalAlertService())->dispatchRecovered($id);
+        } catch (Throwable) {
+            // A normalização já foi persistida; uma falha no canal de aviso não deve revertê-la.
+        }
 
-            $statement = Database::connection()->prepare('UPDATE system_incidents SET resolved_at = NOW() WHERE id = :id AND resolved_at IS NULL');
-            $statement->execute(['id' => $id]);
-            if ($statement->rowCount() > 0) {
-                (new OperationalAlertService())->dispatchRecovered($id);
-
-                // Ao resolver o alerta financeiro, atualiza a evidência imediatamente.
-                // Isso evita que a tela reutilize um health check antigo em estado warning.
-                if ($event === 'operations.alert.payments') {
-                    $this->recordCheck('payments', 'Gateways e pagamentos', $this->checkPayments());
-                }
+        // Recalcula imediatamente os checks relacionados. Como as conexões afetadas
+        // foram pausadas, a mesma causa deixa de reabrir o incidente a cada monitoramento.
+        try {
+            if ($messagingIncident) {
+                $this->refreshMessagingChecks();
+            } elseif ($event === 'operations.alert.payments') {
+                $this->recordCheck('payments', 'Gateways e pagamentos', $this->checkPayments());
             }
         } catch (Throwable) {
-            // Mantém fluxo da tela mesmo se a migration ainda não foi aplicada.
+            // O próximo ciclo do monitor fará a reconciliação caso a atualização imediata falhe.
         }
+
+        return $summary;
     }
 
     public function validBackupToken(string $token): bool
@@ -336,13 +417,13 @@ final class OperationsService
         );
 
         $pausedText = $paused > 0
-            ? '; ' . $paused . ' conexão(ões) pausada(s) pelo cliente, sem alertas operacionais'
+            ? '; ' . $paused . ' conexão(ões) pausada(s) intencionalmente, sem alertas operacionais'
             : '';
 
         if ($instances < 1 && $paused > 0) {
             return [
                 'status' => 'ok',
-                'message' => 'Nenhuma conexão está sendo monitorada no momento; ' . $paused . ' conexão(ões) foi(ram) pausada(s) pelo cliente. As filas vinculadas permanecem preservadas sem gerar notificações.',
+                'message' => 'Nenhuma conexão está sendo monitorada no momento; ' . $paused . ' conexão(ões) foi(ram) pausada(s) intencionalmente. As filas vinculadas permanecem preservadas sem gerar notificações.',
                 'latency_ms' => null,
             ];
         }
@@ -757,7 +838,7 @@ final class OperationsService
             return ['status' => 'warning', 'message' => $activeBlocked . ' grupo(s) de pendência aguardam reconexão de uma conexão monitorada. A fila foi preservada sem repetir tentativas enquanto a instância estiver desconectada.', 'latency_ms' => null];
         }
         if ($actionablePending === 0 && $pausedPending > 0) {
-            return ['status' => 'ok', 'message' => $pausedPending . ' pendência(s) estão vinculadas a conexões pausadas pelo cliente. A fila continua preservada e não gera alertas nem novas tentativas até a reconexão.', 'latency_ms' => null];
+            return ['status' => 'ok', 'message' => $pausedPending . ' pendência(s) estão vinculadas a conexões pausadas intencionalmente. A fila continua preservada e não gera alertas nem novas tentativas até a reconexão.', 'latency_ms' => null];
         }
         if ($lastAt < time() - 129600) {
             return ['status' => 'warning', 'message' => 'Rotina ativa, porém a última execução registrada ocorreu há mais de 36 horas: ' . ($settings['last_run_at'] ?? '') . '.', 'latency_ms' => null];
@@ -1012,7 +1093,7 @@ final class OperationsService
         $details = $pending . ' mensagem(ns) monitorada(s) pendente(s) há mais de ' . $pendingMinutes . ' min; '
             . $failed24 . ' falha(s) monitorada(s) nas últimas 24h.';
         if ($pausedPending > 0) {
-            $details .= ' ' . $pausedPending . ' mensagem(ns) preservada(s) em conexão(ões) pausada(s) pelo cliente, sem notificação.';
+            $details .= ' ' . $pausedPending . ' mensagem(ns) preservada(s) em conexão(ões) pausada(s) intencionalmente, sem notificação.';
         }
         if (!empty($oldest['created_at'])) {
             $details .= ' Mais antiga monitorada: ' . $oldest['created_at'] . '.';
@@ -1239,6 +1320,159 @@ final class OperationsService
             }
         } catch (Throwable) {
             // A leitura por empresa não pode derrubar o ciclo principal de monitoramento.
+        }
+    }
+
+    private function isMessagingIncidentEvent(string $event): bool
+    {
+        return str_starts_with($event, 'operations.alert.evolution')
+            || $event === 'operations.alert.message_queue';
+    }
+
+    /** @param array<string,mixed> $incident @return list<int> */
+    private function incidentInstanceIds(array $incident): array
+    {
+        $event = trim((string) ($incident['event'] ?? ''));
+        $tenantId = (int) ($incident['tenant_id'] ?? 0);
+        $context = json_decode((string) ($incident['context_json'] ?? ''), true);
+        $contextInstanceId = is_array($context) ? (int) ($context['instance_id'] ?? 0) : 0;
+        if ($contextInstanceId > 0) {
+            return [$contextInstanceId];
+        }
+
+        if (preg_match('/^operations\.alert\.evolution\.tenant\.(\d+)\.instance\.(\d+)$/', $event, $matches) === 1) {
+            return [(int) $matches[2]];
+        }
+
+        if ($event === 'operations.alert.message_queue') {
+            return $this->queuedInstanceIds($tenantId);
+        }
+
+        if (str_starts_with($event, 'operations.alert.evolution')) {
+            return $this->disconnectedOperationalInstanceIds($tenantId);
+        }
+
+        return [];
+    }
+
+    /** @return list<int> */
+    private function disconnectedOperationalInstanceIds(int $tenantId = 0): array
+    {
+        try {
+            $sql = 'SELECT id FROM evolution_instances
+                    WHERE LOWER(COALESCE(NULLIF(connection_state, ""), NULLIF(status, ""), "disconnected")) NOT IN ("connected","open","active","online")';
+            $params = [];
+            if ($tenantId > 0) {
+                $sql .= ' AND tenant_id = :tenant_id';
+                $params['tenant_id'] = $tenantId;
+            }
+            if ($this->supportsEvolutionAlertSuppression()) {
+                $sql .= ' AND COALESCE(operational_alerts_enabled, 1) = 1';
+            }
+            $statement = Database::connection()->prepare($sql . ' ORDER BY id');
+            $statement->execute($params);
+            return array_values(array_unique(array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN) ?: [])));
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /** @return list<int> */
+    private function queuedInstanceIds(int $tenantId = 0): array
+    {
+        try {
+            $sql = 'SELECT DISTINCT i.id
+                    FROM evolution_instances i
+                    INNER JOIN conversations c
+                       ON c.evolution_instance_id = i.id
+                      AND c.tenant_id = i.tenant_id
+                    LEFT JOIN conversation_messages cm
+                       ON cm.conversation_id = c.id
+                      AND cm.tenant_id = c.tenant_id
+                      AND cm.direction = "outgoing"
+                      AND cm.status IN ("pending","failed")
+                    LEFT JOIN ai_after_hours_pending ah
+                       ON ah.conversation_id = c.id
+                      AND ah.tenant_id = c.tenant_id
+                      AND ah.status IN ("pending","processing","blocked_plan","blocked_human","error")
+                    WHERE (cm.id IS NOT NULL OR ah.id IS NOT NULL)';
+            $params = [];
+            if ($tenantId > 0) {
+                $sql .= ' AND i.tenant_id = :tenant_id';
+                $params['tenant_id'] = $tenantId;
+            }
+            $statement = Database::connection()->prepare($sql . ' ORDER BY i.id');
+            $statement->execute($params);
+            return array_values(array_unique(array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN) ?: [])));
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /** @param list<int> $instanceIds */
+    private function pauseDisconnectedOperationalAlerts(PDO $pdo, array $instanceIds): int
+    {
+        if (!$this->supportsEvolutionAlertSuppression()) {
+            throw new RuntimeException('A migration 097 precisa ser aplicada antes de silenciar os alertas da conexão.');
+        }
+
+        $instanceIds = array_values(array_unique(array_filter(array_map('intval', $instanceIds), static fn (int $id): bool => $id > 0)));
+        if ($instanceIds === []) {
+            return 0;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($instanceIds), '?'));
+        $statement = $pdo->prepare(
+            'UPDATE evolution_instances
+             SET operational_alerts_enabled = 0,
+                 operational_alerts_paused_at = NOW(),
+                 operational_alerts_pause_reason = "incident_resolved"
+             WHERE id IN (' . $placeholders . ')
+               AND COALESCE(operational_alerts_enabled, 1) = 1
+               AND LOWER(COALESCE(NULLIF(connection_state, ""), NULLIF(status, ""), "disconnected")) NOT IN ("connected","open","active","online")'
+        );
+        $statement->execute($instanceIds);
+        return $statement->rowCount();
+    }
+
+    /** @param list<int> $instanceIds */
+    private function cancelOutgoingQueue(PDO $pdo, array $instanceIds, string $reason): int
+    {
+        $instanceIds = array_values(array_unique(array_filter(array_map('intval', $instanceIds), static fn (int $id): bool => $id > 0)));
+        if ($instanceIds === []) {
+            return 0;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($instanceIds), '?'));
+        $statement = $pdo->prepare(
+            'UPDATE conversation_messages cm
+             INNER JOIN conversations c
+                ON c.id = cm.conversation_id
+               AND c.tenant_id = cm.tenant_id
+             SET cm.status = "cancelled",
+                 cm.error_message = CONCAT_WS(" | ", NULLIF(cm.error_message, ""), ?)
+             WHERE c.evolution_instance_id IN (' . $placeholders . ')
+               AND cm.direction = "outgoing"
+               AND cm.status IN ("pending","failed")'
+        );
+        $statement->execute(array_merge([mb_substr($reason, 0, 500)], $instanceIds));
+        return $statement->rowCount();
+    }
+
+    private function conversationMessageCancellationSupported(PDO $pdo): bool
+    {
+        try {
+            $statement = $pdo->query(
+                'SELECT COLUMN_TYPE
+                 FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = "conversation_messages"
+                   AND COLUMN_NAME = "status"
+                 LIMIT 1'
+            );
+            return str_contains(strtolower((string) $statement->fetchColumn()), "'cancelled'");
+        } catch (Throwable) {
+            return false;
         }
     }
 

@@ -235,7 +235,7 @@ CREATE TABLE conversation_messages (
     message_type VARCHAR(40) NOT NULL DEFAULT 'text',
     content TEXT NULL,
     delivered_content TEXT NULL,
-    status ENUM('pending', 'sent', 'delivered', 'read', 'failed', 'received') NOT NULL DEFAULT 'received',
+    status ENUM('pending', 'sent', 'delivered', 'read', 'failed', 'received', 'cancelled') NOT NULL DEFAULT 'received',
     error_message VARCHAR(500) NULL,
     raw_payload_json JSON NULL,
     content_purged_at DATETIME NULL,

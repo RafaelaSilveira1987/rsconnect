@@ -1109,13 +1109,13 @@ final class EvolutionWebhookController
             } elseif ($status === 'connected') {
                 $updateSql .= ',
                  operational_alerts_enabled = CASE
-                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout", "incident_resolved")
                     THEN 1 ELSE operational_alerts_enabled END,
                  operational_alerts_paused_at = CASE
-                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout", "incident_resolved")
                     THEN NULL ELSE operational_alerts_paused_at END,
                  operational_alerts_pause_reason = CASE
-                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout")
+                    WHEN operational_alerts_pause_reason IN ("client_logout", "connection_logout", "incident_resolved")
                     THEN NULL ELSE operational_alerts_pause_reason END';
             }
         }

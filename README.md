@@ -1,7 +1,7 @@
-## RS Connect 36.26.6
+## RS Connect 36.26.7
 
-Silenciamento operacional por conexão WhatsApp desconectada ou pausada pelo cliente.
+Resolução persistente dos alertas de WhatsApp e liberação segura da fila de respostas.
 
-A fila de respostas permanece preservada, mas deixa de gerar alertas enquanto a conexão estiver pausada. O monitoramento retorna automaticamente após reconexão quando a pausa foi causada por logout.
+Ao normalizar uma situação relacionada a uma conexão desconectada, os alertas ficam silenciados até a reconexão. A ação **Resolver e liberar fila** cancela respostas pendentes ou com falha sem apagar o histórico e impede que sejam enviadas depois.
 
-Consulte `INSTRUCOES-v36.26.6.md`.
+Consulte `docs/ATUALIZACAO-v36.26.7.md`.

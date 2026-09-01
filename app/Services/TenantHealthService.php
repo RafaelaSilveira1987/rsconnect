@@ -318,10 +318,15 @@ final class TenantHealthService
             $alertsPaused = $supportsAlertSuppression
                 && (int) ($instance['operational_alerts_enabled'] ?? 1) !== 1;
             if ($alertsPaused) {
-                $details['Monitoramento operacional'] = 'Pausado pelo cliente';
+                $pauseReason = (string) ($instance['operational_alerts_pause_reason'] ?? '');
+                $resolvedIncidentPause = $pauseReason === 'incident_resolved';
+                $details['Monitoramento operacional'] = $resolvedIncidentPause
+                    ? 'Silenciado após resolução do incidente'
+                    : 'Pausado pelo cliente';
                 $details['Pausado em'] = $this->formatDatabaseDate($instance['operational_alerts_paused_at'] ?? null, 'Não informado');
-                $details['Motivo'] = match ((string) ($instance['operational_alerts_pause_reason'] ?? '')) {
+                $details['Motivo'] = match ($pauseReason) {
                     'client_logout', 'connection_logout' => 'WhatsApp desconectado pelo cliente',
+                    'incident_resolved' => 'Situação resolvida manualmente; silêncio mantido até a reconexão',
                     'manual' => 'Pausa manual dos alertas',
                     default => 'Pausa operacional',
                 };
@@ -330,7 +335,9 @@ final class TenantHealthService
                     'instance.' . $id,
                     'WhatsApp — ' . (string) $instance['name'],
                     'info',
-                    'Conexão pausada pelo cliente. Alertas e notificações da fila estão silenciados; as mensagens permanecem preservadas.',
+                    $resolvedIncidentPause
+                        ? 'Situação resolvida. Alertas e notificações da fila permanecem silenciados até a reconexão do WhatsApp.'
+                        : 'Conexão pausada pelo cliente. Alertas e notificações da fila estão silenciados; as mensagens permanecem preservadas.',
                     $details,
                     '/instances',
                     20 + $id

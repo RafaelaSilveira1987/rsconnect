@@ -10,6 +10,7 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\BackupAutomationService;
 use App\Services\OperationsService;
+use Throwable;
 
 final class OperationsController
 {
@@ -116,8 +117,18 @@ final class OperationsController
         }
 
         $id = (int) ($_POST['id'] ?? 0);
-        (new OperationsService())->resolveIncident($id);
-        Flash::set('success', 'Alerta/incidente marcado como resolvido.');
+        $releaseQueue = (string) ($_POST['release_queue'] ?? '') === '1';
+        try {
+            $result = (new OperationsService())->resolveIncident($id, $releaseQueue);
+            $message = $releaseQueue
+                ? 'Situação resolvida e ' . ((int) ($result['cancelled_messages'] ?? 0) + (int) ($result['cancelled_ai_pending'] ?? 0) + (int) ($result['cancelled_after_hours'] ?? 0)) . ' pendência(s) retirada(s) da fila.'
+                : (!empty($result['messaging_incident'])
+                    ? 'Situação resolvida e alertas silenciados até a reconexão.'
+                    : 'Alerta/incidente marcado como resolvido.');
+            Flash::set('success', $message);
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+        }
         header('Location: ' . Router::url('/operations'));
         exit;
     }

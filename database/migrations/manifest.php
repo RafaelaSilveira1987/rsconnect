@@ -117,5 +117,6 @@ return [
         ['sequence' => 102, 'file' => '095_public_signup_pix_qrcode.sql'],
         ['sequence' => 103, 'file' => '096_public_signup_coupons.sql'],
         ['sequence' => 104, 'file' => '097_evolution_operational_alert_suppression.sql'],
+        ['sequence' => 105, 'file' => '098_operational_queue_release.sql'],
     ],
 ];

@@ -15,6 +15,9 @@ $checked = static fn (string $key): string => !empty($preferences[$key]) ? 'chec
 $statusLabel = static fn (string $status): string => OperationalLanguageService::statusLabel($status);
 $kindLabel = static fn (string $kind): string => OperationalLanguageService::notificationKindLabel($kind);
 $channelLabel = static fn (string $channel): string => OperationalLanguageService::channelLabel($channel);
+$isMessagingIncident = static function (string $event): bool {
+    return str_starts_with($event, 'operations.alert.evolution') || $event === 'operations.alert.message_queue';
+};
 ?>
 
 <style>
@@ -136,7 +139,7 @@ $channelLabel = static fn (string $channel): string => OperationalLanguageServic
         <div>
             <span class="eyebrow">Acompanhamento</span>
             <h2>Situações em aberto</h2>
-            <p class="muted-text">Assumir a análise mostra que alguém já está cuidando. Marcar como normalizado encerra a situação e envia o aviso de recuperação.</p>
+            <p class="muted-text">Assumir a análise mostra que alguém já está cuidando. Em falhas de WhatsApp, você pode apenas silenciar o alerta ou também retirar da fila as respostas que não devem mais ser enviadas.</p>
         </div>
     </div>
     <div class="ops-incident-list">
@@ -145,6 +148,8 @@ $channelLabel = static fn (string $channel): string => OperationalLanguageServic
             $severity = (string) ($incident['severity'] ?? 'warning');
             $acknowledged = !empty($incident['acknowledged_at']);
             $tenantId = (int) ($incident['tenant_id'] ?? 0);
+            $event = (string) ($incident['event'] ?? '');
+            $messagingIncident = $isMessagingIncident($event);
             $presentation = OperationalLanguageService::incident($incident, false);
             ?>
             <article class="ops-incident-card <?= in_array($severity, ['critical', 'error'], true) ? 'is-critical' : 'is-warning' ?>">
@@ -173,11 +178,25 @@ $channelLabel = static fn (string $channel): string => OperationalLanguageServic
                             <button class="btn btn-outline" type="submit">Assumir análise</button>
                         </form>
                     <?php endif; ?>
-                    <form method="post" action="<?= View::e(Router::url('/operacao-alertas/resolve')) ?>" data-confirm="Confirmar que esta situação voltou ao normal?">
-                        <?= Csrf::input() ?>
-                        <input type="hidden" name="incident_id" value="<?= (int) ($incident['id'] ?? 0) ?>">
-                        <button class="btn btn-primary" type="submit">Marcar como normalizado</button>
-                    </form>
+                    <?php if ($messagingIncident): ?>
+                        <form method="post" action="<?= View::e(Router::url('/operacao-alertas/resolve')) ?>" data-confirm="As respostas pendentes/falhas desta conexão serão canceladas no histórico e não serão enviadas após a reconexão. Confirmar?">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="incident_id" value="<?= (int) ($incident['id'] ?? 0) ?>">
+                            <input type="hidden" name="release_queue" value="1">
+                            <button class="btn btn-primary" type="submit">Resolver e liberar fila</button>
+                        </form>
+                        <form method="post" action="<?= View::e(Router::url('/operacao-alertas/resolve')) ?>" data-confirm="O alerta será encerrado e silenciado até a reconexão, mas as respostas permanecerão preservadas na fila. Confirmar?">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="incident_id" value="<?= (int) ($incident['id'] ?? 0) ?>">
+                            <button class="btn btn-outline" type="submit">Resolver sem limpar fila</button>
+                        </form>
+                    <?php else: ?>
+                        <form method="post" action="<?= View::e(Router::url('/operacao-alertas/resolve')) ?>" data-confirm="Confirmar que esta situação voltou ao normal?">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="incident_id" value="<?= (int) ($incident['id'] ?? 0) ?>">
+                            <button class="btn btn-primary" type="submit">Marcar como normalizado</button>
+                        </form>
+                    <?php endif; ?>
                     <a class="btn btn-outline" href="<?= View::e(Router::url('/comunicados?incident_id=' . (int) ($incident['id'] ?? 0) . ($tenantId > 0 ? '&tenant_id=' . $tenantId : '') . '&type=incident')) ?>">Avisar empresa</a>
                 </div>
             </article>

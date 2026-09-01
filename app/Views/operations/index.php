@@ -34,6 +34,9 @@ $storageLabel = static fn (string $storage): string => match ($storage) {
     'dropbox' => 'Dropbox',
     default => 'Outro',
 };
+$isMessagingIncident = static function (string $event): bool {
+    return str_starts_with($event, 'operations.alert.evolution') || $event === 'operations.alert.message_queue';
+};
 $formatBytes = static function ($bytes): string {
     if ($bytes === null || $bytes === '') return '-';
     $bytes = (float) $bytes;
@@ -194,10 +197,12 @@ $formatBytes = static function ($bytes): string {
 " . (string) $alertPresentation['technical_message'])) ?></pre></details>
                     </div>
                     <?php if (!empty($alert['id'])): ?>
-                        <form method="post" action="<?= View::e(Router::url('/operations/incidents/resolve')) ?>">
+                        <?php $alertMessagingIncident = $isMessagingIncident((string) ($alert['event'] ?? '')); ?>
+                        <form method="post" action="<?= View::e(Router::url('/operations/incidents/resolve')) ?>"<?= $alertMessagingIncident ? ' data-confirm="As respostas pendentes/falhas serão canceladas no histórico. Confirmar?"' : '' ?>>
                             <?= Csrf::input() ?>
                             <input type="hidden" name="id" value="<?= (int) $alert['id'] ?>">
-                            <button class="btn btn-quiet" type="submit">Marcar como normalizado</button>
+                            <?php if ($alertMessagingIncident): ?><input type="hidden" name="release_queue" value="1"><?php endif; ?>
+                            <button class="btn btn-quiet" type="submit"><?= $alertMessagingIncident ? 'Resolver e liberar fila' : 'Marcar como normalizado' ?></button>
                         </form>
                     <?php endif; ?>
                 </article>
@@ -240,10 +245,12 @@ $formatBytes = static function ($bytes): string {
 " . (string) $incidentPresentation['technical_message'])) ?></pre></details>
                     </div>
                     <?php if (empty($incident['resolved_at']) && in_array((string) ($incident['severity'] ?? ''), ['warning', 'error', 'critical'], true)): ?>
-                        <form method="post" action="<?= View::e(Router::url('/operations/incidents/resolve')) ?>">
+                        <?php $historyMessagingIncident = $isMessagingIncident((string) ($incident['event'] ?? '')); ?>
+                        <form method="post" action="<?= View::e(Router::url('/operations/incidents/resolve')) ?>"<?= $historyMessagingIncident ? ' data-confirm="As respostas pendentes/falhas serão canceladas no histórico. Confirmar?"' : '' ?>>
                             <?= Csrf::input() ?>
                             <input type="hidden" name="id" value="<?= (int) $incident['id'] ?>">
-                            <button class="btn btn-quiet" type="submit">Marcar como normalizado</button>
+                            <?php if ($historyMessagingIncident): ?><input type="hidden" name="release_queue" value="1"><?php endif; ?>
+                            <button class="btn btn-quiet" type="submit"><?= $historyMessagingIncident ? 'Resolver e liberar fila' : 'Marcar como normalizado' ?></button>
                         </form>
                     <?php endif; ?>
                 </article>

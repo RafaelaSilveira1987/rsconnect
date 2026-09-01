@@ -1003,7 +1003,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const typeLabels = { image: 'Imagem', audio: 'Áudio', document: 'Documento' };
     const type = message.message_type && message.message_type !== 'text' ? `<span class="message-type">${escapeHtml(typeLabels[message.message_type] || message.message_type)}</span>` : '';
     const attachmentMarkup = renderAttachments(attachments);
-    const statusText = outgoing ? `<span class="message-status">${escapeHtml(message.status || '')}</span>` : '';
+    const messageStatusLabels = {pending:'pendente',sent:'enviada',delivered:'entregue',read:'lida',failed:'falhou',received:'recebida',cancelled:'cancelada'};
+    const statusText = outgoing ? `<span class="message-status">${escapeHtml(messageStatusLabels[message.status] || message.status || '')}</span>` : '';
     const senderText = outgoing ? `<span>${escapeHtml(sender)}</span>` : '';
     return `<article class="message-row ${outgoing ? 'is-outgoing' : 'is-incoming'}" data-message-id="${Number(message.id)}">
       <div class="message-bubble ${failed ? 'has-error' : ''}" data-sender="${escapeHtml(message.sender_type || '')}">
