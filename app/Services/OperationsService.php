@@ -711,9 +711,23 @@ final class OperationsService
                         COUNT(e.id) AS event_count,
                         SUM(CASE WHEN e.status IN ('error','failed') THEN 1 ELSE 0 END) AS error_count,
                         MAX(CASE WHEN e.status IN ('error','failed') THEN e.id END) AS last_error_id,
-                        MAX(CASE WHEN e.status = 'success' THEN e.id END) AS last_success_id,
+                        MAX(CASE
+                            WHEN e.status = 'success'
+                              OR (
+                                  e.event = CONCAT('payment.webhook.', pg.provider)
+                                  AND e.status = 'ignored'
+                              )
+                            THEN e.id
+                        END) AS last_success_id,
                         MAX(CASE WHEN e.status IN ('error','failed') THEN e.created_at END) AS last_error_at,
-                        MAX(CASE WHEN e.status = 'success' THEN e.created_at END) AS last_success_at
+                        MAX(CASE
+                            WHEN e.status = 'success'
+                              OR (
+                                  e.event = CONCAT('payment.webhook.', pg.provider)
+                                  AND e.status = 'ignored'
+                              )
+                            THEN e.created_at
+                        END) AS last_success_at
                  FROM payment_gateways pg
                  LEFT JOIN payment_gateway_events e
                    ON e.gateway_id = pg.id
@@ -763,8 +777,8 @@ final class OperationsService
 
             return [
                 'status' => 'warning',
-                'message' => count($activeFailures) . ' meio(s) de pagamento possui(em) falha sem confirmação posterior de uma operação bem-sucedida. '
-                    . 'Isso não confirma que o serviço continua indisponível; significa que ainda não houve uma nova atualização que comprove a recuperação. '
+                'message' => count($activeFailures) . ' meio(s) de pagamento possui(em) falha sem confirmação posterior de comunicação autenticada ou operação bem-sucedida. '
+                    . 'Isso não confirma que o serviço continua indisponível; significa que ainda não houve webhook autenticado nem nova atualização que comprove a recuperação. '
                     . ($failure['label'] ?? 'Gateway') . ' (' . $environment . ').' . $detail,
                 'latency_ms' => null,
             ];

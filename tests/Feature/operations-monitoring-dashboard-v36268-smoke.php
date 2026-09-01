@@ -27,7 +27,7 @@ $checks = [
     'css responsivo da nova central existe' => str_contains($css, 'RS Connect 36.26.8')
         && str_contains($css, '.operations-summary-strip')
         && str_contains($css, '.operations-overview-grid-v3'),
-    'pacote identifica a versão 36.26.8' => str_contains($version, 'RS Connect 36.26.8 — Central de Monitoramento reorganizada'),
+    'marcador histórico identifica a versão 36.26.8' => str_contains($version, 'RS Connect 36.26.8 — Central de Monitoramento compacta, gráficos e histórico progressivo.'),
 ];
 
 $failed = [];
