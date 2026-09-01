@@ -25,6 +25,8 @@ $brandName = $tenantIdentity ? (string) ($branding['app_name'] ?? 'Empresa') : '
 $brandSubtitle = $tenantIdentity ? (string) ($branding['subtitle'] ?? 'Atendimento e Comercial') : 'Atendimento e Comercial';
 $brandIconText = $tenantIdentity ? (string) ($branding['icon_text'] ?? 'EP') : 'RS';
 $brandLogoUrl = $brandEnabled ? (string) ($branding['logo_url'] ?? '') : '';
+$brandLogoMarkStyle = 'background: linear-gradient(180deg, #f8fbfd 0%, #edf3f8 100%); border: 1px solid rgba(20, 100, 152, 0.14); box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), 0 10px 22px rgba(15, 23, 42, 0.08); overflow: hidden; padding: 6px;';
+$brandLogoImageStyle = 'width: 100%; height: 100%; object-fit: contain; display: block;';
 $brandFaviconUrl = '';
 $brandPrimary = '#146498';
 $brandSecondary = '#631b7c';
@@ -152,6 +154,14 @@ $svgIcon = static function (string $name): string {
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
     <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.26.1')) ?>">
+    <style>
+        .brand.is-custom-brand .brand-mark-client-logo {
+            border-radius: 16px;
+        }
+        .brand.is-custom-brand .brand-mark-client-logo img {
+            border-radius: 10px;
+        }
+    </style>
 </head>
 <body<?= $tenantIdentity ? ' class="has-tenant-branding" style="' . View::e($brandCssVariables) . '"' : '' ?>>
 <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
@@ -160,8 +170,8 @@ $svgIcon = static function (string $name): string {
     <aside class="sidebar" id="sidebar">
         <a class="brand<?= $tenantIdentity ? ' is-custom-brand' : '' ?>" href="<?= View::e(Router::url('/')) ?>">
             <?php if ($brandLogoUrl !== ''): ?>
-                <span class="brand-mark brand-mark-image brand-mark-client-logo" style="background: transparent; box-shadow: none; overflow: hidden;">
-                    <img src="<?= View::e($brandAssetHref($brandLogoUrl)) ?>" alt="Logo de <?= View::e($brandName) ?>" style="width: 100%; height: 100%; object-fit: contain; display: block;">
+                <span class="brand-mark brand-mark-image brand-mark-client-logo" style="<?= View::e($brandLogoMarkStyle) ?>">
+                    <img src="<?= View::e($brandAssetHref($brandLogoUrl)) ?>" alt="Logo de <?= View::e($brandName) ?>" style="<?= View::e($brandLogoImageStyle) ?>">
                 </span>
             <?php else: ?>
                 <span class="brand-mark"><?= View::e($brandIconText) ?></span>

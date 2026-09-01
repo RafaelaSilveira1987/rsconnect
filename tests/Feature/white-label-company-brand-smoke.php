@@ -64,7 +64,8 @@ $check(str_contains($layout, '$tenantIdentity ='), 'layout separa identidade da 
 $check(str_contains($layout, '$brandName = $tenantIdentity'), 'layout mostra o nome da empresa mesmo sem logo');
 $check(str_contains($layout, '$brandLogoUrl !=='), 'layout exibe a logo quando ela existe');
 $check(str_contains($layout, 'brand-mark-client-logo'), 'layout possui contêiner específico para logo do cliente');
-$check(str_contains($layout, 'background: transparent; box-shadow: none'), 'logo não herda o fundo degradê do símbolo padrão');
+$check(str_contains($layout, '$brandLogoMarkStyle ='), 'layout define fundo específico para a logo do cliente');
+$check(str_contains($layout, 'linear-gradient(180deg, #f8fbfd 0%, #edf3f8 100%)'), 'fundo da logo usa painel neutro para harmonizar com a sidebar');
 $check(str_contains($layout, 'object-fit: contain'), 'logo mantém proporção no cabeçalho');
 
 $check(!str_contains($layout, '$brandIconUrl'), 'layout não tenta usar ícone antigo separado');
