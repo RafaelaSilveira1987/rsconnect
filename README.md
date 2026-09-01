@@ -1,7 +1,9 @@
-## RS Connect 36.26.7
+## RS Connect 36.26.8
 
-Resolução persistente dos alertas de WhatsApp e liberação segura da fila de respostas.
+Central de Monitoramento reorganizada para separar visão geral, rotinas e histórico.
 
-Ao normalizar uma situação relacionada a uma conexão desconectada, os alertas ficam silenciados até a reconexão. A ação **Resolver e liberar fila** cancela respostas pendentes ou com falha sem apagar o histórico e impede que sejam enviadas depois.
+O painel agora apresenta indicadores compactos, gráfico dos últimos 7 dias, percentual de saúde das rotinas, situações abertas em destaque, filtros e carregamento progressivo do histórico. O aviso financeiro também explica que a ausência de confirmação posterior não significa, por si só, que o Asaas continua indisponível.
 
-Consulte `docs/ATUALIZACAO-v36.26.7.md`.
+As correções da versão 36.26.7 para silenciamento de alertas e liberação segura da fila de mensagens foram preservadas.
+
+Consulte `docs/ATUALIZACAO-v36.26.8.md`.

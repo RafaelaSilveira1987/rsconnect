@@ -18,6 +18,7 @@ final class OperationsService
         $checks = $this->withExpectedChecks($this->latestChecks());
         $lastBackup = $this->lastBackup();
         $alerts = $this->activeAlerts($checks, $lastBackup);
+        $incidents = $this->incidents();
         $history = $this->checkHistory();
         $summary = [
             'healthy' => $this->countStatus($checks, 'ok'),
@@ -62,7 +63,8 @@ final class OperationsService
             'active_backup_routine' => $this->activeBackupRoutine(),
             'backups' => $this->backups(),
             'alerts' => $alerts,
-            'incidents' => $this->incidents(),
+            'incidents' => $incidents,
+            'analytics' => $this->monitoringAnalytics($checks),
             'recovery' => $this->recoveryPlaybooks(),
             'settings' => [
                 'backup_max_age_hours' => (int) Env::get('OPERATIONS_BACKUP_MAX_AGE_HOURS', 24),
@@ -761,7 +763,8 @@ final class OperationsService
 
             return [
                 'status' => 'warning',
-                'message' => count($activeFailures) . ' gateway(s) possui(em) falha sem confirmação posterior. '
+                'message' => count($activeFailures) . ' meio(s) de pagamento possui(em) falha sem confirmação posterior de uma operação bem-sucedida. '
+                    . 'Isso não confirma que o serviço continua indisponível; significa que ainda não houve uma nova atualização que comprove a recuperação. '
                     . ($failure['label'] ?? 'Gateway') . ' (' . $environment . ').' . $detail,
                 'latency_ms' => null,
             ];
@@ -1703,10 +1706,127 @@ final class OperationsService
     private function incidents(): array
     {
         try {
-            return Database::connection()->query('SELECT * FROM system_incidents ORDER BY id DESC LIMIT 30')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            return Database::connection()->query(
+                "SELECT * FROM system_incidents
+                 WHERE event LIKE 'operations.alert.%'
+                 ORDER BY id DESC
+                 LIMIT 60"
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
             return [];
         }
+    }
+
+    /**
+     * Dados compactos para a visão geral da Central de Monitoramento.
+     * Usa somente tabelas existentes e retorna valores seguros quando o banco
+     * ainda não possui o histórico operacional completo.
+     *
+     * @param list<array<string,mixed>> $checks
+     * @return array<string,mixed>
+     */
+    private function monitoringAnalytics(array $checks): array
+    {
+        $healthy = $this->countStatus($checks, 'ok');
+        $warning = $this->countStatus($checks, 'warning');
+        $down = $this->countStatus($checks, 'down');
+        $unknown = $this->countStatus($checks, 'unknown');
+        $total = count($checks);
+
+        $areas = [];
+        foreach ($checks as $check) {
+            $status = (string) ($check['status'] ?? 'unknown');
+            if ($status === 'ok') {
+                continue;
+            }
+            $area = trim((string) ($check['category_label'] ?? 'Outras áreas')) ?: 'Outras áreas';
+            $areas[$area] = ($areas[$area] ?? 0) + 1;
+        }
+        arsort($areas);
+
+        return [
+            'health_score' => $total > 0 ? (int) round(($healthy / $total) * 100) : 0,
+            'attention_total' => $warning + $down + $unknown,
+            'open_incidents' => $this->count(
+                "SELECT COUNT(*) FROM system_incidents
+                 WHERE event LIKE 'operations.alert.%'
+                   AND resolved_at IS NULL
+                   AND severity IN ('warning','error','critical')"
+            ),
+            'resolved_7d' => $this->count(
+                "SELECT COUNT(*) FROM system_incidents
+                 WHERE event LIKE 'operations.alert.%'
+                   AND resolved_at >= (NOW() - INTERVAL 7 DAY)"
+            ),
+            'resolved_total' => $this->count(
+                "SELECT COUNT(*) FROM system_incidents
+                 WHERE event LIKE 'operations.alert.%'
+                   AND resolved_at IS NOT NULL"
+            ),
+            'history_total' => $this->count(
+                "SELECT COUNT(*) FROM system_incidents
+                 WHERE event LIKE 'operations.alert.%'"
+            ),
+            'status_distribution' => [
+                'healthy' => $healthy,
+                'warning' => $warning,
+                'down' => $down,
+                'unknown' => $unknown,
+                'total' => $total,
+            ],
+            'attention_by_area' => $areas,
+            'trend_7d' => $this->incidentTrend(7),
+        ];
+    }
+
+    /** @return list<array{date:string,label:string,opened:int,resolved:int}> */
+    private function incidentTrend(int $days): array
+    {
+        $days = max(2, min(30, $days));
+        $series = [];
+        for ($offset = $days - 1; $offset >= 0; $offset--) {
+            $date = date('Y-m-d', strtotime('-' . $offset . ' day'));
+            $series[$date] = [
+                'date' => $date,
+                'label' => date('d/m', strtotime($date)),
+                'opened' => 0,
+                'resolved' => 0,
+            ];
+        }
+
+        try {
+            $opened = Database::connection()->query(
+                "SELECT DATE(created_at) AS day_key, COUNT(*) AS total
+                 FROM system_incidents
+                 WHERE event LIKE 'operations.alert.%'
+                   AND created_at >= (CURDATE() - INTERVAL " . ($days - 1) . " DAY)
+                 GROUP BY DATE(created_at)"
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($opened as $row) {
+                $key = (string) ($row['day_key'] ?? '');
+                if (isset($series[$key])) {
+                    $series[$key]['opened'] = (int) ($row['total'] ?? 0);
+                }
+            }
+
+            $resolved = Database::connection()->query(
+                "SELECT DATE(resolved_at) AS day_key, COUNT(*) AS total
+                 FROM system_incidents
+                 WHERE event LIKE 'operations.alert.%'
+                   AND resolved_at >= (CURDATE() - INTERVAL " . ($days - 1) . " DAY)
+                 GROUP BY DATE(resolved_at)"
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($resolved as $row) {
+                $key = (string) ($row['day_key'] ?? '');
+                if (isset($series[$key])) {
+                    $series[$key]['resolved'] = (int) ($row['total'] ?? 0);
+                }
+            }
+        } catch (Throwable) {
+            // Mantém a série zerada quando o histórico ainda não está disponível.
+        }
+
+        return array_values($series);
     }
 
     private function activeAlerts(array $checks, ?array $lastBackup): array

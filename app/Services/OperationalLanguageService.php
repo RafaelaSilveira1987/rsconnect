@@ -137,10 +137,10 @@ final class OperationalLanguageService
         ],
         'payments' => [
             'label' => 'Financeiro',
-            'title' => 'Atualizações financeiras não foram confirmadas',
-            'summary' => 'O sistema não confirmou a atualização mais recente de cobrança ou pagamento.',
-            'impact' => 'Situações de pagamento podem aparecer desatualizadas.',
-            'action' => 'Revise o meio de pagamento e as últimas atualizações financeiras.',
+            'title' => 'A recuperação do financeiro ainda não foi confirmada',
+            'summary' => 'Houve uma falha e ainda não existe uma operação posterior concluída que comprove a recuperação.',
+            'impact' => 'O serviço pode já estar disponível, mas os estados de cobranças e pagamentos ainda precisam ser conferidos.',
+            'action' => 'Teste a conexão do meio de pagamento e revise as últimas atualizações antes de normalizar a situação.',
             'client_title' => 'O financeiro precisa de conferência',
             'client_summary' => 'Uma atualização de cobrança ou pagamento ainda não foi confirmada.',
             'client_impact' => 'O status financeiro pode demorar para atualizar.',
@@ -606,6 +606,10 @@ final class OperationalLanguageService
             if (str_contains($folded, 'falha')) {
                 return 'A tentativa mais recente do assistente virtual não foi concluída.';
             }
+        }
+
+        if ($key === 'payments' && (str_contains($folded, 'sem confirmacao posterior') || str_contains($folded, 'sem operacao bem-sucedida posterior'))) {
+            return 'Uma falha financeira foi registrada e ainda não houve uma nova operação concluída que confirme a recuperação. Isso não significa, por si só, que o Asaas continua indisponível.';
         }
 
         if ($key === 'webhooks' && (str_contains($folded, 'nenhum') || str_contains($folded, 'nenhuma') || str_contains($folded, 'inatividade'))) {
