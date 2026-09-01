@@ -7,27 +7,14 @@ use App\Services\BrandingService;
 
 $selected = $selected ?? null;
 $companies = $companies ?? [];
-$active = static fn ($value, $fallback = '') => View::e((string) (($selected[$value] ?? '') !== '' ? $selected[$value] : $fallback));
-$raw = static fn ($value, $fallback = '') => (string) (($selected[$value] ?? '') !== '' ? $selected[$value] : $fallback);
-$previewName = $raw('brand_name', $selected['name'] ?? 'Empresa cliente');
-$previewSubtitle = $raw('brand_subtitle', 'Atendimento e CRM');
-$iconText = mb_substr($raw('brand_icon_text', 'CL'), 0, 4);
-$primary = $raw('brand_primary_color', '#146498');
-$secondary = $raw('brand_secondary_color', '#631b7c');
-$accent = $raw('brand_accent_color', '#01c5b6');
-$loginBg = $raw('login_background_color', '#07111f');
-$loginText = $raw('login_text_color', '#ffffff');
 $previewLogoUrl = BrandingService::assetUrl((string) ($selected['brand_logo_url'] ?? ''));
-$previewIconUrl = BrandingService::assetUrl((string) ($selected['brand_icon_url'] ?? ''));
-$previewFaviconUrl = BrandingService::assetUrl((string) ($selected['brand_favicon_url'] ?? ''));
-$logoVariant = $raw('brand_logo_variant', 'horizontal');
-$logoBackground = $raw('brand_logo_background', 'light');
+$hasLogo = $previewLogoUrl !== '';
 ?>
 <section class="hero-card compact-hero hero-admin white-label-hero">
     <div>
         <span class="eyebrow light">Identidade visual por empresa</span>
-        <h2>White label profissional para o painel do cliente</h2>
-        <p>Configure login, marca, logo, ícone, favicon, textos, cores e prévia real sem expor configurações técnicas ao cliente.</p>
+        <h2>Logo do cliente</h2>
+        <p>Personalize somente a logo. Nome, cores, textos, favicon e identidade visual permanecem no padrão da RS Connect.</p>
     </div>
     <span class="hero-badge">RS Connect Admin</span>
 </section>
@@ -41,272 +28,115 @@ $logoBackground = $raw('brand_logo_background', 'light');
             </div>
         </div>
 
-        <form method="get" action="<?= View::e(Router::url('/white-label')) ?>" class="inline-form-panel white-label-company-picker">
-            <label class="field white-label-company-field">
-                <span>Cliente</span>
-                <select name="tenant_id" data-auto-submit>
-                    <?php foreach ($companies as $company): ?>
-                        <option value="<?= (int) $company['id'] ?>" <?= $selected && (int) $selected['id'] === (int) $company['id'] ? 'selected' : '' ?>>
-                            <?= View::e($company['name']) ?><?= (int) ($company['white_label_enabled'] ?? 0) === 1 ? ' — ativo' : '' ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </label>
-        </form>
-
-        <?php if (!$selected): ?>
-            <p class="empty-state">Cadastre uma empresa antes de configurar white label.</p>
+        <?php if ($companies === []): ?>
+            <p class="empty-state">Cadastre uma empresa antes de configurar a logo.</p>
         <?php else: ?>
+            <form method="get" action="<?= View::e(Router::url('/white-label')) ?>" class="inline-form-panel white-label-company-picker">
+                <label class="field white-label-company-field">
+                    <span>Cliente</span>
+                    <select name="tenant_id" data-auto-submit>
+                        <?php foreach ($companies as $company): ?>
+                            <option value="<?= (int) $company['id'] ?>" <?= $selected && (int) $selected['id'] === (int) $company['id'] ? 'selected' : '' ?>>
+                                <?= View::e($company['name']) ?><?= trim((string) ($company['brand_logo_url'] ?? '')) !== '' ? ' — com logo' : '' ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+            </form>
+        <?php endif; ?>
+
+        <?php if ($selected): ?>
             <form method="post" action="<?= View::e(Router::url('/white-label/save')) ?>" class="white-label-form" data-white-label-form enctype="multipart/form-data">
                 <?= Csrf::input() ?>
                 <input type="hidden" name="tenant_id" value="<?= (int) $selected['id'] ?>">
 
-                <div class="form-divider">Identidade do painel</div>
+                <div class="form-divider">Logo exibida no painel</div>
+                <p class="white-label-section-intro">
+                    Envie uma imagem PNG, JPG/JPEG ou WEBP de até 2 MB. Ao salvar uma logo, a personalização é ativada automaticamente para o cliente.
+                </p>
 
-                <label class="check-field switch-field switch-field-strong">
-                    <input type="checkbox" name="white_label_enabled" value="1" <?= (int) ($selected['white_label_enabled'] ?? 0) === 1 ? 'checked' : '' ?>>
-                    <span><strong>Ativar white label para esta empresa</strong><small>Quando ativo, usuários da empresa veem marca, cores e login personalizados.</small></span>
-                </label>
-
-                <div class="form-grid two">
-                    <label class="field">
-                        <span>Nome exibido no painel</span>
-                        <input name="brand_name" value="<?= $active('brand_name', $selected['name'] ?? '') ?>" placeholder="Nome da marca do cliente">
-                    </label>
-                    <label class="field">
-                        <span>Subtítulo do painel</span>
-                        <input name="brand_subtitle" value="<?= $active('brand_subtitle', 'Atendimento e CRM') ?>" placeholder="Atendimento digital">
-                    </label>
-                </div>
-
-                <div class="form-grid three">
-                    <label class="field">
-                        <span>Tipo de logo</span>
-                        <select name="brand_logo_variant">
-                            <option value="horizontal" <?= $logoVariant === 'horizontal' ? 'selected' : '' ?>>Logo horizontal</option>
-                            <option value="square" <?= $logoVariant === 'square' ? 'selected' : '' ?>>Ícone quadrado</option>
-                            <option value="symbol" <?= $logoVariant === 'symbol' ? 'selected' : '' ?>>Símbolo simples</option>
-                        </select>
-                    </label>
-                    <label class="field">
-                        <span>Fundo da logo</span>
-                        <select name="brand_logo_background">
-                            <option value="light" <?= $logoBackground === 'light' ? 'selected' : '' ?>>Claro</option>
-                            <option value="transparent" <?= $logoBackground === 'transparent' ? 'selected' : '' ?>>Transparente</option>
-                            <option value="brand" <?= $logoBackground === 'brand' ? 'selected' : '' ?>>Cor da marca</option>
-                        </select>
-                    </label>
-                    <label class="field">
-                        <span>Texto mostrado quando o ícone não carregar</span>
-                        <input name="brand_icon_text" maxlength="4" value="<?= $active('brand_icon_text', 'RS') ?>" placeholder="Ex.: MB">
-                    </label>
-                </div>
-
-                <div class="form-divider">Arquivos da marca</div>
-                <p class="white-label-section-intro">Envie arquivos PNG, JPG ou WEBP de até 2 MB. As imagens ficam no armazenamento persistente da aplicação.</p>
-                <div class="white-label-upload-preview-grid">
-                    <article class="white-label-upload-card">
-                        <div class="white-label-upload-head">
-                            <div><span class="eyebrow">Principal</span><strong>Logo horizontal</strong></div>
-                            <span class="white-label-upload-thumb is-horizontal">
-                                <?php if ($previewLogoUrl !== ''): ?><img src="<?= View::e($previewLogoUrl) ?>" alt="Logo atual"><?php else: ?><b>LOGO</b><?php endif; ?>
-                            </span>
+                <article class="white-label-upload-card">
+                    <div class="white-label-upload-head">
+                        <div>
+                            <span class="eyebrow">Arquivo principal</span>
+                            <strong><?= $hasLogo ? 'Logo atual do cliente' : 'Nenhuma logo personalizada' ?></strong>
                         </div>
-                        <label class="field upload-field">
-                            <span>Selecionar nova logo</span>
-                            <input type="file" name="brand_logo_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
-                        </label>
-                        <small class="field-hint">Recomendada para login, cabeçalho e materiais de apresentação.</small>
-                        <?php if ($previewLogoUrl !== ''): ?><label class="mini-check"><input type="checkbox" name="remove_logo" value="1"> Remover logo atual</label><?php endif; ?>
-                    </article>
-                    <article class="white-label-upload-card">
-                        <div class="white-label-upload-head">
-                            <div><span class="eyebrow">Compacto</span><strong>Ícone reduzido</strong></div>
-                            <span class="white-label-upload-thumb is-square">
-                                <?php if ($previewIconUrl !== ''): ?><img src="<?= View::e($previewIconUrl) ?>" alt="Ícone atual"><?php else: ?><b><?= View::e($iconText) ?></b><?php endif; ?>
-                            </span>
-                        </div>
-                        <label class="field upload-field">
-                            <span>Selecionar novo ícone</span>
-                            <input type="file" name="brand_icon_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
-                        </label>
-                        <small class="field-hint">Use uma imagem quadrada para menu lateral e cards compactos.</small>
-                        <?php if ($previewIconUrl !== ''): ?><label class="mini-check"><input type="checkbox" name="remove_icon" value="1"> Remover ícone atual</label><?php endif; ?>
-                    </article>
-                    <article class="white-label-upload-card">
-                        <div class="white-label-upload-head">
-                            <div><span class="eyebrow">Navegador</span><strong>Favicon</strong></div>
-                            <span class="white-label-upload-thumb is-favicon">
-                                <?php if ($previewFaviconUrl !== ''): ?><img src="<?= View::e($previewFaviconUrl) ?>" alt="Favicon atual"><?php else: ?><b>16</b><?php endif; ?>
-                            </span>
-                        </div>
-                        <label class="field upload-field">
-                            <span>Selecionar novo favicon</span>
-                            <input type="file" name="brand_favicon_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
-                        </label>
-                        <small class="field-hint">Prefira uma imagem quadrada e simples, legível em tamanho pequeno.</small>
-                        <?php if ($previewFaviconUrl !== ''): ?><label class="mini-check"><input type="checkbox" name="remove_favicon" value="1"> Remover favicon atual</label><?php endif; ?>
-                    </article>
-                </div>
-
-                <details class="advanced-fields">
-                    <summary>Usar imagens por URL externa</summary>
-                    <div class="form-grid three advanced-url-grid">
-                        <label class="field">
-                            <span>URL da logo principal</span>
-                            <input name="brand_logo_url" value="<?= $active('brand_logo_url') ?>" placeholder="https://.../logo.png ou /uploads/...">
-                        </label>
-                        <label class="field">
-                            <span>URL do ícone reduzido</span>
-                            <input name="brand_icon_url" value="<?= $active('brand_icon_url') ?>" placeholder="https://.../icone.png ou /uploads/...">
-                        </label>
-                        <label class="field">
-                            <span>URL do favicon</span>
-                            <input name="brand_favicon_url" value="<?= $active('brand_favicon_url') ?>" placeholder="https://.../favicon.png ou /uploads/...">
-                        </label>
+                        <span class="white-label-upload-thumb is-horizontal">
+                            <?php if ($hasLogo): ?>
+                                <img src="<?= View::e($previewLogoUrl) ?>" alt="Logo atual de <?= View::e((string) $selected['name']) ?>">
+                            <?php else: ?>
+                                <b>RS</b>
+                            <?php endif; ?>
+                        </span>
                     </div>
-                </details>
 
-                <div class="form-divider">Paleta de cores</div>
-                <p class="white-label-section-intro">Clique na amostra para escolher a cor. A prévia ao lado é atualizada imediatamente.</p>
-                <div class="white-label-color-grid" data-white-label-colors>
-                    <label class="white-label-color-card">
-                        <span>Primária</span>
-                        <div><input type="color" name="brand_primary_color" value="<?= $active('brand_primary_color', '#146498') ?>" data-preview-color="--preview-primary"><output><?= $active('brand_primary_color', '#146498') ?></output></div>
-                        <small>Botões e ações principais</small>
+                    <label class="field upload-field">
+                        <span><?= $hasLogo ? 'Substituir logo' : 'Selecionar logo' ?></span>
+                        <input type="file" name="brand_logo_file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
                     </label>
-                    <label class="white-label-color-card">
-                        <span>Secundária</span>
-                        <div><input type="color" name="brand_secondary_color" value="<?= $active('brand_secondary_color', '#631b7c') ?>" data-preview-color="--preview-secondary"><output><?= $active('brand_secondary_color', '#631b7c') ?></output></div>
-                        <small>Gradientes e elementos de apoio</small>
-                    </label>
-                    <label class="white-label-color-card">
-                        <span>Destaque</span>
-                        <div><input type="color" name="brand_accent_color" value="<?= $active('brand_accent_color', '#01c5b6') ?>" data-preview-color="--preview-accent"><output><?= $active('brand_accent_color', '#01c5b6') ?></output></div>
-                        <small>Indicadores e detalhes</small>
-                    </label>
-                    <label class="white-label-color-card">
-                        <span>Fundo do login</span>
-                        <div><input type="color" name="login_background_color" value="<?= $active('login_background_color', '#07111f') ?>" data-preview-color="--preview-login-bg"><output><?= $active('login_background_color', '#07111f') ?></output></div>
-                        <small>Painel visual da tela de acesso</small>
-                    </label>
-                    <label class="white-label-color-card">
-                        <span>Texto do login</span>
-                        <div><input type="color" name="login_text_color" value="<?= $active('login_text_color', '#ffffff') ?>" data-preview-color="--preview-login-text"><output><?= $active('login_text_color', '#ffffff') ?></output></div>
-                        <small>Contraste dos textos no login</small>
-                    </label>
-                </div>
+                    <small class="field-hint">Dimensão máxima: 4096 × 4096 pixels. Para melhor leitura, prefira uma logo horizontal com fundo transparente.</small>
 
-                <div class="form-divider">Login personalizado</div>
-                <div class="form-grid two">
-                    <label class="field">
-                        <span>Texto pequeno acima do título</span>
-                        <input name="login_eyebrow" value="<?= $active('login_eyebrow', $previewSubtitle) ?>" placeholder="Ex.: Portal do cliente">
-                    </label>
-                    <label class="field">
-                        <span>Texto do botão</span>
-                        <input name="login_button_text" value="<?= $active('login_button_text', 'Acessar painel') ?>" placeholder="Acessar painel">
-                    </label>
-                </div>
-                <label class="field">
-                    <span>Título da tela de login</span>
-                    <input name="login_title" value="<?= $active('login_title') ?>" placeholder="Acesse o painel da sua empresa">
-                </label>
-                <label class="field">
-                    <span>Descrição da tela de login</span>
-                    <textarea name="login_subtitle" rows="3" placeholder="Explique de forma curta o que o cliente acessa no painel."><?= $active('login_subtitle') ?></textarea>
-                </label>
-                <div class="form-grid three">
-                    <label class="field"><span>Benefício 1</span><input name="login_benefit_1" value="<?= $active('login_benefit_1', 'Atendimento centralizado') ?>"></label>
-                    <label class="field"><span>Benefício 2</span><input name="login_benefit_2" value="<?= $active('login_benefit_2', 'Agenda e CRM integrados') ?>"></label>
-                    <label class="field"><span>Benefício 3</span><input name="login_benefit_3" value="<?= $active('login_benefit_3', 'Operação com IA') ?>"></label>
-                </div>
-                <label class="field">
-                    <span>Texto de segurança abaixo do botão</span>
-                    <input name="login_security_text" value="<?= $active('login_security_text', 'Ambiente seguro para administradores, equipes e clientes.') ?>">
-                </label>
+                    <?php if ($hasLogo): ?>
+                        <label class="mini-check">
+                            <input type="checkbox" name="remove_logo" value="1">
+                            Remover a logo e voltar ao padrão RS Connect
+                        </label>
+                    <?php endif; ?>
+                </article>
 
-                <div class="form-divider">Acesso e suporte</div>
-                <div class="form-grid two">
-                    <label class="field">
-                        <span>Domínio personalizado</span>
-                        <input name="custom_domain" value="<?= $active('custom_domain') ?>" placeholder="painel.cliente.com.br">
-                    </label>
-                    <label class="field">
-                        <span>E-mail de suporte</span>
-                        <input type="email" name="support_email" value="<?= $active('support_email') ?>" placeholder="suporte@cliente.com.br">
-                    </label>
+                <div class="notice info" style="margin-top: 18px;">
+                    <strong>O que permanece fixo</strong>
+                    <p>Nome RS Connect, paleta de cores, textos, favicon, login, rodapé e demais elementos visuais não podem ser alterados nesta tela.</p>
                 </div>
-                <label class="field">
-                    <span>Texto do rodapé</span>
-                    <input name="brand_footer_text" value="<?= $active('brand_footer_text') ?>" placeholder="Ex.: Clínica Mariana">
-                </label>
-
-                <label class="check-field switch-field">
-                    <input type="checkbox" name="show_powered_by" value="1" <?= (int) ($selected['show_powered_by'] ?? 1) === 1 ? 'checked' : '' ?>>
-                    <span>Exibir “Powered by RS Connect” quando não houver texto de rodapé</span>
-                </label>
 
                 <div class="form-actions sticky-actions">
-                    <a class="btn btn-outline" href="<?= View::e(Router::url('/white-label/preview?tenant_id=' . (int) ($selected['id'] ?? 0))) ?>" target="_blank" rel="noopener">Pré-visualizar login</a>
-                    <?php if (($selected['slug'] ?? '') !== ''): ?>
-                        <a class="btn btn-outline" href="<?= View::e(Router::url('/login?tenant=' . urlencode((string) $selected['slug']))) ?>" target="_blank" rel="noopener">Abrir login real</a>
+                    <button class="button primary" type="submit">Salvar logo</button>
+                    <?php if ($hasLogo): ?>
+                        <a class="button ghost" target="_blank" rel="noopener" href="<?= View::e(Router::url('/white-label/preview?tenant_id=' . (int) $selected['id'])) ?>">Visualizar aplicação</a>
                     <?php endif; ?>
-                    <button class="btn btn-primary" type="submit">Salvar white label</button>
                 </div>
             </form>
         <?php endif; ?>
     </section>
 
-    <aside class="stack white-label-side-panel">
-        <section class="card white-label-preview-card" style="--preview-primary: <?= View::e($primary) ?>; --preview-secondary: <?= View::e($secondary) ?>; --preview-accent: <?= View::e($accent) ?>; --preview-login-bg: <?= View::e($loginBg) ?>; --preview-login-text: <?= View::e($loginText) ?>;">
-            <div class="section-heading">
-                <div>
-                    <span class="eyebrow">Prévia</span>
-                    <h2>Painel e login</h2>
-                </div>
-                <span class="badge <?= (int) ($selected['white_label_enabled'] ?? 0) === 1 ? 'badge-active' : 'badge-pending' ?>">
-                    <?= (int) ($selected['white_label_enabled'] ?? 0) === 1 ? 'Ativo' : 'Inativo' ?>
-                </span>
+    <aside class="card white-label-preview-card">
+        <div class="section-heading">
+            <div>
+                <span class="eyebrow">Prévia</span>
+                <h2>Como será exibido</h2>
             </div>
-            <div class="brand-preview-shell pro-preview-shell">
-                <div class="brand-preview-sidebar">
-                    <?php if (($previewIconUrl ?: $previewLogoUrl) !== ''): ?>
-                        <span class="brand-image-shell is-<?= View::e($logoVariant) ?> bg-<?= View::e($logoBackground) ?> preview-brand-image">
-                            <img src="<?= View::e($previewIconUrl ?: $previewLogoUrl) ?>" alt="Logo" class="brand-preview-logo">
-                        </span>
-                    <?php else: ?>
-                        <span class="brand-preview-mark"><?= View::e($iconText) ?></span>
-                    <?php endif; ?>
-                    <div>
-                        <strong><?= View::e($previewName) ?></strong>
-                        <small><?= View::e($previewSubtitle) ?></small>
-                    </div>
-                </div>
-                <div class="brand-preview-login">
-                    <span class="preview-window-bar"></span>
-                    <strong><?= View::e($raw('login_title', 'Acesse o painel da ' . $previewName)) ?></strong>
-                    <p><?= View::e($raw('login_subtitle', 'Gerencie sua operação em ambiente seguro e personalizado.')) ?></p>
-                    <i></i><i></i>
-                    <button type="button"><?= View::e($raw('login_button_text', 'Acessar painel')) ?></button>
-                </div>
-            </div>
-            <p class="field-hint">Para testar o login real fora da sessão atual, use uma janela anônima ou acesse pelo link com <strong>?tenant=slug-da-empresa</strong>.</p>
-        </section>
+            <span class="status-pill <?= $hasLogo ? 'success' : 'neutral' ?>"><?= $hasLogo ? 'Logo personalizada' : 'Padrão RS Connect' ?></span>
+        </div>
 
-        <section class="card">
-            <div class="section-heading">
-                <div>
-                    <span class="eyebrow">Checklist visual</span>
-                    <h2>Para finalizar o white label</h2>
+        <div class="white-label-preview-shell">
+            <div class="white-label-preview-sidebar">
+                <div class="white-label-preview-brand">
+                    <span class="white-label-preview-mark">
+                        <?php if ($hasLogo): ?>
+                            <img src="<?= View::e($previewLogoUrl) ?>" alt="Prévia da logo">
+                        <?php else: ?>
+                            <b>RS</b>
+                        <?php endif; ?>
+                    </span>
+                    <span><strong>RS Connect</strong><small>Atendimento e CRM</small></span>
+                </div>
+                <span class="white-label-preview-line is-active"></span>
+                <span class="white-label-preview-line"></span>
+                <span class="white-label-preview-line"></span>
+            </div>
+            <div class="white-label-preview-content">
+                <span class="eyebrow">Painel do cliente</span>
+                <h3>Identidade RS Connect com a logo da empresa</h3>
+                <p>A única substituição visual permitida é a imagem da logo.</p>
+                <div class="white-label-preview-metrics">
+                    <span></span><span></span><span></span>
                 </div>
             </div>
-            <ul class="steps white-label-steps">
-                <li class="is-done"><span>1</span><div><strong>Logo principal</strong><small>Use horizontal para login e cabeçalhos.</small></div></li>
-                <li class="is-done"><span>2</span><div><strong>Ícone reduzido</strong><small>Use quadrado para sidebar e card de acesso.</small></div></li>
-                <li class="is-done"><span>3</span><div><strong>Textos do login</strong><small>Título, descrição, botão e benefícios por cliente.</small></div></li>
-                <li class="is-done"><span>4</span><div><strong>Cores e favicon</strong><small>Identidade aplicada no painel e aba do navegador.</small></div></li>
-            </ul>
-        </section>
+        </div>
+
+        <div class="notice neutral" style="margin-top: 18px;">
+            <strong><?= View::e((string) ($selected['name'] ?? 'Selecione um cliente')) ?></strong>
+            <p><?= $hasLogo ? 'A logo enviada será usada no painel e na tela de acesso do cliente.' : 'Enquanto nenhuma logo for enviada, o sistema usa integralmente a identidade padrão da RS Connect.' ?></p>
+        </div>
     </aside>
 </div>

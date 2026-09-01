@@ -11,6 +11,7 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\BrandingService;
 use PDO;
+use RuntimeException;
 use Throwable;
 
 final class WhiteLabelController
@@ -19,21 +20,27 @@ final class WhiteLabelController
     {
         $pdo = Database::connection();
         $companies = $pdo->query(
-            'SELECT id, name, slug, status, white_label_enabled, brand_name, brand_primary_color, brand_secondary_color, brand_accent_color, custom_domain
+            'SELECT id, name, slug, status, white_label_enabled, brand_logo_url
              FROM tenants
              ORDER BY name ASC'
         )->fetchAll(PDO::FETCH_ASSOC);
 
         $selectedId = (int) ($_GET['tenant_id'] ?? ($companies[0]['id'] ?? 0));
         $selected = null;
+
         if ($selectedId > 0) {
-            $statement = $pdo->prepare('SELECT * FROM tenants WHERE id = :id LIMIT 1');
+            $statement = $pdo->prepare(
+                'SELECT id, name, slug, status, white_label_enabled, brand_logo_url
+                 FROM tenants
+                 WHERE id = :id
+                 LIMIT 1'
+            );
             $statement->execute(['id' => $selectedId]);
             $selected = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
         }
 
         View::render('white_label.index', [
-            'title' => 'White label',
+            'title' => 'Logo do cliente',
             'companies' => $companies,
             'selected' => $selected,
         ]);
@@ -43,169 +50,76 @@ final class WhiteLabelController
     {
         $tenantId = (int) ($_POST['tenant_id'] ?? 0);
         if ($tenantId < 1) {
-            Flash::set('error', 'Selecione uma empresa para configurar o white label.');
+            Flash::set('error', 'Selecione uma empresa para configurar a logo.');
             $this->redirect('/white-label');
         }
 
         $pdo = Database::connection();
-        $statement = $pdo->prepare('SELECT * FROM tenants WHERE id = :id LIMIT 1');
+        $statement = $pdo->prepare(
+            'SELECT id, name, white_label_enabled, brand_logo_url
+             FROM tenants
+             WHERE id = :id
+             LIMIT 1'
+        );
         $statement->execute(['id' => $tenantId]);
         $current = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
+
         if (!$current) {
             Flash::set('error', 'Empresa não encontrada.');
             $this->redirect('/white-label');
         }
 
-        $enabled = isset($_POST['white_label_enabled']) ? 1 : 0;
-        $showPoweredBy = isset($_POST['show_powered_by']) ? 1 : 0;
-
-        $brandName = trim((string) ($_POST['brand_name'] ?? ''));
-        $brandSubtitle = trim((string) ($_POST['brand_subtitle'] ?? ''));
-        $brandIconText = trim((string) ($_POST['brand_icon_text'] ?? ''));
-        $brandLogoUrl = trim((string) ($_POST['brand_logo_url'] ?? ''));
-        $brandIconUrl = trim((string) ($_POST['brand_icon_url'] ?? ''));
-        $brandFaviconUrl = trim((string) ($_POST['brand_favicon_url'] ?? ''));
-        $logoVariant = $this->choice((string) ($_POST['brand_logo_variant'] ?? 'horizontal'), ['horizontal', 'square', 'symbol'], 'horizontal');
-        $logoBackground = $this->choice((string) ($_POST['brand_logo_background'] ?? 'light'), ['light', 'transparent', 'brand'], 'light');
-
-        $primary = $this->color((string) ($_POST['brand_primary_color'] ?? '#146498'), '#146498');
-        $secondary = $this->color((string) ($_POST['brand_secondary_color'] ?? '#631b7c'), '#631b7c');
-        $accent = $this->color((string) ($_POST['brand_accent_color'] ?? '#01c5b6'), '#01c5b6');
-        $loginBg = $this->color((string) ($_POST['login_background_color'] ?? '#07111f'), '#07111f');
-        $loginText = $this->color((string) ($_POST['login_text_color'] ?? '#ffffff'), '#ffffff');
-
-        $loginEyebrow = trim((string) ($_POST['login_eyebrow'] ?? ''));
-        $loginTitle = trim((string) ($_POST['login_title'] ?? ''));
-        $loginSubtitle = trim((string) ($_POST['login_subtitle'] ?? ''));
-        $loginButtonText = trim((string) ($_POST['login_button_text'] ?? ''));
-        $loginBenefit1 = trim((string) ($_POST['login_benefit_1'] ?? ''));
-        $loginBenefit2 = trim((string) ($_POST['login_benefit_2'] ?? ''));
-        $loginBenefit3 = trim((string) ($_POST['login_benefit_3'] ?? ''));
-        $loginSecurityText = trim((string) ($_POST['login_security_text'] ?? ''));
-        $footerText = trim((string) ($_POST['brand_footer_text'] ?? ''));
-        $supportEmail = strtolower(trim((string) ($_POST['support_email'] ?? '')));
-        $customDomain = strtolower(trim((string) ($_POST['custom_domain'] ?? '')));
-
-        if (isset($_POST['remove_logo'])) {
-            $brandLogoUrl = '';
-        } elseif ($brandLogoUrl === '') {
-            $brandLogoUrl = (string) ($current['brand_logo_url'] ?? '');
-        }
-
-        if (isset($_POST['remove_icon'])) {
-            $brandIconUrl = '';
-        } elseif ($brandIconUrl === '') {
-            $brandIconUrl = (string) ($current['brand_icon_url'] ?? '');
-        }
-
-        if (isset($_POST['remove_favicon'])) {
-            $brandFaviconUrl = '';
-        } elseif ($brandFaviconUrl === '') {
-            $brandFaviconUrl = (string) ($current['brand_favicon_url'] ?? '');
-        }
+        $currentLogo = trim((string) ($current['brand_logo_url'] ?? ''));
+        $newLogo = $currentLogo;
+        $uploadedLogo = null;
 
         try {
-            $uploadedLogo = $this->uploadBrandAsset('brand_logo_file', $tenantId, 'logo');
-            if ($uploadedLogo !== null) {
-                $brandLogoUrl = $uploadedLogo;
+            if (isset($_POST['remove_logo'])) {
+                $newLogo = '';
+            } else {
+                $uploadedLogo = $this->uploadLogo($tenantId);
+                if ($uploadedLogo !== null) {
+                    $newLogo = $uploadedLogo;
+                }
             }
 
-            $uploadedIcon = $this->uploadBrandAsset('brand_icon_file', $tenantId, 'icon');
-            if ($uploadedIcon !== null) {
-                $brandIconUrl = $uploadedIcon;
-            }
-
-            $uploadedFavicon = $this->uploadBrandAsset('brand_favicon_file', $tenantId, 'favicon');
-            if ($uploadedFavicon !== null) {
-                $brandFaviconUrl = $uploadedFavicon;
-            }
-        } catch (Throwable $exception) {
-            Flash::set('error', $exception->getMessage());
-            $this->redirect('/white-label?tenant_id=' . $tenantId);
-        }
-
-        foreach ([$brandLogoUrl, $brandIconUrl, $brandFaviconUrl] as $url) {
-            if (!$this->isSafeBrandAssetUrl($url)) {
-                Flash::set('error', 'Use uma imagem PNG, JPG ou WEBP por HTTPS, ou envie o arquivo diretamente. SVG, ICO e URLs ativas não são permitidos.');
-                $this->redirect('/white-label?tenant_id=' . $tenantId);
-            }
-        }
-
-        if ($supportEmail !== '' && !filter_var($supportEmail, FILTER_VALIDATE_EMAIL)) {
-            Flash::set('error', 'O e-mail de suporte informado é inválido.');
-            $this->redirect('/white-label?tenant_id=' . $tenantId);
-        }
-
-        if ($customDomain !== '' && !preg_match('/^[a-z0-9.-]+\.[a-z]{2,}$/', $customDomain)) {
-            Flash::set('error', 'Informe um domínio válido, sem https://. Exemplo: painel.cliente.com.br');
-            $this->redirect('/white-label?tenant_id=' . $tenantId);
-        }
-
-        try {
-            $statement = $pdo->prepare(
+            $enabled = $newLogo !== '' ? 1 : 0;
+            $update = $pdo->prepare(
                 'UPDATE tenants
                  SET white_label_enabled = :enabled,
-                     brand_name = :brand_name,
-                     brand_subtitle = :brand_subtitle,
-                     brand_logo_url = :brand_logo_url,
-                     brand_icon_url = :brand_icon_url,
-                     brand_favicon_url = :brand_favicon_url,
-                     brand_icon_text = :brand_icon_text,
-                     brand_logo_variant = :brand_logo_variant,
-                     brand_logo_background = :brand_logo_background,
-                     brand_primary_color = :primary_color,
-                     brand_secondary_color = :secondary_color,
-                     brand_accent_color = :accent_color,
-                     login_background_color = :login_background_color,
-                     login_text_color = :login_text_color,
-                     login_eyebrow = :login_eyebrow,
-                     login_title = :login_title,
-                     login_subtitle = :login_subtitle,
-                     login_button_text = :login_button_text,
-                     login_benefit_1 = :login_benefit_1,
-                     login_benefit_2 = :login_benefit_2,
-                     login_benefit_3 = :login_benefit_3,
-                     login_security_text = :login_security_text,
-                     brand_footer_text = :footer_text,
-                     support_email = :support_email,
-                     custom_domain = :custom_domain,
-                     show_powered_by = :show_powered_by
+                     brand_logo_url = :brand_logo_url
                  WHERE id = :tenant_id'
             );
-            $statement->execute([
+            $update->execute([
                 'enabled' => $enabled,
-                'brand_name' => $brandName !== '' ? $brandName : null,
-                'brand_subtitle' => $brandSubtitle !== '' ? $brandSubtitle : null,
-                'brand_logo_url' => $brandLogoUrl !== '' ? $brandLogoUrl : null,
-                'brand_icon_url' => $brandIconUrl !== '' ? $brandIconUrl : null,
-                'brand_favicon_url' => $brandFaviconUrl !== '' ? $brandFaviconUrl : null,
-                'brand_icon_text' => $brandIconText !== '' ? mb_substr($brandIconText, 0, 4) : null,
-                'brand_logo_variant' => $logoVariant,
-                'brand_logo_background' => $logoBackground,
-                'primary_color' => $primary,
-                'secondary_color' => $secondary,
-                'accent_color' => $accent,
-                'login_background_color' => $loginBg,
-                'login_text_color' => $loginText,
-                'login_eyebrow' => $loginEyebrow !== '' ? $loginEyebrow : null,
-                'login_title' => $loginTitle !== '' ? $loginTitle : null,
-                'login_subtitle' => $loginSubtitle !== '' ? $loginSubtitle : null,
-                'login_button_text' => $loginButtonText !== '' ? $loginButtonText : null,
-                'login_benefit_1' => $loginBenefit1 !== '' ? $loginBenefit1 : null,
-                'login_benefit_2' => $loginBenefit2 !== '' ? $loginBenefit2 : null,
-                'login_benefit_3' => $loginBenefit3 !== '' ? $loginBenefit3 : null,
-                'login_security_text' => $loginSecurityText !== '' ? $loginSecurityText : null,
-                'footer_text' => $footerText !== '' ? $footerText : null,
-                'support_email' => $supportEmail !== '' ? $supportEmail : null,
-                'custom_domain' => $customDomain !== '' ? $customDomain : null,
-                'show_powered_by' => $showPoweredBy,
+                'brand_logo_url' => $newLogo !== '' ? $newLogo : null,
                 'tenant_id' => $tenantId,
             ]);
 
-            Audit::log('white_label.updated', ['enabled' => $enabled, 'custom_domain' => $customDomain, 'logo_variant' => $logoVariant], $tenantId);
-            Flash::set('success', $enabled === 1 ? 'White label ativado e atualizado.' : 'White label salvo como inativo.');
+            if ($currentLogo !== '' && $currentLogo !== $newLogo) {
+                $this->deleteStoredLogo($currentLogo, $tenantId);
+            }
+
+            Audit::log('white_label.logo_updated', [
+                'enabled' => $enabled,
+                'has_logo' => $newLogo !== '',
+            ], $tenantId);
+
+            Flash::set(
+                'success',
+                $newLogo !== ''
+                    ? 'Logo do cliente atualizada com sucesso.'
+                    : 'Logo removida. A identidade padrão da RS Connect voltou a ser usada.'
+            );
         } catch (Throwable $exception) {
-            Flash::set('error', 'Não foi possível salvar. Execute a migration 023 e verifique se o domínio já não está em uso.');
+            if ($uploadedLogo !== null && $uploadedLogo !== $currentLogo) {
+                $this->deleteStoredLogo($uploadedLogo, $tenantId);
+            }
+
+            $message = $exception instanceof RuntimeException
+                ? $exception->getMessage()
+                : 'Não foi possível salvar a logo. Verifique o banco e as permissões de storage/app.';
+            Flash::set('error', $message);
         }
 
         $this->redirect('/white-label?tenant_id=' . $tenantId);
@@ -216,7 +130,7 @@ final class WhiteLabelController
         $tenantId = (int) ($_GET['scope'] ?? 0);
         $filename = basename(trim((string) ($_GET['file'] ?? '')));
 
-        if ($tenantId < 1 || preg_match('/^(?:logo|icon|favicon)-\d{14}-[a-f0-9]{8}\.(?:png|jpg|webp)$/D', $filename) !== 1) {
+        if ($tenantId < 1 || preg_match('/^logo-\d{14}-[a-f0-9]{8}\.(?:png|jpg|webp)$/D', $filename) !== 1) {
             $this->assetNotFound();
         }
 
@@ -233,6 +147,7 @@ final class WhiteLabelController
             'image/webp' => 'webp',
         ];
         $extension = strtolower((string) pathinfo($filename, PATHINFO_EXTENSION));
+
         if (!isset($allowed[$mime]) || $allowed[$mime] !== $extension) {
             $this->assetNotFound();
         }
@@ -259,25 +174,25 @@ final class WhiteLabelController
         ], 'guest');
     }
 
-    private function uploadBrandAsset(string $field, int $tenantId, string $prefix): ?string
+    private function uploadLogo(int $tenantId): ?string
     {
-        $file = $_FILES[$field] ?? null;
+        $file = $_FILES['brand_logo_file'] ?? null;
         if (!is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
             return null;
         }
 
-        if ((int) $file['error'] !== UPLOAD_ERR_OK) {
-            throw new \RuntimeException('Não foi possível enviar a imagem. Tente novamente.');
+        if ((int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new RuntimeException('Não foi possível enviar a imagem. Tente novamente.');
         }
 
         $size = (int) ($file['size'] ?? 0);
         if ($size < 1 || $size > 2 * 1024 * 1024) {
-            throw new \RuntimeException('A imagem deve ter no máximo 2MB.');
+            throw new RuntimeException('A logo deve ter no máximo 2 MB.');
         }
 
         $tmpName = (string) ($file['tmp_name'] ?? '');
         if ($tmpName === '' || !is_uploaded_file($tmpName)) {
-            throw new \RuntimeException('O arquivo enviado não pôde ser validado.');
+            throw new RuntimeException('O arquivo enviado não pôde ser validado.');
         }
 
         $finfo = new \finfo(FILEINFO_MIME_TYPE);
@@ -289,76 +204,61 @@ final class WhiteLabelController
         ];
 
         if (!isset($extensions[$mime])) {
-            throw new \RuntimeException('Envie somente uma imagem PNG, JPG ou WEBP. Arquivos SVG e ICO não são aceitos por segurança.');
+            throw new RuntimeException('Envie somente uma logo PNG, JPG/JPEG ou WEBP. SVG e ICO não são aceitos.');
         }
 
         $imageInfo = @getimagesize($tmpName);
-        if (!is_array($imageInfo) || (string) ($imageInfo['mime'] ?? '') !== $mime) {
-            throw new \RuntimeException('O conteúdo do arquivo não corresponde a uma imagem válida.');
+        if (!is_array($imageInfo) || strtolower((string) ($imageInfo['mime'] ?? '')) !== $mime) {
+            throw new RuntimeException('O conteúdo enviado não corresponde a uma imagem válida.');
         }
 
         $width = (int) ($imageInfo[0] ?? 0);
         $height = (int) ($imageInfo[1] ?? 0);
         if ($width < 1 || $height < 1 || $width > 4096 || $height > 4096 || ($width * $height) > 16000000) {
-            throw new \RuntimeException('A imagem deve ter dimensões válidas de até 4096 × 4096 pixels.');
+            throw new RuntimeException('A logo deve ter dimensões válidas de até 4096 × 4096 pixels.');
         }
 
         $uploadDir = $this->brandStorageDirectory($tenantId);
         if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
-            throw new \RuntimeException('Não foi possível preparar o armazenamento de imagens. Verifique a permissão de escrita em storage/app.');
+            throw new RuntimeException('Não foi possível preparar o armazenamento. Verifique a permissão de storage/app.');
         }
         if (!is_writable($uploadDir)) {
-            throw new \RuntimeException('O armazenamento de imagens não permite gravação. Verifique a permissão de escrita em storage/app.');
+            throw new RuntimeException('O armazenamento não permite gravação. Verifique a permissão de storage/app.');
         }
 
-        $filename = $prefix . '-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $extensions[$mime];
+        $filename = 'logo-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $extensions[$mime];
         $destination = $uploadDir . '/' . $filename;
 
         if (!move_uploaded_file($tmpName, $destination)) {
-            throw new \RuntimeException('Não foi possível salvar a imagem enviada no armazenamento persistente.');
+            throw new RuntimeException('Não foi possível salvar a logo no armazenamento persistente.');
         }
         @chmod($destination, 0644);
 
         return '/white-label/asset?scope=' . $tenantId . '&file=' . rawurlencode($filename);
     }
 
-    private function isSafeBrandAssetUrl(string $url): bool
+    private function deleteStoredLogo(string $url, int $tenantId): void
     {
-        $url = trim($url);
-        if ($url === '') {
-            return true;
-        }
-
-        if (preg_match('/^(?:javascript|data|file|vbscript):/i', $url) === 1) {
-            return false;
-        }
-
         $path = (string) parse_url($url, PHP_URL_PATH);
-        if ($path === '/white-label/asset') {
-            $query = [];
-            parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
-            $tenantId = (int) ($query['scope'] ?? 0);
-            $filename = basename((string) ($query['file'] ?? ''));
-            return $tenantId > 0
-                && preg_match('/^(?:logo|icon|favicon)-\d{14}-[a-f0-9]{8}\.(?:png|jpg|webp)$/D', $filename) === 1;
+        if ($path !== '/white-label/asset') {
+            return;
         }
 
-        if (str_starts_with($url, '/uploads/')) {
-            $path = strtolower((string) parse_url($url, PHP_URL_PATH));
-            return preg_match('/\.(?:png|jpe?g|webp)$/', $path) === 1;
+        $query = [];
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        if ((int) ($query['scope'] ?? 0) !== $tenantId) {
+            return;
         }
 
-        if (!filter_var($url, FILTER_VALIDATE_URL)) {
-            return false;
+        $filename = basename((string) ($query['file'] ?? ''));
+        if (preg_match('/^logo-\d{14}-[a-f0-9]{8}\.(?:png|jpg|webp)$/D', $filename) !== 1) {
+            return;
         }
 
-        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
-        if ($scheme !== 'https') {
-            return false;
+        $file = $this->brandStorageDirectory($tenantId) . '/' . $filename;
+        if (is_file($file)) {
+            @unlink($file);
         }
-
-        $path = strtolower((string) parse_url($url, PHP_URL_PATH));
-        return preg_match('/\.(?:png|jpe?g|webp)$/', $path) === 1;
     }
 
     private function brandStorageDirectory(int $tenantId): string
@@ -374,18 +274,6 @@ final class WhiteLabelController
         header('X-Content-Type-Options: nosniff');
         echo '{"status":"not_found"}';
         exit;
-    }
-
-    private function color(string $value, string $fallback): string
-    {
-        $value = trim($value);
-        return preg_match('/^#[0-9a-fA-F]{6}$/', $value) === 1 ? $value : $fallback;
-    }
-
-    private function choice(string $value, array $allowed, string $fallback): string
-    {
-        $value = trim($value);
-        return in_array($value, $allowed, true) ? $value : $fallback;
     }
 
     private function redirect(string $path): never

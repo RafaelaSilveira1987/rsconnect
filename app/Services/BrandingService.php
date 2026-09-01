@@ -18,11 +18,7 @@ final class BrandingService
         try {
             $pdo = Database::connection();
             $tenant = self::resolveTenant($pdo);
-            if (!$tenant) {
-                return $default;
-            }
-
-            if ((int) ($tenant['white_label_enabled'] ?? 0) !== 1) {
+            if (!$tenant || (int) ($tenant['white_label_enabled'] ?? 0) !== 1) {
                 return $default;
             }
 
@@ -72,16 +68,18 @@ final class BrandingService
 
         $normalized = '/' . ltrim($path, '/');
         $assetPath = strtolower((string) parse_url($normalized, PHP_URL_PATH));
+
         if ($assetPath === '/white-label/asset') {
             $query = [];
             parse_str((string) parse_url($normalized, PHP_URL_QUERY), $query);
             $tenantId = (int) ($query['scope'] ?? 0);
             $filename = basename((string) ($query['file'] ?? ''));
-            if ($tenantId < 1 || preg_match('/^(?:logo|icon|favicon)-\d{14}-[a-f0-9]{8}\.(?:png|jpg|webp)$/D', $filename) !== 1) {
+            if ($tenantId < 1 || preg_match('/^logo-\d{14}-[a-f0-9]{8}\.(?:png|jpg|webp)$/D', $filename) !== 1) {
                 return '';
             }
             return $normalized;
         }
+
         if (str_starts_with($assetPath, '/uploads/') && preg_match('/\.(?:png|jpe?g|webp)$/', $assetPath) !== 1) {
             return '';
         }
@@ -100,7 +98,7 @@ final class BrandingService
             'logo_url' => '',
             'icon_url' => '',
             'favicon_url' => '',
-            'logo_variant' => 'square',
+            'logo_variant' => 'horizontal',
             'logo_background' => 'light',
             'primary' => '#146498',
             'secondary' => '#631b7c',
@@ -125,59 +123,19 @@ final class BrandingService
             return $default;
         }
 
-        $brandName = trim((string) ($tenant['brand_name'] ?? ''));
-        $brandSubtitle = trim((string) ($tenant['brand_subtitle'] ?? ''));
-        $iconText = trim((string) ($tenant['brand_icon_text'] ?? ''));
         $logoUrl = self::assetUrl((string) ($tenant['brand_logo_url'] ?? ''));
-        $iconUrl = self::assetUrl((string) ($tenant['brand_icon_url'] ?? ''));
-        $faviconUrl = self::assetUrl((string) ($tenant['brand_favicon_url'] ?? ''));
-
-        $benefits = [
-            trim((string) ($tenant['login_benefit_1'] ?? '')),
-            trim((string) ($tenant['login_benefit_2'] ?? '')),
-            trim((string) ($tenant['login_benefit_3'] ?? '')),
-        ];
-        $benefits = array_values(array_filter($benefits, static fn (string $v): bool => $v !== ''));
-        if ($benefits === []) {
-            $benefits = $default['login_benefits'];
+        if ($logoUrl === '') {
+            return $default;
         }
 
-        $logoVariant = trim((string) ($tenant['brand_logo_variant'] ?? ''));
-        if (!in_array($logoVariant, ['horizontal', 'square', 'symbol'], true)) {
-            $logoVariant = $default['logo_variant'];
-        }
-
-        $logoBackground = trim((string) ($tenant['brand_logo_background'] ?? ''));
-        if (!in_array($logoBackground, ['light', 'transparent', 'brand'], true)) {
-            $logoBackground = $default['logo_background'];
-        }
-
-        return [
+        // White label deliberadamente limitado à logo.
+        // Todos os demais dados antigos permanecem armazenados, porém não alteram
+        // nome, cores, favicon, textos, rodapé ou identidade visual da RS Connect.
+        return array_replace($default, [
             'enabled' => true,
             'tenant_id' => (int) ($tenant['id'] ?? 0),
-            'app_name' => $brandName !== '' ? $brandName : (string) ($tenant['name'] ?? $default['app_name']),
-            'subtitle' => $brandSubtitle !== '' ? $brandSubtitle : 'Atendimento e CRM',
-            'icon_text' => $iconText !== '' ? mb_substr($iconText, 0, 4) : self::initials((string) ($tenant['name'] ?? 'RS')),
             'logo_url' => $logoUrl,
-            'icon_url' => $iconUrl,
-            'favicon_url' => $faviconUrl,
-            'logo_variant' => $logoVariant,
-            'logo_background' => $logoBackground,
-            'primary' => self::color((string) ($tenant['brand_primary_color'] ?? ''), $default['primary']),
-            'secondary' => self::color((string) ($tenant['brand_secondary_color'] ?? ''), $default['secondary']),
-            'accent' => self::color((string) ($tenant['brand_accent_color'] ?? ''), $default['accent']),
-            'login_bg' => self::color((string) ($tenant['login_background_color'] ?? ''), $default['login_bg']),
-            'login_text' => self::color((string) ($tenant['login_text_color'] ?? ''), $default['login_text']),
-            'login_eyebrow' => trim((string) ($tenant['login_eyebrow'] ?? '')) ?: ($brandSubtitle ?: $default['login_eyebrow']),
-            'login_title' => trim((string) ($tenant['login_title'] ?? '')) ?: 'Acesse o painel da ' . ($brandName !== '' ? $brandName : (string) ($tenant['name'] ?? $default['app_name'])),
-            'login_subtitle' => trim((string) ($tenant['login_subtitle'] ?? '')) ?: 'Gerencie atendimento, relacionamento e operação em um ambiente seguro e personalizado para sua empresa.',
-            'login_button_text' => trim((string) ($tenant['login_button_text'] ?? '')) ?: $default['login_button_text'],
-            'login_benefits' => $benefits,
-            'login_security_text' => trim((string) ($tenant['login_security_text'] ?? '')) ?: $default['login_security_text'],
-            'footer_text' => trim((string) ($tenant['brand_footer_text'] ?? '')) ?: '',
-            'support_email' => trim((string) ($tenant['support_email'] ?? '')),
-            'show_powered_by' => (int) ($tenant['show_powered_by'] ?? 1) === 1,
-        ];
+        ]);
     }
 
     private static function resolveTenant(PDO $pdo): ?array
@@ -211,23 +169,5 @@ final class BrandingService
         }
 
         return null;
-    }
-
-    private static function color(string $value, string $fallback): string
-    {
-        $value = trim($value);
-        return preg_match('/^#[0-9a-fA-F]{6}$/', $value) === 1 ? $value : $fallback;
-    }
-
-    private static function initials(string $name): string
-    {
-        $name = trim($name);
-        if ($name === '') {
-            return 'RS';
-        }
-        $parts = preg_split('/\s+/', $name) ?: [];
-        $first = mb_substr((string) ($parts[0] ?? 'R'), 0, 1);
-        $second = mb_substr((string) ($parts[1] ?? ($parts[0] ?? 'S')), 0, 1);
-        return mb_strtoupper($first . $second);
     }
 }
