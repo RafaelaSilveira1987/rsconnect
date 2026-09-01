@@ -69,7 +69,8 @@ final class WhiteLabelController
             $this->redirect('/white-label');
         }
 
-        $currentLogo = trim((string) ($current['brand_logo_url'] ?? ''));
+        $storedCurrentLogo = trim((string) ($current['brand_logo_url'] ?? ''));
+        $currentLogo = BrandingService::assetUrl($storedCurrentLogo) !== '' ? $storedCurrentLogo : '';
         $newLogo = $currentLogo;
         $uploadedLogo = null;
 
@@ -84,6 +85,9 @@ final class WhiteLabelController
             }
 
             $enabled = $newLogo !== '' ? 1 : 0;
+            $databaseLogo = $newLogo !== '' ? $newLogo : null;
+
+            $pdo->beginTransaction();
             $update = $pdo->prepare(
                 'UPDATE tenants
                  SET white_label_enabled = :enabled,
@@ -92,9 +96,29 @@ final class WhiteLabelController
             );
             $update->execute([
                 'enabled' => $enabled,
-                'brand_logo_url' => $newLogo !== '' ? $newLogo : null,
+                'brand_logo_url' => $databaseLogo,
                 'tenant_id' => $tenantId,
             ]);
+
+            $verify = $pdo->prepare(
+                'SELECT white_label_enabled, brand_logo_url
+                 FROM tenants
+                 WHERE id = :tenant_id
+                 LIMIT 1'
+            );
+            $verify->execute(['tenant_id' => $tenantId]);
+            $persisted = $verify->fetch(PDO::FETCH_ASSOC) ?: null;
+            $persistedLogo = trim((string) ($persisted['brand_logo_url'] ?? ''));
+
+            if (
+                !$persisted
+                || (int) ($persisted['white_label_enabled'] ?? 0) !== $enabled
+                || $persistedLogo !== ($databaseLogo ?? '')
+            ) {
+                throw new RuntimeException('A logo foi recebida, mas o banco não confirmou a gravação. Nenhuma alteração foi mantida.');
+            }
+
+            $pdo->commit();
 
             if ($currentLogo !== '' && $currentLogo !== $newLogo) {
                 $this->deleteStoredLogo($currentLogo, $tenantId);
@@ -103,18 +127,25 @@ final class WhiteLabelController
             Audit::log('white_label.logo_updated', [
                 'enabled' => $enabled,
                 'has_logo' => $newLogo !== '',
+                'logo_url' => $newLogo,
             ], $tenantId);
 
             Flash::set(
                 'success',
                 $newLogo !== ''
                     ? 'Logo do cliente atualizada com sucesso.'
-                    : 'Logo removida. A identidade padrão da RS Connect voltou a ser usada.'
+                    : 'Logo removida. O painel continuará mostrando o nome e as iniciais da empresa.'
             );
         } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
             if ($uploadedLogo !== null && $uploadedLogo !== $currentLogo) {
                 $this->deleteStoredLogo($uploadedLogo, $tenantId);
             }
+
+            error_log('[RS Connect][white-label] Falha ao persistir logo do tenant ' . $tenantId . ': ' . $exception->getMessage());
 
             $message = $exception instanceof RuntimeException
                 ? $exception->getMessage()

@@ -18,11 +18,11 @@ final class BrandingService
         try {
             $pdo = Database::connection();
             $tenant = self::resolveTenant($pdo);
-            if (!$tenant || (int) ($tenant['white_label_enabled'] ?? 0) !== 1) {
+            if (!$tenant) {
                 return $default;
             }
 
-            return self::buildFromTenant($tenant, $default, false);
+            return self::buildFromTenant($tenant, $default);
         } catch (Throwable) {
             return $default;
         }
@@ -44,7 +44,7 @@ final class BrandingService
                 return $default;
             }
 
-            return self::buildFromTenant($tenant, $default, true);
+            return self::buildFromTenant($tenant, $default);
         } catch (Throwable) {
             return $default;
         }
@@ -91,15 +91,16 @@ final class BrandingService
     {
         return [
             'enabled' => false,
+            'tenant_identity' => false,
             'tenant_id' => 0,
             'app_name' => 'RS Connect',
-            'subtitle' => 'Atendimento e CRM',
+            'subtitle' => 'Atendimento e Comercial',
             'icon_text' => 'RS',
             'logo_url' => '',
             'icon_url' => '',
             'favicon_url' => '',
             'logo_variant' => 'horizontal',
-            'logo_background' => 'light',
+            'logo_background' => 'transparent',
             'primary' => '#146498',
             'secondary' => '#631b7c',
             'accent' => '#01c5b6',
@@ -117,25 +118,70 @@ final class BrandingService
         ];
     }
 
-    private static function buildFromTenant(array $tenant, array $default, bool $allowInactivePreview): array
+    private static function buildFromTenant(array $tenant, array $default): array
     {
-        if (!$allowInactivePreview && (int) ($tenant['white_label_enabled'] ?? 0) !== 1) {
+        $tenantId = (int) ($tenant['id'] ?? 0);
+        if ($tenantId < 1) {
             return $default;
         }
 
+        $tenantName = trim((string) ($tenant['name'] ?? ''));
+        if ($tenantName === '') {
+            $tenantName = 'Empresa';
+        }
+
+        // O nome exibido vem do cadastro da empresa e não é um campo editável
+        // do White Label. A única personalização enviada pelo administrador é a logo.
         $logoUrl = self::assetUrl((string) ($tenant['brand_logo_url'] ?? ''));
-        if ($logoUrl === '') {
-            return $default;
-        }
 
-        // White label deliberadamente limitado à logo.
-        // Todos os demais dados antigos permanecem armazenados, porém não alteram
-        // nome, cores, favicon, textos, rodapé ou identidade visual da RS Connect.
         return array_replace($default, [
-            'enabled' => true,
-            'tenant_id' => (int) ($tenant['id'] ?? 0),
+            'enabled' => $logoUrl !== '',
+            'tenant_identity' => true,
+            'tenant_id' => $tenantId,
+            'app_name' => $tenantName,
+            'subtitle' => 'Atendimento e Comercial',
+            'icon_text' => self::initials($tenantName),
             'logo_url' => $logoUrl,
         ]);
+    }
+
+    private static function initials(string $name): string
+    {
+        $words = preg_split('/\s+/u', trim($name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if ($words === []) {
+            return 'EP';
+        }
+
+        $first = self::characterAt((string) $words[0], 0);
+        $last = count($words) > 1
+            ? self::characterAt((string) $words[count($words) - 1], 0)
+            : self::characterAt((string) $words[0], 1);
+
+        $initials = function_exists('mb_strtoupper')
+            ? mb_strtoupper($first . $last, 'UTF-8')
+            : strtoupper($first . $last);
+
+        return $initials !== '' ? self::firstCharacters($initials, 2) : 'EP';
+    }
+
+    private static function characterAt(string $value, int $position): string
+    {
+        if (function_exists('mb_substr')) {
+            return mb_substr($value, $position, 1, 'UTF-8');
+        }
+
+        preg_match_all('/./us', $value, $matches);
+        return (string) ($matches[0][$position] ?? '');
+    }
+
+    private static function firstCharacters(string $value, int $length): string
+    {
+        if (function_exists('mb_substr')) {
+            return mb_substr($value, 0, $length, 'UTF-8');
+        }
+
+        preg_match_all('/./us', $value, $matches);
+        return implode('', array_slice($matches[0] ?? [], 0, $length));
     }
 
     private static function resolveTenant(PDO $pdo): ?array

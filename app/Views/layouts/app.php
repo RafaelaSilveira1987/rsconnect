@@ -19,18 +19,18 @@ use App\Services\BrandingService;
 $user = Auth::user();
 $flashes = Flash::all();
 $branding = Auth::isSuperAdmin() ? BrandingService::defaults() : BrandingService::forCurrentRequest();
+$tenantIdentity = !Auth::isSuperAdmin() && !empty($branding['tenant_identity']);
 $brandEnabled = !Auth::isSuperAdmin() && !empty($branding['enabled']);
-$brandName = $brandEnabled ? (string) ($branding['app_name'] ?? 'RS Connect') : 'RS Connect';
-$brandSubtitle = $brandEnabled ? (string) ($branding['subtitle'] ?? 'Atendimento e CRM') : 'Atendimento e Comercial';
-$brandIconText = $brandEnabled ? (string) ($branding['icon_text'] ?? 'RS') : 'RS';
+$brandName = $tenantIdentity ? (string) ($branding['app_name'] ?? 'Empresa') : 'RS Connect';
+$brandSubtitle = $tenantIdentity ? (string) ($branding['subtitle'] ?? 'Atendimento e Comercial') : 'Atendimento e Comercial';
+$brandIconText = $tenantIdentity ? (string) ($branding['icon_text'] ?? 'EP') : 'RS';
 $brandLogoUrl = $brandEnabled ? (string) ($branding['logo_url'] ?? '') : '';
-$brandIconUrl = $brandEnabled ? (string) ($branding['icon_url'] ?? '') : '';
-$brandFaviconUrl = $brandEnabled ? (string) ($branding['favicon_url'] ?? '') : '';
-$brandPrimary = $brandEnabled ? (string) ($branding['primary'] ?? '#146498') : '#146498';
-$brandSecondary = $brandEnabled ? (string) ($branding['secondary'] ?? '#631b7c') : '#631b7c';
-$brandAccent = $brandEnabled ? (string) ($branding['accent'] ?? '#01c5b6') : '#01c5b6';
-$brandFooterText = $brandEnabled ? trim((string) ($branding['footer_text'] ?? '')) : '';
-$brandShowPoweredBy = $brandEnabled && !empty($branding['show_powered_by']);
+$brandFaviconUrl = '';
+$brandPrimary = '#146498';
+$brandSecondary = '#631b7c';
+$brandAccent = '#01c5b6';
+$brandFooterText = '';
+$brandShowPoweredBy = false;
 $brandCssVariables = '--rs-blue:' . $brandPrimary . ';--rs-purple:' . $brandSecondary . ';--rs-cyan:' . $brandAccent . ';--rs-teal:' . $brandAccent . ';';
 $brandAssetHref = static fn (string $url): string => preg_match('~^https://~i', $url) === 1 ? $url : Router::url($url);
 $currentPath = rtrim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', '/');
@@ -153,14 +153,16 @@ $svgIcon = static function (string $name): string {
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
     <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.26.1')) ?>">
 </head>
-<body<?= $brandEnabled ? ' class="has-tenant-branding" style="' . View::e($brandCssVariables) . '"' : '' ?>>
+<body<?= $tenantIdentity ? ' class="has-tenant-branding" style="' . View::e($brandCssVariables) . '"' : '' ?>>
 <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
 <div class="sr-only" aria-live="polite" aria-atomic="true" data-app-live-region></div>
 <div class="app-shell">
     <aside class="sidebar" id="sidebar">
-        <a class="brand<?= $brandEnabled ? ' is-custom-brand' : '' ?>" href="<?= View::e(Router::url('/')) ?>">
-            <?php if (($brandIconUrl ?: $brandLogoUrl) !== ''): ?>
-                <span class="brand-mark brand-mark-image"><img src="<?= View::e($brandAssetHref($brandIconUrl ?: $brandLogoUrl)) ?>" alt="<?= View::e($brandName) ?>"></span>
+        <a class="brand<?= $tenantIdentity ? ' is-custom-brand' : '' ?>" href="<?= View::e(Router::url('/')) ?>">
+            <?php if ($brandLogoUrl !== ''): ?>
+                <span class="brand-mark brand-mark-image brand-mark-client-logo" style="background: transparent; box-shadow: none; overflow: hidden;">
+                    <img src="<?= View::e($brandAssetHref($brandLogoUrl)) ?>" alt="Logo de <?= View::e($brandName) ?>" style="width: 100%; height: 100%; object-fit: contain; display: block;">
+                </span>
             <?php else: ?>
                 <span class="brand-mark"><?= View::e($brandIconText) ?></span>
             <?php endif; ?>

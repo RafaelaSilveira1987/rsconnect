@@ -9,12 +9,14 @@ $selected = $selected ?? null;
 $companies = $companies ?? [];
 $previewLogoUrl = BrandingService::assetUrl((string) ($selected['brand_logo_url'] ?? ''));
 $hasLogo = $previewLogoUrl !== '';
+$previewBranding = $selected ? BrandingService::forTenantId((int) $selected['id']) : BrandingService::defaults();
+$previewInitials = (string) ($previewBranding['icon_text'] ?? 'EP');
 ?>
 <section class="hero-card compact-hero hero-admin white-label-hero">
     <div>
         <span class="eyebrow light">Identidade visual por empresa</span>
         <h2>Logo do cliente</h2>
-        <p>Personalize somente a logo. Nome, cores, textos, favicon e identidade visual permanecem no padrão da RS Connect.</p>
+        <p>Personalize somente a logo. O nome exibido vem automaticamente do cadastro da empresa; cores, textos, favicon e demais elementos permanecem no padrão da RS Connect.</p>
     </div>
     <span class="hero-badge">RS Connect Admin</span>
 </section>
@@ -65,7 +67,7 @@ $hasLogo = $previewLogoUrl !== '';
                             <?php if ($hasLogo): ?>
                                 <img src="<?= View::e($previewLogoUrl) ?>" alt="Logo atual de <?= View::e((string) $selected['name']) ?>">
                             <?php else: ?>
-                                <b>RS</b>
+                                <b><?= View::e($previewInitials) ?></b>
                             <?php endif; ?>
                         </span>
                     </div>
@@ -79,14 +81,14 @@ $hasLogo = $previewLogoUrl !== '';
                     <?php if ($hasLogo): ?>
                         <label class="mini-check">
                             <input type="checkbox" name="remove_logo" value="1">
-                            Remover a logo e voltar ao padrão RS Connect
+                            Remover a logo e usar as iniciais da empresa
                         </label>
                     <?php endif; ?>
                 </article>
 
                 <div class="notice info" style="margin-top: 18px;">
                     <strong>O que permanece fixo</strong>
-                    <p>Nome RS Connect, paleta de cores, textos, favicon, login, rodapé e demais elementos visuais não podem ser alterados nesta tela.</p>
+                    <p>A paleta, os textos, o favicon, o login, o rodapé e os demais elementos visuais continuam padronizados. O nome usado no painel é o nome cadastrado da empresa.</p>
                 </div>
 
                 <div class="form-actions sticky-actions">
@@ -115,10 +117,10 @@ $hasLogo = $previewLogoUrl !== '';
                         <?php if ($hasLogo): ?>
                             <img src="<?= View::e($previewLogoUrl) ?>" alt="Prévia da logo">
                         <?php else: ?>
-                            <b>RS</b>
+                            <b><?= View::e($previewInitials) ?></b>
                         <?php endif; ?>
                     </span>
-                    <span><strong>RS Connect</strong><small>Atendimento e CRM</small></span>
+                    <span><strong><?= View::e((string) ($selected['name'] ?? 'Empresa')) ?></strong><small>Atendimento e Comercial</small></span>
                 </div>
                 <span class="white-label-preview-line is-active"></span>
                 <span class="white-label-preview-line"></span>
@@ -126,8 +128,8 @@ $hasLogo = $previewLogoUrl !== '';
             </div>
             <div class="white-label-preview-content">
                 <span class="eyebrow">Painel do cliente</span>
-                <h3>Identidade RS Connect com a logo da empresa</h3>
-                <p>A única substituição visual permitida é a imagem da logo.</p>
+                <h3>Nome e logo da empresa no painel</h3>
+                <p>O nome é obtido do cadastro e a única imagem configurável é a logo.</p>
                 <div class="white-label-preview-metrics">
                     <span></span><span></span><span></span>
                 </div>
@@ -136,7 +138,7 @@ $hasLogo = $previewLogoUrl !== '';
 
         <div class="notice neutral" style="margin-top: 18px;">
             <strong><?= View::e((string) ($selected['name'] ?? 'Selecione um cliente')) ?></strong>
-            <p><?= $hasLogo ? 'A logo enviada será usada no painel e na tela de acesso do cliente.' : 'Enquanto nenhuma logo for enviada, o sistema usa integralmente a identidade padrão da RS Connect.' ?></p>
+            <p><?= $hasLogo ? 'A logo enviada será usada ao lado do nome cadastrado da empresa.' : 'Enquanto nenhuma logo for enviada, o painel mostra as iniciais e o nome cadastrado da empresa.' ?></p>
         </div>
     </aside>
 </div>
