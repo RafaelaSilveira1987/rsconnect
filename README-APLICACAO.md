@@ -129,3 +129,21 @@ A homologação só é aprovada quando a saída termina com:
 ```text
 [APROVADO] Backup gerado e restaurado com sucesso em banco temporário.
 ```
+
+## Homologação de planos e limites
+
+O pacote inclui um auditor transacional dos planos comerciais e dos bloqueios de capacidade.
+
+Dentro do container da aplicação:
+
+```bash
+php bin/plan-limits-audit.php
+```
+
+Ou pelo wrapper:
+
+```bash
+bash scripts/run-plan-limits-audit.sh
+```
+
+O auditor confere a matriz Inicial/Profissional/Empresarial, preços de IA própria e IA RS Connect, compromissos de 3/6/12 meses, limites de usuários/canais/agentes/franquia de IA e os pontos de enforcement do código. Para testar o comportamento no teto e abaixo do teto, altera os limites apenas dentro de uma transação da própria conexão e executa `ROLLBACK` ao final; nenhuma alteração de plano é persistida.

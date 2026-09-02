@@ -10,6 +10,7 @@ use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\SubscriptionService;
 use PDO;
 use Throwable;
 
@@ -72,6 +73,14 @@ final class UserController
             $this->redirect('/users');
         }
 
+        if ($tenantId !== null) {
+            $limit = (new SubscriptionService())->ensureCanCreate((int) $tenantId, 'users');
+            if (empty($limit['ok'])) {
+                Flash::set('error', (string) ($limit['message'] ?? 'Limite de usuários do plano atingido.'));
+                $this->redirect('/users');
+            }
+        }
+
         try {
             $statement = Database::connection()->prepare(
                 'INSERT INTO users
@@ -132,6 +141,16 @@ final class UserController
         if (!$this->validRoleForTenant($role, $tenantId)) {
             Flash::set('error', 'O perfil selecionado não é válido para esse usuário.');
             $this->redirect('/users');
+        }
+
+        if ($tenantId !== null
+            && $status === 'active'
+            && (string) ($target['status'] ?? 'inactive') !== 'active') {
+            $limit = (new SubscriptionService())->ensureCanCreate((int) $tenantId, 'users');
+            if (empty($limit['ok'])) {
+                Flash::set('error', (string) ($limit['message'] ?? 'Limite de usuários do plano atingido.'));
+                $this->redirect('/users');
+            }
         }
 
         if ($userId === Auth::id() && ($status !== 'active' || $role !== Auth::role())) {
