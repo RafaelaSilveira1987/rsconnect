@@ -118,5 +118,6 @@ return [
         ['sequence' => 103, 'file' => '096_public_signup_coupons.sql'],
         ['sequence' => 104, 'file' => '097_evolution_operational_alert_suppression.sql'],
         ['sequence' => 105, 'file' => '098_operational_queue_release.sql'],
+        ['sequence' => 106, 'file' => '099_ai_agent_round_robin_routing.sql'],
     ],
 ];

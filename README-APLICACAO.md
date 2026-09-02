@@ -147,3 +147,36 @@ bash scripts/run-plan-limits-audit.sh
 ```
 
 O auditor confere a matriz Inicial/Profissional/Empresarial, preços de IA própria e IA RS Connect, compromissos de 3/6/12 meses, limites de usuários/canais/agentes/franquia de IA e os pontos de enforcement do código. Para testar o comportamento no teto e abaixo do teto, altera os limites apenas dentro de uma transação da própria conexão e executa `ROLLBACK` ao final; nenhuma alteração de plano é persistida.
+
+## Homologação multiagentes + round-robin
+
+A partir da migration `099_ai_agent_round_robin_routing.sql`, conversas genéricas podem ser distribuídas em round-robin entre os agentes ativos e elegíveis do mesmo canal.
+
+A ordem operacional é:
+
+1. agente já fixado na conversa;
+2. especialista encontrado por `routing_keywords`;
+3. round-robin entre os demais agentes elegíveis do canal;
+4. fallback compatível para o primeiro agente/principal quando a migration ainda não foi aplicada.
+
+O round-robin usa a tabela `ai_agent_routing_state` e `SELECT ... FOR UPDATE`, evitando que duas conversas concorrentes consumam a mesma posição do cursor. Mensagens posteriores da mesma conversa mantêm o agente já fixado e não avançam a rotação. Especialistas por palavra-chave também não consomem o cursor genérico.
+
+Aplicação da migration:
+
+```bash
+php bin/migrate.php
+```
+
+Validação estática:
+
+```bash
+php tests/Feature/multi-agent-round-robin-v36270-smoke.php
+```
+
+Validação real e reversível no banco:
+
+```bash
+php bin/multiagent-audit.php
+```
+
+O auditor usa um canal existente com pelo menos dois agentes ativos, cria conversas temporárias dentro de uma transação, prova a sequência do round-robin e a continuidade por conversa e executa `ROLLBACK` ao final. Se houver `routing_keywords` configuradas no canal, também comprova que a keyword mantém prioridade sem consumir o cursor genérico.

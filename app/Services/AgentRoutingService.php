@@ -30,21 +30,22 @@ final class AgentRoutingService
             $bindings = $this->activeBindings($pdo, $tenantId, $instanceId);
             $agentId = $this->keywordMatch($bindings, $incomingContent);
             if ($agentId < 1) {
-                foreach ($bindings as $binding) {
-                    if ((int) ($binding['is_primary'] ?? 0) === 1) {
-                        $agentId = (int) $binding['agent_id'];
-                        break;
-                    }
-                }
-            }
-            if ($agentId < 1 && $bindings !== []) {
-                $agentId = (int) ($bindings[0]['agent_id'] ?? 0);
+                $agentId = $this->roundRobinAgentId(
+                    $pdo,
+                    $tenantId,
+                    $instanceId,
+                    $bindings,
+                    $conversationId,
+                    $pin
+                );
+            } elseif ($pin && $conversationId > 0) {
+                // Especialistas por palavra-chave permanecem prioritários e não consomem
+                // o cursor do round-robin. Em concorrência, o primeiro pin válido vence.
+                $this->pin($pdo, $tenantId, $instanceId, $conversationId, $agentId, false);
+                $agentId = $this->pinnedAgentId($pdo, $tenantId, $instanceId, $conversationId) ?: $agentId;
             }
 
             if ($agentId > 0) {
-                if ($pin && $conversationId > 0) {
-                    $this->pin($pdo, $tenantId, $instanceId, $conversationId, $agentId, true);
-                }
                 return $this->agentById($pdo, $tenantId, $agentId);
             }
         }
@@ -111,21 +112,28 @@ final class AgentRoutingService
         if ($availableBindings !== []) {
             $agentId = $this->keywordMatch($availableBindings, $incomingContent);
             if ($agentId < 1) {
-                foreach ($availableBindings as $binding) {
-                    if ((int) ($binding['is_primary'] ?? 0) === 1) {
-                        $agentId = (int) ($binding['agent_id'] ?? 0);
-                        break;
-                    }
-                }
-            }
-            if ($agentId < 1) {
-                $agentId = (int) ($availableBindings[0]['agent_id'] ?? 0);
+                $agentId = $this->roundRobinAgentId(
+                    $pdo,
+                    $tenantId,
+                    $instanceId,
+                    $availableBindings,
+                    $conversationId,
+                    $pin
+                );
+            } elseif ($pin && $conversationId > 0) {
+                // O especialista disponível vence a distribuição genérica sem avançar
+                // o cursor do canal. O pin sem force mantém a primeira decisão concorrente.
+                $this->pin($pdo, $tenantId, $instanceId, $conversationId, $agentId, false);
+                $agentId = $this->pinnedAgentId($pdo, $tenantId, $instanceId, $conversationId) ?: $agentId;
             }
             if ($agentId > 0 && isset($availableAgents[$agentId])) {
-                if ($pin && $conversationId > 0) {
-                    $this->pin($pdo, $tenantId, $instanceId, $conversationId, $agentId, true);
-                }
                 return $availableAgents[$agentId];
+            }
+            if ($agentId > 0) {
+                $resolved = $this->agentById($pdo, $tenantId, $agentId);
+                if (is_array($resolved) && $policy->allowsConversationalAutomation($resolved)) {
+                    return $resolved;
+                }
             }
         }
 
@@ -257,6 +265,187 @@ final class AgentRoutingService
     {
         return $this->tableExists($pdo, 'ai_agent_instance_bindings')
             && $this->columnExists($pdo, 'conversations', 'ai_agent_id');
+    }
+
+    public function supportsRoundRobin(PDO $pdo): bool
+    {
+        return $this->supportsRouting($pdo)
+            && $this->tableExists($pdo, 'ai_agent_routing_state');
+    }
+
+    /**
+     * Distribui apenas conversas genéricas entre os agentes elegíveis do canal.
+     *
+     * - palavra-chave/especialista é resolvida antes deste método;
+     * - conversa já fixada é revalidada dentro do lock e não avança o cursor;
+     * - o cursor é travado por linha (FOR UPDATE), portanto duas conversas
+     *   concorrentes recebem posições consecutivas da rotação;
+     * - quando pin=false, apenas consulta o próximo agente sem consumir a rotação.
+     *
+     * @param array<int,array<string,mixed>> $bindings
+     */
+    private function roundRobinAgentId(
+        PDO $pdo,
+        int $tenantId,
+        int $instanceId,
+        array $bindings,
+        int $conversationId,
+        bool $pin
+    ): int {
+        $agentIds = [];
+        foreach ($bindings as $binding) {
+            $agentId = (int) ($binding['agent_id'] ?? 0);
+            if ($agentId > 0 && !in_array($agentId, $agentIds, true)) {
+                $agentIds[] = $agentId;
+            }
+        }
+
+        if ($agentIds === []) {
+            return 0;
+        }
+
+        if (count($agentIds) === 1) {
+            $agentId = $agentIds[0];
+            if ($pin && $conversationId > 0) {
+                $this->pin($pdo, $tenantId, $instanceId, $conversationId, $agentId, false);
+                return $this->pinnedAgentId($pdo, $tenantId, $instanceId, $conversationId) ?: $agentId;
+            }
+            return $agentId;
+        }
+
+        // Sem a migration nova, mantém o comportamento anterior (primeiro elegível,
+        // que pela ordenação existente é o principal/maior prioridade).
+        if (!$this->supportsRoundRobin($pdo)) {
+            $agentId = $agentIds[0];
+            if ($pin && $conversationId > 0) {
+                $this->pin($pdo, $tenantId, $instanceId, $conversationId, $agentId, false);
+                return $this->pinnedAgentId($pdo, $tenantId, $instanceId, $conversationId) ?: $agentId;
+            }
+            return $agentId;
+        }
+
+        // Chamadas de inspeção não alteram o cursor.
+        if (!$pin || $conversationId < 1) {
+            return $this->peekRoundRobinAgentId($pdo, $tenantId, $instanceId, $agentIds);
+        }
+
+        $ownsTransaction = !$pdo->inTransaction();
+        try {
+            if ($ownsTransaction) {
+                $pdo->beginTransaction();
+            }
+
+            // Garante a linha antes do FOR UPDATE. A chave única por canal serializa
+            // também o primeiro acesso concorrente ao cursor.
+            $ensure = $pdo->prepare(
+                'INSERT INTO ai_agent_routing_state
+                    (tenant_id, instance_id, last_agent_id, last_conversation_id, assignment_count)
+                 VALUES (:tenant_id, :instance_id, NULL, NULL, 0)
+                 ON DUPLICATE KEY UPDATE instance_id = VALUES(instance_id)'
+            );
+            $ensure->execute([
+                'tenant_id' => $tenantId,
+                'instance_id' => $instanceId,
+            ]);
+
+            $stateStatement = $pdo->prepare(
+                'SELECT last_agent_id
+                 FROM ai_agent_routing_state
+                 WHERE tenant_id = :tenant_id AND instance_id = :instance_id
+                 FOR UPDATE'
+            );
+            $stateStatement->execute([
+                'tenant_id' => $tenantId,
+                'instance_id' => $instanceId,
+            ]);
+            $lastAgentId = (int) ($stateStatement->fetchColumn() ?: 0);
+
+            // Depois de adquirir o lock, revalida o pin. Isso evita que duas
+            // mensagens simultâneas da MESMA conversa consumam duas posições.
+            $pinnedId = $this->pinnedAgentId($pdo, $tenantId, $instanceId, $conversationId);
+            if ($pinnedId > 0) {
+                if ($ownsTransaction) {
+                    $pdo->commit();
+                }
+                return $pinnedId;
+            }
+
+            $agentId = $this->nextAgentId($agentIds, $lastAgentId);
+
+            $update = $pdo->prepare(
+                'UPDATE ai_agent_routing_state
+                 SET last_agent_id = :agent_id,
+                     last_conversation_id = :conversation_id,
+                     assignment_count = assignment_count + 1,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE tenant_id = :tenant_id AND instance_id = :instance_id'
+            );
+            $update->execute([
+                'agent_id' => $agentId,
+                'conversation_id' => $conversationId,
+                'tenant_id' => $tenantId,
+                'instance_id' => $instanceId,
+            ]);
+
+            $this->pin($pdo, $tenantId, $instanceId, $conversationId, $agentId, false);
+            $finalAgentId = $this->pinnedAgentId($pdo, $tenantId, $instanceId, $conversationId) ?: $agentId;
+
+            if ($ownsTransaction) {
+                $pdo->commit();
+            }
+
+            return $finalAgentId;
+        } catch (Throwable) {
+            if ($ownsTransaction && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            // Fail-safe: não derruba webhook/IA por indisponibilidade do cursor.
+            $agentId = $agentIds[0];
+            if ($pin && $conversationId > 0) {
+                try {
+                    $this->pin($pdo, $tenantId, $instanceId, $conversationId, $agentId, false);
+                    return $this->pinnedAgentId($pdo, $tenantId, $instanceId, $conversationId) ?: $agentId;
+                } catch (Throwable) {
+                    return $agentId;
+                }
+            }
+            return $agentId;
+        }
+    }
+
+    /** @param array<int,int> $agentIds */
+    private function peekRoundRobinAgentId(PDO $pdo, int $tenantId, int $instanceId, array $agentIds): int
+    {
+        try {
+            $statement = $pdo->prepare(
+                'SELECT last_agent_id
+                 FROM ai_agent_routing_state
+                 WHERE tenant_id = :tenant_id AND instance_id = :instance_id
+                 LIMIT 1'
+            );
+            $statement->execute([
+                'tenant_id' => $tenantId,
+                'instance_id' => $instanceId,
+            ]);
+            $lastAgentId = (int) ($statement->fetchColumn() ?: 0);
+            return $this->nextAgentId($agentIds, $lastAgentId);
+        } catch (Throwable) {
+            return $agentIds[0] ?? 0;
+        }
+    }
+
+    /** @param array<int,int> $agentIds */
+    private function nextAgentId(array $agentIds, int $lastAgentId): int
+    {
+        if ($agentIds === []) {
+            return 0;
+        }
+        $lastIndex = array_search($lastAgentId, $agentIds, true);
+        if ($lastIndex === false) {
+            return $agentIds[0];
+        }
+        return $agentIds[((int) $lastIndex + 1) % count($agentIds)];
     }
 
     private function pinnedAgentId(PDO $pdo, int $tenantId, int $instanceId, int $conversationId): int

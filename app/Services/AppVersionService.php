@@ -77,6 +77,7 @@ final class AppVersionService
     // RS Connect 36.26.7 — resolução persistente de alertas e liberação segura da fila de respostas.
     // RS Connect 36.26.8 — Central de Monitoramento compacta, gráficos e histórico progressivo.
     // RS Connect 36.26.9 — webhook autenticado e ignorado confirma recuperação técnica do gateway.
+    // RS Connect 36.27.0 — round-robin transacional por canal, sem quebrar especialistas e continuidade.
     // Compatibilidade histórica: REQUIRED_MIGRATION = '091_after_hours_monitor_and_quote_requests.sql'.
     // Compatibilidade histórica: REQUIRED_MIGRATION = '093_public_signup_asaas_trial.sql'.
     // Compatibilidade histórica: REQUIRED_MIGRATION = '094_normalize_asaas_api_base_url.sql'.
@@ -86,7 +87,7 @@ final class AppVersionService
     // Identidade histórica preservada: Beta Comercial 1.5.
     public const VERSION_LABEL = 'Beta Comercial 1.6';
     public const PACKAGE_LABEL = 'RS Connect 36.26.9 — Recuperação técnica do webhook financeiro';
-    public const REQUIRED_MIGRATION = '098_operational_queue_release.sql';
+    public const REQUIRED_MIGRATION = '099_ai_agent_round_robin_routing.sql';
 
     private PDO $pdo;
 
@@ -472,14 +473,15 @@ final class AppVersionService
         );
 
         $multiChannelReady = $this->tableExists('ai_agent_instance_bindings')
-            && $this->columnExists('conversations', 'ai_agent_id');
+            && $this->columnExists('conversations', 'ai_agent_id')
+            && $this->tableExists('ai_agent_routing_state');
         $checks[] = $this->check(
             'Canais WhatsApp e agentes',
             $multiChannelReady ? 'ok' : 'blocked',
             $multiChannelReady
                 ? 'Múltiplos canais por empresa, múltiplos agentes por canal e continuidade por conversa estão disponíveis.'
                 : 'O vínculo N:N entre canais WhatsApp e agentes ainda não foi aplicado.',
-            'Executar database/migrations/055_multi_whatsapp_agent_routing.sql.'
+            'Executar database/migrations/055_multi_whatsapp_agent_routing.sql e 099_ai_agent_round_robin_routing.sql.'
         );
 
         $agendaWriterMisconfigured = $this->agendaWriterMisconfiguredCount();
