@@ -76,3 +76,29 @@ A pasta `/var/www/html/storage` deve estar em volume persistente no EasyPanel pa
 - O quadro da logo do cliente no menu lateral usa 54x54 px, sem padding interno.
 - A imagem usa `object-fit: cover` e zoom visual de 1.35 para reduzir margens internas presentes em arquivos de logo.
 - A prévia do White Label atualiza a cor do fundo em tempo real e usa o mesmo enquadramento da aplicação.
+
+## Homologação Evolution / WhatsApp E2E
+
+O pacote inclui uma homologação assistida que valida a configuração local e remota da Evolution e acompanha uma mensagem real desde o webhook até a resposta automática.
+
+No host Docker/EasyPanel:
+
+```bash
+bash scripts/run-evolution-e2e.sh --instance=gestaodetempo --timeout=180
+```
+
+Ou, dentro do container da aplicação:
+
+```bash
+php bin/evolution-e2e.php --instance=gestaodetempo --timeout=180
+```
+
+Somente pré-teste, sem aguardar mensagem real:
+
+```bash
+php bin/evolution-e2e.php --instance=gestaodetempo --no-wait
+```
+
+O runner verifica: conexão local e remota, recebimento habilitado, `MESSAGES_UPSERT`, token do webhook, rota pública autenticada, vínculo com agente ativo, chegada da mensagem real, criação/localização da conversa, roteamento para agente, resposta automática, ID devolvido pela Evolution, estado de envio e ausência de resposta duplicada.
+
+As evidências são gravadas em `storage/logs/e2e/evolution-e2e-AAAAMMDD-HHMMSS.json`. Nenhuma API key ou token é exibido no relatório.
