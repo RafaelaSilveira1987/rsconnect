@@ -102,3 +102,30 @@ php bin/evolution-e2e.php --instance=gestaodetempo --no-wait
 O runner verifica: conexão local e remota, recebimento habilitado, `MESSAGES_UPSERT`, token do webhook, rota pública autenticada, vínculo com agente ativo, chegada da mensagem real, criação/localização da conversa, roteamento para agente, resposta automática, ID devolvido pela Evolution, estado de envio e ausência de resposta duplicada.
 
 As evidências são gravadas em `storage/logs/e2e/evolution-e2e-AAAAMMDD-HHMMSS.json`. Nenhuma API key ou token é exibido no relatório.
+
+## Homologação real de backup + restauração
+
+O projeto inclui `scripts/verify-backup-restore.sh` para provar que o backup oficial pode ser restaurado de verdade sem sobrescrever produção.
+
+O verificador:
+
+1. executa `scripts/rsconnect-backup.sh`;
+2. valida `status=success`, `verified=true`, gzip e SHA-256;
+3. cria um banco MySQL temporário com prefixo `rsconnect_restore_verify_`;
+4. restaura integralmente o `.sql.gz` nesse banco temporário;
+5. compara quantidade e lista completa de tabelas;
+6. compara contagens de registros de tabelas críticas disponíveis;
+7. grava uma evidência JSON no diretório de backup;
+8. remove o banco temporário ao finalizar, inclusive em caso de erro.
+
+Uso no host Docker/EasyPanel:
+
+```bash
+bash scripts/verify-backup-restore.sh /backups/rs-connect 5 rs_connect
+```
+
+A homologação só é aprovada quando a saída termina com:
+
+```text
+[APROVADO] Backup gerado e restaurado com sucesso em banco temporário.
+```

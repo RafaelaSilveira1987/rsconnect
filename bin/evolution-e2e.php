@@ -8,6 +8,7 @@ require dirname(__DIR__) . '/bootstrap.php';
 use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Env;
+use App\Core\PublicId;
 use App\Core\Router;
 use App\Services\AccessControlService;
 use App\Services\EvolutionService;
@@ -148,7 +149,9 @@ try {
         $remoteUrl = trim((string) ($body['url'] ?? ''));
         $remoteEnabled = filter_var($body['enabled'] ?? false, FILTER_VALIDATE_BOOL);
         $remoteByEvents = filter_var($body['webhookByEvents'] ?? false, FILTER_VALIDATE_BOOL);
-        $validReference = str_contains($remoteUrl, 'instance_id=' . $instanceId);
+        $publicInstanceId = PublicId::encode('instance', $instanceId);
+        $validReference = str_contains($remoteUrl, 'instance_uuid=' . rawurlencode($publicInstanceId))
+            || str_contains($remoteUrl, 'instance_id=' . $instanceId);
         $remoteOk = $remoteEnabled && !$remoteByEvents && in_array('MESSAGES_UPSERT', $remoteEvents, true)
             && str_contains($remoteUrl, '/webhooks/evolution') && $validReference;
         check($checks, 'evolution.webhook', $remoteOk, 'Webhook remoto da Evolution está correto',
@@ -340,8 +343,8 @@ function resolveInstance(PDO $pdo, int $id, string $name): array
     }
 
     if ($name !== '') {
-        $st = $pdo->prepare('SELECT * FROM evolution_instances WHERE instance_name = :name OR name = :name ORDER BY id DESC LIMIT 2');
-        $st->execute(['name' => $name]);
+        $st = $pdo->prepare('SELECT * FROM evolution_instances WHERE instance_name = :instance_name OR name = :display_name ORDER BY id DESC LIMIT 2');
+        $st->execute(['instance_name' => $name, 'display_name' => $name]);
         $rows = $st->fetchAll(PDO::FETCH_ASSOC);
         if (count($rows) !== 1) {
             throw new RuntimeException('A instância "' . safe($name) . '" não foi encontrada de forma única. Use --instance-id.');
