@@ -69,3 +69,10 @@ A pasta `/var/www/html/storage` deve estar em volume persistente no EasyPanel pa
 
 ## Ajuste visual adicional
 - O bloco da logo no menu lateral e na prévia recebeu fundo neutro suave, com borda leve e sombra discreta, para melhorar logos com transparência ou fundo branco.
+
+## Ajuste visual consolidado da logo
+
+- O fundo do quadro da logo respeita a cor hexadecimal configurada no White Label, inclusive contra regras globais com `!important`.
+- O quadro da logo do cliente no menu lateral usa 54x54 px, sem padding interno.
+- A imagem usa `object-fit: cover` e zoom visual de 1.35 para reduzir margens internas presentes em arquivos de logo.
+- A prévia do White Label atualiza a cor do fundo em tempo real e usa o mesmo enquadramento da aplicação.

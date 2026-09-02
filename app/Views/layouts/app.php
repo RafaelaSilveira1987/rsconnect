@@ -26,8 +26,8 @@ $brandSubtitle = $tenantIdentity ? (string) ($branding['subtitle'] ?? 'Atendimen
 $brandIconText = $tenantIdentity ? (string) ($branding['icon_text'] ?? 'EP') : 'RS';
 $brandLogoUrl = $brandEnabled ? (string) ($branding['logo_url'] ?? '') : '';
 $brandLogoBackground = $tenantIdentity ? (string) ($branding['logo_background'] ?? '#ffffff') : '#ffffff';
-$brandLogoMarkStyle = 'background: ' . $brandLogoBackground . '; border: 1px solid rgba(20, 100, 152, 0.14); box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), 0 10px 22px rgba(15, 23, 42, 0.08); overflow: hidden; padding: 6px;';
-$brandLogoImageStyle = 'width: 100%; height: 100%; object-fit: contain; display: block;';
+$brandLogoMarkStyle = 'background: ' . $brandLogoBackground . ' !important; border: 1px solid rgba(20, 100, 152, 0.14); box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), 0 10px 22px rgba(15, 23, 42, 0.08); overflow: hidden; padding: 0;';
+$brandLogoImageStyle = 'width: 100%; height: 100%; object-fit: cover; transform: scale(1.35); transform-origin: center; display: block;';
 $brandFaviconUrl = '';
 $brandPrimary = '#146498';
 $brandSecondary = '#631b7c';
@@ -157,11 +157,22 @@ $svgIcon = static function (string $name): string {
     <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.26.1')) ?>">
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
+            width: 54px !important;
+            height: 54px !important;
+            min-width: 54px !important;
+            padding: 0 !important;
+            overflow: hidden;
             border-radius: 16px;
             transition: background-color .2s ease;
         }
         .brand.is-custom-brand .brand-mark-client-logo img {
-            border-radius: 10px;
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            transform: scale(1.35);
+            transform-origin: center;
+            display: block;
+            border-radius: 0;
         }
     </style>
 </head>

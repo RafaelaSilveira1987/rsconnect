@@ -67,8 +67,11 @@ $check(str_contains($layout, '$brandName = $tenantIdentity'), 'layout mostra o n
 $check(str_contains($layout, '$brandLogoUrl !=='), 'layout exibe a logo quando ela existe');
 $check(str_contains($layout, 'brand-mark-client-logo'), 'layout possui contêiner específico para logo do cliente');
 $check(str_contains($layout, '$brandLogoBackground ='), 'layout recebe a cor de fundo configurada para a logo');
-$check(str_contains($layout, '$brandLogoMarkStyle = \'background: \' . $brandLogoBackground . \'; border:'), 'layout aplica dinamicamente a cor de fundo da logo');
-$check(str_contains($layout, 'object-fit: contain'), 'logo mantém proporção no cabeçalho');
+$check(str_contains($layout, '$brandLogoMarkStyle =') && str_contains($layout, '$brandLogoBackground . \' !important; border:'), 'layout aplica dinamicamente a cor de fundo da logo com prioridade sobre o CSS global');
+$check(str_contains($layout, 'object-fit: cover') && str_contains($layout, 'transform: scale(1.35)'), 'logo preenche melhor o quadro sem deformação e com zoom controlado');
+$check(str_contains($layout, 'width: 54px !important') && str_contains($layout, 'height: 54px !important'), 'quadro da logo do cliente usa 54x54 no cabeçalho');
+$check(str_contains($view, 'applyLogoBackground'), 'prévia do White Label atualiza a cor do fundo em tempo real');
+$check(str_contains($view, 'transform: scale(1.35)'), 'prévia da logo usa o mesmo zoom do cabeçalho');
 
 $check(!str_contains($layout, '$brandIconUrl'), 'layout não tenta usar ícone antigo separado');
 

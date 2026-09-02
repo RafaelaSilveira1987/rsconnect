@@ -18,14 +18,17 @@ $previewLogoBackground = (string) ($previewBranding['logo_background'] ?? '#ffff
     .white-label-preview-mark {
         border: 1px solid rgba(20, 100, 152, 0.14);
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), 0 10px 22px rgba(15, 23, 42, 0.08);
+        overflow: hidden;
     }
     .white-label-upload-thumb img,
     .white-label-preview-mark img {
         width: 100%;
         height: 100%;
-        object-fit: contain;
+        object-fit: cover;
+        transform: scale(1.35);
+        transform-origin: center;
         display: block;
-        border-radius: 10px;
+        border-radius: 0;
     }
 </style>
 <section class="hero-card compact-hero hero-admin white-label-hero">
@@ -166,3 +169,23 @@ $previewLogoBackground = (string) ($previewBranding['logo_background'] ?? '#ffff
         </div>
     </aside>
 </div>
+
+<script>
+(function () {
+    const picker = document.querySelector('input[name="brand_logo_background"]');
+    if (!picker) {
+        return;
+    }
+
+    const targets = document.querySelectorAll('.white-label-upload-thumb, .white-label-preview-mark');
+    const applyLogoBackground = () => {
+        const color = String(picker.value || '#ffffff').trim();
+        targets.forEach((target) => {
+            target.style.background = color;
+        });
+    };
+
+    picker.addEventListener('input', applyLogoBackground);
+    picker.addEventListener('change', applyLogoBackground);
+})();
+</script>
