@@ -311,3 +311,13 @@ php tests/Feature/crm-conversation-value-and-commercial-dismiss-v36276-smoke.php
 - O botão **Dispensar alerta** usa título, descrição e ações específicas, com foco seguro em **Manter alerta**.
 - Modal acessível: fecha por X, clique no fundo ou Esc, mantém foco e é responsivo.
 - Nenhuma migration adicional é necessária.
+
+
+## v36.27.9 — diálogos visuais globais
+
+- Padroniza confirmações destrutivas que ainda usavam caixas nativas do navegador.
+- Exclusão em massa de conversas passa a usar o modal visual RS Connect.
+- Exclusão de conexão/instância também usa o modal visual com tom de perigo.
+- Fallbacks de cópia que usavam `window.prompt()` passam a usar diálogo visual próprio.
+- O front-end deixa de depender de `window.confirm()`, `window.alert()` e `window.prompt()` nas telas do aplicativo.
+- Não exige migration nova.

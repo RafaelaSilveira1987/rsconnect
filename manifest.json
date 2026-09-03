@@ -1,7 +1,7 @@
 {
   "package": "rsconnect-deploy-hardening-kit",
   "date": "2026-09-03",
-  "purpose": "Full RS Connect production package with multi-agent routing, operational monitoring, CRM commercial value synchronization and commercial request POST UUID fix",
+  "purpose": "Full RS Connect production package with multi-agent routing, operational monitoring, CRM commercial value synchronization and global RS Connect dialog UI",
   "changes": [
     "AiReprocessService.runScheduledIfDue",
     "rsconnect-backup.finish_error exit code",
@@ -31,6 +31,10 @@
     "Valor já preenchido no CRM só é substituído por escolha ou valor final explícito",
     "Alertas de orçamento usam commercial_request_uuid próprio e deixam de colidir com request_id de privacidade/LGPD",
     "TenantIsolationService valida crm_commercial_requests sem afrouxar o isolamento entre empresas",
-    "Ações Marcar orçamento atendido/Dispensar alerta decodificam commercial_request_uuid no POST e mantêm isolamento tenant-aware"
+    "Ações Marcar orçamento atendido/Dispensar alerta decodificam commercial_request_uuid no POST e mantêm isolamento tenant-aware",
+    "Confirmações de exclusão em massa de conversas usam modal visual RS Connect em vez de window.confirm",
+    "Exclusão de conexão/instância usa o mesmo modal visual com tom de perigo e foco seguro",
+    "Fallbacks de cópia deixam de usar window.prompt e usam diálogo visual RS Connect",
+    "Código de interface não mantém chamadas nativas window.confirm/window.alert/window.prompt"
   ]
 }

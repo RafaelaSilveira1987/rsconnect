@@ -262,19 +262,25 @@ document.addEventListener('DOMContentLoaded', () => {
     refresh();
   });
 
-  deleteButton?.addEventListener('click', (event) => {
+  deleteButton?.addEventListener('click', async (event) => {
     const selected = selectedCount();
+    event.preventDefault();
     if (selected < 1) {
-      event.preventDefault();
       refresh();
       return;
     }
 
-    const confirmed = window.confirm(
-      `Excluir ${selected} conversa${selected === 1 ? '' : 's'} do RS Connect?\n\n` +
-      'O histórico de mensagens será apagado definitivamente. O contato, os negócios do CRM e os compromissos serão preservados sem o vínculo com a conversa.'
-    );
-    if (!confirmed) event.preventDefault();
+    const confirmed = await window.RSConnectDialog?.confirm({
+      title: `Excluir ${selected} conversa${selected === 1 ? '' : 's'}?`,
+      message: 'O histórico de mensagens será apagado definitivamente. O contato, os negócios do CRM e os compromissos serão preservados sem o vínculo com a conversa.',
+      action: selected === 1 ? 'Excluir conversa' : `Excluir ${selected} conversas`,
+      cancel: 'Manter conversas',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    if (typeof form.requestSubmit === 'function') form.requestSubmit(deleteButton);
+    else form.submit();
   });
 
   form.addEventListener('submit', (event) => {
@@ -2230,40 +2236,60 @@ document.addEventListener('DOMContentLoaded', () => {
       if (name === 'confirmation') input?.addEventListener('input', syncDeleteEligibility);
     });
 
-    instanceDeleteForm.addEventListener('submit', (event) => {
+    instanceDeleteForm.addEventListener('submit', async (event) => {
       syncDeleteEligibility();
       if (deleteSubmit?.disabled) {
         event.preventDefault();
         setDeleteMessage(deleteError, 'Escolha como tratar os dados vinculados e conclua todas as confirmações antes de excluir.', true);
         return;
       }
+
+      if (instanceDeleteForm.dataset.rsDeleteApproved === '1') {
+        delete instanceDeleteForm.dataset.rsDeleteApproved;
+        if (deleteSubmit) {
+          const remoteMissing = deletePreviewState?.remote?.exists === false;
+          const hasDependencies = Boolean(deletePreviewState?.requires_replacement);
+          const discarding = hasDependencies && Boolean(deleteField('discard_dependencies')?.checked);
+          const transferring = hasDependencies && Boolean(deleteField('replacement')?.value) && !discarding;
+          deleteSubmit.disabled = true;
+          deleteSubmit.textContent = discarding
+            ? 'Removendo dados e cadastro...'
+            : remoteMissing
+              ? (transferring ? 'Transferindo dados...' : 'Excluindo cadastro...')
+              : (transferring ? 'Transferindo e excluindo...' : 'Excluindo conexão...');
+        }
+        return;
+      }
+
+      event.preventDefault();
       const remoteMissing = deletePreviewState?.remote?.exists === false;
       const hasDependencies = Boolean(deletePreviewState?.requires_replacement);
       const discarding = hasDependencies && Boolean(deleteField('discard_dependencies')?.checked);
       const transferring = hasDependencies && Boolean(deleteField('replacement')?.value) && !discarding;
       const confirmationMessage = discarding
         ? (remoteMissing
-          ? 'Confirma a exclusão do cadastro local e a remoção definitiva das conversas, campanhas, vínculos e eventos desta conexão?'
-          : 'Confirma a exclusão da conexão e a remoção definitiva das conversas, campanhas, vínculos e eventos vinculados?')
+          ? 'O cadastro local e as conversas, campanhas, vínculos e eventos desta conexão serão removidos definitivamente.'
+          : 'A conexão e as conversas, campanhas, vínculos e eventos vinculados serão removidos definitivamente.')
         : remoteMissing
           ? (transferring
-            ? 'Confirma a transferência dos dados e a exclusão somente do cadastro desta conexão no RS Connect?'
-            : 'Confirma a exclusão somente do cadastro desta conexão no RS Connect?')
+            ? 'Os dados serão transferidos e somente o cadastro desta conexão será excluído do RS Connect.'
+            : 'Somente o cadastro desta conexão será excluído do RS Connect.')
           : (transferring
-            ? 'Confirma a transferência dos dados e a exclusão definitiva desta conexão?'
-            : 'Confirma a exclusão definitiva desta conexão?');
-      if (!window.confirm(confirmationMessage)) {
-        event.preventDefault();
-        return;
-      }
-      if (deleteSubmit) {
-        deleteSubmit.disabled = true;
-        deleteSubmit.textContent = discarding
-          ? 'Removendo dados e cadastro...'
-          : remoteMissing
-            ? (transferring ? 'Transferindo dados...' : 'Excluindo cadastro...')
-            : (transferring ? 'Transferindo e excluindo...' : 'Excluindo conexão...');
-      }
+            ? 'Os dados serão transferidos e esta conexão será excluída definitivamente.'
+            : 'Esta conexão será excluída definitivamente.');
+
+      const confirmed = await window.RSConnectDialog?.confirm({
+        title: discarding ? 'Excluir conexão e dados vinculados?' : 'Excluir conexão?',
+        message: confirmationMessage,
+        action: discarding ? 'Excluir conexão e dados' : 'Excluir conexão',
+        cancel: 'Cancelar',
+        tone: 'danger',
+      });
+      if (!confirmed) return;
+
+      instanceDeleteForm.dataset.rsDeleteApproved = '1';
+      if (typeof instanceDeleteForm.requestSubmit === 'function') instanceDeleteForm.requestSubmit(deleteSubmit || undefined);
+      else instanceDeleteForm.submit();
     });
   }
 
@@ -2478,7 +2504,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.querySelectorAll('[data-invoice-open]').forEach((button)=>button.addEventListener('click',()=>{const form=document.querySelector('[data-invoice-form]');if(!form)return;form.querySelector('[data-invoice-field="tenant_id"]').value=button.dataset.tenantId||'';form.querySelector('[data-invoice-field="subscription_id"]').value=button.dataset.subscriptionId||'';form.querySelector('[data-invoice-field="amount"]').value=button.dataset.amount||'';const title=document.querySelector('[data-invoice-title]');if(title)title.textContent=`Criar cobrança — ${button.dataset.tenantName||''}`;}));
   document.querySelectorAll('[data-payment-link-open]').forEach((button)=>button.addEventListener('click',()=>{const select=document.querySelector('[data-payment-link-invoice]');if(select&&button.dataset.invoiceId)select.value=button.dataset.invoiceId;}));
-  document.querySelectorAll('[data-copy-value]').forEach((button)=>button.addEventListener('click',async()=>{const value=button.dataset.copyValue||'';if(!value)return;try{await navigator.clipboard.writeText(value);const original=button.textContent;button.textContent='Link copiado';window.setTimeout(()=>button.textContent=original,1800);}catch(error){window.prompt('Copie o link:',value);}}));
+  document.querySelectorAll('[data-copy-value]').forEach((button)=>button.addEventListener('click',async()=>{const value=button.dataset.copyValue||'';if(!value)return;try{await navigator.clipboard.writeText(value);const original=button.textContent;button.textContent='Link copiado';window.setTimeout(()=>button.textContent=original,1800);}catch(error){await window.RSConnectDialog?.prompt({ title: 'Copiar link', message: 'Copie o endereço abaixo:', value, action: 'Fechar', cancel: 'Fechar' });}}));
   const refreshGatewayGuidance=(drawer,editing=false)=>{
     if(!drawer)return;
     const provider=drawer.querySelector('[data-gateway-field="provider"]')?.value||'manual';
@@ -2866,7 +2892,7 @@ document.addEventListener('DOMContentLoaded', () => {
       button.textContent = 'Resumo copiado';
       window.setTimeout(() => { button.textContent = original; }, 1800);
     } catch (_) {
-      window.prompt('Copie o resumo abaixo:', lines.join('\n').trim());
+      await window.RSConnectDialog?.prompt({ title: 'Copiar resumo', message: 'Copie o conteúdo abaixo:', value: lines.join('\n').trim(), action: 'Fechar', cancel: 'Fechar', multiline: true });
     }
   });
 })();
@@ -4031,24 +4057,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
 /* ENT-030 — ações declarativas compatíveis com CSP sem JavaScript inline. */
 document.addEventListener('DOMContentLoaded', () => {
-  const rsConfirm = (() => {
+  const rsDialog = (() => {
     let modal = null;
     let title = null;
     let message = null;
     let confirmButton = null;
     let cancelButton = null;
+    let promptField = null;
     let pendingForm = null;
     let pendingSubmitter = null;
     let previousFocus = null;
+    let pendingResolver = null;
+    let dialogMode = 'confirm';
 
-    const close = (restoreFocus = true) => {
+    const finishProgrammatic = (value) => {
+      const resolver = pendingResolver;
+      pendingResolver = null;
+      if (typeof resolver === 'function') resolver(value);
+    };
+
+    const close = (restoreFocus = true, programmaticValue = false) => {
       if (!modal || modal.hidden) return;
       modal.hidden = true;
       document.body.classList.remove('has-modal-open');
       const focusTarget = previousFocus;
+      const hadProgrammatic = typeof pendingResolver === 'function';
       pendingForm = null;
       pendingSubmitter = null;
       previousFocus = null;
+      dialogMode = 'confirm';
+      if (promptField) {
+        promptField.hidden = true;
+        promptField.value = '';
+        promptField.removeAttribute('data-multiline');
+      }
+      if (hadProgrammatic) finishProgrammatic(programmaticValue);
       if (restoreFocus && focusTarget instanceof HTMLElement) focusTarget.focus();
     };
 
@@ -4067,6 +4110,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="rs-confirm-eyebrow">RS CONNECT · CONFIRMAÇÃO</span>
             <h2 id="rsConfirmTitle"></h2>
             <p id="rsConfirmMessage"></p>
+            <textarea class="rs-confirm-prompt" rows="3" hidden spellcheck="false" aria-label="Conteúdo para copiar"></textarea>
           </div>
           <div class="rs-confirm-actions">
             <button class="btn btn-outline rs-confirm-cancel" type="button" data-rs-confirm-close>Cancelar</button>
@@ -4079,12 +4123,19 @@ document.addEventListener('DOMContentLoaded', () => {
       message = modal.querySelector('#rsConfirmMessage');
       confirmButton = modal.querySelector('.rs-confirm-submit');
       cancelButton = modal.querySelector('.rs-confirm-cancel');
+      promptField = modal.querySelector('.rs-confirm-prompt');
 
       modal.querySelectorAll('[data-rs-confirm-close]').forEach((button) => {
-        button.addEventListener('click', () => close(true));
+        button.addEventListener('click', () => close(true, dialogMode === 'prompt' ? null : false));
       });
 
       confirmButton?.addEventListener('click', () => {
+        if (typeof pendingResolver === 'function') {
+          const value = dialogMode === 'prompt' ? (promptField?.value || '') : true;
+          close(false, value);
+          return;
+        }
+
         const form = pendingForm;
         const submitter = pendingSubmitter;
         if (!(form instanceof HTMLFormElement)) return close(true);
@@ -4102,11 +4153,11 @@ document.addEventListener('DOMContentLoaded', () => {
       modal.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
           event.preventDefault();
-          close(true);
+          close(true, dialogMode === 'prompt' ? null : false);
           return;
         }
         if (event.key !== 'Tab') return;
-        const focusable = Array.from(modal.querySelectorAll('button:not([disabled]), a[href]')).filter((el) => !el.hidden);
+        const focusable = Array.from(modal.querySelectorAll('button:not([disabled]), textarea:not([hidden]), input:not([hidden]), a[href]')).filter((el) => !el.hidden);
         if (!focusable.length) return;
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
@@ -4115,32 +4166,78 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     };
 
-    const open = (form, submitter = null) => {
+    const configure = (options = {}) => {
       ensure();
+      const tone = options.tone || 'warning';
+      modal.dataset.tone = tone;
+      title.textContent = options.title || 'Confirmar esta ação?';
+      message.textContent = options.message || 'Deseja continuar?';
+      confirmButton.textContent = options.action || 'Confirmar';
+      cancelButton.textContent = options.cancel || 'Cancelar';
+      const eyebrow = modal.querySelector('.rs-confirm-eyebrow');
+      if (eyebrow) eyebrow.textContent = options.eyebrow || (dialogMode === 'prompt' ? 'RS CONNECT · INFORMAÇÃO' : 'RS CONNECT · CONFIRMAÇÃO');
+    };
+
+    const openForm = (form, submitter = null) => {
+      dialogMode = 'confirm';
       pendingForm = form;
       pendingSubmitter = submitter;
       previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-
-      const tone = form.dataset.confirmTone || 'warning';
-      modal.dataset.tone = tone;
-      title.textContent = form.dataset.confirmTitle || 'Confirmar esta ação?';
-      message.textContent = form.dataset.confirm || 'Deseja continuar?';
-      confirmButton.textContent = form.dataset.confirmAction || (submitter?.textContent || '').trim() || 'Confirmar';
-      cancelButton.textContent = form.dataset.confirmCancel || 'Cancelar';
-
+      configure({
+        tone: form.dataset.confirmTone || 'warning',
+        title: form.dataset.confirmTitle || 'Confirmar esta ação?',
+        message: form.dataset.confirm || 'Deseja continuar?',
+        action: form.dataset.confirmAction || (submitter?.textContent || '').trim() || 'Confirmar',
+        cancel: form.dataset.confirmCancel || 'Cancelar',
+      });
+      promptField.hidden = true;
       modal.hidden = false;
       document.body.classList.add('has-modal-open');
       window.requestAnimationFrame(() => cancelButton?.focus());
     };
 
-    return { open };
+    const confirm = (options = {}) => new Promise((resolve) => {
+      dialogMode = 'confirm';
+      pendingForm = null;
+      pendingSubmitter = null;
+      pendingResolver = resolve;
+      previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      configure(options);
+      promptField.hidden = true;
+      modal.hidden = false;
+      document.body.classList.add('has-modal-open');
+      window.requestAnimationFrame(() => cancelButton?.focus());
+    });
+
+    const prompt = (options = {}) => new Promise((resolve) => {
+      dialogMode = 'prompt';
+      pendingForm = null;
+      pendingSubmitter = null;
+      pendingResolver = resolve;
+      previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      configure({ ...options, tone: options.tone || 'info', action: options.action || 'Fechar', cancel: options.cancel || 'Cancelar' });
+      promptField.hidden = false;
+      promptField.value = options.value || '';
+      promptField.rows = options.multiline ? 8 : 3;
+      if (options.multiline) promptField.setAttribute('data-multiline', '1');
+      modal.hidden = false;
+      document.body.classList.add('has-modal-open');
+      window.requestAnimationFrame(() => { promptField?.focus(); promptField?.select(); });
+    });
+
+    return { openForm, confirm, prompt };
   })();
+
+  window.RSConnectDialog = {
+    confirm: (options) => rsDialog.confirm(options),
+    prompt: (options) => rsDialog.prompt(options),
+  };
 
   document.addEventListener('submit', (event) => {
     const form = event.target instanceof HTMLFormElement ? event.target : null;
     if (!form || !form.dataset.confirm || form.dataset.confirmApproved === '1') return;
     event.preventDefault();
-    rsConfirm.open(form, event.submitter || null);
+    rsDialog.openForm(form, event.submitter || null);
   }, true);
 
   document.addEventListener('change', (event) => {

@@ -52,8 +52,8 @@ $checks = [
         && str_contains($css, '.agent-routing-guide')
         && str_contains($css, '.agent-channel-routing-config'),
     'pacote identifica versão 36.27.7' => str_contains($version, 'RS Connect 36.27.7'),
-    'cache de CSS e JS foi renovado' => str_contains($layout, 'app.css?v=36.27.8')
-        && str_contains($layout, 'app.js?v=36.27.8'),
+    'cache de CSS e JS foi renovado' => str_contains($layout, 'app.css?v=36.27.9')
+        && str_contains($layout, 'app.js?v=36.27.9'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));
