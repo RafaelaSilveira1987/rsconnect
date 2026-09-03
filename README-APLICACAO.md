@@ -238,3 +238,42 @@ php tests/Feature/agent-instance-linking-v36182-smoke.php
 - O conteúdo persistido no painel continua sem a assinatura textual, pois `sender_display_name` já identifica o agente internamente.
 - Reenvios de mensagens automáticas que falharam preservam a identificação do emissor original.
 - Não exige migration nova.
+
+## RS Connect 36.27.5 — avisos operacionais e bloqueios comerciais
+
+- O Monitor operacional continua enviando alertas imediatos quando um incidente abre, precisa de lembrete ou normaliza.
+- Além disso, o primeiro monitor executado após `OPERATIONS_HEALTH_DIGEST_TIME` (padrão `08:00`, no `APP_TIMEZONE`) envia um resumo diário aos canais administrativos habilitados.
+- O resumo informa serviços saudáveis, pontos de atenção, críticos, bloqueios externos e empresas cujo acesso está bloqueado.
+- A origem dos bloqueios comerciais é `AccessControlService`, portanto o monitor usa a mesma regra que efetivamente libera ou bloqueia a aplicação.
+- São monitorados: assinatura suspensa/cancelada, teste expirado fora da tolerância, vigência encerrada e cobrança vencida além de `BILLING_ACCESS_GRACE_DAYS`.
+- Quando a empresa volta a ficar regular, o incidente é encerrado automaticamente e o aviso de recuperação é enviado.
+- Bloqueios comerciais têm lembrete mínimo de 24 horas para evitar spam.
+- O workflow n8n do Monitor operacional não precisa ser reimportado; ele já chama o endpoint que executa essas novas verificações.
+
+Variáveis opcionais:
+
+```env
+OPERATIONS_HEALTH_DIGEST_ENABLED=true
+OPERATIONS_HEALTH_DIGEST_TIME=08:00
+OPERATIONS_HEALTH_DIGEST_MAX_BLOCKED_COMPANIES=8
+```
+
+Auditoria somente leitura:
+
+```bash
+php bin/operational-alerts-audit.php
+```
+
+Teste explícito dos canais configurados:
+
+```bash
+php bin/operational-alerts-audit.php --send-test
+```
+
+Validação estática:
+
+```bash
+php tests/Feature/operational-digest-subscription-watch-v36275-smoke.php
+```
+
+Não exige migration nova; a migration obrigatória continua sendo `099_ai_agent_round_robin_routing.sql`.

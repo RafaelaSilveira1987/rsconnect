@@ -30,10 +30,9 @@ $checks = [
         && str_contains($automation, "'preview' => mb_substr(\$reply, 0, 255)"),
     'retry preserva identificação do emissor' => str_contains($automation, 'failed.sender_display_name')
         && str_contains($automation, "withAiWhatsappSignature((string) \$failedMessage['content'], \$senderDisplayName)"),
-    'pacote identifica versão 36.27.4' => str_contains($version, 'RS Connect 36.27.4')
-        && str_contains($version, 'Identificação do agente no WhatsApp'),
-    'cache visual renovado' => str_contains($layout, 'app.css?v=36.27.4')
-        && str_contains($layout, 'app.js?v=36.27.4'),
+    'pacote identifica versão 36.27.5' => str_contains($version, 'RS Connect 36.27.5'),
+    'cache visual renovado' => str_contains($layout, 'app.css?v=36.27.5')
+        && str_contains($layout, 'app.js?v=36.27.5'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

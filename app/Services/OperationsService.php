@@ -97,7 +97,9 @@ final class OperationsService
             $this->recordCheck('reporting', 'Agregação de relatórios', $this->checkReporting());
             $this->recordCheck('backup', 'Backup', $this->checkBackupAge());
             $this->syncBlockedEvolutionIncidents();
+            $this->syncSubscriptionAccessIncidents();
             $this->finishMonitorRun($runId, $started, null);
+            $this->dispatchDailyHealthDigest();
         } catch (Throwable $exception) {
             $this->finishMonitorRun($runId, $started, $exception->getMessage());
             throw $exception;
@@ -107,6 +109,7 @@ final class OperationsService
     public function refreshBillingCronCheck(): void
     {
         $this->recordCheck('billing_cron', 'Cron de cobrança', $this->checkBillingCron());
+        $this->syncSubscriptionAccessIncidents();
     }
 
     public function refreshMessagingChecks(): void
@@ -1337,6 +1340,126 @@ final class OperationsService
             }
         } catch (Throwable) {
             // A leitura por empresa não pode derrubar o ciclo principal de monitoramento.
+        }
+    }
+
+    /**
+     * Mantém incidentes por empresa quando o próprio controle de acesso confirma
+     * bloqueio financeiro, fim de teste/vigência ou suspensão/cancelamento.
+     * A origem da verdade continua sendo AccessControlService.
+     */
+    private function syncSubscriptionAccessIncidents(): void
+    {
+        try {
+            $access = new AccessControlService();
+            $summary = $access->securitySummary();
+            $activeEvents = [];
+
+            foreach (($summary['blocked_tenants'] ?? []) as $tenant) {
+                $tenantId = (int) ($tenant['id'] ?? 0);
+                if ($tenantId < 1) {
+                    continue;
+                }
+
+                $status = $access->statusForTenant($tenantId);
+                if (!empty($status['allowed'])) {
+                    // Ex.: teste encerrado, porém ainda dentro da tolerância comercial.
+                    continue;
+                }
+
+                $event = 'operations.alert.access.tenant.' . $tenantId;
+                $activeEvents[] = $event;
+                $tenantName = trim((string) ($status['tenant_name'] ?? $tenant['name'] ?? 'Empresa')) ?: 'Empresa';
+                $code = trim((string) ($status['code'] ?? 'blocked')) ?: 'blocked';
+                $title = trim((string) ($status['title'] ?? 'Acesso bloqueado')) ?: 'Acesso bloqueado';
+                $detail = trim((string) ($status['message'] ?? 'A empresa está com o acesso bloqueado.'));
+                $message = 'Acesso de ' . $tenantName . ' bloqueado — ' . $title . '. ' . $detail;
+
+                $existing = $this->fetchOne(
+                    "SELECT id FROM system_incidents WHERE event = '" . str_replace("'", "''", $event) . "' AND resolved_at IS NULL LIMIT 1"
+                );
+
+                if ($existing && (int) ($existing['id'] ?? 0) > 0) {
+                    $incidentId = (int) $existing['id'];
+                    Database::connection()->prepare(
+                        'UPDATE system_incidents
+                         SET severity = "warning", message = :message, last_seen_at = NOW(), tenant_id = :tenant_id,
+                             context_json = :context_json
+                         WHERE id = :id'
+                    )->execute([
+                        'message' => $message,
+                        'tenant_id' => $tenantId,
+                        'context_json' => json_encode([
+                            'check_key' => 'access',
+                            'source' => 'access_control',
+                            'access_code' => $code,
+                            'subscription_id' => $status['subscription']['id'] ?? null,
+                            'invoice_id' => $status['invoice']['id'] ?? null,
+                        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        'id' => $incidentId,
+                    ]);
+                    (new OperationalAlertService())->dispatchReminderIfDue($incidentId);
+                    continue;
+                }
+
+                $incidentId = $this->recordIncident($event, 'warning', $message, [
+                    'check_key' => 'access',
+                    'source' => 'access_control',
+                    'access_code' => $code,
+                    'subscription_id' => $status['subscription']['id'] ?? null,
+                    'invoice_id' => $status['invoice']['id'] ?? null,
+                ], $tenantId);
+                if ($incidentId) {
+                    (new OperationalAlertService())->dispatchOpened($incidentId);
+                }
+            }
+
+            $rows = Database::connection()->query(
+                "SELECT id, event FROM system_incidents
+                 WHERE event LIKE 'operations.alert.access.tenant.%'
+                   AND resolved_at IS NULL"
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+            foreach ($rows as $row) {
+                $event = (string) ($row['event'] ?? '');
+                if (in_array($event, $activeEvents, true)) {
+                    continue;
+                }
+
+                $incidentId = (int) ($row['id'] ?? 0);
+                if ($incidentId < 1) {
+                    continue;
+                }
+
+                $statement = Database::connection()->prepare(
+                    'UPDATE system_incidents SET resolved_at = NOW(), last_seen_at = NOW()
+                     WHERE id = :id AND resolved_at IS NULL'
+                );
+                $statement->execute(['id' => $incidentId]);
+                if ($statement->rowCount() > 0) {
+                    (new OperationalAlertService())->dispatchRecovered($incidentId);
+                }
+            }
+        } catch (Throwable) {
+            // O monitor continua mesmo quando a fotografia comercial não está disponível.
+        }
+    }
+
+    /**
+     * O monitor roda a cada poucos minutos, mas o resumo saudável não pode virar spam.
+     * OperationalAlertService controla janela, horário e deduplicação por usuário/dia.
+     */
+    private function dispatchDailyHealthDigest(): void
+    {
+        try {
+            $health = (new OperationalHealthService())->dashboard();
+            $access = (new AccessControlService())->securitySummary();
+            (new OperationalAlertService())->dispatchHealthDigest(
+                is_array($health['summary'] ?? null) ? $health['summary'] : [],
+                is_array($access) ? $access : []
+            );
+        } catch (Throwable) {
+            // Um aviso de resumo nunca derruba a rotina principal de monitoramento.
         }
     }
 

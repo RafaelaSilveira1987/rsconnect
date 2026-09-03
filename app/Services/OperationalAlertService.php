@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Core\Auth;
+use App\Core\Clock;
 use App\Core\Database;
 use App\Core\Env;
+use DateTimeImmutable;
+use DateTimeZone;
 use PDO;
 use RuntimeException;
 use Throwable;
@@ -123,10 +126,17 @@ final class OperationalAlertService
 
     public function dispatchReminderIfDue(int $incidentId): void
     {
+        $incident = $this->incident($incidentId);
+        $accessIncident = str_starts_with((string) ($incident['event'] ?? ''), 'operations.alert.access.tenant.');
+
         foreach ($this->admins() as $admin) {
             $userId = (int) $admin['id'];
             $preferences = $this->preferences($userId);
             $hours = max(1, (int) ($preferences['reminder_hours'] ?? 3));
+            if ($accessIncident) {
+                // Bloqueio comercial deve ser lembrado, mas não a cada execução do monitor.
+                $hours = max(24, $hours);
+            }
 
             try {
                 $statement = Database::connection()->prepare(
@@ -149,6 +159,112 @@ final class OperationalAlertService
 
             $this->dispatch($incidentId, 'reminder', $userId);
         }
+    }
+
+    /**
+     * Envia um resumo operacional periódico mesmo quando nenhum incidente mudou de estado.
+     * O monitor pode rodar a cada 15 minutos; a deduplicação abaixo limita cada canal a
+     * uma entrega por dia e somente após o horário configurado.
+     *
+     * @param array<string,mixed> $summary
+     * @param array<string,mixed> $accessSummary
+     * @return array{sent:int,skipped:int,errors:list<string>}
+     */
+    public function dispatchHealthDigest(array $summary, array $accessSummary = []): array
+    {
+        $result = ['sent' => 0, 'skipped' => 0, 'errors' => []];
+        if (!filter_var(Env::get('OPERATIONS_HEALTH_DIGEST_ENABLED', true), FILTER_VALIDATE_BOOL)) {
+            $result['skipped']++;
+            return $result;
+        }
+
+        $timezone = Clock::appTimezone();
+        $now = new DateTimeImmutable('now', new DateTimeZone($timezone));
+        $configuredTime = trim((string) Env::get('OPERATIONS_HEALTH_DIGEST_TIME', '08:00'));
+        if (preg_match('/^(?:[01]\\d|2[0-3]):[0-5]\\d$/', $configuredTime) !== 1) {
+            $configuredTime = '08:00';
+        }
+        [$hour, $minute] = array_map('intval', explode(':', $configuredTime, 2));
+        $notBefore = $now->setTime($hour, $minute, 0);
+        if ($now < $notBefore) {
+            $result['skipped']++;
+            return $result;
+        }
+
+        $blockedTenants = is_array($accessSummary['blocked_tenants'] ?? null)
+            ? $accessSummary['blocked_tenants']
+            : [];
+        $presentation = $this->healthDigestPresentation($summary, $blockedTenants, $now);
+        $relativeUrl = '/central-operacao?tab=status';
+        $absoluteUrl = $this->absoluteUrl($relativeUrl);
+
+        foreach ($this->admins() as $admin) {
+            $userId = (int) ($admin['id'] ?? 0);
+            if ($userId < 1) {
+                continue;
+            }
+            $preferences = $this->preferences($userId);
+            if (empty($preferences['routines_enabled'])) {
+                $result['skipped']++;
+                continue;
+            }
+
+            if (!empty($preferences['platform_enabled']) && !$this->healthDigestSentToday($userId, 'platform', $timezone)) {
+                try {
+                    Database::connection()->prepare(
+                        'INSERT INTO admin_operational_notifications
+                         (user_id, incident_id, notification_kind, severity, title, message, action_url)
+                         VALUES (:user, NULL, "manual", :severity, :title, :message, :url)'
+                    )->execute([
+                        'user' => $userId,
+                        'severity' => (string) $presentation['severity'],
+                        'title' => (string) $presentation['title'],
+                        'message' => (string) $presentation['message'],
+                        'url' => $relativeUrl,
+                    ]);
+                    $this->markHealthDigestSent($userId, 'platform', (string) $presentation['state'], (string) $presentation['message']);
+                    $result['sent']++;
+                } catch (Throwable $exception) {
+                    $result['errors'][] = 'Painel: ' . $exception->getMessage();
+                }
+            }
+
+            if (!empty($preferences['whatsapp_enabled']) && !$this->healthDigestSentToday($userId, 'whatsapp', $timezone)) {
+                $destination = trim((string) ($preferences['whatsapp_recipient'] ?? ''));
+                $delivery = $this->sendWhatsapp(
+                    $destination,
+                    (string) $presentation['title'],
+                    (string) $presentation['message'],
+                    $absoluteUrl
+                );
+                if (!empty($delivery['ok'])) {
+                    $this->markHealthDigestSent($userId, 'whatsapp', (string) $presentation['state'], (string) $presentation['message']);
+                    $result['sent']++;
+                } else {
+                    $result['errors'][] = 'WhatsApp: ' . (string) ($delivery['message'] ?? 'Falha não identificada.');
+                }
+            }
+
+            if (!empty($preferences['email_enabled']) && !$this->healthDigestSentToday($userId, 'email', $timezone)) {
+                $destination = trim((string) ($preferences['email_recipient'] ?? ''));
+                $delivery = $this->sendEmail(
+                    $destination,
+                    (string) $presentation['title'],
+                    (string) $presentation['message'],
+                    $absoluteUrl,
+                    0,
+                    'manual'
+                );
+                if (!empty($delivery['ok'])) {
+                    $this->markHealthDigestSent($userId, 'email', (string) $presentation['state'], (string) $presentation['message']);
+                    $result['sent']++;
+                } else {
+                    $result['errors'][] = 'E-mail: ' . (string) ($delivery['message'] ?? 'Falha não identificada.');
+                }
+            }
+        }
+
+        return $result;
     }
 
     public function acknowledgeIncident(int $incidentId, int $userId, string $note = ''): void
@@ -355,6 +471,7 @@ final class OperationalAlertService
             'message_queue' => 'queue_enabled',
             'billing_cron' => 'routines_enabled',
             'reporting' => 'routines_enabled',
+            'access' => 'routines_enabled',
         ];
         return empty($map[$key]) || !empty($preferences[$map[$key]]);
     }
@@ -366,6 +483,9 @@ final class OperationalAlertService
             : (str_starts_with($event, 'backup.') ? 'backup' : 'generic');
         if (str_starts_with($key, 'evolution.')) {
             return 'evolution';
+        }
+        if (str_starts_with($key, 'access.')) {
+            return 'access';
         }
         return $key;
     }
@@ -458,6 +578,113 @@ final class OperationalAlertService
                 ]);
             } catch (Throwable) {
             }
+        }
+    }
+
+    /** @param list<array<string,mixed>> $blockedTenants @return array{title:string,message:string,severity:string,state:string} */
+    private function healthDigestPresentation(array $summary, array $blockedTenants, DateTimeImmutable $now): array
+    {
+        $state = strtolower(trim((string) ($summary['state'] ?? 'unknown')));
+        $blockedCount = count($blockedTenants);
+        $healthy = $state === 'operational' && $blockedCount === 0;
+        $title = $healthy
+            ? '✅ RS Connect — tudo normal'
+            : '⚠️ RS Connect — atenção necessária';
+        $severity = $healthy ? 'success' : 'warning';
+
+        $servicesTotal = max(0, (int) ($summary['services_total'] ?? 0));
+        $available = max(0, (int) ($summary['available'] ?? 0));
+        $attention = max(0, (int) ($summary['attention'] ?? 0));
+        $critical = max(0, (int) ($summary['critical'] ?? 0));
+        $externalBlocked = max(0, (int) ($summary['blocked'] ?? 0));
+        $affected = max(0, (int) ($summary['affected_companies'] ?? 0));
+
+        $lines = [
+            'Resumo automático de ' . $now->format('d/m/Y H:i') . '.',
+            '',
+            'Sistema: ' . (trim((string) ($summary['label'] ?? '')) ?: ($healthy ? 'Operando normalmente' : 'Revisão necessária')) . '.',
+            'Serviços: ' . $available . '/' . $servicesTotal . ' funcionando.',
+            'Pontos de atenção: ' . $attention . ' · críticos: ' . $critical . ' · bloqueios externos: ' . $externalBlocked . '.',
+        ];
+        if ($affected > 0) {
+            $lines[] = 'Empresas com impacto operacional: ' . $affected . '.';
+        }
+
+        $lines[] = 'Empresas com acesso bloqueado: ' . $blockedCount . '.';
+        if ($blockedCount > 0) {
+            $max = max(1, min(20, (int) Env::get('OPERATIONS_HEALTH_DIGEST_MAX_BLOCKED_COMPANIES', 8)));
+            $access = new AccessControlService();
+            $shown = 0;
+            foreach ($blockedTenants as $tenant) {
+                if ($shown >= $max) {
+                    break;
+                }
+                $tenantId = (int) ($tenant['id'] ?? 0);
+                $name = trim((string) ($tenant['name'] ?? 'Empresa')) ?: 'Empresa';
+                $reason = 'acesso bloqueado';
+                if ($tenantId > 0) {
+                    try {
+                        $status = $access->statusForTenant($tenantId);
+                        if (empty($status['allowed'])) {
+                            $reason = trim((string) ($status['title'] ?? $reason)) ?: $reason;
+                        }
+                    } catch (Throwable) {
+                    }
+                }
+                $lines[] = '• ' . $name . ' — ' . $reason . '.';
+                $shown++;
+            }
+            if ($blockedCount > $shown) {
+                $lines[] = '• +' . ($blockedCount - $shown) . ' empresa(s) bloqueada(s) no painel.';
+            }
+        }
+
+        $lines[] = '';
+        $lines[] = $healthy
+            ? 'Nenhuma ação necessária neste momento.'
+            : 'Abra a Central de Monitoramento para revisar os itens sinalizados.';
+
+        return [
+            'title' => $title,
+            'message' => implode("\n", $lines),
+            'severity' => $severity,
+            'state' => $healthy ? 'ok' : 'warning',
+        ];
+    }
+
+    private function healthDigestSentToday(int $userId, string $channel, string $timezone): bool
+    {
+        try {
+            $key = 'operations_digest_' . $channel . '_user_' . $userId;
+            $statement = Database::connection()->prepare(
+                'SELECT checked_at FROM system_health_checks WHERE check_key = :key ORDER BY id DESC LIMIT 1'
+            );
+            $statement->execute(['key' => $key]);
+            $last = trim((string) $statement->fetchColumn());
+            if ($last === '') {
+                return false;
+            }
+            return Clock::utcToLocal($last, $timezone, 'Y-m-d')
+                === (new DateTimeImmutable('now', new DateTimeZone($timezone)))->format('Y-m-d');
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function markHealthDigestSent(int $userId, string $channel, string $state, string $message): void
+    {
+        try {
+            Database::connection()->prepare(
+                'INSERT INTO system_health_checks (check_key, label, status, message, latency_ms, checked_at)
+                 VALUES (:key, :label, :status, :message, NULL, :checked_at)'
+            )->execute([
+                'key' => 'operations_digest_' . $channel . '_user_' . $userId,
+                'label' => 'Resumo operacional — ' . $channel,
+                'status' => $state === 'ok' ? 'ok' : 'warning',
+                'message' => mb_substr($message, 0, 1000),
+                'checked_at' => Clock::nowUtc(),
+            ]);
+        } catch (Throwable) {
         }
     }
 

@@ -42,10 +42,9 @@ $checks = [
     'polling recebe sender_display_name' => str_contains($controller, 'COALESCE(m.sender_display_name, u.whatsapp_display_name, u.name) AS sender_user_name')
         && str_contains($controller, "'sender_name' => (string) (\$message['sender_user_name'] ?? '')"),
     'javascript mostra IA com nome' => str_contains($js, "message.sender_type === 'ai' ? (message.sender_name || 'IA')"),
-    'pacote identifica versão 36.27.4' => str_contains($version, 'RS Connect 36.27.4')
-        && str_contains($version, 'Identificação do agente no WhatsApp'),
-    'cache visual renovado' => str_contains($layout, 'app.css?v=36.27.4')
-        && str_contains($layout, 'app.js?v=36.27.4'),
+    'pacote identifica versão 36.27.5' => str_contains($version, 'RS Connect 36.27.5'),
+    'cache visual renovado' => str_contains($layout, 'app.css?v=36.27.5')
+        && str_contains($layout, 'app.js?v=36.27.5'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

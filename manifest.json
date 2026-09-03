@@ -1,7 +1,7 @@
 {
   "package": "rsconnect-deploy-hardening-kit",
-  "date": "2026-09-02",
-  "purpose": "Full RS Connect production package with configurable multi-agent routing, identifiable AI handoff and visible AI agent signature on WhatsApp",
+  "date": "2026-09-03",
+  "purpose": "Full RS Connect production package with multi-agent routing, identified AI responses and restored operational WhatsApp monitoring",
   "changes": [
     "AiReprocessService.runScheduledIfDue",
     "rsconnect-backup.finish_error exit code",
@@ -18,6 +18,13 @@
     "WhatsApp: respostas automáticas recebem assinatura em negrito com o agente real",
     "Agentes gerais usam IA - Nome; especialistas usam IA Área - Nome",
     "Assinatura externa não contamina o conteúdo limpo armazenado no painel",
-    "Retry de resposta automática preserva a identificação do emissor original"
+    "Retry de resposta automática preserva a identificação do emissor original",
+    "Monitor operacional envia resumo periódico mesmo quando todos os checks continuam saudáveis",
+    "Resumo diário é deduplicado por usuário e canal e usa OPERATIONS_HEALTH_DIGEST_TIME (08:00 por padrão)",
+    "Monitor cria incidentes por empresa quando AccessControlService confirma bloqueio de acesso",
+    "Bloqueios cobrem assinatura suspensa/cancelada, teste expirado, vigência encerrada e cobrança vencida além da tolerância",
+    "Regularização da empresa gera aviso recovered automaticamente",
+    "Lembretes de bloqueio comercial respeitam intervalo mínimo de 24h para evitar spam",
+    "Novo auditor bin/operational-alerts-audit.php diagnostica transporte, preferências, bloqueios e últimos envios"
   ]
 }
