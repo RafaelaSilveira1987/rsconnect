@@ -29,7 +29,7 @@ $assertContains($service, '/executions?limit=5&workflowId=', 'consulta última e
 $assertContains($runner, 'operationsMonitor($activate)', 'runner permite reativação explícita');
 $assertContains($ops, 'Enquanto permanecer assim, as verificações automáticas não disparam.', 'healthcheck denuncia monitor inativo');
 $assertContains($ops, 'gatilho de agenda/cron não foi encontrado', 'healthcheck denuncia ausência de agenda');
-$assertContains($version, 'RS Connect 36.27.12', 'versão 36.27.12 registrada');
+$assertContains($version, 'RS Connect 36.27.13', 'versão 36.27.13 registrada');
 
 if ($failures > 0) {
     echo "\nFALHA - {$failures}/{$checks} verificações falharam.\n";

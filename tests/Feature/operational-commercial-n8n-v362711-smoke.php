@@ -38,7 +38,7 @@ $checks = [
         && str_contains($operations, 'confirmado(s) diretamente no n8n'),
     'monitor não promove cadastro local a estado real' => str_contains($operations, 'esse número é apenas referência local')
         && str_contains($operations, 'Configure N8N_API_KEY'),
-    'versão do pacote incrementada' => str_contains($version, 'RS Connect 36.27.12 — Monitor operacional auto-reativável'),
+    'versão do pacote incrementada' => str_contains($version, 'RS Connect 36.27.13 — Monitor operacional com ID único'),
     'tela de versão expõe existência da credencial sem revelar segredo' => str_contains($version, "'n8n API key'")
         && str_contains($version, "Env::get('N8N_API_KEY'"),
 ];

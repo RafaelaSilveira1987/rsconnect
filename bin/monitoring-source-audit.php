@@ -17,6 +17,7 @@ Env::load($root . '/.env');
 
 $requireN8n = in_array('--require-n8n-live', $argv, true);
 $requireMonitor = in_array('--require-monitor-active', $argv, true);
+$requireMonitorId = in_array('--require-monitor-id', $argv, true);
 $failures = 0;
 
 echo "==================================================\n";
@@ -94,16 +95,45 @@ try {
 
 try {
     $monitor = (new N8nWorkflowControlService())->operationsMonitor(false);
+    $configuredId = trim((string) ($monitor['configured_workflow_id'] ?? ''));
+    $selectionMode = (string) ($monitor['selection_mode'] ?? '-');
+
+    echo '[INFO] Monitor oficial configurado: ' . ($configuredId !== '' ? $configuredId : 'NÃO')
+        . ' | seleção=' . $selectionMode . "\n";
+
+    if ($requireMonitorId && $configuredId === '') {
+        echo "[ERRO] N8N_OPERATIONS_MONITOR_WORKFLOW_ID é obrigatório nesta auditoria.\n";
+        $failures++;
+    }
+
+    $duplicateCount = max(0, (int) ($monitor['duplicate_active_count'] ?? 0));
+    if ($duplicateCount > 0) {
+        echo '[ERRO] Há ' . $duplicateCount . " Monitor operacional ativo duplicado no n8n.\n";
+        foreach (($monitor['duplicate_active_workflows'] ?? []) as $duplicate) {
+            if (!is_array($duplicate)) {
+                continue;
+            }
+            echo '     - ' . trim((string) ($duplicate['id'] ?? '-'))
+                . ' | ' . trim((string) ($duplicate['name'] ?? 'RS Connect - Monitor operacional')) . "\n";
+        }
+        if ($requireMonitor) {
+            $failures++;
+        }
+    }
+
     if (!empty($monitor['available']) && !empty($monitor['found'])) {
         echo '[OK] Monitor n8n encontrado: ' . ($monitor['workflow_name'] ?? 'RS Connect - Monitor operacional')
+            . ' | ID=' . ($monitor['workflow_id'] ?? '-')
             . ' | ativo=' . (!empty($monitor['active']) ? 'sim' : 'não')
             . ' | agenda=' . (!empty($monitor['schedule_trigger_present']) ? 'sim' : 'não') . "\n";
         if (!empty($monitor['last_execution_available'])) {
             echo '     Última execução: ' . ($monitor['last_execution_started_at'] ?? '-')
                 . ' | status=' . ($monitor['last_execution_status'] ?? '-') . "\n";
         }
-        if ($requireMonitor && (empty($monitor['active']) || empty($monitor['schedule_trigger_present']))) {
-            $failures++;
+        if ($requireMonitor && (empty($monitor['active']) || empty($monitor['schedule_trigger_present']) || $duplicateCount > 0)) {
+            if ($duplicateCount === 0) {
+                $failures++;
+            }
         }
     } else {
         echo '[ATENCAO] Monitor operacional do n8n não confirmado: ' . ($monitor['error'] ?? 'sem detalhe') . "\n";

@@ -489,7 +489,43 @@ final class OperationsService
         // O Monitor operacional é um workflow crítico: não basta haver outros workflows ativos.
         // Se ele estiver despublicado, a Central deve denunciar explicitamente a causa.
         $monitorWorkflow = (new N8nWorkflowControlService())->operationsMonitor(false);
-        if (!empty($monitorWorkflow['available']) && !empty($monitorWorkflow['found'])) {
+        if (!empty($monitorWorkflow['available'])) {
+            $duplicateCount = max(0, (int) ($monitorWorkflow['duplicate_active_count'] ?? 0));
+            if ($duplicateCount > 0) {
+                $duplicateIds = [];
+                foreach (($monitorWorkflow['duplicate_active_workflows'] ?? []) as $duplicate) {
+                    if (is_array($duplicate)) {
+                        $id = trim((string) ($duplicate['id'] ?? ''));
+                        if ($id !== '') {
+                            $duplicateIds[] = $id;
+                        }
+                    }
+                }
+                return [
+                    'status' => 'warning',
+                    'message' => 'Há ' . $duplicateCount . ' Monitor operacional ativo duplicado no n8n além do workflow oficial'
+                        . (count($duplicateIds) > 0 ? ' (' . implode(', ', $duplicateIds) . ')' : '')
+                        . '. Isso pode executar verificações e notificações em duplicidade. Desative o workflow legado.',
+                    'latency_ms' => $latency,
+                ];
+            }
+
+            if (!empty($monitorWorkflow['ambiguity_detected'])) {
+                return [
+                    'status' => 'warning',
+                    'message' => 'Há múltiplos workflows candidatos ao Monitor operacional no n8n e o RS Connect não conseguiu definir um único oficial. Configure N8N_OPERATIONS_MONITOR_WORKFLOW_ID.',
+                    'latency_ms' => $latency,
+                ];
+            }
+
+            if (empty($monitorWorkflow['found'])) {
+                return [
+                    'status' => 'down',
+                    'message' => trim((string) ($monitorWorkflow['error'] ?? 'O workflow crítico do Monitor operacional não foi encontrado no n8n.')),
+                    'latency_ms' => $latency,
+                ];
+            }
+
             if (!empty($monitorWorkflow['archived'])) {
                 return [
                     'status' => 'down',

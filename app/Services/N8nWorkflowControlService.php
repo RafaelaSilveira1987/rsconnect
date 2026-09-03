@@ -19,11 +19,13 @@ final class N8nWorkflowControlService
     private string $baseUrl;
     private string $apiKey;
     private string $apiBase;
+    private string $monitorWorkflowId;
 
     public function __construct()
     {
         $this->baseUrl = rtrim(trim((string) Env::get('N8N_BASE_URL', '')), '/');
         $this->apiKey = trim((string) Env::get('N8N_API_KEY', ''));
+        $this->monitorWorkflowId = trim((string) Env::get('N8N_OPERATIONS_MONITOR_WORKFLOW_ID', ''));
         $this->apiBase = preg_match('#/api/v1$#', $this->baseUrl) === 1
             ? $this->baseUrl
             : $this->baseUrl . '/api/v1';
@@ -35,6 +37,8 @@ final class N8nWorkflowControlService
         $result = [
             'available' => false,
             'configured' => $this->baseUrl !== '' && $this->apiKey !== '',
+            'configured_workflow_id' => $this->monitorWorkflowId !== '' ? $this->monitorWorkflowId : null,
+            'selection_mode' => null,
             'found' => false,
             'workflow_id' => null,
             'workflow_name' => null,
@@ -42,6 +46,12 @@ final class N8nWorkflowControlService
             'archived' => false,
             'schedule_trigger_present' => false,
             'schedule_nodes' => [],
+            'monitor_candidates_count' => 0,
+            'active_monitor_candidates_count' => 0,
+            'duplicate_active_count' => 0,
+            'duplicate_active_workflows' => [],
+            'ambiguous_workflows' => [],
+            'ambiguity_detected' => false,
             'activation_attempted' => false,
             'activation_succeeded' => false,
             'last_execution_available' => false,
@@ -67,12 +77,69 @@ final class N8nWorkflowControlService
 
         try {
             $workflows = $this->listWorkflows();
-            $workflow = $this->findOperationsMonitor($workflows);
-            $result['available'] = true;
+            $candidates = $this->findOperationsMonitorCandidates($workflows);
+            $activeCandidates = array_values(array_filter(
+                $candidates,
+                static fn (array $workflow): bool => (($workflow['active'] ?? false) === true) && empty($workflow['isArchived'])
+            ));
 
-            if ($workflow === null) {
-                $result['error'] = 'Workflow “RS Connect - Monitor operacional” não encontrado no n8n.';
-                return $result;
+            $result['available'] = true;
+            $result['monitor_candidates_count'] = count($candidates);
+            $result['active_monitor_candidates_count'] = count($activeCandidates);
+
+            $workflow = null;
+            if ($this->monitorWorkflowId !== '') {
+                $result['selection_mode'] = 'configured_id';
+                foreach ($workflows as $candidate) {
+                    if (trim((string) ($candidate['id'] ?? '')) === $this->monitorWorkflowId) {
+                        $workflow = $candidate;
+                        break;
+                    }
+                }
+
+                if ($workflow === null) {
+                    $detail = $this->workflowDetail($this->monitorWorkflowId);
+                    if ($detail !== null && $this->isOperationsMonitorWorkflow($detail)) {
+                        $workflow = $detail;
+                    }
+                }
+
+                if ($workflow === null) {
+                    $result['error'] = 'O workflow configurado em N8N_OPERATIONS_MONITOR_WORKFLOW_ID ('
+                        . $this->monitorWorkflowId . ') não foi encontrado ou não corresponde ao Monitor operacional.';
+                    return $result;
+                }
+            } else {
+                $result['selection_mode'] = 'name_fallback';
+                if (count($candidates) === 0) {
+                    $result['error'] = 'Workflow “RS Connect - Monitor operacional” não encontrado no n8n.';
+                    return $result;
+                }
+
+                if (count($activeCandidates) > 1) {
+                    $result['ambiguity_detected'] = true;
+                    $result['ambiguous_workflows'] = array_map(
+                        static fn (array $item): array => [
+                            'id' => trim((string) ($item['id'] ?? '')),
+                            'name' => trim((string) ($item['name'] ?? '')),
+                        ],
+                        $activeCandidates
+                    );
+                    $result['error'] = 'Há mais de um workflow ativo com identidade de Monitor operacional. '
+                        . 'Configure N8N_OPERATIONS_MONITOR_WORKFLOW_ID para definir o workflow oficial antes de reativar/publicar.';
+                    return $result;
+                }
+
+                if (count($activeCandidates) === 1) {
+                    $workflow = $activeCandidates[0];
+                } elseif (count($candidates) === 1) {
+                    $workflow = $candidates[0];
+                } else {
+                    $result['ambiguity_detected'] = true;
+                    $result['error'] = 'Há múltiplos workflows do Monitor operacional e nenhum único candidato ativo. '
+                        . 'Configure N8N_OPERATIONS_MONITOR_WORKFLOW_ID para remover a ambiguidade.';
+                    return $result;
+                }
             }
 
             $workflowId = trim((string) ($workflow['id'] ?? ''));
@@ -80,6 +147,20 @@ final class N8nWorkflowControlService
                 $result['error'] = 'Workflow do monitor encontrado sem ID válido.';
                 return $result;
             }
+
+            $duplicates = [];
+            foreach ($activeCandidates as $candidate) {
+                $candidateId = trim((string) ($candidate['id'] ?? ''));
+                if ($candidateId === '' || $candidateId === $workflowId) {
+                    continue;
+                }
+                $duplicates[] = [
+                    'id' => $candidateId,
+                    'name' => trim((string) ($candidate['name'] ?? 'RS Connect - Monitor operacional')),
+                ];
+            }
+            $result['duplicate_active_workflows'] = $duplicates;
+            $result['duplicate_active_count'] = count($duplicates);
 
             $detail = $this->workflowDetail($workflowId);
             if ($detail !== null) {
@@ -103,6 +184,13 @@ final class N8nWorkflowControlService
             }
 
             if (!$result['active'] && $activateIfInactive) {
+                if ($result['duplicate_active_count'] > 0) {
+                    $result['error'] = 'A reativação automática foi bloqueada porque existe outro Monitor operacional ativo. '
+                        . 'Desative o duplicado antes de publicar o workflow oficial.';
+                    $this->appendLatestExecution($result, $workflowId);
+                    return $result;
+                }
+
                 $result['activation_attempted'] = true;
                 $activation = $this->request('POST', $this->apiBase . '/workflows/' . rawurlencode($workflowId) . '/activate');
                 $code = (int) ($activation['http_code'] ?? 0);
@@ -126,6 +214,14 @@ final class N8nWorkflowControlService
                 $result['error'] = 'O workflow do Monitor operacional está despublicado/inativo.';
             } elseif (!$result['schedule_trigger_present'] && $result['error'] === null) {
                 $result['error'] = 'O workflow está ativo, mas nenhum gatilho de agenda/cron foi encontrado.';
+            } elseif ($result['duplicate_active_count'] > 0 && $result['error'] === null) {
+                $ids = array_values(array_filter(array_map(
+                    static fn (array $item): string => trim((string) ($item['id'] ?? '')),
+                    $duplicates
+                )));
+                $result['error'] = 'Foi detectado ' . $result['duplicate_active_count']
+                    . ' Monitor operacional ativo duplicado além do workflow oficial'
+                    . (count($ids) > 0 ? ': ' . implode(', ', $ids) . '.' : '.');
             }
 
             $this->appendLatestExecution($result, $workflowId);
@@ -176,8 +272,20 @@ final class N8nWorkflowControlService
         return $all;
     }
 
-    /** @param list<array<string,mixed>> $workflows */
-    private function findOperationsMonitor(array $workflows): ?array
+    /** @param list<array<string,mixed>> $workflows @return list<array<string,mixed>> */
+    private function findOperationsMonitorCandidates(array $workflows): array
+    {
+        $result = [];
+        foreach ($workflows as $workflow) {
+            if ($this->isOperationsMonitorWorkflow($workflow)) {
+                $result[] = $workflow;
+            }
+        }
+        return $result;
+    }
+
+    /** @param array<string,mixed> $workflow */
+    private function isOperationsMonitorWorkflow(array $workflow): bool
     {
         $aliases = [
             'RS Connect - Monitor operacional',
@@ -185,22 +293,13 @@ final class N8nWorkflowControlService
             'Monitor operacional RS Connect',
         ];
         $normalizedAliases = array_map(fn (string $name): string => $this->normalizeName($name), $aliases);
+        $normalized = $this->normalizeName((string) ($workflow['name'] ?? ''));
 
-        foreach ($workflows as $workflow) {
-            $name = trim((string) ($workflow['name'] ?? ''));
-            if ($name !== '' && in_array($this->normalizeName($name), $normalizedAliases, true)) {
-                return $workflow;
-            }
+        if ($normalized !== '' && in_array($normalized, $normalizedAliases, true)) {
+            return true;
         }
 
-        foreach ($workflows as $workflow) {
-            $normalized = $this->normalizeName((string) ($workflow['name'] ?? ''));
-            if (str_contains($normalized, 'rs connect') && str_contains($normalized, 'monitor operacional')) {
-                return $workflow;
-            }
-        }
-
-        return null;
+        return str_contains($normalized, 'rs connect') && str_contains($normalized, 'monitor operacional');
     }
 
     /** @return array<string,mixed>|null */

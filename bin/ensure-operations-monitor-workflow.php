@@ -32,6 +32,19 @@ if (!($status['found'] ?? false)) {
     exit(3);
 }
 
+echo '[INFO] Workflow oficial configurado: ' . (($status['configured_workflow_id'] ?? null) ?: 'NÃO') . "\n";
+echo '[INFO] Modo de seleção: ' . ($status['selection_mode'] ?? '-') . "\n";
+
+$duplicateCount = max(0, (int) ($status['duplicate_active_count'] ?? 0));
+if ($duplicateCount > 0) {
+    echo '[ERRO] Há ' . $duplicateCount . " Monitor operacional ativo duplicado no n8n.\n";
+    foreach (($status['duplicate_active_workflows'] ?? []) as $duplicate) {
+        if (is_array($duplicate)) {
+            echo '       - ' . ($duplicate['id'] ?? '-') . ' | ' . ($duplicate['name'] ?? 'Monitor operacional') . "\n";
+        }
+    }
+}
+
 echo '[OK] Workflow: ' . ($status['workflow_name'] ?? 'Monitor operacional')
     . ' | ID=' . ($status['workflow_id'] ?? '-') . "\n";
 echo '[INFO] Publicado/ativo: ' . (!empty($status['active']) ? 'SIM' : 'NÃO') . "\n";
