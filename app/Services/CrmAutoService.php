@@ -28,6 +28,7 @@ final class CrmAutoService
                 $this->touchLead($pdo, $existingId, $incomingContent);
                 $this->updateConversationLead($pdo, $conversationId, $existingId, $incomingContent);
                 $this->mergeTags($pdo, $contactId, $this->detectTags($incomingContent));
+                (new CrmDealValueService())->captureForLead($pdo, $tenantId, $existingId, $incomingContent, 'customer');
                 return $existingId;
             }
 
@@ -82,6 +83,7 @@ final class CrmAutoService
             $this->addNote($pdo, $tenantId, $contactId, $leadId, 'Lead criado automaticamente a partir do WhatsApp. Primeira mensagem: ' . $this->preview($incomingContent, 500));
             $this->updateConversationLead($pdo, $conversationId, $leadId, $incomingContent);
             $this->mergeTags($pdo, $contactId, $this->detectTags($incomingContent));
+            (new CrmDealValueService())->captureForLead($pdo, $tenantId, $leadId, $incomingContent, 'customer');
 
             return $leadId;
         } catch (Throwable) {

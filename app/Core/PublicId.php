@@ -54,6 +54,7 @@ final class PublicId
         'permission' => 32,
         'session' => 33,
         'record' => 34,
+        'commercial_request' => 35,
     ];
 
     /**
@@ -100,6 +101,7 @@ final class PublicId
         'stage_id' => ['alias' => 'stage_uuid', 'entity' => 'stage'],
         'department_id' => ['alias' => 'department_uuid', 'entity' => 'department'],
         'request_id' => ['alias' => 'request_uuid', 'entity' => 'privacy_request'],
+        'commercial_request_id' => ['alias' => 'commercial_request_uuid', 'entity' => 'commercial_request'],
         'slot_id' => ['alias' => 'slot_uuid', 'entity' => 'availability_slot'],
         'chosen_availability_slot_id' => ['alias' => 'chosen_slot_uuid', 'entity' => 'availability_slot'],
         'activity_id' => ['alias' => 'activity_uuid', 'entity' => 'activity'],

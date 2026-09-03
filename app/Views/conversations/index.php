@@ -477,11 +477,11 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                     <?php if ($quoteLeadId > 0 && Auth::can('crm.view')): ?><a class="btn btn-outline btn-small" href="<?= View::e(Router::url('/crm?lead_id=' . $quoteLeadId)) ?>">Abrir no Comercial</a><?php endif; ?>
                     <?php if ($canOperateSelected): ?>
                         <form method="post" action="<?= View::e(Router::url('/conversations/commercial-request/resolve')) ?>">
-                            <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="request_id" value="<?= (int) $selectedCommercialRequest['id'] ?>"><input type="hidden" name="decision" value="resolved">
+                            <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="commercial_request_uuid" value="<?= View::e(PublicId::encode('commercial_request', (int) $selectedCommercialRequest['id'])) ?>"><input type="hidden" name="decision" value="resolved">
                             <button class="btn btn-primary btn-small" type="submit">Marcar orçamento atendido</button>
                         </form>
                         <form method="post" action="<?= View::e(Router::url('/conversations/commercial-request/resolve')) ?>" data-confirm="Dispensar este alerta sem marcar o orçamento como atendido?">
-                            <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="request_id" value="<?= (int) $selectedCommercialRequest['id'] ?>"><input type="hidden" name="decision" value="dismissed">
+                            <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="commercial_request_uuid" value="<?= View::e(PublicId::encode('commercial_request', (int) $selectedCommercialRequest['id'])) ?>"><input type="hidden" name="decision" value="dismissed">
                             <button class="btn btn-quiet btn-small" type="submit">Dispensar alerta</button>
                         </form>
                     <?php endif; ?>

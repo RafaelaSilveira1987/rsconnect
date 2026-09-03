@@ -324,7 +324,7 @@ final class ConversationController
     public function resolveCommercialRequest(): void
     {
         $conversationId = (int) ($_POST['conversation_id'] ?? 0);
-        $requestId = (int) ($_POST['request_id'] ?? 0);
+        $requestId = (int) ($_POST['commercial_request_id'] ?? 0);
         $decision = (string) ($_POST['decision'] ?? 'resolved');
         if ($conversationId < 1 || $requestId < 1 || !in_array($decision, ['resolved', 'dismissed'], true)) {
             Flash::set('error', 'Solicitação comercial inválida.');

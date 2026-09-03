@@ -1770,6 +1770,19 @@ final class AiAutomationService
         $this->insertEvent($pdo, (int) $instance['tenant_id'], $conversationId, $eventType, $eventDescription);
         $pdo->commit();
 
+        // O valor comercial é sincronizado somente depois que a resposta foi
+        // efetivamente enviada e persistida, sem contaminar a transação de entrega.
+        try {
+            (new CrmDealValueService())->captureFromConversation(
+                $pdo,
+                (int) ($instance['tenant_id'] ?? 0),
+                $conversationId,
+                $reply,
+                'ai'
+            );
+        } catch (Throwable) {
+        }
+
         $result['_stored_message_id'] = $storedMessageId;
         return $result;
     }
@@ -1881,6 +1894,17 @@ final class AiAutomationService
         ]);
         $this->insertEvent($pdo, (int) $instance['tenant_id'], $conversationId, 'ai.delivery.retried', 'Resposta já gerada pela IA foi reenviada após a reconexão do WhatsApp.');
         $pdo->commit();
+
+        try {
+            (new CrmDealValueService())->captureFromConversation(
+                $pdo,
+                (int) ($instance['tenant_id'] ?? 0),
+                $conversationId,
+                (string) ($failedMessage['content'] ?? ''),
+                'ai'
+            );
+        } catch (Throwable) {
+        }
 
         $result['_stored_message_id'] = (int) $failedMessage['id'];
         return $result;

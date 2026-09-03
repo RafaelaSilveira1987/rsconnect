@@ -277,3 +277,21 @@ php tests/Feature/operational-digest-subscription-watch-v36275-smoke.php
 ```
 
 Não exige migration nova; a migration obrigatória continua sendo `099_ai_agent_round_robin_routing.sql`.
+
+## RS Connect 36.27.6 — valor comercial automático e resolução de orçamento
+
+- O CRM passa a identificar valores comerciais claros tratados na conversa e sincronizar `crm_leads.value`.
+- A captura acontece em mensagens do cliente e em respostas da IA efetivamente entregues.
+- Uma única quantia explícita pode preencher um negócio ainda sem valor.
+- Listas com múltiplos preços não escolhem automaticamente um valor, evitando transformar tabela de planos em valor fechado.
+- Escolhas e valores finais explícitos podem atualizar o valor já registrado.
+- Alterações automáticas geram nota no lead para rastreabilidade.
+- Os botões **Marcar orçamento atendido** e **Dispensar alerta** passam a usar `commercial_request_uuid`, evitando a colisão do antigo `request_id` com solicitações de privacidade/LGPD.
+- O `TenantIsolationService` valida a solicitação comercial na tabela `crm_commercial_requests`, preservando o isolamento entre empresas.
+- Não exige migration nova.
+
+Validação focada:
+
+```bash
+php tests/Feature/crm-conversation-value-and-commercial-dismiss-v36276-smoke.php
+```

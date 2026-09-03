@@ -44,6 +44,7 @@ final class TenantIsolationService
         'notification' => 'client_notifications',
         'recipient' => 'client_communication_recipients',
         'subscription' => 'tenant_subscriptions',
+        'commercial_request' => 'crm_commercial_requests',
     ];
 
     /** @var array<string,string> */
