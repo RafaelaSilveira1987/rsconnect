@@ -36,15 +36,16 @@ $checks = [
     'primeira resposta do especialista evita cache descontextualizado' => str_contains($automation, '!$afterHoursRecovery && $routingTransition === null'),
     'prompt proíbe falsa promessa de transferência' => str_contains($model, 'Nunca afirme que uma transferência para outro assistente virtual ou setor automatizado já aconteceu'),
     'mensagem automática grava nome da IA' => str_contains($automation, 'sender_display_name')
-        && str_contains($automation, "return \$name !== '' ? 'IA - ' . \$name : 'IA';"),
+        && str_contains($automation, "return 'IA - ' . \$agentName;")
+        && str_contains($automation, "return 'IA ' . \$role . ' - ' . \$agentName;"),
     'histórico usa nome gravado para IA' => str_contains($view, "\$message['sender_type'] === 'ai' ? (\$message['sender_user_name'] ?: 'IA')"),
     'polling recebe sender_display_name' => str_contains($controller, 'COALESCE(m.sender_display_name, u.whatsapp_display_name, u.name) AS sender_user_name')
         && str_contains($controller, "'sender_name' => (string) (\$message['sender_user_name'] ?? '')"),
     'javascript mostra IA com nome' => str_contains($js, "message.sender_type === 'ai' ? (message.sender_name || 'IA')"),
-    'pacote identifica versão 36.27.3' => str_contains($version, 'RS Connect 36.27.3')
-        && str_contains($version, 'Handoff multiagente identificável'),
-    'cache visual renovado' => str_contains($layout, 'app.css?v=36.27.3')
-        && str_contains($layout, 'app.js?v=36.27.3'),
+    'pacote identifica versão 36.27.4' => str_contains($version, 'RS Connect 36.27.4')
+        && str_contains($version, 'Identificação do agente no WhatsApp'),
+    'cache visual renovado' => str_contains($layout, 'app.css?v=36.27.4')
+        && str_contains($layout, 'app.js?v=36.27.4'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

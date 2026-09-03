@@ -227,3 +227,14 @@ php tests/Feature/agent-instance-linking-v36182-smoke.php
 - Regras locais e cache exato são ignorados somente no primeiro turno imediatamente após a troca de IA, garantindo que o novo especialista gere uma resposta contextualizada.
 - O prompt obrigatório impede que uma IA afirme que transferiu para outro assistente virtual quando o motor não confirmou a troca.
 - Não exige migration nova; usa `sender_display_name` já disponível na base atual.
+
+
+## RS Connect 36.27.4 — identificação do agente no WhatsApp
+
+- Respostas automáticas enviadas pela Evolution recebem uma primeira linha em negrito com o agente real que respondeu.
+- Agentes gerais/principais usam `IA - Nome`, por exemplo `IA - Digi`.
+- Especialistas usam a área cadastrada em `segment`, por exemplo `IA Comercial - Carlos`.
+- A identificação é calculada a partir do vínculo ativo do agente no canal; `routing_keywords` caracteriza o especialista.
+- O conteúdo persistido no painel continua sem a assinatura textual, pois `sender_display_name` já identifica o agente internamente.
+- Reenvios de mensagens automáticas que falharam preservam a identificação do emissor original.
+- Não exige migration nova.

@@ -1690,8 +1690,11 @@ final class AiAutomationService
         if (strlen($phone) < 10 || strlen($phone) > 15) {
             throw new RuntimeException('Evolution sendText bloqueado: telefone do contato inválido ou incompleto.');
         }
+        $senderDisplayName = $this->aiSenderDisplayName($pdo, (int) ($instance['tenant_id'] ?? 0), $conversationId, $agent);
+        $deliveredReply = $this->withAiWhatsappSignature($reply, $senderDisplayName);
+
         try {
-            $result = $service->sendText($phone, $reply);
+            $result = $service->sendText($phone, $deliveredReply);
         } catch (Throwable $exception) {
             $message = $exception->getMessage();
             if (!str_starts_with($message, 'Evolution ')) {
@@ -1714,7 +1717,6 @@ final class AiAutomationService
         $sentAt = \App\Core\Clock::nowUtc();
 
         $pdo->beginTransaction();
-        $senderDisplayName = $this->aiSenderDisplayName($pdo, (int) ($instance['tenant_id'] ?? 0), $conversationId, $agent);
         if ($this->hasColumn($pdo, 'conversation_messages', 'sender_display_name')) {
             $insert = $pdo->prepare(
                 'INSERT INTO conversation_messages
@@ -1777,7 +1779,7 @@ final class AiAutomationService
     {
         try {
             $statement = $pdo->prepare(
-                'SELECT failed.id, failed.content, failed.sent_at, failed.error_message
+                'SELECT failed.id, failed.content, failed.sent_at, failed.error_message, failed.sender_display_name
                  FROM conversation_messages incoming
                  INNER JOIN conversation_messages failed
                     ON failed.conversation_id = incoming.conversation_id
@@ -1813,8 +1815,19 @@ final class AiAutomationService
             throw new RuntimeException('Evolution sendText bloqueado: telefone do contato inválido ou incompleto.');
         }
 
+        $senderDisplayName = trim((string) ($failedMessage['sender_display_name'] ?? ''));
+        if ($senderDisplayName === '') {
+            $senderDisplayName = $this->aiSenderDisplayName(
+                $pdo,
+                (int) ($instance['tenant_id'] ?? 0),
+                $conversationId,
+                null
+            );
+        }
+        $deliveredReply = $this->withAiWhatsappSignature((string) $failedMessage['content'], $senderDisplayName);
+
         try {
-            $result = $this->evolutionService($instance)->sendText($phone, (string) $failedMessage['content']);
+            $result = $this->evolutionService($instance)->sendText($phone, $deliveredReply);
         } catch (Throwable $exception) {
             $message = $exception->getMessage();
             if (!str_starts_with($message, 'Evolution ')) {
@@ -1973,32 +1986,107 @@ final class AiAutomationService
 
     private function aiSenderDisplayName(PDO $pdo, int $tenantId, int $conversationId, ?array $agent = null): string
     {
+        $agentId = (int) ($agent['id'] ?? 0);
         $agentName = trim((string) ($agent['name'] ?? ''));
-        if ($agentName !== '') {
-            return 'IA - ' . $agentName;
+        $segment = trim((string) ($agent['segment'] ?? ''));
+        $instanceId = 0;
+
+        if ($tenantId > 0 && $conversationId > 0) {
+            try {
+                $conversationStatement = $pdo->prepare(
+                    'SELECT evolution_instance_id, ai_agent_id
+                     FROM conversations
+                     WHERE id = :conversation_id AND tenant_id = :tenant_id
+                     LIMIT 1'
+                );
+                $conversationStatement->execute([
+                    'conversation_id' => $conversationId,
+                    'tenant_id' => $tenantId,
+                ]);
+                $conversationRow = $conversationStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+                $instanceId = (int) ($conversationRow['evolution_instance_id'] ?? 0);
+                if ($agentId < 1) {
+                    $agentId = (int) ($conversationRow['ai_agent_id'] ?? 0);
+                }
+            } catch (Throwable) {
+                $instanceId = 0;
+            }
         }
 
-        if ($tenantId < 1 || $conversationId < 1) {
+        if ($agentId > 0 && ($agentName === '' || $segment === '')) {
+            try {
+                $agentStatement = $pdo->prepare(
+                    'SELECT name, segment FROM ai_agents WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+                );
+                $agentStatement->execute(['id' => $agentId, 'tenant_id' => $tenantId]);
+                $row = $agentStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+                if ($agentName === '') {
+                    $agentName = trim((string) ($row['name'] ?? ''));
+                }
+                if ($segment === '') {
+                    $segment = trim((string) ($row['segment'] ?? ''));
+                }
+            } catch (Throwable) {
+                // Mantém os dados já disponíveis no agente/conversa.
+            }
+        }
+
+        if ($agentName === '') {
             return 'IA';
         }
 
-        try {
-            $statement = $pdo->prepare(
-                'SELECT a.name
-                 FROM conversations c
-                 INNER JOIN ai_agents a ON a.id = c.ai_agent_id AND a.tenant_id = c.tenant_id
-                 WHERE c.id = :conversation_id AND c.tenant_id = :tenant_id
-                 LIMIT 1'
-            );
-            $statement->execute([
-                'conversation_id' => $conversationId,
-                'tenant_id' => $tenantId,
-            ]);
-            $name = trim((string) ($statement->fetchColumn() ?: ''));
-            return $name !== '' ? 'IA - ' . $name : 'IA';
-        } catch (Throwable) {
-            return 'IA';
+        $isSpecialist = false;
+        if ($tenantId > 0 && $instanceId > 0 && $agentId > 0) {
+            try {
+                $bindingStatement = $pdo->prepare(
+                    'SELECT routing_keywords
+                     FROM ai_agent_instance_bindings
+                     WHERE tenant_id = :tenant_id
+                       AND instance_id = :instance_id
+                       AND agent_id = :agent_id
+                       AND status = "active"
+                     LIMIT 1'
+                );
+                $bindingStatement->execute([
+                    'tenant_id' => $tenantId,
+                    'instance_id' => $instanceId,
+                    'agent_id' => $agentId,
+                ]);
+                $isSpecialist = trim((string) ($bindingStatement->fetchColumn() ?: '')) !== '';
+            } catch (Throwable) {
+                $isSpecialist = false;
+            }
         }
+
+        if ($isSpecialist) {
+            $role = $segment !== '' ? $segment : 'Especialista';
+            return 'IA ' . $role . ' - ' . $agentName;
+        }
+
+        return 'IA - ' . $agentName;
+    }
+
+    private function withAiWhatsappSignature(string $message, string $senderDisplayName): string
+    {
+        $message = trim($message);
+        if ($message === '') {
+            return $message;
+        }
+
+        $signature = trim($senderDisplayName);
+        if ($signature === '') {
+            $signature = 'IA';
+        }
+
+        $plainPrefix = preg_quote($signature, '/');
+        if (preg_match('/^\*?' . $plainPrefix . '\*?\s*(?:\r?\n|$)/iu', $message) === 1) {
+            return $message;
+        }
+
+        // Em conversas individuais o WhatsApp não possui campo separado de "atendente".
+        // A primeira linha em negrito cria a identificação visual do assistente que
+        // realmente enviou a resposta, sem contaminar o conteúdo armazenado no painel.
+        return '*' . $signature . "*\n" . $message;
     }
 
     private function isClosedEvolutionConnectionError(string $message): bool

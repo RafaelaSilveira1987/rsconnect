@@ -1,7 +1,7 @@
 {
   "package": "rsconnect-deploy-hardening-kit",
   "date": "2026-09-02",
-  "purpose": "Full RS Connect production package with configurable multi-agent routing and identifiable AI handoff",
+  "purpose": "Full RS Connect production package with configurable multi-agent routing, identifiable AI handoff and visible AI agent signature on WhatsApp",
   "changes": [
     "AiReprocessService.runScheduledIfDue",
     "rsconnect-backup.finish_error exit code",
@@ -14,6 +14,10 @@
     "Mensagens automáticas gravam autoria como IA - Nome do assistente",
     "Chat e polling exibem IA - Digi / IA - Carlos usando sender_display_name",
     "Prompt bloqueia promessa de transferência automatizada sem troca confirmada pelo motor",
-    "Primeiro turno após handoff ignora cache/regra local para resposta contextual do novo especialista"
+    "Primeiro turno após handoff ignora cache/regra local para resposta contextual do novo especialista",
+    "WhatsApp: respostas automáticas recebem assinatura em negrito com o agente real",
+    "Agentes gerais usam IA - Nome; especialistas usam IA Área - Nome",
+    "Assinatura externa não contamina o conteúdo limpo armazenado no painel",
+    "Retry de resposta automática preserva a identificação do emissor original"
   ]
 }
