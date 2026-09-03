@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 TARGET_ROOT="${1:-/var/www/html}"
+TARGET_ROOT="$(cd "$TARGET_ROOT" && pwd -P)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="$TARGET_ROOT/storage/backups/monitoring-commercial-n8n-v362712-$STAMP"
 
@@ -27,38 +28,84 @@ if [[ ! -d "$TARGET_ROOT/app/Services" ]]; then
   exit 1
 fi
 
+# Segurança crítica: nunca aplicar a partir da própria raiz de produção.
+# Nesse cenário source e target seriam o mesmo arquivo e um rollback poderia
+# interpretar arquivos não copiados como 'novos', removendo-os.
+if [[ "$SOURCE_DIR" == "$TARGET_ROOT" ]]; then
+  cat >&2 <<EOF
+[ERRO] O instalador foi colocado dentro da própria raiz do RS Connect:
+       $TARGET_ROOT
+
+Não execute este hotfix com SOURCE_DIR = TARGET_ROOT.
+Extraia o pacote em outro diretório (recomendado: /tmp) e execute de lá.
+
+Exemplo:
+  mkdir -p /tmp/rsconnect-v362712
+  unzip rs-connect-v36.27.12-r1-installer-seguro.zip -d /tmp/rsconnect-v362712
+  cd /tmp/rsconnect-v362712/rs-connect-v36.27.12-r1-installer-seguro
+  bash apply-monitoring-metrics-v362712.sh /var/www/html
+EOF
+  exit 2
+fi
+
+# Confirma que todos os arquivos do pacote existem ANTES de tocar em produção.
+for relative in "${FILES[@]}"; do
+  source="$SOURCE_DIR/$relative"
+  if [[ ! -f "$source" ]]; then
+    echo "[ERRO] Arquivo do hotfix ausente: $relative" >&2
+    exit 3
+  fi
+done
+
 mkdir -p "$BACKUP_DIR"
+MANIFEST="$BACKUP_DIR/.preexisting-files"
+: > "$MANIFEST"
+
+# Faz backup completo do estado anterior antes da primeira cópia.
+for relative in "${FILES[@]}"; do
+  target="$TARGET_ROOT/$relative"
+  if [[ -f "$target" ]]; then
+    echo "$relative" >> "$MANIFEST"
+    mkdir -p "$BACKUP_DIR/$(dirname "$relative")"
+    cp -a "$target" "$BACKUP_DIR/$relative"
+  fi
+done
 
 rollback() {
   code=$?
+  trap - ERR
   echo >&2
-  echo "[ERRO] Aplicação interrompida. Restaurando arquivos do backup..." >&2
+  echo "[ERRO] Aplicação interrompida. Restaurando exatamente o estado anterior..." >&2
   for relative in "${FILES[@]}"; do
     target="$TARGET_ROOT/$relative"
     backup="$BACKUP_DIR/$relative"
-    if [[ -f "$backup" ]]; then
-      mkdir -p "$(dirname "$target")"
-      cp -a "$backup" "$target"
+    if grep -Fxq "$relative" "$MANIFEST" 2>/dev/null; then
+      if [[ -f "$backup" ]]; then
+        mkdir -p "$(dirname "$target")"
+        cp -a "$backup" "$target"
+      else
+        echo "[ALERTA] Backup esperado ausente: $relative" >&2
+      fi
     else
       rm -f "$target"
     fi
   done
-  echo "[OK] Rollback dos arquivos concluído. Backup: $BACKUP_DIR" >&2
+  echo "[OK] Rollback concluído. Backup: $BACKUP_DIR" >&2
   exit "$code"
 }
 trap rollback ERR
 
+# Só agora modifica produção.
 for relative in "${FILES[@]}"; do
   source="$SOURCE_DIR/$relative"
   target="$TARGET_ROOT/$relative"
-  if [[ ! -f "$source" ]]; then
-    echo "[ERRO] Arquivo do hotfix ausente: $relative" >&2
+
+  # Defesa adicional contra mesmo inode/caminho.
+  if [[ -e "$target" ]] && [[ "$source" -ef "$target" ]]; then
+    echo "[ERRO] Origem e destino são o mesmo arquivo: $relative" >&2
     false
   fi
-  if [[ -f "$target" ]]; then
-    mkdir -p "$BACKUP_DIR/$(dirname "$relative")"
-    cp -a "$target" "$BACKUP_DIR/$relative"
-  fi
+
   mkdir -p "$(dirname "$target")"
   cp -a "$source" "$target"
 done
