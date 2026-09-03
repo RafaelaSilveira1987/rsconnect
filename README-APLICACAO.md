@@ -303,3 +303,11 @@ php tests/Feature/crm-conversation-value-and-commercial-dismiss-v36276-smoke.php
 - `commercial_request_uuid` agora é decodificado explicitamente no POST;
 - o isolamento por empresa também valida aliases UUID enviados em POST;
 - nenhuma migration nova.
+
+
+## v36.27.8 — confirmação visual padronizada
+
+- Substitui o `window.confirm()` nativo por modal visual do RS Connect para formulários com `data-confirm`.
+- O botão **Dispensar alerta** usa título, descrição e ações específicas, com foco seguro em **Manter alerta**.
+- Modal acessível: fecha por X, clique no fundo ou Esc, mantém foco e é responsivo.
+- Nenhuma migration adicional é necessária.

@@ -480,7 +480,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                             <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="commercial_request_uuid" value="<?= View::e(PublicId::encode('commercial_request', (int) $selectedCommercialRequest['id'])) ?>"><input type="hidden" name="decision" value="resolved">
                             <button class="btn btn-primary btn-small" type="submit">Marcar orçamento atendido</button>
                         </form>
-                        <form method="post" action="<?= View::e(Router::url('/conversations/commercial-request/resolve')) ?>" data-confirm="Dispensar este alerta sem marcar o orçamento como atendido?">
+                        <form method="post" action="<?= View::e(Router::url('/conversations/commercial-request/resolve')) ?>" data-confirm="O alerta comercial será removido desta conversa sem marcar o orçamento como atendido. Você poderá continuar o atendimento normalmente." data-confirm-title="Dispensar alerta comercial?" data-confirm-action="Dispensar alerta" data-confirm-cancel="Manter alerta" data-confirm-tone="warning">
                             <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="commercial_request_uuid" value="<?= View::e(PublicId::encode('commercial_request', (int) $selectedCommercialRequest['id'])) ?>"><input type="hidden" name="decision" value="dismissed">
                             <button class="btn btn-quiet btn-small" type="submit">Dispensar alerta</button>
                         </form>

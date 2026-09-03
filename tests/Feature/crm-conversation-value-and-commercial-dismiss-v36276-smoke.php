@@ -57,7 +57,7 @@ $checks = [
     'formulários usam UUID comercial e preservam as duas ações' => substr_count($view, 'name="commercial_request_uuid"') === 2 && str_contains($view, 'decision" value="resolved"') && str_contains($view, 'decision" value="dismissed"'),
     'rota POST de resolução continua registrada' => str_contains($routes, "post('/conversations/commercial-request/resolve'"),
     'pacote identifica versão 36.27.7' => str_contains($version, 'RS Connect 36.27.7'),
-    'cache visual acompanha versão atual' => str_contains($layout, 'app.css?v=36.27.7') && str_contains($layout, 'app.js?v=36.27.7'),
+    'cache visual acompanha versão atual' => str_contains($layout, 'app.css?v=36.27.8') && str_contains($layout, 'app.js?v=36.27.8'),
 ];
 
 $failures = 0;

@@ -39,7 +39,7 @@ $checks = [
     'TenantIsolation valida commercial_request na tabela correta' => str_contains($isolation, "'commercial_request' => 'crm_commercial_requests'"),
     'service exige tenant + conversation + pending ao resolver' => str_contains($service, 'WHERE id = :id AND tenant_id = :tenant_id AND status = "pending"') && str_contains($service, 'AND conversation_id = :conversation_id'),
     'versão 36.27.7 identificada' => str_contains($version, 'RS Connect 36.27.7'),
-    'cache visual acompanha 36.27.7' => str_contains($layout, 'app.css?v=36.27.7') && str_contains($layout, 'app.js?v=36.27.7'),
+    'cache visual acompanha 36.27.7' => str_contains($layout, 'app.css?v=36.27.8') && str_contains($layout, 'app.js?v=36.27.8'),
 ];
 
 $failures = 0;

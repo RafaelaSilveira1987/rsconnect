@@ -12672,3 +12672,128 @@ body.login-demo-open{overflow:hidden}
 /* RS Connect 36.27.3 — autoria visível das respostas de IA por assistente. */
 
 /* RS Connect 36.27.5 — avisos operacionais e monitoramento de bloqueios comerciais. */
+
+
+/* RS Connect 36.27.8 — confirmação visual padronizada para ações sensíveis. */
+.rs-confirm-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1900;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+}
+.rs-confirm-modal[hidden] { display: none !important; }
+.rs-confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, .56);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+.rs-confirm-dialog {
+  --confirm-accent: #ea8a0a;
+  --confirm-accent-soft: #fff5dd;
+  position: relative;
+  z-index: 1;
+  width: min(500px, 100%);
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, .98);
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 100% 0, rgba(29, 134, 205, .10), transparent 38%),
+    radial-gradient(circle at 0 0, rgba(78, 41, 139, .09), transparent 32%),
+    #fff;
+  box-shadow: 0 32px 90px rgba(15, 23, 42, .30);
+  padding: 28px;
+  animation: rs-confirm-enter .18s ease-out both;
+}
+.rs-confirm-modal[data-tone="danger"] .rs-confirm-dialog {
+  --confirm-accent: #c63d3d;
+  --confirm-accent-soft: #fff0f0;
+}
+.rs-confirm-modal[data-tone="info"] .rs-confirm-dialog {
+  --confirm-accent: #147aa8;
+  --confirm-accent-soft: #eaf7fc;
+}
+.rs-confirm-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e5ebf1;
+  border-radius: 50%;
+  background: rgba(255,255,255,.88);
+  color: #687789;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform .16s ease, background .16s ease, color .16s ease;
+}
+.rs-confirm-close:hover { transform: rotate(4deg); background: #f5f8fb; color: #142438; }
+.rs-confirm-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 18px;
+  border-radius: 18px;
+  background: var(--confirm-accent-soft);
+  color: var(--confirm-accent);
+  box-shadow: inset 0 0 0 1px rgba(234, 138, 10, .18);
+  font-size: 25px;
+  font-weight: 900;
+}
+.rs-confirm-copy { padding-right: 26px; }
+.rs-confirm-eyebrow {
+  display: block;
+  margin-bottom: 7px;
+  color: #0797a4;
+  font-size: .70rem;
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+.rs-confirm-dialog h2 {
+  margin: 0;
+  color: #15263a;
+  font-size: clamp(1.25rem, 3vw, 1.55rem);
+  line-height: 1.2;
+}
+.rs-confirm-dialog p {
+  margin: 10px 0 0;
+  color: #617083;
+  font-size: .95rem;
+  line-height: 1.58;
+}
+.rs-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid #edf1f5;
+}
+.rs-confirm-actions .btn { min-width: 128px; justify-content: center; }
+.rs-confirm-submit {
+  background: linear-gradient(135deg, #4d2687 0%, #126f9f 100%);
+  border-color: transparent;
+  box-shadow: 0 9px 22px rgba(53, 74, 139, .18);
+}
+.rs-confirm-submit:hover { filter: brightness(.98); transform: translateY(-1px); }
+@keyframes rs-confirm-enter {
+  from { opacity: 0; transform: translateY(10px) scale(.975); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (max-width: 560px) {
+  .rs-confirm-modal { align-items: end; padding: 0; }
+  .rs-confirm-dialog { width: 100%; border-radius: 26px 26px 0 0; padding: 24px 20px 20px; }
+  .rs-confirm-actions { flex-direction: column-reverse; }
+  .rs-confirm-actions .btn { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rs-confirm-dialog { animation: none; }
+}

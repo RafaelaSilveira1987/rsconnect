@@ -4031,10 +4031,116 @@ document.addEventListener('DOMContentLoaded', () => {
 
 /* ENT-030 — ações declarativas compatíveis com CSP sem JavaScript inline. */
 document.addEventListener('DOMContentLoaded', () => {
+  const rsConfirm = (() => {
+    let modal = null;
+    let title = null;
+    let message = null;
+    let confirmButton = null;
+    let cancelButton = null;
+    let pendingForm = null;
+    let pendingSubmitter = null;
+    let previousFocus = null;
+
+    const close = (restoreFocus = true) => {
+      if (!modal || modal.hidden) return;
+      modal.hidden = true;
+      document.body.classList.remove('has-modal-open');
+      const focusTarget = previousFocus;
+      pendingForm = null;
+      pendingSubmitter = null;
+      previousFocus = null;
+      if (restoreFocus && focusTarget instanceof HTMLElement) focusTarget.focus();
+    };
+
+    const ensure = () => {
+      if (modal) return;
+
+      modal = document.createElement('div');
+      modal.className = 'rs-confirm-modal';
+      modal.hidden = true;
+      modal.innerHTML = `
+        <div class="rs-confirm-backdrop" data-rs-confirm-close></div>
+        <section class="rs-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="rsConfirmTitle" aria-describedby="rsConfirmMessage">
+          <button class="rs-confirm-close" type="button" aria-label="Fechar" data-rs-confirm-close>×</button>
+          <div class="rs-confirm-icon" aria-hidden="true">!</div>
+          <div class="rs-confirm-copy">
+            <span class="rs-confirm-eyebrow">RS CONNECT · CONFIRMAÇÃO</span>
+            <h2 id="rsConfirmTitle"></h2>
+            <p id="rsConfirmMessage"></p>
+          </div>
+          <div class="rs-confirm-actions">
+            <button class="btn btn-outline rs-confirm-cancel" type="button" data-rs-confirm-close>Cancelar</button>
+            <button class="btn btn-primary rs-confirm-submit" type="button">Confirmar</button>
+          </div>
+        </section>`;
+
+      document.body.appendChild(modal);
+      title = modal.querySelector('#rsConfirmTitle');
+      message = modal.querySelector('#rsConfirmMessage');
+      confirmButton = modal.querySelector('.rs-confirm-submit');
+      cancelButton = modal.querySelector('.rs-confirm-cancel');
+
+      modal.querySelectorAll('[data-rs-confirm-close]').forEach((button) => {
+        button.addEventListener('click', () => close(true));
+      });
+
+      confirmButton?.addEventListener('click', () => {
+        const form = pendingForm;
+        const submitter = pendingSubmitter;
+        if (!(form instanceof HTMLFormElement)) return close(true);
+
+        close(false);
+        form.dataset.confirmApproved = '1';
+        try {
+          if (typeof form.requestSubmit === 'function') form.requestSubmit(submitter instanceof HTMLElement ? submitter : undefined);
+          else form.submit();
+        } finally {
+          window.setTimeout(() => { delete form.dataset.confirmApproved; }, 0);
+        }
+      });
+
+      modal.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          close(true);
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = Array.from(modal.querySelectorAll('button:not([disabled]), a[href]')).filter((el) => !el.hidden);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      });
+    };
+
+    const open = (form, submitter = null) => {
+      ensure();
+      pendingForm = form;
+      pendingSubmitter = submitter;
+      previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+      const tone = form.dataset.confirmTone || 'warning';
+      modal.dataset.tone = tone;
+      title.textContent = form.dataset.confirmTitle || 'Confirmar esta ação?';
+      message.textContent = form.dataset.confirm || 'Deseja continuar?';
+      confirmButton.textContent = form.dataset.confirmAction || (submitter?.textContent || '').trim() || 'Confirmar';
+      cancelButton.textContent = form.dataset.confirmCancel || 'Cancelar';
+
+      modal.hidden = false;
+      document.body.classList.add('has-modal-open');
+      window.requestAnimationFrame(() => cancelButton?.focus());
+    };
+
+    return { open };
+  })();
+
   document.addEventListener('submit', (event) => {
     const form = event.target instanceof HTMLFormElement ? event.target : null;
-    if (!form || !form.dataset.confirm) return;
-    if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+    if (!form || !form.dataset.confirm || form.dataset.confirmApproved === '1') return;
+    event.preventDefault();
+    rsConfirm.open(form, event.submitter || null);
   }, true);
 
   document.addEventListener('change', (event) => {
