@@ -12654,3 +12654,16 @@ body.login-demo-open{overflow:hidden}
   .operations-check-row-v3 { grid-template-columns:9px minmax(0,1fr); grid-template-areas:"dot copy" "dot state" "actions actions"; }
   .operations-check-row-v3 .operations-check-state { justify-self:start; }
 }
+
+/* =========================================================
+   RS Connect 36.27.2 — configuração visual de multiagentes
+   ========================================================= */
+.agent-routing-guide{display:grid;grid-template-columns:minmax(220px,.7fr) minmax(0,1.6fr);gap:18px;align-items:center;margin:4px 0 18px;padding:15px 17px;border:1px solid #d8e7ec;border-radius:17px;background:linear-gradient(135deg,#f2fbfa,#f6f8ff)}
+.agent-routing-guide>div:first-child{display:grid;gap:4px}.agent-routing-guide>div:first-child strong{font-size:.9rem;color:#1d2d44}.agent-routing-guide-items{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.agent-routing-guide-items span{display:block;padding:9px 10px;border:1px solid rgba(128,151,171,.18);border-radius:11px;background:rgba(255,255,255,.72);color:#5a6b7f;font-size:.68rem;line-height:1.4}.agent-routing-guide-items b{display:block;margin-bottom:2px;color:#26364b;font-size:.7rem}
+.agent-routing-badge-primary{border-color:#b8dcd7!important;background:#ebfaf6!important;color:#14735f!important}.agent-routing-badge-specialist{border-color:#d9c9ef!important;background:#f5effc!important;color:#6942a0!important}.agent-routing-badge-round_robin{border-color:#c9ddef!important;background:#eff7fd!important;color:#2d6f9f!important}
+.agent-channel-routing-config{display:grid;gap:8px;padding-top:9px;border-top:1px solid #e6edf2}.agent-channel-routing-config .field{margin:0}.agent-routing-keywords{display:none}.agent-routing-keywords.is-visible{display:grid}.agent-routing-keywords textarea{min-height:72px;resize:vertical}.agent-routing-mode-hint{min-height:30px;padding:8px 10px;border-radius:10px;background:#f4f7fa;color:#65758a;font-size:.68rem;line-height:1.4}.agent-channel-option:not(.is-linked) .agent-channel-routing-config{opacity:.48}.agent-channel-option:not(.is-linked) .agent-channel-routing-config select,.agent-channel-option:not(.is-linked) .agent-channel-routing-config textarea{cursor:not-allowed}.agent-channel-option.is-linked .agent-routing-mode-hint{background:#eef8f6;color:#42675f}
+.agent-card .agent-data>div:has(>span:first-child:nth-last-child(n+1)){min-width:0}.agent-card .agent-data small{overflow-wrap:anywhere}
+.agent-create-form .agent-routing-keywords{margin-top:0}.agent-create-form .agent-routing-keywords.is-visible{display:grid}
+@media(max-width:980px){.agent-routing-guide{grid-template-columns:1fr}.agent-routing-guide-items{grid-template-columns:1fr 1fr 1fr}}
+@media(max-width:720px){.agent-routing-guide-items{grid-template-columns:1fr}.agent-channel-routing-config{grid-template-columns:1fr}.agent-routing-mode-hint{min-height:0}}
+.agent-routing-jump{display:inline-flex;align-items:center;justify-content:center;width:100%;min-height:40px;margin-top:10px;padding:9px 12px;border:1px solid #cbdced;border-radius:12px;background:#f4f8ff;color:#245fc1;font-size:.76rem;font-weight:850;text-decoration:none;transition:.18s ease}.agent-routing-jump:hover{border-color:#8db3df;background:#eef5ff;transform:translateY(-1px)}

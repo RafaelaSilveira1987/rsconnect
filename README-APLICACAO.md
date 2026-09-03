@@ -191,3 +191,28 @@ Homologação focada:
 php tests/Feature/ai-to-ai-specialist-handoff-v36271-smoke.php
 php bin/multiagent-audit.php
 ```
+
+## RS Connect 36.27.2 — multiagente configurável pela interface
+
+A tela **Assistentes Virtuais** agora permite configurar o roteamento por canal sem acesso ao banco ou terminal.
+
+Papéis disponíveis:
+
+- **Principal / recepção:** recebe o atendimento geral do canal.
+- **Especialista por assunto:** recebe somente quando uma intenção/palavra configurada for identificada; a conversa é transferida e permanece com o especialista.
+- **Distribuição automática:** participa do round-robin das novas conversas gerais.
+
+Cada card mostra o papel atual e, quando houver especialista, um resumo das intenções configuradas. A criação de um novo assistente também permite escolher o papel inicial.
+
+A partir desta versão, assistentes com `routing_keywords` não participam da distribuição genérica enquanto existir ao menos um agente geral elegível. Isso permite cenários como **Recepção → Comercial** sem que o Comercial receba conversas comuns por sorteio.
+
+Não há migration nova. A migration obrigatória continua sendo `099_ai_agent_round_robin_routing.sql`.
+
+Validação focada:
+
+```bash
+php tests/Feature/multi-agent-round-robin-v36270-smoke.php
+php tests/Feature/ai-to-ai-specialist-handoff-v36271-smoke.php
+php tests/Feature/multi-agent-routing-ui-v36272-smoke.php
+php tests/Feature/agent-instance-linking-v36182-smoke.php
+```

@@ -52,7 +52,7 @@ final class AgentRoutingService
                     $pdo,
                     $tenantId,
                     $instanceId,
-                    $bindings,
+                    $this->genericBindings($bindings),
                     $conversationId,
                     $pin
                 );
@@ -156,7 +156,7 @@ final class AgentRoutingService
                     $pdo,
                     $tenantId,
                     $instanceId,
-                    $availableBindings,
+                    $this->genericBindings($availableBindings),
                     $conversationId,
                     $pin
                 );
@@ -612,6 +612,24 @@ final class AgentRoutingService
         );
         $statement->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId]);
         return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Especialistas com routing_keywords só recebem conversas quando uma intenção
+     * configurada casar. A distribuição genérica considera principal + agentes de
+     * round-robin. Se um canal legado tiver apenas especialistas, mantém fallback
+     * entre todos para evitar canal sem atendimento.
+     *
+     * @param array<int,array<string,mixed>> $bindings
+     * @return array<int,array<string,mixed>>
+     */
+    private function genericBindings(array $bindings): array
+    {
+        $generic = array_values(array_filter(
+            $bindings,
+            static fn (array $binding): bool => trim((string) ($binding['routing_keywords'] ?? '')) === ''
+        ));
+        return $generic !== [] ? $generic : $bindings;
     }
 
     /** @param array<int,array<string,mixed>> $bindings */

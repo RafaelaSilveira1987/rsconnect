@@ -161,6 +161,17 @@ final class AgentController
         $autoReplyEnabled = isset($_POST['auto_reply_enabled']);
         $n8nEnabled = isset($_POST['n8n_enabled']);
         $isDefault = isset($_POST['is_default']);
+        $routingMode = $this->routingModeFromValue((string) ($_POST['routing_mode'] ?? ''));
+        try {
+            $routingKeywords = $this->routingKeywordsForMode(
+                $routingMode,
+                (string) ($_POST['routing_keywords'] ?? '')
+            );
+        } catch (\RuntimeException $exception) {
+            Flash::set('error', $exception->getMessage());
+            $this->redirectToAgents($tenantId ?? 0);
+            return;
+        }
         $replyToReactions = isset($_POST['reply_to_reactions']);
 
         if ($instanceId < 1 || $name === '' || $segment === '' || $prompt === '') {
@@ -254,16 +265,21 @@ final class AgentController
             try {
                 $binding = $pdo->prepare(
                     'INSERT INTO ai_agent_instance_bindings
-                        (tenant_id, agent_id, instance_id, is_primary, priority, status)
-                     VALUES (:tenant_id, :agent_id, :instance_id, :is_primary, :priority, "active")
-                     ON DUPLICATE KEY UPDATE status = "active", priority = VALUES(priority)'
+                        (tenant_id, agent_id, instance_id, is_primary, priority, routing_keywords, status)
+                     VALUES (:tenant_id, :agent_id, :instance_id, :is_primary, :priority, :routing_keywords, "active")
+                     ON DUPLICATE KEY UPDATE
+                        status = "active",
+                        is_primary = VALUES(is_primary),
+                        priority = VALUES(priority),
+                        routing_keywords = VALUES(routing_keywords)'
                 );
                 $existingPrimary = $pdo->prepare(
                     'SELECT COUNT(*) FROM ai_agent_instance_bindings
                      WHERE tenant_id = :tenant_id AND instance_id = :instance_id AND status = "active" AND is_primary = 1'
                 );
                 $existingPrimary->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId]);
-                $makePrimary = $isDefault || (int) $existingPrimary->fetchColumn() === 0;
+                $hasPrimary = (int) $existingPrimary->fetchColumn() > 0;
+                $makePrimary = $routingMode === 'primary' || (!$hasPrimary && $routingMode !== 'specialist');
                 if ($makePrimary) {
                     $pdo->prepare('UPDATE ai_agent_instance_bindings SET is_primary = 0 WHERE tenant_id = :tenant_id AND instance_id = :instance_id')
                         ->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId]);
@@ -274,6 +290,7 @@ final class AgentController
                     'instance_id' => $instanceId,
                     'is_primary' => $makePrimary ? 1 : 0,
                     'priority' => $makePrimary ? 200 : 100,
+                    'routing_keywords' => $routingMode === 'specialist' ? $routingKeywords : null,
                 ]);
             } catch (Throwable) {
                 // Compatibilidade antes da migration 055: o vínculo legado instance_id continua válido.
@@ -335,12 +352,31 @@ final class AgentController
         $selectedInstanceIds = $channelSelectionSubmitted
             ? $this->positiveIntArray($_POST['instance_ids'] ?? [])
             : [];
-        $primaryInstanceIds = $channelSelectionSubmitted
+        $legacyPrimaryInstanceIds = $channelSelectionSubmitted
             ? array_values(array_intersect(
                 $this->positiveIntArray($_POST['primary_instance_ids'] ?? []),
                 $selectedInstanceIds
             ))
             : [];
+        $routingModesByInstance = $channelSelectionSubmitted
+            ? $this->routingModesFromPost($selectedInstanceIds, $legacyPrimaryInstanceIds)
+            : [];
+        try {
+            $routingKeywordsByInstance = $channelSelectionSubmitted
+                ? $this->routingKeywordsFromPost($selectedInstanceIds, $routingModesByInstance)
+                : [];
+        } catch (\RuntimeException $exception) {
+            Flash::set('error', $exception->getMessage());
+            $this->redirectToAgents($tenantId ?? 0);
+            return;
+        }
+        $primaryInstanceIds = array_values(array_map(
+            'intval',
+            array_keys(array_filter(
+                $routingModesByInstance,
+                static fn (string $mode): bool => $mode === 'primary'
+            ))
+        ));
 
         if ($agentId < 1 || !in_array($status, ['active', 'inactive'], true)) {
             Flash::set('error', 'Não foi possível identificar o assistente ou a opção escolhida.');
@@ -444,7 +480,9 @@ final class AgentController
                     $tenantId,
                     $agentId,
                     $selectedInstanceIds,
-                    $primaryInstanceIds
+                    $primaryInstanceIds,
+                    $routingModesByInstance,
+                    $routingKeywordsByInstance
                 );
             }
 
@@ -461,6 +499,10 @@ final class AgentController
                 'channels_updated' => $channelSelectionSubmitted,
                 'instance_ids' => $channelSelectionSubmitted ? $selectedInstanceIds : null,
                 'primary_instance_ids' => $channelSelectionSubmitted ? $primaryInstanceIds : null,
+                'routing_modes' => $channelSelectionSubmitted ? $routingModesByInstance : null,
+                'routing_keywords_configured' => $channelSelectionSubmitted
+                    ? array_map(static fn (?string $value): bool => trim((string) $value) !== '', $routingKeywordsByInstance)
+                    : null,
             ], $tenantId);
 
             $reprocess = (new AiAutomationService())->reprocessLatestPendingForAgent($tenantId, $agentId);
@@ -788,6 +830,77 @@ final class AgentController
         return array_values($ids);
     }
 
+    private function routingModeFromValue(string $value): string
+    {
+        $value = trim($value);
+        return in_array($value, ['primary', 'specialist', 'round_robin'], true)
+            ? $value
+            : 'round_robin';
+    }
+
+    private function routingKeywordsForMode(string $mode, string $raw): ?string
+    {
+        if ($mode !== 'specialist') {
+            return null;
+        }
+
+        $parts = preg_split('/[,;\n]+/u', $raw) ?: [];
+        $clean = [];
+        $seen = [];
+        foreach ($parts as $part) {
+            $keyword = trim((string) $part);
+            if ($keyword === '') {
+                continue;
+            }
+            $key = mb_strtolower($keyword);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $clean[] = $keyword;
+        }
+
+        $value = implode(', ', $clean);
+        if ($value === '') {
+            throw new \RuntimeException('Informe ao menos uma intenção ou palavra para o assistente especialista.');
+        }
+        if (mb_strlen($value) > 1000) {
+            throw new \RuntimeException('As palavras de direcionamento ultrapassam o limite de 1.000 caracteres.');
+        }
+
+        return $value;
+    }
+
+    /** @param int[] $instanceIds @param int[] $legacyPrimaryInstanceIds @return array<int,string> */
+    private function routingModesFromPost(array $instanceIds, array $legacyPrimaryInstanceIds): array
+    {
+        $posted = is_array($_POST['routing_mode'] ?? null) ? $_POST['routing_mode'] : [];
+        $result = [];
+        foreach ($instanceIds as $instanceId) {
+            $raw = (string) ($posted[(string) $instanceId] ?? $posted[$instanceId] ?? '');
+            if ($raw === '') {
+                $raw = in_array($instanceId, $legacyPrimaryInstanceIds, true) ? 'primary' : 'round_robin';
+            }
+            $result[$instanceId] = $this->routingModeFromValue($raw);
+        }
+        return $result;
+    }
+
+    /** @param int[] $instanceIds @param array<int,string> $modes @return array<int,?string> */
+    private function routingKeywordsFromPost(array $instanceIds, array $modes): array
+    {
+        $posted = is_array($_POST['routing_keywords'] ?? null) ? $_POST['routing_keywords'] : [];
+        $result = [];
+        foreach ($instanceIds as $instanceId) {
+            $raw = (string) ($posted[(string) $instanceId] ?? $posted[$instanceId] ?? '');
+            $result[$instanceId] = $this->routingKeywordsForMode(
+                $modes[$instanceId] ?? 'round_robin',
+                $raw
+            );
+        }
+        return $result;
+    }
+
     /** @param int[] $instanceIds */
     private function assertInstancesBelongToTenant(PDO $pdo, int $tenantId, array $instanceIds): void
     {
@@ -816,7 +929,15 @@ final class AgentController
      * @param int[] $instanceIds
      * @param int[] $primaryInstanceIds
      */
-    private function syncAgentChannels(PDO $pdo, int $tenantId, int $agentId, array $instanceIds, array $primaryInstanceIds): void
+    private function syncAgentChannels(
+        PDO $pdo,
+        int $tenantId,
+        int $agentId,
+        array $instanceIds,
+        array $primaryInstanceIds,
+        array $routingModesByInstance = [],
+        array $routingKeywordsByInstance = []
+    ): void
     {
         $legacyInstanceId = $primaryInstanceIds[0] ?? $instanceIds[0] ?? null;
 
@@ -854,16 +975,23 @@ final class AgentController
 
             $insert = $pdo->prepare(
                 'INSERT INTO ai_agent_instance_bindings
-                    (tenant_id, agent_id, instance_id, is_primary, priority, status)
-                 VALUES (:tenant_id, :agent_id, :instance_id, :is_primary, :priority, "active")
+                    (tenant_id, agent_id, instance_id, is_primary, priority, routing_keywords, status)
+                 VALUES (:tenant_id, :agent_id, :instance_id, :is_primary, :priority, :routing_keywords, "active")
                  ON DUPLICATE KEY UPDATE
                     status = "active",
                     is_primary = VALUES(is_primary),
-                    priority = VALUES(priority)'
+                    priority = VALUES(priority),
+                    routing_keywords = VALUES(routing_keywords)'
             );
 
             foreach ($instanceIds as $instanceId) {
-                $isPrimary = in_array($instanceId, $primaryInstanceIds, true);
+                $mode = $routingModesByInstance[$instanceId] ?? (
+                    in_array($instanceId, $primaryInstanceIds, true) ? 'primary' : 'round_robin'
+                );
+                $isPrimary = $mode === 'primary';
+                $routingKeywords = $mode === 'specialist'
+                    ? ($routingKeywordsByInstance[$instanceId] ?? null)
+                    : null;
                 if ($isPrimary) {
                     $clearPrimary = $pdo->prepare(
                         'UPDATE ai_agent_instance_bindings
@@ -878,6 +1006,7 @@ final class AgentController
                     'instance_id' => $instanceId,
                     'is_primary' => $isPrimary ? 1 : 0,
                     'priority' => $isPrimary ? 200 : 100,
+                    'routing_keywords' => $routingKeywords,
                 ]);
             }
         }

@@ -99,16 +99,28 @@ $bindingStatement = $pdo->prepare(
 );
 $bindingStatement->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId]);
 $bindings = $bindingStatement->fetchAll(PDO::FETCH_ASSOC) ?: [];
-$agentIds = array_map(static fn (array $row): int => (int) $row['agent_id'], $bindings);
+$genericBindings = array_values(array_filter(
+    $bindings,
+    static fn (array $row): bool => trim((string) ($row['routing_keywords'] ?? '')) === ''
+));
+if ($genericBindings === []) {
+    $genericBindings = $bindings;
+}
+$genericAgentIds = array_map(static fn (array $row): int => (int) $row['agent_id'], $genericBindings);
 
 foreach ($bindings as $index => $binding) {
+    $mode = (int) ($binding['is_primary'] ?? 0) === 1
+        ? 'principal'
+        : (trim((string) ($binding['routing_keywords'] ?? '')) !== '' ? 'especialista' : 'round-robin');
     echo sprintf(
-        "  %d. agente #%d %s | primary=%d priority=%d\n",
+        "  %d. agente #%d %s | modo=%s primary=%d priority=%d%s\n",
         $index + 1,
         (int) $binding['agent_id'],
         (string) $binding['name'],
+        $mode,
         (int) $binding['is_primary'],
-        (int) $binding['priority']
+        (int) $binding['priority'],
+        $mode === 'especialista' ? ' | keywords=' . trim((string) $binding['routing_keywords']) : ''
     );
 }
 
@@ -145,7 +157,7 @@ try {
     echo "\n=== 3. DISTRIBUIÇÃO GENÉRICA ===\n";
     $selected = [];
     $conversationIds = [];
-    $testCount = min(6, max(4, count($agentIds) * 2));
+    $testCount = min(6, max(4, count($genericAgentIds) * 2));
 
     for ($i = 0; $i < $testCount; $i++) {
         $remoteJid = '5598' . substr((string) (time() + $i), -8) . '@s.whatsapp.net';
@@ -172,7 +184,7 @@ try {
         );
         $selectedId = (int) ($agent['id'] ?? 0);
         $selected[] = $selectedId;
-        $expectedId = $agentIds[$i % count($agentIds)] ?? 0;
+        $expectedId = $genericAgentIds[$i % count($genericAgentIds)] ?? 0;
 
         checkOk(
             $selectedId === $expectedId,
@@ -181,6 +193,20 @@ try {
     }
 
     echo "Sequência: " . implode(' → ', array_map(static fn (int $id): string => '#' . $id, $selected)) . "\n";
+
+    $specialistIds = array_map(
+        static fn (array $row): int => (int) $row['agent_id'],
+        array_values(array_filter(
+            $bindings,
+            static fn (array $row): bool => trim((string) ($row['routing_keywords'] ?? '')) !== ''
+        ))
+    );
+    if ($specialistIds !== [] && count($genericAgentIds) < count($bindings)) {
+        checkOk(
+            array_intersect($selected, $specialistIds) === [],
+            'Especialistas não participam da distribuição genérica'
+        );
+    }
 
     echo "\n=== 4. CONTINUIDADE / PINNING ===\n";
     $firstConversationId = $conversationIds[0] ?? 0;

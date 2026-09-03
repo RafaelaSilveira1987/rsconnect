@@ -35,6 +35,9 @@ $checks = [
         && str_contains($service, 'pinnedAgentId($pdo, $tenantId, $instanceId, $conversationId)'),
     'primeiro pin vence em concorrência' => str_contains($service, '$this->pin($pdo, $tenantId, $instanceId, $conversationId, $agentId, false)'),
     'keyword continua prioritária' => substr_count($service, '$this->keywordMatch(') >= 2,
+    'especialista fica fora da distribuição genérica' => str_contains($service, 'private function genericBindings(')
+        && substr_count($service, '$this->genericBindings(') >= 2
+        && str_contains($service, "routing_keywords'] ?? '')) === ''"),
     'keyword não avança cursor' => str_contains($service, 'não consomem') || str_contains($service, 'não consome'),
     'keyword transfere pin para outro especialista' => str_contains($service, '$keywordAgentId > 0 && $keywordAgentId !== $pinnedId')
         && str_contains($service, 'transferPinToSpecialist('),

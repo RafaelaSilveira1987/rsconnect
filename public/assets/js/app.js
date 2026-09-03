@@ -3715,23 +3715,54 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', (event) => { if (!shell.contains(event.target)) close(); });
 });
 
-// RS Connect 36.18.2 — mantém vínculo e principal do canal coerentes no editor do assistente.
-document.addEventListener('change', (event) => {
-    const input = event.target;
-    if (!(input instanceof HTMLInputElement)) return;
-    const option = input.closest('.agent-channel-option');
-    if (!option) return;
+// RS Connect 36.27.2 — configuração visual do roteamento multiagente por canal.
+document.addEventListener('DOMContentLoaded', () => {
+  const hints = {
+    primary: 'Recebe o atendimento geral. Ao salvar, passa a ser o principal deste WhatsApp.',
+    specialist: 'Só recebe novas conversas quando uma das intenções configuradas for identificada. Depois da transferência, mantém a continuidade.',
+    round_robin: 'Participa da distribuição automática das novas conversas gerais junto com os demais agentes de distribuição.'
+  };
 
-    const linkInput = option.querySelector('input[name="instance_ids[]"]');
-    const primaryInput = option.querySelector('input[name="primary_instance_ids[]"]');
-    if (!(linkInput instanceof HTMLInputElement) || !(primaryInput instanceof HTMLInputElement)) return;
+  const refreshRouting = (scope) => {
+    if (!(scope instanceof Element)) return;
+    const select = scope.querySelector('[data-routing-mode]');
+    const keywordField = scope.querySelector('[data-routing-keywords-field]');
+    const keywords = scope.querySelector('[data-routing-keywords]');
+    const hint = scope.querySelector('[data-routing-mode-hint]');
+    const link = scope.querySelector('[data-agent-channel-link]');
+    const linked = !(link instanceof HTMLInputElement) || link.checked;
 
-    if (input === primaryInput && primaryInput.checked) {
-        linkInput.checked = true;
+    if (select instanceof HTMLSelectElement) select.disabled = !linked;
+    const mode = select instanceof HTMLSelectElement ? select.value : 'round_robin';
+    const specialist = linked && mode === 'specialist';
+
+    if (keywordField instanceof HTMLElement) keywordField.classList.toggle('is-visible', specialist);
+    if (keywords instanceof HTMLInputElement || keywords instanceof HTMLTextAreaElement) {
+      keywords.disabled = !specialist;
+      keywords.required = specialist;
     }
-    if (input === linkInput && !linkInput.checked) {
-        primaryInput.checked = false;
+    if (hint instanceof HTMLElement) hint.textContent = linked ? (hints[mode] || '') : 'Vincule este canal para configurar o roteamento.';
+
+    const option = scope.matches('[data-agent-channel-option]') ? scope : scope.closest('[data-agent-channel-option]');
+    if (option instanceof HTMLElement) option.classList.toggle('is-linked', linked);
+  };
+
+  document.querySelectorAll('[data-agent-channel-option]').forEach(refreshRouting);
+  document.querySelectorAll('form[data-prompt-studio]').forEach((form) => refreshRouting(form));
+
+  document.addEventListener('change', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const option = target.closest('[data-agent-channel-option]');
+    if (option) {
+      refreshRouting(option);
+      return;
     }
+    if (target.matches('[data-routing-mode]')) {
+      const form = target.closest('form');
+      if (form) refreshRouting(form);
+    }
+  });
 });
 
 // RS Connect 36.20.1 — camada de linguagem simples para textos estáticos e conteúdos carregados dinamicamente.

@@ -33,8 +33,8 @@ $checks = [
         && str_contains($view, 'Resolver sem limpar fila'),
     'reconexão retoma pausas criadas pela resolução' => str_contains($webhook, 'incident_resolved')
         && str_contains($instance, 'incident_resolved'),
-    'pacote exige migration 098 e identifica 36.26.7' => str_contains($version, 'RS Connect 36.26.7')
-        && str_contains($version, "REQUIRED_MIGRATION = '098_operational_queue_release.sql'"),
+    'marcadores históricos da migration 098 e 36.26.7 foram preservados' => str_contains($version, 'RS Connect 36.26.7')
+        && str_contains($version, '098_operational_queue_release.sql'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

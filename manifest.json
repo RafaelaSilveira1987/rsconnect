@@ -1,10 +1,14 @@
 {
   "package": "rsconnect-deploy-hardening-kit",
-  "date": "2026-09-01",
-  "purpose": "Persist validated fixes in a full RS Connect source ZIP",
+  "date": "2026-09-02",
+  "purpose": "Full RS Connect production package with configurable multi-agent routing UI",
   "changes": [
     "AiReprocessService.runScheduledIfDue",
     "rsconnect-backup.finish_error exit code",
-    "post-deploy verification assets"
+    "post-deploy verification assets",
+    "Assistentes Virtuais: Principal / Especialista / Distribuição automática por canal",
+    "Persistência visual de routing_keywords em ai_agent_instance_bindings",
+    "Especialistas excluídos da distribuição genérica quando há agentes gerais elegíveis",
+    "Handoff IA→IA por intenção preservado e configurável sem terminal"
   ]
 }
