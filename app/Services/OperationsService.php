@@ -471,7 +471,7 @@ final class OperationsService
 
     private function checkN8n(): array
     {
-        $activeFlows = $this->count("SELECT COUNT(*) FROM n8n_tenant_flows WHERE status = 'active'")
+        $localActiveFlows = $this->count("SELECT COUNT(*) FROM n8n_tenant_flows WHERE status = 'active'")
             + $this->count("SELECT COUNT(*) FROM n8n_flows WHERE status = 'active'");
         $success24 = $this->count("SELECT COUNT(*) FROM n8n_flow_logs WHERE status = 'success' AND created_at >= (NOW() - INTERVAL 24 HOUR)");
         $errors24 = $this->count("SELECT COUNT(*) FROM n8n_flow_logs WHERE status = 'error' AND created_at >= (NOW() - INTERVAL 24 HOUR)");
@@ -482,31 +482,87 @@ final class OperationsService
         $consecutiveErrors = $this->consecutiveN8nErrors();
         $criticalAfter = max(2, (int) Env::get('OPERATIONS_N8N_CONSECUTIVE_ERRORS_CRITICAL', 3));
 
-        if ($activeFlows < 1) {
-            return ['status' => 'warning', 'message' => 'Nenhum fluxo n8n ativo foi encontrado no RS Connect.', 'latency_ms' => null];
-        }
-        if ($consecutiveErrors >= $criticalAfter) {
-            return [
-                'status' => 'down',
-                'message' => $activeFlows . ' fluxo(s) ativo(s), com ' . $consecutiveErrors
-                    . ' falha(s) consecutiva(s). Último erro: '
-                    . trim((string) ($lastError['error_message'] ?? 'erro sem detalhe')),
-                'latency_ms' => null,
-            ];
-        }
-        if ($errorAt > $successAt && $errorAt >= time() - 86400) {
+        $live = (new N8nLiveMetricsService())->snapshot();
+        $liveAvailable = !empty($live['available']);
+        $latency = isset($live['latency_ms']) && $live['latency_ms'] !== null ? (int) $live['latency_ms'] : null;
+
+        if ($liveAvailable) {
+            $activeFlows = max(0, (int) ($live['active'] ?? 0));
+            $totalFlows = max(0, (int) ($live['total'] ?? 0));
+            $inactiveFlows = max(0, (int) ($live['inactive'] ?? 0));
+            $archivedFlows = max(0, (int) ($live['archived'] ?? 0));
+            $sourceText = $activeFlows . ' workflow(s) ativo(s) confirmado(s) diretamente no n8n'
+                . ' de ' . $totalFlows . ' encontrado(s)';
+            if ($inactiveFlows > 0) {
+                $sourceText .= '; ' . $inactiveFlows . ' inativo(s)';
+            }
+            if ($archivedFlows > 0) {
+                $sourceText .= '; ' . $archivedFlows . ' arquivado(s)';
+            }
+            if ($localActiveFlows !== $activeFlows) {
+                $sourceText .= '. RS Connect possui ' . $localActiveFlows . ' cadastro(s) marcado(s) como ativo(s), portanto há divergência de origem';
+            }
+
+            if ($activeFlows < 1) {
+                return [
+                    'status' => 'warning',
+                    'message' => 'A API do n8n respondeu, mas nenhum workflow ativo foi confirmado. ' . $sourceText . '.',
+                    'latency_ms' => $latency,
+                ];
+            }
+
+            if ($consecutiveErrors >= $criticalAfter) {
+                return [
+                    'status' => 'down',
+                    'message' => $sourceText . '. Há ' . $consecutiveErrors
+                        . ' falha(s) consecutiva(s) registrada(s) pelo RS Connect. Último erro: '
+                        . trim((string) ($lastError['error_message'] ?? 'erro sem detalhe')),
+                    'latency_ms' => $latency,
+                ];
+            }
+
+            if ($errorAt > $successAt && $errorAt >= time() - 86400) {
+                return [
+                    'status' => 'warning',
+                    'message' => $sourceText . '. A execução mais recente registrada pelo RS Connect foi uma falha: '
+                        . trim((string) ($lastError['error_message'] ?? 'erro sem detalhe')),
+                    'latency_ms' => $latency,
+                ];
+            }
+
+            if ($success24 > 0) {
+                return [
+                    'status' => 'ok',
+                    'message' => $sourceText . '. Registros RS Connect nas últimas 24h: '
+                        . $success24 . ' sucesso(s) e ' . $errors24 . ' erro(s).',
+                    'latency_ms' => $latency,
+                ];
+            }
+
             return [
                 'status' => 'warning',
-                'message' => $activeFlows . ' fluxo(s) ativo(s), porém a execução mais recente com evidência foi uma falha: '
-                    . trim((string) ($lastError['error_message'] ?? 'erro sem detalhe')),
-                'latency_ms' => null,
+                'message' => $sourceText . ', mas não há sucesso registrado nas últimas 24h para comprovar execução recente.',
+                'latency_ms' => $latency,
             ];
         }
-        if ($success24 > 0) {
-            return ['status' => 'ok', 'message' => $activeFlows . ' fluxo(s) ativo(s); ' . $success24 . ' sucesso(s) e ' . $errors24 . ' erro(s) nas últimas 24h. O último sucesso é posterior às falhas registradas.', 'latency_ms' => null];
+
+        $liveError = trim((string) ($live['error'] ?? 'consulta em tempo real indisponível'));
+        $localText = $localActiveFlows . ' fluxo(s) cadastrado(s) como ativo(s) no RS Connect';
+
+        if ($localActiveFlows < 1) {
+            return [
+                'status' => 'warning',
+                'message' => 'Não foi possível confirmar os workflows diretamente no n8n (' . $liveError . ') e não há fluxo ativo no cadastro local.',
+                'latency_ms' => $latency,
+            ];
         }
 
-        return ['status' => 'warning', 'message' => $activeFlows . ' fluxo(s) ativo(s), mas não há sucesso registrado nas últimas 24h para comprovar execução recente.', 'latency_ms' => null];
+        return [
+            'status' => 'warning',
+            'message' => 'Estado real dos workflows não confirmado: ' . $liveError . '. ' . $localText
+                . '; esse número é apenas referência local. Configure N8N_API_KEY para validar o n8n em tempo real.',
+            'latency_ms' => $latency,
+        ];
     }
 
     private function consecutiveN8nErrors(): int
@@ -1353,6 +1409,10 @@ final class OperationsService
         try {
             $access = new AccessControlService();
             $summary = $access->securitySummary();
+            if (($summary['blocked_tenants_available'] ?? true) !== true) {
+                // Não transforme indisponibilidade da fotografia comercial em falsa recuperação.
+                return;
+            }
             $activeEvents = [];
 
             foreach (($summary['blocked_tenants'] ?? []) as $tenant) {

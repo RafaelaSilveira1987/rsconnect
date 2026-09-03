@@ -191,10 +191,7 @@ final class OperationalAlertService
             return $result;
         }
 
-        $blockedTenants = is_array($accessSummary['blocked_tenants'] ?? null)
-            ? $accessSummary['blocked_tenants']
-            : [];
-        $presentation = $this->healthDigestPresentation($summary, $blockedTenants, $now);
+        $presentation = $this->healthDigestPresentation($summary, $accessSummary, $now);
         $relativeUrl = '/central-operacao?tab=status';
         $absoluteUrl = $this->absoluteUrl($relativeUrl);
 
@@ -581,12 +578,28 @@ final class OperationalAlertService
         }
     }
 
-    /** @param list<array<string,mixed>> $blockedTenants @return array{title:string,message:string,severity:string,state:string} */
-    private function healthDigestPresentation(array $summary, array $blockedTenants, DateTimeImmutable $now): array
+    /**
+     * @param array<string,mixed> $summary
+     * @param array<string,mixed> $accessSummary
+     * @return array{title:string,message:string,severity:string,state:string}
+     */
+    private function healthDigestPresentation(array $summary, array $accessSummary, DateTimeImmutable $now): array
     {
         $state = strtolower(trim((string) ($summary['state'] ?? 'unknown')));
+        $blockedTenants = is_array($accessSummary['blocked_tenants'] ?? null)
+            ? $accessSummary['blocked_tenants']
+            : [];
+        $blockedAvailable = ($accessSummary['blocked_tenants_available'] ?? true) === true;
         $blockedCount = count($blockedTenants);
-        $healthy = $state === 'operational' && $blockedCount === 0;
+        $tenantCounts = is_array($accessSummary['tenant_counts'] ?? null)
+            ? $accessSummary['tenant_counts']
+            : [];
+        $tenantCountsAvailable = ($tenantCounts['available'] ?? false) === true;
+
+        $healthy = $state === 'operational'
+            && $tenantCountsAvailable
+            && $blockedAvailable
+            && $blockedCount === 0;
         $title = $healthy
             ? '✅ RS Connect — tudo normal'
             : '⚠️ RS Connect — atenção necessária';
@@ -603,374 +616,80 @@ final class OperationalAlertService
             'Resumo automático de ' . $now->format('d/m/Y H:i') . '.',
             '',
             'Sistema: ' . (trim((string) ($summary['label'] ?? '')) ?: ($healthy ? 'Operando normalmente' : 'Revisão necessária')) . '.',
-            'Serviços: ' . $available . '/' . $servicesTotal . ' funcionando.',
+            'Verificações operacionais: ' . $available . '/' . $servicesTotal . ' aprovadas.',
             'Pontos de atenção: ' . $attention . ' · críticos: ' . $critical . ' · bloqueios externos: ' . $externalBlocked . '.',
         ];
         if ($affected > 0) {
             $lines[] = 'Empresas com impacto operacional: ' . $affected . '.';
         }
 
-        $lines[] = 'Empresas com acesso bloqueado: ' . $blockedCount . '.';
-        if ($blockedCount > 0) {
+        $lines[] = '';
+        $lines[] = 'Empresas:';
+        if ($tenantCountsAvailable) {
+            $lines[] = '• Cadastradas: ' . max(0, (int) ($tenantCounts['total'] ?? 0));
+            $lines[] = '• Ativas: ' . max(0, (int) ($tenantCounts['active'] ?? 0));
+            $lines[] = '• Inativas / não ativas: ' . max(0, (int) ($tenantCounts['non_active'] ?? 0));
+        } else {
+            $lines[] = '• Contagem cadastral: indisponível nesta verificação.';
+        }
+        $lines[] = $blockedAvailable
+            ? '• Com bloqueio comercial: ' . $blockedCount
+            : '• Com bloqueio comercial: indisponível nesta verificação.';
+
+        if ($blockedAvailable && $blockedCount > 0) {
+            $commercialTypes = [
+                'validity' => 0,
+                'overdue' => 0,
+                'subscription_status' => 0,
+            ];
+            foreach ($blockedTenants as $tenant) {
+                $code = trim((string) ($tenant['access_code'] ?? ''));
+                if (in_array($code, ['trial_expired', 'subscription_period_expired'], true)) {
+                    $commercialTypes['validity']++;
+                } elseif ($code === 'invoice_overdue_grace_exceeded') {
+                    $commercialTypes['overdue']++;
+                } elseif (in_array($code, ['subscription_suspended', 'subscription_canceled'], true)) {
+                    $commercialTypes['subscription_status']++;
+                }
+            }
+
+            if ($commercialTypes['validity'] > 0) {
+                $lines[] = '  ↳ Vigência/teste encerrado: ' . $commercialTypes['validity'];
+            }
+            if ($commercialTypes['overdue'] > 0) {
+                $lines[] = '  ↳ Inadimplência além da tolerância: ' . $commercialTypes['overdue'];
+            }
+            if ($commercialTypes['subscription_status'] > 0) {
+                $lines[] = '  ↳ Assinatura suspensa/cancelada: ' . $commercialTypes['subscription_status'];
+            }
+
             $max = max(1, min(20, (int) Env::get('OPERATIONS_HEALTH_DIGEST_MAX_BLOCKED_COMPANIES', 8)));
-            $access = new AccessControlService();
             $shown = 0;
             foreach ($blockedTenants as $tenant) {
                 if ($shown >= $max) {
                     break;
                 }
-                $tenantId = (int) ($tenant['id'] ?? 0);
                 $name = trim((string) ($tenant['name'] ?? 'Empresa')) ?: 'Empresa';
-                $reason = 'acesso bloqueado';
-                if ($tenantId > 0) {
-                    try {
-                        $status = $access->statusForTenant($tenantId);
-                        if (empty($status['allowed'])) {
-                            $reason = trim((string) ($status['title'] ?? $reason)) ?: $reason;
-                        }
-                    } catch (Throwable) {
-                    }
-                }
-                $lines[] = '• ' . $name . ' — ' . $reason . '.';
+                $reason = trim((string) ($tenant['access_title'] ?? 'acesso bloqueado')) ?: 'acesso bloqueado';
+                $lines[] = '• ' . $name . ': ' . $reason . '.';
                 $shown++;
             }
             if ($blockedCount > $shown) {
-                $lines[] = '• +' . ($blockedCount - $shown) . ' empresa(s) bloqueada(s) no painel.';
+                $lines[] = '• +' . ($blockedCount - $shown) . ' empresa(s) com bloqueio comercial.';
             }
         }
 
         $lines[] = '';
         $lines[] = $healthy
             ? 'Nenhuma ação necessária neste momento.'
-            : 'Abra a Central de Monitoramento para revisar os itens sinalizados.';
+            : 'Abra a Central de Monitoramento para revisar os pontos acima.';
 
         return [
             'title' => $title,
             'message' => implode("\n", $lines),
             'severity' => $severity,
-            'state' => $healthy ? 'ok' : 'warning',
+            'state' => $healthy ? 'operational' : 'attention',
         ];
-    }
-
-    private function healthDigestSentToday(int $userId, string $channel, string $timezone): bool
-    {
-        try {
-            $key = 'operations_digest_' . $channel . '_user_' . $userId;
-            $statement = Database::connection()->prepare(
-                'SELECT checked_at FROM system_health_checks WHERE check_key = :key ORDER BY id DESC LIMIT 1'
-            );
-            $statement->execute(['key' => $key]);
-            $last = trim((string) $statement->fetchColumn());
-            if ($last === '') {
-                return false;
-            }
-            return Clock::utcToLocal($last, $timezone, 'Y-m-d')
-                === (new DateTimeImmutable('now', new DateTimeZone($timezone)))->format('Y-m-d');
-        } catch (Throwable) {
-            return false;
-        }
-    }
-
-    private function markHealthDigestSent(int $userId, string $channel, string $state, string $message): void
-    {
-        try {
-            Database::connection()->prepare(
-                'INSERT INTO system_health_checks (check_key, label, status, message, latency_ms, checked_at)
-                 VALUES (:key, :label, :status, :message, NULL, :checked_at)'
-            )->execute([
-                'key' => 'operations_digest_' . $channel . '_user_' . $userId,
-                'label' => 'Resumo operacional — ' . $channel,
-                'status' => $state === 'ok' ? 'ok' : 'warning',
-                'message' => mb_substr($message, 0, 1000),
-                'checked_at' => Clock::nowUtc(),
-            ]);
-        } catch (Throwable) {
-        }
-    }
-
-    /** @return array{ok:bool,configured:bool,message:string,provider_message_id?:string} */
-    private function sendWhatsapp(string $destination, string $title, string $message, string $url): array
-    {
-        $baseUrl = trim((string) Env::get('OPERATIONS_ALERT_EVOLUTION_URL', Env::get('EVOLUTION_DEFAULT_URL', '')));
-        $apiKey = trim((string) Env::get('OPERATIONS_ALERT_EVOLUTION_API_KEY', Env::get('EVOLUTION_DEFAULT_API_KEY', '')));
-        $instance = trim((string) Env::get('OPERATIONS_ALERT_EVOLUTION_INSTANCE', ''));
-        if ($destination === '' || $baseUrl === '' || $apiKey === '' || $instance === '') {
-            return [
-                'ok' => false,
-                'configured' => false,
-                'message' => 'Configure destino, URL, API Key e instância administrativa da Evolution.',
-            ];
-        }
-
-        try {
-            $service = new EvolutionService(
-                $baseUrl,
-                $apiKey,
-                $instance,
-                max(5, (int) Env::get('OPERATIONS_ALERT_TIMEOUT_SECONDS', 20)),
-                filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL),
-                trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) ?: null,
-            );
-            $text = trim($title . "\n\n" . $message . ($url !== '' ? "\n\nAbrir: " . $url : ''));
-            $response = $service->sendText($destination, $text);
-            $body = is_array($response['body'] ?? null) ? $response['body'] : [];
-            $providerId = trim((string) ($body['key']['id'] ?? $body['messageId'] ?? $body['id'] ?? ''));
-            return [
-                'ok' => true,
-                'configured' => true,
-                'message' => 'WhatsApp enviado.',
-                'provider_message_id' => $providerId,
-            ];
-        } catch (Throwable $exception) {
-            return ['ok' => false, 'configured' => true, 'message' => $exception->getMessage()];
-        }
-    }
-
-    /** @return array{ok:bool,configured:bool,message:string,provider_message_id?:string} */
-    private function sendEmail(
-        string $destination,
-        string $title,
-        string $message,
-        string $url,
-        int $incidentId,
-        string $kind
-    ): array {
-        if ($destination === '') {
-            return ['ok' => false, 'configured' => false, 'message' => 'Destinatário de e-mail não configurado.'];
-        }
-        if (!filter_var($destination, FILTER_VALIDATE_EMAIL)) {
-            return ['ok' => false, 'configured' => true, 'message' => 'Destinatário de e-mail inválido.'];
-        }
-        $safeTitle = trim((string) preg_replace('/[\r\n]+/', ' ', $title));
-
-        $webhookUrl = trim((string) Env::get('OPERATIONS_ALERT_EMAIL_WEBHOOK_URL', ''));
-        if ($webhookUrl !== '') {
-            if (!preg_match('#^https?://#i', $webhookUrl)) {
-                return ['ok' => false, 'configured' => true, 'message' => 'URL do webhook de e-mail inválida.'];
-            }
-            try {
-                $payload = [
-                    'to' => $destination,
-                    'subject' => $safeTitle,
-                    'text' => trim($message . ($url !== '' ? "\n\nAbrir: " . $url : '')),
-                    'incident_id' => $incidentId > 0 ? $incidentId : null,
-                    'notification_kind' => $kind,
-                    'source' => 'rs_connect_operations',
-                ];
-                $response = $this->postJson(
-                    $webhookUrl,
-                    $payload,
-                    trim((string) Env::get('OPERATIONS_ALERT_EMAIL_WEBHOOK_TOKEN', ''))
-                );
-                return [
-                    'ok' => true,
-                    'configured' => true,
-                    'message' => 'E-mail encaminhado ao transportador.',
-                    'provider_message_id' => trim((string) ($response['id'] ?? $response['message_id'] ?? '')),
-                ];
-            } catch (Throwable $exception) {
-                return ['ok' => false, 'configured' => true, 'message' => $exception->getMessage()];
-            }
-        }
-
-        $nativeEnabled = filter_var(Env::get('OPERATIONS_ALERT_EMAIL_NATIVE', false), FILTER_VALIDATE_BOOL);
-        $from = trim((string) preg_replace('/[\r\n]+/', '', (string) Env::get('OPERATIONS_ALERT_EMAIL_FROM', '')));
-        if (!$nativeEnabled || $from === '' || !filter_var($from, FILTER_VALIDATE_EMAIL) || !function_exists('mail')) {
-            return [
-                'ok' => false,
-                'configured' => false,
-                'message' => 'Configure OPERATIONS_ALERT_EMAIL_WEBHOOK_URL ou o envio nativo de e-mail.',
-            ];
-        }
-
-        $headers = [
-            'From: ' . $from,
-            'Content-Type: text/plain; charset=UTF-8',
-            'X-Mailer: RS-Connect',
-        ];
-        $body = trim($message . ($url !== '' ? "\n\nAbrir: " . $url : ''));
-        $ok = @mail($destination, $safeTitle, $body, implode("\r\n", $headers));
-        return [
-            'ok' => $ok,
-            'configured' => true,
-            'message' => $ok ? 'E-mail enviado.' : 'O transportador nativo recusou o envio.',
-        ];
-    }
-
-    /** @param array<string,mixed> $payload @return array<string,mixed> */
-    private function postJson(string $url, array $payload, string $token = ''): array
-    {
-        $curl = curl_init($url);
-        if ($curl === false) {
-            throw new RuntimeException('Não foi possível iniciar o transportador HTTP.');
-        }
-        $headers = ['Content-Type: application/json', 'Accept: application/json'];
-        if ($token !== '') {
-            $headers[] = 'Authorization: Bearer ' . $token;
-            $headers[] = 'X-RS-Connect-Token: ' . $token;
-        }
-        curl_setopt_array($curl, [
-            CURLOPT_POST => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 8,
-            CURLOPT_TIMEOUT => max(5, (int) Env::get('OPERATIONS_ALERT_TIMEOUT_SECONDS', 20)),
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-            CURLOPT_SSL_VERIFYPEER => filter_var(Env::get('OPERATIONS_ALERT_SSL_VERIFY', true), FILTER_VALIDATE_BOOL),
-        ]);
-        $raw = curl_exec($curl);
-        $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-        $error = curl_error($curl);
-        curl_close($curl);
-        if ($raw === false) {
-            throw new RuntimeException('Falha no transportador de e-mail: ' . $error);
-        }
-        $decoded = json_decode((string) $raw, true);
-        $body = is_array($decoded) ? $decoded : ['raw' => (string) $raw];
-        if ($status < 200 || $status >= 300) {
-            $detail = $body['message'] ?? $body['error'] ?? $body['raw'] ?? 'Resposta recusada.';
-            throw new RuntimeException('Transportador de e-mail HTTP ' . $status . ': ' . mb_substr((string) $detail, 0, 400));
-        }
-        return $body;
-    }
-
-    /** @return array<string,mixed>|null */
-    private function incident(int $id): ?array
-    {
-        try {
-            $statement = Database::connection()->prepare(
-                'SELECT i.*, t.name AS tenant_name
-                 FROM system_incidents i
-                 LEFT JOIN tenants t ON t.id = i.tenant_id
-                 WHERE i.id = :id LIMIT 1'
-            );
-            $statement->execute(['id' => $id]);
-            return $statement->fetch(PDO::FETCH_ASSOC) ?: null;
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
-    /** @return list<array<string,mixed>> */
-    private function admins(): array
-    {
-        try {
-            return Database::connection()->query(
-                "SELECT id,name,email FROM users WHERE role='super_admin' AND status='active'"
-            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        } catch (Throwable) {
-            return [];
-        }
-    }
-
-    /** @return list<array<string,mixed>> */
-    private function notifications(int $userId): array
-    {
-        try {
-            $statement = Database::connection()->prepare(
-                'SELECT * FROM admin_operational_notifications WHERE user_id = :user ORDER BY id DESC LIMIT 80'
-            );
-            $statement->execute(['user' => $userId]);
-            return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        } catch (Throwable) {
-            return [];
-        }
-    }
-
-    /** @return list<array<string,mixed>> */
-    private function deliveries(int $userId): array
-    {
-        try {
-            $statement = Database::connection()->prepare(
-                'SELECT d.*, i.event, i.message AS incident_message
-                 FROM operational_alert_deliveries d
-                 LEFT JOIN system_incidents i ON i.id = d.incident_id
-                 WHERE d.user_id = :user
-                 ORDER BY d.id DESC LIMIT 80'
-            );
-            $statement->execute(['user' => $userId]);
-            return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        } catch (Throwable) {
-            return [];
-        }
-    }
-
-    /** @return list<array<string,mixed>> */
-    private function activeIncidents(): array
-    {
-        try {
-            return Database::connection()->query(
-                'SELECT i.*, t.name AS tenant_name, u.name AS acknowledged_by_name
-                 FROM system_incidents i
-                 LEFT JOIN tenants t ON t.id = i.tenant_id
-                 LEFT JOIN users u ON u.id = i.acknowledged_by
-                 WHERE i.resolved_at IS NULL AND i.severity IN ("warning","error","critical")
-                 ORDER BY FIELD(i.severity,"critical","error","warning"), i.last_seen_at DESC, i.id DESC
-                 LIMIT 60'
-            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        } catch (Throwable) {
-            return [];
-        }
-    }
-
-    /** @return list<array<string,mixed>> */
-    private function monitorRuns(): array
-    {
-        try {
-            return Database::connection()->query(
-                'SELECT * FROM operational_monitor_runs ORDER BY id DESC LIMIT 10'
-            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        } catch (Throwable) {
-            return [];
-        }
-    }
-
-    /** @return array<string,array<string,mixed>> */
-    private function channelStatus(): array
-    {
-        $whatsappReady = trim((string) Env::get('OPERATIONS_ALERT_EVOLUTION_INSTANCE', '')) !== ''
-            && trim((string) Env::get('OPERATIONS_ALERT_EVOLUTION_URL', Env::get('EVOLUTION_DEFAULT_URL', ''))) !== ''
-            && trim((string) Env::get('OPERATIONS_ALERT_EVOLUTION_API_KEY', Env::get('EVOLUTION_DEFAULT_API_KEY', ''))) !== '';
-        $emailWebhook = trim((string) Env::get('OPERATIONS_ALERT_EMAIL_WEBHOOK_URL', '')) !== '';
-        $emailNative = filter_var(Env::get('OPERATIONS_ALERT_EMAIL_NATIVE', false), FILTER_VALIDATE_BOOL)
-            && trim((string) Env::get('OPERATIONS_ALERT_EMAIL_FROM', '')) !== '';
-        return [
-            'platform' => ['ready' => true, 'label' => 'Disponível'],
-            'whatsapp' => ['ready' => $whatsappReady, 'label' => $whatsappReady ? 'Configurado' : 'Configuração pendente'],
-            'email' => ['ready' => $emailWebhook || $emailNative, 'label' => ($emailWebhook || $emailNative) ? 'Configurado' : 'Configuração pendente'],
-        ];
-    }
-
-    public function unreadCount(int $userId): int
-    {
-        try {
-            $statement = Database::connection()->prepare(
-                "SELECT COUNT(*) FROM admin_operational_notifications WHERE user_id = :user AND status = 'unread'"
-            );
-            $statement->execute(['user' => $userId]);
-            return (int) $statement->fetchColumn();
-        } catch (Throwable) {
-            return 0;
-        }
-    }
-
-    public function markAllRead(int $userId): void
-    {
-        try {
-            Database::connection()->prepare(
-                "UPDATE admin_operational_notifications SET status = 'read', read_at = NOW()
-                 WHERE user_id = :user AND status = 'unread'"
-            )->execute(['user' => $userId]);
-        } catch (Throwable) {
-        }
-    }
-
-    private function deliveryKey(string $kind): string
-    {
-        if ($kind !== 'reminder') {
-            return $kind;
-        }
-        return 'reminder-' . gmdate('Ymd-H');
     }
 
     private function absoluteUrl(string $path): string

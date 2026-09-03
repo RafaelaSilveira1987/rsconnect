@@ -1,0 +1,38 @@
+RS Connect 36.27.11 — validação estática do pacote
+
+== PHP syntax ==
+No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/N8nLiveMetricsService.php
+No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/AdminExecutiveDashboardService.php
+No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/AccessControlService.php
+No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/OperationsService.php
+No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/AdminDashboardService.php
+No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/AppVersionService.php
+No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/OperationalAlertService.php
+No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/TenantMetricsService.php
+No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/tests/Feature/operational-commercial-n8n-v362711-smoke.php
+No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/bin/monitoring-source-audit.php
+
+== Bash syntax ==
+No syntax errors detected in apply-monitoring-metrics-v362711.sh
+
+== Smoke ==
+[OK] fonte canônica de empresas existe
+[OK] dashboard administrativo usa a fonte canônica
+[OK] dashboard executivo usa a fonte canônica
+[OK] bloqueio comercial deriva da decisão real de acesso
+[OK] vigência encerrada é bloqueio comercial
+[OK] teste expirado é bloqueio comercial
+[OK] inadimplência além da tolerância é bloqueio comercial
+[OK] suspensão e cancelamento são bloqueios comerciais
+[OK] empresa inativa não é classificada como bloqueio comercial
+[OK] tolerância de teste continua respeitada pela origem de acesso
+[OK] falha de validação comercial não vira zero silencioso
+[OK] digest separa vigência atraso e suspensão
+[OK] n8n live usa API v1
+[OK] n8n live autentica com API key
+[OK] monitor usa n8n live como fonte real
+[OK] monitor não promove cadastro local a estado real
+[OK] versão do pacote incrementada
+[OK] tela de versão expõe existência da credencial sem revelar segredo
+
+OK - bloqueio comercial e origem live do n8n validados estaticamente.

@@ -47,15 +47,10 @@ final class AdminExecutiveDashboardService
     /** @return array<string,mixed> */
     private function loadMetrics(): array
     {
-        $company = $this->row(
-            "SELECT COUNT(*) AS total,
-                    COALESCE(SUM(status = 'active'), 0) AS active_count,
-                    COALESCE(SUM(status = 'inactive'), 0) AS inactive_count,
-                    COALESCE(SUM(status = 'suspended'), 0) AS suspended_count
-             FROM tenants",
-            [],
-            'Não foi possível consultar as empresas.'
-        );
+        $tenantCounts = (new TenantMetricsService())->counts();
+        if (empty($tenantCounts['available'])) {
+            $this->warnings[] = 'Não foi possível consultar as empresas.';
+        }
 
         $messages24 = (int) $this->value(
             'SELECT COUNT(*) FROM conversation_messages WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)',
@@ -119,10 +114,10 @@ final class AdminExecutiveDashboardService
         );
 
         return [
-            'active_companies' => (int) ($company['active_count'] ?? 0),
-            'total_companies' => (int) ($company['total'] ?? 0),
-            'inactive_companies' => (int) ($company['inactive_count'] ?? 0),
-            'suspended_companies' => (int) ($company['suspended_count'] ?? 0),
+            'active_companies' => (int) ($tenantCounts['active'] ?? 0),
+            'total_companies' => (int) ($tenantCounts['total'] ?? 0),
+            'inactive_companies' => (int) ($tenantCounts['non_active'] ?? 0),
+            'suspended_companies' => (int) ($tenantCounts['suspended'] ?? 0),
             'onboarding' => $onboarding,
             'active_subscriptions' => (int) ($subscription['active_count'] ?? 0),
             'mrr' => (float) ($subscription['mrr'] ?? 0),

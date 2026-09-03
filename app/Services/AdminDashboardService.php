@@ -271,13 +271,13 @@ final class AdminDashboardService
         $fallbackTotal = count($companies);
         $fallbackActive = count(array_filter($companies, static fn (array $company): bool => ($company['status'] ?? '') === 'active'));
 
-        $companyRow = $this->fetchOne(
-            "SELECT COUNT(*) AS total,
-                    COALESCE(SUM(status = 'active'), 0) AS active_count
-             FROM tenants"
-        );
-        $totalCompanies = array_key_exists('total', $companyRow) ? (int) $companyRow['total'] : $fallbackTotal;
-        $activeCompanies = array_key_exists('active_count', $companyRow) ? (int) $companyRow['active_count'] : $fallbackActive;
+        $tenantCounts = (new TenantMetricsService())->counts();
+        $totalCompanies = !empty($tenantCounts['available'])
+            ? (int) ($tenantCounts['total'] ?? 0)
+            : $fallbackTotal;
+        $activeCompanies = !empty($tenantCounts['available'])
+            ? (int) ($tenantCounts['active'] ?? 0)
+            : $fallbackActive;
 
         $onboarding = 0;
         try {

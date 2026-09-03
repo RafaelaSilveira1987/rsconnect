@@ -11,7 +11,9 @@ use Throwable;
 
 final class AccessControlService
 {
-    public const VERSION = '36.6.38-evolution-live-status-source';
+    public const VERSION = '36.27.11-commercial-access-source';
+
+    private bool $blockedTenantsAvailable = true;
 
     public function statusForTenant(int $tenantId): array
     {
@@ -206,6 +208,9 @@ final class AccessControlService
     public function securitySummary(): array
     {
         $graceDays = $this->invoiceGraceDays();
+        $tenantCounts = (new TenantMetricsService())->counts();
+        $blockedTenants = $this->blockedTenants($graceDays);
+
         return [
             'invoice_grace_days' => $graceDays,
             'expired_subscriptions' => $this->count(
@@ -226,7 +231,9 @@ final class AccessControlService
                  WHERE ts.billing_status = "suspended"'
             ),
             'locked_users' => $this->count('SELECT COUNT(*) FROM users WHERE locked_until IS NOT NULL AND locked_until > NOW()'),
-            'blocked_tenants' => $this->blockedTenants($graceDays),
+            'tenant_counts' => $tenantCounts,
+            'blocked_tenants_available' => $this->blockedTenantsAvailable,
+            'blocked_tenants' => $blockedTenants,
         ];
     }
 
@@ -235,33 +242,74 @@ final class AccessControlService
         return max(0, (int) Env::get('BILLING_ACCESS_GRACE_DAYS', 5));
     }
 
+    /**
+     * Retorna somente bloqueios comerciais que realmente impedem o acesso segundo
+     * statusForTenant(). Empresa apenas inativa/suspensa no cadastro administrativo
+     * não é classificada aqui como bloqueio comercial.
+     *
+     * @return list<array<string,mixed>>
+     */
     private function blockedTenants(int $graceDays): array
     {
+        $this->blockedTenantsAvailable = true;
+
         try {
-            $sql =
-                'SELECT t.id, t.name, t.status,
-                        ts.billing_status, ts.current_period_ends_at, ts.trial_ends_at,
-                        MIN(CASE WHEN i.status IN ("open", "overdue") AND DATEDIFF(CURDATE(), i.due_date) > :grace_days THEN i.due_date END) AS overdue_due_date,
-                        MAX(CASE WHEN i.status IN ("open", "overdue") AND DATEDIFF(CURDATE(), i.due_date) > :grace_days THEN DATEDIFF(CURDATE(), i.due_date) END) AS overdue_days
-                 FROM tenants t
-                 LEFT JOIN tenant_subscriptions ts ON ts.id = (
-                    SELECT ts2.id FROM tenant_subscriptions ts2 WHERE ts2.tenant_id = t.id ORDER BY ts2.id DESC LIMIT 1
-                 )
-                 LEFT JOIN tenant_invoices i ON i.tenant_id = t.id
-                 GROUP BY t.id, t.name, t.status, ts.billing_status, ts.current_period_ends_at, ts.trial_ends_at
-                 HAVING t.status <> "active"
-                    OR ts.billing_status IN ("suspended", "canceled")
-                    OR COALESCE(CASE WHEN ts.billing_status = "trialing" THEN ts.trial_ends_at ELSE ts.current_period_ends_at END, "9999-12-31") < CURDATE()
-                    OR overdue_due_date IS NOT NULL
-                 ORDER BY t.name
-                 LIMIT 50';
-            $statement = Database::connection()->prepare($sql);
-            $statement->bindValue(':grace_days', $graceDays, PDO::PARAM_INT);
-            $statement->execute();
-            return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $rows = Database::connection()->query(
+                'SELECT id, name, status FROM tenants WHERE status = "active" ORDER BY name LIMIT 500'
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+            $blocked = [];
+            foreach ($rows as $tenant) {
+                $tenantId = (int) ($tenant['id'] ?? 0);
+                if ($tenantId < 1) {
+                    continue;
+                }
+
+                $status = $this->statusForTenant($tenantId);
+                $code = trim((string) ($status['code'] ?? ''));
+                if ($code === 'validation_unavailable') {
+                    $this->blockedTenantsAvailable = false;
+                    return [];
+                }
+                if (!empty($status['allowed']) || !$this->isCommercialBlockCode($code)) {
+                    continue;
+                }
+
+                $subscription = is_array($status['subscription'] ?? null) ? $status['subscription'] : [];
+                $invoice = is_array($status['invoice'] ?? null) ? $status['invoice'] : [];
+
+                $blocked[] = [
+                    'id' => $tenantId,
+                    'name' => trim((string) ($status['tenant_name'] ?? $tenant['name'] ?? 'Empresa')) ?: 'Empresa',
+                    'status' => (string) ($tenant['status'] ?? 'active'),
+                    'access_code' => $code,
+                    'access_title' => trim((string) ($status['title'] ?? 'Acesso bloqueado')) ?: 'Acesso bloqueado',
+                    'access_message' => trim((string) ($status['message'] ?? '')),
+                    'billing_status' => (string) ($subscription['billing_status'] ?? ''),
+                    'current_period_ends_at' => $subscription['current_period_ends_at'] ?? null,
+                    'trial_ends_at' => $subscription['trial_ends_at'] ?? null,
+                    'overdue_due_date' => $invoice['due_date'] ?? null,
+                    'overdue_days' => $invoice['overdue_days'] ?? null,
+                    'invoice_grace_days' => $graceDays,
+                ];
+            }
+
+            return $blocked;
         } catch (Throwable) {
+            $this->blockedTenantsAvailable = false;
             return [];
         }
+    }
+
+    private function isCommercialBlockCode(string $code): bool
+    {
+        return in_array($code, [
+            'subscription_suspended',
+            'subscription_canceled',
+            'trial_expired',
+            'subscription_period_expired',
+            'invoice_overdue_grace_exceeded',
+        ], true);
     }
 
     private function blocked(array $base, string $code, string $title, string $message): array
