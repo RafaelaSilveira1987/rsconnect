@@ -52,11 +52,12 @@ $checks = [
     'retry entregue também sincroniza valor' => substr_count($aiAutomation, 'CrmDealValueService())->captureFromConversation') >= 2,
     'commercial request possui tipo de PublicId próprio' => str_contains($publicId, "'commercial_request' => 35") && str_contains($publicId, "'commercial_request_id' => ['alias' => 'commercial_request_uuid', 'entity' => 'commercial_request']"),
     'isolamento valida solicitação comercial na tabela correta' => str_contains($isolation, "'commercial_request' => 'crm_commercial_requests'"),
-    'controller não usa mais request_id ambíguo' => str_contains($controller, "\$_POST['commercial_request_id']") && !str_contains(substr($controller, strpos($controller, 'public function resolveCommercialRequest'), 1200), "\$_POST['request_id']"),
+    'aliases UUID de POST entram no isolamento tenant-aware' => str_contains($publicId, "\$entities[\$definition['alias']] = \$definition['entity'];"),
+    'controller decodifica commercial_request_uuid no POST e mantém fallback legado' => str_contains($controller, "\$_POST['commercial_request_uuid']") && str_contains($controller, "PublicId::decode('commercial_request', \$commercialRequestUuid)") && str_contains($controller, "\$_POST['commercial_request_id']") && !str_contains(substr($controller, strpos($controller, 'public function resolveCommercialRequest'), 1400), "\$_POST['request_id']"),
     'formulários usam UUID comercial e preservam as duas ações' => substr_count($view, 'name="commercial_request_uuid"') === 2 && str_contains($view, 'decision" value="resolved"') && str_contains($view, 'decision" value="dismissed"'),
     'rota POST de resolução continua registrada' => str_contains($routes, "post('/conversations/commercial-request/resolve'"),
-    'pacote identifica versão 36.27.6' => str_contains($version, 'RS Connect 36.27.6'),
-    'cache visual acompanha versão atual' => str_contains($layout, 'app.css?v=36.27.6') && str_contains($layout, 'app.js?v=36.27.6'),
+    'pacote identifica versão 36.27.7' => str_contains($version, 'RS Connect 36.27.7'),
+    'cache visual acompanha versão atual' => str_contains($layout, 'app.css?v=36.27.7') && str_contains($layout, 'app.js?v=36.27.7'),
 ];
 
 $failures = 0;

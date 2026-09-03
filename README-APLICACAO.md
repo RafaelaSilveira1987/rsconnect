@@ -295,3 +295,11 @@ Validação focada:
 ```bash
 php tests/Feature/crm-conversation-value-and-commercial-dismiss-v36276-smoke.php
 ```
+
+
+## RS Connect 36.27.7 — ações de orçamento por UUID
+
+- corrige `Solicitação comercial inválida.` ao usar **Dispensar alerta** ou **Marcar orçamento atendido**;
+- `commercial_request_uuid` agora é decodificado explicitamente no POST;
+- o isolamento por empresa também valida aliases UUID enviados em POST;
+- nenhuma migration nova.

@@ -353,9 +353,14 @@ final class PublicId
         $entities = [];
         foreach (self::PARAMETER_MAP as $parameter => $definition) {
             $entities[$parameter] = $definition['entity'];
+            // POST bodies are intentionally not hydrated by hydrateRequest().
+            // Expose public aliases here so TenantIsolationService validates
+            // UUID fields such as commercial_request_uuid before controllers run.
+            $entities[$definition['alias']] = $definition['entity'];
         }
         foreach (self::PATH_PARAMETER_MAP['/' . trim($routePath, '/')] ?? [] as $parameter => $definition) {
             $entities[$parameter] = $definition['entity'];
+            $entities[$definition['alias']] = $definition['entity'];
         }
 
         return $entities;
