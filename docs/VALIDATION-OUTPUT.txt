@@ -1,21 +1,5 @@
-RS Connect 36.27.11 — validação estática do pacote
+RS Connect 36.27.12 — validação estática local
 
-== PHP syntax ==
-No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/N8nLiveMetricsService.php
-No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/AdminExecutiveDashboardService.php
-No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/AccessControlService.php
-No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/OperationsService.php
-No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/AdminDashboardService.php
-No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/AppVersionService.php
-No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/OperationalAlertService.php
-No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/app/Services/TenantMetricsService.php
-No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/tests/Feature/operational-commercial-n8n-v362711-smoke.php
-No syntax errors detected in /mnt/data/rs-connect-v36.27.11-monitoramento-comercial-n8n-live/bin/monitoring-source-audit.php
-
-== Bash syntax ==
-No syntax errors detected in apply-monitoring-metrics-v362711.sh
-
-== Smoke ==
 [OK] fonte canônica de empresas existe
 [OK] dashboard administrativo usa a fonte canônica
 [OK] dashboard executivo usa a fonte canônica
@@ -36,3 +20,18 @@ No syntax errors detected in apply-monitoring-metrics-v362711.sh
 [OK] tela de versão expõe existência da credencial sem revelar segredo
 
 OK - bloqueio comercial e origem live do n8n validados estaticamente.
+
+[OK] usa endpoint público de ativação do n8n
+[OK] localiza o workflow crítico pelo nome
+[OK] valida Schedule Trigger
+[OK] consulta última execução quando permitido
+[OK] runner permite reativação explícita
+[OK] healthcheck denuncia monitor inativo
+[OK] healthcheck denuncia ausência de agenda
+[OK] versão 36.27.12 registrada
+
+APROVADO - 8/8 verificações passaram.
+
+[OK] php -l em todos os PHP do pacote.
+[OK] bash -n no instalador.
+[NOTA] Ativação live do n8n só é validável no ambiente do usuário com N8N_BASE_URL/N8N_API_KEY.

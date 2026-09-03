@@ -486,6 +486,35 @@ final class OperationsService
         $liveAvailable = !empty($live['available']);
         $latency = isset($live['latency_ms']) && $live['latency_ms'] !== null ? (int) $live['latency_ms'] : null;
 
+        // O Monitor operacional é um workflow crítico: não basta haver outros workflows ativos.
+        // Se ele estiver despublicado, a Central deve denunciar explicitamente a causa.
+        $monitorWorkflow = (new N8nWorkflowControlService())->operationsMonitor(false);
+        if (!empty($monitorWorkflow['available']) && !empty($monitorWorkflow['found'])) {
+            if (!empty($monitorWorkflow['archived'])) {
+                return [
+                    'status' => 'down',
+                    'message' => 'O workflow crítico “' . trim((string) ($monitorWorkflow['workflow_name'] ?? 'RS Connect - Monitor operacional'))
+                        . '” está arquivado no n8n. Desarquive e publique para o monitor voltar a disparar.',
+                    'latency_ms' => $latency,
+                ];
+            }
+            if (empty($monitorWorkflow['active'])) {
+                return [
+                    'status' => 'down',
+                    'message' => 'O workflow crítico “' . trim((string) ($monitorWorkflow['workflow_name'] ?? 'RS Connect - Monitor operacional'))
+                        . '” está despublicado/inativo no n8n. Enquanto permanecer assim, as verificações automáticas não disparam.',
+                    'latency_ms' => $latency,
+                ];
+            }
+            if (empty($monitorWorkflow['schedule_trigger_present'])) {
+                return [
+                    'status' => 'down',
+                    'message' => 'O workflow crítico do Monitor operacional está publicado, mas o gatilho de agenda/cron não foi encontrado.',
+                    'latency_ms' => $latency,
+                ];
+            }
+        }
+
         if ($liveAvailable) {
             $activeFlows = max(0, (int) ($live['active'] ?? 0));
             $totalFlows = max(0, (int) ($live['total'] ?? 0));

@@ -7,6 +7,7 @@ use App\Core\Database;
 use App\Core\Env;
 use App\Services\AccessControlService;
 use App\Services\N8nLiveMetricsService;
+use App\Services\N8nWorkflowControlService;
 use App\Services\TenantMetricsService;
 
 $root = dirname(__DIR__);
@@ -15,6 +16,7 @@ Autoloader::register($root . '/app');
 Env::load($root . '/.env');
 
 $requireN8n = in_array('--require-n8n-live', $argv, true);
+$requireMonitor = in_array('--require-monitor-active', $argv, true);
 $failures = 0;
 
 echo "==================================================\n";
@@ -89,10 +91,37 @@ try {
     }
 }
 
+
+try {
+    $monitor = (new N8nWorkflowControlService())->operationsMonitor(false);
+    if (!empty($monitor['available']) && !empty($monitor['found'])) {
+        echo '[OK] Monitor n8n encontrado: ' . ($monitor['workflow_name'] ?? 'RS Connect - Monitor operacional')
+            . ' | ativo=' . (!empty($monitor['active']) ? 'sim' : 'não')
+            . ' | agenda=' . (!empty($monitor['schedule_trigger_present']) ? 'sim' : 'não') . "\n";
+        if (!empty($monitor['last_execution_available'])) {
+            echo '     Última execução: ' . ($monitor['last_execution_started_at'] ?? '-')
+                . ' | status=' . ($monitor['last_execution_status'] ?? '-') . "\n";
+        }
+        if ($requireMonitor && (empty($monitor['active']) || empty($monitor['schedule_trigger_present']))) {
+            $failures++;
+        }
+    } else {
+        echo '[ATENCAO] Monitor operacional do n8n não confirmado: ' . ($monitor['error'] ?? 'sem detalhe') . "\n";
+        if ($requireMonitor) {
+            $failures++;
+        }
+    }
+} catch (Throwable $exception) {
+    echo '[ERRO] Monitor operacional n8n: ' . $exception->getMessage() . "\n";
+    if ($requireMonitor) {
+        $failures++;
+    }
+}
+
 echo "\n";
 if ($failures > 0) {
     echo "FALHA - {$failures} fonte(s) obrigatória(s) não foram validadas.\n";
     exit(1);
 }
 
-echo "APROVADO - fontes cadastrais e comerciais validadas" . ($requireN8n ? ', incluindo n8n live' : '') . ".\n";
+echo "APROVADO - fontes cadastrais e comerciais validadas" . ($requireN8n ? ', incluindo n8n live' : '') . ($requireMonitor ? ', com Monitor operacional ativo' : '') . ".\n";
