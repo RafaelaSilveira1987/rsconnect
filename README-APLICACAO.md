@@ -180,3 +180,14 @@ php bin/multiagent-audit.php
 ```
 
 O auditor usa um canal existente com pelo menos dois agentes ativos, cria conversas temporárias dentro de uma transação, prova a sequência do round-robin e a continuidade por conversa e executa `ROLLBACK` ao final. Se houver `routing_keywords` configuradas no canal, também comprova que a keyword mantém prioridade sem consumir o cursor genérico.
+
+## RS Connect 36.27.1 — handoff IA→IA por intenção
+
+Conversas já fixadas em um agente podem ser transferidas para outro especialista do mesmo canal quando a nova mensagem casar com `routing_keywords` do destino. A troca usa lock de linha na conversa, atualiza `conversations.ai_agent_id` e não consome o cursor do round-robin. Mensagens genéricas continuam no agente já pinado. O mecanismo é genérico e não depende de nomes de agentes.
+
+Homologação focada:
+
+```bash
+php tests/Feature/ai-to-ai-specialist-handoff-v36271-smoke.php
+php bin/multiagent-audit.php
+```

@@ -36,6 +36,11 @@ $checks = [
     'primeiro pin vence em concorrência' => str_contains($service, '$this->pin($pdo, $tenantId, $instanceId, $conversationId, $agentId, false)'),
     'keyword continua prioritária' => substr_count($service, '$this->keywordMatch(') >= 2,
     'keyword não avança cursor' => str_contains($service, 'não consomem') || str_contains($service, 'não consome'),
+    'keyword transfere pin para outro especialista' => str_contains($service, '$keywordAgentId > 0 && $keywordAgentId !== $pinnedId')
+        && str_contains($service, 'transferPinToSpecialist('),
+    'handoff IA para IA usa lock da conversa' => str_contains($service, 'Transfere uma conversa já pinada para um especialista')
+        && str_contains($service, '$this->pin($pdo, $tenantId, $instanceId, $conversationId, $agentId, true)'),
+    'auditor prova transferência IA para IA' => str_contains((string) file_get_contents($root . '/bin/multiagent-audit.php'), 'TRANSFERÊNCIA IA → IA POR INTENÇÃO'),
     'automação filtra agente fora do expediente' => str_contains($service, 'allowsConversationalAutomation'),
     'pin por conversa continua antes do roteamento' => substr_count($service, '$this->pinnedAgentId(') >= 4,
     'fallback sem migration é compatível' => str_contains($service, 'Sem a migration nova, mantém o comportamento anterior'),

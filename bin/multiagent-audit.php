@@ -261,6 +261,81 @@ try {
             $afterKeywordCount === $beforeKeywordCount,
             'Especialista por keyword não consome o cursor genérico'
         );
+
+        echo "\n=== 5B. TRANSFERÊNCIA IA → IA POR INTENÇÃO ===\n";
+        $sourceBinding = null;
+        foreach ($bindings as $binding) {
+            if ((int) ($binding['agent_id'] ?? 0) !== (int) $keywordBinding['agent_id']) {
+                $sourceBinding = $binding;
+                break;
+            }
+        }
+
+        if (is_array($sourceBinding)) {
+            $remoteJid = '5596' . substr((string) (time() + 20), -8) . '@s.whatsapp.net';
+            $insertConversation->execute([
+                'tenant_id' => $tenantId,
+                'instance_id' => $instanceId,
+                'contact_id' => $contactId,
+                'remote_jid' => $remoteJid,
+            ]);
+            $handoffConversationId = (int) $pdo->lastInsertId();
+            $sourceAgentId = (int) $sourceBinding['agent_id'];
+            $targetAgentId = (int) $keywordBinding['agent_id'];
+
+            checkOk(
+                $service->pin(
+                    $pdo,
+                    $tenantId,
+                    $instanceId,
+                    $handoffConversationId,
+                    $sourceAgentId,
+                    true
+                ),
+                "Conversa fixada inicialmente no agente #{$sourceAgentId}"
+            );
+
+            $beforeCountStatement->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId]);
+            $beforeHandoffCount = (int) ($beforeCountStatement->fetchColumn() ?: 0);
+
+            $transferred = $service->resolve(
+                $pdo,
+                ['id' => $instanceId, 'tenant_id' => $tenantId],
+                $handoffConversationId,
+                'Quero falar sobre ' . $keyword,
+                true
+            );
+            $transferredId = (int) ($transferred['id'] ?? 0);
+
+            $pinStatement = $pdo->prepare(
+                'SELECT ai_agent_id FROM conversations
+                 WHERE id = :conversation_id AND tenant_id = :tenant_id
+                 LIMIT 1'
+            );
+            $pinStatement->execute([
+                'conversation_id' => $handoffConversationId,
+                'tenant_id' => $tenantId,
+            ]);
+            $persistedTargetId = (int) ($pinStatement->fetchColumn() ?: 0);
+
+            $beforeCountStatement->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId]);
+            $afterHandoffCount = (int) ($beforeCountStatement->fetchColumn() ?: 0);
+
+            checkOk(
+                $transferredId === $targetAgentId,
+                "Keyword transfere agente #{$sourceAgentId} → especialista #{$targetAgentId}"
+            );
+            checkOk(
+                $persistedTargetId === $targetAgentId,
+                'Novo especialista fica pinado na conversa'
+            );
+            checkOk(
+                $afterHandoffCount === $beforeHandoffCount,
+                'Transferência IA → IA não consome cursor do round-robin'
+            );
+        } else {
+            warn('Não há outro agente elegível para provar transferência IA → IA.');
+        }
     } else {
         warn('Canal não possui routing_keywords configuradas; prioridade por keyword ficou validada pela suíte estática.');
     }

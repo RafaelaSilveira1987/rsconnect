@@ -22,13 +22,31 @@ final class AgentRoutingService
         }
 
         if ($this->supportsRouting($pdo)) {
+            $bindings = $this->activeBindings($pdo, $tenantId, $instanceId);
+            $keywordAgentId = $this->keywordMatch($bindings, $incomingContent);
+
             $pinnedId = $conversationId > 0 ? $this->pinnedAgentId($pdo, $tenantId, $instanceId, $conversationId) : 0;
             if ($pinnedId > 0) {
+                // Uma mensagem que casa com o especialista de outro agente transfere
+                // explicitamente o pin. Isso permite, por exemplo, Recepção -> Comercial
+                // sem quebrar a continuidade das mensagens genéricas da conversa.
+                if ($keywordAgentId > 0 && $keywordAgentId !== $pinnedId) {
+                    $agentId = $pin && $conversationId > 0
+                        ? $this->transferPinToSpecialist(
+                            $pdo,
+                            $tenantId,
+                            $instanceId,
+                            $conversationId,
+                            $keywordAgentId
+                        )
+                        : $keywordAgentId;
+                    return $this->agentById($pdo, $tenantId, $agentId);
+                }
+
                 return $this->agentById($pdo, $tenantId, $pinnedId);
             }
 
-            $bindings = $this->activeBindings($pdo, $tenantId, $instanceId);
-            $agentId = $this->keywordMatch($bindings, $incomingContent);
+            $agentId = $keywordAgentId;
             if ($agentId < 1) {
                 $agentId = $this->roundRobinAgentId(
                     $pdo,
@@ -77,14 +95,9 @@ final class AgentRoutingService
         $closedFallback = null;
 
         $pinnedId = $conversationId > 0 ? $this->pinnedAgentId($pdo, $tenantId, $instanceId, $conversationId) : 0;
-        if ($pinnedId > 0) {
-            $pinned = $this->agentById($pdo, $tenantId, $pinnedId);
-            if (is_array($pinned)) {
-                if ($policy->allowsConversationalAutomation($pinned)) {
-                    return $pinned;
-                }
-                $closedFallback = $pinned;
-            }
+        $pinned = $pinnedId > 0 ? $this->agentById($pdo, $tenantId, $pinnedId) : null;
+        if (is_array($pinned)) {
+            $closedFallback = $pinned;
         }
 
         $bindings = $this->activeBindings($pdo, $tenantId, $instanceId);
@@ -109,8 +122,35 @@ final class AgentRoutingService
             $availableAgents[$agentId] = $agent;
         }
 
+        $keywordAgentId = $availableBindings !== []
+            ? $this->keywordMatch($availableBindings, $incomingContent)
+            : 0;
+
+        if (is_array($pinned) && $policy->allowsConversationalAutomation($pinned)) {
+            if ($keywordAgentId > 0 && $keywordAgentId !== $pinnedId) {
+                $agentId = $pin && $conversationId > 0
+                    ? $this->transferPinToSpecialist(
+                        $pdo,
+                        $tenantId,
+                        $instanceId,
+                        $conversationId,
+                        $keywordAgentId
+                    )
+                    : $keywordAgentId;
+                if (isset($availableAgents[$agentId])) {
+                    return $availableAgents[$agentId];
+                }
+                $resolved = $this->agentById($pdo, $tenantId, $agentId);
+                if (is_array($resolved) && $policy->allowsConversationalAutomation($resolved)) {
+                    return $resolved;
+                }
+            }
+
+            return $pinned;
+        }
+
         if ($availableBindings !== []) {
-            $agentId = $this->keywordMatch($availableBindings, $incomingContent);
+            $agentId = $keywordAgentId;
             if ($agentId < 1) {
                 $agentId = $this->roundRobinAgentId(
                     $pdo,
@@ -446,6 +486,84 @@ final class AgentRoutingService
             return $agentIds[0];
         }
         return $agentIds[((int) $lastIndex + 1) % count($agentIds)];
+    }
+
+    /**
+     * Transfere uma conversa já pinada para um especialista do mesmo canal.
+     *
+     * O lock da conversa serializa mensagens concorrentes e evita que uma transferência
+     * de especialidade seja sobrescrita por outra decisão simultânea. O cursor de
+     * round-robin não é alterado: transferência por keyword é uma decisão de intenção.
+     */
+    private function transferPinToSpecialist(
+        PDO $pdo,
+        int $tenantId,
+        int $instanceId,
+        int $conversationId,
+        int $agentId
+    ): int {
+        if ($conversationId < 1 || $agentId < 1) {
+            return $agentId;
+        }
+
+        $ownsTransaction = !$pdo->inTransaction();
+        try {
+            if ($ownsTransaction) {
+                $pdo->beginTransaction();
+            }
+
+            $lock = $pdo->prepare(
+                'SELECT ai_agent_id
+                 FROM conversations
+                 WHERE id = :conversation_id
+                   AND tenant_id = :tenant_id
+                   AND evolution_instance_id = :instance_id
+                 FOR UPDATE'
+            );
+            $lock->execute([
+                'conversation_id' => $conversationId,
+                'tenant_id' => $tenantId,
+                'instance_id' => $instanceId,
+            ]);
+
+            if ($lock->fetchColumn() === false) {
+                if ($ownsTransaction) {
+                    $pdo->rollBack();
+                }
+                return $agentId;
+            }
+
+            $this->pin($pdo, $tenantId, $instanceId, $conversationId, $agentId, true);
+            $finalAgentId = $this->pinnedAgentId(
+                $pdo,
+                $tenantId,
+                $instanceId,
+                $conversationId
+            ) ?: $agentId;
+
+            if ($ownsTransaction) {
+                $pdo->commit();
+            }
+
+            return $finalAgentId;
+        } catch (Throwable) {
+            if ($ownsTransaction && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            // Fail-safe: mantém a conversa no agente que já estava pinado quando
+            // a troca segura não puder ser concluída.
+            try {
+                return $this->pinnedAgentId(
+                    $pdo,
+                    $tenantId,
+                    $instanceId,
+                    $conversationId
+                ) ?: $agentId;
+            } catch (Throwable) {
+                return $agentId;
+            }
+        }
     }
 
     private function pinnedAgentId(PDO $pdo, int $tenantId, int $instanceId, int $conversationId): int
