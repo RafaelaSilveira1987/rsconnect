@@ -51,10 +51,10 @@ $checks = [
     'estilo responsivo do roteamento existe' => str_contains($css, 'RS Connect 36.27.2 — configuração visual de multiagentes')
         && str_contains($css, '.agent-routing-guide')
         && str_contains($css, '.agent-channel-routing-config'),
-    'pacote identifica versão 36.27.2' => str_contains($version, 'RS Connect 36.27.2')
-        && str_contains($version, 'Multiagente configurável por canal'),
-    'cache de CSS e JS foi renovado' => str_contains($layout, 'app.css?v=36.27.2')
-        && str_contains($layout, 'app.js?v=36.27.2'),
+    'pacote identifica versão 36.27.3' => str_contains($version, 'RS Connect 36.27.3')
+        && str_contains($version, 'Handoff multiagente identificável'),
+    'cache de CSS e JS foi renovado' => str_contains($layout, 'app.css?v=36.27.3')
+        && str_contains($layout, 'app.js?v=36.27.3'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

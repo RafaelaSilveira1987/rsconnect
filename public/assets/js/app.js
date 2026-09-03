@@ -989,7 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderMessage(message) {
     const outgoing = message.direction === 'outgoing';
     const failed = message.status === 'failed';
-    const baseSender = message.sender_type === 'ai' ? 'IA' : (message.sender_name || 'Equipe');
+    const baseSender = message.sender_type === 'ai' ? (message.sender_name || 'IA') : (message.sender_name || 'Equipe');
     const sender = outgoing && message.sender_type === 'user' && message.sender_role_label
       ? `${baseSender} — ${message.sender_role_label}`
       : (outgoing ? baseSender : '');

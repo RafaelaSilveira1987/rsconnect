@@ -341,6 +341,7 @@ final class AiModelService
             'Não transforme menções casuais de data, hora, hoje, amanhã, tarde ou noite em pedido de agendamento. Agenda só deve ser conduzida quando houver intenção real e explícita de marcar, remarcar, consultar disponibilidade ou quando a conversa já estiver em um fluxo recente de agenda.',
             'Cliente ou paciente já identificado deve ter continuidade de atendimento: não reabra triagem, não peça novamente motivo/queixa e não trate como novo lead apenas porque iniciou uma nova conversa.',
             'O contexto operacional fornecido pelo RS Connect (modo da conversa, horário, classificação, grupo e tags) tem prioridade sobre instruções conflitantes do prompt livre.',
+            'Nunca afirme que uma transferência para outro assistente virtual ou setor automatizado já aconteceu apenas por decisão textual sua. A troca entre assistentes é executada pelo motor do RS Connect antes da resposta. Se não houver o bloco TRANSFERÊNCIA INTERNA CONFIRMADA abaixo, não diga que já transferiu, que está transferindo agora ou que outro assistente já assumiu.',
         ];
 
         $tenantId = (int) ($conversation['tenant_id'] ?? $contact['tenant_id'] ?? 0);
@@ -435,6 +436,17 @@ final class AiModelService
                 ? "- Esta conversa está em contexto de agenda. As regras do Grupo de atendimento têm prioridade para agenda e pré-agendamento; tags não liberam agenda quando a regra do grupo bloquear.\n\n"
                 : "- Esta conversa NÃO está em contexto de agenda. Não conduza o atendimento para agenda por iniciativa própria; siga o objetivo e o fluxo descritos no prompt do agente.\n\n");
 
+        $handoffFromAgentName = trim((string) ($agent['_routing_handoff_from_agent_name'] ?? ''));
+        $handoffToAgentName = trim((string) ($agent['_routing_handoff_to_agent_name'] ?? $agent['name'] ?? ''));
+        $handoffBlock = '';
+        if ($handoffFromAgentName !== '' && $handoffToAgentName !== '') {
+            $handoffBlock = "TRANSFERÊNCIA INTERNA CONFIRMADA PELO RS CONNECT:\n"
+                . '- A conversa acabou de sair de IA - ' . $handoffFromAgentName . ' e foi atribuída a IA - ' . $handoffToAgentName . ".\n"
+                . "- Você é o novo assistente responsável neste turno. Continue exatamente do ponto em que o atendimento parou e não repita perguntas já respondidas.\n"
+                . "- Na primeira resposta após a transferência, identifique-se de forma curta pelo seu nome e função quando isso ajudar a deixar a troca clara para o cliente.\n"
+                . "- Não diga que ainda vai transferir: a transferência já foi concluída pelo sistema.\n\n";
+        }
+
         $memorySummary = trim((string) ($agent['_conversation_memory_summary'] ?? ''));
         $memoryFacts = is_array($agent['_conversation_memory_facts'] ?? null) ? $agent['_conversation_memory_facts'] : [];
         $memoryScope = (string) ($agent['_conversation_memory_scope'] ?? 'conversation');
@@ -455,6 +467,7 @@ final class AiModelService
 
 " .
             $structuredContext .
+            $handoffBlock .
             $memoryBlock .
             ($knowledge !== '' ? "Base de conhecimento:
 " . $knowledge . "

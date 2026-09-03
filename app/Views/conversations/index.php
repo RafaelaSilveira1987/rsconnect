@@ -584,7 +584,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                             <?php if (!empty($message['error_message'])): ?><small class="message-error"><?= View::e($message['error_message']) ?></small><?php endif; ?>
                             <footer>
                                 <?php if ($outgoing): ?>
-                                    <?php $senderLabel = $message['sender_type'] === 'ai' ? 'IA' : ($message['sender_user_name'] ?: 'Equipe'); ?>
+                                    <?php $senderLabel = $message['sender_type'] === 'ai' ? ($message['sender_user_name'] ?: 'IA') : ($message['sender_user_name'] ?: 'Equipe'); ?>
                                     <?php if ($message['sender_type'] === 'user' && !empty($message['sender_user_role_label'])): $senderLabel .= ' — ' . $message['sender_user_role_label']; endif; ?>
                                     <span><?= View::e($senderLabel) ?></span>
                                 <?php endif; ?>

@@ -216,3 +216,14 @@ php tests/Feature/ai-to-ai-specialist-handoff-v36271-smoke.php
 php tests/Feature/multi-agent-routing-ui-v36272-smoke.php
 php tests/Feature/agent-instance-linking-v36182-smoke.php
 ```
+
+
+## RS Connect 36.27.3 — handoff IA→IA identificável
+
+- Mensagens automáticas novas gravam o emissor como `IA - Nome do assistente` quando a base possui `sender_display_name`.
+- A conversa e o polling passam a exibir, por exemplo, `IA - Digi` e `IA - Carlos`, em vez do rótulo genérico `IA`.
+- Quando o roteamento por intenção troca o pin entre assistentes, o motor registra `ai.routing.handoff` e injeta contexto interno no novo especialista.
+- A primeira resposta do especialista recebe orientação para assumir do ponto correto, identificar-se de forma curta e não repetir perguntas já respondidas.
+- Regras locais e cache exato são ignorados somente no primeiro turno imediatamente após a troca de IA, garantindo que o novo especialista gere uma resposta contextualizada.
+- O prompt obrigatório impede que uma IA afirme que transferiu para outro assistente virtual quando o motor não confirmou a troca.
+- Não exige migration nova; usa `sender_display_name` já disponível na base atual.
