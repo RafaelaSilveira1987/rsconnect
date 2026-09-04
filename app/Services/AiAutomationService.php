@@ -1713,7 +1713,16 @@ final class AiAutomationService
             return ['skip_ai' => false, 'handled' => false];
         }
 
-        $intentProbe = (new PreSchedulingService())->detectIntent($content, false);
+        // 36.27.20: o cooldown agrupa mensagens rápidas e apenas a última retomada
+        // continua. Para a agenda isso não pode significar perda das mensagens anteriores
+        // do mesmo bloco (ex.: "Online" seguido de "quinta às 14h"). Reconstituímos
+        // somente as entradas consecutivas após a última saída do sistema e entregamos
+        // esse bloco à máquina determinística da agenda. A IA livre continua usando o
+        // conteúdo normal da conversa; este merge existe apenas para preservar estado.
+        $calendarBurst = $this->calendarBurstForMessage($pdo, $conversationId, $messageId, $content);
+        $calendarContent = (string) ($calendarBurst['content'] ?? $content);
+
+        $intentProbe = (new PreSchedulingService())->detectIntent($calendarContent, false);
         $schedulingIntent = !empty($intentProbe['has_intent']);
 
         try {
@@ -1722,7 +1731,7 @@ final class AiAutomationService
                 $instance,
                 $contactId,
                 $conversationId,
-                $content
+                $calendarContent
             );
 
             $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
@@ -1730,7 +1739,7 @@ final class AiAutomationService
                 $instance,
                 $contactId,
                 $conversationId,
-                $content,
+                $calendarContent,
                 $messageId
             );
             $result = !empty($calendarSelection['handled'])
@@ -1740,10 +1749,12 @@ final class AiAutomationService
                     $instance,
                     $contactId,
                     $conversationId,
-                    $content,
+                    $calendarContent,
                     $flowContext,
                     $messageId
                 );
+            $result['calendar_burst_message_ids'] = $calendarBurst['message_ids'] ?? [$messageId];
+            $result['calendar_burst_count'] = count((array) ($calendarBurst['message_ids'] ?? [$messageId]));
 
             $appointmentEventPayload = $result['appointment_event_payload'] ?? null;
             if (is_array($appointmentEventPayload) && $appointmentEventPayload !== []) {
@@ -1808,6 +1819,89 @@ final class AiAutomationService
                 'scheduling_intent' => $schedulingIntent,
                 'calendar_error' => $exception->getMessage(),
             ];
+        }
+    }
+
+    /**
+     * @return array{content:string,message_ids:list<int>}
+     */
+    private function calendarBurstForMessage(PDO $pdo, int $conversationId, int $messageId, string $fallback): array
+    {
+        $fallback = trim($fallback);
+        if ($conversationId < 1 || $messageId < 1) {
+            return ['content' => $fallback, 'message_ids' => $messageId > 0 ? [$messageId] : []];
+        }
+
+        try {
+            $lastOutgoing = $pdo->prepare(
+                'SELECT COALESCE(MAX(id), 0)
+'
+                . 'FROM conversation_messages
+'
+                . 'WHERE conversation_id = :conversation_id
+'
+                . '  AND direction = "outgoing"
+'
+                . '  AND id < :message_id'
+            );
+            $lastOutgoing->execute([
+                'conversation_id' => $conversationId,
+                'message_id' => $messageId,
+            ]);
+            $afterId = (int) ($lastOutgoing->fetchColumn() ?: 0);
+
+            $statement = $pdo->prepare(
+                'SELECT id, content
+'
+                . 'FROM conversation_messages
+'
+                . 'WHERE conversation_id = :conversation_id
+'
+                . '  AND direction = "incoming"
+'
+                . '  AND id > :after_id
+'
+                . '  AND id <= :message_id
+'
+                . 'ORDER BY id ASC
+'
+                . 'LIMIT 8'
+            );
+            $statement->execute([
+                'conversation_id' => $conversationId,
+                'after_id' => $afterId,
+                'message_id' => $messageId,
+            ]);
+            $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+            $parts = [];
+            $ids = [];
+            foreach ($rows as $row) {
+                $id = (int) ($row['id'] ?? 0);
+                $part = trim((string) ($row['content'] ?? ''));
+                if ($id < 1 || $part === '') {
+                    continue;
+                }
+                $ids[] = $id;
+                $parts[] = $part;
+            }
+
+            if ($parts === []) {
+                return ['content' => $fallback, 'message_ids' => [$messageId]];
+            }
+
+            $merged = trim(implode("
+", $parts));
+            if (mb_strlen($merged) > 1200) {
+                $merged = mb_substr($merged, -1200);
+            }
+
+            return [
+                'content' => $merged !== '' ? $merged : $fallback,
+                'message_ids' => $ids !== [] ? $ids : [$messageId],
+            ];
+        } catch (Throwable) {
+            return ['content' => $fallback, 'message_ids' => [$messageId]];
         }
     }
 

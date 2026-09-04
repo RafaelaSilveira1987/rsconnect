@@ -1,46 +1,17 @@
-{
-  "package": "rsconnect-deploy-hardening-kit",
-  "date": "2026-09-04",
-  "purpose": "Full RS Connect production package with compact agent management UI, scheduling-specialist routing repair, operational monitoring and commercial automation",
-  "changes": [
-    "Assistentes Virtuais: cards compactos, responsivos e sem estouro horizontal com 3+ agentes",
-    "Configurações completas ficam recolhidas por padrão e abrem sob demanda",
-    "Agentes com área de agendamento já existentes recebem direcionamento seguro quando ainda estavam em round-robin sem keywords",
-    "Novos agentes de agendamento recebem sugestão automática de papel Especialista e keywords editáveis",
-    "Mensagens determinísticas do pré-agendamento usam a identidade do agente efetivamente roteado no WhatsApp e no histórico",
-    "Removidos instaladores/hotfixes históricos duplicados do pacote de produção",
-    "AiReprocessService.runScheduledIfDue",
-    "rsconnect-backup.finish_error exit code",
-    "post-deploy verification assets",
-    "Assistentes Virtuais: Principal / Especialista / Distribuição automática por canal",
-    "Persistência visual de routing_keywords em ai_agent_instance_bindings",
-    "Especialistas excluídos da distribuição genérica quando há agentes gerais elegíveis",
-    "Handoff IA→IA por intenção preservado e configurável sem terminal",
-    "Handoff IA→IA registra contexto de transferência para o novo especialista",
-    "Mensagens automáticas gravam autoria como IA - Nome do assistente",
-    "Chat e polling exibem IA - Digi / IA - Carlos usando sender_display_name",
-    "Prompt bloqueia promessa de transferência automatizada sem troca confirmada pelo motor",
-    "Primeiro turno após handoff ignora cache/regra local para resposta contextual do novo especialista",
-    "WhatsApp: respostas automáticas recebem assinatura em negrito com o agente real",
-    "Agentes gerais usam IA - Nome; especialistas usam IA Área - Nome",
-    "Assinatura externa não contamina o conteúdo limpo armazenado no painel",
-    "Retry de resposta automática preserva a identificação do emissor original",
-    "Monitor operacional envia resumo periódico mesmo quando todos os checks continuam saudáveis",
-    "Resumo diário é deduplicado por usuário e canal e usa OPERATIONS_HEALTH_DIGEST_TIME (08:00 por padrão)",
-    "Monitor cria incidentes por empresa quando AccessControlService confirma bloqueio de acesso",
-    "Bloqueios cobrem assinatura suspensa/cancelada, teste expirado, vigência encerrada e cobrança vencida além da tolerância",
-    "Regularização da empresa gera aviso recovered automaticamente",
-    "Lembretes de bloqueio comercial respeitam intervalo mínimo de 24h para evitar spam",
-    "Novo auditor bin/operational-alerts-audit.php diagnostica transporte, preferências, bloqueios e últimos envios",
-    "CRM identifica automaticamente um valor comercial claro tratado por cliente ou IA e atualiza crm_leads.value",
-    "Listas com múltiplos preços permanecem sem valor automático até existir escolha/valor final inequívoco",
-    "Valor já preenchido no CRM só é substituído por escolha ou valor final explícito",
-    "Alertas de orçamento usam commercial_request_uuid próprio e deixam de colidir com request_id de privacidade/LGPD",
-    "TenantIsolationService valida crm_commercial_requests sem afrouxar o isolamento entre empresas",
-    "Ações Marcar orçamento atendido/Dispensar alerta decodificam commercial_request_uuid no POST e mantêm isolamento tenant-aware",
-    "Confirmações de exclusão em massa de conversas usam modal visual RS Connect em vez de window.confirm",
-    "Exclusão de conexão/instância usa o mesmo modal visual com tom de perigo e foco seguro",
-    "Fallbacks de cópia deixam de usar window.prompt e usam diálogo visual RS Connect",
-    "Código de interface não mantém chamadas nativas window.confirm/window.alert/window.prompt"
-  ]
-}
+# RS Connect v36.27.18
+
+Agenda persistida antes da resposta da IA. Base integral da v36.27.17, preservando UI compacta de agentes, roteamento Digi→Ana, monitoramento e confirmação conversacional. Sem migration nova.
+
+
+Esta versão parte integralmente da **36.27.15** e mantém:
+
+- cards compactos e responsivos na tela de Assistentes Virtuais;
+- roteamento do agente especialista de agendamento;
+- migration `101_agent_scheduling_specialist_routing.sql`;
+- autoria correta do agente de agenda.
+
+A 36.27.16 acrescenta a correção crítica do ciclo de agenda: uma resposta afirmativa do cliente (`sim`, `pode`, `pode confirmar`) só gera mensagem de confirmação depois que o compromisso é realmente convertido em `confirmed` na Agenda do RS Connect.
+
+Também mantém aprovação humana como regra superior, revalida conflitos/Google Agenda e impede que o modelo declare um horário confirmado apenas por texto livre.
+
+Não há migration nova. Após o deploy, execute `php bin/migrate.php up` para garantir que a migration 101 já esteja aplicada e siga `docs/VALIDACAO-v36.27.16.md`.

@@ -30,7 +30,7 @@ $checks = [
     'demonstração e reunião não são removidas da finalidade' => preg_match('/private function schedulingPurposeCandidate.*?private function isOnlySchedulingMessage/s', $flow, $purposeMatch) === 1
         && !str_contains($purposeMatch[0], '|demonstracao|')
         && !str_contains($purposeMatch[0], '|reuniao|'),
-    'fila rápida identifica intenção antes do processamento' => str_contains($automation, '$intentProbe = (new PreSchedulingService())->detectIntent($content, false);')
+    'fila rápida identifica intenção antes do processamento' => (str_contains($automation, '$intentProbe = (new PreSchedulingService())->detectIntent($calendarContent, false);') || str_contains($automation, '$intentProbe = (new PreSchedulingService())->detectIntent($content, false);'))
         && str_contains($automation, '$schedulingIntent = !empty($intentProbe[\'has_intent\']);'),
     'erro da agenda fica observável' => str_contains($automation, 'calendar.pre_schedule_error')
         && str_contains($automation, 'Falha ao processar a intenção de agenda antes da resposta da IA.'),
@@ -40,10 +40,10 @@ $checks = [
     'pré-agendamento ainda persiste antes da etapa seguinte' => str_contains($preSchedule, 'INSERT INTO calendar_appointments')
         && str_contains($preSchedule, 'calendar.pre_scheduled')
         && str_contains($preSchedule, "\$result['created'] = true;"),
-    'versão preserva correção 36.27.17 e migration 101' => str_contains($version, 'RS Connect 36.27.18')
+    'versão preserva correção 36.27.17 e migration 101' => (str_contains($version, 'RS Connect 36.27.20') || str_contains($version, 'RS Connect 36.27.18'))
         && str_contains($version, "REQUIRED_MIGRATION = '101_agent_scheduling_specialist_routing.sql'"),
-    'cache de front-end renovado' => str_contains($layout, 'app.css?v=36.27.18')
-        && str_contains($layout, 'app.js?v=36.27.18'),
+    'cache de front-end renovado' => str_contains($layout, 'app.css?v=36.27.20')
+        && str_contains($layout, 'app.js?v=36.27.20'),
 ];
 
 $failures = [];
