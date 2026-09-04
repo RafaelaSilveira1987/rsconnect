@@ -578,6 +578,349 @@ final class OperationalAlertService
         }
     }
 
+    /** @return array{ok:bool,configured:bool,message:string,provider_message_id?:string} */
+    private function sendWhatsapp(string $destination, string $title, string $message, string $url): array
+    {
+        $baseUrl = trim((string) Env::get('OPERATIONS_ALERT_EVOLUTION_URL', Env::get('EVOLUTION_DEFAULT_URL', '')));
+        $apiKey = trim((string) Env::get('OPERATIONS_ALERT_EVOLUTION_API_KEY', Env::get('EVOLUTION_DEFAULT_API_KEY', '')));
+        $instance = trim((string) Env::get('OPERATIONS_ALERT_EVOLUTION_INSTANCE', ''));
+        if ($destination === '' || $baseUrl === '' || $apiKey === '' || $instance === '') {
+            return [
+                'ok' => false,
+                'configured' => false,
+                'message' => 'Configure destino, URL, API Key e instância administrativa da Evolution.',
+            ];
+        }
+
+        try {
+            $service = new EvolutionService(
+                $baseUrl,
+                $apiKey,
+                $instance,
+                max(5, (int) Env::get('OPERATIONS_ALERT_TIMEOUT_SECONDS', 20)),
+                filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL),
+                trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) ?: null,
+            );
+            $text = trim($title . "\n\n" . $message . ($url !== '' ? "\n\nAbrir: " . $url : ''));
+            $response = $service->sendText($destination, $text);
+            $body = is_array($response['body'] ?? null) ? $response['body'] : [];
+            $providerId = trim((string) ($body['key']['id'] ?? $body['messageId'] ?? $body['id'] ?? ''));
+            return [
+                'ok' => true,
+                'configured' => true,
+                'message' => 'WhatsApp enviado.',
+                'provider_message_id' => $providerId,
+            ];
+        } catch (Throwable $exception) {
+            return ['ok' => false, 'configured' => true, 'message' => $exception->getMessage()];
+        }
+    }
+
+    /** @return array{ok:bool,configured:bool,message:string,provider_message_id?:string} */
+    private function sendEmail(
+        string $destination,
+        string $title,
+        string $message,
+        string $url,
+        int $incidentId,
+        string $kind
+    ): array {
+        if ($destination === '') {
+            return ['ok' => false, 'configured' => false, 'message' => 'Destinatário de e-mail não configurado.'];
+        }
+        if (!filter_var($destination, FILTER_VALIDATE_EMAIL)) {
+            return ['ok' => false, 'configured' => true, 'message' => 'Destinatário de e-mail inválido.'];
+        }
+        $safeTitle = trim((string) preg_replace('/[\r\n]+/', ' ', $title));
+
+        $webhookUrl = trim((string) Env::get('OPERATIONS_ALERT_EMAIL_WEBHOOK_URL', ''));
+        if ($webhookUrl !== '') {
+            if (!preg_match('#^https?://#i', $webhookUrl)) {
+                return ['ok' => false, 'configured' => true, 'message' => 'URL do webhook de e-mail inválida.'];
+            }
+            try {
+                $payload = [
+                    'to' => $destination,
+                    'subject' => $safeTitle,
+                    'text' => trim($message . ($url !== '' ? "\n\nAbrir: " . $url : '')),
+                    'incident_id' => $incidentId > 0 ? $incidentId : null,
+                    'notification_kind' => $kind,
+                    'source' => 'rs_connect_operations',
+                ];
+                $response = $this->postJson(
+                    $webhookUrl,
+                    $payload,
+                    trim((string) Env::get('OPERATIONS_ALERT_EMAIL_WEBHOOK_TOKEN', ''))
+                );
+                return [
+                    'ok' => true,
+                    'configured' => true,
+                    'message' => 'E-mail encaminhado ao transportador.',
+                    'provider_message_id' => trim((string) ($response['id'] ?? $response['message_id'] ?? '')),
+                ];
+            } catch (Throwable $exception) {
+                return ['ok' => false, 'configured' => true, 'message' => $exception->getMessage()];
+            }
+        }
+
+        $nativeEnabled = filter_var(Env::get('OPERATIONS_ALERT_EMAIL_NATIVE', false), FILTER_VALIDATE_BOOL);
+        $from = trim((string) preg_replace('/[\r\n]+/', '', (string) Env::get('OPERATIONS_ALERT_EMAIL_FROM', '')));
+        if (!$nativeEnabled || $from === '' || !filter_var($from, FILTER_VALIDATE_EMAIL) || !function_exists('mail')) {
+            return [
+                'ok' => false,
+                'configured' => false,
+                'message' => 'Configure OPERATIONS_ALERT_EMAIL_WEBHOOK_URL ou o envio nativo de e-mail.',
+            ];
+        }
+
+        $headers = [
+            'From: ' . $from,
+            'Content-Type: text/plain; charset=UTF-8',
+            'X-Mailer: RS-Connect',
+        ];
+        $body = trim($message . ($url !== '' ? "\n\nAbrir: " . $url : ''));
+        $ok = @mail($destination, $safeTitle, $body, implode("\r\n", $headers));
+        return [
+            'ok' => $ok,
+            'configured' => true,
+            'message' => $ok ? 'E-mail enviado.' : 'O transportador nativo recusou o envio.',
+        ];
+    }
+
+    /** @param array<string,mixed> $payload @return array<string,mixed> */
+    private function postJson(string $url, array $payload, string $token = ''): array
+    {
+        $curl = curl_init($url);
+        if ($curl === false) {
+            throw new RuntimeException('Não foi possível iniciar o transportador HTTP.');
+        }
+        $headers = ['Content-Type: application/json', 'Accept: application/json'];
+        if ($token !== '') {
+            $headers[] = 'Authorization: Bearer ' . $token;
+            $headers[] = 'X-RS-Connect-Token: ' . $token;
+        }
+        curl_setopt_array($curl, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => max(5, (int) Env::get('OPERATIONS_ALERT_TIMEOUT_SECONDS', 20)),
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+            CURLOPT_SSL_VERIFYPEER => filter_var(Env::get('OPERATIONS_ALERT_SSL_VERIFY', true), FILTER_VALIDATE_BOOL),
+        ]);
+        $raw = curl_exec($curl);
+        $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($curl);
+        curl_close($curl);
+        if ($raw === false) {
+            throw new RuntimeException('Falha no transportador de e-mail: ' . $error);
+        }
+        $decoded = json_decode((string) $raw, true);
+        $body = is_array($decoded) ? $decoded : ['raw' => (string) $raw];
+        if ($status < 200 || $status >= 300) {
+            $detail = $body['message'] ?? $body['error'] ?? $body['raw'] ?? 'Resposta recusada.';
+            throw new RuntimeException('Transportador de e-mail HTTP ' . $status . ': ' . mb_substr((string) $detail, 0, 400));
+        }
+        return $body;
+    }
+
+    /** @return array<string,mixed>|null */
+    private function incident(int $id): ?array
+    {
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT i.*, t.name AS tenant_name
+                 FROM system_incidents i
+                 LEFT JOIN tenants t ON t.id = i.tenant_id
+                 WHERE i.id = :id LIMIT 1'
+            );
+            $statement->execute(['id' => $id]);
+            return $statement->fetch(PDO::FETCH_ASSOC) ?: null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function admins(): array
+    {
+        try {
+            return Database::connection()->query(
+                "SELECT id,name,email FROM users WHERE role='super_admin' AND status='active'"
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function notifications(int $userId): array
+    {
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT * FROM admin_operational_notifications WHERE user_id = :user ORDER BY id DESC LIMIT 80'
+            );
+            $statement->execute(['user' => $userId]);
+            return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function deliveries(int $userId): array
+    {
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT d.*, i.event, i.message AS incident_message
+                 FROM operational_alert_deliveries d
+                 LEFT JOIN system_incidents i ON i.id = d.incident_id
+                 WHERE d.user_id = :user
+                 ORDER BY d.id DESC LIMIT 80'
+            );
+            $statement->execute(['user' => $userId]);
+            return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function activeIncidents(): array
+    {
+        try {
+            return Database::connection()->query(
+                'SELECT i.*, t.name AS tenant_name, u.name AS acknowledged_by_name
+                 FROM system_incidents i
+                 LEFT JOIN tenants t ON t.id = i.tenant_id
+                 LEFT JOIN users u ON u.id = i.acknowledged_by
+                 WHERE i.resolved_at IS NULL AND i.severity IN ("warning","error","critical")
+                 ORDER BY FIELD(i.severity,"critical","error","warning"), i.last_seen_at DESC, i.id DESC
+                 LIMIT 60'
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function monitorRuns(): array
+    {
+        try {
+            return Database::connection()->query(
+                'SELECT * FROM operational_monitor_runs ORDER BY id DESC LIMIT 10'
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /** @return array<string,array<string,mixed>> */
+    private function channelStatus(): array
+    {
+        $whatsappReady = trim((string) Env::get('OPERATIONS_ALERT_EVOLUTION_INSTANCE', '')) !== ''
+            && trim((string) Env::get('OPERATIONS_ALERT_EVOLUTION_URL', Env::get('EVOLUTION_DEFAULT_URL', ''))) !== ''
+            && trim((string) Env::get('OPERATIONS_ALERT_EVOLUTION_API_KEY', Env::get('EVOLUTION_DEFAULT_API_KEY', ''))) !== '';
+        $emailWebhook = trim((string) Env::get('OPERATIONS_ALERT_EMAIL_WEBHOOK_URL', '')) !== '';
+        $emailNative = filter_var(Env::get('OPERATIONS_ALERT_EMAIL_NATIVE', false), FILTER_VALIDATE_BOOL)
+            && trim((string) Env::get('OPERATIONS_ALERT_EMAIL_FROM', '')) !== '';
+        return [
+            'platform' => ['ready' => true, 'label' => 'Disponível'],
+            'whatsapp' => ['ready' => $whatsappReady, 'label' => $whatsappReady ? 'Configurado' : 'Configuração pendente'],
+            'email' => ['ready' => $emailWebhook || $emailNative, 'label' => ($emailWebhook || $emailNative) ? 'Configurado' : 'Configuração pendente'],
+        ];
+    }
+
+    public function unreadCount(int $userId): int
+    {
+        try {
+            $statement = Database::connection()->prepare(
+                "SELECT COUNT(*) FROM admin_operational_notifications WHERE user_id = :user AND status = 'unread'"
+            );
+            $statement->execute(['user' => $userId]);
+            return (int) $statement->fetchColumn();
+        } catch (Throwable) {
+            return 0;
+        }
+    }
+
+    public function markAllRead(int $userId): void
+    {
+        try {
+            Database::connection()->prepare(
+                "UPDATE admin_operational_notifications SET status = 'read', read_at = NOW()
+                 WHERE user_id = :user AND status = 'unread'"
+            )->execute(['user' => $userId]);
+        } catch (Throwable) {
+        }
+    }
+
+    private function healthDigestSentToday(int $userId, string $channel, string $timezone): bool
+    {
+        if ($userId < 1 || !in_array($channel, ['platform', 'whatsapp', 'email'], true)) {
+            return true;
+        }
+
+        try {
+            $date = (new DateTimeImmutable('now', new DateTimeZone($timezone)))->format('Y-m-d');
+            $statement = Database::connection()->prepare(
+                'SELECT 1
+                 FROM operational_health_digest_deliveries
+                 WHERE user_id = :user AND channel = :channel AND digest_date = :digest_date
+                 LIMIT 1'
+            );
+            $statement->execute([
+                'user' => $userId,
+                'channel' => $channel,
+                'digest_date' => $date,
+            ]);
+            return (bool) $statement->fetchColumn();
+        } catch (Throwable) {
+            // Fail-safe: sem o ledger persistente, não repete o digest a cada ciclo do monitor.
+            return true;
+        }
+    }
+
+    private function markHealthDigestSent(int $userId, string $channel, string $state, string $message): void
+    {
+        if ($userId < 1 || !in_array($channel, ['platform', 'whatsapp', 'email'], true)) {
+            return;
+        }
+
+        $timezone = Clock::appTimezone();
+        $date = (new DateTimeImmutable('now', new DateTimeZone($timezone)))->format('Y-m-d');
+        $deliveryKey = 'operations_digest_' . $channel . '_' . str_replace('-', '', $date);
+
+        try {
+            Database::connection()->prepare(
+                'INSERT INTO operational_health_digest_deliveries
+                 (user_id, channel, digest_date, delivery_key, state, message_hash, sent_at)
+                 VALUES (:user, :channel, :digest_date, :delivery_key, :state, :message_hash, NOW())
+                 ON DUPLICATE KEY UPDATE
+                    state = VALUES(state),
+                    message_hash = VALUES(message_hash),
+                    sent_at = VALUES(sent_at)'
+            )->execute([
+                'user' => $userId,
+                'channel' => $channel,
+                'digest_date' => $date,
+                'delivery_key' => $deliveryKey,
+                'state' => mb_substr(trim($state), 0, 32),
+                'message_hash' => hash('sha256', $message),
+            ]);
+        } catch (Throwable) {
+            // O envio já ocorreu; falha de auditoria não deve derrubar o monitor.
+        }
+    }
+
+    private function deliveryKey(string $kind): string
+    {
+        if ($kind !== 'reminder') {
+            return $kind;
+        }
+        return 'reminder-' . gmdate('Ymd-H');
+    }
+
     /**
      * @param array<string,mixed> $summary
      * @param array<string,mixed> $accessSummary

@@ -56,7 +56,14 @@ $isAnyActive = static function (array $paths) use ($isActive): string {
 
 $notificationUnread = 0;
 if (Auth::isSuperAdmin()) {
-    $notificationUnread = (new OperationalAlertService())->unreadCount((int) Auth::id());
+    try {
+        $operationalAlerts = new OperationalAlertService();
+        $notificationUnread = method_exists($operationalAlerts, 'unreadCount')
+            ? $operationalAlerts->unreadCount((int) Auth::id())
+            : 0;
+    } catch (Throwable) {
+        $notificationUnread = 0;
+    }
 } elseif (Auth::tenantId()) {
     $notificationUnread = (new NotificationService())->unreadCount((int) Auth::tenantId());
 }
