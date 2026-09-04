@@ -237,6 +237,21 @@ final class CalendarConversationService
             return $confirmationResult;
         }
 
+        // 36.27.19: uma confirmação curta nunca pode cair na IA livre enquanto existe
+        // pré-agendamento pendente sem slot real selecionado. Antes isso permitia textos
+        // como "Confirmado!" mesmo quando o banco ainda guardava apenas um placeholder.
+        $orphanConfirmation = $this->guardConfirmationWithoutSelectedSlot(
+            $pdo,
+            $instance,
+            $contactId,
+            $conversationId,
+            $content,
+            $incomingMessageId
+        );
+        if (!empty($orphanConfirmation['handled'])) {
+            return $orphanConfirmation;
+        }
+
         $appointment = $this->appointmentWaitingSelection($pdo, $tenantId, $conversationId, $contactId);
         if (!$appointment) {
             return $this->incomingResult(false, false, 'no_pending_options');
@@ -523,6 +538,128 @@ final class CalendarConversationService
             'message_sent' => $send['ok'],
             'send_error' => $send['error'],
         ]);
+    }
+
+    /** @return array<string,mixed> */
+    private function guardConfirmationWithoutSelectedSlot(
+        PDO $pdo,
+        array $instance,
+        int $contactId,
+        int $conversationId,
+        string $content,
+        int $incomingMessageId = 0
+    ): array {
+        $decision = $this->confirmationDecision($content);
+        if ($decision === '') {
+            return $this->incomingResult(false, false, 'not_a_confirmation_guard');
+        }
+
+        $tenantId = (int) ($instance['tenant_id'] ?? 0);
+        if ($tenantId < 1) {
+            return $this->incomingResult(false, false, 'invalid_tenant_confirmation_guard');
+        }
+
+        $appointment = $this->pendingPreScheduleForGuard($pdo, $tenantId, $conversationId, $contactId);
+        if (!$appointment) {
+            return $this->incomingResult(false, false, 'no_pending_pre_schedule_confirmation_guard');
+        }
+
+        $appointmentId = (int) ($appointment['id'] ?? 0);
+        $slotId = (int) ($appointment['chosen_availability_slot_id'] ?? 0);
+        if ($slotId > 0) {
+            return $this->incomingResult(false, false, 'slot_exists_confirmation_guard');
+        }
+
+        $modality = mb_strtolower(trim((string) ($appointment['appointment_modality'] ?? '')));
+        $day = trim((string) ($appointment['preferred_day_text'] ?? ''));
+        $time = trim((string) ($appointment['preferred_time_text'] ?? ''));
+        $availabilityStatus = trim((string) ($appointment['availability_status'] ?? ''));
+
+        if ($decision === 'negative') {
+            $message = 'Sem problema. Ainda não havia um horário confirmado. Me diga outro dia ou horário que você prefere.';
+        } elseif (!in_array($modality, ['online', 'presencial', 'telefone'], true)) {
+            $message = 'Antes de confirmar, preciso saber a modalidade do atendimento: online ou presencial?';
+        } elseif ($day === '' || $time === '') {
+            $message = 'Ainda preciso do dia e do horário desejados antes de confirmar o agendamento.';
+        } elseif (in_array($availabilityStatus, ['requested', 'sent'], true)) {
+            $message = 'Ainda estou validando esse horário na agenda. Assim que a disponibilidade for confirmada, aviso você por aqui.';
+        } else {
+            $message = 'Esse horário ainda não foi validado na agenda. Vou manter sua preferência registrada até a disponibilidade ser confirmada.';
+        }
+
+        $send = $this->sendAppointmentMessage(
+            $appointment,
+            $message,
+            'calendar.confirmation_blocked_without_slot',
+            [
+                'appointment_id' => $appointmentId,
+                'availability_status' => $availabilityStatus !== '' ? $availabilityStatus : null,
+                'incoming_message_id' => $incomingMessageId > 0 ? $incomingMessageId : null,
+                'decision' => $decision,
+            ]
+        );
+
+        $this->markIncomingHandledByCalendar(
+            $pdo,
+            $instance,
+            $conversationId,
+            $incomingMessageId,
+            'confirmation_blocked_without_slot',
+            $appointmentId,
+            null
+        );
+
+        return array_merge($this->incomingResult(true, true, 'confirmation_blocked_without_slot'), [
+            'appointment_id' => $appointmentId,
+            'message_sent' => $send['ok'],
+            'send_error' => $send['error'],
+        ]);
+    }
+
+    /** @return array<string,mixed>|null */
+    private function pendingPreScheduleForGuard(PDO $pdo, int $tenantId, int $conversationId, int $contactId): ?array
+    {
+        try {
+            $statement = $pdo->prepare(
+                'SELECT a.*, ct.name AS contact_name, ct.phone, ct.remote_jid,
+'
+                . '       ct.evolution_instance_id AS contact_instance_id,
+'
+                . '       c.evolution_instance_id AS conversation_instance_id
+'
+                . 'FROM calendar_appointments a
+'
+                . 'LEFT JOIN contacts ct ON ct.id = a.contact_id AND ct.tenant_id = a.tenant_id
+'
+                . 'LEFT JOIN conversations c ON c.id = a.conversation_id AND c.tenant_id = a.tenant_id
+'
+                . 'WHERE a.tenant_id = :tenant_id
+'
+                . '  AND a.is_pre_schedule = 1
+'
+                . '  AND a.status IN ("pre_scheduled", "awaiting_approval", "rescheduled")
+'
+                . '  AND COALESCE(a.approval_status, "pending") <> "approved"
+'
+                . '  AND a.updated_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+'
+                . '  AND (a.conversation_id = :conversation_id OR a.contact_id = :contact_id)
+'
+                . 'ORDER BY (a.conversation_id = :conversation_id_order) DESC, a.updated_at DESC, a.id DESC
+'
+                . 'LIMIT 1'
+            );
+            $statement->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'contact_id' => $contactId,
+                'conversation_id_order' => $conversationId,
+            ]);
+            $row = $statement->fetch(PDO::FETCH_ASSOC);
+            return $row ?: null;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /** @return array<string,mixed>|null */

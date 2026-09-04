@@ -98,6 +98,20 @@ if ($calendarView === 'day') {
 } elseif ($calendarView === 'month') {
     $calendarPeriodLabel = $monthNames[(int) $calendarDate->format('n')] . ' de ' . $calendarDate->format('Y');
 }
+$calendarDisplayAppointments = array_values(array_filter($appointments, static function (array $appointment): bool {
+    if (empty($appointment['is_pre_schedule'])) {
+        return true;
+    }
+
+    // 36.27.19: enquanto dia/horário ainda não foram informados, starts_at/ends_at
+    // são apenas valores técnicos de compatibilidade e não representam compromisso real.
+    // O pedido continua visível na LISTA como "Aguardando preferência", mas não é
+    // desenhado em uma data fictícia no calendário mensal/semanal/diário.
+    $day = trim((string) ($appointment['preferred_day_text'] ?? ''));
+    $time = trim((string) ($appointment['preferred_time_text'] ?? ''));
+    return $day !== '' && $time !== '';
+}));
+
 $calendarEvents = array_map(static function (array $appointment) use ($statusLabels, $locationLabels, $googleLink, $calendarQueryBase): array {
     $listQuery = $calendarQueryBase;
     $listQuery['view'] = 'list';
@@ -117,7 +131,7 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
         'google_url' => $googleLink($appointment),
         'list_url' => Router::url('/calendar?' . http_build_query($listQuery)) . '#appointment-' . (int) ($appointment['id'] ?? 0),
     ];
-}, $appointments);
+}, $calendarDisplayAppointments);
 ?>
 
 
@@ -281,7 +295,11 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
                     <?php endif; ?>
                 </div>
                 <div class="task-actions calendar-actions">
-                    <a class="btn btn-small btn-quiet" target="_blank" rel="noopener" href="<?= View::e($googleLink($appointment)) ?>">Google</a>
+                    <?php if ($isPreSchedule && !$hasPreSchedulePreference): ?>
+                        <button class="btn btn-small btn-disabled" type="button" disabled title="Aguardando dia e horário reais">Google</button>
+                    <?php else: ?>
+                        <a class="btn btn-small btn-quiet" target="_blank" rel="noopener" href="<?= View::e($googleLink($appointment)) ?>">Google</a>
+                    <?php endif; ?>
                     <?php if ($canManage): ?>
                         <?php if (!in_array($appointment['status'], ['completed', 'cancelled', 'rejected'], true)): ?>
                             <?php if (in_array($appointment['status'], ['pre_scheduled', 'awaiting_approval', 'rescheduled'], true)): ?>
@@ -320,7 +338,7 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
 <?php else: ?>
 <section class="card calendar-visual-card" data-calendar-board data-calendar-view="<?= View::e($calendarView) ?>" data-calendar-anchor="<?= View::e($calendarDate->format('Y-m-d')) ?>" data-calendar-range-start="<?= View::e((string) ($filters['date_from'] ?? '')) ?>" data-calendar-range-end="<?= View::e((string) ($filters['date_to'] ?? '')) ?>">
     <div class="section-heading compact">
-        <div><span class="eyebrow">Calendário</span><h2><?= count($appointments) ?> compromissos no período</h2><p>Selecione um compromisso para ver os detalhes. Alterações continuam protegidas pela visualização em lista.</p></div>
+        <div><span class="eyebrow">Calendário</span><h2><?= count($calendarDisplayAppointments) ?> compromissos com horário definido no período</h2><p>Selecione um compromisso para ver os detalhes. Alterações continuam protegidas pela visualização em lista.</p></div>
     </div>
     <script type="application/json" data-calendar-events><?= json_encode($calendarEvents, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
     <div class="calendar-visual-loading" data-calendar-loading>Montando calendário...</div>

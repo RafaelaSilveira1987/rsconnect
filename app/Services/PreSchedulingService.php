@@ -683,24 +683,19 @@ final class PreSchedulingService
             return true;
         }
 
-        // Quando o fluxo já foi ingerido e concluiu que a mensagem é conversa comum,
-        // um compromisso antigo não pode reabrir agenda sozinho. O fallback abaixo existe
-        // apenas para chamadas legadas que não receberam flowContext.
-        if ($flowContext !== []) {
-            return false;
+        // 36.27.19: um pré-agendamento pendente e recente é fonte de verdade mais forte
+        // que uma classificação genérica "conversation" produzida pela mensagem curta.
+        // Isso mantém respostas como "quinta às 14h", "online" ou "presencial" dentro
+        // da agenda sem transformar mensagens comuns ("obrigado", "oi") em intenção.
+        if (is_array($appointment) && $appointment !== []) {
+            $reference = (string) ($appointment['updated_at'] ?? $appointment['created_at'] ?? '');
+            $timestamp = $reference !== '' ? strtotime($reference) : false;
+            if ($timestamp !== false && (time() - $timestamp) <= (36 * 3600)) {
+                return true;
+            }
         }
 
-        if (!is_array($appointment) || $appointment === []) {
-            return false;
-        }
-        $reference = (string) ($appointment['updated_at'] ?? $appointment['created_at'] ?? '');
-        $timestamp = $reference !== '' ? strtotime($reference) : false;
-        if ($timestamp === false) {
-            return false;
-        }
-
-        // Evita que um pré-agendamento antigo deixe a conversa "presa" em agenda por dias.
-        return (time() - $timestamp) <= (36 * 3600);
+        return false;
     }
 
     private function pendingPreSchedule(PDO $pdo, int $tenantId, int $conversationId, int $contactId = 0): ?array
