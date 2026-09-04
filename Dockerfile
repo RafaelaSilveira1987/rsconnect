@@ -1,189 +1,35 @@
-APP_NAME="RS Connect"
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://rsconnect.rsautomacaodigital.cloud
-APP_TIMEZONE=America/Sao_Paulo
-# Datas técnicas são persistidas em UTC; não altere em produção.
-APP_STORAGE_TIMEZONE=UTC
-APP_KEY=base64:SUA_APP_KEY
+FROM php:8.3-apache
 
-DB_HOST=mysql
-DB_PORT=3306
-DB_DATABASE=rs_connect
-DB_USERNAME=rsconnect
-DB_PASSWORD=SUA_SENHA_MYSQL
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
-SESSION_NAME=rs_connect_session
-SESSION_LIFETIME=120
-SESSION_SAMESITE=Lax
-SESSION_COOKIE_SECURE=true
-# Proxies internos do EasyPanel/Docker autorizados a fornecer X-Forwarded-*.
-TRUSTED_PROXIES=127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128
+RUN apt-get update \
+    && apt-get install -y libzip-dev libcurl4-openssl-dev libonig-dev unzip git \
+    && docker-php-ext-install pdo_mysql curl mbstring zip \
+    && printf 'upload_max_filesize=25M\npost_max_size=26M\nmax_file_uploads=5\n' > /usr/local/etc/php/conf.d/rs-connect-uploads.ini \
+    && a2enmod rewrite headers \
+    && rm -rf /var/lib/apt/lists/*
 
-EVOLUTION_DEFAULT_URL=https://evolutionapi.rsautomacaodigital.cloud
-EVOLUTION_DEFAULT_API_KEY=SUA_KEY_GLOBAL_DA_EVOLUTION
-EVOLUTION_SSL_VERIFY=true
-EVOLUTION_CA_BUNDLE=
-EVOLUTION_WEBHOOK_TOKEN=troque_por_um_token_longo
-EVOLUTION_WEBHOOK_MAX_AGE_SECONDS=86400
+COPY . /var/www/html
 
-# Chaves globais da RS. Chaves do cliente podem ser cadastradas no painel RS: Credenciais de IA.
-# Opcional quando todas as empresas/assistentes usam credenciais próprias cadastradas no painel.
-OPENAI_API_KEY=SUA_CHAVE_OPENAI_GLOBAL_OU_VAZIO
-OPENAI_API_BASE_URL=https://api.openai.com/v1
-# Painel administrativo de consumo oficial da organização OpenAI.
-# Use uma Admin API Key; a chave comum de inferência não acessa /organization/usage.
-OPENAI_ADMIN_API_KEY=
-OPENAI_ADMIN_API_BASE_URL=https://api.openai.com/v1
-OPENAI_ORGANIZATION_ID=
-# Opcional: IDs de projetos separados por vírgula. Vazio consulta toda a organização.
-OPENAI_USAGE_PROJECT_IDS=
-OPENAI_USAGE_CACHE_SECONDS=300
-OPENAI_USAGE_HTTP_TIMEOUT=20
-OPENAI_USAGE_SSL_VERIFY=true
-OPENAI_MONTHLY_BUDGET_USD=
-OPENAI_USAGE_USD_BRL=
-GEMINI_API_KEY=
-GOOGLE_GEMINI_API_KEY=
-GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta
-AI_AUTOREPLY_ENABLED=true
-AI_HTTP_TIMEOUT=28
-AI_MAX_OUTPUT_TOKENS=420
-AI_MAX_REPLY_CHARS=1400
-# Opcional: roteamento por perfil. Se vazio, o assistente mantém o modelo configurado no painel.
-AI_MODEL_OPENAI_ECONOMY=
-AI_MODEL_OPENAI_BALANCED=
-AI_MODEL_OPENAI_QUALITY=
-AI_MEMORY_MODEL_OPENAI=
-AI_MEMORY_MODEL_GOOGLE=
-AI_MODEL_GOOGLE_ECONOMY=
-AI_MODEL_GOOGLE_BALANCED=
-AI_MODEL_GOOGLE_QUALITY=
-# Opcional: sobrescreve as tarifas padrão usadas na estimativa por empresa/assistente.
-# Sem esta variável, modelos OpenAI de texto conhecidos usam o catálogo interno (snapshot 2026-08-25).
-# Modelos especializados (TTS, transcrição, realtime, imagem) exigem tarifa explícita quando quiser estimar custo.
-AI_COST_RATES_JSON=
-N8N_WEBHOOK_URL=
+RUN printf '%s\n' \
+    '<VirtualHost *:80>' \
+    '    ServerName localhost' \
+    '    DocumentRoot /var/www/html/public' \
+    '' \
+    '    <Directory /var/www/html/public>' \
+    '        Options -Indexes +FollowSymLinks' \
+    '        AllowOverride All' \
+    '        Require all granted' \
+    '        FallbackResource /index.php' \
+    '    </Directory>' \
+    '' \
+    '    ErrorLog ${APACHE_LOG_DIR}/error.log' \
+    '    CustomLog ${APACHE_LOG_DIR}/access.log combined' \
+    '</VirtualHost>' \
+    > /etc/apache2/sites-available/000-default.conf \
+    && mkdir -p /var/www/html/storage/logs /var/www/html/storage/cache /var/www/html/storage/conversation-attachments /var/www/html/storage/app/white-label \
+    && chown -R www-data:www-data /var/www/html/storage \
+    && php -r "require '/var/www/html/app/Core/Autoloader.php'; App\\Core\\Autoloader::register('/var/www/html/app'); if (!class_exists('App\\Core\\Router')) { fwrite(STDERR, 'Router autoload validation failed.\n'); exit(1); }" \
+    && php /var/www/html/bin/migrate.php verify
 
-# Opcional: n8n para criar/sincronizar eventos em Google Calendar
-N8N_CALENDAR_WEBHOOK_URL=
-
-# ZIP 09: n8n por empresa deve ser configurado no painel Super Admin > Fluxos n8n.
-# Esta variável continua apenas como fallback legado.
-N8N_WEBHOOK_URL=
-
-# Segredo obrigatório para token e HMAC dos callbacks do n8n em /webhooks/n8n/callback.
-# Envie X-RS-Connect-Token, X-RS-Timestamp e X-RS-Signature.
-N8N_CALLBACK_TOKEN=
-N8N_WEBHOOK_MAX_AGE_SECONDS=300
-N8N_HTTP_TIMEOUT=18
-N8N_CALENDAR_HTTP_TIMEOUT=45
-
-# Pagamentos / Gateways
-PAYMENT_HTTP_TIMEOUT=30
-
-# Régua de cobrança / cron externo opcional
-BILLING_CRON_TOKEN=
-
-# Segurança — Beta 1.1 / v36.11.1
-SECURITY_HEADERS_ENABLED=true
-SECURITY_CSP_ENABLED=true
-SECURITY_LOGIN_ATTEMPT_LIMIT=6
-SECURITY_LOGIN_IP_LIMIT=30
-SECURITY_LOGIN_ATTEMPT_WINDOW_MINUTES=15
-SECURITY_SESSION_IDLE_MINUTES=120
-SECURITY_SESSION_ABSOLUTE_MINUTES=720
-SECURITY_SESSION_ROTATE_MINUTES=30
-SECURITY_SESSION_BIND_USER_AGENT=true
-SECURITY_CSRF_TTL_MINUTES=120
-SECURITY_CSRF_ORIGIN_CHECK=true
-SECURITY_WEBHOOK_MAX_BYTES=5242880
-SECURITY_WEBHOOK_RATE_LIMIT_PER_MINUTE=600
-SECURITY_CRON_RATE_LIMIT_PER_MINUTE=60
-# Produção é sempre fail-closed, mesmo que esta variável seja alterada.
-SECURITY_WEBHOOK_STRICT=true
-SECURITY_WEBHOOK_ALLOW_INSECURE_LOCAL=false
-SECURITY_WEBHOOK_MAX_AGE_SECONDS=300
-SECURITY_WEBHOOK_PROCESSING_STALE_SECONDS=900
-
-# ZIP 21 — Monitoramento / backup externo
-OPERATIONS_BACKUP_TOKEN=
-OPERATIONS_MONITOR_TOKEN=
-OPERATIONS_BACKUP_MAX_AGE_HOURS=24
-OPERATIONS_BACKUP_JOB_TIMEOUT_MINUTES=30
-
-# v36.12.0 — Monitoramento e alertas operacionais
-OPERATIONS_WEBHOOK_INACTIVITY_HOURS=24
-OPERATIONS_N8N_CONSECUTIVE_ERRORS_CRITICAL=3
-OPERATIONS_DISK_PATH=/var/www/html
-OPERATIONS_DISK_WARNING_PERCENT=20
-OPERATIONS_DISK_CRITICAL_PERCENT=10
-OPERATIONS_DISK_MIN_FREE_GB=2
-OPERATIONS_MESSAGE_PENDING_MINUTES=15
-OPERATIONS_MESSAGE_QUEUE_WARNING=10
-OPERATIONS_MESSAGE_QUEUE_CRITICAL=50
-OPERATIONS_ALERT_TIMEOUT_SECONDS=20
-OPERATIONS_ALERT_SSL_VERIFY=true
-# WhatsApp administrativo para alertas. Pode reutilizar URL/API Key globais, mas a instância deve ser dedicada ou controlada.
-OPERATIONS_ALERT_EVOLUTION_URL=
-OPERATIONS_ALERT_EVOLUTION_API_KEY=
-OPERATIONS_ALERT_EVOLUTION_INSTANCE=
-# E-mail por webhook (recomendado, por exemplo n8n) ou transportador nativo do servidor.
-OPERATIONS_ALERT_EMAIL_WEBHOOK_URL=
-OPERATIONS_ALERT_EMAIL_WEBHOOK_TOKEN=
-OPERATIONS_ALERT_EMAIL_NATIVE=false
-OPERATIONS_ALERT_EMAIL_FROM=
-N8N_BASE_URL=
-
-# ZIP 24 — Backup automático via n8n
-# Use um token forte. O n8n usará este token para registrar o resultado em /webhooks/operations/backups.
-# OPERATIONS_BACKUP_TOKEN=troque_por_um_token_seguro
-
-# Versão visual exibida no painel de status
-APP_VERSION=Beta Comercial 1.1
-APP_PACKAGE=RS Connect 36.17.2
-
-# Bloqueio de acesso após fatura vencida
-BILLING_ACCESS_GRACE_DAYS=5
-
-# Saúde dos clientes — ZIP 34.4
-TENANT_HEALTH_CRON_TOKEN=
-# Reprocessamento seguro da fila da IA — HOTFIX 36.1.2
-AI_REPROCESS_CRON_TOKEN=
-NOTIFICATION_CRON_TOKEN=troque-por-um-token-longo-e-aleatorio
-# Token dedicado ao endpoint HTTP da retomada pós-horário. Se vazio, reutiliza AI_REPROCESS_CRON_TOKEN.
-AFTER_HOURS_MONITOR_TOKEN=
-AI_REPROCESS_QUEUE_LIMIT=50
-# Necessário somente para acionar a manutenção da agenda por cron externo.
-CALENDAR_MAINTENANCE_TOKEN=
-MESSAGE_RETENTION_TOKEN=troque_por_um_token_longo_e_exclusivo
-CALENDAR_AVAILABILITY_RETRY_MINUTES=2
-CALENDAR_AVAILABILITY_RECOVERY_LIMIT=25
-
-# Recuperação automática de conversas recebidas fora do horário
-AI_AFTER_HOURS_MAX_AGE_HOURS=168
-OPERATIONS_AFTER_HOURS_RECOVERY_LIMIT=25
-
-# Conversas — imagens, PDFs e áudios
-CONVERSATION_ATTACHMENTS_ENABLED=true
-CONVERSATION_ATTACHMENT_MAX_MB=20
-# Diretório privado persistente. Em produção, monte um volume neste caminho.
-CONVERSATION_ATTACHMENTS_PATH=/var/www/html/storage/conversation-attachments
-# Relatórios automáticos — PDF e WhatsApp
-# Monte um volume persistente no caminho abaixo.
-SCHEDULED_REPORTS_PATH=/var/www/html/storage/generated-reports
-SCHEDULED_REPORTS_CRON_TOKEN=
-SCHEDULED_REPORTS_WHATSAPP_TIMEOUT=45
-
-
-# Executor de migrations (ENT-027)
-MIGRATIONS_LOCK_TIMEOUT=30
-MIGRATION_ACTOR=rs-connect-cli
-
-# Identificação obrigatória nas requisições à API Asaas
-ASAAS_USER_AGENT=RS-Connect/36.24.6
-# Compatibilidade histórica: ASAAS_USER_AGENT=RS-Connect/36.24.5
-
-# Cadastro público: falhas técnicas do gateway não entram nessa contagem.
-PUBLIC_SIGNUP_EMAIL_LIMIT_PER_HOUR=5
-PUBLIC_SIGNUP_IP_LIMIT_PER_HOUR=20
+EXPOSE 80
