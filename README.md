@@ -1,9 +1,14 @@
-## RS Connect 36.26.9
+## RS Connect 36.27.16
 
-Correção do monitor financeiro para reconhecer como recuperação técnica um webhook autenticado e processado que retorna `ignored` apenas por não encontrar uma cobrança local correspondente.
+Esta versão parte integralmente da **36.27.15** e mantém:
 
-O monitor agora compara a última falha com a última evidência válida de comunicação. Eventos `payment.webhook.<provider>` com status `ignored` encerram alertas antigos de autenticação quando são posteriores ao erro, sem transformar eventos negados em sucesso.
+- cards compactos e responsivos na tela de Assistentes Virtuais;
+- roteamento do agente especialista de agendamento;
+- migration `101_agent_scheduling_specialist_routing.sql`;
+- autoria correta do agente de agenda.
 
-As melhorias da Central de Monitoramento 36.26.8 e da liberação segura da fila 36.26.7 foram preservadas.
+A 36.27.16 acrescenta a correção crítica do ciclo de agenda: uma resposta afirmativa do cliente (`sim`, `pode`, `pode confirmar`) só gera mensagem de confirmação depois que o compromisso é realmente convertido em `confirmed` na Agenda do RS Connect.
 
-Não há migration nova. Consulte `docs/ATUALIZACAO-v36.26.9.md`.
+Também mantém aprovação humana como regra superior, revalida conflitos/Google Agenda e impede que o modelo declare um horário confirmado apenas por texto livre.
+
+Não há migration nova. Após o deploy, execute `php bin/migrate.php up` para garantir que a migration 101 já esteja aplicada e siga `docs/VALIDACAO-v36.27.16.md`.

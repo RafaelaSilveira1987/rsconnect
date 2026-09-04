@@ -4288,3 +4288,64 @@ document.addEventListener('DOMContentLoaded', () => {
     refresh();
   });
 });
+
+// RS Connect 36.27.15 — cartões compactos e sugestão segura para agente de agendamento.
+document.addEventListener('DOMContentLoaded', () => {
+  const openAgentSettings = (trigger) => {
+    if (!(trigger instanceof Element)) return;
+    const href = trigger.getAttribute('href') || '';
+    if (!href.startsWith('#')) return;
+    const details = document.querySelector(href);
+    if (!(details instanceof HTMLDetailsElement)) return;
+
+    document.querySelectorAll('.agent-settings-details[open]').forEach((item) => {
+      if (item !== details && item instanceof HTMLDetailsElement) item.open = false;
+    });
+    details.open = true;
+
+    const targetSelector = trigger.getAttribute('data-agent-settings-target') || href;
+    const target = document.querySelector(targetSelector);
+    window.requestAnimationFrame(() => {
+      (target instanceof Element ? target : details).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  document.querySelectorAll('[data-agent-settings-open]').forEach((trigger) => {
+    trigger.addEventListener('click', (event) => {
+      event.preventDefault();
+      openAgentSettings(trigger);
+    });
+  });
+
+  document.querySelectorAll('[data-agent-segment]').forEach((segmentInput) => {
+    const form = segmentInput.closest('form');
+    if (!(form instanceof HTMLFormElement)) return;
+    const routingMode = form.querySelector('[data-routing-mode]');
+    const keywords = form.querySelector('[data-routing-keywords]');
+    if (!(routingMode instanceof HTMLSelectElement)) return;
+
+    routingMode.addEventListener('change', () => {
+      routingMode.dataset.routingTouched = '1';
+    });
+
+    const suggestSchedulingSpecialist = () => {
+      if (routingMode.dataset.routingTouched === '1') return;
+      const segment = (segmentInput.value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+      if (!/(^|\s)(agenda|agendamento|agendamentos)(\s|$)/.test(segment) && !segment.includes('agend')) return;
+
+      routingMode.value = 'specialist';
+      if ((keywords instanceof HTMLInputElement || keywords instanceof HTMLTextAreaElement) && keywords.value.trim() === '') {
+        keywords.value = 'agendar, agendamento, marcar, remarcar, reagendar, reservar';
+      }
+      routingMode.dispatchEvent(new Event('change', { bubbles: true }));
+      // O change acima atualiza a interface; a sugestão continua editável pelo usuário.
+      delete routingMode.dataset.routingTouched;
+    };
+
+    segmentInput.addEventListener('blur', suggestSchedulingSpecialist);
+    segmentInput.addEventListener('change', suggestSchedulingSpecialist);
+  });
+});

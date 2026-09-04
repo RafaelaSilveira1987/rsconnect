@@ -165,27 +165,44 @@ $routingModeShortLabels = [
                 <article class="agent-card">
                     <div class="agent-card-head">
                         <span class="agent-icon agent-icon-bot" aria-hidden="true"></span>
-                        <div><h3><?= View::e($agent['name']) ?></h3><p><?= View::e($agent['segment']) ?></p></div>
+                        <div class="agent-card-identity"><h3><?= View::e($agent['name']) ?></h3><p><?= View::e($agent['segment']) ?></p></div>
+                        <span class="agent-card-status-dot <?= $agent['status'] === 'active' ? 'is-active' : 'is-inactive' ?>" title="<?= $agent['status'] === 'active' ? 'Ativo' : 'Inativo' ?>" aria-label="<?= $agent['status'] === 'active' ? 'Ativo' : 'Inativo' ?>"></span>
                     </div>
-                    <div class="agent-data">
-                        <div><span>Canais WhatsApp</span><strong><?= View::e(($agent['channel_names'] ?? '') !== '' ? $agent['channel_names'] : ($agent['instance_name'] ?? 'Não vinculado')) ?></strong><small><?= (int) ($agent['channel_count'] ?? 0) ?> canal(is) vinculado(s)</small></div>
-                        <div><span>Roteamento multiagente</span><strong><?= View::e($routingSummary) ?></strong><?php if ($routingKeywordsSummary !== []): ?><small>Direcionamento: <?= View::e(implode(', ', array_slice($routingKeywordsSummary, 0, 5))) ?><?= count($routingKeywordsSummary) > 5 ? ' +' . (count($routingKeywordsSummary) - 5) : '' ?></small><?php else: ?><small>Configure o papel deste assistente em cada canal.</small><?php endif; ?></div>
-                        <div><span>Modelo usado para responder</span><strong><?= View::e($agent['credential_model'] ?: $agent['model_name']) ?></strong></div>
-                        <div><span>Acesso à IA</span><strong><?= View::e($agent['credential_label'] ?: 'Configuração da RS Connect') ?></strong></div>
-                        <div><span>Memória configurada</span><strong><?= (int) ($agent['max_context_messages'] ?? 12) ?> mensagens</strong></div>
-                        <div><span>Nível de economia</span><strong><?= View::e($aiModeLabels[$agent['ai_efficiency_mode'] ?? 'balanced'] ?? 'Equilibrado') ?></strong><small><?= View::e($aiModeHints[$agent['ai_efficiency_mode'] ?? 'balanced'] ?? $aiModeHints['balanced']) ?></small></div>
+                    <div class="agent-data agent-data-compact">
+                        <div>
+                            <span>Canais</span>
+                            <strong><?= (int) ($agent['channel_count'] ?? 0) === 1 ? '1 canal vinculado' : (int) ($agent['channel_count'] ?? 0) . ' canais vinculados' ?></strong>
+                            <small class="agent-data-ellipsis" title="<?= View::e((string) ($agent['channel_names'] ?? '')) ?>"><?= View::e(($agent['channel_names'] ?? '') !== '' ? $agent['channel_names'] : ($agent['instance_name'] ?? 'Não vinculado')) ?></small>
+                        </div>
+                        <div>
+                            <span>Papel no atendimento</span>
+                            <strong><?= View::e($routingSummary) ?></strong>
+                            <?php if ($routingKeywordsSummary !== []): ?>
+                                <small><?= count($routingKeywordsSummary) ?> intenção(ões) configurada(s)</small>
+                            <?php else: ?>
+                                <small>Sem direcionamento por intenção</small>
+                            <?php endif; ?>
+                        </div>
+                        <div><span>Modelo</span><strong><?= View::e($agent['credential_model'] ?: $agent['model_name']) ?></strong></div>
+                        <div><span>Memória</span><strong><?= (int) ($agent['max_context_messages'] ?? 12) ?> mensagens · <?= View::e($aiModeLabels[$agent['ai_efficiency_mode'] ?? 'balanced'] ?? 'Equilibrado') ?></strong></div>
                     </div>
-                    <div class="badge-row">
+                    <div class="badge-row agent-card-badges">
                         <span class="badge badge-<?= View::e($agent['status']) ?>"><?= $agent['status'] === 'active' ? 'Ativo' : 'Inativo' ?></span>
-                        <span class="badge <?= (int) ($agent['auto_reply_enabled'] ?? 0) === 1 ? 'badge-success' : 'badge-muted' ?>"><?= (int) ($agent['auto_reply_enabled'] ?? 0) === 1 ? 'Respostas automáticas' : 'Resposta manual' ?></span>
-                        <?php foreach (array_keys($routingModesInUse) as $routingMode): ?>
+                        <span class="badge <?= (int) ($agent['auto_reply_enabled'] ?? 0) === 1 ? 'badge-success' : 'badge-muted' ?>"><?= (int) ($agent['auto_reply_enabled'] ?? 0) === 1 ? 'Automático' : 'Manual' ?></span>
+                        <?php foreach (array_slice(array_keys($routingModesInUse), 0, 1) as $routingMode): ?>
                             <span class="badge agent-routing-badge agent-routing-badge-<?= View::e($routingMode) ?>"><?= View::e($routingModeShortLabels[$routingMode] ?? $routingMode) ?></span>
                         <?php endforeach; ?>
-                        <?php if ((int) $agent['is_default'] === 1 && !isset($routingModesInUse['primary'])): ?><span class="badge">Apoio geral</span><?php endif; ?>
-                        <?php if ((int) ($agent['business_hours_enabled'] ?? 0) === 1): ?><span class="badge">Segue horário</span><?php endif; ?>
                     </div>
+                    <details class="agent-technical-summary">
+                        <summary>Detalhes técnicos</summary>
+                        <div class="agent-technical-grid">
+                            <div><span>Acesso à IA</span><strong><?= View::e($agent['credential_label'] ?: 'Configuração da RS Connect') ?></strong></div>
+                            <div><span>Economia</span><strong><?= View::e($aiModeLabels[$agent['ai_efficiency_mode'] ?? 'balanced'] ?? 'Equilibrado') ?></strong><small><?= View::e($aiModeHints[$agent['ai_efficiency_mode'] ?? 'balanced'] ?? $aiModeHints['balanced']) ?></small></div>
+                            <?php if ($routingKeywordsSummary !== []): ?><div class="agent-technical-wide"><span>Intenções</span><strong><?= View::e(implode(', ', $routingKeywordsSummary)) ?></strong></div><?php endif; ?>
+                        </div>
+                    </details>
                     <?php if ($canManage && $instances): ?>
-                        <a class="agent-routing-jump" href="#agent-routing-<?= (int) $agent['id'] ?>">Configurar multiagente</a>
+                        <a class="agent-routing-jump" href="#agent-settings-<?= (int) $agent['id'] ?>" data-agent-settings-open data-agent-settings-target="#agent-routing-<?= (int) $agent['id'] ?>">Configurar</a>
                     <?php endif; ?>
 
                     <?php if ($canManage): ?>
@@ -238,6 +255,8 @@ $routingModeShortLabels = [
                     <?php endif; ?>
 
                     <?php if ($canManage): ?>
+                        <details class="agent-settings-details" id="agent-settings-<?= (int) $agent['id'] ?>">
+                            <summary><span><strong>Configurações completas</strong><small>Canais, roteamento, horário, memória e automações.</small></span><span class="drawer-chevron"></span></summary>
                         <form class="agent-actions agent-settings-form" method="post" action="<?= View::e(Router::url('/agents/status')) ?>">
                             <?= Csrf::input() ?>
                             <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
@@ -365,6 +384,7 @@ $routingModeShortLabels = [
                             <p class="field-hint"><strong>O horário configurado sempre tem prioridade.</strong> Quando “Responder somente no horário configurado” estiver ativo, IA, agenda, seleção de horários e automações conversacionais ficam bloqueadas fora do expediente, mesmo que as instruções do assistente digam para atender 24 horas.</p>
                             <button class="btn btn-outline" type="submit">Salvar configurações</button>
                         </form>
+                        </details>
 
                         <details class="agent-group-rules">
                             <summary>
@@ -443,7 +463,7 @@ $routingModeShortLabels = [
                     <label class="field"><span>Papel neste canal</span><select name="routing_mode" data-routing-mode><option value="primary" <?= count($agents) === 0 ? 'selected' : '' ?>>Principal / recepção</option><option value="specialist">Especialista por assunto</option><option value="round_robin" <?= count($agents) > 0 ? 'selected' : '' ?>>Distribuição automática</option></select><small class="field-hint">Você poderá alterar esta opção a qualquer momento.</small></label>
                     <label class="field agent-routing-keywords" data-routing-keywords-field><span>Intenções / palavras de direcionamento</span><input name="routing_keywords" maxlength="1000" placeholder="comercial, vendas, planos, preço, orçamento" data-routing-keywords disabled><small class="field-hint">Obrigatório quando o papel for Especialista.</small></label>
                     <label class="field"><span>Nome do assistente</span><input name="name" placeholder="Ex.: Digi" required></label>
-                    <label class="field"><span>Área de atendimento</span><input name="segment" placeholder="Ex.: vendas e agendamentos" required></label>
+                    <label class="field"><span>Área de atendimento</span><input name="segment" placeholder="Ex.: vendas e agendamentos" data-agent-segment required></label>
                     <label class="field drawer-span"><span>Objetivo do atendimento</span><textarea name="service_objective" rows="4" placeholder="Ex.: responder dúvidas, identificar a necessidade do cliente, apresentar os serviços e encaminhar oportunidades para a equipe." required></textarea><small class="field-hint">Explique em palavras simples o resultado esperado de cada conversa.</small></label>
                 </div>
             </section>
@@ -588,7 +608,7 @@ $routingModeShortLabels = [
                 <label class="field"><span>Papel neste canal</span><select name="routing_mode" data-routing-mode><option value="primary" <?= count($agents) === 0 ? 'selected' : '' ?>>Principal / recepção</option><option value="specialist">Especialista por assunto</option><option value="round_robin" <?= count($agents) > 0 ? 'selected' : '' ?>>Distribuição automática</option></select></label>
                 <label class="field agent-routing-keywords" data-routing-keywords-field><span>Intenções / palavras de direcionamento</span><input name="routing_keywords" maxlength="1000" placeholder="comercial, vendas, planos, preço, orçamento" data-routing-keywords disabled><small class="field-hint">Obrigatório quando o papel for Especialista.</small></label>
                 <label class="field"><span>Nome do assistente</span><input name="name" placeholder="Ex.: Digi, Assistente Comercial" required></label>
-                <label class="field"><span>Área de atendimento</span><input name="segment" placeholder="Ex.: vendas, suporte, agendamentos" required><small class="field-hint">Ajuda a identificar a função principal do assistente.</small></label>
+                <label class="field"><span>Área de atendimento</span><input name="segment" placeholder="Ex.: vendas, suporte, agendamentos" data-agent-segment required><small class="field-hint">Ajuda a identificar a função principal do assistente.</small></label>
             </section>
 
             <section class="drawer-section prompt-studio-output">

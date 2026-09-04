@@ -48,7 +48,7 @@ $checks = [
     'pin por conversa continua antes do roteamento' => substr_count($service, '$this->pinnedAgentId(') >= 4,
     'fallback sem migration é compatível' => str_contains($service, 'Sem a migration nova, mantém o comportamento anterior'),
     'manifest inclui migration 099' => str_contains($manifest, "099_ai_agent_round_robin_routing.sql"),
-    'versão exige migration 099' => str_contains($version, "REQUIRED_MIGRATION = '099_ai_agent_round_robin_routing.sql'"),
+    'versão preserva migration 099 no histórico' => str_contains($version, '099_ai_agent_round_robin_routing.sql'),
     'takeover humano mantém lock de linha' => str_contains($ownership, 'FOR UPDATE'),
     'takeover humano bloqueia interferência' => str_contains($ownership, 'locked_by_other')
         && str_contains($ownership, 'assertMayInteract'),

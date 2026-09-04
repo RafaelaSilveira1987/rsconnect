@@ -1,8 +1,14 @@
 {
   "package": "rsconnect-deploy-hardening-kit",
-  "date": "2026-09-03",
-  "purpose": "Full RS Connect production package with multi-agent routing, operational monitoring, CRM commercial value synchronization and global RS Connect dialog UI",
+  "date": "2026-09-04",
+  "purpose": "Full RS Connect production package with compact agent management UI, scheduling-specialist routing repair, operational monitoring and commercial automation",
   "changes": [
+    "Assistentes Virtuais: cards compactos, responsivos e sem estouro horizontal com 3+ agentes",
+    "Configurações completas ficam recolhidas por padrão e abrem sob demanda",
+    "Agentes com área de agendamento já existentes recebem direcionamento seguro quando ainda estavam em round-robin sem keywords",
+    "Novos agentes de agendamento recebem sugestão automática de papel Especialista e keywords editáveis",
+    "Mensagens determinísticas do pré-agendamento usam a identidade do agente efetivamente roteado no WhatsApp e no histórico",
+    "Removidos instaladores/hotfixes históricos duplicados do pacote de produção",
     "AiReprocessService.runScheduledIfDue",
     "rsconnect-backup.finish_error exit code",
     "post-deploy verification assets",

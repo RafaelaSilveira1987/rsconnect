@@ -351,9 +351,13 @@ final class AiModelService
             if ($agendaContextActive && $preScheduling->isEnabled($tenantId)) {
                 $settings = $preScheduling->settings($tenantId);
                 $rules[] = 'A conversa está em contexto real de agenda. Antes de conduzir ao pré-agendamento, siga a regra do grupo informada abaixo; quando ela exigir demanda, confirme que foi coletada ou recusada.';
-                $rules[] = 'Quando o contato estiver liberado pelas regras do grupo e do fluxo e demonstrar intenção real de agendar, colete dia/período/horário preferido e modalidade. Não confirme horário, não diga que está marcado e não prometa link.';
+                $rules[] = 'Quando o contato estiver liberado pelas regras do grupo e do fluxo e demonstrar intenção real de agendar, colete dia/período/horário preferido e modalidade. Nunca invente disponibilidade e nunca declare um compromisso confirmado apenas por decisão textual sua.';
                 $rules[] = 'Se o contato ainda não informou dia ou horário depois de estar liberado para agenda, use a mensagem de coleta configurada pelo cliente, adaptando somente o nome se necessário.';
-                $rules[] = 'Se o contato informou preferência de dia ou horário, use a mensagem de registro configurada pelo cliente e deixe claro que depende de confirmação humana.';
+                if (!empty($settings['ai_can_confirm']) && empty($settings['require_human_approval'])) {
+                    $rules[] = 'A confirmação final é executada tecnicamente pelo RS Connect depois que um horário real foi selecionado e o cliente responde afirmativamente. Você pode pedir confirmação, mas não diga que está confirmado antes de o sistema registrar o compromisso como confirmado.';
+                } else {
+                    $rules[] = 'Se o contato informou preferência de dia ou horário, deixe claro que a escolha depende de confirmação humana. Não diga que está marcado ou confirmado.';
+                }
                 $preScheduleBlock = "Configurações de pré-agendamento do cliente:\n" .
                     '- Mensagem para coletar dia/horário: ' . (string) ($settings['collect_message'] ?? '') . "\n" .
                     '- Mensagem após registrar preferência: ' . (string) ($settings['default_message'] ?? '') . "\n" .

@@ -12828,3 +12828,118 @@ body.login-demo-open{overflow:hidden}
   background: #fff;
 }
 .rs-confirm-prompt[data-multiline="1"] { min-height: 180px; }
+
+/* =========================================================
+   RS Connect 36.27.15 — cards compactos de assistentes
+   ========================================================= */
+.agent-management-page,
+.agent-list-card,
+.agent-grid,
+.agent-card { min-width: 0; }
+.agent-list-card { max-width: 100%; }
+.agent-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.agent-card {
+  align-content: start;
+  gap: 12px;
+  padding: 17px;
+  overflow: hidden;
+}
+.agent-card-head { min-width: 0; align-items: center; }
+.agent-card-identity { min-width: 0; flex: 1; }
+.agent-card-identity h3,
+.agent-card-identity p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-card-status-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  margin-left: auto;
+  border-radius: 999px;
+  background: #94a3b8;
+  box-shadow: 0 0 0 4px rgba(148,163,184,.13);
+}
+.agent-card-status-dot.is-active { background: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,.12); }
+.agent-card-status-dot.is-inactive { background: #94a3b8; }
+.agent-data.agent-data-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.agent-data.agent-data-compact > div {
+  min-width: 0;
+  min-height: 76px;
+  align-content: start;
+  padding: 10px 11px;
+  border: 1px solid #edf1f5;
+  background: #fff;
+}
+.agent-data.agent-data-compact strong {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.35;
+}
+.agent-data.agent-data-compact small {
+  display: block;
+  min-width: 0;
+  color: var(--rs-muted);
+  font-size: .68rem;
+  line-height: 1.35;
+}
+.agent-data-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-card-badges { min-height: 27px; gap: 6px; overflow: hidden; }
+.agent-card-badges .badge { max-width: 100%; }
+.agent-technical-summary,
+.agent-settings-details {
+  border: 1px solid #e5ebf1;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+.agent-technical-summary > summary,
+.agent-settings-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  list-style: none;
+  cursor: pointer;
+  color: #526174;
+  font-size: .74rem;
+  font-weight: 800;
+}
+.agent-technical-summary > summary::-webkit-details-marker,
+.agent-settings-details > summary::-webkit-details-marker { display: none; }
+.agent-technical-summary[open] > summary,
+.agent-settings-details[open] > summary { border-bottom: 1px solid #edf1f5; background: #f8fafc; }
+.agent-technical-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+}
+.agent-technical-grid > div { display: grid; gap: 3px; min-width: 0; padding: 9px; border-radius: 9px; background: #f8fafc; }
+.agent-technical-grid span { color: var(--rs-muted); font-size: .65rem; text-transform: uppercase; }
+.agent-technical-grid strong { min-width: 0; overflow-wrap: anywhere; color: #25364c; font-size: .73rem; }
+.agent-technical-grid small { color: var(--rs-muted); font-size: .66rem; line-height: 1.35; }
+.agent-technical-wide { grid-column: 1 / -1; }
+.agent-settings-details > summary span:first-child { display: grid; gap: 2px; min-width: 0; }
+.agent-settings-details > summary strong { color: #2d3e53; }
+.agent-settings-details > summary small { color: var(--rs-muted); font-size: .68rem; font-weight: 500; }
+.agent-settings-details .agent-settings-form { margin: 0; padding: 12px; border-top: 0; }
+.agent-routing-jump { margin-top: 0; }
+
+@media (max-width: 1180px) {
+  .agent-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+}
+@media (max-width: 720px) {
+  .agent-grid { grid-template-columns: 1fr; }
+  .agent-data.agent-data-compact,
+  .agent-technical-grid { grid-template-columns: 1fr; }
+  .agent-technical-wide { grid-column: auto; }
+}

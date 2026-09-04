@@ -1039,23 +1039,42 @@ final class PreSchedulingService
                 filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL) !== false,
                 trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) !== '' ? trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) : null
             );
-            $response = $service->sendText($phone, $message);
+            $senderDisplayName = $this->agendaSenderDisplayName($pdo, $instance, $conversationId, $agent);
+            $deliveredMessage = $this->withAiWhatsappSignature($message, $senderDisplayName);
+            $response = $service->sendText($phone, $deliveredMessage);
             $externalId = $this->extractMessageId($response['body'] ?? []);
             $sentAt = \App\Core\Clock::nowUtc();
 
-            $pdo->prepare(
-                'INSERT INTO conversation_messages
-                    (tenant_id, conversation_id, evolution_message_id, direction, sender_type, message_type, content, status, raw_payload_json, sent_at)
-                 VALUES
-                    (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", "text", :content, "sent", :raw_payload, :sent_at)'
-            )->execute([
-                'tenant_id' => $tenantId,
-                'conversation_id' => $conversationId,
-                'external_id' => $externalId,
-                'content' => $message,
-                'raw_payload' => json_encode($response['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'sent_at' => $sentAt,
-            ]);
+            if ($this->hasColumn($pdo, 'conversation_messages', 'sender_display_name')) {
+                $pdo->prepare(
+                    'INSERT INTO conversation_messages
+                        (tenant_id, conversation_id, evolution_message_id, direction, sender_type, sender_display_name, message_type, content, status, raw_payload_json, sent_at)
+                     VALUES
+                        (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", :sender_display_name, "text", :content, "sent", :raw_payload, :sent_at)'
+                )->execute([
+                    'tenant_id' => $tenantId,
+                    'conversation_id' => $conversationId,
+                    'external_id' => $externalId,
+                    'sender_display_name' => $senderDisplayName !== '' ? $senderDisplayName : null,
+                    'content' => $message,
+                    'raw_payload' => json_encode($response['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'sent_at' => $sentAt,
+                ]);
+            } else {
+                $pdo->prepare(
+                    'INSERT INTO conversation_messages
+                        (tenant_id, conversation_id, evolution_message_id, direction, sender_type, message_type, content, status, raw_payload_json, sent_at)
+                     VALUES
+                        (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", "text", :content, "sent", :raw_payload, :sent_at)'
+                )->execute([
+                    'tenant_id' => $tenantId,
+                    'conversation_id' => $conversationId,
+                    'external_id' => $externalId,
+                    'content' => $message,
+                    'raw_payload' => json_encode($response['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'sent_at' => $sentAt,
+                ]);
+            }
 
             $pdo->prepare(
                 'UPDATE conversations
@@ -1134,23 +1153,42 @@ final class PreSchedulingService
                 filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL) !== false,
                 trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) !== '' ? trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) : null
             );
-            $response = $service->sendText($phone, $message);
+            $senderDisplayName = $this->agendaSenderDisplayName($pdo, $instance, $conversationId, $agent);
+            $deliveredMessage = $this->withAiWhatsappSignature($message, $senderDisplayName);
+            $response = $service->sendText($phone, $deliveredMessage);
             $externalId = $this->extractMessageId($response['body'] ?? []);
             $sentAt = \App\Core\Clock::nowUtc();
 
-            $pdo->prepare(
-                'INSERT INTO conversation_messages
-                    (tenant_id, conversation_id, evolution_message_id, direction, sender_type, message_type, content, status, raw_payload_json, sent_at)
-                 VALUES
-                    (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", "text", :content, "sent", :raw_payload, :sent_at)'
-            )->execute([
-                'tenant_id' => $tenantId,
-                'conversation_id' => $conversationId,
-                'external_id' => $externalId,
-                'content' => $message,
-                'raw_payload' => json_encode($response['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'sent_at' => $sentAt,
-            ]);
+            if ($this->hasColumn($pdo, 'conversation_messages', 'sender_display_name')) {
+                $pdo->prepare(
+                    'INSERT INTO conversation_messages
+                        (tenant_id, conversation_id, evolution_message_id, direction, sender_type, sender_display_name, message_type, content, status, raw_payload_json, sent_at)
+                     VALUES
+                        (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", :sender_display_name, "text", :content, "sent", :raw_payload, :sent_at)'
+                )->execute([
+                    'tenant_id' => $tenantId,
+                    'conversation_id' => $conversationId,
+                    'external_id' => $externalId,
+                    'sender_display_name' => $senderDisplayName !== '' ? $senderDisplayName : null,
+                    'content' => $message,
+                    'raw_payload' => json_encode($response['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'sent_at' => $sentAt,
+                ]);
+            } else {
+                $pdo->prepare(
+                    'INSERT INTO conversation_messages
+                        (tenant_id, conversation_id, evolution_message_id, direction, sender_type, message_type, content, status, raw_payload_json, sent_at)
+                     VALUES
+                        (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", "text", :content, "sent", :raw_payload, :sent_at)'
+                )->execute([
+                    'tenant_id' => $tenantId,
+                    'conversation_id' => $conversationId,
+                    'external_id' => $externalId,
+                    'content' => $message,
+                    'raw_payload' => json_encode($response['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'sent_at' => $sentAt,
+                ]);
+            }
 
             $pdo->prepare(
                 'UPDATE conversations
@@ -1564,6 +1602,76 @@ final class PreSchedulingService
         $statement = $pdo->prepare('SELECT id, name, phone, email FROM contacts WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
         $statement->execute(['id' => $contactId, 'tenant_id' => $tenantId]);
         return $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    private function agendaSenderDisplayName(PDO $pdo, array $instance, int $conversationId, ?array $agent = null): string
+    {
+        $tenantId = (int) ($instance['tenant_id'] ?? 0);
+        $instanceId = (int) ($instance['id'] ?? 0);
+        if (!is_array($agent)) {
+            try {
+                $agent = (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, '', false);
+            } catch (Throwable) {
+                $agent = null;
+            }
+        }
+
+        $agentId = (int) ($agent['id'] ?? 0);
+        $agentName = trim((string) ($agent['name'] ?? ''));
+        $segment = trim((string) ($agent['segment'] ?? ''));
+        if ($agentName === '') {
+            return 'IA';
+        }
+
+        $isSpecialist = false;
+        if ($tenantId > 0 && $instanceId > 0 && $agentId > 0) {
+            try {
+                $statement = $pdo->prepare(
+                    'SELECT routing_keywords
+                     FROM ai_agent_instance_bindings
+                     WHERE tenant_id = :tenant_id
+                       AND instance_id = :instance_id
+                       AND agent_id = :agent_id
+                       AND status = "active"
+                     LIMIT 1'
+                );
+                $statement->execute([
+                    'tenant_id' => $tenantId,
+                    'instance_id' => $instanceId,
+                    'agent_id' => $agentId,
+                ]);
+                $isSpecialist = trim((string) ($statement->fetchColumn() ?: '')) !== '';
+            } catch (Throwable) {
+                $isSpecialist = false;
+            }
+        }
+
+        if ($isSpecialist) {
+            return 'IA ' . ($segment !== '' ? $segment : 'Especialista') . ' - ' . $agentName;
+        }
+
+        return 'IA - ' . $agentName;
+    }
+
+    private function withAiWhatsappSignature(string $message, string $senderDisplayName): string
+    {
+        $message = trim($message);
+        if ($message === '') {
+            return $message;
+        }
+
+        $signature = trim($senderDisplayName) !== '' ? trim($senderDisplayName) : 'IA';
+        $plainPrefix = preg_quote($signature, '/');
+        if (preg_match('/^\*?' . $plainPrefix . '\*?\s*(?:\r?\n|$)/iu', $message) === 1) {
+            return $message;
+        }
+
+        // Remove assinatura antiga fixa para que uma troca de agente não continue
+        // aparecendo no WhatsApp como se a mensagem tivesse sido enviada pelo anterior.
+        $message = preg_replace('/^\*?IA(?:\s+[^\n*-]+)?\s*-\s*[^\n*]+\*?\s*(?:\r?\n|$)/iu', '', $message) ?? $message;
+        $message = trim($message);
+
+        return '*' . $signature . "*\n" . $message;
     }
 
     private function hasColumn(PDO $pdo, string $table, string $column): bool

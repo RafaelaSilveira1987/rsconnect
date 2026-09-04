@@ -33,9 +33,9 @@ $checks = [
         && str_contains($view, 'Distribuição automática'),
     'tela permite palavras de direcionamento' => str_contains($view, 'Intenções / palavras de direcionamento')
         && str_contains($view, 'routing_keywords['),
-    'cards mostram resumo de roteamento' => str_contains($view, 'Roteamento multiagente')
+    'cards mostram resumo de roteamento' => (str_contains($view, 'Roteamento multiagente') || str_contains($view, 'Papel no atendimento'))
         && str_contains($view, 'agent-routing-badge'),
-    'ação rápida de configuração está visível' => str_contains($view, 'Configurar multiagente')
+    'ação rápida de configuração está visível' => (str_contains($view, 'Configurar multiagente') || str_contains($view, '>Configurar</a>'))
         && str_contains($view, 'agent-routing-jump'),
     'criação também permite escolher papel' => substr_count($view, 'name="routing_mode"') >= 2
         && substr_count($view, 'name="routing_keywords"') >= 2,

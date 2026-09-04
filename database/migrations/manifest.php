@@ -120,5 +120,6 @@ return [
         ['sequence' => 105, 'file' => '098_operational_queue_release.sql'],
         ['sequence' => 106, 'file' => '099_ai_agent_round_robin_routing.sql'],
         ['sequence' => 107, 'file' => '100_operational_health_digest_delivery.sql'],
+        ['sequence' => 108, 'file' => '101_agent_scheduling_specialist_routing.sql'],
     ],
 ];
