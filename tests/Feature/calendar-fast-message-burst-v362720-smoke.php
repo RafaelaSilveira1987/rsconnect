@@ -30,7 +30,7 @@ $checks = [
         str_contains($ai, "calendar_burst_message_ids")
         && str_contains($ai, "calendar_burst_count"),
     'versão 36.27.20 preserva migration 101' =>
-        str_contains($version, 'RS Connect 36.27.20')
+        (str_contains($version, 'RS Connect 36.27.21') || str_contains($version, 'RS Connect 36.27.20'))
         && str_contains($version, "REQUIRED_MIGRATION = '101_agent_scheduling_specialist_routing.sql'"),
     'cache de front-end atualizado' =>
         str_contains($layout, 'app.css?v=36.27.20')

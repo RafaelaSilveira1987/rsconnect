@@ -46,6 +46,19 @@ final class PreSchedulingService
         }
 
         $existing = $this->pendingPreSchedule($pdo, $tenantId, $conversationId, $contactId);
+        if ($existing !== null) {
+            // 36.27.21: calendar_appointments.conversation_id usa ON DELETE SET NULL.
+            // Quando a conversa anterior é substituída/removida, o pré-agendamento
+            // continua válido pelo contato, mas precisa ser religado à conversa ativa
+            // antes de qualquer conversation_events ou continuidade da agenda.
+            $existing = $this->rebindOrphanPendingPreScheduleConversation(
+                $pdo,
+                $tenantId,
+                $conversationId,
+                $contactId,
+                $existing
+            );
+        }
         $continuationContext = $this->isAgendaContinuationContext($existing, $flowContext);
         $intent = $this->detectIntent($content, $continuationContext);
         if (!$intent['has_intent']) {
@@ -153,7 +166,7 @@ final class PreSchedulingService
                 'message' => null,
             ];
             if ($this->hasFullPreference($intent) || $this->isAvailabilityModality($this->intentSchedulingModality($intent))) {
-                $transition = $this->prepareExistingForNewPreference($pdo, $tenantId, $existing, $intent);
+                $transition = $this->prepareExistingForNewPreference($pdo, $tenantId, $conversationId, $existing, $intent);
                 if (empty($transition['ok'])) {
                     $result = array_merge($result, [
                         'updated' => false,
@@ -176,7 +189,7 @@ final class PreSchedulingService
                 }
             }
 
-            $update = $this->updatePendingPreSchedule($pdo, $tenantId, $existing, $intent, $content);
+            $update = $this->updatePendingPreSchedule($pdo, $tenantId, $conversationId, $existing, $intent, $content);
             $result = array_merge($result, [
                 'updated' => true,
                 'appointment_id' => (int) ($existing['id'] ?? 0),
@@ -744,8 +757,72 @@ final class PreSchedulingService
         return null;
     }
 
+    private function rebindOrphanPendingPreScheduleConversation(
+        PDO $pdo,
+        int $tenantId,
+        int $conversationId,
+        int $contactId,
+        array $appointment
+    ): array {
+        $appointmentId = (int) ($appointment['id'] ?? 0);
+        if ($appointmentId < 1 || $tenantId < 1 || $conversationId < 1) {
+            return $appointment;
+        }
+
+        $current = $pdo->prepare(
+            'SELECT id, contact_id FROM conversations WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+        );
+        $current->execute(['id' => $conversationId, 'tenant_id' => $tenantId]);
+        $currentConversation = $current->fetch(PDO::FETCH_ASSOC);
+        if (!$currentConversation) {
+            return $appointment;
+        }
+
+        if ($contactId > 0 && (int) ($currentConversation['contact_id'] ?? 0) !== $contactId) {
+            return $appointment;
+        }
+
+        $storedConversationId = (int) ($appointment['conversation_id'] ?? 0);
+        if ($storedConversationId === $conversationId) {
+            return $appointment;
+        }
+
+        // Só religa automaticamente quando o vínculo anterior ficou órfão.
+        // Um appointment ainda ligado a outra conversa válida não é "roubado"
+        // silenciosamente, preservando isolamento entre canais/conversas.
+        if ($storedConversationId > 0) {
+            $stored = $pdo->prepare(
+                'SELECT COUNT(*) FROM conversations WHERE id = :id AND tenant_id = :tenant_id'
+            );
+            $stored->execute(['id' => $storedConversationId, 'tenant_id' => $tenantId]);
+            if ((int) $stored->fetchColumn() > 0) {
+                return $appointment;
+            }
+        }
+
+        $update = $pdo->prepare(
+            'UPDATE calendar_appointments
+             SET conversation_id = :conversation_id,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = :appointment_id
+               AND tenant_id = :tenant_id
+               AND is_pre_schedule = 1'
+        );
+        $update->execute([
+            'conversation_id' => $conversationId,
+            'appointment_id' => $appointmentId,
+            'tenant_id' => $tenantId,
+        ]);
+
+        if ($update->rowCount() > 0) {
+            $appointment['conversation_id'] = $conversationId;
+        }
+
+        return $appointment;
+    }
+
     /** @return array{ok:bool,changed:bool,request_needed:bool,message:?string} */
-    private function prepareExistingForNewPreference(PDO $pdo, int $tenantId, array $appointment, array $intent): array
+    private function prepareExistingForNewPreference(PDO $pdo, int $tenantId, int $conversationId, array $appointment, array $intent): array
     {
         $appointmentId = (int) ($appointment['id'] ?? 0);
         if ($appointmentId < 1) {
@@ -840,7 +917,7 @@ final class PreSchedulingService
                  VALUES (:tenant_id, :conversation_id, "calendar.preference_changed", :description, :metadata_json)'
             )->execute([
                 'tenant_id' => $tenantId,
-                'conversation_id' => (int) ($appointment['conversation_id'] ?? 0),
+                'conversation_id' => $conversationId,
                 'description' => 'Opções anteriores invalidadas e estado da disponibilidade reiniciado antes de uma nova consulta; uma pré-reserva ativa é preservada até a escolha do novo horário.',
                 'metadata_json' => json_encode([
                     'appointment_id' => $appointmentId,
@@ -885,7 +962,7 @@ final class PreSchedulingService
         }
     }
 
-    private function updatePendingPreSchedule(PDO $pdo, int $tenantId, array $appointment, array $intent, string $content): array
+    private function updatePendingPreSchedule(PDO $pdo, int $tenantId, int $conversationId, array $appointment, array $intent, string $content): array
     {
         $settings = $this->settings($tenantId);
         $day = $this->displayDay($intent);
@@ -910,6 +987,7 @@ final class PreSchedulingService
         $params = [
             'id' => (int) $appointment['id'],
             'tenant_id' => $tenantId,
+            'conversation_id' => $conversationId,
             'description' => mb_substr($description, 0, 2000),
             'preferred_day_text' => $day !== '' ? $day : ($appointment['preferred_day_text'] ?? null),
             'preferred_time_text' => $time !== '' ? $time : ($appointment['preferred_time_text'] ?? null),
@@ -938,7 +1016,8 @@ final class PreSchedulingService
 
         $pdo->prepare(
             'UPDATE calendar_appointments
-             SET description = :description' . $setPeriod . $statusSet . ',
+             SET conversation_id = CASE WHEN conversation_id IS NULL THEN :conversation_id ELSE conversation_id END,
+                 description = :description' . $setPeriod . $statusSet . ',
                  preferred_day_text = :preferred_day_text,
                  preferred_time_text = :preferred_time_text,
                  location_type = :location_type,
@@ -949,6 +1028,9 @@ final class PreSchedulingService
         )->execute($params);
 
         $updatedAppointment = array_merge($appointment, [
+            'conversation_id' => (int) ($appointment['conversation_id'] ?? 0) > 0
+                ? (int) $appointment['conversation_id']
+                : $conversationId,
             'description' => $params['description'],
             'preferred_day_text' => $params['preferred_day_text'],
             'preferred_time_text' => $params['preferred_time_text'],
@@ -965,7 +1047,7 @@ final class PreSchedulingService
              VALUES (:tenant_id, :conversation_id, "calendar.pre_schedule_updated", :description, :metadata_json)'
         )->execute([
             'tenant_id' => $tenantId,
-            'conversation_id' => (int) ($updatedAppointment['conversation_id'] ?? 0),
+            'conversation_id' => $conversationId,
             'description' => $readyForAvailability
                 ? 'Preferência de dia/horário e modalidade recebidas; pré-agendamento pronto para consultar disponibilidade.'
                 : ($mergedHasFullPreference ? 'Dia/horário recebidos; aguardando modalidade antes de consultar disponibilidade.' : 'Pré-agendamento atualizado com nova informação do lead.'),
