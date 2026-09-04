@@ -439,6 +439,103 @@ final class AiAutomationService
                 return;
             }
 
+            // 36.27.18: toda mensagem que chega à IA depois da janela de espera passa
+            // novamente pela máquina determinística da Agenda ANTES de qualquer regra
+            // local, cache ou provedor de IA. Isso fecha um atalho em que a Fila rápida
+            // podia acabar chamando handleIncoming() e produzir uma resposta textual de
+            // agendamento sem calendar_appointments persistido.
+            if (!$afterHoursRecovery && $storedMessageId > 0) {
+                $calendarGuard = $this->processSchedulingDuringReprocess($pdo, $instance, [
+                    'contact_id' => (int) ($conversation['contact_id'] ?? 0),
+                    'conversation_id' => $conversationId,
+                    'message_id' => $storedMessageId,
+                    'content' => $incomingContent,
+                ]);
+
+                $calendarError = trim((string) ($calendarGuard['calendar_error'] ?? ''));
+                $calendarHandled = !empty($calendarGuard['handled']);
+                $calendarSkipAi = !empty($calendarGuard['skip_ai']);
+                $schedulingIntent = !empty($calendarGuard['scheduling_intent']);
+                $preSchedulingEnabled = (new PreSchedulingService())->isEnabled((int) $instance['tenant_id']);
+
+                if ($calendarError !== '' && ($schedulingIntent || $calendarHandled)) {
+                    $this->log(
+                        (int) $instance['tenant_id'],
+                        $conversationId,
+                        (int) $agent['id'],
+                        'ai.failed',
+                        'error',
+                        'Falha na camada determinística de agenda: ' . $calendarError,
+                        null,
+                        [
+                            'failure_phase' => 'calendar.pre_schedule',
+                            'incoming_message_id' => $storedMessageId,
+                            'calendar_fail_closed' => true,
+                            'calendar_guard' => 'before_ai_provider',
+                        ]
+                    );
+                    return;
+                }
+
+                if ($calendarHandled && $calendarSkipAi) {
+                    $this->log(
+                        (int) $instance['tenant_id'],
+                        $conversationId,
+                        (int) $agent['id'],
+                        'calendar.pre_schedule.handled',
+                        'success',
+                        null,
+                        null,
+                        [
+                            'incoming_message_id' => $storedMessageId,
+                            'appointment_id' => (int) ($calendarGuard['appointment_id'] ?? 0),
+                            'calendar_guard' => 'before_ai_provider',
+                        ]
+                    );
+                    return;
+                }
+
+                // Se a intenção é explicitamente de agenda e a agenda automática está
+                // habilitada, "não tratado" não é autorização para o modelo improvisar.
+                // Falha fechada: preserva a mensagem para diagnóstico/reprocessamento e
+                // impede frases como "ficou agendado" sem transação no calendário.
+                if ($schedulingIntent && $preSchedulingEnabled && !$calendarHandled) {
+                    $message = 'Intenção de agenda detectada, mas a camada determinística não criou nem atualizou um pré-agendamento.';
+                    try {
+                        $pdo->prepare(
+                            'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json) '
+                            . 'VALUES (:tenant_id, :conversation_id, "calendar.pre_schedule_unhandled", :description, :metadata_json)'
+                        )->execute([
+                            'tenant_id' => (int) $instance['tenant_id'],
+                            'conversation_id' => $conversationId,
+                            'description' => $message,
+                            'metadata_json' => json_encode([
+                                'incoming_message_id' => $storedMessageId,
+                                'agent_id' => (int) $agent['id'],
+                                'calendar_guard' => 'before_ai_provider',
+                            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        ]);
+                    } catch (Throwable) {
+                        // A observabilidade não pode esconder a proteção fail-closed.
+                    }
+                    $this->log(
+                        (int) $instance['tenant_id'],
+                        $conversationId,
+                        (int) $agent['id'],
+                        'ai.failed',
+                        'error',
+                        $message,
+                        null,
+                        [
+                            'failure_phase' => 'calendar.pre_schedule_unhandled',
+                            'incoming_message_id' => $storedMessageId,
+                            'calendar_fail_closed' => true,
+                        ]
+                    );
+                    return;
+                }
+            }
+
             // Se a IA já gerou uma resposta e apenas a Evolution falhou, reaproveita
             // exatamente a saída preservada. Isso evita gastar tokens de novo e mantém
             // a conversa coerente depois que o WhatsApp for reconectado.

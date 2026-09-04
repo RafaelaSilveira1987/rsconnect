@@ -1,4 +1,7 @@
-## RS Connect 36.27.16
+# RS Connect v36.27.18
+
+Agenda persistida antes da resposta da IA. Base integral da v36.27.17, preservando UI compacta de agentes, roteamento Digi→Ana, monitoramento e confirmação conversacional. Sem migration nova.
+
 
 Esta versão parte integralmente da **36.27.15** e mantém:
 

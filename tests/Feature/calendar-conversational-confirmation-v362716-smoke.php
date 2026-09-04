@@ -52,10 +52,10 @@ $checks = [
         && str_contains($calendar, '"outgoing", "ai"'),
     'prompt proíbe confirmação textual sem persistência' => str_contains($aiModel, 'Nunca invente disponibilidade e nunca declare um compromisso confirmado apenas por decisão textual sua.')
         && str_contains($aiModel, 'não diga que está confirmado antes de o sistema registrar o compromisso como confirmado'),
-    'versão identifica 36.27.16 sem migration nova' => str_contains($version, 'RS Connect 36.27.16')
+    'versão atual preserva confirmação 36.27.16 e migration 101' => str_contains($version, 'RS Connect 36.27.18')
         && str_contains($version, "REQUIRED_MIGRATION = '101_agent_scheduling_specialist_routing.sql'"),
-    'cache de front-end renovado' => str_contains($layout, 'app.css?v=36.27.16')
-        && str_contains($layout, 'app.js?v=36.27.16'),
+    'cache de front-end renovado' => str_contains($layout, 'app.css?v=36.27.18')
+        && str_contains($layout, 'app.js?v=36.27.18'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));

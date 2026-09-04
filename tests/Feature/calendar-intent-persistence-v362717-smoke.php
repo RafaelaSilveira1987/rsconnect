@@ -40,10 +40,10 @@ $checks = [
     'pré-agendamento ainda persiste antes da etapa seguinte' => str_contains($preSchedule, 'INSERT INTO calendar_appointments')
         && str_contains($preSchedule, 'calendar.pre_scheduled')
         && str_contains($preSchedule, "\$result['created'] = true;"),
-    'versão identifica 36.27.17 sem migration nova' => str_contains($version, 'RS Connect 36.27.17')
+    'versão preserva correção 36.27.17 e migration 101' => str_contains($version, 'RS Connect 36.27.18')
         && str_contains($version, "REQUIRED_MIGRATION = '101_agent_scheduling_specialist_routing.sql'"),
-    'cache de front-end renovado' => str_contains($layout, 'app.css?v=36.27.17')
-        && str_contains($layout, 'app.js?v=36.27.17'),
+    'cache de front-end renovado' => str_contains($layout, 'app.css?v=36.27.18')
+        && str_contains($layout, 'app.js?v=36.27.18'),
 ];
 
 $failures = [];

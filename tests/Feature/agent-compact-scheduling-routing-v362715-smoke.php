@@ -58,10 +58,10 @@ $checks = [
     'pré-agendamento persiste sender_display_name quando disponível' => str_contains($preSchedule, "hasColumn(\$pdo, 'conversation_messages', 'sender_display_name')")
         && str_contains($preSchedule, ':sender_display_name'),
     'manifest inclui migration 101' => str_contains($manifest, "101_agent_scheduling_specialist_routing.sql"),
-    'versão identifica 36.27.15' => str_contains($version, 'RS Connect 36.27.15')
+    'versão atual preserva UI/roteamento 36.27.15' => str_contains($version, 'RS Connect 36.27.18')
         && str_contains($version, "REQUIRED_MIGRATION = '101_agent_scheduling_specialist_routing.sql'"),
-    'cache de CSS e JS renovado' => str_contains($layout, 'app.css?v=36.27.15')
-        && str_contains($layout, 'app.js?v=36.27.15'),
+    'cache de CSS e JS renovado' => str_contains($layout, 'app.css?v=36.27.18')
+        && str_contains($layout, 'app.js?v=36.27.18'),
 ];
 
 $failures = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));
