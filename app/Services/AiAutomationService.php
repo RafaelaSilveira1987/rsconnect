@@ -1291,6 +1291,33 @@ final class AiAutomationService
                 $preScheduleResult = $this->processSchedulingDuringReprocess($pdo, $instance, $candidate);
             }
 
+            $calendarError = trim((string) ($preScheduleResult['calendar_error'] ?? ''));
+            if (!empty($preScheduleResult['scheduling_intent']) && $calendarError !== '') {
+                // Falha fechada: se a camada determinística de agenda falhar, não deixa
+                // o modelo livre continuar e afirmar disponibilidade/confirmação sem registro.
+                $this->log(
+                    $tenantId,
+                    (int) $candidate['conversation_id'],
+                    $agentId,
+                    'ai.failed',
+                    'error',
+                    'Falha na camada determinística de agenda: ' . $calendarError,
+                    null,
+                    [
+                        'failure_phase' => 'calendar.pre_schedule',
+                        'incoming_message_id' => (int) $candidate['message_id'],
+                        'calendar_fail_closed' => true,
+                    ]
+                );
+                return [
+                    'status' => 'error',
+                    'conversation_id' => (int) $candidate['conversation_id'],
+                    'message_id' => (int) $candidate['message_id'],
+                    'event' => 'ai.failed',
+                    'error' => 'A agenda não pôde ser processada com segurança: ' . $calendarError,
+                ];
+            }
+
             if (!((bool) ($preScheduleResult['skip_ai'] ?? false))) {
                 $this->handleIncoming(
                     $instance,
@@ -1589,6 +1616,9 @@ final class AiAutomationService
             return ['skip_ai' => false, 'handled' => false];
         }
 
+        $intentProbe = (new PreSchedulingService())->detectIntent($content, false);
+        $schedulingIntent = !empty($intentProbe['has_intent']);
+
         try {
             $flowContext = (new ConversationFlowService())->ingestIncoming(
                 $pdo,
@@ -1652,11 +1682,33 @@ final class AiAutomationService
                 }
             }
 
+            $result['scheduling_intent'] = $schedulingIntent;
             return $result;
         } catch (Throwable $exception) {
+            if ($schedulingIntent) {
+                try {
+                    $pdo->prepare(
+                        'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
+'
+                        . 'VALUES (:tenant_id, :conversation_id, "calendar.pre_schedule_error", :description, :metadata_json)'
+                    )->execute([
+                        'tenant_id' => (int) ($instance['tenant_id'] ?? 0),
+                        'conversation_id' => $conversationId,
+                        'description' => 'Falha ao processar a intenção de agenda antes da resposta da IA.',
+                        'metadata_json' => json_encode([
+                            'incoming_message_id' => $messageId,
+                            'error' => mb_substr($exception->getMessage(), 0, 1000),
+                        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    ]);
+                } catch (Throwable) {
+                    // Observabilidade não pode mascarar a falha original.
+                }
+            }
+
             return [
                 'skip_ai' => false,
                 'handled' => false,
+                'scheduling_intent' => $schedulingIntent,
                 'calendar_error' => $exception->getMessage(),
             ];
         }

@@ -632,13 +632,40 @@ final class ConversationFlowService
     private function demandCandidate(string $original, string $text): string
     {
         if (mb_strlen(trim($original)) < 12) return '';
-        if ($this->isOnlySchedulingMessage($text)) return '';
 
         $signals = '/\b(ansiedade|depressao|panico|insonia|luto|relacionamento|autoestima|estresse|medo|trauma|crise|angustia|tristeza|terapia|acompanhamento|ajuda|preciso|porque|motivo|queixa|dificuldade|problema|sofrendo|sinto|estou com|tenho tido)\b/u';
         if (preg_match($signals, $text)) {
             return mb_substr(trim($original), 0, 1200);
         }
+
+        // 36.27.17: em empresas comerciais, a própria finalidade explícita do
+        // agendamento pode ser a demanda. Ex.: “agendar uma demonstração” ou
+        // “agendar uma reunião”. Mantemos a triagem para pedidos genéricos como
+        // “quero agendar” e para “agendar uma consulta”, preservando os fluxos
+        // clínicos que exigem motivo/queixa quando configurados assim.
+        if (in_array($this->intent($text), ['schedule', 'reschedule'], true)) {
+            $purpose = $this->schedulingPurposeCandidate($text);
+            if ($purpose !== '') {
+                return mb_substr(trim($original), 0, 1200);
+            }
+        }
+
+        if ($this->isOnlySchedulingMessage($text)) return '';
         return '';
+    }
+
+    private function schedulingPurposeCandidate(string $text): string
+    {
+        $clean = preg_replace(
+            '/\b(agenda|agendar|reagendar|remarcar|desmarcar|marcar|encaixe|consulta|sessao|atendimento|horario|horarios|disponibilidade|online|presencial|telefone|hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo|manha|tarde|noite|quero|gostaria|preciso|pode|posso|como|qual|quais|tem|ha|ver|consultar|confirma|confirmar|um|uma|o|a|os|as|de|do|da|dos|das|para|por|favor|me|eu)\b/u',
+            ' ',
+            $text
+        ) ?? $text;
+        $clean = preg_replace('/\b\d{1,2}(?::\d{2})?\s*h?\b|\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/u', ' ', $clean) ?? $clean;
+        $clean = preg_replace('/[^a-z0-9 ]+/u', ' ', $clean) ?? $clean;
+        $tokens = preg_split('/\s+/u', trim($clean)) ?: [];
+        $tokens = array_values(array_filter($tokens, static fn (string $token): bool => mb_strlen($token) >= 6));
+        return $tokens !== [] ? implode(' ', $tokens) : '';
     }
 
     private function isOnlySchedulingMessage(string $text): bool
