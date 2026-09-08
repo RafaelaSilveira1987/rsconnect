@@ -352,15 +352,24 @@ final class AiModelService
                 $settings = $preScheduling->settings($tenantId);
                 $rules[] = 'A conversa está em contexto real de agenda. Antes de conduzir ao pré-agendamento, siga a regra do grupo informada abaixo; quando ela exigir demanda, confirme que foi coletada ou recusada.';
                 $rules[] = 'Quando o contato estiver liberado pelas regras do grupo e do fluxo e demonstrar intenção real de agendar, colete dia/período/horário preferido e modalidade. Nunca invente disponibilidade e nunca declare um compromisso confirmado apenas por decisão textual sua.';
-                $rules[] = 'Se o contato ainda não informou dia ou horário depois de estar liberado para agenda, use a mensagem de coleta configurada pelo cliente, adaptando somente o nome se necessário.';
+                $agendaMessageMode = strtolower(trim((string) ($settings['message_mode'] ?? 'form')));
+                if ($agendaMessageMode === 'prompt') {
+                    $rules[] = 'As perguntas de coleta da agenda estão no modo Prompt Studio. Use as instruções do assistente para formular a resposta de modo natural, perguntando somente os dados que ainda faltam.';
+                    $rules[] = 'No modo Prompt Studio da agenda, se ainda faltarem tanto dia/horário quanto modalidade, você pode reunir essas duas perguntas relacionadas em uma única mensagem curta. Exemplo de intenção, sem copiar literalmente: perguntar qual o melhor dia e horário e se prefere online ou presencial.';
+                    $rules[] = 'Não use frases burocráticas como "vou registrar sua preferência e encaminhar" quando ainda faltarem informações. Primeiro colete o necessário e deixe o RS Connect validar a agenda.';
+                } else {
+                    $rules[] = 'As perguntas de coleta da agenda estão no modo Formulário. Use a mensagem configurada para a etapa e não improvise outra redação.';
+                }
                 if (!empty($settings['ai_can_confirm']) && empty($settings['require_human_approval'])) {
                     $rules[] = 'A confirmação final é executada tecnicamente pelo RS Connect depois que um horário real foi selecionado e o cliente responde afirmativamente. Você pode pedir confirmação, mas não diga que está confirmado antes de o sistema registrar o compromisso como confirmado.';
                 } else {
                     $rules[] = 'Se o contato informou preferência de dia ou horário, deixe claro que a escolha depende de confirmação humana. Não diga que está marcado ou confirmado.';
                 }
                 $preScheduleBlock = "Configurações de pré-agendamento do cliente:\n" .
+                    '- Modo das perguntas de coleta: ' . ($agendaMessageMode === 'prompt' ? 'Prompt Studio' : 'Formulário') . "\n" .
+                    '- Mensagem inicial do formulário: ' . (string) ($settings['initial_collect_message'] ?? '') . "\n" .
                     '- Mensagem para coletar dia/horário: ' . (string) ($settings['collect_message'] ?? '') . "\n" .
-                    '- Mensagem após registrar preferência: ' . (string) ($settings['default_message'] ?? '') . "\n" .
+                    '- Mensagem enquanto a agenda é consultada: ' . (string) ($settings['default_message'] ?? '') . "\n" .
                     '- IA pode confirmar sozinha: ' . (!empty($settings['ai_can_confirm']) ? 'sim' : 'não') . "\n" .
                     '- Aprovação humana obrigatória: ' . (!empty($settings['require_human_approval']) ? 'sim' : 'não') . "\n\n";
             }

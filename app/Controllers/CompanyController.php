@@ -311,6 +311,8 @@ final class CompanyController
             'ai_can_confirm' => isset($_POST['pre_schedule_ai_can_confirm']),
             'send_approval_message' => isset($_POST['pre_schedule_send_approval_message']),
             'default_duration_minutes' => (int) ($_POST['pre_schedule_default_duration_minutes'] ?? 50),
+            'message_mode' => trim((string) ($_POST['pre_schedule_message_mode'] ?? 'form')),
+            'initial_collect_message' => trim((string) ($_POST['pre_schedule_initial_collect_message'] ?? '')),
             'default_message' => trim((string) ($_POST['pre_schedule_default_message'] ?? '')),
             'collect_message' => trim((string) ($_POST['pre_schedule_collect_message'] ?? '')),
             'modality_message' => trim((string) ($_POST['pre_schedule_modality_message'] ?? '')),

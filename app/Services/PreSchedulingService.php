@@ -197,25 +197,46 @@ final class PreSchedulingService
                 'has_full_preference' => $update['has_full_preference'],
             ]);
 
+            $conversationSettings = $this->settings($tenantId);
             if (empty($update['has_scheduling_modality'])) {
-                $question = $this->sendModalityQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
                 $result['modality_required'] = true;
+                $result['availability_request_needed'] = false;
+
+                if ($this->usesPromptStudioMessages($conversationSettings)) {
+                    $result['prompt_studio_message_needed'] = true;
+                    $result['prompt_stage'] = empty($update['has_full_preference']) ? 'collect_initial' : 'collect_modality';
+                    $result['skip_ai'] = false;
+                    $result['terminal_handled'] = false;
+                    return $result;
+                }
+
+                $question = empty($update['has_full_preference'])
+                    ? $this->sendInitialSchedulingQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId)
+                    : $this->sendModalityQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
                 $result['modality_question_sent'] = (bool) ($question['ok'] ?? false);
                 $result['modality_question_error'] = $question['error'] ?? null;
                 $result['skip_ai'] = true;
                 $result['terminal_handled'] = true;
-                $result['availability_request_needed'] = false;
                 return $result;
             }
 
             if (empty($update['has_full_preference'])) {
-                $question = $this->sendDateTimeQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
                 $result['date_time_required'] = true;
+                $result['availability_request_needed'] = false;
+
+                if ($this->usesPromptStudioMessages($conversationSettings)) {
+                    $result['prompt_studio_message_needed'] = true;
+                    $result['prompt_stage'] = 'collect_date_time';
+                    $result['skip_ai'] = false;
+                    $result['terminal_handled'] = false;
+                    return $result;
+                }
+
+                $question = $this->sendDateTimeQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
                 $result['date_time_question_sent'] = (bool) ($question['ok'] ?? false);
                 $result['date_time_question_error'] = $question['error'] ?? null;
                 $result['skip_ai'] = true;
                 $result['terminal_handled'] = true;
-                $result['availability_request_needed'] = false;
                 return $result;
             }
 
@@ -396,24 +417,44 @@ final class PreSchedulingService
         $result['appointment_id'] = $appointmentId;
 
         if (!$this->isAvailabilityModality($intentModality)) {
-            $question = $this->sendModalityQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
             $result['modality_required'] = true;
+            $result['availability_request_needed'] = false;
+
+            if ($this->usesPromptStudioMessages($settings)) {
+                $result['prompt_studio_message_needed'] = true;
+                $result['prompt_stage'] = !$this->hasFullPreference($intent) ? 'collect_initial' : 'collect_modality';
+                $result['skip_ai'] = false;
+                $result['terminal_handled'] = false;
+                return $result;
+            }
+
+            $question = !$this->hasFullPreference($intent)
+                ? $this->sendInitialSchedulingQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId)
+                : $this->sendModalityQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
             $result['modality_question_sent'] = (bool) ($question['ok'] ?? false);
             $result['modality_question_error'] = $question['error'] ?? null;
             $result['skip_ai'] = true;
             $result['terminal_handled'] = true;
-            $result['availability_request_needed'] = false;
             return $result;
         }
 
         if (!$this->hasFullPreference($intent)) {
-            $question = $this->sendDateTimeQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
             $result['date_time_required'] = true;
+            $result['availability_request_needed'] = false;
+
+            if ($this->usesPromptStudioMessages($settings)) {
+                $result['prompt_studio_message_needed'] = true;
+                $result['prompt_stage'] = 'collect_date_time';
+                $result['skip_ai'] = false;
+                $result['terminal_handled'] = false;
+                return $result;
+            }
+
+            $question = $this->sendDateTimeQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
             $result['date_time_question_sent'] = (bool) ($question['ok'] ?? false);
             $result['date_time_question_error'] = $question['error'] ?? null;
             $result['skip_ai'] = true;
             $result['terminal_handled'] = true;
-            $result['availability_request_needed'] = false;
             return $result;
         }
 
@@ -494,9 +535,11 @@ final class PreSchedulingService
             'ai_can_confirm' => 0,
             'send_approval_message' => 1,
             'default_duration_minutes' => 50,
-            'default_message' => 'Vou registrar sua preferência e encaminhar para confirmação da profissional.',
-            'collect_message' => 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.',
-            'modality_message' => 'Antes de consultar os horários, você prefere atendimento online ou presencial?',
+            'message_mode' => 'form',
+            'initial_collect_message' => 'Claro! Qual o melhor dia e horário para você? E prefere atendimento online ou presencial?',
+            'default_message' => 'Perfeito. Vou verificar a disponibilidade para {{dia_preferido}} às {{horario_preferido}}.',
+            'collect_message' => 'Qual o melhor dia e horário para você?',
+            'modality_message' => 'Você prefere atendimento online ou presencial?',
             'approved_message' => 'Seu agendamento foi confirmado para {{data}} às {{hora}}. {{local}}',
             'rejected_message' => 'No momento não conseguimos confirmar esse horário. Pode me enviar outra opção de dia ou período?',
             'reschedule_message' => 'Precisamos ajustar sua preferência de horário. Pode me enviar outra opção de dia ou período?',
@@ -526,10 +569,16 @@ final class PreSchedulingService
         $duration = (int) ($data['default_duration_minutes'] ?? 50);
         $duration = max(15, min(240, $duration));
 
+        $messageMode = strtolower(trim((string) ($data['message_mode'] ?? 'form')));
+        if (!in_array($messageMode, ['form', 'prompt'], true)) {
+            $messageMode = 'form';
+        }
+
         $messages = [
-            'default_message' => 'Vou registrar sua preferência e encaminhar para confirmação da profissional.',
-            'collect_message' => 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.',
-            'modality_message' => 'Antes de consultar os horários, você prefere atendimento online ou presencial?',
+            'initial_collect_message' => 'Claro! Qual o melhor dia e horário para você? E prefere atendimento online ou presencial?',
+            'default_message' => 'Perfeito. Vou verificar a disponibilidade para {{dia_preferido}} às {{horario_preferido}}.',
+            'collect_message' => 'Qual o melhor dia e horário para você?',
+            'modality_message' => 'Você prefere atendimento online ou presencial?',
             'approved_message' => 'Seu agendamento foi confirmado para {{data}} às {{hora}}. {{local}}',
             'rejected_message' => 'No momento não conseguimos confirmar esse horário. Pode me enviar outra opção de dia ou período?',
             'reschedule_message' => 'Precisamos ajustar sua preferência de horário. Pode me enviar outra opção de dia ou período?',
@@ -550,6 +599,8 @@ final class PreSchedulingService
             'ai_can_confirm' => !empty($data['ai_can_confirm']) ? 1 : 0,
             'send_approval_message' => !empty($data['send_approval_message']) ? 1 : 0,
             'default_duration_minutes' => $duration,
+            'message_mode' => $messageMode,
+            'initial_collect_message' => $messages['initial_collect_message'],
             'default_message' => $messages['default_message'],
             'collect_message' => $messages['collect_message'],
             'modality_message' => $messages['modality_message'],
@@ -566,11 +617,11 @@ final class PreSchedulingService
             $statement = Database::connection()->prepare(
                 'INSERT INTO tenant_pre_schedule_settings
                     (tenant_id, enabled, require_human_approval, ai_can_suggest_slots, ai_can_confirm, send_approval_message,
-                     default_duration_minutes, default_message, collect_message, modality_message, approved_message, rejected_message, reschedule_message,
+                     default_duration_minutes, message_mode, initial_collect_message, default_message, collect_message, modality_message, approved_message, rejected_message, reschedule_message,
                      availability_options_message, slot_selected_message, no_availability_message, invalid_slot_message)
                  VALUES
                     (:tenant_id, :enabled, :require_human_approval, :ai_can_suggest_slots, :ai_can_confirm, :send_approval_message,
-                     :default_duration_minutes, :default_message, :collect_message, :modality_message, :approved_message, :rejected_message, :reschedule_message,
+                     :default_duration_minutes, :message_mode, :initial_collect_message, :default_message, :collect_message, :modality_message, :approved_message, :rejected_message, :reschedule_message,
                      :availability_options_message, :slot_selected_message, :no_availability_message, :invalid_slot_message)
                  ON DUPLICATE KEY UPDATE
                     enabled = VALUES(enabled),
@@ -579,6 +630,8 @@ final class PreSchedulingService
                     ai_can_confirm = VALUES(ai_can_confirm),
                     send_approval_message = VALUES(send_approval_message),
                     default_duration_minutes = VALUES(default_duration_minutes),
+                    message_mode = VALUES(message_mode),
+                    initial_collect_message = VALUES(initial_collect_message),
                     default_message = VALUES(default_message),
                     collect_message = VALUES(collect_message),
                     modality_message = VALUES(modality_message),
@@ -617,6 +670,8 @@ final class PreSchedulingService
             );
             $legacyParams = $params;
             unset(
+                $legacyParams['message_mode'],
+                $legacyParams['initial_collect_message'],
                 $legacyParams['modality_message'],
                 $legacyParams['availability_options_message'],
                 $legacyParams['slot_selected_message'],
@@ -1095,7 +1150,7 @@ final class PreSchedulingService
             }
 
             $settings = $this->settings($tenantId);
-            $template = trim((string) ($settings['default_message'] ?? '')) ?: 'Certo. Vou registrar sua preferência e encaminhar para confirmação da profissional.';
+            $template = trim((string) ($settings['default_message'] ?? '')) ?: 'Perfeito. Vou verificar a disponibilidade para {{dia_preferido}} às {{horario_preferido}}.';
             $message = $this->renderMessage($template, array_merge($appointment, [
                 'contact_name' => $contact['name'] ?? '',
                 'name' => $contact['name'] ?? '',
@@ -1539,6 +1594,29 @@ final class PreSchedulingService
     private function isAvailabilityModality(string $modality): bool
     {
         return in_array($modality, ['online', 'presencial'], true);
+    }
+
+    private function usesPromptStudioMessages(array $settings): bool
+    {
+        return strtolower(trim((string) ($settings['message_mode'] ?? 'form'))) === 'prompt';
+    }
+
+    /** @return array{ok:bool,error:?string,external_id?:?string} */
+    private function sendInitialSchedulingQuestion(PDO $pdo, array $instance, int $conversationId, int $contactId, int $incomingMessageId = 0): array
+    {
+        $settings = $this->settings((int) ($instance['tenant_id'] ?? 0));
+        $message = trim((string) ($settings['initial_collect_message'] ?? ''))
+            ?: 'Claro! Qual o melhor dia e horário para você? E prefere atendimento online ou presencial?';
+
+        return $this->sendAgendaGateMessage(
+            $pdo,
+            $instance,
+            $conversationId,
+            $contactId,
+            $message,
+            'initial_schedule_data_required',
+            $incomingMessageId
+        );
     }
 
     /** @return array{ok:bool,error:?string,external_id?:?string} */

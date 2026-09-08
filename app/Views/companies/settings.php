@@ -161,20 +161,28 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
         </div>
         <div class="form-grid two">
             <label class="field"><span>Duração padrão</span><input type="number" min="15" max="240" name="pre_schedule_default_duration_minutes" value="<?= (int) ($preScheduleSettings['default_duration_minutes'] ?? 50) ?>"></label>
-            <label class="field"><span>Mensagem quando registrar preferência</span><input name="pre_schedule_default_message" value="<?= View::e($preScheduleSettings['default_message'] ?? '') ?>"></label>
+            <label class="field"><span>Forma de conduzir as perguntas da agenda</span><select name="pre_schedule_message_mode" data-pre-schedule-message-mode>
+                <option value="prompt" <?= ($preScheduleSettings['message_mode'] ?? 'form') === 'prompt' ? 'selected' : '' ?>>Prompt Studio — conversa natural</option>
+                <option value="form" <?= ($preScheduleSettings['message_mode'] ?? 'form') === 'form' ? 'selected' : '' ?>>Formulário — textos definidos abaixo</option>
+            </select><small>No modo Prompt Studio, a IA pergunta apenas os dados que faltam. Mensagens técnicas da agenda continuam usando os textos abaixo como fonte segura e fallback.</small></label>
         </div>
+        <div class="message-info" data-pre-schedule-prompt-info><strong>Prompt Studio</strong><span>Configure o tom e as regras de agenda em Assistentes → Prompt Studio. O RS Connect continua sendo a fonte de verdade para disponibilidade, pré-reserva e confirmação.</span></div>
+        <div data-pre-schedule-form-messages>
         <div class="form-grid two">
+            <label class="field"><span>Mensagem inicial quando faltam dia/horário e modalidade</span><textarea name="pre_schedule_initial_collect_message" rows="3"><?= View::e($preScheduleSettings['initial_collect_message'] ?? 'Claro! Qual o melhor dia e horário para você? E prefere atendimento online ou presencial?') ?></textarea></label>
+            <label class="field"><span>Mensagem enquanto consulta a disponibilidade</span><textarea name="pre_schedule_default_message" rows="3"><?= View::e($preScheduleSettings['default_message'] ?? '') ?></textarea><small>Use {{dia_preferido}} e {{horario_preferido}}. Ex.: “Perfeito. Vou verificar a disponibilidade para sexta às 10:00.”</small></label>
             <label class="field"><span>Mensagem para coletar dia/horário</span><textarea name="pre_schedule_collect_message" rows="3"><?= View::e($preScheduleSettings['collect_message'] ?? '') ?></textarea></label>
-            <label class="field"><span>Mensagem para escolher modalidade</span><textarea name="pre_schedule_modality_message" rows="3"><?= View::e($preScheduleSettings['modality_message'] ?? 'Antes de consultar os horários, você prefere atendimento online ou presencial?') ?></textarea><small>Obrigatória antes da consulta de disponibilidade. A resposta define se o RS Connect buscará VAGO - ONLINE ou VAGO - PRESENCIAL.</small></label>
+            <label class="field"><span>Mensagem para escolher modalidade</span><textarea name="pre_schedule_modality_message" rows="3"><?= View::e($preScheduleSettings['modality_message'] ?? 'Antes de consultar os horários, você prefere atendimento online ou presencial?') ?></textarea><small>Obrigatória antes da consulta de disponibilidade. A modalidade é usada para filtrar corretamente os horários da agenda selecionada.</small></label>
             <label class="field"><span>Mensagem após aprovação</span><textarea name="pre_schedule_approved_message" rows="3"><?= View::e($preScheduleSettings['approved_message'] ?? '') ?></textarea></label>
             <label class="field"><span>Mensagem ao recusar horário</span><textarea name="pre_schedule_rejected_message" rows="3"><?= View::e($preScheduleSettings['rejected_message'] ?? '') ?></textarea></label>
             <label class="field"><span>Mensagem ao remarcar</span><textarea name="pre_schedule_reschedule_message" rows="3"><?= View::e($preScheduleSettings['reschedule_message'] ?? '') ?></textarea></label>
-            <label class="field"><span>Mensagem com horários alternativos</span><textarea name="pre_schedule_availability_options_message" rows="5"><?= View::e($preScheduleSettings['availability_options_message'] ?? '') ?></textarea><small>Use {{opcoes}} para inserir a lista real retornada pelo Google.</small></label>
+            <label class="field"><span>Mensagem com horários alternativos</span><textarea name="pre_schedule_availability_options_message" rows="5"><?= View::e($preScheduleSettings['availability_options_message'] ?? '') ?></textarea><small>Use {{opcoes}} para inserir a lista real retornada pela agenda selecionada.</small></label>
             <label class="field"><span>Mensagem após o cliente escolher</span><textarea name="pre_schedule_slot_selected_message" rows="4"><?= View::e($preScheduleSettings['slot_selected_message'] ?? '') ?></textarea><small>Disponível: {{data}}, {{hora}}, {{inicio}}, {{nome}} e {{modalidade}}.</small></label>
             <label class="field"><span>Mensagem quando não houver horários</span><textarea name="pre_schedule_no_availability_message" rows="3"><?= View::e($preScheduleSettings['no_availability_message'] ?? '') ?></textarea></label>
             <label class="field"><span>Mensagem quando a escolha não for identificada</span><textarea name="pre_schedule_invalid_slot_message" rows="3"><?= View::e($preScheduleSettings['invalid_slot_message'] ?? '') ?></textarea></label>
         </div>
         <p class="form-help">Você pode usar variáveis nas mensagens: <code>{{nome}}</code>, <code>{{data}}</code>, <code>{{hora}}</code>, <code>{{local}}</code>, <code>{{modalidade}}</code>, <code>{{dia_preferido}}</code> e <code>{{horario_preferido}}</code>.</p>
+        </div>
     </section>
 
     <section class="settings-block admin-client-menu-settings" id="company-module-settings">
@@ -404,16 +412,26 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
             </div>
             <div class="form-grid two">
                 <label class="field"><span>Duração padrão em minutos</span><input type="number" min="15" max="240" name="pre_schedule_default_duration_minutes" value="<?= (int) ($preScheduleSettings['default_duration_minutes'] ?? 50) ?>"></label>
-                <label class="field"><span>Mensagem ao registrar preferência</span><input name="pre_schedule_default_message" value="<?= View::e($preScheduleSettings['default_message'] ?? '') ?>"></label>
+                <label class="field"><span>Forma de conduzir as perguntas da agenda</span><select name="pre_schedule_message_mode" data-pre-schedule-message-mode>
+                    <option value="prompt" <?= ($preScheduleSettings['message_mode'] ?? 'form') === 'prompt' ? 'selected' : '' ?>>Prompt Studio — conversa natural</option>
+                    <option value="form" <?= ($preScheduleSettings['message_mode'] ?? 'form') === 'form' ? 'selected' : '' ?>>Formulário — textos configurados</option>
+                </select><small>Prompt Studio usa as regras do assistente para perguntar o que ainda falta. As mensagens técnicas permanecem configuráveis e servem de fallback.</small></label>
+            </div>
+            <div class="message-info" data-pre-schedule-prompt-info><strong>Prompt Studio</strong><span>Edite as regras de agenda em Assistentes → Prompt Studio. A IA cuida da linguagem; disponibilidade e confirmação continuam validadas pelo RS Connect.</span></div>
+            <div data-pre-schedule-form-messages>
+            <div class="form-grid two">
+                <label class="field"><span>Mensagem inicial quando faltam dia/horário e modalidade</span><textarea name="pre_schedule_initial_collect_message" rows="3"><?= View::e($preScheduleSettings['initial_collect_message'] ?? 'Claro! Qual o melhor dia e horário para você? E prefere atendimento online ou presencial?') ?></textarea></label>
+                <label class="field"><span>Mensagem enquanto consulta a disponibilidade</span><textarea name="pre_schedule_default_message" rows="3"><?= View::e($preScheduleSettings['default_message'] ?? '') ?></textarea><small>Use {{dia_preferido}} e {{horario_preferido}}.</small></label>
                 <label class="field"><span>Mensagem para pedir dia e horário</span><textarea name="pre_schedule_collect_message" rows="3"><?= View::e($preScheduleSettings['collect_message'] ?? '') ?></textarea></label>
-                <label class="field"><span>Mensagem para escolher modalidade</span><textarea name="pre_schedule_modality_message" rows="3"><?= View::e($preScheduleSettings['modality_message'] ?? 'Antes de consultar os horários, você prefere atendimento online ou presencial?') ?></textarea><small>Antes de consultar o Google, o cliente precisa definir Online ou Presencial.</small></label>
+                <label class="field"><span>Mensagem para escolher modalidade</span><textarea name="pre_schedule_modality_message" rows="3"><?= View::e($preScheduleSettings['modality_message'] ?? 'Antes de consultar os horários, você prefere atendimento online ou presencial?') ?></textarea><small>Antes de consultar a agenda, o cliente precisa definir Online ou Presencial.</small></label>
                 <label class="field"><span>Mensagem após aprovação</span><textarea name="pre_schedule_approved_message" rows="3"><?= View::e($preScheduleSettings['approved_message'] ?? '') ?></textarea></label>
                 <label class="field"><span>Mensagem quando o horário não for aceito</span><textarea name="pre_schedule_rejected_message" rows="3"><?= View::e($preScheduleSettings['rejected_message'] ?? '') ?></textarea></label>
                 <label class="field"><span>Mensagem para remarcar</span><textarea name="pre_schedule_reschedule_message" rows="3"><?= View::e($preScheduleSettings['reschedule_message'] ?? '') ?></textarea></label>
-                <label class="field"><span>Mensagem com horários alternativos</span><textarea name="pre_schedule_availability_options_message" rows="5"><?= View::e($preScheduleSettings['availability_options_message'] ?? '') ?></textarea><small>Use {{opcoes}} para inserir a lista real retornada pelo Google.</small></label>
+                <label class="field"><span>Mensagem com horários alternativos</span><textarea name="pre_schedule_availability_options_message" rows="5"><?= View::e($preScheduleSettings['availability_options_message'] ?? '') ?></textarea><small>Use {{opcoes}} para inserir a lista real retornada pela agenda selecionada.</small></label>
                 <label class="field"><span>Mensagem após o cliente escolher</span><textarea name="pre_schedule_slot_selected_message" rows="4"><?= View::e($preScheduleSettings['slot_selected_message'] ?? '') ?></textarea><small>Disponível: {{data}}, {{hora}}, {{inicio}}, {{nome}} e {{modalidade}}.</small></label>
                 <label class="field"><span>Mensagem quando não houver horários</span><textarea name="pre_schedule_no_availability_message" rows="3"><?= View::e($preScheduleSettings['no_availability_message'] ?? '') ?></textarea></label>
                 <label class="field"><span>Mensagem quando a escolha não for identificada</span><textarea name="pre_schedule_invalid_slot_message" rows="3"><?= View::e($preScheduleSettings['invalid_slot_message'] ?? '') ?></textarea></label>
+            </div>
             </div>
         </div>
     </details>

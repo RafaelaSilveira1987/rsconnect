@@ -1,17 +1,19 @@
-# RS Connect v36.27.18
+# RS Connect v36.27.25
 
-Agenda persistida antes da resposta da IA. Base integral da v36.27.17, preservando UI compacta de agentes, roteamento Digi→Ana, monitoramento e confirmação conversacional. Sem migration nova.
+Agenda conversacional com escolha entre **Prompt Studio** e **Formulário configurável**.
 
+Principais alterações desta versão:
 
-Esta versão parte integralmente da **36.27.15** e mantém:
+- mantém a Agenda interna como fonte de verdade quando selecionada;
+- permite usar o Prompt Studio para conduzir de forma natural a coleta de dia/horário e modalidade;
+- oferece formulário de mensagens por situação, com fallback seguro;
+- substitui o texto burocrático “Vou registrar sua preferência...” por uma etapa de consulta de disponibilidade;
+- adiciona pergunta inicial configurável para coletar dia/horário + online/presencial;
+- preserva mensagens técnicas determinísticas para disponibilidade, pré-reserva, aprovação e confirmação;
+- migration obrigatória: `102_agenda_prompt_or_form_messages.sql`.
 
-- cards compactos e responsivos na tela de Assistentes Virtuais;
-- roteamento do agente especialista de agendamento;
-- migration `101_agent_scheduling_specialist_routing.sql`;
-- autoria correta do agente de agenda.
+Após o deploy execute:
 
-A 36.27.16 acrescenta a correção crítica do ciclo de agenda: uma resposta afirmativa do cliente (`sim`, `pode`, `pode confirmar`) só gera mensagem de confirmação depois que o compromisso é realmente convertido em `confirmed` na Agenda do RS Connect.
+`php bin/migrate.php up`
 
-Também mantém aprovação humana como regra superior, revalida conflitos/Google Agenda e impede que o modelo declare um horário confirmado apenas por texto livre.
-
-Não há migration nova. Após o deploy, execute `php bin/migrate.php up` para garantir que a migration 101 já esteja aplicada e siga `docs/VALIDACAO-v36.27.16.md`.
+Depois revise em **Configurações da empresa → Agenda → Pré-agendamento e mensagens** a opção **Forma de conduzir as perguntas da agenda**.
