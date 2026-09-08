@@ -1052,7 +1052,7 @@ final class PaymentGatewayService
         }
         $statement = Database::connection()->prepare(
             'UPDATE tenant_invoices
-             SET status = :status,
+             SET status = CASE WHEN status = "paid" AND :paid_status <> "paid" THEN "paid" ELSE :status END,
                  paid_at = CASE WHEN :paid_status = "paid" THEN COALESCE(paid_at, NOW()) ELSE paid_at END,
                  external_payment_id = COALESCE(NULLIF(:external_id, ""), external_payment_id),
                  external_checkout_url = COALESCE(NULLIF(:checkout_url_a, ""), external_checkout_url),
@@ -1130,8 +1130,30 @@ final class PaymentGatewayService
         } elseif ($status === 'overdue' && $tenantId > 0) {
             Database::connection()->prepare(
                 'UPDATE tenant_subscriptions SET billing_status = "overdue"
-                 WHERE tenant_id = :tenant_id ORDER BY id DESC LIMIT 1'
+                 WHERE tenant_id = :tenant_id AND billing_status IN ("trialing", "active", "overdue")
+                 ORDER BY id DESC LIMIT 1'
             )->execute(['tenant_id' => $tenantId]);
+        } elseif ($status === 'open' && $tenantId > 0) {
+            $event = strtoupper((string) ($payload['event'] ?? ''));
+            $paymentStatus = strtoupper((string) ($payload['payment']['status'] ?? $payload['status'] ?? ''));
+            $rejected = in_array($event, [
+                'PAYMENT_CREDIT_CARD_CAPTURE_REFUSED',
+                'PAYMENT_REPROVED_BY_RISK_ANALYSIS',
+                'PAYMENT_ANTIFRAUD_REPROVED',
+            ], true) || in_array($paymentStatus, [
+                'CREDIT_CARD_CAPTURE_REFUSED',
+                'REPROVED_BY_RISK_ANALYSIS',
+                'ANTIFRAUD_REPROVED',
+                'REFUSED',
+                'DECLINED',
+            ], true);
+            if ($rejected) {
+                Database::connection()->prepare(
+                    'UPDATE tenant_subscriptions SET billing_status = "overdue"
+                     WHERE tenant_id = :tenant_id AND billing_status IN ("trialing", "active", "overdue")
+                     ORDER BY id DESC LIMIT 1'
+                )->execute(['tenant_id' => $tenantId]);
+            }
         }
     }
 
@@ -1352,7 +1374,10 @@ final class PaymentGatewayService
             'PAYMENT_REPROVED_BY_RISK_ANALYSIS',
             'PAYMENT_ANTIFRAUD_REPROVED',
         ], true)) {
-            return 'cancelled';
+            // Recusa não cancela a assinatura nem fecha a fatura. Mantemos a
+            // cobrança aberta para nova tentativa e o acesso segue protegido
+            // pelo período vigente + tolerância comercial.
+            return 'open';
         }
 
         if (in_array($event, [
@@ -1376,7 +1401,7 @@ final class PaymentGatewayService
             'REFUSED',
             'DECLINED',
         ], true)) {
-            return 'cancelled';
+            return 'open';
         }
         if (in_array($status, [
             'PENDING',

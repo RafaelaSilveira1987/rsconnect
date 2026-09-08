@@ -893,7 +893,16 @@ final class PublicSignupService
                 ->execute(['id' => $subscriptionId]);
             $this->upsertAsaasInvoice($session, $payment, 'overdue');
         } elseif ($rejected) {
-            $this->upsertAsaasInvoice($session, $payment, 'cancelled');
+            // Recusa de pagamento não encerra a assinatura por si só. O cliente
+            // mantém o acesso durante a vigência/grace period; a cobrança fica
+            // aberta para nova tentativa e a assinatura entra em overdue.
+            // Eventos SUBSCRIPTION_INACTIVATED/SUBSCRIPTION_DELETED continuam
+            // sendo os responsáveis por cancelar a assinatura definitivamente.
+            Database::connection()->prepare(
+                "UPDATE tenant_subscriptions SET billing_status = 'overdue'
+                 WHERE id = :id AND billing_status IN ('trialing', 'active', 'overdue')"
+            )->execute(['id' => $subscriptionId]);
+            $this->upsertAsaasInvoice($session, $payment, 'open');
         } elseif ($open && $externalPaymentId !== '') {
             $this->upsertAsaasInvoice($session, $payment, 'open');
         }
@@ -923,19 +932,20 @@ final class PublicSignupService
         $gatewayId = (int) ($session['gateway_id'] ?? 0);
 
         Database::connection()->prepare(
-            'INSERT INTO tenant_invoices
+            "INSERT INTO tenant_invoices
                 (tenant_id, subscription_id, invoice_number, period_start, period_end, amount, due_date,
                  paid_at, status, payment_method, payment_gateway_id, gateway_provider,
                  external_reference, external_customer_id, external_payment_id,
                  external_checkout_url, external_invoice_url, external_status, payment_payload_json)
              VALUES
                 (:tenant_id, :subscription_id, :invoice_number, :period_start, :period_end, :amount, :due_date,
-                 CASE WHEN :paid_flag = 1 THEN UTC_TIMESTAMP() ELSE NULL END, :status, :payment_method, :gateway_id, "asaas",
+                 CASE WHEN :paid_flag = 1 THEN UTC_TIMESTAMP() ELSE NULL END, :status, :payment_method, :gateway_id, 'asaas',
                  :external_reference, :external_customer_id, :external_payment_id,
                  :external_checkout_url, :external_invoice_url, :external_status, :payload)
              ON DUPLICATE KEY UPDATE
-                 status = VALUES(status), paid_at = COALESCE(VALUES(paid_at), paid_at),
-                 external_status = VALUES(external_status), payment_payload_json = VALUES(payment_payload_json)'
+                 status = CASE WHEN status = 'paid' THEN 'paid' ELSE VALUES(status) END,
+                 paid_at = COALESCE(VALUES(paid_at), paid_at),
+                 external_status = VALUES(external_status), payment_payload_json = VALUES(payment_payload_json)"
         )->execute([
             'tenant_id' => (int) $session['tenant_id'],
             'subscription_id' => (int) $session['subscription_id'],
