@@ -71,7 +71,17 @@ final class CalendarGoogleLifecycleService
             return ['attempted' => false, 'ok' => true, 'message' => null];
         }
 
-        $settings = (new CalendarAvailabilityService())->settings($tenantId);
+        $availabilityService = new CalendarAvailabilityService();
+        $calendarSource = (string) (($availabilityService->calendarSourceSettings($tenantId)['source'] ?? 'none'));
+        if ($calendarSource !== 'google') {
+            return [
+                'attempted' => false,
+                'ok' => true,
+                'blocked' => true,
+                'message' => 'Sincronização Google ignorada porque a origem ativa é a Agenda interna do RS Connect.',
+            ];
+        }
+        $settings = $availabilityService->settings($tenantId);
         $professionalContext = (new ProfessionalCalendarService())->contextForAppointment($tenantId, $appointment, $settings, true);
         if (empty($professionalContext['ok'])) {
             return ['attempted' => true, 'ok' => false, 'message' => (string) ($professionalContext['message'] ?? 'Profissional indisponível para sincronização.')];
@@ -709,7 +719,11 @@ final class CalendarGoogleLifecycleService
 
     private function retryMissingGoogleEvents(int $tenantId, array &$result): void
     {
-        $settings = (new CalendarAvailabilityService())->settings($tenantId);
+        $availabilityService = new CalendarAvailabilityService();
+        if ((string) (($availabilityService->calendarSourceSettings($tenantId)['source'] ?? 'none')) !== 'google') {
+            return;
+        }
+        $settings = $availabilityService->settings($tenantId);
         if (empty($settings['create_google_event_on_confirm'])) {
             return;
         }

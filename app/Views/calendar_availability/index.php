@@ -6,6 +6,10 @@ use App\Core\Router;
 use App\Core\View;
 
 $settings = $settings ?? [];
+$calendarSourceSettings = $calendarSourceSettings ?? ['source' => (!empty($settings['use_n8n']) ? 'google' : (!empty($settings['enabled']) ? 'internal' : 'none'))];
+$calendarSource = in_array((string) ($calendarSourceSettings['source'] ?? ''), ['none', 'internal', 'google'], true)
+    ? (string) $calendarSourceSettings['source']
+    : 'none';
 $pending = $pending ?? [];
 $requests = $requests ?? [];
 $slots = $slots ?? [];
@@ -21,6 +25,18 @@ $workdays = json_decode((string) ($settings['workdays_json'] ?? '[]'), true);
 $workdays = is_array($workdays) ? array_map('intval', $workdays) : [1, 2, 3, 4, 5];
 $hours = json_decode((string) ($settings['working_hours_json'] ?? '{}'), true);
 $hours = is_array($hours) ? $hours : ['start' => '08:00', 'end' => '18:00'];
+$internalHoursByDay = [];
+foreach ([1 => 'Segunda', 2 => 'Terça', 3 => 'Quarta', 4 => 'Quinta', 5 => 'Sexta', 6 => 'Sábado', 0 => 'Domingo'] as $dayNumber => $dayLabel) {
+    $dayConfig = (isset($hours['by_day']) && is_array($hours['by_day']))
+        ? ($hours['by_day'][(string) $dayNumber] ?? $hours['by_day'][$dayNumber] ?? [])
+        : [];
+    $internalHoursByDay[$dayNumber] = [
+        'label' => $dayLabel,
+        'enabled' => $dayConfig !== [] ? !empty($dayConfig['enabled']) : in_array($dayNumber, $workdays, true),
+        'start' => (string) ($dayConfig['start'] ?? $hours['start'] ?? '08:00'),
+        'end' => (string) ($dayConfig['end'] ?? $hours['end'] ?? ($dayNumber === 6 ? '12:00' : '18:00')),
+    ];
+}
 $date = static fn (?string $value, string $format = 'd/m/Y H:i'): string => $value ? date($format, strtotime($value)) : '-';
 $statusLabels = [
     'pending' => 'Pendente',
@@ -38,7 +54,7 @@ $statusLabels = [
 $sourceLabels = [
     'google_free_slots' => 'Espaços livres do Google',
     'google_marked_slots' => 'Eventos VAGO do Google',
-    'internal_fallback' => 'Fallback interno',
+    'internal_fallback' => 'Agenda interna RS Connect',
     'n8n' => 'n8n',
     'n8n_google_calendar' => 'Google Agenda',
 ];
@@ -57,8 +73,13 @@ $eventStateLabels = [
     'deleted' => 'Removido do Google',
 ];
 $modeLabels = [
-    'free_slots' => 'Calcular espaços livres',
-    'marked_events' => 'Usar eventos VAGO',
+    'free_slots' => 'Calcular espaços livres no Google',
+    'marked_events' => 'Usar eventos VAGO no Google',
+];
+$calendarSourceLabels = [
+    'internal' => 'Agenda interna',
+    'google' => 'Google Agenda',
+    'none' => 'Sem agenda',
 ];
 
 $slotsByAppointment = [];
@@ -71,7 +92,13 @@ $requestInsight = static function (array $request): string {
     if (!empty($request['error_message'])) {
         return (string) $request['error_message'];
     }
+    $requested = json_decode((string) ($request['requested_payload_json'] ?? ''), true);
     $raw = json_decode((string) ($request['response_payload_json'] ?? ''), true);
+    $requestedSource = is_array($requested) ? (string) ($requested['calendar_source'] ?? '') : '';
+    $responseSource = is_array($raw) ? (string) ($raw['calendar_source'] ?? $raw['source'] ?? '') : '';
+    if ($requestedSource === 'internal' || in_array($responseSource, ['internal', 'internal_fallback'], true)) {
+        return 'Agenda interna do RS Connect · Google/n8n não utilizados';
+    }
     if (!is_array($raw)) {
         return '';
     }
@@ -130,7 +157,7 @@ $requestInsight = static function (array $request): string {
     <article class="card report-kpi"><span>Pré-agendamentos</span><strong><?= (int) ($metrics['pending'] ?? 0) ?></strong><small>Aguardando decisão</small></article>
     <article class="card report-kpi"><span>Horários atuais</span><strong><?= (int) ($metrics['slots'] ?? 0) ?></strong><small>Somente da última busca</small></article>
     <article class="card report-kpi"><span>Escolhidos</span><strong><?= (int) ($metrics['selected'] ?? 0) ?></strong><small>Aplicados ao pré-agendamento</small></article>
-    <article class="card report-kpi"><span>Modo atual</span><strong class="calendar-mode-kpi"><?= View::e($availabilityMode === 'marked_events' ? 'VAGO' : 'Livres') ?></strong><small><?= View::e($modeLabels[$availabilityMode]) ?></small></article>
+    <article class="card report-kpi"><span>Origem atual</span><strong class="calendar-mode-kpi"><?= View::e($calendarSource === 'internal' ? 'Interna' : ($calendarSource === 'google' ? ($availabilityMode === 'marked_events' ? 'Google VAGO' : 'Google') : 'Desativada')) ?></strong><small><?= View::e($calendarSource === 'google' ? $modeLabels[$availabilityMode] : ($calendarSourceLabels[$calendarSource] ?? 'Sem agenda')) ?></small></article>
 </div>
 
 <section class="card" id="horarios-disponiveis" style="margin-top:16px">
@@ -354,14 +381,50 @@ $requestInsight = static function (array $request): string {
                 <span class="badge badge-info">Visível para a empresa</span>
             </div>
 
-            <div class="calendar-toggle-stack">
+            <div class="onboarding-pre-agent-note">
+                <strong>Origem da agenda</strong>
+                <span>Escolha onde o assistente deve consultar disponibilidade. A Agenda interna usa somente compromissos e regras salvos no RS Connect; Google Agenda continua disponível sem apagar a integração existente.</span>
+            </div>
+            <div class="calendar-mode-grid" role="radiogroup" aria-label="Origem da agenda" data-calendar-source-choices>
+                <label class="calendar-mode-card <?= $calendarSource === 'internal' ? 'is-selected' : '' ?>">
+                    <input type="radio" name="calendar_source" value="internal" <?= $calendarSource === 'internal' ? 'checked' : '' ?>>
+                    <span class="calendar-mode-icon" aria-hidden="true">✓</span>
+                    <span><strong>Agenda interna do RS Connect</strong><small>Consulta horários, bloqueios e compromissos diretamente no banco da plataforma. Não chama Google nem n8n.</small></span>
+                </label>
+                <label class="calendar-mode-card <?= $calendarSource === 'google' ? 'is-selected' : '' ?>">
+                    <input type="radio" name="calendar_source" value="google" <?= $calendarSource === 'google' ? 'checked' : '' ?>>
+                    <span class="calendar-mode-icon" aria-hidden="true">G</span>
+                    <span><strong>Google Agenda</strong><small>Usa a integração n8n/Google já configurada para espaços livres ou eventos VAGO.</small></span>
+                </label>
+                <label class="calendar-mode-card <?= $calendarSource === 'none' ? 'is-selected' : '' ?>">
+                    <input type="radio" name="calendar_source" value="none" <?= $calendarSource === 'none' ? 'checked' : '' ?>>
+                    <span class="calendar-mode-icon" aria-hidden="true">—</span>
+                    <span><strong>Não utilizar agenda</strong><small>O assistente não consulta nem sugere horários automaticamente.</small></span>
+                </label>
+            </div>
+
+            <div class="calendar-toggle-stack" data-calendar-source-shared>
                 <label class="switch-inline"><input type="checkbox" name="enabled" value="1" <?= !empty($settings['enabled']) ? 'checked' : '' ?>><span>Ativar busca automática de horários</span></label>
                 <label class="switch-inline"><input type="checkbox" name="require_before_approval" value="1" <?= !empty($settings['require_before_approval']) ? 'checked' : '' ?>><span>Exigir horário validado antes de aprovar</span></label>
                 <label class="switch-inline"><input type="checkbox" name="auto_request_on_pre_schedule" value="1" <?= !empty($settings['auto_request_on_pre_schedule']) ? 'checked' : '' ?>><span>Consultar automaticamente quando a IA identificar dia e horário</span></label>
             </div>
 
-            <div class="field">
-                <label>Como a disponibilidade será encontrada?</label>
+            <div data-calendar-source-panel="internal">
+                <div class="section-heading compact" style="margin-top:16px"><div><span class="eyebrow">Agenda interna</span><h3>Disponibilidade dentro do RS Connect</h3><p>Esses horários são cruzados com compromissos já cadastrados na agenda interna e, quando habilitado, com a agenda individual do profissional.</p></div><span class="badge badge-success">Sem Google</span></div>
+                <div class="internal-calendar-days">
+                    <?php foreach ($internalHoursByDay as $dayNumber => $dayConfig): ?>
+                        <div class="internal-calendar-day">
+                            <label class="internal-day-toggle"><input type="checkbox" name="internal_days[]" value="<?= (int) $dayNumber ?>" <?= !empty($dayConfig['enabled']) ? 'checked' : '' ?>><span><?= View::e((string) $dayConfig['label']) ?></span></label>
+                            <label class="field"><span>Início</span><input type="time" name="internal_start[<?= (int) $dayNumber ?>]" value="<?= View::e((string) $dayConfig['start']) ?>"></label>
+                            <label class="field"><span>Fim</span><input type="time" name="internal_end[<?= (int) $dayNumber ?>]" value="<?= View::e((string) $dayConfig['end']) ?>"></label>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <div class="calendar-inline-info"><strong>Fonte de verdade interna.</strong><span>Quando essa opção estiver ativa, pedidos como “quinta-feira às 14:00” são validados somente contra a Agenda do RS Connect. Nenhuma consulta é enviada ao Google.</span></div>
+            </div>
+
+            <div class="field" data-calendar-source-panel="google">
+                <label>Como a disponibilidade será encontrada no Google?</label>
                 <select name="availability_mode" id="availability-mode">
                     <option value="free_slots" <?= $availabilityMode === 'free_slots' ? 'selected' : '' ?>>Buscar espaços livres no Google Agenda</option>
                     <option value="marked_events" <?= $availabilityMode === 'marked_events' ? 'selected' : '' ?>>Buscar eventos marcados como VAGO</option>
@@ -372,12 +435,12 @@ $requestInsight = static function (array $request): string {
                 <div class="field"><label>Duração do atendimento</label><div class="input-with-suffix"><input type="number" name="default_duration_minutes" min="15" max="240" value="<?= (int) ($settings['default_duration_minutes'] ?? 50) ?>"><span>min</span></div></div>
                 <div class="field"><label>Início de uma opção para a próxima</label><div class="input-with-suffix"><input type="number" name="slot_interval_minutes" min="5" max="240" value="<?= (int) ($settings['slot_interval_minutes'] ?? 30) ?>"><span>min</span></div><small class="muted-text">Ex.: 60 oferece 08:00, 09:00, 10:00.</small></div>
             </div>
-            <div class="field-grid two">
+            <div class="field-grid two" data-calendar-source-panel="google">
                 <div class="field"><label>Início do expediente</label><input type="time" name="working_start" value="<?= View::e($hours['start'] ?? '08:00') ?>"></div>
                 <div class="field"><label>Fim do expediente</label><input type="time" name="working_end" value="<?= View::e($hours['end'] ?? '18:00') ?>"></div>
             </div>
-            <div class="field">
-                <label>Dias de atendimento</label>
+            <div class="field" data-calendar-source-panel="google">
+                <label>Dias de atendimento no Google</label>
                 <div class="calendar-weekday-grid">
                     <?php foreach ([1 => 'Seg', 2 => 'Ter', 3 => 'Qua', 4 => 'Qui', 5 => 'Sex', 6 => 'Sáb', 0 => 'Dom'] as $day => $label): ?>
                         <label><input type="checkbox" name="workdays[]" value="<?= (int) $day ?>" <?= in_array((int) $day, $workdays, true) ? 'checked' : '' ?>><span><?= View::e($label) ?></span></label>
@@ -393,12 +456,12 @@ $requestInsight = static function (array $request): string {
                 <div class="field"><label>Margem ao redor dos compromissos</label><div class="input-with-suffix"><input type="number" name="buffer_minutes" min="0" max="180" value="<?= (int) ($settings['buffer_minutes'] ?? 10) ?>"><span>min</span></div></div>
             </div>
 
-            <div class="calendar-mode-panel" data-calendar-mode="free_slots">
+            <div class="calendar-mode-panel" data-calendar-mode="free_slots" data-calendar-source-panel="google">
                 <h3>Regras para espaços livres</h3>
                 <label class="switch-inline"><input type="checkbox" name="ignore_transparent_events" value="1" <?= !empty($settings['ignore_transparent_events']) ? 'checked' : '' ?>><span>Eventos configurados como “Disponível” não bloqueiam o horário</span></label>
             </div>
 
-            <div class="calendar-mode-panel" data-calendar-mode="marked_events">
+            <div class="calendar-mode-panel" data-calendar-mode="marked_events" data-calendar-source-panel="google">
                 <h3>Regras para eventos VAGO</h3>
                 <div class="field-grid two">
                     <div class="field"><label>Títulos disponíveis online ou genéricos</label><input type="text" name="marked_online_title" value="<?= View::e($settings['marked_online_title'] ?? 'VAGO — ONLINE') ?>" placeholder="Ex.: Vago, Disponível, VAGO — ONLINE"></div>
@@ -463,7 +526,7 @@ $requestInsight = static function (array $request): string {
                     <div class="field"><label>Timezone</label><input type="text" name="timezone" value="<?= View::e($settings['timezone'] ?? 'America/Sao_Paulo') ?>"></div>
                     <div class="field"><label>Offset</label><input type="text" name="google_utc_offset" value="<?= View::e($settings['google_utc_offset'] ?? '-03:00') ?>"></div>
                 </div>
-                <div class="calendar-mode-panel" data-calendar-mode="free_slots">
+                <div class="calendar-mode-panel" data-calendar-mode="free_slots" data-calendar-source-panel="google">
                     <label class="switch-inline"><input type="checkbox" name="use_internal_fallback" value="1" <?= !empty($settings['use_internal_fallback']) ? 'checked' : '' ?>><span>Usar opção de apoio quando a automação n8n falhar</span></label>
                     <p class="muted-text">Durante os testes, desative a opção de apoio para não confundir horários locais com o retorno real do Google.</p>
                 </div>
@@ -558,7 +621,14 @@ $requestInsight = static function (array $request): string {
                     <tr>
                         <td><?= View::e($date($request['requested_at'] ?? $request['created_at'] ?? null)) ?></td>
                         <td><?= View::e(($request['contact_name'] ?? '') ?: ($request['appointment_title'] ?? '-')) ?></td>
-                        <td><?= View::e($modeLabels[$request['availability_mode'] ?? 'free_slots'] ?? ($request['availability_mode'] ?? '-')) ?></td>
+                        <?php
+                            $requestedPayload = json_decode((string) ($request['requested_payload_json'] ?? ''), true);
+                            $requestCalendarSource = is_array($requestedPayload) ? (string) ($requestedPayload['calendar_source'] ?? '') : '';
+                            $requestModeText = $requestCalendarSource === 'internal'
+                                ? 'Agenda interna RS Connect'
+                                : ($modeLabels[$request['availability_mode'] ?? 'free_slots'] ?? ($request['availability_mode'] ?? '-'));
+                        ?>
+                        <td><?= View::e($requestModeText) ?></td>
                         <td><span class="badge badge-<?= View::e(in_array($request['status'], ['received', 'sent'], true) ? 'success' : ($request['status'] === 'failed' ? 'danger' : 'warning')) ?>"><?= View::e($statusLabels[$request['status']] ?? $request['status']) ?></span></td>
                         <td><?= View::e(($request['preferred_day_text'] ?? '-') . ' · ' . ($request['preferred_time_text'] ?? '-')) ?></td>
                         <td><?= View::e($requestInsight($request)) ?></td>
@@ -596,17 +666,40 @@ $requestInsight = static function (array $request): string {
 
 <script>
 (function () {
-    const select = document.getElementById('availability-mode');
-    const panels = document.querySelectorAll('[data-calendar-mode]');
-    if (!select || !panels.length) return;
+    const form = document.getElementById('smart-calendar-settings');
+    if (!form) return;
+
+    const modeSelect = document.getElementById('availability-mode');
+    const sourceInputs = Array.from(form.querySelectorAll('input[name="calendar_source"]'));
+    const sourcePanels = Array.from(form.querySelectorAll('[data-calendar-source-panel]'));
+    const modePanels = Array.from(form.querySelectorAll('[data-calendar-mode]'));
+    const sourceCards = Array.from(form.querySelectorAll('[data-calendar-source-choices] .calendar-mode-card'));
 
     const refresh = () => {
-        panels.forEach((panel) => {
-            panel.style.display = panel.getAttribute('data-calendar-mode') === select.value ? '' : 'none';
+        const checked = sourceInputs.find((input) => input.checked);
+        const source = checked ? checked.value : 'none';
+        const mode = modeSelect ? modeSelect.value : 'free_slots';
+
+        sourceCards.forEach((card) => {
+            const input = card.querySelector('input[name="calendar_source"]');
+            card.classList.toggle('is-selected', !!input && input.checked);
+        });
+
+        sourcePanels.forEach((panel) => {
+            const sourceMatches = panel.getAttribute('data-calendar-source-panel') === source;
+            const requiredMode = panel.getAttribute('data-calendar-mode');
+            const modeMatches = !requiredMode || requiredMode === mode;
+            panel.style.display = sourceMatches && modeMatches ? '' : 'none';
+        });
+
+        modePanels.forEach((panel) => {
+            if (panel.hasAttribute('data-calendar-source-panel')) return;
+            panel.style.display = panel.getAttribute('data-calendar-mode') === mode ? '' : 'none';
         });
     };
 
-    select.addEventListener('change', refresh);
+    sourceInputs.forEach((input) => input.addEventListener('change', refresh));
+    if (modeSelect) modeSelect.addEventListener('change', refresh);
     refresh();
 })();
 </script>

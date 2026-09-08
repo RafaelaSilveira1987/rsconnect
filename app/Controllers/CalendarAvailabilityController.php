@@ -46,6 +46,7 @@ final class CalendarAvailabilityController
             'tenantId' => $tenantId,
             'tenants' => $tenants,
             'settings' => $dashboard['settings'],
+            'calendarSourceSettings' => $tenantId > 0 ? $service->calendarSourceSettings($tenantId) : ['source' => 'none', 'calendar_mode' => 'none', 'smart_calendar_status' => 'locked'],
             'pending' => $dashboard['pending'],
             'requests' => $dashboard['requests'],
             'slots' => $dashboard['slots'],
@@ -69,8 +70,17 @@ final class CalendarAvailabilityController
         }
 
         try {
-            (new CalendarAvailabilityService())->saveSettings($tenantId, $_POST, Auth::isSuperAdmin());
-            Flash::set('success', 'Configuração de disponibilidade salva.');
+            $service = new CalendarAvailabilityService();
+            $service->saveSettings($tenantId, $_POST, Auth::isSuperAdmin());
+            $currentSource = (string) (($service->calendarSourceSettings($tenantId)['source'] ?? 'none'));
+            $requestedSource = strtolower(trim((string) ($_POST['calendar_source'] ?? $currentSource)));
+            $service->applyCalendarSourceChoice($tenantId, $requestedSource, $_POST);
+            $sourceLabel = match ($requestedSource) {
+                'internal' => 'Agenda interna do RS Connect',
+                'google' => 'Google Agenda',
+                default => 'Sem agenda',
+            };
+            Flash::set('success', 'Configuração salva. Origem ativa: ' . $sourceLabel . '.');
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível salvar: ' . $exception->getMessage());
         }

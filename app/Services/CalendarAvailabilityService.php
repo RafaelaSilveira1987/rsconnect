@@ -203,6 +203,148 @@ final class CalendarAvailabilityService
         )->execute(['tenant_id' => $tenantId]);
     }
 
+    /**
+     * Retorna a origem de agenda escolhida pela empresa. A migration 061 mantém
+     * calendar_mode como fonte de verdade; em instalações antigas fazemos inferência
+     * pelos flags de disponibilidade para preservar compatibilidade.
+     *
+     * @return array{source:string,calendar_mode:string,smart_calendar_status:string}
+     */
+    public function calendarSourceSettings(int $tenantId): array
+    {
+        $availability = $this->settings($tenantId);
+        $source = !empty($availability['enabled'])
+            ? (!empty($availability['use_n8n']) ? 'google' : (!empty($availability['use_internal_fallback']) ? 'internal' : 'none'))
+            : 'none';
+        $calendarMode = $source === 'google' ? 'smart' : $source;
+        $smartStatus = !empty($availability['use_n8n']) ? 'ready' : 'locked';
+
+        if ($tenantId > 0
+            && $this->tableExists('tenant_onboarding_settings')
+            && $this->hasColumn('tenant_onboarding_settings', 'calendar_mode')) {
+            try {
+                $columns = 'calendar_mode';
+                if ($this->hasColumn('tenant_onboarding_settings', 'smart_calendar_status')) {
+                    $columns .= ', smart_calendar_status';
+                }
+                $statement = Database::connection()->prepare(
+                    'SELECT ' . $columns . ' FROM tenant_onboarding_settings WHERE tenant_id = :tenant_id LIMIT 1'
+                );
+                $statement->execute(['tenant_id' => $tenantId]);
+                $row = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+                $storedMode = strtolower(trim((string) ($row['calendar_mode'] ?? '')));
+                if (in_array($storedMode, ['none', 'internal', 'smart'], true)) {
+                    $calendarMode = $storedMode;
+                    $source = $storedMode === 'smart' ? 'google' : $storedMode;
+                }
+                $storedStatus = strtolower(trim((string) ($row['smart_calendar_status'] ?? '')));
+                if (in_array($storedStatus, ['locked', 'configuring', 'ready'], true)) {
+                    $smartStatus = $storedStatus;
+                }
+            } catch (Throwable) {
+                // Instalações antigas continuam usando a inferência acima.
+            }
+        }
+
+        return [
+            'source' => $source,
+            'calendar_mode' => $calendarMode,
+            'smart_calendar_status' => $smartStatus,
+        ];
+    }
+
+    /**
+     * Salva somente a escolha da origem da agenda sem apagar credenciais/configurações
+     * Google existentes. Assim a empresa pode alternar entre Agenda interna e Google
+     * Agenda e retornar depois sem refazer a integração técnica.
+     *
+     * @param array<string,mixed> $data
+     */
+    public function applyCalendarSourceChoice(int $tenantId, string $source, array $data = []): void
+    {
+        if ($tenantId < 1 || !$this->tableExists('tenant_calendar_availability_settings')) {
+            return;
+        }
+
+        $source = strtolower(trim($source));
+        if (!in_array($source, ['none', 'internal', 'google'], true)) {
+            throw new \RuntimeException('Selecione Agenda interna, Google Agenda ou não utilizar agenda.');
+        }
+
+        $pdo = Database::connection();
+        if ($source === 'internal') {
+            $current = $this->settings($tenantId);
+            $currentHours = json_decode((string) ($current['working_hours_json'] ?? '{}'), true);
+            $currentHours = is_array($currentHours) ? $currentHours : [];
+            $currentByDay = isset($currentHours['by_day']) && is_array($currentHours['by_day']) ? $currentHours['by_day'] : [];
+
+            $days = array_values(array_unique(array_filter(array_map('intval', (array) ($data['internal_days'] ?? $data['workdays'] ?? [])), static fn (int $day): bool => $day >= 0 && $day <= 6)));
+            if ($days === []) {
+                $days = array_map('intval', (array) (json_decode((string) ($current['workdays_json'] ?? '[]'), true) ?: [1, 2, 3, 4, 5]));
+            }
+            sort($days);
+
+            $starts = is_array($data['internal_start'] ?? null) ? $data['internal_start'] : [];
+            $ends = is_array($data['internal_end'] ?? null) ? $data['internal_end'] : [];
+            $globalStart = $this->normalizeHour((string) ($data['working_start'] ?? $currentHours['start'] ?? '08:00'), '08:00');
+            $globalEnd = $this->normalizeHour((string) ($data['working_end'] ?? $currentHours['end'] ?? '18:00'), '18:00');
+            $byDay = [];
+            foreach (range(0, 6) as $day) {
+                $existing = $currentByDay[(string) $day] ?? $currentByDay[$day] ?? [];
+                $start = $this->normalizeHour((string) ($starts[$day] ?? $starts[(string) $day] ?? $existing['start'] ?? $globalStart), $globalStart);
+                $end = $this->normalizeHour((string) ($ends[$day] ?? $ends[(string) $day] ?? $existing['end'] ?? $globalEnd), $globalEnd);
+                $enabled = in_array($day, $days, true);
+                if ($enabled && $end <= $start) {
+                    throw new \RuntimeException('Na Agenda interna, o horário final deve ser posterior ao inicial em todos os dias ativos.');
+                }
+                $byDay[(string) $day] = ['enabled' => $enabled ? 1 : 0, 'start' => $start, 'end' => $end];
+            }
+
+            $pdo->prepare(
+                'UPDATE tenant_calendar_availability_settings
+                 SET enabled = 1,
+                     use_n8n = 0,
+                     use_internal_fallback = 1,
+                     workdays_json = :workdays,
+                     working_hours_json = :hours,
+                     updated_at = NOW()
+                 WHERE tenant_id = :tenant_id'
+            )->execute([
+                'workdays' => json_encode($days, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'hours' => json_encode(['by_day' => $byDay], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'tenant_id' => $tenantId,
+            ]);
+        } elseif ($source === 'google') {
+            // Reativa somente o transporte Google/n8n. URLs, tokens e regras do ciclo
+            // permanecem exatamente como estavam antes de usar a agenda interna.
+            $pdo->prepare(
+                'UPDATE tenant_calendar_availability_settings
+                 SET enabled = 1, use_n8n = 1, updated_at = NOW()
+                 WHERE tenant_id = :tenant_id'
+            )->execute(['tenant_id' => $tenantId]);
+        } else {
+            $pdo->prepare(
+                'UPDATE tenant_calendar_availability_settings
+                 SET enabled = 0, updated_at = NOW()
+                 WHERE tenant_id = :tenant_id'
+            )->execute(['tenant_id' => $tenantId]);
+        }
+
+        if ($this->tableExists('tenant_onboarding_settings')
+            && $this->hasColumn('tenant_onboarding_settings', 'calendar_mode')) {
+            $calendarMode = $source === 'google' ? 'smart' : $source;
+            try {
+                $pdo->prepare(
+                    'INSERT INTO tenant_onboarding_settings (tenant_id, calendar_mode)
+                     VALUES (:tenant_id, :calendar_mode)
+                     ON DUPLICATE KEY UPDATE calendar_mode = VALUES(calendar_mode), updated_at = NOW()'
+                )->execute(['tenant_id' => $tenantId, 'calendar_mode' => $calendarMode]);
+            } catch (Throwable) {
+                // A escolha de runtime acima continua válida mesmo em schema legado.
+            }
+        }
+    }
+
     public function saveSettings(int $tenantId, array $data, bool $canManageIntegration = true): void
     {
         if ($tenantId < 1 || !$this->tableExists('tenant_calendar_availability_settings')) {
@@ -416,8 +558,20 @@ final class CalendarAvailabilityService
         }
 
         $settings = $this->settings($tenantId);
+        $calendarSourceConfig = $this->calendarSourceSettings($tenantId);
+        $calendarSource = (string) ($calendarSourceConfig['source'] ?? 'none');
+        if ($calendarSource === 'none') {
+            return ['ok' => false, 'message' => 'A empresa está configurada para não utilizar agenda. Escolha Agenda interna ou Google Agenda em Horários e regras.'];
+        }
         if (empty($settings['enabled'])) {
             return ['ok' => false, 'message' => 'A busca automática de horários ainda não está ativada para esta empresa.'];
+        }
+        if ($calendarSource === 'internal') {
+            // A escolha explícita da empresa prevalece sobre qualquer credencial Google
+            // ainda armazenada. A busca interna nunca chama n8n/Google.
+            $settings['use_n8n'] = 0;
+            $settings['use_internal_fallback'] = 1;
+            $settings['availability_mode'] = 'free_slots';
         }
         $professionalContext = (new ProfessionalCalendarService())->contextForAppointment($tenantId, $appointment, $settings);
         if (empty($professionalContext['ok'])) {
@@ -469,11 +623,53 @@ final class CalendarAvailabilityService
         ]);
         $requestId = (int) $pdo->lastInsertId();
         $payload = $this->buildPayload($requestId, $tenantId, $appointment, $settings, $token, $window, $origin);
+        $payload['calendar_source'] = $calendarSource;
         $pdo->prepare('UPDATE calendar_availability_requests SET requested_payload_json = :payload WHERE id = :id')
             ->execute([
                 'id' => $requestId,
                 'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ]);
+
+        if ($calendarSource === 'internal') {
+            $this->updateAppointmentAvailability($tenantId, $appointmentId, 'requested', $requestId, 0, null, 'internal_fallback');
+            $slots = $this->generateInternalSlots(
+                $tenantId,
+                $window,
+                $settings,
+                (int) ($appointment['owner_user_id'] ?? 0),
+                (int) ($appointment['contact_id'] ?? 0),
+                $appointmentId
+            );
+            $internalPayload = [
+                'slots' => $slots,
+                'source' => 'internal_fallback',
+                'calendar_source' => 'internal',
+                'meta' => ['engine' => 'rs_connect_internal', 'google_used' => false, 'n8n_used' => false],
+            ];
+            $this->storeSlots($requestId, $tenantId, $appointmentId, $slots, 'internal_fallback', $internalPayload);
+            $message = $slots === []
+                ? 'Nenhum horário livre encontrado na Agenda interna do RS Connect para essa preferência.'
+                : 'Horários disponíveis encontrados na Agenda interna do RS Connect.';
+            $request = $this->findRequest($requestId, $token) ?: [
+                'id' => $requestId,
+                'tenant_id' => $tenantId,
+                'appointment_id' => $appointmentId,
+                'origin' => $origin,
+            ];
+            $conversation = (new CalendarConversationService())->handleAvailabilityResult($request, $message);
+            Audit::log('calendar.internal_availability_requested', [
+                'request_id' => $requestId,
+                'appointment_id' => $appointmentId,
+                'slots' => count($slots),
+            ], $tenantId);
+            return [
+                'ok' => $slots !== [],
+                'request_id' => $requestId,
+                'message' => $message,
+                'conversation' => $conversation,
+                'calendar_source' => 'internal',
+            ];
+        }
 
         $this->updateAppointmentAvailability($tenantId, $appointmentId, 'requested', $requestId, 0, null, $mode === 'marked_events' ? 'google_marked_slots' : 'google_free_slots');
 
