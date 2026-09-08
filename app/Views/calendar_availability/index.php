@@ -389,7 +389,7 @@ $requestInsight = static function (array $request): string {
                 <label class="calendar-mode-card <?= $calendarSource === 'internal' ? 'is-selected' : '' ?>">
                     <input type="radio" name="calendar_source" value="internal" <?= $calendarSource === 'internal' ? 'checked' : '' ?>>
                     <span class="calendar-mode-icon" aria-hidden="true">✓</span>
-                    <span><strong>Agenda interna do RS Connect</strong><small>Consulta horários, bloqueios e compromissos diretamente no banco da plataforma. Não chama Google nem n8n.</small></span>
+                    <span><strong>Agenda interna do RS Connect</strong><small>Consulta automaticamente horários, bloqueios e compromissos diretamente no banco da plataforma. Não chama Google nem n8n.</small></span>
                 </label>
                 <label class="calendar-mode-card <?= $calendarSource === 'google' ? 'is-selected' : '' ?>">
                     <input type="radio" name="calendar_source" value="google" <?= $calendarSource === 'google' ? 'checked' : '' ?>>
@@ -406,7 +406,7 @@ $requestInsight = static function (array $request): string {
             <div class="calendar-toggle-stack" data-calendar-source-shared>
                 <label class="switch-inline"><input type="checkbox" name="enabled" value="1" <?= !empty($settings['enabled']) ? 'checked' : '' ?>><span>Ativar busca automática de horários</span></label>
                 <label class="switch-inline"><input type="checkbox" name="require_before_approval" value="1" <?= !empty($settings['require_before_approval']) ? 'checked' : '' ?>><span>Exigir horário validado antes de aprovar</span></label>
-                <label class="switch-inline"><input type="checkbox" name="auto_request_on_pre_schedule" value="1" <?= !empty($settings['auto_request_on_pre_schedule']) ? 'checked' : '' ?>><span>Consultar automaticamente quando a IA identificar dia e horário</span></label>
+                <label class="switch-inline"><input type="checkbox" name="auto_request_on_pre_schedule" value="1" <?= !empty($settings['auto_request_on_pre_schedule']) ? 'checked' : '' ?> data-auto-request-toggle><span>Consultar automaticamente quando a IA identificar dia e horário</span></label>
             </div>
 
             <div data-calendar-source-panel="internal">
@@ -679,6 +679,14 @@ $requestInsight = static function (array $request): string {
         const checked = sourceInputs.find((input) => input.checked);
         const source = checked ? checked.value : 'none';
         const mode = modeSelect ? modeSelect.value : 'free_slots';
+        const autoRequestToggle = form.querySelector('[data-auto-request-toggle]');
+
+        // A Agenda interna é conversacional: ao escolhê-la, a consulta automática
+        // precisa estar ligada. O backend também aplica a mesma regra para evitar
+        // estados legados inconsistentes.
+        if (source === 'internal' && autoRequestToggle) {
+            autoRequestToggle.checked = true;
+        }
 
         sourceCards.forEach((card) => {
             const input = card.querySelector('input[name="calendar_source"]');

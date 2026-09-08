@@ -303,6 +303,8 @@ final class CalendarAvailabilityService
             $pdo->prepare(
                 'UPDATE tenant_calendar_availability_settings
                  SET enabled = 1,
+                     require_before_approval = 1,
+                     auto_request_on_pre_schedule = 1,
                      use_n8n = 0,
                      use_internal_fallback = 1,
                      workdays_json = :workdays,
@@ -638,7 +640,8 @@ final class CalendarAvailabilityService
                 $settings,
                 (int) ($appointment['owner_user_id'] ?? 0),
                 (int) ($appointment['contact_id'] ?? 0),
-                $appointmentId
+                $appointmentId,
+                $requestedModality
             );
             $internalPayload = [
                 'slots' => $slots,
@@ -663,7 +666,11 @@ final class CalendarAvailabilityService
                 'slots' => count($slots),
             ], $tenantId);
             return [
-                'ok' => $slots !== [],
+                // Uma busca interna sem vagas foi processada corretamente: não é falha
+                // técnica. O estado/WhatsApp já foi atualizado por handleAvailabilityResult().
+                'ok' => true,
+                'available' => $slots !== [],
+                'slots' => count($slots),
                 'request_id' => $requestId,
                 'message' => $message,
                 'conversation' => $conversation,
@@ -753,7 +760,8 @@ final class CalendarAvailabilityService
                 $settings,
                 (int) ($appointment['owner_user_id'] ?? 0),
                 (int) ($appointment['contact_id'] ?? 0),
-                $appointmentId
+                $appointmentId,
+                $requestedModality
             );
             $this->storeSlots($requestId, $tenantId, $appointmentId, $slots, 'internal_fallback');
             $internalOnly = empty($settings['use_n8n']);
@@ -1914,7 +1922,8 @@ final class CalendarAvailabilityService
         array $settings,
         int $ownerUserId = 0,
         int $contactId = 0,
-        int $ignoreAppointmentId = 0
+        int $ignoreAppointmentId = 0,
+        string $requestedModality = 'indefinida'
     ): array
     {
         $timezone = new DateTimeZone((string) ($settings['timezone'] ?? 'America/Sao_Paulo'));
@@ -1976,7 +1985,7 @@ final class CalendarAvailabilityService
                             'end' => $slotEnd->format('Y-m-d H:i:s'),
                             'label' => $cursor->format('d/m/Y H:i'),
                             'source' => 'internal_fallback',
-                            'modality' => 'indefinida',
+                            'modality' => $this->normalizeModality($requestedModality),
                             'event_state' => 'available',
                             'raw' => ['generated_by' => 'RS Connect fallback'],
                         ];

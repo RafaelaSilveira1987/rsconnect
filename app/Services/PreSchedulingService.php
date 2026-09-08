@@ -1788,8 +1788,15 @@ final class PreSchedulingService
         try {
             $service = new CalendarAvailabilityService();
             $settings = $service->settings($tenantId);
-            if (empty($settings['enabled']) || empty($settings['auto_request_on_pre_schedule'])) {
-                return ['ok' => false, 'skipped' => true, 'message' => 'Consulta automática de disponibilidade desativada.'];
+            $calendarSource = (string) (($service->calendarSourceSettings($tenantId)['source'] ?? 'none'));
+            if ($calendarSource === 'none' || empty($settings['enabled'])) {
+                return ['ok' => false, 'skipped' => true, 'code' => 'calendar_disabled', 'message' => 'A agenda está desativada para esta empresa.'];
+            }
+            // Na Agenda interna, escolher a fonte significa que o assistente deve de fato
+            // consultar o RS Connect. Não deixa um flag legado do antigo modo Google
+            // impedir silenciosamente a validação do horário.
+            if ($calendarSource !== 'internal' && empty($settings['auto_request_on_pre_schedule'])) {
+                return ['ok' => false, 'skipped' => true, 'code' => 'auto_request_disabled', 'message' => 'Consulta automática de disponibilidade desativada.'];
             }
             $appointment = $this->appointmentById(Database::connection(), $tenantId, $appointmentId);
             $modality = is_array($appointment) ? $this->appointmentSchedulingModality($appointment) : 'indefinida';
@@ -1807,7 +1814,7 @@ final class PreSchedulingService
                     $tenantId,
                     $appointmentId,
                     0,
-                    (string) ($result['message'] ?? 'O fluxo n8n não recebeu a nova consulta de disponibilidade.')
+                    (string) ($result['message'] ?? 'Não foi possível consultar a disponibilidade da agenda.')
                 );
             }
             return $result;

@@ -368,3 +368,16 @@ Correções adicionais aplicadas após teste em produção:
 - mensagens automáticas de agenda deixam de prefixar `IA - Nome do agente` quando a identificação estiver desativada;
 - se um template/resposta já vier com prefixo `IA - ...`, ele é removido antes do envio quando a opção estiver desativada;
 - teste de regressão incluído em `tests/Feature/whatsapp-signature-disable-regression.php`.
+
+## Hotfix v8 — Agenda interna consultada automaticamente
+
+Correções após validação real pelo WhatsApp:
+
+- ao selecionar **Agenda interna do RS Connect**, `auto_request_on_pre_schedule` é ativado no backend;
+- o runtime da agenda interna não depende mais de um flag legado que possa ter ficado desativado no antigo modo Google;
+- a interface religa visualmente a consulta automática ao selecionar a agenda interna;
+- busca interna sem vagas é tratada como resultado válido (`available=false`), e não como falha técnica;
+- horários gerados pela agenda interna preservam a modalidade `online`/`presencial` ao serem selecionados;
+- pedidos como **“Pode ser na sexta às 10h”** continuam sendo reconhecidos como preferência completa no contexto de agenda.
+
+Teste de regressão: `tests/Feature/calendar-internal-auto-request-v8-smoke.php`.
