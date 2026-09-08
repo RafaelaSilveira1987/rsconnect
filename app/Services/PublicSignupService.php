@@ -554,7 +554,28 @@ final class PublicSignupService
         // in_array($event, ['CHECKOUT_PAID', 'SUBSCRIPTION_CREATED'], true)
         $paymentMethod = (string) ($session['payment_method'] ?? 'credit_card');
         $isPixSignup = $paymentMethod === 'pix';
-        $isPaidPaymentEvent = in_array($event, ['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'], true);
+        $isPaidPaymentEvent = in_array($event, ['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'PAYMENT_RECEIVED_IN_CASH'], true);
+        $isRejectedPaymentEvent = in_array($event, [
+            'PAYMENT_CREDIT_CARD_CAPTURE_REFUSED',
+            'PAYMENT_REPROVED_BY_RISK_ANALYSIS',
+            'PAYMENT_ANTIFRAUD_REPROVED',
+        ], true);
+
+        if ($isRejectedPaymentEvent && (int) ($session['tenant_id'] ?? 0) < 1) {
+            Database::connection()->prepare(
+                'UPDATE public_signup_sessions
+                 SET status = CASE WHEN status = "provisioned" THEN status ELSE "failed" END,
+                     external_status = :external_status,
+                     last_error = :last_error,
+                     last_webhook_at = UTC_TIMESTAMP()
+                 WHERE id = :id'
+            )->execute([
+                'external_status' => $externalStatus !== '' ? $externalStatus : $event,
+                'last_error' => mb_substr('Pagamento recusado pelo Asaas: ' . $event, 0, 2000),
+                'id' => $sessionId,
+            ]);
+            return $this->webhookResult($session, 'cancelled', 'Pagamento recusado pelo Asaas.', $event);
+        }
 
         if ($event === 'SUBSCRIPTION_CREATED' && (int) ($session['tenant_id'] ?? 0) > 0) {
             $this->syncSubscriptionEvent($session, $event, $payload, $subscriptionId, $customerId);
@@ -842,7 +863,12 @@ final class PublicSignupService
             || str_contains($event . ' ' . $paymentStatus, 'PAYMENT_CONFIRMED')
             || in_array($paymentStatus, ['RECEIVED', 'CONFIRMED'], true);
         $overdue = str_contains($event . ' ' . $paymentStatus, 'OVERDUE');
-        $open = $event === 'PAYMENT_CREATED' || in_array($paymentStatus, ['PENDING', 'AWAITING_RISK_ANALYSIS'], true);
+        $open = $event === 'PAYMENT_CREATED' || in_array($paymentStatus, ['PENDING', 'AWAITING_RISK_ANALYSIS', 'APPROVED_BY_RISK_ANALYSIS', 'AUTHORIZED'], true);
+        $rejected = in_array($event, [
+            'PAYMENT_CREDIT_CARD_CAPTURE_REFUSED',
+            'PAYMENT_REPROVED_BY_RISK_ANALYSIS',
+            'PAYMENT_ANTIFRAUD_REPROVED',
+        ], true) || in_array($paymentStatus, ['CREDIT_CARD_CAPTURE_REFUSED', 'REPROVED_BY_RISK_ANALYSIS', 'ANTIFRAUD_REPROVED', 'REFUSED', 'DECLINED'], true);
 
         if ($paid) {
             $start = new DateTimeImmutable((string) ($payment['paymentDate'] ?? $payment['confirmedDate'] ?? 'today'));
@@ -866,6 +892,8 @@ final class PublicSignupService
             Database::connection()->prepare('UPDATE tenant_subscriptions SET billing_status = "overdue" WHERE id = :id')
                 ->execute(['id' => $subscriptionId]);
             $this->upsertAsaasInvoice($session, $payment, 'overdue');
+        } elseif ($rejected) {
+            $this->upsertAsaasInvoice($session, $payment, 'cancelled');
         } elseif ($open && $externalPaymentId !== '') {
             $this->upsertAsaasInvoice($session, $payment, 'open');
         }
@@ -875,7 +903,7 @@ final class PublicSignupService
              SET status = :status, last_event_at = UTC_TIMESTAMP(), payload_json = :payload
              WHERE subscription_id = :subscription_id'
         )->execute([
-            'status' => $paid ? 'active' : ($overdue ? 'overdue' : strtolower($paymentStatus ?: $event)),
+            'status' => $paid ? 'active' : ($rejected ? 'cancelled' : ($overdue ? 'overdue' : strtolower($paymentStatus ?: $event))),
             'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'subscription_id' => $subscriptionId,
         ]);
@@ -1280,9 +1308,41 @@ final class PublicSignupService
     /** @param array<string,mixed> $payload */
     private function extractCheckoutId(array $payload): string
     {
-        if (is_array($payload['checkout'] ?? null)) {
-            return trim((string) ($payload['checkout']['id'] ?? ''));
+        // Em eventos PAYMENT_* do Checkout Asaas, o identificador do checkout
+        // normalmente chega em payment.checkoutSession (e não em checkout.id).
+        // Sem esse fallback, PAYMENT_CONFIRMED/PAYMENT_RECEIVED pode chegar com
+        // HTTP 200 e ainda assim não encontrar a public_signup_session.
+        $checkout = $payload['checkout'] ?? null;
+        if (is_array($checkout)) {
+            $value = trim((string) ($checkout['id'] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
         }
+
+        // Em PAYMENT_* o Asaas coloca o checkout em payment.checkoutSession.
+        // O payment.id é a cobrança, portanto nunca deve ser confundido com o
+        // identificador do checkout.
+        $payment = $payload['payment'] ?? null;
+        if (is_array($payment)) {
+            foreach (['checkoutSession', 'checkout_session'] as $key) {
+                $value = $payment[$key] ?? null;
+                if (is_scalar($value) && trim((string) $value) !== '') {
+                    return trim((string) $value);
+                }
+            }
+        }
+
+        $subscription = $payload['subscription'] ?? null;
+        if (is_array($subscription)) {
+            foreach (['checkoutSession', 'checkout_session'] as $key) {
+                $value = $subscription[$key] ?? null;
+                if (is_scalar($value) && trim((string) $value) !== '') {
+                    return trim((string) $value);
+                }
+            }
+        }
+
         $event = strtoupper((string) ($payload['event'] ?? ''));
         return str_starts_with($event, 'CHECKOUT_') ? trim((string) ($payload['id'] ?? '')) : '';
     }

@@ -977,20 +977,39 @@ final class PaymentGatewayService
 
     private function findInvoice(string $invoiceNumber, string $externalId): ?array
     {
-        $sql = 'SELECT * FROM tenant_invoices WHERE 1=1';
-        $params = [];
-        if ($invoiceNumber !== '') {
-            $sql .= ' AND invoice_number = :invoice_number';
-            $params['invoice_number'] = $invoiceNumber;
-        } elseif ($externalId !== '') {
-            $sql .= ' AND external_payment_id = :external_payment_id';
-            $params['external_payment_id'] = $externalId;
-        } else {
+        // O Asaas envia `payment.id` de forma consistente, enquanto
+        // `externalReference` depende de a cobrança ter sido criada pelo RS Connect.
+        // Quando os dois existem, tente ambos para não perder uma atualização
+        // financeira apenas porque a referência externa foi alterada/omitida.
+        if ($invoiceNumber === '' && $externalId === '') {
             return null;
         }
-        $sql .= ' LIMIT 1';
-        $statement = Database::connection()->prepare($sql);
-        $statement->execute($params);
+
+        if ($invoiceNumber !== '' && $externalId !== '') {
+            $statement = Database::connection()->prepare(
+                'SELECT * FROM tenant_invoices
+                 WHERE invoice_number = :invoice_number
+                    OR external_payment_id = :external_payment_id
+                 ORDER BY CASE WHEN external_payment_id = :external_payment_id_order THEN 0 ELSE 1 END, id DESC
+                 LIMIT 1'
+            );
+            $statement->execute([
+                'invoice_number' => $invoiceNumber,
+                'external_payment_id' => $externalId,
+                'external_payment_id_order' => $externalId,
+            ]);
+        } elseif ($invoiceNumber !== '') {
+            $statement = Database::connection()->prepare(
+                'SELECT * FROM tenant_invoices WHERE invoice_number = :invoice_number LIMIT 1'
+            );
+            $statement->execute(['invoice_number' => $invoiceNumber]);
+        } else {
+            $statement = Database::connection()->prepare(
+                'SELECT * FROM tenant_invoices WHERE external_payment_id = :external_payment_id LIMIT 1'
+            );
+            $statement->execute(['external_payment_id' => $externalId]);
+        }
+
         $invoice = $statement->fetch(PDO::FETCH_ASSOC);
         return $invoice ?: null;
     }
@@ -1312,9 +1331,60 @@ final class PaymentGatewayService
 
     private function mapAsaasStatus(string $event, string $status): ?string
     {
-        $source = strtoupper($event . ' ' . $status);
-        if (str_contains($source, 'PAYMENT_RECEIVED') || str_contains($source, 'CONFIRMED') || str_contains($source, 'RECEIVED')) {
+        $event = strtoupper(trim($event));
+        $status = strtoupper(trim($status));
+        $source = trim($event . ' ' . $status);
+
+        // O Asaas comunica a confirmação/recebimento por eventos próprios e
+        // comunica recusas por eventos de captura/análise de risco. Não dependa
+        // apenas de payment.status, pois alguns webhooks carregam a decisão
+        // financeira no campo `event`.
+        if (in_array($event, [
+            'PAYMENT_CONFIRMED',
+            'PAYMENT_RECEIVED',
+            'PAYMENT_RECEIVED_IN_CASH',
+        ], true)) {
             return 'paid';
+        }
+
+        if (in_array($event, [
+            'PAYMENT_CREDIT_CARD_CAPTURE_REFUSED',
+            'PAYMENT_REPROVED_BY_RISK_ANALYSIS',
+            'PAYMENT_ANTIFRAUD_REPROVED',
+        ], true)) {
+            return 'cancelled';
+        }
+
+        if (in_array($event, [
+            'PAYMENT_AWAITING_RISK_ANALYSIS',
+            'PAYMENT_PENDING',
+            'PAYMENT_CREATED',
+            'PAYMENT_APPROVED_BY_RISK_ANALYSIS',
+            'PAYMENT_AUTHORIZED',
+        ], true)) {
+            return 'open';
+        }
+
+        // Fallback para payloads legados/integrações que enviam somente o status.
+        if (in_array($status, ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'], true)) {
+            return 'paid';
+        }
+        if (in_array($status, [
+            'CREDIT_CARD_CAPTURE_REFUSED',
+            'REPROVED_BY_RISK_ANALYSIS',
+            'ANTIFRAUD_REPROVED',
+            'REFUSED',
+            'DECLINED',
+        ], true)) {
+            return 'cancelled';
+        }
+        if (in_array($status, [
+            'PENDING',
+            'AWAITING_RISK_ANALYSIS',
+            'APPROVED_BY_RISK_ANALYSIS',
+            'AUTHORIZED',
+        ], true)) {
+            return 'open';
         }
         if (str_contains($source, 'OVERDUE')) {
             return 'overdue';
@@ -1322,6 +1392,7 @@ final class PaymentGatewayService
         if (str_contains($source, 'DELETED') || str_contains($source, 'CANCEL')) {
             return 'cancelled';
         }
+
         return null;
     }
 
