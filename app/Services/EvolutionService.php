@@ -236,6 +236,40 @@ final class EvolutionService
         return $this->request('DELETE', $endpoint, null, 'deleteInstance');
     }
 
+    /**
+     * Consulta os contatos conhecidos pela instância. Usado apenas como enriquecimento
+     * quando o webhook não entrega o pushName; nunca deve ser necessário para persistir
+     * a mensagem principal.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function findContacts(?string $remoteJid = null, int $take = 20): array
+    {
+        $endpoint = rtrim($this->baseUrl, '/') . '/chat/findContacts/' . rawurlencode($this->instanceName);
+        $where = [];
+        if ($remoteJid !== null && trim($remoteJid) !== '') {
+            $where['id'] = trim($remoteJid);
+        }
+        $result = $this->request('POST', $endpoint, [
+            'where' => $where,
+            'take' => max(1, min(100, $take)),
+            'skip' => 0,
+        ], 'findContacts');
+        $body = $result['body'] ?? [];
+        if (!is_array($body)) {
+            return [];
+        }
+        if (array_is_list($body)) {
+            return array_values(array_filter($body, 'is_array'));
+        }
+        foreach (['contacts', 'data', 'response', 'result'] as $key) {
+            if (is_array($body[$key] ?? null)) {
+                return array_values(array_filter($body[$key], 'is_array'));
+            }
+        }
+        return [];
+    }
+
     public function fetchProfilePictureUrl(string $phone): ?string
     {
         $endpoint = rtrim($this->baseUrl, '/') . '/chat/fetchProfilePictureUrl/' . rawurlencode($this->instanceName);

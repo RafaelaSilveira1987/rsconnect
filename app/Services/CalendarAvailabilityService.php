@@ -1701,7 +1701,9 @@ final class CalendarAvailabilityService
             try {
                 $preferred = new DateTimeImmutable((string) $appointment['starts_at'], $timezone);
                 if ($preferred > $start) {
-                    $start = $preferred->setTime(0, 0, 0);
+                    // Respeita também a hora pedida pelo lead. Antes a busca voltava
+                    // para 00:00 do dia e sugeria horários anteriores ao solicitado.
+                    $start = $preferred;
                 }
             } catch (Throwable) {
             }

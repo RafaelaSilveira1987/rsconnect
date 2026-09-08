@@ -79,6 +79,7 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
 
 
     <section class="settings-block message-governance-settings">
+        <input type="hidden" name="message_governance_settings_submitted" value="1">
         <div class="section-heading compact">
             <div>
                 <span class="eyebrow">Conversas e privacidade</span>

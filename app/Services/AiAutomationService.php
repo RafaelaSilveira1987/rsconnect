@@ -1934,7 +1934,8 @@ final class AiAutomationService
             throw new RuntimeException('Evolution sendText bloqueado: telefone do contato inválido ou incompleto.');
         }
         $senderDisplayName = $this->aiSenderDisplayName($pdo, (int) ($instance['tenant_id'] ?? 0), $conversationId, $agent);
-        $deliveredReply = $this->withAiWhatsappSignature($reply, $senderDisplayName);
+        $signatureEnabled = $this->whatsappSenderIdentificationEnabled($pdo, (int) ($instance['tenant_id'] ?? 0));
+        $deliveredReply = $this->withAiWhatsappSignature($reply, $senderDisplayName, $signatureEnabled);
 
         try {
             $result = $service->sendText($phone, $deliveredReply);
@@ -2080,7 +2081,8 @@ final class AiAutomationService
                 null
             );
         }
-        $deliveredReply = $this->withAiWhatsappSignature((string) $failedMessage['content'], $senderDisplayName);
+        $signatureEnabled = $this->whatsappSenderIdentificationEnabled($pdo, (int) ($instance['tenant_id'] ?? 0));
+        $deliveredReply = $this->withAiWhatsappSignature((string) $failedMessage['content'], $senderDisplayName, $signatureEnabled);
 
         try {
             $result = $this->evolutionService($instance)->sendText($phone, $deliveredReply);
@@ -2333,11 +2335,31 @@ final class AiAutomationService
         return 'IA - ' . $agentName;
     }
 
-    private function withAiWhatsappSignature(string $message, string $senderDisplayName): string
+    private function whatsappSenderIdentificationEnabled(PDO $pdo, int $tenantId): bool
+    {
+        if ($tenantId < 1) {
+            return false;
+        }
+        try {
+            $statement = $pdo->prepare('SELECT whatsapp_human_signature_enabled FROM tenants WHERE id = :id LIMIT 1');
+            $statement->execute(['id' => $tenantId]);
+            return (int) ($statement->fetchColumn() ?: 0) === 1;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function withAiWhatsappSignature(string $message, string $senderDisplayName, bool $enabled = true): string
     {
         $message = trim($message);
         if ($message === '') {
             return $message;
+        }
+        if (!$enabled) {
+            // A opção da empresa controla a identificação visível tanto das mensagens
+            // humanas quanto das respostas automáticas. Mantemos sender_display_name
+            // apenas como metadado interno de auditoria.
+            return preg_replace('/^\*?IA(?:\s+[^\n*-]+)?\s*-\s*[^\n*]+\*?\s*(?:\r?\n|$)/iu', '', $message) ?? $message;
         }
 
         $signature = trim($senderDisplayName);

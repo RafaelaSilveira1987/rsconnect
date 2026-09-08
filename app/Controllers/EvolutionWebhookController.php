@@ -125,7 +125,7 @@ final class EvolutionWebhookController
             }
 
             $key = is_array($data['key'] ?? null) ? $data['key'] : [];
-            $pushName = trim((string) ($data['pushName'] ?? $data['senderName'] ?? ''));
+            $pushName = $this->extractWhatsappName($data);
             $remoteJid = $this->preferredRemoteJid(
                 trim((string) ($key['remoteJid'] ?? $data['remoteJid'] ?? '')),
                 trim((string) ($key['remoteJidAlt'] ?? $data['remoteJidAlt'] ?? '')),
@@ -184,7 +184,7 @@ final class EvolutionWebhookController
             }
 
             $externalId = trim((string) ($key['id'] ?? $data['id'] ?? '')) ?: null;
-            $phone = preg_replace('/\D+/', '', strstr($remoteJid, '@', true) ?: $remoteJid) ?: '';
+            $phone = $this->normalizeContactPhone('', $remoteJid);
             if ($phone === '') {
                 // Eventos de status, canais e broadcasts não devem derrubar o webhook.
                 $this->respond(202, ['ok' => true, 'ignored' => 'jid_without_phone']);
@@ -1188,15 +1188,23 @@ final class EvolutionWebhookController
             if (!is_array($row)) {
                 continue;
             }
-            $remoteJid = trim((string) ($row['remoteJid'] ?? $row['id'] ?? ''));
-            if ($remoteJid === '' || $this->ignoredRemoteJidReason($remoteJid, $instance) !== null) {
+            $rawRemoteJid = trim((string) ($row['remoteJid'] ?? $row['id'] ?? ''));
+            $remoteJid = $this->preferredRemoteJid(
+                $rawRemoteJid,
+                trim((string) ($row['remoteJidAlt'] ?? '')),
+                $row
+            );
+            if ($remoteJid === '' || $this->ignoredRemoteJidReason($remoteJid, $instance) !== null || $this->isLidRemoteJid($remoteJid)) {
                 continue;
             }
-            $phone = preg_replace('/\D+/', '', strstr($remoteJid, '@', true) ?: $remoteJid) ?: '';
+            $phone = $this->normalizeContactPhone(
+                trim((string) ($row['number'] ?? '')),
+                $remoteJid
+            );
             if ($phone === '') {
                 continue;
             }
-            $pushName = trim((string) ($row['pushName'] ?? $row['name'] ?? ''));
+            $pushName = $this->extractWhatsappName($row);
             $contactId = $this->upsertContact($pdo, $instance, $remoteJid, $phone, $pushName);
             if ($contactId < 1) {
                 continue;
@@ -1282,6 +1290,52 @@ final class EvolutionWebhookController
     private function upsertContact(PDO $pdo, array $instance, string $remoteJid, string $phone, string $pushName): int
     {
         $tenantId = (int) ($instance['tenant_id'] ?? 0);
+        $phone = $this->normalizeContactPhone($phone, $remoteJid);
+        if ($tenantId < 1 || $remoteJid === '' || $phone === '') {
+            return 0;
+        }
+
+        // Se a mesma conversa já existe com um JID equivalente, corrige o telefone
+        // quando a nova mensagem trouxe uma versão mais confiável (ex.: @lid -> @s.whatsapp.net).
+        $existing = $pdo->prepare(
+            'SELECT id, phone FROM contacts
+             WHERE tenant_id = :tenant_id AND evolution_instance_id = :instance_id AND remote_jid = :remote_jid
+             LIMIT 1'
+        );
+        $existing->execute([
+            'tenant_id' => $tenantId,
+            'instance_id' => (int) $instance['id'],
+            'remote_jid' => $remoteJid,
+        ]);
+        $existingRow = $existing->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($existingRow) {
+            $existingPhone = preg_replace('/\D+/', '', (string) ($existingRow['phone'] ?? '')) ?: '';
+            if ($existingPhone !== $phone) {
+                try {
+                    $collision = $pdo->prepare(
+                        'SELECT id FROM contacts WHERE tenant_id = :tenant_id AND phone = :phone AND id <> :id LIMIT 1'
+                    );
+                    $collision->execute([
+                        'tenant_id' => $tenantId,
+                        'phone' => $phone,
+                        'id' => (int) $existingRow['id'],
+                    ]);
+                    if (!$collision->fetchColumn()) {
+                        $pdo->prepare(
+                            'UPDATE contacts SET phone = :phone WHERE id = :id AND tenant_id = :tenant_id'
+                        )->execute([
+                            'phone' => $phone,
+                            'id' => (int) $existingRow['id'],
+                            'tenant_id' => $tenantId,
+                        ]);
+                    }
+                } catch (Throwable) {
+                    // Não impede o recebimento da mensagem se uma base antiga tiver
+                    // uma restrição de unicidade incompatível.
+                }
+            }
+        }
+
         $identityReady = $this->contactIdentityColumnsAvailable($pdo);
 
         if ($identityReady) {
@@ -1294,11 +1348,10 @@ final class EvolutionWebhookController
                  ON DUPLICATE KEY UPDATE
                     id = LAST_INSERT_ID(id),
                     evolution_instance_id = VALUES(evolution_instance_id),
-                    remote_jid = VALUES(remote_jid)'
+                    remote_jid = VALUES(remote_jid),
+                    phone = IF(VALUES(phone) <> "", VALUES(phone), phone)'
             );
         } else {
-            // Compatibilidade segura antes da migration 059: nunca confia em um único pushName.
-            // A interface já usa o telefone como fallback quando contacts.name é nulo.
             $statement = $pdo->prepare(
                 'INSERT INTO contacts
                     (tenant_id, evolution_instance_id, remote_jid, phone, name)
@@ -1307,7 +1360,8 @@ final class EvolutionWebhookController
                  ON DUPLICATE KEY UPDATE
                     id = LAST_INSERT_ID(id),
                     evolution_instance_id = VALUES(evolution_instance_id),
-                    remote_jid = VALUES(remote_jid)'
+                    remote_jid = VALUES(remote_jid),
+                    phone = IF(VALUES(phone) <> "", VALUES(phone), phone)'
             );
         }
         $statement->execute([
@@ -1322,6 +1376,77 @@ final class EvolutionWebhookController
             $this->observeWhatsappContactName($pdo, $instance, $contactId, $phone, $pushName);
         }
         return $contactId;
+    }
+
+    private function normalizeContactPhone(string $number, string $remoteJid): string
+    {
+        $candidate = preg_replace('/\D+/', '', trim($number)) ?: '';
+        if ($candidate === '') {
+            $local = strstr(trim($remoteJid), '@', true);
+            $candidate = preg_replace('/\D+/', '', $local !== false ? $local : trim($remoteJid)) ?: '';
+        }
+        if ($candidate === '' || strlen($candidate) < 10 || strlen($candidate) > 15) {
+            return '';
+        }
+
+        $countryCode = preg_replace('/\D+/', '', (string) Env::get('DEFAULT_COUNTRY_CODE', '55')) ?: '55';
+        if (str_starts_with($candidate, '00')) {
+            $candidate = substr($candidate, 2);
+        }
+        if ($countryCode === '55' && in_array(strlen($candidate), [10, 11], true)) {
+            $candidate = '55' . $candidate;
+        }
+
+        // Um LID numérico pode ter 14-16 dígitos e não é telefone. Só aceitamos
+        // o formato internacional brasileiro quando o código 55 estiver presente.
+        if ($countryCode === '55' && strlen($candidate) === 13 && str_starts_with($candidate, '55')) {
+            return $candidate;
+        }
+        if ($countryCode === '55' && strlen($candidate) === 12 && str_starts_with($candidate, '55')) {
+            return $candidate;
+        }
+        if ($countryCode === '55' && strlen($candidate) > 13 && !str_starts_with($candidate, '55')) {
+            return '';
+        }
+        return $candidate;
+    }
+
+    private function extractWhatsappName(array $data): string
+    {
+        $candidates = [
+            $data['pushName'] ?? null,
+            $data['senderName'] ?? null,
+            $data['verifiedName'] ?? null,
+            $data['notify'] ?? null,
+            $data['name'] ?? null,
+            $data['profileName'] ?? null,
+        ];
+        foreach (['contact', 'sender', 'participant'] as $nestedKey) {
+            $nested = $data[$nestedKey] ?? null;
+            if (is_array($nested)) {
+                $candidates[] = $nested['pushName'] ?? null;
+                $candidates[] = $nested['name'] ?? null;
+                $candidates[] = $nested['verifiedName'] ?? null;
+                $candidates[] = $nested['notify'] ?? null;
+            }
+        }
+        foreach ($candidates as $candidate) {
+            if (!is_scalar($candidate)) {
+                continue;
+            }
+            $value = trim(preg_replace('/\s+/u', ' ', (string) $candidate) ?? (string) $candidate);
+            if ($value !== '' && !$this->automaticContactNameIsObviouslyInvalid($value)) {
+                return substr($value, 0, 150);
+            }
+        }
+        return '';
+    }
+
+    private function automaticContactNameIsObviouslyInvalid(string $name): bool
+    {
+        $normalized = strtolower(trim($name));
+        return in_array($normalized, ['unknown', 'desconhecido', 'sem nome', 'whatsapp'], true)
+            || preg_match('/^\d{8,}$/', preg_replace('/\D+/', '', $name) ?: '') === 1;
     }
 
     private function contactIdentityColumnsAvailable(PDO $pdo): bool
@@ -1410,9 +1535,9 @@ final class EvolutionWebhookController
             $source = 'unknown';
         }
 
-        // Só promove depois de duas observações consistentes do mesmo número.
-        // Até lá, a lista de conversas exibe o telefone.
-        $promote = $seen >= 2;
+        // O pushName do evento de mensagem/contato já é a identidade fornecida pelo WhatsApp.
+        // Depois das validações de segurança acima, uma observação confiável já pode ser exibida.
+        $promote = $seen >= 1;
         $pdo->prepare(
             'UPDATE contacts
              SET whatsapp_name_candidate = :candidate,
@@ -1504,6 +1629,10 @@ final class EvolutionWebhookController
 
         $local = strstr($jid, '@', true);
         $digits = preg_replace('/\D+/', '', $local !== false ? $local : $jid) ?: '';
+        $countryCode = preg_replace('/\D+/', '', (string) Env::get('DEFAULT_COUNTRY_CODE', '55')) ?: '55';
+        if ($countryCode === '55') {
+            return str_starts_with($digits, '55') && in_array(strlen($digits), [12, 13], true);
+        }
         return strlen($digits) >= 10 && strlen($digits) <= 15;
     }
 
@@ -1526,7 +1655,7 @@ final class EvolutionWebhookController
                     $name = strtolower((string) $key);
                     if (in_array($name, [
                         'remotejidalt', 'senderpn', 'participantpn', 'senderjid',
-                        'participantjid', 'remotejid', 'sender', 'participant',
+                        'participantjid', 'remotejid', 'sender', 'participant', 'number', 'phone',
                     ], true)) {
                         $candidate = trim((string) $item);
                         if ($candidate !== '') {
