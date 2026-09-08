@@ -1605,7 +1605,8 @@ final class CalendarConversationService
                 $caBundle !== '' ? $caBundle : null
             );
             $senderDisplayName = $this->agendaSenderDisplayName($guardPdo, $instance, $conversationId, is_array($agent) ? $agent : null);
-            $deliveredMessage = $this->withAiWhatsappSignature($message, $senderDisplayName);
+            $signatureEnabled = (new MessageGovernanceService())->whatsappSenderIdentificationEnabled($guardPdo, $tenantId);
+            $deliveredMessage = $this->withAiWhatsappSignature($message, $senderDisplayName, $signatureEnabled);
             $response = $service->sendText($phone, $deliveredMessage);
             $externalId = $this->extractMessageId(is_array($response['body'] ?? null) ? $response['body'] : []);
             $sentAt = \App\Core\Clock::nowUtc();
@@ -1788,11 +1789,15 @@ final class CalendarConversationService
         return 'IA - ' . $agentName;
     }
 
-    private function withAiWhatsappSignature(string $message, string $senderDisplayName): string
+    private function withAiWhatsappSignature(string $message, string $senderDisplayName, bool $enabled = true): string
     {
         $message = trim($message);
         if ($message === '') {
             return $message;
+        }
+        if (!$enabled) {
+            $message = preg_replace('/^\*?IA(?:\s+[^\n*-]+)?\s*-\s*[^\n*]+\*?\s*(?:\r?\n|$)/iu', '', $message) ?? $message;
+            return trim($message);
         }
         $signature = trim($senderDisplayName) !== '' ? trim($senderDisplayName) : 'IA';
         $plainPrefix = preg_quote($signature, '/');

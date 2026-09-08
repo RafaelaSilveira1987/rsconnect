@@ -210,7 +210,7 @@ final class CompanyController
         $companyBusinessHours = $posted('company_business_hours', $current);
         $companyNotes = $posted('company_notes', $current);
         $humanSignatureEnabled = array_key_exists('message_governance_settings_submitted', $_POST)
-            ? (isset($_POST['whatsapp_human_signature_enabled']) ? 1 : 0)
+            ? ((string) ($_POST['whatsapp_human_signature_enabled'] ?? '0') === '1' ? 1 : 0)
             : (int) ($current['whatsapp_human_signature_enabled'] ?? 0);
         $humanSignatureFormat = trim((string) ($_POST['whatsapp_human_signature_format'] ?? ($current['whatsapp_human_signature_format'] ?? 'name_role')));
         if (!in_array($humanSignatureFormat, ['name', 'name_role', 'name_company'], true)) {

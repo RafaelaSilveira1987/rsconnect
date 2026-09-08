@@ -1117,7 +1117,8 @@ final class PreSchedulingService
                 trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) !== '' ? trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) : null
             );
             $senderDisplayName = $this->agendaSenderDisplayName($pdo, $instance, $conversationId, $agent);
-            $deliveredMessage = $this->withAiWhatsappSignature($message, $senderDisplayName);
+            $signatureEnabled = (new MessageGovernanceService())->whatsappSenderIdentificationEnabled($pdo, $tenantId);
+            $deliveredMessage = $this->withAiWhatsappSignature($message, $senderDisplayName, $signatureEnabled);
             $response = $service->sendText($phone, $deliveredMessage);
             $externalId = $this->extractMessageId($response['body'] ?? []);
             $sentAt = \App\Core\Clock::nowUtc();
@@ -1231,7 +1232,8 @@ final class PreSchedulingService
                 trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) !== '' ? trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) : null
             );
             $senderDisplayName = $this->agendaSenderDisplayName($pdo, $instance, $conversationId, $agent);
-            $deliveredMessage = $this->withAiWhatsappSignature($message, $senderDisplayName);
+            $signatureEnabled = (new MessageGovernanceService())->whatsappSenderIdentificationEnabled($pdo, $tenantId);
+            $deliveredMessage = $this->withAiWhatsappSignature($message, $senderDisplayName, $signatureEnabled);
             $response = $service->sendText($phone, $deliveredMessage);
             $externalId = $this->extractMessageId($response['body'] ?? []);
             $sentAt = \App\Core\Clock::nowUtc();
@@ -1730,11 +1732,18 @@ final class PreSchedulingService
         return 'IA - ' . $agentName;
     }
 
-    private function withAiWhatsappSignature(string $message, string $senderDisplayName): string
+    private function withAiWhatsappSignature(string $message, string $senderDisplayName, bool $enabled = true): string
     {
         $message = trim($message);
         if ($message === '') {
             return $message;
+        }
+
+        if (!$enabled) {
+            // A configuração da empresa também controla mensagens automáticas da agenda.
+            // Remove uma identificação que já tenha vindo do template/modelo antes do envio.
+            $message = preg_replace('/^\*?IA(?:\s+[^\n*-]+)?\s*-\s*[^\n*]+\*?\s*(?:\r?\n|$)/iu', '', $message) ?? $message;
+            return trim($message);
         }
 
         $signature = trim($senderDisplayName) !== '' ? trim($senderDisplayName) : 'IA';

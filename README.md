@@ -356,3 +356,15 @@ return static function (Router $router): void {
     $router->post('/n8n-flows/save', [N8nFlowController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/n8n-flows/test', [N8nFlowController::class, 'test'], ['auth', 'super_admin', 'csrf']);
 };
+
+## Hotfix v6 — Identificação do atendente no WhatsApp
+
+Correções adicionais aplicadas após teste em produção:
+
+- o formulário do cliente agora envia explicitamente `message_governance_settings_submitted`;
+- o checkbox `whatsapp_human_signature_enabled` envia `0` quando desmarcado e `1` quando marcado;
+- o backend interpreta o valor real do checkbox, em vez de testar somente a presença do campo;
+- `AiAutomationService`, `PreSchedulingService` e `CalendarConversationService` usam a mesma configuração da empresa;
+- mensagens automáticas de agenda deixam de prefixar `IA - Nome do agente` quando a identificação estiver desativada;
+- se um template/resposta já vier com prefixo `IA - ...`, ele é removido antes do envio quando a opção estiver desativada;
+- teste de regressão incluído em `tests/Feature/whatsapp-signature-disable-regression.php`.

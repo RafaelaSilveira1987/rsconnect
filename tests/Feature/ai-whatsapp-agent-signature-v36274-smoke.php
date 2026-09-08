@@ -19,7 +19,7 @@ $version = (string) file_get_contents($versionFile);
 $layout = (string) file_get_contents($layoutFile);
 
 $checks = [
-    'WhatsApp recebe assinatura da IA antes do texto' => str_contains($automation, '$deliveredReply = $this->withAiWhatsappSignature($reply, $senderDisplayName)')
+    'WhatsApp recebe assinatura da IA antes do texto' => str_contains($automation, '$deliveredReply = $this->withAiWhatsappSignature($reply, $senderDisplayName, $signatureEnabled)')
         && str_contains($automation, 'sendText($phone, $deliveredReply)'),
     'assinatura usa negrito do WhatsApp' => str_contains($automation, 'return \'*\' . $signature . "*\\n" . $message;'),
     'agente geral usa IA - Nome' => str_contains($automation, 'return \'IA - \' . $agentName;'),
@@ -29,7 +29,7 @@ $checks = [
     'conteúdo do painel continua limpo' => str_contains($automation, "'content' => \$reply")
         && str_contains($automation, "'preview' => mb_substr(\$reply, 0, 255)"),
     'retry preserva identificação do emissor' => str_contains($automation, 'failed.sender_display_name')
-        && str_contains($automation, "withAiWhatsappSignature((string) \$failedMessage['content'], \$senderDisplayName)"),
+        && str_contains($automation, "withAiWhatsappSignature((string) \$failedMessage['content'], \$senderDisplayName, \$signatureEnabled)"),
     'pacote identifica versão 36.27.7' => str_contains($version, 'RS Connect 36.27.7'),
     'cache visual renovado' => str_contains($layout, 'app.css?v=36.27.9')
         && str_contains($layout, 'app.js?v=36.27.9'),

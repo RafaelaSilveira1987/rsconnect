@@ -89,7 +89,7 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
             <span class="badge <?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'badge-active' : 'badge-pending' ?>"><?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'Assinatura ativa' : 'Assinatura desativada' ?></span>
         </div>
         <div class="settings-toggle-grid">
-            <label class="switch-card"><input type="checkbox" name="whatsapp_human_signature_enabled" value="1" <?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'checked' : '' ?>><span><strong>Identificar atendente no WhatsApp</strong><small>Mensagens manuais passam a incluir o nome público do usuário logado.</small></span></label>
+            <label class="switch-card"><input type="hidden" name="whatsapp_human_signature_enabled" value="0"><input type="checkbox" name="whatsapp_human_signature_enabled" value="1" <?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'checked' : '' ?>><span><strong>Identificar atendente no WhatsApp</strong><small>Mensagens humanas e automáticas exibem o nome do emissor no WhatsApp.</small></span></label>
         </div>
         <div class="form-grid two">
             <label class="field"><span>Formato da assinatura</span><select name="whatsapp_human_signature_format">
@@ -343,6 +343,7 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
 
 
     <section class="card client-settings-card message-governance-settings">
+        <input type="hidden" name="message_governance_settings_submitted" value="1">
         <div class="section-heading compact">
             <div>
                 <span class="eyebrow">Conversas e privacidade</span>
@@ -352,7 +353,7 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
             <span class="badge <?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'badge-active' : 'badge-pending' ?>"><?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'Assinatura ativa' : 'Assinatura desativada' ?></span>
         </div>
         <div class="settings-toggle-grid">
-            <label class="switch-card"><input type="checkbox" name="whatsapp_human_signature_enabled" value="1" <?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'checked' : '' ?>><span><strong>Identificar atendente no WhatsApp</strong><small>Mensagens manuais passam a incluir o nome público do usuário logado.</small></span></label>
+            <label class="switch-card"><input type="hidden" name="whatsapp_human_signature_enabled" value="0"><input type="checkbox" name="whatsapp_human_signature_enabled" value="1" <?= !empty($messageGovernanceSettings['whatsapp_human_signature_enabled']) ? 'checked' : '' ?>><span><strong>Identificar atendente no WhatsApp</strong><small>Mensagens humanas e automáticas exibem o nome do emissor no WhatsApp.</small></span></label>
         </div>
         <div class="form-grid two">
             <label class="field"><span>Formato da assinatura</span><select name="whatsapp_human_signature_format">

@@ -2337,16 +2337,7 @@ final class AiAutomationService
 
     private function whatsappSenderIdentificationEnabled(PDO $pdo, int $tenantId): bool
     {
-        if ($tenantId < 1) {
-            return false;
-        }
-        try {
-            $statement = $pdo->prepare('SELECT whatsapp_human_signature_enabled FROM tenants WHERE id = :id LIMIT 1');
-            $statement->execute(['id' => $tenantId]);
-            return (int) ($statement->fetchColumn() ?: 0) === 1;
-        } catch (Throwable) {
-            return false;
-        }
+        return (new MessageGovernanceService())->whatsappSenderIdentificationEnabled($pdo, $tenantId);
     }
 
     private function withAiWhatsappSignature(string $message, string $senderDisplayName, bool $enabled = true): string

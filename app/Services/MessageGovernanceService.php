@@ -38,6 +38,21 @@ final class MessageGovernanceService
         }
     }
 
+    public function whatsappSenderIdentificationEnabled(PDO $pdo, int $tenantId): bool
+    {
+        if ($tenantId < 1) {
+            return false;
+        }
+
+        try {
+            $statement = $pdo->prepare('SELECT whatsapp_human_signature_enabled FROM tenants WHERE id = :id LIMIT 1');
+            $statement->execute(['id' => $tenantId]);
+            return (int) ($statement->fetchColumn() ?: 0) === 1;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
     /** @return array{original:string,delivered:string,display_name:?string,role_label:?string,signed:bool} */
     public function prepareHumanMessage(PDO $pdo, int $tenantId, int $userId, string $message): array
     {
