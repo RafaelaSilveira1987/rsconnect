@@ -115,8 +115,12 @@ final class AgentTriageService
                 $collected['patient_name'] = $collected['requester_name'];
             }
 
-            $schedulingIntent = $forceScheduling || $this->hasSchedulingIntent($normalizedContext)
-                || in_array((string) ($session['last_intent'] ?? ''), ['schedule', 'reschedule'], true);
+            $schedulingIntent = $this->resolveSchedulingIntent(
+                $session,
+                $content,
+                $normalizedContext,
+                $forceScheduling
+            );
             $result['scheduling_intent'] = $schedulingIntent;
 
             $action = $schedulingIntent ? 'calendar.pre_schedule' : 'conversation';
@@ -455,14 +459,30 @@ final class AgentTriageService
         return mb_substr($text, 0, 300);
     }
 
+    /**
+     * Retorna somente o bloco atual de mensagens recebidas, isto é, as entradas após
+     * a última saída da conversa. Antes da 36.28.8 eram lidas as 8 últimas entradas
+     * globais; isso fazia uma intenção antiga de "agendar" contaminar mensagens
+     * posteriores como "quero uma indicação" e reativar indevidamente a trava da agenda.
+     */
     private function recentIncomingContext(PDO $pdo, int $conversationId, string $fallback): string
     {
         try {
             $stmt = $pdo->prepare(
                 'SELECT content FROM (
-                    SELECT id, content FROM conversation_messages
-                    WHERE conversation_id = :conversation_id AND direction = "incoming" AND message_type = "text"
-                    ORDER BY sent_at DESC, id DESC LIMIT 8
+                    SELECT m.id, m.content
+                    FROM conversation_messages m
+                    WHERE m.conversation_id = :conversation_id
+                      AND m.direction = "incoming"
+                      AND m.message_type = "text"
+                      AND m.id > COALESCE((
+                          SELECT MAX(o.id)
+                          FROM conversation_messages o
+                          WHERE o.conversation_id = m.conversation_id
+                            AND o.direction = "outgoing"
+                      ), 0)
+                    ORDER BY m.id DESC
+                    LIMIT 8
                  ) recent ORDER BY id ASC'
             );
             $stmt->execute(['conversation_id' => $conversationId]);
@@ -473,6 +493,37 @@ final class AgentTriageService
         } catch (Throwable) {
         }
         return $fallback;
+    }
+
+    /**
+     * Resolve a intenção do turno sem carregar uma intenção de agenda já encerrada.
+     * Quando uma regra deixou a conversa ativa, mas bloqueou somente a agenda, uma
+     * mensagem comum posterior precisa voltar ao diálogo normal. Uma nova tentativa
+     * explícita de agenda (inclusive apenas dia/horário) continua protegida.
+     */
+    private function resolveSchedulingIntent(array $session, string $latestContent, string $normalizedContext, bool $forceScheduling): bool
+    {
+        if ($forceScheduling) {
+            return true;
+        }
+
+        $latestNormalized = $this->normalize($latestContent);
+        $latestExplicitScheduling = $this->hasSchedulingIntent($latestNormalized)
+            || $this->hasSchedulePreference($latestNormalized);
+        $calendarRestrictionActive = (string) ($session['eligibility_status'] ?? '') === 'blocked'
+            && (string) ($session['status'] ?? '') === 'completed'
+            && (string) ($session['last_intent'] ?? '') === 'conversation'
+            && trim((string) ($session['block_reason'] ?? '')) !== '';
+
+        if ($calendarRestrictionActive) {
+            // Depois que uma restrição de agenda foi informada, o turno atual passa a
+            // mandar: conversa comum continua; nova tentativa explícita (inclusive só
+            // dia/horário) volta ao gate de agenda e permanece bloqueada com segurança.
+            return $latestExplicitScheduling;
+        }
+
+        return $this->hasSchedulingIntent($normalizedContext)
+            || in_array((string) ($session['last_intent'] ?? ''), ['schedule', 'reschedule'], true);
     }
 
     private function session(PDO $pdo, int $tenantId, int $conversationId): array

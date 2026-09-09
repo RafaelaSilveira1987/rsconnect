@@ -35,10 +35,24 @@ final class ConversationAutomationMessageService
                 return ['ok' => false, 'error' => 'Contato sem telefone válido.', 'external_id' => null];
             }
 
+            // Deduplica apenas uma segunda tentativa do MESMO processamento. Se houve
+            // nova mensagem do cliente depois da última saída igual, precisamos responder
+            // novamente; caso contrário a entrada fica sem saída e aparece como pendente
+            // na fila da IA mesmo quando a regra foi processada corretamente.
             $recent = $pdo->prepare(
-                'SELECT 1 FROM conversation_messages
-                 WHERE conversation_id = :conversation_id AND direction = "outgoing" AND content = :content
-                   AND sent_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 SECOND)
+                'SELECT m.id
+                 FROM conversation_messages m
+                 WHERE m.conversation_id = :conversation_id
+                   AND m.direction = "outgoing"
+                   AND m.content = :content
+                   AND m.sent_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 SECOND)
+                   AND m.id > COALESCE((
+                       SELECT MAX(i.id)
+                       FROM conversation_messages i
+                       WHERE i.conversation_id = m.conversation_id
+                         AND i.direction = "incoming"
+                   ), 0)
+                 ORDER BY m.id DESC
                  LIMIT 1'
             );
             $recent->execute(['conversation_id' => $conversationId, 'content' => $message]);

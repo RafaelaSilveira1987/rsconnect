@@ -118,8 +118,9 @@ final class AppVersionService
     // RS Connect 36.28.5 — diagnóstico com auto-reparo seguro, agenda por origem real e correção de pré-reservas vencidas.
     // RS Connect 36.28.6 — restrições por regra bloqueiam somente a ação configurada e mantêm a conversa ativa.
     // RS Connect 36.28.7 — corrige envio de mensagens das regras: usa attendance_mode e destrava respostas pendentes.
-    public const VERSION_LABEL = 'Beta Comercial 1.8.5';
-    public const PACKAGE_LABEL = 'RS Connect 36.28.7 — Mensagens de regras e fila da IA destravadas';
+    // RS Connect 36.28.8 — follow-up após restrição volta à conversa normal; intenção antiga não contamina o turno e dedupe não engole nova entrada.
+    public const VERSION_LABEL = 'Beta Comercial 1.8.6';
+    public const PACKAGE_LABEL = 'RS Connect 36.28.8 — Continuidade após restrições de agenda';
     public const REQUIRED_MIGRATION = '104_customer_patient_continuity_guard.sql';
 
     private PDO $pdo;
