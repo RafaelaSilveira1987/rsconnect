@@ -441,7 +441,13 @@ final class TenantHealthService
             $hasWhatsapp = (int) ($agent['binding_count'] ?? 0) > 0
                 || !empty($agent['instance_id'])
                 || ((int) ($agent['is_default'] ?? 0) === 1 && (int) ($agent['tenant_instance_count'] ?? 0) > 0);
-            $hasCredential = (int) ($agent['credential_count'] ?? 0) > 0;
+            $hasStoredCredential = (int) ($agent['credential_count'] ?? 0) > 0;
+            $agentProvider = strtolower(trim((string) ($agent['model_provider'] ?? 'google'))) ?: 'google';
+            $hasGlobalCredential = !$hasStoredCredential && $this->globalAiCredentialAvailable($agentProvider);
+            $hasCredential = $hasStoredCredential || $hasGlobalCredential;
+            $credentialSource = $hasStoredCredential
+                ? 'Chave cadastrada para a empresa ou assistente'
+                : ($hasGlobalCredential ? 'Chave principal da RS Connect' : 'Nenhuma chave disponível');
 
             $pending = $this->pendingAiResponses(
                 $tenantId,
@@ -520,7 +526,8 @@ final class TenantHealthService
             $details += [
                 'Canal legado/principal' => (string) ($agent['instance_label'] ?? 'Não vinculado'),
                 'Canais vinculados' => (string) ((int) ($agent['binding_count'] ?? 0)),
-                'Credencial ativa encontrada' => $hasCredential ? 'Sim' : 'Não',
+                'Acesso à IA disponível' => $hasCredential ? 'Sim' : 'Não',
+                'Origem do acesso à IA' => $credentialSource,
                 'Modelo' => (string) ($agent['model_name'] ?? ''),
                 'Última resposta bem-sucedida' => $this->formatDatabaseDate($agent['last_success'] ?? null, 'Nenhuma'),
                 'Última falha' => $this->formatDatabaseDate($agent['last_error'] ?? null, 'Nenhuma'),
@@ -539,6 +546,15 @@ final class TenantHealthService
             $checks[] = $this->check('Assistente de IA', 'agent.' . $id, 'Assistente — ' . (string) $agent['name'], $status, $summary, $details, '/agents?tenant_id=' . $tenantId, 40 + $id);
         }
         return $checks;
+    }
+
+    private function globalAiCredentialAvailable(string $provider): bool
+    {
+        return match (strtolower(trim($provider))) {
+            'openai' => trim((string) \App\Core\Env::get('OPENAI_API_KEY', '')) !== '',
+            'google' => trim((string) \App\Core\Env::get('GEMINI_API_KEY', \App\Core\Env::get('GOOGLE_GEMINI_API_KEY', ''))) !== '',
+            default => false,
+        };
     }
 
     /** @return array<int,array<string,mixed>> */
