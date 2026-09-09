@@ -113,8 +113,9 @@ final class AppVersionService
     // RS Connect 36.28.0 — blueprints por nicho, triagem estruturada e Policy Engine fail-closed.
     // RS Connect 36.28.1 — interface dos modelos e regras do assistente em linguagem simples.
     // RS Connect 36.28.2 — diagnóstico seguro do ambiente e continuidade de clientes/pacientes sem regressão.
-    public const VERSION_LABEL = 'Beta Comercial 1.8';
-    public const PACKAGE_LABEL = 'RS Connect 36.28.2 — Diagnóstico seguro e continuidade corrigida';
+    // RS Connect 36.28.3 — tela de configuração do assistente em largura total, responsiva e com linguagem operacional.
+    public const VERSION_LABEL = 'Beta Comercial 1.8.1';
+    public const PACKAGE_LABEL = 'RS Connect 36.28.3 — Configuração de assistentes responsiva';
     public const REQUIRED_MIGRATION = '104_customer_patient_continuity_guard.sql';
 
     private PDO $pdo;

@@ -27,11 +27,11 @@ $version = (string) file_get_contents($versionFile);
 $layout = (string) file_get_contents($layoutFile);
 
 $checks = [
-    'tela exibe guia de multiagente' => str_contains($view, 'Defina o papel de cada assistente no próprio canal'),
-    'tela oferece os três papéis' => str_contains($view, 'Principal / recepção')
-        && str_contains($view, 'Especialista por assunto')
-        && str_contains($view, 'Distribuição automática'),
-    'tela permite palavras de direcionamento' => str_contains($view, 'Intenções / palavras de direcionamento')
+    'tela exibe guia de multiagente' => str_contains($view, 'Defina o papel de cada assistente no próprio canal') || str_contains($view, 'Escolha como cada assistente participa do atendimento'),
+    'tela oferece os três papéis' => (str_contains($view, 'Principal / recepção') || str_contains($view, 'Atendimento principal'))
+        && (str_contains($view, 'Especialista por assunto') || str_contains($view, 'Atender assuntos específicos'))
+        && (str_contains($view, 'Distribuição automática') || str_contains($view, 'Dividir atendimentos automaticamente')),
+    'tela permite palavras de direcionamento' => str_contains($view, 'Intenções / palavras de direcionamento') || str_contains($view, 'Assuntos que direcionam para este assistente')
         && str_contains($view, 'routing_keywords['),
     'cards mostram resumo de roteamento' => (str_contains($view, 'Roteamento multiagente') || str_contains($view, 'Papel no atendimento'))
         && str_contains($view, 'agent-routing-badge'),

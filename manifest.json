@@ -1,23 +1,21 @@
-# RS Connect v36.28.2
+# RS Connect v36.28.3
 
-Diagnóstico seguro do ambiente e correção definitiva da continuidade de clientes/pacientes.
+Correção visual e responsiva da tela de configuração de assistentes.
 
 Principais alterações desta versão:
 
-- chaves, senhas e tokens deixam de mostrar qualquer trecho na tela de status;
-- integrações sensíveis passam a aparecer apenas como `Configurado` ou `Não configurado`;
-- nomes técnicos do painel foram substituídos por linguagem operacional;
-- corrige a configuração de `Paciente atual`, que ainda podia voltar a exigir o motivo do atendimento;
-- o backend passa a impedir essa regressão mesmo que uma tela antiga envie a opção incorreta;
-- o aviso `Continuidade de Cliente/Paciente` passa a usar linguagem simples e indicar a ação correta;
-- adiciona reparo idempotente dos registros antigos que ficaram presos em triagem.
+- ao abrir **Configurar assistente**, o card passa a ocupar toda a largura disponível;
+- somente um painel de configuração completo fica aberto por vez;
+- os WhatsApps vinculados se reorganizam automaticamente sem espremer ou sobrepor campos;
+- selects, textos e campos ficam contidos dentro do painel;
+- em telas menores, configurações de duas colunas passam para uma coluna;
+- os termos de roteamento foram simplificados para linguagem mais fácil de entender;
+- CSS e JavaScript receberam novo versionamento de cache para a correção aparecer logo após o deploy.
 
-Migration obrigatória:
+Não há migration nova nesta versão.
+
+Migration obrigatória atual:
 
 `104_customer_patient_continuity_guard.sql`
 
-Após o deploy execute:
-
-`php bin/migrate.php up`
-
-Depois abra **Status do sistema** novamente. A área de integrações não deve exibir nenhum trecho de token e o item de clientes/pacientes deve ficar como **Operando** após a normalização.
+Depois do deploy, reinicie o PHP-FPM/container. O cache de CSS/JS já foi renovado para `36.28.3`.

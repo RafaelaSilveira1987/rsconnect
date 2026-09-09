@@ -59,14 +59,14 @@ $routingModeForBinding = static function (array $binding): string {
     return trim((string) ($binding['routing_keywords'] ?? '')) !== '' ? 'specialist' : 'round_robin';
 };
 $routingModeLabels = [
-    'primary' => 'Principal / recepção',
-    'specialist' => 'Especialista',
-    'round_robin' => 'Distribuição automática',
+    'primary' => 'Atendimento principal',
+    'specialist' => 'Assuntos específicos',
+    'round_robin' => 'Divisão automática',
 ];
 $routingModeShortLabels = [
     'primary' => 'Principal',
-    'specialist' => 'Especialista',
-    'round_robin' => 'Distribuição automática',
+    'specialist' => 'Assuntos específicos',
+    'round_robin' => 'Divisão automática',
 ];
 ?>
 <div class="agent-management-page <?= $isClientExperience ? 'agent-client-experience' : 'agent-admin-experience' ?>">
@@ -112,11 +112,11 @@ $routingModeShortLabels = [
 
         <?php if ($canManage && $instances): ?>
             <div class="agent-routing-guide">
-                <div><span class="eyebrow">Multiagente</span><strong>Defina o papel de cada assistente no próprio canal</strong></div>
+                <div><span class="eyebrow">Mais de um assistente</span><strong>Escolha como cada assistente participa do atendimento</strong></div>
                 <div class="agent-routing-guide-items">
-                    <span><b>Principal</b> recebe o atendimento geral.</span>
-                    <span><b>Especialista</b> assume quando identifica as intenções configuradas.</span>
-                    <span><b>Distribuição automática</b> divide novas conversas gerais entre os assistentes participantes.</span>
+                    <span><b>Atendimento principal</b> recebe as conversas gerais.</span>
+                    <span><b>Assuntos específicos</b> recebe somente os temas que você escolher.</span>
+                    <span><b>Divisão automática</b> reparte novos atendimentos entre os assistentes disponíveis.</span>
                 </div>
             </div>
         <?php endif; ?>
@@ -256,7 +256,7 @@ $routingModeShortLabels = [
 
                     <?php if ($canManage): ?>
                         <details class="agent-settings-details" id="agent-settings-<?= (int) $agent['id'] ?>">
-                            <summary><span><strong>Configurações completas</strong><small>Canais, roteamento, horário, memória e automações.</small></span><span class="drawer-chevron"></span></summary>
+                            <summary><span><strong>Configurar assistente</strong><small>Canais, distribuição do atendimento, horários, memória e automações.</small></span><span class="drawer-chevron"></span></summary>
                         <form class="agent-actions agent-settings-form" method="post" action="<?= View::e(Router::url('/agents/status')) ?>">
                             <?= Csrf::input() ?>
                             <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
@@ -266,9 +266,9 @@ $routingModeShortLabels = [
                             <section class="agent-channel-editor" id="agent-routing-<?= (int) $agent['id'] ?>">
                                 <div class="agent-channel-editor-head">
                                     <div>
-                                        <span class="eyebrow">Canais WhatsApp</span>
-                                        <strong>Onde este assistente deve atuar?</strong>
-                                        <small>Marque uma ou mais conexões e escolha como este assistente participa do atendimento em cada uma delas.</small>
+                                        <span class="eyebrow">WhatsApp do assistente</span>
+                                        <strong>Em quais números este assistente atende?</strong>
+                                        <small>Escolha um ou mais WhatsApps e defina como o atendimento será distribuído em cada número.</small>
                                     </div>
                                     <span class="badge"><?= count($agentChannelBindings) ?> vinculado(s)</span>
                                 </div>
@@ -293,24 +293,24 @@ $routingModeShortLabels = [
                                                 </label>
                                                 <div class="agent-channel-routing-config">
                                                     <label class="field compact-field">
-                                                        <span>Papel neste canal</span>
+                                                        <span>Como atender neste WhatsApp</span>
                                                         <select name="routing_mode[<?= $channelId ?>]" data-routing-mode <?= !$isLinked ? 'disabled' : '' ?>>
-                                                            <option value="primary" <?= $routingMode === 'primary' ? 'selected' : '' ?>>Principal / recepção</option>
-                                                            <option value="specialist" <?= $routingMode === 'specialist' ? 'selected' : '' ?>>Especialista por assunto</option>
-                                                            <option value="round_robin" <?= $routingMode === 'round_robin' ? 'selected' : '' ?>>Distribuição automática</option>
+                                                            <option value="primary" <?= $routingMode === 'primary' ? 'selected' : '' ?>>Atendimento principal</option>
+                                                            <option value="specialist" <?= $routingMode === 'specialist' ? 'selected' : '' ?>>Atender assuntos específicos</option>
+                                                            <option value="round_robin" <?= $routingMode === 'round_robin' ? 'selected' : '' ?>>Dividir atendimentos automaticamente</option>
                                                         </select>
                                                     </label>
                                                     <label class="field compact-field agent-routing-keywords <?= $routingMode === 'specialist' ? 'is-visible' : '' ?>" data-routing-keywords-field>
-                                                        <span>Intenções / palavras de direcionamento</span>
+                                                        <span>Assuntos que direcionam para este assistente</span>
                                                         <textarea name="routing_keywords[<?= $channelId ?>]" rows="3" maxlength="1000" placeholder="Ex.: comercial, vendas, planos, preço, orçamento" data-routing-keywords <?= (!$isLinked || $routingMode !== 'specialist') ? 'disabled' : '' ?>><?= View::e($routingKeywordsValue) ?></textarea>
-                                                        <small class="field-hint">Quando uma mensagem contiver uma dessas intenções, a conversa é transferida para este assistente e permanece com ele.</small>
+                                                        <small class="field-hint">Quando a mensagem tiver um destes assuntos, a conversa passa para este assistente e continua com ele.</small>
                                                     </label>
                                                     <div class="agent-routing-mode-hint" data-routing-mode-hint></div>
                                                 </div>
                                             </article>
                                         <?php endforeach; ?>
                                     </div>
-                                    <p class="field-hint agent-channel-help">Principal recebe o atendimento geral. Especialista só entra quando a intenção configurada for identificada. Distribuição automática participa do round-robin das novas conversas gerais.</p>
+                                    <p class="field-hint agent-channel-help">Atendimento principal recebe as conversas gerais. Assuntos específicos recebem apenas os temas escolhidos. Divisão automática reparte novos atendimentos entre os assistentes disponíveis.</p>
                                 <?php else: ?>
                                     <div class="message-warning">Cadastre uma conexão em Canais WhatsApp antes de vincular este assistente.</div>
                                 <?php endif; ?>
@@ -464,8 +464,8 @@ $routingModeShortLabels = [
                 </div>
                 <div class="drawer-form-grid">
                     <label class="field drawer-span"><span>Canal inicial</span><select name="instance_id" required><option value="">Selecione o WhatsApp</option><?php foreach ($instances as $instance): ?><option value="<?= (int) $instance['id'] ?>"><?= View::e($instance['name']) ?></option><?php endforeach; ?></select><small class="field-hint">É o primeiro número em que ele atuará. Outros canais podem ser adicionados depois.</small></label>
-                    <label class="field"><span>Papel neste canal</span><select name="routing_mode" data-routing-mode><option value="primary" <?= count($agents) === 0 ? 'selected' : '' ?>>Principal / recepção</option><option value="specialist">Especialista por assunto</option><option value="round_robin" <?= count($agents) > 0 ? 'selected' : '' ?>>Distribuição automática</option></select><small class="field-hint">Você poderá alterar esta opção a qualquer momento.</small></label>
-                    <label class="field agent-routing-keywords" data-routing-keywords-field><span>Intenções / palavras de direcionamento</span><input name="routing_keywords" maxlength="1000" placeholder="comercial, vendas, planos, preço, orçamento" data-routing-keywords disabled><small class="field-hint">Obrigatório quando o papel for Especialista.</small></label>
+                    <label class="field"><span>Como atender neste WhatsApp</span><select name="routing_mode" data-routing-mode><option value="primary" <?= count($agents) === 0 ? 'selected' : '' ?>>Atendimento principal</option><option value="specialist">Atender assuntos específicos</option><option value="round_robin" <?= count($agents) > 0 ? 'selected' : '' ?>>Dividir atendimentos automaticamente</option></select><small class="field-hint">Você poderá alterar esta opção a qualquer momento.</small></label>
+                    <label class="field agent-routing-keywords" data-routing-keywords-field><span>Assuntos que direcionam para este assistente</span><input name="routing_keywords" maxlength="1000" placeholder="comercial, vendas, planos, preço, orçamento" data-routing-keywords disabled><small class="field-hint">Preencha quando escolher “Atender assuntos específicos”.</small></label>
                     <label class="field"><span>Nome do assistente</span><input name="name" placeholder="Ex.: Digi" required></label>
                     <label class="field"><span>Área de atendimento</span><input name="segment" placeholder="Ex.: vendas e agendamentos" data-agent-segment required></label>
                     <label class="field drawer-span"><span>Objetivo do atendimento</span><textarea name="service_objective" rows="4" placeholder="Ex.: responder dúvidas, identificar a necessidade do cliente, apresentar os serviços e encaminhar oportunidades para a equipe." required></textarea><small class="field-hint">Explique em palavras simples o resultado esperado de cada conversa.</small></label>
@@ -609,8 +609,8 @@ $routingModeShortLabels = [
             <section class="drawer-section">
                 <div class="drawer-section-title"><div><span class="eyebrow">1. Identificação</span><h3>Quem vai atender?</h3></div></div>
                 <label class="field"><span>Canal inicial</span><select name="instance_id" required><option value="">Selecione o WhatsApp</option><?php foreach ($instances as $instance): ?><option value="<?= (int) $instance['id'] ?>"><?= View::e($instance['name']) ?></option><?php endforeach; ?></select><small class="field-hint">Escolha o primeiro WhatsApp deste assistente. Depois você pode vinculá-lo a outros canais na tela WhatsApp.</small></label>
-                <label class="field"><span>Papel neste canal</span><select name="routing_mode" data-routing-mode><option value="primary" <?= count($agents) === 0 ? 'selected' : '' ?>>Principal / recepção</option><option value="specialist">Especialista por assunto</option><option value="round_robin" <?= count($agents) > 0 ? 'selected' : '' ?>>Distribuição automática</option></select></label>
-                <label class="field agent-routing-keywords" data-routing-keywords-field><span>Intenções / palavras de direcionamento</span><input name="routing_keywords" maxlength="1000" placeholder="comercial, vendas, planos, preço, orçamento" data-routing-keywords disabled><small class="field-hint">Obrigatório quando o papel for Especialista.</small></label>
+                <label class="field"><span>Como atender neste WhatsApp</span><select name="routing_mode" data-routing-mode><option value="primary" <?= count($agents) === 0 ? 'selected' : '' ?>>Atendimento principal</option><option value="specialist">Atender assuntos específicos</option><option value="round_robin" <?= count($agents) > 0 ? 'selected' : '' ?>>Dividir atendimentos automaticamente</option></select></label>
+                <label class="field agent-routing-keywords" data-routing-keywords-field><span>Assuntos que direcionam para este assistente</span><input name="routing_keywords" maxlength="1000" placeholder="comercial, vendas, planos, preço, orçamento" data-routing-keywords disabled><small class="field-hint">Preencha quando escolher “Atender assuntos específicos”.</small></label>
                 <label class="field"><span>Nome do assistente</span><input name="name" placeholder="Ex.: Digi, Assistente Comercial" required></label>
                 <label class="field"><span>Área de atendimento</span><input name="segment" placeholder="Ex.: vendas, suporte, agendamentos" data-agent-segment required><small class="field-hint">Ajuda a identificar a função principal do assistente.</small></label>
             </section>

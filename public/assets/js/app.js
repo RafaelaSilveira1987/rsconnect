@@ -3744,9 +3744,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // RS Connect 36.27.2 — configuração visual do roteamento multiagente por canal.
 document.addEventListener('DOMContentLoaded', () => {
   const hints = {
-    primary: 'Recebe o atendimento geral. Ao salvar, passa a ser o principal deste WhatsApp.',
-    specialist: 'Só recebe novas conversas quando uma das intenções configuradas for identificada. Depois da transferência, mantém a continuidade.',
-    round_robin: 'Participa da distribuição automática das novas conversas gerais junto com os demais agentes de distribuição.'
+    primary: 'Recebe as conversas gerais deste WhatsApp.',
+    specialist: 'Recebe a conversa quando identificar um dos assuntos configurados e continua o atendimento por aqui.',
+    round_robin: 'Divide os novos atendimentos gerais com os outros assistentes disponíveis.'
   };
 
   const refreshRouting = (scope) => {
@@ -4289,8 +4289,33 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// RS Connect 36.27.15 — cartões compactos e sugestão segura para agente de agendamento.
+// RS Connect 36.27.15 / 36.28.3 — cartões compactos e configuração responsiva em largura total.
 document.addEventListener('DOMContentLoaded', () => {
+  const syncAgentSettingsCard = (details) => {
+    if (!(details instanceof HTMLDetailsElement)) return;
+    const card = details.closest('.agent-card');
+    if (!(card instanceof HTMLElement)) return;
+    card.classList.toggle('is-settings-open', details.open);
+  };
+
+  const closeOtherAgentSettings = (current) => {
+    document.querySelectorAll('.agent-settings-details[open]').forEach((item) => {
+      if (item !== current && item instanceof HTMLDetailsElement) {
+        item.open = false;
+        syncAgentSettingsCard(item);
+      }
+    });
+  };
+
+  document.querySelectorAll('.agent-settings-details').forEach((details) => {
+    if (!(details instanceof HTMLDetailsElement)) return;
+    syncAgentSettingsCard(details);
+    details.addEventListener('toggle', () => {
+      if (details.open) closeOtherAgentSettings(details);
+      syncAgentSettingsCard(details);
+    });
+  });
+
   const openAgentSettings = (trigger) => {
     if (!(trigger instanceof Element)) return;
     const href = trigger.getAttribute('href') || '';
@@ -4298,10 +4323,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const details = document.querySelector(href);
     if (!(details instanceof HTMLDetailsElement)) return;
 
-    document.querySelectorAll('.agent-settings-details[open]').forEach((item) => {
-      if (item !== details && item instanceof HTMLDetailsElement) item.open = false;
-    });
+    closeOtherAgentSettings(details);
     details.open = true;
+    syncAgentSettingsCard(details);
 
     const targetSelector = trigger.getAttribute('data-agent-settings-target') || href;
     const target = document.querySelector(targetSelector);

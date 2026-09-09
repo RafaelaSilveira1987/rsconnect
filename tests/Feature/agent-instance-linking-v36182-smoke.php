@@ -17,9 +17,9 @@ $js = (string) file_get_contents(__DIR__ . '/../../public/assets/js/app.js');
 $layout = (string) file_get_contents(__DIR__ . '/../../app/Views/layouts/app.php');
 
 $assert(str_contains($agentView, 'name="instance_ids[]"'), 'edição do assistente deve permitir selecionar canais');
-$assert(str_contains($agentView, 'name="routing_mode[') && str_contains($agentView, 'Principal / recepção'), 'edição deve permitir definir principal por canal');
+$assert(str_contains($agentView, 'name="routing_mode[') && (str_contains($agentView, 'Principal / recepção') || str_contains($agentView, 'Atendimento principal')), 'edição deve permitir definir principal por canal');
 $assert(str_contains($agentView, 'name="channels_present"'), 'formulário deve sinalizar presença da nova seleção para preservar compatibilidade');
-$assert(str_contains($agentView, 'Onde este assistente deve atuar?'), 'interface deve explicar o vínculo de canais');
+$assert(str_contains($agentView, 'Onde este assistente deve atuar?') || str_contains($agentView, 'Em quais números este assistente atende?'), 'interface deve explicar o vínculo de canais');
 $assert(str_contains($agentController, 'syncAgentChannels('), 'controller do assistente deve sincronizar vínculos');
 $assert(str_contains($agentController, 'assertInstancesBelongToTenant'), 'controller deve validar isolamento por empresa');
 $assert(str_contains($agentController, 'UPDATE ai_agents SET instance_id = :instance_id'), 'vínculo legado deve ser mantido');
