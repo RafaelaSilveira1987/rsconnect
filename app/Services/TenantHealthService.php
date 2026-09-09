@@ -48,9 +48,15 @@ final class TenantHealthService
                 'SELECT * FROM tenant_health_checks WHERE snapshot_id = :snapshot_id ORDER BY sort_order, id',
                 ['snapshot_id' => (int) $snapshot['id']]
             );
+            $selfHealing = new TenantSelfHealingService();
             foreach ($checks as &$check) {
                 $details = json_decode((string) ($check['details_json'] ?? ''), true);
                 $check['details'] = is_array($details) ? $details : [];
+                $check['repairable'] = $selfHealing->isRecommended(
+                    (string) ($check['component_key'] ?? ''),
+                    $check['details'],
+                    (string) ($check['status'] ?? 'info')
+                );
             }
             unset($check);
         }
@@ -129,6 +135,15 @@ final class TenantHealthService
         $tenant = $this->row('SELECT * FROM tenants WHERE id = :id LIMIT 1', ['id' => $tenantId]);
         if (!$tenant) {
             throw new \RuntimeException('Empresa não encontrada.');
+        }
+
+        // Antes de medir, tenta corrigir automaticamente apenas estados operacionais
+        // conhecidos e seguros (ex.: pré-reservas vencidas). Configurações de negócio
+        // nunca são inventadas pelo diagnóstico.
+        try {
+            (new TenantSelfHealingService())->runSafeRepairs($tenantId, $source);
+        } catch (Throwable) {
+            // O diagnóstico deve continuar mesmo se uma tentativa de auto-reparo falhar.
         }
 
         $checks = array_merge(
@@ -603,44 +618,80 @@ final class TenantHealthService
     /** @return array<int,array<string,mixed>> */
     private function calendarChecks(int $tenantId): array
     {
+        $availabilityService = new CalendarAvailabilityService();
         $settings = $this->row('SELECT * FROM tenant_calendar_availability_settings WHERE tenant_id = :tenant_id LIMIT 1', ['tenant_id' => $tenantId]);
-        if (!$settings || (int) ($settings['enabled'] ?? 0) !== 1) {
-            return [$this->check('Agenda', 'calendar.disabled', 'Agenda inteligente', 'info', 'A Agenda Inteligente não está ativada para esta empresa.', [], '/calendar?section=availability', 80)];
+        $sourceSettings = $availabilityService->calendarSourceSettings($tenantId);
+        $source = (string) ($sourceSettings['source'] ?? 'none');
+
+        if (!$settings || $source === 'none' || (int) ($settings['enabled'] ?? 0) !== 1) {
+            return [$this->check('Agenda', 'calendar.disabled', 'Agenda', 'info', 'A empresa não está utilizando agenda automática.', [
+                'Origem selecionada' => 'Sem agenda',
+            ], '/calendar?section=availability', 80)];
         }
 
         $status = 'ok';
         $problems = [];
         $mode = (string) ($settings['availability_mode'] ?? 'free_slots');
-        $urlField = $mode === 'marked_events' ? 'marked_events_webhook_url_encrypted' : 'free_slots_webhook_url_encrypted';
-        if (empty($settings[$urlField]) && empty($settings['n8n_webhook_url_encrypted'])) {
-            $status = 'critical';
-            $problems[] = 'webhook n8n não configurado';
+        $isGoogle = $source === 'google';
+        $isInternal = $source === 'internal';
+
+        // Só cobra webhook/n8n quando a origem realmente escolhida é Google.
+        if ($isGoogle) {
+            $urlField = $mode === 'marked_events' ? 'marked_events_webhook_url_encrypted' : 'free_slots_webhook_url_encrypted';
+            if (empty($settings[$urlField]) && empty($settings['n8n_webhook_url_encrypted'])) {
+                $status = 'critical';
+                $problems[] = 'integração da agenda Google não configurada';
+            }
+            if ($mode === 'free_slots'
+                && !empty($settings['create_google_event_on_confirm'])
+                && empty($settings['calendar_event_webhook_url_encrypted'])) {
+                $status = 'critical';
+                $problems[] = 'criação de compromisso no Google não configurada';
+            }
         }
-        if ($mode === 'free_slots'
-            && !empty($settings['create_google_event_on_confirm'])
-            && empty($settings['calendar_event_webhook_url_encrypted'])) {
-            $status = 'critical';
-            $problems[] = 'fluxo do ciclo Google não configurado';
+
+        // Na Agenda interna, valida apenas a grade local e nunca exige Google/n8n.
+        if ($isInternal) {
+            $workdays = json_decode((string) ($settings['workdays_json'] ?? '[]'), true);
+            $hours = json_decode((string) ($settings['working_hours_json'] ?? '{}'), true);
+            if (!is_array($workdays) || $workdays === []) {
+                $status = 'warning';
+                $problems[] = 'nenhum dia de atendimento configurado';
+            }
+            if (!is_array($hours) || $hours === []) {
+                $status = 'warning';
+                $problems[] = 'horários de atendimento não configurados';
+            }
         }
+
         $lastRequest = $this->row('SELECT * FROM calendar_availability_requests WHERE tenant_id = :tenant_id ORDER BY id DESC LIMIT 1', ['tenant_id' => $tenantId]);
-        $lastSync = $this->row('SELECT * FROM calendar_google_sync_logs WHERE tenant_id = :tenant_id ORDER BY id DESC LIMIT 1', ['tenant_id' => $tenantId]);
+        $lastSync = $isGoogle
+            ? $this->row('SELECT * FROM calendar_google_sync_logs WHERE tenant_id = :tenant_id ORDER BY id DESC LIMIT 1', ['tenant_id' => $tenantId])
+            : null;
+
         $expiredHolds = (int) $this->value(
-            'SELECT COUNT(*) FROM calendar_availability_slots WHERE tenant_id = :tenant_id AND event_state = "held" AND hold_expires_at IS NOT NULL AND hold_expires_at < NOW()',
+            'SELECT COUNT(*) FROM calendar_availability_slots
+             WHERE tenant_id = :tenant_id AND event_state = "held"
+               AND hold_expires_at IS NOT NULL AND hold_expires_at < NOW()',
             ['tenant_id' => $tenantId],
             0
         );
-        if (($lastRequest['status'] ?? '') === 'error' || ($lastSync['status'] ?? '') === 'error') {
-            $status = 'warning';
-            $problems[] = 'última consulta ou sincronização terminou com erro';
+
+        if (($lastRequest['status'] ?? '') === 'error' || ($isGoogle && ($lastSync['status'] ?? '') === 'error')) {
+            $status = $status === 'critical' ? 'critical' : 'warning';
+            $problems[] = $isGoogle
+                ? 'última consulta ou sincronização terminou com erro'
+                : 'última consulta da agenda terminou com erro';
         }
         if ($expiredHolds > 0) {
             $status = $status === 'critical' ? 'critical' : 'warning';
             $problems[] = $expiredHolds . ' pré-reserva(s) vencida(s)';
         }
+
         $confirmedWithoutEvent = 0;
         $failedSyncs = 0;
         $lastMaintenance = null;
-        if ($this->hasColumn('calendar_appointments', 'google_sync_key')) {
+        if ($isGoogle && $this->hasColumn('calendar_appointments', 'google_sync_key')) {
             $confirmedWithoutEvent = (int) $this->value(
                 'SELECT COUNT(*) FROM calendar_appointments
                  WHERE tenant_id = :tenant_id
@@ -657,33 +708,53 @@ final class TenantHealthService
                 ['tenant_id' => $tenantId],
                 0
             );
-            if ($this->tableExists('calendar_maintenance_runs')) {
-                $lastMaintenance = $this->row(
-                    'SELECT * FROM calendar_maintenance_runs WHERE tenant_id = :tenant_id OR tenant_id IS NULL ORDER BY id DESC LIMIT 1',
-                    ['tenant_id' => $tenantId]
-                );
-            }
         }
-        if ($confirmedWithoutEvent > 0) {
+        if ($this->tableExists('calendar_maintenance_runs')) {
+            $lastMaintenance = $this->row(
+                'SELECT * FROM calendar_maintenance_runs WHERE tenant_id = :tenant_id OR tenant_id IS NULL ORDER BY id DESC LIMIT 1',
+                ['tenant_id' => $tenantId]
+            );
+        }
+
+        if ($isGoogle && $confirmedWithoutEvent > 0) {
             $status = $status === 'critical' ? 'critical' : 'warning';
             $problems[] = $confirmedWithoutEvent . ' compromisso(s) confirmado(s) sem evento Google';
         }
-        if ($failedSyncs > 0) {
+        if ($isGoogle && $failedSyncs > 0) {
             $status = $status === 'critical' ? 'critical' : 'warning';
             $problems[] = $failedSyncs . ' sincronização(ões) com falha';
         }
-        $summary = $problems ? 'Revisar: ' . implode('; ', $problems) . '.' : 'Agenda configurada e sem falhas recentes.';
-        return [$this->check('Agenda', 'calendar.integration', 'Agenda e Google Calendar', $status, $summary, [
-            'Modo' => $mode === 'marked_events' ? 'Eventos VAGO' : 'Espaços livres',
-            'Calendário' => (string) ($settings['google_calendar_id'] ?? 'primary'),
+
+        $sourceLabel = $isInternal ? 'Agenda interna do RS Connect' : 'Google Agenda';
+        $modeLabel = $isInternal
+            ? 'Agenda interna'
+            : ($mode === 'marked_events' ? 'Eventos VAGO' : 'Espaços livres');
+        $summary = $problems
+            ? 'Revisar: ' . implode('; ', $problems) . '.'
+            : ($isInternal ? 'Agenda interna configurada e sem pendências.' : 'Agenda Google configurada e sem falhas recentes.');
+
+        $details = [
+            'Origem ativa' => $sourceLabel,
+            'Modo' => $modeLabel,
             'Última busca' => $this->formatDatabaseDate($lastRequest['created_at'] ?? null, 'Nenhuma'),
             'Situação da última busca' => (string) ($lastRequest['status'] ?? 'Não disponível'),
-            'Última sincronização Google' => $this->formatDatabaseDate($lastSync['created_at'] ?? null, 'Nenhuma'),
             'Última manutenção' => $this->formatDatabaseDate($lastMaintenance['finished_at'] ?? $lastMaintenance['started_at'] ?? null, 'Nenhuma'),
             'Pré-reservas vencidas' => (string) $expiredHolds,
-            'Confirmados sem evento' => (string) $confirmedWithoutEvent,
-            'Sincronizações com falha' => (string) $failedSyncs,
-        ], '/calendar?section=availability', 80)];
+        ];
+        if ($isGoogle) {
+            $details += [
+                'Calendário' => (string) ($settings['google_calendar_id'] ?? 'primary'),
+                'Última sincronização Google' => $this->formatDatabaseDate($lastSync['created_at'] ?? null, 'Nenhuma'),
+                'Confirmados sem evento' => (string) $confirmedWithoutEvent,
+                'Sincronizações com falha' => (string) $failedSyncs,
+            ];
+        } else {
+            $details += [
+                'Google/n8n' => 'Não utilizado nesta origem',
+            ];
+        }
+
+        return [$this->check('Agenda', 'calendar.integration', 'Agenda', $status, $summary, $details, '/calendar?section=availability', 80)];
     }
 
     /** @return array<int,array<string,mixed>> */

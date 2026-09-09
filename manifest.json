@@ -1,16 +1,16 @@
-# RS Connect v36.28.3
+# RS Connect v36.28.5
 
-Correção visual e responsiva da tela de configuração de assistentes.
+Diagnóstico com correção automática segura e agenda por origem real.
 
 Principais alterações desta versão:
 
-- ao abrir **Configurar assistente**, o card passa a ocupar toda a largura disponível;
-- somente um painel de configuração completo fica aberto por vez;
-- os WhatsApps vinculados se reorganizam automaticamente sem espremer ou sobrepor campos;
-- selects, textos e campos ficam contidos dentro do painel;
-- em telas menores, configurações de duas colunas passam para uma coluna;
-- os termos de roteamento foram simplificados para linguagem mais fácil de entender;
-- CSS e JavaScript receberam novo versionamento de cache para a correção aparecer logo após o deploy.
+- a tela de Saúde e diagnóstico agora pode corrigir automaticamente pendências operacionais seguras;
+- pré-reservas vencidas que ficavam presas em `calendar_availability_slots` são liberadas pela manutenção;
+- o diagnóstico da agenda passa a respeitar a origem realmente escolhida pela empresa: Agenda interna, Google Agenda ou sem agenda;
+- Agenda interna não acusa mais dependência de n8n/Google quando eles não são a origem ativa;
+- itens reparáveis exibem **Corrigir agora**; itens que exigem decisão/configuração continuam em **Abrir configuração**;
+- o diagnóstico manual e o cron executam a camada de auto-reparo antes de gerar o novo estado;
+- todas as correções automáticas são auditadas e não alteram regras de negócio, horários, URLs ou credenciais por conta própria.
 
 Não há migration nova nesta versão.
 
@@ -18,4 +18,4 @@ Migration obrigatória atual:
 
 `104_customer_patient_continuity_guard.sql`
 
-Depois do deploy, reinicie o PHP-FPM/container. O cache de CSS/JS já foi renovado para `36.28.3`.
+Depois do deploy, reinicie o PHP-FPM/container para limpar OPcache.

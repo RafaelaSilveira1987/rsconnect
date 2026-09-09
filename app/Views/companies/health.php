@@ -149,7 +149,19 @@ if (!in_array($trackingPriority, ['attention', 'critical', 'implantation'], true
                             <span class="health-check-label is-<?= View::e($itemStatus) ?>"><?= View::e($itemStatusLabel) ?></span>
                         </div>
                         <div class="tenant-health-check-actions">
-                            <?php if (!empty($check['action_url'])): ?><a class="btn btn-quiet" href="<?= View::e(Router::url((string) $check['action_url'])) ?>">Abrir área de correção</a><?php endif; ?>
+                            <?php
+                            $canAutoRepair = !empty($check['repairable']) && in_array((string) ($check['status'] ?? ''), ['warning', 'critical'], true);
+                            $repairComponentKey = (string) ($check['component_key'] ?? '');
+                            ?>
+                            <?php if ($canAutoRepair): ?>
+                                <form method="post" action="<?= View::e(Router::url('/companies/health/repair')) ?>">
+                                    <?= Csrf::input() ?>
+                                    <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
+                                    <input type="hidden" name="component_key" value="<?= View::e($repairComponentKey) ?>">
+                                    <button class="btn btn-primary" type="submit">Corrigir agora</button>
+                                </form>
+                            <?php endif; ?>
+                            <?php if (!empty($check['action_url'])): ?><a class="btn btn-quiet" href="<?= View::e(Router::url((string) $check['action_url'])) ?>"><?= $canAutoRepair ? 'Abrir configuração' : 'Abrir área de correção' ?></a><?php endif; ?>
                             <?php
                             $pendingConversationCount = (int) (($check['details']['Conversas aguardando resposta'] ?? 0));
                             $componentKey = (string) ($check['component_key'] ?? '');

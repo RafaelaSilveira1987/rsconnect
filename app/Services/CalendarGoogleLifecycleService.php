@@ -326,6 +326,9 @@ final class CalendarGoogleLifecycleService
                 try {
                     $this->closeStaleRequests($currentTenantId, $tenantResult);
                     $this->releaseExpiredMarkedHolds($currentTenantId, $tenantResult);
+                    // Limpa também holds órfãos/locais que ficaram presos na tabela de slots.
+                    // O diagnóstico sempre deve medir o mesmo estado que a manutenção consegue corrigir.
+                    $this->releaseExpiredAvailabilitySlots($currentTenantId, $tenantResult);
                     $this->retryMissingGoogleEvents($currentTenantId, $tenantResult);
                     $this->deleteCancelledGoogleEvents($currentTenantId, $tenantResult);
                     $this->touchMaintenance($currentTenantId);
@@ -700,6 +703,14 @@ final class CalendarGoogleLifecycleService
                AND google_event_state = "held"
                AND google_hold_expires_at IS NOT NULL
                AND google_hold_expires_at <= NOW()
+               AND NOT EXISTS (
+                   SELECT 1 FROM calendar_availability_slots s
+                   WHERE s.tenant_id = calendar_appointments.tenant_id
+                     AND s.appointment_id = calendar_appointments.id
+                     AND s.event_state = "held"
+                     AND s.hold_expires_at IS NOT NULL
+                     AND s.hold_expires_at <= NOW()
+               )
              ORDER BY google_hold_expires_at ASC LIMIT 30'
         );
         $statement->execute(['tenant_id' => $tenantId]);
@@ -713,6 +724,128 @@ final class CalendarGoogleLifecycleService
                 $this->logSync($tenantId, $appointmentId, null, 'maintenance_release', 'success', '', '', null, $release, null);
             } else {
                 $result['errors'][] = 'Pré-reserva #' . $appointmentId . ': ' . (string) ($release['message'] ?? 'falha ao liberar');
+            }
+        }
+    }
+
+    /**
+     * Libera holds vencidos que ficaram apenas em calendar_availability_slots.
+     *
+     * Antes da 36.28.5 o diagnóstico contava esses registros, porém a manutenção
+     * tratava somente calendar_appointments/google_marked_slots. O resultado era
+     * um alerta permanente que o botão de correção nunca conseguia resolver.
+     */
+    private function releaseExpiredAvailabilitySlots(int $tenantId, array &$result): void
+    {
+        if (!$this->tableExists('calendar_availability_slots')) {
+            return;
+        }
+
+        $pdo = Database::connection();
+        $statement = $pdo->prepare(
+            'SELECT s.id, s.appointment_id, s.google_event_id,
+                    a.status AS appointment_status, a.is_pre_schedule,
+                    a.chosen_availability_slot_id, a.availability_source,
+                    a.google_event_state
+             FROM calendar_availability_slots s
+             LEFT JOIN calendar_appointments a
+               ON a.id = s.appointment_id AND a.tenant_id = s.tenant_id
+             WHERE s.tenant_id = :tenant_id
+               AND s.event_state = "held"
+               AND s.hold_expires_at IS NOT NULL
+               AND s.hold_expires_at <= NOW()
+             ORDER BY s.hold_expires_at ASC, s.id ASC
+             LIMIT 100'
+        );
+        $statement->execute(['tenant_id' => $tenantId]);
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        if ($rows === []) {
+            return;
+        }
+
+        $availability = new CalendarAvailabilityService();
+        foreach ($rows as $row) {
+            $slotId = (int) ($row['id'] ?? 0);
+            $appointmentId = (int) ($row['appointment_id'] ?? 0);
+            if ($slotId < 1) {
+                continue;
+            }
+
+            $result['expired_holds_found']++;
+
+            // Se ainda for um hold VAGO válido no compromisso, tenta a liberação
+            // oficial (com callback Google) antes de qualquer limpeza local.
+            if ($appointmentId > 0
+                && (string) ($row['availability_source'] ?? '') === 'google_marked_slots'
+                && (string) ($row['google_event_state'] ?? '') === 'held') {
+                $release = $availability->releaseMarkedAppointment($tenantId, $appointmentId, true);
+                if (!empty($release['attempted'])) {
+                    if (!empty($release['ok'])) {
+                        $result['expired_holds_released']++;
+                        // releaseMarkedAppointment/callback já atualiza o slot.
+                        continue;
+                    }
+                    $result['errors'][] = 'Pré-reserva #' . $appointmentId . ': ' . (string) ($release['message'] ?? 'falha ao liberar');
+                    continue;
+                }
+            }
+
+            // Compromisso já confirmado: o hold vencido é apenas um estado residual
+            // do slot. Não libera o compromisso; normaliza o slot como confirmado.
+            if (in_array((string) ($row['appointment_status'] ?? ''), ['scheduled', 'confirmed'], true)) {
+                $update = $pdo->prepare(
+                    'UPDATE calendar_availability_slots
+                     SET event_state = "confirmed", hold_expires_at = NULL
+                     WHERE id = :id AND tenant_id = :tenant_id
+                       AND event_state = "held"'
+                );
+                $update->execute(['id' => $slotId, 'tenant_id' => $tenantId]);
+                if ($update->rowCount() > 0) {
+                    $result['expired_holds_released']++;
+                }
+                continue;
+            }
+
+            $pdo->beginTransaction();
+            try {
+                $updateSlot = $pdo->prepare(
+                    'UPDATE calendar_availability_slots
+                     SET selected_at = NULL, event_state = "released", hold_expires_at = NULL
+                     WHERE id = :id AND tenant_id = :tenant_id
+                       AND event_state = "held"
+                       AND hold_expires_at IS NOT NULL
+                       AND hold_expires_at <= NOW()'
+                );
+                $updateSlot->execute(['id' => $slotId, 'tenant_id' => $tenantId]);
+
+                if ($appointmentId > 0 && (int) ($row['chosen_availability_slot_id'] ?? 0) === $slotId) {
+                    $updateAppointment = $pdo->prepare(
+                        'UPDATE calendar_appointments
+                         SET chosen_availability_slot_id = NULL,
+                             availability_status = CASE
+                                 WHEN availability_status IN ("slot_selected", "validated", "hold_requested") THEN "received"
+                                 ELSE availability_status
+                             END,
+                             google_hold_expires_at = NULL,
+                             updated_at = CURRENT_TIMESTAMP
+                         WHERE id = :appointment_id AND tenant_id = :tenant_id
+                           AND status NOT IN ("scheduled", "confirmed")'
+                    );
+                    $updateAppointment->execute([
+                        'appointment_id' => $appointmentId,
+                        'tenant_id' => $tenantId,
+                    ]);
+                }
+
+                $pdo->commit();
+                if ($updateSlot->rowCount() > 0) {
+                    $result['expired_holds_released']++;
+                }
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $result['errors'][] = 'Slot vencido #' . $slotId . ': ' . $exception->getMessage();
             }
         }
     }

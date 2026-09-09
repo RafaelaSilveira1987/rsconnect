@@ -13,6 +13,7 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\AiAutomationService;
 use App\Services\TenantHealthService;
+use App\Services\TenantSelfHealingService;
 use Throwable;
 
 final class TenantHealthController
@@ -75,6 +76,44 @@ final class TenantHealthController
             Flash::set('error', 'Não foi possível atualizar o incidente: ' . $e->getMessage());
         }
         $this->redirect('/companies/health?tenant_id=' . $tenantId . '#incidents');
+    }
+
+    public function repair(): void
+    {
+        $tenantId = (int) ($_POST['tenant_id'] ?? 0);
+        $componentKey = trim((string) ($_POST['component_key'] ?? ''));
+
+        try {
+            if ($tenantId < 1 || $componentKey === '') {
+                throw new \RuntimeException('Empresa ou item de correção inválido.');
+            }
+
+            $repair = (new TenantSelfHealingService())->repairComponent($tenantId, $componentKey, 'manual');
+            (new TenantHealthService())->runForTenant($tenantId, Auth::id(), 'manual');
+
+            Audit::log('tenant.health.repair', [
+                'tenant_id' => $tenantId,
+                'component_key' => $componentKey,
+                'repair' => $repair,
+            ], $tenantId);
+
+            if (!empty($repair['ok']) && !empty($repair['changed'])) {
+                Flash::set('success', (string) ($repair['message'] ?? 'Correção aplicada.'));
+            } elseif (!empty($repair['ok'])) {
+                Flash::set('info', (string) ($repair['message'] ?? 'Nenhuma correção automática era necessária.'));
+            } else {
+                $errors = array_values((array) ($repair['errors'] ?? []));
+                $message = (string) ($repair['message'] ?? 'Não foi possível corrigir automaticamente.');
+                if ($errors !== []) {
+                    $message .= ' ' . implode(' ', array_slice(array_map('strval', $errors), 0, 2));
+                }
+                Flash::set('warning', $message);
+            }
+        } catch (Throwable $e) {
+            Flash::set('error', 'Não foi possível executar a correção automática: ' . $e->getMessage());
+        }
+
+        $this->redirect('/companies/health?tenant_id=' . $tenantId);
     }
 
     public function reprocessAi(): void
