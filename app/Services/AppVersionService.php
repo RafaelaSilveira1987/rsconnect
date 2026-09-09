@@ -122,8 +122,8 @@ final class AppVersionService
     // RS Connect 36.29.0 — laboratório de assistentes com simulador, IA real opcional, regressão e replay de conversas.
     // RS Connect 36.29.1 — CLI do laboratório valida empresa/assistente, lista IDs reais e elimina exemplos ambíguos.
     public const VERSION_LABEL = 'Beta Comercial 1.9.2';
-    // RS Connect 36.29.2 — seletor do laboratório separado por empresa/assistente e versão visível para validar deploy.
-    public const PACKAGE_LABEL = 'RS Connect 36.29.2 — Laboratório com troca confiável de assistente';
+    // RS Connect 36.29.3 — seletor do laboratório sincronizado com o servidor e protegido contra restauração de formulário do navegador.
+    public const PACKAGE_LABEL = 'RS Connect 36.29.3 — Laboratório com seleção consistente por empresa';
     public const REQUIRED_MIGRATION = '105_agent_testing_lab.sql';
 
     private PDO $pdo;

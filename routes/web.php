@@ -79,6 +79,7 @@ return static function (Router $router): void {
     $router->get('/central-ajuda', [DocumentationController::class, 'index'], ['auth']);
     $router->get('/docs', [DocumentationController::class, 'index'], ['auth']);
     $router->get('/agent-tests', [AgentTestController::class, 'index'], ['auth', 'super_admin']);
+    $router->get('/agent-tests/agents', [AgentTestController::class, 'agents'], ['auth', 'super_admin']);
     $router->post('/agent-tests/simulate', [AgentTestController::class, 'simulate'], ['auth', 'super_admin', 'csrf']);
     $router->post('/agent-tests/defaults', [AgentTestController::class, 'createDefaults'], ['auth', 'super_admin', 'csrf']);
     $router->post('/agent-tests/run', [AgentTestController::class, 'runScenario'], ['auth', 'super_admin', 'csrf']);

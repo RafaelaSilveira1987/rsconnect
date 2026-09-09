@@ -19,6 +19,7 @@ final class AgentTestController
 {
     public function index(): void
     {
+        $this->noStore();
         $service = new AgentSimulationService();
         $tenants = $service->tenants();
         $tenantId = (int) ($_GET['tenant_id'] ?? 0);
@@ -48,7 +49,42 @@ final class AgentTestController
             'runs' => $runs,
             'migrationReady' => $migrationReady,
             'sourceConversationId' => max(0, (int) ($_GET['conversation_id'] ?? 0)),
-            'labVersion' => '36.29.2',
+            'labVersion' => '36.29.3',
+        ]);
+    }
+
+    public function agents(): void
+    {
+        $this->noStore();
+        $tenantId = (int) ($_GET['tenant_id'] ?? 0);
+        $service = new AgentSimulationService();
+        $tenants = $service->tenants();
+        $tenant = null;
+        foreach ($tenants as $row) {
+            if ((int) ($row['id'] ?? 0) === $tenantId) {
+                $tenant = $row;
+                break;
+            }
+        }
+
+        if (!$tenant) {
+            $this->json(['ok' => false, 'message' => 'Empresa não encontrada.'], 404);
+        }
+
+        $agents = $service->agents($tenantId);
+        $this->json([
+            'ok' => true,
+            'tenant' => [
+                'id' => (int) ($tenant['id'] ?? 0),
+                'name' => (string) ($tenant['name'] ?? ''),
+            ],
+            'agents' => array_map(static fn (array $agent): array => [
+                'id' => (int) ($agent['id'] ?? 0),
+                'name' => (string) ($agent['name'] ?? ''),
+                'status' => (string) ($agent['status'] ?? ''),
+                'provider' => (string) ($agent['model_provider'] ?? ''),
+                'model' => (string) ($agent['model_name'] ?? ''),
+            ], $agents),
         ]);
     }
 
@@ -160,6 +196,13 @@ final class AgentTestController
         }
         $decoded = json_decode((string) $value, true);
         return is_array($decoded) ? $decoded : [];
+    }
+
+    private function noStore(): void
+    {
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
     }
 
     private function tableExists(string $table): bool

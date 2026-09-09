@@ -12,13 +12,13 @@ $checks = [
     'tenant solicitado é validado contra lista real' => str_contains($controller, '$validTenantIds') && str_contains($controller, 'in_array($tenantId, $validTenantIds, true)'),
     'agente solicitado é validado contra empresa selecionada' => str_contains($controller, '$validAgentIds') && str_contains($controller, 'in_array($selectedAgentId, $validAgentIds, true)'),
     'seletores de empresa e assistente usam formulários separados' => substr_count($view, 'class="agent-lab-select-form"') >= 2,
-    'troca de empresa não reaproveita agent_id antigo' => str_contains($view, '<select name="tenant_id" required onchange="this.form.submit()">'),
+    'troca de empresa não reaproveita agent_id antigo' => str_contains($view, 'data-lab-tenant-select') && str_contains($view, 'new URLSearchParams({tenant_id: nextTenantId})'),
     'troca de assistente preserva tenant correto' => str_contains($view, '<input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>">'),
-    'lista mostra quantidade de assistentes' => str_contains($view, 'assistentes encontrados nesta empresa') && str_contains($view, 'apenas 1 assistente cadastrado'),
+    'lista mostra quantidade de assistentes' => str_contains($view, 'assistentes encontrados na empresa #') && str_contains($view, '1 assistente encontrado na empresa #'),
     'assistente atual fica visível no simulador' => str_contains($view, 'Assistente atual: #'),
     'versão do laboratório fica visível' => str_contains($view, 'Lab <?= View::e($labVersion) ?>'),
     'CLI expõe versão instalada' => str_contains($cli, "'version'") && str_contains($cli, 'RS Connect Agent Lab'),
-    'pacote 36.29.2 identificado' => str_contains($version, 'RS Connect 36.29.2'),
+    'pacote 36.29.3 identificado' => str_contains($version, 'RS Connect 36.29.3'),
 ];
 
 $failed = [];

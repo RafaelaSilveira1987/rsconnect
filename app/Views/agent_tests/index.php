@@ -12,7 +12,7 @@ $selectedTenantId = (int) ($selectedTenantId ?? 0);
 $selectedAgentId = (int) ($selectedAgentId ?? 0);
 $migrationReady = !empty($migrationReady);
 $sourceConversationId = (int) ($sourceConversationId ?? 0);
-$labVersion = (string) ($labVersion ?? '36.29.2');
+$labVersion = (string) ($labVersion ?? '36.29.3');
 $csrfToken = Csrf::token();
 $selectedAgent = null;
 foreach ($agents as $agentRow) {
@@ -33,7 +33,7 @@ $statusLabel = static fn (string $status): string => match ($status) {
 .agent-lab-page{display:grid;gap:22px}.agent-lab-hero{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}.agent-lab-hero h2{margin:4px 0 8px}.agent-lab-selector{display:grid;grid-template-columns:minmax(220px,1fr) minmax(280px,1.2fr) auto;gap:12px;align-items:end;min-width:min(720px,100%)}.agent-lab-select-form{margin:0;min-width:0}.agent-lab-select-form .field{margin:0}.agent-lab-select-form select{width:100%;min-width:0}.agent-lab-select-hint{display:block;margin-top:5px;color:var(--muted,#64748b);font-size:.78rem}.agent-lab-version{display:inline-flex;margin-left:8px;padding:3px 8px;border-radius:999px;background:#eef6ff;color:#24598a;font-size:.75rem;font-weight:700;vertical-align:middle}.agent-lab-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.65fr);gap:18px}.agent-lab-chat{min-height:560px;display:flex;flex-direction:column}.agent-lab-chat-window{flex:1;min-height:380px;max-height:580px;overflow:auto;border:1px solid var(--border,#dbe4ee);border-radius:18px;padding:18px;background:linear-gradient(180deg,#f8fbfd,#fff);display:flex;flex-direction:column;gap:12px}.agent-lab-bubble{max-width:82%;padding:12px 14px;border-radius:15px;line-height:1.45;white-space:pre-wrap;word-break:break-word}.agent-lab-bubble.user{margin-left:auto;background:#e9f6f3;border-bottom-right-radius:5px}.agent-lab-bubble.assistant{margin-right:auto;background:#eef3f8;border-bottom-left-radius:5px}.agent-lab-bubble.system{max-width:100%;background:#fff8df;border:1px solid #f0df9f;font-size:.92rem}.agent-lab-composer{display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:12px}.agent-lab-composer textarea{min-height:74px;resize:vertical}.agent-lab-mode{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.agent-lab-mode label{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--border,#dbe4ee);border-radius:14px;padding:10px 12px;cursor:pointer;flex:1;min-width:220px}.agent-lab-mode small{display:block;color:var(--muted,#64748b);margin-top:2px}.agent-lab-diagnostics{display:grid;gap:12px}.agent-lab-diagnostic-card{border:1px solid var(--border,#dbe4ee);border-radius:16px;padding:14px;background:#fff}.agent-lab-diagnostic-card strong{display:block;margin-bottom:7px}.agent-lab-pill{display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;background:#edf2f7;font-size:.82rem;font-weight:700}.agent-lab-pill.ok{background:#dcfce7;color:#166534}.agent-lab-pill.block{background:#fee2e2;color:#991b1b}.agent-lab-pill.warn{background:#fef3c7;color:#92400e}.agent-lab-data{display:grid;gap:6px;margin-top:10px}.agent-lab-data div{display:flex;justify-content:space-between;gap:15px;border-bottom:1px dashed #e2e8f0;padding-bottom:6px}.agent-lab-data span{color:#64748b}.agent-lab-scenarios{display:grid;gap:12px}.agent-lab-scenario{border:1px solid var(--border,#dbe4ee);border-radius:16px;padding:15px;display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center}.agent-lab-scenario h4{margin:0 0 4px}.agent-lab-scenario p{margin:0;color:#64748b}.agent-lab-scenario-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.agent-lab-history{overflow:auto}.agent-lab-history table{width:100%;border-collapse:collapse}.agent-lab-history th,.agent-lab-history td{text-align:left;padding:10px;border-bottom:1px solid #e5edf4;white-space:nowrap}.agent-lab-warning{padding:14px;border:1px solid #f1d68a;background:#fff8dd;border-radius:14px}.agent-lab-empty{padding:28px;text-align:center;color:#64748b;border:1px dashed #cbd5e1;border-radius:16px}.agent-lab-inline-form{display:flex;gap:8px;align-items:end;flex-wrap:wrap}.agent-lab-inline-form .field{min-width:220px}.agent-lab-meta{font-size:.82rem;color:#64748b;margin-top:5px}.agent-lab-loader{display:none}.agent-lab-loader.is-visible{display:inline-flex}@media(max-width:1050px){.agent-lab-hero{flex-direction:column}.agent-lab-selector{min-width:0;width:100%}.agent-lab-grid{grid-template-columns:1fr}}@media(max-width:720px){.agent-lab-selector{grid-template-columns:1fr}.agent-lab-scenario{grid-template-columns:1fr}.agent-lab-composer{grid-template-columns:1fr}.agent-lab-bubble{max-width:92%}}
 </style>
 
-<div class="agent-lab-page" data-agent-lab data-simulate-url="<?= View::e(Router::url('/agent-tests/simulate')) ?>" data-csrf="<?= View::e($csrfToken) ?>">
+<div class="agent-lab-page" data-agent-lab data-simulate-url="<?= View::e(Router::url('/agent-tests/simulate')) ?>" data-agent-list-url="<?= View::e(Router::url('/agent-tests/agents')) ?>" data-page-url="<?= View::e(Router::url('/agent-tests')) ?>" data-server-tenant-id="<?= $selectedTenantId ?>" data-server-agent-id="<?= $selectedAgentId ?>" data-csrf="<?= View::e($csrfToken) ?>">
     <section class="card">
         <div class="agent-lab-hero">
             <div>
@@ -42,19 +42,18 @@ $statusLabel = static fn (string $status): string => match ($status) {
                 <p>Converse com o assistente sem enviar nada ao WhatsApp. O laboratório mostra a resposta, as informações coletadas e quais regras foram aplicadas.</p>
             </div>
             <div class="agent-lab-selector" aria-label="Selecionar empresa e assistente">
-                <form class="agent-lab-select-form" method="get" action="<?= View::e(Router::url('/agent-tests')) ?>">
-                    <label class="field"><span>Empresa</span><select name="tenant_id" required onchange="this.form.submit()">
-                        <?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= $selectedTenantId === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e((string) $tenant['name']) ?></option><?php endforeach; ?>
-                    </select><small class="agent-lab-select-hint">Ao trocar a empresa, o laboratório carrega os assistentes dela.</small></label>
+                <form class="agent-lab-select-form" method="get" action="<?= View::e(Router::url('/agent-tests')) ?>" autocomplete="off" onsubmit="return false;">
+                    <label class="field"><span>Empresa</span><select name="tenant_id" required autocomplete="off" data-lab-tenant-select data-server-value="<?= $selectedTenantId ?>">
+                        <?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= $selectedTenantId === (int) $tenant['id'] ? 'selected' : '' ?>>#<?= (int) $tenant['id'] ?> · <?= View::e((string) $tenant['name']) ?></option><?php endforeach; ?>
+                    </select><small class="agent-lab-select-hint">Empresa carregada pelo servidor: #<?= $selectedTenantId ?>. Ao trocar, a lista de assistentes é recarregada do banco.</small></label>
                 </form>
-                <form class="agent-lab-select-form" method="get" action="<?= View::e(Router::url('/agent-tests')) ?>">
-                    <input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>">
-                    <label class="field"><span>Assistente</span><select name="agent_id" required onchange="this.form.submit()" <?= $agents === [] ? 'disabled' : '' ?>>
+                <form class="agent-lab-select-form" method="get" action="<?= View::e(Router::url('/agent-tests')) ?>" autocomplete="off" onsubmit="return false;">
+                    <label class="field"><span>Assistente</span><select name="agent_id" required autocomplete="off" data-lab-agent-select data-server-value="<?= $selectedAgentId ?>" <?= $agents === [] ? 'disabled' : '' ?>>
                         <?php foreach ($agents as $agent):
                             $agentStatus = (string) ($agent['status'] ?? '');
                             $statusSuffix = $agentStatus === 'active' ? ' · ativo' : ($agentStatus !== '' ? ' · ' . $agentStatus : '');
                         ?><option value="<?= (int) $agent['id'] ?>" <?= $selectedAgentId === (int) $agent['id'] ? 'selected' : '' ?>>#<?= (int) $agent['id'] ?> · <?= View::e((string) $agent['name']) ?> · <?= View::e((string) $agent['model_name']) ?><?= View::e($statusSuffix) ?></option><?php endforeach; ?>
-                    </select><small class="agent-lab-select-hint"><?php if (count($agents) > 1): ?><?= count($agents) ?> assistentes encontrados nesta empresa.<?php elseif (count($agents) === 1): ?>Esta empresa possui apenas 1 assistente cadastrado.<?php else: ?>Nenhum assistente cadastrado para esta empresa.<?php endif; ?></small></label>
+                    </select><small class="agent-lab-select-hint"><?php if (count($agents) > 1): ?><?= count($agents) ?> assistentes encontrados na empresa #<?= $selectedTenantId ?>.<?php elseif (count($agents) === 1): ?>1 assistente encontrado na empresa #<?= $selectedTenantId ?>: #<?= $selectedAgentId ?>.<?php else: ?>Nenhum assistente cadastrado para a empresa #<?= $selectedTenantId ?>.<?php endif; ?></small></label>
                 </form>
                 <a class="btn btn-quiet" href="<?= View::e(Router::url('/agents?tenant_id=' . $selectedTenantId) . ($selectedAgentId > 0 ? '#agent-settings-' . $selectedAgentId : '')) ?>">Abrir assistente</a>
             </div>
@@ -149,6 +148,58 @@ $statusLabel = static fn (string $status): string => match ($status) {
     if (!root) return;
     const tenantId = <?= $selectedTenantId ?>;
     const agentId = <?= $selectedAgentId ?>;
+    const tenantSelect = root.querySelector('[data-lab-tenant-select]');
+    const agentSelect = root.querySelector('[data-lab-agent-select]');
+    const pageUrl = root.dataset.pageUrl || '';
+    const agentListUrl = root.dataset.agentListUrl || '';
+    const serverTenantId = String(root.dataset.serverTenantId || tenantId || '');
+    const serverAgentId = String(root.dataset.serverAgentId || agentId || '');
+
+    // Navegadores podem restaurar o valor antigo de <select> após refresh/back-forward.
+    // O servidor é a fonte de verdade: force os valores renderizados para impedir que
+    // o nome de uma empresa apareça ao lado dos assistentes de outra empresa.
+    const syncServerSelection = () => {
+        if (tenantSelect && serverTenantId && tenantSelect.value !== serverTenantId) {
+            tenantSelect.value = serverTenantId;
+        }
+        if (agentSelect && serverAgentId && agentSelect.value !== serverAgentId) {
+            agentSelect.value = serverAgentId;
+        }
+    };
+    syncServerSelection();
+    window.addEventListener('pageshow', syncServerSelection);
+
+    tenantSelect?.addEventListener('change', async () => {
+        const nextTenantId = String(tenantSelect.value || '').trim();
+        if (!nextTenantId || nextTenantId === serverTenantId) return;
+        if (agentSelect) {
+            agentSelect.disabled = true;
+            agentSelect.innerHTML = '<option value="">Carregando assistentes...</option>';
+        }
+        try {
+            const response = await fetch(agentListUrl + '?tenant_id=' + encodeURIComponent(nextTenantId), {
+                method: 'GET',
+                headers: {'Accept':'application/json','X-Requested-With':'XMLHttpRequest'},
+                cache: 'no-store',
+                credentials: 'same-origin'
+            });
+            const data = await response.json();
+            if (!response.ok || !data.ok) throw new Error(data.message || 'Não foi possível carregar os assistentes.');
+            const nextAgentId = Array.isArray(data.agents) && data.agents.length ? String(data.agents[0].id || '') : '';
+            const params = new URLSearchParams({tenant_id: nextTenantId});
+            if (nextAgentId) params.set('agent_id', nextAgentId);
+            window.location.assign(pageUrl + '?' + params.toString());
+        } catch (error) {
+            window.location.assign(pageUrl + '?tenant_id=' + encodeURIComponent(nextTenantId));
+        }
+    });
+
+    agentSelect?.addEventListener('change', () => {
+        const nextAgentId = String(agentSelect.value || '').trim();
+        if (!nextAgentId || nextAgentId === serverAgentId) return;
+        const params = new URLSearchParams({tenant_id: serverTenantId, agent_id: nextAgentId});
+        window.location.assign(pageUrl + '?' + params.toString());
+    });
     const chat = root.querySelector('[data-lab-chat]');
     const input = root.querySelector('[data-lab-message]');
     const send = root.querySelector('[data-lab-send]');
