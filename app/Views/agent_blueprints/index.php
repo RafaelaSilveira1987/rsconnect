@@ -6,172 +6,226 @@ use App\Core\View;
 
 /** @var array<int,array<string,mixed>> $niches */
 /** @var array<int,array<string,mixed>> $blueprints */
+
+$modeLabels = [
+    'hybrid' => 'Natural com regras',
+    'form' => 'Perguntas fixas',
+    'prompt' => 'Prompt Studio com regras',
+];
 ?>
 
-<section class="page-header">
-    <div>
-        <span class="eyebrow">Arquitetura de agentes</span>
-        <h1>Nichos e blueprints</h1>
-        <p>Defina o comportamento estrutural por segmento. O Prompt Studio continua responsável pela linguagem; capacidades, triagem, políticas e ações ficam protegidas pelo backend.</p>
-    </div>
-</section>
+<div class="agent-models-page">
+    <section class="agent-models-hero">
+        <div class="agent-models-hero-copy">
+            <span class="eyebrow">Configuração por segmento</span>
+            <h1>Modelos de atendimento</h1>
+            <p>Crie um padrão para cada tipo de negócio. Ao escolher o segmento de uma empresa, o RS Connect já prepara as perguntas, regras de segurança e ações que o assistente poderá usar.</p>
+        </div>
+        <div class="agent-models-hero-badge">
+            <span>Como funciona</span>
+            <strong>Segmento → modelo → empresa</strong>
+            <small>Cada empresa recebe uma cópia própria e pode ser personalizada sem afetar as demais.</small>
+        </div>
+    </section>
 
-<section class="card" style="margin-bottom:18px;">
-    <div class="card-header">
-        <div>
-            <span class="eyebrow">Modelo de segurança</span>
-            <h2>Blueprint → cópia por empresa → personalização</h2>
-        </div>
-    </div>
-    <div class="card-body">
-        <p style="margin-top:0;">Publicar uma nova versão <strong>não altera empresas em produção automaticamente</strong>. O blueprint é copiado para cada tenant quando aplicado, evitando mudanças globais acidentais.</p>
-        <div class="grid grid-4" style="gap:12px;">
-            <div class="surface-card"><strong>Prompt Studio</strong><br><small>Como o agente conversa.</small></div>
-            <div class="surface-card"><strong>Triagem</strong><br><small>O que precisa ser coletado.</small></div>
-            <div class="surface-card"><strong>Policy Engine</strong><br><small>O que pode ou não acontecer.</small></div>
-            <div class="surface-card"><strong>Capabilities</strong><br><small>Quais ações o agente pode executar.</small></div>
-        </div>
-    </div>
-</section>
+    <section class="agent-model-concepts" aria-label="Partes do modelo de atendimento">
+        <article>
+            <span class="agent-model-concept-icon">01</span>
+            <div><strong>Jeito de falar</strong><small>O Prompt Studio cuida do tom, personalidade e forma de responder.</small></div>
+        </article>
+        <article>
+            <span class="agent-model-concept-icon">02</span>
+            <div><strong>Informações a coletar</strong><small>Define o que o assistente precisa saber antes de seguir.</small></div>
+        </article>
+        <article>
+            <span class="agent-model-concept-icon">03</span>
+            <div><strong>Regras de segurança</strong><small>Impede atendimento, agenda ou confirmação quando alguma regra não for atendida.</small></div>
+        </article>
+        <article>
+            <span class="agent-model-concept-icon">04</span>
+            <div><strong>Ações permitidas</strong><small>Controla o que o assistente pode consultar, reservar, confirmar ou encaminhar.</small></div>
+        </article>
+    </section>
 
-<section class="card" style="margin-bottom:18px;">
-    <div class="card-header">
-        <div>
-            <span class="eyebrow">Catálogo</span>
-            <h2>Nichos</h2>
+    <section class="card agent-model-section">
+        <div class="card-header agent-model-section-head">
+            <div>
+                <span class="eyebrow">Segmentos</span>
+                <h2>Tipos de empresa</h2>
+                <p>Use os segmentos para organizar os modelos e facilitar a configuração de novos clientes.</p>
+            </div>
+            <details class="agent-model-add-details">
+                <summary class="btn btn-primary">Novo segmento</summary>
+                <form method="post" action="<?= View::e(Router::url('/agent-blueprints/niche')) ?>" class="agent-model-inline-form">
+                    <?= Csrf::input() ?>
+                    <label class="field"><span>Nome do segmento</span><input class="form-control" name="name" required placeholder="Ex.: Imobiliária"></label>
+                    <label class="field"><span>Descrição</span><textarea class="form-control" name="description" rows="2" placeholder="Explique em poucas palavras para que tipo de empresa este segmento serve."></textarea></label>
+                    <details class="agent-model-technical-details">
+                        <summary>Configuração técnica</summary>
+                        <div class="form-grid two">
+                            <label class="field"><span>Código interno</span><input class="form-control" name="code" placeholder="imobiliaria"></label>
+                            <label class="field"><span>Ordem de exibição</span><input class="form-control" type="number" name="position" value="100"></label>
+                        </div>
+                    </details>
+                    <label class="switch-inline"><input type="checkbox" name="active" value="1" checked> Disponível para uso</label>
+                    <button class="btn btn-primary" type="submit">Criar segmento</button>
+                </form>
+            </details>
         </div>
-    </div>
-    <div class="card-body">
-        <div class="table-wrap">
-            <table class="table">
-                <thead><tr><th>Nicho</th><th>Código</th><th>Blueprints</th><th>Empresas</th><th>Status</th><th>Ajustar</th></tr></thead>
-                <tbody>
+        <div class="card-body">
+            <div class="agent-niche-grid">
                 <?php foreach ($niches as $niche): ?>
-                    <tr>
-                        <td><strong><?= View::e((string) $niche['name']) ?></strong><br><small><?= View::e((string) ($niche['description'] ?? '')) ?></small></td>
-                        <td><code><?= View::e((string) $niche['code']) ?></code></td>
-                        <td><?= (int) ($niche['blueprint_count'] ?? 0) ?></td>
-                        <td><?= (int) ($niche['tenant_count'] ?? 0) ?></td>
-                        <td><?= (int) ($niche['active'] ?? 0) === 1 ? 'Ativo' : 'Inativo' ?></td>
-                        <td>
-                            <details>
-                                <summary class="btn btn-secondary btn-sm">Editar</summary>
-                                <form method="post" action="<?= View::e(Router::url('/agent-blueprints/niche')) ?>" style="margin-top:12px; min-width:320px;">
+                    <article class="agent-niche-card <?= (int) ($niche['active'] ?? 0) === 1 ? '' : 'is-inactive' ?>">
+                        <div class="agent-niche-card-top">
+                            <div>
+                                <strong><?= View::e((string) $niche['name']) ?></strong>
+                                <small><?= View::e((string) (($niche['description'] ?? '') ?: 'Sem descrição.')) ?></small>
+                            </div>
+                            <span class="badge <?= (int) ($niche['active'] ?? 0) === 1 ? 'badge-active' : 'badge-pending' ?>"><?= (int) ($niche['active'] ?? 0) === 1 ? 'Disponível' : 'Desativado' ?></span>
+                        </div>
+                        <div class="agent-niche-stats">
+                            <div><strong><?= (int) ($niche['blueprint_count'] ?? 0) ?></strong><span>modelo(s)</span></div>
+                            <div><strong><?= (int) ($niche['tenant_count'] ?? 0) ?></strong><span>empresa(s)</span></div>
+                        </div>
+                        <details class="agent-model-edit-details">
+                            <summary>Ajustar segmento</summary>
+                            <form method="post" action="<?= View::e(Router::url('/agent-blueprints/niche')) ?>" class="agent-model-inline-form compact">
+                                <?= Csrf::input() ?>
+                                <input type="hidden" name="id" value="<?= (int) $niche['id'] ?>">
+                                <label class="field"><span>Nome</span><input class="form-control" name="name" value="<?= View::e((string) $niche['name']) ?>" required></label>
+                                <label class="field"><span>Descrição</span><textarea class="form-control" name="description" rows="2"><?= View::e((string) ($niche['description'] ?? '')) ?></textarea></label>
+                                <details class="agent-model-technical-details">
+                                    <summary>Configuração técnica</summary>
+                                    <div class="form-grid two">
+                                        <label class="field"><span>Código interno</span><input class="form-control" name="code" value="<?= View::e((string) $niche['code']) ?>" required></label>
+                                        <label class="field"><span>Ordem</span><input class="form-control" type="number" name="position" value="<?= (int) ($niche['position'] ?? 100) ?>"></label>
+                                    </div>
+                                </details>
+                                <label class="switch-inline"><input type="checkbox" name="active" value="1" <?= (int) ($niche['active'] ?? 0) === 1 ? 'checked' : '' ?>> Disponível para uso</label>
+                                <button class="btn btn-primary btn-sm" type="submit">Salvar alterações</button>
+                            </form>
+                        </details>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+
+    <section class="card agent-model-section">
+        <div class="card-header agent-model-section-head">
+            <div>
+                <span class="eyebrow">Padrões prontos</span>
+                <h2>Modelos de atendimento por segmento</h2>
+                <p>O modelo é o ponto de partida. Quando aplicado a uma empresa, ela recebe uma cópia própria das regras.</p>
+            </div>
+            <details class="agent-model-add-details">
+                <summary class="btn btn-secondary">Novo modelo</summary>
+                <form method="post" action="<?= View::e(Router::url('/agent-blueprints/blueprint')) ?>" class="agent-model-inline-form">
+                    <?= Csrf::input() ?>
+                    <label class="field"><span>Segmento</span>
+                        <select class="form-control" name="niche_id" required>
+                            <option value="">Selecione</option>
+                            <?php foreach ($niches as $niche): ?>
+                                <option value="<?= (int) $niche['id'] ?>"><?= View::e((string) $niche['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+                    <label class="field"><span>Nome do modelo</span><input class="form-control" name="name" required placeholder="Ex.: Atendimento inicial com aprovação"></label>
+                    <label class="field"><span>Descrição</span><textarea class="form-control" name="description" rows="2" placeholder="Resuma como este modelo deve funcionar."></textarea></label>
+                    <details class="agent-model-technical-details">
+                        <summary>Configuração técnica</summary>
+                        <label class="field"><span>Código interno</span><input class="form-control" name="code" placeholder="atendimento-inicial-v1"></label>
+                    </details>
+                    <label class="switch-inline"><input type="checkbox" name="active" value="1" checked> Disponível para uso</label>
+                    <button class="btn btn-primary" type="submit">Criar modelo</button>
+                </form>
+            </details>
+        </div>
+        <div class="card-body">
+            <?php if ($blueprints === []): ?>
+                <div class="message-info"><strong>Nenhum modelo criado</strong><span>Crie o primeiro modelo para começar a automatizar a configuração por segmento.</span></div>
+            <?php endif; ?>
+
+            <div class="agent-blueprint-grid">
+                <?php foreach ($blueprints as $blueprint): ?>
+                    <?php
+                    $config = is_array($blueprint['current_config_decoded'] ?? null) ? $blueprint['current_config_decoded'] : [];
+                    $capabilities = is_array($config['capabilities'] ?? null) ? $config['capabilities'] : [];
+                    $fields = is_array($config['triage_fields'] ?? null) ? $config['triage_fields'] : [];
+                    $policies = is_array($config['policies'] ?? null) ? $config['policies'] : [];
+                    $workflow = is_array($config['workflow'] ?? null) ? $config['workflow'] : [];
+                    $mode = (string) ($config['interaction_mode'] ?? 'hybrid');
+                    ?>
+                    <article class="agent-blueprint-card <?= (int) ($blueprint['active'] ?? 0) === 1 ? '' : 'is-inactive' ?>">
+                        <div class="agent-blueprint-card-head">
+                            <div>
+                                <span class="agent-model-segment-pill"><?= View::e((string) $blueprint['niche_name']) ?></span>
+                                <h3><?= View::e((string) $blueprint['name']) ?></h3>
+                                <p><?= View::e((string) (($blueprint['description'] ?? '') ?: 'Sem descrição.')) ?></p>
+                            </div>
+                            <span class="badge <?= (int) ($blueprint['active'] ?? 0) === 1 ? 'badge-active' : 'badge-pending' ?>"><?= (int) ($blueprint['active'] ?? 0) === 1 ? 'Disponível' : 'Desativado' ?></span>
+                        </div>
+
+                        <div class="agent-blueprint-summary">
+                            <div><strong><?= count($fields) ?></strong><span>informações a coletar</span></div>
+                            <div><strong><?= count($policies) ?></strong><span>regras</span></div>
+                            <div><strong><?= count($workflow) ?></strong><span>etapas</span></div>
+                            <div><strong><?= View::e($modeLabels[$mode] ?? 'Personalizado') ?></strong><span>forma de conversar</span></div>
+                        </div>
+
+                        <div class="agent-blueprint-meta-row">
+                            <span>Versão <?= View::e((string) ($blueprint['current_version_label'] ?? 'ainda não publicada')) ?></span>
+                            <span><?= (int) ($blueprint['tenant_count'] ?? 0) ?> empresa(s) usando</span>
+                            <?php if (!empty($capabilities['calendar.human_approval'])): ?><span>Aprovação da equipe</span><?php endif; ?>
+                            <?php if (!empty($capabilities['calendar.confirm'])): ?><span>Confirmação automática</span><?php endif; ?>
+                        </div>
+
+                        <div class="agent-blueprint-actions">
+                            <details class="agent-model-edit-details">
+                                <summary>Ajustar informações</summary>
+                                <form method="post" action="<?= View::e(Router::url('/agent-blueprints/blueprint')) ?>" class="agent-model-inline-form compact">
                                     <?= Csrf::input() ?>
-                                    <input type="hidden" name="id" value="<?= (int) $niche['id'] ?>">
-                                    <label>Nome<input class="form-control" name="name" value="<?= View::e((string) $niche['name']) ?>" required></label>
-                                    <label>Código<input class="form-control" name="code" value="<?= View::e((string) $niche['code']) ?>" required></label>
-                                    <label>Descrição<textarea class="form-control" name="description" rows="2"><?= View::e((string) ($niche['description'] ?? '')) ?></textarea></label>
-                                    <label>Ordem<input class="form-control" type="number" name="position" value="<?= (int) ($niche['position'] ?? 100) ?>"></label>
-                                    <label style="display:flex; gap:8px; align-items:center;"><input type="checkbox" name="active" value="1" <?= (int) ($niche['active'] ?? 0) === 1 ? 'checked' : '' ?>> Ativo</label>
-                                    <button class="btn btn-primary btn-sm" type="submit">Salvar nicho</button>
+                                    <input type="hidden" name="id" value="<?= (int) $blueprint['id'] ?>">
+                                    <label class="field"><span>Segmento</span>
+                                        <select class="form-control" name="niche_id" required>
+                                            <?php foreach ($niches as $niche): ?>
+                                                <option value="<?= (int) $niche['id'] ?>" <?= (int) $niche['id'] === (int) $blueprint['niche_id'] ? 'selected' : '' ?>><?= View::e((string) $niche['name']) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <label class="field"><span>Nome do modelo</span><input class="form-control" name="name" value="<?= View::e((string) $blueprint['name']) ?>" required></label>
+                                    <label class="field"><span>Descrição</span><textarea class="form-control" name="description" rows="3"><?= View::e((string) ($blueprint['description'] ?? '')) ?></textarea></label>
+                                    <details class="agent-model-technical-details">
+                                        <summary>Configuração técnica</summary>
+                                        <label class="field"><span>Código interno</span><input class="form-control" name="code" value="<?= View::e((string) $blueprint['code']) ?>" required></label>
+                                    </details>
+                                    <label class="switch-inline"><input type="checkbox" name="active" value="1" <?= (int) ($blueprint['active'] ?? 0) === 1 ? 'checked' : '' ?>> Disponível para uso</label>
+                                    <button class="btn btn-primary btn-sm" type="submit">Salvar alterações</button>
                                 </form>
                             </details>
-                        </td>
-                    </tr>
+
+                            <details class="agent-model-edit-details agent-model-version-details">
+                                <summary>Criar nova versão</summary>
+                                <form method="post" action="<?= View::e(Router::url('/agent-blueprints/version')) ?>" class="agent-model-inline-form compact">
+                                    <?= Csrf::input() ?>
+                                    <input type="hidden" name="blueprint_id" value="<?= (int) $blueprint['id'] ?>">
+                                    <label class="field"><span>Nome da versão</span><input class="form-control" name="version_label" placeholder="Ex.: 1.1"></label>
+                                    <label class="field"><span>Orientação para o jeito de conversar</span><textarea class="form-control" name="prompt_guidance" rows="3" placeholder="Regras complementares para o Prompt Studio."><?= View::e((string) ($blueprint['current_prompt_guidance'] ?? '')) ?></textarea><small>Use este campo para tom e condução da conversa. As regras de segurança continuam protegidas pelo sistema.</small></label>
+                                    <details class="agent-model-technical-details">
+                                        <summary>Configuração avançada do modelo</summary>
+                                        <p class="agent-model-technical-warning">Esta área é técnica. Altere somente se souber exatamente o efeito da mudança.</p>
+                                        <label class="field"><span>Configuração interna (JSON)</span>
+                                            <textarea class="form-control agent-model-json" name="config_json" rows="22" spellcheck="false" required><?= View::e((string) ($blueprint['current_config_pretty'] ?? '{\n  "interaction_mode": "hybrid",\n  "capabilities": {},\n  "triage_fields": [],\n  "policies": [],\n  "workflow": []\n}')) ?></textarea>
+                                        </label>
+                                    </details>
+                                    <div class="message-info"><strong>Empresas atuais ficam protegidas</strong><span>Publicar uma nova versão não muda automaticamente as empresas que já estão usando este modelo.</span></div>
+                                    <button class="btn btn-primary" type="submit">Publicar nova versão</button>
+                                </form>
+                            </details>
+                        </div>
+                    </article>
                 <?php endforeach; ?>
-                </tbody>
-            </table>
+            </div>
         </div>
-
-        <details style="margin-top:16px;">
-            <summary class="btn btn-secondary">Novo nicho</summary>
-            <form method="post" action="<?= View::e(Router::url('/agent-blueprints/niche')) ?>" class="grid grid-2" style="gap:12px; margin-top:14px; max-width:900px;">
-                <?= Csrf::input() ?>
-                <label>Nome<input class="form-control" name="name" required placeholder="Ex.: Imobiliária"></label>
-                <label>Código<input class="form-control" name="code" placeholder="imobiliaria"></label>
-                <label style="grid-column:1/-1;">Descrição<textarea class="form-control" name="description" rows="2"></textarea></label>
-                <label>Ordem<input class="form-control" type="number" name="position" value="100"></label>
-                <label style="display:flex; gap:8px; align-items:center;"><input type="checkbox" name="active" value="1" checked> Ativo</label>
-                <div><button class="btn btn-primary" type="submit">Criar nicho</button></div>
-            </form>
-        </details>
-    </div>
-</section>
-
-<section class="card">
-    <div class="card-header">
-        <div>
-            <span class="eyebrow">Blueprints versionados</span>
-            <h2>Fluxos, campos, políticas e capacidades</h2>
-        </div>
-    </div>
-    <div class="card-body">
-        <?php if ($blueprints === []): ?>
-            <p>Nenhum blueprint cadastrado.</p>
-        <?php endif; ?>
-
-        <?php foreach ($blueprints as $blueprint): ?>
-            <article class="surface-card" style="margin-bottom:16px; padding:18px;">
-                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap;">
-                    <div>
-                        <span class="eyebrow"><?= View::e((string) $blueprint['niche_name']) ?></span>
-                        <h3 style="margin:4px 0;"><?= View::e((string) $blueprint['name']) ?></h3>
-                        <p style="margin:0;"><?= View::e((string) ($blueprint['description'] ?? '')) ?></p>
-                    </div>
-                    <div style="text-align:right;">
-                        <span class="badge"><?= (int) ($blueprint['active'] ?? 0) === 1 ? 'Ativo' : 'Inativo' ?></span>
-                        <div><small>Versão atual: <?= View::e((string) ($blueprint['current_version_label'] ?? 'sem versão')) ?> · <?= (int) ($blueprint['tenant_count'] ?? 0) ?> empresa(s)</small></div>
-                    </div>
-                </div>
-
-                <div class="grid grid-2" style="gap:14px; margin-top:16px; align-items:start;">
-                    <details>
-                        <summary class="btn btn-secondary btn-sm">Editar metadados</summary>
-                        <form method="post" action="<?= View::e(Router::url('/agent-blueprints/blueprint')) ?>" style="margin-top:12px;">
-                            <?= Csrf::input() ?>
-                            <input type="hidden" name="id" value="<?= (int) $blueprint['id'] ?>">
-                            <label>Nicho
-                                <select class="form-control" name="niche_id" required>
-                                    <?php foreach ($niches as $niche): ?>
-                                        <option value="<?= (int) $niche['id'] ?>" <?= (int) $niche['id'] === (int) $blueprint['niche_id'] ? 'selected' : '' ?>><?= View::e((string) $niche['name']) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </label>
-                            <label>Nome<input class="form-control" name="name" value="<?= View::e((string) $blueprint['name']) ?>" required></label>
-                            <label>Código<input class="form-control" name="code" value="<?= View::e((string) $blueprint['code']) ?>" required></label>
-                            <label>Descrição<textarea class="form-control" name="description" rows="3"><?= View::e((string) ($blueprint['description'] ?? '')) ?></textarea></label>
-                            <label style="display:flex; gap:8px; align-items:center;"><input type="checkbox" name="active" value="1" <?= (int) ($blueprint['active'] ?? 0) === 1 ? 'checked' : '' ?>> Ativo</label>
-                            <button class="btn btn-primary btn-sm" type="submit">Salvar blueprint</button>
-                        </form>
-                    </details>
-
-                    <details>
-                        <summary class="btn btn-primary btn-sm">Publicar nova versão</summary>
-                        <form method="post" action="<?= View::e(Router::url('/agent-blueprints/version')) ?>" style="margin-top:12px;">
-                            <?= Csrf::input() ?>
-                            <input type="hidden" name="blueprint_id" value="<?= (int) $blueprint['id'] ?>">
-                            <label>Rótulo da versão<input class="form-control" name="version_label" placeholder="Ex.: 1.1"></label>
-                            <label>Orientação complementar ao Prompt Studio<textarea class="form-control" name="prompt_guidance" rows="3"><?= View::e((string) ($blueprint['current_prompt_guidance'] ?? '')) ?></textarea></label>
-                            <label>Configuração JSON
-                                <textarea class="form-control" name="config_json" rows="22" spellcheck="false" style="font-family:monospace; font-size:12px;" required><?= View::e((string) ($blueprint['current_config_pretty'] ?? '{\n  "interaction_mode": "hybrid",\n  "capabilities": {},\n  "triage_fields": [],\n  "policies": [],\n  "workflow": []\n}')) ?></textarea>
-                            </label>
-                            <p><small>Uma nova versão não reconfigura tenants existentes. Para atualizar uma empresa, aplique a versão pela configuração da empresa.</small></p>
-                            <button class="btn btn-primary" type="submit">Publicar versão</button>
-                        </form>
-                    </details>
-                </div>
-            </article>
-        <?php endforeach; ?>
-
-        <details style="margin-top:14px;">
-            <summary class="btn btn-secondary">Novo blueprint</summary>
-            <form method="post" action="<?= View::e(Router::url('/agent-blueprints/blueprint')) ?>" class="grid grid-2" style="gap:12px; margin-top:14px; max-width:900px;">
-                <?= Csrf::input() ?>
-                <label>Nicho
-                    <select class="form-control" name="niche_id" required>
-                        <option value="">Selecione</option>
-                        <?php foreach ($niches as $niche): ?>
-                            <option value="<?= (int) $niche['id'] ?>"><?= View::e((string) $niche['name']) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </label>
-                <label>Nome<input class="form-control" name="name" required placeholder="Ex.: Imobiliária — Qualificação e visita"></label>
-                <label>Código<input class="form-control" name="code" placeholder="imobiliaria-visita-v1"></label>
-                <label style="grid-column:1/-1;">Descrição<textarea class="form-control" name="description" rows="2"></textarea></label>
-                <label style="display:flex; gap:8px; align-items:center;"><input type="checkbox" name="active" value="1" checked> Ativo</label>
-                <div><button class="btn btn-primary" type="submit">Criar blueprint</button></div>
-            </form>
-        </details>
-    </div>
-</section>
+    </section>
+</div>

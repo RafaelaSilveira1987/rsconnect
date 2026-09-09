@@ -12943,3 +12943,287 @@ body.login-demo-open{overflow:hidden}
   .agent-technical-grid { grid-template-columns: 1fr; }
   .agent-technical-wide { grid-column: auto; }
 }
+
+/* =========================================================
+   RS Connect 36.28.1 — modelos de atendimento em linguagem simples
+   ========================================================= */
+.agent-models-page,
+.agent-rules-panel,
+.agent-decision-history { min-width: 0; }
+
+.agent-models-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, .75fr);
+  gap: 22px;
+  align-items: stretch;
+  margin-bottom: 18px;
+  padding: 28px;
+  border: 1px solid rgba(1,148,142,.16);
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 6% 12%, rgba(1,148,142,.12), transparent 28%),
+    radial-gradient(circle at 94% 18%, rgba(20,100,152,.10), transparent 30%),
+    #fff;
+  box-shadow: 0 18px 52px rgba(15,23,42,.07);
+}
+.agent-models-hero-copy { align-self: center; }
+.agent-models-hero-copy h1 { margin: 5px 0 10px; font-size: clamp(1.75rem, 2.6vw, 2.45rem); }
+.agent-models-hero-copy p { max-width: 780px; margin: 0; color: var(--muted); line-height: 1.7; }
+.agent-models-hero-badge {
+  display: grid;
+  gap: 7px;
+  align-content: center;
+  padding: 20px;
+  border: 1px solid rgba(20,100,152,.14);
+  border-radius: 20px;
+  background: rgba(248,250,252,.82);
+}
+.agent-models-hero-badge span { color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.agent-models-hero-badge strong { color: #17324d; font-size: 1rem; }
+.agent-models-hero-badge small { color: var(--muted); line-height: 1.5; }
+
+.agent-model-concepts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.agent-model-concepts article {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(15,23,42,.04);
+}
+.agent-model-concepts article > div { display: grid; gap: 4px; }
+.agent-model-concepts strong { color: #25364c; font-size: .9rem; }
+.agent-model-concepts small { color: var(--muted); font-size: .78rem; line-height: 1.45; }
+.agent-model-concept-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: rgba(1,148,142,.10);
+  color: #04756f;
+  font-size: .7rem;
+  font-weight: 900;
+}
+
+.agent-model-section { margin-bottom: 18px; overflow: visible; }
+.agent-model-section-head { align-items: center; gap: 18px; }
+.agent-model-section-head p { margin: 5px 0 0; color: var(--muted); }
+.agent-model-add-details { position: relative; }
+.agent-model-add-details > summary,
+.agent-model-edit-details > summary,
+.agent-model-technical-details > summary { list-style: none; cursor: pointer; }
+.agent-model-add-details > summary::-webkit-details-marker,
+.agent-model-edit-details > summary::-webkit-details-marker,
+.agent-model-technical-details > summary::-webkit-details-marker { display: none; }
+.agent-model-add-details[open] > .agent-model-inline-form {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(560px, calc(100vw - 48px));
+  max-height: min(74vh, 720px);
+  overflow: auto;
+  box-shadow: 0 24px 70px rgba(15,23,42,.20);
+}
+.agent-model-inline-form {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid #dbe5ec;
+  border-radius: 18px;
+  background: #fff;
+}
+.agent-model-inline-form.compact { margin-top: 10px; box-shadow: none; }
+.agent-model-technical-details {
+  border: 1px dashed #d6e0e8;
+  border-radius: 13px;
+  background: #f8fafc;
+}
+.agent-model-technical-details > summary {
+  padding: 10px 12px;
+  color: #607086;
+  font-size: .78rem;
+  font-weight: 800;
+}
+.agent-model-technical-details[open] > summary { border-bottom: 1px solid #e8edf2; }
+.agent-model-technical-details > :not(summary) { margin-left: 12px; margin-right: 12px; }
+.agent-model-technical-details > :last-child { margin-bottom: 12px; }
+.agent-model-technical-warning { padding: 10px 12px; border-radius: 11px; background: rgba(245,158,11,.09); color: #8a5a09; font-size: .78rem; line-height: 1.45; }
+.agent-model-json { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .75rem; line-height: 1.55; }
+
+.agent-niche-grid,
+.agent-blueprint-grid { display: grid; gap: 14px; }
+.agent-niche-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.agent-blueprint-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.agent-niche-card,
+.agent-blueprint-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: linear-gradient(180deg, #fff, #fbfdfe);
+  box-shadow: 0 10px 30px rgba(15,23,42,.045);
+}
+.agent-niche-card.is-inactive,
+.agent-blueprint-card.is-inactive { opacity: .68; }
+.agent-niche-card-top,
+.agent-blueprint-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+.agent-niche-card-top > div,
+.agent-blueprint-card-head > div { min-width: 0; }
+.agent-niche-card-top strong { display: block; color: #25364c; font-size: 1rem; }
+.agent-niche-card-top small { display: block; margin-top: 4px; color: var(--muted); line-height: 1.45; }
+.agent-niche-stats,
+.agent-blueprint-summary {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.agent-niche-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.agent-blueprint-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.agent-niche-stats > div,
+.agent-blueprint-summary > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 11px;
+  border-radius: 13px;
+  background: #f7fafc;
+}
+.agent-niche-stats strong,
+.agent-blueprint-summary strong { min-width: 0; overflow-wrap: anywhere; color: #20364d; font-size: .83rem; }
+.agent-niche-stats span,
+.agent-blueprint-summary span { color: var(--muted); font-size: .7rem; line-height: 1.25; }
+.agent-model-edit-details { margin-top: 12px; border-top: 1px solid #edf1f4; }
+.agent-model-edit-details > summary { padding: 11px 2px 2px; color: #146498; font-size: .78rem; font-weight: 800; }
+
+.agent-blueprint-card-head h3 { margin: 7px 0 5px; color: #20364d; font-size: 1rem; }
+.agent-blueprint-card-head p { margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.5; }
+.agent-model-segment-pill,
+.agent-field-type-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(1,148,142,.09);
+  color: #08766f;
+  font-size: .68rem;
+  font-weight: 850;
+}
+.agent-blueprint-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.agent-blueprint-meta-row span {
+  padding: 6px 9px;
+  border: 1px solid #e5ebf0;
+  border-radius: 999px;
+  background: #fff;
+  color: #607086;
+  font-size: .68rem;
+  font-weight: 700;
+}
+.agent-blueprint-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.agent-blueprint-actions .agent-model-edit-details { margin-top: 0; padding: 0 10px 8px; border: 1px solid #e5ebf0; border-radius: 13px; background: #fff; }
+.agent-model-version-details > summary { color: #08766f; }
+
+/* Regras do assistente dentro da empresa */
+.agent-rules-panel {
+  padding: 24px;
+  border: 1px solid rgba(1,148,142,.14);
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(249,252,253,.94), #fff 180px);
+}
+.agent-rules-heading { border-bottom: 0; }
+.agent-rules-intro {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 10px;
+  margin: 6px 0 18px;
+}
+.agent-rules-intro > div {
+  display: grid;
+  grid-template-columns: 32px minmax(0,1fr);
+  gap: 3px 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e5ebf0;
+  border-radius: 15px;
+  background: #fff;
+}
+.agent-rules-intro > div > span { grid-row: 1 / 3; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: rgba(20,100,152,.08); color: #146498; font-size: .72rem; font-weight: 900; }
+.agent-rules-intro strong { color: #25364c; font-size: .8rem; }
+.agent-rules-intro small { color: var(--muted); font-size: .7rem; line-height: 1.35; }
+.agent-rules-main-fields { padding: 18px; border: 1px solid #e8edf2; border-radius: 18px; background: #fff; }
+.agent-rules-status-grid { align-self: end; }
+.agent-rules-section-title { display: grid; gap: 3px; margin-top: 24px; margin-bottom: 10px; }
+.agent-rules-section-title > span { color: #08766f; font-size: .68rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.agent-rules-section-title h3 { margin: 0; color: #25364c; font-size: 1rem; }
+.agent-rules-section-title p { margin: 0; color: var(--muted); font-size: .8rem; line-height: 1.5; }
+.agent-capability-grid .agent-rule-toggle { min-height: 96px; align-items: center; }
+.agent-rule-toggle.is-off { background: #f8fafc; opacity: .72; }
+.agent-rule-card-content { width: 100%; min-width: 0; }
+.agent-collection-card,
+.agent-policy-card { padding: 17px; }
+.agent-rule-card-head,
+.agent-policy-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.agent-rule-card-head .field { flex: 1; }
+.agent-policy-card-head > div { display: grid; gap: 4px; min-width: 0; }
+.agent-policy-card-head strong { color: #25364c; font-size: .88rem; }
+.agent-policy-card-head small { color: var(--muted); line-height: 1.45; }
+.agent-rule-options {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 11px 12px;
+  border-radius: 13px;
+  background: #f8fafc;
+}
+.agent-rule-options.single-line { display: flex; }
+.agent-rule-options label { display: flex; align-items: flex-start; gap: 7px; color: #526174; font-size: .76rem; font-weight: 700; line-height: 1.35; }
+.agent-rule-options input { margin-top: 2px; accent-color: var(--primary, #01948e); }
+.agent-rule-technical { margin-top: 10px; }
+.agent-rule-technical code { display: block; padding: 10px 12px; overflow-wrap: anywhere; color: #607086; font-size: .72rem; }
+.agent-workflow-flow { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 10px; }
+.agent-workflow-step { position: relative; display: flex; align-items: center; gap: 8px; flex: 0 0 auto; min-width: 150px; padding: 10px 12px; border: 1px solid #e5ebf0; border-radius: 14px; background: #fff; }
+.agent-workflow-step:not(:last-child)::after { content: '›'; position: absolute; right: -8px; color: #91a0b0; font-size: 1rem; }
+.agent-workflow-step > span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 9px; background: rgba(1,148,142,.09); color: #08766f; font-size: .68rem; font-weight: 900; }
+.agent-workflow-step strong { color: #33475e; font-size: .74rem; white-space: nowrap; }
+.agent-safety-info { margin-top: 18px; background: rgba(34,197,94,.06); border-color: rgba(34,197,94,.16); }
+.agent-decision-history { padding: 22px 0 0; }
+.agent-decision-table td { vertical-align: middle; }
+
+@media (max-width: 1120px) {
+  .agent-model-concepts { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .agent-blueprint-grid { grid-template-columns: 1fr; }
+  .agent-blueprint-summary { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 880px) {
+  .agent-models-hero { grid-template-columns: 1fr; padding: 20px; }
+  .agent-niche-grid { grid-template-columns: 1fr; }
+  .agent-rules-intro { grid-template-columns: 1fr; }
+  .agent-blueprint-actions { grid-template-columns: 1fr; }
+  .agent-rules-panel { padding: 18px; }
+}
+@media (max-width: 620px) {
+  .agent-model-concepts { grid-template-columns: 1fr; }
+  .agent-blueprint-summary { grid-template-columns: 1fr 1fr; }
+  .agent-model-section-head { align-items: flex-start; flex-direction: column; }
+  .agent-model-add-details[open] > .agent-model-inline-form { position: fixed; inset: 74px 12px 12px; width: auto; max-height: none; }
+}

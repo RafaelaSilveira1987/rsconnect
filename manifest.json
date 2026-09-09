@@ -1,22 +1,25 @@
-# RS Connect v36.27.26
+# RS Connect v36.28.1
 
-Agenda assertiva com validação técnica do horário antes de pré-reservar ou confirmar.
+Modelos de atendimento por segmento com regras de segurança em linguagem simples.
 
 Principais alterações desta versão:
 
-- a intenção de agendamento coleta modalidade + dia/data + horário antes de consultar a agenda;
-- preferência textual não ocupa mais o calendário nem vira compromisso por si só;
-- na Agenda interna, o horário exato solicitado é validado antes da grade de alternativas;
-- se o horário estiver realmente livre e dentro das regras, cria uma pré-reserva real;
-- confirmação automática só é enviada depois de persistir `status = confirmed`;
-- aprovação humana, confirmação automática e somente pré-agendamento passam a ser modos explícitos;
-- pré-reservas reais bloqueiam o horário durante o período de hold; preferências sem slot não bloqueiam;
-- respostas livres da IA/Prompt Studio não podem inventar disponibilidade ou confirmação;
-- "Sugerir horários alternativos" não desliga a validação do horário exato;
-- migration obrigatória permanece `102_agenda_prompt_or_form_messages.sql`.
+- mantém a arquitetura por segmento, triagem estruturada e validações de segurança da v36.28.0;
+- renomeia termos técnicos da interface para linguagem operacional e fácil de entender;
+- `Blueprint` passa a ser apresentado como `Modelo de atendimento`;
+- `Policy Engine` passa a ser apresentado como `Regras de segurança` / `Proteção automática`;
+- `Capabilities` passam a ser `O que o assistente pode fazer`;
+- `Workflow` passa a ser `Passo a passo do atendimento`;
+- campos técnicos e JSON ficam recolhidos em áreas avançadas;
+- configuração da empresa ganha cards, explicações e histórico de decisões traduzido;
+- cadastro de empresa passa a usar `Segmento` + `Modelo de atendimento`.
+
+Migration obrigatória permanece:
+
+`103_agent_blueprints_policy_engine.sql`
 
 Após o deploy execute:
 
 `php bin/migrate.php up`
 
-Depois revise em **Configurações da empresa → Agenda → Pré-agendamento e mensagens** o modo de confirmação e as regras de disponibilidade.
+Depois revise em **RS Admin → Empresas → Configurações → Regras do assistente**.

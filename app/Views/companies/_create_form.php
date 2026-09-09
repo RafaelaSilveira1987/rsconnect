@@ -16,19 +16,19 @@ use App\Core\View;
             <label class="field"><span>Plano inicial</span><select name="plan"><option value="starter">Inicial</option><option value="pro">Profissional</option><option value="business">Empresarial</option><option value="custom">Personalizado</option></select></label>
             <label class="field drawer-span"><span>E-mail comercial</span><input type="email" name="email" placeholder="contato@empresa.com"></label>
             <label class="field"><span>Telefone</span><input name="phone" placeholder="(11) 99999-9999"></label>
-            <label class="field"><span>Nicho da empresa</span><select name="business_niche_id" data-company-niche>
-                <option value="">Sem blueprint automático</option>
+            <label class="field"><span>Segmento da empresa</span><select name="business_niche_id" data-company-niche>
+                <option value="">Escolher depois</option>
                 <?php foreach (($businessNiches ?? []) as $niche): ?>
                     <option value="<?= (int) ($niche['id'] ?? 0) ?>"><?= View::e((string) ($niche['name'] ?? '')) ?></option>
                 <?php endforeach; ?>
-            </select><small class="field-hint">O nicho habilita a arquitetura inicial de triagem, políticas e ações do agente.</small></label>
-            <label class="field"><span>Blueprint do agente</span><select name="agent_blueprint_id" data-company-blueprint>
-                <option value="">Selecionar automaticamente pelo nicho</option>
+            </select><small class="field-hint">O segmento sugere um modelo de atendimento com perguntas, regras de segurança e permissões adequadas ao tipo de negócio.</small></label>
+            <label class="field"><span>Modelo de atendimento</span><select name="agent_blueprint_id" data-company-blueprint>
+                <option value="">Usar o modelo recomendado para o segmento</option>
                 <?php foreach (($agentBlueprints ?? []) as $blueprint): ?>
                     <option value="<?= (int) ($blueprint['id'] ?? 0) ?>" data-niche-id="<?= (int) ($blueprint['niche_id'] ?? 0) ?>"><?= View::e((string) (($blueprint['niche_name'] ?? '') . ' — ' . ($blueprint['name'] ?? ''))) ?></option>
                 <?php endforeach; ?>
             </select></label>
-            <label class="field drawer-span"><span>Segmento livre / observação</span><input name="segment" placeholder="Opcional. Ex.: Psicologia infantil, barbearia premium..."><small class="field-hint">Se ficar vazio, o RS Connect usa o nome do nicho selecionado.</small></label>
+            <label class="field drawer-span"><span>Detalhes do segmento</span><input name="segment" placeholder="Opcional. Ex.: Psicologia infantil, barbearia premium..."><small class="field-hint">Opcional. Use apenas se quiser detalhar melhor a atividade da empresa.</small></label>
         </div>
     </section>
 

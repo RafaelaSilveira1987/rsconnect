@@ -59,82 +59,143 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
     $agentTriageFields = is_array($agentBlueprintProfile['triage_fields'] ?? null) ? $agentBlueprintProfile['triage_fields'] : [];
     $agentPolicies = is_array($agentBlueprintProfile['policies'] ?? null) ? $agentBlueprintProfile['policies'] : [];
     $agentWorkflow = is_array($agentBlueprintProfile['workflow'] ?? null) ? $agentBlueprintProfile['workflow'] : [];
+
     $capabilityLabels = [
-        'triage.enabled' => 'Triagem estruturada',
-        'eligibility.enabled' => 'Motor de elegibilidade',
-        'calendar.read' => 'Consultar agenda',
-        'calendar.pre_schedule' => 'Criar pré-agendamento',
-        'calendar.confirm' => 'Confirmar automaticamente',
-        'calendar.human_approval' => 'Exigir aprovação humana',
-        'handoff.audio' => 'Transferir ao receber áudio',
-        'policy.fail_closed' => 'Falhar fechado em erro de política',
+        'triage.enabled' => 'Coletar informações antes de avançar',
+        'eligibility.enabled' => 'Validar as regras antes de atender',
+        'calendar.read' => 'Verificar horários na agenda',
+        'calendar.pre_schedule' => 'Fazer pré-reserva de horário',
+        'calendar.confirm' => 'Confirmar agendamento automaticamente',
+        'calendar.human_approval' => 'Pedir aprovação da equipe antes de confirmar',
+        'handoff.audio' => 'Passar para uma pessoa ao receber áudio',
+        'policy.fail_closed' => 'Bloquear ações quando houver dúvida ou erro',
     ];
+    $capabilityHelp = [
+        'triage.enabled' => 'O assistente pergunta somente o que ainda estiver faltando e guarda as respostas na conversa.',
+        'eligibility.enabled' => 'Antes de seguir para ações importantes, confere idade, tipo de atendimento e outras regras configuradas.',
+        'calendar.read' => 'Permite consultar horários reais. Não dá permissão para confirmar sozinho.',
+        'calendar.pre_schedule' => 'Permite segurar um horário válido antes da confirmação final.',
+        'calendar.confirm' => 'Quando ligado, o sistema pode concluir o agendamento sem depender de uma pessoa da equipe.',
+        'calendar.human_approval' => 'Mesmo com horário disponível, a confirmação final fica aguardando alguém da equipe.',
+        'handoff.audio' => 'Ao receber áudio, o assistente para e deixa a conversa para atendimento humano.',
+        'policy.fail_closed' => 'Se uma regra não puder ser validada, o sistema prefere não executar a ação em vez de correr risco.',
+    ];
+    $fieldTypeLabels = ['text' => 'Texto', 'textarea' => 'Texto livre', 'number' => 'Número', 'boolean' => 'Sim ou não', 'select' => 'Lista de opções', 'date' => 'Data', 'time' => 'Horário'];
+    $policyLabels = [
+        'minimum_age' => 'Idade mínima para atendimento',
+        'couple_service_allowed' => 'Permitir atendimento de casal',
+        'scheduling_requires_eligibility' => 'Validar as regras antes de consultar a agenda',
+        'confirmation_requires_human' => 'Confirmação depende da equipe',
+        'service_required' => 'Exigir o serviço antes de consultar a agenda',
+        'required_before_schedule' => 'Informações obrigatórias antes da agenda',
+    ];
+    $policyHelp = [
+        'minimum_age' => 'Se a idade informada for menor que este valor, o assistente não poderá consultar nem reservar horário.',
+        'couple_service_allowed' => 'Define se esse tipo de atendimento pode seguir normalmente neste modelo.',
+        'scheduling_requires_eligibility' => 'Impede que o assistente pule a validação das regras e vá direto para a agenda.',
+        'confirmation_requires_human' => 'O horário pode ser pré-reservado, mas só fica confirmado após aprovação da equipe.',
+        'service_required' => 'Usado em negócios como salão e barbearia para saber a duração e o tipo de atendimento antes de procurar horário.',
+    ];
+    $policyActionLabels = [
+        'block' => 'Bloquear a ação',
+        'block_schedule' => 'Não permitir agenda',
+        'human_approval' => 'Pedir aprovação da equipe',
+        'collect' => 'Pedir a informação antes de seguir',
+        'allow_confirm' => 'Permitir confirmação automática',
+        'handoff' => 'Passar para atendimento humano',
+        'warn' => 'Apenas sinalizar atenção',
+    ];
+    $decisionLabels = ['allow' => 'Permitido', 'block' => 'Bloqueado', 'collect' => 'Faltou informação', 'handoff' => 'Passado para a equipe', 'warn' => 'Atenção'];
+    $decisionClasses = ['allow' => 'badge-active', 'block' => 'badge-rejected', 'collect' => 'badge-warning', 'handoff' => 'badge-pending', 'warn' => 'badge-warning'];
+    $reasonLabels = [
+        'minimum_age' => 'Idade abaixo do permitido',
+        'couple_service_not_allowed' => 'Tipo de atendimento não permitido',
+        'triage_incomplete' => 'Faltam informações obrigatórias',
+        'human_approval_required' => 'Precisa de aprovação da equipe',
+        'capability_denied' => 'Ação não liberada nas configurações',
+        'allowed' => 'Regras atendidas',
+        'profile_inactive' => 'Regras específicas ainda não estão ativas',
+    ];
+    $humanizeInternalKey = static function (string $key): string {
+        $value = preg_replace('/[_\.]+/', ' ', trim($key)) ?? $key;
+        return $value !== '' ? mb_convert_case($value, MB_CASE_TITLE, 'UTF-8') : 'Regra personalizada';
+    };
     ?>
-    <section class="settings-block agent-architecture-settings" id="agent-architecture-settings">
+    <section class="settings-block agent-architecture-settings agent-rules-panel" id="agent-architecture-settings">
         <input type="hidden" name="agent_architecture_settings_submitted" value="1">
-        <div class="section-heading compact">
+        <div class="section-heading compact agent-rules-heading">
             <div>
-                <span class="eyebrow">Arquitetura do agente</span>
-                <h2>Blueprint, triagem e travas por nicho</h2>
-                <p>O Prompt Studio controla como o agente conversa. Este bloco controla o que precisa ser coletado e quais ações o backend permite executar.</p>
+                <span class="eyebrow">Regras do assistente</span>
+                <h2>Como o assistente deve atender</h2>
+                <p>Escolha um modelo pronto para o segmento e ajuste as informações, limites e permissões desta empresa. O Prompt Studio continua cuidando apenas do jeito de falar.</p>
             </div>
-            <span class="badge <?= ($agentBlueprintProfile['status'] ?? 'inactive') === 'active' ? 'badge-active' : 'badge-pending' ?>"><?= ($agentBlueprintProfile['status'] ?? 'inactive') === 'active' ? 'Policy Engine ativo' : 'Sem blueprint' ?></span>
+            <span class="badge <?= ($agentBlueprintProfile['status'] ?? 'inactive') === 'active' ? 'badge-active' : 'badge-pending' ?>"><?= ($agentBlueprintProfile['status'] ?? 'inactive') === 'active' ? 'Regras ativas' : 'Modelo ainda não aplicado' ?></span>
         </div>
 
-        <div class="form-grid two">
-            <label class="field"><span>Nicho</span><select data-agent-architecture-niche>
-                <option value="">Sem nicho</option>
+        <div class="agent-rules-intro">
+            <div><span>1</span><strong>Escolha o segmento</strong><small>Psicologia, salão, clínica, serviços etc.</small></div>
+            <div><span>2</span><strong>Escolha o modelo</strong><small>O RS Connect carrega uma base pronta para esse tipo de negócio.</small></div>
+            <div><span>3</span><strong>Ajuste as regras</strong><small>Cada empresa pode ter limites e formas de atendimento diferentes.</small></div>
+        </div>
+
+        <div class="form-grid two agent-rules-main-fields">
+            <label class="field"><span>Segmento da empresa</span><select data-agent-architecture-niche>
+                <option value="">Escolher depois</option>
                 <?php foreach (($businessNiches ?? []) as $niche): ?>
                     <option value="<?= (int) ($niche['id'] ?? 0) ?>" <?= (int) ($agentBlueprintProfile['niche_id'] ?? $company['business_niche_id'] ?? 0) === (int) ($niche['id'] ?? 0) ? 'selected' : '' ?>><?= View::e((string) ($niche['name'] ?? '')) ?></option>
                 <?php endforeach; ?>
-            </select><small>Selecionar um blueprint abaixo aplica o pacote do nicho à empresa.</small></label>
-            <label class="field"><span>Blueprint aplicado</span><select name="agent_blueprint_id" data-agent-architecture-blueprint>
-                <option value="">Nenhum</option>
+            </select><small>O segmento filtra os modelos de atendimento disponíveis.</small></label>
+            <label class="field"><span>Modelo de atendimento</span><select name="agent_blueprint_id" data-agent-architecture-blueprint>
+                <option value="">Nenhum modelo aplicado</option>
                 <?php foreach (($agentBlueprints ?? []) as $blueprint): ?>
                     <option value="<?= (int) ($blueprint['id'] ?? 0) ?>" data-niche-id="<?= (int) ($blueprint['niche_id'] ?? 0) ?>" <?= (int) ($agentBlueprintProfile['blueprint_id'] ?? 0) === (int) ($blueprint['id'] ?? 0) ? 'selected' : '' ?>><?= View::e((string) (($blueprint['niche_name'] ?? '') . ' — ' . ($blueprint['name'] ?? ''))) ?></option>
                 <?php endforeach; ?>
-            </select><small>Ao trocar o blueprint, os padrões de capacidades, triagem, políticas e workflow são reaplicados antes das personalizações deste formulário.</small></label>
-            <label class="field"><span>Modo de conversa estruturada</span><select name="agent_interaction_mode">
-                <option value="hybrid" <?= ($agentBlueprintProfile['interaction_mode'] ?? 'hybrid') === 'hybrid' ? 'selected' : '' ?>>Híbrido — recomendado</option>
-                <option value="form" <?= ($agentBlueprintProfile['interaction_mode'] ?? '') === 'form' ? 'selected' : '' ?>>Formulário — perguntas fixas</option>
-                <option value="prompt" <?= ($agentBlueprintProfile['interaction_mode'] ?? '') === 'prompt' ? 'selected' : '' ?>>Prompt Studio — IA redige as perguntas</option>
-            </select><small>Mesmo em Prompt Studio, políticas e ações continuam bloqueadas no backend até a triagem estar válida.</small></label>
-            <div class="readonly-grid compact-readonly-grid">
-                <div><span>Versão</span><strong><?= View::e((string) ($agentBlueprintProfile['version_label'] ?? '—')) ?></strong></div>
-                <div><span>Personalizado</span><strong><?= !empty($agentBlueprintProfile['customized']) ? 'Sim' : 'Não' ?></strong></div>
+            </select><small>Ao trocar o modelo, o RS Connect reaplica o padrão do segmento. Depois você pode personalizar os itens abaixo.</small></label>
+            <label class="field"><span>Como fazer as perguntas</span><select name="agent_interaction_mode">
+                <option value="hybrid" <?= ($agentBlueprintProfile['interaction_mode'] ?? 'hybrid') === 'hybrid' ? 'selected' : '' ?>>Natural com regras — recomendado</option>
+                <option value="form" <?= ($agentBlueprintProfile['interaction_mode'] ?? '') === 'form' ? 'selected' : '' ?>>Perguntas fixas configuradas aqui</option>
+                <option value="prompt" <?= ($agentBlueprintProfile['interaction_mode'] ?? '') === 'prompt' ? 'selected' : '' ?>>Prompt Studio com as mesmas travas</option>
+            </select><small>Em qualquer opção, as regras de segurança continuam valendo e não podem ser ignoradas pela IA.</small></label>
+            <div class="readonly-grid compact-readonly-grid agent-rules-status-grid">
+                <div><span>Versão do modelo</span><strong><?= View::e((string) ($agentBlueprintProfile['version_label'] ?? '—')) ?></strong></div>
+                <div><span>Tem ajustes próprios?</span><strong><?= !empty($agentBlueprintProfile['customized']) ? 'Sim' : 'Ainda não' ?></strong></div>
             </div>
         </div>
 
         <?php if ($agentCapabilities !== []): ?>
-            <h3>Capacidades permitidas</h3>
-            <div class="settings-toggle-grid">
+            <div class="agent-rules-section-title"><span>Permissões</span><h3>O que o assistente pode fazer</h3><p>Desligue qualquer ação que você não queira deixar nas mãos do atendimento automático.</p></div>
+            <div class="settings-toggle-grid agent-capability-grid">
                 <?php foreach ($agentCapabilities as $capabilityKey => $enabled): ?>
-                    <label class="switch-card">
+                    <label class="switch-card agent-rule-toggle <?= $enabled ? 'is-on' : 'is-off' ?>">
                         <input type="hidden" name="agent_capabilities[<?= View::e((string) $capabilityKey) ?>]" value="0">
                         <input type="checkbox" name="agent_capabilities[<?= View::e((string) $capabilityKey) ?>]" value="1" <?= $enabled ? 'checked' : '' ?>>
-                        <span><strong><?= View::e($capabilityLabels[$capabilityKey] ?? (string) $capabilityKey) ?></strong><small><?= View::e((string) $capabilityKey) ?></small></span>
+                        <span><strong><?= View::e($capabilityLabels[$capabilityKey] ?? $humanizeInternalKey((string) $capabilityKey)) ?></strong><small><?= View::e($capabilityHelp[$capabilityKey] ?? 'Permissão definida pelo modelo de atendimento.') ?></small></span>
                     </label>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
 
         <?php if ($agentTriageFields !== []): ?>
-            <h3>Campos da triagem</h3>
-            <div class="module-settings-grid">
+            <div class="agent-rules-section-title"><span>Coleta de informações</span><h3>O que precisa ser perguntado</h3><p>O assistente aproveita o que a pessoa já informou e pergunta somente o que estiver faltando.</p></div>
+            <div class="module-settings-grid agent-collection-grid">
                 <?php foreach ($agentTriageFields as $field): ?>
-                    <?php $fieldKey = (string) ($field['field_key'] ?? ''); ?>
-                    <article class="module-setting-card">
-                        <div style="width:100%">
-                            <div class="form-grid two">
-                                <label class="field"><span>Campo</span><input name="triage_fields[<?= View::e($fieldKey) ?>][label]" value="<?= View::e((string) ($field['label'] ?? $fieldKey)) ?>"></label>
-                                <div class="readonly-grid compact-readonly-grid"><div><span>Chave</span><strong><?= View::e($fieldKey) ?></strong></div><div><span>Tipo</span><strong><?= View::e((string) ($field['field_type'] ?? 'text')) ?></strong></div></div>
+                    <?php $fieldKey = (string) ($field['field_key'] ?? ''); $fieldType = (string) ($field['field_type'] ?? 'text'); ?>
+                    <article class="module-setting-card agent-collection-card">
+                        <div class="agent-rule-card-content">
+                            <div class="agent-rule-card-head">
+                                <label class="field"><span>Informação</span><input name="triage_fields[<?= View::e($fieldKey) ?>][label]" value="<?= View::e((string) ($field['label'] ?? $fieldKey)) ?>"></label>
+                                <span class="agent-field-type-pill"><?= View::e($fieldTypeLabels[$fieldType] ?? 'Informação') ?></span>
                             </div>
-                            <label class="field"><span>Pergunta padrão / fallback</span><textarea name="triage_fields[<?= View::e($fieldKey) ?>][prompt_text]" rows="2"><?= View::e((string) ($field['prompt_text'] ?? '')) ?></textarea></label>
-                            <div class="module-setting-actions">
-                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="0"><label><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="1" <?= !empty($field['active']) ? 'checked' : '' ?>> Ativo</label>
-                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="0"><label><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="1" <?= !empty($field['required_before_schedule']) ? 'checked' : '' ?>> Obrigatório antes da agenda</label>
-                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_for_completion]" value="0"><label><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][required_for_completion]" value="1" <?= !empty($field['required_for_completion']) ? 'checked' : '' ?>> Obrigatório na triagem</label>
+                            <label class="field"><span>Pergunta usada se o Prompt Studio não definir outra</span><textarea name="triage_fields[<?= View::e($fieldKey) ?>][prompt_text]" rows="2"><?= View::e((string) ($field['prompt_text'] ?? '')) ?></textarea></label>
+                            <div class="agent-rule-options">
+                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="0"><label><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="1" <?= !empty($field['active']) ? 'checked' : '' ?>> Usar esta informação</label>
+                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="0"><label><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="1" <?= !empty($field['required_before_schedule']) ? 'checked' : '' ?>> Precisa estar preenchida antes de consultar a agenda</label>
+                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_for_completion]" value="0"><label><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][required_for_completion]" value="1" <?= !empty($field['required_for_completion']) ? 'checked' : '' ?>> Precisa ser coletada antes de encerrar o atendimento</label>
                             </div>
+                            <details class="agent-model-technical-details agent-rule-technical">
+                                <summary>Detalhes técnicos</summary>
+                                <div class="readonly-grid compact-readonly-grid"><div><span>Identificação interna</span><strong><?= View::e($fieldKey) ?></strong></div><div><span>Formato</span><strong><?= View::e($fieldType) ?></strong></div></div>
+                            </details>
                         </div>
                     </article>
                 <?php endforeach; ?>
@@ -142,19 +203,23 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
         <?php endif; ?>
 
         <?php if ($agentPolicies !== []): ?>
-            <h3>Políticas e bloqueios</h3>
-            <div class="module-settings-grid">
+            <div class="agent-rules-section-title"><span>Limites e segurança</span><h3>Regras que o assistente deve respeitar</h3><p>Essas regras são verificadas pelo sistema antes de liberar agenda, confirmação ou outras ações importantes.</p></div>
+            <div class="module-settings-grid agent-policy-grid">
                 <?php foreach ($agentPolicies as $policy): ?>
                     <?php
                     $policyKey = (string) ($policy['policy_key'] ?? '');
                     $policyType = (string) ($policy['policy_type'] ?? 'string');
                     $policyValue = $policy['value'] ?? '';
+                    $actionKey = (string) ($policy['action_key'] ?? 'block');
                     ?>
-                    <article class="module-setting-card">
-                        <div style="width:100%">
-                            <strong><?= View::e($policyKey) ?></strong>
+                    <article class="module-setting-card agent-policy-card <?= !empty($policy['enabled']) ? 'is-enabled' : 'is-disabled' ?>">
+                        <div class="agent-rule-card-content">
+                            <div class="agent-policy-card-head">
+                                <div><strong><?= View::e($policyLabels[$policyKey] ?? $humanizeInternalKey($policyKey)) ?></strong><small><?= View::e($policyHelp[$policyKey] ?? 'Regra personalizada deste modelo de atendimento.') ?></small></div>
+                                <span class="badge <?= !empty($policy['enabled']) ? 'badge-active' : 'badge-pending' ?>"><?= !empty($policy['enabled']) ? 'Ativa' : 'Desligada' ?></span>
+                            </div>
                             <div class="form-grid two">
-                                <label class="field"><span>Valor</span>
+                                <label class="field"><span><?= $policyType === 'number' ? 'Valor definido' : 'Esta regra deve valer?' ?></span>
                                     <?php if ($policyType === 'boolean'): ?>
                                         <select name="agent_policies[<?= View::e($policyKey) ?>][value]"><option value="1" <?= !empty($policyValue) ? 'selected' : '' ?>>Sim</option><option value="0" <?= empty($policyValue) ? 'selected' : '' ?>>Não</option></select>
                                     <?php elseif ($policyType === 'number'): ?>
@@ -163,11 +228,17 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
                                         <input name="agent_policies[<?= View::e($policyKey) ?>][value]" value="<?= View::e(is_array($policyValue) ? json_encode($policyValue, JSON_UNESCAPED_UNICODE) : (string) $policyValue) ?>">
                                     <?php endif; ?>
                                 </label>
-                                <label class="field"><span>Ação</span><input name="agent_policies[<?= View::e($policyKey) ?>][action_key]" value="<?= View::e((string) ($policy['action_key'] ?? 'block')) ?>"></label>
+                                <label class="field"><span>O que fazer quando a regra for acionada</span><select name="agent_policies[<?= View::e($policyKey) ?>][action_key]">
+                                    <?php if (!array_key_exists($actionKey, $policyActionLabels)): ?><option value="<?= View::e($actionKey) ?>" selected>Regra personalizada</option><?php endif; ?>
+                                    <?php foreach ($policyActionLabels as $key => $label): ?><option value="<?= View::e($key) ?>" <?= $actionKey === $key ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?>
+                                </select></label>
                             </div>
-                            <label class="field"><span>Mensagem ao cliente</span><textarea name="agent_policies[<?= View::e($policyKey) ?>][customer_message]" rows="3"><?= View::e((string) ($policy['customer_message'] ?? '')) ?></textarea></label>
-                            <input type="hidden" name="agent_policies[<?= View::e($policyKey) ?>][enabled]" value="0">
-                            <label><input type="checkbox" name="agent_policies[<?= View::e($policyKey) ?>][enabled]" value="1" <?= !empty($policy['enabled']) ? 'checked' : '' ?>> Política ativa</label>
+                            <label class="field"><span>Mensagem que o cliente recebe</span><textarea name="agent_policies[<?= View::e($policyKey) ?>][customer_message]" rows="3"><?= View::e((string) ($policy['customer_message'] ?? '')) ?></textarea></label>
+                            <div class="agent-rule-options single-line">
+                                <input type="hidden" name="agent_policies[<?= View::e($policyKey) ?>][enabled]" value="0">
+                                <label><input type="checkbox" name="agent_policies[<?= View::e($policyKey) ?>][enabled]" value="1" <?= !empty($policy['enabled']) ? 'checked' : '' ?>> Usar esta regra</label>
+                            </div>
+                            <details class="agent-model-technical-details agent-rule-technical"><summary>Detalhes técnicos</summary><code><?= View::e($policyKey) ?></code></details>
                         </div>
                     </article>
                 <?php endforeach; ?>
@@ -175,42 +246,43 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
         <?php endif; ?>
 
         <?php if ($agentWorkflow !== []): ?>
-            <h3>Workflow aplicado</h3>
-            <div class="readonly-grid">
-                <?php foreach ($agentWorkflow as $step): ?>
-                    <div><span><?= (int) ($step['position'] ?? 0) ?> · <?= View::e((string) ($step['step_type'] ?? '')) ?></span><strong><?= View::e((string) ($step['label'] ?? $step['step_key'] ?? '')) ?></strong></div>
+            <div class="agent-rules-section-title"><span>Ordem do atendimento</span><h3>Passo a passo que o assistente segue</h3><p>Essa sequência ajuda o sistema a saber o que vem antes de consultar agenda, confirmar ou encaminhar.</p></div>
+            <div class="agent-workflow-flow">
+                <?php foreach ($agentWorkflow as $index => $step): ?>
+                    <div class="agent-workflow-step"><span><?= $index + 1 ?></span><strong><?= View::e((string) ($step['label'] ?? $step['step_key'] ?? 'Etapa')) ?></strong></div>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
 
-        <div class="message-info"><strong>Regra de segurança</strong><span>O modelo pode sugerir uma ação, mas somente o backend autoriza. Sem elegibilidade e campos obrigatórios, a agenda não é consultada nem pré-reservada.</span></div>
+        <div class="message-info agent-safety-info"><strong>Proteção automática</strong><span>A IA pode entender o pedido e sugerir o próximo passo, mas o RS Connect confere as regras antes de executar. Se faltar uma informação obrigatória ou houver uma restrição, a agenda não é liberada.</span></div>
     </section>
 
     <?php $agentPolicyDecisions = is_array($agentPolicyDecisions ?? null) ? $agentPolicyDecisions : []; ?>
-    <section class="settings-block" id="agent-policy-audit">
+    <section class="settings-block agent-decision-history" id="agent-policy-audit">
         <div class="section-heading compact">
             <div>
-                <span class="eyebrow">Auditoria do agente</span>
-                <h2>Decisões recentes do Policy Engine</h2>
-                <p>Use este histórico para validar por que a IA foi bloqueada, pediu um dado ou transferiu o atendimento.</p>
+                <span class="eyebrow">Histórico de segurança</span>
+                <h2>O que o assistente decidiu recentemente</h2>
+                <p>Acompanhe por que uma conversa foi liberada, bloqueada, ficou aguardando informação ou precisou da equipe.</p>
             </div>
             <span class="badge"><?= count($agentPolicyDecisions) ?> registro(s)</span>
         </div>
         <?php if ($agentPolicyDecisions === []): ?>
-            <div class="message-info"><strong>Sem decisões registradas</strong><span>Os eventos aparecerão aqui após a migration 103 e novas conversas passarem pela triagem estruturada.</span></div>
+            <div class="message-info"><strong>Ainda não há registros</strong><span>Quando novas conversas passarem pelas regras do assistente, as decisões aparecerão aqui.</span></div>
         <?php else: ?>
             <div class="table-wrap">
-                <table class="table">
-                    <thead><tr><th>Data</th><th>Contato</th><th>Política</th><th>Decisão</th><th>Motivo</th><th>Conversa</th></tr></thead>
+                <table class="table agent-decision-table">
+                    <thead><tr><th>Data</th><th>Contato</th><th>Regra verificada</th><th>Resultado</th><th>Motivo</th><th>Conversa</th></tr></thead>
                     <tbody>
                     <?php foreach ($agentPolicyDecisions as $policyDecision): ?>
+                        <?php $decision = (string) ($policyDecision['decision'] ?? 'warn'); $reason = (string) ($policyDecision['reason_code'] ?? ''); $pKey = (string) ($policyDecision['policy_key'] ?? ''); ?>
                         <tr>
                             <td><?= View::e((string) ($policyDecision['created_at'] ?? '')) ?></td>
                             <td><strong><?= View::e((string) (($policyDecision['contact_name'] ?? '') ?: 'Contato')) ?></strong><br><small><?= View::e((string) ($policyDecision['contact_phone'] ?? '')) ?></small></td>
-                            <td><code><?= View::e((string) ($policyDecision['policy_key'] ?? '')) ?></code></td>
-                            <td><span class="badge"><?= View::e((string) ($policyDecision['decision'] ?? '')) ?></span></td>
-                            <td><?= View::e((string) ($policyDecision['reason_code'] ?? '—')) ?></td>
-                            <td><a class="btn btn-secondary btn-sm" href="<?= View::e(Router::url('/conversations?id=' . (int) ($policyDecision['conversation_id'] ?? 0))) ?>">Abrir</a></td>
+                            <td><strong><?= View::e($policyLabels[$pKey] ?? $humanizeInternalKey($pKey)) ?></strong></td>
+                            <td><span class="badge <?= View::e($decisionClasses[$decision] ?? '') ?>"><?= View::e($decisionLabels[$decision] ?? $humanizeInternalKey($decision)) ?></span></td>
+                            <td><?= View::e($reasonLabels[$reason] ?? ($reason !== '' ? $humanizeInternalKey($reason) : '—')) ?></td>
+                            <td><a class="btn btn-secondary btn-sm" href="<?= View::e(Router::url('/conversations?id=' . (int) ($policyDecision['conversation_id'] ?? 0))) ?>">Ver conversa</a></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>

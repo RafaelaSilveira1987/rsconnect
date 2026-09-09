@@ -117,22 +117,22 @@ $checks['webhook executa triagem antes da agenda'] = str_contains($webhook, 'Age
 $checks['pré-agendamento possui defesa em profundidade'] = str_contains($pre, 'Policy Engine obrigatório antes de QUALQUER acesso à agenda')
     && str_contains($pre, 'rejectPendingForPolicy');
 $checks['confirmação automática passa pelo Policy Engine'] = str_contains($calendar, "evaluate(\$profile, \$collected, 'calendar.confirm')");
-$checks['RS Admin possui editor de blueprint e políticas'] = str_contains($settings, 'Blueprint, triagem e travas por nicho')
+$checks['RS Admin possui editor de blueprint e políticas'] = str_contains($settings, 'Como o assistente deve atender')
     && str_contains($settings, 'agent_policies[')
     && str_contains($settings, 'triage_fields[')
-    && str_contains($settings, 'Decisões recentes do Policy Engine');
+    && str_contains($settings, 'O que o assistente decidiu recentemente');
 $checks['cadastro de empresa seleciona nicho e blueprint'] = str_contains($createForm, 'business_niche_id') && str_contains($createForm, 'agent_blueprint_id');
 $checks['migration cria estrutura versionada e auditoria'] = str_contains($migration, 'agent_blueprint_versions')
     && str_contains($migration, 'conversation_policy_decisions')
     && str_contains($migration, 'conversation_triage_sessions');
-$checks['RS Admin possui catálogo global de nichos e blueprints'] = str_contains($blueprintAdmin, 'Nichos e blueprints')
+$checks['RS Admin possui catálogo global de nichos e blueprints'] = str_contains($blueprintAdmin, 'Modelos de atendimento')
     && str_contains($blueprintController, 'publishVersion')
     && str_contains($routes, "'/agent-blueprints'")
-    && str_contains($layout, 'Nichos e blueprints');
+    && str_contains($layout, 'Modelos por segmento');
 $checks['publicação de versão não altera tenants automaticamente'] = str_contains($blueprintController, 'empresas existentes não foram alteradas')
     || str_contains($blueprintController, 'empresas existentes não são alteradas');
 $checks['versão do pacote exige migration 103'] = str_contains($versionService, "REQUIRED_MIGRATION = '103_agent_blueprints_policy_engine.sql'")
-    && str_contains($versionService, 'RS Connect 36.28.0');
+    && str_contains($versionService, 'RS Connect 36.28.1');
 
 $failed = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));
 foreach ($checks as $label => $ok) {

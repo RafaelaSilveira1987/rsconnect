@@ -49,6 +49,7 @@ final class AgentBlueprintController
 
         foreach ($blueprints as &$blueprint) {
             $decoded = json_decode((string) ($blueprint['current_config_json'] ?? ''), true);
+            $blueprint['current_config_decoded'] = is_array($decoded) ? $decoded : [];
             $blueprint['current_config_pretty'] = is_array($decoded)
                 ? json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
                 : (string) ($blueprint['current_config_json'] ?? '');
@@ -56,7 +57,7 @@ final class AgentBlueprintController
         unset($blueprint);
 
         View::render('agent_blueprints.index', [
-            'title' => 'Nichos e blueprints de agentes',
+            'title' => 'Modelos de atendimento por segmento',
             'niches' => $niches,
             'blueprints' => $blueprints,
         ]);
@@ -72,7 +73,7 @@ final class AgentBlueprintController
         $active = isset($_POST['active']) ? 1 : 0;
 
         if ($name === '' || $code === '') {
-            Flash::set('error', 'Informe o nome e o código do nicho.');
+            Flash::set('error', 'Informe o nome do segmento. Se usar a configuração avançada, informe também um código válido.');
             $this->redirect('/agent-blueprints');
         }
 
@@ -93,7 +94,7 @@ final class AgentBlueprintController
                     'id' => $id,
                 ]);
                 Audit::log('agent_niche.updated', ['niche_id' => $id, 'code' => $code]);
-                Flash::set('success', 'Nicho atualizado. Empresas existentes não são alteradas automaticamente.');
+                Flash::set('success', 'Segmento atualizado. As empresas já configuradas não são alteradas automaticamente.');
             } else {
                 $stmt = $pdo->prepare(
                     'INSERT INTO business_niches (code, name, description, active, position)
@@ -108,11 +109,11 @@ final class AgentBlueprintController
                 ]);
                 $newId = (int) $pdo->lastInsertId();
                 Audit::log('agent_niche.created', ['niche_id' => $newId, 'code' => $code]);
-                Flash::set('success', 'Nicho criado. Agora crie um blueprint para ele.');
+                Flash::set('success', 'Segmento criado. Agora você pode criar um modelo de atendimento para ele.');
             }
         } catch (Throwable $exception) {
             error_log('[RS Connect][agent-blueprints] Falha ao salvar nicho: ' . $exception->getMessage());
-            Flash::set('error', 'Não foi possível salvar o nicho. Verifique se o código já está em uso.');
+            Flash::set('error', 'Não foi possível salvar o segmento. Verifique a configuração e tente novamente.');
         }
 
         $this->redirect('/agent-blueprints');
@@ -128,7 +129,7 @@ final class AgentBlueprintController
         $active = isset($_POST['active']) ? 1 : 0;
 
         if ($nicheId < 1 || $name === '' || $code === '') {
-            Flash::set('error', 'Informe nicho, nome e código do blueprint.');
+            Flash::set('error', 'Informe o segmento e o nome do modelo de atendimento.');
             $this->redirect('/agent-blueprints');
         }
 
@@ -137,7 +138,7 @@ final class AgentBlueprintController
             $check = $pdo->prepare('SELECT id FROM business_niches WHERE id = :id LIMIT 1');
             $check->execute(['id' => $nicheId]);
             if (!$check->fetchColumn()) {
-                throw new RuntimeException('Nicho inválido.');
+                throw new RuntimeException('Segmento inválido.');
             }
 
             if ($id > 0) {
@@ -155,7 +156,7 @@ final class AgentBlueprintController
                     'id' => $id,
                 ]);
                 Audit::log('agent_blueprint.updated', ['blueprint_id' => $id, 'niche_id' => $nicheId, 'code' => $code]);
-                Flash::set('success', 'Blueprint atualizado. Tenants já configurados mantêm a cópia atual.');
+                Flash::set('success', 'Modelo atualizado. As empresas que já usam uma cópia continuam com a configuração atual.');
             } else {
                 $stmt = $pdo->prepare(
                     'INSERT INTO agent_blueprints (niche_id, code, name, description, active)
@@ -170,13 +171,13 @@ final class AgentBlueprintController
                 ]);
                 $newId = (int) $pdo->lastInsertId();
                 Audit::log('agent_blueprint.created', ['blueprint_id' => $newId, 'niche_id' => $nicheId, 'code' => $code]);
-                Flash::set('success', 'Blueprint criado. Publique a primeira versão para poder aplicá-lo a empresas.');
+                Flash::set('success', 'Modelo criado. Crie a primeira versão para poder aplicá-lo às empresas.');
             }
         } catch (Throwable $exception) {
             error_log('[RS Connect][agent-blueprints] Falha ao salvar blueprint: ' . $exception->getMessage());
             Flash::set('error', $exception instanceof RuntimeException
                 ? $exception->getMessage()
-                : 'Não foi possível salvar o blueprint. Verifique se o código já está em uso.');
+                : 'Não foi possível salvar o modelo. Verifique a configuração e tente novamente.');
         }
 
         $this->redirect('/agent-blueprints');
@@ -190,14 +191,14 @@ final class AgentBlueprintController
         $promptGuidance = trim((string) ($_POST['prompt_guidance'] ?? ''));
 
         if ($blueprintId < 1 || $configRaw === '') {
-            Flash::set('error', 'Selecione o blueprint e informe a configuração JSON.');
+            Flash::set('error', 'Selecione o modelo e informe a configuração avançada.');
             $this->redirect('/agent-blueprints');
         }
 
         try {
             $config = json_decode($configRaw, true, 512, JSON_THROW_ON_ERROR);
             if (!is_array($config)) {
-                throw new RuntimeException('A configuração do blueprint precisa ser um objeto JSON.');
+                throw new RuntimeException('A configuração avançada do modelo está em formato inválido.');
             }
             $this->validateBlueprintConfig($config);
         } catch (Throwable $exception) {
@@ -211,7 +212,7 @@ final class AgentBlueprintController
             $blueprintStmt->execute(['id' => $blueprintId]);
             $blueprint = $blueprintStmt->fetch(PDO::FETCH_ASSOC) ?: null;
             if (!$blueprint) {
-                throw new RuntimeException('Blueprint não encontrado.');
+                throw new RuntimeException('Modelo de atendimento não encontrado.');
             }
 
             $pdo->beginTransaction();
@@ -251,7 +252,7 @@ final class AgentBlueprintController
             ]);
             Flash::set(
                 'success',
-                'Nova versão publicada. Ela será usada em novas aplicações do blueprint; empresas existentes não foram alteradas.'
+                'Nova versão publicada. Ela será usada quando o modelo for aplicado novamente; empresas existentes não foram alteradas.'
             );
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
@@ -260,7 +261,7 @@ final class AgentBlueprintController
             error_log('[RS Connect][agent-blueprints] Falha ao publicar versão: ' . $exception->getMessage());
             Flash::set('error', $exception instanceof RuntimeException
                 ? $exception->getMessage()
-                : 'Não foi possível publicar a nova versão do blueprint.');
+                : 'Não foi possível publicar a nova versão do modelo.');
         }
 
         $this->redirect('/agent-blueprints');
@@ -282,13 +283,13 @@ final class AgentBlueprintController
 
         foreach ($config['triage_fields'] as $field) {
             if (!is_array($field) || trim((string) ($field['key'] ?? '')) === '' || trim((string) ($field['label'] ?? '')) === '') {
-                throw new RuntimeException('Cada campo de triagem precisa de key e label.');
+                throw new RuntimeException('Cada informação a coletar precisa ter uma identificação interna e um nome visível.');
             }
         }
 
         foreach ($config['policies'] as $policy) {
             if (!is_array($policy) || trim((string) ($policy['key'] ?? '')) === '') {
-                throw new RuntimeException('Cada política precisa de uma key.');
+                throw new RuntimeException('Cada regra precisa ter uma identificação interna.');
             }
         }
     }

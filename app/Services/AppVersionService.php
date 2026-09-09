@@ -111,8 +111,9 @@ final class AppVersionService
     // Identidade histórica preservada: Beta Comercial 1.5.
     // Compatibilidade histórica do pacote anterior: RS Connect 36.27.26 — Agenda assertiva e sem confirmação falsa.
     // RS Connect 36.28.0 — blueprints por nicho, triagem estruturada e Policy Engine fail-closed.
+    // RS Connect 36.28.1 — interface dos modelos e regras do assistente em linguagem simples.
     public const VERSION_LABEL = 'Beta Comercial 1.7';
-    public const PACKAGE_LABEL = 'RS Connect 36.28.0 — Blueprints por nicho e Policy Engine';
+    public const PACKAGE_LABEL = 'RS Connect 36.28.1 — Modelos de atendimento por segmento';
     public const REQUIRED_MIGRATION = '103_agent_blueprints_policy_engine.sql';
 
     private PDO $pdo;
