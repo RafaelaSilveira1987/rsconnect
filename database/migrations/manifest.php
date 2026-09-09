@@ -123,5 +123,6 @@ return [
         ['sequence' => 108, 'file' => '101_agent_scheduling_specialist_routing.sql'],
         ['sequence' => 109, 'file' => '102_agenda_prompt_or_form_messages.sql'],
         ['sequence' => 110, 'file' => '103_agent_blueprints_policy_engine.sql'],
+        ['sequence' => 111, 'file' => '104_customer_patient_continuity_guard.sql'],
     ],
 ];

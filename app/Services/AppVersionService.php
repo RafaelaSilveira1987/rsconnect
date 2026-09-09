@@ -112,9 +112,10 @@ final class AppVersionService
     // Compatibilidade histórica do pacote anterior: RS Connect 36.27.26 — Agenda assertiva e sem confirmação falsa.
     // RS Connect 36.28.0 — blueprints por nicho, triagem estruturada e Policy Engine fail-closed.
     // RS Connect 36.28.1 — interface dos modelos e regras do assistente em linguagem simples.
-    public const VERSION_LABEL = 'Beta Comercial 1.7';
-    public const PACKAGE_LABEL = 'RS Connect 36.28.1 — Modelos de atendimento por segmento';
-    public const REQUIRED_MIGRATION = '103_agent_blueprints_policy_engine.sql';
+    // RS Connect 36.28.2 — diagnóstico seguro do ambiente e continuidade de clientes/pacientes sem regressão.
+    public const VERSION_LABEL = 'Beta Comercial 1.8';
+    public const PACKAGE_LABEL = 'RS Connect 36.28.2 — Diagnóstico seguro e continuidade corrigida';
+    public const REQUIRED_MIGRATION = '104_customer_patient_continuity_guard.sql';
 
     private PDO $pdo;
 
@@ -579,15 +580,20 @@ final class AppVersionService
             ? $this->number("SELECT COUNT(*) FROM conversation_flow_states fs INNER JOIN contacts ct ON ct.id = fs.contact_id AND ct.tenant_id = fs.tenant_id WHERE fs.demand_status = 'pending' AND (ct.status = 'customer' OR ct.contact_group IN ('customer','patient'))")
             : 0;
         $customerContinuityReady = $conversationFlowReady && $legacyCustomerDemandRules === 0 && $legacyCustomerDemandStates === 0;
+        $continuityRepairApplied = $this->migrationApplied('104_customer_patient_continuity_guard.sql');
         $checks[] = $this->check(
-            'Continuidade de Cliente/Paciente',
+            'Clientes e pacientes já conhecidos',
             $customerContinuityReady ? 'ok' : ($conversationFlowReady ? 'warning' : 'blocked'),
             $customerContinuityReady
-                ? 'Clientes e pacientes atuais não voltam para a coleta obrigatória de demanda.'
+                ? 'Clientes e pacientes atuais continuam o atendimento sem repetir perguntas de triagem que já não são necessárias.'
                 : ($conversationFlowReady
-                    ? ($legacyCustomerDemandRules . ' regra(s) e ' . $legacyCustomerDemandStates . ' estado(s) antigos ainda exigem normalização.')
-                    : 'A estrutura de fluxo ainda não está disponível.'),
-            'Executar database/migrations/050_human_takeover_customer_context.sql.'
+                    ? ($legacyCustomerDemandRules + $legacyCustomerDemandStates) . ' configuração(ões) antigas ainda precisam ser ajustadas para manter a continuidade do atendimento.'
+                    : 'A estrutura necessária para reconhecer clientes e pacientes atuais ainda não está disponível.'),
+            $customerContinuityReady
+                ? 'Nenhuma ação necessária.'
+                : ($continuityRepairApplied
+                    ? 'Revise e salve novamente as regras do assistente. O sistema agora impede que Cliente/Paciente volte a exigir nova triagem de demanda.'
+                    : 'Aplique as atualizações pendentes do sistema com php bin/migrate.php up.')
         );
 
         $calendarConversationReady = $this->columnExists('calendar_appointments', 'availability_options_request_id')
@@ -783,23 +789,45 @@ final class AppVersionService
     private function environment(): array
     {
         return [
-            ['label' => 'Ambiente', 'value' => (string) Env::get('APP_ENV', 'não informado'), 'secret' => false],
-            ['label' => 'Debug', 'value' => (string) Env::get('APP_DEBUG', 'não informado'), 'secret' => false],
-            ['label' => 'APP_URL', 'value' => (string) Env::get('APP_URL', 'não informado'), 'secret' => false],
-            ['label' => 'Timezone', 'value' => (string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo'), 'secret' => false],
-            ['label' => 'Evolution URL', 'value' => (string) Env::get('EVOLUTION_DEFAULT_URL', 'não informado'), 'secret' => false],
-            ['label' => 'Evolution webhook', 'value' => $this->masked((string) Env::get('EVOLUTION_WEBHOOK_TOKEN', '')), 'secret' => true],
-            ['label' => 'OpenAI base URL', 'value' => (string) Env::get('OPENAI_API_BASE_URL', 'não informado'), 'secret' => false],
-            ['label' => 'n8n base URL', 'value' => (string) Env::get('N8N_BASE_URL', 'não informado'), 'secret' => false],
-            ['label' => 'n8n API key', 'value' => $this->masked((string) Env::get('N8N_API_KEY', '')), 'secret' => true],
-            ['label' => 'n8n Monitor workflow ID', 'value' => (string) Env::get('N8N_OPERATIONS_MONITOR_WORKFLOW_ID', 'não informado'), 'secret' => false],
-            ['label' => 'Backup token', 'value' => $this->masked((string) (Env::get('OPERATIONS_BACKUP_TOKEN', '') ?: Env::get('BACKUP_WEBHOOK_TOKEN', ''))), 'secret' => true],
-            ['label' => 'OpenAI global', 'value' => $this->masked((string) Env::get('OPENAI_API_KEY', '')), 'secret' => true],
-            ['label' => 'Callback n8n', 'value' => $this->masked((string) Env::get('N8N_CALLBACK_TOKEN', '')), 'secret' => true],
-            ['label' => 'Cron de cobrança', 'value' => $this->masked((string) Env::get('BILLING_CRON_TOKEN', '')), 'secret' => true],
-            ['label' => 'Cron fila IA', 'value' => $this->masked((string) Env::get('AI_REPROCESS_CRON_TOKEN', '')), 'secret' => true],
-            ['label' => 'Manutenção agenda', 'value' => $this->masked((string) Env::get('CALENDAR_MAINTENANCE_TOKEN', '')), 'secret' => true],
-            ['label' => 'Retenção de mensagens', 'value' => $this->masked((string) Env::get('MESSAGE_RETENTION_TOKEN', '')), 'secret' => true],
+            $this->environmentValue('Ambiente da aplicação', (string) Env::get('APP_ENV', 'não informado')),
+            $this->environmentValue('Modo de diagnóstico', (string) Env::get('APP_DEBUG', 'não informado')),
+            $this->environmentValue('Endereço público do RS Connect', (string) Env::get('APP_URL', 'não informado')),
+            $this->environmentValue('Fuso horário', (string) Env::get('APP_TIMEZONE', 'America/Sao_Paulo')),
+            $this->environmentValue('Servidor do WhatsApp', (string) Env::get('EVOLUTION_DEFAULT_URL', 'não informado')),
+            $this->environmentSecret('Proteção do webhook do WhatsApp', (string) Env::get('EVOLUTION_WEBHOOK_TOKEN', '')),
+            $this->environmentValue('Servidor da IA', (string) Env::get('OPENAI_API_BASE_URL', 'não informado')),
+            $this->environmentValue('Servidor de automações', (string) Env::get('N8N_BASE_URL', 'não informado')),
+            $this->environmentSecret('Chave de integração das automações', (string) Env::get('N8N_API_KEY', '')),
+            $this->environmentValue('Identificador do monitor automático', (string) Env::get('N8N_OPERATIONS_MONITOR_WORKFLOW_ID', 'não informado')),
+            $this->environmentSecret('Segurança do backup automático', (string) (Env::get('OPERATIONS_BACKUP_TOKEN', '') ?: Env::get('BACKUP_WEBHOOK_TOKEN', ''))),
+            $this->environmentSecret('Chave principal da IA', (string) Env::get('OPENAI_API_KEY', '')),
+            $this->environmentSecret('Retorno seguro das automações', (string) Env::get('N8N_CALLBACK_TOKEN', '')),
+            $this->environmentSecret('Rotina automática de cobrança', (string) Env::get('BILLING_CRON_TOKEN', '')),
+            $this->environmentSecret('Rotina automática da fila da IA', (string) Env::get('AI_REPROCESS_CRON_TOKEN', '')),
+            $this->environmentSecret('Rotina de manutenção da agenda', (string) Env::get('CALENDAR_MAINTENANCE_TOKEN', '')),
+            $this->environmentSecret('Rotina de retenção de mensagens', (string) Env::get('MESSAGE_RETENTION_TOKEN', '')),
+        ];
+    }
+
+    private function environmentValue(string $label, string $value): array
+    {
+        $normalized = trim($value);
+        return [
+            'label' => $label,
+            'value' => $normalized !== '' ? $normalized : 'Não informado',
+            'secret' => false,
+            'configured' => $normalized !== '' && mb_strtolower($normalized) !== 'não informado',
+        ];
+    }
+
+    private function environmentSecret(string $label, string $value): array
+    {
+        $configured = trim($value) !== '';
+        return [
+            'label' => $label,
+            'value' => $configured ? 'Configurado' : 'Não configurado',
+            'secret' => true,
+            'configured' => $configured,
         ];
     }
 
@@ -916,15 +944,19 @@ SQL;
         }
     }
 
-    private function masked(string $value): string
+
+    private function migrationApplied(string $migration): bool
     {
-        if ($value === '') {
-            return 'não configurado';
+        if (!$this->tableExists('schema_migrations')) {
+            return false;
         }
-        if (strlen($value) <= 10) {
-            return substr($value, 0, 2) . '***';
+        try {
+            $statement = $this->pdo->prepare('SELECT COUNT(*) FROM schema_migrations WHERE migration = :migration');
+            $statement->execute(['migration' => $migration]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
         }
-        return substr($value, 0, 6) . '...' . substr($value, -4);
     }
 
     private function databaseOk(): bool

@@ -1,25 +1,23 @@
-# RS Connect v36.28.1
+# RS Connect v36.28.2
 
-Modelos de atendimento por segmento com regras de segurança em linguagem simples.
+Diagnóstico seguro do ambiente e correção definitiva da continuidade de clientes/pacientes.
 
 Principais alterações desta versão:
 
-- mantém a arquitetura por segmento, triagem estruturada e validações de segurança da v36.28.0;
-- renomeia termos técnicos da interface para linguagem operacional e fácil de entender;
-- `Blueprint` passa a ser apresentado como `Modelo de atendimento`;
-- `Policy Engine` passa a ser apresentado como `Regras de segurança` / `Proteção automática`;
-- `Capabilities` passam a ser `O que o assistente pode fazer`;
-- `Workflow` passa a ser `Passo a passo do atendimento`;
-- campos técnicos e JSON ficam recolhidos em áreas avançadas;
-- configuração da empresa ganha cards, explicações e histórico de decisões traduzido;
-- cadastro de empresa passa a usar `Segmento` + `Modelo de atendimento`.
+- chaves, senhas e tokens deixam de mostrar qualquer trecho na tela de status;
+- integrações sensíveis passam a aparecer apenas como `Configurado` ou `Não configurado`;
+- nomes técnicos do painel foram substituídos por linguagem operacional;
+- corrige a configuração de `Paciente atual`, que ainda podia voltar a exigir o motivo do atendimento;
+- o backend passa a impedir essa regressão mesmo que uma tela antiga envie a opção incorreta;
+- o aviso `Continuidade de Cliente/Paciente` passa a usar linguagem simples e indicar a ação correta;
+- adiciona reparo idempotente dos registros antigos que ficaram presos em triagem.
 
-Migration obrigatória permanece:
+Migration obrigatória:
 
-`103_agent_blueprints_policy_engine.sql`
+`104_customer_patient_continuity_guard.sql`
 
 Após o deploy execute:
 
 `php bin/migrate.php up`
 
-Depois revise em **RS Admin → Empresas → Configurações → Regras do assistente**.
+Depois abra **Status do sistema** novamente. A área de integrações não deve exibir nenhum trecho de token e o item de clientes/pacientes deve ficar como **Operando** após a normalização.

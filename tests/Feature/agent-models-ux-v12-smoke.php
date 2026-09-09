@@ -21,7 +21,7 @@ $checks = [
     'histórico traduz decisões' => str_contains($settings, "'allow' => 'Permitido'") && str_contains($settings, "'block' => 'Bloqueado'"),
     'cadastro usa segmento e modelo' => str_contains($create, 'Segmento da empresa') && str_contains($create, 'Modelo de atendimento'),
     'estilo novo carregado' => str_contains($css, '.agent-models-hero') && str_contains($css, '.agent-rules-panel') && str_contains($css, '.agent-workflow-flow'),
-    'pacote atualizado' => str_contains($version, 'RS Connect 36.28.1'),
+    'pacote atualizado' => str_contains($version, 'RS Connect 36.28.2'),
 ];
 
 $failed = [];

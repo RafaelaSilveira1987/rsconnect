@@ -341,7 +341,11 @@ final class ConversationFlowService
                 'agent_id' => $agentId,
                 'contact_group' => $group,
                 'allow_pre_schedule' => array_key_exists('allow_pre_schedule', $row) ? 1 : 0,
-                'require_demand' => array_key_exists('require_demand_before_pre_schedule', $row) ? 1 : 0,
+                // Cliente e paciente já conhecidos nunca devem voltar à triagem de demanda
+                // por causa de uma configuração antiga ou de um checkbox enviado pela interface.
+                'require_demand' => in_array($group, ['customer', 'patient'], true)
+                    ? 0
+                    : (array_key_exists('require_demand_before_pre_schedule', $row) ? 1 : 0),
                 'allow_reschedule' => array_key_exists('allow_reschedule_without_demand', $row) ? 1 : 0,
                 'instructions' => trim((string) ($row['instructions'] ?? '')) ?: ($defaults['instructions'] ?: null),
             ]);

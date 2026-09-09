@@ -13227,3 +13227,64 @@ body.login-demo-open{overflow:hidden}
   .agent-model-section-head { align-items: flex-start; flex-direction: column; }
   .agent-model-add-details[open] > .agent-model-inline-form { position: fixed; inset: 74px 12px 12px; width: auto; max-height: none; }
 }
+
+/* RS Connect 36.28.2 — diagnóstico seguro e linguagem operacional */
+.version-env-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+}
+.version-env-item.is-protected {
+  background: linear-gradient(135deg, rgba(240,253,250,.82), rgba(255,255,255,.92));
+  border-color: #cfe8e2;
+}
+.version-env-copy { min-width: 0; }
+.version-env-copy > span { margin-bottom: 0; }
+.version-env-copy small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted, #667085);
+  font-size: .72rem;
+}
+.version-env-item > strong {
+  max-width: 260px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.version-env-help {
+  margin-top: 12px !important;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(248,250,252,.9);
+  border: 1px solid var(--border, #e5e7eb);
+}
+.agent-rule-fixed-note {
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid #cfe8e2;
+  background: #f0fdfa;
+}
+.agent-rule-fixed-note strong,
+.agent-rule-fixed-note span { display: block; }
+.agent-rule-fixed-note strong { color: #0f766e; font-size: .84rem; }
+.agent-rule-fixed-note span { margin-top: 4px; color: #526071; font-size: .78rem; line-height: 1.45; }
+@media (max-width: 820px) {
+  .version-env-item { grid-template-columns: 1fr; align-items: start; }
+  .version-env-item > strong { max-width: none; text-align: left; }
+}
+.version-env-item > .badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  margin: 0;
+  font-size: .74rem;
+  line-height: 1;
+}
+.version-env-item > .badge.badge-success { color: #166534; }
+.version-env-item > .badge.badge-warning { color: #92400e; }
+@media (max-width: 820px) {
+  .version-env-item > .badge { justify-self: start; }
+}

@@ -78,16 +78,24 @@ $statusText = static fn (string $status): string => match ($status) {
 
 <div class="operations-grid" style="margin-top:16px">
     <section class="card">
-        <div class="section-heading"><div><span class="eyebrow">Variáveis</span><h2>Ambiente carregado</h2></div></div>
+        <div class="section-heading"><div><span class="eyebrow">Conexões do sistema</span><h2>Integrações e rotinas</h2></div></div>
         <div class="version-env-grid">
             <?php foreach (($dashboard['environment'] ?? []) as $env): ?>
-                <div class="version-env-item">
-                    <span><?= View::e($env['label'] ?? '') ?></span>
-                    <strong><?= View::e($env['value'] ?? '') ?></strong>
+                <?php $isSecret = !empty($env['secret']); $configured = !empty($env['configured']); ?>
+                <div class="version-env-item <?= $isSecret ? 'is-protected' : '' ?>">
+                    <div class="version-env-copy">
+                        <span><?= View::e($env['label'] ?? '') ?></span>
+                        <?php if ($isSecret): ?><small>Valor protegido</small><?php endif; ?>
+                    </div>
+                    <?php if ($isSecret): ?>
+                        <span class="badge <?= $configured ? 'badge-success' : 'badge-warning' ?>"><?= View::e($env['value'] ?? '') ?></span>
+                    <?php else: ?>
+                        <strong><?= View::e($env['value'] ?? '') ?></strong>
+                    <?php endif; ?>
                 </div>
             <?php endforeach; ?>
         </div>
-        <p class="muted-text" style="margin-top:10px">Valores sensíveis são mascarados. Use esta tela para confirmar se o EasyPanel entregou as variáveis ao PHP após o redeploy.</p>
+        <p class="muted-text version-env-help">Por segurança, chaves, senhas e tokens nunca são exibidos nesta tela. O painel mostra apenas se cada proteção está configurada.</p>
     </section>
 
     <section class="card">

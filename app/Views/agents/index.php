@@ -401,7 +401,7 @@ $routingModeShortLabels = [
                                         $savedRule = $groupRules[(int) $agent['id']][$groupKey] ?? [];
                                         $defaults = match ($groupKey) {
                                             'customer' => ['allow' => 1, 'require' => 0, 'reschedule' => 1, 'instructions' => 'Cliente atual: use cadastro e histórico existentes e não reinicie a triagem como novo interessado. Pergunte somente o que for necessário para o pedido atual.'],
-                                            'patient' => ['allow' => 1, 'require' => 1, 'reschedule' => 1, 'instructions' => 'Paciente atual: não peça novamente a queixa quando ele estiver apenas remarcando um atendimento.'],
+                                            'patient' => ['allow' => 1, 'require' => 0, 'reschedule' => 1, 'instructions' => 'Paciente atual: use o cadastro e o histórico existentes. Não repita perguntas de triagem já respondidas para consultar, marcar ou remarcar horário.'],
                                             'family' => ['allow' => 0, 'require' => 1, 'reschedule' => 0, 'instructions' => 'Siga a regra da empresa para familiares antes de oferecer atendimento ou agenda.'],
                                             'couple' => ['allow' => 0, 'require' => 1, 'reschedule' => 0, 'instructions' => 'Não abra pré-agendamento automático quando a empresa atende somente individualmente.'],
                                             default => ['allow' => 1, 'require' => 1, 'reschedule' => 0, 'instructions' => ''],
@@ -414,7 +414,11 @@ $routingModeShortLabels = [
                                         <section class="agent-group-rule-card">
                                             <div><span class="eyebrow">Grupo</span><h4><?= View::e($groupLabel) ?></h4></div>
                                             <label class="check-field compact-check"><input type="checkbox" name="group_rules[<?= View::e($groupKey) ?>][allow_pre_schedule]" value="1" <?= $allow === 1 ? 'checked' : '' ?>><span>Permitir pré-agendamento</span></label>
-                                            <label class="check-field compact-check"><input type="checkbox" name="group_rules[<?= View::e($groupKey) ?>][require_demand_before_pre_schedule]" value="1" <?= $require === 1 ? 'checked' : '' ?>><span>Exigir demanda antes da agenda</span></label>
+                                            <?php if (in_array($groupKey, ['customer', 'patient'], true)): ?>
+                                                <div class="agent-rule-fixed-note"><strong>Triagem já conhecida</strong><span>Para clientes e pacientes atuais, o assistente usa o histórico e não exige novamente o motivo do atendimento antes da agenda.</span></div>
+                                            <?php else: ?>
+                                                <label class="check-field compact-check"><input type="checkbox" name="group_rules[<?= View::e($groupKey) ?>][require_demand_before_pre_schedule]" value="1" <?= $require === 1 ? 'checked' : '' ?>><span>Pedir o motivo antes de consultar a agenda</span></label>
+                                            <?php endif; ?>
                                             <label class="check-field compact-check"><input type="checkbox" name="group_rules[<?= View::e($groupKey) ?>][allow_reschedule_without_demand]" value="1" <?= $reschedule === 1 ? 'checked' : '' ?>><span>Permitir remarcação sem repetir a demanda</span></label>
                                             <label class="field compact-field"><span>Orientação específica</span><textarea name="group_rules[<?= View::e($groupKey) ?>][instructions]" rows="4" placeholder="Explique como o assistente deve agir com este grupo."><?= View::e($instructions) ?></textarea></label>
                                         </section>
