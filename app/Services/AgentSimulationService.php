@@ -215,6 +215,15 @@ final class AgentSimulationService
     public function createPsychologyDefaults(int $tenantId, int $agentId, ?int $createdBy = null): int
     {
         $pdo = Database::connection();
+        $tenantCheck = $pdo->prepare('SELECT id, name FROM tenants WHERE id = :id LIMIT 1');
+        $tenantCheck->execute(['id' => $tenantId]);
+        $tenant = $tenantCheck->fetch(PDO::FETCH_ASSOC) ?: null;
+        if (!$tenant) {
+            throw new RuntimeException('A empresa informada não existe. Liste as empresas disponíveis antes de preparar os cenários.');
+        }
+        if (!$this->agent($pdo, $tenantId, $agentId)) {
+            throw new RuntimeException('O assistente informado não existe ou não pertence à empresa selecionada.');
+        }
         $scenarios = [
             [
                 'slug' => 'psi-menor-indicacao-regressao',
@@ -333,7 +342,7 @@ final class AgentSimulationService
     public function tenants(): array
     {
         $pdo = Database::connection();
-        return $pdo->query('SELECT id, name, status FROM tenants ORDER BY status = "active" DESC, name')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        return $pdo->query('SELECT id, name, slug, status FROM tenants ORDER BY status = "active" DESC, name')->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
     public function importConversation(int $tenantId, int $conversationId, int $agentId, ?int $createdBy = null): int

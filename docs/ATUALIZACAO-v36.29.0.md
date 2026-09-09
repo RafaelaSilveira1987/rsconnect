@@ -57,9 +57,11 @@ Uma conversa real pode virar cenário de teste. No chat, o RS Admin possui o ata
 Também é possível executar regressões no servidor:
 
 ```bash
-php bin/test-agent.php --tenant=12 --agent=4 --prepare-psychology
-php bin/test-agent.php --tenant=12 --agent=4 --mode=quick
-php bin/test-agent.php --tenant=12 --agent=4 --scenario=psi-menor-indicacao-regressao --mode=real
+php bin/test-agent.php --list-tenants
+php bin/test-agent.php --tenant=ID_EMPRESA --list-agents
+php bin/test-agent.php --tenant=ID_EMPRESA --agent=ID_ASSISTENTE --prepare-psychology
+php bin/test-agent.php --tenant=ID_EMPRESA --agent=ID_ASSISTENTE --mode=quick
+php bin/test-agent.php --tenant=ID_EMPRESA --agent=ID_ASSISTENTE --scenario=psi-menor-indicacao-regressao --mode=real
 ```
 
 Isso permite colocar os cenários no processo de deploy/CI sem depender da interface.

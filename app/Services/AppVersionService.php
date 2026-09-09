@@ -120,8 +120,10 @@ final class AppVersionService
     // RS Connect 36.28.7 — corrige envio de mensagens das regras: usa attendance_mode e destrava respostas pendentes.
     // RS Connect 36.28.8 — follow-up após restrição volta à conversa normal; intenção antiga não contamina o turno e dedupe não engole nova entrada.
     // RS Connect 36.29.0 — laboratório de assistentes com simulador, IA real opcional, regressão e replay de conversas.
-    public const VERSION_LABEL = 'Beta Comercial 1.9.0';
-    public const PACKAGE_LABEL = 'RS Connect 36.29.0 — Laboratório e regressão de assistentes';
+    // RS Connect 36.29.1 — CLI do laboratório valida empresa/assistente, lista IDs reais e elimina exemplos ambíguos.
+    public const VERSION_LABEL = 'Beta Comercial 1.9.2';
+    // RS Connect 36.29.2 — seletor do laboratório separado por empresa/assistente e versão visível para validar deploy.
+    public const PACKAGE_LABEL = 'RS Connect 36.29.2 — Laboratório com troca confiável de assistente';
     public const REQUIRED_MIGRATION = '105_agent_testing_lab.sql';
 
     private PDO $pdo;

@@ -22,14 +22,16 @@ final class AgentTestController
         $service = new AgentSimulationService();
         $tenants = $service->tenants();
         $tenantId = (int) ($_GET['tenant_id'] ?? 0);
-        if ($tenantId < 1 && $tenants !== []) {
-            $tenantId = (int) ($tenants[0]['id'] ?? 0);
+        $validTenantIds = array_map(static fn (array $row): int => (int) ($row['id'] ?? 0), $tenants);
+        if ($tenantId < 1 || !in_array($tenantId, $validTenantIds, true)) {
+            $tenantId = $tenants !== [] ? (int) ($tenants[0]['id'] ?? 0) : 0;
         }
 
         $agents = $tenantId > 0 ? $service->agents($tenantId) : [];
         $selectedAgentId = (int) ($_GET['agent_id'] ?? 0);
-        if ($selectedAgentId < 1 && $agents !== []) {
-            $selectedAgentId = (int) ($agents[0]['id'] ?? 0);
+        $validAgentIds = array_map(static fn (array $row): int => (int) ($row['id'] ?? 0), $agents);
+        if ($selectedAgentId < 1 || !in_array($selectedAgentId, $validAgentIds, true)) {
+            $selectedAgentId = $agents !== [] ? (int) ($agents[0]['id'] ?? 0) : 0;
         }
 
         $migrationReady = $this->tableExists('agent_test_scenarios');
@@ -46,6 +48,7 @@ final class AgentTestController
             'runs' => $runs,
             'migrationReady' => $migrationReady,
             'sourceConversationId' => max(0, (int) ($_GET['conversation_id'] ?? 0)),
+            'labVersion' => '36.29.2',
         ]);
     }
 
