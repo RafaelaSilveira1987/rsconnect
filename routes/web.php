@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Controllers\AccessController;
 use App\Controllers\AgentController;
+use App\Controllers\AgentTestController;
 use App\Controllers\AgentBlueprintController;
 use App\Controllers\AdminCrmController;
 use App\Controllers\AiCredentialController;
@@ -77,6 +78,11 @@ return static function (Router $router): void {
     $router->get('/ajuda', [DocumentationController::class, 'index'], ['auth']);
     $router->get('/central-ajuda', [DocumentationController::class, 'index'], ['auth']);
     $router->get('/docs', [DocumentationController::class, 'index'], ['auth']);
+    $router->get('/agent-tests', [AgentTestController::class, 'index'], ['auth', 'super_admin']);
+    $router->post('/agent-tests/simulate', [AgentTestController::class, 'simulate'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/agent-tests/defaults', [AgentTestController::class, 'createDefaults'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/agent-tests/run', [AgentTestController::class, 'runScenario'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/agent-tests/import-conversation', [AgentTestController::class, 'importConversation'], ['auth', 'super_admin', 'csrf']);
     $router->get('/agent-blueprints', [AgentBlueprintController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/agent-blueprints/niche', [AgentBlueprintController::class, 'saveNiche'], ['auth', 'super_admin', 'csrf']);
     $router->post('/agent-blueprints/blueprint', [AgentBlueprintController::class, 'saveBlueprint'], ['auth', 'super_admin', 'csrf']);

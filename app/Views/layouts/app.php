@@ -259,6 +259,7 @@ $svgIcon = static function (string $name): string {
                 <span class="nav-caption">Administração RS</span>
                 <a class="nav-link<?= $isAnyActive(['/companies', '/companies/overview', '/companies/health', '/company-settings']) ?>" href="<?= View::e(Router::url('/companies')) ?>"><?= $svgIcon('company') ?><span>Empresas</span></a>
                 <a class="nav-link<?= $isActive('/agent-blueprints') ?>" href="<?= View::e(Router::url('/agent-blueprints')) ?>"><?= $svgIcon('agent') ?><span>Modelos por segmento</span></a>
+                <a class="nav-link<?= $isActive('/agent-tests') ?>" href="<?= View::e(Router::url('/agent-tests')) ?>"><?= $svgIcon('chat') ?><span>Testar assistentes</span></a>
                 <a class="nav-link<?= $isAnyActive(['/white-label', '/white_label']) ?>" href="<?= View::e(Router::url('/white-label')) ?>"><?= $svgIcon('palette') ?><span>Marca dos clientes</span></a>
                 <?php if (Auth::can('users.view')): ?>
                     <a class="nav-link<?= $isActive('/users') ?>" href="<?= View::e(Router::url('/users')) ?>"><?= $svgIcon('users') ?><span>Usuários</span></a>

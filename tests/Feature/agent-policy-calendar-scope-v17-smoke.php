@@ -61,8 +61,8 @@ $settingsSource = (string) file_get_contents($root . '/app/Views/companies/setti
 $controllerSource = (string) file_get_contents($root . '/app/Controllers/CompanyController.php');
 
 $checks['restrição de agenda encerra intenção mas não a conversa'] = str_contains($triageSource, "$" . "lastIntent = 'conversation';")
-    && str_contains($triageSource, "'conversation_continues' =") === false
-    && str_contains($triageSource, "conversation_continues");
+    && str_contains($triageSource, "conversation_continues")
+    && str_contains($triageSource, "$" . "result['conversation_continues'] = true;");
 $checks['restrição é informada uma única vez por conversa'] = str_contains($triageSource, 'hasPriorPolicyDecision')
     && str_contains($triageSource, 'agent.policy.calendar_restricted');
 $checks['interface explica que a conversa continua'] = str_contains($settingsSource, 'Não permitir agenda (a conversa continua)')

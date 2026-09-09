@@ -464,7 +464,9 @@ final class AiModelService
         if ($tenantId > 0) {
             try {
                 $agentProfile = (new AgentBlueprintService())->profileForTenant($tenantId, true);
-                $triageContext = (new AgentTriageService())->context($tenantId, (int) ($conversation['id'] ?? $conversation['conversation_id'] ?? 0));
+                $triageContext = is_array($conversation['_simulation_triage_context'] ?? null)
+                    ? $conversation['_simulation_triage_context']
+                    : (new AgentTriageService())->context($tenantId, (int) ($conversation['id'] ?? $conversation['conversation_id'] ?? 0));
                 if (($agentProfile['status'] ?? 'inactive') === 'active') {
                     $collected = is_array($triageContext['collected'] ?? null) ? $triageContext['collected'] : [];
                     if (isset($collected['brief_demand'])) {

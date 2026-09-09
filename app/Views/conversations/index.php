@@ -360,6 +360,9 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                             <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
                             <button class="btn btn-ghost btn-small" type="submit">Reprocessar IA</button>
                         </form>
+                        <?php if (Auth::isSuperAdmin()): ?>
+                            <a class="btn btn-ghost btn-small" href="<?= View::e(Router::url('/agent-tests?tenant_id=' . (int) $selected['tenant_id'] . '&conversation_id=' . (int) $selected['id'])) ?>">Transformar em teste</a>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
             </header>

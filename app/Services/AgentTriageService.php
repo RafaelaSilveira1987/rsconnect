@@ -59,13 +59,136 @@ final class AgentTriageService
     {
         $normalized = $this->normalize($text);
         $collected = $this->extractDeterministic($collected, $text, $normalized, null);
-        $schedulingIntent = $forceScheduling || $this->hasSchedulingIntent($normalized);
+        $schedulingIntent = $forceScheduling
+            || $this->hasSchedulingIntent($normalized)
+            || $this->hasSchedulePreference($normalized);
         $action = $schedulingIntent ? 'calendar.pre_schedule' : 'conversation';
         $decision = (new AgentPolicyEngineService())->evaluate($profile, $collected, $action);
         return [
             'collected' => $collected,
             'scheduling_intent' => $schedulingIntent,
             'decision' => $decision,
+        ];
+    }
+
+    /**
+     * Executa uma etapa do laboratório sem gravar contato, conversa ou agenda.
+     * Usa os mesmos extratores e o mesmo Policy Engine do atendimento real.
+     *
+     * @param array<string,mixed> $state
+     * @return array<string,mixed>
+     */
+    public function simulateTurn(array $profile, array $state, string $text): array
+    {
+        $collected = is_array($state['collected'] ?? null) ? $state['collected'] : [];
+        $currentField = trim((string) ($state['current_field_key'] ?? '')) ?: null;
+        $normalized = $this->normalize($text);
+        $collected = $this->extractDeterministic($collected, $text, $normalized, $currentField, $text);
+
+        if (!empty($collected['is_for_self']) && empty($collected['patient_name']) && !empty($collected['requester_name'])) {
+            $collected['patient_name'] = $collected['requester_name'];
+        }
+
+        $calendarRestrictionActive = (string) ($state['eligibility_status'] ?? '') === 'blocked'
+            && (string) ($state['status'] ?? '') === 'completed'
+            && (string) ($state['last_intent'] ?? '') === 'conversation'
+            && trim((string) ($state['block_reason'] ?? '')) !== '';
+        $explicitScheduling = $this->hasSchedulingIntent($normalized) || $this->hasSchedulePreference($normalized);
+        $schedulingIntent = $calendarRestrictionActive
+            ? $explicitScheduling
+            : ($explicitScheduling || in_array((string) ($state['last_intent'] ?? ''), ['schedule', 'reschedule'], true));
+
+        $action = $schedulingIntent ? 'calendar.pre_schedule' : 'conversation';
+        $engine = new AgentPolicyEngineService();
+        $decision = $engine->evaluate($profile, $collected, $action);
+        $fields = is_array($profile['triage_fields'] ?? null) ? $profile['triage_fields'] : [];
+        $missingBeforeSchedule = $engine->missingRequiredBeforeSchedule($fields, $collected);
+        $missingCompletion = $engine->missingForCompletion($fields, $collected);
+        $missingKeys = array_values(array_map(static fn (array $field): string => (string) ($field['field_key'] ?? ''), $missingCompletion));
+
+        $decisionType = (string) ($decision['decision'] ?? 'allow');
+        $restrictionScope = (string) ($decision['evidence']['restriction_scope'] ?? '');
+        $isScopedCalendarRestriction = $restrictionScope === 'calendar' && in_array($decisionType, ['block', 'warn'], true);
+
+        $status = 'collecting';
+        $eligibility = 'pending';
+        $blockReason = null;
+        $nextField = null;
+        $lastIntent = $schedulingIntent ? 'schedule' : ((string) ($state['last_intent'] ?? '') ?: 'conversation');
+
+        if ($isScopedCalendarRestriction) {
+            $status = 'completed';
+            $eligibility = 'blocked';
+            $blockReason = (string) ($decision['code'] ?? 'calendar_restricted');
+            $lastIntent = 'conversation';
+        } elseif (empty($decision['allowed']) && $decisionType === 'block') {
+            $status = 'blocked';
+            $eligibility = 'blocked';
+            $blockReason = (string) ($decision['code'] ?? 'blocked');
+        } elseif (empty($decision['allowed']) && $decisionType === 'handoff') {
+            $status = 'handoff';
+            $eligibility = 'eligible';
+            $blockReason = (string) ($decision['code'] ?? 'human_approval_required');
+        } elseif ($schedulingIntent && $missingBeforeSchedule !== []) {
+            $status = 'collecting';
+            $eligibility = 'pending';
+            $nextField = (string) ($missingBeforeSchedule[0]['field_key'] ?? '');
+        } else {
+            $eligibility = !empty($profile['capabilities']['eligibility.enabled']) ? 'eligible' : 'not_required';
+            $status = $missingCompletion === [] ? 'ready' : 'collecting';
+        }
+
+        $notifiedPolicies = is_array($state['notified_policy_codes'] ?? null) ? $state['notified_policy_codes'] : [];
+        $policyFingerprint = trim((string) ($decision['policy_key'] ?? '')) . ':' . trim((string) ($decision['code'] ?? ''));
+        $warnNeedsNotification = $isScopedCalendarRestriction
+            && $decisionType === 'warn'
+            && $policyFingerprint !== ':'
+            && !in_array($policyFingerprint, $notifiedPolicies, true);
+        if ($warnNeedsNotification) {
+            $notifiedPolicies[] = $policyFingerprint;
+        }
+        if ($isScopedCalendarRestriction && $decisionType === 'block' && $policyFingerprint !== ':') {
+            $notifiedPolicies[] = $policyFingerprint;
+        }
+
+        $handledByRule = (empty($decision['allowed']) && in_array($decisionType, ['block', 'handoff'], true))
+            || $warnNeedsNotification;
+        $promptMode = strtolower(trim((string) ($profile['interaction_mode'] ?? 'hybrid'))) === 'prompt';
+        if ($schedulingIntent && $missingBeforeSchedule !== [] && !$handledByRule) {
+            $decision = [
+                'allowed' => false,
+                'decision' => 'collect',
+                'code' => 'triage_incomplete',
+                'message' => trim((string) ($missingBeforeSchedule[0]['prompt_text'] ?? '')) ?: 'Antes de consultar a agenda, preciso confirmar uma informação.',
+                'policy_key' => 'required_before_schedule',
+                'evidence' => [
+                    'next_field' => $nextField,
+                    'missing_fields' => array_values(array_map(static fn (array $field): string => (string) ($field['field_key'] ?? ''), $missingBeforeSchedule)),
+                ],
+            ];
+        }
+
+        return [
+            'collected' => $collected,
+            'missing' => $missingKeys,
+            'missing_before_schedule' => array_values(array_map(static fn (array $field): string => (string) ($field['field_key'] ?? ''), $missingBeforeSchedule)),
+            'scheduling_intent' => $schedulingIntent,
+            'action' => $action,
+            'decision' => $decision,
+            'state' => [
+                'collected' => $collected,
+                'missing' => $missingKeys,
+                'status' => $status,
+                'eligibility_status' => $eligibility,
+                'block_reason' => $blockReason,
+                'current_field_key' => $nextField,
+                'last_intent' => $lastIntent,
+                'notified_policy_codes' => array_values(array_unique($notifiedPolicies)),
+            ],
+            'conversation_continues' => $isScopedCalendarRestriction || $decisionType !== 'block',
+            'calendar_allowed' => $schedulingIntent ? !empty($decision['allowed']) : ($eligibility !== 'blocked'),
+            'should_use_rule_message' => $handledByRule && trim((string) ($decision['message'] ?? '')) !== '',
+            'should_use_ai' => !$handledByRule && !($schedulingIntent && $missingBeforeSchedule !== [] && !$promptMode),
         ];
     }
 
