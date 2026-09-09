@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Controllers\AccessController;
 use App\Controllers\AgentController;
+use App\Controllers\AgentBlueprintController;
 use App\Controllers\AdminCrmController;
 use App\Controllers\AiCredentialController;
 use App\Controllers\AiProfitabilityController;
@@ -76,6 +77,10 @@ return static function (Router $router): void {
     $router->get('/ajuda', [DocumentationController::class, 'index'], ['auth']);
     $router->get('/central-ajuda', [DocumentationController::class, 'index'], ['auth']);
     $router->get('/docs', [DocumentationController::class, 'index'], ['auth']);
+    $router->get('/agent-blueprints', [AgentBlueprintController::class, 'index'], ['auth', 'super_admin']);
+    $router->post('/agent-blueprints/niche', [AgentBlueprintController::class, 'saveNiche'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/agent-blueprints/blueprint', [AgentBlueprintController::class, 'saveBlueprint'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/agent-blueprints/version', [AgentBlueprintController::class, 'publishVersion'], ['auth', 'super_admin', 'csrf']);
     $router->get('/central-operacao', [OperationsCenterController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/painel-operacional', [OperationalPanelController::class, 'index'], ['auth', 'super_admin']);
     $router->get('/operacao-rs', [OperationalPanelController::class, 'index'], ['auth', 'super_admin']);

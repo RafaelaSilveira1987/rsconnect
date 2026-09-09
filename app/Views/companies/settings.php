@@ -53,6 +53,191 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
     </div>
 
 
+    <?php
+    $agentBlueprintProfile = is_array($agentBlueprintProfile ?? null) ? $agentBlueprintProfile : [];
+    $agentCapabilities = is_array($agentBlueprintProfile['capabilities'] ?? null) ? $agentBlueprintProfile['capabilities'] : [];
+    $agentTriageFields = is_array($agentBlueprintProfile['triage_fields'] ?? null) ? $agentBlueprintProfile['triage_fields'] : [];
+    $agentPolicies = is_array($agentBlueprintProfile['policies'] ?? null) ? $agentBlueprintProfile['policies'] : [];
+    $agentWorkflow = is_array($agentBlueprintProfile['workflow'] ?? null) ? $agentBlueprintProfile['workflow'] : [];
+    $capabilityLabels = [
+        'triage.enabled' => 'Triagem estruturada',
+        'eligibility.enabled' => 'Motor de elegibilidade',
+        'calendar.read' => 'Consultar agenda',
+        'calendar.pre_schedule' => 'Criar pré-agendamento',
+        'calendar.confirm' => 'Confirmar automaticamente',
+        'calendar.human_approval' => 'Exigir aprovação humana',
+        'handoff.audio' => 'Transferir ao receber áudio',
+        'policy.fail_closed' => 'Falhar fechado em erro de política',
+    ];
+    ?>
+    <section class="settings-block agent-architecture-settings" id="agent-architecture-settings">
+        <input type="hidden" name="agent_architecture_settings_submitted" value="1">
+        <div class="section-heading compact">
+            <div>
+                <span class="eyebrow">Arquitetura do agente</span>
+                <h2>Blueprint, triagem e travas por nicho</h2>
+                <p>O Prompt Studio controla como o agente conversa. Este bloco controla o que precisa ser coletado e quais ações o backend permite executar.</p>
+            </div>
+            <span class="badge <?= ($agentBlueprintProfile['status'] ?? 'inactive') === 'active' ? 'badge-active' : 'badge-pending' ?>"><?= ($agentBlueprintProfile['status'] ?? 'inactive') === 'active' ? 'Policy Engine ativo' : 'Sem blueprint' ?></span>
+        </div>
+
+        <div class="form-grid two">
+            <label class="field"><span>Nicho</span><select data-agent-architecture-niche>
+                <option value="">Sem nicho</option>
+                <?php foreach (($businessNiches ?? []) as $niche): ?>
+                    <option value="<?= (int) ($niche['id'] ?? 0) ?>" <?= (int) ($agentBlueprintProfile['niche_id'] ?? $company['business_niche_id'] ?? 0) === (int) ($niche['id'] ?? 0) ? 'selected' : '' ?>><?= View::e((string) ($niche['name'] ?? '')) ?></option>
+                <?php endforeach; ?>
+            </select><small>Selecionar um blueprint abaixo aplica o pacote do nicho à empresa.</small></label>
+            <label class="field"><span>Blueprint aplicado</span><select name="agent_blueprint_id" data-agent-architecture-blueprint>
+                <option value="">Nenhum</option>
+                <?php foreach (($agentBlueprints ?? []) as $blueprint): ?>
+                    <option value="<?= (int) ($blueprint['id'] ?? 0) ?>" data-niche-id="<?= (int) ($blueprint['niche_id'] ?? 0) ?>" <?= (int) ($agentBlueprintProfile['blueprint_id'] ?? 0) === (int) ($blueprint['id'] ?? 0) ? 'selected' : '' ?>><?= View::e((string) (($blueprint['niche_name'] ?? '') . ' — ' . ($blueprint['name'] ?? ''))) ?></option>
+                <?php endforeach; ?>
+            </select><small>Ao trocar o blueprint, os padrões de capacidades, triagem, políticas e workflow são reaplicados antes das personalizações deste formulário.</small></label>
+            <label class="field"><span>Modo de conversa estruturada</span><select name="agent_interaction_mode">
+                <option value="hybrid" <?= ($agentBlueprintProfile['interaction_mode'] ?? 'hybrid') === 'hybrid' ? 'selected' : '' ?>>Híbrido — recomendado</option>
+                <option value="form" <?= ($agentBlueprintProfile['interaction_mode'] ?? '') === 'form' ? 'selected' : '' ?>>Formulário — perguntas fixas</option>
+                <option value="prompt" <?= ($agentBlueprintProfile['interaction_mode'] ?? '') === 'prompt' ? 'selected' : '' ?>>Prompt Studio — IA redige as perguntas</option>
+            </select><small>Mesmo em Prompt Studio, políticas e ações continuam bloqueadas no backend até a triagem estar válida.</small></label>
+            <div class="readonly-grid compact-readonly-grid">
+                <div><span>Versão</span><strong><?= View::e((string) ($agentBlueprintProfile['version_label'] ?? '—')) ?></strong></div>
+                <div><span>Personalizado</span><strong><?= !empty($agentBlueprintProfile['customized']) ? 'Sim' : 'Não' ?></strong></div>
+            </div>
+        </div>
+
+        <?php if ($agentCapabilities !== []): ?>
+            <h3>Capacidades permitidas</h3>
+            <div class="settings-toggle-grid">
+                <?php foreach ($agentCapabilities as $capabilityKey => $enabled): ?>
+                    <label class="switch-card">
+                        <input type="hidden" name="agent_capabilities[<?= View::e((string) $capabilityKey) ?>]" value="0">
+                        <input type="checkbox" name="agent_capabilities[<?= View::e((string) $capabilityKey) ?>]" value="1" <?= $enabled ? 'checked' : '' ?>>
+                        <span><strong><?= View::e($capabilityLabels[$capabilityKey] ?? (string) $capabilityKey) ?></strong><small><?= View::e((string) $capabilityKey) ?></small></span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($agentTriageFields !== []): ?>
+            <h3>Campos da triagem</h3>
+            <div class="module-settings-grid">
+                <?php foreach ($agentTriageFields as $field): ?>
+                    <?php $fieldKey = (string) ($field['field_key'] ?? ''); ?>
+                    <article class="module-setting-card">
+                        <div style="width:100%">
+                            <div class="form-grid two">
+                                <label class="field"><span>Campo</span><input name="triage_fields[<?= View::e($fieldKey) ?>][label]" value="<?= View::e((string) ($field['label'] ?? $fieldKey)) ?>"></label>
+                                <div class="readonly-grid compact-readonly-grid"><div><span>Chave</span><strong><?= View::e($fieldKey) ?></strong></div><div><span>Tipo</span><strong><?= View::e((string) ($field['field_type'] ?? 'text')) ?></strong></div></div>
+                            </div>
+                            <label class="field"><span>Pergunta padrão / fallback</span><textarea name="triage_fields[<?= View::e($fieldKey) ?>][prompt_text]" rows="2"><?= View::e((string) ($field['prompt_text'] ?? '')) ?></textarea></label>
+                            <div class="module-setting-actions">
+                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="0"><label><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="1" <?= !empty($field['active']) ? 'checked' : '' ?>> Ativo</label>
+                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="0"><label><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="1" <?= !empty($field['required_before_schedule']) ? 'checked' : '' ?>> Obrigatório antes da agenda</label>
+                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_for_completion]" value="0"><label><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][required_for_completion]" value="1" <?= !empty($field['required_for_completion']) ? 'checked' : '' ?>> Obrigatório na triagem</label>
+                            </div>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($agentPolicies !== []): ?>
+            <h3>Políticas e bloqueios</h3>
+            <div class="module-settings-grid">
+                <?php foreach ($agentPolicies as $policy): ?>
+                    <?php
+                    $policyKey = (string) ($policy['policy_key'] ?? '');
+                    $policyType = (string) ($policy['policy_type'] ?? 'string');
+                    $policyValue = $policy['value'] ?? '';
+                    ?>
+                    <article class="module-setting-card">
+                        <div style="width:100%">
+                            <strong><?= View::e($policyKey) ?></strong>
+                            <div class="form-grid two">
+                                <label class="field"><span>Valor</span>
+                                    <?php if ($policyType === 'boolean'): ?>
+                                        <select name="agent_policies[<?= View::e($policyKey) ?>][value]"><option value="1" <?= !empty($policyValue) ? 'selected' : '' ?>>Sim</option><option value="0" <?= empty($policyValue) ? 'selected' : '' ?>>Não</option></select>
+                                    <?php elseif ($policyType === 'number'): ?>
+                                        <input type="number" step="1" name="agent_policies[<?= View::e($policyKey) ?>][value]" value="<?= View::e((string) $policyValue) ?>">
+                                    <?php else: ?>
+                                        <input name="agent_policies[<?= View::e($policyKey) ?>][value]" value="<?= View::e(is_array($policyValue) ? json_encode($policyValue, JSON_UNESCAPED_UNICODE) : (string) $policyValue) ?>">
+                                    <?php endif; ?>
+                                </label>
+                                <label class="field"><span>Ação</span><input name="agent_policies[<?= View::e($policyKey) ?>][action_key]" value="<?= View::e((string) ($policy['action_key'] ?? 'block')) ?>"></label>
+                            </div>
+                            <label class="field"><span>Mensagem ao cliente</span><textarea name="agent_policies[<?= View::e($policyKey) ?>][customer_message]" rows="3"><?= View::e((string) ($policy['customer_message'] ?? '')) ?></textarea></label>
+                            <input type="hidden" name="agent_policies[<?= View::e($policyKey) ?>][enabled]" value="0">
+                            <label><input type="checkbox" name="agent_policies[<?= View::e($policyKey) ?>][enabled]" value="1" <?= !empty($policy['enabled']) ? 'checked' : '' ?>> Política ativa</label>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($agentWorkflow !== []): ?>
+            <h3>Workflow aplicado</h3>
+            <div class="readonly-grid">
+                <?php foreach ($agentWorkflow as $step): ?>
+                    <div><span><?= (int) ($step['position'] ?? 0) ?> · <?= View::e((string) ($step['step_type'] ?? '')) ?></span><strong><?= View::e((string) ($step['label'] ?? $step['step_key'] ?? '')) ?></strong></div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <div class="message-info"><strong>Regra de segurança</strong><span>O modelo pode sugerir uma ação, mas somente o backend autoriza. Sem elegibilidade e campos obrigatórios, a agenda não é consultada nem pré-reservada.</span></div>
+    </section>
+
+    <?php $agentPolicyDecisions = is_array($agentPolicyDecisions ?? null) ? $agentPolicyDecisions : []; ?>
+    <section class="settings-block" id="agent-policy-audit">
+        <div class="section-heading compact">
+            <div>
+                <span class="eyebrow">Auditoria do agente</span>
+                <h2>Decisões recentes do Policy Engine</h2>
+                <p>Use este histórico para validar por que a IA foi bloqueada, pediu um dado ou transferiu o atendimento.</p>
+            </div>
+            <span class="badge"><?= count($agentPolicyDecisions) ?> registro(s)</span>
+        </div>
+        <?php if ($agentPolicyDecisions === []): ?>
+            <div class="message-info"><strong>Sem decisões registradas</strong><span>Os eventos aparecerão aqui após a migration 103 e novas conversas passarem pela triagem estruturada.</span></div>
+        <?php else: ?>
+            <div class="table-wrap">
+                <table class="table">
+                    <thead><tr><th>Data</th><th>Contato</th><th>Política</th><th>Decisão</th><th>Motivo</th><th>Conversa</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($agentPolicyDecisions as $policyDecision): ?>
+                        <tr>
+                            <td><?= View::e((string) ($policyDecision['created_at'] ?? '')) ?></td>
+                            <td><strong><?= View::e((string) (($policyDecision['contact_name'] ?? '') ?: 'Contato')) ?></strong><br><small><?= View::e((string) ($policyDecision['contact_phone'] ?? '')) ?></small></td>
+                            <td><code><?= View::e((string) ($policyDecision['policy_key'] ?? '')) ?></code></td>
+                            <td><span class="badge"><?= View::e((string) ($policyDecision['decision'] ?? '')) ?></span></td>
+                            <td><?= View::e((string) ($policyDecision['reason_code'] ?? '—')) ?></td>
+                            <td><a class="btn btn-secondary btn-sm" href="<?= View::e(Router::url('/conversations?id=' . (int) ($policyDecision['conversation_id'] ?? 0))) ?>">Abrir</a></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </section>
+
+    <script>
+    (function () {
+        const niche = document.querySelector('[data-agent-architecture-niche]');
+        const blueprint = document.querySelector('[data-agent-architecture-blueprint]');
+        if (!niche || !blueprint) return;
+        const sync = () => {
+            const nicheId = niche.value;
+            [...blueprint.options].forEach((option, index) => {
+                if (index === 0) return;
+                option.hidden = !!nicheId && option.dataset.nicheId !== nicheId;
+            });
+            const selected = blueprint.selectedOptions[0];
+            if (selected && selected.value && selected.hidden) blueprint.value = '';
+        };
+        niche.addEventListener('change', sync);
+        sync();
+    })();
+    </script>
+
     <section class="settings-block smart-calendar-admin-control">
         <div class="section-heading compact">
             <div>

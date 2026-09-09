@@ -68,6 +68,47 @@ final class PreSchedulingService
         $result['handled'] = true;
         $result['has_preference'] = $this->hasAnyPreference($intent);
         $result['has_full_preference'] = $this->hasFullPreference($intent);
+
+        // 36.28.0 — Policy Engine obrigatório antes de QUALQUER acesso à agenda.
+        // Mesmo chamadas internas/reprocessamentos não podem contornar elegibilidade/triagem.
+        $policyGate = (new AgentTriageService())->schedulingGate(
+            $pdo,
+            $instance,
+            $contactId,
+            $conversationId,
+            $content
+        );
+        if (!empty($policyGate['handled']) && empty($policyGate['allowed'])) {
+            $blockedReason = (string) ($policyGate['code'] ?? 'policy_blocked');
+            $blockedMessage = trim((string) ($policyGate['message'] ?? ''));
+            if ($blockedMessage === '') {
+                $blockedMessage = 'Antes de consultar a agenda, preciso concluir uma etapa obrigatória do atendimento.';
+            }
+
+            if (in_array($blockedReason, ['minimum_age', 'couple_service_not_allowed'], true)) {
+                $this->rejectPendingForPolicy($pdo, $tenantId, $conversationId, $contactId, $blockedReason);
+            }
+
+            $send = (new ConversationAutomationMessageService())->send(
+                $pdo,
+                $instance,
+                $conversationId,
+                $contactId,
+                $blockedMessage,
+                'agent.policy.calendar_blocked',
+                ['reason' => $blockedReason]
+            );
+            $result['blocked'] = true;
+            $result['blocked_reason'] = $blockedReason;
+            $result['blocked_message'] = $blockedMessage;
+            $result['blocked_message_sent'] = (bool) ($send['ok'] ?? false);
+            $result['blocked_message_error'] = $send['error'] ?? null;
+            $result['skip_ai'] = true;
+            $result['terminal_handled'] = true;
+            $result['availability_request_needed'] = false;
+            return $result;
+        }
+
         if ($existing === null) {
             $decision = (new ConversationFlowService())->schedulingDecision(
                 $pdo,
@@ -485,6 +526,35 @@ final class PreSchedulingService
         }
 
         return $result;
+    }
+
+    private function rejectPendingForPolicy(PDO $pdo, int $tenantId, int $conversationId, int $contactId, string $reason): void
+    {
+        try {
+            $pdo->prepare(
+                'UPDATE calendar_appointments
+                 SET status = "rejected",
+                     is_pre_schedule = 0,
+                     approval_status = "rejected",
+                     approval_notes = CONCAT(COALESCE(approval_notes, ""), :note),
+                     availability_status = CASE
+                        WHEN availability_status IN ("slot_selected", "options_sent", "received", "sent", "requested") THEN "expired"
+                        ELSE availability_status
+                     END,
+                     chosen_availability_slot_id = NULL
+                 WHERE tenant_id = :tenant_id
+                   AND contact_id = :contact_id
+                   AND (conversation_id = :conversation_id OR conversation_id IS NULL)
+                   AND status IN ("pre_scheduled", "awaiting_approval", "scheduled")'
+            )->execute([
+                'note' => "\nBloqueado automaticamente pelo Policy Engine: " . mb_substr($reason, 0, 100),
+                'tenant_id' => $tenantId,
+                'contact_id' => $contactId,
+                'conversation_id' => $conversationId,
+            ]);
+        } catch (Throwable) {
+            // Compatibilidade com schemas antigos: a trava de criação continua valendo.
+        }
     }
 
     private function defaultResult(): array

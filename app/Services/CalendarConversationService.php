@@ -503,6 +503,51 @@ final class CalendarConversationService
             ]);
         }
 
+        // 36.28.0: confirmação automática também passa pelo Policy Engine. Um slot
+        // selecionado não concede, por si só, permissão para confirmar.
+        try {
+            $profile = (new AgentBlueprintService())->profileForTenant($tenantId, true, $pdo);
+            if (($profile['status'] ?? 'inactive') === 'active') {
+                $triage = (new AgentTriageService())->context($tenantId, $conversationId);
+                $collected = is_array($triage['collected'] ?? null) ? $triage['collected'] : [];
+                $policyDecision = (new AgentPolicyEngineService())->evaluate($profile, $collected, 'calendar.confirm');
+                if (empty($policyDecision['allowed'])) {
+                    $message = trim((string) ($policyDecision['message'] ?? ''))
+                        ?: 'A confirmação deste horário precisa ser validada pela equipe responsável.';
+                    $send = $this->sendAppointmentMessage(
+                        $appointment,
+                        $message,
+                        'calendar.appointment_confirmation_policy_blocked',
+                        [
+                            'appointment_id' => $appointmentId,
+                            'slot_id' => $slotId ?: null,
+                            'incoming_message_id' => $incomingMessageId > 0 ? $incomingMessageId : null,
+                            'policy_code' => $policyDecision['code'] ?? null,
+                        ]
+                    );
+                    $this->markIncomingHandledByCalendar(
+                        $pdo,
+                        $instance,
+                        $conversationId,
+                        $incomingMessageId,
+                        'confirmation_policy_blocked',
+                        $appointmentId,
+                        $slotId ?: null
+                    );
+                    return array_merge($this->incomingResult(true, true, 'confirmation_policy_blocked'), [
+                        'appointment_id' => $appointmentId,
+                        'slot_id' => $slotId ?: null,
+                        'message_sent' => $send['ok'],
+                        'send_error' => $send['error'],
+                        'policy_code' => $policyDecision['code'] ?? null,
+                    ]);
+                }
+            }
+        } catch (Throwable) {
+            // O fluxo de confirmação abaixo ainda aplica as travas tradicionais; tenants com
+            // Policy Engine ativo também são protegidos na entrada da conversa/pré-agenda.
+        }
+
         $confirmation = $this->confirmAppointmentFromConversation($tenantId, $appointment);
         if (empty($confirmation['ok'])) {
             $message = 'Não consegui concluir a confirmação desse horário agora. O pedido continua registrado e a equipe foi avisada.';

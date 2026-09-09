@@ -17,7 +17,7 @@ $checks = [
     'migration adiciona modo prompt/form' => str_contains($migration, "'message_mode'") && str_contains($migration, "enum('form','prompt')"),
     'migration adiciona mensagem inicial' => str_contains($migration, "'initial_collect_message'"),
     'manifest inclui migration 102' => str_contains($manifest, "102_agenda_prompt_or_form_messages.sql"),
-    'versão exige migration 102' => str_contains($appVersion, "REQUIRED_MIGRATION = '102_agenda_prompt_or_form_messages.sql'"),
+    'pacote preserva migration 102 e exige versão posterior compatível' => str_contains($manifest, "102_agenda_prompt_or_form_messages.sql") && (str_contains($appVersion, "REQUIRED_MIGRATION = '102_agenda_prompt_or_form_messages.sql'") || str_contains($appVersion, "REQUIRED_MIGRATION = '103_agent_blueprints_policy_engine.sql'")),
     'controller persiste origem das mensagens' => str_contains($controller, "'message_mode' => trim((string) (\$_POST['pre_schedule_message_mode']"),
     'controller persiste mensagem inicial' => str_contains($controller, "pre_schedule_initial_collect_message"),
     'tela oferece Prompt Studio' => str_contains($view, 'Prompt Studio — conversa natural'),

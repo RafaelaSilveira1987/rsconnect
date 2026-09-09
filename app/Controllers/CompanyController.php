@@ -11,6 +11,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AdminDashboardService;
+use App\Services\AgentBlueprintService;
 use App\Services\PreSchedulingService;
 use App\Services\TenantModuleService;
 use App\Services\OnboardingGuideService;
@@ -31,12 +32,15 @@ final class CompanyController
             'tracking' => (string) ($_GET['tracking'] ?? ''),
         ]);
 
+        $blueprintService = new AgentBlueprintService();
         View::render('companies.index', [
             'title' => 'Empresas',
             'companies' => $data['companies'],
             'summary' => $data['summary'],
             'filters' => $data['filters'],
             'dataWarnings' => $data['data_warnings'] ?? [],
+            'businessNiches' => $blueprintService->niches(),
+            'agentBlueprints' => $blueprintService->blueprints(),
         ]);
     }
 
@@ -63,6 +67,8 @@ final class CompanyController
         $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
         $phone = trim((string) ($_POST['phone'] ?? ''));
         $segment = trim((string) ($_POST['segment'] ?? ''));
+        $businessNicheId = max(0, (int) ($_POST['business_niche_id'] ?? 0));
+        $agentBlueprintId = max(0, (int) ($_POST['agent_blueprint_id'] ?? 0));
         $plan = (string) ($_POST['plan'] ?? 'starter');
         $ownerName = trim((string) ($_POST['owner_name'] ?? ''));
         $ownerEmail = mb_strtolower(trim((string) ($_POST['owner_email'] ?? '')));
@@ -83,15 +89,38 @@ final class CompanyController
         }
 
         $pdo = Database::connection();
+        $blueprintService = new AgentBlueprintService();
+        if ($agentBlueprintId > 0) {
+            $selectedBlueprint = $blueprintService->blueprint($agentBlueprintId, $pdo);
+            if (!$selectedBlueprint || ($businessNicheId > 0 && (int) ($selectedBlueprint['niche_id'] ?? 0) !== $businessNicheId)) {
+                Flash::set('error', 'O blueprint selecionado não pertence ao nicho informado.');
+                $this->redirect('/companies');
+            }
+            $businessNicheId = (int) ($selectedBlueprint['niche_id'] ?? $businessNicheId);
+            if ($segment === '') {
+                $segment = (string) ($selectedBlueprint['niche_name'] ?? '');
+            }
+        } elseif ($businessNicheId > 0) {
+            foreach ($blueprintService->blueprints($businessNicheId) as $candidateBlueprint) {
+                $agentBlueprintId = (int) ($candidateBlueprint['id'] ?? 0);
+                if ($agentBlueprintId > 0) {
+                    if ($segment === '') {
+                        $segment = (string) ($candidateBlueprint['niche_name'] ?? '');
+                    }
+                    break;
+                }
+            }
+        }
+
         try {
             $pdo->beginTransaction();
             $slug = $this->uniqueSlug($name);
 
             $tenant = $pdo->prepare(
                 'INSERT INTO tenants
-                    (name, legal_name, slug, document, email, phone, segment, plan, status, onboarding_step)
+                    (name, legal_name, slug, document, email, phone, segment, business_niche_id, plan, status, onboarding_step)
                  VALUES
-                    (:name, :legal_name, :slug, :document, :email, :phone, :segment, :plan, "active", 1)'
+                    (:name, :legal_name, :slug, :document, :email, :phone, :segment, :business_niche_id, :plan, "active", 1)'
             );
             $tenant->execute([
                 'name' => $name,
@@ -101,6 +130,7 @@ final class CompanyController
                 'email' => $email !== '' ? $email : null,
                 'phone' => $phone !== '' ? $phone : null,
                 'segment' => $segment !== '' ? $segment : null,
+                'business_niche_id' => $businessNicheId > 0 ? $businessNicheId : null,
                 'plan' => $plan,
             ]);
             $tenantId = (int) $pdo->lastInsertId();
@@ -118,6 +148,9 @@ final class CompanyController
 
             $this->createInitialSubscription($pdo, $tenantId, $plan);
             $this->createDefaultPipeline($pdo, $tenantId);
+            if ($agentBlueprintId > 0) {
+                $blueprintService->applyBlueprint($tenantId, $agentBlueprintId, $pdo, false);
+            }
 
             $pdo->commit();
             Audit::log('company.created', ['company_name' => $name, 'owner_email' => $ownerEmail], $tenantId);
@@ -147,9 +180,33 @@ final class CompanyController
         $preSchedulingService = new PreSchedulingService();
         $moduleService = new TenantModuleService();
 
+        $blueprintService = new AgentBlueprintService();
+        $agentPolicyDecisions = [];
+        if (Auth::isSuperAdmin()) {
+            try {
+                $policyStmt = Database::connection()->prepare(
+                    'SELECT d.id, d.conversation_id, d.policy_key, d.decision, d.reason_code, d.created_at,
+                            c.name AS contact_name, c.phone AS contact_phone
+                     FROM conversation_policy_decisions d
+                     LEFT JOIN contacts c ON c.id = d.contact_id AND c.tenant_id = d.tenant_id
+                     WHERE d.tenant_id = :tenant_id
+                     ORDER BY d.created_at DESC, d.id DESC
+                     LIMIT 40'
+                );
+                $policyStmt->execute(['tenant_id' => $tenantId]);
+                $agentPolicyDecisions = $policyStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            } catch (Throwable) {
+                // A tela continua disponível antes da migration 103.
+            }
+        }
+
         View::render('companies.settings', [
             'title' => Auth::isSuperAdmin() ? 'Configurações da empresa' : 'Minha empresa',
             'company' => $company,
+            'businessNiches' => $blueprintService->niches(),
+            'agentBlueprints' => $blueprintService->blueprints(),
+            'agentBlueprintProfile' => $blueprintService->profileForTenant($tenantId, true),
+            'agentPolicyDecisions' => $agentPolicyDecisions,
             'preScheduleSettings' => $preSchedulingService->settings($tenantId),
             'availableModules' => TenantModuleService::modules(),
             'moduleSettings' => $moduleService->settingsForTenant($tenantId),
@@ -303,6 +360,28 @@ final class CompanyController
             'professional_auto_assign_enabled' => $professionalAutoAssignEnabled,
             'id' => $tenantId,
         ]);
+
+        if (Auth::isSuperAdmin() && array_key_exists('agent_architecture_settings_submitted', $_POST)) {
+            try {
+                $blueprintService = new AgentBlueprintService();
+                $postedBlueprintId = max(0, (int) ($_POST['agent_blueprint_id'] ?? 0));
+                $currentProfile = $blueprintService->profileForTenant($tenantId, false);
+                if ($postedBlueprintId > 0 && (int) ($currentProfile['blueprint_id'] ?? 0) !== $postedBlueprintId) {
+                    $blueprintService->applyBlueprint($tenantId, $postedBlueprintId, null, false);
+                }
+                if ($postedBlueprintId > 0 || !empty($currentProfile['id'])) {
+                    $blueprintService->saveTenantConfiguration($tenantId, [
+                        'interaction_mode' => (string) ($_POST['agent_interaction_mode'] ?? 'hybrid'),
+                        'capabilities' => is_array($_POST['agent_capabilities'] ?? null) ? $_POST['agent_capabilities'] : [],
+                        'triage_fields' => is_array($_POST['triage_fields'] ?? null) ? $_POST['triage_fields'] : [],
+                        'policies' => is_array($_POST['agent_policies'] ?? null) ? $_POST['agent_policies'] : [],
+                    ]);
+                }
+            } catch (Throwable $exception) {
+                Flash::set('error', 'Configurações cadastrais salvas, mas a arquitetura do agente não pôde ser atualizada: ' . $exception->getMessage());
+                $this->redirect('/company-settings?id=' . $tenantId);
+            }
+        }
 
         $confirmationMode = strtolower(trim((string) ($_POST['pre_schedule_confirmation_mode'] ?? '')));
         if (!in_array($confirmationMode, ['human', 'automatic', 'pre_schedule'], true)) {

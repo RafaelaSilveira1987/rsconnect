@@ -460,6 +460,46 @@ final class AiModelService
                 . "- Não diga que ainda vai transferir: a transferência já foi concluída pelo sistema.\n\n";
         }
 
+        $policyEngineBlock = '';
+        if ($tenantId > 0) {
+            try {
+                $agentProfile = (new AgentBlueprintService())->profileForTenant($tenantId, true);
+                $triageContext = (new AgentTriageService())->context($tenantId, (int) ($conversation['id'] ?? $conversation['conversation_id'] ?? 0));
+                if (($agentProfile['status'] ?? 'inactive') === 'active') {
+                    $collected = is_array($triageContext['collected'] ?? null) ? $triageContext['collected'] : [];
+                    if (isset($collected['brief_demand'])) {
+                        $collected['brief_demand'] = '[já coletada e registrada]';
+                    }
+                    $missing = is_array($triageContext['missing'] ?? null) ? $triageContext['missing'] : [];
+                    $policyEngineBlock = "POLICY ENGINE / BLUEPRINT DO RS CONNECT (fonte de verdade, prioridade máxima):
+"
+                        . '- Nicho: ' . (string) ($agentProfile['niche_name'] ?? 'não definido') . "
+"
+                        . '- Blueprint: ' . (string) ($agentProfile['blueprint_name'] ?? 'não definido') . "
+"
+                        . '- Modo de conversa: ' . (string) ($agentProfile['interaction_mode'] ?? 'hybrid') . "
+"
+                        . '- Status da triagem: ' . (string) ($triageContext['status'] ?? 'ainda não iniciada') . "
+"
+                        . '- Elegibilidade: ' . (string) ($triageContext['eligibility_status'] ?? 'ainda não avaliada') . "
+"
+                        . '- Motivo de bloqueio: ' . (trim((string) ($triageContext['block_reason'] ?? '')) ?: 'nenhum') . "
+"
+                        . '- Próximo campo obrigatório: ' . (trim((string) ($triageContext['current_field_key'] ?? '')) ?: 'nenhum') . "
+"
+                        . '- Campos ainda faltantes: ' . ($missing !== [] ? implode(', ', array_map('strval', $missing)) : 'nenhum obrigatório conhecido') . "
+"
+                        . '- Dados estruturados já coletados: ' . ($collected !== [] ? json_encode($collected, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '{}') . "
+"
+                        . "REGRAS: nunca contrarie elegibilidade, capability ou bloqueio do RS Connect. Se houver próximo campo obrigatório, pergunte somente esse dado (salvo instrução explícita do modo híbrido). Não afirme disponibilidade, pré-reserva ou confirmação por texto: essas ações só existem quando o backend as executa.
+
+";
+                }
+            } catch (Throwable) {
+                $policyEngineBlock = '';
+            }
+        }
+
         $memorySummary = trim((string) ($agent['_conversation_memory_summary'] ?? ''));
         $memoryFacts = is_array($agent['_conversation_memory_facts'] ?? null) ? $agent['_conversation_memory_facts'] : [];
         $memoryScope = (string) ($agent['_conversation_memory_scope'] ?? 'conversation');
@@ -480,6 +520,7 @@ final class AiModelService
 
 " .
             $structuredContext .
+            $policyEngineBlock .
             $handoffBlock .
             $memoryBlock .
             ($knowledge !== '' ? "Base de conhecimento:

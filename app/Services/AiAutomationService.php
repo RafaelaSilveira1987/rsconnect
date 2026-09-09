@@ -1734,7 +1734,7 @@ final class AiAutomationService
                 $calendarContent
             );
 
-            $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
+            $triageResult = (new AgentTriageService())->handleIncoming(
                 $pdo,
                 $instance,
                 $contactId,
@@ -1742,17 +1742,29 @@ final class AiAutomationService
                 $calendarContent,
                 $messageId
             );
-            $result = !empty($calendarSelection['handled'])
-                ? $calendarSelection
-                : (new PreSchedulingService())->handleIncoming(
+            if (!empty($triageResult['handled'])) {
+                $result = $triageResult;
+            } else {
+                $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
                     $pdo,
                     $instance,
                     $contactId,
                     $conversationId,
                     $calendarContent,
-                    $flowContext,
                     $messageId
                 );
+                $result = !empty($calendarSelection['handled'])
+                    ? $calendarSelection
+                    : (new PreSchedulingService())->handleIncoming(
+                        $pdo,
+                        $instance,
+                        $contactId,
+                        $conversationId,
+                        $calendarContent,
+                        $flowContext,
+                        $messageId
+                    );
+            }
             $result['calendar_burst_message_ids'] = $calendarBurst['message_ids'] ?? [$messageId];
             $result['calendar_burst_count'] = count((array) ($calendarBurst['message_ids'] ?? [$messageId]));
 

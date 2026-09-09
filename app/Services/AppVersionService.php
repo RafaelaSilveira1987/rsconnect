@@ -109,9 +109,11 @@ final class AppVersionService
     // Compatibilidade histórica: REQUIRED_MIGRATION = '096_public_signup_coupons.sql'.
     // Migrations históricas: 075_scheduled_reports_and_deliveries.sql, 076_evolution_instance_management.sql, 077_ai_efficiency_foundation.sql, 078_contact_avatar_refresh.sql, 079_ai_efficiency_phase2_and_report_cleanup.sql e 080_ai_memory_and_usage_intelligence.sql, 081_ai_cost_attribution.sql, 082_ai_budget_governance.sql, 083_ai_commercial_margin.sql, 084_ai_profitability_history.sql, 085_ai_commercial_attention_queue.sql, 086_plan_ai_mode_and_commitment.sql, 087_webhook_security_events.sql, 088_payment_reconciliation_schema_compat.sql, 089_schema_migrations_registry.sql, 090_crm_conversation_automation.sql e 091_after_hours_monitor_and_quote_requests.sql, 092_notification_orchestration.sql, 093_public_signup_asaas_trial.sql 094_normalize_asaas_api_base_url.sql e 095_public_signup_pix_qrcode.sql e 096_public_signup_coupons.sql e 097_evolution_operational_alert_suppression.sql e 098_operational_queue_release.sql.
     // Identidade histórica preservada: Beta Comercial 1.5.
-    public const VERSION_LABEL = 'Beta Comercial 1.6';
-    public const PACKAGE_LABEL = 'RS Connect 36.27.26 — Agenda assertiva e sem confirmação falsa';
-    public const REQUIRED_MIGRATION = '102_agenda_prompt_or_form_messages.sql';
+    // Compatibilidade histórica do pacote anterior: RS Connect 36.27.26 — Agenda assertiva e sem confirmação falsa.
+    // RS Connect 36.28.0 — blueprints por nicho, triagem estruturada e Policy Engine fail-closed.
+    public const VERSION_LABEL = 'Beta Comercial 1.7';
+    public const PACKAGE_LABEL = 'RS Connect 36.28.0 — Blueprints por nicho e Policy Engine';
+    public const REQUIRED_MIGRATION = '103_agent_blueprints_policy_engine.sql';
 
     private PDO $pdo;
 
@@ -218,13 +220,23 @@ final class AppVersionService
             'public_signup_settings',
             'public_signup_sessions',
             'tenant_subscription_gateways',
+            'business_niches',
+            'agent_blueprints',
+            'agent_blueprint_versions',
+            'tenant_agent_profiles',
+            'tenant_agent_capabilities',
+            'tenant_triage_fields',
+            'tenant_agent_policies',
+            'tenant_agent_workflow_steps',
+            'conversation_triage_sessions',
+            'conversation_policy_decisions',
         ];
         $missingTables = array_values(array_filter($migrationTables, fn (string $table): bool => !$this->tableExists($table)));
         $checks[] = $this->check(
             'Migrations centrais',
             count($missingTables) === 0 ? 'ok' : 'blocked',
             count($missingTables) === 0 ? 'Estrutura principal do pacote atual encontrada.' : 'Tabelas ausentes: ' . implode(', ', $missingTables),
-            'Executar php bin/migrate.php status e aplicar o baseline/up até a migration 093.'
+            'Executar php bin/migrate.php status e aplicar php bin/migrate.php up até a migration 103.'
         );
 
         $monitoringReady = $this->tableExists('operational_monitor_runs')

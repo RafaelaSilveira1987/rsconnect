@@ -14,6 +14,7 @@ use App\Services\AiAfterHoursRecoveryService;
 use App\Services\AiReplyTimingService;
 use App\Services\AgentRoutingService;
 use App\Services\AgentOperatingPolicyService;
+use App\Services\AgentTriageService;
 use App\Services\AutomationWebhookService;
 use App\Services\CrmAutoService;
 use App\Services\CommercialAutomationService;
@@ -522,7 +523,9 @@ final class EvolutionWebhookController
                             'reply_wait_remaining' => $replyWaitRemaining,
                         ];
                     } else {
-                        $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
+                        // 36.28.0: triagem/policies vêm ANTES da agenda e da IA. O LLM pode
+                        // conversar, mas não pode liberar uma ação que o Policy Engine bloqueou.
+                        $triageResult = (new AgentTriageService())->handleIncoming(
                             $pdo,
                             $instance,
                             $contactId,
@@ -530,17 +533,30 @@ final class EvolutionWebhookController
                             $content,
                             $storedMessageId
                         );
-                        $preScheduleResult = !empty($calendarSelection['handled'])
-                            ? $calendarSelection
-                            : (new PreSchedulingService())->handleIncoming(
+
+                        if (!empty($triageResult['handled'])) {
+                            $preScheduleResult = $triageResult;
+                        } else {
+                            $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
                                 $pdo,
                                 $instance,
                                 $contactId,
                                 $conversationId,
                                 $content,
-                                $flowContext,
                                 $storedMessageId
                             );
+                            $preScheduleResult = !empty($calendarSelection['handled'])
+                                ? $calendarSelection
+                                : (new PreSchedulingService())->handleIncoming(
+                                    $pdo,
+                                    $instance,
+                                    $contactId,
+                                    $conversationId,
+                                    $content,
+                                    $flowContext,
+                                    $storedMessageId
+                                );
+                        }
                     }
                 } catch (Throwable $exception) {
                     $processingWarnings[] = 'pre_schedule';
