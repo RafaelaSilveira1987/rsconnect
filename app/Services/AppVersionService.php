@@ -117,8 +117,9 @@ final class AppVersionService
     // RS Connect 36.28.4 — diagnóstico dos assistentes reconhece a chave global da RS Connect e elimina falso alerta de credencial ausente.
     // RS Connect 36.28.5 — diagnóstico com auto-reparo seguro, agenda por origem real e correção de pré-reservas vencidas.
     // RS Connect 36.28.6 — restrições por regra bloqueiam somente a ação configurada e mantêm a conversa ativa.
-    public const VERSION_LABEL = 'Beta Comercial 1.8.4';
-    public const PACKAGE_LABEL = 'RS Connect 36.28.6 — Regras de atendimento sem bloquear a conversa';
+    // RS Connect 36.28.7 — corrige envio de mensagens das regras: usa attendance_mode e destrava respostas pendentes.
+    public const VERSION_LABEL = 'Beta Comercial 1.8.5';
+    public const PACKAGE_LABEL = 'RS Connect 36.28.7 — Mensagens de regras e fila da IA destravadas';
     public const REQUIRED_MIGRATION = '104_customer_patient_continuity_guard.sql';
 
     private PDO $pdo;

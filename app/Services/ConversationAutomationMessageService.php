@@ -21,10 +21,10 @@ final class ConversationAutomationMessageService
             return ['ok' => false, 'error' => 'Dados insuficientes para enviar a mensagem automática.', 'external_id' => null];
         }
         try {
-            $conversation = $pdo->prepare('SELECT mode, status FROM conversations WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+            $conversation = $pdo->prepare('SELECT attendance_mode, status FROM conversations WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
             $conversation->execute(['id' => $conversationId, 'tenant_id' => $tenantId]);
             $conversationRow = $conversation->fetch(PDO::FETCH_ASSOC) ?: [];
-            if (($conversationRow['mode'] ?? 'ai') !== 'ai' || in_array((string) ($conversationRow['status'] ?? ''), ['closed', 'archived'], true)) {
+            if (($conversationRow['attendance_mode'] ?? 'ai') !== 'ai' || in_array((string) ($conversationRow['status'] ?? ''), ['closed', 'archived'], true)) {
                 return ['ok' => false, 'error' => 'Conversa sob controle humano ou encerrada.', 'external_id' => null];
             }
 
