@@ -185,7 +185,7 @@ final class CompanyController
         if (Auth::isSuperAdmin()) {
             try {
                 $policyStmt = Database::connection()->prepare(
-                    'SELECT d.id, d.conversation_id, d.policy_key, d.decision, d.reason_code, d.created_at,
+                    'SELECT d.id, d.conversation_id, d.policy_key, d.decision, d.reason_code, d.evidence_json, d.created_at,
                             c.name AS contact_name, c.phone AS contact_phone
                      FROM conversation_policy_decisions d
                      LEFT JOIN contacts c ON c.id = d.contact_id AND c.tenant_id = d.tenant_id
@@ -195,6 +195,11 @@ final class CompanyController
                 );
                 $policyStmt->execute(['tenant_id' => $tenantId]);
                 $agentPolicyDecisions = $policyStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                foreach ($agentPolicyDecisions as &$policyDecision) {
+                    $decodedEvidence = json_decode((string) ($policyDecision['evidence_json'] ?? ''), true);
+                    $policyDecision['evidence'] = is_array($decodedEvidence) ? $decodedEvidence : [];
+                }
+                unset($policyDecision);
             } catch (Throwable) {
                 // A tela continua disponível antes da migration 103.
             }

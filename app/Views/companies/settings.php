@@ -90,7 +90,7 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
         'required_before_schedule' => 'Informações obrigatórias antes da agenda',
     ];
     $policyHelp = [
-        'minimum_age' => 'Se a idade informada for menor que este valor, o assistente não poderá consultar nem reservar horário.',
+        'minimum_age' => 'Se a idade informada for menor que este valor, o assistente envia a mensagem configurada e continua a conversa, mas não consulta nem reserva horário.',
         'couple_service_allowed' => 'Define se esse tipo de atendimento pode seguir normalmente neste modelo.',
         'scheduling_requires_eligibility' => 'Impede que o assistente pule a validação das regras e vá direto para a agenda.',
         'confirmation_requires_human' => 'O horário pode ser pré-reservado, mas só fica confirmado após aprovação da equipe.',
@@ -98,7 +98,7 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
     ];
     $policyActionLabels = [
         'block' => 'Bloquear a ação',
-        'block_schedule' => 'Não permitir agenda',
+        'block_schedule' => 'Não permitir agenda (a conversa continua)',
         'human_approval' => 'Pedir aprovação da equipe',
         'collect' => 'Pedir a informação antes de seguir',
         'allow_confirm' => 'Permitir confirmação automática',
@@ -280,7 +280,18 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
                             <td><?= View::e((string) ($policyDecision['created_at'] ?? '')) ?></td>
                             <td><strong><?= View::e((string) (($policyDecision['contact_name'] ?? '') ?: 'Contato')) ?></strong><br><small><?= View::e((string) ($policyDecision['contact_phone'] ?? '')) ?></small></td>
                             <td><strong><?= View::e($policyLabels[$pKey] ?? $humanizeInternalKey($pKey)) ?></strong></td>
-                            <td><span class="badge <?= View::e($decisionClasses[$decision] ?? '') ?>"><?= View::e($decisionLabels[$decision] ?? $humanizeInternalKey($decision)) ?></span></td>
+                            <?php
+                            $decisionEvidence = is_array($policyDecision['evidence'] ?? null) ? $policyDecision['evidence'] : [];
+                            $decisionEvidenceData = is_array($decisionEvidence['decision_evidence'] ?? null) ? $decisionEvidence['decision_evidence'] : [];
+                            $restrictionScope = (string) ($decisionEvidenceData['restriction_scope'] ?? '');
+                            $displayDecision = $decisionLabels[$decision] ?? $humanizeInternalKey($decision);
+                            if ($restrictionScope === 'calendar' && $decision === 'block') {
+                                $displayDecision = 'Agenda não liberada';
+                            } elseif ($restrictionScope === 'calendar' && $decision === 'warn') {
+                                $displayDecision = 'Regra informada';
+                            }
+                            ?>
+                            <td><span class="badge <?= View::e($decisionClasses[$decision] ?? '') ?>"><?= View::e($displayDecision) ?></span></td>
                             <td><?= View::e($reasonLabels[$reason] ?? ($reason !== '' ? $humanizeInternalKey($reason) : '—')) ?></td>
                             <td><a class="btn btn-secondary btn-sm" href="<?= View::e(Router::url('/conversations?id=' . (int) ($policyDecision['conversation_id'] ?? 0))) ?>">Ver conversa</a></td>
                         </tr>

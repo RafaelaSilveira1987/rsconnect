@@ -48,19 +48,31 @@ final class AgentPolicyEngineService
                     (string) ($policyMap['minimum_age']['customer_message'] ?? ''),
                     ['minimum_age' => $this->formatNumber($minimum), 'patient_age' => $this->formatNumber($age)]
                 );
-                return $this->block('minimum_age', 'minimum_age', $message !== '' ? $message : 'Este atendimento não está disponível para a idade informada.', [
-                    'patient_age' => $age,
-                    'minimum_age' => $minimum,
-                ]);
+                return $this->policyViolation(
+                    $policyMap['minimum_age'],
+                    'minimum_age',
+                    'minimum_age',
+                    $message !== '' ? $message : 'Este atendimento não está disponível para a idade informada.',
+                    [
+                        'patient_age' => $age,
+                        'minimum_age' => $minimum,
+                    ],
+                    $action
+                );
             }
         }
 
         $coupleIntent = !empty($collected['couple_intent']);
         if ($coupleIntent && isset($policyMap['couple_service_allowed']) && !$this->boolValue($policyMap['couple_service_allowed']['value'] ?? true)) {
             $message = trim((string) ($policyMap['couple_service_allowed']['customer_message'] ?? ''));
-            return $this->block('couple_service_not_allowed', 'couple_service_allowed', $message !== '' ? $message : 'Este tipo de atendimento não está disponível.', [
-                'couple_intent' => true,
-            ]);
+            return $this->policyViolation(
+                $policyMap['couple_service_allowed'],
+                'couple_service_not_allowed',
+                'couple_service_allowed',
+                $message !== '' ? $message : 'Este tipo de atendimento não está disponível.',
+                ['couple_intent' => true],
+                $action
+            );
         }
 
         $genericDecision = $this->evaluateGenericJsonPolicies($policyMap, $collected, $action);
@@ -171,10 +183,9 @@ final class AgentPolicyEngineService
                 continue;
             }
 
-            $actionKey = strtolower(trim((string) ($policy['action_key'] ?? 'block')));
             $message = trim((string) ($policy['customer_message'] ?? ''));
-            $decision = str_contains($actionKey, 'handoff') || str_contains($actionKey, 'human') ? 'handoff' : 'block';
-            return $this->block(
+            return $this->policyViolation(
+                $policy,
                 'policy_rule:' . (string) $key,
                 (string) $key,
                 $message !== '' ? $message : 'Esta ação não está disponível para os dados informados.',
@@ -183,7 +194,7 @@ final class AgentPolicyEngineService
                     'operator' => (string) ($condition['operator'] ?? 'eq'),
                     'rule_matched' => true,
                 ],
-                $decision
+                $action
             );
         }
         return null;
@@ -334,6 +345,52 @@ final class AgentPolicyEngineService
     private function formatNumber(float $value): string
     {
         return floor($value) === $value ? (string) (int) $value : number_format($value, 1, ',', '.');
+    }
+
+    /**
+     * Converte a ação configurada da política em uma decisão coerente com o escopo.
+     * `block_schedule` bloqueia somente ações de agenda; a conversa continua disponível.
+     */
+    private function policyViolation(array $policy, string $code, string $policyKey, string $message, array $evidence, string $action): array
+    {
+        $actionKey = strtolower(trim((string) ($policy['action_key'] ?? 'block')));
+        if ($actionKey === '') {
+            $actionKey = 'block';
+        }
+
+        $evidence['action_key'] = $actionKey;
+        $evidence['evaluated_action'] = $action;
+
+        if ($actionKey === 'block_schedule') {
+            $evidence['restriction_scope'] = 'calendar';
+            if (str_starts_with($action, 'calendar.')) {
+                return $this->block($code, $policyKey, $message, $evidence);
+            }
+
+            return $this->warn($code, $policyKey, $message, $evidence);
+        }
+
+        if ($actionKey === 'warn') {
+            return $this->warn($code, $policyKey, $message, $evidence);
+        }
+
+        if ($actionKey === 'handoff' || $actionKey === 'human_approval' || str_contains($actionKey, 'handoff') || str_contains($actionKey, 'human')) {
+            return $this->block($code, $policyKey, $message, $evidence, 'handoff');
+        }
+
+        return $this->block($code, $policyKey, $message, $evidence);
+    }
+
+    private function warn(string $code, string $policyKey, string $message, array $evidence = []): array
+    {
+        return [
+            'allowed' => true,
+            'decision' => 'warn',
+            'code' => $code,
+            'message' => $message,
+            'policy_key' => $policyKey,
+            'evidence' => $evidence,
+        ];
     }
 
     private function allow(string $code): array

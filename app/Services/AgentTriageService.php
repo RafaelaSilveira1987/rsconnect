@@ -131,12 +131,25 @@ final class AgentTriageService
             $blockReason = null;
             $nextField = null;
             $lastIntent = $schedulingIntent ? 'schedule' : ((string) ($session['last_intent'] ?? '') ?: 'conversation');
+            $decisionType = (string) ($decision['decision'] ?? 'allow');
+            $restrictionScope = (string) (($decision['evidence']['restriction_scope'] ?? ''));
+            $isScopedCalendarRestriction = $restrictionScope === 'calendar'
+                && in_array($decisionType, ['block', 'warn'], true);
 
-            if (!$decision['allowed'] && ($decision['decision'] ?? '') === 'block') {
+            if ($isScopedCalendarRestriction) {
+                // Uma regra como idade mínima com ação "Não permitir agenda" não encerra
+                // a conversa. Ela encerra apenas o fluxo de agenda e mantém o atendimento
+                // disponível para orientação, indicação ou esclarecimentos.
+                $status = 'completed';
+                $eligibility = 'blocked';
+                $blockReason = (string) ($decision['code'] ?? 'calendar_restricted');
+                $nextField = null;
+                $lastIntent = 'conversation';
+            } elseif (!$decision['allowed'] && $decisionType === 'block') {
                 $status = 'blocked';
                 $eligibility = 'blocked';
                 $blockReason = (string) ($decision['code'] ?? 'blocked');
-            } elseif (!$decision['allowed'] && ($decision['decision'] ?? '') === 'handoff') {
+            } elseif (!$decision['allowed'] && $decisionType === 'handoff') {
                 $status = 'handoff';
                 $eligibility = 'eligible';
                 $blockReason = (string) ($decision['code'] ?? 'human_approval_required');
@@ -171,11 +184,16 @@ final class AgentTriageService
             $result['message'] = $decision['message'] ?? null;
             $result['decision'] = $decision;
 
-            if (!$decision['allowed'] && in_array((string) ($decision['decision'] ?? ''), ['block', 'handoff'], true)) {
-                $this->logDecision($pdo, $tenantId, $conversationId, $contactId, $decision, $collected);
+            if (!$decision['allowed'] && in_array($decisionType, ['block', 'handoff'], true)) {
+                $alreadyLogged = $isScopedCalendarRestriction
+                    && $this->hasPriorPolicyDecision($pdo, $tenantId, $conversationId, (string) ($decision['policy_key'] ?? ''), (string) ($decision['code'] ?? ''));
+                if (!$alreadyLogged) {
+                    $this->logDecision($pdo, $tenantId, $conversationId, $contactId, $decision, $collected);
+                }
                 $result['handled'] = true;
                 $result['skip_ai'] = true;
                 $result['terminal_handled'] = true;
+                $result['conversation_continues'] = $isScopedCalendarRestriction;
                 if ($sendMessages && trim((string) ($decision['message'] ?? '')) !== '') {
                     $send = (new ConversationAutomationMessageService())->send(
                         $pdo,
@@ -183,12 +201,63 @@ final class AgentTriageService
                         $conversationId,
                         $contactId,
                         (string) $decision['message'],
-                        'agent.policy.blocked',
-                        ['policy' => $decision['policy_key'] ?? null, 'code' => $decision['code'] ?? null]
+                        $isScopedCalendarRestriction ? 'agent.policy.calendar_restricted' : 'agent.policy.blocked',
+                        [
+                            'policy' => $decision['policy_key'] ?? null,
+                            'code' => $decision['code'] ?? null,
+                            'scope' => $restrictionScope !== '' ? $restrictionScope : null,
+                        ]
                     );
                     $result['message_sent'] = !empty($send['ok']);
                     $result['message_error'] = $send['error'] ?? null;
                 }
+                return $result;
+            }
+
+            if ($decisionType === 'warn' && $isScopedCalendarRestriction) {
+                // A restrição já foi identificada, mas a conversa não fica travada. Na
+                // primeira ocorrência enviamos a mensagem configurada; depois deixamos a
+                // IA conversar normalmente, mantendo a agenda protegida pelo schedulingGate.
+                $alreadyNotified = $this->hasPriorPolicyDecision(
+                    $pdo,
+                    $tenantId,
+                    $conversationId,
+                    (string) ($decision['policy_key'] ?? ''),
+                    (string) ($decision['code'] ?? '')
+                );
+
+                if (!$alreadyNotified) {
+                    $this->logDecision($pdo, $tenantId, $conversationId, $contactId, $decision, $collected);
+                    $result['handled'] = true;
+                    $result['skip_ai'] = true;
+                    $result['terminal_handled'] = true;
+                    $result['conversation_continues'] = true;
+                    if ($sendMessages && trim((string) ($decision['message'] ?? '')) !== '') {
+                        $send = (new ConversationAutomationMessageService())->send(
+                            $pdo,
+                            $instance,
+                            $conversationId,
+                            $contactId,
+                            (string) $decision['message'],
+                            'agent.policy.calendar_restricted',
+                            [
+                                'policy' => $decision['policy_key'] ?? null,
+                                'code' => $decision['code'] ?? null,
+                                'scope' => 'calendar',
+                            ]
+                        );
+                        $result['message_sent'] = !empty($send['ok']);
+                        $result['message_error'] = $send['error'] ?? null;
+                    }
+                    return $result;
+                }
+
+                $result['handled'] = false;
+                $result['skip_ai'] = false;
+                $result['terminal_handled'] = false;
+                $result['allowed'] = true;
+                $result['conversation_continues'] = true;
+                $result['code'] = 'calendar_restriction_active';
                 return $result;
             }
 
@@ -447,6 +516,35 @@ final class AgentTriageService
             'missing_json' => json_encode($missing, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'last_intent' => $lastIntent,
         ]);
+    }
+
+    private function hasPriorPolicyDecision(PDO $pdo, int $tenantId, int $conversationId, string $policyKey, string $reasonCode): bool
+    {
+        if ($policyKey === '' || !$this->tableExists($pdo, 'conversation_policy_decisions')) {
+            return false;
+        }
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT 1
+                 FROM conversation_policy_decisions
+                 WHERE tenant_id = :tenant_id
+                   AND conversation_id = :conversation_id
+                   AND policy_key = :policy_key
+                   AND (:reason_code = \'\' OR reason_code = :reason_code_match)
+                 ORDER BY id DESC
+                 LIMIT 1'
+            );
+            $stmt->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'policy_key' => mb_substr($policyKey, 0, 120),
+                'reason_code' => mb_substr($reasonCode, 0, 120),
+                'reason_code_match' => mb_substr($reasonCode, 0, 120),
+            ]);
+            return (bool) $stmt->fetchColumn();
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function logDecision(PDO $pdo, int $tenantId, int $conversationId, int $contactId, array $decision, array $collected): void
