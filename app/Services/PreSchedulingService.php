@@ -321,7 +321,9 @@ final class PreSchedulingService
         $description = $this->buildDescription($content, $intent, $flowContext);
         $intentModality = $this->intentSchedulingModality($intent);
         $readyForAvailability = $this->hasFullPreference($intent) && $this->isAvailabilityModality($intentModality);
-        $status = $readyForAvailability ? 'awaiting_approval' : 'pre_scheduled';
+        // Preferência completa ainda NÃO é compromisso. Só vira awaiting_approval quando
+        // CalendarAvailabilityService aplicar um slot realmente livre.
+        $status = 'pre_scheduled';
         $ownerUserId = null;
         $professionalCalendarService = new ProfessionalCalendarService();
         $professionalCalendarSettings = $professionalCalendarService->tenantSettings($tenantId);
@@ -591,12 +593,17 @@ final class PreSchedulingService
             $messages[$field] = trim((string) ($data[$field] ?? '')) ?: $fallback;
         }
 
+        $requireHumanApproval = !empty($data['require_human_approval']);
+        // Configurações contraditórias eram uma das fontes de comportamento ambíguo.
+        // Aprovação humana sempre vence e desliga a confirmação automática.
+        $aiCanConfirm = !$requireHumanApproval && !empty($data['ai_can_confirm']);
+
         $params = [
             'tenant_id' => $tenantId,
             'enabled' => !empty($data['enabled']) ? 1 : 0,
-            'require_human_approval' => !empty($data['require_human_approval']) ? 1 : 0,
+            'require_human_approval' => $requireHumanApproval ? 1 : 0,
             'ai_can_suggest_slots' => !empty($data['ai_can_suggest_slots']) ? 1 : 0,
-            'ai_can_confirm' => !empty($data['ai_can_confirm']) ? 1 : 0,
+            'ai_can_confirm' => $aiCanConfirm ? 1 : 0,
             'send_approval_message' => !empty($data['send_approval_message']) ? 1 : 0,
             'default_duration_minutes' => $duration,
             'message_mode' => $messageMode,
@@ -1067,7 +1074,8 @@ final class PreSchedulingService
         $mergedHasFullPreference = trim((string) ($params['preferred_day_text'] ?? '')) !== ''
             && trim((string) ($params['preferred_time_text'] ?? '')) !== '';
         $readyForAvailability = $mergedHasFullPreference && $this->isAvailabilityModality($effectiveModality);
-        $statusSet = $readyForAvailability ? ', status = "awaiting_approval"' : '';
+        // Não promove para awaiting_approval antes da validação real da agenda.
+        $statusSet = $readyForAvailability ? ', status = "pre_scheduled"' : '';
 
         $pdo->prepare(
             'UPDATE calendar_appointments
@@ -1094,7 +1102,7 @@ final class PreSchedulingService
             'location' => $params['location'],
             'starts_at' => $period['starts_at'],
             'ends_at' => $period['ends_at'],
-            'status' => $readyForAvailability ? 'awaiting_approval' : ($appointment['status'] ?? 'pre_scheduled'),
+            'status' => $readyForAvailability ? 'pre_scheduled' : ($appointment['status'] ?? 'pre_scheduled'),
         ]);
 
         $pdo->prepare(

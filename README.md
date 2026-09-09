@@ -381,3 +381,8 @@ Correções após validação real pelo WhatsApp:
 - pedidos como **“Pode ser na sexta às 10h”** continuam sendo reconhecidos como preferência completa no contexto de agenda.
 
 Teste de regressão: `tests/Feature/calendar-internal-auto-request-v8-smoke.php`.
+
+
+## RS Connect 36.27.26 — Agenda assertiva
+
+Esta versão transforma o agendamento conversacional em um fluxo determinístico: intenção → coleta de preferência → validação real → pré-reserva → confirmação conforme a configuração da empresa. Preferências sem slot não ocupam o calendário e a IA não pode afirmar que confirmou sem persistência real. Veja `docs/ATUALIZACAO-v36.27.26.md`.

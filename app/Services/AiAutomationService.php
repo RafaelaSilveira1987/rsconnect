@@ -1926,6 +1926,103 @@ final class AiAutomationService
         return $value !== '' ? $value : null;
     }
 
+    private function guardUnsupportedCalendarClaim(PDO $pdo, int $tenantId, int $conversationId, string $reply): string
+    {
+        $reply = trim($reply);
+        if ($reply === '' || $tenantId < 1 || $conversationId < 1) {
+            return $reply;
+        }
+
+        $normalized = mb_strtolower($reply);
+        $normalized = strtr($normalized, [
+            'á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a', 'é' => 'e', 'ê' => 'e',
+            'í' => 'i', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ú' => 'u', 'ç' => 'c',
+        ]);
+        $claimsConfirmed = preg_match('/\b(agendad[oa]|confirmad[oa]|ficou\s+marcad[oa]|marquei|agendei|reservei|pre-reservei)\b/u', $normalized) === 1;
+        $claimsAvailable = preg_match('/\b(tenho\s+disponibilidade|encontrei\s+disponibilidade|horario\s+(?:esta\s+)?disponivel|esse\s+horario\s+esta\s+livre)\b/u', $normalized) === 1;
+        $claimsUnavailable = preg_match('/\b(nao\s+tenho\s+disponibilidade|sem\s+disponibilidade|horario\s+indisponivel|horario\s+nao\s+esta\s+disponivel|nao\s+esta\s+disponivel)\b/u', $normalized) === 1;
+        $asksTechnicalConfirmation = preg_match('/\b(posso\s+confirmar|quer\s+que\s+eu\s+confirme|deseja\s+confirmar)\b/u', $normalized) === 1;
+        if (!$claimsConfirmed && !$claimsAvailable && !$claimsUnavailable && !$asksTechnicalConfirmation) {
+            return $reply;
+        }
+
+        try {
+            $statement = $pdo->prepare(
+                'SELECT a.* FROM calendar_appointments a
+                 WHERE a.tenant_id = :tenant_id
+                   AND a.conversation_id = :conversation_id
+                   AND a.updated_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+                 ORDER BY a.updated_at DESC, a.id DESC
+                 LIMIT 1'
+            );
+            $statement->execute(['tenant_id' => $tenantId, 'conversation_id' => $conversationId]);
+            $appointment = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
+        } catch (Throwable) {
+            $appointment = null;
+        }
+
+        $settings = (new PreSchedulingService())->settings($tenantId);
+        if ($claimsConfirmed && is_array($appointment) && (string) ($appointment['status'] ?? '') === 'confirmed') {
+            return $reply;
+        }
+        if ($claimsAvailable && is_array($appointment)
+            && (int) ($appointment['chosen_availability_slot_id'] ?? 0) > 0
+            && in_array((string) ($appointment['availability_status'] ?? ''), ['slot_selected', 'validated'], true)) {
+            return $reply;
+        }
+        if ($claimsUnavailable && is_array($appointment)
+            && (string) ($appointment['availability_status'] ?? '') === 'empty') {
+            return $reply;
+        }
+        if ($asksTechnicalConfirmation && is_array($appointment)
+            && empty($settings['require_human_approval'])
+            && !empty($settings['ai_can_confirm'])
+            && (int) ($appointment['chosen_availability_slot_id'] ?? 0) > 0
+            && in_array((string) ($appointment['availability_status'] ?? ''), ['slot_selected', 'validated'], true)) {
+            return $reply;
+        }
+
+        if (!is_array($appointment)) {
+            return 'Antes de confirmar qualquer horário, preciso registrar sua preferência de dia, horário e modalidade. Qual opção funciona melhor para você?';
+        }
+
+        $modality = strtolower(trim((string) ($appointment['appointment_modality'] ?? $appointment['location_type'] ?? '')));
+        $day = trim((string) ($appointment['preferred_day_text'] ?? ''));
+        $time = trim((string) ($appointment['preferred_time_text'] ?? ''));
+        $availabilityStatus = trim((string) ($appointment['availability_status'] ?? ''));
+        $slotId = (int) ($appointment['chosen_availability_slot_id'] ?? 0);
+
+        if (!in_array($modality, ['online', 'presencial', 'telefone'], true)) {
+            return trim((string) ($settings['modality_message'] ?? '')) ?: 'Você prefere atendimento online ou presencial?';
+        }
+        if ($day === '' || $time === '') {
+            return trim((string) ($settings['collect_message'] ?? '')) ?: 'Qual o melhor dia e horário para você?';
+        }
+        if ($slotId > 0 && in_array($availabilityStatus, ['slot_selected', 'validated'], true)) {
+            if (!empty($settings['require_human_approval'])) {
+                return (new PreSchedulingService())->renderMessage(
+                    trim((string) ($settings['slot_selected_message'] ?? '')) ?: 'O horário foi pré-reservado para {{data}} às {{hora}} e aguarda confirmação da equipe.',
+                    $appointment
+                );
+            }
+            if (!empty($settings['ai_can_confirm'])) {
+                return (new PreSchedulingService())->renderMessage('Encontrei {{data}} às {{hora}} disponível. Posso confirmar esse agendamento?', $appointment);
+            }
+            return (new PreSchedulingService())->renderMessage(
+                trim((string) ($settings['slot_selected_message'] ?? '')) ?: 'O horário de {{data}} às {{hora}} ficou pré-agendado. A confirmação será feita pela equipe.',
+                $appointment
+            );
+        }
+        if (in_array($availabilityStatus, ['requested', 'sent', 'communicating'], true)) {
+            return (new PreSchedulingService())->renderMessage(
+                trim((string) ($settings['default_message'] ?? '')) ?: 'Vou verificar a disponibilidade para {{dia_preferido}} às {{horario_preferido}}.',
+                $appointment
+            );
+        }
+
+        return 'Ainda não confirmei esse horário. Vou validar a disponibilidade real da agenda antes de informar qualquer confirmação.';
+    }
+
     private function sendAutomatedMessage(PDO $pdo, array $instance, array $conversation, int $conversationId, string $reply, string $eventType, string $eventDescription, ?array $agent = null): array
     {
         $service = $this->evolutionService($instance);
@@ -1933,6 +2030,11 @@ final class AiAutomationService
         if (strlen($phone) < 10 || strlen($phone) > 15) {
             throw new RuntimeException('Evolution sendText bloqueado: telefone do contato inválido ou incompleto.');
         }
+        // Defesa final: Prompt Studio pode escolher a linguagem, mas jamais pode inventar
+        // disponibilidade, pré-reserva ou confirmação. Qualquer afirmação técnica de agenda
+        // precisa estar respaldada pelo estado real de calendar_appointments.
+        $reply = $this->guardUnsupportedCalendarClaim($pdo, (int) ($instance['tenant_id'] ?? 0), $conversationId, $reply);
+
         $senderDisplayName = $this->aiSenderDisplayName($pdo, (int) ($instance['tenant_id'] ?? 0), $conversationId, $agent);
         $signatureEnabled = $this->whatsappSenderIdentificationEnabled($pdo, (int) ($instance['tenant_id'] ?? 0));
         $deliveredReply = $this->withAiWhatsappSignature($reply, $senderDisplayName, $signatureEnabled);

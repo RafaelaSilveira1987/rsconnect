@@ -143,16 +143,8 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
                 <span><strong>Usar pré-agendamento</strong><small>Cria solicitações na agenda a partir da intenção detectada na conversa.</small></span>
             </label>
             <label class="switch-card">
-                <input type="checkbox" name="pre_schedule_require_human_approval" value="1" <?= !empty($preScheduleSettings['require_human_approval']) ? 'checked' : '' ?>>
-                <span><strong>Exigir aprovação humana</strong><small>Recomendado para psicologia, saúde, consultorias e serviços com agenda sensível.</small></span>
-            </label>
-            <label class="switch-card">
                 <input type="checkbox" name="pre_schedule_ai_can_suggest_slots" value="1" <?= !empty($preScheduleSettings['ai_can_suggest_slots']) ? 'checked' : '' ?>>
-                <span><strong>IA pode sugerir disponibilidade</strong><small>Permite que a IA registre opções aproximadas, sem confirmar.</small></span>
-            </label>
-            <label class="switch-card">
-                <input type="checkbox" name="pre_schedule_ai_can_confirm" value="1" <?= !empty($preScheduleSettings['ai_can_confirm']) ? 'checked' : '' ?>>
-                <span><strong>IA pode confirmar sozinha</strong><small>Use apenas em negócios onde não há necessidade de validação humana.</small></span>
+                <span><strong>Sugerir horários alternativos</strong><small>Quando o horário pedido estiver ocupado, apresenta outras opções reais da agenda.</small></span>
             </label>
             <label class="switch-card">
                 <input type="checkbox" name="pre_schedule_send_approval_message" value="1" <?= !empty($preScheduleSettings['send_approval_message']) ? 'checked' : '' ?>>
@@ -160,6 +152,12 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
             </label>
         </div>
         <div class="form-grid two">
+            <label class="field"><span>Depois de encontrar um horário realmente livre</span><select name="pre_schedule_confirmation_mode">
+                <?php $confirmationMode = !empty($preScheduleSettings['require_human_approval']) ? 'human' : (!empty($preScheduleSettings['ai_can_confirm']) ? 'automatic' : 'pre_schedule'); ?>
+                <option value="human" <?= $confirmationMode === 'human' ? 'selected' : '' ?>>Pré-agendar e aguardar aprovação da equipe</option>
+                <option value="automatic" <?= $confirmationMode === 'automatic' ? 'selected' : '' ?>>Perguntar ao cliente e confirmar automaticamente</option>
+                <option value="pre_schedule" <?= $confirmationMode === 'pre_schedule' ? 'selected' : '' ?>>Somente pré-agendar; confirmação manual posterior</option>
+            </select><small>A preferência do lead nunca vira compromisso sozinha. O modo acima só é aplicado depois que o RS Connect validar e reservar um slot real.</small></label>
             <label class="field"><span>Duração padrão</span><input type="number" min="15" max="240" name="pre_schedule_default_duration_minutes" value="<?= (int) ($preScheduleSettings['default_duration_minutes'] ?? 50) ?>"></label>
             <label class="field"><span>Forma de conduzir as perguntas da agenda</span><select name="pre_schedule_message_mode" data-pre-schedule-message-mode>
                 <option value="prompt" <?= ($preScheduleSettings['message_mode'] ?? 'form') === 'prompt' ? 'selected' : '' ?>>Prompt Studio — conversa natural</option>
@@ -405,12 +403,16 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
         <div class="client-settings-accordion-body">
             <div class="settings-toggle-grid">
                 <label class="switch-card"><input type="checkbox" name="pre_schedule_enabled" value="1" <?= !empty($preScheduleSettings['enabled']) ? 'checked' : '' ?>><span><strong>Usar pré-agendamento</strong><small>Registra preferências de dia e horário durante a conversa.</small></span></label>
-                <label class="switch-card"><input type="checkbox" name="pre_schedule_require_human_approval" value="1" <?= !empty($preScheduleSettings['require_human_approval']) ? 'checked' : '' ?>><span><strong>Exigir aprovação da equipe</strong><small>Nenhum horário é confirmado sem revisão humana.</small></span></label>
-                <label class="switch-card"><input type="checkbox" name="pre_schedule_ai_can_suggest_slots" value="1" <?= !empty($preScheduleSettings['ai_can_suggest_slots']) ? 'checked' : '' ?>><span><strong>Assistente pode sugerir horários</strong><small>Apresenta opções sem confirmar sozinho.</small></span></label>
-                <label class="switch-card"><input type="checkbox" name="pre_schedule_ai_can_confirm" value="1" <?= !empty($preScheduleSettings['ai_can_confirm']) ? 'checked' : '' ?>><span><strong>Assistente pode confirmar sozinho</strong><small>Use apenas quando a operação não exigir revisão.</small></span></label>
+                <label class="switch-card"><input type="checkbox" name="pre_schedule_ai_can_suggest_slots" value="1" <?= !empty($preScheduleSettings['ai_can_suggest_slots']) ? 'checked' : '' ?>><span><strong>Sugerir horários alternativos</strong><small>Quando a preferência estiver indisponível, apresenta outras opções reais da agenda.</small></span></label>
                 <label class="switch-card"><input type="checkbox" name="pre_schedule_send_approval_message" value="1" <?= !empty($preScheduleSettings['send_approval_message']) ? 'checked' : '' ?>><span><strong>Enviar confirmação pelo WhatsApp</strong><small>Envia a mensagem quando a equipe aprovar o horário.</small></span></label>
             </div>
             <div class="form-grid two">
+                <label class="field"><span>Depois de encontrar um horário realmente livre</span><select name="pre_schedule_confirmation_mode">
+                    <?php $confirmationMode = !empty($preScheduleSettings['require_human_approval']) ? 'human' : (!empty($preScheduleSettings['ai_can_confirm']) ? 'automatic' : 'pre_schedule'); ?>
+                    <option value="human" <?= $confirmationMode === 'human' ? 'selected' : '' ?>>Pré-agendar e aguardar aprovação da equipe</option>
+                    <option value="automatic" <?= $confirmationMode === 'automatic' ? 'selected' : '' ?>>Perguntar ao cliente e confirmar automaticamente</option>
+                    <option value="pre_schedule" <?= $confirmationMode === 'pre_schedule' ? 'selected' : '' ?>>Somente pré-agendar; confirmação manual posterior</option>
+                </select><small>A escolha só entra em ação após validar disponibilidade real.</small></label>
                 <label class="field"><span>Duração padrão em minutos</span><input type="number" min="15" max="240" name="pre_schedule_default_duration_minutes" value="<?= (int) ($preScheduleSettings['default_duration_minutes'] ?? 50) ?>"></label>
                 <label class="field"><span>Forma de conduzir as perguntas da agenda</span><select name="pre_schedule_message_mode" data-pre-schedule-message-mode>
                     <option value="prompt" <?= ($preScheduleSettings['message_mode'] ?? 'form') === 'prompt' ? 'selected' : '' ?>>Prompt Studio — conversa natural</option>

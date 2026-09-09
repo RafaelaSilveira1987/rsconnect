@@ -304,11 +304,18 @@ final class CompanyController
             'id' => $tenantId,
         ]);
 
+        $confirmationMode = strtolower(trim((string) ($_POST['pre_schedule_confirmation_mode'] ?? '')));
+        if (!in_array($confirmationMode, ['human', 'automatic', 'pre_schedule'], true)) {
+            $confirmationMode = isset($_POST['pre_schedule_require_human_approval'])
+                ? 'human'
+                : (isset($_POST['pre_schedule_ai_can_confirm']) ? 'automatic' : 'pre_schedule');
+        }
+
         (new PreSchedulingService())->saveSettings($tenantId, [
             'enabled' => isset($_POST['pre_schedule_enabled']),
-            'require_human_approval' => isset($_POST['pre_schedule_require_human_approval']),
+            'require_human_approval' => $confirmationMode === 'human',
             'ai_can_suggest_slots' => isset($_POST['pre_schedule_ai_can_suggest_slots']),
-            'ai_can_confirm' => isset($_POST['pre_schedule_ai_can_confirm']),
+            'ai_can_confirm' => $confirmationMode === 'automatic',
             'send_approval_message' => isset($_POST['pre_schedule_send_approval_message']),
             'default_duration_minutes' => (int) ($_POST['pre_schedule_default_duration_minutes'] ?? 50),
             'message_mode' => trim((string) ($_POST['pre_schedule_message_mode'] ?? 'form')),

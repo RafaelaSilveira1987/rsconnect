@@ -52,9 +52,15 @@ final class CalendarConversationService
         }
 
         $settings = (new PreSchedulingService())->settings($tenantId);
-        if (empty($settings['enabled']) || empty($settings['ai_can_suggest_slots'])) {
-            return $this->result(false, 'suggestions_disabled');
+        if (empty($settings['enabled'])) {
+            return $this->result(false, 'pre_schedule_disabled');
         }
+
+        // A opção "IA pode sugerir horários" controla somente a oferta de ALTERNATIVAS.
+        // A preferência exata informada pelo lead continua sendo validada tecnicamente e,
+        // se estiver livre, pode virar uma pré-reserva real conforme o modo de confirmação.
+        // Assim, desligar sugestões não desliga a própria agenda nem força respostas falsas.
+        $canSuggestAlternatives = !empty($settings['ai_can_suggest_slots']);
 
         if ($this->requestAlreadyCommunicated($appointment, $requestId)) {
             return $this->result(false, 'already_communicated');
@@ -154,6 +160,33 @@ final class CalendarConversationService
                     'send_error' => $send['error'],
                 ]);
             }
+        }
+
+        // O horário exato não estava disponível (ou não pôde ser reservado). Se a empresa
+        // desativou sugestões, não apresenta opções aproximadas: pede outra preferência e
+        // mantém o registro como pré-agendamento sem slot, sem ocupar o calendário.
+        if (!$canSuggestAlternatives) {
+            $message = trim((string) ($settings['no_availability_message'] ?? ''))
+                ?: 'Esse horário não está disponível. Pode me informar outro dia ou horário de preferência?';
+            $send = $this->sendAppointmentMessage(
+                $appointment,
+                $message,
+                'calendar.alternatives_disabled',
+                ['request_id' => $requestId, 'diagnostic' => $diagnostic]
+            );
+            $this->markOptionsCommunication(
+                $tenantId,
+                $appointmentId,
+                $requestId,
+                $send['external_id'] ?? null,
+                false,
+                'received',
+                (bool) $send['ok']
+            );
+            return array_merge($this->result(true, 'alternatives_disabled'), [
+                'message_sent' => $send['ok'],
+                'send_error' => $send['error'],
+            ]);
         }
 
         $message = $this->optionsMessage($settings, $appointment, $slots);
@@ -1404,12 +1437,15 @@ final class CalendarConversationService
     private function finalizeSelection(int $tenantId, int $appointmentId, array $slot, string $selectedBy): void
     {
         $start = new DateTimeImmutable((string) $slot['starts_at']);
+        $settings = (new CalendarAvailabilityService())->settings($tenantId);
+        $holdMinutes = max(5, min(1440, (int) ($settings['hold_minutes'] ?? 30)));
         $params = [
             'tenant_id' => $tenantId,
             'appointment_id' => $appointmentId,
             'preferred_day_text' => $start->format('d/m/Y'),
             'preferred_time_text' => $start->format('H:i'),
             'selected_by' => $selectedBy,
+            'selection_expires_at' => date('Y-m-d H:i:s', time() + $holdMinutes * 60),
         ];
         try {
             Database::connection()->prepare(
@@ -1420,7 +1456,7 @@ final class CalendarConversationService
                      preferred_time_text = :preferred_time_text,
                      availability_selected_at = NOW(),
                      availability_selected_by = :selected_by,
-                     availability_selection_expires_at = NULL,
+                     availability_selection_expires_at = :selection_expires_at,
                      availability_error = NULL,
                      updated_at = CURRENT_TIMESTAMP
                  WHERE id = :appointment_id AND tenant_id = :tenant_id'

@@ -103,13 +103,17 @@ $calendarDisplayAppointments = array_values(array_filter($appointments, static f
         return true;
     }
 
-    // 36.27.19: enquanto dia/horário ainda não foram informados, starts_at/ends_at
-    // são apenas valores técnicos de compatibilidade e não representam compromisso real.
-    // O pedido continua visível na LISTA como "Aguardando preferência", mas não é
-    // desenhado em uma data fictícia no calendário mensal/semanal/diário.
-    $day = trim((string) ($appointment['preferred_day_text'] ?? ''));
-    $time = trim((string) ($appointment['preferred_time_text'] ?? ''));
-    return $day !== '' && $time !== '';
+    // Preferências ainda não validadas não representam compromisso real e NÃO ocupam o calendário. Um pré-agendamento só aparece
+    // na grade depois que a disponibilidade real foi validada e um slot foi selecionado.
+    // Antes disso ele continua visível apenas na lista operacional de pré-agendamentos.
+    $status = (string) ($appointment['status'] ?? '');
+    if (in_array($status, ['scheduled', 'confirmed'], true)
+        || (string) ($appointment['pre_schedule_source'] ?? '') === 'manual') {
+        return true;
+    }
+    $availabilityStatus = (string) ($appointment['availability_status'] ?? '');
+    $chosenSlotId = (int) ($appointment['chosen_availability_slot_id'] ?? 0);
+    return $chosenSlotId > 0 && in_array($availabilityStatus, ['slot_selected', 'validated'], true);
 }));
 
 $calendarEvents = array_map(static function (array $appointment) use ($statusLabels, $locationLabels, $googleLink, $calendarQueryBase): array {

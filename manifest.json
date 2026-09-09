@@ -1,19 +1,22 @@
-# RS Connect v36.27.25
+# RS Connect v36.27.26
 
-Agenda conversacional com escolha entre **Prompt Studio** e **Formulário configurável**.
+Agenda assertiva com validação técnica do horário antes de pré-reservar ou confirmar.
 
 Principais alterações desta versão:
 
-- mantém a Agenda interna como fonte de verdade quando selecionada;
-- permite usar o Prompt Studio para conduzir de forma natural a coleta de dia/horário e modalidade;
-- oferece formulário de mensagens por situação, com fallback seguro;
-- substitui o texto burocrático “Vou registrar sua preferência...” por uma etapa de consulta de disponibilidade;
-- adiciona pergunta inicial configurável para coletar dia/horário + online/presencial;
-- preserva mensagens técnicas determinísticas para disponibilidade, pré-reserva, aprovação e confirmação;
-- migration obrigatória: `102_agenda_prompt_or_form_messages.sql`.
+- a intenção de agendamento coleta modalidade + dia/data + horário antes de consultar a agenda;
+- preferência textual não ocupa mais o calendário nem vira compromisso por si só;
+- na Agenda interna, o horário exato solicitado é validado antes da grade de alternativas;
+- se o horário estiver realmente livre e dentro das regras, cria uma pré-reserva real;
+- confirmação automática só é enviada depois de persistir `status = confirmed`;
+- aprovação humana, confirmação automática e somente pré-agendamento passam a ser modos explícitos;
+- pré-reservas reais bloqueiam o horário durante o período de hold; preferências sem slot não bloqueiam;
+- respostas livres da IA/Prompt Studio não podem inventar disponibilidade ou confirmação;
+- "Sugerir horários alternativos" não desliga a validação do horário exato;
+- migration obrigatória permanece `102_agenda_prompt_or_form_messages.sql`.
 
 Após o deploy execute:
 
 `php bin/migrate.php up`
 
-Depois revise em **Configurações da empresa → Agenda → Pré-agendamento e mensagens** a opção **Forma de conduzir as perguntas da agenda**.
+Depois revise em **Configurações da empresa → Agenda → Pré-agendamento e mensagens** o modo de confirmação e as regras de disponibilidade.

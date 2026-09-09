@@ -278,10 +278,10 @@ final class OnboardingGuideService
         $enabled = $mode === 'none' ? 0 : 1;
         $humanApproval = (string) ($data['require_human_approval'] ?? '') === '1' ? 1 : 0;
         $suggest = (string) ($data['ai_can_suggest_slots'] ?? '') === '1' ? 1 : 0;
-        $confirm = (string) ($data['ai_can_confirm'] ?? '') === '1' ? 1 : 0;
+        $confirm = $humanApproval === 1 ? 0 : ((string) ($data['ai_can_confirm'] ?? '') === '1' ? 1 : 0);
         $duration = max(15, min(240, (int) ($data['default_duration_minutes'] ?? 60)));
         $collect = mb_substr(trim((string) ($data['collect_message'] ?? 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.')), 0, 800);
-        $registered = mb_substr(trim((string) ($data['default_message'] ?? 'Vou registrar sua preferência e encaminhar para confirmação.')), 0, 500);
+        $registered = mb_substr(trim((string) ($data['default_message'] ?? 'Perfeito. Vou verificar a disponibilidade real para {{dia_preferido}} às {{horario_preferido}}.')), 0, 500);
 
         $this->ensurePreScheduleTable();
         $statement = $this->pdo->prepare(

@@ -634,7 +634,17 @@ final class CalendarAvailabilityService
 
         if ($calendarSource === 'internal') {
             $this->updateAppointmentAvailability($tenantId, $appointmentId, 'requested', $requestId, 0, null, 'internal_fallback');
-            $slots = $this->generateInternalSlots(
+
+            // A preferência exata do lead é sempre testada primeiro. O intervalo entre
+            // sugestões serve para montar alternativas, mas não deve rejeitar um horário
+            // específico que esteja realmente livre e dentro das regras configuradas.
+            $exact = $this->validateInternalRequestedSlot($tenantId, $appointment, $settings, $requestedModality);
+            $slots = [];
+            if (!empty($exact['ok']) && is_array($exact['slot'] ?? null)) {
+                $slots[] = $exact['slot'];
+            }
+
+            $generated = $this->generateInternalSlots(
                 $tenantId,
                 $window,
                 $settings,
@@ -643,10 +653,32 @@ final class CalendarAvailabilityService
                 $appointmentId,
                 $requestedModality
             );
+            foreach ($generated as $candidate) {
+                $candidateKey = (string) ($candidate['start'] ?? '') . '|' . (string) ($candidate['end'] ?? '');
+                $duplicate = false;
+                foreach ($slots as $current) {
+                    if (((string) ($current['start'] ?? '') . '|' . (string) ($current['end'] ?? '')) === $candidateKey) {
+                        $duplicate = true;
+                        break;
+                    }
+                }
+                if (!$duplicate) {
+                    $slots[] = $candidate;
+                }
+                if (count($slots) >= max(1, (int) ($settings['max_suggestions'] ?? 5))) {
+                    break;
+                }
+            }
+
             $internalPayload = [
                 'slots' => $slots,
                 'source' => 'internal_fallback',
                 'calendar_source' => 'internal',
+                'exact_preference' => [
+                    'ok' => !empty($exact['ok']),
+                    'code' => $exact['code'] ?? null,
+                    'message' => $exact['message'] ?? null,
+                ],
                 'meta' => ['engine' => 'rs_connect_internal', 'google_used' => false, 'n8n_used' => false],
             ];
             $this->storeSlots($requestId, $tenantId, $appointmentId, $slots, 'internal_fallback', $internalPayload);
@@ -1071,6 +1103,27 @@ final class CalendarAvailabilityService
         }
 
         $source = trim((string) ($slot['source'] ?? ''));
+        if ($source === 'internal_fallback') {
+            $settings = $this->settings($tenantId);
+            $context = $professionalService->contextForAppointment($tenantId, $appointment, $settings);
+            if (empty($context['ok'])) {
+                return ['ok' => false, 'message' => (string) ($context['message'] ?? 'O profissional não está disponível para esse agendamento.')];
+            }
+            $effectiveSettings = (array) ($context['settings'] ?? $settings);
+            $candidateAppointment = array_merge($appointment, [
+                'starts_at' => (string) ($slot['starts_at'] ?? ''),
+                'ends_at' => (string) ($slot['ends_at'] ?? ''),
+            ]);
+            $check = $this->validateInternalRequestedSlot(
+                $tenantId,
+                $candidateAppointment,
+                $effectiveSettings,
+                (string) ($slot['modality'] ?? $appointment['appointment_modality'] ?? 'indefinida')
+            );
+            if (empty($check['ok'])) {
+                return ['ok' => false, 'message' => (string) ($check['message'] ?? 'O horário não está mais livre na Agenda interna.')];
+            }
+        }
         $isMarked = $source === 'google_marked_slots' || trim((string) ($slot['google_event_id'] ?? '')) !== '';
         if ($isMarked) {
             $currentSlotId = (int) ($appointment['chosen_availability_slot_id'] ?? 0);
@@ -1251,6 +1304,19 @@ final class CalendarAvailabilityService
         if ((string) ($appointment['availability_source'] ?? '') === 'google_marked_slots'
             && !in_array((string) ($appointment['google_event_state'] ?? ''), ['held', 'confirmed'], true)) {
             return ['ok' => false, 'message' => 'O evento VAGO ainda não foi pré-reservado no Google Agenda.'];
+        }
+
+        if ((string) ($appointment['availability_source'] ?? '') === 'internal_fallback') {
+            $recheck = $this->validateInternalRequestedSlot(
+                $tenantId,
+                $appointment,
+                $settings,
+                (string) ($appointment['appointment_modality'] ?? $appointment['location_type'] ?? 'indefinida'),
+                false
+            );
+            if (empty($recheck['ok'])) {
+                return ['ok' => false, 'message' => 'O horário deixou de estar disponível na Agenda interna: ' . (string) ($recheck['message'] ?? 'conflito detectado.')];
+            }
         }
         return ['ok' => true, 'message' => null];
     }
@@ -1916,6 +1982,105 @@ final class CalendarAvailabilityService
         return ['start' => $start->format('Y-m-d H:i:s'), 'end' => $end->format('Y-m-d H:i:s')];
     }
 
+    /**
+     * Valida a preferência exata contra a Agenda interna, sem depender da grade de
+     * sugestões. Se estiver livre, ela deve poder virar pré-agendamento/agendamento.
+     *
+     * @return array{ok:bool,code:string,message:?string,slot?:array<string,mixed>}
+     */
+    private function validateInternalRequestedSlot(int $tenantId, array $appointment, array $settings, string $requestedModality, bool $enforceNotice = true): array
+    {
+        $startText = trim((string) ($appointment['starts_at'] ?? ''));
+        if ($startText === '') {
+            return ['ok' => false, 'code' => 'missing_start', 'message' => 'Dia/horário ainda não informados.'];
+        }
+
+        $timezone = new DateTimeZone((string) ($settings['timezone'] ?? 'America/Sao_Paulo'));
+        try {
+            $start = new DateTimeImmutable($startText, $timezone);
+        } catch (Throwable) {
+            return ['ok' => false, 'code' => 'invalid_start', 'message' => 'Dia/horário inválidos.'];
+        }
+
+        $duration = max(15, (int) ($settings['default_duration_minutes'] ?? 50));
+        $end = $start->add(new DateInterval('PT' . $duration . 'M'));
+        if ($enforceNotice) {
+            $now = new DateTimeImmutable('now', $timezone);
+            $minStart = $now->add(new DateInterval('PT' . max(0, (int) ($settings['min_notice_hours'] ?? 0)) . 'H'));
+            if ($start < $minStart) {
+                return ['ok' => false, 'code' => 'min_notice', 'message' => 'O horário não respeita a antecedência mínima configurada.'];
+            }
+        }
+
+        $hours = json_decode((string) ($settings['working_hours_json'] ?? '{}'), true);
+        if (!is_array($hours)) {
+            $hours = ['start' => '08:00', 'end' => '18:00'];
+        }
+        $workdays = json_decode((string) ($settings['workdays_json'] ?? '[]'), true);
+        if (!is_array($workdays) || $workdays === []) {
+            $workdays = [1, 2, 3, 4, 5];
+        }
+        $workdays = array_map('intval', $workdays);
+        $byDay = isset($hours['by_day']) && is_array($hours['by_day']) ? $hours['by_day'] : [];
+        $weekday = (int) $start->format('w');
+        $dayConfig = $byDay[(string) $weekday] ?? $byDay[$weekday] ?? null;
+        $enabled = is_array($dayConfig) ? !empty($dayConfig['enabled']) : in_array($weekday, $workdays, true);
+        if (!$enabled) {
+            return ['ok' => false, 'code' => 'day_disabled', 'message' => 'O dia solicitado não está habilitado para atendimento.'];
+        }
+
+        $defaultStart = $this->normalizeHour((string) ($hours['start'] ?? '08:00'), '08:00');
+        $defaultEnd = $this->normalizeHour((string) ($hours['end'] ?? '18:00'), '18:00');
+        $dayStart = $this->normalizeHour((string) (is_array($dayConfig) ? ($dayConfig['start'] ?? $defaultStart) : $defaultStart), $defaultStart);
+        $dayEnd = $this->normalizeHour((string) (is_array($dayConfig) ? ($dayConfig['end'] ?? $defaultEnd) : $defaultEnd), $defaultEnd);
+        $businessStart = new DateTimeImmutable($start->format('Y-m-d') . ' ' . $dayStart, $timezone);
+        $businessEnd = new DateTimeImmutable($start->format('Y-m-d') . ' ' . $dayEnd, $timezone);
+        if ($start < $businessStart || $end > $businessEnd) {
+            return ['ok' => false, 'code' => 'outside_working_hours', 'message' => 'O horário solicitado fica fora da faixa de atendimento configurada ou a duração não cabe no expediente.'];
+        }
+
+        $ownerUserId = (int) ($appointment['owner_user_id'] ?? 0);
+        $appointmentId = (int) ($appointment['id'] ?? 0);
+        $buffer = max(0, (int) ($settings['buffer_minutes'] ?? 0));
+        $busy = $this->busyPeriods(
+            $tenantId,
+            $start->format('Y-m-d H:i:s'),
+            $end->format('Y-m-d H:i:s'),
+            $ownerUserId,
+            $appointmentId
+        );
+        $professionalSettings = (new ProfessionalCalendarService())->tenantSettings($tenantId);
+        if (!empty($professionalSettings['enabled'])
+            && !empty($professionalSettings['prevent_contact_overlap'])
+            && (int) ($appointment['contact_id'] ?? 0) > 0) {
+            $busy = array_merge($busy, $this->contactBusyPeriods(
+                $tenantId,
+                (int) $appointment['contact_id'],
+                $start->format('Y-m-d H:i:s'),
+                $end->format('Y-m-d H:i:s'),
+                $appointmentId
+            ));
+        }
+        if ($this->overlapsBusy($start, $end, $busy, $buffer)) {
+            return ['ok' => false, 'code' => 'conflict', 'message' => 'Já existe compromisso ou pré-reserva real que conflita com o horário solicitado.'];
+        }
+
+        return [
+            'ok' => true,
+            'code' => 'available',
+            'message' => null,
+            'slot' => [
+                'start' => $start->format('Y-m-d H:i:s'),
+                'end' => $end->format('Y-m-d H:i:s'),
+                'label' => $start->format('d/m/Y H:i'),
+                'source' => 'internal_fallback',
+                'modality' => $this->normalizeModality($requestedModality),
+                'event_state' => 'available',
+                'raw' => ['generated_by' => 'RS Connect internal exact preference', 'exact_preference' => true],
+            ],
+        ];
+    }
+
     private function generateInternalSlots(
         int $tenantId,
         array $window,
@@ -1945,7 +2110,7 @@ final class CalendarAvailabilityService
         $byDay = isset($hours['by_day']) && is_array($hours['by_day']) ? $hours['by_day'] : [];
         $defaultDayStart = $this->normalizeHour((string) ($hours['start'] ?? '08:00'), '08:00');
         $defaultDayEnd = $this->normalizeHour((string) ($hours['end'] ?? '18:00'), '18:00');
-        $busy = $this->busyPeriods($tenantId, $window['start'], $window['end'], $ownerUserId);
+        $busy = $this->busyPeriods($tenantId, $window['start'], $window['end'], $ownerUserId, $ignoreAppointmentId);
         $professionalSettings = (new ProfessionalCalendarService())->tenantSettings($tenantId);
         if (!empty($professionalSettings['enabled'])
             && !empty($professionalSettings['prevent_contact_overlap'])
@@ -1998,12 +2163,29 @@ final class CalendarAvailabilityService
         return $slots;
     }
 
-    private function busyPeriods(int $tenantId, string $start, string $end, int $ownerUserId = 0): array
+    private function busyPeriods(int $tenantId, string $start, string $end, int $ownerUserId = 0, int $ignoreAppointmentId = 0): array
     {
         try {
+            // Além dos confirmados, um horário realmente selecionado pelo fluxo de
+            // pré-agendamento também bloqueia a agenda. Preferências ainda não validadas
+            // NÃO bloqueiam e por isso nunca criam uma "agenda falsa".
             $sql = 'SELECT starts_at, ends_at FROM calendar_appointments
                     WHERE tenant_id = :tenant_id
-                      AND status IN ("scheduled", "confirmed")
+                      AND (
+                            status IN ("scheduled", "confirmed")
+                            OR (
+                                is_pre_schedule = 1
+                                AND status IN ("pre_scheduled", "awaiting_approval", "rescheduled")
+                                AND (
+                                    COALESCE(pre_schedule_source, "") = "manual"
+                                    OR (
+                                        COALESCE(chosen_availability_slot_id, 0) > 0
+                                        AND COALESCE(availability_status, "") IN ("slot_selected", "validated")
+                                    )
+                                )
+                                AND (availability_selection_expires_at IS NULL OR availability_selection_expires_at >= NOW())
+                            )
+                      )
                       AND starts_at < :end_at
                       AND ends_at > :start_at';
             $params = ['tenant_id' => $tenantId, 'start_at' => $start, 'end_at' => $end];
@@ -2011,9 +2193,13 @@ final class CalendarAvailabilityService
                 $sql .= ' AND owner_user_id = :owner_user_id';
                 $params['owner_user_id'] = $ownerUserId;
             }
+            if ($ignoreAppointmentId > 0) {
+                $sql .= ' AND id <> :ignore_appointment_id';
+                $params['ignore_appointment_id'] = $ignoreAppointmentId;
+            }
             $statement = Database::connection()->prepare($sql);
             $statement->execute($params);
-            return $statement->fetchAll(PDO::FETCH_ASSOC);
+            return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
             return [];
         }
