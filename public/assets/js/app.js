@@ -3488,7 +3488,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (item.profile_name) parts.push(item.profile_name);
     const phone = String(item.profile_phone || '').replace(/\D+/g, '');
     if (phone.length >= 10 && phone.length <= 15) parts.push(phone);
-    if (item.reason) parts.push(item.reason);
+    const reason = String(item.reason || '').trim();
+    const healthyConnected = String(item.status || '').toLowerCase() === 'connected';
+    if (!healthyConnected && reason && !/^\d{3}$/.test(reason)) parts.push(reason);
     return parts.join(' · ') || 'Aguardando atualização da Evolution';
   }
 
@@ -3515,7 +3517,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const normalizedConnected = String(item.profile_phone || '').replace(/\D+/g, '');
     const authorizedValid = normalizedAuthorized.length >= 10 && normalizedAuthorized.length <= 15;
     const connectedValid = normalizedConnected.length >= 10 && normalizedConnected.length <= 15;
-    const mismatch = String(item.identity_status || '').toLowerCase() === 'mismatch';
+    const numbersMatchExactly = authorizedValid && connectedValid && normalizedAuthorized === normalizedConnected;
+    const mismatch = String(item.identity_status || '').toLowerCase() === 'mismatch' && !numbersMatchExactly;
     if (authorizedPhone) authorizedPhone.textContent = authorizedValid ? normalizedAuthorized : 'Será confirmado na conexão';
     if (connectedPhone) connectedPhone.textContent = connectedValid ? normalizedConnected : 'Ainda não confirmado';
     if (recoveryMode) recoveryMode.textContent = Number(item.auto_recovery_enabled || 0) === 1 ? 'Ativa' : 'Desativada';

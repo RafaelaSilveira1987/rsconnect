@@ -154,7 +154,7 @@ final class EvolutionInstanceSafetyService
         }
         $assessment = self::assess($instance);
         $storedStatus = strtolower(trim((string) ($instance['identity_status'] ?? '')));
-        if ($assessment['status'] === 'mismatch' || $storedStatus === 'mismatch') {
+        if ($assessment['status'] === 'mismatch' || ($assessment['status'] !== 'verified' && $storedStatus === 'mismatch')) {
             throw new RuntimeException('Mensagem ignorada: a conexão está usando um número diferente do número autorizado.');
         }
     }
@@ -184,7 +184,7 @@ final class EvolutionInstanceSafetyService
 
             $assessment = self::assess($rows[0]);
             $storedStatus = strtolower(trim((string) ($rows[0]['identity_status'] ?? '')));
-            if ($assessment['status'] === 'mismatch' || $storedStatus === 'mismatch') {
+            if ($assessment['status'] === 'mismatch' || ($assessment['status'] !== 'verified' && $storedStatus === 'mismatch')) {
                 throw new RuntimeException(
                     'Envio bloqueado por segurança: o número conectado ('
                     . ($assessment['connected_phone'] !== '' ? $assessment['connected_phone'] : 'não confirmado')

@@ -351,6 +351,7 @@ td small { margin-top: 3px; color: var(--rs-muted); }
 .message-bubble footer { display: flex; justify-content: flex-end; gap: 7px; margin-top: 5px; color: #7e8797; font-size: .61rem; }
 .message-type { display: inline-block; margin-bottom: 5px; color: var(--rs-blue); font-size: .63rem; font-weight: 900; text-transform: uppercase; }
 .message-error { display: block; margin-top: 6px; color: var(--rs-danger); font-size: .68rem; }
+.message-error[hidden], .instance-identity-warning[hidden] { display: none !important; }
 .message-status { font-weight: 800; }
 .chat-empty { display: grid; place-items: center; align-content: center; min-height: 280px; color: var(--rs-muted); text-align: center; }
 .chat-empty > span { display: grid; place-items: center; width: 58px; height: 58px; margin-bottom: 12px; border-radius: 20px; color: var(--rs-blue); background: #e9f3fa; font-size: 1.6rem; }
@@ -16064,4 +16065,4 @@ summary {
     }
 }
 
-/* RS Connect 36.30.5 — correção de identidade e frontend de instâncias */
+/* RS Connect 36.30.6 — corrige alerta fantasma de identidade e status visual */

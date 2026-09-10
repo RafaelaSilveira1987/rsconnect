@@ -382,7 +382,7 @@ final class InstanceController
             echo json_encode([
                 'ok' => true,
                 'source_version' => '36.6.38-live-status',
-                'resilience_version' => '36.30.5-identity-reconciliation',
+                'resilience_version' => '36.30.6-identity-visual-reconciliation',
                 'items' => $items,
                 'checked_at' => date(DATE_ATOM),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -392,7 +392,7 @@ final class InstanceController
             echo json_encode([
                 'ok' => false,
                 'source_version' => '36.6.38-live-status',
-                'resilience_version' => '36.30.5-identity-reconciliation',
+                'resilience_version' => '36.30.6-identity-visual-reconciliation',
                 'message' => 'Não foi possível atualizar o status das conexões.',
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
@@ -1963,7 +1963,8 @@ final class InstanceController
     {
         if (EvolutionInstanceSafetyService::schemaSupported($pdo)) {
             $assessment = EvolutionInstanceSafetyService::assess($instance);
-            if (($assessment['status'] ?? '') === 'mismatch' || strtolower((string) ($instance['identity_status'] ?? '')) === 'mismatch') {
+            $storedIdentityStatus = strtolower((string) ($instance['identity_status'] ?? ''));
+            if (($assessment['status'] ?? '') === 'mismatch' || (($assessment['status'] ?? '') !== 'verified' && $storedIdentityStatus === 'mismatch')) {
                 throw new \RuntimeException('Recuperação bloqueada: o número conectado diverge do número autorizado. Desconecte e leia o QR Code com o número correto.');
             }
             $pdo->prepare(

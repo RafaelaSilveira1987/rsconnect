@@ -110,7 +110,12 @@ $statusLabels = ['connected' => 'Conectada', 'disconnected' => 'Desconectada', '
                 'authorized_phone' => (string) ($instance['authorized_phone'] ?? ''),
                 'auto_recovery_enabled' => (int) ($instance['auto_recovery_enabled'] ?? 1),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-            $identityStatus = (string) ($instance['identity_status'] ?? 'unknown');
+            $identityAssessment = EvolutionInstanceSafetyService::assess($instance);
+            $identityStatus = match ((string) ($identityAssessment['status'] ?? 'unknown')) {
+                'verified' => 'verified',
+                'mismatch' => 'mismatch',
+                default => 'unknown',
+            };
             $authorizedPhone = EvolutionInstanceSafetyService::normalizeObservedPhone((string) ($instance['authorized_phone'] ?? ''));
             $connectedPhone = EvolutionInstanceSafetyService::normalizeObservedPhone((string) ($instance['profile_phone'] ?? ''));
             ?>

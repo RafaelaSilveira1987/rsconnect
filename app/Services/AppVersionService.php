@@ -143,7 +143,9 @@ final class AppVersionService
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.30.4 — Instâncias resilientes';
     // Compatibilidade histórica: REQUIRED_MIGRATION = '108_evolution_instance_resilience.sql';
     // RS Connect 36.30.5 — corrige vazamento visual dos layouts e reconcilia o número conectado via fetchInstances.
-    public const PACKAGE_LABEL = 'RS Connect 36.30.5 — Correção de identidade das instâncias';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.30.5 — Correção de identidade das instâncias';
+    // RS Connect 36.30.6 — corrige alerta fantasma quando os números já conferem e limpa o detalhe visual de conexões saudáveis.
+    public const PACKAGE_LABEL = 'RS Connect 36.30.6 — Correção do alerta de identidade';
     public const REQUIRED_MIGRATION = '109_evolution_instance_identity_cleanup.sql';
 
     private PDO $pdo;

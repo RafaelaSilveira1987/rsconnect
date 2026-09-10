@@ -1,4 +1,4 @@
-# RS Connect v36.30.5
+# RS Connect v36.30.6
 
 Fechamento visual e QA responsivo sobre a base 36.29.9, consolidando Laboratório de Assistentes, Avisos Operacionais, Fila/Equipe e superfícies administrativas remanescentes sem alterar regras de negócio.
 
@@ -44,3 +44,5 @@ Migration obrigatória atual:
 - v36.30.4: instâncias resilientes com número autorizado, bloqueio por divergência, diagnóstico e recuperação automática segura.
 
 - v36.30.5: correção do vazamento visual dos layouts e reconhecimento robusto do número conectado via fetchInstances; migration 109 limpa valores inválidos como códigos HTTP.
+
+- v36.30.6: hotfix visual/lógico da identidade; aviso de bloqueio respeita `hidden`, estado verificado prevalece sobre mismatch antigo e conexões saudáveis não exibem resíduos como HTTP 200.

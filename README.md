@@ -1,4 +1,13 @@
-# RS Connect 36.30.5
+# RS Connect 36.30.6
+
+## Hotfix do alerta de identidade — 36.30.6
+
+- corrige a mensagem vermelha que podia permanecer visível mesmo com Número autorizado e Número conectado iguais;
+- força elementos de erro com `hidden` a permanecerem realmente ocultos, evitando conflito com `.message-error { display: block; }`;
+- o frontend deixa de exibir códigos HTTP/resíduos como `· 200` em instâncias saudáveis;
+- o estado visual de identidade passa a ser derivado dos números atuais, evitando badge verificado junto de aviso de divergência;
+- a proteção de entrada/saída considera a verificação atual como fonte de verdade quando um `identity_status=mismatch` antigo ficou persistido;
+- nenhuma migration nova; permanece obrigatória `109_evolution_instance_identity_cleanup.sql`.
 
 ## Correção de identidade e layouts — 36.30.5
 

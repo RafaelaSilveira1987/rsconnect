@@ -4,7 +4,7 @@ ef587bcac67854566992deca813d0170495fe5118df5906949e007c64a6455c8  ./.env.example
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./.env.vps.example
 7ba6b8258e72ac23abfe4f291bc3b43467ae583c6c0f12b58797f75825b8c020  ./.gitignore
 ef587bcac67854566992deca813d0170495fe5118df5906949e007c64a6455c8  ./Dockerfile
-666a2e3c1e495540ee1f54daa6dcab92c51ec2388388ff72913c3ab0cb1c4627  ./README.md
+244244db7780a35a39c1722346b909f2979d6faa289336577a86366c8e2f4190  ./README.md
 ce7249f53b73b4347f0db1bf484321162a24877aca6e7106d85afd34365ab179  ./app/Controllers/AccessController.php
 64dc9574317cd81b08f9669533f2b8cf57d8a8ba305760158a7ecff6dee51433  ./app/Controllers/AdminCrmController.php
 7a964baf4c3563146b922fd9fd3cea227dff01727aa798b8afacbf65cddf8894  ./app/Controllers/AgentBlueprintController.php
@@ -32,7 +32,7 @@ bef2d0154285068ef5276815e18ef43957dc1fd7d37abc5040b10e610bb920f4  ./app/Controll
 9de6de0bd128033a7ff7f72d7cd7c7123b9332f1d31d8fa3e8082b6b8993eb4c  ./app/Controllers/EvolutionWebhookController.php
 cb0f0456616dcae0fd385642dc0393ec3d6f0d10a922ddf81e4670bfff5f1e98  ./app/Controllers/HealthController.php
 8b19d33a0db13fd17bec5c387c92f66a86a1bf739c5bd4a60741dcbe56bc1289  ./app/Controllers/ImplementationController.php
-bf9adce5fcab67ece33394e2bf6550cfebc2565ffe20faecdc91d0c74331564e  ./app/Controllers/InstanceController.php
+1a0e1e5ca0c12df057edf448b421dbb56ae263a469ba5d1ac9f1cfad4736a323  ./app/Controllers/InstanceController.php
 840cfecede401bd18f1d3b864176de1deb448e089e7099dff34187ad05d89829  ./app/Controllers/MessageGovernanceController.php
 9159a02775446657688c6196c472e2b93f72303829eca7f88ca96b69ef62b010  ./app/Controllers/N8nFlowController.php
 18e1369b1e63fb6a96258359ee2cd3e1f66cb386892fa790d95c8e70c0b505a3  ./app/Controllers/N8nTemplateController.php
@@ -102,7 +102,7 @@ f98077caae5b7beeb7dead715471527a4a58b64dbeb0c2505660b543228bfbcf  ./app/Services
 d73181c7c18f1585050d3f611b49303ced38528adb42ea46ad9cc05858f1f01a  ./app/Services/AiRouterService.php
 fe5c2b3eca0bfce848ac8ef3058623da97b8aa04d5565c2a67f4e6fc258ed0e5  ./app/Services/AiTurnContextService.php
 31f804dbc48f1506e82c9de1395a7f67650de453a03671900a8132a291cd1465  ./app/Services/AiUsageService.php
-c7737e2650968c03802a1cba0f4d5c1f9c0259b67c2a72420b391f59f8b6337c  ./app/Services/AppVersionService.php
+6d941e446bbc3de7949bdbfd94aa46c6c645d35f60bc2ac952e0dca59c4128c5  ./app/Services/AppVersionService.php
 827a1e1fb703b1ffa5cc9f663219e6116c7c043852661bbaa8b7514e73b715f6  ./app/Services/AutomationWebhookService.php
 1980cb493d0e0464cdcbeb155b5aea8739c318f78bd0aafd0c8acc6dc5e8f335  ./app/Services/BackupAutomationService.php
 ec4c8036b556935456fe05933de8074d1020866d3f256f203943dcfaf7be9b74  ./app/Services/BackupSchedulePolicyService.php
@@ -122,7 +122,7 @@ afd668e10e7bb9dd1d38bb67fed06c8a5be9ddfa00705a81a630757e966fe1d7  ./app/Services
 3b97f7d65e3b75c0df5bdfceea077684abef116954dd62547cdfb6ce0a319ef1  ./app/Services/ConversationOwnershipService.php
 8f249d929e4867ed39a52a9965c4048f418a90c49b4525e9702d4d4037ad2abc  ./app/Services/CrmAutoService.php
 dc7bf3d1f66f4f9768c4b0c7db0e6ec20e01c874124db7bbc4739b5672dcaed5  ./app/Services/CrmDealValueService.php
-61d51fe049841f5feb92132864993c93db985bc52acb52915dc3b791b5392d9a  ./app/Services/EvolutionInstanceSafetyService.php
+d49a23fe381d98b0ea45671707e2a523c74bb352477a1260bd57b4309531337d  ./app/Services/EvolutionInstanceSafetyService.php
 3d33099bc3be0617dcec73d6853dd7f8c96199943bfe1016f1d525a54d283a31  ./app/Services/EvolutionService.php
 ed046c81cf77a7a7821235d11829017e9196b4d1c74f965bca766eaeed415d80  ./app/Services/ExecutiveMetricsPolicyService.php
 c58bde3e7fa3b77c7681f90b1722d4eef091129d177798068e5835f9cdca805f  ./app/Services/ExecutiveReportPdfService.php
@@ -206,10 +206,10 @@ c73c9ff89ae867198446a710527246fbff87ffa8f8a5172b88ae1b5e5e8d9340  ./app/Views/im
 5c4cfd53658634fe70d00021cbdc1316fb14da83d8809a94687a651bb2955b0a  ./app/Views/implementations/index.php
 7e19130c45f5d8359aa971fdd4818bc799fcb42cc6e5bc9853c6ac1c268217b1  ./app/Views/instances/_client.php
 dc9743c6b0aedf080724becc18387f9e897c42e7e37e72c7ae5bfb99b18e0ff6  ./app/Views/instances/_routing.php
-ed7903140c432e281c06cd6258d6a5546e80d32cc851aafa1ca714b3e42b1aa9  ./app/Views/instances/index.php
-112c3e2da6749195ef029162558dee4a0d8ab0e3422ac8d6cb09974639c2e8fe  ./app/Views/layouts/app.php
-507ef6f200fb3e699659c8b5ce23e5abd600ce040d10d6b0876013da10203002  ./app/Views/layouts/guest.php
-53b6417b05d2d6322e9720011541c5ec697710deb4b6a48fa380ad18a2c7b2b7  ./app/Views/layouts/restricted.php
+d096d834ce6c33de1ae28a86cf6b467508d02f4cb8e45a5822c4de94b9995b0a  ./app/Views/instances/index.php
+e8a9198b1881be299234f5f2fcb6492ad3737925bc7db85f477344d272f17543  ./app/Views/layouts/app.php
+1cbd673e56346eea576f242c45db4b206438a0956cfab92fbb1a45991278ddbf  ./app/Views/layouts/guest.php
+8084b4f93a6d29ea84d329e1a41c2ca2554e453f3abd66ac3171424ef4000657  ./app/Views/layouts/restricted.php
 c2dd3e3877988cd66431f00b18714186ba6323196537b5e43b0895ed4836a241  ./app/Views/n8n_flows/_nav.php
 fc7f4bbef193359502d5dcc7c39140592ddfee90691a3f0852935ee4357462c0  ./app/Views/n8n_flows/hub.php
 bb3d78af7cd65273a4c8ea4663ea3fcb0a329d5eb4c12ff9eab949a97f428c2a  ./app/Views/n8n_flows/index.php
@@ -518,6 +518,7 @@ aa35f780ec235e9cb70bea82827101510b5b9da2ad98d37e0f8ad0cb076677b0  ./docs/ATUALIZ
 112186dff58a9c310c27b557b9d47d9d287b7fe9a56d494d9b9ee4cef7265100  ./docs/ATUALIZACAO-v36.30.3.md
 f8112e13ff7421cc5f52044f3fac002950bbbe7a19e8950964f2c677cf9fe864  ./docs/ATUALIZACAO-v36.30.4.md
 c44f611f4a221e143b331fba770a95cc617a7d8947b1f089cd22dde1f4780884  ./docs/ATUALIZACAO-v36.30.5.md
+3bc8ed1e95906456439c5ea0641e85c1c2d1e2d7fb853c1ce129a6bd6c40bee2  ./docs/ATUALIZACAO-v36.30.6.md
 cc0ed1b48f4448f2256c8f0972a37cf24342ab7e5f5bbed6af6e39e53c5f1199  ./docs/ATUALIZACAO-v36.6.10.md
 868c8f2f58490d04357c95b2140d696d937530632228b736617ef378607ea7c7  ./docs/ATUALIZACAO-v36.6.11.md
 c5429636c9356d6548b356466f8244aeec21e6a4f63c6f30671951717e101361  ./docs/ATUALIZACAO-v36.6.12.md
@@ -681,9 +682,9 @@ aeee5bc8e058b1d03890b79daaf9f39eef29e7e448efdc8b6d05d5678a01f1ac  ./docs/n8n_tem
 752c18986f14e103d9eb9950a0aab494d88b10c541cd3a470a051d790b7bdc11  ./docs/validation/HOMOLOGACAO-PERSISTENTE-2026-09-01.md
 006d6da9b25d9788d3afbc7c1f275a6b9d6d12ffcb1181961f519c05bfdb79cf  ./docs/validation/calendar-source-v7.md
 22347f12bacc2a5de89719e419f28f2e0a26bc5ecd4e467f396e2dc236d3fb34  ./docs/validation/homologacao-persistente-2026-09-01.json
-50a2008f23af3e076c660e382a7e9199eb4a4a6b779c1d6b9b8d43e2139549f7  ./manifest.json
+aaaa44af0a7334c4405f987fbc887dd5246d714a644cd997ab95e6e57f694c83  ./manifest.json
 c835b907d8eb7381a72224cfdc8b688ffbb9a7676f4f05f7bc84d18c4f61324e  ./public/.htaccess
-dab6723b831e1c6e2dd96b9f62d9603b2a6b4ade8900aba16b2d64f2baeb43f9  ./public/assets/css/app.css
+dec88ee41730140a08fa322d4864ce4e9c04f378207557a9dc2595b9443e0750  ./public/assets/css/app.css
 999265b25e5166e45224120b1b9a7d3e7e205acca6b472b50dbb0e73f91f4d5b  ./public/assets/css/reports.css
 eb9bc52f13a9bd152bfa27d7c522830ec59fdc580dd043a293531392c628cd70  ./public/assets/img/RS_Connect_horizontal_transparente.png
 8845f4643d846dc948141fb4de0df0bc1bb98124bf74913e664c792d1b2c07ab  ./public/assets/img/RS_Connect_horizontal_vetor.svg
@@ -691,7 +692,7 @@ eb9bc52f13a9bd152bfa27d7c522830ec59fdc580dd043a293531392c628cd70  ./public/asset
 e66fc5d2a230fa640104ac2370e09b6311388482db2ebd8f98d590ff3db642d9  ./public/assets/img/rs-connect-mark.png
 fecb9b583424227bc0e1a48936808e8a9be42d0c7a3573feb0f1e4498bbe9668  ./public/assets/img/rs-connect-report-mark.jpg
 00fb8db54d6e8e2cd085489e742109048ba0caa8c045177c08dc6d1ecd0cf0d1  ./public/assets/img/rs-digital-lab-report.jpg
-097c3364296214daddff9cd87515c36f9b186df55c99bd48183c85a715130874  ./public/assets/js/app.js
+3d22e165b3f9e1a60cf5b4467f3757f41db4e92f3e3c6a323de0a7bfb6954181  ./public/assets/js/app.js
 bd3f28a610989ec4d99f29030753678612cbdc06c871a7832045a20580af2b84  ./public/assets/js/company-settings.js
 429e2971f0e10a6c60617af58e523854177da606636f184409e12f1ec003576d  ./public/assets/js/login-demo.js
 880607a52fcd14e524d0509931b1958608a3299daccd0b4d7c1968c6d57f9f43  ./public/assets/js/reports.js
@@ -835,6 +836,7 @@ b62a18068ce5173257a15e526421f4b15e309089d24b553103ea9d622102ad14  ./tests/Featur
 8ed55410dbffb070caad348157ab00d4b7db1d135233e9a9f7dc506323a946a8  ./tests/Feature/evolution-alert-suppression-v36266-smoke.php
 217ef1ec2410c79507f787d88285ebcf0f054464138b3b27a5a80df5407ff191  ./tests/Feature/evolution-client-admin-v36161-smoke.php
 850ea35e00beabab55e7e026e1ef9ccb7042f149fcb8c2b02c1d9f8ec5dddd49  ./tests/Feature/evolution-instance-identity-v36305-smoke.php
+f15e19ce88eae07cdfecb9beed650418cce4e64dba30d4896113e9b4a8b7c253  ./tests/Feature/evolution-instance-identity-warning-v36306-smoke.php
 3308224934ef683f8a0e9ebfd0f22d216fabad09909246404f0cdcaeea0b1b87  ./tests/Feature/evolution-instance-management-v36160-smoke.php
 5f7276046eba7dfba21d9684566d32e0eacf872199dbfc0bd5f8ff6d58c2fc87  ./tests/Feature/evolution-instance-resilience-v36304-smoke.php
 f0ce1185d826be67ed1d733bd70d562d8e3f2b499a322e7e47027dfc0c76c04d  ./tests/Feature/evolution-live-status-smoke.php
