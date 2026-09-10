@@ -1,6 +1,6 @@
-# RS Connect v36.29.5
+# RS Connect v36.29.6
 
-Fluxo editável e regras do atendimento no cliente.
+Formulários consistentes e responsividade mobile, preservando o fluxo editável e as regras do atendimento no cliente.
 
 Alterações principais:
 
@@ -10,6 +10,8 @@ Alterações principais:
 - regras operacionais disponíveis em `/agents` para usuários com `agents.manage`;
 - segmento, blueprint, versão e proteções estruturais permanecem no RS Admin;
 - `policy.fail_closed` permanece protegido para clientes;
+- padronização visual de formulários, checkboxes, radios, filtros e ações;
+- responsividade mobile reforçada sem alterar seletores funcionais;
 - nenhuma migration nova.
 
 Migration obrigatória atual:

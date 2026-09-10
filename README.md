@@ -1,4 +1,4 @@
-# RS Connect 36.29.5
+# RS Connect 36.29.6
 
 Fluxo de atendimento editável e regras operacionais disponíveis no módulo de Assistentes.
 
@@ -13,6 +13,15 @@ Principais alterações desta versão:
 - o editor da sequência foi redesenhado em cards responsivos, sem rolagem horizontal;
 - regras de segurança e Policy Engine continuam valendo independentemente da ordem visual;
 - agrupamento de mensagens e prioridade do turno atual da versão 36.29.4 foram preservados.
+
+## Ajustes visuais desta versão
+
+- campos de texto, select, textarea, data/hora e uploads com padrão visual comum;
+- checkboxes e radios alinhados e com alvo de toque consistente;
+- formulários de duas/três colunas adaptados para uma coluna em mobile;
+- filtros, ações, tabelas e popovers preparados para viewport pequena;
+- nenhuma alteração em `name`, `id`, `data-*`, rotas, actions de formulário ou lógica JavaScript;
+- nenhuma migration nova.
 
 Migration obrigatória atual:
 

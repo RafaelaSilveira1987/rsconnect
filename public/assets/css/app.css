@@ -13628,3 +13628,427 @@ body.login-demo-open{overflow:hidden}
   .agent-operation-savebar .btn { width: 100%; }
   .agent-workflow-editor-step { grid-template-columns: 54px minmax(0,1fr); }
 }
+
+/* =========================================================
+   RS Connect 36.29.6 — camada de consistência visual
+   Formulários, checkboxes, filtros e responsividade mobile.
+   Apenas apresentação: não altera nomes, IDs, data-* ou fluxo JS.
+   ========================================================= */
+:root {
+  --rs-form-control-height: 44px;
+  --rs-form-radius: 12px;
+  --rs-form-border: #d8e1ea;
+  --rs-form-border-hover: #bccbd7;
+  --rs-form-focus: #15968f;
+  --rs-form-focus-ring: rgba(21,150,143,.12);
+  --rs-form-label: #435268;
+  --rs-form-help: #788697;
+  --rs-form-disabled: #f4f6f8;
+}
+
+/* Base segura para todos os formulários. */
+form,
+fieldset,
+.field,
+.form-grid,
+.field-grid {
+  min-width: 0;
+}
+fieldset {
+  max-width: 100%;
+}
+
+/* Campos nativos: aparência comum sem alcançar checkbox/radio/hidden. */
+form :where(
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="month"],
+  input[type="week"],
+  select,
+  textarea
+) {
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--rs-form-control-height);
+  border: 1px solid var(--rs-form-border);
+  border-radius: var(--rs-form-radius);
+  color: var(--rs-text);
+  background-color: #fff;
+  box-shadow: 0 1px 2px rgba(15,23,42,.025);
+  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+}
+form :where(
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="month"],
+  input[type="week"],
+  select,
+  textarea
+):hover:not(:disabled):not([readonly]) {
+  border-color: var(--rs-form-border-hover);
+}
+form :where(
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="month"],
+  input[type="week"],
+  select,
+  textarea
+):focus {
+  border-color: var(--rs-form-focus);
+  outline: 0;
+  box-shadow: 0 0 0 4px var(--rs-form-focus-ring);
+}
+form :where(input, select, textarea):disabled,
+form :where(input, textarea)[readonly] {
+  color: #7b8796;
+  background: var(--rs-form-disabled);
+  cursor: not-allowed;
+  opacity: 1;
+}
+form :where(input, textarea)::placeholder {
+  color: #9aa6b4;
+  opacity: 1;
+}
+form textarea {
+  line-height: 1.5;
+}
+
+/* Arquivo segue o mesmo padrão visual, preservando o input nativo. */
+form input[type="file"] {
+  max-width: 100%;
+  min-width: 0;
+  color: var(--rs-muted);
+}
+form input[type="file"]::file-selector-button {
+  min-height: 38px;
+  margin-right: 10px;
+  padding: 8px 12px;
+  border: 1px solid #cfdbe5;
+  border-radius: 10px;
+  color: #36566b;
+  background: #f7fafc;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Rótulos, ajuda e espaçamento vertical consistentes. */
+.field {
+  min-width: 0;
+  gap: 7px;
+}
+.field > span,
+.field > label,
+fieldset > legend {
+  color: var(--rs-form-label);
+}
+.field > span {
+  line-height: 1.35;
+}
+.field-hint,
+.field-hint-inline,
+.field small,
+.form-hint {
+  overflow-wrap: anywhere;
+}
+.field-hint,
+.field-hint-inline {
+  color: var(--rs-form-help);
+  line-height: 1.45;
+}
+.form-grid,
+.field-grid {
+  align-items: start;
+}
+.form-grid > *,
+.field-grid > * {
+  min-width: 0;
+}
+
+/* Checkbox e radio simples: alvo confortável e alinhamento idêntico. */
+input[type="checkbox"],
+input[type="radio"] {
+  width: 19px !important;
+  min-width: 19px !important;
+  max-width: 19px !important;
+  height: 19px !important;
+  min-height: 19px !important;
+  margin: 1px 0 0 !important;
+  padding: 0 !important;
+  flex: 0 0 19px !important;
+  accent-color: var(--rs-teal);
+  vertical-align: middle;
+}
+.check-field {
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 34px;
+  line-height: 1.4;
+}
+.check-field > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.check-field:has(input:focus-visible),
+.inline-checks label:has(input:focus-visible),
+.checkbox-fieldset label:has(input:focus-visible),
+.switch-inline:has(input:focus-visible),
+.switch-card:has(input:focus-visible) {
+  outline: 3px solid rgba(20,100,152,.18);
+  outline-offset: 2px;
+}
+
+/* Grupos de opções ficam visualmente equivalentes entre módulos. */
+.inline-checks,
+.checkbox-grid,
+.settings-toggle-grid,
+.module-settings-grid {
+  min-width: 0;
+}
+.inline-checks label,
+.checkbox-fieldset label {
+  min-height: 42px;
+  cursor: pointer;
+}
+.inline-checks label:has(input:checked) {
+  border-color: #a9d9d5;
+  background: #f0faf8;
+  color: #245b58;
+}
+.switch-card,
+.switch-inline,
+.module-setting-card,
+.check-card {
+  min-width: 0;
+}
+.switch-card > span,
+.module-setting-card > div,
+.check-card > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Botões de formulário e cabeçalhos podem quebrar sem sobrepor conteúdo. */
+.form-actions,
+.page-heading,
+.section-heading,
+.hero-actions,
+.action-row {
+  min-width: 0;
+}
+.form-actions {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.form-actions > * {
+  min-width: 0;
+}
+.page-heading,
+.section-heading {
+  flex-wrap: wrap;
+}
+.page-heading > *,
+.section-heading > * {
+  min-width: 0;
+}
+
+/* Filtros reutilizam altura e permitem quebra progressiva. */
+.filter-bar,
+.conversation-filters {
+  flex-wrap: wrap;
+}
+.filter-bar :where(select, .filter-search),
+.conversation-filters :where(select, .filter-search) {
+  min-width: 0;
+}
+.filter-search {
+  min-height: var(--rs-form-control-height);
+}
+.filter-search input[type="search"],
+.filter-search input[type="text"] {
+  min-height: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+/* Tabelas nunca estouram a viewport; o conteúdo continua acessível por rolagem. */
+.table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.table-wrap table {
+  min-width: max-content;
+}
+
+/* Details/popovers mantêm conteúdo dentro da viewport. */
+.popover-panel,
+.popover-form,
+.edit-panel {
+  max-width: calc(100vw - 32px);
+}
+summary {
+  overflow-wrap: anywhere;
+}
+
+/* Tablet: formulários densos passam progressivamente para uma coluna. */
+@media (max-width: 900px) {
+  .form-grid.three,
+  .drawer-form-grid,
+  .settings-toggle-grid,
+  .module-settings-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .business-hours-editor-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .business-hours-editor-head > small {
+    max-width: none;
+    text-align: left;
+  }
+}
+
+/* Mobile: mesma leitura, alvos de toque maiores e ações empilhadas. */
+@media (max-width: 680px) {
+  :root {
+    --rs-form-control-height: 46px;
+  }
+
+  .form-grid.two,
+  .form-grid.three,
+  .field-grid.two,
+  .wizard-columns,
+  .settings-toggle-grid,
+  .module-settings-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .field,
+  .drawer-form .field,
+  .attention-followup .field {
+    margin-bottom: 12px;
+  }
+
+  .inline-checks {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .inline-checks label,
+  .checkbox-fieldset label,
+  .switch-inline {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  .form-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+  .form-actions .btn,
+  .form-actions button,
+  .form-actions input[type="submit"] {
+    width: 100%;
+  }
+
+  .filter-bar,
+  .conversation-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .filter-bar > *,
+  .conversation-filters > *,
+  .filter-bar select,
+  .conversation-filters select,
+  .filter-bar .filter-search,
+  .conversation-filters .filter-search {
+    width: 100%;
+    max-width: none;
+  }
+
+  .page-heading,
+  .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .page-heading .btn,
+  .section-heading > .btn {
+    width: 100%;
+  }
+
+  .business-hours-day {
+    grid-template-columns: 1fr !important;
+    align-items: stretch;
+  }
+  .business-hours-day-toggle {
+    min-height: 40px;
+  }
+
+  .popover-panel,
+  .popover-form,
+  .edit-panel {
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-width: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-content {
+    padding: 18px 14px 34px;
+  }
+  .topbar {
+    min-height: 72px;
+    padding: 12px 14px;
+  }
+  .topbar h1 {
+    font-size: 1.2rem;
+    line-height: 1.25;
+  }
+  .card,
+  .login-card {
+    padding: 16px;
+    border-radius: 16px;
+  }
+  .form-divider {
+    margin: 20px 0 14px;
+    font-size: .68rem;
+  }
+  .btn {
+    min-height: 44px;
+  }
+  .btn-small {
+    min-height: 38px;
+  }
+}
