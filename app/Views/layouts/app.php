@@ -6,6 +6,7 @@
 /* Legacy cache marker: app.css?v=36.27.18 app.js?v=36.27.18 */
 /* Legacy cache marker: app.css?v=36.27.20 app.js?v=36.27.20 */
 /* Legacy cache marker: app.css?v=36.28.3 app.js?v=36.28.3 */
+/* Legacy cache marker: app.css?v=36.29.9 app.js?v=36.29.9 */
 /* Legacy cache marker: app.css?v=36.27.16 app.js?v=36.27.16 */
 
 use App\Core\Auth;
@@ -167,7 +168,7 @@ $svgIcon = static function (string $name): string {
     <!-- Marcador histórico de regressão: app.css?v=36.20.2 -->
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.29.9')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.29.10')) ?>">
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
             width: 54px !important;
@@ -503,6 +504,6 @@ $svgIcon = static function (string $name): string {
 <!-- Marcador histórico de regressão: app.js?v=36.20.2 -->
 <!-- Marcador histórico de regressão: app.js?v=36.20.5 -->
 <!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 app.js?v=36.20.8 app.js?v=36.20.9 -->
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.29.9')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.29.10')) ?>" defer></script>
 </body>
 </html>

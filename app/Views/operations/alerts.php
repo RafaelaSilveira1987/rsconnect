@@ -20,9 +20,7 @@ $isMessagingIncident = static function (string $event): bool {
 };
 ?>
 
-<style>
-.ops-monitor-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0 0}.ops-monitor-summary article,.ops-channel-state{border:1px solid var(--border-color,#dbe4ec);border-radius:14px;padding:14px;background:rgba(255,255,255,.7)}.ops-monitor-summary strong{display:block;font-size:1.35rem}.ops-channel-state-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}.ops-channel-state.is-ready{border-color:#a7e8c1}.ops-channel-state.is-pending{border-color:#f1d79a}.ops-channel-state small{display:block;margin-top:5px}.ops-incident-list{display:grid;gap:14px}.ops-incident-card{border:1px solid var(--border-color,#dbe4ec);border-radius:16px;padding:16px;background:#fff}.ops-incident-card.is-critical{border-left:5px solid #d23d4e}.ops-incident-card.is-warning{border-left:5px solid #d69b20}.ops-incident-card header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.ops-incident-meta{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.ops-incident-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:end}.ops-incident-actions form{display:flex;flex-wrap:wrap;gap:8px;align-items:end}.ops-incident-actions input{min-width:240px}.ops-delivery-error{max-width:360px;white-space:normal}.ops-run-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.ops-run{border:1px solid var(--border-color,#dbe4ec);border-radius:12px;padding:12px}.ops-run small{display:block}.operations-alert-layout{align-items:start}@media(max-width:900px){.ops-monitor-summary,.ops-channel-state-list,.ops-run-grid{grid-template-columns:1fr}.ops-incident-card header{display:block}.ops-incident-actions form{display:grid;width:100%}.ops-incident-actions input{min-width:0;width:100%}}
-</style>
+
 
 <section class="admin-module-hero operations-alert-hero">
     <div>

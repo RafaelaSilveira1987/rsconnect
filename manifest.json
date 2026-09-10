@@ -1,6 +1,6 @@
-# RS Connect v36.29.9
+# RS Connect v36.29.10
 
-Quarta rodada visual em Agenda, Campanhas, Relatórios e Cobranças, com correção do alinhamento das permissões da automação e preservação integral das regras operacionais.
+Fechamento visual e QA responsivo sobre a base 36.29.9, consolidando Laboratório de Assistentes, Avisos Operacionais, Fila/Equipe e superfícies administrativas remanescentes sem alterar regras de negócio.
 
 Alterações principais:
 
@@ -21,6 +21,11 @@ Alterações principais:
 - permissões de automação alinhadas em cards consistentes sem alterar os checkboxes funcionais;
 - cliente/paciente atual recebe continuidade e não vira novo lead automático em conversas rotineiras;
 - Contatos e Conversas compartilham a mesma normalização de classificação e prévia de contexto da IA.
+
+- quinta rodada de fechamento: Laboratório e Avisos Operacionais sem CSS inline;
+- Fila/Equipe com layout responsivo próprio e tabela convertida em cards no mobile;
+- foco por teclado e acabamento final em Agenda/Disponibilidade, Permissões, Usuários, LGPD, Signup, Segurança e n8n;
+- QA de regressão ampliado sem migration nova.
 
 Migration obrigatória atual:
 `106_agent_message_grouping_context_priority.sql`

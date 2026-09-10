@@ -1,4 +1,4 @@
-# RS Connect 36.29.9
+# RS Connect 36.29.10
 
 Organização inteligente de contatos, continuidade de cliente/paciente e terceira rodada visual em telas operacionais, preservando o fluxo editável dos Assistentes.
 
@@ -60,3 +60,13 @@ Migration obrigatória atual:
 Não existe migration nova nesta versão.
 
 Depois do deploy, execute `php bin/migrate.php status` e reinicie o PHP-FPM/container para limpar OPcache.
+
+## Quinta rodada de fechamento — 36.29.10
+
+- Laboratório de Assistentes deixou de manter CSS inline e passou a usar a camada visual compartilhada, com seletor, simulador, diagnósticos, cenários e histórico responsivos;
+- Avisos Operacionais também tiveram o CSS local consolidado no `app.css`, reduzindo divergência entre telas administrativas;
+- Fila/Equipe recebeu hierarquia visual completa, métricas, filtros, setores e tabela que vira cards no celular;
+- Disponibilidade da Agenda, Permissões, Usuários, Privacidade/LGPD, Signup administrativo, Segurança e templates n8n receberam ajustes finais de consistência;
+- foco por teclado reforçado nos módulos revisados, sem alterar submits, rotas ou eventos JavaScript;
+- nenhuma migration nova; a obrigatória permanece `106_agent_message_grouping_context_priority.sql`.
+

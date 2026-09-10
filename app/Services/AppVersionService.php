@@ -129,7 +129,9 @@ final class AppVersionService
     // RS Connect 36.29.7 — segunda rodada visual: hierarquia, cards e experiência mobile unificados por módulo.
     // RS Connect 36.29.8 — terceira rodada operacional: Organização inteligente, continuidade de cliente/paciente e correções dos layouts revisados.
     // RS Connect 36.29.9 — quarta rodada visual: Agenda, Campanhas, Relatórios, Cobranças e alinhamento das permissões da automação.
-    public const PACKAGE_LABEL = 'RS Connect 36.29.9 — Agenda, Campanhas, Relatórios e Cobranças';
+    // Compatibilidade histórica: RS Connect 36.29.9 — Agenda, Campanhas, Relatórios e Cobranças.
+    // RS Connect 36.29.10 — fechamento visual: Laboratório, Operação, Fila/Equipe, acessibilidade e QA responsivo.
+    public const PACKAGE_LABEL = 'RS Connect 36.29.10 — Fechamento visual e QA responsivo';
     public const REQUIRED_MIGRATION = '106_agent_message_grouping_context_priority.sql';
 
     private PDO $pdo;
