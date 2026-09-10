@@ -246,10 +246,41 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
         <?php endif; ?>
 
         <?php if ($agentWorkflow !== []): ?>
-            <div class="agent-rules-section-title"><span>Ordem do atendimento</span><h3>Passo a passo que o assistente segue</h3><p>Essa sequência ajuda o sistema a saber o que vem antes de consultar agenda, confirmar ou encaminhar.</p></div>
-            <div class="agent-workflow-flow">
+            <div class="agent-rules-section-title"><span>Ordem do atendimento</span><h3>Passo a passo que o assistente segue</h3><p>Essa ordem vem do modelo de atendimento aplicado à empresa. Você pode reorganizar as etapas; as travas de segurança continuam sendo validadas pelo RS Connect independentemente da posição.</p></div>
+            <div class="agent-workflow-editor" data-workflow-list>
                 <?php foreach ($agentWorkflow as $index => $step): ?>
-                    <div class="agent-workflow-step"><span><?= $index + 1 ?></span><strong><?= View::e((string) ($step['label'] ?? $step['step_key'] ?? 'Etapa')) ?></strong></div>
+                    <?php
+                    $workflowKey = (string) ($step['step_key'] ?? '');
+                    $workflowType = (string) ($step['step_type'] ?? 'collect');
+                    $workflowTypeLabel = [
+                        'collect' => 'Coleta',
+                        'policy' => 'Validação',
+                        'action' => 'Ação',
+                        'handoff' => 'Equipe',
+                        'complete' => 'Conclusão',
+                    ][$workflowType] ?? 'Etapa';
+                    ?>
+                    <article class="agent-workflow-editor-step" data-workflow-step>
+                        <div class="agent-workflow-order">
+                            <span class="agent-workflow-number" data-workflow-number><?= $index + 1 ?></span>
+                            <div class="agent-workflow-move">
+                                <button type="button" class="workflow-move-btn" data-workflow-move="up" aria-label="Mover etapa para cima">↑</button>
+                                <button type="button" class="workflow-move-btn" data-workflow-move="down" aria-label="Mover etapa para baixo">↓</button>
+                            </div>
+                        </div>
+                        <div class="agent-workflow-editor-content">
+                            <div class="agent-workflow-editor-head">
+                                <span class="agent-workflow-type"><?= View::e($workflowTypeLabel) ?></span>
+                                <?php if ($workflowType !== 'collect'): ?><span class="agent-workflow-protected">Proteção do sistema</span><?php endif; ?>
+                            </div>
+                            <label class="field compact-field">
+                                <span>Nome da etapa</span>
+                                <input name="workflow_steps[<?= View::e($workflowKey) ?>][label]" value="<?= View::e((string) ($step['label'] ?? $workflowKey)) ?>" maxlength="180">
+                            </label>
+                            <input type="hidden" name="workflow_steps[<?= View::e($workflowKey) ?>][position]" value="<?= (int) ($step['position'] ?? (($index + 1) * 10)) ?>" data-workflow-position>
+                            <small><?= $workflowType === 'collect' ? 'A ordem influencia qual informação pendente será pedida primeiro.' : 'Esta etapa pode ser movida, mas a regra técnica continua obrigatória quando aplicável.' ?></small>
+                        </div>
+                    </article>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>

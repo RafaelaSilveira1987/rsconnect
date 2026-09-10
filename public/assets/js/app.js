@@ -4373,3 +4373,50 @@ document.addEventListener('DOMContentLoaded', () => {
     segmentInput.addEventListener('change', suggestSchedulingSpecialist);
   });
 });
+
+
+// RS Connect 36.29.5 — editor da ordem do atendimento.
+// A ordem gravada também passa a ordenar a próxima informação pendente da triagem.
+document.addEventListener('DOMContentLoaded', () => {
+  const refreshWorkflowList = (list) => {
+    if (!(list instanceof HTMLElement)) return;
+    const steps = [...list.querySelectorAll(':scope > [data-workflow-step]')];
+    steps.forEach((step, index) => {
+      const number = step.querySelector('[data-workflow-number]');
+      const position = step.querySelector('[data-workflow-position]');
+      if (number instanceof HTMLElement) number.textContent = String(index + 1);
+      if (position instanceof HTMLInputElement) position.value = String((index + 1) * 10);
+      const up = step.querySelector('[data-workflow-move="up"]');
+      const down = step.querySelector('[data-workflow-move="down"]');
+      if (up instanceof HTMLButtonElement) up.disabled = index === 0;
+      if (down instanceof HTMLButtonElement) down.disabled = index === steps.length - 1;
+    });
+  };
+
+  document.querySelectorAll('[data-workflow-list]').forEach((list) => {
+    if (!(list instanceof HTMLElement)) return;
+    refreshWorkflowList(list);
+
+    list.addEventListener('click', (event) => {
+      const button = event.target instanceof Element
+        ? event.target.closest('[data-workflow-move]')
+        : null;
+      if (!(button instanceof HTMLButtonElement)) return;
+      event.preventDefault();
+
+      const step = button.closest('[data-workflow-step]');
+      if (!(step instanceof HTMLElement)) return;
+      const direction = button.dataset.workflowMove || '';
+
+      if (direction === 'up') {
+        const previous = step.previousElementSibling;
+        if (previous instanceof HTMLElement) list.insertBefore(step, previous);
+      } else if (direction === 'down') {
+        const next = step.nextElementSibling;
+        if (next instanceof HTMLElement) list.insertBefore(next, step);
+      }
+
+      refreshWorkflowList(list);
+    });
+  });
+});

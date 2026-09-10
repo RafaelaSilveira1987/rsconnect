@@ -12,6 +12,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AiAutomationService;
+use App\Services\AgentBlueprintService;
 use App\Services\AgentRoutingService;
 use App\Services\ConversationFlowService;
 use App\Services\SubscriptionService;
@@ -46,6 +47,7 @@ final class AgentController
         $companyProfile = [];
         $groupRules = [];
         $promptVersions = [];
+        $agentBlueprintProfile = [];
 
         if ($tenantId > 0) {
             $agentsStatement = $pdo->prepare(
@@ -97,6 +99,12 @@ final class AgentController
             $promptVersions = (new PromptStudioService())->versionsForAgents($tenantId, array_column($agents, 'id'));
 
             try {
+                $agentBlueprintProfile = (new AgentBlueprintService())->profileForTenant($tenantId, true, $pdo);
+            } catch (Throwable) {
+                $agentBlueprintProfile = [];
+            }
+
+            try {
                 $bindings = (new AgentRoutingService())->bindingsForTenant($pdo, $tenantId);
                 $channelsByAgent = [];
                 foreach ($bindings as $binding) {
@@ -133,7 +141,56 @@ final class AgentController
             'groupRules' => $groupRules,
             'contactGroups' => ConversationFlowService::GROUPS,
             'promptVersions' => $promptVersions,
+            'agentBlueprintProfile' => $agentBlueprintProfile,
         ]);
+    }
+
+    public function updateOperationalRules(): void
+    {
+        $tenantId = $this->resolveTenantId();
+        if ($tenantId < 1) {
+            Flash::set('error', 'Não foi possível identificar a empresa.');
+            $this->redirectToAgents(0);
+            return;
+        }
+
+        try {
+            $service = new AgentBlueprintService();
+            $profile = $service->profileForTenant($tenantId, true);
+            if (empty($profile['id'])) {
+                throw new \RuntimeException('Esta empresa ainda não possui um modelo de atendimento aplicado.');
+            }
+
+            $postedCapabilities = is_array($_POST['agent_capabilities'] ?? null)
+                ? $_POST['agent_capabilities']
+                : [];
+
+            // Proteções estruturais pertencem à plataforma. O cliente pode configurar
+            // a operação, mas não desligar o fail-closed que impede ações sem validação.
+            if (!Auth::isSuperAdmin() && array_key_exists('policy.fail_closed', $profile['capabilities'] ?? [])) {
+                unset($postedCapabilities['policy.fail_closed']);
+            }
+
+            $service->saveTenantConfiguration($tenantId, [
+                'interaction_mode' => (string) ($_POST['agent_interaction_mode'] ?? ($profile['interaction_mode'] ?? 'hybrid')),
+                'capabilities' => $postedCapabilities,
+                'triage_fields' => is_array($_POST['triage_fields'] ?? null) ? $_POST['triage_fields'] : [],
+                'policies' => is_array($_POST['agent_policies'] ?? null) ? $_POST['agent_policies'] : [],
+                'workflow' => is_array($_POST['workflow_steps'] ?? null) ? $_POST['workflow_steps'] : [],
+            ]);
+
+            Audit::log('agent.operational_rules_updated', [
+                'blueprint_id' => (int) ($profile['blueprint_id'] ?? 0),
+                'interaction_mode' => (string) ($_POST['agent_interaction_mode'] ?? ''),
+                'workflow_steps' => count((array) ($_POST['workflow_steps'] ?? [])),
+            ], $tenantId);
+
+            Flash::set('success', 'Regras do atendimento atualizadas. As próximas conversas já usarão essa configuração.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar as regras do atendimento: ' . $exception->getMessage());
+        }
+
+        $this->redirectToAgents($tenantId);
     }
 
     public function store(): void
@@ -394,6 +451,20 @@ final class AgentController
         }
 
         $pdo = Database::connection();
+
+        if (!Auth::isSuperAdmin()) {
+            $technicalStmt = $pdo->prepare(
+                'SELECT n8n_webhook_url, n8n_enabled
+                 FROM ai_agents
+                 WHERE id = :id AND tenant_id = :tenant_id
+                 LIMIT 1'
+            );
+            $technicalStmt->execute(['id' => $agentId, 'tenant_id' => $tenantId]);
+            $technicalCurrent = $technicalStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            $n8nWebhookUrl = trim((string) ($technicalCurrent['n8n_webhook_url'] ?? ''));
+            $n8nEnabled = (int) ($technicalCurrent['n8n_enabled'] ?? 0) === 1;
+        }
+
         try {
             $business = $this->businessHoursFromPost();
             if ($channelSelectionSubmitted) {

@@ -1,20 +1,16 @@
-# RS Connect v36.29.4
+# RS Connect v36.29.5
 
-Conversa agrupada e continuidade contextual para assistentes de IA.
+Fluxo editável e regras do atendimento no cliente.
 
-Principais alterações desta versão:
+Alterações principais:
 
-- agrupamento configurável de mensagens consecutivas do cliente antes da resposta;
-- o tempo de espera reinicia a cada nova mensagem recebida no mesmo turno;
-- o assistente recebe o bloco completo do turno atual, e não apenas o último balão;
-- perguntas diretas do cliente têm prioridade antes da retomada do roteiro;
-- a identidade pública configurada do assistente passa a ser fonte de verdade quando o cliente pergunta com quem está falando;
-- telefone já conhecido pelo WhatsApp não deve ser solicitado novamente sem necessidade;
-- cache e respostas locais são evitados quando há múltiplas mensagens agrupadas, preservando o contexto completo;
-- regras críticas de segurança, triagem e agenda permanecem controladas pelo backend e pelo Policy Engine.
+- editor responsivo do passo a passo do atendimento;
+- personalização da ordem gravada em `tenant_agent_workflow_steps`;
+- ordem do fluxo usada para priorizar a próxima coleta da triagem;
+- regras operacionais disponíveis em `/agents` para usuários com `agents.manage`;
+- segmento, blueprint, versão e proteções estruturais permanecem no RS Admin;
+- `policy.fail_closed` permanece protegido para clientes;
+- nenhuma migration nova.
 
 Migration obrigatória atual:
-
 `106_agent_message_grouping_context_priority.sql`
-
-Depois do deploy, execute as migrations e reinicie o PHP-FPM/container para limpar OPcache.

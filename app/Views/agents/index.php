@@ -68,6 +68,54 @@ $routingModeShortLabels = [
     'specialist' => 'Assuntos específicos',
     'round_robin' => 'Divisão automática',
 ];
+
+$agentRulesProfile = is_array($agentBlueprintProfile ?? null) ? $agentBlueprintProfile : [];
+$agentRuleCapabilities = is_array($agentRulesProfile['capabilities'] ?? null) ? $agentRulesProfile['capabilities'] : [];
+$agentRuleFields = is_array($agentRulesProfile['triage_fields'] ?? null) ? $agentRulesProfile['triage_fields'] : [];
+$agentRulePolicies = is_array($agentRulesProfile['policies'] ?? null) ? $agentRulesProfile['policies'] : [];
+$agentRuleWorkflow = is_array($agentRulesProfile['workflow'] ?? null) ? $agentRulesProfile['workflow'] : [];
+$agentCapabilityLabels = [
+    'triage.enabled' => 'Coletar informações antes de avançar',
+    'eligibility.enabled' => 'Validar regras antes de liberar ações',
+    'calendar.read' => 'Verificar horários na agenda',
+    'calendar.pre_schedule' => 'Fazer pré-reserva de horário',
+    'calendar.confirm' => 'Confirmar agendamento automaticamente',
+    'calendar.human_approval' => 'Pedir aprovação da equipe antes de confirmar',
+    'handoff.audio' => 'Passar para uma pessoa ao receber áudio',
+    'policy.fail_closed' => 'Bloquear ações quando houver dúvida ou erro',
+];
+$agentCapabilityHelp = [
+    'triage.enabled' => 'Pergunta somente o que estiver faltando e aproveita o que já foi informado.',
+    'eligibility.enabled' => 'Confere as regras do negócio antes de agenda, confirmação ou outra ação importante.',
+    'calendar.read' => 'Permite consultar disponibilidade real.',
+    'calendar.pre_schedule' => 'Permite segurar um horário válido conforme as regras da agenda.',
+    'calendar.confirm' => 'Pode concluir o agendamento sem aprovação humana quando a operação permitir.',
+    'calendar.human_approval' => 'Mantém a confirmação final com a equipe.',
+    'handoff.audio' => 'Ao receber áudio, pausa a automação e entrega a conversa para uma pessoa.',
+    'policy.fail_closed' => 'Proteção estrutural da plataforma: se algo não puder ser validado, a ação não é executada.',
+];
+$agentPolicyLabels = [
+    'minimum_age' => 'Idade mínima para atendimento',
+    'couple_service_allowed' => 'Permitir atendimento de casal',
+    'scheduling_requires_eligibility' => 'Validar regras antes de consultar agenda',
+    'confirmation_requires_human' => 'Confirmação depende da equipe',
+    'service_required' => 'Exigir serviço antes de consultar agenda',
+    'required_before_schedule' => 'Informações obrigatórias antes da agenda',
+];
+$agentPolicyActionLabels = [
+    'block' => 'Bloquear a ação',
+    'block_schedule' => 'Não permitir agenda (a conversa continua)',
+    'human_approval' => 'Pedir aprovação da equipe',
+    'collect' => 'Pedir a informação antes de seguir',
+    'allow_confirm' => 'Permitir confirmação automática',
+    'handoff' => 'Passar para atendimento humano',
+    'warn' => 'Apenas sinalizar atenção',
+];
+$agentFieldTypeLabels = ['text' => 'Texto', 'textarea' => 'Texto livre', 'number' => 'Número', 'boolean' => 'Sim ou não', 'select' => 'Lista de opções', 'date' => 'Data', 'time' => 'Horário'];
+$humanizeAgentRule = static function (string $key): string {
+    $value = preg_replace('/[_\.]+/', ' ', trim($key)) ?? $key;
+    return $value !== '' ? mb_convert_case($value, MB_CASE_TITLE, 'UTF-8') : 'Regra';
+};
 ?>
 <div class="agent-management-page <?= $isClientExperience ? 'agent-client-experience' : 'agent-admin-experience' ?>">
     <section class="card agent-list-card">
@@ -119,6 +167,175 @@ $routingModeShortLabels = [
                     <span><b>Divisão automática</b> reparte novos atendimentos entre os assistentes disponíveis.</span>
                 </div>
             </div>
+        <?php endif; ?>
+
+        <?php if ($canManage && $agentRulesProfile !== [] && !empty($agentRulesProfile['id'])): ?>
+            <section class="agent-operation-rules">
+                <form method="post" action="<?= View::e(Router::url('/agents/operational-rules')) ?>" class="agent-operation-rules-form">
+                    <?= Csrf::input() ?>
+                    <?php if (Auth::isSuperAdmin()): ?><input type="hidden" name="tenant_id" value="<?= $selectedTenantId ?>"><?php endif; ?>
+
+                    <div class="agent-operation-rules-head">
+                        <div>
+                            <span class="eyebrow">Regras do atendimento</span>
+                            <h3>Como os assistentes desta empresa devem trabalhar</h3>
+                            <p>Essas regras são compartilhadas pelos assistentes da empresa. Cada assistente continua tendo suas próprias instruções, canais e personalidade.</p>
+                        </div>
+                        <div class="agent-operation-model-summary">
+                            <span>Segmento</span><strong><?= View::e((string) ($agentRulesProfile['niche_name'] ?? 'Não definido')) ?></strong>
+                            <span>Modelo</span><strong><?= View::e((string) ($agentRulesProfile['blueprint_name'] ?? 'Sem modelo')) ?></strong>
+                        </div>
+                    </div>
+
+                    <div class="message-info agent-operation-admin-note">
+                        <strong>O que fica com a RS Connect</strong>
+                        <span>Troca de segmento, modelo-base, versão e proteções técnicas da plataforma ficam no RS Admin. As regras do dia a dia podem ser ajustadas aqui pela empresa.</span>
+                    </div>
+
+                    <div class="agent-operation-mode-row">
+                        <label class="field compact-field">
+                            <span>Como o assistente faz as perguntas</span>
+                            <select name="agent_interaction_mode">
+                                <option value="hybrid" <?= ($agentRulesProfile['interaction_mode'] ?? 'hybrid') === 'hybrid' ? 'selected' : '' ?>>Natural com regras — recomendado</option>
+                                <option value="form" <?= ($agentRulesProfile['interaction_mode'] ?? '') === 'form' ? 'selected' : '' ?>>Perguntas configuradas</option>
+                                <option value="prompt" <?= ($agentRulesProfile['interaction_mode'] ?? '') === 'prompt' ? 'selected' : '' ?>>Prompt Studio com as mesmas travas</option>
+                            </select>
+                            <small>A forma de falar pode variar; as regras abaixo continuam sendo verificadas pelo sistema.</small>
+                        </label>
+                        <div class="agent-operation-version">
+                            <span>Modelo aplicado</span>
+                            <strong><?= View::e((string) ($agentRulesProfile['version_label'] ?? '—')) ?></strong>
+                            <small><?= !empty($agentRulesProfile['customized']) ? 'Com ajustes próprios da empresa' : 'Padrão do segmento' ?></small>
+                        </div>
+                    </div>
+
+                    <?php if ($agentRuleWorkflow !== []): ?>
+                        <details class="agent-operation-section" open>
+                            <summary>
+                                <span><b>1</b><strong>Ordem do atendimento</strong><small>Defina o que vem primeiro na conversa.</small></span>
+                                <span class="drawer-chevron"></span>
+                            </summary>
+                            <div class="agent-operation-section-body">
+                                <p class="field-hint">A sequência vem do modelo escolhido no RS Admin, mas pode ser reorganizada para esta empresa. A ordem também passa a influenciar qual informação pendente o sistema pede primeiro.</p>
+                                <div class="agent-workflow-editor" data-workflow-list>
+                                    <?php foreach ($agentRuleWorkflow as $index => $step): ?>
+                                        <?php
+                                        $workflowKey = (string) ($step['step_key'] ?? '');
+                                        $workflowType = (string) ($step['step_type'] ?? 'collect');
+                                        $workflowTypeLabel = ['collect'=>'Coleta','policy'=>'Validação','action'=>'Ação','handoff'=>'Equipe','complete'=>'Conclusão'][$workflowType] ?? 'Etapa';
+                                        ?>
+                                        <article class="agent-workflow-editor-step" data-workflow-step>
+                                            <div class="agent-workflow-order">
+                                                <span class="agent-workflow-number" data-workflow-number><?= $index + 1 ?></span>
+                                                <div class="agent-workflow-move">
+                                                    <button type="button" class="workflow-move-btn" data-workflow-move="up" aria-label="Mover para cima">↑</button>
+                                                    <button type="button" class="workflow-move-btn" data-workflow-move="down" aria-label="Mover para baixo">↓</button>
+                                                </div>
+                                            </div>
+                                            <div class="agent-workflow-editor-content">
+                                                <div class="agent-workflow-editor-head">
+                                                    <span class="agent-workflow-type"><?= View::e($workflowTypeLabel) ?></span>
+                                                    <?php if ($workflowType !== 'collect'): ?><span class="agent-workflow-protected">Validada pelo sistema</span><?php endif; ?>
+                                                </div>
+                                                <label class="field compact-field"><span>Nome da etapa</span><input name="workflow_steps[<?= View::e($workflowKey) ?>][label]" value="<?= View::e((string) ($step['label'] ?? $workflowKey)) ?>" maxlength="180"></label>
+                                                <input type="hidden" name="workflow_steps[<?= View::e($workflowKey) ?>][position]" value="<?= (int) ($step['position'] ?? (($index + 1) * 10)) ?>" data-workflow-position>
+                                            </div>
+                                        </article>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </details>
+                    <?php endif; ?>
+
+                    <?php if ($agentRuleFields !== []): ?>
+                        <details class="agent-operation-section">
+                            <summary>
+                                <span><b>2</b><strong>Informações que precisam ser coletadas</strong><small>Escolha o que perguntar e em que momento exigir.</small></span>
+                                <span class="drawer-chevron"></span>
+                            </summary>
+                            <div class="agent-operation-section-body">
+                                <div class="agent-operation-fields-grid">
+                                    <?php foreach ($agentRuleFields as $field): ?>
+                                        <?php $fieldKey = (string) ($field['field_key'] ?? ''); $fieldType = (string) ($field['field_type'] ?? 'text'); ?>
+                                        <article class="agent-operation-field-card">
+                                            <div class="agent-operation-card-title"><strong><?= View::e((string) ($field['label'] ?? $fieldKey)) ?></strong><span><?= View::e($agentFieldTypeLabels[$fieldType] ?? 'Informação') ?></span></div>
+                                            <label class="field compact-field"><span>Nome da informação</span><input name="triage_fields[<?= View::e($fieldKey) ?>][label]" value="<?= View::e((string) ($field['label'] ?? $fieldKey)) ?>"></label>
+                                            <label class="field compact-field"><span>Pergunta usada como padrão</span><textarea name="triage_fields[<?= View::e($fieldKey) ?>][prompt_text]" rows="2"><?= View::e((string) ($field['prompt_text'] ?? '')) ?></textarea></label>
+                                            <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="0">
+                                            <label class="check-field compact-check"><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="1" <?= !empty($field['active']) ? 'checked' : '' ?>><span>Usar esta informação</span></label>
+                                            <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="0">
+                                            <label class="check-field compact-check"><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="1" <?= !empty($field['required_before_schedule']) ? 'checked' : '' ?>><span>Exigir antes de consultar a agenda</span></label>
+                                            <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_for_completion]" value="0">
+                                            <label class="check-field compact-check"><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][required_for_completion]" value="1" <?= !empty($field['required_for_completion']) ? 'checked' : '' ?>><span>Coletar antes de encerrar o atendimento</span></label>
+                                        </article>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </details>
+                    <?php endif; ?>
+
+                    <?php if ($agentRulePolicies !== []): ?>
+                        <details class="agent-operation-section">
+                            <summary>
+                                <span><b>3</b><strong>Regras e limites do negócio</strong><small>Idade, tipo de atendimento, aprovação e mensagens de orientação.</small></span>
+                                <span class="drawer-chevron"></span>
+                            </summary>
+                            <div class="agent-operation-section-body">
+                                <div class="agent-operation-fields-grid">
+                                    <?php foreach ($agentRulePolicies as $policy): ?>
+                                        <?php
+                                        $policyKey = (string) ($policy['policy_key'] ?? '');
+                                        $policyType = (string) ($policy['policy_type'] ?? 'string');
+                                        $policyValue = $policy['value'] ?? '';
+                                        $actionKey = (string) ($policy['action_key'] ?? 'block');
+                                        ?>
+                                        <article class="agent-operation-field-card">
+                                            <div class="agent-operation-card-title"><strong><?= View::e($agentPolicyLabels[$policyKey] ?? $humanizeAgentRule($policyKey)) ?></strong><span><?= !empty($policy['enabled']) ? 'Ativa' : 'Desativada' ?></span></div>
+                                            <?php if ($policyType === 'boolean'): ?>
+                                                <label class="field compact-field"><span>Esta regra deve valer?</span><select name="agent_policies[<?= View::e($policyKey) ?>][value]"><option value="1" <?= !empty($policyValue) ? 'selected' : '' ?>>Sim</option><option value="0" <?= empty($policyValue) ? 'selected' : '' ?>>Não</option></select></label>
+                                            <?php elseif ($policyType === 'number'): ?>
+                                                <label class="field compact-field"><span>Valor definido</span><input type="number" name="agent_policies[<?= View::e($policyKey) ?>][value]" value="<?= View::e((string) $policyValue) ?>"></label>
+                                            <?php else: ?>
+                                                <label class="field compact-field"><span>Valor</span><input name="agent_policies[<?= View::e($policyKey) ?>][value]" value="<?= View::e(is_array($policyValue) ? json_encode($policyValue, JSON_UNESCAPED_UNICODE) : (string) $policyValue) ?>"></label>
+                                            <?php endif; ?>
+                                            <label class="field compact-field"><span>Quando a regra acontecer</span><select name="agent_policies[<?= View::e($policyKey) ?>][action_key]"><?php foreach ($agentPolicyActionLabels as $key => $label): ?><option value="<?= View::e($key) ?>" <?= $actionKey === $key ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?></select></label>
+                                            <label class="field compact-field"><span>Mensagem que o cliente recebe</span><textarea name="agent_policies[<?= View::e($policyKey) ?>][customer_message]" rows="3"><?= View::e((string) ($policy['customer_message'] ?? '')) ?></textarea></label>
+                                            <input type="hidden" name="agent_policies[<?= View::e($policyKey) ?>][enabled]" value="0">
+                                            <label class="check-field compact-check"><input type="checkbox" name="agent_policies[<?= View::e($policyKey) ?>][enabled]" value="1" <?= !empty($policy['enabled']) ? 'checked' : '' ?>><span>Usar esta regra</span></label>
+                                        </article>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </details>
+                    <?php endif; ?>
+
+                    <?php if ($agentRuleCapabilities !== []): ?>
+                        <details class="agent-operation-section">
+                            <summary>
+                                <span><b>4</b><strong>O que a automação pode fazer</strong><small>Permissões práticas de triagem, agenda e encaminhamento.</small></span>
+                                <span class="drawer-chevron"></span>
+                            </summary>
+                            <div class="agent-operation-section-body">
+                                <div class="settings-toggle-grid agent-operation-capabilities">
+                                    <?php foreach ($agentRuleCapabilities as $capabilityKey => $enabled): ?>
+                                        <?php $platformLocked = $capabilityKey === 'policy.fail_closed' && !Auth::isSuperAdmin(); ?>
+                                        <label class="switch-card agent-rule-toggle <?= $enabled ? 'is-on' : 'is-off' ?> <?= $platformLocked ? 'is-platform-locked' : '' ?>">
+                                            <?php if (!$platformLocked): ?><input type="hidden" name="agent_capabilities[<?= View::e((string) $capabilityKey) ?>]" value="0"><?php endif; ?>
+                                            <input type="checkbox" name="agent_capabilities[<?= View::e((string) $capabilityKey) ?>]" value="1" <?= $enabled ? 'checked' : '' ?> <?= $platformLocked ? 'disabled' : '' ?>>
+                                            <span><strong><?= View::e($agentCapabilityLabels[$capabilityKey] ?? $humanizeAgentRule((string) $capabilityKey)) ?></strong><small><?= View::e($agentCapabilityHelp[$capabilityKey] ?? 'Permissão definida pelo modelo de atendimento.') ?><?= $platformLocked ? ' Esta proteção é mantida pela RS Connect.' : '' ?></small></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </details>
+                    <?php endif; ?>
+
+                    <div class="agent-operation-savebar">
+                        <div><strong>As mudanças valem para as próximas conversas.</strong><small>As proteções técnicas continuam ativas mesmo quando você muda a ordem ou a forma das perguntas.</small></div>
+                        <?php if ($canManage): ?><button class="btn btn-primary" type="submit">Salvar regras do atendimento</button><?php endif; ?>
+                    </div>
+                </form>
+            </section>
         <?php endif; ?>
 
         <div class="agent-grid">
@@ -381,12 +598,16 @@ $routingModeShortLabels = [
                                 <?php endforeach; ?>
                             </div>
                             <label class="field compact-field"><span>Mensagem fora do horário</span><input name="after_hours_message" value="<?= View::e($agent['after_hours_message'] ?? '') ?>" placeholder="Estamos fora do horário. Retornaremos em breve."></label>
-                            <label class="field compact-field"><span>Automação externa deste assistente</span><input name="n8n_webhook_url" value="<?= View::e($agent['n8n_webhook_url'] ?? '') ?>" placeholder="Preencha somente com orientação da equipe RS Connect"><small class="field-hint">Use somente quando este assistente tiver uma automação própria. A Agenda Google é acionada automaticamente quando existe um compromisso real.</small></label>
-                            <?php if (!empty($agent['n8n_calendar_conflict'])): ?><div class="message-warning"><strong>Configuração antiga precisa ser corrigida:</strong> este assistente está ligado diretamente a uma automação antiga que cria eventos no Google Calendar. Para evitar agendamentos duplicados, remova o endereço deste campo e mantenha a Agenda somente em Automações (n8n) → Fluxos por empresa.</div><?php endif; ?>
+                            <?php if (Auth::isSuperAdmin()): ?>
+                                <label class="field compact-field"><span>Automação externa deste assistente</span><input name="n8n_webhook_url" value="<?= View::e($agent['n8n_webhook_url'] ?? '') ?>" placeholder="Preencha somente com orientação da equipe RS Connect"><small class="field-hint">Use somente quando este assistente tiver uma automação própria. A Agenda Google é acionada automaticamente quando existe um compromisso real.</small></label>
+                                <?php if (!empty($agent['n8n_calendar_conflict'])): ?><div class="message-warning"><strong>Configuração antiga precisa ser corrigida:</strong> este assistente está ligado diretamente a uma automação antiga que cria eventos no Google Calendar. Para evitar agendamentos duplicados, remova o endereço deste campo e mantenha a Agenda somente em Automações (n8n) → Fluxos por empresa.</div><?php endif; ?>
+                            <?php else: ?>
+                                <div class="message-info"><strong>Integrações técnicas protegidas</strong><span>URLs e acionamento de automações externas são mantidos pela RS Connect para evitar interrupções acidentais.</span></div>
+                            <?php endif; ?>
                             <div class="agent-toggle-grid">
                                 <label class="check-field compact-check"><input type="checkbox" name="auto_reply_enabled" value="1" <?= (int) ($agent['auto_reply_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder automaticamente</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="business_hours_enabled" value="1" <?= (int) ($agent['business_hours_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder somente no horário configurado</span></label>
-                                <label class="check-field compact-check"><input type="checkbox" name="n8n_enabled" value="1" <?= (int) ($agent['n8n_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Usar integração externa</span></label>
+                                <?php if (Auth::isSuperAdmin()): ?><label class="check-field compact-check"><input type="checkbox" name="n8n_enabled" value="1" <?= (int) ($agent['n8n_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Usar integração externa</span></label><?php endif; ?>
                                 <label class="check-field compact-check"><input type="checkbox" name="reply_to_reactions" value="1" <?= (int) ($agent['reply_to_reactions'] ?? 0) === 1 ? 'checked' : '' ?>><span>Responder a reações em mensagens</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="ai_selective_knowledge" value="1" <?= !array_key_exists('ai_selective_knowledge', $agent) || (int) ($agent['ai_selective_knowledge'] ?? 1) === 1 ? 'checked' : '' ?>><span>Enviar somente trechos relevantes da base</span></label>
                                 <label class="check-field compact-check"><input type="checkbox" name="is_default" value="1" <?= (int) $agent['is_default'] === 1 ? 'checked' : '' ?>><span>Assistente de apoio</span></label>
@@ -539,10 +760,9 @@ $routingModeShortLabels = [
                 </summary>
                 <div class="agent-advanced-body">
                     <div class="form-grid two">
-                        <label class="field"><span>Serviço de IA</span><select name="model_provider"><option value="openai">OpenAI</option><option value="google">Google Gemini</option><option value="custom">Outro serviço</option></select></label>
                         <label class="field"><span>Estilo das respostas</span><select name="temperature"><option value="0.1">Mais objetivo</option><option value="0.2" selected>Equilibrado</option><option value="0.5">Mais criativo</option><option value="0.8">Bem criativo</option></select></label>
+                        <div class="message-info"><strong>Serviço de IA protegido</strong><span>Chave, provedor e modelo técnico são definidos pela RS Connect para evitar incompatibilidades. Você continua controlando instruções, estilo e regras do atendimento.</span></div>
                     </div>
-                    <label class="field"><span>Modelo de IA</span><input name="model_name" value="gpt-4o-mini" required><small class="field-hint">A equipe RS Connect pode orientar este ajuste.</small></label>
                     <label class="field"><span>Palavras para chamar uma pessoa</span><input name="handoff_keywords" value="humano, atendente, pessoa, suporte"></label>
                     <label class="field"><span>Mensagem ao encaminhar para a equipe</span><input name="human_handoff_message" value="Vou encaminhar você para uma pessoa da nossa equipe. Aguarde um momento, por favor."></label>
                     <input type="hidden" name="handoff_action" value="paused">
@@ -593,10 +813,9 @@ $routingModeShortLabels = [
                             <label class="check-field"><input type="checkbox" name="prioritize_current_turn" value="1" checked><span>Responder primeiro as perguntas atuais e depois continuar o roteiro</span></label>
                         </div>
                     </div>
-                    <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
+                    <div class="message-info"><strong>Integrações técnicas</strong><span>Endereços de automação externa são mantidos pela RS Connect. Isso evita que uma alteração acidental interrompa agenda, callbacks ou outros fluxos críticos.</span></div>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
                     <p class="field-hint">Quando ativado, este horário tem prioridade e pausa a IA, a agenda e outras automações fora do expediente.</p>
-                    <label class="check-field"><input type="checkbox" name="n8n_enabled" value="1"><span>Usar integração externa neste assistente</span></label>
                     <label class="check-field"><input type="checkbox" name="reply_to_reactions" value="1"><span>Responder quando o contato reagir a uma mensagem</span><small class="field-hint">Desativado por padrão. Curtidas e emojis de reação não geram resposta automática.</small></label>
                 </div>
             </details>

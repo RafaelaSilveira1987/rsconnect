@@ -124,7 +124,8 @@ final class AppVersionService
     public const VERSION_LABEL = 'Beta Comercial 1.9.2';
     // RS Connect 36.29.3 — seletor do laboratório sincronizado com o servidor e protegido contra restauração de formulário do navegador.
     // RS Connect 36.29.4 — agrupamento configurável de mensagens e prioridade ao turno atual antes de retomar o roteiro.
-    public const PACKAGE_LABEL = 'RS Connect 36.29.4 — Conversa agrupada e continuidade contextual';
+    // RS Connect 36.29.5 — fluxo do atendimento editável, efetivo e regras operacionais disponíveis ao cliente.
+    public const PACKAGE_LABEL = 'RS Connect 36.29.5 — Fluxo editável e regras do atendimento no cliente';
     public const REQUIRED_MIGRATION = '106_agent_message_grouping_context_priority.sql';
 
     private PDO $pdo;

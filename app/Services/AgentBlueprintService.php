@@ -113,9 +113,12 @@ final class AgentBlueprintService
 
         $row['config'] = $this->decodeJson($row['config_json'] ?? null);
         $row['capabilities'] = $this->capabilities($tenantId, 0, $pdo);
-        $row['triage_fields'] = $this->triageFields($tenantId, $pdo);
-        $row['policies'] = $this->policies($tenantId, $pdo);
         $row['workflow'] = $this->workflow($tenantId, $pdo);
+        $row['triage_fields'] = $this->applyWorkflowOrderToTriageFields(
+            $this->triageFields($tenantId, $pdo),
+            $row['workflow']
+        );
+        $row['policies'] = $this->policies($tenantId, $pdo);
         return $row;
     }
 
@@ -314,6 +317,11 @@ final class AgentBlueprintService
                     'tenant_id' => $tenantId,
                     'policy_key' => $policyKey,
                 ]);
+            }
+
+            $workflowRows = is_array($data['workflow'] ?? null) ? $data['workflow'] : [];
+            if ($workflowRows !== []) {
+                $this->updateWorkflowConfiguration($pdo, $tenantId, $workflowRows);
             }
 
             $this->syncCalendarDefaults($pdo, $tenantId, $this->capabilities($tenantId, 0, $pdo));
@@ -592,6 +600,170 @@ final class AgentBlueprintService
             'json' => is_array($value) ? $value : ($this->decodeJson((string) $value) ?: []),
             default => trim((string) $value),
         };
+    }
+
+    /**
+     * Atualiza apenas a personalização do fluxo do tenant. O tipo e a configuração
+     * técnica de cada etapa continuam definidos pelo modelo da RS Connect.
+     *
+     * @param array<string,array<string,mixed>> $postedRows
+     */
+    private function updateWorkflowConfiguration(PDO $pdo, int $tenantId, array $postedRows): void
+    {
+        $currentStmt = $pdo->prepare(
+            'SELECT step_key, label, step_type, active, position
+             FROM tenant_agent_workflow_steps
+             WHERE tenant_id = :tenant_id
+             ORDER BY position, id'
+        );
+        $currentStmt->execute(['tenant_id' => $tenantId]);
+        $currentRows = $currentStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        if ($currentRows === []) {
+            return;
+        }
+
+        $currentByKey = [];
+        foreach ($currentRows as $row) {
+            $currentByKey[(string) ($row['step_key'] ?? '')] = $row;
+        }
+
+        $ordered = [];
+        foreach ($postedRows as $stepKey => $posted) {
+            $stepKey = trim((string) $stepKey);
+            if ($stepKey === '' || !isset($currentByKey[$stepKey]) || !is_array($posted)) {
+                continue;
+            }
+            $position = max(1, min(9990, (int) ($posted['position'] ?? $currentByKey[$stepKey]['position'] ?? 100)));
+            $ordered[] = [
+                'step_key' => $stepKey,
+                'position' => $position,
+                'label' => mb_substr(
+                    trim((string) ($posted['label'] ?? $currentByKey[$stepKey]['label'] ?? $stepKey)),
+                    0,
+                    180
+                ),
+            ];
+        }
+
+        // Etapas não enviadas nunca são excluídas. Elas permanecem no fim, preservando
+        // compatibilidade e evitando que um formulário antigo desmonte o fluxo.
+        $sentKeys = array_column($ordered, 'step_key');
+        foreach ($currentRows as $row) {
+            $key = (string) ($row['step_key'] ?? '');
+            if ($key === '' || in_array($key, $sentKeys, true)) {
+                continue;
+            }
+            $ordered[] = [
+                'step_key' => $key,
+                'position' => (int) ($row['position'] ?? 100),
+                'label' => (string) ($row['label'] ?? $key),
+            ];
+        }
+
+        usort($ordered, static function (array $a, array $b): int {
+            $cmp = ((int) $a['position']) <=> ((int) $b['position']);
+            return $cmp !== 0 ? $cmp : strcmp((string) $a['step_key'], (string) $b['step_key']);
+        });
+
+        $update = $pdo->prepare(
+            'UPDATE tenant_agent_workflow_steps
+             SET label = :label, position = :position, source = "tenant"
+             WHERE tenant_id = :tenant_id AND step_key = :step_key'
+        );
+        foreach ($ordered as $index => $row) {
+            $update->execute([
+                'label' => (string) $row['label'],
+                'position' => ($index + 1) * 10,
+                'tenant_id' => $tenantId,
+                'step_key' => (string) $row['step_key'],
+            ]);
+        }
+    }
+
+    /**
+     * Faz a ordem visual do fluxo também influenciar a próxima informação pedida.
+     * O Policy Engine continua sendo a trava final; alterar a sequência nunca remove
+     * uma política de segurança ou autoriza uma ação proibida.
+     *
+     * @param array<int,array<string,mixed>> $fields
+     * @param array<int,array<string,mixed>> $workflow
+     * @return array<int,array<string,mixed>>
+     */
+    private function applyWorkflowOrderToTriageFields(array $fields, array $workflow): array
+    {
+        if ($fields === [] || $workflow === []) {
+            return $fields;
+        }
+
+        $fallbackMap = [
+            'identify_intent' => ['requester_name'],
+            'identify_subject' => ['is_for_self', 'patient_name'],
+            'collect_age' => ['patient_age'],
+            'collect_modality' => ['modality'],
+            'collect_demand' => ['brief_demand'],
+            'collect_schedule' => ['preferred_schedule'],
+            'collect_source' => ['contact_source'],
+            'collect_service' => ['service'],
+            'collect_professional' => ['professional'],
+            'triage' => [],
+        ];
+
+        $rank = [];
+        $rankIndex = 0;
+        foreach ($workflow as $step) {
+            if (!is_array($step) || empty($step['active'])) {
+                continue;
+            }
+            $config = is_array($step['config'] ?? null) ? $step['config'] : [];
+            $stepKey = trim((string) ($step['step_key'] ?? ''));
+
+            $keys = [];
+            if (!empty($config['field_key'])) {
+                $keys[] = (string) $config['field_key'];
+            }
+            if (is_array($config['field_keys'] ?? null)) {
+                foreach ($config['field_keys'] as $key) {
+                    if (trim((string) $key) !== '') {
+                        $keys[] = (string) $key;
+                    }
+                }
+            }
+            if ($keys === [] && array_key_exists($stepKey, $fallbackMap)) {
+                $keys = $fallbackMap[$stepKey];
+            }
+
+            if ($stepKey === 'triage' && $keys === []) {
+                foreach ($fields as $field) {
+                    $key = trim((string) ($field['field_key'] ?? ''));
+                    if ($key !== '' && !array_key_exists($key, $rank)) {
+                        $rank[$key] = $rankIndex++;
+                    }
+                }
+                continue;
+            }
+
+            foreach ($keys as $key) {
+                $key = trim((string) $key);
+                if ($key !== '' && !array_key_exists($key, $rank)) {
+                    $rank[$key] = $rankIndex++;
+                }
+            }
+        }
+
+        $originalOrder = [];
+        foreach ($fields as $index => $field) {
+            $originalOrder[(string) ($field['field_key'] ?? '')] = $index;
+        }
+
+        usort($fields, static function (array $a, array $b) use ($rank, $originalOrder): int {
+            $aKey = (string) ($a['field_key'] ?? '');
+            $bKey = (string) ($b['field_key'] ?? '');
+            $aRank = $rank[$aKey] ?? (10000 + ($originalOrder[$aKey] ?? 0));
+            $bRank = $rank[$bKey] ?? (10000 + ($originalOrder[$bKey] ?? 0));
+            return $aRank <=> $bRank;
+        });
+
+        return array_values($fields);
     }
 
     private function inferNicheCode(string $segment): string

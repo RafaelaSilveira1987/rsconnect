@@ -1,30 +1,23 @@
-# RS Connect 36.29.4
+# RS Connect 36.29.5
 
-Melhoria da continuidade de conversa dos assistentes no WhatsApp.
+Fluxo de atendimento editável e regras operacionais disponíveis no módulo de Assistentes.
 
-## O que mudou
+Principais alterações desta versão:
 
-- configuração por assistente para **aguardar o cliente terminar e agrupar mensagens** antes de responder;
-- o tempo configurado passa a representar silêncio após a última mensagem; se chegar outro balão, a contagem recomeça;
-- o RS Connect reconstrói o **turno atual** com todas as mensagens recebidas desde a última resposta;
-- o assistente recebe instrução prioritária para responder primeiro perguntas e pedidos do turno atual e só depois retomar o roteiro;
-- a identidade pública do assistente é enviada como contexto confiável; perguntas como “com quem eu falo?” devem usar o nome real configurado;
-- quando o telefone já veio do WhatsApp/cadastro, o prompt operacional impede pedir o telefone novamente sem necessidade;
-- respostas locais/cache exato não são usados quando há vários balões no mesmo turno, evitando responder somente o último fragmento;
-- agenda/triagem continuam usando o mesmo bloco agrupado e as travas do Policy Engine permanecem intactas.
+- a ordem do atendimento agora pode ser reorganizada por empresa;
+- a sequência configurada passa a influenciar qual informação pendente será solicitada primeiro;
+- o cliente pode ajustar regras do dia a dia diretamente em **Assistentes**;
+- perguntas obrigatórias, mensagens, políticas de negócio e permissões operacionais ficam disponíveis ao administrador do cliente;
+- segmento, modelo-base, versão, provedor/modelo de IA, credenciais, integrações externas e proteções estruturais ficam no RS Admin quando puderem interromper a operação;
+- `policy.fail_closed` não pode ser desligado pelo cliente;
+- o editor da sequência foi redesenhado em cards responsivos, sem rolagem horizontal;
+- regras de segurança e Policy Engine continuam valendo independentemente da ordem visual;
+- agrupamento de mensagens e prioridade do turno atual da versão 36.29.4 foram preservados.
 
-## Migration
-
-Execute:
-
-```bash
-php bin/migrate.php up
-php bin/migrate.php status
-php bin/migrate.php verify
-```
-
-Migration nova:
+Migration obrigatória atual:
 
 `106_agent_message_grouping_context_priority.sql`
 
-Depois reinicie o PHP-FPM/container para limpar OPcache.
+Não existe migration nova nesta versão.
+
+Depois do deploy, execute `php bin/migrate.php status` e reinicie o PHP-FPM/container para limpar OPcache.
