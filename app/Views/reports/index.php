@@ -101,7 +101,7 @@ $quickReports = [
     ['name' => 'Cobranças da empresa', 'type' => 'Financeiro', 'metric' => $money($metrics['received_amount'] ?? 0) . ' recebido', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'billing']))],
 ];
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.15.1')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.29.9')) ?>">
 <div class="executive-report-page client-manager-report report-v3646 report-v3647 report-v36140 report-v36150">
     <header class="rs-admin-report-header rs-client-report-header">
         <div>

@@ -1311,3 +1311,156 @@ body:has(> .executive-report-page) {
 .scheduled-report-cron-card code{display:block;margin:14px 0 8px;padding:12px 14px;border-radius:11px;background:#0f1f34;color:#eaf6ff;overflow:auto}.scheduled-report-cron-card small{color:var(--report-muted,#687589)}
 @media(max-width:1050px){.scheduled-reports-grid{grid-template-columns:1fr}.form-grid.three-columns{grid-template-columns:1fr 1fr}.scheduled-reports-header{flex-direction:column}}
 @media(max-width:650px){.form-grid.two-columns,.form-grid.three-columns,.scheduled-report-sections{grid-template-columns:1fr}.scheduled-report-form-card,.scheduled-report-list-card,.scheduled-report-cron-card{padding:16px}.scheduled-reports-header h1{font-size:1.65rem}}
+
+/* =========================================================
+   RS Connect 36.29.9 — quarta rodada visual / Relatórios
+   Harmonização de filtros, cards, checkboxes, tabelas e mobile.
+   ========================================================= */
+.report-v36140,
+.report-v36150,
+.team-report-page,
+.scheduled-reports-page {
+  width: 100%;
+  min-width: 0;
+}
+.report-v36140 .card,
+.report-v36150 .card,
+.team-report-page .card,
+.scheduled-reports-page .card {
+  border-radius: 20px;
+  box-shadow: 0 8px 26px rgba(15,23,42,.04);
+}
+.rs-admin-report-header,
+.scheduled-reports-header { min-width: 0; }
+.rs-admin-report-header > div:first-child,
+.scheduled-reports-header > div:first-child { min-width: 0; }
+.rs-admin-report-header p,
+.scheduled-reports-header p { overflow-wrap: anywhere; }
+.rs-admin-report-header-actions { align-items: center; }
+.rs-admin-report-header-actions .btn { min-height: 40px; }
+.rs-admin-report-toolbar,
+.team-report-filters {
+  border: 1px solid var(--report-border, #dfe6ef);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 7px 22px rgba(15,23,42,.03);
+}
+.rs-admin-report-toolbar input,
+.rs-admin-report-toolbar select,
+.team-report-filters input,
+.team-report-filters select { min-width: 0; }
+.rs-admin-toolbar-actions .btn,
+.team-report-filter-actions .btn { min-height: 42px; }
+.rs-admin-kpi,
+.team-report-kpis article,
+.report-content-card,
+.client-report-summary-card,
+.rs-client-attention-grid > a {
+  border-radius: 16px;
+}
+.rs-admin-kpi > div,
+.client-report-summary-card,
+.report-content-card { min-width: 0; }
+.rs-admin-dashboard-card,
+.rs-client-attention-panel,
+.report-content-card { overflow: hidden; }
+.rs-admin-dashboard-card > header,
+.rs-client-attention-panel > header,
+.report-content-card-header { min-width: 0; }
+.rs-admin-dashboard-card > header > div,
+.rs-client-attention-panel > header > div,
+.report-content-card-header > div { min-width: 0; }
+.client-report-summary-card dl div { align-items: baseline; }
+.client-report-summary-card dt { min-width: 0; line-height: 1.35; }
+.client-report-summary-card dd { flex: 0 0 auto; text-align: right; }
+.report-section-directory { border-radius: 18px; overflow: hidden; }
+.report-section-link { min-width: 0; }
+.report-section-link > span:last-child { min-width: 0; }
+.table-wrap { max-width: 100%; overscroll-behavior-inline: contain; }
+
+/* Relatórios automáticos — opções clicáveis com o mesmo padrão dos demais formulários. */
+.scheduled-report-form-card,
+.scheduled-report-list-card,
+.scheduled-report-cron-card { min-width: 0; }
+.scheduled-report-sections {
+  gap: 9px;
+  padding: 13px;
+  border-radius: 15px;
+  background: #fbfcfd;
+}
+.scheduled-report-sections label,
+.checkbox-row {
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid #e2e8ee;
+  border-radius: 11px;
+  background: #fff;
+  cursor: pointer;
+}
+.scheduled-report-sections label:has(input:checked),
+.checkbox-row:has(input:checked) {
+  border-color: #add9d4;
+  background: #f1faf8;
+}
+.scheduled-report-sections input[type="checkbox"],
+.checkbox-row input[type="checkbox"] {
+  width: 18px !important;
+  height: 18px !important;
+  flex: 0 0 18px;
+  accent-color: #0d9488;
+}
+.scheduled-report-table th { white-space: nowrap; }
+.scheduled-actions { min-width: 0; }
+.scheduled-actions .btn { white-space: nowrap; }
+.scheduled-report-cron-card code { max-width: 100%; }
+
+@media (max-width: 900px) {
+  .rs-admin-report-header-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rs-admin-report-header-actions .btn { width: 100%; justify-content: center; }
+  .rs-admin-report-toolbar,
+  .team-report-filters { padding: 13px; }
+}
+
+@media (max-width: 680px) {
+  .report-v36140,
+  .report-v36150,
+  .team-report-page,
+  .scheduled-reports-page { gap: 14px; }
+  .report-v36140 .card,
+  .report-v36150 .card,
+  .team-report-page .card,
+  .scheduled-reports-page .card { border-radius: 17px; }
+  .rs-admin-report-header-actions,
+  .rs-admin-toolbar-actions,
+  .team-report-filter-actions { grid-template-columns: 1fr; width: 100%; }
+  .rs-admin-report-header-actions > *,
+  .rs-admin-toolbar-actions > *,
+  .team-report-filter-actions > * { width: 100%; }
+  .rs-admin-report-toolbar,
+  .team-report-filters { border-radius: 15px; }
+  .rs-admin-kpi-grid,
+  .team-report-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rs-admin-kpi,
+  .team-report-kpis article { min-height: 108px; padding: 14px; }
+  .rs-client-attention-grid { grid-template-columns: 1fr; }
+  .scheduled-report-form-card,
+  .scheduled-report-list-card,
+  .scheduled-report-cron-card { padding: 15px; }
+  .scheduled-report-sections { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 440px) {
+  .rs-admin-kpi-grid,
+  .team-report-kpis { grid-template-columns: 1fr; }
+  .rs-admin-kpi,
+  .team-report-kpis article { min-height: 0; }
+  .client-report-summary-card dl div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .client-report-summary-card dd { text-align: left; }
+}

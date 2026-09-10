@@ -14961,3 +14961,468 @@ summary {
     grid-column: 1;
   }
 }
+
+/* =========================================================
+   RS Connect 36.29.9 — quarta rodada visual
+   Agenda, Campanhas, Cobranças + correção das permissões da automação.
+   ========================================================= */
+
+/* Agentes — "O que a automação pode fazer": checkbox e conteúdo seguem a mesma coluna visual. */
+.agent-operation-capabilities {
+  align-items: stretch;
+  grid-auto-rows: 1fr;
+}
+.agent-operation-capabilities .agent-rule-toggle {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  justify-content: start;
+  gap: 12px;
+  width: 100%;
+  min-height: 86px;
+  padding: 16px 17px;
+  text-align: left;
+}
+.agent-operation-capabilities .agent-rule-toggle > input[type="checkbox"] {
+  align-self: start;
+  justify-self: start;
+  margin-top: 2px !important;
+}
+.agent-operation-capabilities .agent-rule-toggle > span {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+.agent-operation-capabilities .agent-rule-toggle strong {
+  display: block;
+  color: #27364b;
+  line-height: 1.35;
+}
+.agent-operation-capabilities .agent-rule-toggle small {
+  display: block;
+  color: #66758a;
+  line-height: 1.48;
+}
+.agent-operation-capabilities .agent-rule-toggle.is-off {
+  opacity: 1;
+  background: #fbfcfd;
+}
+.agent-operation-capabilities .agent-rule-toggle.is-off strong { color: #536176; }
+.agent-operation-capabilities .agent-rule-toggle.is-platform-locked { background: #f6f8fa; }
+
+/* Agenda — mesma hierarquia visual das telas operacionais recentes. */
+.agenda-unified-tabs {
+  margin-bottom: 16px;
+  border: 1px solid #e1e9ef;
+  box-shadow: 0 7px 22px rgba(15,23,42,.035);
+}
+.calendar-page-heading {
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+.calendar-page-heading > div:first-child { min-width: 0; }
+.calendar-page-heading p { max-width: 760px; }
+.calendar-page-heading .action-popover { flex: 0 0 auto; }
+.calendar-page-heading .popover-panel {
+  width: min(620px, calc(100vw - 36px));
+  max-height: min(78vh, 760px);
+  overflow-y: auto;
+}
+.calendar-metrics {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.calendar-metrics .metric-card {
+  min-width: 0;
+  min-height: 112px;
+  padding: 16px;
+  border-radius: 17px;
+  box-shadow: 0 7px 22px rgba(15,23,42,.035);
+}
+.calendar-metrics .metric-card strong { font-size: 1.45rem; }
+.calendar-view-toolbar {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 17px;
+  box-shadow: 0 7px 22px rgba(15,23,42,.035);
+}
+.calendar-view-switch { min-width: 0; }
+.calendar-view-button { white-space: nowrap; }
+.calendar-period-navigation { min-width: 0; }
+.calendar-period-navigation > strong { overflow-wrap: anywhere; }
+.calendar-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid #e1e9ef;
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 7px 22px rgba(15,23,42,.03);
+}
+.calendar-filter-bar > select,
+.calendar-filter-bar > input,
+.calendar-filter-bar > .btn {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--rs-form-control-height);
+}
+.calendar-list-card,
+.calendar-visual-card {
+  border-radius: 22px;
+  box-shadow: 0 9px 28px rgba(15,23,42,.04);
+}
+.calendar-list-card > .section-heading,
+.calendar-visual-card > .section-heading {
+  padding-bottom: 13px;
+  border-bottom: 1px solid #edf1f4;
+}
+.calendar-row {
+  min-width: 0;
+  border: 1px solid #e4eaf0;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(15,23,42,.025);
+}
+.calendar-row + .calendar-row { margin-top: 9px; }
+.calendar-row .task-main,
+.calendar-row .task-deadline,
+.calendar-row .calendar-actions { min-width: 0; }
+.calendar-row .task-main p,
+.calendar-row .task-main small { overflow-wrap: anywhere; }
+.calendar-actions { gap: 7px; }
+.calendar-actions form { min-width: 0; }
+.calendar-visual-content { min-width: 0; }
+.calendar-week-scroll,
+.calendar-month-scroll { border-radius: 14px; }
+
+/* Campanhas — painel operacional completo e responsivo. */
+.campaign-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  margin-bottom: 16px;
+  padding: 25px 26px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #fff 0%, #f7fbff 58%, #eff9f7 100%);
+  box-shadow: 0 9px 28px rgba(15,23,42,.04);
+}
+.campaign-hero > div { min-width: 0; }
+.campaign-hero h2 { margin: 5px 0 7px; }
+.campaign-hero p { max-width: 780px; margin: 0; color: var(--rs-muted); line-height: 1.55; }
+.campaign-hero .btn { flex: 0 0 auto; }
+.campaign-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.campaign-metrics .metric-card {
+  min-width: 0;
+  min-height: 108px;
+  padding: 16px;
+  border-radius: 17px;
+  box-shadow: 0 7px 22px rgba(15,23,42,.035);
+}
+.campaign-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 13px;
+  border-radius: 18px;
+}
+.campaign-filter-bar .field { margin: 0; }
+.campaign-filter-bar .btn { width: 100%; min-height: var(--rs-form-control-height); }
+.campaign-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(340px, .75fr);
+  gap: 16px;
+  align-items: start;
+}
+.campaign-list-panel,
+.campaign-form-panel,
+.campaign-detail-panel {
+  min-width: 0;
+  border-radius: 22px;
+  box-shadow: 0 9px 28px rgba(15,23,42,.04);
+}
+.campaign-form-panel {
+  position: sticky;
+  top: 92px;
+}
+.campaign-list { display: grid; gap: 10px; }
+.campaign-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  min-width: 0;
+  padding: 14px 15px;
+  border: 1px solid #e1e8ee;
+  border-radius: 15px;
+  color: inherit;
+  background: #fff;
+  text-decoration: none;
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.campaign-card:hover {
+  transform: translateY(-1px);
+  border-color: #bcd8d5;
+  box-shadow: 0 8px 20px rgba(15,23,42,.055);
+}
+.campaign-card.is-selected {
+  border-color: #9ed4cf;
+  background: linear-gradient(135deg, #f2fbf9, #fff);
+  box-shadow: inset 3px 0 #15968f, 0 8px 20px rgba(15,23,42,.04);
+}
+.campaign-card > div:first-child { min-width: 0; }
+.campaign-card strong { display: block; overflow-wrap: anywhere; }
+.campaign-card small { color: var(--rs-muted); line-height: 1.4; }
+.campaign-card > div:first-child small { display: block; margin-top: 3px; }
+.campaign-card > .mini-badge { align-self: start; justify-self: end; }
+.campaign-progress {
+  grid-column: 1 / -1;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef2;
+}
+.campaign-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #15968f, #3e72ae);
+}
+.campaign-card > small:last-child { grid-column: 1 / -1; }
+.campaign-form-panel form { display: grid; gap: 12px; }
+.campaign-form-panel .field { margin: 0; }
+.campaign-form-panel textarea { resize: vertical; }
+.campaign-help-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 12px 13px;
+  border: 1px solid #dce7ec;
+  border-radius: 13px;
+  background: #f7fafc;
+}
+.campaign-help-box strong { flex: 1 0 100%; color: #42546b; font-size: .76rem; }
+.campaign-help-box span {
+  display: inline-flex;
+  padding: 5px 8px;
+  border: 1px solid #d7e5e4;
+  border-radius: 999px;
+  color: #34645f;
+  background: #fff;
+  font-size: .7rem;
+  font-weight: 800;
+}
+.campaign-detail-panel { margin-top: 16px; }
+.campaign-status-stack { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.campaign-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(290px, .75fr);
+  gap: 14px;
+}
+.campaign-detail-grid > article {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #e2e9ef;
+  border-radius: 16px;
+  background: #fbfcfd;
+}
+.campaign-detail-grid h3 { margin: 0 0 12px; font-size: .98rem; }
+.campaign-message-preview {
+  min-height: 120px;
+  padding: 14px;
+  border: 1px solid #dce6eb;
+  border-radius: 13px;
+  background: #fff;
+  line-height: 1.58;
+  overflow-wrap: anywhere;
+}
+.campaign-detail-grid .detail-list {
+  display: grid;
+  grid-template-columns: minmax(110px, .55fr) minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+}
+.campaign-detail-grid .detail-list dt,
+.campaign-detail-grid .detail-list dd {
+  margin: 0;
+  padding: 9px 0;
+  border-bottom: 1px solid #e8edf1;
+}
+.campaign-detail-grid .detail-list dt { color: var(--rs-muted); font-size: .72rem; font-weight: 800; }
+.campaign-detail-grid .detail-list dd { min-width: 0; font-size: .8rem; font-weight: 700; overflow-wrap: anywhere; }
+.campaign-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 13px;
+  border: 1px solid #e3e9ee;
+  border-radius: 15px;
+  background: #f8fafc;
+}
+.campaign-actions form { margin: 0; }
+.campaign-actions .dispatch-form {
+  display: grid;
+  grid-template-columns: 100px auto;
+  align-items: end;
+  gap: 8px;
+}
+.campaign-actions .dispatch-form .field { margin: 0; }
+.campaign-recipients-table {
+  margin-top: 16px;
+  border: 1px solid #e3e9ee;
+  border-radius: 15px;
+}
+.campaign-recipients-table table { min-width: 880px; }
+.campaign-recipients-table td > small { display: block; margin-top: 3px; color: var(--rs-muted); }
+.recipient-message-cell { max-width: 360px; line-height: 1.45; overflow-wrap: anywhere; }
+
+/* Cobranças e assinatura — cards e ações com ritmo uniforme. */
+.billing-hero-v2,
+.billing-subscription-card,
+.billing-invoice-card,
+.commercial-plans-panel,
+.client-subscription-hero,
+.client-subscription-content-card,
+.client-upgrade-card,
+.client-billing-details-card,
+.client-invoice-section {
+  border-radius: 22px;
+  box-shadow: 0 9px 28px rgba(15,23,42,.04);
+}
+.billing-summary-v2 { gap: 12px; }
+.billing-summary-v2 .admin-module-summary-item,
+.billing-summary-v2 > div {
+  min-width: 0;
+}
+.billing-guidance-strip {
+  border-radius: 15px;
+  box-shadow: 0 5px 18px rgba(15,23,42,.025);
+}
+.billing-subscription-card,
+.billing-invoice-card { min-width: 0; }
+.billing-subscription-card header > div,
+.billing-invoice-main { min-width: 0; }
+.billing-subscription-card header h3,
+.billing-invoice-card h3,
+.billing-subscription-card header p,
+.billing-invoice-card p { overflow-wrap: anywhere; }
+.billing-subscription-facts > div,
+.billing-invoice-facts > div { min-width: 0; }
+.billing-invoice-actions { align-items: end; }
+.billing-invoice-actions > form { min-width: 0; }
+.client-subscription-summary-card,
+.client-usage-card,
+.client-invoice-card,
+.client-billing-details-grid > div { border-radius: 15px; }
+.client-subscription-content-card > .section-heading,
+.client-invoice-section > .section-heading,
+.client-billing-details-card > .section-heading {
+  padding-bottom: 13px;
+  border-bottom: 1px solid #edf1f4;
+}
+.client-next-invoice { min-width: 0; }
+.client-next-invoice > div { min-width: 0; }
+.client-next-invoice strong,
+.client-next-invoice small { overflow-wrap: anywhere; }
+.client-invoice-actions { min-width: 0; }
+
+@media (max-width: 1120px) {
+  .calendar-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .campaign-layout { grid-template-columns: minmax(0, 1fr) minmax(320px, .8fr); }
+}
+
+@media (max-width: 900px) {
+  .campaign-layout { grid-template-columns: 1fr; }
+  .campaign-form-panel { position: static; }
+  .campaign-detail-grid { grid-template-columns: 1fr; }
+  .billing-invoice-actions .billing-status-form { margin-left: 0; }
+}
+
+@media (max-width: 720px) {
+  .agent-operation-capabilities .agent-rule-toggle { min-height: 0; padding: 14px; }
+
+  .calendar-page-heading { align-items: stretch; flex-direction: column; }
+  .calendar-page-heading .action-popover,
+  .calendar-page-heading .action-popover > summary { width: 100%; }
+  .calendar-page-heading .action-popover > summary { justify-content: center; }
+  .calendar-page-heading .popover-panel {
+    position: fixed;
+    inset: 12px;
+    width: auto;
+    max-height: calc(100dvh - 24px);
+    border-radius: 18px;
+  }
+  .calendar-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .calendar-view-toolbar { align-items: stretch; }
+  .calendar-view-switch { width: 100%; }
+  .calendar-period-navigation { width: 100%; }
+  .calendar-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .calendar-filter-bar .btn { min-height: 44px; }
+  .calendar-list-card,
+  .calendar-visual-card { border-radius: 18px; }
+
+  .campaign-hero { align-items: flex-start; flex-direction: column; padding: 20px; border-radius: 20px; }
+  .campaign-hero .btn { width: 100%; }
+  .campaign-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .campaign-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .campaign-list-panel,
+  .campaign-form-panel,
+  .campaign-detail-panel { border-radius: 18px; }
+  .campaign-status-stack { justify-content: flex-start; }
+  .campaign-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  .campaign-actions > form,
+  .campaign-actions > form .btn { width: 100%; }
+  .campaign-actions .dispatch-form { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }
+  .campaign-actions .dispatch-form .btn { min-height: var(--rs-form-control-height); }
+
+  .billing-subscription-card,
+  .billing-invoice-card { border-radius: 18px; }
+  .billing-invoice-actions { display: grid; grid-template-columns: 1fr; }
+  .billing-invoice-actions > *,
+  .billing-invoice-actions .btn { width: 100%; }
+  .billing-invoice-actions .billing-status-form { grid-template-columns: 1fr; }
+  .client-subscription-hero,
+  .client-subscription-content-card,
+  .client-upgrade-card,
+  .client-billing-details-card,
+  .client-invoice-section { border-radius: 18px; }
+}
+
+@media (max-width: 480px) {
+  .calendar-metrics,
+  .calendar-filter-bar,
+  .campaign-metrics,
+  .campaign-filter-bar,
+  .campaign-actions { grid-template-columns: 1fr; }
+  .calendar-metrics .metric-card,
+  .campaign-metrics .metric-card { min-height: 0; }
+  .calendar-view-switch { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .calendar-period-navigation .btn { flex: 1 1 0; }
+  .calendar-period-navigation > strong { flex-basis: 100%; }
+  .campaign-card { grid-template-columns: 1fr; }
+  .campaign-card > .mini-badge { justify-self: start; }
+  .campaign-card > .campaign-progress,
+  .campaign-card > small:last-child { grid-column: 1; }
+  .campaign-detail-grid .detail-list { grid-template-columns: 1fr; }
+  .campaign-detail-grid .detail-list dt { padding-bottom: 3px; border-bottom: 0; }
+  .campaign-detail-grid .detail-list dd { padding-top: 0; }
+  .campaign-actions .dispatch-form { grid-column: 1; grid-template-columns: 1fr; }
+}

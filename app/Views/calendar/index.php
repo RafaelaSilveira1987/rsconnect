@@ -150,7 +150,7 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
     </a>
 </nav>
 
-<div class="page-heading">
+<div class="page-heading calendar-page-heading">
     <div>
         <span class="eyebrow">Agenda comercial</span>
         <h2>Agenda e compromissos</h2>
@@ -195,7 +195,7 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
     <?php endif; ?>
 </div>
 
-<div class="metric-grid metric-grid-compact">
+<div class="metric-grid metric-grid-compact calendar-metrics">
     <article class="metric-card"><span>Hoje</span><strong><?= (int) ($metrics['today_count'] ?? 0) ?></strong><small>compromissos do dia</small></article>
     <article class="metric-card"><span>Próximos</span><strong><?= (int) ($metrics['upcoming_count'] ?? 0) ?></strong><small>em aberto</small></article>
     <article class="metric-card metric-card-link"><span>Pré-agendamentos</span><strong><?= (int) ($metrics['pre_schedule_pending'] ?? 0) ?></strong><small>aguardando aprovação</small></article>

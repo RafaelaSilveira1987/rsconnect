@@ -1,4 +1,4 @@
-# RS Connect 36.29.8
+# RS Connect 36.29.9
 
 Organização inteligente de contatos, continuidade de cliente/paciente e terceira rodada visual em telas operacionais, preservando o fluxo editável dos Assistentes.
 
@@ -41,6 +41,16 @@ Principais alterações desta versão:
 - Organização do contato passa a gerar perfil operacional usado pela IA em Contatos e Conversas;
 - paciente e cliente atual recebem continuidade de atendimento e não voltam à qualificação de novo lead;
 - CRM deixa de criar oportunidade automática para conversas rotineiras de relacionamento atual, preservando oportunidades existentes e novas intenções comerciais explícitas;
+- nenhuma migration nova.
+
+## Quarta rodada visual — 36.29.9
+
+- Agenda com métricas, filtros, alternância de visualização, cartões de compromisso e ações mais consistentes em desktop, tablet e celular;
+- Campanhas com layout próprio para histórico, criação, progresso, detalhes, ações e destinatários, incluindo adaptação completa para mobile;
+- Relatórios executivo, equipe e automáticos com cards, filtros, tabelas e checkboxes harmonizados, mantendo a folha `reports.css` separada;
+- Cobranças e assinatura com hierarquia visual e comportamento responsivo reforçados para faturas, uso, status e ações;
+- bloco **O que a automação pode fazer** corrigido para alinhar checkbox, título e descrição à esquerda em todos os cards;
+- nenhuma rota, `name`, `id`, `data-*`, action de formulário, evento JavaScript ou regra de negócio foi removida;
 - nenhuma migration nova.
 
 Migration obrigatória atual:

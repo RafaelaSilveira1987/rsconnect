@@ -101,7 +101,7 @@ $quickReports = [
     ['name' => 'Pipeline comercial RS', 'type' => 'Comercial', 'metric' => $money($metrics['commercial_pipeline'] ?? 0), 'export' => 'commercial'],
 ];
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.15.1')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.29.9')) ?>">
 <div class="executive-report-page executive-report-admin report-v3646 report-v3647 report-v36140">
     <header class="rs-admin-report-header">
         <div>

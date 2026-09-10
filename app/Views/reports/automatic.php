@@ -27,7 +27,7 @@ $frequencyLabel = static fn (string $value): string => match ($value) {
     default => 'Manual',
 };
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.15.1')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.29.9')) ?>">
 
 <div class="scheduled-reports-page">
     <header class="scheduled-reports-header">

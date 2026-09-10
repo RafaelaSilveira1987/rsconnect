@@ -32,7 +32,7 @@ $statusClass = static fn (?string $status): string => preg_replace('/[^a-z0-9_-]
     <article class="metric-card compact"><span>Enviadas</span><strong><?= (int) ($metrics['sent'] ?? 0) ?></strong><small>mensagens registradas</small></article>
 </section>
 
-<form class="filter-bar card" method="get" action="<?= View::e(Router::url('/campaigns')) ?>">
+<form class="filter-bar card campaign-filter-bar" method="get" action="<?= View::e(Router::url('/campaigns')) ?>">
     <?php if (Auth::isSuperAdmin()): ?>
         <label class="field compact-field"><span>Empresa</span>
             <select name="tenant_id" data-auto-submit>
