@@ -1,4 +1,4 @@
-# RS Connect 36.30.0
+# RS Connect 36.30.1
 
 Organização inteligente de contatos, continuidade de cliente/paciente e terceira rodada visual em telas operacionais, preservando o fluxo editável dos Assistentes.
 
@@ -83,3 +83,14 @@ Depois do deploy, execute `php bin/migrate.php status` e reinicie o PHP-FPM/cont
 - o setor operacional passa a integrar o contexto estruturado fornecido à IA;
 - joins sensíveis da Fila e do contexto da IA foram reforçados com `tenant_id`;
 - migration obrigatória: `107_service_department_memberships.sql`.
+
+
+## Fila opcional e frontend operacional — 36.30.1
+
+- `Fila e setores` passa a ser um recurso operacional opcional por empresa.
+- Quando desligado, o menu e as rotas da fila ficam indisponíveis para o cliente e o atendimento continua direto por IA/usuário.
+- Quando ligado em **Minha empresa**, o menu é liberado automaticamente e as regras de setor/equipe entram em ação.
+- Regras antigas de setor deixam de restringir atendimento quando o recurso está desligado.
+- A tela da fila foi redesenhada: tabela sem deslocamento horizontal desnecessário, ações consistentes e distribuição em drawer lateral.
+- O painel de setores ganhou cadastro recolhível e edição de equipe por setor sem checkboxes comprimidos.
+- Não há migration nova nesta versão; a migration necessária para vínculo usuário ↔ setor continua sendo `107_service_department_memberships.sql`.

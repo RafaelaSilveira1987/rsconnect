@@ -16,6 +16,8 @@ $profileFields = [
 $filledProfile = count(array_filter($profileFields, static fn ($value): bool => trim((string) $value) !== ''));
 $profilePercent = (int) round(($filledProfile / max(1, count($profileFields))) * 100);
 $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $messageGovernanceSettings : [];
+$queueModuleDefinition = is_array(($availableModules ?? [])['queue'] ?? null) ? $availableModules['queue'] : [];
+$queueEnabled = (bool) (($moduleSettings['queue']['is_enabled'] ?? null) ?? ($queueModuleDefinition['default_enabled'] ?? false));
 ?>
 <?php if (Auth::isSuperAdmin()): ?>
 
@@ -677,6 +679,34 @@ $messageGovernanceSettings = is_array($messageGovernanceSettings ?? null) ? $mes
             <div class="readonly-grid compact-readonly-grid"><div><span>Última limpeza</span><strong><?= View::e((string) ($messageGovernanceSettings['message_retention_last_run_at'] ?? 'Ainda não executada')) ?></strong></div></div>
         </div>
         <div class="message-info"><strong>Modo efêmero</strong><span>Preserva mensagens enquanto a conversa está ativa. Depois da janela configurada, remove o conteúdo e os dados técnicos, mantendo data, remetente, status e métricas.</span></div>
+    </section>
+
+    <section class="card client-settings-card queue-optional-settings" id="queue-operation-settings">
+        <input type="hidden" name="queue_settings_submitted" value="1">
+        <div class="section-heading compact">
+            <div>
+                <span class="eyebrow">Organização da equipe</span>
+                <h2>Fila e setores</h2>
+                <p>Use somente quando sua operação precisar distribuir conversas por áreas como Comercial, Recepção, Suporte ou Financeiro.</p>
+            </div>
+            <span class="badge <?= $queueEnabled ? 'badge-active' : 'badge-pending' ?>"><?= $queueEnabled ? 'Em uso' : 'Opcional' ?></span>
+        </div>
+        <div class="settings-toggle-grid">
+            <label class="switch-card queue-operation-toggle">
+                <input type="checkbox" name="queue_enabled" value="1" <?= $queueEnabled ? 'checked' : '' ?>>
+                <span>
+                    <strong>Usar Fila e setores nesta empresa</strong>
+                    <small>Quando ativado, libera o menu da fila, transferência por setor e regras da equipe. Quando desligado, o atendimento continua direto por usuário e pela IA.</small>
+                </span>
+            </label>
+        </div>
+        <div class="queue-operation-explainer">
+            <div><span>Desativado</span><strong>Fluxo simples</strong><small>Conversa → IA ou atendente, sem exigir setor.</small></div>
+            <div><span>Ativado</span><strong>Fluxo por equipe</strong><small>Conversa → setor → profissional responsável.</small></div>
+        </div>
+        <?php if ($queueEnabled && Auth::can('queue.view')): ?>
+            <div class="form-actions queue-settings-actions"><a class="btn btn-outline" href="<?= View::e(Router::url('/queue')) ?>">Abrir Fila e setores</a></div>
+        <?php endif; ?>
     </section>
 
     <section class="card client-settings-card professional-assignment-settings">

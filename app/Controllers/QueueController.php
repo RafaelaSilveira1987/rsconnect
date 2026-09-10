@@ -10,6 +10,7 @@ use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\TenantModuleService;
 use PDO;
 use Throwable;
 
@@ -205,6 +206,11 @@ final class QueueController
         if (!$conversation) {
             Flash::set('error', 'Conversa não encontrada.');
             $this->redirect('/queue');
+        }
+
+        if (!(new TenantModuleService())->enabled((int) $conversation['tenant_id'], 'queue')) {
+            Flash::set('warning', 'A Fila e setores está desativada para esta empresa. Ative o recurso em Minha empresa antes de distribuir conversas.');
+            $this->redirect('/conversations?conversation_id=' . $conversationId);
         }
 
         if ($userId !== null && !$this->userBelongsToTenant($userId, (int) $conversation['tenant_id'])) {

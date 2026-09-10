@@ -12,6 +12,7 @@ $ownershipSnapshot = is_array($ownershipSnapshot ?? null) ? $ownershipSnapshot :
 $canOperateSelected = $canManage && !empty($ownershipSnapshot['can_interact']);
 $conversationAgents = is_array($conversationAgents ?? null) ? $conversationAgents : [];
 $departments = is_array($departments ?? null) ? $departments : [];
+$queueEnabled = !empty($queueEnabled);
 $commercialRequestSettings = is_array($commercialRequestSettings ?? null) ? $commercialRequestSettings : ['ready' => false, 'enabled' => false, 'show_conversation_alert' => false];
 $selectedCommercialRequest = is_array($selectedCommercialRequest ?? null) ? $selectedCommercialRequest : null;
 $formatDate = static function (?string $date, string $format = 'd/m/Y H:i'): string {
@@ -304,7 +305,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                         <span class="conversation-meta-row">
                             <span class="mini-badge mode-<?= View::e($conversation['attendance_mode']) ?>"><?= View::e($modeLabel[$conversation['attendance_mode']] ?? $conversation['attendance_mode']) ?></span>
                             <span class="mini-badge conversation-status-badge status-<?= View::e($conversationStatus) ?>" data-conversation-list-status><?= View::e($statusLabel[$conversationStatus]) ?></span>
-                            <?php if (!empty($conversation['department_name'])): ?><span class="mini-badge conversation-department-badge" data-conversation-department><?= View::e($conversation['department_name']) ?></span><?php endif; ?>
+                            <?php if ($queueEnabled && !empty($conversation['department_name'])): ?><span class="mini-badge conversation-department-badge" data-conversation-department><?= View::e($conversation['department_name']) ?></span><?php endif; ?>
                             <?php if (Auth::isSuperAdmin()): ?><small><?= View::e($conversation['tenant_name']) ?></small><?php endif; ?>
                             <b class="unread-count" data-unread-count <?= (int) $conversation['unread_count'] > 0 ? '' : 'hidden' ?>><?= (int) $conversation['unread_count'] ?></b>
                         </span>
@@ -661,6 +662,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                     || (int) ($selected['assigned_user_id'] ?? 0) === (int) (Auth::id() ?? 0)
                 );
                 ?>
+                <?php if ($queueEnabled): ?>
                 <section class="drawer-section conversation-department-card">
                     <div class="drawer-section-title">
                         <div>
@@ -697,6 +699,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                         <div class="message-info">Nenhum setor foi definido para esta conversa.</div>
                     <?php endif; ?>
                 </section>
+                <?php endif; ?>
 
                 <?php if (!empty($professionalAssignmentSettings['enabled'])): ?>
                     <section class="drawer-section conversation-ownership-card">

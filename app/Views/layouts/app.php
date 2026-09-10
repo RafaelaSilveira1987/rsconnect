@@ -169,7 +169,7 @@ $svgIcon = static function (string $name): string {
     <!-- Marcador histórico de regressão: app.css?v=36.20.2 -->
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.30.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.30.1')) ?>">
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
             width: 54px !important;
@@ -214,13 +214,13 @@ $svgIcon = static function (string $name): string {
                 <a class="nav-link<?= $isActive('/onboarding') ?>" href="<?= View::e(Router::url('/onboarding')) ?>"><?= $svgIcon('check') ?><span>Primeiros passos</span></a>
             <?php endif; ?>
 
-            <?php if ((Auth::can('conversations.view') && $moduleVisible('conversations')) || Auth::can('queue.view') || (Auth::can('contacts.view') && $moduleVisible('contacts')) || (Auth::can('crm.view') && $moduleVisible('crm')) || (Auth::can('tasks.view') && $moduleVisible('tasks')) || (Auth::can('calendar.view') && $moduleVisible('calendar'))): ?>
+            <?php if ((Auth::can('conversations.view') && $moduleVisible('conversations')) || (Auth::can('queue.view') && $moduleVisible('queue')) || (Auth::can('contacts.view') && $moduleVisible('contacts')) || (Auth::can('crm.view') && $moduleVisible('crm')) || (Auth::can('tasks.view') && $moduleVisible('tasks')) || (Auth::can('calendar.view') && $moduleVisible('calendar'))): ?>
                 <span class="nav-caption">Relacionamento</span>
             <?php endif; ?>
             <?php if (Auth::can('conversations.view') && $moduleVisible('conversations')): ?>
                 <a class="nav-link<?= $isActive('/conversations') ?>" href="<?= View::e(Router::url('/conversations')) ?>"><?= $svgIcon('chat') ?><span>Conversas</span><?= $notificationBadge($conversationUnread) ?></a>
             <?php endif; ?>
-            <?php if (Auth::can('queue.view')): ?>
+            <?php if (Auth::can('queue.view') && $moduleVisible('queue')): ?>
                 <a class="nav-link<?= $isActive('/queue') ?>" href="<?= View::e(Router::url('/queue')) ?>"><?= $svgIcon('users') ?><span>Fila e setores</span></a>
             <?php endif; ?>
             <?php if (Auth::can('contacts.view') && $moduleVisible('contacts')): ?>
@@ -508,6 +508,6 @@ $svgIcon = static function (string $name): string {
 <!-- Marcador histórico de regressão: app.js?v=36.20.2 -->
 <!-- Marcador histórico de regressão: app.js?v=36.20.5 -->
 <!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 app.js?v=36.20.8 app.js?v=36.20.9 -->
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.30.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.30.1')) ?>" defer></script>
 </body>
 </html>

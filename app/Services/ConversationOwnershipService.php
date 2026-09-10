@@ -99,7 +99,8 @@ final class ConversationOwnershipService
         $tenantId = (int) ($conversation['tenant_id'] ?? 0);
         $settings = $this->settingsForTenant($pdo, $tenantId);
         $assignedUserId = (int) ($conversation['assigned_user_id'] ?? 0);
-        $departmentId = (int) ($conversation['department_id'] ?? 0);
+        $queueEnabled = $this->queueEnabledForTenant($tenantId);
+        $departmentId = $queueEnabled ? (int) ($conversation['department_id'] ?? 0) : 0;
         $actorId = (int) (Auth::id() ?? 0);
         $actorBelongsToTenant = $actorId > 0 && $this->activeUserBelongsToTenant($pdo, $actorId, $tenantId);
         $manager = $this->isManagerForTenant($actorBelongsToTenant);
@@ -181,7 +182,7 @@ final class ConversationOwnershipService
             }
 
             $assignedUserId = (int) ($current['assigned_user_id'] ?? 0);
-            $departmentId = (int) ($current['department_id'] ?? 0);
+            $departmentId = $this->queueEnabledForTenant($tenantId) ? (int) ($current['department_id'] ?? 0) : 0;
             $manager = $this->isManagerForTenant(true);
             if ($departmentId > 0 && !$manager && !$this->userBelongsToDepartment($pdo, $actorId, $departmentId, $tenantId)) {
                 throw new RuntimeException('Esta conversa está na fila de outro setor. Solicite a transferência do atendimento ou peça a um administrador.');
@@ -296,7 +297,7 @@ final class ConversationOwnershipService
             if (($targetUserId ?? 0) > 0 && !$this->activeUserBelongsToTenant($pdo, (int) $targetUserId, $tenantId)) {
                 throw new RuntimeException('O profissional selecionado não pertence à empresa ou está inativo.');
             }
-            $departmentId = (int) ($conversation['department_id'] ?? 0);
+            $departmentId = $this->queueEnabledForTenant($tenantId) ? (int) ($conversation['department_id'] ?? 0) : 0;
             if (($targetUserId ?? 0) > 0 && $departmentId > 0
                 && !$this->userBelongsToDepartment($pdo, (int) $targetUserId, $departmentId, $tenantId)) {
                 throw new RuntimeException('O profissional selecionado não pertence ao setor atual desta conversa.');
@@ -379,6 +380,9 @@ final class ConversationOwnershipService
             }
 
             $tenantId = (int) $conversation['tenant_id'];
+            if (!$this->queueEnabledForTenant($tenantId)) {
+                throw new RuntimeException('A Fila e setores está desativada para esta empresa. Ative o recurso em Minha empresa antes de distribuir por setor.');
+            }
             if ((string) ($conversation['status'] ?? '') === 'closed') {
                 throw new RuntimeException('Reabra a conversa antes de transferi-la para um setor.');
             }
@@ -682,6 +686,14 @@ final class ConversationOwnershipService
         $statement->execute(['id' => $departmentId, 'tenant_id' => $tenantId]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
         return $row ?: null;
+    }
+
+    private function queueEnabledForTenant(int $tenantId): bool
+    {
+        if ($tenantId < 1) {
+            return false;
+        }
+        return (new TenantModuleService())->enabled($tenantId, 'queue');
     }
 
     private function hasTable(PDO $pdo, string $table): bool

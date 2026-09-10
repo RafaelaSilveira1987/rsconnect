@@ -29,6 +29,13 @@ final class TenantModuleService
                 'default_visible' => true,
                 'default_enabled' => true,
             ],
+            'queue' => [
+                'label' => 'Fila e setores',
+                'description' => 'Distribuição opcional das conversas por setor e equipe.',
+                'paths' => ['/queue'],
+                'default_visible' => true,
+                'default_enabled' => true,
+            ],
             'contacts' => [
                 'label' => 'Contatos',
                 'description' => 'Cadastro de contatos e leads.',
@@ -216,6 +223,31 @@ final class TenantModuleService
                 'is_enabled' => $isEnabled,
             ]);
         }
+        unset(self::$settingsCache[$tenantId]);
+    }
+
+    public function saveModuleState(int $tenantId, string $moduleKey, bool $enabled, ?bool $visible = null): void
+    {
+        if ($tenantId < 1 || !isset(self::modules()[$moduleKey]) || !$this->tableExists('tenant_module_settings')) {
+            return;
+        }
+
+        $isEnabled = $enabled ? 1 : 0;
+        $isVisible = $isEnabled === 1 && ($visible ?? $enabled) ? 1 : 0;
+        $statement = Database::connection()->prepare(
+            'INSERT INTO tenant_module_settings (tenant_id, module_key, is_visible, is_enabled)
+             VALUES (:tenant_id, :module_key, :is_visible, :is_enabled)
+             ON DUPLICATE KEY UPDATE
+                is_visible = VALUES(is_visible),
+                is_enabled = VALUES(is_enabled),
+                updated_at = CURRENT_TIMESTAMP'
+        );
+        $statement->execute([
+            'tenant_id' => $tenantId,
+            'module_key' => $moduleKey,
+            'is_visible' => $isVisible,
+            'is_enabled' => $isEnabled,
+        ]);
         unset(self::$settingsCache[$tenantId]);
     }
 

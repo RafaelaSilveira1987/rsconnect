@@ -397,7 +397,9 @@ final class AiModelService
         $demandStatus = trim((string) ($conversation['demand_status'] ?? 'pending')) ?: 'pending';
         $demandSummary = trim((string) ($conversation['demand_summary'] ?? ''));
         $lastIntent = trim((string) ($conversation['last_intent'] ?? ''));
-        $departmentName = trim((string) ($conversation['department_name'] ?? ''));
+        $tenantId = (int) ($conversation['tenant_id'] ?? $contact['tenant_id'] ?? 0);
+        $queueEnabled = $tenantId > 0 && (new TenantModuleService())->enabled($tenantId, 'queue');
+        $departmentName = $queueEnabled ? trim((string) ($conversation['department_name'] ?? '')) : '';
         $agendaContextActive = in_array($lastIntent, ['schedule', 'reschedule'], true)
             || in_array($flowStage, ['scheduling', 'awaiting_approval'], true);
         $contactCompany = trim((string) ($contact['company'] ?? $conversation['company'] ?? ''));
@@ -426,7 +428,6 @@ final class AiModelService
             'Nunca afirme que uma transferência para outro assistente virtual ou setor automatizado já aconteceu apenas por decisão textual sua. A troca entre assistentes é executada pelo motor do RS Connect antes da resposta. Se não houver o bloco TRANSFERÊNCIA INTERNA CONFIRMADA abaixo, não diga que já transferiu, que está transferindo agora ou que outro assistente já assumiu.',
         ];
 
-        $tenantId = (int) ($conversation['tenant_id'] ?? $contact['tenant_id'] ?? 0);
         $preScheduleBlock = '';
         if ($tenantId > 0) {
             $preScheduling = new PreSchedulingService();

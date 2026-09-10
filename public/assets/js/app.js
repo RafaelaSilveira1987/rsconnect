@@ -4490,3 +4490,102 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+
+// RS Connect 36.30.1 — drawer de distribuição da fila.
+document.addEventListener('DOMContentLoaded', () => {
+  const drawer = document.getElementById('queue-distribution-drawer');
+  const form = drawer?.querySelector('[data-queue-distribution-form]');
+  if (!drawer || !form) return;
+
+  const field = (name) => form.querySelector(`[data-queue-field="${name}"]`);
+  const contactLabel = drawer.querySelector('[data-queue-drawer-contact]');
+  const summaryContact = drawer.querySelector('[data-queue-summary-contact]');
+  const summaryPhone = drawer.querySelector('[data-queue-summary-phone]');
+  const summaryTenant = drawer.querySelector('[data-queue-summary-tenant]');
+  const assignmentHint = drawer.querySelector('[data-queue-assignment-hint]');
+  let payload = null;
+
+  const safeDecode = (value) => {
+    try {
+      return JSON.parse(decodeURIComponent(value || ''));
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const option = (value, text, selected = false, disabled = false) => {
+    const item = document.createElement('option');
+    item.value = String(value ?? '');
+    item.textContent = text;
+    item.selected = selected;
+    item.disabled = disabled;
+    return item;
+  };
+
+  const fillUsers = (selectedUserId = 0) => {
+    if (!payload) return;
+    const departmentSelect = field('department_id');
+    const userSelect = field('assigned_user_id');
+    if (!departmentSelect || !userSelect) return;
+
+    const departmentId = Number(departmentSelect.value || 0);
+    const users = Array.isArray(payload.users) ? payload.users : [];
+    const eligible = departmentId > 0
+      ? users.filter((user) => Array.isArray(user.departments) && user.departments.map(Number).includes(departmentId))
+      : users;
+
+    userSelect.replaceChildren();
+    userSelect.appendChild(option('', departmentId > 0 ? 'Aguardar equipe do setor' : 'Sem responsável', Number(selectedUserId) < 1));
+    eligible.forEach((user) => {
+      userSelect.appendChild(option(user.id, user.name || 'Usuário', Number(user.id) === Number(selectedUserId)));
+    });
+
+    if (assignmentHint) {
+      assignmentHint.textContent = departmentId > 0
+        ? 'Somente membros vinculados ao setor podem ser escolhidos. Sem responsável, a conversa aguarda a equipe e a IA é pausada.'
+        : 'Sem setor, a conversa pode ficar livre ou ser atribuída diretamente a qualquer usuário ativo da empresa.';
+    }
+  };
+
+  const loadPayload = (button) => {
+    payload = safeDecode(button.dataset.queueAssignment);
+    if (!payload) return;
+
+    const conversationId = field('conversation_id');
+    const departmentSelect = field('department_id');
+    const prioritySelect = field('priority');
+    const statusSelect = field('operational_status');
+
+    if (conversationId) conversationId.value = String(payload.conversation_id || '');
+    if (summaryContact) summaryContact.textContent = payload.contact || '—';
+    if (summaryPhone) summaryPhone.textContent = payload.phone || '—';
+    if (summaryTenant) summaryTenant.textContent = payload.tenant || '—';
+    if (contactLabel) contactLabel.textContent = `${payload.contact || 'Contato'} · ${payload.phone || ''}`.replace(/ · $/, '');
+
+    if (departmentSelect) {
+      departmentSelect.replaceChildren();
+      departmentSelect.appendChild(option('', 'Sem setor', Number(payload.department_id) < 1));
+      (Array.isArray(payload.departments) ? payload.departments : []).forEach((department) => {
+        const current = Number(department.id) === Number(payload.department_id);
+        const disabled = !department.has_team && !current;
+        const suffix = department.has_team ? '' : ' · configure a equipe';
+        departmentSelect.appendChild(option(department.id, `${department.name || 'Setor'}${suffix}`, current, disabled));
+      });
+    }
+
+    if (prioritySelect) prioritySelect.value = payload.priority || 'normal';
+    if (statusSelect) statusSelect.value = payload.operational_status || 'new';
+    fillUsers(Number(payload.assigned_user_id || 0));
+  };
+
+  document.querySelectorAll('[data-queue-assign-open]').forEach((button) => {
+    button.addEventListener('click', () => loadPayload(button));
+  });
+
+  field('department_id')?.addEventListener('change', () => {
+    fillUsers(0);
+    const departmentId = Number(field('department_id')?.value || 0);
+    const statusSelect = field('operational_status');
+    if (departmentId > 0 && statusSelect) statusSelect.value = 'waiting_agent';
+  });
+});

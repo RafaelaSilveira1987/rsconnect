@@ -444,6 +444,14 @@ final class CompanyController
             }
         }
 
+        if (!Auth::isSuperAdmin()
+            && (int) Auth::tenantId() === $tenantId
+            && array_key_exists('queue_settings_submitted', $_POST)) {
+            $queueEnabled = isset($_POST['queue_enabled']) && (string) $_POST['queue_enabled'] === '1';
+            (new TenantModuleService())->saveModuleState($tenantId, 'queue', $queueEnabled, $queueEnabled);
+            Audit::log('company.queue_preference_updated', ['enabled' => $queueEnabled], $tenantId);
+        }
+
         if (!Auth::isSuperAdmin() && Auth::tenantId() === $tenantId) {
             Auth::refreshUser();
         }

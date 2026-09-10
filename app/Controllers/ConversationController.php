@@ -24,6 +24,7 @@ use App\Services\ConversationOwnershipService;
 use App\Services\ConversationAttachmentService;
 use App\Services\CommercialRequestService;
 use App\Services\MessageGovernanceService;
+use App\Services\TenantModuleService;
 use App\Services\EvolutionService;
 use PDO;
 use Throwable;
@@ -41,6 +42,9 @@ final class ConversationController
             Flash::set('error', 'Sua conta não está vinculada a uma empresa ativa. Entre novamente ou solicite a correção do usuário.');
             $this->redirect('/');
         }
+
+        $moduleService = new TenantModuleService();
+        $queueEnabled = $tenantId > 0 ? $moduleService->enabled($tenantId, 'queue') : false;
 
         $filters = [
             'search' => trim((string) ($_GET['search'] ?? '')),
@@ -204,7 +208,7 @@ final class ConversationController
                     unset($conversation);
                 }
 
-                $selectedDepartmentId = (int) ($selected['department_id'] ?? 0);
+                $selectedDepartmentId = $queueEnabled ? (int) ($selected['department_id'] ?? 0) : 0;
                 if ($selectedDepartmentId > 0 && $this->hasTable($pdo, 'service_department_members')) {
                     $teamStatement = $pdo->prepare(
                         'SELECT u.id, u.name, u.role
@@ -233,7 +237,9 @@ final class ConversationController
 
                 $ownershipService = new ConversationOwnershipService();
                 $professionalAssignmentSettings = $ownershipService->settingsForTenant($pdo, (int) $selected['tenant_id']);
-                $departments = $ownershipService->departmentsForTenant($pdo, (int) $selected['tenant_id']);
+                $departments = $queueEnabled
+                    ? $ownershipService->departmentsForTenant($pdo, (int) $selected['tenant_id'])
+                    : [];
                 $ownershipSnapshot = $ownershipService->snapshot($pdo, $selected);
 
                 try {
@@ -330,6 +336,7 @@ final class ConversationController
             'messages' => $messages,
             'team' => $team,
             'departments' => $departments,
+            'queueEnabled' => $queueEnabled,
             'conversationAgents' => $conversationAgents,
             'selectedRuleSnapshot' => $selectedRuleSnapshot,
             'selectedAfterHoursPending' => $selectedAfterHoursPending,
