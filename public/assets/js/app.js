@@ -3486,7 +3486,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const parts = [];
     if (item.connection_state) parts.push(item.connection_state);
     if (item.profile_name) parts.push(item.profile_name);
-    if (item.profile_phone) parts.push(item.profile_phone);
+    const phone = String(item.profile_phone || '').replace(/\D+/g, '');
+    if (phone.length >= 10 && phone.length <= 15) parts.push(phone);
     if (item.reason) parts.push(item.reason);
     return parts.join(' · ') || 'Aguardando atualização da Evolution';
   }
@@ -3504,6 +3505,22 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     const detail = card.querySelector('[data-instance-status-detail]');
     if (detail) detail.textContent = formatDetail(item);
+
+    const identityGrid = card.querySelector('[data-instance-identity-grid]');
+    const authorizedPhone = card.querySelector('[data-instance-authorized-phone]');
+    const connectedPhone = card.querySelector('[data-instance-connected-phone]');
+    const recoveryMode = card.querySelector('[data-instance-recovery-mode]');
+    const identityWarning = card.querySelector('[data-instance-identity-warning]');
+    const normalizedAuthorized = String(item.authorized_phone || '').replace(/\D+/g, '');
+    const normalizedConnected = String(item.profile_phone || '').replace(/\D+/g, '');
+    const authorizedValid = normalizedAuthorized.length >= 10 && normalizedAuthorized.length <= 15;
+    const connectedValid = normalizedConnected.length >= 10 && normalizedConnected.length <= 15;
+    const mismatch = String(item.identity_status || '').toLowerCase() === 'mismatch';
+    if (authorizedPhone) authorizedPhone.textContent = authorizedValid ? normalizedAuthorized : 'Será confirmado na conexão';
+    if (connectedPhone) connectedPhone.textContent = connectedValid ? normalizedConnected : 'Ainda não confirmado';
+    if (recoveryMode) recoveryMode.textContent = Number(item.auto_recovery_enabled || 0) === 1 ? 'Ativa' : 'Desativada';
+    if (identityGrid) identityGrid.classList.toggle('is-danger', mismatch);
+    if (identityWarning) identityWarning.hidden = !mismatch;
 
     const qrForm = card.querySelector('[data-qr-code-form]');
     const connectedNote = card.querySelector('.channel-connected-note');

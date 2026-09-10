@@ -4,6 +4,7 @@ use App\Core\Auth;
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\EvolutionInstanceSafetyService;
 
 $canManage = Auth::can('instances.manage');
 $isSuperAdmin = Auth::isSuperAdmin();
@@ -110,8 +111,8 @@ $statusLabels = ['connected' => 'Conectada', 'disconnected' => 'Desconectada', '
                 'auto_recovery_enabled' => (int) ($instance['auto_recovery_enabled'] ?? 1),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             $identityStatus = (string) ($instance['identity_status'] ?? 'unknown');
-            $authorizedPhone = (string) ($instance['authorized_phone'] ?? '');
-            $connectedPhone = (string) ($instance['profile_phone'] ?? '');
+            $authorizedPhone = EvolutionInstanceSafetyService::normalizeObservedPhone((string) ($instance['authorized_phone'] ?? ''));
+            $connectedPhone = EvolutionInstanceSafetyService::normalizeObservedPhone((string) ($instance['profile_phone'] ?? ''));
             ?>
             <article class="admin-record-card" data-admin-card data-instance-status-card data-status-endpoint="<?= View::e(Router::url('/instances/status-feed')) ?>" data-instance-id="<?= (int) $instance['id'] ?>" data-search="<?= View::e($searchText) ?>" data-status="<?= View::e((string) $instance['status']) ?>">
                 <div class="admin-record-main">
@@ -130,12 +131,12 @@ $statusLabels = ['connected' => 'Conectada', 'disconnected' => 'Desconectada', '
                     <div><dt>Conversas</dt><dd><?= (int) $instance['conversations_count'] ?></dd></div>
                     <div><dt>Recuperação</dt><dd><?= (int) ($instance['auto_recovery_enabled'] ?? 1) === 1 ? 'Auto' : 'Manual' ?></dd></div>
                 </dl>
-                <div class="instance-identity-grid <?= $identityStatus === 'mismatch' ? 'is-danger' : '' ?>">
-                    <div><span>Número autorizado</span><strong><?= View::e($authorizedPhone !== '' ? $authorizedPhone : 'Será confirmado na conexão') ?></strong></div>
-                    <div><span>Número conectado</span><strong><?= View::e($connectedPhone !== '' ? $connectedPhone : 'Ainda não confirmado') ?></strong></div>
-                    <div><span>Recuperação automática</span><strong><?= (int) ($instance['auto_recovery_enabled'] ?? 1) === 1 ? 'Ativa' : 'Desativada' ?></strong></div>
+                <div class="instance-identity-grid <?= $identityStatus === 'mismatch' ? 'is-danger' : '' ?>" data-instance-identity-grid>
+                    <div><span>Número autorizado</span><strong data-instance-authorized-phone><?= View::e($authorizedPhone !== '' ? $authorizedPhone : 'Será confirmado na conexão') ?></strong></div>
+                    <div><span>Número conectado</span><strong data-instance-connected-phone><?= View::e($connectedPhone !== '' ? $connectedPhone : 'Ainda não confirmado') ?></strong></div>
+                    <div><span>Recuperação automática</span><strong data-instance-recovery-mode><?= (int) ($instance['auto_recovery_enabled'] ?? 1) === 1 ? 'Ativa' : 'Desativada' ?></strong></div>
                 </div>
-                <?php if ($identityStatus === 'mismatch'): ?><div class="message-error instance-identity-warning">Envios e novas mensagens estão bloqueados até que o número correto seja reconectado.</div><?php endif; ?>
+                <div class="message-error instance-identity-warning" data-instance-identity-warning <?= $identityStatus === 'mismatch' ? '' : 'hidden' ?>>Envios e novas mensagens estão bloqueados até que o número correto seja reconectado.</div>
                 <details class="admin-inline-details"><summary><?= $isSuperAdmin ? 'Atualizações e detalhes técnicos' : 'Regras de recebimento' ?></summary><div class="admin-technical-copy"><strong><?= $isSuperAdmin ? 'Endereço de atualizações da conexão' : 'Atualizações administradas automaticamente' ?></strong><?php if ($isSuperAdmin): ?><code><?= View::e($webhookUrl) ?></code><?php endif; ?><small><?= (int) ($instance['webhook_enabled'] ?? 1) === 1 ? 'Ativo · ' . count($instance['webhook_events_list'] ?? []) . ' evento(s) selecionado(s).' : 'Recebimento automático desativado para esta conexão.' ?></small><small>Grupos: <?= (int) ($instance['ignore_groups'] ?? 1) === 1 ? 'ignorados' : 'recebidos' ?> · Chamadas: <?= (int) ($instance['reject_calls'] ?? 0) === 1 ? 'rejeitadas' : 'permitidas' ?> · Histórico completo: <?= (int) ($instance['sync_full_history'] ?? 0) === 1 ? 'sim' : 'não' ?></small><?php if (!$isSuperAdmin): ?><small>A URL e a chave da Evolution permanecem protegidas no servidor do RS Connect.</small><?php endif; ?></div></details>
                 <?php
                 $bindings = $routingByInstance[(int) $instance['id']] ?? [];

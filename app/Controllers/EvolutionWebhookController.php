@@ -1103,7 +1103,7 @@ final class EvolutionWebhookController
         }
         $reason = trim((string) $reasonValue);
         $profileName = trim((string) ($data['profileName'] ?? $data['name'] ?? $instanceData['profileName'] ?? $instanceData['name'] ?? ''));
-        $profilePhone = preg_replace('/\D+/', '', (string) ($data['ownerJid'] ?? $data['number'] ?? $instanceData['ownerJid'] ?? $instanceData['number'] ?? '')) ?: '';
+        $profilePhone = EvolutionInstanceSafetyService::extractConnectedPhone($data);
         $profilePicture = trim((string) ($data['profilePictureUrl'] ?? $data['profilePicUrl'] ?? $instanceData['profilePictureUrl'] ?? ''));
         if ($profilePicture !== '' && !preg_match('#^https?://#i', $profilePicture)) {
             $profilePicture = '';

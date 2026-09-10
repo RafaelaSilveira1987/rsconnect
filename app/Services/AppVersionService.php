@@ -140,8 +140,11 @@ final class AppVersionService
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.30.3 — Indicadores de atendimento';
     // Compatibilidade histórica: REQUIRED_MIGRATION = '107_service_department_memberships.sql';
     // RS Connect 36.30.4 — identidade autorizada, diagnóstico e recuperação resiliente das conexões WhatsApp.
-    public const PACKAGE_LABEL = 'RS Connect 36.30.4 — Instâncias resilientes';
-    public const REQUIRED_MIGRATION = '108_evolution_instance_resilience.sql';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.30.4 — Instâncias resilientes';
+    // Compatibilidade histórica: REQUIRED_MIGRATION = '108_evolution_instance_resilience.sql';
+    // RS Connect 36.30.5 — corrige vazamento visual dos layouts e reconcilia o número conectado via fetchInstances.
+    public const PACKAGE_LABEL = 'RS Connect 36.30.5 — Correção de identidade das instâncias';
+    public const REQUIRED_MIGRATION = '109_evolution_instance_identity_cleanup.sql';
 
     private PDO $pdo;
 

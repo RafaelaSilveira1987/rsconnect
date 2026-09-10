@@ -286,10 +286,7 @@ final class InstanceController
                     $row['connection_reason'] = '';
                     if ($connected && $resilienceSupported) {
                         $liveBody = is_array($live['body'] ?? null) ? $live['body'] : [];
-                        $observedPhone = EvolutionInstanceSafetyService::extractConnectedPhone($liveBody);
-                        if ($observedPhone === '') {
-                            $observedPhone = (string) ($row['profile_phone'] ?? '');
-                        }
+                        $observedPhone = $this->resolveObservedConnectedPhone($service, $liveBody, $row);
                         if ($observedPhone !== '') {
                             $identity = EvolutionInstanceSafetyService::persistObservedIdentity($pdo, $row, $observedPhone, true);
                             $row['authorized_phone'] = (string) ($identity['authorized_phone'] ?? '');
@@ -369,8 +366,8 @@ final class InstanceController
                     'reason' => (string) ($row['connection_reason'] ?? ''),
                     'updated_at' => (string) (($row['connection_updated_at'] ?? '') ?: ($row['last_status_check_at'] ?? '') ?: ($row['last_webhook_at'] ?? '')),
                     'profile_name' => (string) ($row['profile_name'] ?? ''),
-                    'profile_phone' => (string) ($row['profile_phone'] ?? ''),
-                    'authorized_phone' => (string) ($row['authorized_phone'] ?? ''),
+                    'profile_phone' => EvolutionInstanceSafetyService::normalizeObservedPhone((string) ($row['profile_phone'] ?? '')),
+                    'authorized_phone' => EvolutionInstanceSafetyService::normalizeObservedPhone((string) ($row['authorized_phone'] ?? '')),
                     'identity_status' => (string) ($row['identity_status'] ?? 'unknown'),
                     'auto_recovery_enabled' => (int) ($row['auto_recovery_enabled'] ?? 0),
                     'recovery_state' => (string) ($row['recovery_state'] ?? ''),
@@ -385,7 +382,7 @@ final class InstanceController
             echo json_encode([
                 'ok' => true,
                 'source_version' => '36.6.38-live-status',
-                'resilience_version' => '36.30.4-resilient-instances',
+                'resilience_version' => '36.30.5-identity-reconciliation',
                 'items' => $items,
                 'checked_at' => date(DATE_ATOM),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -395,7 +392,7 @@ final class InstanceController
             echo json_encode([
                 'ok' => false,
                 'source_version' => '36.6.38-live-status',
-                'resilience_version' => '36.30.4-resilient-instances',
+                'resilience_version' => '36.30.5-identity-reconciliation',
                 'message' => 'Não foi possível atualizar o status das conexões.',
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
@@ -1871,6 +1868,35 @@ final class InstanceController
             || str_contains($message, 'instance is disconnected');
     }
 
+    /**
+     * Resolve o número efetivamente conectado sem confundir códigos HTTP ou
+     * metadados curtos com telefone. O endpoint connectionState costuma trazer
+     * apenas o estado; por isso consulta fetchInstances como fonte complementar.
+     *
+     * @param array<string,mixed> $liveBody
+     * @param array<string,mixed> $instance
+     */
+    private function resolveObservedConnectedPhone(EvolutionService $service, array $liveBody, array $instance): string
+    {
+        $observed = EvolutionInstanceSafetyService::extractConnectedPhone($liveBody);
+        if ($observed !== '') {
+            return $observed;
+        }
+
+        try {
+            $details = $service->instanceDetails();
+            $detailsBody = is_array($details['body'] ?? null) ? $details['body'] : [];
+            $observed = EvolutionInstanceSafetyService::extractConnectedPhone($detailsBody);
+            if ($observed !== '') {
+                return $observed;
+            }
+        } catch (Throwable $exception) {
+            error_log('[InstanceController::resolveObservedConnectedPhone] fetchInstances: ' . $exception->getMessage());
+        }
+
+        return EvolutionInstanceSafetyService::normalizeObservedPhone((string) ($instance['profile_phone'] ?? ''));
+    }
+
     /** @param array<string,mixed> $instance */
     private function diagnoseInstance(PDO $pdo, array $instance): string
     {
@@ -1878,7 +1904,7 @@ final class InstanceController
         $live = $service->connectionState();
         $state = mb_strtolower(trim((string) ($live['state'] ?? 'unknown')));
         $body = is_array($live['body'] ?? null) ? $live['body'] : [];
-        $observedPhone = EvolutionInstanceSafetyService::extractConnectedPhone($body);
+        $observedPhone = $this->resolveObservedConnectedPhone($service, $body, $instance);
         $identity = EvolutionInstanceSafetyService::assess($instance);
         if ($observedPhone !== '' && EvolutionInstanceSafetyService::schemaSupported($pdo)) {
             $identity = EvolutionInstanceSafetyService::persistObservedIdentity($pdo, $instance, $observedPhone, true);

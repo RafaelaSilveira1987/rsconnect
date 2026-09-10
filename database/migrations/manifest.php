@@ -128,5 +128,6 @@ return [
         ['sequence' => 113, 'file' => '106_agent_message_grouping_context_priority.sql'],
         ['sequence' => 114, 'file' => '107_service_department_memberships.sql'],
         ['sequence' => 115, 'file' => '108_evolution_instance_resilience.sql'],
+        ['sequence' => 116, 'file' => '109_evolution_instance_identity_cleanup.sql'],
     ],
 ];

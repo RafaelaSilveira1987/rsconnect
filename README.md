@@ -1,4 +1,13 @@
-# RS Connect 36.30.4
+# RS Connect 36.30.5
+
+## Correção de identidade e layouts — 36.30.5
+
+- remove marcadores CSS que estavam sendo renderizados como texto antes do login e dentro da aplicação;
+- ignora códigos HTTP e valores curtos como `200` ao identificar o telefone conectado;
+- consulta `instance/fetchInstances` quando `connectionState` não informa `ownerJid/number`;
+- atualiza em tempo real os campos Número autorizado/Número conectado no card da instância;
+- adiciona a migration `109_evolution_instance_identity_cleanup.sql` para limpar identidades inválidas já persistidas.
+
 
 
 ## Instâncias resilientes — 36.30.4

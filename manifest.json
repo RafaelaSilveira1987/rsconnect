@@ -1,4 +1,4 @@
-# RS Connect v36.30.4
+# RS Connect v36.30.5
 
 Fechamento visual e QA responsivo sobre a base 36.29.9, consolidando Laboratório de Assistentes, Avisos Operacionais, Fila/Equipe e superfícies administrativas remanescentes sem alterar regras de negócio.
 
@@ -42,3 +42,5 @@ Migration obrigatória atual:
 
 - v36.30.3: indicadores de atendimento com SLA da primeira resposta humana, duração do ciclo, espera atual e carga por profissional/setor.
 - v36.30.4: instâncias resilientes com número autorizado, bloqueio por divergência, diagnóstico e recuperação automática segura.
+
+- v36.30.5: correção do vazamento visual dos layouts e reconhecimento robusto do número conectado via fetchInstances; migration 109 limpa valores inválidos como códigos HTTP.

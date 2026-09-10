@@ -37,6 +37,6 @@ php bin/migrate.php seed --yes
 
 DDL em MySQL pode realizar commit implícito. Em caso de falha no meio de uma migration, não repita cegamente: confira a instrução indicada, valide o schema e somente então execute novamente.
 
-## Atualização 36.30.4
+## Atualização 36.30.5
 
-A migration corrente é `108_evolution_instance_resilience.sql`, responsável por identidade autorizada e recuperação controlada das instâncias Evolution.
+A migration corrente é `109_evolution_instance_identity_cleanup.sql`. Ela limpa valores inválidos de identidade (por exemplo códigos HTTP gravados como telefone) e permite que a aplicação reconfirme o número real pela Evolution. A migration `108_evolution_instance_resilience.sql` continua responsável pela estrutura de identidade autorizada e recuperação controlada.

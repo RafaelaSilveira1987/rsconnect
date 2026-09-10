@@ -1,6 +1,7 @@
-<!-- Compatibilidade histórica de smoke tests: app.css?v=36.29.10; app.js?v=36.29.10 -->
-/* Legacy cache marker: app.css?v=36.30.3 app.js?v=36.30.3 */
 <?php
+/* Compatibilidade cache v36.30.4: app.css?v=36.30.4 app.js?v=36.30.4 */
+/* Compatibilidade histórica de smoke tests: app.css?v=36.29.10; app.js?v=36.29.10 */
+/* Legacy cache marker: app.css?v=36.30.3 app.js?v=36.30.3 */
 
 /* Legacy smoke markers: app.js?v=36.25.2 app.css?v=36.15.1 app.js?v=36.15.1 */
 /* Legacy cache marker: app.css?v=36.27.9 app.js?v=36.27.9 */
@@ -171,7 +172,7 @@ $svgIcon = static function (string $name): string {
     <!-- Marcador histórico de regressão: app.css?v=36.20.2 -->
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.30.4')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.30.5')) ?>">
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
             width: 54px !important;
@@ -510,6 +511,6 @@ $svgIcon = static function (string $name): string {
 <!-- Marcador histórico de regressão: app.js?v=36.20.2 -->
 <!-- Marcador histórico de regressão: app.js?v=36.20.5 -->
 <!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 app.js?v=36.20.8 app.js?v=36.20.9 -->
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.30.4')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.30.5')) ?>" defer></script>
 </body>
 </html>

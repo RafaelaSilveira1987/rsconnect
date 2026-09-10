@@ -150,6 +150,23 @@ final class EvolutionService
     }
 
     /**
+     * Consulta os metadados completos da instância. Em diversas versões da
+     * Evolution, connectionState informa apenas `state`; ownerJid/number ficam
+     * disponíveis em fetchInstances.
+     */
+    public function instanceDetails(): array
+    {
+        $endpoint = rtrim($this->baseUrl, '/') . '/instance/fetchInstances?instanceName=' . rawurlencode($this->instanceName);
+        $result = $this->request('GET', $endpoint, null, 'fetchInstances');
+        $body = is_array($result['body'] ?? null) ? $result['body'] : [];
+
+        return [
+            'status' => (int) ($result['status'] ?? 0),
+            'body' => $body,
+        ];
+    }
+
+    /**
      * @param list<string> $events
      * @param array<string,string> $headers
      */

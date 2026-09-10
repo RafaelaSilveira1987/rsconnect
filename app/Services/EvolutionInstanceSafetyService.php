@@ -29,6 +29,23 @@ final class EvolutionInstanceSafetyService
         return ltrim($digits, '0');
     }
 
+    /**
+     * Normaliza somente valores que podem representar um telefone real.
+     * Evita tratar status HTTP (ex.: 200), ids curtos ou outros metadados como número.
+     */
+    public static function normalizeObservedPhone(string $phone): string
+    {
+        $digits = self::normalizePhone($phone);
+        return self::isPlausiblePhone($digits) ? $digits : '';
+    }
+
+    public static function isPlausiblePhone(string $phone): bool
+    {
+        $digits = self::normalizePhone($phone);
+        $length = strlen($digits);
+        return $length >= 10 && $length <= 15;
+    }
+
     public static function phonesEquivalent(string $left, string $right): bool
     {
         $a = self::normalizePhone($left);
@@ -57,35 +74,27 @@ final class EvolutionInstanceSafetyService
     /** @param array<string,mixed> $payload */
     public static function extractConnectedPhone(array $payload): string
     {
-        $candidates = [
-            $payload['ownerJid'] ?? null,
-            $payload['number'] ?? null,
-            $payload['phone'] ?? null,
-            $payload['wuid'] ?? null,
-            $payload['instance']['ownerJid'] ?? null,
-            $payload['instance']['number'] ?? null,
-            $payload['instance']['phone'] ?? null,
-            $payload['instance']['wuid'] ?? null,
-            $payload['data']['ownerJid'] ?? null,
-            $payload['data']['number'] ?? null,
-            $payload['data']['phone'] ?? null,
-            $payload['data']['instance']['ownerJid'] ?? null,
-            $payload['data']['instance']['number'] ?? null,
+        $candidateKeys = [
+            'ownerjid', 'owner_jid', 'number', 'phone', 'wuid', 'wid',
+            'connectedphone', 'connected_phone', 'phonenumber', 'phone_number',
         ];
 
-        foreach ($candidates as $candidate) {
-            if (is_scalar($candidate)) {
-                $digits = self::normalizePhone((string) $candidate);
-                if (strlen($digits) >= 10 && strlen($digits) <= 15) {
+        foreach ($payload as $key => $value) {
+            $normalizedKey = strtolower((string) $key);
+            if (in_array($normalizedKey, $candidateKeys, true) && is_scalar($value)) {
+                $digits = self::normalizeObservedPhone((string) $value);
+                if ($digits !== '') {
                     return $digits;
                 }
             }
         }
 
-        foreach (['data', 'response', 'result', 'instance'] as $key) {
-            $nested = $payload[$key] ?? null;
-            if (is_array($nested)) {
-                $found = self::extractConnectedPhone($nested);
+        // A Evolution varia o envelope entre versões e o endpoint fetchInstances
+        // normalmente devolve uma lista. Percorre somente estruturas aninhadas e
+        // continua aceitando telefone apenas em chaves semanticamente seguras.
+        foreach ($payload as $value) {
+            if (is_array($value)) {
+                $found = self::extractConnectedPhone($value);
                 if ($found !== '') {
                     return $found;
                 }
@@ -101,8 +110,8 @@ final class EvolutionInstanceSafetyService
      */
     public static function assess(array $instance): array
     {
-        $authorized = self::normalizePhone((string) ($instance['authorized_phone'] ?? ''));
-        $connected = self::normalizePhone((string) ($instance['profile_phone'] ?? ''));
+        $authorized = self::normalizeObservedPhone((string) ($instance['authorized_phone'] ?? ''));
+        $connected = self::normalizeObservedPhone((string) ($instance['profile_phone'] ?? ''));
 
         if ($authorized === '') {
             return [
@@ -203,12 +212,12 @@ final class EvolutionInstanceSafetyService
     {
         if (!self::schemaSupported($pdo)) {
             $copy = $instance;
-            $copy['profile_phone'] = self::normalizePhone($connectedPhone);
+            $copy['profile_phone'] = self::normalizeObservedPhone($connectedPhone);
             return self::assess($copy);
         }
 
-        $connected = self::normalizePhone($connectedPhone);
-        $authorized = self::normalizePhone((string) ($instance['authorized_phone'] ?? ''));
+        $connected = self::normalizeObservedPhone($connectedPhone);
+        $authorized = self::normalizeObservedPhone((string) ($instance['authorized_phone'] ?? ''));
         if ($authorized === '' && $connected !== '' && $adoptIfEmpty) {
             $authorized = $connected;
         }
