@@ -110,6 +110,7 @@ final class ConversationController
                     ct.status AS contact_status, ct.preferred_user_id, pref.name AS preferred_user_name,
                     i.name AS instance_label, i.instance_name,
                     t.name AS tenant_name, u.name AS assigned_user_name,
+                    d.name AS department_name, d.color AS department_color,
                     ah.status AS after_hours_status,
                     ah.first_received_at AS after_hours_first_received_at,
                     ah.last_received_at AS after_hours_last_received_at,
@@ -133,6 +134,7 @@ final class ConversationController
              INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = c.tenant_id
              INNER JOIN tenants t ON t.id = c.tenant_id
              LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
+             LEFT JOIN service_departments d ON d.id = c.department_id AND d.tenant_id = c.tenant_id
              LEFT JOIN users pref ON pref.id = ct.preferred_user_id AND pref.tenant_id = ct.tenant_id
              LEFT JOIN ai_after_hours_pending ah ON ah.conversation_id = c.id
                 AND ah.status IN ("pending","processing","blocked_plan","blocked_human","error")
@@ -152,6 +154,7 @@ final class ConversationController
         $selected = null;
         $messages = [];
         $team = [];
+        $departments = [];
         $conversationAgents = [];
         $selectedRuleSnapshot = null;
         $selectedAfterHoursPending = null;
@@ -201,17 +204,36 @@ final class ConversationController
                     unset($conversation);
                 }
 
-                $teamStatement = $pdo->prepare(
-                    'SELECT id, name, role
-                     FROM users
-                     WHERE tenant_id = :tenant_id AND status = "active"
-                     ORDER BY name'
-                );
-                $teamStatement->execute(['tenant_id' => $selected['tenant_id']]);
+                $selectedDepartmentId = (int) ($selected['department_id'] ?? 0);
+                if ($selectedDepartmentId > 0 && $this->hasTable($pdo, 'service_department_members')) {
+                    $teamStatement = $pdo->prepare(
+                        'SELECT u.id, u.name, u.role
+                         FROM users u
+                         INNER JOIN service_department_members dm
+                            ON dm.user_id = u.id AND dm.tenant_id = u.tenant_id
+                         WHERE u.tenant_id = :tenant_id
+                           AND u.status = "active"
+                           AND dm.department_id = :department_id
+                         ORDER BY u.name'
+                    );
+                    $teamStatement->execute([
+                        'tenant_id' => $selected['tenant_id'],
+                        'department_id' => $selectedDepartmentId,
+                    ]);
+                } else {
+                    $teamStatement = $pdo->prepare(
+                        'SELECT id, name, role
+                         FROM users
+                         WHERE tenant_id = :tenant_id AND status = "active"
+                         ORDER BY name'
+                    );
+                    $teamStatement->execute(['tenant_id' => $selected['tenant_id']]);
+                }
                 $team = $teamStatement->fetchAll(PDO::FETCH_ASSOC);
 
                 $ownershipService = new ConversationOwnershipService();
                 $professionalAssignmentSettings = $ownershipService->settingsForTenant($pdo, (int) $selected['tenant_id']);
+                $departments = $ownershipService->departmentsForTenant($pdo, (int) $selected['tenant_id']);
                 $ownershipSnapshot = $ownershipService->snapshot($pdo, $selected);
 
                 try {
@@ -307,6 +329,7 @@ final class ConversationController
             'selected' => $selected,
             'messages' => $messages,
             'team' => $team,
+            'departments' => $departments,
             'conversationAgents' => $conversationAgents,
             'selectedRuleSnapshot' => $selectedRuleSnapshot,
             'selectedAfterHoursPending' => $selectedAfterHoursPending,
@@ -1244,6 +1267,40 @@ final class ConversationController
         $this->redirect('/conversations?' . http_build_query($query));
     }
 
+    public function assignDepartment(): void
+    {
+        $conversationId = (int) ($_POST['conversation_id'] ?? 0);
+        $departmentId = (int) ($_POST['department_id'] ?? 0) ?: null;
+        $returnTenantId = (int) ($_POST['tenant_id'] ?? 0);
+
+        if ($conversationId < 1) {
+            Flash::set('error', 'Conversa inválida para transferência de setor.');
+            $this->redirect('/conversations');
+        }
+
+        try {
+            $pdo = Database::connection();
+            $result = (new ConversationOwnershipService())->changeDepartment($pdo, $conversationId, $departmentId);
+            $returnTenantId = (int) ($result['tenant_id'] ?? $returnTenantId);
+            $departmentName = trim((string) ($result['department_name'] ?? ''));
+            $description = $departmentId !== null
+                ? 'Conversa transferida para o setor ' . ($departmentName !== '' ? $departmentName : 'selecionado') . '. O responsável anterior foi liberado.'
+                : 'Setor removido da conversa. O atendimento ficou disponível para a equipe.';
+
+            $this->insertEvent($conversationId, $returnTenantId, 'ownership.department_transfer', $description);
+            Audit::log('conversation.department_transferred', $result, $returnTenantId);
+            Flash::set('success', $description);
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+        }
+
+        $query = ['conversation_id' => $conversationId];
+        if (Auth::isSuperAdmin() && $returnTenantId > 0) {
+            $query['tenant_id'] = $returnTenantId;
+        }
+        $this->redirect('/conversations?' . http_build_query($query));
+    }
+
     public function setMode(): void
     {
         $conversationId = (int) ($_POST['conversation_id'] ?? 0);
@@ -1818,6 +1875,7 @@ final class ConversationController
                        fs.is_existing_patient, fs.last_intent,
                        i.name AS instance_label, i.instance_name, i.base_url, i.api_key_encrypted,
                        t.name AS tenant_name, u.name AS assigned_user_name,
+                       d.name AS department_name, d.color AS department_color,
                        ' . $memorySelect . ',
                        ' . $leadSelect . '
                 FROM conversations c
@@ -1825,6 +1883,7 @@ final class ConversationController
                 INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = c.tenant_id
                 INNER JOIN tenants t ON t.id = c.tenant_id
                 LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
+                LEFT JOIN service_departments d ON d.id = c.department_id AND d.tenant_id = c.tenant_id
                 LEFT JOIN users pref ON pref.id = ct.preferred_user_id AND pref.tenant_id = ct.tenant_id
                 LEFT JOIN conversation_flow_states fs ON fs.conversation_id = c.id AND fs.tenant_id = c.tenant_id
                 ' . $memoryJoin . '
@@ -2484,9 +2543,9 @@ final class ConversationController
             ? ' LEFT JOIN crm_commercial_requests cr ON cr.id = (SELECT MAX(cr_latest.id) FROM crm_commercial_requests cr_latest WHERE cr_latest.conversation_id = c.id AND cr_latest.tenant_id = c.tenant_id AND cr_latest.status = "pending")'
             : '';
         $statement = $pdo->prepare(
-            'SELECT c.id, c.status, c.attendance_mode, c.assigned_user_id, c.unread_count, c.last_message_at, c.last_message_preview,
+            'SELECT c.id, c.status, c.attendance_mode, c.assigned_user_id, c.department_id, c.unread_count, c.last_message_at, c.last_message_preview,
                     ct.name AS contact_name, ct.phone, ct.avatar_url, i.name AS instance_label, i.instance_name,
-                    t.name AS tenant_name, u.name AS assigned_user_name,
+                    t.name AS tenant_name, u.name AS assigned_user_name, d.name AS department_name,
                     ah.status AS after_hours_status,
                     ah.first_received_at AS after_hours_first_received_at,
                     ah.last_received_at AS after_hours_last_received_at,
@@ -2509,6 +2568,7 @@ final class ConversationController
              INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = c.tenant_id
              INNER JOIN tenants t ON t.id = c.tenant_id
              LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
+             LEFT JOIN service_departments d ON d.id = c.department_id AND d.tenant_id = c.tenant_id
              LEFT JOIN ai_after_hours_pending ah ON ah.conversation_id = c.id
                 AND ah.status IN ("pending","processing","blocked_plan","blocked_human","error")
              ' . $commercialRequestJoin . '
@@ -2539,6 +2599,8 @@ final class ConversationController
             'mode' => (string) ($conversation['attendance_mode'] ?? ''),
             'assigned_user_id' => (int) ($conversation['assigned_user_id'] ?? 0),
             'assigned_user_name' => (string) ($conversation['assigned_user_name'] ?? ''),
+            'department_id' => (int) ($conversation['department_id'] ?? 0),
+            'department_name' => (string) ($conversation['department_name'] ?? ''),
             'after_hours' => $this->formatAfterHoursForJson($conversation),
             'quote_pending' => (int) ($conversation['commercial_request_id'] ?? 0) > 0,
             'quote_due_at' => (string) ($conversation['commercial_request_due_at'] ?? ''),

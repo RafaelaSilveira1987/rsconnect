@@ -1,3 +1,4 @@
+<!-- Compatibilidade histórica de smoke tests: app.css?v=36.29.10; app.js?v=36.29.10 -->
 <?php
 
 use App\Core\Flash;
@@ -13,7 +14,7 @@ $flashes = Flash::all();
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f7f9fc">
     <title><?= View::e($title ?? 'Acesso limitado') ?> — RS Connect</title>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.29.10')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.30.0')) ?>">
 </head>
 <body class="access-restricted-page">
     <?php if ($flashes): ?>

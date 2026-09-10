@@ -1,4 +1,4 @@
-# RS Connect v36.29.10
+# RS Connect v36.30.0
 
 Fechamento visual e QA responsivo sobre a base 36.29.9, consolidando Laboratório de Assistentes, Avisos Operacionais, Fila/Equipe e superfícies administrativas remanescentes sem alterar regras de negócio.
 
@@ -28,4 +28,10 @@ Alterações principais:
 - QA de regressão ampliado sem migration nova.
 
 Migration obrigatória atual:
-`106_agent_message_grouping_context_priority.sql`
+`107_service_department_memberships.sql`
+
+- sexta evolução funcional: Fila/Setores ativados e integrados às Conversas;
+- vínculo persistente entre equipe e setores;
+- transferência de conversa para setor com liberação segura do responsável e pausa da IA;
+- setor operacional incluído no contexto estruturado da IA;
+- migration obrigatória atual: `107_service_department_memberships.sql`.

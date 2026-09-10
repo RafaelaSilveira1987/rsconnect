@@ -1,4 +1,4 @@
-# RS Connect 36.29.10
+# RS Connect 36.30.0
 
 Organização inteligente de contatos, continuidade de cliente/paciente e terceira rodada visual em telas operacionais, preservando o fluxo editável dos Assistentes.
 
@@ -55,9 +55,9 @@ Principais alterações desta versão:
 
 Migration obrigatória atual:
 
-`106_agent_message_grouping_context_priority.sql`
+`107_service_department_memberships.sql`
 
-Não existe migration nova nesta versão.
+A versão 36.30.0 adiciona `107_service_department_memberships.sql` para o vínculo usuário ↔ setor.
 
 Depois do deploy, execute `php bin/migrate.php status` e reinicie o PHP-FPM/container para limpar OPcache.
 
@@ -70,3 +70,16 @@ Depois do deploy, execute `php bin/migrate.php status` e reinicie o PHP-FPM/cont
 - foco por teclado reforçado nos módulos revisados, sem alterar submits, rotas ou eventos JavaScript;
 - nenhuma migration nova; a obrigatória permanece `106_agent_message_grouping_context_priority.sql`.
 
+
+## Distribuição operacional — 36.30.0
+
+- módulo **Fila e setores** ativado nas rotas e no menu conforme permissões `queue.view`/`queue.manage`;
+- vínculo persistente entre usuários e setores por `service_department_members`;
+- administração da equipe de cada setor dentro da própria Fila;
+- Conversas passam a exibir o setor atual e permitem transferência para setor;
+- ao transferir para um setor, o responsável anterior é liberado, a IA é pausada e a conversa entra em espera para a equipe;
+- profissionais só podem assumir/receber uma conversa de setor quando pertencem ao setor, salvo administradores;
+- distribuição direta pela Fila valida tenant, setor, profissional, prioridade e status operacional;
+- o setor operacional passa a integrar o contexto estruturado fornecido à IA;
+- joins sensíveis da Fila e do contexto da IA foram reforçados com `tenant_id`;
+- migration obrigatória: `107_service_department_memberships.sql`.

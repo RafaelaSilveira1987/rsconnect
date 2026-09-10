@@ -49,6 +49,7 @@ final class QueueController
         $tenantForLists = $filters['tenant_id'] > 0 ? $filters['tenant_id'] : (Auth::isSuperAdmin() ? null : Auth::tenantId());
         $departments = $this->departments($tenantForLists);
         $users = $this->users($tenantForLists);
+        $departmentMembers = $this->departmentMembers($tenantForLists);
         $metrics = $this->metrics($pdo, $filters);
         $conversations = $this->conversations($pdo, $filters);
 
@@ -58,6 +59,7 @@ final class QueueController
             'tenants' => $tenants,
             'departments' => $departments,
             'users' => $users,
+            'departmentMembers' => $departmentMembers,
             'conversations' => $conversations,
             'metrics' => $metrics,
             'statusLabels' => $this->statusLabels,
@@ -123,6 +125,67 @@ final class QueueController
         $this->redirect('/queue?tenant_id=' . (int) $department['tenant_id']);
     }
 
+    public function syncDepartmentMembers(): void
+    {
+        $departmentId = (int) ($_POST['department_id'] ?? 0);
+        $memberIds = $_POST['member_ids'] ?? [];
+        $memberIds = is_array($memberIds) ? $memberIds : [];
+        $memberIds = array_values(array_unique(array_filter(array_map('intval', $memberIds), static fn (int $id): bool => $id > 0)));
+
+        $department = $this->department($departmentId);
+        if (!$department) {
+            Flash::set('error', 'Setor não encontrado ou fora da sua empresa.');
+            $this->redirect('/queue');
+        }
+
+        $tenantId = (int) $department['tenant_id'];
+        if (!$this->tableExists('service_department_members')) {
+            Flash::set('error', 'A estrutura de vínculo entre equipe e setores ainda não foi aplicada. Execute as migrations pendentes.');
+            $this->redirect('/queue?tenant_id=' . $tenantId);
+        }
+
+        foreach ($memberIds as $memberId) {
+            if (!$this->userBelongsToTenant($memberId, $tenantId)) {
+                Flash::set('error', 'Um dos usuários selecionados não pertence à empresa ou está inativo.');
+                $this->redirect('/queue?tenant_id=' . $tenantId);
+            }
+        }
+
+        $pdo = Database::connection();
+        try {
+            $pdo->beginTransaction();
+            $pdo->prepare('DELETE FROM service_department_members WHERE tenant_id = :tenant_id AND department_id = :department_id')
+                ->execute(['tenant_id' => $tenantId, 'department_id' => $departmentId]);
+
+            if ($memberIds !== []) {
+                $insert = $pdo->prepare(
+                    'INSERT INTO service_department_members (tenant_id, department_id, user_id, is_primary)
+                     VALUES (:tenant_id, :department_id, :user_id, 0)'
+                );
+                foreach ($memberIds as $memberId) {
+                    $insert->execute([
+                        'tenant_id' => $tenantId,
+                        'department_id' => $departmentId,
+                        'user_id' => $memberId,
+                    ]);
+                }
+            }
+            $pdo->commit();
+            Audit::log('queue.department_members_updated', [
+                'department_id' => $departmentId,
+                'member_ids' => $memberIds,
+            ], $tenantId);
+            Flash::set('success', 'Equipe do setor atualizada.');
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            Flash::set('error', 'Não foi possível atualizar a equipe do setor: ' . $exception->getMessage());
+        }
+
+        $this->redirect('/queue?tenant_id=' . $tenantId);
+    }
+
     public function assign(): void
     {
         $conversationId = (int) ($_POST['conversation_id'] ?? 0);
@@ -152,7 +215,24 @@ final class QueueController
             Flash::set('error', 'Setor fora da empresa da conversa.');
             $this->redirect('/queue');
         }
+        if ($departmentId !== null && $userId !== null && !$this->userBelongsToDepartment($userId, $departmentId, (int) $conversation['tenant_id'])) {
+            Flash::set('error', 'O responsável selecionado não pertence ao setor escolhido.');
+            $this->redirect('/queue?tenant_id=' . (int) $conversation['tenant_id']);
+        }
+        if ($departmentId !== null && $userId === null && !$this->departmentHasActiveMembers($departmentId, (int) $conversation['tenant_id'])) {
+            Flash::set('error', 'Vincule pelo menos um usuário ativo ao setor antes de enviar conversas para essa fila.');
+            $this->redirect('/queue?tenant_id=' . (int) $conversation['tenant_id']);
+        }
 
+        if ($departmentId !== null && $userId === null) {
+            $operationalStatus = 'waiting_agent';
+        }
+        $attendanceMode = $userId !== null
+            ? 'human'
+            : ($departmentId !== null ? 'paused' : (string) ($conversation['attendance_mode'] ?? 'paused'));
+        $assignmentSource = $userId !== null ? 'queue' : ($departmentId !== null ? 'department_queue' : 'released');
+
+        // Compatibilidade de auditoria histórica: assignment_source = IF foi substituído por binding explícito para distinguir fila de setor e liberação.
         $pdo = Database::connection();
         $pdo->prepare(
             'UPDATE conversations
@@ -160,23 +240,24 @@ final class QueueController
                  department_id = :department_id,
                  priority = :priority,
                  operational_status = :operational_status,
-                 attendance_mode = IF(:user_id_for_mode IS NULL, attendance_mode, "human"),
+                 attendance_mode = :attendance_mode,
                  assigned_at = IF(:user_id_for_date IS NULL, NULL, CURRENT_TIMESTAMP),
-                 assignment_source = IF(:user_id_for_source IS NULL, "released", "queue"),
+                 assignment_source = :assignment_source,
                  assignment_updated_by_user_id = :assignment_updated_by_user_id,
                  assignment_released_at = IF(:user_id_for_release IS NULL, CURRENT_TIMESTAMP, NULL)
-             WHERE id = :id'
+             WHERE id = :id AND tenant_id = :tenant_id'
         )->execute([
             'user_id' => $userId,
             'department_id' => $departmentId,
             'priority' => $priority,
             'operational_status' => $operationalStatus,
-            'user_id_for_mode' => $userId,
+            'attendance_mode' => $attendanceMode,
             'user_id_for_date' => $userId,
-            'user_id_for_source' => $userId,
+            'assignment_source' => $assignmentSource,
             'user_id_for_release' => $userId,
             'assignment_updated_by_user_id' => Auth::id(),
             'id' => $conversationId,
+            'tenant_id' => (int) $conversation['tenant_id'],
         ]);
 
         $this->insertEvent($conversationId, (int) $conversation['tenant_id'], 'queue.assigned', 'Conversa distribuída na fila de atendimento.');
@@ -227,11 +308,11 @@ final class QueueController
                     i.name AS instance_label, u.name AS assigned_user_name,
                     d.name AS department_name, d.color AS department_color
              FROM conversations c
-             INNER JOIN contacts ct ON ct.id = c.contact_id
+             INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
              INNER JOIN tenants t ON t.id = c.tenant_id
-             INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id
-             LEFT JOIN users u ON u.id = c.assigned_user_id
-             LEFT JOIN service_departments d ON d.id = c.department_id
+             INNER JOIN evolution_instances i ON i.id = c.evolution_instance_id AND i.tenant_id = c.tenant_id
+             LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
+             LEFT JOIN service_departments d ON d.id = c.department_id AND d.tenant_id = c.tenant_id
              ' . $sqlWhere . '
              ORDER BY FIELD(c.priority, "urgent", "high", "normal", "low"),
                       FIELD(c.operational_status, "new", "waiting_agent", "in_service", "waiting_customer", "resolved", "archived"),
@@ -291,6 +372,36 @@ final class QueueController
              INNER JOIN tenants t ON t.id = d.tenant_id
              ORDER BY t.name, d.status, d.name'
         )->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private function departmentMembers(?int $tenantId): array
+    {
+        if (!$this->tableExists('service_department_members')) {
+            return [];
+        }
+
+        try {
+            $sql = 'SELECT m.department_id, m.user_id
+                    FROM service_department_members m
+                    INNER JOIN service_departments d ON d.id = m.department_id AND d.tenant_id = m.tenant_id
+                    INNER JOIN users u ON u.id = m.user_id AND u.tenant_id = m.tenant_id
+                    WHERE u.status = "active"';
+            $params = [];
+            if ($tenantId !== null && $tenantId > 0) {
+                $sql .= ' AND m.tenant_id = :tenant_id';
+                $params['tenant_id'] = $tenantId;
+            }
+            $sql .= ' ORDER BY m.department_id, u.name';
+            $statement = Database::connection()->prepare($sql);
+            $statement->execute($params);
+            $map = [];
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $map[(int) $row['department_id']][(int) $row['user_id']] = true;
+            }
+            return $map;
+        } catch (Throwable) {
+            return [];
+        }
     }
 
     private function users(?int $tenantId): array
@@ -354,6 +465,53 @@ final class QueueController
         $statement = Database::connection()->prepare('SELECT COUNT(*) FROM service_departments WHERE id = :id AND tenant_id = :tenant_id AND status = "active"');
         $statement->execute(['id' => $departmentId, 'tenant_id' => $tenantId]);
         return (int) $statement->fetchColumn() > 0;
+    }
+
+    private function departmentHasActiveMembers(int $departmentId, int $tenantId): bool
+    {
+        if (!$this->tableExists('service_department_members')) {
+            return false;
+        }
+        $statement = Database::connection()->prepare(
+            'SELECT COUNT(*)
+             FROM service_department_members m
+             INNER JOIN users u ON u.id = m.user_id AND u.tenant_id = m.tenant_id
+             WHERE m.tenant_id = :tenant_id AND m.department_id = :department_id AND u.status = "active"'
+        );
+        $statement->execute(['tenant_id' => $tenantId, 'department_id' => $departmentId]);
+        return (int) $statement->fetchColumn() > 0;
+    }
+
+    private function userBelongsToDepartment(int $userId, int $departmentId, int $tenantId): bool
+    {
+        if (!$this->tableExists('service_department_members')) {
+            return false;
+        }
+        $statement = Database::connection()->prepare(
+            'SELECT COUNT(*)
+             FROM service_department_members
+             WHERE tenant_id = :tenant_id AND department_id = :department_id AND user_id = :user_id'
+        );
+        $statement->execute([
+            'tenant_id' => $tenantId,
+            'department_id' => $departmentId,
+            'user_id' => $userId,
+        ]);
+        return (int) $statement->fetchColumn() > 0;
+    }
+
+    private function tableExists(string $table): bool
+    {
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name'
+            );
+            $statement->execute(['table_name' => $table]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function insertEvent(int $conversationId, int $tenantId, string $type, string $description): void

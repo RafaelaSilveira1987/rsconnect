@@ -1551,9 +1551,12 @@ final class AiAutomationService
                         ct.status AS contact_status,
                         COALESCE(NULLIF(ct.contact_group, ""), "unclassified") AS contact_group,
                         fs.stage AS flow_stage, fs.demand_status, fs.demand_summary,
-                        fs.is_existing_patient, fs.last_intent
+                        fs.is_existing_patient, fs.last_intent,
+                        d.name AS department_name, d.color AS department_color
                  FROM conversations c
-                 INNER JOIN contacts ct ON ct.id = c.contact_id
+                 INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
+                 LEFT JOIN service_departments d
+                        ON d.id = c.department_id AND d.tenant_id = c.tenant_id
                  LEFT JOIN conversation_flow_states fs
                         ON fs.conversation_id = c.id AND fs.tenant_id = c.tenant_id
                  WHERE c.id = :id
@@ -1570,7 +1573,7 @@ final class AiAutomationService
                         NULL AS flow_stage, NULL AS demand_status, NULL AS demand_summary,
                         0 AS is_existing_patient, NULL AS last_intent
                  FROM conversations c
-                 INNER JOIN contacts ct ON ct.id = c.contact_id
+                 INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
                  WHERE c.id = :id
                  LIMIT 1'
             );

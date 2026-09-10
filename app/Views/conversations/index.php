@@ -11,6 +11,7 @@ $professionalAssignmentSettings = is_array($professionalAssignmentSettings ?? nu
 $ownershipSnapshot = is_array($ownershipSnapshot ?? null) ? $ownershipSnapshot : ['enabled' => false, 'can_interact' => true, 'locked_by_other' => false];
 $canOperateSelected = $canManage && !empty($ownershipSnapshot['can_interact']);
 $conversationAgents = is_array($conversationAgents ?? null) ? $conversationAgents : [];
+$departments = is_array($departments ?? null) ? $departments : [];
 $commercialRequestSettings = is_array($commercialRequestSettings ?? null) ? $commercialRequestSettings : ['ready' => false, 'enabled' => false, 'show_conversation_alert' => false];
 $selectedCommercialRequest = is_array($selectedCommercialRequest ?? null) ? $selectedCommercialRequest : null;
 $formatDate = static function (?string $date, string $format = 'd/m/Y H:i'): string {
@@ -303,6 +304,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                         <span class="conversation-meta-row">
                             <span class="mini-badge mode-<?= View::e($conversation['attendance_mode']) ?>"><?= View::e($modeLabel[$conversation['attendance_mode']] ?? $conversation['attendance_mode']) ?></span>
                             <span class="mini-badge conversation-status-badge status-<?= View::e($conversationStatus) ?>" data-conversation-list-status><?= View::e($statusLabel[$conversationStatus]) ?></span>
+                            <?php if (!empty($conversation['department_name'])): ?><span class="mini-badge conversation-department-badge" data-conversation-department><?= View::e($conversation['department_name']) ?></span><?php endif; ?>
                             <?php if (Auth::isSuperAdmin()): ?><small><?= View::e($conversation['tenant_name']) ?></small><?php endif; ?>
                             <b class="unread-count" data-unread-count <?= (int) $conversation['unread_count'] > 0 ? '' : 'hidden' ?>><?= (int) $conversation['unread_count'] ?></b>
                         </span>
@@ -650,6 +652,52 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
             </div>
 
             <div class="conversation-drawer-body">
+                <?php
+                $currentDepartmentId = (int) ($selected['department_id'] ?? 0);
+                $currentDepartmentName = trim((string) ($selected['department_name'] ?? ''));
+                $canChangeDepartment = $canManage && (
+                    Auth::isSuperAdmin()
+                    || Auth::role() === 'client_admin'
+                    || (int) ($selected['assigned_user_id'] ?? 0) === (int) (Auth::id() ?? 0)
+                );
+                ?>
+                <section class="drawer-section conversation-department-card">
+                    <div class="drawer-section-title">
+                        <div>
+                            <span class="eyebrow">Distribuição</span>
+                            <h3>Setor e fila</h3>
+                            <small>Organize a conversa antes de definir o profissional responsável.</small>
+                        </div>
+                        <span class="mini-badge<?= $currentDepartmentId > 0 ? ' is-active' : '' ?>">
+                            <?= View::e($currentDepartmentName !== '' ? $currentDepartmentName : 'Sem setor') ?>
+                        </span>
+                    </div>
+
+                    <?php if ($canChangeDepartment && $departments): ?>
+                        <form method="post" action="<?= View::e(Router::url('/conversations/department')) ?>" class="ownership-transfer-form department-transfer-form" data-confirm="Transferir esta conversa para o setor selecionado? O responsável atual será liberado e a conversa voltará para a fila do setor.">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
+                            <input type="hidden" name="tenant_id" value="<?= (int) $selected['tenant_id'] ?>">
+                            <label class="field"><span>Transferir para setor</span><select name="department_id" required>
+                                <option value="">Escolha um setor</option>
+                                <?php foreach ($departments as $department): ?>
+                                    <?php if ((int) ($department['id'] ?? 0) === $currentDepartmentId) continue; ?>
+                                    <?php $departmentMemberCount = (int) ($department['members_count'] ?? 0); ?>
+                                    <option value="<?= (int) ($department['id'] ?? 0) ?>" <?= $departmentMemberCount < 1 ? 'disabled' : '' ?>>
+                                        <?= View::e((string) ($department['name'] ?? 'Setor')) ?><?= $departmentMemberCount > 0 ? ' · ' . $departmentMemberCount . ' membro(s)' : ' · configure a equipe primeiro' ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select></label>
+                            <button class="btn btn-outline btn-block" type="submit">Transferir para setor</button>
+                            <small class="field-hint">A IA fica pausada e a conversa aguarda um profissional vinculado ao novo setor.</small>
+                        </form>
+                    <?php elseif ($currentDepartmentId > 0): ?>
+                        <div class="message-info">Esta conversa está direcionada ao setor <?= View::e($currentDepartmentName !== '' ? $currentDepartmentName : '#' . $currentDepartmentId) ?>.</div>
+                    <?php else: ?>
+                        <div class="message-info">Nenhum setor foi definido para esta conversa.</div>
+                    <?php endif; ?>
+                </section>
+
                 <?php if (!empty($professionalAssignmentSettings['enabled'])): ?>
                     <section class="drawer-section conversation-ownership-card">
                         <div class="drawer-section-title">
@@ -660,6 +708,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                             </div>
                         </div>
                         <div class="ownership-summary-grid">
+                            <div><span>Setor atual</span><strong><?= View::e($currentDepartmentName !== '' ? $currentDepartmentName : 'Sem setor') ?></strong></div>
                             <div><span>Profissional preferido</span><strong><?= View::e($selected['preferred_user_name'] ?: 'Sem preferência') ?></strong></div>
                             <div><span>Responsável atual</span><strong><?= View::e($selected['assigned_user_name'] ?: 'Conversa disponível') ?></strong></div>
                         </div>

@@ -120,7 +120,54 @@ $currentTenantId = (int) ($filters['tenant_id'] ?? 0);
                         <td><?= $conversation['assigned_user_name'] ? View::e($conversation['assigned_user_name']) : '<span class="muted-text">Sem responsável</span>' ?></td>
                         <td><span class="mini-badge priority-<?= View::e($conversation['priority'] ?? 'normal') ?>"><?= View::e($priorityLabels[$conversation['priority'] ?? 'normal'] ?? 'Normal') ?></span></td>
                         <td><?= View::e($formatDate($conversation['last_message_at'], 'd/m H:i')) ?><?php if ((int) $conversation['unread_count'] > 0): ?><b class="unread-count inline-unread"><?= (int) $conversation['unread_count'] ?></b><?php endif; ?></td>
-                        <td><a class="btn btn-outline btn-small" href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) $conversation['id'])) ?>">Abrir</a></td>
+                        <td class="queue-actions-cell">
+                            <a class="btn btn-outline btn-small" href="<?= View::e(Router::url('/conversations?conversation_id=' . (int) $conversation['id'])) ?>">Abrir</a>
+                            <?php if (Auth::can('queue.manage')): ?>
+                                <?php
+                                $rowTenantId = (int) $conversation['tenant_id'];
+                                $rowDepartments = array_values(array_filter($departments, static fn (array $department): bool => (int) ($department['tenant_id'] ?? 0) === $rowTenantId && ($department['status'] ?? '') === 'active'));
+                                $rowUsers = array_values(array_filter($users, static fn (array $member): bool => (int) ($member['tenant_id'] ?? 0) === $rowTenantId));
+                                ?>
+                                <details class="queue-assign-menu">
+                                    <summary class="btn btn-quiet btn-small">Distribuir</summary>
+                                    <form method="post" action="<?= View::e(Router::url('/queue/assign')) ?>" class="queue-assign-form">
+                                        <?= Csrf::input() ?>
+                                        <input type="hidden" name="conversation_id" value="<?= (int) $conversation['id'] ?>">
+                                        <label class="field"><span>Setor</span><select name="department_id">
+                                            <option value="">Sem setor</option>
+                                            <?php foreach ($rowDepartments as $department): ?>
+                                                <?php
+                                                $optionDepartmentId = (int) $department['id'];
+                                                $hasDepartmentTeam = !empty($departmentMembers[$optionDepartmentId]);
+                                                $isCurrentDepartment = (int) ($conversation['department_id'] ?? 0) === $optionDepartmentId;
+                                                ?>
+                                                <option value="<?= $optionDepartmentId ?>" <?= $isCurrentDepartment ? 'selected' : '' ?> <?= !$hasDepartmentTeam && !$isCurrentDepartment ? 'disabled' : '' ?>><?= View::e($department['name']) ?><?= $hasDepartmentTeam ? '' : ' · configure a equipe' ?></option>
+                                            <?php endforeach; ?>
+                                        </select></label>
+                                        <label class="field"><span>Responsável</span><select name="assigned_user_id">
+                                            <option value="">Aguardar equipe do setor</option>
+                                            <?php foreach ($rowUsers as $member): ?>
+                                                <option value="<?= (int) $member['id'] ?>" <?= (int) ($conversation['assigned_user_id'] ?? 0) === (int) $member['id'] ? 'selected' : '' ?>><?= View::e($member['name']) ?></option>
+                                            <?php endforeach; ?>
+                                        </select></label>
+                                        <div class="queue-assign-grid">
+                                            <label class="field"><span>Prioridade</span><select name="priority">
+                                                <?php foreach ($priorityLabels as $priorityKey => $priorityLabel): ?>
+                                                    <option value="<?= View::e($priorityKey) ?>" <?= ($conversation['priority'] ?? 'normal') === $priorityKey ? 'selected' : '' ?>><?= View::e($priorityLabel) ?></option>
+                                                <?php endforeach; ?>
+                                            </select></label>
+                                            <label class="field"><span>Status</span><select name="operational_status">
+                                                <?php foreach ($statusLabels as $statusKey => $statusLabel): ?>
+                                                    <option value="<?= View::e($statusKey) ?>" <?= ($conversation['operational_status'] ?? 'new') === $statusKey ? 'selected' : '' ?>><?= View::e($statusLabel) ?></option>
+                                                <?php endforeach; ?>
+                                            </select></label>
+                                        </div>
+                                        <small class="field-hint">Se escolher um setor sem responsável, a conversa entra em espera e a IA é pausada. Ao escolher profissional + setor, o profissional precisa estar vinculado àquele setor.</small>
+                                        <button class="btn btn-primary btn-block" type="submit">Salvar distribuição</button>
+                                    </form>
+                                </details>
+                            <?php endif; ?>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$conversations): ?>
@@ -161,10 +208,54 @@ $currentTenantId = (int) ($filters['tenant_id'] ?? 0);
 
         <div class="department-list">
             <?php foreach ($departments as $department): ?>
+                <?php
+                $departmentId = (int) $department['id'];
+                $departmentTenantId = (int) $department['tenant_id'];
+                $eligibleUsers = array_values(array_filter($users, static fn (array $member): bool => (int) ($member['tenant_id'] ?? 0) === $departmentTenantId));
+                $memberMap = is_array($departmentMembers[$departmentId] ?? null) ? $departmentMembers[$departmentId] : [];
+                $memberNames = [];
+                foreach ($eligibleUsers as $member) {
+                    if (!empty($memberMap[(int) $member['id']])) {
+                        $memberNames[] = (string) $member['name'];
+                    }
+                }
+                ?>
                 <article class="department-card" style="--dept: <?= View::e($department['color'] ?: '#146498') ?>">
-                    <strong><?= View::e($department['name']) ?></strong>
-                    <small><?= View::e($department['tenant_name'] ?? '') ?><?= $department['status'] === 'inactive' ? ' · Inativo' : '' ?></small>
+                    <div class="department-card-head">
+                        <div>
+                            <strong><?= View::e($department['name']) ?></strong>
+                            <small><?= View::e($department['tenant_name'] ?? '') ?><?= $department['status'] === 'inactive' ? ' · Inativo' : '' ?></small>
+                        </div>
+                        <?php if (Auth::can('queue.manage')): ?>
+                            <form method="post" action="<?= View::e(Router::url('/queue/departments/status')) ?>">
+                                <?= Csrf::input() ?>
+                                <input type="hidden" name="department_id" value="<?= $departmentId ?>">
+                                <input type="hidden" name="status" value="<?= $department['status'] === 'active' ? 'inactive' : 'active' ?>">
+                                <button class="btn btn-quiet btn-small" type="submit"><?= $department['status'] === 'active' ? 'Inativar' : 'Ativar' ?></button>
+                            </form>
+                        <?php endif; ?>
+                    </div>
                     <?php if (!empty($department['description'])): ?><p><?= View::e($department['description']) ?></p><?php endif; ?>
+                    <div class="department-team-summary">
+                        <span>Equipe vinculada</span>
+                        <strong><?= $memberNames !== [] ? View::e(implode(', ', $memberNames)) : 'Nenhum usuário vinculado' ?></strong>
+                    </div>
+                    <?php if (Auth::can('queue.manage') && $department['status'] === 'active'): ?>
+                        <form class="department-members-form" method="post" action="<?= View::e(Router::url('/queue/departments/members')) ?>">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="department_id" value="<?= $departmentId ?>">
+                            <div class="department-members-options">
+                                <?php foreach ($eligibleUsers as $member): ?>
+                                    <label class="department-member-option">
+                                        <input type="checkbox" name="member_ids[]" value="<?= (int) $member['id'] ?>" <?= !empty($memberMap[(int) $member['id']]) ? 'checked' : '' ?>>
+                                        <span><strong><?= View::e($member['name']) ?></strong><small><?= View::e($member['role'] === 'client_admin' ? 'Administrador' : 'Membro da equipe') ?></small></span>
+                                    </label>
+                                <?php endforeach; ?>
+                                <?php if ($eligibleUsers === []): ?><small class="muted-text">Nenhum usuário ativo nesta empresa.</small><?php endif; ?>
+                            </div>
+                            <button class="btn btn-outline btn-small btn-block" type="submit">Salvar equipe do setor</button>
+                        </form>
+                    <?php endif; ?>
                 </article>
             <?php endforeach; ?>
             <?php if (!$departments): ?><p class="muted-text">Nenhum setor cadastrado ainda.</p><?php endif; ?>

@@ -397,6 +397,7 @@ final class AiModelService
         $demandStatus = trim((string) ($conversation['demand_status'] ?? 'pending')) ?: 'pending';
         $demandSummary = trim((string) ($conversation['demand_summary'] ?? ''));
         $lastIntent = trim((string) ($conversation['last_intent'] ?? ''));
+        $departmentName = trim((string) ($conversation['department_name'] ?? ''));
         $agendaContextActive = in_array($lastIntent, ['schedule', 'reschedule'], true)
             || in_array($flowStage, ['scheduling', 'awaiting_approval'], true);
         $contactCompany = trim((string) ($contact['company'] ?? $conversation['company'] ?? ''));
@@ -421,6 +422,7 @@ final class AiModelService
             'Cliente ou paciente já identificado deve ter continuidade de atendimento: não reabra triagem, não peça novamente motivo/queixa e não trate como novo lead apenas porque iniciou uma nova conversa.',
             'O contexto operacional fornecido pelo RS Connect (modo da conversa, horário, classificação, grupo e tags) tem prioridade sobre instruções conflitantes do prompt livre.',
             'A organização do contato é uma regra operacional, não apenas informativa: adapte a conversa ao perfil de relacionamento indicado pelo RS Connect.',
+            'Quando existir um setor operacional atual informado pelo RS Connect, considere-o a fila real desta conversa e adapte linguagem/encaminhamento ao papel desse setor.',
             'Nunca afirme que uma transferência para outro assistente virtual ou setor automatizado já aconteceu apenas por decisão textual sua. A troca entre assistentes é executada pelo motor do RS Connect antes da resposta. Se não houver o bloco TRANSFERÊNCIA INTERNA CONFIRMADA abaixo, não diga que já transferiu, que está transferindo agora ou que outro assistente já assumiu.',
         ];
 
@@ -518,6 +520,8 @@ final class AiModelService
 " : '') .
             '- Grupo de atendimento: ' . $groupLabel . "
 " .
+            '- Setor operacional atual: ' . ($departmentName !== '' ? $departmentName : 'não definido') . "
+" .
             '- Tags cadastradas: ' . $tagsText . "
 " .
             ($tagFacts !== [] ? '- Fatos derivados das tags: ' . implode('; ', $tagFacts) . "
@@ -543,6 +547,8 @@ final class AiModelService
 " : '') .
             "- Não pergunte novamente se a pessoa é cliente, paciente, interessada ou pertence a um grupo quando isso já estiver indicado acima.
 " .
+            ($departmentName !== '' ? "- O setor operacional atual é " . $departmentName . ". Considere esse setor como informação confirmada pelo sistema; não anuncie mudança para outro setor sem confirmação técnica do RS Connect.
+" : '') .
             "- Se a classificação indicar relacionamento atual ou o grupo indicar Cliente atual/Paciente atual, fale com a pessoa como relacionamento já existente, sem reiniciar o fluxo de novo interessado.
 " .
             "- Para cliente/paciente atual, NÃO peça motivo do atendimento, principal queixa ou nova qualificação como pré-condição para responder uma dúvida, consultar agenda, marcar ou remarcar horário. Responda diretamente ao pedido atual usando cadastro e histórico.

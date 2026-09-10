@@ -41,6 +41,7 @@ use App\Controllers\CommunicationsController;
 use App\Controllers\PaymentGatewayController;
 use App\Controllers\PrivacyController;
 use App\Controllers\PublicSignupController;
+use App\Controllers\QueueController;
 use App\Controllers\ReportController;
 use App\Controllers\ScheduledReportController;
 use App\Controllers\SecurityController;
@@ -126,6 +127,7 @@ return static function (Router $router): void {
     $router->post('/conversations/attachments/send', [ConversationController::class, 'sendAttachment'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->get('/conversations/attachment', [ConversationController::class, 'attachment'], ['auth', 'permission:conversations.view']);
     $router->post('/conversations/assignment', [ConversationController::class, 'assignProfessional'], ['auth', 'permission:conversations.manage', 'csrf']);
+    $router->post('/conversations/department', [ConversationController::class, 'assignDepartment'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/mode', [ConversationController::class, 'setMode'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/agent', [ConversationController::class, 'setAgent'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/status', [ConversationController::class, 'updateStatus'], ['auth', 'permission:conversations.manage', 'csrf']);
@@ -135,6 +137,13 @@ return static function (Router $router): void {
     $router->post('/conversations/commercial-request/resolve', [ConversationController::class, 'resolveCommercialRequest'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/mark-read', [ConversationController::class, 'markRead'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/delete', [ConversationController::class, 'delete'], ['auth', 'permission:conversations.manage', 'csrf']);
+
+
+    $router->get('/queue', [QueueController::class, 'index'], ['auth', 'permission:queue.view']);
+    $router->post('/queue/departments', [QueueController::class, 'storeDepartment'], ['auth', 'permission:queue.manage', 'csrf']);
+    $router->post('/queue/departments/status', [QueueController::class, 'updateDepartmentStatus'], ['auth', 'permission:queue.manage', 'csrf']);
+    $router->post('/queue/departments/members', [QueueController::class, 'syncDepartmentMembers'], ['auth', 'permission:queue.manage', 'csrf']);
+    $router->post('/queue/assign', [QueueController::class, 'assign'], ['auth', 'permission:queue.manage', 'csrf']);
 
 
     $router->get('/contacts', [ContactController::class, 'index'], ['auth', 'permission:contacts.view']);

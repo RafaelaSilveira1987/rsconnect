@@ -72,14 +72,38 @@ final class ConversationOwnershipService
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    public function departmentsForTenant(PDO $pdo, int $tenantId): array
+    {
+        if ($tenantId < 1 || !$this->hasTable($pdo, 'service_departments')) {
+            return [];
+        }
+        $membersReady = $this->hasTable($pdo, 'service_department_members');
+        $sql = $membersReady
+            ? 'SELECT d.id, d.tenant_id, d.name, d.description, d.color, d.status, COUNT(m.id) AS members_count
+               FROM service_departments d
+               LEFT JOIN service_department_members m ON m.department_id = d.id AND m.tenant_id = d.tenant_id
+               WHERE d.tenant_id = :tenant_id AND d.status = "active"
+               GROUP BY d.id, d.tenant_id, d.name, d.description, d.color, d.status
+               ORDER BY d.name'
+            : 'SELECT d.id, d.tenant_id, d.name, d.description, d.color, d.status, 0 AS members_count
+               FROM service_departments d
+               WHERE d.tenant_id = :tenant_id AND d.status = "active"
+               ORDER BY d.name';
+        $statement = $pdo->prepare($sql);
+        $statement->execute(['tenant_id' => $tenantId]);
+        return $statement->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public function snapshot(PDO $pdo, array $conversation): array
     {
         $tenantId = (int) ($conversation['tenant_id'] ?? 0);
         $settings = $this->settingsForTenant($pdo, $tenantId);
         $assignedUserId = (int) ($conversation['assigned_user_id'] ?? 0);
+        $departmentId = (int) ($conversation['department_id'] ?? 0);
         $actorId = (int) (Auth::id() ?? 0);
         $actorBelongsToTenant = $actorId > 0 && $this->activeUserBelongsToTenant($pdo, $actorId, $tenantId);
         $manager = $this->isManagerForTenant($actorBelongsToTenant);
+        $actorCanServeDepartment = $departmentId < 1 || $manager || $this->userBelongsToDepartment($pdo, $actorId, $departmentId, $tenantId);
         $open = (string) ($conversation['status'] ?? '') !== 'closed';
         $lockedByOther = $settings['enabled']
             && $settings['lock_enabled']
@@ -91,10 +115,13 @@ final class ConversationOwnershipService
         return $settings + [
             'assigned_user_id' => $assignedUserId,
             'assigned_user_name' => (string) ($conversation['assigned_user_name'] ?? ''),
+            'department_id' => $departmentId,
+            'department_name' => (string) ($conversation['department_name'] ?? ''),
+            'actor_can_serve_department' => $actorCanServeDepartment,
             'is_open' => $open,
             'locked_by_other' => $lockedByOther,
             'can_interact' => !$lockedByOther,
-            'can_claim' => $settings['enabled'] && $open && $assignedUserId < 1 && $actorBelongsToTenant,
+            'can_claim' => $settings['enabled'] && $open && $assignedUserId < 1 && $actorBelongsToTenant && $actorCanServeDepartment,
             'can_assign' => $settings['enabled'] && $open && $assignedUserId < 1 && $manager,
             'can_release' => $settings['enabled'] && $open && $assignedUserId > 0
                 && ($assignedUserId === $actorId || $manager),
@@ -141,7 +168,7 @@ final class ConversationOwnershipService
 
         try {
             $statement = $pdo->prepare(
-                'SELECT c.id, c.tenant_id, c.status, c.assigned_user_id, u.name AS assigned_user_name
+                'SELECT c.id, c.tenant_id, c.status, c.assigned_user_id, c.department_id, u.name AS assigned_user_name
                  FROM conversations c
                  LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
                  WHERE c.id = :id AND c.tenant_id = :tenant_id
@@ -154,6 +181,11 @@ final class ConversationOwnershipService
             }
 
             $assignedUserId = (int) ($current['assigned_user_id'] ?? 0);
+            $departmentId = (int) ($current['department_id'] ?? 0);
+            $manager = $this->isManagerForTenant(true);
+            if ($departmentId > 0 && !$manager && !$this->userBelongsToDepartment($pdo, $actorId, $departmentId, $tenantId)) {
+                throw new RuntimeException('Esta conversa está na fila de outro setor. Solicite a transferência do atendimento ou peça a um administrador.');
+            }
             if ($settings['lock_enabled']
                 && (string) ($current['status'] ?? '') !== 'closed'
                 && $assignedUserId > 0
@@ -206,7 +238,7 @@ final class ConversationOwnershipService
 
         try {
             $statement = $pdo->prepare(
-                'SELECT c.id, c.tenant_id, c.status, c.assigned_user_id,
+                'SELECT c.id, c.tenant_id, c.status, c.assigned_user_id, c.department_id,
                         u.name AS assigned_user_name
                  FROM conversations c
                  LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
@@ -264,6 +296,11 @@ final class ConversationOwnershipService
             if (($targetUserId ?? 0) > 0 && !$this->activeUserBelongsToTenant($pdo, (int) $targetUserId, $tenantId)) {
                 throw new RuntimeException('O profissional selecionado não pertence à empresa ou está inativo.');
             }
+            $departmentId = (int) ($conversation['department_id'] ?? 0);
+            if (($targetUserId ?? 0) > 0 && $departmentId > 0
+                && !$this->userBelongsToDepartment($pdo, (int) $targetUserId, $departmentId, $tenantId)) {
+                throw new RuntimeException('O profissional selecionado não pertence ao setor atual desta conversa.');
+            }
 
             $source = match ($action) {
                 'claim' => 'claim',
@@ -303,6 +340,102 @@ final class ConversationOwnershipService
                 'assigned_user_name' => $name,
                 'action' => $action,
                 'after_hours_resolved' => $afterHoursResolved,
+            ];
+        } catch (Throwable $exception) {
+            if ($started && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    public function changeDepartment(PDO $pdo, int $conversationId, ?int $targetDepartmentId): array
+    {
+        $actorId = (int) (Auth::id() ?? 0);
+        if ($conversationId < 1 || $actorId < 1) {
+            throw new RuntimeException('Conversa ou usuário inválido.');
+        }
+        if (!$this->hasTable($pdo, 'service_departments') || !$this->hasTable($pdo, 'service_department_members')) {
+            throw new RuntimeException('A estrutura de setores ainda não foi aplicada. Execute as migrations pendentes.');
+        }
+
+        $started = !$pdo->inTransaction();
+        if ($started) {
+            $pdo->beginTransaction();
+        }
+        try {
+            $statement = $pdo->prepare(
+                'SELECT c.id, c.tenant_id, c.status, c.assigned_user_id, c.department_id,
+                        u.name AS assigned_user_name
+                 FROM conversations c
+                 LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
+                 WHERE c.id = :id
+                 FOR UPDATE'
+            );
+            $statement->execute(['id' => $conversationId]);
+            $conversation = $statement->fetch(PDO::FETCH_ASSOC);
+            if (!$conversation) {
+                throw new RuntimeException('Conversa não encontrada.');
+            }
+
+            $tenantId = (int) $conversation['tenant_id'];
+            if ((string) ($conversation['status'] ?? '') === 'closed') {
+                throw new RuntimeException('Reabra a conversa antes de transferi-la para um setor.');
+            }
+            $actorBelongsToTenant = $this->activeUserBelongsToTenant($pdo, $actorId, $tenantId);
+            $manager = $this->isManagerForTenant($actorBelongsToTenant);
+            $currentUserId = (int) ($conversation['assigned_user_id'] ?? 0);
+            if (!Auth::isSuperAdmin() && !$actorBelongsToTenant) {
+                throw new RuntimeException('Seu usuário não pertence à equipe desta empresa.');
+            }
+            if (!$manager && $currentUserId !== $actorId) {
+                throw new RuntimeException('Somente o responsável atual ou um administrador pode transferir esta conversa de setor.');
+            }
+
+            $departmentName = '';
+            if (($targetDepartmentId ?? 0) > 0) {
+                $department = $this->departmentForTenant($pdo, (int) $targetDepartmentId, $tenantId);
+                if (!$department) {
+                    throw new RuntimeException('O setor selecionado não pertence à empresa ou está inativo.');
+                }
+                if (!$this->departmentHasActiveMembers($pdo, (int) $targetDepartmentId, $tenantId)) {
+                    throw new RuntimeException('Vincule pelo menos um usuário ativo ao setor antes de transferir conversas para ele.');
+                }
+                $departmentName = (string) $department['name'];
+            } else {
+                $targetDepartmentId = null;
+            }
+
+            $pdo->prepare(
+                'UPDATE conversations
+                 SET department_id = :department_id,
+                     assigned_user_id = NULL,
+                     assigned_at = NULL,
+                     attendance_mode = "paused",
+                     operational_status = "waiting_agent",
+                     assignment_source = :assignment_source,
+                     assignment_updated_by_user_id = :actor_id,
+                     assignment_released_at = :released_at
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            )->execute([
+                'department_id' => $targetDepartmentId,
+                'assignment_source' => $targetDepartmentId !== null ? 'department_transfer' : 'department_release',
+                'actor_id' => $actorId,
+                'released_at' => \App\Core\Clock::nowUtc(),
+                'id' => $conversationId,
+                'tenant_id' => $tenantId,
+            ]);
+
+            if ($started) {
+                $pdo->commit();
+            }
+            return [
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'previous_department_id' => (int) ($conversation['department_id'] ?? 0) ?: null,
+                'department_id' => $targetDepartmentId,
+                'department_name' => $departmentName,
+                'previous_user_id' => $currentUserId ?: null,
             ];
         } catch (Throwable $exception) {
             if ($started && $pdo->inTransaction()) {
@@ -499,6 +632,70 @@ final class ConversationOwnershipService
     private function isManagerForTenant(bool $actorBelongsToTenant): bool
     {
         return Auth::isSuperAdmin() || (Auth::role() === 'client_admin' && $actorBelongsToTenant);
+    }
+
+    private function userBelongsToDepartment(PDO $pdo, int $userId, int $departmentId, int $tenantId): bool
+    {
+        if ($userId < 1 || $departmentId < 1 || !$this->hasTable($pdo, 'service_department_members')) {
+            return false;
+        }
+        $statement = $pdo->prepare(
+            'SELECT COUNT(*) FROM service_department_members
+             WHERE tenant_id = :tenant_id AND department_id = :department_id AND user_id = :user_id'
+        );
+        $statement->execute([
+            'tenant_id' => $tenantId,
+            'department_id' => $departmentId,
+            'user_id' => $userId,
+        ]);
+        return (int) $statement->fetchColumn() > 0;
+    }
+
+    private function departmentHasActiveMembers(PDO $pdo, int $departmentId, int $tenantId): bool
+    {
+        if (!$this->hasTable($pdo, 'service_department_members')) {
+            return false;
+        }
+        $statement = $pdo->prepare(
+            'SELECT COUNT(*)
+             FROM service_department_members m
+             INNER JOIN users u ON u.id = m.user_id AND u.tenant_id = m.tenant_id
+             WHERE m.tenant_id = :tenant_id
+               AND m.department_id = :department_id
+               AND u.status = "active"'
+        );
+        $statement->execute([
+            'tenant_id' => $tenantId,
+            'department_id' => $departmentId,
+        ]);
+        return (int) $statement->fetchColumn() > 0;
+    }
+
+    private function departmentForTenant(PDO $pdo, int $departmentId, int $tenantId): ?array
+    {
+        $statement = $pdo->prepare(
+            'SELECT id, tenant_id, name, color
+             FROM service_departments
+             WHERE id = :id AND tenant_id = :tenant_id AND status = "active"
+             LIMIT 1'
+        );
+        $statement->execute(['id' => $departmentId, 'tenant_id' => $tenantId]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    private function hasTable(PDO $pdo, string $table): bool
+    {
+        try {
+            $statement = $pdo->prepare(
+                'SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name'
+            );
+            $statement->execute(['table_name' => $table]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function hasColumn(PDO $pdo, string $table, string $column): bool

@@ -131,8 +131,11 @@ final class AppVersionService
     // RS Connect 36.29.9 — quarta rodada visual: Agenda, Campanhas, Relatórios, Cobranças e alinhamento das permissões da automação.
     // Compatibilidade histórica: RS Connect 36.29.9 — Agenda, Campanhas, Relatórios e Cobranças.
     // RS Connect 36.29.10 — fechamento visual: Laboratório, Operação, Fila/Equipe, acessibilidade e QA responsivo.
-    public const PACKAGE_LABEL = 'RS Connect 36.29.10 — Fechamento visual e QA responsivo';
-    public const REQUIRED_MIGRATION = '106_agent_message_grouping_context_priority.sql';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.29.10 — Fechamento visual e QA responsivo';
+    // Compatibilidade histórica: REQUIRED_MIGRATION = '106_agent_message_grouping_context_priority.sql';
+    // RS Connect 36.30.0 — distribuição operacional por setores, equipe vinculada e fila integrada às Conversas/IA.
+    public const PACKAGE_LABEL = 'RS Connect 36.30.0 — Fila e setores integrados ao atendimento';
+    public const REQUIRED_MIGRATION = '107_service_department_memberships.sql';
 
     private PDO $pdo;
 

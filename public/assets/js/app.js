@@ -838,6 +838,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="conversation-meta-row">
             <span class="mini-badge mode-${modeClass}">${escapeHtml(modeLabel)}</span>
             <span class="mini-badge conversation-status-badge status-${conversationStatus}" data-conversation-list-status>${escapeHtml(conversationStatusText(conversationStatus))}</span>
+            ${item.department_name ? `<span class="mini-badge conversation-department-badge" data-conversation-department>${escapeHtml(item.department_name)}</span>` : ''}
             <small>${escapeHtml(item.assigned_user_name ? `Responsável: ${item.assigned_user_name}` : (item.tenant_name || item.instance_label || ''))}</small>
             <b class="unread-count" data-unread-count${unreadHidden}>${unread}</b>
           </span>
@@ -887,6 +888,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const unread = node.querySelector('[data-unread-count]');
       const modeBadge = node.querySelector('.mini-badge');
       const statusBadge = node.querySelector('[data-conversation-list-status]');
+      let departmentBadge = node.querySelector('[data-conversation-department]');
       if (name) name.textContent = item.name || item.phone || 'Contato';
       if (time) time.textContent = item.last_message_label || '';
       if (preview) preview.textContent = item.preview || 'Sem mensagens';
@@ -900,6 +902,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if (statusBadge) {
         statusBadge.className = `mini-badge conversation-status-badge status-${itemStatus}`;
         statusBadge.textContent = conversationStatusText(itemStatus);
+      }
+      const departmentName = String(item.department_name || '').trim();
+      if (departmentName && !departmentBadge) {
+        statusBadge?.insertAdjacentHTML('afterend', `<span class="mini-badge conversation-department-badge" data-conversation-department>${escapeHtml(departmentName)}</span>`);
+        departmentBadge = node.querySelector('[data-conversation-department]');
+      }
+      if (departmentBadge) {
+        if (departmentName) departmentBadge.textContent = departmentName;
+        else departmentBadge.remove();
       }
       if (id === selectedConversationId) applySelectedConversationStatus(itemStatus);
       if (unread) {
