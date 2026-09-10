@@ -1,4 +1,16 @@
-# RS Connect 36.30.2
+# RS Connect 36.30.3
+
+## Indicadores de atendimento — 36.30.3
+
+- meta configurável de SLA da primeira resposta humana (5 a 1440 minutos);
+- SLA calculado sobre ciclos operacionais persistidos, com quantidade dentro e fora da meta;
+- tempo médio do ciclo de atendimento entre abertura e encerramento;
+- fila atual de conversas aguardando primeira resposta, com espera média, maior espera e violações de SLA;
+- relatório por profissional com SLA, duração média, espera atual e setores vinculados;
+- quando Fila/Setores estiver habilitada, relatório exibe carga operacional atual por setor sem inventar atribuição histórica;
+- exportação CSV da equipe e auditoria de primeira resposta incluem os novos campos;
+- nenhuma migration nova; permanece obrigatória `107_service_department_memberships.sql`.
+
 
 Organização inteligente de contatos, continuidade de cliente/paciente e terceira rodada visual em telas operacionais, preservando o fluxo editável dos Assistentes.
 

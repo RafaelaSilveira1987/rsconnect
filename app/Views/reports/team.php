@@ -1,4 +1,5 @@
 <?php
+/* Legacy reports cache marker: reports.css?v=36.29.9 */
 
 use App\Core\Auth;
 use App\Core\PublicId;
@@ -11,6 +12,9 @@ $dailySeries = $dailySeries ?? [];
 $recentActivities = $recentActivities ?? [];
 $responseAudit = $responseAudit ?? [];
 $dataQuality = $dataQuality ?? [];
+$serviceQuality = $serviceQuality ?? [];
+$departmentPerformance = $departmentPerformance ?? [];
+$queueEnabled = !empty($queue_enabled);
 $responseProvenance = $responseProvenance ?? [];
 $warnings = $warnings ?? [];
 $users = $users ?? [];
@@ -20,6 +24,7 @@ $readiness = $readiness ?? ['ready' => false, 'missing' => []];
 $tenant = $tenant ?? [];
 $selectedUserId = (int) ($selected_user_id ?? 0);
 $tenantId = (int) ($filters['tenant_id'] ?? 0);
+$slaMinutes = max(5, min(1440, (int) ($filters['sla_minutes'] ?? 30)));
 
 $number = static fn (float|int|string $value): string => number_format((float) $value, 0, ',', '.');
 $percent = static fn (float|int|string $value): string => number_format((float) $value, 1, ',', '.') . '%';
@@ -44,6 +49,7 @@ $queryBase = array_filter([
     'tenant_id' => $tenantId,
     'user_id' => $selectedUserId,
     'operational_only' => !empty($filters['operational_only']) ? 1 : 0,
+    'sla_minutes' => $slaMinutes,
 ], static fn ($value): bool => $value !== '' && $value !== 0);
 
 $dailyMax = 1;
@@ -55,7 +61,7 @@ foreach ($professionals as $professional) {
     $professionalMax = max($professionalMax, (int) ($professional['activity_score'] ?? 0));
 }
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.29.9')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.30.3')) ?>">
 <div class="executive-report-page team-report-page report-v36100">
     <section class="client-report-hero team-report-hero">
         <div>
@@ -89,7 +95,8 @@ foreach ($professionals as $professional) {
         <label class="field"><span>Data final</span><input type="date" name="end" value="<?= View::e((string) ($filters['end'] ?? '')) ?>"></label>
         <?php if ($tenantId > 0): ?>
             <label class="field"><span>Profissional</span><select name="user_uuid" <?= ($scope['mode'] ?? '') === 'own' ? 'disabled' : '' ?>><option value="">Toda a equipe</option><?php foreach ($users as $user): $userId = (int) ($user['id'] ?? 0); ?><option value="<?= View::e(PublicId::encode('user', $userId)) ?>" <?= $selectedUserId === $userId ? 'selected' : '' ?>><?= View::e((string) (($user['whatsapp_display_name'] ?? '') ?: ($user['name'] ?? 'Usuário'))) ?><?= ($user['status'] ?? '') !== 'active' ? ' · inativo' : '' ?></option><?php endforeach; ?></select><?php if (($scope['mode'] ?? '') === 'own'): ?><input type="hidden" name="user_uuid" value="<?= View::e(PublicId::encode('user', $selectedUserId)) ?>"><?php endif; ?></label>
-            <label class="team-report-operational-filter"><input type="checkbox" name="operational_only" value="1" <?= !empty($filters['operational_only']) ? 'checked' : '' ?>><span><strong>Somente métricas operacionais</strong><small>Exclui ciclos históricos recuperados da 1ª resposta e dos encerramentos.</small></span></label>
+            <label class="field team-report-sla-filter"><span>Meta da 1ª resposta</span><div class="team-report-sla-input"><input type="number" name="sla_minutes" min="5" max="1440" step="5" value="<?= $slaMinutes ?>"><small>min</small></div></label>
+            <label class="team-report-operational-filter"><input type="checkbox" name="operational_only" value="1" <?= !empty($filters['operational_only']) ? 'checked' : '' ?>><span><strong>Somente métricas operacionais</strong><small>Exclui ciclos históricos recuperados da 1ª resposta, duração e encerramentos.</small></span></label>
         <?php endif; ?>
         <div class="team-report-filter-actions"><button class="btn btn-primary" type="submit">Atualizar relatório</button><a class="btn btn-quiet" href="<?= View::e(Router::url('/reports/team' . (Auth::isSuperAdmin() && $tenantId > 0 ? '?tenant_id=' . $tenantId : ''))) ?>">Limpar filtros</a></div>
     </form>
@@ -110,7 +117,7 @@ foreach ($professionals as $professional) {
     <?php else: ?>
         <section class="team-report-context card">
             <div><span class="eyebrow">Escopo</span><strong><?= View::e((string) ($overview['scope_label'] ?? 'Toda a equipe')) ?></strong><small><?= View::e((string) ($tenant['name'] ?? 'Empresa')) ?> · Fuso <?= View::e((string) ($tenant['timezone'] ?? 'America/Sao_Paulo')) ?> · <?= View::e(date('d/m/Y', strtotime((string) $filters['start']))) ?> a <?= View::e(date('d/m/Y', strtotime((string) $filters['end']))) ?></small></div>
-            <div class="team-report-context-badges"><span class="badge <?= !empty($tenant['professional_assignment_enabled']) ? 'badge-success' : 'badge-info' ?>">Atendimento por profissional <?= !empty($tenant['professional_assignment_enabled']) ? 'ativo' : 'opcional' ?></span><span class="badge <?= !empty($tenant['professional_calendar_enabled']) ? 'badge-success' : 'badge-info' ?>">Agenda individual <?= !empty($tenant['professional_calendar_enabled']) ? 'ativa' : 'opcional' ?></span><span class="badge <?= !empty($responseProvenance['operational_only']) ? 'badge-success' : 'badge-info' ?>"><?= View::e((string) ($responseProvenance['filter_label'] ?? 'Histórico + operacional')) ?></span></div>
+            <div class="team-report-context-badges"><span class="badge <?= !empty($tenant['professional_assignment_enabled']) ? 'badge-success' : 'badge-info' ?>">Atendimento por profissional <?= !empty($tenant['professional_assignment_enabled']) ? 'ativo' : 'opcional' ?></span><span class="badge <?= !empty($tenant['professional_calendar_enabled']) ? 'badge-success' : 'badge-info' ?>">Agenda individual <?= !empty($tenant['professional_calendar_enabled']) ? 'ativa' : 'opcional' ?></span><span class="badge <?= !empty($responseProvenance['operational_only']) ? 'badge-success' : 'badge-info' ?>"><?= View::e((string) ($responseProvenance['filter_label'] ?? 'Histórico + operacional')) ?></span><span class="badge badge-info">SLA humano: <?= $slaMinutes ?> min</span></div>
         </section>
 
         <section class="card team-report-provenance <?= !empty($responseProvenance['operational_only']) ? 'is-operational' : 'is-mixed' ?>">
@@ -128,7 +135,10 @@ foreach ($professionals as $professional) {
         <section class="team-report-kpis" aria-label="Indicadores da equipe">
             <article class="card"><span>Profissionais analisados</span><strong><?= $number($overview['team_members'] ?? 0) ?></strong><small><?= $number($overview['preferred_clients'] ?? 0) ?> clientes preferenciais</small></article>
             <article class="card is-primary"><span>Conversas respondidas</span><strong><?= $number($overview['conversations_replied'] ?? 0) ?></strong><small><?= $number($overview['human_messages'] ?? 0) ?> mensagens humanas</small></article>
-            <article class="card"><span>Tempo médio da 1ª resposta</span><strong><?= View::e($duration($overview['avg_first_response_seconds'] ?? 0)) ?></strong><small><?= $number($overview['first_responses'] ?? 0) ?> primeiras respostas medidas</small></article>
+            <article class="card"><span>Tempo médio da 1ª resposta humana</span><strong><?= View::e($duration($overview['avg_first_response_seconds'] ?? 0)) ?></strong><small><?= $number($overview['first_responses'] ?? 0) ?> primeiras respostas medidas</small></article>
+            <article class="card <?= (float) ($overview['sla_compliance'] ?? 0) < 80 && (int) ($overview['sla_measured'] ?? 0) > 0 ? 'is-warning' : 'is-success' ?>"><span>SLA da 1ª resposta humana</span><strong><?= $percent($overview['sla_compliance'] ?? 0) ?></strong><small><?= $number($overview['sla_met'] ?? 0) ?>/<?= $number($overview['sla_measured'] ?? 0) ?> dentro de <?= $slaMinutes ?> min</small></article>
+            <article class="card"><span>Tempo médio do ciclo</span><strong><?= View::e($duration($overview['avg_service_duration_seconds'] ?? 0)) ?></strong><small><?= $number($overview['service_cycles_closed'] ?? 0) ?> ciclo(s) encerrado(s)</small></article>
+            <article class="card <?= (int) ($overview['waiting_over_sla'] ?? 0) > 0 ? 'is-warning' : '' ?>"><span>Aguardando 1ª resposta agora</span><strong><?= $number($overview['waiting_now'] ?? 0) ?></strong><small>Média <?= View::e($duration($overview['avg_current_wait_seconds'] ?? 0)) ?> · <?= $number($overview['waiting_over_sla'] ?? 0) ?> fora do SLA</small></article>
             <article class="card"><span>Conversas encerradas</span><strong><?= $number($overview['closed_conversations'] ?? 0) ?></strong><small><?= $number($overview['open_conversations'] ?? 0) ?> abertas agora</small></article>
             <article class="card"><span>Transferências</span><strong><?= $number(($overview['transfers_received'] ?? 0) + ($overview['transfers_out'] ?? 0)) ?></strong><small><?= $number($overview['releases'] ?? 0) ?> liberações</small></article>
             <article class="card"><span>Agendamentos</span><strong><?= $number($overview['appointments'] ?? 0) ?></strong><small><?= $number($overview['appointments_upcoming'] ?? 0) ?> futuros no período</small></article>
@@ -151,7 +161,7 @@ foreach ($professionals as $professional) {
             </div>
             <div class="table-wrap team-report-audit-wrap">
                 <table class="team-report-audit-table">
-                    <thead><tr><th>Cliente</th><th>Profissional</th><th>Ciclo</th><th>Entrada do cliente</th><th>Primeira resposta</th><th>Tempo</th><th>Qualidade</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Cliente</th><th>Profissional</th><th>Ciclo</th><th>Entrada do cliente</th><th>Primeira resposta</th><th>Tempo</th><th>SLA <?= $slaMinutes ?> min</th><th>Qualidade</th><th>Status</th></tr></thead>
                     <tbody>
                     <?php foreach ($responseAudit as $cycle): ?>
                         <tr>
@@ -161,11 +171,12 @@ foreach ($professionals as $professional) {
                             <td><?= View::e(date('d/m/Y H:i:s', strtotime((string) ($cycle['first_incoming_at_local'] ?? 'now')))) ?></td>
                             <td><?= View::e(date('d/m/Y H:i:s', strtotime((string) ($cycle['first_response_at_local'] ?? 'now')))) ?></td>
                             <td><strong><?= View::e($duration($cycle['response_seconds'] ?? 0)) ?></strong></td>
+                            <td><span class="badge <?= !empty($cycle['within_sla']) ? 'badge-success' : 'badge-warning' ?>"><?= !empty($cycle['within_sla']) ? 'Dentro do SLA' : 'Fora do SLA' ?></span></td>
                             <td><span class="badge <?= ($cycle['data_quality'] ?? '') === 'historical_recovered' ? 'badge-info' : 'badge-success' ?>"><?= View::e((string) ($cycle['data_quality_label'] ?? 'Métrica operacional')) ?></span><small class="team-report-source-label"><?= View::e((string) ($cycle['source_label'] ?? $cycle['source'] ?? '')) ?></small></td>
                             <td><span class="badge <?= ($cycle['cycle_status'] ?? '') === 'closed' ? 'badge-info' : 'badge-success' ?>"><?= ($cycle['cycle_status'] ?? '') === 'closed' ? 'Encerrado' : 'Ativo' ?></span></td>
                         </tr>
                     <?php endforeach; ?>
-                    <?php if (!$responseAudit): ?><tr><td colspan="8"><div class="empty-state">Nenhuma primeira resposta humana medida no período.</div></td></tr><?php endif; ?>
+                    <?php if (!$responseAudit): ?><tr><td colspan="9"><div class="empty-state">Nenhuma primeira resposta humana medida no período.</div></td></tr><?php endif; ?>
                     </tbody>
                 </table>
             </div>
@@ -188,12 +199,15 @@ foreach ($professionals as $professional) {
 
         <section class="card team-report-section">
             <div class="section-heading"><div><span class="eyebrow">Comparativo</span><h2>Desempenho por profissional</h2><p>Os indicadores respeitam quem respondeu, quem encerrou e quem executará o agendamento.</p></div></div>
-            <div class="table-wrap team-report-table-wrap"><table class="team-report-table"><thead><tr><th>Profissional</th><th>Conversas</th><th>1ª resposta</th><th>Encerradas</th><th>Transferências</th><th>Clientes</th><th>Agenda</th><th>Resultado</th><th>Faltas</th><th></th></tr></thead><tbody>
+            <div class="table-wrap team-report-table-wrap"><table class="team-report-table"><thead><tr><th>Profissional</th><th>Conversas</th><th>1ª resposta humana</th><th>SLA</th><th>Duração</th><th>Espera agora</th><th>Encerradas</th><th>Transferências</th><th>Clientes</th><th>Agenda</th><th>Resultado</th><th>Faltas</th><th></th></tr></thead><tbody>
                 <?php foreach ($professionals as $professional): $userId = (int) ($professional['user_id'] ?? 0); ?>
                     <tr>
-                        <td><div class="team-report-person"><span><?= View::e(mb_strtoupper(mb_substr((string) ($professional['name'] ?? 'U'), 0, 2))) ?></span><div><strong><?= View::e((string) ($professional['name'] ?? 'Usuário')) ?></strong><small><?= View::e((string) ($professional['role_label'] ?? 'Profissional')) ?> · <?= View::e($statusLabel((string) ($professional['status'] ?? 'active'))) ?></small></div></div></td>
+                        <td><div class="team-report-person"><span><?= View::e(mb_strtoupper(mb_substr((string) ($professional['name'] ?? 'U'), 0, 2))) ?></span><div><strong><?= View::e((string) ($professional['name'] ?? 'Usuário')) ?></strong><small><?= View::e((string) ($professional['role_label'] ?? 'Profissional')) ?> · <?= View::e($statusLabel((string) ($professional['status'] ?? 'active'))) ?></small><?php if ($queueEnabled && trim((string) ($professional['department_names'] ?? '')) !== ''): ?><small class="team-report-department-label"><?= View::e((string) $professional['department_names']) ?></small><?php endif; ?></div></div></td>
                         <td><strong><?= $number($professional['conversations_replied'] ?? 0) ?></strong><small><?= $number($professional['human_messages'] ?? 0) ?> mensagens</small></td>
                         <td><strong><?= View::e($duration($professional['avg_first_response_seconds'] ?? 0)) ?></strong><small><?= $number($professional['first_responses'] ?? 0) ?> medida(s)</small></td>
+                        <td><strong><?= $percent($professional['sla_compliance'] ?? 0) ?></strong><small><?= $number($professional['sla_met'] ?? 0) ?>/<?= $number($professional['sla_measured'] ?? 0) ?> no prazo</small></td>
+                        <td><strong><?= View::e($duration($professional['avg_service_duration_seconds'] ?? 0)) ?></strong><small><?= $number($professional['service_cycles_closed'] ?? 0) ?> ciclo(s)</small></td>
+                        <td><strong><?= $number($professional['waiting_now'] ?? 0) ?></strong><small><?= View::e($duration($professional['avg_current_wait_seconds'] ?? 0)) ?> méd. · <?= $number($professional['waiting_over_sla'] ?? 0) ?> fora SLA</small></td>
                         <td><strong><?= $number($professional['closed_conversations'] ?? 0) ?></strong><small><?= $number($professional['open_conversations'] ?? 0) ?> abertas</small></td>
                         <td><strong><?= $number(($professional['transfers_received'] ?? 0) + ($professional['transfers_out'] ?? 0)) ?></strong><small><?= $number($professional['transfers_received'] ?? 0) ?> recebidas</small></td>
                         <td><strong><?= $number($professional['preferred_clients'] ?? 0) ?></strong><small>preferenciais</small></td>
@@ -206,12 +220,33 @@ foreach ($professionals as $professional) {
                             'tenant_id' => $tenantId,
                             'user_id' => $userId,
                             'operational_only' => !empty($filters['operational_only']) ? 1 : 0,
+                            'sla_minutes' => $slaMinutes,
                         ], static fn ($value): bool => $value !== '' && $value !== 0)))) ?>">Detalhar</a><?php endif; ?></td>
                     </tr>
                 <?php endforeach; ?>
-                <?php if (!$professionals): ?><tr><td colspan="10"><div class="empty-state">Nenhum profissional com dados no período selecionado.</div></td></tr><?php endif; ?>
+                <?php if (!$professionals): ?><tr><td colspan="13"><div class="empty-state">Nenhum profissional com dados no período selecionado.</div></td></tr><?php endif; ?>
             </tbody></table></div>
         </section>
+
+        <?php if ($queueEnabled): ?>
+            <section class="card team-report-section team-report-departments">
+                <div class="section-heading"><div><span class="eyebrow">Fila e setores</span><h2>Carga atual por setor</h2><p>Leitura do estado atual da operação. Como o vínculo histórico de setor ainda não é versionado por ciclo, esta visão não atribui desempenho passado ao setor.</p></div><span class="badge badge-info">SLA <?= $slaMinutes ?> min</span></div>
+                <div class="team-report-department-grid">
+                    <?php foreach ($departmentPerformance as $department): ?>
+                        <article>
+                            <header><span class="team-report-department-dot" style="--department-color:<?= View::e((string) ($department['color'] ?? '#1f6ea1')) ?>"></span><strong><?= View::e((string) ($department['name'] ?? 'Setor')) ?></strong><small><?= $number($department['active_members'] ?? 0) ?> membro(s) ativo(s)</small></header>
+                            <dl>
+                                <div><dt>Conversas abertas</dt><dd><?= $number($department['open_conversations'] ?? 0) ?></dd></div>
+                                <div><dt>Aguardando 1ª resposta</dt><dd><?= $number($department['waiting_now'] ?? 0) ?></dd></div>
+                                <div><dt>Fora do SLA agora</dt><dd class="<?= (int) ($department['waiting_over_sla'] ?? 0) > 0 ? 'is-warning' : '' ?>"><?= $number($department['waiting_over_sla'] ?? 0) ?></dd></div>
+                                <div><dt>Espera média atual</dt><dd><?= View::e($duration($department['avg_current_wait_seconds'] ?? 0)) ?></dd></div>
+                            </dl>
+                        </article>
+                    <?php endforeach; ?>
+                    <?php if (!$departmentPerformance): ?><div class="empty-state">Nenhum setor ativo com dados para exibir.</div><?php endif; ?>
+                </div>
+            </section>
+        <?php endif; ?>
 
         <div class="team-report-two-columns">
             <section class="card team-report-section">

@@ -57,6 +57,12 @@ final class AdminExecutiveReportService
             $date['start'],
             $date['end']
         );
+        $serviceMetrics = $this->executivePolicy->operationalServiceMetrics(
+            $tenantId > 0 ? $tenantId : null,
+            $date['start'],
+            $date['end'],
+            (int) ($filters['sla_minutes'] ?? 30)
+        );
 
         $metrics = [
             'new_companies' => $this->scalar(
@@ -136,6 +142,17 @@ final class AdminExecutiveReportService
             'avg_first_response_seconds' => $operationalResponses['average_seconds'],
             'min_first_response_seconds' => $operationalResponses['min_seconds'],
             'max_first_response_seconds' => $operationalResponses['max_seconds'],
+            'avg_service_duration_seconds' => (int) ($serviceMetrics['avg_service_duration_seconds'] ?? 0),
+            'service_cycles_closed' => (int) ($serviceMetrics['closed_cycles'] ?? 0),
+            'sla_target_minutes' => (int) ($serviceMetrics['sla_target_minutes'] ?? 30),
+            'sla_measured' => (int) ($serviceMetrics['sla_measured'] ?? 0),
+            'sla_met' => (int) ($serviceMetrics['sla_met'] ?? 0),
+            'sla_breached' => (int) ($serviceMetrics['sla_breached'] ?? 0),
+            'sla_compliance' => (float) ($serviceMetrics['sla_compliance'] ?? 0),
+            'waiting_now' => (int) ($serviceMetrics['waiting_now'] ?? 0),
+            'waiting_over_sla' => (int) ($serviceMetrics['waiting_over_sla'] ?? 0),
+            'avg_current_wait_seconds' => (int) ($serviceMetrics['avg_current_wait_seconds'] ?? 0),
+            'max_current_wait_seconds' => (int) ($serviceMetrics['max_current_wait_seconds'] ?? 0),
             'connected_instances' => $this->scalar(
                 'SELECT COUNT(*) FROM evolution_instances WHERE status IN ("connected","open","active","online")' . $scope,
                 $tenantParams
@@ -208,6 +225,12 @@ final class AdminExecutiveReportService
 
         $previousDate = $this->previousDateParams($filters);
         $previousParams = $previousDate + ($tenantId > 0 ? ['tenant_id' => $tenantId] : []);
+        $previousServiceMetrics = $this->executivePolicy->operationalServiceMetrics(
+            $tenantId > 0 ? $tenantId : null,
+            $previousDate['start'],
+            $previousDate['end'],
+            (int) ($filters['sla_minutes'] ?? 30)
+        );
         $previousMetrics = [
             'new_companies' => $this->scalar(
                 'SELECT COUNT(*) FROM tenants WHERE created_at BETWEEN :start AND :end' . $tenantTableScope,
@@ -230,6 +253,8 @@ final class AdminExecutiveReportService
                 $previousDate['start'],
                 $previousDate['end']
             )['average_seconds'],
+            'avg_service_duration_seconds' => (int) ($previousServiceMetrics['avg_service_duration_seconds'] ?? 0),
+            'sla_compliance' => (float) ($previousServiceMetrics['sla_compliance'] ?? 0),
             'ai_replies' => $this->scalar(
                 'SELECT COUNT(*) FROM conversation_messages WHERE direction = "outgoing" AND sender_type = "ai" AND sent_at BETWEEN :start AND :end' . $scope,
                 $previousParams
@@ -252,6 +277,8 @@ final class AdminExecutiveReportService
             'conversations_started' => $this->percentChange((int) $metrics['conversations_started'], (int) $previousMetrics['conversations_started']),
             'human_messages' => $this->percentChange((int) $metrics['human_messages'], (int) $previousMetrics['human_messages']),
             'avg_first_response_seconds' => $this->percentChange((int) $metrics['avg_first_response_seconds'], (int) $previousMetrics['avg_first_response_seconds']),
+            'avg_service_duration_seconds' => $this->percentChange((int) $metrics['avg_service_duration_seconds'], (int) $previousMetrics['avg_service_duration_seconds']),
+            'sla_compliance' => $this->percentChange((float) $metrics['sla_compliance'], (float) $previousMetrics['sla_compliance']),
             'ai_replies' => $this->percentChange((int) $metrics['ai_replies'], (int) $previousMetrics['ai_replies']),
             'appointments_confirmed' => $this->percentChange((int) $metrics['appointments_confirmed'], (int) $previousMetrics['appointments_confirmed']),
             'automation_failures' => $this->percentChange((int) $metrics['automation_failures'], (int) $previousMetrics['automation_failures']),

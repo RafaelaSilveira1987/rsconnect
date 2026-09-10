@@ -1464,3 +1464,163 @@ body:has(> .executive-report-page) {
   }
   .client-report-summary-card dd { text-align: left; }
 }
+
+/* =========================================================
+   RS Connect 36.30.3 — indicadores operacionais de atendimento
+   SLA humano, duração do ciclo, espera atual e carga por setor.
+   ========================================================= */
+.rs-report-sla-filter,
+.team-report-sla-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 132px;
+}
+.rs-report-sla-filter > span,
+.team-report-sla-filter > span {
+  color: var(--report-muted);
+  font-size: .68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.rs-report-sla-filter > div,
+.team-report-sla-input {
+  display: grid;
+  grid-template-columns: minmax(74px, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+.rs-report-sla-filter input,
+.team-report-sla-input input {
+  width: 100%;
+  min-width: 0;
+}
+.rs-report-sla-filter small,
+.team-report-sla-input small {
+  color: var(--report-muted);
+  font-size: .7rem;
+  font-weight: 800;
+}
+.report-v36140 .rs-admin-report-toolbar {
+  grid-template-columns: minmax(300px, 1.15fr) minmax(190px, .75fr) minmax(132px, .42fr) auto;
+}
+.report-v36150 .rs-client-report-toolbar {
+  grid-template-columns: minmax(300px, 1.1fr) minmax(132px, .42fr) minmax(230px, .85fr) auto;
+}
+.team-report-filters {
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) minmax(130px, .55fr) minmax(260px, 1.15fr) auto;
+}
+.team-report-table {
+  min-width: 1540px !important;
+}
+.team-report-department-label {
+  color: var(--team-green) !important;
+  font-weight: 800;
+  white-space: normal !important;
+}
+.team-report-departments .section-heading {
+  align-items: flex-start;
+  gap: 16px;
+}
+.team-report-department-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.team-report-department-grid > article {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--report-border);
+  border-radius: 15px;
+  background: linear-gradient(145deg, #fbfdfd, #fff);
+}
+.team-report-department-grid > article > header {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 3px 8px;
+  align-items: center;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--team-line);
+}
+.team-report-department-grid > article > header strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-report-department-grid > article > header small {
+  grid-column: 2;
+  color: var(--report-muted);
+  font-size: .68rem;
+}
+.team-report-department-dot {
+  grid-row: 1 / span 2;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--department-color, var(--team-blue));
+  box-shadow: 0 0 0 4px #eef4f7;
+}
+.team-report-department-grid dl {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+.team-report-department-grid dl > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.team-report-department-grid dt {
+  color: var(--report-muted);
+  font-size: .7rem;
+}
+.team-report-department-grid dd {
+  margin: 0;
+  color: var(--report-ink);
+  font-size: .78rem;
+  font-weight: 900;
+  text-align: right;
+}
+.team-report-department-grid dd.is-warning {
+  color: #a15c00;
+}
+.team-report-audit-table {
+  min-width: 1180px;
+}
+@media (max-width: 1280px) {
+  .report-v36140 .rs-admin-report-toolbar,
+  .report-v36150 .rs-client-report-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .report-v36140 .rs-admin-toolbar-actions,
+  .report-v36150 .rs-admin-toolbar-actions {
+    justify-content: flex-start;
+  }
+  .team-report-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .team-report-filter-actions { grid-column: 1 / -1; }
+  .team-report-department-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .report-v36140 .rs-admin-report-toolbar,
+  .report-v36150 .rs-client-report-toolbar,
+  .team-report-filters {
+    grid-template-columns: 1fr;
+  }
+  .team-report-filter-actions { grid-column: auto; }
+  .team-report-department-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .rs-report-sla-filter > div,
+  .team-report-sla-input { grid-template-columns: minmax(0, 1fr) auto; }
+  .team-report-departments .section-heading { flex-direction: column; }
+  .team-report-department-grid dl > div { align-items: flex-start; }
+}
+@media print {
+  .team-report-department-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

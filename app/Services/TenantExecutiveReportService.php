@@ -249,10 +249,27 @@ final class TenantExecutiveReportService
             $date['start'],
             $date['end']
         );
+        $serviceMetrics = $this->executivePolicy->operationalServiceMetrics(
+            $tenantId,
+            $date['start'],
+            $date['end'],
+            (int) ($filters['sla_minutes'] ?? 30)
+        );
         $metrics['avg_first_response_seconds'] = $operationalResponses['average_seconds'];
         $metrics['first_responses_measured'] = $operationalResponses['count'];
         $metrics['min_first_response_seconds'] = $operationalResponses['min_seconds'];
         $metrics['max_first_response_seconds'] = $operationalResponses['max_seconds'];
+        $metrics['avg_service_duration_seconds'] = (int) ($serviceMetrics['avg_service_duration_seconds'] ?? 0);
+        $metrics['service_cycles_closed'] = (int) ($serviceMetrics['closed_cycles'] ?? 0);
+        $metrics['sla_target_minutes'] = (int) ($serviceMetrics['sla_target_minutes'] ?? 30);
+        $metrics['sla_measured'] = (int) ($serviceMetrics['sla_measured'] ?? 0);
+        $metrics['sla_met'] = (int) ($serviceMetrics['sla_met'] ?? 0);
+        $metrics['sla_breached'] = (int) ($serviceMetrics['sla_breached'] ?? 0);
+        $metrics['sla_compliance'] = (float) ($serviceMetrics['sla_compliance'] ?? 0);
+        $metrics['waiting_now'] = (int) ($serviceMetrics['waiting_now'] ?? 0);
+        $metrics['waiting_over_sla'] = (int) ($serviceMetrics['waiting_over_sla'] ?? 0);
+        $metrics['avg_current_wait_seconds'] = (int) ($serviceMetrics['avg_current_wait_seconds'] ?? 0);
+        $metrics['max_current_wait_seconds'] = (int) ($serviceMetrics['max_current_wait_seconds'] ?? 0);
 
         $metrics['attendance_rate'] = ((int) $metrics['appointments_completed'] + (int) $metrics['appointments_no_show']) > 0
             ? round(((int) $metrics['appointments_completed'] / ((int) $metrics['appointments_completed'] + (int) $metrics['appointments_no_show'])) * 100, 1)
@@ -288,6 +305,12 @@ final class TenantExecutiveReportService
             : 0;
 
         $previousDate = $this->previousDateParams($filters);
+        $previousServiceMetrics = $this->executivePolicy->operationalServiceMetrics(
+            $tenantId,
+            $previousDate['start'],
+            $previousDate['end'],
+            (int) ($filters['sla_minutes'] ?? 30)
+        );
         $previousMetrics = [
             'active_conversations' => $this->scalar(
                 'SELECT COUNT(DISTINCT conversation_id)
@@ -337,6 +360,8 @@ final class TenantExecutiveReportService
                 'SELECT COUNT(*) FROM crm_leads WHERE tenant_id = :tenant_id AND status = "won" AND created_at BETWEEN :start AND :end',
                 ['tenant_id' => $tenantId] + $previousDate
             ),
+            'avg_service_duration_seconds' => (int) ($previousServiceMetrics['avg_service_duration_seconds'] ?? 0),
+            'sla_compliance' => (float) ($previousServiceMetrics['sla_compliance'] ?? 0),
         ];
         $comparisons = [
             'active_conversations' => $this->percentChange((int) $metrics['active_conversations'], (int) $previousMetrics['active_conversations']),
@@ -346,6 +371,8 @@ final class TenantExecutiveReportService
             'contacts' => $this->percentChange((int) $metrics['contacts'], (int) $previousMetrics['contacts']),
             'total_messages' => $this->percentChange((int) $metrics['total_messages'], (int) $previousMetrics['total_messages']),
             'ai_replies' => $this->percentChange((int) $metrics['ai_replies'], (int) $previousMetrics['ai_replies']),
+            'avg_service_duration_seconds' => $this->percentChange((int) $metrics['avg_service_duration_seconds'], (int) $previousMetrics['avg_service_duration_seconds']),
+            'sla_compliance' => $this->percentChange((float) $metrics['sla_compliance'], (float) $previousMetrics['sla_compliance']),
             'appointments_successful' => $this->percentChange((int) $metrics['appointments_successful'], (int) $previousMetrics['appointments_successful']),
             'crm_won' => $this->percentChange((int) $metrics['crm_won'], (int) $previousMetrics['crm_won']),
         ];

@@ -1,4 +1,5 @@
 <?php
+/* Legacy reports cache marker: reports.css?v=36.29.9 */
 
 use App\Core\Router;
 use App\Core\View;
@@ -67,6 +68,7 @@ $queryBase = array_filter([
     'start' => $filters['start'] ?? '',
     'end' => $filters['end'] ?? '',
     'tenant_id' => (int) ($filters['tenant_id'] ?? 0),
+    'sla_minutes' => (int) ($filters['sla_minutes'] ?? 30),
 ], static fn ($value) => $value !== '' && $value !== 0);
 $lineSeries = json_encode(array_map(static fn (array $row): array => [
     'label' => date('d/m', strtotime((string) $row['label'])),
@@ -101,7 +103,7 @@ $quickReports = [
     ['name' => 'Pipeline comercial RS', 'type' => 'Comercial', 'metric' => $money($metrics['commercial_pipeline'] ?? 0), 'export' => 'commercial'],
 ];
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.29.9')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.30.3')) ?>">
 <div class="executive-report-page executive-report-admin report-v3646 report-v3647 report-v36140">
     <header class="rs-admin-report-header">
         <div>
@@ -124,6 +126,7 @@ $quickReports = [
             <label><span>Até</span><input type="date" name="end" value="<?= View::e($filters['end']) ?>"></label>
         </div>
         <label class="rs-admin-company-filter"><span>Empresa</span><select name="tenant_id"><option value="">Toda a operação</option><?php foreach ($tenants as $tenant): ?><option value="<?= (int) $tenant['id'] ?>" <?= (int) ($filters['tenant_id'] ?? 0) === (int) $tenant['id'] ? 'selected' : '' ?>><?= View::e($tenant['name']) ?></option><?php endforeach; ?></select></label>
+        <label class="rs-report-sla-filter"><span>Meta da 1ª resposta</span><div><input type="number" name="sla_minutes" min="5" max="1440" step="5" value="<?= (int) ($filters['sla_minutes'] ?? 30) ?>"><small>min</small></div></label>
         <div class="rs-admin-toolbar-actions"><button class="btn btn-primary" type="submit"><?= $icon('filter') ?> Aplicar filtros</button><a class="btn btn-quiet" href="<?= View::e(Router::url('/reports')) ?>">Limpar</a></div>
     </form>
 
@@ -137,7 +140,11 @@ $quickReports = [
         <?php $t = $trend($comparisons['human_messages'] ?? null); ?>
         <a class="card rs-admin-kpi is-teal" href="<?= View::e(Router::url('/reports/team?' . http_build_query($queryBase))) ?>"><span class="rs-admin-kpi-icon"><?= $icon('human') ?></span><div><small>Atendimentos humanos</small><strong><?= $number($metrics['human_conversations'] ?? 0) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= $number($metrics['human_messages'] ?? 0) ?> respostas da equipe</em></div></a>
         <?php $t = $trend($comparisons['avg_first_response_seconds'] ?? null, true); ?>
-        <a class="card rs-admin-kpi is-purple" href="<?= View::e(Router::url('/reports/team?' . http_build_query($queryBase))) ?>"><span class="rs-admin-kpi-icon"><?= $icon('clock') ?></span><div><small>Tempo médio da 1ª resposta</small><strong><?= View::e($duration($metrics['avg_first_response_seconds'] ?? 0)) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= $number($metrics['first_responses'] ?? 0) ?> respostas medidas</em></div></a>
+        <a class="card rs-admin-kpi is-purple" href="<?= View::e(Router::url('/reports/team?' . http_build_query($queryBase))) ?>"><span class="rs-admin-kpi-icon"><?= $icon('clock') ?></span><div><small>Tempo médio da 1ª resposta humana</small><strong><?= View::e($duration($metrics['avg_first_response_seconds'] ?? 0)) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= $number($metrics['first_responses'] ?? 0) ?> respostas medidas</em></div></a>
+        <a class="card rs-admin-kpi is-green" href="<?= View::e(Router::url('/reports/team?' . http_build_query($queryBase))) ?>"><span class="rs-admin-kpi-icon"><?= $icon('check') ?></span><div><small>SLA da 1ª resposta humana</small><strong><?= number_format((float) ($metrics['sla_compliance'] ?? 0), 1, ',', '.') ?>%</strong><em><?= $number($metrics['sla_met'] ?? 0) ?>/<?= $number($metrics['sla_measured'] ?? 0) ?> em até <?= $number($metrics['sla_target_minutes'] ?? 30) ?> min</em></div></a>
+        <?php $t = $trend($comparisons['avg_service_duration_seconds'] ?? null, true); ?>
+        <a class="card rs-admin-kpi is-indigo" href="<?= View::e(Router::url('/reports/team?' . http_build_query($queryBase))) ?>"><span class="rs-admin-kpi-icon"><?= $icon('clock') ?></span><div><small>Tempo médio do ciclo de atendimento</small><strong><?= View::e($duration($metrics['avg_service_duration_seconds'] ?? 0)) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= $number($metrics['service_cycles_closed'] ?? 0) ?> ciclo(s) encerrado(s)</em></div></a>
+        <a class="card rs-admin-kpi <?= (int) ($metrics['waiting_over_sla'] ?? 0) > 0 ? 'is-red' : 'is-teal' ?>" href="<?= View::e(Router::url('/conversations')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('alert') ?></span><div><small>Aguardando 1ª resposta agora</small><strong><?= $number($metrics['waiting_now'] ?? 0) ?></strong><em>Média <?= View::e($duration($metrics['avg_current_wait_seconds'] ?? 0)) ?> · <?= $number($metrics['waiting_over_sla'] ?? 0) ?> fora do SLA</em></div></a>
         <?php $t = $trend($comparisons['appointments_confirmed'] ?? null); ?>
         <a class="card rs-admin-kpi is-orange" href="<?= View::e(Router::url('/calendar')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('calendar') ?></span><div><small>Agendamentos</small><strong><?= $number($metrics['appointments'] ?? 0) ?></strong><em class="report-trend <?= $t['class'] ?>"><?= number_format((float) ($metrics['agenda_conversion'] ?? 0), 1, ',', '.') ?>% confirmados/concluídos</em></div></a>
         <a class="card rs-admin-kpi is-green" href="<?= View::e(Router::url('/calendar')) ?>"><span class="rs-admin-kpi-icon"><?= $icon('check') ?></span><div><small>Comparecimento</small><strong><?= number_format((float) ($metrics['attendance_rate'] ?? 0), 1, ',', '.') ?>%</strong><em><?= $number($metrics['appointments_completed'] ?? 0) ?> concluído(s)</em></div></a>

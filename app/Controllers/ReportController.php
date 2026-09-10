@@ -54,6 +54,9 @@ final class ReportController
             'recentActivities' => [],
             'responseAudit' => [],
             'dataQuality' => [],
+            'serviceQuality' => [],
+            'departmentPerformance' => [],
+            'queue_enabled' => false,
             'responseProvenance' => [],
             'warnings' => [],
         ];
@@ -98,6 +101,8 @@ final class ReportController
                         'entrada_cliente_utc' => (string) ($row['first_incoming_at'] ?? ''),
                         'primeira_resposta_utc' => (string) ($row['first_response_at'] ?? ''),
                         'tempo_primeira_resposta_segundos' => (int) ($row['response_seconds'] ?? 0),
+                        'sla_meta_minutos' => (int) ($row['sla_target_minutes'] ?? ($filters['sla_minutes'] ?? 30)),
+                        'dentro_sla' => !empty($row['within_sla']) ? 'sim' : 'nao',
                         'status_ciclo' => (string) ($row['cycle_status'] ?? ''),
                         'qualidade_dado' => (string) ($row['data_quality_label'] ?? ''),
                         'qualidade_dado_codigo' => (string) ($row['data_quality'] ?? ''),
@@ -127,6 +132,16 @@ final class ReportController
                 'conversas_respondidas' => (int) ($row['conversations_replied'] ?? 0),
                 'primeiras_respostas' => (int) ($row['first_responses'] ?? 0),
                 'tempo_medio_primeira_resposta_segundos' => (int) ($row['avg_first_response_seconds'] ?? 0),
+                'sla_meta_minutos' => (int) ($filters['sla_minutes'] ?? 30),
+                'sla_primeira_resposta_percentual' => number_format((float) ($row['sla_compliance'] ?? 0), 2, '.', ''),
+                'primeiras_respostas_no_sla' => (int) ($row['sla_met'] ?? 0),
+                'primeiras_respostas_fora_sla' => (int) ($row['sla_breached'] ?? 0),
+                'tempo_medio_ciclo_atendimento_segundos' => (int) ($row['avg_service_duration_seconds'] ?? 0),
+                'ciclos_encerrados_medidos' => (int) ($row['service_cycles_closed'] ?? 0),
+                'aguardando_primeira_resposta_agora' => (int) ($row['waiting_now'] ?? 0),
+                'aguardando_fora_sla_agora' => (int) ($row['waiting_over_sla'] ?? 0),
+                'tempo_medio_espera_atual_segundos' => (int) ($row['avg_current_wait_seconds'] ?? 0),
+                'setores' => (string) ($row['department_names'] ?? ''),
                 'conversas_encerradas' => (int) ($row['closed_conversations'] ?? 0),
                 'conversas_abertas' => (int) ($row['open_conversations'] ?? 0),
                 'transferencias_recebidas' => (int) ($row['transfers_received'] ?? 0),
@@ -282,6 +297,7 @@ final class ReportController
             'start' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) ? $start : date('Y-m-d', strtotime('-29 days')),
             'end' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $end) ? $end : date('Y-m-d'),
             'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
+            'sla_minutes' => max(5, min(1440, (int) ($_GET['sla_minutes'] ?? 30))),
         ];
     }
 
@@ -308,6 +324,7 @@ final class ReportController
             'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
             'user_id' => (int) ($_GET['user_id'] ?? 0),
             'operational_only' => filter_var($_GET['operational_only'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
+            'sla_minutes' => max(5, min(1440, (int) ($_GET['sla_minutes'] ?? 30))),
         ];
     }
 

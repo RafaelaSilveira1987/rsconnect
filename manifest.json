@@ -1,4 +1,4 @@
-# RS Connect v36.30.2
+# RS Connect v36.30.3
 
 Fechamento visual e QA responsivo sobre a base 36.29.9, consolidando Laboratório de Assistentes, Avisos Operacionais, Fila/Equipe e superfícies administrativas remanescentes sem alterar regras de negócio.
 
@@ -39,3 +39,5 @@ Migration obrigatória atual:
 - v36.30.1: Fila e setores opcional por empresa, drawer de distribuição e correções responsivas do frontend.
 
 - v36.30.2: notas internas privadas por conversa com histórico de autor/data e isolamento de WhatsApp/IA.
+
+- v36.30.3: indicadores de atendimento com SLA da primeira resposta humana, duração do ciclo, espera atual e carga por profissional/setor.
