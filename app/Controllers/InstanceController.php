@@ -12,6 +12,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\EvolutionService;
+use App\Services\EvolutionInstanceSafetyService;
 use App\Services\AgentRoutingService;
 use App\Services\SubscriptionService;
 use App\Services\WebhookSecurityService;
@@ -191,13 +192,17 @@ final class InstanceController
         $alertSelect = $this->columnExists($pdo, 'evolution_instances', 'operational_alerts_enabled')
             ? ', operational_alerts_enabled, operational_alerts_paused_at, operational_alerts_pause_reason'
             : ', 1 AS operational_alerts_enabled, NULL AS operational_alerts_paused_at, NULL AS operational_alerts_pause_reason';
+        $resilienceSupported = $this->columnExists($pdo, 'evolution_instances', 'authorized_phone');
+        $resilienceSelect = $resilienceSupported
+            ? ', authorized_phone, identity_status, identity_mismatch_at, auto_recovery_enabled, recovery_attempts, last_recovery_attempt_at, last_recovery_success_at, recovery_state'
+            : ', NULL AS authorized_phone, "unknown" AS identity_status, NULL AS identity_mismatch_at, 0 AS auto_recovery_enabled, 0 AS recovery_attempts, NULL AS last_recovery_attempt_at, NULL AS last_recovery_success_at, NULL AS recovery_state';
 
         $sql = 'SELECT id, tenant_id, name, instance_name, base_url, api_key_encrypted,
                        status, connection_state, connection_reason,
                        connection_updated_at, last_status_check_at, last_webhook_at,
                        profile_name, profile_phone, profile_picture_url,
                        qrcode_base64, qrcode_updated_at, qrcode_expires_at'
-                . $alertSelect . '
+                . $alertSelect . $resilienceSelect . '
                 FROM evolution_instances';
         if ($conditions !== []) {
             $sql .= ' WHERE ' . implode(' AND ', $conditions);
@@ -279,6 +284,32 @@ final class InstanceController
                     $row['connection_state'] = $state;
                     $row['status'] = $mappedStatus;
                     $row['connection_reason'] = '';
+                    if ($connected && $resilienceSupported) {
+                        $liveBody = is_array($live['body'] ?? null) ? $live['body'] : [];
+                        $observedPhone = EvolutionInstanceSafetyService::extractConnectedPhone($liveBody);
+                        if ($observedPhone === '') {
+                            $observedPhone = (string) ($row['profile_phone'] ?? '');
+                        }
+                        if ($observedPhone !== '') {
+                            $identity = EvolutionInstanceSafetyService::persistObservedIdentity($pdo, $row, $observedPhone, true);
+                            $row['authorized_phone'] = (string) ($identity['authorized_phone'] ?? '');
+                            $row['profile_phone'] = (string) ($identity['connected_phone'] ?? $observedPhone);
+                            $row['identity_status'] = (string) ($identity['status'] === 'mismatch' ? 'mismatch' : ($identity['status'] === 'verified' ? 'verified' : 'unknown'));
+                            if (($identity['status'] ?? '') === 'mismatch') {
+                                $reason = mb_substr('Número conectado diferente do autorizado. Conectado: ' . ($identity['connected_phone'] ?? '') . ' · autorizado: ' . ($identity['authorized_phone'] ?? ''), 0, 255);
+                                $pdo->prepare('UPDATE evolution_instances SET status="disconnected", connection_state="identity_mismatch", connection_reason=:reason, connection_updated_at=NOW() WHERE id=:id')
+                                    ->execute(['reason' => $reason, 'id' => (int) $row['id']]);
+                                $row['status'] = 'disconnected';
+                                $row['connection_state'] = 'identity_mismatch';
+                                $row['connection_reason'] = $reason;
+                            } else {
+                                $pdo->prepare('UPDATE evolution_instances SET recovery_attempts=0, recovery_state="healthy", last_recovery_success_at=COALESCE(last_recovery_success_at, NOW()) WHERE id=:id')
+                                    ->execute(['id' => (int) $row['id']]);
+                                $row['recovery_attempts'] = 0;
+                                $row['recovery_state'] = 'healthy';
+                            }
+                        }
+                    }
                     if ($connected && in_array((string) ($row['operational_alerts_pause_reason'] ?? ''), ['client_logout', 'connection_logout', 'incident_resolved'], true)) {
                         $row['operational_alerts_enabled'] = 1;
                         $row['operational_alerts_paused_at'] = null;
@@ -339,6 +370,11 @@ final class InstanceController
                     'updated_at' => (string) (($row['connection_updated_at'] ?? '') ?: ($row['last_status_check_at'] ?? '') ?: ($row['last_webhook_at'] ?? '')),
                     'profile_name' => (string) ($row['profile_name'] ?? ''),
                     'profile_phone' => (string) ($row['profile_phone'] ?? ''),
+                    'authorized_phone' => (string) ($row['authorized_phone'] ?? ''),
+                    'identity_status' => (string) ($row['identity_status'] ?? 'unknown'),
+                    'auto_recovery_enabled' => (int) ($row['auto_recovery_enabled'] ?? 0),
+                    'recovery_state' => (string) ($row['recovery_state'] ?? ''),
+                    'recovery_attempts' => (int) ($row['recovery_attempts'] ?? 0),
                     'profile_picture_url' => (string) ($row['profile_picture_url'] ?? ''),
                     'qr_ready' => $qrValid,
                     'qr_code' => $instanceId > 0 && $qrValid ? (string) $row['qrcode_base64'] : null,
@@ -349,6 +385,7 @@ final class InstanceController
             echo json_encode([
                 'ok' => true,
                 'source_version' => '36.6.38-live-status',
+                'resilience_version' => '36.30.4-resilient-instances',
                 'items' => $items,
                 'checked_at' => date(DATE_ATOM),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -358,6 +395,7 @@ final class InstanceController
             echo json_encode([
                 'ok' => false,
                 'source_version' => '36.6.38-live-status',
+                'resilience_version' => '36.30.4-resilient-instances',
                 'message' => 'Não foi possível atualizar o status das conexões.',
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
@@ -498,6 +536,18 @@ final class InstanceController
                 'sync_full_history' => $settings['sync_full_history'],
             ]);
             $instanceId = (int) $pdo->lastInsertId();
+            if ($this->columnExists($pdo, 'evolution_instances', 'authorized_phone')) {
+                $pdo->prepare(
+                    'UPDATE evolution_instances
+                     SET authorized_phone = :authorized_phone,
+                         auto_recovery_enabled = 1,
+                         identity_status = "unknown"
+                     WHERE id = :id'
+                )->execute([
+                    'authorized_phone' => $phone !== '' ? EvolutionInstanceSafetyService::normalizePhone($phone) : null,
+                    'id' => $instanceId,
+                ]);
+            }
 
             $remoteBody = [];
             if ($managementMode === 'managed') {
@@ -929,6 +979,12 @@ final class InstanceController
         $settings = $this->settingsFromRequest($_POST);
         $events = $this->webhookEventsFromRequest($_POST);
         $webhookEnabled = isset($_POST['webhook_enabled']);
+        $authorizedPhone = EvolutionInstanceSafetyService::normalizePhone((string) ($_POST['authorized_phone'] ?? ''));
+        $autoRecoveryEnabled = isset($_POST['auto_recovery_enabled']);
+        if ($authorizedPhone !== '' && strlen($authorizedPhone) < 10) {
+            Flash::set('error', 'Informe o número autorizado completo, com DDI e DDD.');
+            $this->redirect('/instances');
+        }
 
         $pdo = Database::connection();
         try {
@@ -978,11 +1034,34 @@ final class InstanceController
                 'id' => $instanceId,
             ]);
 
+            if ($this->columnExists($pdo, 'evolution_instances', 'authorized_phone')) {
+                $identityProbe = $instance;
+                $identityProbe['authorized_phone'] = $authorizedPhone;
+                $assessment = EvolutionInstanceSafetyService::assess($identityProbe);
+                $identityStatus = $assessment['status'] === 'mismatch' ? 'mismatch' : ($assessment['status'] === 'verified' ? 'verified' : 'unknown');
+                $pdo->prepare(
+                    'UPDATE evolution_instances
+                     SET authorized_phone = :authorized_phone,
+                         auto_recovery_enabled = :auto_recovery_enabled,
+                         identity_status = :identity_status,
+                         identity_mismatch_at = CASE WHEN :is_mismatch = 1 THEN COALESCE(identity_mismatch_at, NOW()) ELSE NULL END
+                     WHERE id = :id'
+                )->execute([
+                    'authorized_phone' => $authorizedPhone !== '' ? $authorizedPhone : null,
+                    'auto_recovery_enabled' => $autoRecoveryEnabled ? 1 : 0,
+                    'identity_status' => $identityStatus,
+                    'is_mismatch' => $identityStatus === 'mismatch' ? 1 : 0,
+                    'id' => $instanceId,
+                ]);
+            }
+
             $this->audit((int) $instance['tenant_id'], 'evolution.settings_updated', [
                 'instance_id' => $instanceId,
                 'events' => $events,
                 'webhook_enabled' => $webhookEnabled,
                 'settings' => $settings,
+                'authorized_phone_configured' => $authorizedPhone !== '',
+                'auto_recovery_enabled' => $autoRecoveryEnabled,
             ]);
             Flash::set('success', 'Configurações aplicadas na Evolution e salvas no RS Connect.');
         } catch (Throwable $exception) {
@@ -997,7 +1076,7 @@ final class InstanceController
     {
         $instanceId = (int) ($_POST['instance_id'] ?? 0);
         $action = strtolower(trim((string) ($_POST['action'] ?? '')));
-        if (!in_array($action, ['restart', 'logout', 'sync', 'pause_alerts', 'resume_alerts'], true)) {
+        if (!in_array($action, ['restart', 'logout', 'sync', 'diagnose', 'recover', 'pause_alerts', 'resume_alerts'], true)) {
             Flash::set('error', 'Ação da Evolution inválida.');
             $this->redirect('/instances');
         }
@@ -1010,7 +1089,11 @@ final class InstanceController
             }
             $supportsAlerts = $this->columnExists($pdo, 'evolution_instances', 'operational_alerts_enabled');
 
-            if ($action === 'pause_alerts') {
+            if ($action === 'diagnose') {
+                $message = $this->diagnoseInstance($pdo, $instance);
+            } elseif ($action === 'recover') {
+                $message = $this->recoverInstance($pdo, $instance);
+            } elseif ($action === 'pause_alerts') {
                 if (!$supportsAlerts) {
                     throw new \RuntimeException('A migration 097 precisa ser aplicada antes de pausar os alertas.');
                 }
@@ -1095,7 +1178,7 @@ final class InstanceController
                 'instance_id' => $instanceId,
                 'action' => $action,
             ]);
-            if (in_array($action, ['logout', 'pause_alerts', 'resume_alerts'], true)) {
+            if (in_array($action, ['logout', 'recover', 'pause_alerts', 'resume_alerts'], true)) {
                 try {
                     (new \App\Services\OperationsService())->refreshMessagingChecks();
                 } catch (Throwable) {
@@ -1786,6 +1869,132 @@ final class InstanceController
         return str_contains($message, 'not connected')
             || str_contains($message, 'não está conectada')
             || str_contains($message, 'instance is disconnected');
+    }
+
+    /** @param array<string,mixed> $instance */
+    private function diagnoseInstance(PDO $pdo, array $instance): string
+    {
+        $service = $this->evolutionServiceFor($instance, 20);
+        $live = $service->connectionState();
+        $state = mb_strtolower(trim((string) ($live['state'] ?? 'unknown')));
+        $body = is_array($live['body'] ?? null) ? $live['body'] : [];
+        $observedPhone = EvolutionInstanceSafetyService::extractConnectedPhone($body);
+        $identity = EvolutionInstanceSafetyService::assess($instance);
+        if ($observedPhone !== '' && EvolutionInstanceSafetyService::schemaSupported($pdo)) {
+            $identity = EvolutionInstanceSafetyService::persistObservedIdentity($pdo, $instance, $observedPhone, true);
+        }
+
+        $webhookOk = false;
+        $settingsOk = false;
+        try {
+            $service->findWebhook();
+            $webhookOk = true;
+        } catch (Throwable) {
+            $webhookOk = false;
+        }
+        try {
+            $service->findSettings();
+            $settingsOk = true;
+        } catch (Throwable) {
+            $settingsOk = false;
+        }
+
+        $connected = in_array($state, ['open', 'connected', 'online', 'active'], true);
+        $logicalState = (($identity['status'] ?? '') === 'mismatch') ? 'identity_mismatch' : $state;
+        $logicalStatus = $connected && $logicalState !== 'identity_mismatch'
+            ? 'connected'
+            : ($connected ? 'disconnected' : (in_array($state, ['connecting', 'qrcode', 'qr', 'pending', 'created'], true) ? 'pending' : 'disconnected'));
+        $reason = (($identity['status'] ?? '') === 'mismatch')
+            ? 'Número conectado diferente do autorizado.'
+            : null;
+        $pdo->prepare(
+            'UPDATE evolution_instances
+             SET status=:status, connection_state=:state, connection_reason=:reason,
+                 last_status_check_at=NOW(), connection_updated_at=NOW()
+             WHERE id=:id'
+        )->execute([
+            'status' => $logicalStatus,
+            'state' => $logicalState !== '' ? $logicalState : 'unknown',
+            'reason' => $reason,
+            'id' => (int) $instance['id'],
+        ]);
+
+        $identityLabel = match ($identity['status'] ?? 'unknown') {
+            'verified' => 'número verificado',
+            'mismatch' => 'NÚMERO DIVERGENTE',
+            'unconfigured' => 'número autorizado ainda não definido',
+            default => 'número ainda não confirmado',
+        };
+
+        return 'Diagnóstico: estado ' . ($state !== '' ? $state : 'desconhecido')
+            . ' · ' . $identityLabel
+            . ' · webhook ' . ($webhookOk ? 'acessível' : 'com falha')
+            . ' · configurações ' . ($settingsOk ? 'acessíveis' : 'com falha') . '.';
+    }
+
+    /** @param array<string,mixed> $instance */
+    private function recoverInstance(PDO $pdo, array $instance): string
+    {
+        if (EvolutionInstanceSafetyService::schemaSupported($pdo)) {
+            $assessment = EvolutionInstanceSafetyService::assess($instance);
+            if (($assessment['status'] ?? '') === 'mismatch' || strtolower((string) ($instance['identity_status'] ?? '')) === 'mismatch') {
+                throw new \RuntimeException('Recuperação bloqueada: o número conectado diverge do número autorizado. Desconecte e leia o QR Code com o número correto.');
+            }
+            $pdo->prepare(
+                'UPDATE evolution_instances
+                 SET recovery_attempts = recovery_attempts + 1,
+                     last_recovery_attempt_at = NOW(),
+                     recovery_state = "manual_requested"
+                 WHERE id = :id'
+            )->execute(['id' => (int) $instance['id']]);
+        }
+
+        $service = $this->evolutionServiceFor($instance, 30);
+        $state = '';
+        try {
+            $state = mb_strtolower(trim((string) ($service->connectionState()['state'] ?? '')));
+        } catch (Throwable) {
+            $state = '';
+        }
+        if (in_array($state, ['open', 'connected', 'online', 'active'], true)) {
+            if (EvolutionInstanceSafetyService::schemaSupported($pdo)) {
+                $pdo->prepare('UPDATE evolution_instances SET status="connected", recovery_attempts=0, recovery_state="healthy", last_recovery_success_at=NOW() WHERE id=:id')
+                    ->execute(['id' => (int) $instance['id']]);
+            }
+            return 'A conexão já está ativa. Nenhuma recuperação foi necessária.';
+        }
+
+        if (in_array($state, ['logged_out', 'logout', 'loggedout', 'qrcode', 'qr'], true)) {
+            $result = $service->connectQrCode();
+            $body = is_array($result['body'] ?? null) ? $result['body'] : [];
+            $qr = EvolutionService::extractQrCode($body);
+            $pdo->prepare(
+                'UPDATE evolution_instances
+                 SET status="pending", connection_state="qrcode", connection_reason=NULL,
+                     qrcode_base64=:qrcode,
+                     qrcode_updated_at=CASE WHEN :has_qr=1 THEN NOW() ELSE qrcode_updated_at END,
+                     qrcode_expires_at=CASE WHEN :has_qr_expiry=1 THEN DATE_ADD(NOW(), INTERVAL 2 MINUTE) ELSE qrcode_expires_at END,
+                     connection_updated_at=NOW(), recovery_state="needs_qrcode"
+                 WHERE id=:id'
+            )->execute([
+                'qrcode' => $qr !== '' ? $qr : null,
+                'has_qr' => $qr !== '' ? 1 : 0,
+                'has_qr_expiry' => $qr !== '' ? 1 : 0,
+                'id' => (int) $instance['id'],
+            ]);
+            return $qr !== ''
+                ? 'A sessão exige nova autenticação. Um QR Code foi preparado para reconectar o número.'
+                : 'A sessão exige nova autenticação. Use “Gerar QR Code” para reconectar o número.';
+        }
+
+        $service->restartInstance();
+        $pdo->prepare(
+            'UPDATE evolution_instances
+             SET status="pending", connection_state="recovering", connection_reason=NULL,
+                 connection_updated_at=NOW(), recovery_state="restart_requested"
+             WHERE id=:id'
+        )->execute(['id' => (int) $instance['id']]);
+        return 'Recuperação solicitada. O RS Connect reiniciou a sessão e acompanhará o próximo estado da conexão.';
     }
 
     /** @param array<string,mixed> $instance */

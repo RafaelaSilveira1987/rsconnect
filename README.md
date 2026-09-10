@@ -1,4 +1,16 @@
-# RS Connect 36.30.3
+# RS Connect 36.30.4
+
+
+## Instâncias resilientes — 36.30.4
+
+- cada conexão pode ter um **número autorizado**; quando outro número é detectado, entradas e saídas ficam bloqueadas por segurança;
+- se nenhuma autorização tiver sido informada, o primeiro número confirmado pela Evolution é adotado automaticamente;
+- tela de Instâncias exibe número autorizado, número conectado e estado da recuperação automática;
+- ações **Diagnosticar** e **Recuperar conexão** foram adicionadas ao fluxo administrativo;
+- o diagnóstico consulta estado, identidade, webhook e configurações remotas sem expor a API Key;
+- o monitor operacional pode reiniciar quedas técnicas de instâncias gerenciadas, respeitando logout, QR Code e divergência de identidade;
+- a proteção de saída foi centralizada no `EvolutionService`, cobrindo texto e mídia enviados por Conversas, IA, Agenda, notificações, relatórios e demais serviços que usam a Evolution;
+- migration obrigatória: `108_evolution_instance_resilience.sql`.
 
 ## Indicadores de atendimento — 36.30.3
 

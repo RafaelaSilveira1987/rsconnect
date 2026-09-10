@@ -46,6 +46,8 @@ final class EvolutionService
 
     public function sendText(string $phone, string $message): array
     {
+        EvolutionInstanceSafetyService::assertOutboundAllowedByConnection($this->baseUrl, $this->instanceName);
+
         $endpoint = rtrim($this->baseUrl, '/') . '/message/sendText/' . rawurlencode($this->instanceName);
         $payload = [
             'number' => $this->normalizePhone($phone),
@@ -90,6 +92,8 @@ final class EvolutionService
         string $base64,
         string $caption = ''
     ): array {
+        EvolutionInstanceSafetyService::assertOutboundAllowedByConnection($this->baseUrl, $this->instanceName);
+
         $mediaType = strtolower(trim($mediaType));
         if (!in_array($mediaType, ['image', 'audio', 'document', 'video'], true)) {
             throw new RuntimeException('Tipo de mídia não permitido para envio.');

@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Core\Auth;
 use App\Core\Database;
+use App\Core\Crypto;
 use App\Core\Env;
 use PDO;
 use RuntimeException;
@@ -84,6 +85,7 @@ final class OperationsService
             $this->recordCheck('database', 'Banco de dados', $this->checkDatabase());
             $this->recordCheck('migrations', 'Estrutura e migrations', $this->checkMigrations());
             $this->recordCheck('disk', 'Espaço em disco', $this->checkDisk());
+            $this->recoverEvolutionInstances();
             $this->recordCheck('evolution', 'WhatsApp / Evolution', $this->checkEvolution());
             $this->recordCheck('n8n', 'n8n', $this->checkN8n());
             $this->recordCheck('openai', 'OpenAI / IA', $this->checkOpenAi());
@@ -103,6 +105,71 @@ final class OperationsService
         } catch (Throwable $exception) {
             $this->finishMonitorRun($runId, $started, $exception->getMessage());
             throw $exception;
+        }
+    }
+
+    /** Reinicia quedas técnicas elegíveis sem interferir em logout, QR Code ou divergência de número. */
+    private function recoverEvolutionInstances(): void
+    {
+        try {
+            $pdo = Database::connection();
+            $supported = (int) $pdo->query(
+                'SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = "evolution_instances"
+                   AND COLUMN_NAME IN ("auto_recovery_enabled", "last_recovery_attempt_at", "identity_status")'
+            )->fetchColumn() === 3;
+            if (!$supported) {
+                return;
+            }
+
+            $statement = $pdo->query(
+                'SELECT * FROM evolution_instances
+                 WHERE auto_recovery_enabled = 1
+                   AND management_mode = "managed"
+                   AND LOWER(COALESCE(NULLIF(connection_state, ""), status, "")) NOT IN
+                       ("open","connected","online","active","logged_out","logout","loggedout","qrcode","qr","identity_mismatch")
+                   AND COALESCE(identity_status, "unknown") <> "mismatch"
+                   AND (last_recovery_attempt_at IS NULL OR last_recovery_attempt_at < (NOW() - INTERVAL 10 MINUTE))
+                 ORDER BY COALESCE(last_recovery_attempt_at, "1970-01-01") ASC
+                 LIMIT 3'
+            );
+            $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($rows as $instance) {
+                try {
+                    $service = new EvolutionService(
+                        (string) $instance['base_url'],
+                        Crypto::decrypt((string) $instance['api_key_encrypted']),
+                        (string) $instance['instance_name'],
+                        15,
+                        filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true,
+                        trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) ?: null
+                    );
+                    $live = $service->connectionState();
+                    $state = mb_strtolower(trim((string) ($live['state'] ?? '')));
+                    if (in_array($state, ['open', 'connected', 'online', 'active'], true)) {
+                        $pdo->prepare('UPDATE evolution_instances SET status="connected", connection_state=:state, recovery_attempts=0, recovery_state="healthy", last_recovery_success_at=NOW(), last_status_check_at=NOW() WHERE id=:id')
+                            ->execute(['state' => $state, 'id' => (int) $instance['id']]);
+                        continue;
+                    }
+                    if (in_array($state, ['logged_out', 'logout', 'loggedout', 'qrcode', 'qr'], true)) {
+                        continue;
+                    }
+
+                    $pdo->prepare('UPDATE evolution_instances SET recovery_attempts=recovery_attempts+1, last_recovery_attempt_at=NOW(), recovery_state="auto_requested" WHERE id=:id')
+                        ->execute(['id' => (int) $instance['id']]);
+                    $service->restartInstance();
+                    $pdo->prepare('UPDATE evolution_instances SET status="pending", connection_state="recovering", connection_updated_at=NOW(), recovery_state="restart_requested" WHERE id=:id')
+                        ->execute(['id' => (int) $instance['id']]);
+                } catch (Throwable $exception) {
+                    $pdo->prepare('UPDATE evolution_instances SET last_recovery_attempt_at=NOW(), recovery_state="failed", connection_reason=:reason WHERE id=:id')
+                        ->execute([
+                            'reason' => mb_substr('Recuperação automática: ' . $exception->getMessage(), 0, 255),
+                            'id' => (int) ($instance['id'] ?? 0),
+                        ]);
+                }
+            }
+        } catch (Throwable) {
+            // O monitor continua executando os demais checks mesmo sem a recuperação automática.
         }
     }
 

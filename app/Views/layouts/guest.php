@@ -1,4 +1,5 @@
 <!-- Compatibilidade histórica de smoke tests: app.css?v=36.29.10; app.js?v=36.29.10 -->
+/* Legacy cache marker: app.css?v=36.30.3 app.js?v=36.30.3 */
 <?php
 
 use App\Core\Flash;
@@ -25,7 +26,7 @@ $brandCssVariables = '--rs-blue:' . $brandPrimary . ';--rs-purple:' . $brandSeco
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= View::e($title ?? 'Entrar') ?> — <?= View::e($brandName) ?></title>
     <?php if ($brandFaviconUrl !== ''): ?><link rel="icon" href="<?= View::e($brandAssetHref($brandFaviconUrl)) ?>"><?php endif; ?>
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.30.3')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.30.4')) ?>">
 </head>
 <body class="guest-page<?= !empty($branding['enabled']) ? ' has-tenant-branding' : '' ?>" style="<?= View::e($brandCssVariables) ?>">
     <main class="guest-shell">

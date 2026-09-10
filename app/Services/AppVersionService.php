@@ -137,8 +137,11 @@ final class AppVersionService
     // RS Connect 36.30.1 — fila opcional por empresa e frontend operacional revisado com drawer de distribuição.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.30.2 — Notas internas da conversa';
     // RS Connect 36.30.3 — SLA humano, duração do ciclo, espera atual e carga por setor/profissional.
-    public const PACKAGE_LABEL = 'RS Connect 36.30.3 — Indicadores de atendimento';
-    public const REQUIRED_MIGRATION = '107_service_department_memberships.sql';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.30.3 — Indicadores de atendimento';
+    // Compatibilidade histórica: REQUIRED_MIGRATION = '107_service_department_memberships.sql';
+    // RS Connect 36.30.4 — identidade autorizada, diagnóstico e recuperação resiliente das conexões WhatsApp.
+    public const PACKAGE_LABEL = 'RS Connect 36.30.4 — Instâncias resilientes';
+    public const REQUIRED_MIGRATION = '108_evolution_instance_resilience.sql';
 
     private PDO $pdo;
 

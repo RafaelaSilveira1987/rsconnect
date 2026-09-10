@@ -24,6 +24,7 @@ use App\Services\ConversationFlowService;
 use App\Services\ConversationOwnershipService;
 use App\Services\ConversationAttachmentService;
 use App\Services\EvolutionService;
+use App\Services\EvolutionInstanceSafetyService;
 use App\Services\NotificationService;
 use App\Services\PreSchedulingService;
 use App\Services\WebhookSecurityService;
@@ -71,6 +72,17 @@ final class EvolutionWebhookController
             $instance = $this->resolveInstance($payload);
             if (str_contains($event, 'messages.upsert') && (int) ($instance['receive_messages'] ?? 1) !== 1) {
                 $this->respond(202, ['ok' => true, 'ignored' => 'message_reception_disabled']);
+            }
+            if (str_contains($event, 'messages.upsert')) {
+                try {
+                    EvolutionInstanceSafetyService::assertInboundAllowed($instance);
+                } catch (Throwable $identityException) {
+                    $this->respond(202, [
+                        'ok' => true,
+                        'ignored' => 'instance_identity_mismatch',
+                        'message' => $identityException->getMessage(),
+                    ]);
+                }
             }
             try {
                 Database::connection()->prepare('UPDATE evolution_instances SET last_webhook_at = NOW() WHERE id = :id')
@@ -1104,6 +1116,19 @@ final class EvolutionWebhookController
             : (in_array($state, $pendingStates, true) ? 'pending' : 'disconnected');
 
         $pdo = Database::connection();
+        $identity = null;
+        if ($status === 'connected' && $profilePhone !== '' && EvolutionInstanceSafetyService::schemaSupported($pdo)) {
+            $identity = EvolutionInstanceSafetyService::persistObservedIdentity($pdo, $instance, $profilePhone, true);
+            if (($identity['status'] ?? '') === 'mismatch') {
+                $status = 'disconnected';
+                $state = 'identity_mismatch';
+                $reason = mb_substr(
+                    'Número conectado (' . ($identity['connected_phone'] ?? '') . ') diferente do autorizado (' . ($identity['authorized_phone'] ?? '') . ').',
+                    0,
+                    255
+                );
+            }
+        }
         $supportsAlerts = $this->columnExists($pdo, 'evolution_instances', 'operational_alerts_enabled');
         $logoutStates = ['logged_out', 'logout', 'loggedout', 'user_logout', 'manual_logout'];
         $isLogout = in_array($state, $logoutStates, true);
@@ -1164,7 +1189,7 @@ final class EvolutionWebhookController
             }
         }
 
-        return ['state' => $state, 'status' => $status, 'reason' => $reason, 'profile_name' => $profileName, 'profile_phone' => $profilePhone];
+        return ['state' => $state, 'status' => $status, 'reason' => $reason, 'profile_name' => $profileName, 'profile_phone' => $profilePhone, 'identity' => $identity];
     }
 
     /** @param array<string,mixed> $payload */

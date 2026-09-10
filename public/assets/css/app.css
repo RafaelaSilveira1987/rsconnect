@@ -16018,3 +16018,48 @@ summary {
 .conversation-internal-note-empty{display:grid;gap:4px;padding:16px;border:1px dashed #cad8e3;border-radius:14px;text-align:center;color:var(--rs-muted);background:rgba(248,250,252,.75)}
 .conversation-internal-note-empty strong{font-size:.82rem;color:#46556a}.conversation-internal-note-empty span{font-size:.74rem;line-height:1.5}
 @media(max-width:560px){.conversation-internal-notes-heading{display:grid}.conversation-internal-notes-heading .badge{justify-self:start}.conversation-internal-note-actions{align-items:stretch;display:grid}.conversation-internal-note-actions .btn{width:100%}.conversation-internal-note-private{padding-left:3px}.conversation-internal-note-form{padding:12px}.conversation-internal-note-item{padding:12px}}
+
+/* RS Connect 36.30.4 — identidade e resiliência das conexões WhatsApp */
+.instance-identity-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 12px 0;
+}
+.instance-identity-grid > div {
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color, #d8e0e8);
+    border-radius: 12px;
+    background: var(--surface-soft, #f8fafc);
+}
+.instance-identity-grid span {
+    display: block;
+    margin-bottom: 3px;
+    font-size: .76rem;
+    color: var(--text-muted, #64748b);
+}
+.instance-identity-grid strong {
+    display: block;
+    overflow-wrap: anywhere;
+    font-size: .9rem;
+}
+.instance-identity-grid.is-danger > div {
+    border-color: rgba(185, 28, 28, .25);
+    background: rgba(254, 226, 226, .45);
+}
+.instance-identity-warning {
+    margin: 0 0 12px;
+}
+@media (max-width: 720px) {
+    .instance-identity-grid {
+        grid-template-columns: 1fr;
+    }
+    .instance-management-actions form,
+    .instance-management-actions .btn {
+        width: 100%;
+    }
+    .instance-management-actions form .btn {
+        justify-content: center;
+    }
+}

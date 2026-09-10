@@ -1771,7 +1771,7 @@ document.addEventListener('DOMContentLoaded', () => {
         [
           'receive_messages', 'ignore_groups', 'ignore_status', 'ignore_broadcast',
           'ignore_newsletters', 'ignore_from_me', 'reject_calls', 'always_online',
-          'read_messages', 'read_status', 'sync_full_history', 'webhook_enabled'
+          'read_messages', 'read_status', 'sync_full_history', 'webhook_enabled', 'auto_recovery_enabled'
         ].forEach((name) => {
           const input = settingsField(name);
           if (input) input.checked = Number(data[name] || 0) === 1;
@@ -1779,6 +1779,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const rejectMessage = settingsField('reject_call_message');
         if (rejectMessage) rejectMessage.value = data.reject_call_message || '';
+        const authorizedPhone = settingsField('authorized_phone');
+        if (authorizedPhone) authorizedPhone.value = data.authorized_phone || '';
         const selectedEvents = Array.isArray(data.webhook_events) ? data.webhook_events : [];
         settingsForm.querySelectorAll('[data-instance-event]').forEach((input) => {
           input.checked = selectedEvents.includes(input.value);

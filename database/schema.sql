@@ -100,6 +100,14 @@ CREATE TABLE evolution_instances (
     last_webhook_at DATETIME NULL,
     profile_name VARCHAR(150) NULL,
     profile_phone VARCHAR(40) NULL,
+    authorized_phone VARCHAR(40) NULL,
+    identity_status ENUM('unknown','verified','mismatch') NOT NULL DEFAULT 'unknown',
+    identity_mismatch_at DATETIME NULL,
+    auto_recovery_enabled TINYINT(1) NOT NULL DEFAULT 1,
+    recovery_attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    last_recovery_attempt_at DATETIME NULL,
+    last_recovery_success_at DATETIME NULL,
+    recovery_state VARCHAR(60) NULL,
     profile_picture_url VARCHAR(500) NULL,
     qrcode_base64 MEDIUMTEXT NULL,
     qrcode_updated_at DATETIME NULL,
@@ -110,7 +118,8 @@ CREATE TABLE evolution_instances (
     CONSTRAINT fk_instances_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
     UNIQUE KEY uq_instance_tenant_name (tenant_id, instance_name),
     INDEX idx_instances_tenant_status (tenant_id, status),
-    INDEX idx_instances_management (tenant_id, management_mode, webhook_enabled)
+    INDEX idx_instances_management (tenant_id, management_mode, webhook_enabled),
+    INDEX idx_instances_recovery (tenant_id, auto_recovery_enabled, status, last_recovery_attempt_at)
 ) ENGINE=InnoDB;
 
 CREATE TABLE permissions (
