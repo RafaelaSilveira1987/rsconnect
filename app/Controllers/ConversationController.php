@@ -157,6 +157,7 @@ final class ConversationController
 
         $selected = null;
         $messages = [];
+        $internalNotes = [];
         $team = [];
         $departments = [];
         $conversationAgents = [];
@@ -234,6 +235,26 @@ final class ConversationController
                     $teamStatement->execute(['tenant_id' => $selected['tenant_id']]);
                 }
                 $team = $teamStatement->fetchAll(PDO::FETCH_ASSOC);
+
+                if ($this->hasTable($pdo, 'conversation_internal_notes')) {
+                    $internalNotesStatement = $pdo->prepare(
+                        'SELECT n.id, n.note, n.created_at, n.user_id,
+                                u.name AS user_name, u.role AS user_role
+                         FROM conversation_internal_notes n
+                         LEFT JOIN users u
+                           ON u.id = n.user_id
+                          AND (u.tenant_id = n.tenant_id OR (u.tenant_id IS NULL AND u.role = "super_admin"))
+                         WHERE n.tenant_id = :tenant_id
+                           AND n.conversation_id = :conversation_id
+                         ORDER BY n.created_at DESC, n.id DESC
+                         LIMIT 100'
+                    );
+                    $internalNotesStatement->execute([
+                        'tenant_id' => (int) $selected['tenant_id'],
+                        'conversation_id' => $selectedId,
+                    ]);
+                    $internalNotes = $internalNotesStatement->fetchAll(PDO::FETCH_ASSOC);
+                }
 
                 $ownershipService = new ConversationOwnershipService();
                 $professionalAssignmentSettings = $ownershipService->settingsForTenant($pdo, (int) $selected['tenant_id']);
@@ -334,6 +355,7 @@ final class ConversationController
             'conversations' => $conversations,
             'selected' => $selected,
             'messages' => $messages,
+            'internalNotes' => $internalNotes,
             'team' => $team,
             'departments' => $departments,
             'queueEnabled' => $queueEnabled,
@@ -1641,6 +1663,77 @@ final class ConversationController
         $this->redirect('/conversations?conversation_id=' . $conversationId);
     }
 
+
+    public function addInternalNote(): void
+    {
+        $conversationId = (int) ($_POST['conversation_id'] ?? 0);
+        $note = trim((string) ($_POST['note'] ?? ''));
+
+        if ($conversationId < 1) {
+            Flash::set('error', 'Conversa inválida para registrar a nota interna.');
+            $this->redirect('/conversations');
+        }
+
+        if ($note === '') {
+            Flash::set('error', 'Digite a nota interna antes de salvar.');
+            $this->redirect('/conversations?conversation_id=' . $conversationId . '#conversation-internal-notes');
+        }
+
+        if (mb_strlen($note) > 4000) {
+            Flash::set('error', 'A nota interna deve ter no máximo 4.000 caracteres.');
+            $this->redirect('/conversations?conversation_id=' . $conversationId . '#conversation-internal-notes');
+        }
+
+        $conversation = $this->findConversation($conversationId);
+        if ($conversation === null) {
+            Flash::set('error', 'Conversa não encontrada.');
+            $this->redirect('/conversations');
+        }
+        $this->requireConversationInteraction($conversation, $conversationId);
+
+        $pdo = Database::connection();
+        if (!$this->hasTable($pdo, 'conversation_internal_notes')) {
+            Flash::set('error', 'A estrutura de notas internas ainda não está disponível. Verifique as migrations da plataforma.');
+            $this->redirect('/conversations?conversation_id=' . $conversationId);
+        }
+
+        try {
+            $statement = $pdo->prepare(
+                'INSERT INTO conversation_internal_notes (tenant_id, conversation_id, user_id, note)
+                 VALUES (:tenant_id, :conversation_id, :user_id, :note)'
+            );
+            $statement->execute([
+                'tenant_id' => (int) $conversation['tenant_id'],
+                'conversation_id' => $conversationId,
+                'user_id' => Auth::id(),
+                'note' => $note,
+            ]);
+
+            // O conteúdo da nota fica somente em conversation_internal_notes.
+            // O evento registra apenas a ação, evitando que o texto interno seja
+            // reutilizado por integrações, automações ou contexto da IA.
+            $this->insertEvent(
+                $conversationId,
+                (int) $conversation['tenant_id'],
+                'internal_note.added',
+                'Nota interna registrada pela equipe.'
+            );
+            Audit::log('conversation.internal_note_added', [
+                'conversation_id' => $conversationId,
+                'internal_note_id' => (int) $pdo->lastInsertId(),
+            ], (int) $conversation['tenant_id']);
+
+            Flash::set('success', 'Nota interna adicionada. Ela é visível somente para a equipe e não é enviada ao cliente ou à IA.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar a nota interna: ' . $exception->getMessage());
+        }
+
+        $query = ['conversation_id' => $conversationId];
+        if (Auth::isSuperAdmin()) {
+            $query['tenant_id'] = (int) $conversation['tenant_id'];
+        }
+        $this->redirect('/conversations?' . http_build_query($query) . '#conversation-internal-notes');
+    }
 
     public function suggest(): void
     {

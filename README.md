@@ -1,4 +1,4 @@
-# RS Connect 36.30.1
+# RS Connect 36.30.2
 
 Organização inteligente de contatos, continuidade de cliente/paciente e terceira rodada visual em telas operacionais, preservando o fluxo editável dos Assistentes.
 
@@ -94,3 +94,13 @@ Depois do deploy, execute `php bin/migrate.php status` e reinicie o PHP-FPM/cont
 - A tela da fila foi redesenhada: tabela sem deslocamento horizontal desnecessário, ações consistentes e distribuição em drawer lateral.
 - O painel de setores ganhou cadastro recolhível e edição de equipe por setor sem checkboxes comprimidos.
 - Não há migration nova nesta versão; a migration necessária para vínculo usuário ↔ setor continua sendo `107_service_department_memberships.sql`.
+
+
+## Notas internas da conversa — 36.30.2
+
+- cria a experiência operacional de notas privadas por conversa usando a tabela já existente `conversation_internal_notes`;
+- cada nota registra autor e horário e fica disponível no drawer de dados da conversa;
+- o conteúdo da nota não é enviado ao WhatsApp, não entra em `contacts.notes` e não é incluído no contexto da IA;
+- `contacts.notes` passa a ser apresentado como **Contexto do contato**, deixando explícito que é informação persistente que pode ser usada pela IA;
+- gravação respeita tenant, permissão `conversations.manage` e trava de responsabilidade do atendimento;
+- nenhuma migration nova; continua obrigatória `107_service_department_memberships.sql`.

@@ -135,7 +135,8 @@ final class AppVersionService
     // Compatibilidade histórica: REQUIRED_MIGRATION = '106_agent_message_grouping_context_priority.sql';
     // RS Connect 36.30.0 — distribuição operacional por setores, equipe vinculada e fila integrada às Conversas/IA.
     // RS Connect 36.30.1 — fila opcional por empresa e frontend operacional revisado com drawer de distribuição.
-    public const PACKAGE_LABEL = 'RS Connect 36.30.1 — Fila opcional e frontend revisado';
+    // RS Connect 36.30.2 — notas internas privadas por conversa, com histórico de autor/data e isolamento da IA.
+    public const PACKAGE_LABEL = 'RS Connect 36.30.2 — Notas internas da conversa';
     public const REQUIRED_MIGRATION = '107_service_department_memberships.sql';
 
     private PDO $pdo;

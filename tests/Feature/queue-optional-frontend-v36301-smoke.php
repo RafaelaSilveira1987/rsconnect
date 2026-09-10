@@ -49,7 +49,7 @@ $check(str_contains($content['css'], '.queue-table{width:100%;min-width:0!import
 $check(str_contains($content['css'], '@media(max-width:860px)'), 'Breakpoint de cards da fila não foi adicionado.');
 $check(str_contains($content['js'], 'data-queue-assign-open'), 'JavaScript do drawer de distribuição não foi adicionado.');
 $check(str_contains($content['js'], 'fillUsers'), 'Drawer não filtra responsáveis conforme o setor.');
-$check(str_contains($content['version'], 'RS Connect 36.30.1 — Fila opcional e frontend revisado'), 'Versão 36.30.1 não foi registrada.');
+$check(str_contains($content['version'], 'RS Connect 36.30.2 — Notas internas da conversa'), 'Versão 36.30.2 não foi registrada.');
 
 if ($failures !== []) {
     fwrite(STDERR, "FAIL queue-optional-frontend-v36301-smoke\n- " . implode("\n- ", $failures) . "\n");

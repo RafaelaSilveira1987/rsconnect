@@ -52,8 +52,8 @@ $check(str_contains($aiModel, 'Setor operacional atual:') && str_contains($aiMod
 $check(str_contains($layout, 'Fila e setores') && str_contains($layout, "Auth::can('queue.view')"), 'menu exibe Fila e setores conforme permissão', $failed);
 $check(str_contains($appCss, 'RS Connect 36.30.0 — fila, setores e equipe operacional integrada'), 'CSS contém acabamento da distribuição operacional', $failed);
 
-$check(str_contains($layout, 'app.css?v=36.30.1') && str_contains($layout, 'app.js?v=36.30.1'), 'cache principal atualizado para a versão corrente da fila', $failed);
-$check(str_contains($version, "PACKAGE_LABEL = 'RS Connect 36.30.1 — Fila opcional e frontend revisado'"), 'versão corrente preserva a integração de fila e setores', $failed);
+$check(str_contains($layout, 'app.css?v=36.30.2') && str_contains($layout, 'app.js?v=36.30.2'), 'cache principal atualizado para a versão corrente da fila', $failed);
+$check(str_contains($version, "PACKAGE_LABEL = 'RS Connect 36.30.2 — Notas internas da conversa'"), 'versão corrente preserva a integração de fila e setores', $failed);
 $check(str_contains($version, "REQUIRED_MIGRATION = '107_service_department_memberships.sql'"), 'migration obrigatória atualizada para 107', $failed);
 
 exit($failed === 0 ? 0 : 1);

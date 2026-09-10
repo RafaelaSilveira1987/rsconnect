@@ -132,6 +132,7 @@ return static function (Router $router): void {
     $router->post('/conversations/agent', [ConversationController::class, 'setAgent'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/status', [ConversationController::class, 'updateStatus'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/contact', [ConversationController::class, 'updateContact'], ['auth', 'permission:conversations.manage', 'csrf']);
+    $router->post('/conversations/internal-notes', [ConversationController::class, 'addInternalNote'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/suggest', [ConversationController::class, 'suggest'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/reprocess-ai', [ConversationController::class, 'reprocessAi'], ['auth', 'permission:conversations.manage', 'csrf']);
     $router->post('/conversations/commercial-request/resolve', [ConversationController::class, 'resolveCommercialRequest'], ['auth', 'permission:conversations.manage', 'csrf']);

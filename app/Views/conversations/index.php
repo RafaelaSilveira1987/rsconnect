@@ -11,6 +11,7 @@ $professionalAssignmentSettings = is_array($professionalAssignmentSettings ?? nu
 $ownershipSnapshot = is_array($ownershipSnapshot ?? null) ? $ownershipSnapshot : ['enabled' => false, 'can_interact' => true, 'locked_by_other' => false];
 $canOperateSelected = $canManage && !empty($ownershipSnapshot['can_interact']);
 $conversationAgents = is_array($conversationAgents ?? null) ? $conversationAgents : [];
+$internalNotes = is_array($internalNotes ?? null) ? $internalNotes : [];
 $departments = is_array($departments ?? null) ? $departments : [];
 $queueEnabled = !empty($queueEnabled);
 $commercialRequestSettings = is_array($commercialRequestSettings ?? null) ? $commercialRequestSettings : ['ready' => false, 'enabled' => false, 'show_conversation_alert' => false];
@@ -875,6 +876,67 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                     </section>
                 <?php endif; ?>
 
+                <?php
+                $internalNoteRoleLabel = static fn (string $role): string => match ($role) {
+                    'super_admin' => 'Equipe RS',
+                    'client_admin' => 'Administrador',
+                    default => 'Equipe',
+                };
+                ?>
+                <section class="drawer-section conversation-internal-notes-card" id="conversation-internal-notes">
+                    <div class="drawer-section-title conversation-internal-notes-heading">
+                        <div>
+                            <span class="eyebrow">Equipe</span>
+                            <h3>Notas internas da conversa</h3>
+                            <small>Histórico privado para alinhamento da equipe. Não é enviado ao WhatsApp e não entra no contexto da IA.</small>
+                        </div>
+                        <span class="badge"><?= count($internalNotes) ?> nota(s)</span>
+                    </div>
+
+                    <?php if ($canOperateSelected): ?>
+                        <form class="conversation-internal-note-form" method="post" action="<?= View::e(Router::url('/conversations/internal-notes')) ?>">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
+                            <label class="field">
+                                <span>Nova nota interna</span>
+                                <textarea name="note" rows="3" maxlength="4000" required placeholder="Ex.: cliente pediu retorno depois das 15h; confirmar documento com o financeiro."></textarea>
+                                <small class="field-hint">Somente usuários autorizados da operação conseguem visualizar este conteúdo.</small>
+                            </label>
+                            <div class="conversation-internal-note-actions">
+                                <span class="conversation-internal-note-private">Privado · equipe</span>
+                                <button class="btn btn-primary btn-small" type="submit">Adicionar nota</button>
+                            </div>
+                        </form>
+                    <?php elseif (!empty($ownershipSnapshot['locked_by_other'])): ?>
+                        <div class="message-info">Você pode consultar as notas, mas somente o responsável atual ou um administrador pode registrar uma nova nota durante este atendimento.</div>
+                    <?php endif; ?>
+
+                    <div class="conversation-internal-note-list">
+                        <?php foreach ($internalNotes as $internalNote): ?>
+                            <?php
+                            $internalAuthor = trim((string) ($internalNote['user_name'] ?? ''));
+                            $internalRole = $internalNoteRoleLabel((string) ($internalNote['user_role'] ?? 'client_user'));
+                            ?>
+                            <article class="conversation-internal-note-item">
+                                <header>
+                                    <span class="conversation-internal-note-avatar" aria-hidden="true"><?= View::e(mb_strtoupper(mb_substr($internalAuthor !== '' ? $internalAuthor : 'E', 0, 1))) ?></span>
+                                    <div>
+                                        <strong><?= View::e($internalAuthor !== '' ? $internalAuthor : 'Equipe') ?></strong>
+                                        <small><?= View::e($internalRole) ?> · <?= View::e($formatDate((string) ($internalNote['created_at'] ?? ''), 'd/m/Y H:i')) ?></small>
+                                    </div>
+                                </header>
+                                <p><?= nl2br(View::e((string) ($internalNote['note'] ?? ''))) ?></p>
+                            </article>
+                        <?php endforeach; ?>
+                        <?php if (!$internalNotes): ?>
+                            <div class="conversation-internal-note-empty">
+                                <strong>Nenhuma nota interna registrada</strong>
+                                <span>Use este espaço para contexto operacional que não deve ser enviado ao cliente nem usado pela IA.</span>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </section>
+
                 <form class="lead-form drawer-form" data-contact-classification-form method="post" action="<?= View::e(Router::url('/conversations/contact')) ?>">
                     <?= Csrf::input() ?>
                     <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
@@ -913,7 +975,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                             </div>
                         </div>
                         <label class="field drawer-span"><span>Tags separadas por vírgula</span><input name="tags" value="<?= View::e($tagText) ?>" <?= !$canOperateSelected ? 'readonly' : '' ?>></label>
-                        <label class="field drawer-span"><span>Notas internas</span><textarea name="notes" rows="7" <?= !$canOperateSelected ? 'readonly' : '' ?>><?= View::e($selected['notes']) ?></textarea></label>
+                        <label class="field drawer-span"><span>Contexto do contato</span><textarea name="notes" rows="5" <?= !$canOperateSelected ? 'readonly' : '' ?>><?= View::e($selected['notes']) ?></textarea><small class="field-hint">Informação persistente do cadastro. Pode ser utilizada pela IA para dar continuidade ao relacionamento.</small></label>
                     </section>
 
                     <section class="drawer-section conversation-flow-card">
