@@ -14603,3 +14603,361 @@ summary {
   .agent-card:hover,
   .admin-quick-action:hover { transform: none; }
 }
+
+/* =========================================================
+   RS Connect 36.29.8 — terceira rodada operacional
+   Ajustes pontuais dos prints + Contatos/Organização orientados à IA.
+   ========================================================= */
+
+/* Instâncias: palavras de roteamento ocupam o espaço útil e prioridade não estica. */
+.channel-routing-agent-fields {
+  grid-template-columns: minmax(0, 1fr) 124px;
+  align-items: start;
+  gap: 12px;
+}
+.channel-routing-agent-fields > .field {
+  align-self: start;
+  margin-bottom: 0;
+}
+.channel-priority-field {
+  align-content: start;
+  grid-template-rows: auto auto;
+}
+.channel-priority-field input[type="number"] {
+  width: 100%;
+  height: var(--rs-form-control-height);
+  min-height: var(--rs-form-control-height);
+}
+
+/* Menus do cliente: ações sempre ocupam duas colunas estáveis. */
+.module-setting-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 156px;
+  align-items: center;
+  gap: 16px;
+}
+.module-setting-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  justify-content: stretch;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+}
+.module-setting-actions label {
+  display: grid;
+  grid-template-columns: 19px minmax(0, 1fr);
+  align-items: center;
+  justify-content: start;
+  gap: 7px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 7px 8px;
+  border: 1px solid #e4eaf0;
+  border-radius: 10px;
+  background: #fff;
+  color: #435268;
+  white-space: nowrap;
+}
+.module-setting-actions label:has(input:checked) {
+  border-color: #b8ddd9;
+  background: #f4fbfa;
+  color: #285d59;
+}
+.module-setting-actions label:has(input:disabled) {
+  background: #f5f7f9;
+  color: #7b8796;
+}
+
+/* Agentes: introduções não colam eyebrow, título e descrição. */
+.ai-local-automation-intro {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.ai-local-automation-intro > .eyebrow,
+.ai-local-automation-intro > strong,
+.ai-local-automation-intro > p {
+  display: block;
+  min-width: 0;
+}
+.ai-local-automation-intro > strong {
+  color: var(--rs-text);
+  line-height: 1.35;
+}
+.ai-local-automation-intro > .field-hint {
+  margin: 0;
+}
+
+/* Ordem do atendimento é uma sequência: uma etapa por linha. */
+.agent-workflow-editor {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.agent-workflow-editor-step {
+  width: 100%;
+}
+.agent-workflow-editor-content {
+  display: grid;
+  align-content: center;
+}
+.agent-workflow-editor-content .field {
+  margin-bottom: 0;
+}
+
+/* Contatos: lista mais legível e drawer com contexto operacional explícito. */
+.contacts-layout .data-card {
+  overflow: hidden;
+  border-radius: 22px;
+  box-shadow: 0 9px 28px rgba(15,23,42,.04);
+}
+.contacts-layout .data-card > .section-heading {
+  padding: 18px 20px 10px;
+}
+.contact-table-row td {
+  vertical-align: middle;
+}
+.contact-table-row.is-selected {
+  background: #f1faf8;
+  box-shadow: inset 3px 0 #15968f;
+}
+.contact-classification-cell,
+.contact-history-cell,
+.contact-last-cell {
+  min-width: 0;
+}
+.contact-classification-cell {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 5px;
+}
+.contact-classification-cell > small,
+.contact-history-cell > small {
+  display: block;
+  margin-top: 3px;
+  color: var(--rs-muted);
+  line-height: 1.35;
+}
+.contact-last-cell > span:first-child {
+  display: block;
+}
+.contact-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.contact-tag-list small {
+  display: inline-flex;
+  max-width: 150px;
+  padding: 3px 7px;
+  border: 1px solid #e0e7ed;
+  border-radius: 999px;
+  background: #f7fafc;
+  color: #637286;
+  font-size: .63rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.contact-table-action {
+  white-space: nowrap;
+}
+
+.contact-form-drawer {
+  width: min(680px, 96vw) !important;
+  max-width: 680px !important;
+}
+.contact-form-drawer .conversation-drawer-header {
+  padding: 20px 22px 16px;
+  background: linear-gradient(135deg, #fff 58%, #f1faf9);
+}
+.contact-header-meta {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 6px !important;
+  margin-top: 7px;
+}
+.contact-header-meta em {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  border: 1px solid #d9e7e5;
+  border-radius: 999px;
+  background: rgba(255,255,255,.85);
+  color: #42645f;
+  font-size: .66rem;
+  font-style: normal;
+  font-weight: 800;
+}
+.contact-drawer-body {
+  background: #f8fafc;
+}
+.contact-drawer-section {
+  border: 1px solid #e3eaf0;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(15,23,42,.025);
+}
+.contact-drawer-section .drawer-section-title {
+  padding-bottom: 10px;
+  border-bottom: 1px solid #edf1f4;
+}
+.contact-drawer-grid {
+  gap: 14px;
+}
+.contact-ai-context-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 13px 14px;
+  border: 1px solid #cfe4e1;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #eef9f7, #f6fbfd);
+}
+.contact-ai-context-preview > span {
+  color: #15847c;
+  font-size: .64rem;
+  font-weight: 900;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.contact-ai-context-preview > strong {
+  color: #294a4b;
+  font-size: .86rem;
+}
+.contact-ai-context-preview > small {
+  color: #5f7280;
+  font-size: .72rem;
+  line-height: 1.5;
+}
+.contact-ai-context-preview[data-relationship="patient"],
+.contact-ai-context-preview[data-relationship="customer"] {
+  border-color: #b9dfd5;
+  background: linear-gradient(135deg, #ecfaf5, #f5fbf9);
+}
+.contact-ai-context-preview[data-relationship="inactive"] {
+  border-color: #dfe4e9;
+  background: #f5f7f9;
+}
+
+@media (max-width: 980px) {
+  .module-setting-card {
+    grid-template-columns: minmax(0, 1fr) 150px;
+  }
+}
+
+@media (max-width: 680px) {
+  .channel-routing-agent-fields {
+    grid-template-columns: 1fr;
+  }
+  .channel-priority-field {
+    max-width: 150px;
+  }
+
+  .module-setting-card {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .module-setting-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .module-setting-actions label {
+    min-height: 44px;
+  }
+
+  .agent-workflow-editor-step {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .contacts-layout .data-card > .section-heading {
+    padding: 16px 14px 8px;
+  }
+  .contacts-layout .clean-table tr.contact-table-row {
+    display: grid;
+    gap: 0;
+    margin: 10px;
+    width: calc(100% - 20px);
+    padding: 14px;
+    border: 1px solid #e1e8ee;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 5px 18px rgba(15,23,42,.035);
+  }
+  .contacts-layout .clean-table tr.contact-table-row.is-selected {
+    border-color: #acd9d4;
+    background: #f2fbf9;
+    box-shadow: 0 0 0 1px rgba(21,150,143,.08), 0 5px 18px rgba(15,23,42,.035);
+  }
+  .contacts-layout .clean-table tr.contact-table-row td {
+    display: grid;
+    grid-template-columns: 108px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 9px 0;
+    border-top: 1px solid #edf1f4;
+  }
+  .contacts-layout .clean-table tr.contact-table-row td::before {
+    content: attr(data-label);
+    color: #778497;
+    font-size: .65rem;
+    font-weight: 900;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .contacts-layout .clean-table tr.contact-table-row .contact-table-main {
+    display: block;
+    padding-top: 0;
+    border-top: 0;
+  }
+  .contacts-layout .clean-table tr.contact-table-row .contact-table-main::before,
+  .contacts-layout .clean-table tr.contact-table-row .contact-table-action::before {
+    display: none;
+  }
+  .contacts-layout .clean-table tr.contact-table-row .contact-classification-cell {
+    justify-items: start;
+  }
+  .contact-tag-list {
+    grid-column: 2;
+  }
+  .contact-table-action {
+    display: block !important;
+    padding-bottom: 0 !important;
+  }
+  .contact-table-action .btn {
+    width: 100%;
+  }
+
+  .contact-form-drawer {
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+  .contact-form-drawer .conversation-drawer-header {
+    padding: 18px 16px 14px;
+  }
+  .contact-header-meta {
+    margin-top: 5px;
+  }
+  .contact-drawer-section {
+    padding: 14px;
+    border-radius: 16px;
+  }
+  .contact-ai-context-preview {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 440px) {
+  .module-setting-actions {
+    grid-template-columns: 1fr;
+  }
+  .contacts-layout .clean-table tr.contact-table-row td {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+  .contact-tag-list {
+    grid-column: 1;
+  }
+}

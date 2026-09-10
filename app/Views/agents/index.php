@@ -547,7 +547,7 @@ $humanizeAgentRule = static function (string $key): string {
                             </div>
                             <section class="ai-local-automation-card" style="margin-top:12px">
                                 <div class="ai-local-automation-body">
-                                    <div><span class="eyebrow">Conversa natural</span><strong>Responder o conjunto da conversa, não só o último balão</strong><p class="field-hint">Recomendado para WhatsApp: o cliente costuma enviar a mesma ideia em duas ou três mensagens seguidas.</p></div>
+                                    <div class="ai-local-automation-intro"><span class="eyebrow">Conversa natural</span><strong>Responder o conjunto da conversa, não só o último balão</strong><p class="field-hint">Recomendado para WhatsApp: o cliente costuma enviar a mesma ideia em duas ou três mensagens seguidas.</p></div>
                                     <div class="agent-toggle-grid">
                                         <label class="check-field compact-check"><input type="checkbox" name="message_grouping_enabled" value="1" <?= !array_key_exists('message_grouping_enabled', $agent) || (int) ($agent['message_grouping_enabled'] ?? 1) === 1 ? 'checked' : '' ?>><span>Aguardar o cliente terminar e agrupar as mensagens antes de responder</span></label>
                                         <label class="check-field compact-check"><input type="checkbox" name="prioritize_current_turn" value="1" <?= !array_key_exists('prioritize_current_turn', $agent) || (int) ($agent['prioritize_current_turn'] ?? 1) === 1 ? 'checked' : '' ?>><span>Responder primeiro o que o cliente acabou de perguntar e depois retomar o roteiro</span></label>
@@ -807,7 +807,7 @@ $humanizeAgentRule = static function (string $key): string {
                         <div class="ai-local-automation-body">
                             <input type="hidden" name="message_grouping_present" value="1">
                             <input type="hidden" name="current_turn_priority_present" value="1">
-                            <div><span class="eyebrow">Conversa natural</span><strong>Agrupar mensagens antes de responder</strong><p class="field-hint">Evita responder no meio da fala quando o cliente divide a mesma ideia em vários balões.</p></div>
+                            <div class="ai-local-automation-intro"><span class="eyebrow">Conversa natural</span><strong>Agrupar mensagens antes de responder</strong><p class="field-hint">Evita responder no meio da fala quando o cliente divide a mesma ideia em vários balões.</p></div>
                             <label class="check-field"><input type="checkbox" name="message_grouping_enabled" value="1" checked><span>Aguardar o cliente terminar e juntar as mensagens</span></label>
                             <label class="field"><span>Tempo de silêncio antes da resposta (seg.)</span><input type="number" name="cooldown_seconds" value="10" min="2" max="120"><small class="field-hint">Se chegar outra mensagem dentro desse tempo, a contagem recomeça e o novo balão entra na mesma resposta.</small></label>
                             <label class="check-field"><input type="checkbox" name="prioritize_current_turn" value="1" checked><span>Responder primeiro as perguntas atuais e depois continuar o roteiro</span></label>
@@ -940,7 +940,7 @@ $humanizeAgentRule = static function (string $key): string {
                         <div class="ai-local-automation-body">
                             <input type="hidden" name="message_grouping_present" value="1">
                             <input type="hidden" name="current_turn_priority_present" value="1">
-                            <div><span class="eyebrow">Conversa natural</span><strong>Agrupar mensagens antes de responder</strong><p class="field-hint">Evita responder no meio da fala quando o cliente divide a mesma ideia em vários balões.</p></div>
+                            <div class="ai-local-automation-intro"><span class="eyebrow">Conversa natural</span><strong>Agrupar mensagens antes de responder</strong><p class="field-hint">Evita responder no meio da fala quando o cliente divide a mesma ideia em vários balões.</p></div>
                             <label class="check-field"><input type="checkbox" name="message_grouping_enabled" value="1" checked><span>Aguardar o cliente terminar e juntar as mensagens</span></label>
                             <label class="field"><span>Tempo de silêncio antes da resposta (seg.)</span><input type="number" name="cooldown_seconds" value="10" min="2" max="120"><small class="field-hint">Se chegar outra mensagem dentro desse tempo, a contagem recomeça e o novo balão entra na mesma resposta.</small></label>
                             <label class="check-field"><input type="checkbox" name="prioritize_current_turn" value="1" checked><span>Responder primeiro as perguntas atuais e depois continuar o roteiro</span></label>

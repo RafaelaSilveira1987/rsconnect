@@ -174,7 +174,9 @@ final class ContactController
         if (!array_key_exists($contactGroup, \App\Services\ConversationFlowService::GROUPS)) {
             $contactGroup = 'unclassified';
         }
-        $contactGroup = $this->normalizeGroupForStatus($status, $contactGroup);
+        $normalizedClassification = \App\Services\ConversationFlowService::normalizeClassification($status, $contactGroup);
+        $status = $normalizedClassification['status'];
+        $contactGroup = $normalizedClassification['group'];
         if ($instanceId > 0 && !$this->instanceBelongsToTenant($instanceId, $tenantId)) {
             Flash::set('error', 'A instância selecionada não pertence à empresa.');
             $this->redirect('/contacts');
@@ -257,7 +259,9 @@ final class ContactController
         if (!array_key_exists($contactGroup, \App\Services\ConversationFlowService::GROUPS)) {
             $contactGroup = 'unclassified';
         }
-        $contactGroup = $this->normalizeGroupForStatus($status, $contactGroup);
+        $normalizedClassification = \App\Services\ConversationFlowService::normalizeClassification($status, $contactGroup);
+        $status = $normalizedClassification['status'];
+        $contactGroup = $normalizedClassification['group'];
         if ($preferredUserId !== null && !$this->userBelongsToTenant($preferredUserId, (int) $contact['tenant_id'])) {
             Flash::set('error', 'O profissional preferido não pertence à empresa ou está inativo.');
             $this->redirect('/contacts?contact_id=' . $contactId);
@@ -363,17 +367,6 @@ final class ContactController
         );
         $statement->execute(['id' => $userId, 'tenant_id' => $tenantId]);
         return (int) $statement->fetchColumn() > 0;
-    }
-
-    private function normalizeGroupForStatus(string $status, string $group): string
-    {
-        if ($status === 'customer' && in_array($group, ['unclassified', 'interested'], true)) {
-            return 'customer';
-        }
-        if ($status !== 'customer' && $group === 'customer') {
-            return $status === 'lead' ? 'interested' : 'unclassified';
-        }
-        return $group;
     }
 
     private function normalizeTags(string $raw): array

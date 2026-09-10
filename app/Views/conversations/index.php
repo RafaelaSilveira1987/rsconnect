@@ -46,6 +46,9 @@ $afterHoursStatusClasses = [
 ];
 $normalizeStatus = static fn (?string $status): string => in_array($status, ['open', 'pending', 'closed'], true) ? (string) $status : 'open';
 $contactGroupLabels = \App\Services\ConversationFlowService::GROUPS;
+$contactStatusLabels = \App\Services\ConversationFlowService::STATUS_LABELS;
+$relationshipService = new \App\Services\ConversationFlowService();
+$selectedRelationship = $selected ? $relationshipService->relationshipProfile($selected) : null;
 $flowStageLabels = \App\Services\ConversationFlowService::STAGES;
 $demandStatusLabels = \App\Services\ConversationFlowService::DEMAND_STATUSES;
 $contactLabel = static function (array $row): string {
@@ -820,7 +823,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                     </section>
                 <?php endif; ?>
 
-                <form class="lead-form drawer-form" method="post" action="<?= View::e(Router::url('/conversations/contact')) ?>">
+                <form class="lead-form drawer-form" data-contact-classification-form method="post" action="<?= View::e(Router::url('/conversations/contact')) ?>">
                     <?= Csrf::input() ?>
                     <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
 
@@ -836,20 +839,26 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                             <label class="field"><span>E-mail</span><input type="email" name="email" value="<?= View::e($selected['email']) ?>" <?= !$canOperateSelected ? 'readonly' : '' ?>></label>
                             <label class="field"><span>Empresa</span><input name="company" value="<?= View::e($selected['company']) ?>" <?= !$canOperateSelected ? 'readonly' : '' ?>></label>
                             <label class="field"><span>Classificação</span>
-                                <select name="contact_status" <?= !$canOperateSelected ? 'disabled' : '' ?>>
-                                    <option value="lead" <?= $selected['contact_status'] === 'lead' ? 'selected' : '' ?>>Lead</option>
-                                    <option value="customer" <?= $selected['contact_status'] === 'customer' ? 'selected' : '' ?>>Cliente</option>
-                                    <option value="inactive" <?= $selected['contact_status'] === 'inactive' ? 'selected' : '' ?>>Inativo</option>
+                                <select name="contact_status" data-contact-status-select <?= !$canOperateSelected ? 'disabled' : '' ?>>
+                                    <?php foreach ($contactStatusLabels as $value => $label): ?>
+                                        <option value="<?= View::e($value) ?>" <?= ($selected['contact_status'] ?? 'lead') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
+                                    <?php endforeach; ?>
                                 </select>
+                                <small class="field-hint">Diferencia novo contato de relacionamento já existente.</small>
                             </label>
                             <label class="field"><span>Grupo de atendimento</span>
-                                <select name="contact_group" <?= !$canOperateSelected ? 'disabled' : '' ?>>
+                                <select name="contact_group" data-contact-group-select <?= !$canOperateSelected ? 'disabled' : '' ?>>
                                     <?php foreach ($contactGroupLabels as $value => $label): ?>
                                         <option value="<?= View::e($value) ?>" <?= ($selected['contact_group'] ?? 'unclassified') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
                                     <?php endforeach; ?>
                                 </select>
-                                <small class="field-hint">O assistente recebe esse grupo junto com as tags e aplica as regras específicas.</small>
+                                <small class="field-hint">Paciente e cliente atual recebem continuidade, sem voltar à triagem de novo lead.</small>
                             </label>
+                            <div class="contact-ai-context-preview drawer-span" data-contact-ai-context data-relationship="<?= View::e((string) ($selectedRelationship['key'] ?? 'unclassified')) ?>">
+                                <span>Como a IA vai conduzir este contato</span>
+                                <strong data-contact-ai-context-title><?= View::e((string) ($selectedRelationship['label'] ?? 'Relacionamento não identificado')) ?></strong>
+                                <small data-contact-ai-context-description><?= View::e((string) ($selectedRelationship['description'] ?? '')) ?></small>
+                            </div>
                         </div>
                         <label class="field drawer-span"><span>Tags separadas por vírgula</span><input name="tags" value="<?= View::e($tagText) ?>" <?= !$canOperateSelected ? 'readonly' : '' ?>></label>
                         <label class="field drawer-span"><span>Notas internas</span><textarea name="notes" rows="7" <?= !$canOperateSelected ? 'readonly' : '' ?>><?= View::e($selected['notes']) ?></textarea></label>

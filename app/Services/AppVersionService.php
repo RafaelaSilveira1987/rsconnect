@@ -127,7 +127,8 @@ final class AppVersionService
     // RS Connect 36.29.5 — fluxo do atendimento editável, efetivo e regras operacionais disponíveis ao cliente.
     // RS Connect 36.29.6 — padronização visual de formulários, checkboxes e responsividade mobile.
     // RS Connect 36.29.7 — segunda rodada visual: hierarquia, cards e experiência mobile unificados por módulo.
-    public const PACKAGE_LABEL = 'RS Connect 36.29.7 — Hierarquia visual unificada e experiência mobile';
+    // RS Connect 36.29.8 — terceira rodada operacional: Organização inteligente, continuidade de cliente/paciente e correções dos layouts revisados.
+    public const PACKAGE_LABEL = 'RS Connect 36.29.8 — Organização inteligente e telas operacionais';
     public const REQUIRED_MIGRATION = '106_agent_message_grouping_context_priority.sql';
 
     private PDO $pdo;

@@ -3311,6 +3311,65 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 })();
 
+// RS Connect 36.29.8 — classificação operacional de contatos.
+(function () {
+  const profiles = {
+    lead: ['Novo lead / interessado', 'Novo relacionamento: qualificar somente o necessário e conduzir para o próximo passo adequado.'],
+    customer: ['Cliente atual', 'Relacionamento já existente: resolver a necessidade atual sem reiniciar a prospecção.'],
+    patient: ['Paciente atual', 'Continuidade do atendimento: usar cadastro e histórico e não reiniciar a triagem de um novo lead.'],
+    family: ['Familiar / responsável', 'Atendimento relacionado a outra pessoa. Confirmar para quem é a solicitação apenas quando isso for necessário.'],
+    couple: ['Atendimento de casal', 'Contexto compartilhado. Aplicar as regras específicas do grupo antes de oferecer agenda ou próximos passos.'],
+    other: ['Outro grupo', 'Há uma segmentação definida pela empresa; usar grupo, tags e observações antes de fazer nova qualificação.'],
+    inactive: ['Contato inativo', 'Não presumir vínculo ativo. Se a pessoa retornar, entender primeiro o pedido atual e tratar como reativação quando fizer sentido.'],
+    unclassified: ['Relacionamento não identificado', 'Ainda não há contexto suficiente. Não assumir que é lead, cliente ou paciente sem evidência.']
+  };
+
+  function profileKey(status, group) {
+    if (status === 'inactive') return 'inactive';
+    if (group === 'patient') return 'patient';
+    if (group === 'customer' || status === 'customer') return 'customer';
+    if (group === 'family') return 'family';
+    if (group === 'couple') return 'couple';
+    if (group === 'other') return 'other';
+    if (group === 'interested' || status === 'lead') return 'lead';
+    return 'unclassified';
+  }
+
+  document.querySelectorAll('[data-contact-classification-form]').forEach((form) => {
+    const status = form.querySelector('[data-contact-status-select]');
+    const group = form.querySelector('[data-contact-group-select]');
+    const preview = form.querySelector('[data-contact-ai-context]');
+    const title = preview?.querySelector('[data-contact-ai-context-title]');
+    const description = preview?.querySelector('[data-contact-ai-context-description]');
+    if (!status || !group || !preview) return;
+
+    const render = () => {
+      const profile = profiles[profileKey(status.value, group.value)] || profiles.unclassified;
+      if (title) title.textContent = profile[0];
+      if (description) description.textContent = profile[1];
+      preview.dataset.relationship = profileKey(status.value, group.value);
+    };
+
+    group.addEventListener('change', () => {
+      if (status.value !== 'inactive' && ['customer', 'patient'].includes(group.value)) {
+        status.value = 'customer';
+      }
+      render();
+    });
+
+    status.addEventListener('change', () => {
+      if (status.value === 'customer' && ['unclassified', 'interested'].includes(group.value)) {
+        group.value = 'customer';
+      } else if (status.value === 'lead' && ['customer', 'patient'].includes(group.value)) {
+        group.value = 'interested';
+      }
+      render();
+    });
+
+    render();
+  });
+})();
+
 // Prompt Studio 36.6.35 — geração determinística e revisão antes de criar o agente.
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('[data-prompt-studio]').forEach(function (form) {

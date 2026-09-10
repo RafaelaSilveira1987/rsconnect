@@ -382,9 +382,17 @@ final class AiModelService
             : [];
         $tagsText = $tags !== [] ? implode(', ', $tags) : 'nenhuma';
         $tagFacts = $this->tagFacts($tags);
-        $isExistingCustomer = $contactStatus === 'customer'
-            || in_array($group, ['customer', 'patient'], true)
-            || $this->hasAnyNormalizedTag($tags, ['cliente', 'customer', 'client', 'paciente', 'paciente atual']);
+        $relationshipProfile = (new ConversationFlowService())->relationshipProfile([
+            'status' => $contactStatus,
+            'contact_status' => $contactStatus,
+            'contact_group' => $group,
+            'tags_json' => $tags,
+        ]);
+        $relationshipKey = (string) ($relationshipProfile['key'] ?? 'unclassified');
+        $relationshipLabel = (string) ($relationshipProfile['label'] ?? 'Relacionamento não identificado');
+        $relationshipDescription = (string) ($relationshipProfile['description'] ?? '');
+        $relationshipInstruction = trim((string) ($relationshipProfile['ai_instruction'] ?? ''));
+        $isExistingCustomer = !empty($relationshipProfile['is_existing_customer']);
         $flowStage = trim((string) ($conversation['flow_stage'] ?? 'identifying_contact')) ?: 'identifying_contact';
         $demandStatus = trim((string) ($conversation['demand_status'] ?? 'pending')) ?: 'pending';
         $demandSummary = trim((string) ($conversation['demand_summary'] ?? ''));
@@ -412,6 +420,7 @@ final class AiModelService
             'Não transforme menções casuais de data, hora, hoje, amanhã, tarde ou noite em pedido de agendamento. Agenda só deve ser conduzida quando houver intenção real e explícita de marcar, remarcar, consultar disponibilidade ou quando a conversa já estiver em um fluxo recente de agenda.',
             'Cliente ou paciente já identificado deve ter continuidade de atendimento: não reabra triagem, não peça novamente motivo/queixa e não trate como novo lead apenas porque iniciou uma nova conversa.',
             'O contexto operacional fornecido pelo RS Connect (modo da conversa, horário, classificação, grupo e tags) tem prioridade sobre instruções conflitantes do prompt livre.',
+            'A organização do contato é uma regra operacional, não apenas informativa: adapte a conversa ao perfil de relacionamento indicado pelo RS Connect.',
             'Nunca afirme que uma transferência para outro assistente virtual ou setor automatizado já aconteceu apenas por decisão textual sua. A troca entre assistentes é executada pelo motor do RS Connect antes da resposta. Se não houver o bloco TRANSFERÊNCIA INTERNA CONFIRMADA abaixo, não diga que já transferiu, que está transferindo agora ou que outro assistente já assumiu.',
         ];
 
@@ -503,6 +512,10 @@ final class AiModelService
 " .
             '- Relacionamento atual: ' . ($isExistingCustomer ? 'já é cliente/paciente da empresa' : 'não confirmado como cliente atual') . "
 " .
+            '- Perfil operacional: ' . $relationshipLabel . ' (código: ' . $relationshipKey . ')' . "
+" .
+            ($relationshipDescription !== '' ? '- Leitura do perfil: ' . $relationshipDescription . "
+" : '') .
             '- Grupo de atendimento: ' . $groupLabel . "
 " .
             '- Tags cadastradas: ' . $tagsText . "
@@ -526,9 +539,11 @@ final class AiModelService
 " .
             "- Trate classificação, grupo e tags como informações já conhecidas e válidas.
 " .
+            ($relationshipInstruction !== '' ? '- Regra de relacionamento: ' . $relationshipInstruction . "
+" : '') .
             "- Não pergunte novamente se a pessoa é cliente, paciente, interessada ou pertence a um grupo quando isso já estiver indicado acima.
 " .
-            "- Se a classificação for Cliente ou o grupo indicar Cliente/Paciente atual, fale com a pessoa como relacionamento já existente, sem reiniciar o fluxo de novo interessado.
+            "- Se a classificação indicar relacionamento atual ou o grupo indicar Cliente atual/Paciente atual, fale com a pessoa como relacionamento já existente, sem reiniciar o fluxo de novo interessado.
 " .
             "- Para cliente/paciente atual, NÃO peça motivo do atendimento, principal queixa ou nova qualificação como pré-condição para responder uma dúvida, consultar agenda, marcar ou remarcar horário. Responda diretamente ao pedido atual usando cadastro e histórico.
 " .
@@ -630,7 +645,7 @@ final class AiModelService
     {
         return match ($status) {
             'lead' => 'Lead / novo contato',
-            'customer' => 'Cliente atual',
+            'customer' => 'Cliente/Paciente atual',
             'inactive' => 'Contato inativo',
             '' => 'Não informada',
             default => $status,

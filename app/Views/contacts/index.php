@@ -5,8 +5,9 @@ use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
 
-$statusLabels = ['lead' => 'Lead', 'customer' => 'Cliente', 'inactive' => 'Inativo'];
+$statusLabels = \App\Services\ConversationFlowService::STATUS_LABELS;
 $groupLabels = \App\Services\ConversationFlowService::GROUPS;
+$flowService = new \App\Services\ConversationFlowService();
 $formatDate = static function (?string $value): string {
     if (!$value) {
         return 'Sem interação';
@@ -56,7 +57,7 @@ $contactsBaseUrl = Router::url('/contacts' . ($queryBase ? '?' . http_build_quer
         <button class="icon-button drawer-close" type="button" data-close-panel="contact-create-drawer" aria-label="Fechar">×</button>
     </div>
 
-    <form class="contact-drawer-form" method="post" action="<?= View::e(Router::url('/contacts')) ?>">
+    <form class="contact-drawer-form" data-contact-classification-form method="post" action="<?= View::e(Router::url('/contacts')) ?>">
         <?= Csrf::input() ?>
         <div class="conversation-drawer-body contact-drawer-body">
             <?php if (Auth::isSuperAdmin()): ?>
@@ -84,12 +85,17 @@ $contactsBaseUrl = Router::url('/contacts' . ($queryBase ? '?' . http_build_quer
             <section class="drawer-section contact-drawer-section">
                 <div class="drawer-section-title"><div><span class="eyebrow">Organização</span><h3>Como este contato será atendido?</h3></div></div>
                 <div class="form-grid two contact-drawer-grid">
-                    <label class="field"><span>Classificação</span><select name="status">
-                        <option value="lead">Lead</option><option value="customer">Cliente</option><option value="inactive">Inativo</option>
-                    </select></label>
-                    <label class="field"><span>Grupo de atendimento</span><select name="contact_group">
+                    <label class="field"><span>Classificação</span><select name="status" data-contact-status-select>
+                        <?php foreach ($statusLabels as $value => $label): ?><option value="<?= View::e($value) ?>"><?= View::e($label) ?></option><?php endforeach; ?>
+                    </select><small class="field-hint">Use Cliente/Paciente atual quando já existe relacionamento com a empresa.</small></label>
+                    <label class="field"><span>Grupo de atendimento</span><select name="contact_group" data-contact-group-select>
                         <?php foreach ($groupLabels as $value => $label): ?><option value="<?= View::e($value) ?>"><?= View::e($label) ?></option><?php endforeach; ?>
-                    </select><small class="field-hint">O grupo ajuda o assistente a aplicar as regras corretas.</small></label>
+                    </select><small class="field-hint">O grupo define a tratativa operacional que a IA deve seguir.</small></label>
+                    <div class="contact-ai-context-preview contact-drawer-grid-full" data-contact-ai-context>
+                        <span>Como a IA vai tratar este contato</span>
+                        <strong data-contact-ai-context-title>Novo lead / interessado</strong>
+                        <small data-contact-ai-context-description>Novo relacionamento: qualificar somente o necessário e conduzir para o próximo passo adequado.</small>
+                    </div>
                     <label class="field contact-drawer-grid-full"><span>Conexão WhatsApp</span><select name="evolution_instance_id" data-instance-select>
                         <option value="">Sem vínculo</option>
                         <?php foreach ($instances as $instance): ?>
@@ -167,18 +173,22 @@ $contactsBaseUrl = Router::url('/contacts' . ($queryBase ? '?' . http_build_quer
                     $params = $queryBase;
                     $params['contact_id'] = (int) $contact['id'];
                     $tags = json_decode((string) ($contact['tags_json'] ?? ''), true);
+                    $relationship = $flowService->relationshipProfile($contact);
                     ?>
-                    <tr class="<?= $selected && (int) $selected['id'] === (int) $contact['id'] ? 'is-selected' : '' ?>">
-                        <td>
+                    <tr class="contact-table-row <?= $selected && (int) $selected['id'] === (int) $contact['id'] ? 'is-selected' : '' ?>">
+                        <td class="contact-table-main" data-label="Contato">
                             <div class="person-cell">
                                 <span class="soft-avatar"><span><?= View::e($contactInitial($contact)) ?></span><?php if ($contactAvatar($contact) !== ''): ?><img src="<?= View::e($contactAvatar($contact)) ?>" alt="" loading="lazy" referrerpolicy="no-referrer" data-static-contact-avatar><?php endif; ?></span>
                                 <span><strong><?= View::e($contact['name'] ?: 'Contato sem nome') ?></strong><small><?= View::e($contact['phone']) ?><?= $contact['company'] ? ' · ' . View::e($contact['company']) : '' ?></small></span>
                             </div>
                         </td>
-                        <td><span class="badge badge-<?= View::e($contact['status']) ?>"><?= View::e($statusLabels[$contact['status']] ?? $contact['status']) ?></span><small><?= View::e($groupLabels[$contact['contact_group'] ?? 'unclassified'] ?? 'Não identificado') ?></small></td>
-                        <td><strong><?= (int) $contact['conversations_count'] ?> conversas</strong><small><?= (int) $contact['leads_count'] ?> negócios<?= !empty($contact['preferred_user_name']) ? ' · Preferência: ' . View::e($contact['preferred_user_name']) : '' ?><?= Auth::isSuperAdmin() ? ' · ' . View::e($contact['tenant_name']) : '' ?></small></td>
-                        <td><span><?= View::e($formatDate($contact['last_interaction_at'])) ?></span><?php if (is_array($tags) && $tags): ?><small><?= View::e(implode(' · ', array_slice($tags, 0, 3))) ?></small><?php endif; ?></td>
-                        <td><a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/contacts?' . http_build_query($params))) ?>">Ver</a></td>
+                        <td class="contact-classification-cell" data-label="Classificação">
+                            <span class="badge badge-<?= View::e($contact['status']) ?>"><?= View::e((string) ($relationship['label'] ?? ($statusLabels[$contact['status']] ?? $contact['status']))) ?></span>
+                            <small><?= View::e($groupLabels[$contact['contact_group'] ?? 'unclassified'] ?? 'Não identificado') ?></small>
+                        </td>
+                        <td class="contact-history-cell" data-label="Relacionamento"><strong><?= (int) $contact['conversations_count'] ?> conversas</strong><small><?= (int) $contact['leads_count'] ?> negócios<?= !empty($contact['preferred_user_name']) ? ' · Preferência: ' . View::e($contact['preferred_user_name']) : '' ?><?= Auth::isSuperAdmin() ? ' · ' . View::e($contact['tenant_name']) : '' ?></small></td>
+                        <td class="contact-last-cell" data-label="Última interação"><span><?= View::e($formatDate($contact['last_interaction_at'])) ?></span><?php if (is_array($tags) && $tags): ?><span class="contact-tag-list"><?php foreach (array_slice($tags, 0, 3) as $tag): ?><small><?= View::e((string) $tag) ?></small><?php endforeach; ?></span><?php endif; ?></td>
+                        <td class="contact-table-action"><a class="btn btn-small btn-quiet" href="<?= View::e(Router::url('/contacts?' . http_build_query($params))) ?>">Ver contato</a></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -188,17 +198,17 @@ $contactsBaseUrl = Router::url('/contacts' . ($queryBase ? '?' . http_build_quer
 </div>
 
 <?php if ($selected): ?>
-    <?php $selectedTags = json_decode((string) ($selected['tags_json'] ?? ''), true); ?>
+    <?php $selectedTags = json_decode((string) ($selected['tags_json'] ?? ''), true); $selectedRelationship = $flowService->relationshipProfile($selected); ?>
     <aside id="contact-edit-drawer" class="conversation-details conversation-drawer contact-form-drawer is-open" aria-label="Editar contato">
         <div class="conversation-drawer-header">
             <div class="person-cell">
                 <span class="soft-avatar large"><span><?= View::e($contactInitial($selected)) ?></span><?php if ($contactAvatar($selected) !== ''): ?><img src="<?= View::e($contactAvatar($selected)) ?>" alt="" referrerpolicy="no-referrer" data-static-contact-avatar><?php endif; ?></span>
-                <span><span class="eyebrow">Contato</span><h2><?= View::e($selected['name'] ?: 'Contato sem nome') ?></h2><small><?= View::e($selected['phone']) ?></small></span>
+                <span><span class="eyebrow">Contato</span><h2><?= View::e($selected['name'] ?: 'Contato sem nome') ?></h2><small><?= View::e($selected['phone']) ?></small><span class="contact-header-meta"><em><?= View::e((string) ($selectedRelationship['label'] ?? 'Relacionamento não identificado')) ?></em><em><?= View::e($groupLabels[$selected['contact_group'] ?? 'unclassified'] ?? 'Não identificado') ?></em></span></span>
             </div>
             <a class="icon-button drawer-close" href="<?= View::e($contactsBaseUrl) ?>" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
         </div>
 
-        <form class="contact-drawer-form" method="post" action="<?= View::e(Router::url('/contacts/update')) ?>">
+        <form class="contact-drawer-form" data-contact-classification-form method="post" action="<?= View::e(Router::url('/contacts/update')) ?>">
             <?= Csrf::input() ?><input type="hidden" name="contact_id" value="<?= (int) $selected['id'] ?>">
             <div class="conversation-drawer-body contact-drawer-body">
                 <section class="drawer-section contact-drawer-section">
@@ -214,12 +224,17 @@ $contactsBaseUrl = Router::url('/contacts' . ($queryBase ? '?' . http_build_quer
                 <section class="drawer-section contact-drawer-section">
                     <div class="drawer-section-title"><div><span class="eyebrow">Organização</span><h3>Classificação do atendimento</h3></div></div>
                     <div class="form-grid two contact-drawer-grid">
-                        <label class="field"><span>Classificação</span><select name="status" <?= !$canManage ? 'disabled' : '' ?>>
+                        <label class="field"><span>Classificação</span><select name="status" data-contact-status-select <?= !$canManage ? 'disabled' : '' ?>>
                             <?php foreach ($statusLabels as $value => $label): ?><option value="<?= View::e($value) ?>" <?= $selected['status'] === $value ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?>
-                        </select></label>
-                        <label class="field"><span>Grupo de atendimento</span><select name="contact_group" <?= !$canManage ? 'disabled' : '' ?>>
+                        </select><small class="field-hint">Diferencia novo lead de relacionamento já existente.</small></label>
+                        <label class="field"><span>Grupo de atendimento</span><select name="contact_group" data-contact-group-select <?= !$canManage ? 'disabled' : '' ?>>
                             <?php foreach ($groupLabels as $value => $label): ?><option value="<?= View::e($value) ?>" <?= ($selected['contact_group'] ?? 'unclassified') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option><?php endforeach; ?>
-                        </select></label>
+                        </select><small class="field-hint">Paciente e cliente atual recebem continuidade, sem voltar para a triagem de novo interessado.</small></label>
+                        <div class="contact-ai-context-preview contact-drawer-grid-full" data-contact-ai-context>
+                            <span>Como a IA entende este cadastro</span>
+                            <strong data-contact-ai-context-title><?= View::e((string) ($selectedRelationship['label'] ?? 'Relacionamento não identificado')) ?></strong>
+                            <small data-contact-ai-context-description><?= View::e((string) ($selectedRelationship['description'] ?? '')) ?></small>
+                        </div>
                         <?php if (!empty($professionalAssignmentSettings['enabled'])): ?>
                             <label class="field"><span>Profissional preferido</span><select name="preferred_user_id" <?= !$canManage ? 'disabled' : '' ?>>
                                 <option value="">Sem preferência</option>

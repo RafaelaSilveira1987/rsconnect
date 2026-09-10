@@ -1524,11 +1524,9 @@ final class ConversationController
         if (!array_key_exists($contactGroup, ConversationFlowService::GROUPS)) {
             $contactGroup = 'unclassified';
         }
-        if ($status === 'customer' && in_array($contactGroup, ['unclassified', 'interested'], true)) {
-            $contactGroup = 'customer';
-        } elseif ($status !== 'customer' && $contactGroup === 'customer') {
-            $contactGroup = $status === 'lead' ? 'interested' : 'unclassified';
-        }
+        $normalizedClassification = ConversationFlowService::normalizeClassification($status, $contactGroup);
+        $status = $normalizedClassification['status'];
+        $contactGroup = $normalizedClassification['group'];
 
         $pdo = Database::connection();
         $statement = $pdo->prepare(

@@ -69,7 +69,7 @@ final class AgentSimulationService
                     'phone' => '5511999999999',
                     'status' => 'lead',
                     'contact_status' => 'lead',
-                    'contact_group' => 'lead',
+                    'contact_group' => 'interested',
                 ];
                 $simulationContext = is_array($triage['state'] ?? null) ? $triage['state'] : [];
                 $simulationContext['collected'] = $triage['state']['collected'] ?? [];
@@ -80,7 +80,7 @@ final class AgentSimulationService
                     'tenant_id' => $tenantId,
                     'contact_name' => $contact['name'],
                     'phone' => $contact['phone'],
-                    'contact_group' => 'lead',
+                    'contact_group' => 'interested',
                     'contact_status' => 'lead',
                     'status' => 'open',
                     'attendance_mode' => 'ai',

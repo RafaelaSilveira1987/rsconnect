@@ -1,6 +1,6 @@
-# RS Connect 36.29.7
+# RS Connect 36.29.8
 
-Fluxo de atendimento editável e regras operacionais disponíveis no módulo de Assistentes.
+Organização inteligente de contatos, continuidade de cliente/paciente e terceira rodada visual em telas operacionais, preservando o fluxo editável dos Assistentes.
 
 Principais alterações desta versão:
 
@@ -32,6 +32,15 @@ Principais alterações desta versão:
 - RS Admin com KPIs, ações rápidas, prioridades e saúde da plataforma ajustados para tablet/mobile;
 - pontos de quebra revisados para 1024px, 820px, 680px e 440px;
 - nenhuma alteração funcional em rotas, campos, IDs, `data-*` ou JavaScript;
+- nenhuma migration nova.
+
+## Terceira rodada operacional — 36.29.8
+
+- correções pontuais em prioridade do roteamento, alinhamento de Menu/Acesso, cabeçalho de Conversa natural e ordem vertical do atendimento;
+- Base de Contatos com tabela mais legível, drawer reorganizado e cards responsivos no mobile;
+- Organização do contato passa a gerar perfil operacional usado pela IA em Contatos e Conversas;
+- paciente e cliente atual recebem continuidade de atendimento e não voltam à qualificação de novo lead;
+- CRM deixa de criar oportunidade automática para conversas rotineiras de relacionamento atual, preservando oportunidades existentes e novas intenções comerciais explícitas;
 - nenhuma migration nova.
 
 Migration obrigatória atual:

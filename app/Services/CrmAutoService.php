@@ -17,22 +17,33 @@ final class CrmAutoService
             }
 
             $tenantId = (int) $instance['tenant_id'];
+            $contact = $this->contact($pdo, $contactId);
+            $relationship = (new ConversationFlowService())->relationshipProfile($contact);
+            $mayTagAsInterested = !empty($relationship['is_new_lead']) || ($relationship['key'] ?? '') === 'unclassified';
+
+            // Se já existe uma oportunidade aberta, preserva o vínculo comercial independentemente
+            // da classificação atual do contato. Isso evita quebrar negociações legítimas em andamento.
+            $existingId = $this->findExistingOpenLead($pdo, $tenantId, $contactId, $conversationId);
+            if ($existingId > 0) {
+                $this->touchLead($pdo, $existingId, $incomingContent);
+                $this->updateConversationLead($pdo, $conversationId, $existingId, $incomingContent);
+                $this->mergeTags($pdo, $contactId, $this->detectTags($incomingContent, $mayTagAsInterested));
+                (new CrmDealValueService())->captureForLead($pdo, $tenantId, $existingId, $incomingContent, 'customer');
+                return $existingId;
+            }
+
+            // Cliente/paciente atual não vira um novo lead comercial só porque iniciou outra
+            // conversa no WhatsApp. O cadastro em Organização é a fonte de verdade.
+            if (empty($relationship['should_create_commercial_lead']) && !$this->hasExplicitCommercialIntent($incomingContent)) {
+                $this->mergeTags($pdo, $contactId, $this->detectTags($incomingContent, false));
+                return null;
+            }
+
             $pipelineId = $this->ensurePipeline($pdo, $tenantId);
             $stageId = $this->firstStage($pdo, $tenantId, $pipelineId);
             if ($pipelineId < 1 || $stageId < 1) {
                 return null;
             }
-
-            $existingId = $this->findExistingOpenLead($pdo, $tenantId, $contactId, $conversationId);
-            if ($existingId > 0) {
-                $this->touchLead($pdo, $existingId, $incomingContent);
-                $this->updateConversationLead($pdo, $conversationId, $existingId, $incomingContent);
-                $this->mergeTags($pdo, $contactId, $this->detectTags($incomingContent));
-                (new CrmDealValueService())->captureForLead($pdo, $tenantId, $existingId, $incomingContent, 'customer');
-                return $existingId;
-            }
-
-            $contact = $this->contact($pdo, $contactId);
             $title = 'WhatsApp - ' . trim((string) ($contact['name'] ?? ''));
             if ($title === 'WhatsApp -') {
                 $title = 'WhatsApp - ' . (string) ($contact['phone'] ?? 'Lead');
@@ -80,7 +91,10 @@ final class CrmAutoService
             }
 
             $leadId = (int) $pdo->lastInsertId();
-            $this->addNote($pdo, $tenantId, $contactId, $leadId, 'Lead criado automaticamente a partir do WhatsApp. Primeira mensagem: ' . $this->preview($incomingContent, 500));
+            $originLabel = !empty($relationship['is_existing_customer'])
+                ? 'Oportunidade criada automaticamente a partir do WhatsApp para relacionamento atual. Primeira mensagem: '
+                : 'Lead criado automaticamente a partir do WhatsApp. Primeira mensagem: ';
+            $this->addNote($pdo, $tenantId, $contactId, $leadId, $originLabel . $this->preview($incomingContent, 500));
             $this->updateConversationLead($pdo, $conversationId, $leadId, $incomingContent);
             $this->mergeTags($pdo, $contactId, $this->detectTags($incomingContent));
             (new CrmDealValueService())->captureForLead($pdo, $tenantId, $leadId, $incomingContent, 'customer');
@@ -238,7 +252,21 @@ final class CrmAutoService
             ]);
     }
 
-    private function detectTags(string $content): array
+
+    private function hasExplicitCommercialIntent(string $content): bool
+    {
+        $text = mb_strtolower(trim($content));
+        if ($text === '') {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/\b(or[cç]amento|orcar|or[cç]ar|comprar|contratar|contrata[cç][aã]o|novo plano|novo servi[cç]o|adicionar servi[cç]o|upgrade)\b/u',
+            $text
+        );
+    }
+
+    private function detectTags(string $content, bool $includeLeadSignals = true): array
     {
         $text = mb_strtolower($content);
         $tags = ['whatsapp'];
@@ -247,9 +275,11 @@ final class CrmAutoService
             'suporte' => ['suporte', 'problema', 'erro', 'bug', 'ajuda'],
             'agendamento' => ['agenda', 'agendar', 'horário', 'horario', 'marcar'],
             'urgente' => ['urgente', 'agora', 'imediato'],
-            'interessado' => ['quero', 'tenho interesse', 'comprar', 'contratar'],
             'humano' => ['atendente', 'humano', 'pessoa', 'consultor'],
         ];
+        if ($includeLeadSignals) {
+            $map['interessado'] = ['quero', 'tenho interesse', 'comprar', 'contratar'];
+        }
 
         foreach ($map as $tag => $keywords) {
             foreach ($keywords as $keyword) {

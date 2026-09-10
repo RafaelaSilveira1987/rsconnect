@@ -23,7 +23,7 @@ final class ConversationFlowService
 
     public const STATUS_LABELS = [
         'lead' => 'Lead / novo contato',
-        'customer' => 'Cliente atual',
+        'customer' => 'Cliente/Paciente atual',
         'inactive' => 'Contato inativo',
     ];
 
@@ -33,6 +33,137 @@ final class ConversationFlowService
         'refused' => 'Preferiu não informar',
         'not_required' => 'Não necessária neste fluxo',
     ];
+
+    /**
+     * Normaliza a classificação cadastral sem criar novos estados no banco.
+     * O grupo mais específico (cliente/paciente) prevalece sobre "Lead" para
+     * evitar que um relacionamento existente volte ao fluxo de prospecção.
+     *
+     * @return array{status:string, group:string}
+     */
+    public static function normalizeClassification(string $status, string $group): array
+    {
+        $status = in_array($status, ['lead', 'customer', 'inactive'], true) ? $status : 'lead';
+        $group = array_key_exists($group, self::GROUPS) ? $group : 'unclassified';
+
+        if ($status !== 'inactive' && in_array($group, ['customer', 'patient'], true)) {
+            $status = 'customer';
+        }
+        if ($status === 'customer' && in_array($group, ['unclassified', 'interested'], true)) {
+            $group = 'customer';
+        }
+
+        return ['status' => $status, 'group' => $group];
+    }
+
+    /**
+     * Traduz classificação + grupo + tags em um perfil operacional único.
+     * Esse perfil é consumido pela IA e pelo CRM para diferenciar continuidade
+     * de cliente/paciente de uma conversa realmente nova.
+     *
+     * @return array{key:string,label:string,description:string,ai_instruction:string,is_existing_customer:bool,is_new_lead:bool,should_create_commercial_lead:bool}
+     */
+    public function relationshipProfile(array $contact): array
+    {
+        $status = trim((string) ($contact['status'] ?? $contact['contact_status'] ?? ''));
+        $group = $this->resolveGroup($contact);
+        $tags = $this->tags($contact['tags_json'] ?? null);
+        $existing = $this->isExistingCustomer($status, $group, $tags);
+
+        if ($status === 'inactive') {
+            return [
+                'key' => 'inactive',
+                'label' => 'Contato inativo',
+                'description' => 'Não presumir vínculo ativo. Se a pessoa retornar, entender primeiro o pedido atual e tratar como reativação quando fizer sentido.',
+                'ai_instruction' => 'O contato está inativo. Não o trate como cliente/paciente atual nem como novo lead automaticamente; entenda o pedido atual e confirme apenas o contexto necessário para uma eventual reativação.',
+                'is_existing_customer' => false,
+                'is_new_lead' => false,
+                'should_create_commercial_lead' => false,
+            ];
+        }
+
+        if ($group === 'patient') {
+            return [
+                'key' => 'patient',
+                'label' => 'Paciente atual',
+                'description' => 'Continuidade do atendimento: usar cadastro e histórico e não reiniciar a triagem de um novo lead.',
+                'ai_instruction' => 'Trate como paciente atual. Priorize continuidade, dúvidas, acompanhamento e agenda; não faça qualificação comercial de novo lead e não peça novamente dados ou motivo já conhecidos.',
+                'is_existing_customer' => true,
+                'is_new_lead' => false,
+                'should_create_commercial_lead' => false,
+            ];
+        }
+
+        if ($existing || $group === 'customer') {
+            return [
+                'key' => 'customer',
+                'label' => 'Cliente atual',
+                'description' => 'Relacionamento já existente: resolver a necessidade atual sem reiniciar a prospecção.',
+                'ai_instruction' => 'Trate como cliente atual. Use cadastro e histórico, responda ao pedido corrente e não reinicie roteiro de captação, descoberta ou qualificação de novo lead.',
+                'is_existing_customer' => true,
+                'is_new_lead' => false,
+                'should_create_commercial_lead' => false,
+            ];
+        }
+
+        if ($group === 'family') {
+            return [
+                'key' => 'family',
+                'label' => 'Familiar / responsável',
+                'description' => 'Atendimento relacionado a outra pessoa. Confirmar para quem é a solicitação apenas quando isso for necessário.',
+                'ai_instruction' => 'O contato é familiar ou responsável. Não presuma que ele é o paciente/cliente; identifique para quem é o atendimento somente se isso mudar a resposta ou a próxima ação.',
+                'is_existing_customer' => false,
+                'is_new_lead' => false,
+                'should_create_commercial_lead' => true,
+            ];
+        }
+
+        if ($group === 'couple') {
+            return [
+                'key' => 'couple',
+                'label' => 'Atendimento de casal',
+                'description' => 'Contexto compartilhado. Aplicar as regras específicas do grupo antes de oferecer agenda ou próximos passos.',
+                'ai_instruction' => 'O contato está em contexto de casal. Preserve esse contexto e siga as regras específicas do grupo; não converta a conversa automaticamente em atendimento individual.',
+                'is_existing_customer' => false,
+                'is_new_lead' => false,
+                'should_create_commercial_lead' => true,
+            ];
+        }
+
+        if ($group === 'other') {
+            return [
+                'key' => 'other',
+                'label' => 'Outro grupo',
+                'description' => 'Há uma segmentação definida pela empresa; usar grupo, tags e observações antes de fazer nova qualificação.',
+                'ai_instruction' => 'Existe uma segmentação específica cadastrada. Use grupo, tags e observações como contexto e pergunte somente o que estiver realmente faltando para o pedido atual.',
+                'is_existing_customer' => false,
+                'is_new_lead' => false,
+                'should_create_commercial_lead' => true,
+            ];
+        }
+
+        if ($group === 'interested' || $status === 'lead') {
+            return [
+                'key' => 'lead',
+                'label' => 'Novo lead / interessado',
+                'description' => 'Novo relacionamento: qualificar somente o necessário e conduzir para o próximo passo adequado.',
+                'ai_instruction' => 'Trate como novo lead/interessado. Qualifique de forma progressiva, sem repetir dados já informados, e faça somente as perguntas necessárias para orientar o próximo passo.',
+                'is_existing_customer' => false,
+                'is_new_lead' => true,
+                'should_create_commercial_lead' => true,
+            ];
+        }
+
+        return [
+            'key' => 'unclassified',
+            'label' => 'Relacionamento não identificado',
+            'description' => 'Ainda não há contexto suficiente. Não assumir que é lead, cliente ou paciente sem evidência.',
+            'ai_instruction' => 'O relacionamento ainda não está identificado. Não presuma que a pessoa é novo lead, cliente ou paciente; faça no máximo a pergunta mínima necessária quando essa distinção realmente mudar o atendimento.',
+            'is_existing_customer' => false,
+            'is_new_lead' => false,
+            'should_create_commercial_lead' => true,
+        ];
+    }
 
     public const STAGES = [
         'identifying_contact' => 'Identificando o contato',
@@ -60,10 +191,11 @@ final class ConversationFlowService
 
         $state = $this->state($pdo, $tenantId, $conversationId, $contactId);
         $group = $this->resolveGroup($contact);
-        $existingPatient = $group === 'patient';
         $contactStatus = (string) ($contact['status'] ?? '');
         $contactTags = $this->tags($contact['tags_json'] ?? null);
-        $existingCustomer = $this->isExistingCustomer($contactStatus, $group, $contactTags);
+        $relationship = $this->relationshipProfile($contact);
+        $existingPatient = ($relationship['key'] ?? '') === 'patient';
+        $existingCustomer = !empty($relationship['is_existing_customer']);
         $text = $this->normalize($content);
         $intent = $this->intent($text);
         if ($intent === 'conversation'
@@ -101,7 +233,9 @@ final class ConversationFlowService
             'contact_status' => $contactStatus,
             'contact_status_label' => self::STATUS_LABELS[$contactStatus] ?? ($contactStatus !== '' ? $contactStatus : 'Não informado'),
             'tags' => $contactTags,
-            'is_existing_customer' => $this->isExistingCustomer($contactStatus, $group, $contactTags),
+            'is_existing_customer' => $existingCustomer,
+            'relationship_key' => (string) ($relationship['key'] ?? 'unclassified'),
+            'relationship_label' => (string) ($relationship['label'] ?? 'Relacionamento não identificado'),
             'last_message_preview' => mb_substr(trim($content), 0, 300),
         ];
 
@@ -219,6 +353,7 @@ final class ConversationFlowService
         }
 
         $group = $this->resolveGroup($row);
+        $relationship = $this->relationshipProfile($row);
         return [
             'stage' => (string) ($row['stage'] ?? 'identifying_contact'),
             'demand_status' => (string) ($row['demand_status'] ?? 'pending'),
@@ -229,7 +364,10 @@ final class ConversationFlowService
             'contact_status' => (string) ($row['contact_status'] ?? ''),
             'contact_status_label' => self::STATUS_LABELS[(string) ($row['contact_status'] ?? '')] ?? ((string) ($row['contact_status'] ?? '') !== '' ? (string) $row['contact_status'] : 'Não informado'),
             'tags' => $this->tags($row['tags_json'] ?? null),
-            'is_existing_customer' => $this->isExistingCustomer((string) ($row['contact_status'] ?? ''), $group, $this->tags($row['tags_json'] ?? null)),
+            'is_existing_customer' => !empty($relationship['is_existing_customer']),
+            'relationship_key' => (string) ($relationship['key'] ?? 'unclassified'),
+            'relationship_label' => (string) ($relationship['label'] ?? 'Relacionamento não identificado'),
+            'relationship_description' => (string) ($relationship['description'] ?? ''),
             'stage_label' => self::STAGES[(string) ($row['stage'] ?? '')] ?? 'Em atendimento',
             'demand_status_label' => self::DEMAND_STATUSES[(string) ($row['demand_status'] ?? '')] ?? 'Ainda não coletada',
             'contact_group_label' => self::GROUPS[$group] ?? 'Outro grupo',
@@ -453,6 +591,7 @@ final class ConversationFlowService
             $group = $this->resolveGroup($contact);
             $status = (string) ($contact['status'] ?? '');
             $tags = $this->tags($contact['tags_json'] ?? null);
+            $relationship = $this->relationshipProfile($contact);
 
             $statement = $pdo->prepare(
                 'SELECT id, metadata_json
@@ -493,7 +632,9 @@ final class ConversationFlowService
                 $metadata['contact_status'] = $status;
                 $metadata['contact_status_label'] = self::STATUS_LABELS[$status] ?? ($status !== '' ? $status : 'Não informado');
                 $metadata['tags'] = $tags;
-                $metadata['is_existing_customer'] = $this->isExistingCustomer($status, $group, $tags);
+                $metadata['is_existing_customer'] = !empty($relationship['is_existing_customer']);
+                $metadata['relationship_key'] = (string) ($relationship['key'] ?? 'unclassified');
+                $metadata['relationship_label'] = (string) ($relationship['label'] ?? 'Relacionamento não identificado');
                 $isExistingCustomer = !empty($metadata['is_existing_customer']) ? 1 : 0;
 
                 $update->execute([
@@ -570,6 +711,9 @@ final class ConversationFlowService
     /** @param array<int, string> $tags */
     private function isExistingCustomer(string $status, string $group, array $tags): bool
     {
+        if ($status === 'inactive') {
+            return false;
+        }
         if ($status === 'customer' || in_array($group, ['customer', 'patient'], true)) {
             return true;
         }
