@@ -4,7 +4,7 @@ ef587bcac67854566992deca813d0170495fe5118df5906949e007c64a6455c8  ./.env.example
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./.env.vps.example
 7ba6b8258e72ac23abfe4f291bc3b43467ae583c6c0f12b58797f75825b8c020  ./.gitignore
 ef587bcac67854566992deca813d0170495fe5118df5906949e007c64a6455c8  ./Dockerfile
-b3874dbeb59ae5b2dbb30902f5322334808da36652e3c3e4adee4cd543a39902  ./README.md
+8ffb7983731385906988c293d1f4c108b5fafbaedce8d0017738270465444601  ./README.md
 ce7249f53b73b4347f0db1bf484321162a24877aca6e7106d85afd34365ab179  ./app/Controllers/AccessController.php
 64dc9574317cd81b08f9669533f2b8cf57d8a8ba305760158a7ecff6dee51433  ./app/Controllers/AdminCrmController.php
 7a964baf4c3563146b922fd9fd3cea227dff01727aa798b8afacbf65cddf8894  ./app/Controllers/AgentBlueprintController.php
@@ -102,7 +102,7 @@ f98077caae5b7beeb7dead715471527a4a58b64dbeb0c2505660b543228bfbcf  ./app/Services
 d73181c7c18f1585050d3f611b49303ced38528adb42ea46ad9cc05858f1f01a  ./app/Services/AiRouterService.php
 fe5c2b3eca0bfce848ac8ef3058623da97b8aa04d5565c2a67f4e6fc258ed0e5  ./app/Services/AiTurnContextService.php
 31f804dbc48f1506e82c9de1395a7f67650de453a03671900a8132a291cd1465  ./app/Services/AiUsageService.php
-3d18c66c5299c1333c4de7217fa59b9d317970797dec04edf89678d5b647fa0a  ./app/Services/AppVersionService.php
+a76153b04b3054ccb368778de1d47d43252181e071f5c606381610d61fd10c72  ./app/Services/AppVersionService.php
 827a1e1fb703b1ffa5cc9f663219e6116c7c043852661bbaa8b7514e73b715f6  ./app/Services/AutomationWebhookService.php
 1980cb493d0e0464cdcbeb155b5aea8739c318f78bd0aafd0c8acc6dc5e8f335  ./app/Services/BackupAutomationService.php
 ec4c8036b556935456fe05933de8074d1020866d3f256f203943dcfaf7be9b74  ./app/Services/BackupSchedulePolicyService.php
@@ -206,9 +206,9 @@ c73c9ff89ae867198446a710527246fbff87ffa8f8a5172b88ae1b5e5e8d9340  ./app/Views/im
 7e19130c45f5d8359aa971fdd4818bc799fcb42cc6e5bc9853c6ac1c268217b1  ./app/Views/instances/_client.php
 dc9743c6b0aedf080724becc18387f9e897c42e7e37e72c7ae5bfb99b18e0ff6  ./app/Views/instances/_routing.php
 23b02e4daf6d961d60c87704510c664a7991470e078d73c1da409f786a4d12c3  ./app/Views/instances/index.php
-3fceb13338a2155be1383bb84e7c4440fec15ae6ebdc198a1a5c3ce4cd4b7cf0  ./app/Views/layouts/app.php
-78453aeb015e3156506bf463afb707f2a4b7f6ca417816b314e4e25d8bd04b0b  ./app/Views/layouts/guest.php
-546f49b8864244ce3170321f5c8758e20e20f140beaa2b7e4aff898fc52885a3  ./app/Views/layouts/restricted.php
+50b5d298f8d9f90c77f3892960cab8ba8e2e5a374afb4bb09d0116d105dcacc1  ./app/Views/layouts/app.php
+481796e4e679ca5be0c97635c55504b7d83894dcebfcfb2decc9971fbf50e18c  ./app/Views/layouts/guest.php
+e3e5b5aba4f8a135f11d4ebc21ddb6e593f321c8cd28428d6025595609e92696  ./app/Views/layouts/restricted.php
 c2dd3e3877988cd66431f00b18714186ba6323196537b5e43b0895ed4836a241  ./app/Views/n8n_flows/_nav.php
 fc7f4bbef193359502d5dcc7c39140592ddfee90691a3f0852935ee4357462c0  ./app/Views/n8n_flows/hub.php
 bb3d78af7cd65273a4c8ea4663ea3fcb0a329d5eb4c12ff9eab949a97f428c2a  ./app/Views/n8n_flows/index.php
@@ -504,6 +504,7 @@ d5d4e909132db75e92e0fa0534168bc02d099f7ab234cf21514eda20162d9793  ./docs/ATUALIZ
 fc5840a601564a403050219bd051864ea063e94b922d320e70c5d82f2bfbd8ca  ./docs/ATUALIZACAO-v36.29.4.md
 484724666c73ad777f99bb9ec59b9e50756d6b6c9ed4887ab13a5b6bf0ada61b  ./docs/ATUALIZACAO-v36.29.5.md
 1046964e9e27d01de8ff61db241442eb495f24b4896c81b1815e7a0314636a9d  ./docs/ATUALIZACAO-v36.29.6.md
+7864c38762ba33be852901272681328a974bf83af07e3ffa49cc862077ee5301  ./docs/ATUALIZACAO-v36.29.7.md
 cc0ed1b48f4448f2256c8f0972a37cf24342ab7e5f5bbed6af6e39e53c5f1199  ./docs/ATUALIZACAO-v36.6.10.md
 868c8f2f58490d04357c95b2140d696d937530632228b736617ef378607ea7c7  ./docs/ATUALIZACAO-v36.6.11.md
 c5429636c9356d6548b356466f8244aeec21e6a4f63c6f30671951717e101361  ./docs/ATUALIZACAO-v36.6.12.md
@@ -667,9 +668,9 @@ aeee5bc8e058b1d03890b79daaf9f39eef29e7e448efdc8b6d05d5678a01f1ac  ./docs/n8n_tem
 752c18986f14e103d9eb9950a0aab494d88b10c541cd3a470a051d790b7bdc11  ./docs/validation/HOMOLOGACAO-PERSISTENTE-2026-09-01.md
 006d6da9b25d9788d3afbc7c1f275a6b9d6d12ffcb1181961f519c05bfdb79cf  ./docs/validation/calendar-source-v7.md
 22347f12bacc2a5de89719e419f28f2e0a26bc5ecd4e467f396e2dc236d3fb34  ./docs/validation/homologacao-persistente-2026-09-01.json
-eb1a6e8c67b5167a9b0a058289d11cf8ef1b66de6c02739568ea06882f194bea  ./manifest.json
+8649f2ecb7cbc89a79dac6957cda6507631fb5fcd2ebd543215e8c813e9c6136  ./manifest.json
 c835b907d8eb7381a72224cfdc8b688ffbb9a7676f4f05f7bc84d18c4f61324e  ./public/.htaccess
-f42c7717b5860032e31aeec335d9efd480bdf6dd65d5a224f9fd83e4c7e09c8a  ./public/assets/css/app.css
+45ab9042a0bbdf22a756aeac2f4d86e67518dba50c67768a6849d0c11040079a  ./public/assets/css/app.css
 5938352018fb7e9bec55da3fa9f8edfd923b923e078703548880d978bf922b2e  ./public/assets/css/reports.css
 eb9bc52f13a9bd152bfa27d7c522830ec59fdc580dd043a293531392c628cd70  ./public/assets/img/RS_Connect_horizontal_transparente.png
 8845f4643d846dc948141fb4de0df0bc1bb98124bf74913e664c792d1b2c07ab  ./public/assets/img/RS_Connect_horizontal_vetor.svg
@@ -895,6 +896,7 @@ b10c896c975c1ac1ce9449d2cb877062ad1e33b9f6a47b4cb30dfe033a9b0338  ./tests/Featur
 60ce0788713b36288a6dc8334d40ec721f73ea46c5e4e1be342ad092425499b5  ./tests/Feature/tenant-health-self-healing-v36285-smoke.php
 0d51aeaa4b2a8c2fe2c56aeff44957ce63c784c796ad701250689ca9ba23d7ef  ./tests/Feature/tenant-isolation-hardening-smoke.php
 52727a95325409ba3096afc77f87533e1882690621adc039ba6ba6e769bf18dc  ./tests/Feature/ui-consistency-responsive-v36296-smoke.php
+74bbb9a93aad2b99d7db8481ef996ac2007c8f61db66fbcb09c86c5508352f73  ./tests/Feature/ui-module-hierarchy-responsive-v36297-smoke.php
 011c6057cc7ce929ccdeeffc95b561b0bd43b898f206fb29a6c312c59d2e1ad0  ./tests/Feature/ui-ux-v36203-smoke.php
 a8701f7cc0da4b5646fa496d601ebafe85a091b92810b50b474e6de372acfacd  ./tests/Feature/ui-ux-v36204-smoke.php
 156c4549e654db6871862d9ce7ef82654525f00e674ba8477c42278e00ffd5b7  ./tests/Feature/usability-v36205-smoke.php

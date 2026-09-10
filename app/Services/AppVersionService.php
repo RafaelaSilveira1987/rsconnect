@@ -126,7 +126,8 @@ final class AppVersionService
     // RS Connect 36.29.4 — agrupamento configurável de mensagens e prioridade ao turno atual antes de retomar o roteiro.
     // RS Connect 36.29.5 — fluxo do atendimento editável, efetivo e regras operacionais disponíveis ao cliente.
     // RS Connect 36.29.6 — padronização visual de formulários, checkboxes e responsividade mobile.
-    public const PACKAGE_LABEL = 'RS Connect 36.29.6 — Formulários consistentes e responsividade mobile';
+    // RS Connect 36.29.7 — segunda rodada visual: hierarquia, cards e experiência mobile unificados por módulo.
+    public const PACKAGE_LABEL = 'RS Connect 36.29.7 — Hierarquia visual unificada e experiência mobile';
     public const REQUIRED_MIGRATION = '106_agent_message_grouping_context_priority.sql';
 
     private PDO $pdo;

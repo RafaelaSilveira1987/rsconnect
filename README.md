@@ -1,4 +1,4 @@
-# RS Connect 36.29.6
+# RS Connect 36.29.7
 
 Fluxo de atendimento editável e regras operacionais disponíveis no módulo de Assistentes.
 
@@ -14,13 +14,24 @@ Principais alterações desta versão:
 - regras de segurança e Policy Engine continuam valendo independentemente da ordem visual;
 - agrupamento de mensagens e prioridade do turno atual da versão 36.29.4 foram preservados.
 
-## Ajustes visuais desta versão
+## Ajustes visuais da base 36.29.6
 
 - campos de texto, select, textarea, data/hora e uploads com padrão visual comum;
 - checkboxes e radios alinhados e com alvo de toque consistente;
 - formulários de duas/três colunas adaptados para uma coluna em mobile;
 - filtros, ações, tabelas e popovers preparados para viewport pequena;
 - nenhuma alteração em `name`, `id`, `data-*`, rotas, actions de formulário ou lógica JavaScript;
+- nenhuma migration nova.
+
+## Segunda rodada visual — 36.29.7
+
+- Agentes com cabeçalho, seletor de empresa, cards, ações e áreas expansíveis mais uniformes;
+- Instâncias com resumo, filtros, cards, opções e drawers harmonizados;
+- Onboarding com roteiro lateral, etapa atual, cards de agenda e formulários mais legíveis;
+- Configurações da empresa com cards, accordions, switches e barra de salvamento no mesmo padrão;
+- RS Admin com KPIs, ações rápidas, prioridades e saúde da plataforma ajustados para tablet/mobile;
+- pontos de quebra revisados para 1024px, 820px, 680px e 440px;
+- nenhuma alteração funcional em rotas, campos, IDs, `data-*` ou JavaScript;
 - nenhuma migration nova.
 
 Migration obrigatória atual:

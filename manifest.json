@@ -1,6 +1,6 @@
-# RS Connect v36.29.6
+# RS Connect v36.29.7
 
-Formulários consistentes e responsividade mobile, preservando o fluxo editável e as regras do atendimento no cliente.
+Hierarquia visual unificada em Agentes, Instâncias, Onboarding, Configurações e RS Admin, preservando formulários responsivos e regras do atendimento.
 
 Alterações principais:
 
@@ -12,6 +12,9 @@ Alterações principais:
 - `policy.fail_closed` permanece protegido para clientes;
 - padronização visual de formulários, checkboxes, radios, filtros e ações;
 - responsividade mobile reforçada sem alterar seletores funcionais;
+
+- segunda rodada visual unificando hierarquia, cards e ações em Agentes, Instâncias, Onboarding, Configurações e RS Admin;
+- pontos de quebra adicionais para tablet e celulares estreitos;
 - nenhuma migration nova.
 
 Migration obrigatória atual:
