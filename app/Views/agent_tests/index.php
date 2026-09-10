@@ -12,7 +12,7 @@ $selectedTenantId = (int) ($selectedTenantId ?? 0);
 $selectedAgentId = (int) ($selectedAgentId ?? 0);
 $migrationReady = !empty($migrationReady);
 $sourceConversationId = (int) ($sourceConversationId ?? 0);
-$labVersion = (string) ($labVersion ?? '36.29.3');
+$labVersion = (string) ($labVersion ?? '36.29.4');
 $csrfToken = Csrf::token();
 $selectedAgent = null;
 foreach ($agents as $agentRow) {

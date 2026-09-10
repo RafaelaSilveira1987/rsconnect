@@ -125,5 +125,6 @@ return [
         ['sequence' => 110, 'file' => '103_agent_blueprints_policy_engine.sql'],
         ['sequence' => 111, 'file' => '104_customer_patient_continuity_guard.sql'],
         ['sequence' => 112, 'file' => '105_agent_testing_lab.sql'],
+        ['sequence' => 113, 'file' => '106_agent_message_grouping_context_priority.sql'],
     ],
 ];

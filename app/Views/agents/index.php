@@ -323,11 +323,21 @@ $routingModeShortLabels = [
                                 <label class="field compact-field"><span>Tamanho máximo da resposta</span><input type="number" name="ai_max_output_tokens" value="<?= View::e((string) ($agent['ai_max_output_tokens'] ?? '')) ?>" min="64" max="2000" placeholder="Automático pelo modo"><small class="field-hint">Se ficar vazio, o sistema usa um limite adequado ao nível de economia escolhido.</small></label>
                                 <label class="field compact-field"><span>Orçamento da base (caracteres)</span><input type="number" name="ai_knowledge_budget_chars" value="<?= View::e((string) ($agent['ai_knowledge_budget_chars'] ?? '')) ?>" min="1000" max="120000" placeholder="Automático pelo modo"><small class="field-hint">Limita quanto da base de conhecimento entra em cada chamada.</small></label>
                                 <label class="field compact-field">
-                                    <span>Tempo de espera da IA (seg.)</span>
-                                    <input type="number" name="cooldown_seconds" value="<?= (int) ($agent['cooldown_seconds'] ?? 15) ?>" min="0" max="3600">
-                                    <small class="field-hint">A IA aguarda este tempo após a última mensagem recebida. Se outra chegar durante a espera, o relógio reinicia e as mensagens são agrupadas no contexto.</small>
+                                    <span>Tempo para juntar mensagens (seg.)</span>
+                                    <input type="number" name="cooldown_seconds" value="<?= (int) ($agent['cooldown_seconds'] ?? 15) ?>" min="0" max="120">
+                                    <small class="field-hint">Depois da última mensagem do cliente, o assistente espera esse período de silêncio antes de responder. Se chegar outra mensagem, a contagem recomeça.</small>
                                 </label>
                             </div>
+                            <section class="ai-local-automation-card" style="margin-top:12px">
+                                <div class="ai-local-automation-body">
+                                    <div><span class="eyebrow">Conversa natural</span><strong>Responder o conjunto da conversa, não só o último balão</strong><p class="field-hint">Recomendado para WhatsApp: o cliente costuma enviar a mesma ideia em duas ou três mensagens seguidas.</p></div>
+                                    <div class="agent-toggle-grid">
+                                        <label class="check-field compact-check"><input type="checkbox" name="message_grouping_enabled" value="1" <?= !array_key_exists('message_grouping_enabled', $agent) || (int) ($agent['message_grouping_enabled'] ?? 1) === 1 ? 'checked' : '' ?>><span>Aguardar o cliente terminar e agrupar as mensagens antes de responder</span></label>
+                                        <label class="check-field compact-check"><input type="checkbox" name="prioritize_current_turn" value="1" <?= !array_key_exists('prioritize_current_turn', $agent) || (int) ($agent['prioritize_current_turn'] ?? 1) === 1 ? 'checked' : '' ?>><span>Responder primeiro o que o cliente acabou de perguntar e depois retomar o roteiro</span></label>
+                                    </div>
+                                    <p class="field-hint">Exemplo: se o cliente enviar “quero uma indicação” e logo depois “com quem eu falo mesmo?”, o assistente deve considerar as duas mensagens na mesma resposta e só depois seguir para outra pergunta necessária.</p>
+                                </div>
+                            </section>
                             <details class="ai-local-automation-card">
                                 <summary><span><strong>Respostas sem nova cobrança de IA</strong><small>Saudações prontas e reaproveitamento opcional antes de chamar o serviço de IA.</small></span><span class="drawer-chevron"></span></summary>
                                 <div class="ai-local-automation-body">
@@ -573,7 +583,16 @@ $routingModeShortLabels = [
                             <small class="field-hint">Respostas reaproveitadas não são usadas para agenda, dados pessoais, números, links ou mensagens que dependem da conversa.</small>
                         </div>
                     </details>
-                    <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se o cliente enviar outra mensagem, a contagem reinicia.</small></label>
+                    <div class="ai-local-automation-card">
+                        <div class="ai-local-automation-body">
+                            <input type="hidden" name="message_grouping_present" value="1">
+                            <input type="hidden" name="current_turn_priority_present" value="1">
+                            <div><span class="eyebrow">Conversa natural</span><strong>Agrupar mensagens antes de responder</strong><p class="field-hint">Evita responder no meio da fala quando o cliente divide a mesma ideia em vários balões.</p></div>
+                            <label class="check-field"><input type="checkbox" name="message_grouping_enabled" value="1" checked><span>Aguardar o cliente terminar e juntar as mensagens</span></label>
+                            <label class="field"><span>Tempo de silêncio antes da resposta (seg.)</span><input type="number" name="cooldown_seconds" value="10" min="2" max="120"><small class="field-hint">Se chegar outra mensagem dentro desse tempo, a contagem recomeça e o novo balão entra na mesma resposta.</small></label>
+                            <label class="check-field"><input type="checkbox" name="prioritize_current_turn" value="1" checked><span>Responder primeiro as perguntas atuais e depois continuar o roteiro</span></label>
+                        </div>
+                    </div>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
                     <p class="field-hint">Quando ativado, este horário tem prioridade e pausa a IA, a agenda e outras automações fora do expediente.</p>
@@ -698,7 +717,16 @@ $routingModeShortLabels = [
                             <small class="field-hint">Respostas reaproveitadas não são usadas para agenda, dados pessoais, números, links ou mensagens que dependem da conversa.</small>
                         </div>
                     </details>
-                    <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" value="15" min="0" max="3600"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se o cliente enviar outra mensagem, a contagem reinicia.</small></label>
+                    <div class="ai-local-automation-card">
+                        <div class="ai-local-automation-body">
+                            <input type="hidden" name="message_grouping_present" value="1">
+                            <input type="hidden" name="current_turn_priority_present" value="1">
+                            <div><span class="eyebrow">Conversa natural</span><strong>Agrupar mensagens antes de responder</strong><p class="field-hint">Evita responder no meio da fala quando o cliente divide a mesma ideia em vários balões.</p></div>
+                            <label class="check-field"><input type="checkbox" name="message_grouping_enabled" value="1" checked><span>Aguardar o cliente terminar e juntar as mensagens</span></label>
+                            <label class="field"><span>Tempo de silêncio antes da resposta (seg.)</span><input type="number" name="cooldown_seconds" value="10" min="2" max="120"><small class="field-hint">Se chegar outra mensagem dentro desse tempo, a contagem recomeça e o novo balão entra na mesma resposta.</small></label>
+                            <label class="check-field"><input type="checkbox" name="prioritize_current_turn" value="1" checked><span>Responder primeiro as perguntas atuais e depois continuar o roteiro</span></label>
+                        </div>
+                    </div>
                     <label class="field"><span>Integração externa</span><input name="n8n_webhook_url" placeholder="Preencha somente com orientação da equipe RS Connect"></label>
                     <label class="check-field"><input type="checkbox" name="business_hours_enabled" value="1"><span>Responder somente no horário configurado</span></label>
                     <p class="field-hint">Quando ativado, este horário tem prioridade e pausa a IA, a agenda e outras automações fora do expediente.</p>

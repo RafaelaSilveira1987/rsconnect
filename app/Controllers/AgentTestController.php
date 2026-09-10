@@ -49,7 +49,7 @@ final class AgentTestController
             'runs' => $runs,
             'migrationReady' => $migrationReady,
             'sourceConversationId' => max(0, (int) ($_GET['conversation_id'] ?? 0)),
-            'labVersion' => '36.29.3',
+            'labVersion' => '36.29.4',
         ]);
     }
 

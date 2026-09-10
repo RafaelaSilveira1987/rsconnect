@@ -18,7 +18,7 @@ $checks = [
     'assistente atual fica visível no simulador' => str_contains($view, 'Assistente atual: #'),
     'versão do laboratório fica visível' => str_contains($view, 'Lab <?= View::e($labVersion) ?>'),
     'CLI expõe versão instalada' => str_contains($cli, "'version'") && str_contains($cli, 'RS Connect Agent Lab'),
-    'pacote 36.29.3 identificado' => str_contains($version, 'RS Connect 36.29.3'),
+    'pacote 36.29.x identificado' => str_contains($version, 'RS Connect 36.29.'),
 ];
 
 $failed = [];

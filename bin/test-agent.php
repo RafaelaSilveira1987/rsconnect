@@ -20,7 +20,7 @@ $options = getopt('', [
     'help',
 ]);
 
-$labVersion = '36.29.3';
+$labVersion = '36.29.4';
 $service = new AgentSimulationService();
 
 $printTenants = static function (array $tenants): void {
@@ -72,7 +72,7 @@ $printScenarios = static function (array $scenarios, int $tenantId): void {
 };
 
 $help = static function () use ($printTenants, $service): void {
-    echo "RS Connect — Laboratório de assistentes 36.29.3\n\n";
+    echo "RS Connect — Laboratório de assistentes 36.29.4\n\n";
     echo "Primeiro descubra os IDs reais do seu banco:\n";
     echo "  php bin/test-agent.php --list-tenants\n";
     echo "  php bin/test-agent.php --tenant=ID_EMPRESA --list-agents\n\n";

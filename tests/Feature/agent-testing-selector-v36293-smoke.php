@@ -17,7 +17,7 @@ $checks = [
     'troca de empresa recarrega agentes do banco' => str_contains($view, 'data-agent-list-url') && str_contains($view, "cache: 'no-store'") && str_contains($view, 'data.agents'),
     'troca de assistente preserva tenant confirmado' => str_contains($view, 'new URLSearchParams({tenant_id: serverTenantId, agent_id: nextAgentId})'),
     'interface expõe tenant carregado pelo servidor' => str_contains($view, 'Empresa carregada pelo servidor: #<?= $selectedTenantId ?>'),
-    'pacote 36.29.3 identificado' => str_contains($version, 'RS Connect 36.29.3'),
+    'pacote 36.29.x identificado' => str_contains($version, 'RS Connect 36.29.'),
 ];
 
 $failed = [];

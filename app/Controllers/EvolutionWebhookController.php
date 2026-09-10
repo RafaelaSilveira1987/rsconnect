@@ -399,10 +399,15 @@ final class EvolutionWebhookController
                         }
 
                         if (!$outsideBusinessHours) {
+                            $messageGroupingEnabled = !array_key_exists('message_grouping_enabled', $resolvedAgent)
+                                || (int) ($resolvedAgent['message_grouping_enabled'] ?? 1) === 1;
+                            $replyWaitSeconds = $messageGroupingEnabled
+                                ? (int) ($resolvedAgent['cooldown_seconds'] ?? 15)
+                                : 0;
                             $replyWaitRemaining = (new AiReplyTimingService())->remainingForConversation(
                                 $pdo,
                                 $conversationId,
-                                (int) ($resolvedAgent['cooldown_seconds'] ?? 15)
+                                $replyWaitSeconds
                             );
                             $waitingReplyWindow = $replyWaitRemaining > 0;
                         }

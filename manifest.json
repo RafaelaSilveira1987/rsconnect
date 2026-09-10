@@ -1,21 +1,20 @@
-# RS Connect v36.28.7
+# RS Connect v36.29.4
 
-Regras de atendimento com escopo correto: a política pode impedir agenda sem encerrar a conversa.
+Conversa agrupada e continuidade contextual para assistentes de IA.
 
 Principais alterações desta versão:
 
-- regras configuradas como **Não permitir agenda** passam a bloquear somente consulta, pré-reserva e confirmação de horários;
-- ao detectar uma restrição, como idade abaixo do mínimo, o RS Connect envia a mensagem configurada para o cliente;
-- a conversa continua ativa para indicação, esclarecimentos, encaminhamento ou outras orientações permitidas;
-- a intenção de agenda é encerrada após a restrição, evitando que toda mensagem seguinte seja tratada como nova tentativa de agendamento;
-- o aviso da mesma regra não é repetido a cada mensagem da conversa;
-- o histórico diferencia **Agenda não liberada** de um bloqueio completo da conversa;
-- a proteção da agenda continua fail-closed: a IA não pode consultar ou reservar enquanto a regra estiver ativa.
-
-Não há migration nova nesta versão.
+- agrupamento configurável de mensagens consecutivas do cliente antes da resposta;
+- o tempo de espera reinicia a cada nova mensagem recebida no mesmo turno;
+- o assistente recebe o bloco completo do turno atual, e não apenas o último balão;
+- perguntas diretas do cliente têm prioridade antes da retomada do roteiro;
+- a identidade pública configurada do assistente passa a ser fonte de verdade quando o cliente pergunta com quem está falando;
+- telefone já conhecido pelo WhatsApp não deve ser solicitado novamente sem necessidade;
+- cache e respostas locais são evitados quando há múltiplas mensagens agrupadas, preservando o contexto completo;
+- regras críticas de segurança, triagem e agenda permanecem controladas pelo backend e pelo Policy Engine.
 
 Migration obrigatória atual:
 
-`104_customer_patient_continuity_guard.sql`
+`106_agent_message_grouping_context_priority.sql`
 
-Depois do deploy, reinicie o PHP-FPM/container para limpar OPcache.
+Depois do deploy, execute as migrations e reinicie o PHP-FPM/container para limpar OPcache.

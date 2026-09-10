@@ -103,10 +103,14 @@ final class AiContextBuilder
         $removedChars = max(0, $baselineHistoryChars - $historySentChars - $memoryChars)
             + max(0, $knowledgeTotalChars - $knowledgeSentChars);
 
+        $currentTurn = (new AiTurnContextService())->currentTurn($pdo, $conversationId, 8, 2200);
         $preparedAgent = $agent;
         $preparedAgent['knowledge_base'] = $knowledgeSent;
         $preparedAgent['_ai_efficiency_mode'] = $profile['mode'];
         $preparedAgent['_ai_max_output_tokens'] = $profile['max_output_tokens'];
+        $preparedAgent['_current_turn_text'] = trim((string) ($currentTurn['content'] ?? '')) ?: trim($incomingContent);
+        $preparedAgent['_current_turn_count'] = max(1, (int) ($currentTurn['count'] ?? 0));
+        $preparedAgent['_current_turn_message_ids'] = (array) ($currentTurn['message_ids'] ?? []);
         if ($memorySummary !== '') {
             $preparedAgent['_conversation_memory_summary'] = $memorySummary;
             $preparedAgent['_conversation_memory_facts'] = $memoryFacts;
@@ -128,6 +132,7 @@ final class AiContextBuilder
                 'memory_chars_sent' => $memoryChars,
                 'memory_refresh_count' => (int) ($memory['refresh_count'] ?? 0),
                 'memory_scope' => (string) ($memory['scope'] ?? ''),
+                'current_turn_messages' => max(1, (int) ($currentTurn['count'] ?? 0)),
             ],
         ];
     }

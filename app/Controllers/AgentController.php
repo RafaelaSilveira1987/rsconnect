@@ -173,6 +173,8 @@ final class AgentController
             return;
         }
         $replyToReactions = isset($_POST['reply_to_reactions']);
+        $messageGroupingEnabled = !isset($_POST['message_grouping_present']) || isset($_POST['message_grouping_enabled']);
+        $prioritizeCurrentTurn = !isset($_POST['current_turn_priority_present']) || isset($_POST['prioritize_current_turn']);
 
         if ($instanceId < 1 || $name === '' || $segment === '' || $prompt === '') {
             Flash::set('error', 'Escolha a conexão WhatsApp e informe o nome, a área de atendimento e as instruções do assistente.');
@@ -215,14 +217,14 @@ final class AgentController
                      ai_efficiency_mode, ai_max_output_tokens, ai_knowledge_budget_chars, ai_selective_knowledge,
                      ai_local_replies_enabled, ai_greeting_reply, ai_gratitude_reply, ai_farewell_reply, ai_menu_reply,
                      ai_exact_cache_enabled, ai_exact_cache_ttl_hours, knowledge_base, n8n_enabled, n8n_webhook_url, business_hours_enabled, business_timezone,
-                     business_hours_json, after_hours_message, human_handoff_message, handoff_action, cooldown_seconds, reply_to_reactions)
+                     business_hours_json, after_hours_message, human_handoff_message, handoff_action, cooldown_seconds, message_grouping_enabled, prioritize_current_turn, reply_to_reactions)
                  VALUES
                     (:tenant_id, :instance_id, :name, :segment, :provider, :model, :temperature, :prompt,
                      "active", :is_default, :auto_reply_enabled, :handoff_keywords, :max_context_messages,
                      :ai_efficiency_mode, :ai_max_output_tokens, :ai_knowledge_budget_chars, :ai_selective_knowledge,
                      :ai_local_replies_enabled, :ai_greeting_reply, :ai_gratitude_reply, :ai_farewell_reply, :ai_menu_reply,
                      :ai_exact_cache_enabled, :ai_exact_cache_ttl_hours, :knowledge_base, :n8n_enabled, :n8n_webhook_url, :business_hours_enabled, :business_timezone,
-                     :business_hours_json, :after_hours_message, :human_handoff_message, :handoff_action, :cooldown_seconds, :reply_to_reactions)'
+                     :business_hours_json, :after_hours_message, :human_handoff_message, :handoff_action, :cooldown_seconds, :message_grouping_enabled, :prioritize_current_turn, :reply_to_reactions)'
             );
             $insert->execute([
                 'tenant_id' => $tenantId,
@@ -258,6 +260,8 @@ final class AgentController
                 'human_handoff_message' => $business['human_handoff_message'],
                 'handoff_action' => $business['handoff_action'],
                 'cooldown_seconds' => $business['cooldown_seconds'],
+                'message_grouping_enabled' => $messageGroupingEnabled ? 1 : 0,
+                'prioritize_current_turn' => $prioritizeCurrentTurn ? 1 : 0,
                 'reply_to_reactions' => $replyToReactions ? 1 : 0,
             ]);
             $agentId = (int) $pdo->lastInsertId();
@@ -348,6 +352,8 @@ final class AgentController
         $n8nWebhookUrl = trim((string) ($_POST['n8n_webhook_url'] ?? ''));
         $isDefault = isset($_POST['is_default']);
         $replyToReactions = isset($_POST['reply_to_reactions']);
+        $messageGroupingEnabled = isset($_POST['message_grouping_enabled']);
+        $prioritizeCurrentTurn = isset($_POST['prioritize_current_turn']);
         $channelSelectionSubmitted = isset($_POST['channels_present']);
         $selectedInstanceIds = $channelSelectionSubmitted
             ? $this->positiveIntArray($_POST['instance_ids'] ?? [])
@@ -430,6 +436,8 @@ final class AgentController
                      human_handoff_message = :human_handoff_message,
                      handoff_action = :handoff_action,
                      cooldown_seconds = :cooldown_seconds,
+                     message_grouping_enabled = :message_grouping_enabled,
+                     prioritize_current_turn = :prioritize_current_turn,
                      reply_to_reactions = :reply_to_reactions
                  WHERE id = :id AND tenant_id = :tenant_id'
             );
@@ -462,6 +470,8 @@ final class AgentController
                 'human_handoff_message' => $business['human_handoff_message'],
                 'handoff_action' => $business['handoff_action'],
                 'cooldown_seconds' => $business['cooldown_seconds'],
+                'message_grouping_enabled' => $messageGroupingEnabled ? 1 : 0,
+                'prioritize_current_turn' => $prioritizeCurrentTurn ? 1 : 0,
                 'reply_to_reactions' => $replyToReactions ? 1 : 0,
                 'id' => $agentId,
                 'tenant_id' => $tenantId,
@@ -493,6 +503,8 @@ final class AgentController
                 'auto_reply_enabled' => $autoReplyEnabled,
                 'n8n_enabled' => $n8nEnabled,
                 'cooldown_seconds' => $business['cooldown_seconds'],
+                'message_grouping_enabled' => $messageGroupingEnabled,
+                'prioritize_current_turn' => $prioritizeCurrentTurn,
                 'ai_efficiency_mode' => $aiEfficiencyMode,
                 'ai_local_replies_enabled' => $localAutomation['enabled'] === 1,
                 'ai_exact_cache_enabled' => $localAutomation['cache_enabled'] === 1,

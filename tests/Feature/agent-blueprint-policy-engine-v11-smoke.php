@@ -132,8 +132,8 @@ $checks['RS Admin possui catálogo global de nichos e blueprints'] = str_contain
 $checks['publicação de versão não altera tenants automaticamente'] = str_contains($blueprintController, 'empresas existentes não foram alteradas')
     || str_contains($blueprintController, 'empresas existentes não são alteradas');
 $checks['estrutura 103 permanece e pacote exige migration atual do laboratório'] = str_contains($migration, 'agent_blueprint_versions')
-    && str_contains($versionService, "REQUIRED_MIGRATION = '105_agent_testing_lab.sql'")
-    && str_contains($versionService, 'RS Connect 36.29.0');
+    && (str_contains($versionService, "REQUIRED_MIGRATION = '105_agent_testing_lab.sql'") || str_contains($versionService, "REQUIRED_MIGRATION = '106_agent_message_grouping_context_priority.sql'"))
+    && str_contains($versionService, 'RS Connect 36.29.');
 
 $failed = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));
 foreach ($checks as $label => $ok) {

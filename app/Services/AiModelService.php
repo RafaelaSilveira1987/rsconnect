@@ -93,6 +93,8 @@ final class AiModelService
             throw new RuntimeException('A OpenAI não retornou texto.');
         }
 
+        $text = $this->applyCurrentTurnContinuityGuard($text, $agent, $contact);
+
         return mb_substr($text, 0, (int) Env::get('AI_MAX_REPLY_CHARS', 1400));
     }
 
@@ -150,6 +152,8 @@ final class AiModelService
         if ($text === '') {
             throw new RuntimeException('A IA não retornou texto.');
         }
+
+        $text = $this->applyCurrentTurnContinuityGuard($text, $agent, $contact);
 
         return mb_substr($text, 0, (int) Env::get('AI_MAX_REPLY_CHARS', 1400));
     }
@@ -245,6 +249,63 @@ final class AiModelService
         return $this->lastUsage;
     }
 
+    /**
+     * Última barreira de continuidade conversacional.
+     *
+     * Regras de negócio críticas continuam no Policy Engine. Aqui só garantimos
+     * coerência de conversa para fatos que o RS Connect já conhece com certeza:
+     * identidade pública do assistente e telefone do contato recebido pelo canal.
+     */
+    private function applyCurrentTurnContinuityGuard(string $reply, array $agent, array $contact): string
+    {
+        $reply = trim($reply);
+        if ($reply === '') {
+            return $reply;
+        }
+
+        $prioritizeCurrentTurn = !array_key_exists('prioritize_current_turn', $agent)
+            || (int) ($agent['prioritize_current_turn'] ?? 1) === 1;
+        if (!$prioritizeCurrentTurn) {
+            return $reply;
+        }
+
+        $currentTurn = trim((string) ($agent['_current_turn_text'] ?? ''));
+        if ($currentTurn === '') {
+            return $reply;
+        }
+
+        // Se o cliente perguntou com quem está falando, o nome configurado no
+        // assistente é a fonte de verdade. O modelo pode variar a frase, mas não
+        // pode ignorar essa pergunta nem inventar outra identidade.
+        $asksIdentity = preg_match(
+            '/(?:com\\s+quem\\s+(?:eu\\s+)?(?:falo|estou\\s+falando)|quem\\s+(?:é|e)\\s+(?:você|voce)|qual\\s+(?:é|e)\\s+(?:o\\s+)?seu\\s+nome|como\\s+(?:você|voce)\\s+se\\s+chama)/iu',
+            $currentTurn
+        ) === 1;
+        $assistantName = trim((string) ($agent['name'] ?? ''));
+        if ($asksIdentity && $assistantName !== '') {
+            $firstName = trim((string) preg_split('/[,_\\-–—]/u', $assistantName, 2)[0]);
+            $hasIdentity = $firstName !== '' && mb_stripos($reply, $firstName) !== false;
+            if (!$hasIdentity) {
+                $reply = 'Você está falando com ' . $assistantName . '. ' . ltrim($reply);
+            }
+        }
+
+        // No WhatsApp o telefone já é um dado técnico do contato. Se o modelo
+        // tentar pedir o telefone novamente sem que o cliente esteja falando de
+        // telefone, removemos essa redundância e preservamos a coleta de outros
+        // dados (por exemplo, o nome da pessoa).
+        $knownPhone = trim((string) ($contact['phone'] ?? $contact['phone_number'] ?? $contact['whatsapp'] ?? ''));
+        $turnMentionsPhone = preg_match('/\\b(?:telefone|celular|whatsapp|número|numero)\\b/iu', $currentTurn) === 1;
+        if ($knownPhone !== '' && !$turnMentionsPhone) {
+            $reply = preg_replace('/\\bnome\\s+e\\s+telefone\\b/iu', 'nome', $reply) ?? $reply;
+            $reply = preg_replace('/\\btelefone\\s+e\\s+nome\\b/iu', 'nome', $reply) ?? $reply;
+            $reply = preg_replace('/(?:^|(?<=[.!?])\\s+)(?:você|voce)?\\s*(?:pode\\s+)?(?:me\\s+)?(?:informar|passar|dizer)\\s+(?:o\\s+)?(?:seu\\s+)?telefone\\s*[?!.]?/iu', '', $reply) ?? $reply;
+            $reply = preg_replace('/\\s{2,}/u', ' ', $reply) ?? $reply;
+        }
+
+        return trim($reply);
+    }
+
     private function provider(array $agent): string
     {
         $credentialProvider = trim((string) ($agent['credential_provider'] ?? ''));
@@ -303,6 +364,12 @@ final class AiModelService
         $contactName = trim((string) ($contact['name'] ?? $conversation['contact_name'] ?? ''));
         $contactPhone = trim((string) ($contact['phone'] ?? $conversation['phone'] ?? ''));
         $timezone = trim((string) ($agent['business_timezone'] ?? Env::get('APP_TIMEZONE', 'America/Sao_Paulo')));
+        $assistantName = trim((string) ($agent['name'] ?? ''));
+        $assistantRole = trim((string) ($agent['segment'] ?? ''));
+        $prioritizeCurrentTurn = !array_key_exists('prioritize_current_turn', $agent)
+            || (int) ($agent['prioritize_current_turn'] ?? 1) === 1;
+        $currentTurnText = trim((string) ($agent['_current_turn_text'] ?? ''));
+        $currentTurnCount = max(1, (int) ($agent['_current_turn_count'] ?? 1));
 
         $group = trim((string) ($conversation['contact_group'] ?? $contact['contact_group'] ?? 'unclassified')) ?: 'unclassified';
         $groupLabel = ConversationFlowService::GROUPS[$group] ?? 'Outro grupo';
@@ -333,8 +400,12 @@ final class AiModelService
             'Responda sempre em português do Brasil.',
             'Seja breve, educada e objetiva. Evite textos longos.',
             'Faça somente uma pergunta por mensagem.',
+            'Quando o cliente enviar várias mensagens antes da sua resposta, trate todas como uma única fala e responda ao conjunto, não apenas ao último balão.',
+            'Se o cliente fizer uma pergunta direta durante um fluxo, responda essa pergunta primeiro. Só depois retome a etapa pendente do atendimento, sem reiniciar o roteiro.',
+            'Se o cliente perguntar com quem está falando, qual é o seu nome ou quem você é, responda usando o nome público do assistente informado pelo RS Connect. Não invente outro nome e não peça o nome ou telefone do cliente para responder essa pergunta.',
             'Não invente preço, prazo, disponibilidade, política ou informação que não esteja no prompt/base.',
             'Não pergunte novamente informações que já estejam no histórico, no cadastro do contato ou no resumo da demanda.',
+            'Quando o telefone já estiver disponível no cadastro do WhatsApp, não peça o telefone novamente como condição para continuar um atendimento comum.',
             'Se a pergunta exigir decisão humana, peça uma confirmação e diga que encaminhará para atendimento.',
             'Não mencione que você é um modelo de linguagem.',
             'Se o lead pedir humano, atendente, suporte ou uma pessoa, sinalize transferência em vez de insistir no atendimento automático.',
@@ -402,7 +473,25 @@ final class AiModelService
                 ($groupInstructions !== '' ? '- Orientação específica: ' . $groupInstructions . "\n" : '') . "\n";
         }
 
+        $currentTurnBlock = '';
+        if ($prioritizeCurrentTurn && $currentTurnText !== '') {
+            $currentTurnBlock = "TURNO ATUAL DO CLIENTE (prioridade de resposta):
+"
+                . "O cliente enviou " . $currentTurnCount . " mensagem(ns) desde a sua última resposta. Trate o bloco abaixo como UMA ÚNICA FALA e resolva primeiro as perguntas/pedidos explícitos antes de continuar o roteiro:
+---
+"
+                . mb_substr($currentTurnText, 0, 2200)
+                . "
+---
+"
+                . "Se houver mais de um pedido neste bloco, responda de forma curta a todos os que puderem ser atendidos agora. Depois, se ainda for necessário, faça somente a próxima pergunta pendente do fluxo.
+
+";
+        }
+
         $structuredContext = "CONTEXTO CADASTRAL PRIORITÁRIO DO RS CONNECT (fonte de verdade):
+" .
+            '- Assistente atual: ' . ($assistantName !== '' ? $assistantName : 'não informado') . ($assistantRole !== '' ? ' — ' . $assistantRole : '') . "
 " .
             '- Nome: ' . ($contactName !== '' ? $contactName : 'não informado') . "
 " .
@@ -493,7 +582,7 @@ final class AiModelService
 "
                         . '- Dados estruturados já coletados: ' . ($collected !== [] ? json_encode($collected, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '{}') . "
 "
-                        . "REGRAS: nunca contrarie elegibilidade, capability ou bloqueio do RS Connect. Se houver próximo campo obrigatório, pergunte somente esse dado (salvo instrução explícita do modo híbrido). Não afirme disponibilidade, pré-reserva ou confirmação por texto: essas ações só existem quando o backend as executa.
+                        . "REGRAS: nunca contrarie elegibilidade, capability ou bloqueio do RS Connect. Se houver pergunta ou pedido explícito no TURNO ATUAL, responda primeiro ao que for permitido; só depois retome o próximo campo obrigatório. Quando for retomar a coleta, faça somente uma pergunta por vez. Não afirme disponibilidade, pré-reserva ou confirmação por texto: essas ações só existem quando o backend as executa.
 
 ";
                 }
@@ -521,6 +610,7 @@ final class AiModelService
         return trim($base . "
 
 " .
+            $currentTurnBlock .
             $structuredContext .
             $policyEngineBlock .
             $handoffBlock .

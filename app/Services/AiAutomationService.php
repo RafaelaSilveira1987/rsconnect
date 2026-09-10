@@ -411,7 +411,11 @@ final class AiAutomationService
                 return;
             }
 
-            $cooldownSeconds = max(0, min(3600, (int) ($agent['cooldown_seconds'] ?? 15)));
+            $messageGroupingEnabled = !array_key_exists('message_grouping_enabled', $agent)
+                || (int) ($agent['message_grouping_enabled'] ?? 1) === 1;
+            $cooldownSeconds = $messageGroupingEnabled
+                ? max(0, min(3600, (int) ($agent['cooldown_seconds'] ?? 15)))
+                : 0;
             $remainingSeconds = $this->cooldownRemaining($pdo, $conversationId, $cooldownSeconds);
 
             // 36.6.16: cooldown_seconds passa a representar o tempo mínimo de espera
@@ -569,7 +573,14 @@ final class AiAutomationService
                 }
             }
 
-            if ($this->shouldHandoff($incomingContent, (string) ($agent['handoff_keywords'] ?? ''))) {
+            $currentTurn = (new AiTurnContextService())->currentTurn($pdo, $conversationId, 8, 2200);
+            $currentTurnContent = trim((string) ($currentTurn['content'] ?? ''));
+            if ($currentTurnContent === '') {
+                $currentTurnContent = $incomingContent;
+            }
+            $currentTurnCount = max(1, (int) ($currentTurn['count'] ?? 0));
+
+            if ($this->shouldHandoff($currentTurnContent, (string) ($agent['handoff_keywords'] ?? ''))) {
                 $this->handoff($pdo, $instance, $conversation, $agent, $conversationId);
                 return;
             }
@@ -621,7 +632,7 @@ final class AiAutomationService
 
             // Antes de reservar franquia ou chamar o provedor, tenta respostas determinísticas
             // configuradas e o cache exato opcional. Essas saídas não consomem tokens.
-            if (!$afterHoursRecovery && $routingTransition === null) {
+            if (!$afterHoursRecovery && $routingTransition === null && $currentTurnCount === 1) {
                 $localReply = (new AiLocalReplyService())->match($agent, $incomingContent);
                 if (!empty($localReply['matched']) && trim((string) ($localReply['reply'] ?? '')) !== '') {
                     $conversation = $this->conversation($pdo, $conversationId);
@@ -699,7 +710,7 @@ final class AiAutomationService
                 );
             }
 
-            $aiRoute = (new AiRouterService())->route($routingAgent, $conversation, $incomingContent);
+            $aiRoute = (new AiRouterService())->route($routingAgent, $conversation, $currentTurnContent);
             $generationAgent = array_merge($routingAgent, (array) ($aiRoute['agent_overrides'] ?? []));
 
             $quota = $usageService->reserveAutoReply(
@@ -735,7 +746,7 @@ final class AiAutomationService
                 $generationAgent['_routing_handoff_to_agent_name'] = (string) $routingTransition['to_agent_name'];
             }
 
-            $preparedContext = (new AiContextBuilder())->build($pdo, $generationAgent, $conversationId, $incomingContent);
+            $preparedContext = (new AiContextBuilder())->build($pdo, $generationAgent, $conversationId, $currentTurnContent);
             $messages = (array) ($preparedContext['messages'] ?? []);
             $generationAgent = is_array($preparedContext['agent'] ?? null) ? $preparedContext['agent'] : $generationAgent;
             $efficiencyTelemetry = is_array($preparedContext['telemetry'] ?? null) ? $preparedContext['telemetry'] : [];
@@ -805,7 +816,9 @@ final class AiAutomationService
             $usageReservationId = 0;
 
             // O cache é opcional, exato e invalidado automaticamente quando prompt, base ou modelo mudam.
-            (new AiExactCacheService())->store($pdo, (int) $instance['tenant_id'], $agent, $incomingContent, $reply);
+            if ($currentTurnCount === 1) {
+                (new AiExactCacheService())->store($pdo, (int) $instance['tenant_id'], $agent, $incomingContent, $reply);
+            }
 
             $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.replied', 'success', null, $reply, [
                 'http_status' => $result['status'] ?? null,
@@ -1092,6 +1105,7 @@ final class AiAutomationService
 
             $agentStatement = $pdo->prepare(
                 'SELECT a.id, a.tenant_id, a.status, a.auto_reply_enabled, a.cooldown_seconds,
+                        COALESCE(a.message_grouping_enabled, 1) AS message_grouping_enabled,
                         COALESCE(a.reply_to_reactions, 0) AS reply_to_reactions
                  FROM ai_agents a
                  INNER JOIN tenants t
@@ -1377,10 +1391,13 @@ final class AiAutomationService
             }
 
             $bypassReplyWait = $source === 'manual';
+            $replyWaitSeconds = (int) ($agent['message_grouping_enabled'] ?? 1) === 1
+                ? (int) ($agent['cooldown_seconds'] ?? 15)
+                : 0;
             $replyWaitRemaining = (new AiReplyTimingService())->remainingForConversation(
                 $pdo,
                 (int) $candidate['conversation_id'],
-                (int) ($agent['cooldown_seconds'] ?? 15)
+                $replyWaitSeconds
             );
 
             $preScheduleResult = ['skip_ai' => false, 'handled' => false];

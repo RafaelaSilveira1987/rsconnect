@@ -1,18 +1,30 @@
-# RS Connect 36.29.3
+# RS Connect 36.29.4
 
-Correção do Laboratório de Assistentes para troca confiável de empresa e assistente.
+Melhoria da continuidade de conversa dos assistentes no WhatsApp.
 
-- seletores independentes para evitar reaproveitamento de `agent_id` de outra empresa;
-- validação server-side do tenant e do assistente;
-- ID/modelo/status visíveis no seletor;
-- quantidade de assistentes encontrada por empresa;
-- versão do laboratório visível na tela e no CLI;
-- nenhuma migration nova: permanece `105_agent_testing_lab.sql`.
+## O que mudou
 
-Após o deploy, valide:
+- configuração por assistente para **aguardar o cliente terminar e agrupar mensagens** antes de responder;
+- o tempo configurado passa a representar silêncio após a última mensagem; se chegar outro balão, a contagem recomeça;
+- o RS Connect reconstrói o **turno atual** com todas as mensagens recebidas desde a última resposta;
+- o assistente recebe instrução prioritária para responder primeiro perguntas e pedidos do turno atual e só depois retomar o roteiro;
+- a identidade pública do assistente é enviada como contexto confiável; perguntas como “com quem eu falo?” devem usar o nome real configurado;
+- quando o telefone já veio do WhatsApp/cadastro, o prompt operacional impede pedir o telefone novamente sem necessidade;
+- respostas locais/cache exato não são usados quando há vários balões no mesmo turno, evitando responder somente o último fragmento;
+- agenda/triagem continuam usando o mesmo bloco agrupado e as travas do Policy Engine permanecem intactas.
+
+## Migration
+
+Execute:
 
 ```bash
-php bin/test-agent.php --version
-php bin/test-agent.php --list-tenants
-php bin/test-agent.php --tenant=ID --list-agents
+php bin/migrate.php up
+php bin/migrate.php status
+php bin/migrate.php verify
 ```
+
+Migration nova:
+
+`106_agent_message_grouping_context_priority.sql`
+
+Depois reinicie o PHP-FPM/container para limpar OPcache.
