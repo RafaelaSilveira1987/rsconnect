@@ -145,7 +145,9 @@ final class AppVersionService
     // RS Connect 36.30.5 — corrige vazamento visual dos layouts e reconcilia o número conectado via fetchInstances.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.30.5 — Correção de identidade das instâncias';
     // RS Connect 36.30.6 — corrige alerta fantasma quando os números já conferem e limpa o detalhe visual de conexões saudáveis.
-    public const PACKAGE_LABEL = 'RS Connect 36.30.6 — Correção do alerta de identidade';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.30.6 — Correção do alerta de identidade';
+    // RS Connect 36.30.7 — infraestrutura de instalação normalizada, reproduzível e documentada para MySQL/MariaDB.
+    public const PACKAGE_LABEL = 'RS Connect 36.30.7 — Infraestrutura de instalação reproduzível';
     public const REQUIRED_MIGRATION = '109_evolution_instance_identity_cleanup.sql';
 
     private PDO $pdo;

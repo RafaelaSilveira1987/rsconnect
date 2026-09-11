@@ -1,4 +1,16 @@
-# RS Connect 36.30.6
+# RS Connect 36.30.7
+
+## Infraestrutura de instalação reproduzível — 36.30.7
+
+- restaura `composer.json` como JSON válido e Composer-compatible;
+- restaura `.env.example`, `.env.local.example` e `.env.vps.example` com as variáveis realmente usadas pela aplicação;
+- restaura `.dockerignore` e `.gitignore` para impedir publicação de segredos e arquivos de execução;
+- restaura `docker-compose.yml` com MySQL 8.4, serviço de migrations e health check;
+- normaliza o `Dockerfile` PHP 8.3/Apache, extensões necessárias, OPcache e validação offline das migrations;
+- restaura `build-full-release.sh` como script Bash de validação, checksums e empacotamento;
+- restaura `manifest.json` como JSON de release;
+- atualiza o guia de instalação para o banco realmente usado: **MySQL/MariaDB**;
+- nenhuma migration nova; permanece obrigatória `109_evolution_instance_identity_cleanup.sql`.
 
 ## Hotfix do alerta de identidade — 36.30.6
 

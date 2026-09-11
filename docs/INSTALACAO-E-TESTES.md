@@ -1,119 +1,162 @@
-# Instalação e testes — ZIP 28
+# RS Connect — instalação e testes
 
-## 1. Aplicar no RS Connect
+Guia canônico a partir da versão **36.30.7**.
 
-1. Copie o conteúdo deste pacote para a raiz do repositório do ZIP 27.
-2. Mescle os arquivos da pasta `patches/` com o controller, as rotas e a view existentes.
-3. Suba no GitHub e faça **Redeploy** no EasyPanel.
-4. No Adminer, execute:
+## 1. Requisitos
 
-```text
-database/migrations/030_google_calendar_availability_modes.sql
+- PHP 8.2 ou superior (imagem oficial do projeto: PHP 8.3 + Apache);
+- extensões `pdo`, `pdo_mysql`, `curl`, `mbstring` e `openssl`;
+- MySQL 8.0+ ou MariaDB 10.6+;
+- HTTPS em produção;
+- acesso à Evolution API quando WhatsApp estiver habilitado;
+- armazenamento persistente para `storage/`.
+
+> O banco da RS Connect é MySQL/MariaDB. Não configure PostgreSQL para este projeto.
+
+## 2. Instalação local com Docker Compose
+
+```bash
+cp .env.local.example .env
 ```
 
-5. Pressione `Ctrl + F5`.
+Revise as credenciais e então:
 
-## 2. Configurar a credencial Google no n8n
-
-Nos dois workflows, abra os nós Google/HTTP que pedem `Google Calendar OAuth2 API` e selecione a credencial da empresa. Em n8n self-hosted, use uma credencial Google Calendar OAuth2 configurada no Google Cloud.
-
-Cada empresa deve usar seu próprio workflow/credencial ou uma segregação equivalente. Não compartilhe a agenda de uma empresa com outra.
-
-## 3. Importar o fluxo de espaços livres
-
-Importe:
-
-```text
-docs/n8n_templates/template-agenda-google-espacos-livres.json
+```bash
+docker compose up --build -d
 ```
 
-Depois:
+O Compose sobe três serviços:
 
-1. Selecione a credencial no nó **Google Calendar — listar eventos**.
-2. Ative o workflow.
-3. Copie a Production URL.
-4. No RS Connect, selecione **Calcular pelos espaços livres da agenda**.
-5. Cole a URL em **Webhook n8n — espaços livres**.
+1. `db` — MySQL 8.4;
+2. `migrate` — executa `php bin/migrate.php bootstrap --yes` e termina;
+3. `app` — só inicia depois do banco saudável e das migrations concluídas.
 
-### Regra
+A aplicação fica em `http://localhost:8000` e o MySQL local é publicado em `localhost:3307` apenas para diagnóstico/desenvolvimento.
 
-- `opaque`/Ocupado: bloqueia o período;
-- `transparent`/Disponível: não bloqueia;
-- `interval_minutes`: pausa após cada atendimento. Duração 60 + intervalo 60 cria inícios a cada 120 minutos.
+Para conferir:
 
-### Teste
-
-1. Crie um evento Ocupado das 14:00 às 15:00.
-2. Busque disponibilidade para a mesma data.
-3. O horário 14:00 não deve aparecer.
-4. Troque o evento para Disponível.
-5. Busque novamente; 14:00 deve voltar.
-
-## 4. Importar o fluxo de eventos VAGO
-
-Importe:
-
-```text
-docs/n8n_templates/template-agenda-google-eventos-vago.json
+```bash
+docker compose ps
+docker compose logs migrate
+docker compose logs app
 ```
 
-Depois:
+## 3. Instalação em VPS / EasyPanel
 
-1. Abra os três nós HTTP do Google e selecione a credencial `Google Calendar OAuth2 API`.
-2. Ative o workflow.
-3. Copie a Production URL.
-4. No RS Connect, selecione **Usar eventos marcados como VAGO**.
-5. Cole a URL em **Webhook n8n — eventos VAGO**.
+Use `.env.vps.example` somente como referência. **Não sobrescreva um `.env` de produção já existente.**
 
-Crie no Google Agenda eventos com estes títulos:
+No EasyPanel, prefira cadastrar as variáveis no ambiente do serviço. No mínimo configure:
 
 ```text
-VAGO — ONLINE
-VAGO — PRESENCIAL
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://seu-dominio
+APP_KEY=<segredo forte>
+DB_HOST=<host mysql>
+DB_PORT=3306
+DB_DATABASE=<banco>
+DB_USERNAME=<usuario>
+DB_PASSWORD=<senha>
+EVOLUTION_DEFAULT_URL=<url evolution>
+EVOLUTION_DEFAULT_API_KEY=<se aplicável>
+EVOLUTION_WEBHOOK_TOKEN=<segredo forte>
 ```
 
-Configure-os como **Disponível**, não Ocupado.
-
-### Ciclo
+Mantenha `storage/` persistente, especialmente:
 
 ```text
-VAGO — ONLINE
-→ PRÉ-RESERVADO — ONLINE — Maria
-→ AGENDADO — ONLINE — Maria
+storage/conversation-attachments
+storage/generated-reports
+storage/app/white-label
+storage/logs
 ```
 
-Em cancelamento/liberação:
+O document root do servidor web deve ser `public/`.
 
-```text
-PRÉ-RESERVADO/AGENDADO
-→ VAGO — ONLINE
+## 4. Banco vazio
+
+Com o banco criado e vazio:
+
+```bash
+php bin/check-requirements.php
+php bin/migrate.php verify
+php bin/migrate.php install --yes
+php bin/migrate.php status
 ```
 
-## 5. Testar pelo arquivo de payloads
+Em Docker Compose, o serviço `migrate` executa o bootstrap automaticamente.
 
-Use exemplos de:
+## 5. Atualização de banco existente
 
-```text
-docs/n8n_templates/payloads-exemplo.json
+Antes de qualquer atualização, faça backup validado.
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php status
+php bin/migrate.php up --dry-run
+php bin/migrate.php up
+php bin/migrate.php status
 ```
 
-No n8n, clique em **Listen for test event** no Webhook e envie o JSON correspondente pelo Postman/Insomnia.
+Nunca reaplique migrations SQL manualmente sem verificar `schema_migrations` e o status do runner.
 
-## 6. Validação esperada no RS Connect
+## 6. Health checks
 
-Na busca, o callback para `/webhooks/calendar/availability` recebe:
+- `/health/live` — processo web vivo;
+- `/health/ready` — aplicação pronta para tráfego;
+- `/health/ready/details` — diagnóstico detalhado, protegido para RS Admin.
 
-- `source=google_free_slots` ou `source=google_marked_slots`;
-- lista `slots`;
-- no modo VAGO, `google_event_id` e `modality`.
+Exemplo:
 
-Nas atualizações do modo VAGO, recebe:
+```bash
+curl -fsS https://seu-dominio/health/live
+curl -fsS https://seu-dominio/health/ready
+```
 
-- `event=calendar.marked_slot.updated`;
-- `action=hold|confirm|release`;
-- `state=held|confirmed|released`;
-- `google_event_id`.
+## 7. Validação pós-deploy
 
-## 7. Concorrência
+Execute:
 
-O fluxo de eventos VAGO relê o evento antes da alteração e envia o cabeçalho `If-Match` com o `etag`. Se outra pessoa alterar o evento entre a busca e a reserva, o Google retorna conflito em vez de sobrescrever silenciosamente.
+```bash
+php bin/check-requirements.php
+php bin/migrate.php verify
+php bin/migrate.php status
+php tests/Feature/infrastructure-installation-v36307-smoke.php
+```
+
+Depois valide no navegador:
+
+1. login;
+2. dashboard;
+3. uma instância WhatsApp conectada;
+4. envio e recebimento de uma mensagem;
+5. Conversas e Contatos;
+6. Assistente/IA;
+7. Agenda;
+8. Relatórios;
+9. portal de cobrança, quando habilitado.
+
+## 8. Build de release
+
+O projeto contém um empacotador de verificação:
+
+```bash
+bash build-full-release.sh 36.30.7
+```
+
+Ele valida requisitos, manifesto de migrations, JSONs de infraestrutura, smoke test, Docker Compose quando disponível, gera `SHA256SUMS.txt` e cria o ZIP.
+
+## 9. Segurança
+
+Nunca versionar ou enviar no ZIP de release:
+
+- `.env` real;
+- chaves OpenAI/Gemini;
+- API Key da Evolution;
+- tokens n8n;
+- credenciais Asaas;
+- dumps de produção;
+- anexos e relatórios privados;
+- logs reais.
+
+Os arquivos `.env.*.example` contêm apenas modelos e placeholders.

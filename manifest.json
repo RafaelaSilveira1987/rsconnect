@@ -1,48 +1,20 @@
-# RS Connect v36.30.6
-
-Fechamento visual e QA responsivo sobre a base 36.29.9, consolidando Laboratório de Assistentes, Avisos Operacionais, Fila/Equipe e superfícies administrativas remanescentes sem alterar regras de negócio.
-
-Alterações principais:
-
-- editor responsivo do passo a passo do atendimento;
-- personalização da ordem gravada em `tenant_agent_workflow_steps`;
-- ordem do fluxo usada para priorizar a próxima coleta da triagem;
-- regras operacionais disponíveis em `/agents` para usuários com `agents.manage`;
-- segmento, blueprint, versão e proteções estruturais permanecem no RS Admin;
-- `policy.fail_closed` permanece protegido para clientes;
-- padronização visual de formulários, checkboxes, radios, filtros e ações;
-- responsividade mobile reforçada sem alterar seletores funcionais;
-
-- segunda rodada visual unificando hierarquia, cards e ações em Agentes, Instâncias, Onboarding, Configurações e RS Admin;
-- pontos de quebra adicionais para tablet e celulares estreitos;
-- nenhuma migration nova.
-- terceira rodada operacional: correções dos layouts revisados e Organização de Contatos usada como regra efetiva da IA;
-- quarta rodada visual: Agenda, Campanhas, Relatórios e Cobranças harmonizados para desktop e mobile;
-- permissões de automação alinhadas em cards consistentes sem alterar os checkboxes funcionais;
-- cliente/paciente atual recebe continuidade e não vira novo lead automático em conversas rotineiras;
-- Contatos e Conversas compartilham a mesma normalização de classificação e prévia de contexto da IA.
-
-- quinta rodada de fechamento: Laboratório e Avisos Operacionais sem CSS inline;
-- Fila/Equipe com layout responsivo próprio e tabela convertida em cards no mobile;
-- foco por teclado e acabamento final em Agenda/Disponibilidade, Permissões, Usuários, LGPD, Signup, Segurança e n8n;
-- QA de regressão ampliado sem migration nova.
-
-Migration obrigatória atual:
-`107_service_department_memberships.sql`
-
-- sexta evolução funcional: Fila/Setores ativados e integrados às Conversas;
-- vínculo persistente entre equipe e setores;
-- transferência de conversa para setor com liberação segura do responsável e pausa da IA;
-- setor operacional incluído no contexto estruturado da IA;
-- migration obrigatória atual: `107_service_department_memberships.sql`.
-
-- v36.30.1: Fila e setores opcional por empresa, drawer de distribuição e correções responsivas do frontend.
-
-- v36.30.2: notas internas privadas por conversa com histórico de autor/data e isolamento de WhatsApp/IA.
-
-- v36.30.3: indicadores de atendimento com SLA da primeira resposta humana, duração do ciclo, espera atual e carga por profissional/setor.
-- v36.30.4: instâncias resilientes com número autorizado, bloqueio por divergência, diagnóstico e recuperação automática segura.
-
-- v36.30.5: correção do vazamento visual dos layouts e reconhecimento robusto do número conectado via fetchInstances; migration 109 limpa valores inválidos como códigos HTTP.
-
-- v36.30.6: hotfix visual/lógico da identidade; aviso de bloqueio respeita `hidden`, estado verificado prevalece sobre mismatch antigo e conexões saudáveis não exibem resíduos como HTTP 200.
+{
+  "name": "RS Connect",
+  "package_version": "36.30.7",
+  "release_name": "Infraestrutura de instalação reproduzível",
+  "runtime": {
+    "php": ">=8.2",
+    "container_image": "php:8.3-apache",
+    "database": "MySQL 8.0+ / MariaDB 10.6+",
+    "document_root": "public/"
+  },
+  "database": {
+    "driver": "mysql",
+    "required_migration": "109_evolution_instance_identity_cleanup.sql",
+    "migration_runner": "php bin/migrate.php"
+  },
+  "install": {
+    "local": "cp .env.local.example .env && docker compose up --build -d",
+    "production": "configure .env/variables, then php bin/migrate.php verify && php bin/migrate.php up"
+  }
+}
