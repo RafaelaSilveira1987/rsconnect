@@ -735,6 +735,9 @@ final class ConversationFlowService
 
     private function stageFor(string $intent, string $demandStatus, bool $existingPatient): string
     {
+        if ($intent === 'human_handoff') {
+            return 'human_handoff';
+        }
         if (in_array($demandStatus, ['collected', 'refused', 'not_required'], true)) {
             return in_array($intent, ['schedule', 'reschedule'], true) ? 'scheduling' : 'qualified';
         }

@@ -338,6 +338,11 @@ final class AgentTriageService
                     $result['message_sent'] = !empty($send['ok']);
                     $result['message_error'] = $send['error'] ?? null;
                 }
+                if ($decisionType === 'handoff' && !$isScopedCalendarRestriction) {
+                    $this->handoffConversation($pdo, $tenantId, $conversationId, $decision);
+                    $result['attendance_mode'] = 'paused';
+                    $result['operational_status'] = 'waiting_agent';
+                }
                 return $result;
             }
 
@@ -698,23 +703,44 @@ final class AgentTriageService
             return false;
         }
         try {
+            $cycleFilter = '';
+            if ($this->tableExists($pdo, 'conversation_service_cycles')) {
+                $cycleFilter = '
+                   AND created_at >= COALESCE((
+                       SELECT opened_at
+                       FROM conversation_service_cycles
+                       WHERE tenant_id = :cycle_tenant_id
+                         AND conversation_id = :cycle_conversation_id
+                         AND cycle_status = "active"
+                       ORDER BY cycle_number DESC
+                       LIMIT 1
+                   ), "1970-01-01 00:00:00")';
+            }
+
             $stmt = $pdo->prepare(
                 'SELECT 1
                  FROM conversation_policy_decisions
                  WHERE tenant_id = :tenant_id
                    AND conversation_id = :conversation_id
                    AND policy_key = :policy_key
-                   AND (:reason_code = \'\' OR reason_code = :reason_code_match)
+                   AND (:reason_code = \'\' OR reason_code = :reason_code_match)'
+                . $cycleFilter .
+                '
                  ORDER BY id DESC
                  LIMIT 1'
             );
-            $stmt->execute([
+            $params = [
                 'tenant_id' => $tenantId,
                 'conversation_id' => $conversationId,
                 'policy_key' => mb_substr($policyKey, 0, 120),
                 'reason_code' => mb_substr($reasonCode, 0, 120),
                 'reason_code_match' => mb_substr($reasonCode, 0, 120),
-            ]);
+            ];
+            if ($cycleFilter !== '') {
+                $params['cycle_tenant_id'] = $tenantId;
+                $params['cycle_conversation_id'] = $conversationId;
+            }
+            $stmt->execute($params);
             return (bool) $stmt->fetchColumn();
         } catch (Throwable) {
             return false;
@@ -745,6 +771,45 @@ final class AgentTriageService
                 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ]);
         } catch (Throwable) {
+        }
+    }
+
+    private function handoffConversation(PDO $pdo, int $tenantId, int $conversationId, array $decision): void
+    {
+        if ($tenantId < 1 || $conversationId < 1) {
+            return;
+        }
+        try {
+            $pdo->prepare(
+                'UPDATE conversations
+                 SET attendance_mode = "paused",
+                     status = IF(status = "closed", "open", status),
+                     operational_status = "waiting_agent"
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            )->execute([
+                'id' => $conversationId,
+                'tenant_id' => $tenantId,
+            ]);
+
+            if ($this->tableExists($pdo, 'conversation_events')) {
+                $pdo->prepare(
+                    'INSERT INTO conversation_events
+                        (tenant_id, conversation_id, event_type, description, metadata_json)
+                     VALUES
+                        (:tenant_id, :conversation_id, "agent.policy.handoff", :description, :metadata_json)'
+                )->execute([
+                    'tenant_id' => $tenantId,
+                    'conversation_id' => $conversationId,
+                    'description' => 'Atendimento encaminhado para a equipe por regra operacional.',
+                    'metadata_json' => json_encode([
+                        'policy' => $decision['policy_key'] ?? null,
+                        'code' => $decision['code'] ?? null,
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ]);
+            }
+        } catch (Throwable) {
+            // O Policy Engine continua fail-closed: se a atualização operacional
+            // falhar, skip_ai permanece verdadeiro e a IA não executa a ação.
         }
     }
 

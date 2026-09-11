@@ -513,11 +513,13 @@ final class ConversationOwnershipService
     {
         $tenantId = (int) ($conversation['tenant_id'] ?? 0);
         $conversationId = (int) ($conversation['id'] ?? 0);
-        $settings = $this->settingsForTenant($pdo, $tenantId);
-        if (!$settings['enabled'] || $conversationId < 1 || (string) ($conversation['status'] ?? '') !== 'closed') {
+        if ($conversationId < 1 || $tenantId < 1 || (string) ($conversation['status'] ?? '') !== 'closed') {
             return $conversation;
         }
 
+        // Reabrir um atendimento é uma regra de ciclo, não uma funcionalidade
+        // opcional de "responsável exclusivo". O novo ciclo começa limpo e a
+        // chamada que disparou a reabertura decide depois se haverá takeover humano.
         $pdo->prepare(
             'UPDATE conversations
              SET status = "open",
@@ -527,7 +529,12 @@ final class ConversationOwnershipService
                  assignment_source = "released",
                  assignment_updated_by_user_id = :actor_id,
                  assignment_released_at = CURRENT_TIMESTAMP,
-                 operational_status = "waiting_agent"
+                 attendance_mode = "ai",
+                 department_id = NULL,
+                 ai_agent_id = NULL,
+                 priority = "normal",
+                 operational_status = "new",
+                 unread_count = 0
              WHERE id = :id AND tenant_id = :tenant_id'
         )->execute([
             'status_actor_id' => Auth::id(),
@@ -536,6 +543,12 @@ final class ConversationOwnershipService
             'tenant_id' => $tenantId,
         ]);
 
+        (new ConversationLifecycleService())->resetTransientStateForNewCycle(
+            $pdo,
+            $tenantId,
+            $conversationId,
+            'application_conversation_reopened'
+        );
         (new ConversationCycleService())->ensureActiveCycle(
             $pdo,
             $conversationId,
@@ -544,19 +557,26 @@ final class ConversationOwnershipService
         );
 
         $conversation['status'] = 'open';
+        $conversation['attendance_mode'] = 'ai';
         $conversation['assigned_user_id'] = null;
         $conversation['assigned_user_name'] = null;
         $conversation['assignment_source'] = 'released';
+        $conversation['department_id'] = null;
+        $conversation['ai_agent_id'] = null;
+        $conversation['priority'] = 'normal';
+        $conversation['operational_status'] = 'new';
+        $conversation['unread_count'] = 0;
         return $conversation;
     }
 
     public function releaseWhenClosed(PDO $pdo, int $conversationId, int $tenantId): void
     {
-        $settings = $this->settingsForTenant($pdo, $tenantId);
-        if (!$settings['enabled']) {
+        if ($conversationId < 1 || $tenantId < 1) {
             return;
         }
 
+        // Encerramento precisa sempre retirar a conversa da fila ativa, mesmo
+        // quando o recurso opcional de atribuição profissional está desligado.
         $pdo->prepare(
             'UPDATE conversations
              SET assigned_user_id = NULL,
@@ -564,7 +584,9 @@ final class ConversationOwnershipService
                  assignment_source = "released",
                  assignment_updated_by_user_id = :actor_id,
                  assignment_released_at = CURRENT_TIMESTAMP,
-                 operational_status = "resolved"
+                 attendance_mode = "paused",
+                 operational_status = "resolved",
+                 unread_count = 0
              WHERE id = :id AND tenant_id = :tenant_id'
         )->execute([
             'actor_id' => Auth::id(),

@@ -21,6 +21,7 @@ use App\Services\CommercialAutomationService;
 use App\Services\CommercialRequestService;
 use App\Services\CalendarConversationService;
 use App\Services\ConversationFlowService;
+use App\Services\ConversationLifecycleService;
 use App\Services\ConversationOwnershipService;
 use App\Services\ConversationAttachmentService;
 use App\Services\EvolutionService;
@@ -1753,6 +1754,30 @@ final class EvolutionWebhookController
         string $sentAt,
         bool $incrementUnread
     ): int {
+        $tenantId = (int) ($instance['tenant_id'] ?? 0);
+        $instanceId = (int) ($instance['id'] ?? 0);
+        $wasClosed = false;
+
+        // A mesma linha de conversation é reutilizada entre ciclos. Travamos a
+        // linha antes do UPSERT para saber se esta mensagem está abrindo um ciclo
+        // novo e, nesse caso, não reaproveitar roteamento/triagem antigos.
+        $existing = $pdo->prepare(
+            'SELECT id, status
+             FROM conversations
+             WHERE tenant_id = :tenant_id
+               AND evolution_instance_id = :instance_id
+               AND remote_jid = :remote_jid
+             LIMIT 1
+             FOR UPDATE'
+        );
+        $existing->execute([
+            'tenant_id' => $tenantId,
+            'instance_id' => $instanceId,
+            'remote_jid' => $remoteJid,
+        ]);
+        $existingRow = $existing->fetch(PDO::FETCH_ASSOC) ?: null;
+        $wasClosed = is_array($existingRow) && (string) ($existingRow['status'] ?? '') === 'closed';
+
         $statement = $pdo->prepare(
             'INSERT INTO conversations
                 (tenant_id, evolution_instance_id, contact_id, remote_jid, status,
@@ -1765,25 +1790,40 @@ final class EvolutionWebhookController
                 contact_id = VALUES(contact_id),
                 last_message_at = VALUES(last_message_at),
                 last_message_preview = VALUES(last_message_preview),
-                unread_count = unread_count + VALUES(unread_count),
+                unread_count = IF(status = "closed", VALUES(unread_count), unread_count + VALUES(unread_count)),
                 assigned_user_id = IF(status = "closed", NULL, assigned_user_id),
                 assigned_at = IF(status = "closed", NULL, assigned_at),
                 assignment_source = IF(status = "closed", "released", assignment_source),
                 assignment_updated_by_user_id = IF(status = "closed", NULL, assignment_updated_by_user_id),
                 assignment_released_at = IF(status = "closed", CURRENT_TIMESTAMP, assignment_released_at),
-                operational_status = IF(status = "closed", "waiting_agent", operational_status),
+                attendance_mode = IF(status = "closed", IF(VALUES(unread_count) > 0, "ai", "paused"), attendance_mode),
+                department_id = IF(status = "closed", NULL, department_id),
+                ai_agent_id = IF(status = "closed", NULL, ai_agent_id),
+                priority = IF(status = "closed", "normal", priority),
+                operational_status = IF(status = "closed", IF(VALUES(unread_count) > 0, "new", "waiting_customer"), operational_status),
                 status = IF(status = "closed", "open", status)'
         );
         $statement->execute([
-            'tenant_id' => $instance['tenant_id'],
-            'instance_id' => $instance['id'],
+            'tenant_id' => $tenantId,
+            'instance_id' => $instanceId,
             'contact_id' => $contactId,
             'remote_jid' => $remoteJid,
             'unread_count' => $incrementUnread ? 1 : 0,
             'last_message_at' => $sentAt,
             'preview' => mb_substr($content, 0, 255),
         ]);
-        return (int) $pdo->lastInsertId();
+        $conversationId = (int) $pdo->lastInsertId();
+
+        if ($wasClosed && $conversationId > 0) {
+            (new ConversationLifecycleService())->resetTransientStateForNewCycle(
+                $pdo,
+                $tenantId,
+                $conversationId,
+                'incoming_message_new_cycle'
+            );
+        }
+
+        return $conversationId;
     }
 
     private function insertMessage(

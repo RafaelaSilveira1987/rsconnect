@@ -1,4 +1,17 @@
-# RS Connect 36.30.7
+# RS Connect 36.30.8
+
+## QA do fluxo central — 36.30.8
+
+- valida o encadeamento **Contato → IA → Conversa → Fila opcional → Atendente → Agenda/CRM → Encerramento → Relatórios**;
+- uma mensagem recebida após o encerramento inicia um ciclo limpo em IA; uma saída direta pelo WhatsApp reabre pausada, sem risco de a IA assumir por engano;
+- estado transitório de triagem e fluxo é reiniciado somente no novo ciclo, preservando cadastro, relacionamento, CRM, agenda e histórico de mensagens;
+- pendências pós-horário do ciclo anterior são canceladas para evitar resposta tardia a uma mensagem antiga;
+- encerramento sempre limpa responsável, não lidas e fila operacional, mesmo quando a atribuição profissional opcional está desligada;
+- reabertura manual também deixa de depender da configuração de responsável exclusivo;
+- pedidos explícitos de atendimento humano passam a refletir o estágio `human_handoff`;
+- decisões do Policy Engine com ação `handoff` pausam a IA e colocam efetivamente a conversa em espera da equipe;
+- deduplicação de avisos de política passa a respeitar o ciclo ativo, mantendo o histórico de decisões anteriores;
+- migration obrigatória: `110_conversation_lifecycle_e2e_consistency.sql`.
 
 ## Infraestrutura de instalação reproduzível — 36.30.7
 

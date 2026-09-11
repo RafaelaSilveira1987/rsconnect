@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.30.7",
-  "release_name": "Infraestrutura de instalação reproduzível",
+  "package_version": "36.30.8",
+  "release_name": "QA do fluxo central",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -10,7 +10,7 @@
   },
   "database": {
     "driver": "mysql",
-    "required_migration": "109_evolution_instance_identity_cleanup.sql",
+    "required_migration": "110_conversation_lifecycle_e2e_consistency.sql",
     "migration_runner": "php bin/migrate.php"
   },
   "install": {

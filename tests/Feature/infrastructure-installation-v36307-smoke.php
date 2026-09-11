@@ -36,7 +36,7 @@ $version = $read('app/Services/AppVersionService.php');
 $check(is_array($composer) && ($composer['name'] ?? '') === 'rs-automacao-digital/rs-connect', 'composer.json é JSON válido do projeto');
 $check(($composer['require']['php'] ?? '') === '>=8.2' && isset($composer['require']['ext-pdo_mysql']), 'Composer declara PHP e PDO MySQL');
 $check(($composer['autoload']['psr-4']['App\\'] ?? '') === 'app/', 'Composer declara autoload PSR-4 compatível');
-$check(is_array($manifest) && ($manifest['package_version'] ?? '') === '36.30.7', 'manifest.json é JSON válido da release');
+$check(is_array($manifest) && version_compare((string) ($manifest['package_version'] ?? '0'), '36.30.7', '>='), 'manifest.json é JSON válido da release 36.30.7 ou superior');
 $check(($manifest['database']['driver'] ?? '') === 'mysql', 'manifesto declara MySQL como driver canônico');
 
 foreach (['.env.example' => $env, '.env.local.example' => $envLocal, '.env.vps.example' => $envVps] as $name => $content) {
@@ -54,7 +54,7 @@ $check(str_contains($dockerfile, 'FROM php:8.3-apache') && str_contains($dockerf
 $check(str_starts_with($builder, '#!/usr/bin/env bash') && str_contains($builder, 'set -euo pipefail') && str_contains($builder, 'SHA256SUMS.txt'), 'build-full-release.sh é Bash seguro e gera checksums');
 $check(str_contains($database, 'mysql:host=') && !str_contains($database, 'pgsql:'), 'Database usa MySQL/PDO e não PostgreSQL');
 $check(str_contains($docs, 'MySQL/MariaDB') && str_contains($docs, 'EasyPanel') && str_contains($docs, 'docker compose up --build -d'), 'guia canônico cobre banco, VPS e instalação local');
-$check(str_contains($version, 'RS Connect 36.30.7') && str_contains($version, 'Infraestrutura de instalação reproduzível'), 'versão 36.30.7 registrada');
+$check(str_contains($version, 'RS Connect 36.30.7') && str_contains($version, 'Infraestrutura de instalação reproduzível'), 'marcador histórico da infraestrutura 36.30.7 preservado');
 
 if ($failures !== []) {
     fwrite(STDERR, "\nFALHAS:\n- " . implode("\n- ", $failures) . "\n");
