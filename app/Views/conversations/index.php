@@ -346,7 +346,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
 
                 <?php if ($canOperateSelected): ?>
                     <div class="chat-actions">
-                        <button class="btn btn-outline btn-small" type="button" data-toggle-panel="conversation-details">Dados do lead</button>
+                        <button class="btn btn-outline btn-small" type="button" data-toggle-panel="conversation-details">Dados da conversa</button>
                         <form method="post" action="<?= View::e(Router::url('/conversations/mode')) ?>" data-mode-action="human" <?= $selected['attendance_mode'] === 'human' ? 'hidden' : '' ?>>
                             <?= Csrf::input() ?><input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>"><input type="hidden" name="mode" value="human">
                             <button class="btn btn-primary btn-small" type="submit">Assumir atendimento</button>
@@ -643,17 +643,96 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
             $tags = json_decode((string) ($selected['tags_json'] ?? ''), true);
             $tagText = is_array($tags) ? implode(', ', $tags) : '';
             $interestLabel = $selected['ai_interest_level'] ?? '';
+            $drawerAvatarUrl = $contactAvatarUrl($selected);
+            $drawerRuleSnapshot = is_array($selectedRuleSnapshot ?? null) ? $selectedRuleSnapshot : [];
+            $drawerAgentName = trim((string) ($drawerRuleSnapshot['agent_name'] ?? ''));
+            if ($drawerAgentName === '') {
+                foreach ($conversationAgents as $routeAgent) {
+                    if ((int) ($selected['ai_agent_id'] ?? 0) === (int) ($routeAgent['agent_id'] ?? 0)) {
+                        $drawerAgentName = trim((string) ($routeAgent['name'] ?? ''));
+                        break;
+                    }
+                }
+            }
+            $drawerStatusLabel = $statusLabel[$selectedStatus] ?? $selectedStatus;
+            $drawerModeValue = (string) ($selected['attendance_mode'] ?? 'ai');
+            $drawerModeLabel = $modeLabel[$drawerModeValue] ?? $drawerModeValue;
+            $drawerContactStatus = (string) ($selected['contact_status'] ?? 'lead');
+            $drawerContactStatusLabel = $contactStatusLabels[$drawerContactStatus] ?? $drawerContactStatus;
+            $drawerGroup = (string) ($selected['contact_group'] ?? 'unclassified');
+            $drawerGroupLabel = $contactGroupLabels[$drawerGroup] ?? $drawerGroup;
+            $drawerRelationshipLabel = trim((string) ($selectedRelationship['label'] ?? 'Relacionamento não identificado'));
+            $drawerRelationshipDescription = trim((string) ($selectedRelationship['description'] ?? ''));
             ?>
-            <div class="conversation-drawer-header">
-                <div>
-                    <span class="eyebrow">Atendimento</span>
-                    <h2>Dados da conversa</h2>
-                    <p><?= View::e($contactLabel($selected)) ?></p>
+            <div class="conversation-drawer-header conversation-data-header">
+                <div class="conversation-drawer-person">
+                    <span class="conversation-avatar large" data-contact-avatar-container data-avatar-resolved="<?= array_key_exists('avatar_url', $selected) && $selected['avatar_url'] !== null ? '1' : '0' ?>">
+                        <span class="conversation-avatar-fallback" data-avatar-fallback><?= View::e($contactInitial($selected)) ?></span>
+                        <?php if ($drawerAvatarUrl !== ''): ?><img class="conversation-avatar-image" data-contact-avatar src="<?= View::e($drawerAvatarUrl) ?>" alt="" referrerpolicy="no-referrer"><?php endif; ?>
+                    </span>
+                    <div class="conversation-drawer-person-copy">
+                        <span class="eyebrow">Atendimento</span>
+                        <h2>Dados da conversa</h2>
+                        <strong><?= View::e($contactLabel($selected)) ?></strong>
+                        <p><span><?= View::e((string) ($selected['phone'] ?? '')) ?></span><?php if (!empty($selected['instance_label'])): ?><span aria-hidden="true">·</span><span><?= View::e((string) $selected['instance_label']) ?></span><?php endif; ?></p>
+                    </div>
                 </div>
                 <button class="icon-button drawer-close" type="button" data-close-panel="conversation-details" aria-label="Fechar painel">×</button>
             </div>
 
-            <div class="conversation-drawer-body">
+            <div class="conversation-drawer-body conversation-data-body">
+                <section class="conversation-overview-panel" id="conversation-summary" aria-label="Resumo atual da conversa">
+                    <div class="conversation-overview-heading">
+                        <div>
+                            <span class="eyebrow">Visão rápida</span>
+                            <h3>Como este atendimento está agora</h3>
+                        </div>
+                        <span class="conversation-overview-live">Atual</span>
+                    </div>
+                    <div class="conversation-overview-grid">
+                        <article class="conversation-overview-item status-<?= View::e($selectedStatus) ?>">
+                            <span>Situação</span>
+                            <strong><?= View::e($drawerStatusLabel) ?></strong>
+                            <small><?= $selectedStatus === 'closed' ? 'Ciclo encerrado' : ($selectedStatus === 'pending' ? 'Aguardando andamento' : 'Conversa em operação') ?></small>
+                        </article>
+                        <article class="conversation-overview-item mode-<?= View::e($drawerModeValue) ?>">
+                            <span>Atendimento</span>
+                            <strong><?= View::e($drawerModeLabel) ?></strong>
+                            <small><?= $drawerModeValue === 'human' ? 'Equipe conduzindo' : ($drawerModeValue === 'paused' ? 'Automação em pausa' : 'Automação habilitada') ?></small>
+                        </article>
+                        <article class="conversation-overview-item">
+                            <span>Responsável</span>
+                            <strong><?= View::e((string) ($selected['assigned_user_name'] ?: 'Disponível')) ?></strong>
+                            <small><?= !empty($selected['assigned_user_name']) ? 'Profissional atual' : 'Sem responsável exclusivo' ?></small>
+                        </article>
+                        <article class="conversation-overview-item">
+                            <span>Assistente</span>
+                            <strong><?= View::e($drawerAgentName !== '' ? $drawerAgentName : 'Não definido') ?></strong>
+                            <small><?= $drawerAgentName !== '' ? 'Agente efetivo / vinculado' : 'Revise o roteamento deste WhatsApp' ?></small>
+                        </article>
+                    </div>
+                    <div class="conversation-relationship-summary">
+                        <div>
+                            <span>Relacionamento</span>
+                            <strong><?= View::e($drawerContactStatusLabel) ?> · <?= View::e($drawerGroupLabel) ?></strong>
+                        </div>
+                        <div>
+                            <strong><?= View::e($drawerRelationshipLabel) ?></strong>
+                            <?php if ($drawerRelationshipDescription !== ''): ?><small><?= View::e($drawerRelationshipDescription) ?></small><?php endif; ?>
+                        </div>
+                    </div>
+                </section>
+
+                <nav class="conversation-drawer-nav" aria-label="Seções dos dados da conversa">
+                    <a href="#conversation-summary">Resumo</a>
+                    <?php if ($queueEnabled): ?><a href="#conversation-distribution">Fila</a><?php endif; ?>
+                    <?php if (!empty($professionalAssignmentSettings['enabled'])): ?><a href="#conversation-owner">Responsável</a><?php endif; ?>
+                    <a href="#conversation-ai-routing">IA</a>
+                    <a href="#conversation-internal-notes">Notas</a>
+                    <a href="#conversation-contact-data">Contato</a>
+                    <a href="#conversation-flow-data">Fluxo</a>
+                    <a href="#conversation-crm">CRM</a>
+                </nav>
                 <?php
                 $currentDepartmentId = (int) ($selected['department_id'] ?? 0);
                 $currentDepartmentName = trim((string) ($selected['department_name'] ?? ''));
@@ -664,7 +743,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                 );
                 ?>
                 <?php if ($queueEnabled): ?>
-                <section class="drawer-section conversation-department-card">
+                <section class="drawer-section conversation-department-card" id="conversation-distribution">
                     <div class="drawer-section-title">
                         <div>
                             <span class="eyebrow">Distribuição</span>
@@ -703,7 +782,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                 <?php endif; ?>
 
                 <?php if (!empty($professionalAssignmentSettings['enabled'])): ?>
-                    <section class="drawer-section conversation-ownership-card">
+                    <section class="drawer-section conversation-ownership-card" id="conversation-owner">
                         <div class="drawer-section-title">
                             <div>
                                 <span class="eyebrow">Responsabilidade</span>
@@ -778,7 +857,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                 <?php endif; ?>
 
                 <?php if ($canOperateSelected): ?>
-                    <section class="drawer-section drawer-status-card">
+                    <section class="drawer-section drawer-status-card" id="conversation-status-control">
                         <div class="drawer-section-title">
                             <div>
                                 <span class="eyebrow">Status</span>
@@ -797,7 +876,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                     </section>
                 <?php endif; ?>
 
-                <section class="drawer-section conversation-agent-route-card">
+                <section class="drawer-section conversation-agent-route-card" id="conversation-ai-routing">
                     <div class="drawer-section-title">
                         <div>
                             <span class="eyebrow">Roteamento da IA</span>
@@ -842,36 +921,85 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                 <?php if (is_array($selectedRuleSnapshot ?? null)): ?>
                     <?php
                     $ruleStatusLabels = ['lead' => 'Lead', 'customer' => 'Cliente', 'inactive' => 'Inativo'];
-                    $ruleModeLabels = ['ai' => 'IA', 'human' => 'Humano', 'paused' => 'IA pausada'];
+                    $ruleModeLabels = ['ai' => 'IA ativa', 'human' => 'Humano', 'paused' => 'IA pausada'];
+                    $ruleIntentLabels = [
+                        'conversation' => 'Conversa geral',
+                        'schedule' => 'Agendamento',
+                        'reschedule' => 'Reagendamento',
+                        'human_handoff' => 'Atendimento humano',
+                        'quote' => 'Orçamento',
+                        'quote_request' => 'Pedido de orçamento',
+                        'support' => 'Suporte',
+                    ];
                     $ruleHours = is_array($selectedRuleSnapshot['hours'] ?? null) ? $selectedRuleSnapshot['hours'] : [];
                     $hoursEnforced = !empty($ruleHours['enforced']);
                     $insideHours = !empty($ruleHours['inside']);
                     $ruleGroup = (string) ($selectedRuleSnapshot['contact_group'] ?? 'unclassified');
                     $ruleStage = (string) ($selectedRuleSnapshot['flow_stage'] ?? 'identifying_contact');
+                    $ruleLastIntent = (string) ($selectedRuleSnapshot['last_intent'] ?? 'conversation');
                     ?>
-                    <section class="drawer-section conversation-flow-card">
-                        <div class="drawer-section-title">
+                    <section class="drawer-section conversation-flow-card conversation-effective-rules" id="conversation-effective-rules">
+                        <div class="drawer-section-title conversation-rules-heading">
                             <div>
                                 <span class="eyebrow">Validação efetiva</span>
                                 <h3>Regras aplicadas agora</h3>
-                                <small>Este resumo mostra as regras que têm prioridade sobre as instruções livres do assistente.</small>
+                                <small>Resumo operacional do que realmente orienta a IA nesta conversa.</small>
+                            </div>
+                            <span class="mini-badge mode-<?= View::e((string) ($selectedRuleSnapshot['attendance_mode'] ?? 'ai')) ?>"><?= View::e($ruleModeLabels[(string) ($selectedRuleSnapshot['attendance_mode'] ?? '')] ?? (string) ($selectedRuleSnapshot['attendance_mode'] ?? '—')) ?></span>
+                        </div>
+                        <div class="conversation-rule-grid">
+                            <article class="conversation-rule-item is-primary">
+                                <span>Agente efetivo</span>
+                                <strong><?= View::e((string) ($selectedRuleSnapshot['agent_name'] ?? 'Não definido')) ?></strong>
+                                <?php if (!empty($selectedRuleSnapshot['agent_id'])): ?><small>ID <?= (int) $selectedRuleSnapshot['agent_id'] ?> · agente realmente utilizado</small><?php endif; ?>
+                            </article>
+                            <article class="conversation-rule-item">
+                                <span>Classificação</span>
+                                <strong><?= View::e($ruleStatusLabels[(string) ($selectedRuleSnapshot['contact_status'] ?? '')] ?? (string) ($selectedRuleSnapshot['contact_status'] ?? 'Não informada')) ?></strong>
+                                <small>Perfil comercial atual</small>
+                            </article>
+                            <article class="conversation-rule-item">
+                                <span>Grupo</span>
+                                <strong><?= View::e($contactGroupLabels[$ruleGroup] ?? $ruleGroup) ?></strong>
+                                <small>Define a tratativa do relacionamento</small>
+                            </article>
+                            <article class="conversation-rule-item">
+                                <span>Horário operacional</span>
+                                <strong><?= !$hoursEnforced ? 'Livre / 24h' : ($insideHours ? 'Dentro do expediente' : 'Fora do expediente') ?></strong>
+                                <?php if ($hoursEnforced && !empty($ruleHours['current'])): ?><small>Agora: <?= View::e((string) $ruleHours['current']) ?> · <?= View::e((string) ($ruleHours['timezone'] ?? '')) ?></small><?php elseif (!$hoursEnforced): ?><small>Sem bloqueio por faixa de horário</small><?php endif; ?>
+                            </article>
+                            <article class="conversation-rule-item">
+                                <span>Última intenção</span>
+                                <strong><?= View::e($ruleIntentLabels[$ruleLastIntent] ?? $ruleLastIntent) ?></strong>
+                                <small>Intenção considerada no fluxo atual</small>
+                            </article>
+                            <article class="conversation-rule-item">
+                                <span>Etapa do fluxo</span>
+                                <strong><?= View::e($flowStageLabels[$ruleStage] ?? $ruleStage) ?></strong>
+                                <small>Posição atual da triagem</small>
+                            </article>
+                        </div>
+                        <?php if ($hoursEnforced && !empty($ruleHours['ranges']) && is_array($ruleHours['ranges'])): ?>
+                            <div class="conversation-rule-hours">
+                                <span>Faixa aplicada</span>
+                                <strong><?= View::e(implode(' / ', array_map(static fn($r) => is_array($r) ? (($r[0] ?? '') . '–' . ($r[1] ?? '')) : '', $ruleHours['ranges']))) ?></strong>
+                                <?php if (!$insideHours && !empty($selectedRuleSnapshot['next_opening_at'])): ?><small>Próxima janela: <?= View::e($formatDate((string) $selectedRuleSnapshot['next_opening_at'], 'd/m H:i')) ?></small><?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                        <div class="conversation-rule-context <?= !empty($selectedRuleSnapshot['agenda_context']) ? 'is-agenda' : 'is-general' ?>">
+                            <span class="conversation-rule-context-icon" aria-hidden="true"></span>
+                            <div>
+                                <strong><?= !empty($selectedRuleSnapshot['agenda_context']) ? 'Contexto de agenda ativo' : 'Conversa geral' ?></strong>
+                                <small><?= !empty($selectedRuleSnapshot['agenda_context'])
+                                    ? 'As regras específicas de pré-agendamento estão autorizadas a entrar no contexto da IA.'
+                                    : 'Menções casuais de data ou horário não iniciam a agenda automaticamente.' ?></small>
                             </div>
                         </div>
-                        <div class="drawer-form-grid">
-                            <div class="field"><span>Agente efetivo</span><strong><?= View::e((string) ($selectedRuleSnapshot['agent_name'] ?? 'Não definido')) ?></strong><?php if (!empty($selectedRuleSnapshot['agent_id'])): ?><small class="field-hint">ID <?= (int) $selectedRuleSnapshot['agent_id'] ?> · agente realmente usado pelas regras abaixo</small><?php endif; ?></div>
-                            <div class="field"><span>Modo da conversa</span><strong><?= View::e($ruleModeLabels[(string) ($selectedRuleSnapshot['attendance_mode'] ?? '')] ?? (string) ($selectedRuleSnapshot['attendance_mode'] ?? '—')) ?></strong></div>
-                            <div class="field"><span>Horário operacional</span><strong><?= !$hoursEnforced ? 'Livre / 24h' : ($insideHours ? 'Dentro do expediente' : 'Fora do expediente') ?></strong><?php if ($hoursEnforced && !empty($ruleHours['current'])): ?><small class="field-hint">Agora: <?= View::e((string) $ruleHours['current']) ?> · <?= View::e((string) ($ruleHours['timezone'] ?? '')) ?></small><?php endif; ?><?php if ($hoursEnforced && !empty($ruleHours['ranges']) && is_array($ruleHours['ranges'])): ?><small class="field-hint">Faixa aplicada: <?= View::e(implode(' / ', array_map(static fn($r) => is_array($r) ? (($r[0] ?? '') . '–' . ($r[1] ?? '')) : '', $ruleHours['ranges']))) ?></small><?php endif; ?><?php if ($hoursEnforced && !$insideHours && !empty($selectedRuleSnapshot['next_opening_at'])): ?><small class="field-hint">Próxima janela: <?= View::e($formatDate((string) $selectedRuleSnapshot['next_opening_at'], 'd/m H:i')) ?></small><?php endif; ?></div>
-                            <div class="field"><span>Classificação</span><strong><?= View::e($ruleStatusLabels[(string) ($selectedRuleSnapshot['contact_status'] ?? '')] ?? (string) ($selectedRuleSnapshot['contact_status'] ?? 'Não informada')) ?></strong></div>
-                            <div class="field"><span>Grupo</span><strong><?= View::e($contactGroupLabels[$ruleGroup] ?? $ruleGroup) ?></strong></div>
-                            <div class="field"><span>Última intenção</span><strong><?= View::e((string) ($selectedRuleSnapshot['last_intent'] ?? 'conversation')) ?></strong></div>
-                        </div>
-                        <div class="<?= !empty($selectedRuleSnapshot['agenda_context']) ? 'message-warning' : 'message-success' ?>">
-                            <?= !empty($selectedRuleSnapshot['agenda_context'])
-                                ? 'Contexto de agenda ativo: somente agora as regras específicas de pré-agendamento entram no contexto da IA.'
-                                : 'Conversa geral: a agenda não deve ser iniciada apenas por menções casuais de data ou horário.' ?>
-                        </div>
                         <?php if (!empty($selectedRuleSnapshot['tags'])): ?>
-                            <p class="field-hint"><strong>Tags consideradas:</strong> <?= View::e(implode(', ', $selectedRuleSnapshot['tags'])) ?></p>
+                            <div class="conversation-rule-tags">
+                                <span>Tags consideradas</span>
+                                <div><?php foreach ($selectedRuleSnapshot['tags'] as $ruleTag): ?><em><?= View::e((string) $ruleTag) ?></em><?php endforeach; ?></div>
+                            </div>
                         <?php endif; ?>
                     </section>
                 <?php endif; ?>
@@ -941,7 +1069,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                     <?= Csrf::input() ?>
                     <input type="hidden" name="conversation_id" value="<?= (int) $selected['id'] ?>">
 
-                    <section class="drawer-section">
+                    <section class="drawer-section conversation-contact-card" id="conversation-contact-data">
                         <div class="drawer-section-title">
                             <div>
                                 <span class="eyebrow">Contato</span>
@@ -978,7 +1106,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                         <label class="field drawer-span"><span>Contexto do contato</span><textarea name="notes" rows="5" <?= !$canOperateSelected ? 'readonly' : '' ?>><?= View::e($selected['notes']) ?></textarea><small class="field-hint">Informação persistente do cadastro. Pode ser utilizada pela IA para dar continuidade ao relacionamento.</small></label>
                     </section>
 
-                    <section class="drawer-section conversation-flow-card">
+                    <section class="drawer-section conversation-flow-card conversation-demand-card" id="conversation-flow-data">
                         <div class="drawer-section-title">
                             <div>
                                 <span class="eyebrow">Fluxo do atendimento</span>
@@ -1023,7 +1151,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                     <?php endif; ?>
                 </form>
 
-                <details class="drawer-section drawer-collapsed-card">
+                <details class="drawer-section drawer-collapsed-card" id="conversation-crm">
                     <summary>
                         <span>
                             <span class="eyebrow">CRM automático</span>

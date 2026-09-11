@@ -1,4 +1,16 @@
-# RS Connect 36.30.8
+# RS Connect 36.30.9
+
+## Dados da conversa aprimorados — 36.30.9
+
+- confirma o QA de reabertura da v36.30.8: os prints de atendimento humano e de novo ciclo representam momentos diferentes e os estados estão coerentes;
+- renomeia a ação **Dados do lead** para **Dados da conversa**, adequada também a clientes e pacientes;
+- adiciona cabeçalho com avatar, contato, telefone e conexão do WhatsApp;
+- cria uma **Visão rápida** com situação da conversa, modo de atendimento, responsável, assistente e relacionamento;
+- adiciona navegação curta entre Resumo, Fila/Responsável quando aplicável, IA, Notas, Contato, Fluxo e CRM;
+- reorganiza **Regras aplicadas agora** em cartões legíveis, com intenção traduzida, etapa do fluxo, faixa de horário, contexto de agenda e tags;
+- amplia o drawer no desktop e preserva layout de duas colunas compacto no mobile;
+- não altera rotas, nomes de campos, submits, regras de negócio nem banco de dados;
+- nenhuma migration nova; permanece obrigatória `110_conversation_lifecycle_e2e_consistency.sql`.
 
 ## QA do fluxo central — 36.30.8
 
