@@ -109,7 +109,7 @@ $check(str_contains($css, 'agent-conversation-behavior-section') && str_contains
 $check(str_contains($layout, 'app.css?v=36.31.0') && str_contains($layout, 'app.js?v=36.31.0'), 'Layout autenticado invalida cache para 36.31.0.');
 $check(str_contains($guest, 'app.css?v=36.31.0') && str_contains($restricted, 'app.css?v=36.31.0'), 'Layouts auxiliares invalidam cache CSS para 36.31.0.');
 $check(str_contains($version, "PACKAGE_LABEL = 'RS Connect 36.31.0 — Atendimento conversacional estruturado'"), 'Versão 36.31.0 registrada.');
-$check(str_contains($manifest, '"package_version": "36.31.0"') || str_contains($manifest, '"package_version": "36.31.1"') || str_contains($manifest, '"package_version": "36.31.2"'), 'A linha 36.31 permanece registrada no manifesto atual.');
+$check(str_contains($manifest, '"package_version": "36.31.0"') || str_contains($manifest, '"package_version": "36.31.1"') || str_contains($manifest, '"package_version": "36.31.2"') || str_contains($manifest, '"package_version": "36.31.3"'), 'A linha 36.31 permanece registrada no manifesto atual.');
 $check(str_contains($manifest, '110_conversation_lifecycle_e2e_consistency.sql') || str_contains($read('database/migrations/manifest.php'), '110_conversation_lifecycle_e2e_consistency.sql'), 'Migration-base 110 permanece registrada no histórico de migrations.');
 
 if ($failures > 0) {

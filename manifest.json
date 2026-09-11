@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.31.2",
-  "release_name": "Saudação inteligente por contato",
+  "package_version": "36.31.3",
+  "release_name": "Hotfix da saudação configurada",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,10 +19,14 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.31.1",
-      "release_name": "Relatórios PDF e homologação conversacional"
+      "package_version": "36.31.2",
+      "release_name": "Saudação inteligente por contato"
     },
     "historical_releases": [
+      {
+        "package_version": "36.31.1",
+        "release_name": "Relatórios PDF e homologação conversacional"
+      },
       {
         "package_version": "36.31.0",
         "release_name": "Atendimento conversacional estruturado"

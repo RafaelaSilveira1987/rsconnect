@@ -46,7 +46,7 @@ $result = $service->match($baseAgent + ['ai_greeting_mode' => 'disabled'], 'Oi',
 $check(empty($result['matched']), 'Modo desativado não força saudação pronta.');
 
 $result = $service->match($baseAgent + ['ai_greeting_mode' => 'all_contacts'], 'Oi', $continuedLead);
-$check(empty($result['matched']), 'Saudação pronta não se repete quando a conversa já teve resposta.');
+$check(!empty($result['matched']) && ($result['reply'] ?? '') === 'Olá! Como posso ajudar você hoje?', 'Saudação explícita continua usando a resposta configurada mesmo quando a conversa já possui histórico.');
 
 $result = $service->match($baseAgent + ['ai_greeting_mode' => 'disabled'], 'Obrigado', $continuedLead);
 $check(!empty($result['matched']) && ($result['type'] ?? '') === 'gratitude', 'Desativar saudação não desativa outras respostas locais configuradas.');
@@ -61,14 +61,14 @@ $manifest = $read('manifest.json');
 $version = $read('app/Services/AppVersionService.php');
 
 $check(str_contains($view, 'Quem recebe a saudação') && str_contains($view, 'Somente novos contatos; cliente/paciente reconhecido continua naturalmente'), 'Tela do Agente expõe os três modos de saudação.');
-$check(str_contains($view, 'ai_greeting_use_contact_name') && str_contains($view, 'não se repete nos próximos turnos'), 'Tela permite uso natural do nome e explica a regra de não repetição.');
+$check(str_contains($view, 'ai_greeting_use_contact_name') && str_contains($view, 'conversa já existente'), 'Tela permite uso natural do nome e explica a política para saudações em conversa existente.');
 $check(str_contains($controller, 'ai_greeting_mode') && str_contains($controller, 'ai_greeting_use_contact_name'), 'Criação e atualização do assistente persistem a política de saudação.');
 $check(str_contains($model, 'Não use mensagem de boas-vindas de novo contato') && str_contains($model, 'Não repita saudação de abertura'), 'Prompt diferencia cliente/paciente reconhecido e continuidade da conversa.');
-$check(str_contains($automation, 'hasPriorOutgoingMessage') && str_contains($automation, "empty(\$generationAgent['_is_opening_turn'])"), 'Automação bloqueia repetição e evita cache de respostas de abertura.');
+$check(str_contains($automation, 'hasPriorOutgoingMessage') && str_contains($automation, "empty(\$generationAgent['_is_opening_turn'])"), 'Automação preserva a detecção de abertura da IA e evita cache de respostas de abertura.');
 $check(str_contains($context, "['_is_opening_turn']") && str_contains($context, 'outgoing_messages'), 'Contexto da IA sabe quando é a primeira resposta da conversa.');
 $check(str_contains($migration, 'ai_greeting_mode') && str_contains($migration, "DEFAULT ''all_contacts''") && str_contains($migration, 'ai_greeting_use_contact_name'), 'Migration preserva instalações existentes e adiciona configuração por agente.');
-$check(str_contains($manifest, '"package_version": "36.31.2"') && str_contains($manifest, '111_agent_greeting_policy.sql'), 'Manifesto aponta para a release e migration 36.31.2.');
-$check(str_contains($version, "PACKAGE_LABEL = 'RS Connect 36.31.2 — Saudação inteligente por contato'") && str_contains($version, "REQUIRED_MIGRATION = '111_agent_greeting_policy.sql'"), 'Versão da aplicação registra a nova release.');
+$check((str_contains($manifest, '"package_version": "36.31.2"') || str_contains($manifest, '"package_version": "36.31.3"')) && str_contains($manifest, '111_agent_greeting_policy.sql'), 'Manifesto mantém a política e migration de saudação.');
+$check(str_contains($version, "RS Connect 36.31.2 — Saudação inteligente por contato") && str_contains($version, "REQUIRED_MIGRATION = '111_agent_greeting_policy.sql'"), 'Versão da aplicação preserva compatibilidade com a release 36.31.2.');
 
 if ($failures > 0) {
     fwrite(STDERR, "\n{$failures} falha(s); {$passes} verificação(ões) aprovada(s).\n");

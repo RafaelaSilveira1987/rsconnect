@@ -1,11 +1,20 @@
-# RS Connect 36.31.2
+# RS Connect 36.31.3
+
+## Hotfix da saudação configurada — 36.31.3
+
+- corrige o caso em que o contato envia apenas **"Oi/Olá/Bom dia"** em uma conversa que já possuía mensagens e a resposta configurada não era utilizada;
+- no modo **Todos os contatos**, uma saudação explícita agora usa deterministicamente o texto salvo em **Resposta para saudação**, mesmo quando o mesmo registro de conversa já tem histórico;
+- no modo **Somente novos contatos**, leads continuam usando a saudação configurada e cliente/paciente reconhecido segue para resposta natural da IA;
+- o modo **Sem saudação automática** continua ignorando a resposta pronta de saudação;
+- a limitação de "primeira resposta" permanece apenas para a apresentação espontânea da IA em mensagens que não sejam uma saudação pura;
+- nenhuma migration nova; permanece obrigatória `111_agent_greeting_policy.sql`.
 
 ## Saudação inteligente por contato — 36.31.2
 
 - cada assistente pode escolher entre **saudar todos os contatos**, **saudar somente novos contatos** ou **não usar saudação automática**;
 - no modo recomendado para novos contatos, **cliente/paciente reconhecido continua a conversa com naturalidade**, sem mensagem de boas-vindas de novo lead;
 - o agente pode usar o nome cadastrado quando isso soar natural;
-- a saudação de abertura ocorre somente na primeira resposta da conversa e não é repetida nos turnos seguintes;
+- a apresentação automática da IA ocorre somente na primeira resposta da conversa; saudações explícitas do contato seguem a política configurada;
 - respostas locais de “oi/olá” respeitam a mesma política; para cliente/paciente reconhecido, a IA assume a resposta natural quando configurado;
 - o cache exato não é usado nem alimentado na abertura da conversa, evitando reaproveitar uma resposta de saudação fora de contexto;
 - migration obrigatória: `111_agent_greeting_policy.sql`.

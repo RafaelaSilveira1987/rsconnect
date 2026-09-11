@@ -58,8 +58,15 @@ final class AiLocalReplyService
         if (!in_array($mode, ['all_contacts', 'new_contacts', 'disabled'], true)) {
             $mode = 'all_contacts';
         }
-        $isOpeningTurn = !array_key_exists('_is_opening_turn', $conversation) || !empty($conversation['_is_opening_turn']);
-        if ($mode === 'disabled' || !$isOpeningTurn) {
+
+        // A resposta local de saudação é acionada apenas quando a mensagem recebida
+        // é, por si só, uma saudação elegível ("oi", "olá", "bom dia" etc.).
+        // Por isso ela não deve depender de ser a primeira resposta de todo o histórico
+        // da conversa: o mesmo contato pode retornar horas depois e cumprimentar de novo
+        // sem que o RS Connect tenha criado outro registro de conversa. A regra de
+        // "abertura" continua sendo usada somente para a saudação espontânea da IA
+        // em mensagens que não são uma saudação pura.
+        if ($mode === 'disabled') {
             return false;
         }
         if ($mode === 'all_contacts') {
@@ -73,6 +80,9 @@ final class AiLocalReplyService
             'tags_json' => $conversation['tags_json'] ?? null,
         ]);
 
+        // Em "Somente novos contatos", cliente/paciente reconhecido segue para a IA
+        // responder de modo contextual e natural, enquanto lead/novo contato recebe a
+        // resposta de saudação configurada no assistente.
         return empty($relationship['is_existing_customer']);
     }
 
