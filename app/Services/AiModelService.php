@@ -393,6 +393,13 @@ final class AiModelService
         $relationshipDescription = (string) ($relationshipProfile['description'] ?? '');
         $relationshipInstruction = trim((string) ($relationshipProfile['ai_instruction'] ?? ''));
         $isExistingCustomer = !empty($relationshipProfile['is_existing_customer']);
+        $greetingMode = strtolower(trim((string) ($agent['ai_greeting_mode'] ?? 'all_contacts')));
+        if (!in_array($greetingMode, ['all_contacts', 'new_contacts', 'disabled'], true)) {
+            $greetingMode = 'all_contacts';
+        }
+        $greetingUseName = (int) ($agent['ai_greeting_use_contact_name'] ?? 1) === 1;
+        $isOpeningTurn = !empty($agent['_is_opening_turn']);
+        $configuredGreeting = trim((string) ($agent['ai_greeting_reply'] ?? ''));
         $flowStage = trim((string) ($conversation['flow_stage'] ?? 'identifying_contact')) ?: 'identifying_contact';
         $demandStatus = trim((string) ($conversation['demand_status'] ?? 'pending')) ?: 'pending';
         $demandSummary = trim((string) ($conversation['demand_summary'] ?? ''));
@@ -427,6 +434,37 @@ final class AiModelService
             'Quando existir um setor operacional atual informado pelo RS Connect, considere-o a fila real desta conversa e adapte linguagem/encaminhamento ao papel desse setor.',
             'Nunca afirme que uma transferência para outro assistente virtual ou setor automatizado já aconteceu apenas por decisão textual sua. A troca entre assistentes é executada pelo motor do RS Connect antes da resposta. Se não houver o bloco TRANSFERÊNCIA INTERNA CONFIRMADA abaixo, não diga que já transferiu, que está transferindo agora ou que outro assistente já assumiu.',
         ];
+
+        if ($isOpeningTurn) {
+            if ($greetingMode === 'all_contacts') {
+                $rules[] = 'Esta é a primeira resposta desta conversa. Faça uma saudação curta antes de responder ao pedido, inclusive para lead, cliente e paciente.';
+                if ($configuredGreeting !== '') {
+                    $rules[] = 'Use a saudação configurada como referência de linguagem, sem repeti-la mecanicamente se a mensagem do contato pedir uma resposta mais direta: ' . $configuredGreeting;
+                }
+                if ($greetingUseName && $contactName !== '') {
+                    $rules[] = 'Você pode usar o primeiro nome do contato na saudação quando soar natural: ' . $contactName . '.';
+                }
+            } elseif ($greetingMode === 'new_contacts') {
+                if ($isExistingCustomer || in_array($relationshipKey, ['customer', 'patient'], true)) {
+                    $rules[] = 'Esta é a primeira resposta desta conversa, mas o contato já foi reconhecido como cliente/paciente. Não use mensagem de boas-vindas de novo contato; responda com continuidade e naturalidade.';
+                    if ($greetingUseName && $contactName !== '') {
+                        $rules[] = 'Quando combinar com o pedido, pode chamar a pessoa pelo primeiro nome sem transformar a resposta em uma apresentação formal: ' . $contactName . '.';
+                    }
+                } else {
+                    $rules[] = 'Esta é a primeira resposta desta conversa e o contato ainda não é cliente/paciente reconhecido. Faça uma saudação curta antes de conduzir o atendimento.';
+                    if ($configuredGreeting !== '') {
+                        $rules[] = 'Use como referência a saudação configurada: ' . $configuredGreeting;
+                    }
+                    if ($greetingUseName && $contactName !== '') {
+                        $rules[] = 'Você pode usar o primeiro nome do contato se ele estiver disponível e soar natural: ' . $contactName . '.';
+                    }
+                }
+            } else {
+                $rules[] = 'Não force uma saudação ou apresentação automática nesta abertura. Responda naturalmente ao que a pessoa escreveu; se ela apenas cumprimentar, retribua de forma breve.';
+            }
+        } else {
+            $rules[] = 'A conversa já possui resposta anterior. Não repita saudação de abertura ou mensagem de boas-vindas; continue do ponto atual.';
+        }
 
         $preScheduleBlock = '';
         if ($tenantId > 0) {

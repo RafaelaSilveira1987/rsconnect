@@ -130,5 +130,6 @@ return [
         ['sequence' => 115, 'file' => '108_evolution_instance_resilience.sql'],
         ['sequence' => 116, 'file' => '109_evolution_instance_identity_cleanup.sql'],
         ['sequence' => 117, 'file' => '110_conversation_lifecycle_e2e_consistency.sql'],
+        ['sequence' => 118, 'file' => '111_agent_greeting_policy.sql'],
     ],
 ];

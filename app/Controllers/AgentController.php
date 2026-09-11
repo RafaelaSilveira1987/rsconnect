@@ -295,14 +295,14 @@ final class AgentController
                     (tenant_id, instance_id, name, segment, model_provider, model_name, temperature, system_prompt,
                      status, is_default, auto_reply_enabled, handoff_keywords, max_context_messages,
                      ai_efficiency_mode, ai_max_output_tokens, ai_knowledge_budget_chars, ai_selective_knowledge,
-                     ai_local_replies_enabled, ai_greeting_reply, ai_gratitude_reply, ai_farewell_reply, ai_menu_reply,
+                     ai_local_replies_enabled, ai_greeting_reply, ai_greeting_mode, ai_greeting_use_contact_name, ai_gratitude_reply, ai_farewell_reply, ai_menu_reply,
                      ai_exact_cache_enabled, ai_exact_cache_ttl_hours, knowledge_base, n8n_enabled, n8n_webhook_url, business_hours_enabled, business_timezone,
                      business_hours_json, after_hours_message, human_handoff_message, handoff_action, cooldown_seconds, message_grouping_enabled, prioritize_current_turn, reply_to_reactions)
                  VALUES
                     (:tenant_id, :instance_id, :name, :segment, :provider, :model, :temperature, :prompt,
                      "active", :is_default, :auto_reply_enabled, :handoff_keywords, :max_context_messages,
                      :ai_efficiency_mode, :ai_max_output_tokens, :ai_knowledge_budget_chars, :ai_selective_knowledge,
-                     :ai_local_replies_enabled, :ai_greeting_reply, :ai_gratitude_reply, :ai_farewell_reply, :ai_menu_reply,
+                     :ai_local_replies_enabled, :ai_greeting_reply, :ai_greeting_mode, :ai_greeting_use_contact_name, :ai_gratitude_reply, :ai_farewell_reply, :ai_menu_reply,
                      :ai_exact_cache_enabled, :ai_exact_cache_ttl_hours, :knowledge_base, :n8n_enabled, :n8n_webhook_url, :business_hours_enabled, :business_timezone,
                      :business_hours_json, :after_hours_message, :human_handoff_message, :handoff_action, :cooldown_seconds, :message_grouping_enabled, :prioritize_current_turn, :reply_to_reactions)'
             );
@@ -325,6 +325,8 @@ final class AgentController
                 'ai_selective_knowledge' => $aiSelectiveKnowledge ? 1 : 0,
                 'ai_local_replies_enabled' => $localAutomation['enabled'],
                 'ai_greeting_reply' => $localAutomation['greeting'],
+                'ai_greeting_mode' => $localAutomation['greeting_mode'],
+                'ai_greeting_use_contact_name' => $localAutomation['greeting_use_contact_name'],
                 'ai_gratitude_reply' => $localAutomation['gratitude'],
                 'ai_farewell_reply' => $localAutomation['farewell'],
                 'ai_menu_reply' => $localAutomation['menu'],
@@ -514,6 +516,8 @@ final class AgentController
                      ai_selective_knowledge = :ai_selective_knowledge,
                      ai_local_replies_enabled = :ai_local_replies_enabled,
                      ai_greeting_reply = :ai_greeting_reply,
+                     ai_greeting_mode = :ai_greeting_mode,
+                     ai_greeting_use_contact_name = :ai_greeting_use_contact_name,
                      ai_gratitude_reply = :ai_gratitude_reply,
                      ai_farewell_reply = :ai_farewell_reply,
                      ai_menu_reply = :ai_menu_reply,
@@ -548,6 +552,8 @@ final class AgentController
                 'ai_selective_knowledge' => $aiSelectiveKnowledge ? 1 : 0,
                 'ai_local_replies_enabled' => $localAutomation['enabled'],
                 'ai_greeting_reply' => $localAutomation['greeting'],
+                'ai_greeting_mode' => $localAutomation['greeting_mode'],
+                'ai_greeting_use_contact_name' => $localAutomation['greeting_use_contact_name'],
                 'ai_gratitude_reply' => $localAutomation['gratitude'],
                 'ai_farewell_reply' => $localAutomation['farewell'],
                 'ai_menu_reply' => $localAutomation['menu'],
@@ -601,6 +607,8 @@ final class AgentController
                 'prioritize_current_turn' => $prioritizeCurrentTurn,
                 'ai_efficiency_mode' => $aiEfficiencyMode,
                 'ai_local_replies_enabled' => $localAutomation['enabled'] === 1,
+                'ai_greeting_mode' => $localAutomation['greeting_mode'],
+                'ai_greeting_use_contact_name' => $localAutomation['greeting_use_contact_name'] === 1,
                 'ai_exact_cache_enabled' => $localAutomation['cache_enabled'] === 1,
                 'channels_updated' => $channelSelectionSubmitted,
                 'instance_ids' => $channelSelectionSubmitted ? $selectedInstanceIds : null,
@@ -1222,7 +1230,7 @@ final class AgentController
         header('Location: ' . Router::url($path));
         exit;
     }
-    /** @return array{enabled:int,greeting:?string,gratitude:?string,farewell:?string,menu:?string,cache_enabled:int,cache_ttl_hours:int} */
+    /** @return array{enabled:int,greeting:?string,greeting_mode:string,greeting_use_contact_name:int,gratitude:?string,farewell:?string,menu:?string,cache_enabled:int,cache_ttl_hours:int} */
     private function aiLocalAutomationFromPost(): array
     {
         $clean = static function (string $key, int $limit): ?string {
@@ -1230,9 +1238,16 @@ final class AgentController
             return $value !== '' ? mb_substr($value, 0, $limit) : null;
         };
 
+        $greetingMode = strtolower(trim((string) ($_POST['ai_greeting_mode'] ?? 'new_contacts')));
+        if (!in_array($greetingMode, ['all_contacts', 'new_contacts', 'disabled'], true)) {
+            $greetingMode = 'new_contacts';
+        }
+
         return [
             'enabled' => isset($_POST['ai_local_replies_enabled']) ? 1 : 0,
             'greeting' => $clean('ai_greeting_reply', 500),
+            'greeting_mode' => $greetingMode,
+            'greeting_use_contact_name' => isset($_POST['ai_greeting_use_contact_name']) ? 1 : 0,
             'gratitude' => $clean('ai_gratitude_reply', 500),
             'farewell' => $clean('ai_farewell_reply', 500),
             'menu' => $clean('ai_menu_reply', 4000),

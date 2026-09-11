@@ -667,14 +667,16 @@ $humanizeAgentRule = static function (string $key): string {
                                 </div>
                             </section>
                             <details class="ai-local-automation-card">
-                                <summary><span><strong>Respostas sem nova cobrança de IA</strong><small>Saudações prontas e reaproveitamento opcional antes de chamar o serviço de IA.</small></span><span class="drawer-chevron"></span></summary>
+                                <summary><span><strong>Respostas sem nova cobrança de IA</strong><small>Saudação opcional por tipo de contato e reaproveitamento antes de chamar o serviço de IA.</small></span><span class="drawer-chevron"></span></summary>
                                 <div class="ai-local-automation-body">
                                     <div class="agent-toggle-grid">
                                         <label class="check-field compact-check"><input type="checkbox" name="ai_local_replies_enabled" value="1" <?= !array_key_exists('ai_local_replies_enabled', $agent) || (int) ($agent['ai_local_replies_enabled'] ?? 1) === 1 ? 'checked' : '' ?>><span>Usar respostas locais configuradas</span></label>
                                         <label class="check-field compact-check"><input type="checkbox" name="ai_exact_cache_enabled" value="1" <?= (int) ($agent['ai_exact_cache_enabled'] ?? 0) === 1 ? 'checked' : '' ?>><span>Reutilizar perguntas idênticas elegíveis</span></label>
                                     </div>
                                     <div class="form-grid two">
-                                        <label class="field compact-field"><span>Resposta para saudação</span><input name="ai_greeting_reply" value="<?= View::e($agent['ai_greeting_reply'] ?? '') ?>" maxlength="500" placeholder="Olá! Como posso ajudar você hoje?"></label>
+                                        <label class="field compact-field"><span>Resposta para saudação</span><input name="ai_greeting_reply" value="<?= View::e($agent['ai_greeting_reply'] ?? '') ?>" maxlength="500" placeholder="Olá! Como posso ajudar você hoje?"><small class="field-hint">Usada como resposta pronta quando a pessoa envia apenas uma saudação e como referência para a abertura natural da IA.</small></label>
+                                        <label class="field compact-field"><span>Quem recebe a saudação de abertura?</span><select name="ai_greeting_mode"><option value="all_contacts" <?= ($agent['ai_greeting_mode'] ?? 'all_contacts') === 'all_contacts' ? 'selected' : '' ?>>Todos os contatos</option><option value="new_contacts" <?= ($agent['ai_greeting_mode'] ?? '') === 'new_contacts' ? 'selected' : '' ?>>Somente novos contatos; cliente/paciente reconhecido continua naturalmente</option><option value="disabled" <?= ($agent['ai_greeting_mode'] ?? '') === 'disabled' ? 'selected' : '' ?>>Sem saudação automática</option></select><small class="field-hint">A saudação de abertura é aplicada somente na primeira resposta da conversa e não se repete nos próximos turnos.</small></label>
+                                        <label class="check-field compact-check"><input type="checkbox" name="ai_greeting_use_contact_name" value="1" <?= !array_key_exists('ai_greeting_use_contact_name', $agent) || (int) ($agent['ai_greeting_use_contact_name'] ?? 1) === 1 ? 'checked' : '' ?>><span>Usar o nome do contato quando estiver disponível e soar natural</span></label>
                                         <label class="field compact-field"><span>Resposta para agradecimento</span><input name="ai_gratitude_reply" value="<?= View::e($agent['ai_gratitude_reply'] ?? '') ?>" maxlength="500" placeholder="Por nada! Estou à disposição."></label>
                                         <label class="field compact-field"><span>Resposta para despedida</span><input name="ai_farewell_reply" value="<?= View::e($agent['ai_farewell_reply'] ?? '') ?>" maxlength="500" placeholder="Até mais! Quando precisar, fale com a gente."></label>
                                         <label class="field compact-field"><span>Por quantas horas uma resposta pode ser reaproveitada?</span><input type="number" name="ai_exact_cache_ttl_hours" value="<?= (int) ($agent['ai_exact_cache_ttl_hours'] ?? 168) ?>" min="1" max="720"><small class="field-hint">As respostas salvas são apagadas automaticamente quando as instruções, informações ou modelo mudam.</small></label>
@@ -900,11 +902,13 @@ $humanizeAgentRule = static function (string $key): string {
                         <label class="check-field"><input type="checkbox" name="ai_selective_knowledge" value="1" checked><span>Enviar somente os trechos da base relacionados à conversa</span></label>
                     </div>
                     <details class="ai-local-automation-card">
-                        <summary><span><strong>Respostas sem nova cobrança de IA</strong><small>Configure respostas de saudação. O reaproveitamento de perguntas iguais é opcional.</small></span><span class="drawer-chevron"></span></summary>
+                        <summary><span><strong>Respostas sem nova cobrança de IA</strong><small>Configure a saudação e escolha se cliente/paciente reconhecido deve receber boas-vindas ou continuidade natural.</small></span><span class="drawer-chevron"></span></summary>
                         <div class="ai-local-automation-body">
                             <label class="check-field"><input type="checkbox" name="ai_local_replies_enabled" value="1" checked><span>Usar respostas locais configuradas</span></label>
                             <div class="form-grid two">
                                 <label class="field"><span>Saudação</span><input name="ai_greeting_reply" maxlength="500" placeholder="Olá! Como posso ajudar você hoje?"></label>
+                                <label class="field"><span>Quem recebe a saudação?</span><select name="ai_greeting_mode"><option value="all_contacts">Todos os contatos</option><option value="new_contacts" selected>Somente novos contatos; cliente/paciente reconhecido continua naturalmente</option><option value="disabled">Sem saudação automática</option></select><small class="field-hint">A abertura só acontece na primeira resposta da conversa.</small></label>
+                                <label class="check-field"><input type="checkbox" name="ai_greeting_use_contact_name" value="1" checked><span>Usar o nome do contato quando estiver disponível e soar natural</span></label>
                                 <label class="field"><span>Agradecimento</span><input name="ai_gratitude_reply" maxlength="500" placeholder="Por nada! Estou à disposição."></label>
                                 <label class="field"><span>Despedida</span><input name="ai_farewell_reply" maxlength="500" placeholder="Até mais! Quando precisar, fale com a gente."></label>
                                 <label class="field"><span>Por quantas horas uma resposta pode ser reaproveitada?</span><input type="number" name="ai_exact_cache_ttl_hours" value="168" min="1" max="720"></label>
@@ -1033,11 +1037,13 @@ $humanizeAgentRule = static function (string $key): string {
                         <label class="check-field"><input type="checkbox" name="ai_selective_knowledge" value="1" checked><span>Enviar somente os trechos da base relacionados à conversa</span></label>
                     </div>
                     <details class="ai-local-automation-card">
-                        <summary><span><strong>Respostas sem nova cobrança de IA</strong><small>Configure respostas de saudação. O reaproveitamento de perguntas iguais é opcional.</small></span><span class="drawer-chevron"></span></summary>
+                        <summary><span><strong>Respostas sem nova cobrança de IA</strong><small>Configure a saudação e escolha se cliente/paciente reconhecido deve receber boas-vindas ou continuidade natural.</small></span><span class="drawer-chevron"></span></summary>
                         <div class="ai-local-automation-body">
                             <label class="check-field"><input type="checkbox" name="ai_local_replies_enabled" value="1" checked><span>Usar respostas locais configuradas</span></label>
                             <div class="form-grid two">
                                 <label class="field"><span>Saudação</span><input name="ai_greeting_reply" maxlength="500" placeholder="Olá! Como posso ajudar você hoje?"></label>
+                                <label class="field"><span>Quem recebe a saudação?</span><select name="ai_greeting_mode"><option value="all_contacts">Todos os contatos</option><option value="new_contacts" selected>Somente novos contatos; cliente/paciente reconhecido continua naturalmente</option><option value="disabled">Sem saudação automática</option></select><small class="field-hint">A abertura só acontece na primeira resposta da conversa.</small></label>
+                                <label class="check-field"><input type="checkbox" name="ai_greeting_use_contact_name" value="1" checked><span>Usar o nome do contato quando estiver disponível e soar natural</span></label>
                                 <label class="field"><span>Agradecimento</span><input name="ai_gratitude_reply" maxlength="500" placeholder="Por nada! Estou à disposição."></label>
                                 <label class="field"><span>Despedida</span><input name="ai_farewell_reply" maxlength="500" placeholder="Até mais! Quando precisar, fale com a gente."></label>
                                 <label class="field"><span>Por quantas horas uma resposta pode ser reaproveitada?</span><input type="number" name="ai_exact_cache_ttl_hours" value="168" min="1" max="720"></label>

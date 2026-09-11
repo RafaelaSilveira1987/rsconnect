@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.31.1",
-  "release_name": "Relatórios PDF e homologação conversacional",
+  "package_version": "36.31.2",
+  "release_name": "Saudação inteligente por contato",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -10,7 +10,7 @@
   },
   "database": {
     "driver": "mysql",
-    "required_migration": "110_conversation_lifecycle_e2e_consistency.sql",
+    "required_migration": "111_agent_greeting_policy.sql",
     "migration_runner": "php bin/migrate.php"
   },
   "install": {
@@ -19,10 +19,14 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.31.0",
-      "release_name": "Atendimento conversacional estruturado"
+      "package_version": "36.31.1",
+      "release_name": "Relatórios PDF e homologação conversacional"
     },
     "historical_releases": [
+      {
+        "package_version": "36.31.0",
+        "release_name": "Atendimento conversacional estruturado"
+      },
       {
         "package_version": "36.30.9",
         "release_name": "Dados da conversa aprimorados"

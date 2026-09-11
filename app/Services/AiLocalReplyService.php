@@ -11,7 +11,7 @@ namespace App\Services;
 final class AiLocalReplyService
 {
     /** @return array{matched:bool,type:?string,reply:?string,normalized:string} */
-    public function match(array $agent, string $message): array
+    public function match(array $agent, string $message, array $conversation = []): array
     {
         $normalized = $this->normalize($message);
         if ((int) ($agent['ai_local_replies_enabled'] ?? 1) !== 1 || $normalized === '' || $this->length($normalized) > 60) {
@@ -38,12 +38,42 @@ final class AiLocalReplyService
         ];
 
         foreach ($rules as $type => $rule) {
-            if ($rule['reply'] !== '' && in_array($normalized, array_map([$this, 'normalize'], $rule['patterns']), true)) {
-                return ['matched' => true, 'type' => $type, 'reply' => $rule['reply'], 'normalized' => $normalized];
+            if ($rule['reply'] === '' || !in_array($normalized, array_map([$this, 'normalize'], $rule['patterns']), true)) {
+                continue;
             }
+
+            if ($type === 'greeting' && !$this->greetingAllowed($agent, $conversation)) {
+                continue;
+            }
+
+            return ['matched' => true, 'type' => $type, 'reply' => $rule['reply'], 'normalized' => $normalized];
         }
 
         return ['matched' => false, 'type' => null, 'reply' => null, 'normalized' => $normalized];
+    }
+
+    private function greetingAllowed(array $agent, array $conversation): bool
+    {
+        $mode = strtolower(trim((string) ($agent['ai_greeting_mode'] ?? 'all_contacts')));
+        if (!in_array($mode, ['all_contacts', 'new_contacts', 'disabled'], true)) {
+            $mode = 'all_contacts';
+        }
+        $isOpeningTurn = !array_key_exists('_is_opening_turn', $conversation) || !empty($conversation['_is_opening_turn']);
+        if ($mode === 'disabled' || !$isOpeningTurn) {
+            return false;
+        }
+        if ($mode === 'all_contacts') {
+            return true;
+        }
+
+        $relationship = (new ConversationFlowService())->relationshipProfile([
+            'status' => (string) ($conversation['contact_status'] ?? $conversation['status'] ?? ''),
+            'contact_status' => (string) ($conversation['contact_status'] ?? ''),
+            'contact_group' => (string) ($conversation['contact_group'] ?? 'unclassified'),
+            'tags_json' => $conversation['tags_json'] ?? null,
+        ]);
+
+        return empty($relationship['is_existing_customer']);
     }
 
     public function normalize(string $value): string

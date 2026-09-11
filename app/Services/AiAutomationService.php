@@ -684,7 +684,8 @@ final class AiAutomationService
             // Antes de reservar franquia ou chamar o provedor, tenta respostas determinísticas
             // configuradas e o cache exato opcional. Essas saídas não consomem tokens.
             if (!$afterHoursRecovery && $routingTransition === null && $currentTurnCount === 1) {
-                $localReply = (new AiLocalReplyService())->match($agent, $incomingContent);
+                $conversation['_is_opening_turn'] = !$this->hasPriorOutgoingMessage($pdo, $conversationId);
+                $localReply = (new AiLocalReplyService())->match($agent, $incomingContent, $conversation);
                 if (!empty($localReply['matched']) && trim((string) ($localReply['reply'] ?? '')) !== '') {
                     $conversation = $this->conversation($pdo, $conversationId);
                     if (!$this->conversationAllowsAutomaticReply($conversation)) {
@@ -710,7 +711,9 @@ final class AiAutomationService
                     return;
                 }
 
-                $cacheResult = (new AiExactCacheService())->lookup($pdo, (int) $instance['tenant_id'], $agent, $incomingContent);
+                $cacheResult = !empty($conversation['_is_opening_turn'])
+                    ? ['hit' => false, 'reply' => null, 'cache_id' => null, 'normalized' => '']
+                    : (new AiExactCacheService())->lookup($pdo, (int) $instance['tenant_id'], $agent, $incomingContent);
                 if (!empty($cacheResult['hit']) && trim((string) ($cacheResult['reply'] ?? '')) !== '') {
                     $conversation = $this->conversation($pdo, $conversationId);
                     if (!$this->conversationAllowsAutomaticReply($conversation)) {
@@ -867,7 +870,7 @@ final class AiAutomationService
             $usageReservationId = 0;
 
             // O cache é opcional, exato e invalidado automaticamente quando prompt, base ou modelo mudam.
-            if ($currentTurnCount === 1) {
+            if ($currentTurnCount === 1 && empty($generationAgent['_is_opening_turn'])) {
                 (new AiExactCacheService())->store($pdo, (int) $instance['tenant_id'], $agent, $incomingContent, $reply);
             }
 
@@ -1632,6 +1635,20 @@ final class AiAutomationService
             $conversation = $statement->fetch(PDO::FETCH_ASSOC);
             return $conversation ?: null;
         }
+    }
+
+
+    private function hasPriorOutgoingMessage(PDO $pdo, int $conversationId): bool
+    {
+        $statement = $pdo->prepare(
+            'SELECT COUNT(*)
+             FROM conversation_messages
+             WHERE conversation_id = :conversation_id
+               AND direction = "outgoing"
+               AND status NOT IN ("failed", "cancelled")'
+        );
+        $statement->execute(['conversation_id' => $conversationId]);
+        return (int) $statement->fetchColumn() > 0;
     }
 
     private function conversationAllowsAutomaticReply(?array $conversation): bool

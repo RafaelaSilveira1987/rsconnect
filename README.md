@@ -1,4 +1,14 @@
-# RS Connect 36.31.1
+# RS Connect 36.31.2
+
+## Saudação inteligente por contato — 36.31.2
+
+- cada assistente pode escolher entre **saudar todos os contatos**, **saudar somente novos contatos** ou **não usar saudação automática**;
+- no modo recomendado para novos contatos, **cliente/paciente reconhecido continua a conversa com naturalidade**, sem mensagem de boas-vindas de novo lead;
+- o agente pode usar o nome cadastrado quando isso soar natural;
+- a saudação de abertura ocorre somente na primeira resposta da conversa e não é repetida nos turnos seguintes;
+- respostas locais de “oi/olá” respeitam a mesma política; para cliente/paciente reconhecido, a IA assume a resposta natural quando configurado;
+- o cache exato não é usado nem alimentado na abertura da conversa, evitando reaproveitar uma resposta de saudação fora de contexto;
+- migration obrigatória: `111_agent_greeting_policy.sql`.
 
 ## Relatórios PDF e homologação conversacional — 36.31.1
 

@@ -42,7 +42,8 @@ final class AiContextBuilder
         $baselineHistoryLimit = max(4, min(30, (int) ($agent['max_context_messages'] ?? 12)));
 
         $aggregate = $pdo->prepare(
-            'SELECT COUNT(*) AS total_messages
+            'SELECT COUNT(*) AS total_messages,
+                    SUM(CASE WHEN direction = "outgoing" AND status NOT IN ("failed", "cancelled") THEN 1 ELSE 0 END) AS outgoing_messages
              FROM conversation_messages
              WHERE conversation_id = :conversation_id
                AND NOT (direction = "outgoing" AND status = "failed")'
@@ -111,6 +112,7 @@ final class AiContextBuilder
         $preparedAgent['_current_turn_text'] = trim((string) ($currentTurn['content'] ?? '')) ?: trim($incomingContent);
         $preparedAgent['_current_turn_count'] = max(1, (int) ($currentTurn['count'] ?? 0));
         $preparedAgent['_current_turn_message_ids'] = (array) ($currentTurn['message_ids'] ?? []);
+        $preparedAgent['_is_opening_turn'] = (int) ($historyStats['outgoing_messages'] ?? 0) === 0;
         if ($memorySummary !== '') {
             $preparedAgent['_conversation_memory_summary'] = $memorySummary;
             $preparedAgent['_conversation_memory_facts'] = $memoryFacts;

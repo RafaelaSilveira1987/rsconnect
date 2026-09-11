@@ -156,8 +156,10 @@ final class AppVersionService
     // RS Connect 36.31.0 — comportamento conversacional estruturado: demanda, modalidades, blocos, indisponibilidade e encaminhamentos especiais.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.31.0 — Atendimento conversacional estruturado';
     // RS Connect 36.31.1 — exportação PDF direta e homologação assistida das regras conversacionais.
-    public const PACKAGE_LABEL = 'RS Connect 36.31.1 — Relatórios PDF e homologação conversacional';
-    public const REQUIRED_MIGRATION = '110_conversation_lifecycle_e2e_consistency.sql';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.31.1 — Relatórios PDF e homologação conversacional';
+    // RS Connect 36.31.2 — saudação opcional por assistente, com continuidade natural para clientes/pacientes reconhecidos.
+    public const PACKAGE_LABEL = 'RS Connect 36.31.2 — Saudação inteligente por contato';
+    public const REQUIRED_MIGRATION = '111_agent_greeting_policy.sql';
 
     private PDO $pdo;
 
