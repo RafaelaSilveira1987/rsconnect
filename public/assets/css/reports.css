@@ -1624,3 +1624,11 @@ body:has(> .executive-report-page) {
 @media print {
   .team-report-department-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+
+/* RS Connect 36.31.1 - exportação profissional PDF + CSV explícito */
+.report-export-actions{display:inline-flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.report-export-chip{min-width:44px;min-height:30px;padding:6px 10px;border:1px solid var(--border,#d8e1eb);border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:800;letter-spacing:.025em;text-decoration:none;background:#fff;color:var(--text,#1f2937)}
+.report-export-chip:hover,.report-export-chip:focus-visible{border-color:var(--primary,#146498);box-shadow:0 0 0 3px rgba(20,100,152,.10)}
+.report-export-chip.is-pdf{border-color:rgba(99,27,124,.22);background:rgba(99,27,124,.07);color:#631b7c}
+@media(max-width:680px){.rs-admin-report-header-actions,.client-report-hero-actions{width:100%}.rs-admin-report-header-actions .btn,.client-report-hero-actions .btn{flex:1 1 145px;justify-content:center}.report-export-actions{justify-content:flex-start}}

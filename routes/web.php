@@ -181,8 +181,10 @@ return static function (Router $router): void {
     $router->get('/webhooks/reports/scheduled/run', [ScheduledReportController::class, 'cron']);
     $router->post('/webhooks/reports/scheduled/run', [ScheduledReportController::class, 'cron']);
     $router->get('/reports/export', [ReportController::class, 'export'], ['auth', 'permission:reports.view']);
+    $router->get('/reports/pdf', [ReportController::class, 'pdf'], ['auth', 'permission:reports.view']);
     $router->get('/reports/team', [ReportController::class, 'team'], ['auth', 'permission:reports.view']);
     $router->get('/reports/team/export', [ReportController::class, 'teamExport'], ['auth', 'permission:reports.view']);
+    $router->get('/reports/team/pdf', [ReportController::class, 'teamPdf'], ['auth', 'permission:reports.view']);
 
     $router->get('/security', [OperationsCenterController::class, 'security'], ['auth', 'super_admin']);
     $router->get('/seguranca', [OperationsCenterController::class, 'security'], ['auth', 'super_admin']);

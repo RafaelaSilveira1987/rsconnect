@@ -61,7 +61,7 @@ foreach ($professionals as $professional) {
     $professionalMax = max($professionalMax, (int) ($professional['activity_score'] ?? 0));
 }
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.30.3')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.31.1')) ?>">
 <div class="executive-report-page team-report-page report-v36100">
     <section class="client-report-hero team-report-hero">
         <div>
@@ -76,8 +76,9 @@ foreach ($professionals as $professional) {
                 'tenant_id' => $tenantId,
             ], static fn ($value): bool => $value !== '' && $value !== 0)))) ?>">Visão geral</a>
             <?php if ($tenantId > 0 && !empty($readiness['ready'])): ?>
-                <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/team/export?' . http_build_query($queryBase))) ?>">Exportar equipe</a>
-                <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/team/export?' . http_build_query($queryBase + ['detail' => 'first_responses']))) ?>">Exportar 1ª respostas</a>
+                <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/team/pdf?' . http_build_query($queryBase))) ?>">Salvar PDF</a>
+                <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/team/export?' . http_build_query($queryBase))) ?>">CSV equipe</a>
+                <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/team/export?' . http_build_query($queryBase + ['detail' => 'first_responses']))) ?>">CSV 1ª respostas</a>
             <?php endif; ?>
             <button class="btn btn-outline" type="button" data-page-action="print">Imprimir</button>
         </div>

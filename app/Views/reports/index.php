@@ -98,12 +98,12 @@ $hourMap = array_fill(0, 24, 0);
 foreach (($byHour ?? []) as $row) $hourMap[(int) ($row['label'] ?? 0)] = (int) ($row['total'] ?? 0);
 $hourMax = max(1, ...array_values($hourMap));
 $quickReports = [
-    ['name' => 'Conversas do período', 'type' => 'Atendimento', 'metric' => $number($metrics['active_conversations'] ?? 0) . ' atendidas', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'conversations']))],
-    ['name' => 'Oportunidades comerciais', 'type' => 'CRM', 'metric' => $number($metrics['crm_leads'] ?? 0) . ' oportunidades', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'leads']))],
-    ['name' => 'Cobranças da empresa', 'type' => 'Financeiro', 'metric' => $money($metrics['received_amount'] ?? 0) . ' recebido', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'billing']))],
+    ['name' => 'Conversas do período', 'type' => 'Atendimento', 'metric' => $number($metrics['active_conversations'] ?? 0) . ' atendidas', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'conversations'])), 'pdf_url' => Router::url('/reports/pdf?' . http_build_query($queryBase + ['type' => 'conversations']))],
+    ['name' => 'Oportunidades comerciais', 'type' => 'CRM', 'metric' => $number($metrics['crm_leads'] ?? 0) . ' oportunidades', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'leads'])), 'pdf_url' => Router::url('/reports/pdf?' . http_build_query($queryBase + ['type' => 'leads']))],
+    ['name' => 'Cobranças da empresa', 'type' => 'Financeiro', 'metric' => $money($metrics['received_amount'] ?? 0) . ' recebido', 'url' => Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'billing'])), 'pdf_url' => Router::url('/reports/pdf?' . http_build_query($queryBase + ['type' => 'billing']))],
 ];
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.30.3')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.31.1')) ?>">
 <div class="executive-report-page client-manager-report report-v3646 report-v3647 report-v36140 report-v36150">
     <header class="rs-admin-report-header rs-client-report-header">
         <div>
@@ -115,7 +115,8 @@ $quickReports = [
             <?php if (Auth::can('reports.schedule.manage')): ?><a class="btn btn-outline" href="<?= View::e(Router::url('/reports/automatic')) ?>">Relatórios automáticos</a><?php endif; ?>
             <?php if (Auth::can('reports.team.view_own') || Auth::can('reports.team.view_all')): ?><a class="btn btn-outline" href="<?= View::e($teamReportUrl) ?>">Equipe e profissionais</a><?php endif; ?>
             <button class="btn btn-outline" type="button" data-page-action="reload"><?= $icon('refresh') ?> Atualizar</button>
-            <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'conversations']))) ?>"><?= $icon('download') ?> Exportar</a>
+            <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'conversations']))) ?>"><?= $icon('download') ?> CSV</a>
+            <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/pdf?' . http_build_query($queryBase + ['type' => 'full']))) ?>"><?= $icon('report') ?> Salvar PDF</a>
         </div>
     </header>
 
@@ -188,8 +189,8 @@ $quickReports = [
     </section>
 
     <section class="card rs-admin-ready-reports">
-        <header><div><h2>Exportações detalhadas</h2><p>Baixe os dados do período para análise em planilha. Os PDFs ficam em Relatórios automáticos.</p></div><span><?= View::e($periodLabel) ?></span></header>
-        <div class="table-wrap"><table><thead><tr><th>Nome do relatório</th><th>Tipo</th><th>Período</th><th>Indicador</th><th>Ações</th></tr></thead><tbody><?php foreach ($quickReports as $row): ?><tr><td><span class="rs-admin-report-name"><i><?= $icon('report') ?></i><strong><?= View::e($row['name']) ?></strong></span></td><td><span class="badge"><?= View::e($row['type']) ?></span></td><td><?= View::e($periodLabel) ?></td><td><?= View::e($row['metric']) ?></td><td><a class="rs-admin-download-action" href="<?= View::e($row['url']) ?>" aria-label="Exportar <?= View::e($row['name']) ?>"><?= $icon('download') ?></a></td></tr><?php endforeach; ?></tbody></table></div>
+        <header><div><h2>Exportações detalhadas</h2><p>Use CSV para análise em planilha ou gere um PDF pronto para compartilhar e arquivar.</p></div><span><?= View::e($periodLabel) ?></span></header>
+        <div class="table-wrap"><table><thead><tr><th>Nome do relatório</th><th>Tipo</th><th>Período</th><th>Indicador</th><th>Ações</th></tr></thead><tbody><?php foreach ($quickReports as $row): ?><tr><td><span class="rs-admin-report-name"><i><?= $icon('report') ?></i><strong><?= View::e($row['name']) ?></strong></span></td><td><span class="badge"><?= View::e($row['type']) ?></span></td><td><?= View::e($periodLabel) ?></td><td><?= View::e($row['metric']) ?></td><td><div class="report-export-actions"><a class="report-export-chip is-pdf" href="<?= View::e($row['pdf_url']) ?>" aria-label="Salvar <?= View::e($row['name']) ?> em PDF">PDF</a><a class="report-export-chip" href="<?= View::e($row['url']) ?>" aria-label="Exportar <?= View::e($row['name']) ?> em CSV">CSV</a></div></td></tr><?php endforeach; ?></tbody></table></div>
     </section>
 
     <?php if ($insights): ?><section class="card rs-admin-insights-strip"><div><span class="eyebrow">Insights automáticos</span><h2>Leitura rápida do período</h2></div><div class="report-insights-grid is-compact"><?php foreach ($insights as $item): ?><article class="report-insight is-<?= View::e($item['tone'] ?? 'info') ?>"><span class="report-insight-dot"></span><div><strong><?= View::e($item['title'] ?? '') ?></strong><p><?= View::e($item['text'] ?? '') ?></p></div></article><?php endforeach; ?></div></section><?php endif; ?>

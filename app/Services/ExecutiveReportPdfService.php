@@ -89,8 +89,8 @@ final class ExecutiveReportPdfService
     private function defaultSections(string $scope): array
     {
         return $scope === 'admin'
-            ? ['overview', 'companies', 'usage', 'health', 'automation', 'agenda', 'commercial']
-            : ['overview', 'conversations', 'team', 'agenda', 'ai', 'attention'];
+            ? ['overview', 'companies', 'usage', 'health', 'automation', 'agenda', 'billing', 'commercial']
+            : ['overview', 'conversations', 'team', 'agenda', 'ai', 'attention', 'commercial', 'billing'];
     }
 
     private function header(
@@ -263,6 +263,30 @@ final class ExecutiveReportPdfService
             $y = $this->table($pdf, $y, ['Situação', 'Compromissos'], $rows, [390, 107], $primary);
         }
 
+        if (in_array('billing', $sections, true)) {
+            $revenueRows = array_slice(is_array($data['revenueByPlan'] ?? null) ? $data['revenueByPlan'] : [], 0, 10);
+            $invoiceRows = array_slice(is_array($data['recentInvoices'] ?? null) ? $data['recentInvoices'] : [], 0, 10);
+            $this->ensureSpace($pdf, $y, 145, $name, $period, $primary);
+            $y = $this->sectionTitle($pdf, $y, 'Receita e cobranças', 'Resumo financeiro da operação e faturas recentes.', $primary);
+            $rows = array_map(fn (array $row): array => [
+                (string) ($row['label'] ?? 'Plano'),
+                $this->number($row['subscriptions'] ?? 0),
+                $this->money($row['total'] ?? 0),
+            ], $revenueRows);
+            $y = $this->table($pdf, $y, ['Plano', 'Assinaturas', 'Valor'], $rows, [270, 105, 122], $secondary);
+            if ($invoiceRows !== []) {
+                $this->ensureSpace($pdf, $y, 100, $name, $period, $primary);
+                $rows = array_map(fn (array $row): array => [
+                    (string) ($row['tenant_name'] ?? 'Empresa'),
+                    (string) ($row['invoice_number'] ?? '-'),
+                    $this->money($row['amount'] ?? 0),
+                    $this->dateBr((string) ($row['due_date'] ?? '')),
+                    $this->friendlyStatus((string) ($row['status'] ?? '')),
+                ], $invoiceRows);
+                $y = $this->table($pdf, $y, ['Empresa', 'Cobrança', 'Valor', 'Vencimento', 'Situação'], $rows, [150, 95, 82, 82, 88], $primary);
+            }
+        }
+
         if (in_array('commercial', $sections, true)) {
             $this->ensureSpace($pdf, $y, 145, $name, $period, $primary);
             $y = $this->sectionTitle($pdf, $y, 'Comercial RS', 'Oportunidades por etapa e valor estimado.', $primary);
@@ -343,6 +367,31 @@ final class ExecutiveReportPdfService
                 $this->friendlyStatus((string) ($row['status'] ?? 'open')),
             ], $attentionRows);
             $y = $this->table($pdf, $y, ['Contato', 'Telefone', 'Não lidas', 'Situação'], $rows, [185, 115, 60, 151], $primary);
+        }
+
+        if (in_array('commercial', $sections, true)) {
+            $commercialRows = array_slice(is_array($data['crmByStage'] ?? null) ? $data['crmByStage'] : [], 0, 12);
+            $this->ensureSpace($pdf, $y, 135, $name, $period, $primary);
+            $y = $this->sectionTitle($pdf, $y, 'Comercial', 'Oportunidades criadas no período por etapa do funil.', $primary);
+            $rows = array_map(fn (array $row): array => [
+                (string) ($row['label'] ?? 'Etapa'),
+                $this->number($row['total'] ?? 0),
+                $this->money($row['value'] ?? 0),
+            ], $commercialRows);
+            $y = $this->table($pdf, $y, ['Etapa', 'Oportunidades', 'Valor'], $rows, [280, 105, 112], $secondary);
+        }
+
+        if (in_array('billing', $sections, true)) {
+            $invoiceRows = array_slice(is_array($data['recentInvoices'] ?? null) ? $data['recentInvoices'] : [], 0, 12);
+            $this->ensureSpace($pdf, $y, 135, $name, $period, $primary);
+            $y = $this->sectionTitle($pdf, $y, 'Cobranças da empresa', 'Situação das cobranças mais recentes do cadastro da empresa.', $primary);
+            $rows = array_map(fn (array $row): array => [
+                (string) ($row['invoice_number'] ?? '-'),
+                $this->money($row['amount'] ?? 0),
+                $this->dateBr((string) ($row['due_date'] ?? '')),
+                $this->friendlyStatus((string) ($row['status'] ?? '')),
+            ], $invoiceRows);
+            $y = $this->table($pdf, $y, ['Cobrança', 'Valor', 'Vencimento', 'Situação'], $rows, [160, 105, 110, 122], $primary);
         }
 
         $this->renderInsights($pdf, $y, $data, $name, $period, $primary);
@@ -543,6 +592,11 @@ final class ExecutiveReportPdfService
             'cancelled' => 'Cancelado',
             'no_show' => 'Não compareceu',
             'rejected' => 'Rejeitado',
+            'paid' => 'Pago',
+            'overdue' => 'Vencido',
+            'draft' => 'Rascunho',
+            'refunded' => 'Estornado',
+            'void', 'voided' => 'Cancelado',
             'healthy' => 'Saudável',
             'attention', 'warning' => 'Atenção',
             'critical', 'down' => 'Ação imediata',
@@ -598,7 +652,11 @@ final class ExecutiveReportPdfService
     }
     private function upper(string $value): string
     {
-        return function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
+        if (function_exists('mb_strtoupper')) {
+            return mb_strtoupper($value, 'UTF-8');
+        }
+        $value = strtr($value, ['á'=>'Á','à'=>'À','â'=>'Â','ã'=>'Ã','ä'=>'Ä','é'=>'É','è'=>'È','ê'=>'Ê','ë'=>'Ë','í'=>'Í','ì'=>'Ì','î'=>'Î','ï'=>'Ï','ó'=>'Ó','ò'=>'Ò','ô'=>'Ô','õ'=>'Õ','ö'=>'Ö','ú'=>'Ú','ù'=>'Ù','û'=>'Û','ü'=>'Ü','ç'=>'Ç']);
+        return strtoupper($value);
     }
 
     private function length(string $value): int

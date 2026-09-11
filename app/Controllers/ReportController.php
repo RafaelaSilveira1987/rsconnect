@@ -8,8 +8,11 @@ use App\Core\Auth;
 use App\Core\Database;
 use App\Core\View;
 use App\Services\AdminExecutiveReportService;
+use App\Services\BrandingService;
+use App\Services\ExecutiveReportPdfService;
 use App\Services\TenantExecutiveReportService;
 use App\Services\TeamProfessionalReportService;
+use App\Services\TeamProfessionalReportPdfService;
 use PDO;
 
 final class ReportController
@@ -76,6 +79,45 @@ final class ReportController
             'tenants' => $tenants,
             ...$reportData,
         ], 'app');
+    }
+
+    public function pdf(): void
+    {
+        $filters = $this->filters();
+        $scope = Auth::isSuperAdmin() ? 'admin' : 'tenant';
+        $type = strtolower(trim((string) ($_GET['type'] ?? 'full')));
+        $allowed = $scope === 'admin'
+            ? ['full', 'companies', 'usage', 'revenue', 'failures', 'commercial']
+            : ['full', 'conversations', 'leads', 'billing'];
+        if (!in_array($type, $allowed, true)) {
+            $type = 'full';
+        }
+
+        $data = $scope === 'admin'
+            ? (new AdminExecutiveReportService())->build($filters)
+            : (new TenantExecutiveReportService())->build($filters);
+        $sections = $this->pdfSections($scope, $type);
+        $identity = $this->pdfIdentity($scope, (int) ($filters['tenant_id'] ?? 0), $this->pdfTitle($scope, $type));
+        $generated = (new ExecutiveReportPdfService())->generate($scope, $filters, $data, $identity, $sections);
+        $this->pdfResponse($this->pdfFilename('rs-connect-' . $type, $filters), (string) ($generated['bytes'] ?? ''));
+    }
+
+    public function teamPdf(): void
+    {
+        $filters = $this->teamFilters();
+        if ((int) ($filters['tenant_id'] ?? 0) < 1) {
+            http_response_code(422);
+            exit('Selecione uma empresa para gerar o PDF.');
+        }
+        try {
+            $data = (new TeamProfessionalReportService())->build($filters);
+        } catch (\RuntimeException $exception) {
+            http_response_code(403);
+            exit($exception->getMessage());
+        }
+        $identity = $this->pdfIdentity('tenant', (int) $filters['tenant_id'], 'Equipe e profissionais');
+        $generated = (new TeamProfessionalReportPdfService())->generate($filters, $data, $identity);
+        $this->pdfResponse($this->pdfFilename('rs-connect-equipe-profissionais', $filters), (string) ($generated['bytes'] ?? ''));
     }
 
     public function teamExport(): void
@@ -287,6 +329,84 @@ final class ReportController
             $params
         );
         $this->csv('rs-connect-empresas.csv', $rows);
+    }
+
+    /** @return list<string> */
+    private function pdfSections(string $scope, string $type): array
+    {
+        if ($scope === 'admin') {
+            return match ($type) {
+                'companies' => ['companies', 'health'],
+                'usage' => ['usage', 'companies'],
+                'revenue' => ['billing'],
+                'failures' => ['automation', 'health'],
+                'commercial' => ['commercial'],
+                default => [],
+            };
+        }
+        return match ($type) {
+            'conversations' => ['conversations', 'team', 'ai', 'attention'],
+            'leads' => ['commercial'],
+            'billing' => ['billing'],
+            default => [],
+        };
+    }
+
+    private function pdfTitle(string $scope, string $type): string
+    {
+        if ($scope === 'admin') {
+            return match ($type) {
+                'companies' => 'Empresas e saúde da operação',
+                'usage' => 'Uso da plataforma',
+                'revenue' => 'Receita e cobranças',
+                'failures' => 'Integrações e ocorrências',
+                'commercial' => 'Pipeline comercial RS',
+                default => 'Relatório executivo',
+            };
+        }
+        return match ($type) {
+            'conversations' => 'Atendimento e conversas',
+            'leads' => 'Oportunidades comerciais',
+            'billing' => 'Cobranças da empresa',
+            default => 'Relatório executivo',
+        };
+    }
+
+    /** @return array{name:string,primary:string,secondary:string,accent:string,report_title:string} */
+    private function pdfIdentity(string $scope, int $tenantId, string $title): array
+    {
+        if ($scope === 'tenant' && $tenantId > 0) {
+            $branding = BrandingService::forTenantId($tenantId);
+            return [
+                'name' => (string) ($branding['app_name'] ?? 'Empresa'),
+                'primary' => (string) ($branding['primary'] ?? '#2F80FF'),
+                'secondary' => (string) ($branding['secondary'] ?? '#7B3FF2'),
+                'accent' => (string) ($branding['accent'] ?? '#14B8A6'),
+                'report_title' => $title,
+            ];
+        }
+        return ['name' => 'RS Connect', 'primary' => '#2F80FF', 'secondary' => '#7B3FF2', 'accent' => '#14B8A6', 'report_title' => $title];
+    }
+
+    private function pdfFilename(string $prefix, array $filters): string
+    {
+        $start = preg_replace('/[^0-9-]/', '', (string) ($filters['start'] ?? '')) ?: date('Y-m-d');
+        $end = preg_replace('/[^0-9-]/', '', (string) ($filters['end'] ?? '')) ?: date('Y-m-d');
+        return $prefix . '-' . $start . '-a-' . $end . '.pdf';
+    }
+
+    private function pdfResponse(string $filename, string $bytes): never
+    {
+        if (!str_starts_with($bytes, '%PDF-')) {
+            http_response_code(500);
+            exit('Não foi possível gerar o PDF solicitado.');
+        }
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="' . addslashes($filename) . '"');
+        header('Content-Length: ' . strlen($bytes));
+        header('Cache-Control: private, no-store, max-age=0');
+        echo $bytes;
+        exit;
     }
 
     private function filters(): array

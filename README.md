@@ -1,4 +1,13 @@
-# RS Connect 36.31.0
+# RS Connect 36.31.1
+
+## Relatórios PDF e homologação conversacional — 36.31.1
+
+- exportação PDF direta no painel de Relatórios, sem depender de Relatórios automáticos;
+- PDF executivo completo e PDFs temáticos de Atendimento, CRM e Cobranças;
+- PDF de Equipe e profissionais com SLA, primeira resposta, duração, filas e auditoria;
+- CSV continua disponível para análise em planilha e agora é identificado explicitamente na interface;
+- nenhuma migration nova; última obrigatória: `110_conversation_lifecycle_e2e_consistency.sql`;
+- a homologação das regras conversacionais 36.31.0 continua em validação real antes do encerramento formal da primeira fase.
 
 ## Atendimento conversacional estruturado — 36.31.0
 

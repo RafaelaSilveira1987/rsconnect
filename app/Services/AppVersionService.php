@@ -154,7 +154,9 @@ final class AppVersionService
     // RS Connect 36.30.9 — reorganiza Dados da conversa com visão rápida, navegação por seções e regras da IA legíveis.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.30.9 — Dados da conversa aprimorados';
     // RS Connect 36.31.0 — comportamento conversacional estruturado: demanda, modalidades, blocos, indisponibilidade e encaminhamentos especiais.
-    public const PACKAGE_LABEL = 'RS Connect 36.31.0 — Atendimento conversacional estruturado';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.31.0 — Atendimento conversacional estruturado';
+    // RS Connect 36.31.1 — exportação PDF direta e homologação assistida das regras conversacionais.
+    public const PACKAGE_LABEL = 'RS Connect 36.31.1 — Relatórios PDF e homologação conversacional';
     public const REQUIRED_MIGRATION = '110_conversation_lifecycle_e2e_consistency.sql';
 
     private PDO $pdo;

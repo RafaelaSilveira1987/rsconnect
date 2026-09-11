@@ -103,7 +103,7 @@ $quickReports = [
     ['name' => 'Pipeline comercial RS', 'type' => 'Comercial', 'metric' => $money($metrics['commercial_pipeline'] ?? 0), 'export' => 'commercial'],
 ];
 ?>
-<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.30.3')) ?>">
+<link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/reports.css?v=36.31.1')) ?>">
 <div class="executive-report-page executive-report-admin report-v3646 report-v3647 report-v36140">
     <header class="rs-admin-report-header">
         <div>
@@ -115,7 +115,8 @@ $quickReports = [
             <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/automatic')) ?>">Relatórios automáticos</a>
             <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/team?' . http_build_query($queryBase))) ?>">Equipe e profissionais</a>
             <button class="btn btn-outline" type="button" data-page-action="reload"><?= $icon('refresh') ?> Atualizar</button>
-            <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'companies']))) ?>"><?= $icon('download') ?> Exportar</a>
+            <a class="btn btn-outline" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => 'companies']))) ?>"><?= $icon('download') ?> CSV</a>
+            <a class="btn btn-primary" href="<?= View::e(Router::url('/reports/pdf?' . http_build_query($queryBase + ['type' => 'full']))) ?>"><?= $icon('report') ?> Salvar PDF</a>
         </div>
     </header>
 
@@ -188,7 +189,7 @@ $quickReports = [
 
     <section class="card rs-admin-ready-reports">
         <header><div><h2>Relatórios prontos para exportar</h2><p>Arquivos atualizados conforme o período e a empresa selecionados.</p></div><span><?= View::e($periodLabel) ?></span></header>
-        <div class="table-wrap"><table><thead><tr><th>Nome do relatório</th><th>Tipo</th><th>Período</th><th>Escopo</th><th>Indicador</th><th>Ações</th></tr></thead><tbody><?php foreach ($quickReports as $row): ?><tr><td><span class="rs-admin-report-name"><i><?= $icon('report') ?></i><strong><?= View::e($row['name']) ?></strong></span></td><td><span class="badge"><?= View::e($row['type']) ?></span></td><td><?= View::e($periodLabel) ?></td><td><?= (int) ($filters['tenant_id'] ?? 0) > 0 ? 'Empresa selecionada' : 'Toda a operação' ?></td><td><?= View::e($row['metric']) ?></td><td><a class="rs-admin-download-action" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => $row['export']]))) ?>" aria-label="Exportar <?= View::e($row['name']) ?>"><?= $icon('download') ?></a></td></tr><?php endforeach; ?></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Nome do relatório</th><th>Tipo</th><th>Período</th><th>Escopo</th><th>Indicador</th><th>Ações</th></tr></thead><tbody><?php foreach ($quickReports as $row): ?><tr><td><span class="rs-admin-report-name"><i><?= $icon('report') ?></i><strong><?= View::e($row['name']) ?></strong></span></td><td><span class="badge"><?= View::e($row['type']) ?></span></td><td><?= View::e($periodLabel) ?></td><td><?= (int) ($filters['tenant_id'] ?? 0) > 0 ? 'Empresa selecionada' : 'Toda a operação' ?></td><td><?= View::e($row['metric']) ?></td><td><div class="report-export-actions"><a class="report-export-chip is-pdf" href="<?= View::e(Router::url('/reports/pdf?' . http_build_query($queryBase + ['type' => $row['export']]))) ?>" aria-label="Salvar <?= View::e($row['name']) ?> em PDF">PDF</a><a class="report-export-chip" href="<?= View::e(Router::url('/reports/export?' . http_build_query($queryBase + ['type' => $row['export']]))) ?>" aria-label="Exportar <?= View::e($row['name']) ?> em CSV">CSV</a></div></td></tr><?php endforeach; ?></tbody></table></div>
     </section>
 
     <?php if ($insights): ?><section class="card rs-admin-insights-strip"><div><span class="eyebrow">Insights automáticos</span><h2>Leitura rápida do período</h2></div><div class="report-insights-grid is-compact"><?php foreach ($insights as $item): ?><article class="report-insight is-<?= View::e($item['tone'] ?? 'info') ?>"><span class="report-insight-dot"></span><div><strong><?= View::e($item['title'] ?? '') ?></strong><p><?= View::e($item['text'] ?? '') ?></p></div></article><?php endforeach; ?></div></section><?php endif; ?>
