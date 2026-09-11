@@ -74,6 +74,29 @@ $agentRuleCapabilities = is_array($agentRulesProfile['capabilities'] ?? null) ? 
 $agentRuleFields = is_array($agentRulesProfile['triage_fields'] ?? null) ? $agentRulesProfile['triage_fields'] : [];
 $agentRulePolicies = is_array($agentRulesProfile['policies'] ?? null) ? $agentRulesProfile['policies'] : [];
 $agentRuleWorkflow = is_array($agentRulesProfile['workflow'] ?? null) ? $agentRulesProfile['workflow'] : [];
+$conversationBehavior = is_array($conversationBehavior ?? null) ? $conversationBehavior : [];
+$behaviorDemand = is_array($conversationBehavior['demand'] ?? null) ? $conversationBehavior['demand'] : [];
+$behaviorDelivery = is_array($conversationBehavior['response_delivery'] ?? null) ? $conversationBehavior['response_delivery'] : [];
+$behaviorModalities = is_array($conversationBehavior['modalities'] ?? null) ? $conversationBehavior['modalities'] : [];
+$behaviorPayment = is_array($conversationBehavior['payment'] ?? null) ? $conversationBehavior['payment'] : [];
+$behaviorNoAvailability = is_array($conversationBehavior['no_availability'] ?? null) ? $conversationBehavior['no_availability'] : [];
+$behaviorSpecialRoutes = is_array($conversationBehavior['special_routes'] ?? null) ? array_values($conversationBehavior['special_routes']) : [];
+$teamUsers = is_array($teamUsers ?? null) ? $teamUsers : [];
+$preScheduleSettings = is_array($preScheduleSettings ?? null) ? $preScheduleSettings : [];
+$hasExplicitConversationBehavior = is_array(($agentRulesProfile['config']['conversation_behavior'] ?? null));
+// Na primeira abertura após a atualização, preserve a mensagem que a empresa já usava
+// no pré-agendamento. O default da nova camada não deve sobrescrever silenciosamente
+// uma configuração operacional existente.
+if (!$hasExplicitConversationBehavior && trim((string) ($preScheduleSettings['no_availability_message'] ?? '')) !== '') {
+    $behaviorNoAvailability['message'] = (string) $preScheduleSettings['no_availability_message'];
+} elseif (trim((string) ($behaviorNoAvailability['message'] ?? '')) === '' && trim((string) ($preScheduleSettings['no_availability_message'] ?? '')) !== '') {
+    $behaviorNoAvailability['message'] = (string) $preScheduleSettings['no_availability_message'];
+}
+while (count($behaviorSpecialRoutes) < 4) {
+    $behaviorSpecialRoutes[] = ['enabled' => false, 'label' => '', 'keywords' => '', 'customer_message' => '', 'target_user_id' => 0];
+}
+$weekdayLabelsLong = ['mon'=>'Segunda','tue'=>'Terça','wed'=>'Quarta','thu'=>'Quinta','fri'=>'Sexta','sat'=>'Sábado','sun'=>'Domingo'];
+$paymentMethodOptions = ['Pix','Cartão','Transferência','Dinheiro','Boleto'];
 $agentCapabilityLabels = [
     'triage.enabled' => 'Coletar informações antes de avançar',
     'eligibility.enabled' => 'Validar regras antes de liberar ações',
@@ -309,10 +332,98 @@ $humanizeAgentRule = static function (string $key): string {
                         </details>
                     <?php endif; ?>
 
+                    <details class="agent-operation-section agent-conversation-behavior-section" open>
+                        <summary>
+                            <span><b>4</b><strong>Conversa, modalidades e encaminhamentos</strong><small>Defina o que precisa ser perguntado, como explicar o atendimento e quando chamar uma pessoa.</small></span>
+                            <span class="drawer-chevron"></span>
+                        </summary>
+                        <div class="agent-operation-section-body agent-behavior-body">
+                            <div class="agent-behavior-intro">
+                                <div><span class="eyebrow">Comportamento estruturado</span><strong>Regras que não dependem só do prompt</strong></div>
+                                <p>Use estes campos para informações operacionais que precisam ser consistentes em toda conversa. O texto livre continua definindo tom e personalidade.</p>
+                            </div>
+
+                            <div class="agent-behavior-grid">
+                                <article class="agent-behavior-card">
+                                    <div class="agent-behavior-card-head"><span class="agent-behavior-index">1</span><div><strong>Entender a demanda</strong><small>Evita avançar para agenda sem saber o que a pessoa precisa.</small></div></div>
+                                    <input type="hidden" name="conversation_behavior[demand][enabled]" value="0">
+                                    <label class="check-field compact-check"><input type="checkbox" name="conversation_behavior[demand][enabled]" value="1" <?= !empty($behaviorDemand['enabled']) ? 'checked' : '' ?>><span>Perguntar a demanda quando ainda não estiver clara</span></label>
+                                    <input type="hidden" name="conversation_behavior[demand][required_before_schedule]" value="0">
+                                    <label class="check-field compact-check"><input type="checkbox" name="conversation_behavior[demand][required_before_schedule]" value="1" <?= !empty($behaviorDemand['required_before_schedule']) ? 'checked' : '' ?>><span>Exigir a demanda antes de consultar a agenda</span></label>
+                                    <label class="field compact-field"><span>Pergunta sugerida</span><textarea name="conversation_behavior[demand][prompt]" rows="3" placeholder="Ex.: Antes de avançarmos, pode me contar brevemente o que você está buscando neste atendimento?"><?= View::e((string) ($behaviorDemand['prompt'] ?? '')) ?></textarea></label>
+                                    <p class="field-hint">Clientes e pacientes atuais continuam usando o histórico e não são obrigados a refazer uma triagem já conhecida.</p>
+                                </article>
+
+                                <article class="agent-behavior-card">
+                                    <div class="agent-behavior-card-head"><span class="agent-behavior-index">2</span><div><strong>Respostas em mensagens curtas</strong><small>Deixa o WhatsApp mais natural sem quebrar uma frase no meio.</small></div></div>
+                                    <label class="field compact-field"><span>Como enviar respostas maiores</span><select name="conversation_behavior[response_delivery][mode]"><option value="auto" <?= ($behaviorDelivery['mode'] ?? 'auto') === 'auto' ? 'selected' : '' ?>>Automático conforme o conteúdo</option><option value="blocks" <?= ($behaviorDelivery['mode'] ?? '') === 'blocks' ? 'selected' : '' ?>>Preferir mensagens separadas</option><option value="single" <?= ($behaviorDelivery['mode'] ?? '') === 'single' ? 'selected' : '' ?>>Sempre uma única mensagem</option></select></label>
+                                    <label class="field compact-field"><span>Máximo de blocos</span><select name="conversation_behavior[response_delivery][max_blocks]"><?php foreach ([2,3,4] as $blockCount): ?><option value="<?= $blockCount ?>" <?= (int) ($behaviorDelivery['max_blocks'] ?? 3) === $blockCount ? 'selected' : '' ?>><?= $blockCount ?> mensagens</option><?php endforeach; ?></select></label>
+                                    <div class="agent-behavior-example"><b>Exemplo</b><span>1. modalidade/local</span><span>2. valor e pagamento</span><span>3. próximo passo</span></div>
+                                </article>
+                            </div>
+
+                            <div class="agent-behavior-subsection">
+                                <div class="agent-behavior-subhead"><div><span class="eyebrow">Modalidades</span><strong>Online e presencial</strong></div><small>Estas informações entram no contexto operacional da IA e os dias presenciais também filtram horários oferecidos pela agenda conversacional.</small></div>
+                                <div class="agent-behavior-grid agent-modality-grid">
+                                    <?php $online = is_array($behaviorModalities['online'] ?? null) ? $behaviorModalities['online'] : []; ?>
+                                    <article class="agent-behavior-card modality-card">
+                                        <input type="hidden" name="conversation_behavior[modalities][online][enabled]" value="0">
+                                        <label class="check-field compact-check behavior-card-toggle"><input type="checkbox" name="conversation_behavior[modalities][online][enabled]" value="1" <?= !empty($online['enabled']) ? 'checked' : '' ?>><span><strong>Atendimento online</strong></span></label>
+                                        <label class="field compact-field"><span>Como acontece</span><input name="conversation_behavior[modalities][online][channel]" value="<?= View::e((string) ($online['channel'] ?? '')) ?>" placeholder="Ex.: Google Meet"></label>
+                                        <label class="field compact-field"><span>Mensagem operacional</span><textarea name="conversation_behavior[modalities][online][message]" rows="3" placeholder="Ex.: O atendimento online é realizado pelo Google Meet."><?= View::e((string) ($online['message'] ?? '')) ?></textarea></label>
+                                    </article>
+                                    <?php $presencial = is_array($behaviorModalities['presencial'] ?? null) ? $behaviorModalities['presencial'] : []; $presencialDays = is_array($presencial['allowed_days'] ?? null) ? $presencial['allowed_days'] : []; ?>
+                                    <article class="agent-behavior-card modality-card">
+                                        <input type="hidden" name="conversation_behavior[modalities][presencial][enabled]" value="0">
+                                        <label class="check-field compact-check behavior-card-toggle"><input type="checkbox" name="conversation_behavior[modalities][presencial][enabled]" value="1" <?= !empty($presencial['enabled']) ? 'checked' : '' ?>><span><strong>Atendimento presencial</strong></span></label>
+                                        <label class="field compact-field"><span>Local</span><input name="conversation_behavior[modalities][presencial][location]" value="<?= View::e((string) ($presencial['location'] ?? '')) ?>" placeholder="Ex.: Bronze — endereço ou referência"></label>
+                                        <div class="field compact-field"><span>Dias permitidos para presencial</span><div class="agent-weekday-checks"><?php foreach ($weekdayLabelsLong as $dayKey => $dayLabel): ?><label><input type="checkbox" name="conversation_behavior[modalities][presencial][allowed_days][]" value="<?= View::e($dayKey) ?>" <?= in_array($dayKey, $presencialDays, true) ? 'checked' : '' ?>><span><?= View::e($dayLabel) ?></span></label><?php endforeach; ?></div></div>
+                                        <label class="field compact-field"><span>Mensagem operacional</span><textarea name="conversation_behavior[modalities][presencial][message]" rows="3" placeholder="Ex.: Os atendimentos presenciais acontecem no Bronze, somente às segundas-feiras."><?= View::e((string) ($presencial['message'] ?? '')) ?></textarea></label>
+                                    </article>
+                                </div>
+                            </div>
+
+                            <div class="agent-behavior-grid">
+                                <article class="agent-behavior-card">
+                                    <div class="agent-behavior-card-head"><span class="agent-behavior-index">3</span><div><strong>Valor e formas de pagamento</strong><small>Informe depois de explicar a modalidade, sem depender de memória do prompt.</small></div></div>
+                                    <input type="hidden" name="conversation_behavior[payment][enabled]" value="0">
+                                    <label class="check-field compact-check"><input type="checkbox" name="conversation_behavior[payment][enabled]" value="1" <?= !empty($behaviorPayment['enabled']) ? 'checked' : '' ?>><span>Usar estas informações no atendimento</span></label>
+                                    <label class="field compact-field"><span>Valor / regra de preço</span><input name="conversation_behavior[payment][value_text]" value="<?= View::e((string) ($behaviorPayment['value_text'] ?? '')) ?>" placeholder="Ex.: R$ 200 por sessão"></label>
+                                    <div class="field compact-field"><span>Formas aceitas</span><div class="agent-payment-methods"><?php $selectedMethods = is_array($behaviorPayment['methods'] ?? null) ? $behaviorPayment['methods'] : []; foreach ($paymentMethodOptions as $method): ?><label><input type="checkbox" name="conversation_behavior[payment][methods][]" value="<?= View::e($method) ?>" <?= in_array($method, $selectedMethods, true) ? 'checked' : '' ?>><span><?= View::e($method) ?></span></label><?php endforeach; ?></div></div>
+                                    <label class="field compact-field"><span>Complemento opcional</span><textarea name="conversation_behavior[payment][message]" rows="2" placeholder="Ex.: O pagamento pode ser feito antes da sessão."><?= View::e((string) ($behaviorPayment['message'] ?? '')) ?></textarea></label>
+                                </article>
+
+                                <article class="agent-behavior-card">
+                                    <div class="agent-behavior-card-head"><span class="agent-behavior-index">4</span><div><strong>Quando não houver vaga</strong><small>A resposta vem da disponibilidade real da agenda.</small></div></div>
+                                    <label class="field compact-field"><span>Mensagem sem disponibilidade</span><textarea name="conversation_behavior[no_availability][message]" rows="4" placeholder="Ex.: No momento minha agenda está sem novos horários disponíveis..."><?= View::e((string) ($behaviorNoAvailability['message'] ?? '')) ?></textarea></label>
+                                    <label class="field compact-field"><span>Depois de informar</span><select name="conversation_behavior[no_availability][action]"><option value="message_only" <?= ($behaviorNoAvailability['action'] ?? 'message_only') === 'message_only' ? 'selected' : '' ?>>Somente conversar e pedir outra preferência</option><option value="notify" <?= ($behaviorNoAvailability['action'] ?? '') === 'notify' ? 'selected' : '' ?>>Avisar a equipe na RS Connect</option><option value="handoff" <?= ($behaviorNoAvailability['action'] ?? '') === 'handoff' ? 'selected' : '' ?>>Encaminhar para atendimento humano</option></select></label>
+                                    <label class="field compact-field"><span>Responsável preferencial</span><select name="conversation_behavior[no_availability][target_user_id]"><option value="0">Equipe / sem responsável específico</option><?php foreach ($teamUsers as $teamUser): ?><option value="<?= (int) $teamUser['id'] ?>" <?= (int) ($behaviorNoAvailability['target_user_id'] ?? 0) === (int) $teamUser['id'] ? 'selected' : '' ?>><?= View::e((string) ($teamUser['whatsapp_display_name'] ?: $teamUser['name'])) ?></option><?php endforeach; ?></select></label>
+                                </article>
+                            </div>
+
+                            <div class="agent-behavior-subsection">
+                                <div class="agent-behavior-subhead"><div><span class="eyebrow">Encaminhamentos especiais</span><strong>Assuntos que não devem virar pré-agendamento</strong></div><small>Ex.: convite para palestra, aula, supervisão ou parceria. Ao detectar o assunto, o RS Connect responde a mensagem configurada, pausa a IA e encaminha a conversa.</small></div>
+                                <div class="agent-special-routes">
+                                    <?php foreach ($behaviorSpecialRoutes as $routeIndex => $route): ?>
+                                        <article class="agent-special-route-card">
+                                            <div class="agent-special-route-title"><strong>Regra <?= $routeIndex + 1 ?></strong><label class="compact-inline-check"><input type="hidden" name="conversation_behavior[special_routes][<?= $routeIndex ?>][enabled]" value="0"><input type="checkbox" name="conversation_behavior[special_routes][<?= $routeIndex ?>][enabled]" value="1" <?= !empty($route['enabled']) ? 'checked' : '' ?>><span>Ativa</span></label></div>
+                                            <div class="agent-special-route-grid">
+                                                <label class="field compact-field"><span>Assunto</span><input name="conversation_behavior[special_routes][<?= $routeIndex ?>][label]" value="<?= View::e((string) ($route['label'] ?? '')) ?>" placeholder="Ex.: Convite para palestra"></label>
+                                                <label class="field compact-field"><span>Palavras / frases</span><input name="conversation_behavior[special_routes][<?= $routeIndex ?>][keywords]" value="<?= View::e((string) ($route['keywords'] ?? '')) ?>" placeholder="palestra, convite para palestra, evento"></label>
+                                                <label class="field compact-field"><span>Encaminhar para</span><select name="conversation_behavior[special_routes][<?= $routeIndex ?>][target_user_id]"><option value="0">Equipe / sem responsável específico</option><?php foreach ($teamUsers as $teamUser): ?><option value="<?= (int) $teamUser['id'] ?>" <?= (int) ($route['target_user_id'] ?? 0) === (int) $teamUser['id'] ? 'selected' : '' ?>><?= View::e((string) ($teamUser['whatsapp_display_name'] ?: $teamUser['name'])) ?></option><?php endforeach; ?></select></label>
+                                                <label class="field compact-field agent-special-route-message"><span>Mensagem para o cliente</span><textarea name="conversation_behavior[special_routes][<?= $routeIndex ?>][customer_message]" rows="2" placeholder="Ex.: Claro! Vou encaminhar seu convite para a responsável continuar com você."><?= View::e((string) ($route['customer_message'] ?? '')) ?></textarea></label>
+                                            </div>
+                                        </article>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
                     <?php if ($agentRuleCapabilities !== []): ?>
                         <details class="agent-operation-section">
                             <summary>
-                                <span><b>4</b><strong>O que a automação pode fazer</strong><small>Permissões práticas de triagem, agenda e encaminhamento.</small></span>
+                                <span><b>5</b><strong>O que a automação pode fazer</strong><small>Permissões práticas de triagem, agenda e encaminhamento.</small></span>
                                 <span class="drawer-chevron"></span>
                             </summary>
                             <div class="agent-operation-section-body">

@@ -91,6 +91,9 @@ final class CalendarConversationService
         $slots = $this->slotsForRequest($tenantId, $appointmentId, $requestId);
         $this->assignSuggestionPositions($requestId, $slots);
         $slots = $this->slotsForRequest($tenantId, $appointmentId, $requestId);
+        // Regras por modalidade configuradas no Agente também são operacionais:
+        // ex.: atendimento presencial somente às segundas-feiras.
+        $slots = (new AgentConversationBehaviorService())->filterSlotsForAppointment($tenantId, $appointment, $slots);
 
         if (!$this->claimAvailabilityCommunication($tenantId, $appointmentId, $requestId)) {
             return $this->result(false, 'already_processing');
@@ -106,7 +109,12 @@ final class CalendarConversationService
                 ['request_id' => $requestId, 'diagnostic' => $diagnostic]
             );
             $this->markOptionsCommunication($tenantId, $appointmentId, $requestId, $send['external_id'] ?? null, false, 'empty', (bool) $send['ok']);
-            return array_merge($this->result(true, 'no_availability'), ['message_sent' => $send['ok'], 'send_error' => $send['error']]);
+            $followUp = (new AgentConversationBehaviorService())->handleNoAvailability(
+                $tenantId,
+                (int) ($appointment['conversation_id'] ?? 0),
+                $appointment
+            );
+            return array_merge($this->result(true, 'no_availability'), ['message_sent' => $send['ok'], 'send_error' => $send['error'], 'follow_up' => $followUp]);
         }
 
         // Se a opção originalmente pedida estiver realmente disponível, pré-reserva sem pedir nova escolha.
@@ -155,9 +163,15 @@ final class CalendarConversationService
                 );
                 $this->markOptionsCommunication($tenantId, $appointmentId, $requestId, $send['external_id'] ?? null, false, 'empty', (bool) $send['ok']);
                 $this->notifyFailure($tenantId, $appointment, (string) ($apply['message'] ?? 'Falha ao pré-reservar o horário solicitado.'));
+                $followUp = (new AgentConversationBehaviorService())->handleNoAvailability(
+                    $tenantId,
+                    (int) ($appointment['conversation_id'] ?? 0),
+                    $appointment
+                );
                 return array_merge($this->result(true, 'exact_hold_failed_no_alternatives'), [
                     'message_sent' => $send['ok'],
                     'send_error' => $send['error'],
+                    'follow_up' => $followUp,
                 ]);
             }
         }
@@ -183,9 +197,15 @@ final class CalendarConversationService
                 'received',
                 (bool) $send['ok']
             );
+            $followUp = (new AgentConversationBehaviorService())->handleNoAvailability(
+                $tenantId,
+                (int) ($appointment['conversation_id'] ?? 0),
+                $appointment
+            );
             return array_merge($this->result(true, 'alternatives_disabled'), [
                 'message_sent' => $send['ok'],
                 'send_error' => $send['error'],
+                'follow_up' => $followUp,
             ]);
         }
 

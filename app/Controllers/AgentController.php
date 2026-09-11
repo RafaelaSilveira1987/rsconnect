@@ -13,6 +13,9 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\AiAutomationService;
 use App\Services\AgentBlueprintService;
+use App\Services\AgentConversationBehaviorService;
+use App\Services\ConversationOwnershipService;
+use App\Services\PreSchedulingService;
 use App\Services\AgentRoutingService;
 use App\Services\ConversationFlowService;
 use App\Services\SubscriptionService;
@@ -48,6 +51,9 @@ final class AgentController
         $groupRules = [];
         $promptVersions = [];
         $agentBlueprintProfile = [];
+        $conversationBehavior = [];
+        $teamUsers = [];
+        $preScheduleSettings = [];
 
         if ($tenantId > 0) {
             $agentsStatement = $pdo->prepare(
@@ -100,8 +106,21 @@ final class AgentController
 
             try {
                 $agentBlueprintProfile = (new AgentBlueprintService())->profileForTenant($tenantId, true, $pdo);
+                $conversationBehavior = (new AgentConversationBehaviorService())->settingsFromProfile($agentBlueprintProfile);
             } catch (Throwable) {
                 $agentBlueprintProfile = [];
+                $conversationBehavior = [];
+            }
+
+            try {
+                $teamUsers = (new ConversationOwnershipService())->teamForTenant($pdo, $tenantId);
+            } catch (Throwable) {
+                $teamUsers = [];
+            }
+            try {
+                $preScheduleSettings = (new PreSchedulingService())->settings($tenantId);
+            } catch (Throwable) {
+                $preScheduleSettings = [];
             }
 
             try {
@@ -142,6 +161,9 @@ final class AgentController
             'contactGroups' => ConversationFlowService::GROUPS,
             'promptVersions' => $promptVersions,
             'agentBlueprintProfile' => $agentBlueprintProfile,
+            'conversationBehavior' => $conversationBehavior,
+            'teamUsers' => $teamUsers,
+            'preScheduleSettings' => $preScheduleSettings,
         ]);
     }
 
@@ -177,6 +199,7 @@ final class AgentController
                 'triage_fields' => is_array($_POST['triage_fields'] ?? null) ? $_POST['triage_fields'] : [],
                 'policies' => is_array($_POST['agent_policies'] ?? null) ? $_POST['agent_policies'] : [],
                 'workflow' => is_array($_POST['workflow_steps'] ?? null) ? $_POST['workflow_steps'] : [],
+                'conversation_behavior' => is_array($_POST['conversation_behavior'] ?? null) ? $_POST['conversation_behavior'] : [],
             ]);
 
             Audit::log('agent.operational_rules_updated', [

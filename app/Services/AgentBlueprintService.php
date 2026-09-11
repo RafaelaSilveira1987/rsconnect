@@ -244,11 +244,26 @@ final class AgentBlueprintService
             $interactionMode = 'hybrid';
         }
 
+        $currentConfig = is_array($profile['config'] ?? null) ? $profile['config'] : [];
+        if (is_array($data['conversation_behavior'] ?? null)) {
+            $fallbackBehavior = is_array($currentConfig['conversation_behavior'] ?? null) ? $currentConfig['conversation_behavior'] : [];
+            $currentConfig['conversation_behavior'] = AgentConversationBehaviorService::normalizeConfiguration(
+                $data['conversation_behavior'],
+                $fallbackBehavior
+            );
+        }
+
         $pdo->beginTransaction();
         try {
             $pdo->prepare(
-                'UPDATE tenant_agent_profiles SET interaction_mode = :mode, customized = 1 WHERE tenant_id = :tenant_id'
-            )->execute(['mode' => $interactionMode, 'tenant_id' => $tenantId]);
+                'UPDATE tenant_agent_profiles
+                 SET interaction_mode = :mode, config_json = :config_json, customized = 1
+                 WHERE tenant_id = :tenant_id'
+            )->execute([
+                'mode' => $interactionMode,
+                'config_json' => json_encode($currentConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'tenant_id' => $tenantId,
+            ]);
 
             $postedCapabilities = is_array($data['capabilities'] ?? null) ? $data['capabilities'] : [];
             $effectiveCapabilities = $this->capabilities($tenantId, 0, $pdo);
@@ -324,8 +339,12 @@ final class AgentBlueprintService
                 $this->updateWorkflowConfiguration($pdo, $tenantId, $workflowRows);
             }
 
+            if (is_array($currentConfig['conversation_behavior'] ?? null)) {
+                $this->syncConversationBehavior($pdo, $tenantId, $currentConfig['conversation_behavior']);
+            }
             $this->syncCalendarDefaults($pdo, $tenantId, $this->capabilities($tenantId, 0, $pdo));
             $pdo->commit();
+            (new AgentConversationBehaviorService())->clearCache($tenantId);
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -526,6 +545,42 @@ final class AgentBlueprintService
                 'config_json' => $config !== [] ? json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
                 'position' => max(1, (int) ($item['position'] ?? (($index + 1) * 10))),
             ]);
+        }
+    }
+
+    /** @param array<string,mixed> $behavior */
+    private function syncConversationBehavior(PDO $pdo, int $tenantId, array $behavior): void
+    {
+        $demand = is_array($behavior['demand'] ?? null) ? $behavior['demand'] : [];
+        if (!empty($demand['enabled']) && $this->tableExists($pdo, 'tenant_triage_fields')) {
+            try {
+                $prompt = mb_substr(trim((string) ($demand['prompt'] ?? '')), 0, 1000);
+                $pdo->prepare(
+                    'UPDATE tenant_triage_fields
+                     SET active = 1,
+                         required_before_schedule = :required_before_schedule,
+                         prompt_text = CASE WHEN :prompt_text <> "" THEN :prompt_text_value ELSE prompt_text END,
+                         source = "tenant"
+                     WHERE tenant_id = :tenant_id AND field_key = "brief_demand"'
+                )->execute([
+                    'required_before_schedule' => !empty($demand['required_before_schedule']) ? 1 : 0,
+                    'prompt_text' => $prompt,
+                    'prompt_text_value' => $prompt,
+                    'tenant_id' => $tenantId,
+                ]);
+            } catch (Throwable) {
+            }
+        }
+
+        $noAvailability = is_array($behavior['no_availability'] ?? null) ? $behavior['no_availability'] : [];
+        $message = mb_substr(trim((string) ($noAvailability['message'] ?? '')), 0, 1200);
+        if ($message !== '' && $this->tableExists($pdo, 'tenant_pre_schedule_settings')) {
+            try {
+                $pdo->prepare(
+                    'UPDATE tenant_pre_schedule_settings SET no_availability_message = :message WHERE tenant_id = :tenant_id'
+                )->execute(['message' => $message, 'tenant_id' => $tenantId]);
+            } catch (Throwable) {
+            }
         }
     }
 

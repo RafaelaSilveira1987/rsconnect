@@ -580,6 +580,57 @@ final class AiAutomationService
             }
             $currentTurnCount = max(1, (int) ($currentTurn['count'] ?? 0));
 
+            $conversationBehavior = new AgentConversationBehaviorService();
+            $specialRoute = $conversationBehavior->matchSpecialRoute(
+                (int) ($instance['tenant_id'] ?? 0),
+                $currentTurnContent,
+                $pdo
+            );
+            if (is_array($specialRoute)) {
+                $routeMessage = trim((string) ($specialRoute['customer_message'] ?? ''));
+                $routeSendError = null;
+                if ($routeMessage !== '') {
+                    try {
+                        $conversation = $this->conversation($pdo, $conversationId);
+                        if ($this->conversationAllowsAutomaticReply($conversation)) {
+                            $this->sendAutomatedMessage(
+                                $pdo,
+                                $instance,
+                                $conversation,
+                                $conversationId,
+                                $routeMessage,
+                                'agent.special_route.message',
+                                'Mensagem de encaminhamento especial enviada pela automação.',
+                                $agent
+                            );
+                        }
+                    } catch (Throwable $exception) {
+                        $routeSendError = $exception->getMessage();
+                    }
+                }
+                $handoffResult = $conversationBehavior->handoffSpecialRoute(
+                    $pdo,
+                    (int) ($instance['tenant_id'] ?? 0),
+                    $conversationId,
+                    $specialRoute
+                );
+                $this->log(
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    'agent.special_route',
+                    $routeSendError === null ? 'success' : 'warning',
+                    $routeSendError,
+                    null,
+                    [
+                        'route_label' => $specialRoute['label'] ?? null,
+                        'matched_keyword' => $specialRoute['matched_keyword'] ?? null,
+                        'target_user_id' => $handoffResult['target_user_id'] ?? null,
+                    ]
+                );
+                return;
+            }
+
             if ($this->shouldHandoff($currentTurnContent, (string) ($agent['handoff_keywords'] ?? ''))) {
                 $this->handoff($pdo, $instance, $conversation, $agent, $conversationId);
                 return;
@@ -667,7 +718,7 @@ final class AiAutomationService
                         return;
                     }
                     $reply = trim((string) $cacheResult['reply']);
-                    $result = $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $reply, 'ai.cache.replied', 'Resposta automática reutilizada do cache exato, sem chamada ao provedor.', $agent);
+                    $result = $this->sendAutomatedReplySequence($pdo, $instance, $conversation, $conversationId, $reply, 'ai.cache.replied', 'Resposta automática reutilizada do cache exato, sem chamada ao provedor.', $agent);
                     $usageService->recordAvoidedAutoReply(
                         (int) $instance['tenant_id'],
                         $agent,
@@ -811,7 +862,7 @@ final class AiAutomationService
             }
 
             $failurePhase = 'evolution.send';
-            $result = $this->sendAutomatedMessage($pdo, $instance, $conversation, $conversationId, $reply, 'ai.replied', 'Resposta automática enviada pela IA.', $agent);
+            $result = $this->sendAutomatedReplySequence($pdo, $instance, $conversation, $conversationId, $reply, 'ai.replied', 'Resposta automática enviada pela IA.', $agent);
             $usageService->completeAutoReply($usageReservationId, (int) ($result['_stored_message_id'] ?? 0), array_merge($this->ai->lastUsage(), $efficiencyTelemetry));
             $usageReservationId = 0;
 
@@ -2055,7 +2106,53 @@ final class AiAutomationService
         return 'Ainda não confirmei esse horário. Vou validar a disponibilidade real da agenda antes de informar qualquer confirmação.';
     }
 
-    private function sendAutomatedMessage(PDO $pdo, array $instance, array $conversation, int $conversationId, string $reply, string $eventType, string $eventDescription, ?array $agent = null): array
+    /**
+     * Entrega uma resposta da IA em um ou mais balões conforme a configuração da empresa.
+     * O consumo continua vinculado à mesma chamada do provedor; somente a entrega no
+     * WhatsApp é segmentada.
+     */
+    private function sendAutomatedReplySequence(PDO $pdo, array $instance, array $conversation, int $conversationId, string $reply, string $eventType, string $eventDescription, ?array $agent = null): array
+    {
+        $tenantId = (int) ($instance['tenant_id'] ?? 0);
+        $blocks = (new AgentConversationBehaviorService())->splitReply($tenantId, $reply, $pdo);
+        if ($blocks === []) {
+            $blocks = [trim($reply)];
+        }
+
+        $lastResult = [];
+        $storedIds = [];
+        foreach ($blocks as $index => $block) {
+            $block = trim((string) $block);
+            if ($block === '') {
+                continue;
+            }
+            if ($index > 0) {
+                $conversation = $this->conversation($pdo, $conversationId);
+                if (!$this->conversationAllowsAutomaticReply($conversation)) {
+                    break;
+                }
+            }
+            $lastResult = $this->sendAutomatedMessage(
+                $pdo,
+                $instance,
+                $conversation,
+                $conversationId,
+                $block,
+                $eventType,
+                $eventDescription . (count($blocks) > 1 ? ' Bloco ' . ($index + 1) . '/' . count($blocks) . '.' : ''),
+                $agent,
+                $index === 0
+            );
+            if ((int) ($lastResult['_stored_message_id'] ?? 0) > 0) {
+                $storedIds[] = (int) $lastResult['_stored_message_id'];
+            }
+        }
+        $lastResult['_stored_message_ids'] = $storedIds;
+        $lastResult['_message_count'] = count($storedIds);
+        return $lastResult;
+    }
+
+    private function sendAutomatedMessage(PDO $pdo, array $instance, array $conversation, int $conversationId, string $reply, string $eventType, string $eventDescription, ?array $agent = null, bool $includeSignature = true): array
     {
         $service = $this->evolutionService($instance);
         $phone = preg_replace('/\D+/', '', (string) ($conversation['phone'] ?? '')) ?: '';
@@ -2069,7 +2166,10 @@ final class AiAutomationService
 
         $senderDisplayName = $this->aiSenderDisplayName($pdo, (int) ($instance['tenant_id'] ?? 0), $conversationId, $agent);
         $signatureEnabled = $this->whatsappSenderIdentificationEnabled($pdo, (int) ($instance['tenant_id'] ?? 0));
-        $deliveredReply = $this->withAiWhatsappSignature($reply, $senderDisplayName, $signatureEnabled);
+        // Compatibilidade do contrato histórico: $deliveredReply = $this->withAiWhatsappSignature($reply, $senderDisplayName, $signatureEnabled)
+        $deliveredReply = $includeSignature
+            ? $this->withAiWhatsappSignature($reply, $senderDisplayName, $signatureEnabled)
+            : $reply;
 
         try {
             $result = $service->sendText($phone, $deliveredReply);

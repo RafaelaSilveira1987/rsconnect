@@ -1,4 +1,16 @@
-# RS Connect 36.30.9
+# RS Connect 36.31.0
+
+## Atendimento conversacional estruturado — 36.31.0
+
+- transforma demanda, modalidades, valor/pagamento, indisponibilidade e encaminhamentos especiais em configurações operacionais do Agente;
+- permite exigir **entendimento da demanda** antes de consultar a agenda para novos leads, sem requalificar cliente/paciente atual;
+- adiciona modo de resposta **automático, em mensagens separadas ou em mensagem única**, com até 4 blocos e assinatura apenas no primeiro;
+- estrutura atendimento **Online** e **Presencial**, incluindo local/meio e dias permitidos; a agenda filtra horários presenciais fora dos dias configurados;
+- adiciona bloco de **valor e formas de pagamento**, preservando a ordem modalidade → valor/pagamento;
+- permite definir o que fazer **quando não houver vaga**: somente responder, avisar a equipe ou encaminhar para humano;
+- adiciona **Encaminhamentos especiais** para assuntos como palestra, aula, supervisão e parceria, com responsável e mensagem ao cliente;
+- encaminhamentos especiais pausam a IA e geram notificação interna, sem transformar o assunto em pré-agendamento;
+- nenhuma migration nova; permanece obrigatória `110_conversation_lifecycle_e2e_consistency.sql`.
 
 ## Dados da conversa aprimorados — 36.30.9
 

@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.30.9",
-  "release_name": "Dados da conversa aprimorados",
+  "package_version": "36.31.0",
+  "release_name": "Atendimento conversacional estruturado",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -16,5 +16,11 @@
   "install": {
     "local": "cp .env.local.example .env && docker compose up --build -d",
     "production": "configure .env/variables, then php bin/migrate.php verify && php bin/migrate.php up"
+  },
+  "compatibility": {
+    "previous_release": {
+      "package_version": "36.30.9",
+      "release_name": "Dados da conversa aprimorados"
+    }
   }
 }

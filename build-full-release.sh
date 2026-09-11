@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
-VERSION="${1:-36.30.9}"
+VERSION="${1:-36.31.0}"
 OUTPUT="${2:-$ROOT/../rs-connect-vps-ready-v${VERSION}.zip}"
 
 echo "[1/7] Requisitos PHP do host"

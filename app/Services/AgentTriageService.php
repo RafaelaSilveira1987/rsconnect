@@ -228,6 +228,16 @@ final class AgentTriageService
             if ($this->isUsableContactName($contactName, (string) ($contact['phone'] ?? ''))) {
                 $collected['requester_name'] = $collected['requester_name'] ?? $contactName;
             }
+            // Cliente/paciente atual não deve ser bloqueado por uma regra de demanda
+            // criada para novos interessados. Marcamos o campo como já conhecido no
+            // ciclo estruturado sem inventar ou expor um conteúdo clínico.
+            try {
+                $relationship = (new ConversationFlowService())->relationshipProfile($contact);
+                if (!empty($relationship['is_existing_customer']) && empty($collected['brief_demand'])) {
+                    $collected['brief_demand'] = '[continuidade: demanda anterior não precisa ser repetida]';
+                }
+            } catch (Throwable) {
+            }
 
             $contextText = $this->recentIncomingContext($pdo, $conversationId, $content);
             $normalizedContext = $this->normalize($contextText);
@@ -826,7 +836,7 @@ final class AgentTriageService
 
     private function contact(PDO $pdo, int $tenantId, int $contactId): array
     {
-        $stmt = $pdo->prepare('SELECT id, name, phone, name_source FROM contacts WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+        $stmt = $pdo->prepare('SELECT id, name, phone, name_source, status, contact_group, tags_json FROM contacts WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
         $stmt->execute(['id' => $contactId, 'tenant_id' => $tenantId]);
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
     }

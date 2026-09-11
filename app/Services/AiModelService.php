@@ -572,6 +572,7 @@ final class AiModelService
         }
 
         $policyEngineBlock = '';
+        $conversationBehaviorBlock = '';
         if ($tenantId > 0) {
             try {
                 $agentProfile = (new AgentBlueprintService())->profileForTenant($tenantId, true);
@@ -579,6 +580,7 @@ final class AiModelService
                     ? $conversation['_simulation_triage_context']
                     : (new AgentTriageService())->context($tenantId, (int) ($conversation['id'] ?? $conversation['conversation_id'] ?? 0));
                 if (($agentProfile['status'] ?? 'inactive') === 'active') {
+                    $conversationBehaviorBlock = (new AgentConversationBehaviorService())->promptBlock($agentProfile);
                     $collected = is_array($triageContext['collected'] ?? null) ? $triageContext['collected'] : [];
                     if (isset($collected['brief_demand'])) {
                         $collected['brief_demand'] = '[já coletada e registrada]';
@@ -610,6 +612,7 @@ final class AiModelService
                 }
             } catch (Throwable) {
                 $policyEngineBlock = '';
+                $conversationBehaviorBlock = '';
             }
         }
 
@@ -635,6 +638,7 @@ final class AiModelService
             $currentTurnBlock .
             $structuredContext .
             $policyEngineBlock .
+            $conversationBehaviorBlock .
             $handoffBlock .
             $memoryBlock .
             ($knowledge !== '' ? "Base de conhecimento:
