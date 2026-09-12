@@ -13,6 +13,7 @@ use App\Core\View;
 use App\Services\AccessControlService;
 use App\Services\PaymentGatewayService;
 use App\Services\SubscriptionService;
+use App\Services\TenantLifecycleService;
 use PDO;
 use Throwable;
 
@@ -39,7 +40,7 @@ final class BillingController
             ? 'ts.ai_billing_mode, ts.commitment_months, ts.commitment_ends_at,'
             : '"rs_connect" AS ai_billing_mode, 3 AS commitment_months, NULL AS commitment_ends_at,';
         $tenants = $pdo->query(
-            'SELECT t.id, t.name, t.plan, t.status,
+            'SELECT t.id, t.name, t.plan, t.status, t.lifecycle_status,
                     ts.id AS subscription_id, ts.plan_id, ts.billing_cycle, ts.billing_status,
                     ' . $subscriptionCommercialColumns . '
                     ts.starts_at, ts.trial_ends_at, ts.trial_days, ts.trial_end_behavior, ts.trial_grace_days,
@@ -516,6 +517,11 @@ final class BillingController
         if ($tenantId < 1 || $subscriptionId < 1 || $amount <= 0) {
             Flash::set('error', 'Informe empresa, assinatura e valor da cobrança.');
             $this->redirect('/billing');
+        }
+
+        if (!(new TenantLifecycleService())->allowsProductionBilling($tenantId)) {
+            Flash::set('warning', 'Cobrança manual de produção bloqueada: a empresa ainda não está em LIVE. Conclua a homologação e confirme o Go-Live no cadastro da empresa.');
+            $this->redirect('/billing?tenant_id=' . $tenantId);
         }
 
         try {

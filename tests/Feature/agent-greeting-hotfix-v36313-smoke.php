@@ -56,7 +56,7 @@ $serviceSource = file_get_contents($root . '/app/Services/AiLocalReplyService.ph
 
 $check(str_contains((string) $view, 'Uma saudação enviada pelo contato usa esta política mesmo em uma conversa já existente'), 'Tela explica corretamente o comportamento corrigido.');
 $check(str_contains((string) $serviceSource, 'não deve depender de ser a primeira resposta de todo o histórico'), 'Serviço documenta a separação entre saudação explícita e abertura espontânea.');
-$check(str_contains((string) $manifest, '"package_version": "36.31.3"') && str_contains((string) $manifest, '111_agent_greeting_policy.sql'), 'Manifesto registra 36.31.3 sem exigir nova migration.');
+$check((str_contains((string) $manifest, '"package_version": "36.31.3"') || str_contains((string) $manifest, '"package_version": "36.32.0"')) && str_contains((string) $manifest, '111_agent_greeting_policy.sql'), 'Manifesto registra 36.31.3 sem exigir nova migration.');
 $check(str_contains((string) $version, "PACKAGE_LABEL = 'RS Connect 36.31.3 — Hotfix da saudação configurada'") && str_contains((string) $version, "REQUIRED_MIGRATION = '111_agent_greeting_policy.sql'"), 'Versão atualizada e migration preservada.');
 
 if ($failures > 0) {

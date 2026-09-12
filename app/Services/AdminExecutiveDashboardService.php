@@ -89,6 +89,7 @@ final class AdminExecutiveDashboardService
                 FROM tenant_subscriptions
                 GROUP BY tenant_id
              ) latest ON latest.max_id = ts.id
+             INNER JOIN tenants lifecycle_tenant ON lifecycle_tenant.id = ts.tenant_id AND lifecycle_tenant.lifecycle_status = 'live'
              WHERE ts.billing_status IN ('active','trialing','overdue')",
             [],
             'Não foi possível consultar as assinaturas.'
@@ -98,7 +99,7 @@ final class AdminExecutiveDashboardService
             "SELECT COUNT(*)
              FROM tenants
              WHERE status = 'active'
-               AND onboarding_completed_at IS NULL",
+               AND COALESCE(lifecycle_status, 'onboarding') IN ('onboarding','ready')",
             [],
             0,
             'Não foi possível consultar as empresas em implantação.'

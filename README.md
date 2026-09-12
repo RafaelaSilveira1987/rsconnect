@@ -1,4 +1,16 @@
-# RS Connect 36.31.3
+# RS Connect 36.32.0
+
+## Production Readiness: Go-Live — 36.32.0
+
+- separa **onboarding/homologação** da **operação oficial** com os estados `onboarding`, `ready`, `live` e `suspended`;
+- adiciona Go-Live explícito no Superadmin, histórico de transições e auditoria;
+- WhatsApp, IA, atendimento e agenda continuam disponíveis antes do Go-Live para testes reais;
+- SLA, primeira resposta e duração oficial consideram somente períodos em que a empresa estava `LIVE`;
+- cobrança manual de produção é bloqueada fora de `LIVE`, sem misturar ciclo operacional com assinatura/trial;
+- o painel do cliente mostra uma tarja clara durante onboarding, ready ou suspensão;
+- empresas existentes entram em `onboarding` após a migration para que o primeiro Go-Live seja confirmado conscientemente;
+- migration obrigatória: `112_tenant_lifecycle_go_live.sql`;
+- consulte `TESTE_DA_VERSAO.md` para configurar e homologar a fase antes de avançar no roadmap.
 
 ## Hotfix da saudação configurada — 36.31.3
 

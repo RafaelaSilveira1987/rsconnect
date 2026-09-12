@@ -78,11 +78,11 @@ final class AdminExecutiveReportService
                 $tenantParams
             ),
             'active_subscriptions' => $this->scalar(
-                'SELECT COUNT(*) FROM tenant_subscriptions WHERE billing_status IN ("active","trialing")' . $scope,
+                'SELECT COUNT(*) FROM tenant_subscriptions WHERE billing_status IN ("active","trialing") AND EXISTS (SELECT 1 FROM tenants lifecycle_tenant WHERE lifecycle_tenant.id = tenant_subscriptions.tenant_id AND lifecycle_tenant.lifecycle_status = "live")' . $scope,
                 $tenantParams
             ),
             'mrr' => $this->money(
-                'SELECT COALESCE(SUM(amount),0) FROM tenant_subscriptions WHERE billing_status IN ("active","trialing")' . $scope,
+                'SELECT COALESCE(SUM(amount),0) FROM tenant_subscriptions WHERE billing_status IN ("active","trialing") AND EXISTS (SELECT 1 FROM tenants lifecycle_tenant WHERE lifecycle_tenant.id = tenant_subscriptions.tenant_id AND lifecycle_tenant.lifecycle_status = "live")' . $scope,
                 $tenantParams
             ),
             'received' => $this->money(

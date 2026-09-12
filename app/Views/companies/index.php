@@ -3,8 +3,9 @@
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\TenantLifecycleService;
 
-$filters = $filters ?? ['q' => '', 'status' => '', 'plan' => '', 'health' => '', 'tracking' => ''];
+$filters = $filters ?? ['q' => '', 'status' => '', 'plan' => '', 'health' => '', 'tracking' => '', 'lifecycle' => ''];
 $summary = $summary ?? [];
 $dataWarnings = $dataWarnings ?? [];
 $relative = static function (?string $value): string {
@@ -45,6 +46,8 @@ $subscriptionLabel = static fn (string $status): string => match ($status) {
 
 <section class="admin-company-summary-grid" aria-label="Resumo das empresas">
     <a href="<?= View::e(Router::url('/companies')) ?>" class="admin-company-summary-card"><span>Total</span><strong><?= (int) ($summary['total'] ?? 0) ?></strong><small>empresas cadastradas</small></a>
+    <a href="<?= View::e(Router::url('/companies?lifecycle=live')) ?>" class="admin-company-summary-card is-healthy"><span>Em produção</span><strong><?= (int) ($summary['lifecycle_live'] ?? 0) ?></strong><small>com métricas oficiais</small></a>
+    <a href="<?= View::e(Router::url('/companies?lifecycle=onboarding')) ?>" class="admin-company-summary-card is-implantation"><span>Onboarding</span><strong><?= (int) ($summary['lifecycle_onboarding'] ?? 0) ?></strong><small>homologação / testes</small></a>
     <a href="<?= View::e(Router::url('/companies?health=healthy')) ?>" class="admin-company-summary-card is-healthy"><span>Saudáveis</span><strong><?= (int) ($summary['healthy'] ?? 0) ?></strong><small>operando normalmente</small></a>
     <a href="<?= View::e(Router::url('/companies?health=implantation')) ?>" class="admin-company-summary-card is-implantation"><span>Em implantação</span><strong><?= (int) ($summary['implantation'] ?? 0) ?></strong><small>configuração em andamento</small></a>
     <a href="<?= View::e(Router::url('/companies?health=attention')) ?>" class="admin-company-summary-card is-attention"><span>Atenção</span><strong><?= (int) ($summary['attention'] ?? 0) ?></strong><small>precisam de revisão</small></a>
@@ -57,6 +60,7 @@ $subscriptionLabel = static fn (string $status): string => match ($status) {
     <label><span class="sr-only">Saúde</span><select name="health"><option value="">Todas as situações</option><option value="healthy" <?= $filters['health'] === 'healthy' ? 'selected' : '' ?>>Saudável</option><option value="implantation" <?= $filters['health'] === 'implantation' ? 'selected' : '' ?>>Em implantação</option><option value="attention" <?= $filters['health'] === 'attention' ? 'selected' : '' ?>>Atenção</option><option value="critical" <?= $filters['health'] === 'critical' ? 'selected' : '' ?>>Crítica</option><option value="inactive" <?= $filters['health'] === 'inactive' ? 'selected' : '' ?>>Inativa</option></select></label>
     <label><span class="sr-only">Plano</span><select name="plan"><option value="">Todos os planos</option><option value="starter" <?= $filters['plan'] === 'starter' ? 'selected' : '' ?>>Inicial</option><option value="pro" <?= $filters['plan'] === 'pro' ? 'selected' : '' ?>>Profissional</option><option value="business" <?= $filters['plan'] === 'business' ? 'selected' : '' ?>>Empresarial</option><option value="custom" <?= $filters['plan'] === 'custom' ? 'selected' : '' ?>>Personalizado</option></select></label>
     <label><span class="sr-only">Status cadastral</span><select name="status"><option value="">Todos os status</option><option value="active" <?= $filters['status'] === 'active' ? 'selected' : '' ?>>Ativa</option><option value="inactive" <?= $filters['status'] === 'inactive' ? 'selected' : '' ?>>Inativa</option><option value="suspended" <?= $filters['status'] === 'suspended' ? 'selected' : '' ?>>Suspensa</option></select></label>
+    <label><span class="sr-only">Ciclo operacional</span><select name="lifecycle"><option value="">Todos os ciclos</option><option value="onboarding" <?= ($filters['lifecycle'] ?? '') === 'onboarding' ? 'selected' : '' ?>>Onboarding</option><option value="ready" <?= ($filters['lifecycle'] ?? '') === 'ready' ? 'selected' : '' ?>>Pronta para produção</option><option value="live" <?= ($filters['lifecycle'] ?? '') === 'live' ? 'selected' : '' ?>>Em produção</option><option value="suspended" <?= ($filters['lifecycle'] ?? '') === 'suspended' ? 'selected' : '' ?>>Operação suspensa</option></select></label>
     <label><span class="sr-only">Acompanhamento</span><select name="tracking"><option value="">Todo acompanhamento</option><option value="automatic" <?= $filters['tracking'] === 'automatic' ? 'selected' : '' ?>>Automático</option><option value="attention" <?= $filters['tracking'] === 'attention' ? 'selected' : '' ?>>Atenção manual</option><option value="reviewed" <?= $filters['tracking'] === 'reviewed' ? 'selected' : '' ?>>Em acompanhamento</option><option value="resolved" <?= $filters['tracking'] === 'resolved' ? 'selected' : '' ?>>Corrigida</option></select></label>
     <button class="btn btn-primary" type="submit">Filtrar</button>
     <a class="btn btn-quiet" href="<?= View::e(Router::url('/companies')) ?>">Limpar</a>
@@ -79,6 +83,9 @@ $subscriptionLabel = static fn (string $status): string => match ($status) {
             $trackingStatus = (string) ($tracking['tracking_status'] ?? 'automatic');
             $trackingPriority = (string) ($tracking['priority'] ?? 'attention');
             $trackingNote = (string) ($tracking['note'] ?? '');
+            $lifecycleStatus = (string) ($company['lifecycle_status'] ?? TenantLifecycleService::ONBOARDING);
+            $lifecycleLabel = TenantLifecycleService::label($lifecycleStatus);
+            $lifecycleTargets = TenantLifecycleService::allowedTargets($lifecycleStatus);
         ?>
         <article class="admin-company-card is-<?= View::e((string) $company['health']) ?>">
             <div class="admin-company-card-identity">
@@ -86,7 +93,7 @@ $subscriptionLabel = static fn (string $status): string => match ($status) {
                 <div>
                     <div class="admin-company-title-row"><h3><?= View::e((string) $company['name']) ?></h3><span class="admin-health-badge is-<?= View::e((string) $company['health']) ?>"><?= View::e((string) $company['health_label']) ?></span></div>
                     <p><?= View::e((string) ($company['segment'] ?: 'Segmento não informado')) ?><?= !empty($company['email']) ? ' · ' . View::e((string) $company['email']) : '' ?></p>
-                    <div class="badge-row"><span class="badge"><?= View::e(ucfirst((string) $company['plan'])) ?></span><span class="badge badge-<?= View::e((string) $company['status']) ?>"><?= View::e(ucfirst((string) $company['status'])) ?></span><span class="badge"><?= View::e($subscriptionLabel($subscriptionStatus)) ?></span></div>
+                    <div class="badge-row"><span class="badge"><?= View::e(ucfirst((string) $company['plan'])) ?></span><span class="badge badge-<?= View::e((string) $company['status']) ?>"><?= View::e(ucfirst((string) $company['status'])) ?></span><span class="badge"><?= View::e($subscriptionLabel($subscriptionStatus)) ?></span><span class="badge"><?= View::e($lifecycleLabel) ?></span></div>
                 </div>
             </div>
 
@@ -119,6 +126,30 @@ $subscriptionLabel = static fn (string $status): string => match ($status) {
                     <a class="btn btn-outline" href="<?= View::e(Router::url('/companies/health?tenant_id=' . (int) $company['id'])) ?>">Saúde e IA</a>
                     <a class="btn btn-outline" href="<?= View::e(Router::url('/company-settings?id=' . (int) $company['id'])) ?>">Editar dados</a>
                     <a class="btn btn-outline" href="<?= View::e(Router::url('/company-settings?id=' . (int) $company['id'])) ?>#company-module-settings">Menus do cliente</a>
+                    <?php if ($lifecycleStatus === TenantLifecycleService::READY): ?>
+                        <form method="post" action="<?= View::e(Router::url('/companies/lifecycle')) ?>" data-confirm="Confirma o Go-Live desta empresa? A partir deste momento SLA, métricas oficiais e cobranças manuais de produção serão liberados.">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="tenant_id" value="<?= (int) $company['id'] ?>">
+                            <input type="hidden" name="lifecycle_status" value="live">
+                            <input type="hidden" name="return_to" value="/companies">
+                            <button class="btn btn-primary" type="submit">Colocar em produção</button>
+                        </form>
+                    <?php endif; ?>
+                    <details class="action-popover">
+                        <summary class="btn btn-quiet">Ciclo operacional</summary>
+                        <form class="popover-form" method="post" action="<?= View::e(Router::url('/companies/lifecycle')) ?>" data-confirm="Confirma a alteração do ciclo operacional desta empresa?">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="tenant_id" value="<?= (int) $company['id'] ?>">
+                            <input type="hidden" name="return_to" value="/companies">
+                            <div class="field"><span>Status atual</span><strong><?= View::e($lifecycleLabel) ?></strong><small class="field-hint"><?= View::e(TenantLifecycleService::description($lifecycleStatus)) ?></small></div>
+                            <label class="field"><span>Alterar para</span><select name="lifecycle_status">
+                                <?php foreach ($lifecycleTargets as $target): ?><option value="<?= View::e($target) ?>"><?= View::e(TenantLifecycleService::label($target)) ?></option><?php endforeach; ?>
+                            </select></label>
+                            <label class="field"><span>Observação</span><textarea name="note" rows="2" placeholder="Motivo ou evidência da alteração (opcional)."></textarea></label>
+                            <small class="field-hint">O ciclo operacional não altera automaticamente o login nem o status da assinatura comercial.</small>
+                            <button class="btn btn-primary btn-block" type="submit">Atualizar ciclo</button>
+                        </form>
+                    </details>
                     <details class="action-popover admin-tracking-popover">
                         <summary class="btn btn-quiet">Acompanhamento</summary>
                         <form class="popover-form" method="post" action="<?= View::e(Router::url('/companies/tracking')) ?>">

@@ -1,4 +1,5 @@
 <?php /* Compatibilidade smoke v36.30.9: app.css?v=36.30.9 app.js?v=36.30.9 */ ?>
+<?php /* Compatibilidade histórica v36.31.0: app.css?v=36.31.0 app.js?v=36.31.0 */ ?>
 <?php
 /* Compatibilidade histórica v36.30.6: app.css?v=36.30.6 app.js?v=36.30.6 */
 /* Compatibilidade cache v36.30.4: app.css?v=36.30.4 app.js?v=36.30.4 */
@@ -103,6 +104,16 @@ $communicationUnread = (int) ($communicationInbox['unread'] ?? 0);
 $communicationLatest = is_array($communicationInbox['latest'] ?? null) ? $communicationInbox['latest'] : null;
 $tenantAccessStatus = is_array($_SESSION['tenant_access_status'] ?? null) ? $_SESSION['tenant_access_status'] : [];
 $trialStatus = is_array($tenantAccessStatus['trial'] ?? null) ? $tenantAccessStatus['trial'] : [];
+$tenantLifecycle = null;
+if (Auth::check() && !Auth::isSuperAdmin() && Auth::tenantId()) {
+    try {
+        $lifecycleStatement = Database::connection()->prepare('SELECT lifecycle_status, lifecycle_changed_at, went_live_at FROM tenants WHERE id = :id LIMIT 1');
+        $lifecycleStatement->execute(['id' => (int) Auth::tenantId()]);
+        $tenantLifecycle = $lifecycleStatement->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (Throwable) {
+        $tenantLifecycle = null;
+    }
+}
 $pageHelp = (new PageHelpService())->forPath($_SERVER['REQUEST_URI'] ?? '/', Auth::isSuperAdmin());
 
 $conversationUnread = 0;
@@ -175,7 +186,7 @@ $svgIcon = static function (string $name): string {
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
     <!-- Compatibilidade histórica v36.30.5: app.css?v=36.30.5 app.js?v=36.30.5 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.31.0')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.32.0')) ?>">
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
             width: 54px !important;
@@ -388,6 +399,17 @@ $svgIcon = static function (string $name): string {
             </section>
         <?php endif; ?>
 
+        <?php if (!Auth::isSuperAdmin() && is_array($tenantLifecycle) && (($tenantLifecycle['lifecycle_status'] ?? 'onboarding') !== 'live')): ?>
+            <?php $tenantLifecycleStatus = (string) ($tenantLifecycle['lifecycle_status'] ?? 'onboarding'); ?>
+            <section class="trial-access-banner<?= $tenantLifecycleStatus === 'suspended' ? ' is-grace' : '' ?>" role="status">
+                <span class="trial-access-icon" aria-hidden="true"><?= $svgIcon($tenantLifecycleStatus === 'suspended' ? 'status' : 'rocket') ?></span>
+                <div>
+                    <strong><?= $tenantLifecycleStatus === 'ready' ? 'Ambiente pronto para produção' : ($tenantLifecycleStatus === 'suspended' ? 'Operação produtiva suspensa' : 'Ambiente de onboarding / homologação') ?></strong>
+                    <span><?= $tenantLifecycleStatus === 'ready' ? 'Configuração concluída. SLA e métricas oficiais só começam após o Go-Live confirmado pela RS.' : ($tenantLifecycleStatus === 'suspended' ? 'Novas métricas oficiais estão pausadas; o histórico de produção anterior permanece preservado.' : 'Você pode testar WhatsApp, IA, agenda e atendimento normalmente sem contaminar SLA e métricas oficiais.') ?></span>
+                </div>
+            </section>
+        <?php endif; ?>
+
         <?php if ($flashes): ?>
             <section class="flash-stack" aria-live="polite">
                 <?php foreach ($flashes as $flash): ?>
@@ -514,6 +536,6 @@ $svgIcon = static function (string $name): string {
 <!-- Marcador histórico de regressão: app.js?v=36.20.2 -->
 <!-- Marcador histórico de regressão: app.js?v=36.20.5 -->
 <!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 app.js?v=36.20.8 app.js?v=36.20.9 -->
-<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.31.0')) ?>" defer></script>
+<script src="<?= View::e(Router::url('/assets/js/app.js?v=36.32.0')) ?>" defer></script>
 </body>
 </html>

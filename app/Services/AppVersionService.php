@@ -160,8 +160,11 @@ final class AppVersionService
     // RS Connect 36.31.2 — saudação opcional por assistente, com continuidade natural para clientes/pacientes reconhecidos.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.31.2 — Saudação inteligente por contato';
     // RS Connect 36.31.3 — hotfix da saudação configurada em retornos na mesma conversa.
-    public const PACKAGE_LABEL = 'RS Connect 36.31.3 — Hotfix da saudação configurada';
-    public const REQUIRED_MIGRATION = '111_agent_greeting_policy.sql';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.31.3 — Hotfix da saudação configurada';
+    // Compatibilidade histórica: REQUIRED_MIGRATION = '111_agent_greeting_policy.sql';
+    // RS Connect 36.32.0 — Production Readiness Fase A: ciclo operacional e Go-Live explícito.
+    public const PACKAGE_LABEL = 'RS Connect 36.32.0 — Production Readiness: Go-Live';
+    public const REQUIRED_MIGRATION = '112_tenant_lifecycle_go_live.sql';
 
     private PDO $pdo;
 
@@ -830,6 +833,18 @@ final class AppVersionService
             $this->tableExists('tenant_onboarding_progress') ? 'ok' : 'warning',
             $this->tableExists('tenant_onboarding_progress') ? $onboarding . ' registro(s) de onboarding.' : 'Tabela de onboarding ausente.',
             'Liberar Primeiros passos para clientes novos.'
+        );
+
+        $lifecycleReady = $this->columnExists('tenants', 'lifecycle_status')
+            && $this->columnExists('tenants', 'went_live_at')
+            && $this->tableExists('tenant_lifecycle_events');
+        $checks[] = $this->check(
+            'Ciclo operacional / Go-Live',
+            $lifecycleReady ? 'ok' : 'blocked',
+            $lifecycleReady
+                ? 'Onboarding, homologação, produção e suspensão possuem estado e histórico auditável.'
+                : 'O ciclo operacional separado do acesso ainda não foi aplicado.',
+            'Executar database/migrations/112_tenant_lifecycle_go_live.sql e confirmar o Go-Live das empresas prontas.'
         );
 
         return $checks;

@@ -14,6 +14,7 @@ use App\Services\AdminDashboardService;
 use App\Services\AgentBlueprintService;
 use App\Services\PreSchedulingService;
 use App\Services\TenantModuleService;
+use App\Services\TenantLifecycleService;
 use App\Services\OnboardingGuideService;
 use App\Services\MessageGovernanceService;
 use App\Services\ConversationOwnershipService;
@@ -30,6 +31,7 @@ final class CompanyController
             'plan' => (string) ($_GET['plan'] ?? ''),
             'health' => (string) ($_GET['health'] ?? ''),
             'tracking' => (string) ($_GET['tracking'] ?? ''),
+            'lifecycle' => (string) ($_GET['lifecycle'] ?? ''),
         ]);
 
         $blueprintService = new AgentBlueprintService();
@@ -56,6 +58,7 @@ final class CompanyController
         View::render('companies.overview', [
             'title' => 'Visão geral da empresa',
             'company' => $company,
+            'lifecycleHistory' => (new TenantLifecycleService())->history($tenantId, 12),
         ]);
     }
 
@@ -118,9 +121,9 @@ final class CompanyController
 
             $tenant = $pdo->prepare(
                 'INSERT INTO tenants
-                    (name, legal_name, slug, document, email, phone, segment, business_niche_id, plan, status, onboarding_step)
+                    (name, legal_name, slug, document, email, phone, segment, business_niche_id, plan, status, lifecycle_status, onboarding_step)
                  VALUES
-                    (:name, :legal_name, :slug, :document, :email, :phone, :segment, :business_niche_id, :plan, "active", 1)'
+                    (:name, :legal_name, :slug, :document, :email, :phone, :segment, :business_niche_id, :plan, "active", "onboarding", 1)'
             );
             $tenant->execute([
                 'name' => $name,
@@ -459,6 +462,40 @@ final class CompanyController
         Audit::log('company.updated', ['company_name' => $name, 'profile_enriched' => !Auth::isSuperAdmin()], $tenantId);
         Flash::set('success', 'Dados da empresa atualizados. As novas informações já podem ser usadas pelos assistentes.');
         $this->redirect('/company-settings' . (Auth::isSuperAdmin() ? '?id=' . $tenantId : ''));
+    }
+
+    public function updateLifecycle(): void
+    {
+        $tenantId = (int) ($_POST['tenant_id'] ?? 0);
+        $target = trim((string) ($_POST['lifecycle_status'] ?? ''));
+        $note = trim((string) ($_POST['note'] ?? ''));
+        $returnTo = trim((string) ($_POST['return_to'] ?? '/companies'));
+        if (!str_starts_with($returnTo, '/companies')) {
+            $returnTo = '/companies';
+        }
+
+        if ($tenantId < 1 || !array_key_exists($target, TenantLifecycleService::statuses())) {
+            Flash::set('error', 'Empresa ou estágio operacional inválido.');
+            $this->redirect($returnTo);
+        }
+
+        try {
+            $result = (new TenantLifecycleService())->transition($tenantId, $target, $note);
+            $message = match ($target) {
+                TenantLifecycleService::READY => 'Empresa marcada como pronta para produção. As métricas oficiais continuam pausadas até o Go-Live.',
+                TenantLifecycleService::LIVE => 'Go-Live confirmado. SLA, métricas oficiais e cobranças manuais de produção estão liberados a partir de agora.',
+                TenantLifecycleService::SUSPENDED => 'Operação produtiva suspensa. O histórico anterior foi preservado e novas métricas oficiais ficam pausadas.',
+                default => 'Empresa retornou para onboarding/homologação. Métricas oficiais ficam pausadas.',
+            };
+            if (($result['from_status'] ?? '') === TenantLifecycleService::LIVE && $target === TenantLifecycleService::READY) {
+                $message = 'Empresa retornou para homologação. O histórico de produção anterior foi preservado e novas métricas oficiais ficam pausadas.';
+            }
+            Flash::set('success', $message);
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+        }
+
+        $this->redirect($returnTo);
     }
 
     public function updateTracking(): void

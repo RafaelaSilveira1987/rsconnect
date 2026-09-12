@@ -44,10 +44,11 @@ final class ExecutiveMetricsPolicyService
                         COALESCE(ROUND(AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, first_incoming_at, first_response_at)))), 0) AS average_seconds,
                         COALESCE(MIN(GREATEST(0, TIMESTAMPDIFF(SECOND, first_incoming_at, first_response_at))), 0) AS min_seconds,
                         COALESCE(MAX(GREATEST(0, TIMESTAMPDIFF(SECOND, first_incoming_at, first_response_at))), 0) AS max_seconds
-                 FROM conversation_service_cycles
-                 WHERE first_incoming_at BETWEEN :start AND :end
-                   AND first_response_at IS NOT NULL
-                   AND source NOT IN ("migration_snapshot", "migration_069_recovery")' . $scope
+                 FROM conversation_service_cycles sc
+                 WHERE sc.first_incoming_at BETWEEN :start AND :end
+                   AND sc.first_response_at IS NOT NULL
+                   AND sc.source NOT IN ("migration_snapshot", "migration_069_recovery")
+                   AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $scope
             );
             $statement->execute($params);
             $row = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -113,7 +114,8 @@ final class ExecutiveMetricsPolicyService
                    AND sc.opened_at IS NOT NULL
                    AND sc.closed_at IS NOT NULL
                    AND sc.closed_at BETWEEN :start AND :end
-                   AND ' . self::operationalCycleSql('sc') . $scope
+                   AND ' . self::operationalCycleSql('sc') . '
+                   AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.opened_at') . $scope
             );
             $closedParams = $params;
             unset($closedParams['sla_seconds']);
@@ -129,7 +131,8 @@ final class ExecutiveMetricsPolicyService
                    AND sc.first_response_at IS NOT NULL
                    AND sc.first_response_user_id IS NOT NULL
                    AND sc.first_incoming_at BETWEEN :start AND :end
-                   AND ' . self::operationalCycleSql('sc') . $scope
+                   AND ' . self::operationalCycleSql('sc') . '
+                   AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $scope
             );
             $sla->execute($params);
             $slaRow = $sla->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -149,7 +152,9 @@ final class ExecutiveMetricsPolicyService
                  WHERE sc.cycle_status = "active"
                    AND c.status <> "closed"
                    AND sc.first_incoming_at IS NOT NULL
-                   AND sc.first_response_at IS NULL' . $waitingScope
+                   AND sc.first_response_at IS NULL
+                   AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . '
+                   AND ' . TenantLifecycleService::currentLiveSql('sc.tenant_id') . $waitingScope
             );
             $waiting->execute($waitingParams);
             $waitingRow = $waiting->fetch(PDO::FETCH_ASSOC) ?: [];

@@ -62,7 +62,7 @@ final class AdminDashboardService
     }
 
     /**
-     * @param array{q?:string,status?:string,plan?:string,health?:string,tracking?:string} $filters
+     * @param array{q?:string,status?:string,plan?:string,health?:string,tracking?:string,lifecycle?:string} $filters
      */
     public function companies(array $filters): array
     {
@@ -207,6 +207,9 @@ final class AdminDashboardService
             if ($normalized['tracking'] !== '' && (string) ($company['admin_tracking']['tracking_status'] ?? 'automatic') !== $normalized['tracking']) {
                 return false;
             }
+            if ($normalized['lifecycle'] !== '' && (string) ($company['lifecycle_status'] ?? 'onboarding') !== $normalized['lifecycle']) {
+                return false;
+            }
             if ($normalized['q'] !== '') {
                 $haystack = mb_strtolower(implode(' ', [
                     (string) ($company['name'] ?? ''),
@@ -284,9 +287,8 @@ final class AdminDashboardService
             $statement = $this->pdo->query(
                 "SELECT COUNT(*)
                  FROM tenants t
-                 LEFT JOIN tenant_implementation_status tis ON tis.tenant_id = t.id
                  WHERE t.status = 'active'
-                   AND (t.onboarding_completed_at IS NULL OR COALESCE(tis.status, 'pending') <> 'ready')"
+                   AND COALESCE(t.lifecycle_status, 'onboarding') IN ('onboarding','ready')"
             );
             $onboarding = (int) $statement->fetchColumn();
         } catch (Throwable) {
@@ -334,6 +336,7 @@ final class AdminDashboardService
                 FROM tenant_subscriptions
                 GROUP BY tenant_id
              ) latest ON latest.max_id = ts.id
+             INNER JOIN tenants lifecycle_tenant ON lifecycle_tenant.id = ts.tenant_id AND lifecycle_tenant.lifecycle_status = 'live'
              WHERE ts.billing_status IN ('active','trialing','overdue')"
         );
         $activeSubscriptions = (int) ($subscriptionRow['active_count'] ?? 0);
@@ -369,7 +372,8 @@ final class AdminDashboardService
 
         $critical = [];
         $attention = [];
-        $isOnboarding = empty($company['onboarding_completed_at']);
+        $lifecycleStatus = (string) ($company['lifecycle_status'] ?? 'onboarding');
+        $isOnboarding = in_array($lifecycleStatus, ['onboarding', 'ready'], true);
         $subscriptionStatus = (string) ($company['subscription']['billing_status'] ?? '');
         $instanceTotal = (int) ($company['instances']['total'] ?? 0);
         $connectedInstances = (int) ($company['instances']['connected_count'] ?? 0);
@@ -407,8 +411,10 @@ final class AdminDashboardService
         if ($activeAgents === 0) {
             $attention[] = 'Nenhum assistente virtual ativo.';
         }
-        if ($isOnboarding) {
-            $attention[] = 'Configuração inicial ainda não foi concluída.';
+        if ($lifecycleStatus === 'onboarding') {
+            $attention[] = 'Empresa em onboarding/homologação; métricas oficiais ainda estão pausadas.';
+        } elseif ($lifecycleStatus === 'ready') {
+            $attention[] = 'Empresa pronta para produção, aguardando confirmação de Go-Live.';
         }
         if ($implementationStatus === 'attention' || $implementationAttention > 0) {
             $attention[] = 'Implantação possui itens pendentes.';
@@ -479,6 +485,10 @@ final class AdminDashboardService
             if (($company['status'] ?? '') === 'active') {
                 $summary['active']++;
             }
+            $lifecycle = (string) ($company['lifecycle_status'] ?? 'onboarding');
+            if (array_key_exists('lifecycle_' . $lifecycle, $summary)) {
+                $summary['lifecycle_' . $lifecycle]++;
+            }
         }
         return $summary;
     }
@@ -493,6 +503,10 @@ final class AdminDashboardService
             'critical' => 0,
             'implantation' => 0,
             'inactive' => 0,
+            'lifecycle_onboarding' => 0,
+            'lifecycle_ready' => 0,
+            'lifecycle_live' => 0,
+            'lifecycle_suspended' => 0,
         ];
     }
 
@@ -525,6 +539,7 @@ final class AdminDashboardService
         $limit = max(1, min(40, $limit));
         $actions = [
             'company.created', 'company.updated', 'company.status_updated',
+            'company.lifecycle_onboarding', 'company.lifecycle_ready', 'company.lifecycle_live', 'company.lifecycle_suspended',
             'company.attention_marked', 'company.attention_reviewed', 'company.attention_resolved', 'company.attention_reset',
             'user.created', 'user.updated',
             'evolution.instance_created', 'evolution.instance_updated', 'evolution.instance_deleted',
@@ -651,12 +666,14 @@ final class AdminDashboardService
         $plan = trim((string) ($filters['plan'] ?? ''));
         $health = trim((string) ($filters['health'] ?? ''));
         $tracking = trim((string) ($filters['tracking'] ?? ''));
+        $lifecycle = trim((string) ($filters['lifecycle'] ?? ''));
         return [
             'q' => trim((string) ($filters['q'] ?? '')),
             'status' => in_array($status, ['active', 'inactive', 'suspended'], true) ? $status : '',
             'plan' => in_array($plan, ['starter', 'pro', 'business', 'custom'], true) ? $plan : '',
             'health' => in_array($health, ['healthy', 'attention', 'critical', 'implantation', 'inactive'], true) ? $health : '',
             'tracking' => in_array($tracking, ['automatic', 'attention', 'reviewed', 'resolved'], true) ? $tracking : '',
+            'lifecycle' => in_array($lifecycle, ['onboarding', 'ready', 'live', 'suspended'], true) ? $lifecycle : '',
         ];
     }
 
@@ -682,6 +699,10 @@ final class AdminDashboardService
             'company.created' => 'Empresa cadastrada',
             'company.updated' => 'Dados da empresa atualizados',
             'company.status_updated' => 'Plano ou status atualizado',
+            'company.lifecycle_onboarding' => 'Empresa retornou ao onboarding',
+            'company.lifecycle_ready' => 'Empresa pronta para produção',
+            'company.lifecycle_live' => 'Go-Live confirmado',
+            'company.lifecycle_suspended' => 'Operação produtiva suspensa',
             'company.attention_marked' => 'Empresa marcada para atenção',
             'company.attention_reviewed' => 'Acompanhamento iniciado',
             'company.attention_resolved' => 'Pendência marcada como corrigida',
@@ -726,6 +747,7 @@ final class AdminDashboardService
         return match ($action) {
             'company.created' => !empty($context['owner_email']) ? 'Primeiro acesso: ' . (string) $context['owner_email'] : 'Novo cliente incluído na base.',
             'company.status_updated' => 'Status: ' . (string) ($context['status'] ?? 'atualizado') . ' · Plano: ' . (string) ($context['plan'] ?? 'mantido'),
+            'company.lifecycle_onboarding', 'company.lifecycle_ready', 'company.lifecycle_live', 'company.lifecycle_suspended' => 'Ciclo operacional: ' . (string) ($context['from_status'] ?? 'anterior') . ' → ' . (string) ($context['to_status'] ?? 'atualizado') . '.',
             'company.attention_resolved' => 'A equipe registrou que a pendência foi revisada e corrigida.',
             'company.attention_reviewed' => 'A pendência foi visualizada e está em acompanhamento.',
             'company.attention_marked' => 'Novo ponto de atenção incluído para acompanhamento.',

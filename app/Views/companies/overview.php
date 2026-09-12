@@ -3,6 +3,7 @@
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\TenantLifecycleService;
 
 $relative = static function (?string $value): string {
     if (!$value) return 'Sem atividade';
@@ -44,6 +45,10 @@ $tracking = (array) ($company['admin_tracking'] ?? []);
 $trackingStatus = (string) ($tracking['tracking_status'] ?? 'automatic');
 $trackingPriority = (string) ($tracking['priority'] ?? 'attention');
 $trackingNote = (string) ($tracking['note'] ?? '');
+$lifecycleStatus = (string) ($company['lifecycle_status'] ?? TenantLifecycleService::ONBOARDING);
+$lifecycleLabel = TenantLifecycleService::label($lifecycleStatus);
+$lifecycleTargets = TenantLifecycleService::allowedTargets($lifecycleStatus);
+$lifecycleHistory = is_array($lifecycleHistory ?? null) ? $lifecycleHistory : [];
 ?>
 
 <nav class="admin-breadcrumb" aria-label="Navegação"><a href="<?= View::e(Router::url('/companies')) ?>">Empresas</a><span>›</span><strong><?= View::e((string) $company['name']) ?></strong></nav>
@@ -55,7 +60,7 @@ $trackingNote = (string) ($tracking['note'] ?? '');
             <span class="eyebrow">Visão geral do cliente</span>
             <div class="admin-company-title-row"><h2><?= View::e((string) $company['name']) ?></h2><span class="admin-health-badge is-<?= View::e((string) $company['health']) ?>"><?= View::e((string) $company['health_label']) ?></span></div>
             <p><?= View::e((string) ($company['segment'] ?: 'Segmento não informado')) ?><?= !empty($company['email']) ? ' · ' . View::e((string) $company['email']) : '' ?><?= !empty($company['phone']) ? ' · ' . View::e((string) $company['phone']) : '' ?></p>
-            <div class="badge-row"><span class="badge"><?= View::e(ucfirst((string) $company['plan'])) ?></span><span class="badge badge-<?= View::e((string) $company['status']) ?>"><?= View::e(ucfirst((string) $company['status'])) ?></span><span class="badge"><?= View::e($subscriptionLabel((string) ($subscription['billing_status'] ?? ''))) ?></span></div>
+            <div class="badge-row"><span class="badge"><?= View::e(ucfirst((string) $company['plan'])) ?></span><span class="badge badge-<?= View::e((string) $company['status']) ?>"><?= View::e(ucfirst((string) $company['status'])) ?></span><span class="badge"><?= View::e($subscriptionLabel((string) ($subscription['billing_status'] ?? ''))) ?></span><span class="badge"><?= View::e($lifecycleLabel) ?></span></div>
         </div>
     </div>
     <div class="admin-company-overview-actions">
@@ -81,6 +86,46 @@ $trackingNote = (string) ($tracking['note'] ?? '');
     <article><span>Assistentes</span><strong><?= $activeAgents ?></strong><small><?= (int) ($company['agents']['auto_reply_count'] ?? 0) ?> com respostas automáticas</small></article>
     <article><span>Mensagens em 30 dias</span><strong><?= number_format((int) ($company['messages']['count_30d'] ?? 0), 0, ',', '.') ?></strong><small><?= (int) ($company['conversations']['unread_count'] ?? 0) ?> pendente(s) de leitura</small></article>
     <article><span>Última atividade</span><strong class="is-date"><?= View::e($relative($company['last_activity_at'] ?? null)) ?></strong><small><?= (int) ($company['conversations']['open_count'] ?? 0) ?> conversa(s) aberta(s)</small></article>
+</section>
+
+<section class="card admin-company-tracking-card" id="company-lifecycle">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Go-Live</span>
+            <h2>Ciclo operacional</h2>
+            <p><?= View::e(TenantLifecycleService::description($lifecycleStatus)) ?></p>
+        </div>
+        <span class="badge"><?= View::e($lifecycleLabel) ?></span>
+    </div>
+    <form class="admin-company-tracking-form" method="post" action="<?= View::e(Router::url('/companies/lifecycle')) ?>" data-confirm="<?= View::e($lifecycleStatus === TenantLifecycleService::READY ? 'Confirma o Go-Live desta empresa? SLA, métricas oficiais e cobranças manuais de produção serão liberados ao selecionar Em produção.' : 'Confirma a alteração do ciclo operacional desta empresa?') ?>">
+        <?= Csrf::input() ?>
+        <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
+        <input type="hidden" name="return_to" value="/companies/overview?id=<?= $tenantId ?>">
+        <label class="field"><span>Alterar estágio</span><select name="lifecycle_status">
+            <?php foreach ($lifecycleTargets as $target): ?><option value="<?= View::e($target) ?>"><?= View::e(TenantLifecycleService::label($target)) ?></option><?php endforeach; ?>
+        </select></label>
+        <label class="field admin-tracking-note"><span>Observação / evidência</span><input name="note" placeholder="Ex.: homologação concluída com o cliente."></label>
+        <button class="btn <?= $lifecycleStatus === TenantLifecycleService::READY ? 'btn-primary' : 'btn-outline' ?>" type="submit"><?= $lifecycleStatus === TenantLifecycleService::READY ? 'Confirmar alteração / Go-Live' : 'Atualizar ciclo' ?></button>
+    </form>
+    <div class="admin-company-detail-list" style="margin-top:1rem">
+        <div><span>Pronta em</span><strong><?= View::e($date($company['ready_at'] ?? null)) ?></strong></div>
+        <div><span>Primeiro Go-Live</span><strong><?= View::e($date($company['went_live_at'] ?? null)) ?></strong></div>
+        <div><span>Última suspensão</span><strong><?= View::e($date($company['suspended_at'] ?? null)) ?></strong></div>
+    </div>
+    <?php if ($lifecycleHistory): ?>
+        <details style="margin-top:1rem">
+            <summary class="btn btn-quiet">Ver histórico do ciclo</summary>
+            <div class="admin-company-detail-list" style="margin-top:.75rem">
+                <?php foreach ($lifecycleHistory as $event): ?>
+                    <div>
+                        <span><?= View::e((string) ($event['changed_at'] ?? '')) ?><?= !empty($event['changed_by_name']) ? ' · ' . View::e((string) $event['changed_by_name']) : '' ?></span>
+                        <strong><?= View::e(TenantLifecycleService::label((string) ($event['from_status'] ?? 'onboarding'))) ?> → <?= View::e(TenantLifecycleService::label((string) ($event['to_status'] ?? 'onboarding'))) ?></strong>
+                        <?php if (!empty($event['note'])): ?><small><?= View::e((string) $event['note']) ?></small><?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </details>
+    <?php endif; ?>
 </section>
 
 <?php if (!empty($company['attention_reasons'])): ?>

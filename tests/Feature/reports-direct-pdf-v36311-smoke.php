@@ -16,5 +16,5 @@ $checks=[
 'PDF equipe SLA'=>str_contains($teamPdf,"'SLA'")&&str_contains($teamPdf,'sla_compliance'),
 'PDF equipe setores'=>str_contains($teamPdf,"'Carga atual por setor'")&&str_contains($teamPdf,'departmentPerformance'),
 'release registrada'=>str_contains($version,"PACKAGE_LABEL = 'RS Connect 36.31.1 — Relatórios PDF e homologação conversacional'"),
-'manifesto'=>(str_contains($manifest,'"package_version": "36.31.2"')||str_contains($manifest,'"package_version": "36.31.3"'))&&str_contains($manifest,'"package_version": "36.31.1"')];
+'manifesto'=>(str_contains($manifest,'"package_version": "36.31.2"')||str_contains($manifest,'"package_version": "36.31.3"')||str_contains($manifest,'"package_version": "36.32.0"'))&&str_contains($manifest,'"package_version": "36.31.1"')];
 $p=0;foreach($checks as $l=>$ok){echo($ok?'[OK] ':'[FAIL] ').$l.PHP_EOL;$p+=$ok?1:0;}if($p!==count($checks)){fwrite(STDERR,"Falha: {$p}/".count($checks).PHP_EOL);exit(1);}echo"OK - relatórios PDF 36.31.1: {$p}/".count($checks)."\n";

@@ -44,6 +44,7 @@ final class TeamProfessionalReportService
         $slaMinutes = max(5, min(1440, (int) ($filters['sla_minutes'] ?? 30)));
         $tenant = $this->row(
             'SELECT t.id, t.name, t.professional_assignment_enabled, t.professional_calendar_enabled,
+                    t.lifecycle_status, t.went_live_at,
                     COALESCE(NULLIF(os.business_timezone, ""), NULLIF(cas.timezone, ""), "America/Sao_Paulo") AS timezone
              FROM tenants t
              LEFT JOIN tenant_onboarding_settings os ON os.tenant_id = t.id
@@ -77,6 +78,10 @@ final class TeamProfessionalReportService
             $this->warnings[] = 'As migrations históricas até a 071 ainda não estão completas. Aplique o contrato UTC antes de usar este relatório.';
             $base['warnings'] = $this->warnings;
             return $base;
+        }
+
+        if ((string) ($tenant['lifecycle_status'] ?? 'onboarding') !== TenantLifecycleService::LIVE) {
+            $this->warnings[] = 'Esta empresa não está em produção. SLA e métricas oficiais consideram somente períodos em que o ciclo operacional estava LIVE.';
         }
 
         $professionals = $this->professionalBase($users, $selectedUserId);
@@ -303,7 +308,8 @@ final class TeamProfessionalReportService
              FROM conversation_service_cycles sc
              WHERE sc.tenant_id = :tenant_id
                AND sc.first_response_user_id IS NOT NULL
-               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $filter . $reliabilityFilter . '
+               AND sc.first_response_at BETWEEN :start_at AND :end_at
+               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $filter . $reliabilityFilter . '
              GROUP BY sc.first_response_user_id',
             ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end'], 'sla_seconds' => max(5, min(1440, $slaMinutes)) * 60] + $params + $reliabilityParams
         );
@@ -323,7 +329,8 @@ final class TeamProfessionalReportService
                AND sc.opened_at IS NOT NULL
                AND sc.closed_at IS NOT NULL
                AND sc.closed_by_user_id IS NOT NULL
-               AND sc.closed_at BETWEEN :start_at AND :end_at' . $filter . $reliabilityFilter . '
+               AND sc.closed_at BETWEEN :start_at AND :end_at
+               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.opened_at') . $filter . $reliabilityFilter . '
              GROUP BY sc.closed_by_user_id',
             ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params + $reliabilityParams
         );
@@ -345,7 +352,9 @@ final class TeamProfessionalReportService
                AND c.status <> "closed"
                AND c.assigned_user_id IS NOT NULL
                AND sc.first_incoming_at IS NOT NULL
-               AND sc.first_response_at IS NULL' . $filter . '
+               AND sc.first_response_at IS NULL
+               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . '
+               AND ' . TenantLifecycleService::currentLiveSql('sc.tenant_id') . $filter . '
              GROUP BY c.assigned_user_id',
             ['tenant_id' => $tenantId, 'sla_seconds' => max(5, min(1440, $slaMinutes)) * 60] + $params
         );
@@ -611,7 +620,8 @@ final class TeamProfessionalReportService
              WHERE sc.tenant_id = :tenant_id AND sc.cycle_status = "closed"
                AND sc.opened_at IS NOT NULL AND sc.closed_at IS NOT NULL
                AND sc.closed_by_user_id IS NOT NULL
-               AND sc.closed_at BETWEEN :start_at AND :end_at' . $closedFilter . $closedReliability,
+               AND sc.closed_at BETWEEN :start_at AND :end_at
+               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.opened_at') . $closedFilter . $closedReliability,
             ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $closedParams + $closedReliabilityParams
         );
 
@@ -625,7 +635,8 @@ final class TeamProfessionalReportService
              WHERE sc.tenant_id = :tenant_id
                AND sc.first_incoming_at IS NOT NULL AND sc.first_response_at IS NOT NULL
                AND sc.first_response_user_id IS NOT NULL
-               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $slaFilter . $slaReliability,
+               AND sc.first_response_at BETWEEN :start_at AND :end_at
+               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $slaFilter . $slaReliability,
             ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end'], 'sla_seconds' => $slaMinutes * 60] + $slaParams + $slaReliabilityParams
         );
 
@@ -643,7 +654,9 @@ final class TeamProfessionalReportService
              FROM conversation_service_cycles sc
              INNER JOIN conversations c ON c.id = sc.conversation_id AND c.tenant_id = sc.tenant_id
              WHERE sc.tenant_id = :tenant_id AND sc.cycle_status = "active" AND c.status <> "closed"
-               AND sc.first_incoming_at IS NOT NULL AND sc.first_response_at IS NULL' . $waitingFilter,
+               AND sc.first_incoming_at IS NOT NULL AND sc.first_response_at IS NULL
+               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . '
+               AND ' . TenantLifecycleService::currentLiveSql('sc.tenant_id') . $waitingFilter,
             ['tenant_id' => $tenantId, 'sla_seconds' => $slaMinutes * 60] + $waitingParams
         );
 
@@ -705,7 +718,8 @@ final class TeamProfessionalReportService
                AND sc.first_incoming_at IS NOT NULL
                AND sc.first_response_at IS NOT NULL
                AND sc.first_response_user_id IS NOT NULL
-               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $measuredFilter . $measuredReliabilityFilter,
+               AND sc.first_response_at BETWEEN :start_at AND :end_at
+               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $measuredFilter . $measuredReliabilityFilter,
             ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $measuredParams + $measuredReliabilityParams
         );
 
@@ -724,7 +738,8 @@ final class TeamProfessionalReportService
                AND sc.cycle_status = "active"
                AND sc.first_incoming_at IS NOT NULL
                AND sc.first_response_at IS NULL
-               AND sc.first_incoming_at BETWEEN :start_at AND :end_at' . $pendingFilter . $pendingReliabilityFilter,
+               AND sc.first_incoming_at BETWEEN :start_at AND :end_at
+               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $pendingFilter . $pendingReliabilityFilter,
             ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $pendingParams + $pendingReliabilityParams
         );
 
@@ -763,7 +778,8 @@ final class TeamProfessionalReportService
                AND sc.first_incoming_at IS NOT NULL
                AND sc.first_response_at IS NOT NULL
                AND sc.first_response_user_id IS NOT NULL
-               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $filter . $reliabilityFilter . '
+               AND sc.first_response_at BETWEEN :start_at AND :end_at
+               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $filter . $reliabilityFilter . '
              ORDER BY sc.first_response_at DESC
              LIMIT ' . $limit,
             ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params + $reliabilityParams
@@ -813,7 +829,8 @@ final class TeamProfessionalReportService
                AND sc.first_incoming_at IS NOT NULL
                AND sc.first_response_at IS NOT NULL
                AND sc.first_response_user_id IS NOT NULL
-               AND sc.first_response_at BETWEEN :start_at AND :end_at' . $filter,
+               AND sc.first_response_at BETWEEN :start_at AND :end_at
+               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $filter,
             ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params
         );
 

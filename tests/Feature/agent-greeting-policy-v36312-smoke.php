@@ -67,7 +67,7 @@ $check(str_contains($model, 'Não use mensagem de boas-vindas de novo contato') 
 $check(str_contains($automation, 'hasPriorOutgoingMessage') && str_contains($automation, "empty(\$generationAgent['_is_opening_turn'])"), 'Automação preserva a detecção de abertura da IA e evita cache de respostas de abertura.');
 $check(str_contains($context, "['_is_opening_turn']") && str_contains($context, 'outgoing_messages'), 'Contexto da IA sabe quando é a primeira resposta da conversa.');
 $check(str_contains($migration, 'ai_greeting_mode') && str_contains($migration, "DEFAULT ''all_contacts''") && str_contains($migration, 'ai_greeting_use_contact_name'), 'Migration preserva instalações existentes e adiciona configuração por agente.');
-$check((str_contains($manifest, '"package_version": "36.31.2"') || str_contains($manifest, '"package_version": "36.31.3"')) && str_contains($manifest, '111_agent_greeting_policy.sql'), 'Manifesto mantém a política e migration de saudação.');
+$check((str_contains($manifest, '"package_version": "36.31.2"') || str_contains($manifest, '"package_version": "36.31.3"') || str_contains($manifest, '"package_version": "36.32.0"')) && str_contains($manifest, '111_agent_greeting_policy.sql'), 'Manifesto mantém a política e migration de saudação.');
 $check(str_contains($version, "RS Connect 36.31.2 — Saudação inteligente por contato") && str_contains($version, "REQUIRED_MIGRATION = '111_agent_greeting_policy.sql'"), 'Versão da aplicação preserva compatibilidade com a release 36.31.2.');
 
 if ($failures > 0) {
