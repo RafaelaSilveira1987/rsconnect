@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Core\Clock;
 use App\Core\Database;
 use DateTimeImmutable;
 use PDO;
@@ -32,20 +33,16 @@ final class TenantExecutiveReportService
             throw new \InvalidArgumentException('Empresa obrigatória para o relatório do cliente.');
         }
 
-        $date = $this->dateParams($filters);
+        $timezone = $this->tenantTimezone($tenantId);
+        $date = $this->dateParams($filters, $timezone);
+
+        // O cache report_daily_metrics v2 materializa dias em UTC. Enquanto a
+        // camada derivada não for migrada para o contrato de dia local por
+        // empresa, o painel executivo do tenant usa diretamente as tabelas
+        // operacionais para que 00:00–23:59 represente de fato o fuso exibido.
         $aggregateTotals = [];
-        $byDay = [];
-        if ($this->aggregation->isAvailable()) {
-            try {
-                $this->aggregation->ensureRange($tenantId, (string) $filters['start'], (string) $filters['end']);
-                $aggregateTotals = $this->aggregation->totals($tenantId, (string) $filters['start'], (string) $filters['end']);
-                $byDay = $this->aggregation->dailySeries($tenantId, (string) $filters['start'], (string) $filters['end']);
-                $this->warnings = array_merge($this->warnings, $this->aggregation->warnings());
-            } catch (Throwable $exception) {
-                error_log('[reports.client.aggregate] ' . preg_replace('/\s+/', ' ', $exception->getMessage()));
-                $this->warnings[] = 'A atualização dos dados diários encontrou uma inconsistência; o relatório usou dados operacionais.';
-            }
-        }
+        $series = $this->messageSeries($tenantId, $date, $timezone);
+        $byDay = $series['by_day'];
 
         $metrics = [
             // Conversas com movimento no período. Esta é a base executiva de
@@ -304,7 +301,7 @@ final class TenantExecutiveReportService
             ? round((int) $metrics['total_messages'] / (int) $metrics['active_conversations'], 1)
             : 0;
 
-        $previousDate = $this->previousDateParams($filters);
+        $previousDate = $this->previousDateParams($filters, $timezone);
         $previousServiceMetrics = $this->executivePolicy->operationalServiceMetrics(
             $tenantId,
             $previousDate['start'],
@@ -377,39 +374,8 @@ final class TenantExecutiveReportService
             'crm_won' => $this->percentChange((int) $metrics['crm_won'], (int) $previousMetrics['crm_won']),
         ];
 
-        if ($byDay === []) {
-            $byDay = $this->rows(
-                'SELECT DATE(sent_at) AS label, COUNT(*) AS total,
-                        SUM(direction = "incoming") AS incoming,
-                        SUM(direction = "outgoing") AS outgoing,
-                        SUM(direction = "outgoing" AND sender_type = "ai") AS ai,
-                        SUM(direction = "outgoing" AND sender_type = "user") AS human,
-                        SUM(direction = "outgoing" AND sender_type NOT IN ("ai","user")) AS system_messages
-                 FROM conversation_messages
-                 WHERE tenant_id = :tenant_id AND sent_at BETWEEN :start AND :end
-                 GROUP BY DATE(sent_at)
-                 ORDER BY label ASC',
-                ['tenant_id' => $tenantId] + $date
-            );
-        }
-
-        $byHour = $this->rows(
-            'SELECT HOUR(sent_at) AS label, COUNT(*) AS total
-             FROM conversation_messages
-             WHERE tenant_id = :tenant_id AND direction = "incoming" AND sent_at BETWEEN :start AND :end
-             GROUP BY HOUR(sent_at)
-             ORDER BY label ASC',
-            ['tenant_id' => $tenantId] + $date
-        );
-
-        $heatmap = $this->rows(
-            'SELECT WEEKDAY(sent_at) AS weekday_index, HOUR(sent_at) AS hour_index, COUNT(*) AS total
-             FROM conversation_messages
-             WHERE tenant_id = :tenant_id AND direction = "incoming" AND sent_at BETWEEN :start AND :end
-             GROUP BY WEEKDAY(sent_at), HOUR(sent_at)
-             ORDER BY weekday_index, hour_index',
-            ['tenant_id' => $tenantId] + $date
-        );
+        $byHour = $series['by_hour'];
+        $heatmap = $series['heatmap'];
 
         $crmByStage = $this->rows(
             'SELECT s.name AS label, s.color_key, COUNT(l.id) AS total, COALESCE(SUM(l.value),0) AS value
@@ -509,17 +475,24 @@ final class TenantExecutiveReportService
     }
 
 
-    private function previousDateParams(array $filters): array
+    private function previousDateParams(array $filters, string $timezone): array
     {
-        $start = new DateTimeImmutable((string) $filters['start']);
-        $end = new DateTimeImmutable((string) $filters['end']);
+        $timezone = Clock::safeTimezone($timezone);
+        $zone = new \DateTimeZone($timezone);
+        $start = new DateTimeImmutable((string) $filters['start'], $zone);
+        $end = new DateTimeImmutable((string) $filters['end'], $zone);
         $days = max(1, (int) $start->diff($end)->days + 1);
         $previousEnd = $start->modify('-1 day');
         $previousStart = $previousEnd->modify('-' . ($days - 1) . ' days');
+        $utc = Clock::localRangeToUtc(
+            $previousStart->format('Y-m-d'),
+            $previousEnd->format('Y-m-d'),
+            $timezone
+        );
 
         return [
-            'start' => $previousStart->format('Y-m-d 00:00:00'),
-            'end' => $previousEnd->format('Y-m-d 23:59:59'),
+            'start' => $utc['start'],
+            'end' => $utc['end'],
         ];
     }
 
@@ -642,11 +615,124 @@ final class TenantExecutiveReportService
         }
     }
 
-    private function dateParams(array $filters): array
+    private function tenantTimezone(int $tenantId): string
     {
+        $rows = $this->rows(
+            'SELECT COALESCE(NULLIF(os.business_timezone, ""), NULLIF(cas.timezone, ""), "America/Sao_Paulo") AS timezone
+             FROM tenants t
+             LEFT JOIN tenant_onboarding_settings os ON os.tenant_id = t.id
+             LEFT JOIN tenant_calendar_availability_settings cas ON cas.tenant_id = t.id
+             WHERE t.id = :tenant_id
+             LIMIT 1',
+            ['tenant_id' => $tenantId]
+        );
+
+        return Clock::safeTimezone((string) ($rows[0]['timezone'] ?? 'America/Sao_Paulo'));
+    }
+
+    private function dateParams(array $filters, string $timezone): array
+    {
+        $utc = Clock::localRangeToUtc(
+            (string) $filters['start'],
+            (string) $filters['end'],
+            $timezone
+        );
+
         return [
-            'start' => $filters['start'] . ' 00:00:00',
-            'end' => $filters['end'] . ' 23:59:59',
+            'start' => $utc['start'],
+            'end' => $utc['end'],
+        ];
+    }
+
+    /**
+     * Constrói séries de mensagens em horas UTC (no máximo 24 linhas por dia)
+     * e converte os baldes para o fuso do tenant em PHP. Evita depender das
+     * tabelas de timezone do MySQL e mantém dias/horas coerentes com o filtro.
+     *
+     * @return array{by_day:array<int,array<string,int|string>>,by_hour:array<int,array<string,int>>,heatmap:array<int,array<string,int>>}
+     */
+    private function messageSeries(int $tenantId, array $date, string $timezone): array
+    {
+        $rows = $this->rows(
+            'SELECT DATE_FORMAT(sent_at, "%Y-%m-%d %H:00:00") AS utc_hour,
+                    COUNT(*) AS total,
+                    SUM(direction = "incoming") AS incoming,
+                    SUM(direction = "outgoing") AS outgoing,
+                    SUM(direction = "outgoing" AND sender_type = "ai") AS ai,
+                    SUM(direction = "outgoing" AND sender_type = "user") AS human,
+                    SUM(direction = "outgoing" AND sender_type NOT IN ("ai","user")) AS system_messages
+             FROM conversation_messages
+             WHERE tenant_id = :tenant_id AND sent_at BETWEEN :start AND :end
+             GROUP BY DATE_FORMAT(sent_at, "%Y-%m-%d %H:00:00")
+             ORDER BY utc_hour ASC',
+            [
+                'tenant_id' => $tenantId,
+                'start' => (string) ($date['start'] ?? ''),
+                'end' => (string) ($date['end'] ?? ''),
+            ]
+        );
+
+        $timezone = Clock::safeTimezone($timezone);
+        $days = [];
+        $hours = [];
+        $heatmap = [];
+
+        foreach ($rows as $row) {
+            $utcHour = (string) ($row['utc_hour'] ?? '');
+            if ($utcHour === '') {
+                continue;
+            }
+            $localDay = Clock::utcToLocal($utcHour, $timezone, 'Y-m-d');
+            $localHour = (int) Clock::utcToLocal($utcHour, $timezone, 'G');
+            $weekday = (int) Clock::utcToLocal($utcHour, $timezone, 'N') - 1;
+
+            if (!isset($days[$localDay])) {
+                $days[$localDay] = [
+                    'label' => $localDay,
+                    'total' => 0,
+                    'incoming' => 0,
+                    'outgoing' => 0,
+                    'ai' => 0,
+                    'human' => 0,
+                    'system_messages' => 0,
+                ];
+            }
+            foreach (['total', 'incoming', 'outgoing', 'ai', 'human', 'system_messages'] as $metric) {
+                $days[$localDay][$metric] += (int) ($row[$metric] ?? 0);
+            }
+
+            $incoming = (int) ($row['incoming'] ?? 0);
+            if ($incoming > 0) {
+                $hours[$localHour] = ($hours[$localHour] ?? 0) + $incoming;
+                $key = $weekday . ':' . $localHour;
+                $heatmap[$key] = ($heatmap[$key] ?? 0) + $incoming;
+            }
+        }
+
+        ksort($days);
+        ksort($hours, SORT_NUMERIC);
+        $byHour = [];
+        foreach ($hours as $hour => $total) {
+            $byHour[] = ['label' => (int) $hour, 'total' => (int) $total];
+        }
+
+        $heatmapRows = [];
+        foreach ($heatmap as $key => $total) {
+            [$weekday, $hour] = array_map('intval', explode(':', $key, 2));
+            $heatmapRows[] = [
+                'weekday_index' => $weekday,
+                'hour_index' => $hour,
+                'total' => (int) $total,
+            ];
+        }
+        usort($heatmapRows, static fn (array $a, array $b): int =>
+            [$a['weekday_index'], $a['hour_index']] <=> [$b['weekday_index'], $b['hour_index']]
+        );
+
+        return [
+            'by_day' => array_values($days),
+            'by_hour' => $byHour,
+            'heatmap' => $heatmapRows,
         ];
     }
 

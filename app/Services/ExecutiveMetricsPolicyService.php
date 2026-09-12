@@ -47,7 +47,8 @@ final class ExecutiveMetricsPolicyService
                  FROM conversation_service_cycles sc
                  WHERE sc.first_incoming_at BETWEEN :start AND :end
                    AND sc.first_response_at IS NOT NULL
-                   AND sc.source NOT IN ("migration_snapshot", "migration_069_recovery")
+                   AND sc.first_response_user_id IS NOT NULL
+                   AND ' . self::operationalCycleSql('sc') . '
                    AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $scope
             );
             $statement->execute($params);

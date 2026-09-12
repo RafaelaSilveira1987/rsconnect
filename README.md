@@ -1,4 +1,13 @@
-# RS Connect 36.32.0
+# RS Connect 36.32.1
+
+## Hotfix de relatório e SLA humano — 36.32.1
+
+Correção da Fase A após homologação real no fim do dia: o relatório executivo do cliente agora interpreta o período no fuso configurado da empresa antes de consultar timestamps UTC. O mesmo pacote corrige a consistência entre **Tempo médio da 1ª resposta humana** e **SLA da 1ª resposta humana**, repara ciclos que possuíam horário sem usuário atribuído e adiciona proteção para a corrida entre o eco da Evolution e o envio humano pelo painel.
+
+- migration obrigatória: `113_human_first_response_report_consistency.sql`;
+- manifesto esperado após atualização: **120 migrations**;
+- a migration `112_tenant_lifecycle_go_live.sql` da Fase A continua obrigatória e preservada.
+
 
 ## Production Readiness: Go-Live — 36.32.0
 

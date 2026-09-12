@@ -163,8 +163,11 @@ final class AppVersionService
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.31.3 — Hotfix da saudação configurada';
     // Compatibilidade histórica: REQUIRED_MIGRATION = '111_agent_greeting_policy.sql';
     // RS Connect 36.32.0 — Production Readiness Fase A: ciclo operacional e Go-Live explícito.
-    public const PACKAGE_LABEL = 'RS Connect 36.32.0 — Production Readiness: Go-Live';
-    public const REQUIRED_MIGRATION = '112_tenant_lifecycle_go_live.sql';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.32.0 — Production Readiness: Go-Live';
+    // Compatibilidade histórica: REQUIRED_MIGRATION = '112_tenant_lifecycle_go_live.sql';
+    // RS Connect 36.32.1 — hotfix de fuso do relatório e consistência da primeira resposta humana/SLA.
+    public const PACKAGE_LABEL = 'RS Connect 36.32.1 — Hotfix de relatório e SLA humano';
+    public const REQUIRED_MIGRATION = '113_human_first_response_report_consistency.sql';
 
     private PDO $pdo;
 

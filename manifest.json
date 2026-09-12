@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.32.0",
-  "release_name": "Production Readiness: Go-Live",
+  "package_version": "36.32.1",
+  "release_name": "Hotfix de relatório e SLA humano",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -10,7 +10,7 @@
   },
   "database": {
     "driver": "mysql",
-    "required_migration": "112_tenant_lifecycle_go_live.sql",
+    "required_migration": "113_human_first_response_report_consistency.sql",
     "migration_runner": "php bin/migrate.php"
   },
   "install": {
@@ -19,11 +19,16 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.31.3",
-      "release_name": "Hotfix da saudação configurada",
-      "required_migration": "111_agent_greeting_policy.sql"
+      "package_version": "36.32.0",
+      "release_name": "Production Readiness: Go-Live",
+      "required_migration": "112_tenant_lifecycle_go_live.sql"
     },
     "historical_releases": [
+      {
+        "package_version": "36.31.3",
+        "release_name": "Hotfix da saudação configurada",
+        "required_migration": "111_agent_greeting_policy.sql"
+      },
       {
         "package_version": "36.31.2",
         "release_name": "Saudação inteligente por contato",
