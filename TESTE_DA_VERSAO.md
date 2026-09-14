@@ -1,3 +1,53 @@
+# TESTE DA VERSÃO — RS Connect 36.34.3
+
+## Hotfix H3 — expediente do onboarding interpretado corretamente
+
+### 1. Atualizar
+
+Não há migration nova. Depois de substituir os arquivos:
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php up
+php bin/migrate.php verify
+docker compose restart app
+```
+
+**Esperado:** manifesto com **123 migrations de subida** e nenhuma migration pendente.
+
+### 2. Conferir o JSON salvo
+
+```sql
+SELECT id, name, business_hours_enabled, business_timezone, business_hours_json
+FROM ai_agents
+WHERE tenant_id = SEU_TENANT_ID
+ORDER BY id;
+```
+
+O formato compacto abaixo é válido e não precisa ser convertido manualmente:
+
+```json
+{"days":["mon","tue","wed","thu","fri"],"start":"08:00","end":"18:00"}
+```
+
+### 3. Testar dentro do expediente
+
+Configure Seg–Sex, `08:00–18:00`, `America/Sao_Paulo`. Em uma segunda-feira entre 08:00 e 18:00, envie uma mensagem nova.
+
+**Esperado:** a mensagem entra normalmente e o agente **não** envia a mensagem configurada de fora do horário.
+
+### 4. Testar fora do expediente
+
+Após 18:00, ou usando temporariamente uma faixa que exclua o horário atual, envie outra mensagem nova.
+
+**Esperado:** a política retorna fora do expediente e usa a mensagem configurada para esse cenário.
+
+### 5. Retomar o SLA
+
+Volte à meta temporária de 5 min / alerta 80% e crie uma conversa nova para os cenários normal → warning → breached.
+
+---
+
 # TESTE DA VERSÃO — RS Connect 36.34.2
 
 ## Hotfix H2 — recebimento Evolution bloqueado pelo trigger de SLA

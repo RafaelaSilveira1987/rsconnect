@@ -1,4 +1,9 @@
-# RS Connect 36.34.2
+# RS Connect 36.34.3
+
+## Hotfix do horário de atendimento
+
+A política operacional do agente agora entende o mesmo formato compacto de expediente salvo pelo onboarding (`days/start/end`) e mantém compatibilidade com o formato detalhado por dia. Não há migration nova; permanece obrigatória `116_sla_trigger_mysql_compat.sql`.
+
 
 > **Hotfix 36.34.2:** corrige o trigger de SLA da migration 115 que fazia o MySQL rejeitar `MESSAGES_UPSERT` com `SQLSTATE[HY000]: 1221 Incorrect usage of UPDATE and ORDER BY`. A correção está na migration `116_sla_trigger_mysql_compat.sql` e restaura o recebimento de mensagens sem remover a política de SLA.
 

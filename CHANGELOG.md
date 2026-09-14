@@ -1,5 +1,24 @@
 # Changelog — RS Connect
 
+## 36.34.3 — Hotfix do horário de atendimento
+
+### Corrigido
+- a política operacional do agente passa a aceitar tanto o formato compacto salvo pelo onboarding (`days/start/end`) quanto o formato detalhado por dia usado na tela do agente;
+- segunda a sexta em `08:00–18:00` deixam de ser interpretadas incorretamente como `day_closed`;
+- a mensagem de fora do horário não é mais disparada dentro do expediente por incompatibilidade de formato;
+- `nextOpeningAt()` usa a mesma normalização, preservando a retomada automática pós-horário;
+- configurações antigas e novas permanecem compatíveis, sem conversão destrutiva do JSON salvo.
+
+### Banco de dados
+- **nenhuma migration nova**;
+- permanece obrigatória `116_sla_trigger_mysql_compat.sql`;
+- manifesto esperado: **123 migrations de subida**.
+
+### Homologação
+- com `America/Sao_Paulo`, Seg–Sex e `08:00–18:00`, uma mensagem na segunda às 15:59 deve ser considerada dentro do expediente;
+- uma mensagem após 18:00 deve continuar usando a resposta fora do horário;
+- depois retomar os cenários de SLA da Fase C com uma conversa nova.
+
 ## 36.34.2 — Hotfix do recebimento Evolution e trigger de SLA
 
 ### Corrigido

@@ -179,7 +179,9 @@ final class AppVersionService
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.34.1 — Hotfix do salvamento das regras de atendimento';
     // Compatibilidade histórica: REQUIRED_MIGRATION = '115_sla_operational_policy.sql';
     // RS Connect 36.34.2 — hotfix do trigger de SLA que bloqueava MESSAGES_UPSERT no MySQL.
-    public const PACKAGE_LABEL = 'RS Connect 36.34.2 — Hotfix do recebimento Evolution e trigger de SLA';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.34.2 — Hotfix do recebimento Evolution e trigger de SLA';
+    // RS Connect 36.34.3 — hotfix da leitura do expediente compacto salvo pelo onboarding.
+    public const PACKAGE_LABEL = 'RS Connect 36.34.3 — Hotfix do horário de atendimento';
     public const REQUIRED_MIGRATION = '116_sla_trigger_mysql_compat.sql';
 
     private PDO $pdo;
