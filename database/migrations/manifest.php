@@ -135,5 +135,6 @@ return [
         ['sequence' => 120, 'file' => '113_human_first_response_report_consistency.sql'],
         ['sequence' => 121, 'file' => '114_evolution_reconciliation_observability.sql'],
         ['sequence' => 122, 'file' => '115_sla_operational_policy.sql'],
+        ['sequence' => 123, 'file' => '116_sla_trigger_mysql_compat.sql'],
     ],
 ];

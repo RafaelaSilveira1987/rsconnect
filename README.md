@@ -1,3 +1,18 @@
+# RS Connect 36.34.2
+
+> **Hotfix 36.34.2:** corrige o trigger de SLA da migration 115 que fazia o MySQL rejeitar `MESSAGES_UPSERT` com `SQLSTATE[HY000]: 1221 Incorrect usage of UPDATE and ORDER BY`. A correção está na migration `116_sla_trigger_mysql_compat.sql` e restaura o recebimento de mensagens sem remover a política de SLA.
+
+## Atualização rápida
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php up
+php bin/migrate.php verify
+docker compose restart app
+```
+
+Esperado: **123 migrations de subida** e execução de `116_sla_trigger_mysql_compat.sql`. Depois envie uma mensagem nova pelo WhatsApp e confirme a persistência em `conversation_messages`.
+
 # RS Connect 36.34.1
 
 > **Hotfix 36.34.1:** corrige o salvamento das Regras de atendimento quando o onboarding reaplica `handoff_action` ao agente. Não há migration nova; permanece `115_sla_operational_policy.sql`.

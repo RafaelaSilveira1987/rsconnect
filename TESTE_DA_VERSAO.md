@@ -1,3 +1,71 @@
+# TESTE DA VERSÃO — RS Connect 36.34.2
+
+## Hotfix H2 — recebimento Evolution bloqueado pelo trigger de SLA
+
+### 1. Aplicar a correção
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php up
+php bin/migrate.php verify
+docker compose restart app
+```
+
+**Esperado:** manifesto com **123 migrations de subida** e execução de `116_sla_trigger_mysql_compat.sql`.
+
+### 2. Confirmar o trigger corrigido
+
+```sql
+SHOW CREATE TRIGGER trg_rs_messages_after_insert_metrics;
+```
+
+**Esperado:** o trigger seleciona o ciclo ativo com `SELECT ... ORDER BY ... LIMIT 1` e depois faz `UPDATE conversation_service_cycles ... WHERE id = active_cycle_id`. Não deve existir `UPDATE ... LEFT JOIN ... ORDER BY ... LIMIT`.
+
+### 3. Enviar uma mensagem nova pelo WhatsApp
+
+Envie, por exemplo:
+
+```text
+RS TESTE 36.34.2
+```
+
+Depois confira:
+
+```sql
+SELECT id, conversation_id, evolution_message_id, direction, sender_type, content, sent_at
+FROM conversation_messages
+ORDER BY id DESC
+LIMIT 10;
+```
+
+**Esperado:** a mensagem nova aparece uma única vez.
+
+### 4. Conferir o ledger do webhook
+
+```sql
+SELECT id, status, attempts, duplicate_count, response_code, last_error, first_received_at, last_received_at
+FROM webhook_security_events
+WHERE source = 'evolution'
+ORDER BY id DESC
+LIMIT 20;
+```
+
+**Esperado para o novo `MESSAGES_UPSERT`:** `status = processed`, `response_code = 200` e `last_error = NULL`. Eventos antigos que falharam antes da migration podem permanecer no histórico como evidência.
+
+### 5. Confirmar que o SLA ainda registra a entrada
+
+```sql
+SELECT id, conversation_id, first_incoming_at, first_response_at, first_response_user_id,
+       sla_target_minutes, sla_warning_percent, sla_count_outside_business_hours
+FROM conversation_service_cycles
+ORDER BY id DESC
+LIMIT 10;
+```
+
+**Esperado:** o ciclo da conversa nova possui `first_incoming_at` e snapshot de SLA. Depois disso, retome os cenários da Fase C abaixo.
+
+---
+
 # TESTE DA VERSÃO — RS Connect 36.34.1
 
 ## Hotfix — salvamento das Regras de atendimento

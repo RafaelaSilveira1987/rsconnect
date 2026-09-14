@@ -1,5 +1,25 @@
 # Changelog — RS Connect
 
+## 36.34.2 — Hotfix do recebimento Evolution e trigger de SLA
+
+### Corrigido
+- corrige o trigger `trg_rs_messages_after_insert_metrics` criado na migration 115, que executava `UPDATE ... LEFT JOIN ... ORDER BY ... LIMIT` e causava `SQLSTATE[HY000] / 1221 Incorrect usage of UPDATE and ORDER BY` no MySQL;
+- mensagens `MESSAGES_UPSERT` voltam a ser persistidas em `conversation_messages`;
+- o snapshot de SLA continua sendo atualizado no ciclo ativo mais recente, mas agora o ciclo é selecionado primeiro e atualizado por `id`, sem `ORDER BY/LIMIT` no `UPDATE`;
+- a primeira resposta humana continua sendo registrada no ciclo ativo sem alterar a semântica da Fase C;
+- os retries da Evolution deixam de retornar HTTP 500 por causa do trigger de SLA.
+
+### Banco de dados
+- nova migration `116_sla_trigger_mysql_compat.sql`;
+- manifesto esperado: **123 migrations de subida**;
+- a migration é corretiva e apenas recria o trigger de métricas/SLA; não altera nem apaga mensagens existentes.
+
+### Homologação
+- confirmar que `MESSAGES_UPSERT` novo retorna HTTP 200;
+- confirmar que a nova mensagem aparece em `conversation_messages`;
+- confirmar que `conversation_service_cycles.first_incoming_at` e o snapshot de SLA continuam sendo atualizados;
+- depois retomar os cenários A–E da Fase C.
+
 ## 36.34.1 — Hotfix do salvamento das regras de atendimento
 
 ### Corrigido

@@ -1,3 +1,9 @@
+# Rollback — RS Connect 36.34.2
+
+A migration `116_sla_trigger_mysql_compat.sql` corrige um trigger que bloqueia o recebimento de mensagens no MySQL. **Não é recomendado remover a migration 116 enquanto a Fase C estiver ativa.** Se for necessário voltar os arquivos para 36.34.1, mantenha a migration 116 aplicada no banco para não reintroduzir o erro 1221.
+
+---
+
 # ROLLBACK — RS Connect 36.34.1
 
 A 36.34.1 não cria migration nova. Para rollback de aplicação, restaure os arquivos da 36.34.0 e reinicie o container/app.

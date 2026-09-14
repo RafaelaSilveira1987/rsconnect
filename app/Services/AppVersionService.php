@@ -176,8 +176,11 @@ final class AppVersionService
     // RS Connect 36.34.0 — Production Readiness Fase C: SLA operacional com alerta preventivo e relógio de expediente.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.34.0 — Production Readiness: SLA operacional';
     // RS Connect 36.34.1 — hotfix do salvamento das regras de atendimento (handoff_action).
-    public const PACKAGE_LABEL = 'RS Connect 36.34.1 — Hotfix do salvamento das regras de atendimento';
-    public const REQUIRED_MIGRATION = '115_sla_operational_policy.sql';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.34.1 — Hotfix do salvamento das regras de atendimento';
+    // Compatibilidade histórica: REQUIRED_MIGRATION = '115_sla_operational_policy.sql';
+    // RS Connect 36.34.2 — hotfix do trigger de SLA que bloqueava MESSAGES_UPSERT no MySQL.
+    public const PACKAGE_LABEL = 'RS Connect 36.34.2 — Hotfix do recebimento Evolution e trigger de SLA';
+    public const REQUIRED_MIGRATION = '116_sla_trigger_mysql_compat.sql';
 
     private PDO $pdo;
 
