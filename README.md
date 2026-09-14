@@ -1,3 +1,21 @@
+# RS Connect 36.34.0
+
+## Production Readiness — Fase C: SLA operacional
+
+A Fase B (Evolution Reliability) foi homologada em ambiente real. Esta versão transforma o SLA da primeira resposta humana em uma política operacional persistente, visível na caixa de entrada e coerente com o expediente da empresa.
+
+- migration obrigatória: `115_sla_operational_policy.sql`;
+- manifesto esperado: **122 migrations de subida**;
+- meta de primeira resposta humana configurável por empresa;
+- alerta preventivo configurável (padrão **80%** da meta);
+- estado **SLA em risco** antes do limite e **SLA violado** após 100%;
+- relógio pode pausar fora do expediente ou contar continuamente;
+- política é congelada no ciclo de atendimento para preservar a leitura histórica;
+- caixa de entrada atualiza o risco automaticamente e avisa o supervisor quando o estado muda;
+- relatórios executivo e de equipe passam a usar o mesmo relógio operacional do SLA;
+- IA não encerra o SLA humano: somente uma resposta atribuída a uma pessoa da equipe encerra o relógio;
+- consulte `TESTE_DA_VERSAO.md` antes de avançar para a Fase D.
+
 # RS Connect 36.33.0
 
 ## Production Readiness — Fase B: Evolution Reliability

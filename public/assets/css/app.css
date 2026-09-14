@@ -16487,3 +16487,98 @@ summary {
     font-size: .72rem;
     line-height: 1.35;
 }
+
+/* RS Connect 36.34.0 — SLA operacional em tempo real */
+.onboarding-sla-policy {
+  margin: 4px 0 2px;
+  padding: 18px;
+  border: 1px solid rgba(180, 83, 9, .18);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, .055), rgba(20, 100, 152, .035));
+}
+.onboarding-sla-policy .section-heading { margin-bottom: 14px; }
+.onboarding-sla-policy .section-heading h3 { margin: 3px 0 2px; font-size: 1rem; }
+.onboarding-sla-policy .section-heading p { margin: 0; color: var(--rs-muted); font-size: .78rem; line-height: 1.5; }
+.onboarding-sla-policy .sla-clock-toggle { align-content: start; }
+.onboarding-sla-policy .checkbox-control { display: flex; align-items: flex-start; gap: 9px; min-height: 40px; }
+.onboarding-sla-policy .checkbox-control input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--rs-teal); }
+
+.conversation-sla-risk-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid rgba(180, 83, 9, .22);
+  border-radius: 999px;
+  color: #92400e;
+  background: #fff7ed;
+  font-size: .68rem;
+  font-weight: 800;
+}
+.conversation-sla-risk-counter > span {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: #fff;
+  background: #d97706;
+  font-size: .64rem;
+}
+.conversation-sla-risk-counter small { color: inherit; font-size: .62rem; }
+.conversation-list-row.has-sla-warning { box-shadow: inset 3px 0 0 #d97706; }
+.conversation-list-row.has-sla-breached { box-shadow: inset 3px 0 0 var(--rs-danger); }
+.conversation-queue-state.is-sla-warning,
+.conversation-queue-state.is-sla-breached {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  margin-top: 5px;
+  padding: 5px 8px;
+  border-radius: 10px;
+  line-height: 1.12;
+}
+.conversation-queue-state.is-sla-warning { color: #92400e; background: #fff7ed; border: 1px solid #fed7aa; }
+.conversation-queue-state.is-sla-breached { color: #991b1b; background: #fff1f2; border: 1px solid #fecdd3; }
+.conversation-queue-state.is-sla-warning small,
+.conversation-queue-state.is-sla-breached small { display: block; margin-top: 2px; color: inherit; opacity: .75; font-size: .62rem; }
+.sla-alert-symbol {
+  display: grid;
+  place-items: center;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: #fff;
+  background: currentColor;
+  font-size: 0;
+}
+.sla-alert-symbol::after { content: "!"; color: #fff; font-size: .66rem; font-weight: 900; }
+.conversation-sla-banner {
+  display: grid;
+  gap: 8px;
+  margin: 0 18px 12px;
+  padding: 11px 13px;
+  border: 1px solid #dbe5ec;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+.conversation-sla-banner[hidden] { display: none !important; }
+.conversation-sla-banner h3 { margin: 0; font-size: .84rem; }
+.conversation-sla-banner p { margin: 0; color: var(--rs-muted); font-size: .7rem; line-height: 1.4; }
+.conversation-sla-banner.is-warning { border-color: #fed7aa; background: #fff7ed; }
+.conversation-sla-banner.is-warning h3 { color: #92400e; }
+.conversation-sla-banner.is-breached { border-color: #fecdd3; background: #fff1f2; }
+.conversation-sla-banner.is-breached h3 { color: #991b1b; }
+.conversation-sla-meter { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 10px; }
+.conversation-sla-meter > span { display: block; height: 7px; overflow: hidden; border-radius: 999px; background: rgba(100,116,139,.16); }
+.conversation-sla-meter i { display: block; height: 100%; border-radius: inherit; background: var(--rs-teal); transition: width .3s ease; }
+.conversation-sla-banner.is-warning .conversation-sla-meter i { background: #d97706; }
+.conversation-sla-banner.is-breached .conversation-sla-meter i { background: var(--rs-danger); }
+.conversation-sla-meter strong { color: var(--rs-muted); font-size: .66rem; white-space: nowrap; }
+@media (max-width: 720px) {
+  .onboarding-sla-policy { padding: 14px; }
+  .conversation-sla-banner { margin-inline: 10px; }
+}

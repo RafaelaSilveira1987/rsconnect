@@ -29,21 +29,18 @@ final class ExecutiveMetricsPolicyService
      */
     public function operationalFirstResponses(?int $tenantId, string $start, string $end): array
     {
-        $scope = $tenantId !== null && $tenantId > 0 ? ' AND tenant_id = :tenant_id' : '';
-        $params = [
-            'start' => $start,
-            'end' => $end,
-        ];
+        $scope = $tenantId !== null && $tenantId > 0 ? ' AND sc.tenant_id = :tenant_id' : '';
+        $params = ['start' => $start, 'end' => $end];
         if ($scope !== '') {
             $params['tenant_id'] = $tenantId;
         }
 
         try {
             $statement = $this->pdo->prepare(
-                'SELECT COUNT(*) AS measured,
-                        COALESCE(ROUND(AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, first_incoming_at, first_response_at)))), 0) AS average_seconds,
-                        COALESCE(MIN(GREATEST(0, TIMESTAMPDIFF(SECOND, first_incoming_at, first_response_at))), 0) AS min_seconds,
-                        COALESCE(MAX(GREATEST(0, TIMESTAMPDIFF(SECOND, first_incoming_at, first_response_at))), 0) AS max_seconds
+                'SELECT sc.tenant_id, sc.first_incoming_at, sc.first_response_at,
+                        sc.sla_target_minutes, sc.sla_warning_percent,
+                        sc.sla_count_outside_business_hours, sc.sla_timezone,
+                        sc.sla_business_hours_json
                  FROM conversation_service_cycles sc
                  WHERE sc.first_incoming_at BETWEEN :start AND :end
                    AND sc.first_response_at IS NOT NULL
@@ -52,22 +49,34 @@ final class ExecutiveMetricsPolicyService
                    AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $scope
             );
             $statement->execute($params);
-            $row = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
-
+            $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+            $clock = new SlaPolicyService($this->pdo);
+            $seconds = [];
+            foreach ($rows as $row) {
+                $rowTenant = (int) ($row['tenant_id'] ?? 0);
+                if ($rowTenant < 1) {
+                    continue;
+                }
+                $policy = $clock->policyForCycle($rowTenant, $row);
+                $seconds[] = $clock->elapsedSeconds(
+                    $rowTenant,
+                    (string) ($row['first_incoming_at'] ?? ''),
+                    (string) ($row['first_response_at'] ?? ''),
+                    $policy
+                );
+            }
+            if ($seconds === []) {
+                return ['count' => 0, 'average_seconds' => 0, 'min_seconds' => 0, 'max_seconds' => 0];
+            }
             return [
-                'count' => (int) ($row['measured'] ?? 0),
-                'average_seconds' => (int) ($row['average_seconds'] ?? 0),
-                'min_seconds' => (int) ($row['min_seconds'] ?? 0),
-                'max_seconds' => (int) ($row['max_seconds'] ?? 0),
+                'count' => count($seconds),
+                'average_seconds' => (int) round(array_sum($seconds) / count($seconds)),
+                'min_seconds' => (int) min($seconds),
+                'max_seconds' => (int) max($seconds),
             ];
         } catch (Throwable $exception) {
             error_log('[reports.executive.consistency] ' . preg_replace('/\s+/', ' ', $exception->getMessage()));
-            return [
-                'count' => 0,
-                'average_seconds' => 0,
-                'min_seconds' => 0,
-                'max_seconds' => 0,
-            ];
+            return ['count' => 0, 'average_seconds' => 0, 'min_seconds' => 0, 'max_seconds' => 0];
         }
     }
 
@@ -101,17 +110,11 @@ final class ExecutiveMetricsPolicyService
         ];
 
         $closedRow = [];
-        $slaRow = [];
-        $waitingRow = [];
-
-        // Cada bloco é isolado. Uma falha em duração ou espera não deve zerar
-        // o SLA já calculado (e vice-versa).
         try {
             $closedParams = ['start' => $start, 'end' => $end];
             if ($scope !== '') {
                 $closedParams['tenant_id'] = $tenantId;
             }
-
             $closed = $this->pdo->prepare(
                 'SELECT COUNT(*) AS closed_cycles,
                         COALESCE(ROUND(AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.opened_at, sc.closed_at)))), 0) AS avg_service_duration_seconds,
@@ -131,23 +134,20 @@ final class ExecutiveMetricsPolicyService
             error_log('[reports.executive.service-cycle.closed] ' . preg_replace('/\s+/', ' ', $exception->getMessage()));
         }
 
+        $clock = new SlaPolicyService($this->pdo);
+        $slaMeasured = 0;
+        $slaMet = 0;
+        $slaBreached = 0;
         try {
-            // PDO MySQL roda com ATTR_EMULATE_PREPARES=false. Por isso cada
-            // ocorrência precisa de um placeholder nomeado exclusivo.
-            $slaParams = [
-                'start' => $start,
-                'end' => $end,
-                'sla_met_seconds' => $slaSeconds,
-                'sla_breached_seconds' => $slaSeconds,
-            ];
+            $slaParams = ['start' => $start, 'end' => $end];
             if ($scope !== '') {
                 $slaParams['tenant_id'] = $tenantId;
             }
-
             $sla = $this->pdo->prepare(
-                'SELECT COUNT(*) AS sla_measured,
-                        COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at)) <= :sla_met_seconds),0) AS sla_met,
-                        COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at)) > :sla_breached_seconds),0) AS sla_breached
+                'SELECT sc.tenant_id, sc.first_incoming_at, sc.first_response_at,
+                        sc.sla_target_minutes, sc.sla_warning_percent,
+                        sc.sla_count_outside_business_hours, sc.sla_timezone,
+                        sc.sla_business_hours_json
                  FROM conversation_service_cycles sc
                  WHERE sc.first_incoming_at IS NOT NULL
                    AND sc.first_response_at IS NOT NULL
@@ -157,22 +157,44 @@ final class ExecutiveMetricsPolicyService
                    AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $scope
             );
             $sla->execute($slaParams);
-            $slaRow = $sla->fetch(PDO::FETCH_ASSOC) ?: [];
+            foreach ($sla->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $rowTenant = (int) ($row['tenant_id'] ?? 0);
+                if ($rowTenant < 1) {
+                    continue;
+                }
+                $policy = $clock->policyForCycle($rowTenant, $row);
+                // O filtro do relatório continua podendo simular outra meta;
+                // o relógio (expediente/fuso) permanece o snapshot do ciclo.
+                $policy['target_minutes'] = $slaMinutes;
+                $elapsed = $clock->elapsedSeconds(
+                    $rowTenant,
+                    (string) ($row['first_incoming_at'] ?? ''),
+                    (string) ($row['first_response_at'] ?? ''),
+                    $policy
+                );
+                $slaMeasured++;
+                if ($elapsed <= $slaSeconds) {
+                    $slaMet++;
+                } else {
+                    $slaBreached++;
+                }
+            }
         } catch (Throwable $exception) {
             error_log('[reports.executive.service-cycle.sla] ' . preg_replace('/\s+/', ' ', $exception->getMessage()));
         }
 
+        $waitingSeconds = [];
+        $waitingOver = 0;
         try {
-            $waitingParams = ['sla_seconds' => $slaSeconds];
+            $waitingParams = [];
             if ($scope !== '') {
                 $waitingParams['tenant_id'] = $tenantId;
             }
-
             $waiting = $this->pdo->prepare(
-                'SELECT COUNT(*) AS waiting_now,
-                        COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, UTC_TIMESTAMP())) > :sla_seconds),0) AS waiting_over_sla,
-                        COALESCE(ROUND(AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, UTC_TIMESTAMP())))),0) AS avg_current_wait_seconds,
-                        COALESCE(MAX(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, UTC_TIMESTAMP()))),0) AS max_current_wait_seconds
+                'SELECT sc.tenant_id, sc.first_incoming_at,
+                        sc.sla_target_minutes, sc.sla_warning_percent,
+                        sc.sla_count_outside_business_hours, sc.sla_timezone,
+                        sc.sla_business_hours_json
                  FROM conversation_service_cycles sc
                  INNER JOIN conversations c ON c.id = sc.conversation_id AND c.tenant_id = sc.tenant_id
                  WHERE sc.cycle_status = "active"
@@ -183,28 +205,39 @@ final class ExecutiveMetricsPolicyService
                    AND ' . TenantLifecycleService::currentLiveSql('sc.tenant_id') . $scope
             );
             $waiting->execute($waitingParams);
-            $waitingRow = $waiting->fetch(PDO::FETCH_ASSOC) ?: [];
+            $now = gmdate('Y-m-d H:i:s');
+            foreach ($waiting->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $rowTenant = (int) ($row['tenant_id'] ?? 0);
+                if ($rowTenant < 1) {
+                    continue;
+                }
+                $policy = $clock->policyForCycle($rowTenant, $row);
+                $policy['target_minutes'] = $slaMinutes;
+                $elapsed = $clock->elapsedSeconds($rowTenant, (string) ($row['first_incoming_at'] ?? ''), $now, $policy);
+                $waitingSeconds[] = $elapsed;
+                if ($elapsed > $slaSeconds) {
+                    $waitingOver++;
+                }
+            }
         } catch (Throwable $exception) {
             error_log('[reports.executive.service-cycle.waiting] ' . preg_replace('/\s+/', ' ', $exception->getMessage()));
         }
 
-        $measured = (int) ($slaRow['sla_measured'] ?? 0);
-        $met = (int) ($slaRow['sla_met'] ?? 0);
-
+        $waitingCount = count($waitingSeconds);
         return [
             'closed_cycles' => (int) ($closedRow['closed_cycles'] ?? $empty['closed_cycles']),
             'avg_service_duration_seconds' => (int) ($closedRow['avg_service_duration_seconds'] ?? $empty['avg_service_duration_seconds']),
             'min_service_duration_seconds' => (int) ($closedRow['min_service_duration_seconds'] ?? $empty['min_service_duration_seconds']),
             'max_service_duration_seconds' => (int) ($closedRow['max_service_duration_seconds'] ?? $empty['max_service_duration_seconds']),
             'sla_target_minutes' => $slaMinutes,
-            'sla_measured' => $measured,
-            'sla_met' => $met,
-            'sla_breached' => (int) ($slaRow['sla_breached'] ?? $empty['sla_breached']),
-            'sla_compliance' => $measured > 0 ? round(($met / $measured) * 100, 1) : 0.0,
-            'waiting_now' => (int) ($waitingRow['waiting_now'] ?? $empty['waiting_now']),
-            'waiting_over_sla' => (int) ($waitingRow['waiting_over_sla'] ?? $empty['waiting_over_sla']),
-            'avg_current_wait_seconds' => (int) ($waitingRow['avg_current_wait_seconds'] ?? $empty['avg_current_wait_seconds']),
-            'max_current_wait_seconds' => (int) ($waitingRow['max_current_wait_seconds'] ?? $empty['max_current_wait_seconds']),
+            'sla_measured' => $slaMeasured,
+            'sla_met' => $slaMet,
+            'sla_breached' => $slaBreached,
+            'sla_compliance' => $slaMeasured > 0 ? round(($slaMet / $slaMeasured) * 100, 1) : 0.0,
+            'waiting_now' => $waitingCount,
+            'waiting_over_sla' => $waitingOver,
+            'avg_current_wait_seconds' => $waitingCount > 0 ? (int) round(array_sum($waitingSeconds) / $waitingCount) : 0,
+            'max_current_wait_seconds' => $waitingCount > 0 ? (int) max($waitingSeconds) : 0,
         ];
     }
 

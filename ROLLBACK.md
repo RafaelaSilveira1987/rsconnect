@@ -1,40 +1,52 @@
-# ROLLBACK — RS Connect 36.33.0
+# ROLLBACK — RS Connect 36.34.0
 
 ## Quando usar
-Use este procedimento se a Fase B causar regressão no gerenciamento das conexões WhatsApp.
 
-## Rollback recomendado
-1. faça backup do banco atual;
-2. restaure os arquivos da **36.32.2**;
-3. reinicie a aplicação:
+Use rollback se a Fase C apresentar regressão operacional que impeça a continuidade do atendimento. Prefira corrigir a `36.34.x` quando o problema estiver restrito ao SLA, pois a migration é aditiva.
+
+## Antes de voltar
+
+1. faça backup do banco;
+2. registre o erro e horário;
+3. preserve logs do container `app`;
+4. confirme que a Evolution continua saudável;
+5. tenha o ZIP homologado `36.33.0` disponível.
+
+## Retorno de código
+
+Restaure os arquivos da `36.33.0` e reinicie a aplicação:
 
 ```bash
 docker compose restart app
 ```
 
-4. valide login, WhatsApp, IA, atendimento humano, agenda, Go-Live e relatórios.
+Depois valide WhatsApp, Conversas e Evolution Reliability.
 
 ## Banco de dados
-A migration `114_evolution_reconciliation_observability.sql` é aditiva. Em rollback de código, **não é necessário remover**:
-- `remote_connection_state`;
-- `reconciliation_status`;
-- `reconciliation_reason`;
-- `last_reconciled_at`;
-- `reconciliation_failures`;
-- `evolution_reconciliation_runs`.
 
-A 36.32.2 ignora esses campos/tabela. Preservá-los mantém o histórico para uma nova tentativa de atualização.
+**Não remova a migration 115 do histórico e não apague manualmente `tenant_sla_settings`.**
 
-Também não reverta as migrations 112 e 113 já homologadas.
+A migration `115_sla_operational_policy.sql` é aditiva. A `36.33.0` ignora os novos campos e a tabela, portanto eles podem permanecer até o hotfix ser aplicado. O trigger de métricas continua compatível com os campos antigos e apenas acrescenta snapshot do SLA.
 
-## Validação pós-rollback
-- [ ] conexão WhatsApp aparece no painel;
-- [ ] mensagens entram e saem;
-- [ ] IA responde conforme configuração;
-- [ ] atendimento humano funciona;
-- [ ] relatório mantém SLA homologado na Fase A;
-- [ ] Go-Live continua `LIVE` quando aplicável;
-- [ ] nenhuma conversa/contato foi removido.
+Não execute `DROP COLUMN` ou `DROP TABLE` em produção como rollback emergencial.
 
-## Compatibilidade histórica da Fase A
-**Não remova a migration 112** durante rollback. Se for necessária contingência mais ampla, a versão **36.31.3** pode ser restaurada preservando as migrations aditivas no banco, conforme o procedimento histórico já homologado.
+## Retorno para 36.34.x
+
+Quando a correção estiver pronta:
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php up
+php bin/migrate.php verify
+docker compose restart app
+```
+
+A migration 115 já aplicada deve ser reconhecida como concluída e não duplicada.
+
+## Validação mínima após rollback
+
+- mensagens entram e saem pelo WhatsApp;
+- atendimento humano funciona;
+- reconciliação Evolution permanece `healthy`;
+- nenhuma conversa ou mensagem foi duplicada;
+- relatórios da 36.33.0 continuam acessíveis.

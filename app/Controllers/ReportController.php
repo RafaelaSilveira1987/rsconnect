@@ -13,6 +13,7 @@ use App\Services\ExecutiveReportPdfService;
 use App\Services\TenantExecutiveReportService;
 use App\Services\TeamProfessionalReportService;
 use App\Services\TeamProfessionalReportPdfService;
+use App\Services\SlaPolicyService;
 use PDO;
 
 final class ReportController
@@ -413,11 +414,12 @@ final class ReportController
     {
         $start = trim((string) ($_GET['start'] ?? date('Y-m-d', strtotime('-29 days'))));
         $end = trim((string) ($_GET['end'] ?? date('Y-m-d')));
+        $tenantId = Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId();
         return [
             'start' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) ? $start : date('Y-m-d', strtotime('-29 days')),
             'end' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $end) ? $end : date('Y-m-d'),
-            'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
-            'sla_minutes' => max(5, min(1440, (int) ($_GET['sla_minutes'] ?? 30))),
+            'tenant_id' => $tenantId,
+            'sla_minutes' => $this->resolvedSlaMinutes($tenantId),
         ];
     }
 
@@ -438,14 +440,32 @@ final class ReportController
             $start = $endDate->modify('-365 days')->format('Y-m-d');
         }
 
+        $tenantId = Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId();
         return [
             'start' => $start,
             'end' => $end,
-            'tenant_id' => Auth::isSuperAdmin() ? (int) ($_GET['tenant_id'] ?? 0) : (int) Auth::tenantId(),
+            'tenant_id' => $tenantId,
             'user_id' => (int) ($_GET['user_id'] ?? 0),
             'operational_only' => filter_var($_GET['operational_only'] ?? false, FILTER_VALIDATE_BOOLEAN) ? 1 : 0,
-            'sla_minutes' => max(5, min(1440, (int) ($_GET['sla_minutes'] ?? 30))),
+            'sla_minutes' => $this->resolvedSlaMinutes($tenantId),
         ];
+    }
+
+
+    private function resolvedSlaMinutes(int $tenantId): int
+    {
+        if (isset($_GET['sla_minutes']) && trim((string) $_GET['sla_minutes']) !== '') {
+            return max(5, min(1440, (int) $_GET['sla_minutes']));
+        }
+        if ($tenantId > 0) {
+            try {
+                $settings = (new SlaPolicyService())->settings($tenantId);
+                return max(5, min(1440, (int) ($settings['target_minutes'] ?? 30)));
+            } catch (\Throwable) {
+                // Janela de deploy: mantém compatibilidade até a migration 115.
+            }
+        }
+        return SlaPolicyService::DEFAULT_TARGET_MINUTES;
     }
 
     private function reportTenants(): array

@@ -1,20 +1,12 @@
-# TESTE DA VERSÃO — RS Connect 36.33.0
-
-## Fase B — Evolution Reliability
+# TESTE DA VERSÃO — RS Connect 36.34.0
 
 ## Objetivo
-Provar que o WhatsApp continua operacional mesmo quando o estado local fica desatualizado, a Evolution cai temporariamente ou o mesmo webhook chega mais de uma vez.
 
-A regra desta fase é:
-
-```text
-Webhook = caminho rápido
-Reconciliação = caminho de recuperação
-Banco local não deve ser a única fonte de verdade do estado da conexão
-```
+Homologar a **Fase C — SLA operacional**. O foco é provar que o relógio da primeira resposta humana usa a política configurada, gera alerta preventivo antes do estouro, não é encerrado por IA e respeita o expediente quando configurado para isso.
 
 ## 1. Atualização
-Faça backup antes da atualização. Na raiz do projeto:
+
+Faça backup do banco e dos arquivos. Depois substitua o pacote e execute:
 
 ```bash
 php bin/migrate.php verify
@@ -23,207 +15,218 @@ php bin/migrate.php verify
 docker compose restart app
 ```
 
+Resultado esperado:
+
+```text
+[OK] Manifesto: 122 migrations de subida.
+```
+
+A migration nova é `115_sla_operational_policy.sql`.
+
+## 2. Configuração de homologação
+
+Na empresa de teste, confirme primeiro que o ciclo operacional está em **LIVE**.
+
+Acesse **Implantação / Regras de atendimento** e configure temporariamente:
+
+- **Meta da 1ª resposta:** `5 min`;
+- **Alerta preventivo:** `80%`;
+- horário de atendimento: mantenha o horário real da empresa;
+- **Contabilizar também fora do horário de atendimento:** para os testes A–D, marque esta opção; no teste E, desmarque.
+
+Com meta de 5 minutos e alerta em 80%:
+
+```text
+0:00 ───────── 4:00 ───── 5:00
+NORMAL          EM RISCO    VIOLADO
+```
+
+Depois de homologar, restaure a meta comercial desejada, por exemplo `30 min`.
+
+## 3. Cenário A — resposta humana antes do alerta
+
+1. Inicie uma conversa nova pelo WhatsApp.
+2. Abra a conversa no RS Connect.
+3. Responda como humano antes de 4 minutos.
+4. Atualize Relatórios.
+
 Esperado:
 
-```text
-[OK] Manifesto: 121 migrations de subida.
-[OK] 1 migration(s) executada(s):
-- 114_evolution_reconciliation_observability.sql
-```
+- a conversa não entra em **SLA em risco**;
+- a primeira resposta humana é medida;
+- a resposta fica **dentro do SLA**;
+- o relógio para no instante da resposta da equipe.
 
-Em instalações que já executaram a migration, `up` pode informar que não existem migrations pendentes.
+## 4. Cenário B — alerta preventivo em 80%
 
-## 2. Configuração
-Abra **Canais WhatsApp** e localize a conexão usada na homologação.
+1. Inicie outra conversa nova.
+2. Não dê resposta humana por pelo menos 4 minutos.
+3. Mantenha a tela de Conversas aberta.
 
-Mantenha:
-- número autorizado correto;
-- **Recuperação automática: Ativa**;
-- webhook habilitado;
-- eventos mínimos `MESSAGES_UPSERT`, `MESSAGES_UPDATE`, `CONNECTION_UPDATE`, `QRCODE_UPDATED`, `CONTACTS_UPSERT` e `CONTACTS_UPDATE`.
+Esperado ao atingir 80%:
 
-O card deve mostrar:
+- a linha da conversa recebe **SLA em risco**;
+- aparece o percentual e a meta;
+- o contador de SLA da caixa de entrada aumenta;
+- o supervisor recebe um aviso visual na atualização automática;
+- ainda **não** é uma violação.
 
-```text
-Estado no RS Connect
-Estado observado na Evolution
-Última reconciliação
-Último webhook
-```
+### Aceleração opcional em ambiente de homologação
 
-As ações agora têm responsabilidades diferentes:
-
-```text
-Diagnosticar       = testa estado + webhook + settings
-Reconciliar agora  = compara RS Connect x Evolution e corrige o estado local
-Reaplicar webhook  = reaplica webhook e settings salvos
-Recuperar conexão  = tenta recuperar/reiniciar uma queda técnica elegível
-```
-
-## 3. Teste A — estado saudável
-1. deixe o WhatsApp conectado;
-2. clique **Reconciliar agora**;
-3. atualize a página.
-
-Esperado:
-- Estado no RS Connect: `open`, `connected`, `online` ou `active`;
-- Estado observado na Evolution: estado conectado equivalente;
-- badge **Reconciliação: Consistente**;
-- `reconciliation_failures = 0`;
-- nova linha em `evolution_reconciliation_runs` com `result_status = healthy`.
-
-Consulta opcional:
+Se não quiser aguardar, use apenas uma conversa de teste. Identifique o ciclo ativo e ajuste o relógio para 4 minutos:
 
 ```sql
-SELECT id, connection_state, remote_connection_state, reconciliation_status,
-       reconciliation_reason, last_reconciled_at, reconciliation_failures
-FROM evolution_instances
-ORDER BY id DESC;
+SELECT id, conversation_id, first_incoming_at, first_response_at,
+       sla_target_minutes, sla_warning_percent
+FROM conversation_service_cycles
+WHERE cycle_status = 'active'
+  AND first_incoming_at IS NOT NULL
+ORDER BY id DESC
+LIMIT 10;
 ```
 
-## 4. Teste B — estado local propositalmente divergente
-Este teste altera apenas o estado local e deve ser feito na conexão de homologação.
-
-1. anote o `id` da instância;
-2. com a Evolution realmente conectada, execute:
+Depois, substitua `ID_DO_CICLO`:
 
 ```sql
-UPDATE evolution_instances
-SET status = 'disconnected', connection_state = 'disconnected'
-WHERE id = SEU_ID;
+UPDATE conversation_service_cycles
+SET first_incoming_at = UTC_TIMESTAMP() - INTERVAL 4 MINUTE,
+    sla_target_minutes = 5,
+    sla_warning_percent = 80,
+    sla_count_outside_business_hours = 1
+WHERE id = ID_DO_CICLO
+  AND first_response_at IS NULL;
 ```
 
-3. abra **Canais WhatsApp** sem reiniciar a Evolution;
-4. clique **Reconciliar agora**.
+Aguarde a próxima atualização automática da caixa de entrada.
+
+## 5. Cenário C — violação em 100%
+
+Na mesma conversa de teste, aguarde passar de 5 minutos ou, em homologação, ajuste para 6 minutos:
+
+```sql
+UPDATE conversation_service_cycles
+SET first_incoming_at = UTC_TIMESTAMP() - INTERVAL 6 MINUTE,
+    sla_target_minutes = 5,
+    sla_warning_percent = 80,
+    sla_count_outside_business_hours = 1
+WHERE id = ID_DO_CICLO
+  AND first_response_at IS NULL;
+```
 
 Esperado:
-- o estado volta para conectado;
-- `remote_connection_state` mostra o estado observado na Evolution;
-- `reconciliation_status = corrected`;
-- histórico registra `action_taken = local_state_updated`;
-- nenhuma conversa, contato ou mensagem é duplicada.
 
-## 5. Teste C — Evolution temporariamente indisponível
-Faça este teste somente se puder interromper a Evolution de homologação por alguns minutos.
+- a conversa muda para **SLA violado**;
+- o contador permanece sinalizando risco;
+- o banner da conversa mostra **Prazo excedido**;
+- Relatórios contabilizam o ciclo como fora da meta quando houver resposta humana posterior.
 
-1. pare ou torne a Evolution inacessível;
-2. clique **Reconciliar agora**.
+## 6. Cenário D — IA não encerra o SLA humano
 
-Esperado:
-- a tela informa falha da Evolution;
-- `reconciliation_status = unreachable`;
-- `reconciliation_failures` aumenta;
-- o histórico registra a tentativa e o erro;
-- contatos/conversas/mensagens existentes não são apagados;
-- o sistema não inventa estado `connected`.
+1. Abra uma conversa nova.
+2. Deixe o agente de IA responder.
+3. Não responda como humano.
+4. Verifique o ciclo:
 
-Religue a Evolution e clique **Reconciliar agora** novamente.
+```sql
+SELECT id, conversation_id, first_incoming_at, first_response_at, first_response_user_id
+FROM conversation_service_cycles
+WHERE conversation_id = ID_DA_CONVERSA
+ORDER BY id DESC
+LIMIT 1;
+```
 
-Esperado:
-- `reconciliation_failures` volta para `0`;
-- estado local volta a refletir o estado real;
-- a nova tentativa aparece no histórico.
+Esperado após somente a IA responder:
 
-## 6. Teste D — queda recuperável
-Com **Recuperação automática: Ativa**:
+```text
+first_incoming_at       preenchido
+first_response_at       NULL
+first_response_user_id  NULL
+```
 
-1. provoque uma queda técnica sem logout voluntário e sem trocar o número;
-2. execute o monitor operacional ou aguarde a rotina configurada. Para forçar o ciclo pela CLI:
+Somente depois de uma pessoa da equipe responder, `first_response_at` e `first_response_user_id` devem ser preenchidos.
+
+## 7. Cenário E — relógio fora do expediente
+
+Volte às **Regras de atendimento** e desmarque **Contabilizar também fora do horário de atendimento**.
+
+Exemplo: expediente `08:00–18:00`, segunda a sexta.
+
+- uma mensagem recebida às 22:00 não deve acumular quatro horas de SLA durante a madrugada;
+- o relógio efetivo começa na próxima abertura;
+- uma mensagem de sexta após 18:00 aguarda a abertura de segunda sem consumir o fim de semana;
+- depois da abertura, o alerta de 80% e a violação seguem a mesma meta configurada.
+
+Para validar sem esperar a madrugada, use o smoke test da versão:
 
 ```bash
-php bin/operations-monitor.php
+php tests/Feature/sla-operational-policy-v36340-smoke.php
 ```
 
-3. acompanhe a conexão.
+O teste contém cenários determinísticos de horário comercial e fim de semana.
+
+## 8. Cenário F — consistência dos relatórios
+
+Depois de responder como humano a uma conversa de teste:
+
+- abra o **Relatório executivo**;
+- abra **Equipe e profissionais**;
+- confira a auditoria/exportação de primeiras respostas.
 
 Esperado:
 
-```text
-reconciliação detecta estado remoto
-↓
-monitor classifica queda
-↓
-recuperação automática tenta restart
-↓
-conexão volta a connected/open
-```
+- o tempo efetivo de primeira resposta é o mesmo conceito em todas as telas;
+- o SLA usa a meta configurada como padrão;
+- o filtro de meta do relatório pode simular outro limite sem alterar a configuração da empresa;
+- a contagem fora do expediente segue o snapshot do ciclo.
 
-O sistema **não** deve reiniciar automaticamente quando o estado for:
-- `logged_out` / logout voluntário;
-- QR Code pendente;
-- `identity_mismatch`.
+## 9. Cenário G — empresa fora de LIVE
 
-## 7. Teste E — webhook duplicado
-Use preferencialmente uma ferramenta de replay/HTTP ou o payload de homologação da Evolution.
-
-Envie duas vezes o mesmo `MESSAGES_UPSERT` com o mesmo `key.id`/event id.
+Mude temporariamente a empresa para `SUSPENDED` (somente se for seguro no ambiente de homologação).
 
 Esperado:
 
-```text
-1 mensagem persistida
-1 processamento da automação
-1 consumo/resposta da IA, quando aplicável
-0 conversas duplicadas
-```
+- atendimento continua preservado conforme a política da Fase A;
+- alertas produtivos de SLA não aparecem na caixa de entrada;
+- novas interações fora de LIVE não contaminam métricas oficiais.
 
-Validação do ledger:
+Retorne para `LIVE` ao final.
+
+## 10. Consultas de confirmação
+
+Configuração vigente:
 
 ```sql
-SELECT source, event_key, status, attempts, duplicate_count, response_code, last_error
-FROM webhook_security_events
-WHERE source = 'evolution'
-ORDER BY id DESC
-LIMIT 20;
+SELECT tenant_id, enabled, target_minutes, warning_percent,
+       count_outside_business_hours, timezone, business_hours_json, updated_at
+FROM tenant_sla_settings
+WHERE tenant_id = ID_DA_EMPRESA;
 ```
 
-Na repetição, `duplicate_count` deve aumentar sem repetir o efeito de negócio.
+Snapshot dos últimos ciclos:
 
-## 8. Teste F — segurança de identidade
-Com o número autorizado preenchido, **não conecte intencionalmente outro número em produção**. Este cenário pode ser validado apenas em ambiente controlado.
+```sql
+SELECT id, conversation_id, first_incoming_at, first_response_at, first_response_user_id,
+       sla_target_minutes, sla_warning_percent, sla_count_outside_business_hours,
+       sla_timezone, sla_business_hours_json
+FROM conversation_service_cycles
+WHERE tenant_id = ID_DA_EMPRESA
+ORDER BY id DESC
+LIMIT 10;
+```
 
-Esperado diante de divergência real:
-- `identity_status = mismatch`;
-- `reconciliation_status = identity_mismatch`;
-- mensagens de entrada e saída ficam bloqueadas pela política já existente;
-- **Recuperar conexão** não transforma o estado em saudável sem corrigir o número.
+## Critérios para aprovar a Fase C
 
-## 9. Teste G — Reaplicar webhook
-1. clique **Diagnosticar**;
-2. se o diagnóstico indicar falha de webhook/settings, clique **Reaplicar webhook**;
-3. clique **Diagnosticar** novamente.
+A Fase C está homologada somente se todos forem verdadeiros:
 
-Esperado:
-- webhook acessível;
-- settings acessíveis;
-- recebimento de uma nova mensagem continua funcionando.
+- [ ] configuração persiste após recarregar a página;
+- [ ] resposta humana antes de 80% não alerta;
+- [ ] 80% gera **SLA em risco**;
+- [ ] 100% gera **SLA violado**;
+- [ ] IA não encerra o relógio humano;
+- [ ] resposta humana encerra o relógio;
+- [ ] fora do expediente pausa quando a opção está desmarcada;
+- [ ] caixa de entrada atualiza os estados automaticamente;
+- [ ] relatórios usam o mesmo conceito de tempo efetivo;
+- [ ] empresa fora de LIVE não gera alerta produtivo.
 
-## 10. Critério de aprovação da Fase B
-Marque como aprovada somente se:
-
-- [ ] reconciliação saudável funciona;
-- [ ] estado local divergente é corrigido pela Evolution;
-- [ ] indisponibilidade não produz falso `connected`;
-- [ ] recuperação automática não interfere em logout/QR/mismatch;
-- [ ] webhook duplicado não duplica mensagem/conversa/IA;
-- [ ] diagnóstico e reaplicação de webhook funcionam pelo painel;
-- [ ] envio e recebimento continuam normais depois dos testes;
-- [ ] migration 114 e manifesto 121 estão válidos.
-
-Depois disso, seguimos para a **Fase C — SLA operacional e alerta preventivo de 80%**.
-
----
-
-## Compatibilidade dos cenários já homologados
-Os testes das versões anteriores permanecem válidos e devem continuar passando como regressão.
-
-### Fase A — referências preservadas
-- **Cenário A — Onboarding**: atendimento funciona, mas métricas oficiais não contam.
-- **Cenário C — Go-Live**: nova conversa iniciada em LIVE entra nas métricas oficiais.
-- **Critérios para aprovar a Fase A**: ciclo operacional, auditoria, SLA e suspensão já foram homologados.
-
-### Hotfix 36.32.1 — virada UTC reproduzida
-Cenário histórico de **11/09/2026** em `America/Sao_Paulo`: a janela local alcança **12/09** em UTC, sem obrigar o usuário a ampliar manualmente o filtro. Para uma resposta humana de 1min53s e meta de 30 minutos, o resultado esperado permanece **1/1 em até 30 min**.
-
-### Hotfix 36.32.2 — PDO nativo
-O erro histórico **HY093** foi eliminado com placeholders exclusivos no cálculo do SLA. A Fase B não altera esse cálculo.
+Somente depois desta validação avançar para a **Fase D — carga operacional e filas**.

@@ -496,7 +496,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const conversationCount = document.querySelector('[data-conversation-count]');
   const afterHoursQueueCount = document.querySelector('[data-after-hours-queue-count]');
   const quotePendingQueueCount = document.querySelector('[data-quote-pending-count]');
+  const slaRiskCount = document.querySelector('[data-sla-risk-count]');
   let searchTimer = null;
+  const slaStatusMemory = new Map();
+  let slaStatusPrimed = false;
 
   function escapeHtml(value) {
     return String(value || '')
@@ -752,6 +755,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function updateSelectedSla(sla) {
+    const banner = document.querySelector('[data-selected-sla-banner]');
+    if (!banner) return;
+    if (!sla || sla.responded) {
+      banner.hidden = true;
+      return;
+    }
+    banner.hidden = false;
+    const status = String(sla.status || 'normal');
+    banner.classList.remove('is-normal', 'is-warning', 'is-breached');
+    banner.classList.add(`is-${status}`);
+    const title = banner.querySelector('h3');
+    const text = banner.querySelector('p');
+    const meter = banner.querySelector('.conversation-sla-meter i');
+    const remaining = banner.querySelector('.conversation-sla-meter strong');
+    if (title) title.textContent = status === 'breached' ? 'Prazo violado' : (status === 'warning' ? 'Atendimento em risco' : 'Dentro do prazo');
+    if (text) text.textContent = `${Math.max(0, Math.round(Number(sla.percent || 0)))}% de uma meta de ${Number(sla.target_minutes || 30)} min. ${sla.count_outside_business_hours ? 'Relógio corrido.' : 'O relógio considera somente o expediente configurado.'}`;
+    if (meter) meter.style.width = `${Math.min(100, Math.max(0, Number(sla.percent || 0)))}%`;
+    if (remaining) remaining.textContent = status === 'breached' ? 'Prazo excedido' : `${Math.ceil(Number(sla.remaining_seconds || 0) / 60)} min restantes`;
+  }
+
   function setConversationMode(mode) {
     const normalized = ['ai', 'human', 'paused'].includes(mode) ? mode : 'ai';
     const stateBadge = document.querySelector('.chat-state-bar .mini-badge');
@@ -806,8 +830,21 @@ document.addEventListener('DOMContentLoaded', () => {
     </span>`;
   }
 
+  function slaQueueMarkup(item) {
+    const sla = item?.sla;
+    if (!sla || sla.responded || !['warning', 'breached'].includes(String(sla.status || ''))) return '';
+    const status = String(sla.status || 'warning');
+    const label = status === 'breached' ? 'SLA violado' : 'SLA em risco';
+    const percent = Math.max(0, Math.round(Number(sla.percent || 0)));
+    const target = Math.max(5, Number(sla.target_minutes || 30));
+    return `<span class="conversation-queue-state is-sla-${status}" data-sla-list-state>
+      <span class="sla-alert-symbol" aria-hidden="true">!</span>
+      <span><strong>${label}</strong><small>${percent}% da meta · ${target} min</small></span>
+    </span>`;
+  }
+
   function operationalQueueMarkup(item) {
-    return `${afterHoursListMarkup(item?.after_hours)}${quotePendingMarkup(item)}`;
+    return `${slaQueueMarkup(item)}${afterHoursListMarkup(item?.after_hours)}${quotePendingMarkup(item)}`;
   }
 
   function renderConversationItem(item) {
@@ -821,7 +858,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const hasAfterHoursQueue = Boolean(item.after_hours && item.after_hours.status);
     const afterHoursStatus = hasAfterHoursQueue ? String(item.after_hours.status) : '';
     const hasQuotePending = Boolean(item.quote_pending);
-    return `<div class="conversation-list-row status-${conversationStatus}${unread > 0 ? ' has-unread' : ''}${hasAfterHoursQueue ? ' has-after-hours-queue' : ''}${hasQuotePending ? ' has-quote-pending' : ''}" data-conversation-row data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}" data-conversation-status="${conversationStatus}" data-after-hours-status="${escapeHtml(afterHoursStatus)}">
+    const slaStatus = item?.sla && !item.sla.responded ? String(item.sla.status || '') : '';
+    const slaClass = ['warning', 'breached'].includes(slaStatus) ? ` has-sla-${slaStatus}` : '';
+    return `<div class="conversation-list-row status-${conversationStatus}${unread > 0 ? ' has-unread' : ''}${hasAfterHoursQueue ? ' has-after-hours-queue' : ''}${hasQuotePending ? ' has-quote-pending' : ''}${slaClass}" data-conversation-row data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}" data-conversation-status="${conversationStatus}" data-after-hours-status="${escapeHtml(afterHoursStatus)}">
       <label class="conversation-select-control" title="Selecionar ${escapeHtml(item.name || item.phone || 'conversa')}">
         <input type="checkbox" name="conversation_ids[]" value="${Number(item.id)}" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de ${escapeHtml(item.name || item.phone || 'contato')}">
         <span aria-hidden="true"></span>
@@ -849,6 +888,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateConversationList(conversations) {
     if (!list || !Array.isArray(conversations)) return;
+    const slaTransitions = [];
     const validIds = new Set(conversations.map((item) => Number(item.id)).filter(Boolean));
     list.querySelectorAll('[data-conversation-row]').forEach((row) => {
       const id = Number(row.dataset.conversationId || 0);
@@ -880,6 +920,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const hasAfterHoursQueue = Boolean(item.after_hours && item.after_hours.status);
       row?.classList.toggle('has-after-hours-queue', hasAfterHoursQueue);
       row?.classList.toggle('has-quote-pending', Boolean(item.quote_pending));
+      const slaStatus = item?.sla && !item.sla.responded ? String(item.sla.status || '') : '';
+      const previousSlaStatus = slaStatusMemory.get(id) || '';
+      if (slaStatusPrimed && previousSlaStatus !== slaStatus && ['warning', 'breached'].includes(slaStatus)) {
+        slaTransitions.push({ status: slaStatus, name: String(item.name || item.phone || 'Contato') });
+      }
+      slaStatusMemory.set(id, slaStatus);
+      row?.classList.toggle('has-sla-warning', slaStatus === 'warning');
+      row?.classList.toggle('has-sla-breached', slaStatus === 'breached');
       if (row) row.dataset.afterHoursStatus = hasAfterHoursQueue ? String(item.after_hours.status) : '';
       const name = node.querySelector('[data-conversation-name]');
       const time = node.querySelector('[data-conversation-time]');
@@ -912,7 +960,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (departmentName) departmentBadge.textContent = departmentName;
         else departmentBadge.remove();
       }
-      if (id === selectedConversationId) applySelectedConversationStatus(itemStatus);
+      if (id === selectedConversationId) {
+        applySelectedConversationStatus(itemStatus);
+        updateSelectedSla(item.sla || null);
+      }
       if (unread) {
         unread.textContent = Number(item.unread_count || 0);
         unread.hidden = Number(item.unread_count || 0) < 1;
@@ -939,6 +990,19 @@ document.addEventListener('DOMContentLoaded', () => {
       if (value) value.textContent = String(quoteTotal);
       quotePendingQueueCount.hidden = quoteTotal < 1;
     }
+    if (slaRiskCount) {
+      const total = conversations.filter((item) => item?.sla && !item.sla.responded && ['warning', 'breached'].includes(String(item.sla.status || ''))).length;
+      const value = slaRiskCount.querySelector('strong');
+      if (value) value.textContent = String(total);
+      slaRiskCount.hidden = total < 1;
+    }
+    if (slaStatusPrimed && slaTransitions.length > 0) {
+      const breached = slaTransitions.filter((item) => item.status === 'breached');
+      const picked = breached[0] || slaTransitions[0];
+      const extra = slaTransitions.length > 1 ? ` +${slaTransitions.length - 1}` : '';
+      showToast(`${picked.status === 'breached' ? 'SLA violado' : 'SLA em risco'}: ${picked.name}${extra}`);
+    }
+    slaStatusPrimed = true;
     wireAvatarImages(list);
     observeConversationAvatars(list);
   }

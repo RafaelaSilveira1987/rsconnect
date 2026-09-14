@@ -12,6 +12,7 @@ $instances = $guide['instances'] ?? ($instances ?? []);
 $agents = $guide['agents'] ?? ($agents ?? []);
 $defaultAgent = $guide['default_agent'] ?? ($agents[0] ?? []);
 $attendanceSettings = $guide['attendance_settings'] ?? [];
+$slaSettings = $guide['sla_settings'] ?? ['target_minutes' => 30, 'warning_percent' => 80, 'count_outside_business_hours' => 0];
 $preSchedule = $guide['pre_schedule'] ?? [];
 $calendarAccess = $guide['calendar_access'] ?? [];
 $calendarAvailability = $guide['calendar_availability'] ?? [];
@@ -189,6 +190,14 @@ $statusClass = static fn (string $status): string => match ($status) {
                         </div>
                         <div class="field"><span>Dias de atendimento</span><div class="inline-checks"><?php foreach ($dayLabels as $key => $label): ?><label><input type="checkbox" name="days[]" value="<?= View::e($key) ?>" <?= in_array($key, (array) ($hours['days'] ?? []), true) ? 'checked' : '' ?>> <?= View::e($label) ?></label><?php endforeach; ?></div></div>
                         <label class="field"><span>Fuso horário</span><input name="business_timezone" value="<?= View::e($attendanceSettings['business_timezone'] ?? ($defaultAgent['business_timezone'] ?? 'America/Sao_Paulo')) ?>"></label>
+                        <div class="onboarding-sla-policy">
+                            <div class="section-heading compact"><div><span class="eyebrow">SLA operacional</span><h3>Primeira resposta humana</h3><p>O alerta preventivo aparece antes do estouro e acompanha a caixa de entrada em tempo real.</p></div><span class="badge badge-success">Fase C</span></div>
+                            <div class="form-grid three">
+                                <label class="field"><span>Meta da 1ª resposta</span><div class="team-report-sla-input"><input type="number" name="sla_target_minutes" min="5" max="1440" step="5" value="<?= (int) ($slaSettings['target_minutes'] ?? 30) ?>"><small>min</small></div><small>Tempo máximo para a primeira resposta de uma pessoa da equipe.</small></label>
+                                <label class="field"><span>Alerta preventivo</span><div class="team-report-sla-input"><input type="number" name="sla_warning_percent" min="50" max="99" step="1" value="<?= (int) ($slaSettings['warning_percent'] ?? 80) ?>"><small>%</small></div><small>Com meta de 30 min e 80%, o alerta começa aos 24 min.</small></label>
+                                <label class="field checkbox-field sla-clock-toggle"><span>Relógio fora do expediente</span><span class="checkbox-control"><input type="checkbox" name="sla_count_outside_hours" value="1" <?= !empty($slaSettings['count_outside_business_hours']) ? 'checked' : '' ?>><span>Contabilizar também fora do horário de atendimento</span></span><small>Desmarcado: o relógio pausa fora do expediente e começa na próxima abertura quando a mensagem chega após o fechamento.</small></label>
+                            </div>
+                        </div>
                         <label class="field"><span>Mensagem fora de horário</span><textarea name="after_hours_message" rows="3"><?= View::e($attendanceSettings['after_hours_message'] ?? ($defaultAgent['after_hours_message'] ?? 'No momento estamos fora do horário de atendimento. Assim que possível, nossa equipe retorna o contato.')) ?></textarea></label>
                         <label class="field"><span>Mensagem de encaminhamento humano</span><textarea name="human_handoff_message" rows="3"><?= View::e($attendanceSettings['human_handoff_message'] ?? ($defaultAgent['human_handoff_message'] ?? 'Vou encaminhar sua solicitação para uma pessoa da equipe continuar o atendimento.')) ?></textarea></label>
                         <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" min="0" max="3600" value="<?= (int) ($attendanceSettings['cooldown_seconds'] ?? ($defaultAgent['cooldown_seconds'] ?? 60)) ?>"><small class="field-hint">A IA espera este tempo após a última mensagem recebida. Se outra mensagem chegar durante a espera, a contagem reinicia para agrupar o contexto.</small></label>

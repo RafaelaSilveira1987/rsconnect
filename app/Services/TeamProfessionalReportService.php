@@ -17,12 +17,13 @@ use Throwable;
  */
 final class TeamProfessionalReportService
 {
-    public const VERSION = '36.30.3-service-performance-metrics';
+    public const VERSION = '36.34.0-sla-operational-policy';
 
     private const HISTORICAL_CYCLE_SOURCES = ['migration_snapshot', 'migration_069_recovery'];
 
     private PDO $pdo;
     private TeamMetricsFoundationService $foundation;
+    private SlaPolicyService $slaPolicy;
     private array $warnings = [];
     private bool $cutoverLoaded = false;
     private string $cutoverAtUtc = '';
@@ -31,6 +32,7 @@ final class TeamProfessionalReportService
     {
         $this->pdo = $pdo ?? Database::connection();
         $this->foundation = new TeamMetricsFoundationService($this->pdo);
+        $this->slaPolicy = new SlaPolicyService($this->pdo);
     }
 
     public function build(array $filters): array
@@ -296,23 +298,65 @@ final class TeamProfessionalReportService
 
     private function firstResponses(int $tenantId, array $date, int $userId, bool $operationalOnly, int $slaMinutes): array
     {
+        $slaMinutes = max(5, min(1440, $slaMinutes));
+        $slaSeconds = $slaMinutes * 60;
         [$filter, $params] = $this->userFilter('sc.first_response_user_id', $userId);
         [$reliabilityFilter, $reliabilityParams] = $this->cycleReliabilityFilter('sc', 'first_response_at', $date, $operationalOnly);
-        return $this->rows(
-            'SELECT sc.first_response_user_id AS user_id,
-                    COUNT(*) AS first_responses,
-                    COUNT(*) AS sla_measured,
-                    SUM(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at)) <= :sla_seconds) AS sla_met,
-                    SUM(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at)) > :sla_seconds) AS sla_breached,
-                    AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at))) AS avg_first_response_seconds
+        $rows = $this->rows(
+            'SELECT sc.first_response_user_id AS user_id, sc.first_incoming_at, sc.first_response_at,
+                    sc.sla_target_minutes, sc.sla_warning_percent,
+                    sc.sla_count_outside_business_hours, sc.sla_timezone,
+                    sc.sla_business_hours_json
              FROM conversation_service_cycles sc
              WHERE sc.tenant_id = :tenant_id
+               AND sc.first_incoming_at IS NOT NULL
                AND sc.first_response_user_id IS NOT NULL
                AND sc.first_response_at BETWEEN :start_at AND :end_at
-               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $filter . $reliabilityFilter . '
-             GROUP BY sc.first_response_user_id',
-            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end'], 'sla_seconds' => max(5, min(1440, $slaMinutes)) * 60] + $params + $reliabilityParams
+               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $filter . $reliabilityFilter,
+            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $params + $reliabilityParams
         );
+
+        $result = [];
+        foreach ($rows as $row) {
+            $uid = (int) ($row['user_id'] ?? 0);
+            if ($uid < 1) {
+                continue;
+            }
+            if (!isset($result[$uid])) {
+                $result[$uid] = [
+                    'user_id' => $uid,
+                    'first_responses' => 0,
+                    'sla_measured' => 0,
+                    'sla_met' => 0,
+                    'sla_breached' => 0,
+                    'avg_first_response_seconds' => 0,
+                    '_seconds_total' => 0,
+                ];
+            }
+            $policy = $this->slaPolicy->policyForCycle($tenantId, $row);
+            $policy['target_minutes'] = $slaMinutes;
+            $elapsed = $this->slaPolicy->elapsedSeconds(
+                $tenantId,
+                (string) ($row['first_incoming_at'] ?? ''),
+                (string) ($row['first_response_at'] ?? ''),
+                $policy
+            );
+            $result[$uid]['first_responses']++;
+            $result[$uid]['sla_measured']++;
+            $result[$uid]['_seconds_total'] += $elapsed;
+            if ($elapsed <= $slaSeconds) {
+                $result[$uid]['sla_met']++;
+            } else {
+                $result[$uid]['sla_breached']++;
+            }
+        }
+        foreach ($result as &$item) {
+            $count = max(1, (int) $item['first_responses']);
+            $item['avg_first_response_seconds'] = (int) round(((int) $item['_seconds_total']) / $count);
+            unset($item['_seconds_total']);
+        }
+        unset($item);
+        return array_values($result);
     }
 
     private function serviceDurations(int $tenantId, array $date, int $userId, bool $operationalOnly): array
@@ -338,13 +382,14 @@ final class TeamProfessionalReportService
 
     private function currentWaiting(int $tenantId, int $userId, int $slaMinutes): array
     {
+        $slaMinutes = max(5, min(1440, $slaMinutes));
+        $slaSeconds = $slaMinutes * 60;
         [$filter, $params] = $this->userFilter('c.assigned_user_id', $userId);
-        return $this->rows(
-            'SELECT c.assigned_user_id AS user_id,
-                    COUNT(*) AS waiting_now,
-                    SUM(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, UTC_TIMESTAMP())) > :sla_seconds) AS waiting_over_sla,
-                    AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, UTC_TIMESTAMP()))) AS avg_current_wait_seconds,
-                    MAX(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, UTC_TIMESTAMP()))) AS max_current_wait_seconds
+        $rows = $this->rows(
+            'SELECT c.assigned_user_id AS user_id, sc.first_incoming_at,
+                    sc.sla_target_minutes, sc.sla_warning_percent,
+                    sc.sla_count_outside_business_hours, sc.sla_timezone,
+                    sc.sla_business_hours_json
              FROM conversation_service_cycles sc
              INNER JOIN conversations c ON c.id = sc.conversation_id AND c.tenant_id = sc.tenant_id
              WHERE sc.tenant_id = :tenant_id
@@ -354,10 +399,44 @@ final class TeamProfessionalReportService
                AND sc.first_incoming_at IS NOT NULL
                AND sc.first_response_at IS NULL
                AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . '
-               AND ' . TenantLifecycleService::currentLiveSql('sc.tenant_id') . $filter . '
-             GROUP BY c.assigned_user_id',
-            ['tenant_id' => $tenantId, 'sla_seconds' => max(5, min(1440, $slaMinutes)) * 60] + $params
+               AND ' . TenantLifecycleService::currentLiveSql('sc.tenant_id') . $filter,
+            ['tenant_id' => $tenantId] + $params
         );
+
+        $result = [];
+        $now = gmdate('Y-m-d H:i:s');
+        foreach ($rows as $row) {
+            $uid = (int) ($row['user_id'] ?? 0);
+            if ($uid < 1) {
+                continue;
+            }
+            if (!isset($result[$uid])) {
+                $result[$uid] = [
+                    'user_id' => $uid,
+                    'waiting_now' => 0,
+                    'waiting_over_sla' => 0,
+                    'avg_current_wait_seconds' => 0,
+                    'max_current_wait_seconds' => 0,
+                    '_seconds_total' => 0,
+                ];
+            }
+            $policy = $this->slaPolicy->policyForCycle($tenantId, $row);
+            $policy['target_minutes'] = $slaMinutes;
+            $elapsed = $this->slaPolicy->elapsedSeconds($tenantId, (string) ($row['first_incoming_at'] ?? ''), $now, $policy);
+            $result[$uid]['waiting_now']++;
+            $result[$uid]['_seconds_total'] += $elapsed;
+            $result[$uid]['max_current_wait_seconds'] = max((int) $result[$uid]['max_current_wait_seconds'], $elapsed);
+            if ($elapsed > $slaSeconds) {
+                $result[$uid]['waiting_over_sla']++;
+            }
+        }
+        foreach ($result as &$item) {
+            $count = max(1, (int) $item['waiting_now']);
+            $item['avg_current_wait_seconds'] = (int) round(((int) $item['_seconds_total']) / $count);
+            unset($item['_seconds_total']);
+        }
+        unset($item);
+        return array_values($result);
     }
 
     private function departmentMemberships(int $tenantId, int $userId): array
@@ -625,43 +704,23 @@ final class TeamProfessionalReportService
             ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $closedParams + $closedReliabilityParams
         );
 
-        [$slaFilter, $slaParams] = $this->userFilter('sc.first_response_user_id', $userId);
-        [$slaReliability, $slaReliabilityParams] = $this->cycleReliabilityFilter('sc', 'first_response_at', $date, $operationalOnly, 'sla');
-        $sla = $this->row(
-            'SELECT COUNT(*) AS sla_measured,
-                    SUM(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at)) <= :sla_seconds) AS sla_met,
-                    SUM(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at)) > :sla_seconds) AS sla_breached
-             FROM conversation_service_cycles sc
-             WHERE sc.tenant_id = :tenant_id
-               AND sc.first_incoming_at IS NOT NULL AND sc.first_response_at IS NOT NULL
-               AND sc.first_response_user_id IS NOT NULL
-               AND sc.first_response_at BETWEEN :start_at AND :end_at
-               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $slaFilter . $slaReliability,
-            ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end'], 'sla_seconds' => $slaMinutes * 60] + $slaParams + $slaReliabilityParams
-        );
-
-        $waitingFilter = '';
-        $waitingParams = [];
-        if ($userId > 0) {
-            $waitingFilter = ' AND c.assigned_user_id = :waiting_user_id';
-            $waitingParams['waiting_user_id'] = $userId;
+        $slaRows = $this->firstResponses($tenantId, $date, $userId, $operationalOnly, $slaMinutes);
+        $waitingRows = $this->currentWaiting($tenantId, $userId, $slaMinutes);
+        $measured = $met = $breached = 0;
+        foreach ($slaRows as $row) {
+            $measured += (int) ($row['sla_measured'] ?? 0);
+            $met += (int) ($row['sla_met'] ?? 0);
+            $breached += (int) ($row['sla_breached'] ?? 0);
         }
-        $waiting = $this->row(
-            'SELECT COUNT(*) AS waiting_now,
-                    SUM(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, UTC_TIMESTAMP())) > :sla_seconds) AS waiting_over_sla,
-                    AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, UTC_TIMESTAMP()))) AS avg_current_wait_seconds,
-                    MAX(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, UTC_TIMESTAMP()))) AS max_current_wait_seconds
-             FROM conversation_service_cycles sc
-             INNER JOIN conversations c ON c.id = sc.conversation_id AND c.tenant_id = sc.tenant_id
-             WHERE sc.tenant_id = :tenant_id AND sc.cycle_status = "active" AND c.status <> "closed"
-               AND sc.first_incoming_at IS NOT NULL AND sc.first_response_at IS NULL
-               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . '
-               AND ' . TenantLifecycleService::currentLiveSql('sc.tenant_id') . $waitingFilter,
-            ['tenant_id' => $tenantId, 'sla_seconds' => $slaMinutes * 60] + $waitingParams
-        );
+        $waitingNow = $waitingOver = $waitingTotal = $waitingMax = 0;
+        foreach ($waitingRows as $row) {
+            $count = (int) ($row['waiting_now'] ?? 0);
+            $waitingNow += $count;
+            $waitingOver += (int) ($row['waiting_over_sla'] ?? 0);
+            $waitingTotal += ((int) ($row['avg_current_wait_seconds'] ?? 0)) * $count;
+            $waitingMax = max($waitingMax, (int) ($row['max_current_wait_seconds'] ?? 0));
+        }
 
-        $measured = (int) ($sla['sla_measured'] ?? 0);
-        $met = (int) ($sla['sla_met'] ?? 0);
         return [
             'closed_cycles' => (int) ($closed['closed_cycles'] ?? 0),
             'avg_service_duration_seconds' => (int) round((float) ($closed['avg_service_duration_seconds'] ?? 0)),
@@ -670,49 +729,101 @@ final class TeamProfessionalReportService
             'sla_target_minutes' => $slaMinutes,
             'sla_measured' => $measured,
             'sla_met' => $met,
-            'sla_breached' => (int) ($sla['sla_breached'] ?? 0),
+            'sla_breached' => $breached,
             'sla_compliance' => $measured > 0 ? round(($met / $measured) * 100, 1) : 0.0,
-            'waiting_now' => (int) ($waiting['waiting_now'] ?? 0),
-            'waiting_over_sla' => (int) ($waiting['waiting_over_sla'] ?? 0),
-            'avg_current_wait_seconds' => (int) round((float) ($waiting['avg_current_wait_seconds'] ?? 0)),
-            'max_current_wait_seconds' => (int) ($waiting['max_current_wait_seconds'] ?? 0),
+            'waiting_now' => $waitingNow,
+            'waiting_over_sla' => $waitingOver,
+            'avg_current_wait_seconds' => $waitingNow > 0 ? (int) round($waitingTotal / $waitingNow) : 0,
+            'max_current_wait_seconds' => $waitingMax,
         ];
     }
 
     private function departmentPerformance(int $tenantId, int $slaMinutes): array
     {
         $slaMinutes = max(5, min(1440, $slaMinutes));
-        return $this->rows(
+        $slaSeconds = $slaMinutes * 60;
+        $base = $this->rows(
             'SELECT d.id AS department_id, d.name, d.color,
                     COUNT(DISTINCT CASE WHEN c.status <> "closed" THEN c.id END) AS open_conversations,
-                    COUNT(DISTINCT CASE WHEN c.status <> "closed" AND sc.first_incoming_at IS NOT NULL AND sc.first_response_at IS NULL THEN c.id END) AS waiting_now,
-                    COUNT(DISTINCT CASE WHEN c.status <> "closed" AND sc.first_incoming_at IS NOT NULL AND sc.first_response_at IS NULL
-                        AND GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, UTC_TIMESTAMP())) > :sla_seconds THEN c.id END) AS waiting_over_sla,
-                    COALESCE(ROUND(AVG(CASE WHEN c.status <> "closed" AND sc.first_incoming_at IS NOT NULL AND sc.first_response_at IS NULL
-                        THEN GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, UTC_TIMESTAMP())) END)),0) AS avg_current_wait_seconds,
                     COUNT(DISTINCT CASE WHEN u.status = "active" THEN m.user_id END) AS active_members
              FROM service_departments d
              LEFT JOIN conversations c ON c.department_id = d.id AND c.tenant_id = d.tenant_id
-             LEFT JOIN conversation_service_cycles sc ON sc.conversation_id = c.id AND sc.tenant_id = c.tenant_id AND sc.cycle_status = "active"
              LEFT JOIN service_department_members m ON m.department_id = d.id AND m.tenant_id = d.tenant_id
              LEFT JOIN users u ON u.id = m.user_id AND u.tenant_id = m.tenant_id
              WHERE d.tenant_id = :tenant_id AND d.status = "active"
-             GROUP BY d.id, d.name, d.color
-             ORDER BY waiting_over_sla DESC, waiting_now DESC, open_conversations DESC, d.name',
-            ['tenant_id' => $tenantId, 'sla_seconds' => $slaMinutes * 60]
+             GROUP BY d.id, d.name, d.color',
+            ['tenant_id' => $tenantId]
         );
+        $indexed = [];
+        foreach ($base as $row) {
+            $id = (int) ($row['department_id'] ?? 0);
+            $row['waiting_now'] = 0;
+            $row['waiting_over_sla'] = 0;
+            $row['avg_current_wait_seconds'] = 0;
+            $row['_waiting_total'] = 0;
+            $indexed[$id] = $row;
+        }
+
+        $pending = $this->rows(
+            'SELECT c.department_id, sc.first_incoming_at,
+                    sc.sla_target_minutes, sc.sla_warning_percent,
+                    sc.sla_count_outside_business_hours, sc.sla_timezone,
+                    sc.sla_business_hours_json
+             FROM conversation_service_cycles sc
+             INNER JOIN conversations c ON c.id = sc.conversation_id AND c.tenant_id = sc.tenant_id
+             WHERE sc.tenant_id = :tenant_id
+               AND c.department_id IS NOT NULL
+               AND c.status <> "closed"
+               AND sc.cycle_status = "active"
+               AND sc.first_incoming_at IS NOT NULL
+               AND sc.first_response_at IS NULL
+               AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . '
+               AND ' . TenantLifecycleService::currentLiveSql('sc.tenant_id'),
+            ['tenant_id' => $tenantId]
+        );
+        $now = gmdate('Y-m-d H:i:s');
+        foreach ($pending as $row) {
+            $id = (int) ($row['department_id'] ?? 0);
+            if (!isset($indexed[$id])) {
+                continue;
+            }
+            $policy = $this->slaPolicy->policyForCycle($tenantId, $row);
+            $policy['target_minutes'] = $slaMinutes;
+            $elapsed = $this->slaPolicy->elapsedSeconds($tenantId, (string) ($row['first_incoming_at'] ?? ''), $now, $policy);
+            $indexed[$id]['waiting_now']++;
+            $indexed[$id]['_waiting_total'] += $elapsed;
+            if ($elapsed > $slaSeconds) {
+                $indexed[$id]['waiting_over_sla']++;
+            }
+        }
+        foreach ($indexed as &$row) {
+            $count = (int) ($row['waiting_now'] ?? 0);
+            $row['avg_current_wait_seconds'] = $count > 0 ? (int) round(((int) $row['_waiting_total']) / $count) : 0;
+            unset($row['_waiting_total']);
+        }
+        unset($row);
+        $rows = array_values($indexed);
+        usort($rows, static function (array $a, array $b): int {
+            foreach (['waiting_over_sla', 'waiting_now', 'open_conversations'] as $key) {
+                $cmp = ((int) ($b[$key] ?? 0)) <=> ((int) ($a[$key] ?? 0));
+                if ($cmp !== 0) {
+                    return $cmp;
+                }
+            }
+            return strcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+        });
+        return $rows;
     }
 
     private function responseDataQuality(int $tenantId, array $date, int $userId, bool $operationalOnly): array
     {
         [$measuredFilter, $measuredParams] = $this->userFilter('sc.first_response_user_id', $userId);
         [$measuredReliabilityFilter, $measuredReliabilityParams] = $this->cycleReliabilityFilter('sc', 'first_response_at', $date, $operationalOnly);
-        $measured = $this->row(
-            'SELECT COUNT(*) AS measured_responses,
-                    AVG(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at))) AS avg_response_seconds,
-                    MIN(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at))) AS min_response_seconds,
-                    MAX(GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at))) AS max_response_seconds,
-                    SUM(sc.first_response_at < sc.first_incoming_at) AS invalid_response_cycles
+        $measuredRows = $this->rows(
+            'SELECT sc.first_incoming_at, sc.first_response_at,
+                    sc.sla_target_minutes, sc.sla_warning_percent,
+                    sc.sla_count_outside_business_hours, sc.sla_timezone,
+                    sc.sla_business_hours_json
              FROM conversation_service_cycles sc
              WHERE sc.tenant_id = :tenant_id
                AND sc.first_incoming_at IS NOT NULL
@@ -722,6 +833,17 @@ final class TeamProfessionalReportService
                AND ' . TenantLifecycleService::productionAtSql('sc.tenant_id', 'sc.first_incoming_at') . $measuredFilter . $measuredReliabilityFilter,
             ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $measuredParams + $measuredReliabilityParams
         );
+        $seconds = [];
+        $invalid = 0;
+        foreach ($measuredRows as $row) {
+            $incoming = (string) ($row['first_incoming_at'] ?? '');
+            $response = (string) ($row['first_response_at'] ?? '');
+            if ($incoming !== '' && $response !== '' && strtotime($response . ' UTC') < strtotime($incoming . ' UTC')) {
+                $invalid++;
+            }
+            $policy = $this->slaPolicy->policyForCycle($tenantId, $row);
+            $seconds[] = $this->slaPolicy->elapsedSeconds($tenantId, $incoming, $response, $policy);
+        }
 
         $pendingFilter = '';
         $pendingParams = [];
@@ -743,13 +865,14 @@ final class TeamProfessionalReportService
             ['tenant_id' => $tenantId, 'start_at' => $date['utc_start'], 'end_at' => $date['utc_end']] + $pendingParams + $pendingReliabilityParams
         );
 
+        $count = count($seconds);
         $quality = [
-            'measured_responses' => (int) ($measured['measured_responses'] ?? 0),
-            'avg_response_seconds' => (int) round((float) ($measured['avg_response_seconds'] ?? 0)),
-            'min_response_seconds' => (int) ($measured['min_response_seconds'] ?? 0),
-            'max_response_seconds' => (int) ($measured['max_response_seconds'] ?? 0),
+            'measured_responses' => $count,
+            'avg_response_seconds' => $count > 0 ? (int) round(array_sum($seconds) / $count) : 0,
+            'min_response_seconds' => $count > 0 ? (int) min($seconds) : 0,
+            'max_response_seconds' => $count > 0 ? (int) max($seconds) : 0,
             'pending_response_cycles' => $pending,
-            'invalid_response_cycles' => (int) ($measured['invalid_response_cycles'] ?? 0),
+            'invalid_response_cycles' => $invalid,
             'operational_only' => $operationalOnly,
         ];
 
@@ -767,7 +890,9 @@ final class TeamProfessionalReportService
         $rows = $this->rows(
             'SELECT sc.conversation_id, sc.cycle_number, sc.first_incoming_at, sc.first_response_at,
                     sc.first_response_user_id, sc.cycle_status, sc.source,
-                    GREATEST(0, TIMESTAMPDIFF(SECOND, sc.first_incoming_at, sc.first_response_at)) AS response_seconds,
+                    sc.sla_target_minutes, sc.sla_warning_percent,
+                    sc.sla_count_outside_business_hours, sc.sla_timezone,
+                    sc.sla_business_hours_json,
                     COALESCE(NULLIF(u.whatsapp_display_name, ""), u.name, "Usuário") AS professional_name,
                     COALESCE(NULLIF(ct.name, ""), ct.phone, "Cliente") AS contact_name
              FROM conversation_service_cycles sc
@@ -790,7 +915,14 @@ final class TeamProfessionalReportService
             unset($row['conversation_id']);
             $row['first_incoming_at_local'] = \App\Core\Clock::utcToLocal((string) ($row['first_incoming_at'] ?? ''), $date['timezone']);
             $row['first_response_at_local'] = \App\Core\Clock::utcToLocal((string) ($row['first_response_at'] ?? ''), $date['timezone']);
-            $row['response_seconds'] = (int) ($row['response_seconds'] ?? 0);
+            $policy = $this->slaPolicy->policyForCycle($tenantId, $row);
+            $policy['target_minutes'] = max(5, min(1440, $slaMinutes));
+            $row['response_seconds'] = $this->slaPolicy->elapsedSeconds(
+                $tenantId,
+                (string) ($row['first_incoming_at'] ?? ''),
+                (string) ($row['first_response_at'] ?? ''),
+                $policy
+            );
             $classification = $this->classifyCycleSource((string) ($row['source'] ?? ''), (string) ($row['first_response_at'] ?? ''), (string) ($date['cutover_at_utc'] ?? ''));
             $row['data_quality'] = $classification['code'];
             $row['data_quality_label'] = $classification['label'];

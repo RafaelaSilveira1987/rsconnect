@@ -1,5 +1,28 @@
 # Changelog — RS Connect
 
+## 36.34.0 — Production Readiness: SLA operacional
+
+### Adicionado
+- política persistente em `tenant_sla_settings` para meta de primeira resposta humana, limiar preventivo, fuso e regra de contagem fora do expediente;
+- configuração na etapa de regras de atendimento do onboarding/implantação;
+- snapshot da política nos ciclos de atendimento para evitar que uma alteração futura reescreva o SLA histórico;
+- alerta visual **SLA em risco** ao atingir o percentual preventivo e **SLA violado** ao atingir a meta;
+- contador de conversas em risco na caixa de entrada e aviso em tempo real quando uma conversa muda de faixa;
+- relógio de SLA compatível com os dias/horários de atendimento da empresa.
+
+### Consistência operacional
+- somente `sender_type = user` / resposta humana atribuída encerra o SLA; resposta de IA não mascara o tempo da equipe;
+- empresas fora de `LIVE` não exibem alertas produtivos de SLA;
+- relatório executivo, relatório de equipe, auditoria de primeira resposta e espera atual usam o mesmo relógio de expediente;
+- o filtro manual de meta nos relatórios continua disponível para simulação, sem alterar a política persistida.
+
+### Migration
+- `115_sla_operational_policy.sql`;
+- manifesto esperado: **122 migrations de subida**.
+
+### Homologação
+Consulte `TESTE_DA_VERSAO.md`. A Fase C só deve ser aprovada após validar resposta normal, alerta em 80%, violação em 100%, IA sem encerrar o SLA e pausa fora do expediente.
+
 ## 36.33.0 — Production Readiness: Evolution Reliability
 
 ### Adicionado

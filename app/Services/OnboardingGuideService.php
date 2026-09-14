@@ -99,6 +99,7 @@ final class OnboardingGuideService
             'agents' => $this->agents($tenantId),
             'default_agent' => $this->defaultAgent($tenantId),
             'attendance_settings' => $this->onboardingSettings($tenantId),
+            'sla_settings' => (new SlaPolicyService($this->pdo))->settings($tenantId),
             'calendar_access' => $this->calendarAccessSettings($tenantId),
             'calendar_availability' => (new CalendarAvailabilityService())->settings($tenantId),
             'pre_schedule' => $this->preScheduleSettings($tenantId),
@@ -226,6 +227,12 @@ final class OnboardingGuideService
             'human_handoff_message' => $handoff !== '' ? $handoff : null,
             'cooldown_seconds' => $cooldown,
         ]);
+
+        $slaPayload = $data + [
+            'business_timezone' => $timezone,
+            'business_hours_json' => $hoursJson,
+        ];
+        (new SlaPolicyService($this->pdo))->save($tenantId, $slaPayload, $userId);
 
         $this->applyStoredAttendanceToAgent($tenantId, null);
         $this->saveStep($tenantId, 'attendance_rules', 'complete', 'Horários, mensagem fora de horário e encaminhamento humano definidos para a operação.', $userId);

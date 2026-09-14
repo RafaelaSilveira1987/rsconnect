@@ -24,6 +24,8 @@ use App\Services\ConversationOwnershipService;
 use App\Services\ConversationAttachmentService;
 use App\Services\CommercialRequestService;
 use App\Services\MessageGovernanceService;
+use App\Services\SlaPolicyService;
+use App\Services\TenantLifecycleService;
 use App\Services\TenantModuleService;
 use App\Services\EvolutionService;
 use PDO;
@@ -122,7 +124,11 @@ final class ConversationController
                     ah.recovery_attempts AS after_hours_recovery_attempts,
                     ah.last_attempt_at AS after_hours_last_attempt_at,
                     ah.next_attempt_at AS after_hours_next_attempt_at,
-                    ah.last_error AS after_hours_last_error' . $commercialRequestSelect . ',
+                    ah.last_error AS after_hours_last_error,
+                    sc.first_incoming_at AS sla_first_incoming_at,
+                    sc.first_response_at AS sla_first_response_at,
+                    sc.sla_target_minutes, sc.sla_warning_percent,
+                    sc.sla_count_outside_business_hours, sc.sla_timezone, sc.sla_business_hours_json' . $commercialRequestSelect . ',
                     CASE
                         WHEN ah.id IS NULL OR ah.first_message_id IS NULL OR ah.last_message_id IS NULL THEN 0
                         ELSE (
@@ -140,6 +146,10 @@ final class ConversationController
              LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
              LEFT JOIN service_departments d ON d.id = c.department_id AND d.tenant_id = c.tenant_id
              LEFT JOIN users pref ON pref.id = ct.preferred_user_id AND pref.tenant_id = ct.tenant_id
+             LEFT JOIN conversation_service_cycles sc ON sc.id = (
+                 SELECT MAX(sc_active.id) FROM conversation_service_cycles sc_active
+                 WHERE sc_active.conversation_id = c.id AND sc_active.tenant_id = c.tenant_id AND sc_active.cycle_status = "active"
+             )
              LEFT JOIN ai_after_hours_pending ah ON ah.conversation_id = c.id
                 AND ah.status IN ("pending","processing","blocked_plan","blocked_human","error")
              ' . $commercialRequestJoin . '
@@ -148,7 +158,7 @@ final class ConversationController
              LIMIT 100'
         );
         $statement->execute($params);
-        $conversations = $statement->fetchAll(PDO::FETCH_ASSOC);
+        $conversations = $this->enrichSlaRows($pdo, $statement->fetchAll(PDO::FETCH_ASSOC));
 
         // Uma conversa somente é aberta quando o usuário a seleciona explicitamente.
         // Isso evita marcar a primeira conversa como lida ou assumir visualmente um
@@ -164,6 +174,7 @@ final class ConversationController
         $selectedRuleSnapshot = null;
         $selectedAfterHoursPending = null;
         $selectedCommercialRequest = null;
+        $selectedSla = null;
         $commercialRequestSettings = ['ready' => false, 'enabled' => false, 'show_conversation_alert' => false];
         $professionalAssignmentSettings = ['enabled' => false, 'lock_enabled' => true, 'auto_assign_enabled' => false];
         $ownershipSnapshot = ['enabled' => false, 'can_interact' => true, 'locked_by_other' => false];
@@ -175,6 +186,12 @@ final class ConversationController
                 $selectedId = 0;
             }
             if ($selected !== null) {
+                foreach ($conversations as $conversationSlaRow) {
+                    if ((int) ($conversationSlaRow['id'] ?? 0) === (int) $selected['id']) {
+                        $selectedSla = is_array($conversationSlaRow['sla'] ?? null) ? $conversationSlaRow['sla'] : null;
+                        break;
+                    }
+                }
                 $selected = $this->refreshSelectedContactAvatar($pdo, $selected);
                 foreach ($conversations as &$conversationAvatarRow) {
                     if ((int) ($conversationAvatarRow['id'] ?? 0) === (int) $selected['id']) {
@@ -363,6 +380,8 @@ final class ConversationController
             'selectedRuleSnapshot' => $selectedRuleSnapshot,
             'selectedAfterHoursPending' => $selectedAfterHoursPending,
             'selectedCommercialRequest' => $selectedCommercialRequest,
+            'selectedSla' => $selectedSla,
+            'slaSettings' => $tenantId > 0 ? (new SlaPolicyService($pdo))->settings($tenantId) : [],
             'commercialRequestSettings' => $commercialRequestSettings,
             'professionalAssignmentSettings' => $professionalAssignmentSettings,
             'ownershipSnapshot' => $ownershipSnapshot,
@@ -2418,7 +2437,7 @@ final class ConversationController
             }
         }
 
-        $conversations = $this->conversationSummaries($pdo, $filters);
+        $conversations = $this->enrichSlaRows($pdo, $this->conversationSummaries($pdo, $filters));
         $messages = [];
         $latestMessageId = $afterId;
         $selected = null;
@@ -2652,7 +2671,11 @@ final class ConversationController
                     ah.ack_sent_at AS after_hours_ack_sent_at,
                     ah.recovery_attempts AS after_hours_recovery_attempts,
                     ah.next_attempt_at AS after_hours_next_attempt_at,
-                    ah.last_error AS after_hours_last_error' . $commercialRequestSelect . ',
+                    ah.last_error AS after_hours_last_error,
+                    sc.first_incoming_at AS sla_first_incoming_at,
+                    sc.first_response_at AS sla_first_response_at,
+                    sc.sla_target_minutes, sc.sla_warning_percent,
+                    sc.sla_count_outside_business_hours, sc.sla_timezone, sc.sla_business_hours_json' . $commercialRequestSelect . ',
                     CASE
                         WHEN ah.id IS NULL OR ah.first_message_id IS NULL OR ah.last_message_id IS NULL THEN 0
                         ELSE (
@@ -2669,6 +2692,10 @@ final class ConversationController
              INNER JOIN tenants t ON t.id = c.tenant_id
              LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
              LEFT JOIN service_departments d ON d.id = c.department_id AND d.tenant_id = c.tenant_id
+             LEFT JOIN conversation_service_cycles sc ON sc.id = (
+                 SELECT MAX(sc_active.id) FROM conversation_service_cycles sc_active
+                 WHERE sc_active.conversation_id = c.id AND sc_active.tenant_id = c.tenant_id AND sc_active.cycle_status = "active"
+             )
              LEFT JOIN ai_after_hours_pending ah ON ah.conversation_id = c.id
                 AND ah.status IN ("pending","processing","blocked_plan","blocked_human","error")
              ' . $commercialRequestJoin . '
@@ -2678,6 +2705,40 @@ final class ConversationController
         );
         $statement->execute($params);
         return $statement->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /** @param list<array<string,mixed>> $rows @return list<array<string,mixed>> */
+    private function enrichSlaRows(PDO $pdo, array $rows): array
+    {
+        if ($rows === []) {
+            return $rows;
+        }
+        $service = new SlaPolicyService($pdo);
+        $lifecycle = new TenantLifecycleService($pdo);
+        $liveCache = [];
+        foreach ($rows as &$row) {
+            $tenantId = (int) ($row['tenant_id'] ?? 0);
+            if ($tenantId < 1) {
+                $tenantId = (int) (Auth::isSuperAdmin() ? ($_GET['tenant_id'] ?? 0) : (Auth::tenantId() ?? 0));
+            }
+            $firstIncoming = trim((string) ($row['sla_first_incoming_at'] ?? ''));
+            if ($tenantId > 0 && !array_key_exists($tenantId, $liveCache)) {
+                $liveCache[$tenantId] = $lifecycle->isLive($tenantId);
+            }
+            if ($tenantId < 1 || empty($liveCache[$tenantId]) || $firstIncoming === '' || (string) ($row['status'] ?? '') === 'closed') {
+                $row['sla'] = null;
+                continue;
+            }
+            $policy = $service->policyForCycle($tenantId, $row);
+            $row['sla'] = $service->state(
+                $tenantId,
+                $firstIncoming,
+                trim((string) ($row['sla_first_response_at'] ?? '')) ?: null,
+                $policy
+            );
+        }
+        unset($row);
+        return $rows;
     }
 
     private function formatConversationForJson(array $conversation, int $selectedId): array
@@ -2704,6 +2765,7 @@ final class ConversationController
             'after_hours' => $this->formatAfterHoursForJson($conversation),
             'quote_pending' => (int) ($conversation['commercial_request_id'] ?? 0) > 0,
             'quote_due_at' => (string) ($conversation['commercial_request_due_at'] ?? ''),
+            'sla' => is_array($conversation['sla'] ?? null) ? $conversation['sla'] : null,
             'is_selected' => (int) $conversation['id'] === $selectedId,
         ];
     }

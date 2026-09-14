@@ -16,6 +16,8 @@ $departments = is_array($departments ?? null) ? $departments : [];
 $queueEnabled = !empty($queueEnabled);
 $commercialRequestSettings = is_array($commercialRequestSettings ?? null) ? $commercialRequestSettings : ['ready' => false, 'enabled' => false, 'show_conversation_alert' => false];
 $selectedCommercialRequest = is_array($selectedCommercialRequest ?? null) ? $selectedCommercialRequest : null;
+$selectedSla = is_array($selectedSla ?? null) ? $selectedSla : null;
+$slaSettings = is_array($slaSettings ?? null) ? $slaSettings : ['target_minutes' => 30, 'warning_percent' => 80, 'count_outside_business_hours' => 0];
 $formatDate = static function (?string $date, string $format = 'd/m/Y H:i'): string {
     if (!$date) {
         return '—';
@@ -90,6 +92,10 @@ $publicPollQuery = (string) (parse_url(Router::url('/conversations?' . http_buil
 $selectedConversationPublicId = $selected ? PublicId::encode('conversation', (int) $selected['id']) : '';
 $afterHoursQueueCount = count(array_filter($conversations, static fn (array $conversation): bool => trim((string) ($conversation['after_hours_status'] ?? '')) !== ''));
 $quotePendingQueueCount = count(array_filter($conversations, static fn (array $conversation): bool => (int) ($conversation['commercial_request_id'] ?? 0) > 0));
+$slaRiskCount = count(array_filter($conversations, static function (array $conversation): bool {
+    $sla = $conversation['sla'] ?? null;
+    return is_array($sla) && empty($sla['responded']) && in_array((string) ($sla['status'] ?? ''), ['warning', 'breached'], true);
+}));
 ?>
 
 <form class="conversation-filters card" method="get" action="<?= View::e(Router::url('/conversations')) ?>">
@@ -208,6 +214,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                     <span class="quote-pending-icon" aria-hidden="true">$</span>
                     <span><?= (int) $quotePendingQueueCount ?></span>
                 </a>
+                <span class="conversation-sla-risk-counter" data-sla-risk-count title="Conversas com SLA em atenção ou violado" <?= $slaRiskCount > 0 ? '' : 'hidden' ?>><span aria-hidden="true">!</span><strong><?= (int) $slaRiskCount ?></strong><small>SLA</small></span>
                 <span class="badge" data-conversation-count><?= count($conversations) ?></span>
                 <?php if ($canManage && $conversations): ?>
                     <button class="btn btn-outline btn-small conversation-select-toggle" type="button" data-toggle-bulk-read aria-expanded="false" aria-controls="conversation-bulk-read-form">
@@ -270,8 +277,11 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                 $afterHoursLabel = $afterHoursStatusLabels[$afterHoursStatus] ?? 'Aguardando horário';
                 $hasQuotePending = (int) ($conversation['commercial_request_id'] ?? 0) > 0;
                 $quoteDueAt = trim((string) ($conversation['commercial_request_due_at'] ?? ''));
+                $conversationSla = is_array($conversation['sla'] ?? null) ? $conversation['sla'] : null;
+                $slaPendingStatus = $conversationSla && empty($conversationSla['responded']) ? (string) ($conversationSla['status'] ?? '') : '';
+                $hasSlaAlert = in_array($slaPendingStatus, ['warning', 'breached'], true);
                 ?>
-                <div class="conversation-list-row status-<?= View::e($conversationStatus) ?><?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?><?= $afterHoursStatus !== '' ? ' has-after-hours-queue' : '' ?><?= $hasQuotePending ? ' has-quote-pending' : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>" data-conversation-public-id="<?= View::e($conversationPublicId) ?>" data-conversation-status="<?= View::e($conversationStatus) ?>" data-after-hours-status="<?= View::e($afterHoursStatus) ?>">
+                <div class="conversation-list-row status-<?= View::e($conversationStatus) ?><?= (int) $conversation['unread_count'] > 0 ? ' has-unread' : '' ?><?= $afterHoursStatus !== '' ? ' has-after-hours-queue' : '' ?><?= $hasQuotePending ? ' has-quote-pending' : '' ?><?= $hasSlaAlert ? ' has-sla-' . View::e($slaPendingStatus) : '' ?>" data-conversation-row data-conversation-id="<?= (int) $conversation['id'] ?>" data-conversation-public-id="<?= View::e($conversationPublicId) ?>" data-conversation-status="<?= View::e($conversationStatus) ?>" data-after-hours-status="<?= View::e($afterHoursStatus) ?>">
                     <?php if ($canManage): ?>
                         <label class="conversation-select-control" title="Selecionar <?= View::e($displayName) ?>">
                             <input type="checkbox" name="conversation_ids[]" value="<?= (int) $conversation['id'] ?>" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de <?= View::e($displayName) ?>">
@@ -290,6 +300,12 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                         </span>
                         <span class="conversation-preview" data-conversation-preview><?= View::e($conversation['last_message_preview'] ?: 'Sem mensagens') ?></span>
                         <span class="conversation-queue-slot" data-after-hours-list-slot>
+                            <?php if ($hasSlaAlert): ?>
+                                <span class="conversation-queue-state is-sla-<?= View::e($slaPendingStatus) ?>" data-sla-list-state>
+                                    <span class="sla-alert-symbol" aria-hidden="true">!</span>
+                                    <span><strong><?= $slaPendingStatus === 'breached' ? 'SLA violado' : 'SLA em risco' ?></strong><small><?= number_format((float) ($conversationSla['percent'] ?? 0), 0, ',', '.') ?>% da meta · <?= (int) ($conversationSla['target_minutes'] ?? 30) ?> min</small></span>
+                                </span>
+                            <?php endif; ?>
                             <?php if ($afterHoursStatus !== ''): ?>
                                 <span class="conversation-queue-state <?= View::e($afterHoursClass) ?>" data-after-hours-list-state>
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
@@ -397,7 +413,7 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                 $selectedAfterHoursClass = $afterHoursStatusClasses[$selectedAfterHoursStatus] ?? 'is-waiting';
                 $selectedAfterHoursLabel = $afterHoursStatusLabels[$selectedAfterHoursStatus] ?? 'Aguardando horário';
                 ?>
-                <?php if ($hasAfterHoursPending): ?>
+            <?php if ($hasAfterHoursPending): ?>
                     <span class="after-hours-state <?= View::e($selectedAfterHoursClass) ?>" title="A demanda está preservada e não será perdida.">
                         <?= View::e($selectedAfterHoursLabel) ?> · <?= $selectedAfterHoursCount ?> <?= $selectedAfterHoursCount === 1 ? 'mensagem' : 'mensagens' ?>
                     </span>
@@ -407,6 +423,14 @@ $quotePendingQueueCount = count(array_filter($conversations, static fn (array $c
                 <?php $refreshQuery = $currentQuery; $refreshQuery['conversation_id'] = (int) $selected['id']; ?>
                 <a class="refresh-chat" href="<?= View::e(Router::url('/conversations?' . http_build_query($refreshQuery))) ?>">Atualizar</a>
             </div>
+
+            <?php if ($selectedSla && empty($selectedSla['responded'])): ?>
+                <?php $selectedSlaStatus = (string) ($selectedSla['status'] ?? 'normal'); ?>
+                <section class="conversation-sla-banner is-<?= View::e($selectedSlaStatus) ?>" data-selected-sla-banner>
+                    <div><span class="eyebrow">SLA da 1ª resposta humana</span><h3><?= $selectedSlaStatus === 'breached' ? 'Prazo violado' : ($selectedSlaStatus === 'warning' ? 'Atendimento em risco' : 'Dentro do prazo') ?></h3><p><?= number_format((float) ($selectedSla['percent'] ?? 0), 0, ',', '.') ?>% de uma meta de <?= (int) ($selectedSla['target_minutes'] ?? 30) ?> min. <?= !empty($selectedSla['count_outside_business_hours']) ? 'Relógio corrido.' : 'O relógio considera somente o expediente configurado.' ?></p></div>
+                    <div class="conversation-sla-meter"><span><i style="width: <?= min(100, max(0, (float) ($selectedSla['percent'] ?? 0))) ?>%"></i></span><strong><?= $selectedSlaStatus === 'breached' ? 'Prazo excedido' : ((int) ceil(((int) ($selectedSla['remaining_seconds'] ?? 0)) / 60) . ' min restantes') ?></strong></div>
+                </section>
+            <?php endif; ?>
 
             <?php if ($hasAfterHoursPending): ?>
                 <?php
