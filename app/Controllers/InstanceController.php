@@ -13,6 +13,7 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\EvolutionService;
 use App\Services\EvolutionInstanceSafetyService;
+use App\Services\EvolutionReconciliationService;
 use App\Services\AgentRoutingService;
 use App\Services\SubscriptionService;
 use App\Services\WebhookSecurityService;
@@ -196,13 +197,17 @@ final class InstanceController
         $resilienceSelect = $resilienceSupported
             ? ', authorized_phone, identity_status, identity_mismatch_at, auto_recovery_enabled, recovery_attempts, last_recovery_attempt_at, last_recovery_success_at, recovery_state'
             : ', NULL AS authorized_phone, "unknown" AS identity_status, NULL AS identity_mismatch_at, 0 AS auto_recovery_enabled, 0 AS recovery_attempts, NULL AS last_recovery_attempt_at, NULL AS last_recovery_success_at, NULL AS recovery_state';
+        $reconciliationSupported = $this->columnExists($pdo, 'evolution_instances', 'remote_connection_state');
+        $reconciliationSelect = $reconciliationSupported
+            ? ', remote_connection_state, reconciliation_status, reconciliation_reason, last_reconciled_at, reconciliation_failures'
+            : ', NULL AS remote_connection_state, "unknown" AS reconciliation_status, NULL AS reconciliation_reason, NULL AS last_reconciled_at, 0 AS reconciliation_failures';
 
         $sql = 'SELECT id, tenant_id, name, instance_name, base_url, api_key_encrypted,
                        status, connection_state, connection_reason,
                        connection_updated_at, last_status_check_at, last_webhook_at,
                        profile_name, profile_phone, profile_picture_url,
                        qrcode_base64, qrcode_updated_at, qrcode_expires_at'
-                . $alertSelect . $resilienceSelect . '
+                . $alertSelect . $resilienceSelect . $reconciliationSelect . '
                 FROM evolution_instances';
         if ($conditions !== []) {
             $sql .= ' WHERE ' . implode(' AND ', $conditions);
@@ -284,6 +289,11 @@ final class InstanceController
                     $row['connection_state'] = $state;
                     $row['status'] = $mappedStatus;
                     $row['connection_reason'] = '';
+                    if ($reconciliationSupported) {
+                        $pdo->prepare('UPDATE evolution_instances SET remote_connection_state=:state WHERE id=:id')
+                            ->execute(['state' => $state, 'id' => (int) $row['id']]);
+                        $row['remote_connection_state'] = $state;
+                    }
                     if ($connected && $resilienceSupported) {
                         $liveBody = is_array($live['body'] ?? null) ? $live['body'] : [];
                         $observedPhone = $this->resolveObservedConnectedPhone($service, $liveBody, $row);
@@ -372,6 +382,11 @@ final class InstanceController
                     'auto_recovery_enabled' => (int) ($row['auto_recovery_enabled'] ?? 0),
                     'recovery_state' => (string) ($row['recovery_state'] ?? ''),
                     'recovery_attempts' => (int) ($row['recovery_attempts'] ?? 0),
+                    'remote_connection_state' => (string) ($row['remote_connection_state'] ?? ''),
+                    'reconciliation_status' => (string) ($row['reconciliation_status'] ?? 'unknown'),
+                    'reconciliation_reason' => (string) ($row['reconciliation_reason'] ?? ''),
+                    'last_reconciled_at' => (string) ($row['last_reconciled_at'] ?? ''),
+                    'reconciliation_failures' => (int) ($row['reconciliation_failures'] ?? 0),
                     'profile_picture_url' => (string) ($row['profile_picture_url'] ?? ''),
                     'qr_ready' => $qrValid,
                     'qr_code' => $instanceId > 0 && $qrValid ? (string) $row['qrcode_base64'] : null,
@@ -1073,7 +1088,7 @@ final class InstanceController
     {
         $instanceId = (int) ($_POST['instance_id'] ?? 0);
         $action = strtolower(trim((string) ($_POST['action'] ?? '')));
-        if (!in_array($action, ['restart', 'logout', 'sync', 'diagnose', 'recover', 'pause_alerts', 'resume_alerts'], true)) {
+        if (!in_array($action, ['restart', 'logout', 'sync', 'diagnose', 'recover', 'reconcile', 'pause_alerts', 'resume_alerts'], true)) {
             Flash::set('error', 'Ação da Evolution inválida.');
             $this->redirect('/instances');
         }
@@ -1088,6 +1103,13 @@ final class InstanceController
 
             if ($action === 'diagnose') {
                 $message = $this->diagnoseInstance($pdo, $instance);
+            } elseif ($action === 'reconcile') {
+                $result = (new EvolutionReconciliationService())->reconcile($instance, 'manual');
+                $message = match ((string) ($result['result'] ?? '')) {
+                    'corrected' => 'Reconciliação concluída: o estado local foi corrigido com base na Evolution.',
+                    'identity_mismatch' => 'Reconciliação concluída com bloqueio: o número conectado diverge do autorizado.',
+                    default => 'Reconciliação concluída: RS Connect e Evolution estão consistentes.',
+                };
             } elseif ($action === 'recover') {
                 $message = $this->recoverInstance($pdo, $instance);
             } elseif ($action === 'pause_alerts') {
@@ -1175,7 +1197,7 @@ final class InstanceController
                 'instance_id' => $instanceId,
                 'action' => $action,
             ]);
-            if (in_array($action, ['logout', 'recover', 'pause_alerts', 'resume_alerts'], true)) {
+            if (in_array($action, ['logout', 'reconcile', 'recover', 'pause_alerts', 'resume_alerts'], true)) {
                 try {
                     (new \App\Services\OperationsService())->refreshMessagingChecks();
                 } catch (Throwable) {

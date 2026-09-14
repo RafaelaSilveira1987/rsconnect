@@ -1,38 +1,40 @@
-# ROLLBACK — RS Connect 36.32.2
+# ROLLBACK — RS Connect 36.33.0
 
 ## Quando usar
-Use este procedimento se a 36.32.2 causar regressão durante a homologação do relatório/SLA.
+Use este procedimento se a Fase B causar regressão no gerenciamento das conexões WhatsApp.
 
 ## Rollback recomendado
 1. faça backup do banco atual;
-2. restaure os arquivos da **36.32.1**;
-3. reinicie o container/processo PHP;
-4. valide login, WhatsApp, IA, conversas, agenda e relatório.
+2. restaure os arquivos da **36.32.2**;
+3. reinicie a aplicação:
 
 ```bash
 docker compose restart app
 ```
 
+4. valide login, WhatsApp, IA, atendimento humano, agenda, Go-Live e relatórios.
+
 ## Banco de dados
-A 36.32.2 **não adiciona migration**. Não reverta a migration 113.
+A migration `114_evolution_reconciliation_observability.sql` é aditiva. Em rollback de código, **não é necessário remover**:
+- `remote_connection_state`;
+- `reconciliation_status`;
+- `reconciliation_reason`;
+- `last_reconciled_at`;
+- `reconciliation_failures`;
+- `evolution_reconciliation_runs`.
 
-Permanece instalada:
-- `112_tenant_lifecycle_go_live.sql`;
-- `113_human_first_response_report_consistency.sql`.
+A 36.32.2 ignora esses campos/tabela. Preservá-los mantém o histórico para uma nova tentativa de atualização.
 
-Os dados de `first_response_at` e `first_response_user_id` reparados pela 113 devem ser preservados.
+Também não reverta as migrations 112 e 113 já homologadas.
 
 ## Validação pós-rollback
-- [ ] login funcionando;
-- [ ] mensagens recebidas e enviadas;
-- [ ] IA conforme configuração;
-- [ ] atendimento humano e fila funcionando;
-- [ ] agenda funcionando;
-- [ ] lifecycle da empresa preservado;
-- [ ] relatório abre sem erro fatal.
+- [ ] conexão WhatsApp aparece no painel;
+- [ ] mensagens entram e saem;
+- [ ] IA responde conforme configuração;
+- [ ] atendimento humano funciona;
+- [ ] relatório mantém SLA homologado na Fase A;
+- [ ] Go-Live continua `LIVE` quando aplicável;
+- [ ] nenhuma conversa/contato foi removido.
 
-A 36.32.1 pode voltar a apresentar `SLA 0/0` por causa do placeholder PDO duplicado; o rollback é apenas contingencial.
-
-
-## Compatibilidade histórica
-**Não remova a migration 112** durante rollback. Em contingência mais ampla, os arquivos da **36.31.3** também podem ser restaurados mantendo as migrations 112 e 113 no banco; versões anteriores ignoram os campos adicionais.
+## Compatibilidade histórica da Fase A
+**Não remova a migration 112** durante rollback. Se for necessária contingência mais ampla, a versão **36.31.3** pode ser restaurada preservando as migrations aditivas no banco, conforme o procedimento histórico já homologado.

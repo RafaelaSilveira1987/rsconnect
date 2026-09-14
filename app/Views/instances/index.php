@@ -1,6 +1,7 @@
 <?php
 
 use App\Core\Auth;
+use App\Core\Clock;
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
@@ -118,6 +119,22 @@ $statusLabels = ['connected' => 'Conectada', 'disconnected' => 'Desconectada', '
             };
             $authorizedPhone = EvolutionInstanceSafetyService::normalizeObservedPhone((string) ($instance['authorized_phone'] ?? ''));
             $connectedPhone = EvolutionInstanceSafetyService::normalizeObservedPhone((string) ($instance['profile_phone'] ?? ''));
+            $reconciliationStatus = strtolower(trim((string) ($instance['reconciliation_status'] ?? 'unknown')));
+            $reconciliationLabel = match ($reconciliationStatus) {
+                'healthy' => 'Consistente',
+                'corrected' => 'Corrigida',
+                'unreachable' => 'Evolution indisponível',
+                'identity_mismatch' => 'Número divergente',
+                default => 'Ainda não reconciliada',
+            };
+            $reconciliationBadge = match ($reconciliationStatus) {
+                'healthy' => 'badge-success',
+                'corrected' => 'badge-warning',
+                'unreachable', 'identity_mismatch' => 'badge-danger',
+                default => '',
+            };
+            $lastReconciled = Clock::formatUtc((string) ($instance['last_reconciled_at'] ?? ''), 'd/m/Y H:i');
+            $lastWebhook = Clock::formatUtc((string) ($instance['last_webhook_at'] ?? ''), 'd/m/Y H:i');
             ?>
             <article class="admin-record-card" data-admin-card data-instance-status-card data-status-endpoint="<?= View::e(Router::url('/instances/status-feed')) ?>" data-instance-id="<?= (int) $instance['id'] ?>" data-search="<?= View::e($searchText) ?>" data-status="<?= View::e((string) $instance['status']) ?>">
                 <div class="admin-record-main">
@@ -125,7 +142,7 @@ $statusLabels = ['connected' => 'Conectada', 'disconnected' => 'Desconectada', '
                     <div class="admin-record-copy">
                         <div class="admin-record-title-row">
                             <div><h3><?= View::e($instance['name']) ?></h3><p><?= $isSuperAdmin ? View::e($instance['tenant_name']) . ' · ' : '' ?><?= View::e($instance['instance_name']) ?></p></div>
-                            <div class="admin-record-badges"><span class="badge badge-<?= View::e($instance['status']) ?>" data-instance-status-badge><?= View::e($alertsPaused ? 'Pausada pelo cliente' : ($statusLabels[$instance['status']] ?? ucfirst((string) $instance['status']))) ?></span><?php if ($alertsPaused): ?><span class="badge badge-warning">Alertas silenciados</span><?php endif; ?><span class="badge <?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'badge-success' : '' ?>"><?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'Criada pelo RS Connect' : 'Conexão criada fora do RS Connect' ?></span><?php if ((int) $instance['is_default'] === 1): ?><span class="badge">Padrão</span><?php endif; ?><?php if ($identityStatus === 'mismatch'): ?><span class="badge badge-danger">Número divergente</span><?php elseif ($identityStatus === 'verified'): ?><span class="badge badge-success">Número verificado</span><?php endif; ?></div>
+                            <div class="admin-record-badges"><span class="badge badge-<?= View::e($instance['status']) ?>" data-instance-status-badge><?= View::e($alertsPaused ? 'Pausada pelo cliente' : ($statusLabels[$instance['status']] ?? ucfirst((string) $instance['status']))) ?></span><?php if ($alertsPaused): ?><span class="badge badge-warning">Alertas silenciados</span><?php endif; ?><span class="badge <?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'badge-success' : '' ?>"><?= ($instance['management_mode'] ?? 'external') === 'managed' ? 'Criada pelo RS Connect' : 'Conexão criada fora do RS Connect' ?></span><?php if ((int) $instance['is_default'] === 1): ?><span class="badge">Padrão</span><?php endif; ?><?php if ($identityStatus === 'mismatch'): ?><span class="badge badge-danger">Número divergente</span><?php elseif ($identityStatus === 'verified'): ?><span class="badge badge-success">Número verificado</span><?php endif; ?><span class="badge <?= View::e($reconciliationBadge) ?>" data-instance-reconciliation-badge>Reconciliação: <?= View::e($reconciliationLabel) ?></span></div>
                         </div>
                         <?php if ($isSuperAdmin): ?><small class="admin-record-muted"><?= View::e($instance['base_url']) ?></small><?php endif; ?><small class="admin-record-muted" data-instance-status-detail><?= View::e((string) (($instance['connection_state'] ?? '') ?: 'Aguardando atualização')) ?></small><?php if ($alertsPaused): ?><small class="admin-record-muted">As notificações operacionais e os alertas da fila estão pausados até a reconexão ou retomada manual.</small><?php endif; ?>
                     </div>
@@ -141,6 +158,11 @@ $statusLabels = ['connected' => 'Conectada', 'disconnected' => 'Desconectada', '
                     <div><span>Número conectado</span><strong data-instance-connected-phone><?= View::e($connectedPhone !== '' ? $connectedPhone : 'Ainda não confirmado') ?></strong></div>
                     <div><span>Recuperação automática</span><strong data-instance-recovery-mode><?= (int) ($instance['auto_recovery_enabled'] ?? 1) === 1 ? 'Ativa' : 'Desativada' ?></strong></div>
                 </div>
+                <div class="instance-identity-grid instance-reconciliation-grid <?= in_array($reconciliationStatus, ['unreachable', 'identity_mismatch'], true) ? 'is-danger' : '' ?>">
+                    <div><span>Estado no RS Connect</span><strong data-instance-local-state><?= View::e((string) (($instance['connection_state'] ?? '') ?: ($instance['status'] ?? 'desconhecido'))) ?></strong></div>
+                    <div><span>Estado observado na Evolution</span><strong data-instance-remote-state><?= View::e((string) (($instance['remote_connection_state'] ?? '') ?: 'Ainda não reconciliado')) ?></strong></div>
+                    <div><span>Última reconciliação</span><strong><?= View::e($lastReconciled !== '' ? $lastReconciled : 'Ainda não executada') ?></strong><small><?= View::e($lastWebhook !== '' ? 'Último webhook: ' . $lastWebhook : 'Nenhum webhook registrado') ?></small></div>
+                </div>
                 <div class="message-error instance-identity-warning" data-instance-identity-warning <?= $identityStatus === 'mismatch' ? '' : 'hidden' ?>>Envios e novas mensagens estão bloqueados até que o número correto seja reconectado.</div>
                 <details class="admin-inline-details"><summary><?= $isSuperAdmin ? 'Atualizações e detalhes técnicos' : 'Regras de recebimento' ?></summary><div class="admin-technical-copy"><strong><?= $isSuperAdmin ? 'Endereço de atualizações da conexão' : 'Atualizações administradas automaticamente' ?></strong><?php if ($isSuperAdmin): ?><code><?= View::e($webhookUrl) ?></code><?php endif; ?><small><?= (int) ($instance['webhook_enabled'] ?? 1) === 1 ? 'Ativo · ' . count($instance['webhook_events_list'] ?? []) . ' evento(s) selecionado(s).' : 'Recebimento automático desativado para esta conexão.' ?></small><small>Grupos: <?= (int) ($instance['ignore_groups'] ?? 1) === 1 ? 'ignorados' : 'recebidos' ?> · Chamadas: <?= (int) ($instance['reject_calls'] ?? 0) === 1 ? 'rejeitadas' : 'permitidas' ?> · Histórico completo: <?= (int) ($instance['sync_full_history'] ?? 0) === 1 ? 'sim' : 'não' ?></small><?php if (!$isSuperAdmin): ?><small>A URL e a chave da Evolution permanecem protegidas no servidor do RS Connect.</small><?php endif; ?></div></details>
                 <?php
@@ -153,8 +175,9 @@ $statusLabels = ['connected' => 'Conectada', 'disconnected' => 'Desconectada', '
                     <form method="post" action="<?= View::e(Router::url('/instances/qr')) ?>" data-qr-code-form <?= $instance['status'] === 'connected' ? 'hidden' : '' ?>><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><button class="btn btn-small btn-primary" type="submit" data-qr-code-button>Gerar QR Code</button></form>
                     <button class="btn btn-small btn-outline" type="button" data-toggle-panel="instance-settings-drawer" data-instance-settings="<?= View::e($settingsData) ?>">Configurar WhatsApp</button>
                     <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="diagnose"><button class="btn btn-small btn-outline" type="submit">Diagnosticar</button></form>
+                    <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="reconcile"><button class="btn btn-small btn-outline" type="submit">Reconciliar agora</button></form>
                     <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="recover"><button class="btn btn-small btn-outline" type="submit">Recuperar conexão</button></form>
-                    <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="sync"><button class="btn btn-small btn-outline" type="submit">Sincronizar</button></form>
+                    <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="sync"><button class="btn btn-small btn-outline" type="submit">Reaplicar webhook</button></form>
                     <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>" data-confirm="Reiniciar esta conexão do WhatsApp?"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="restart"><button class="btn btn-small btn-outline" type="submit">Reiniciar</button></form>
                     <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>"><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="<?= $alertsPaused ? 'resume_alerts' : 'pause_alerts' ?>"><button class="btn btn-small btn-outline" type="submit"><?= $alertsPaused ? 'Retomar alertas' : 'Pausar alertas' ?></button></form>
                     <form method="post" action="<?= View::e(Router::url('/instances/action')) ?>" data-confirm="Desconectar o WhatsApp desta instância? Será necessário ler um novo QR Code. Os alertas e notificações da fila serão pausados até a reconexão."><?= Csrf::input() ?><input type="hidden" name="instance_id" value="<?= (int) $instance['id'] ?>"><input type="hidden" name="action" value="logout"><button class="btn btn-small btn-danger-soft" type="submit">Desconectar</button></form>

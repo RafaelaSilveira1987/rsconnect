@@ -3525,6 +3525,27 @@ document.addEventListener('DOMContentLoaded', function () {
     if (identityGrid) identityGrid.classList.toggle('is-danger', mismatch);
     if (identityWarning) identityWarning.hidden = !mismatch;
 
+    const localState = card.querySelector('[data-instance-local-state]');
+    const remoteState = card.querySelector('[data-instance-remote-state]');
+    const reconciliationBadge = card.querySelector('[data-instance-reconciliation-badge]');
+    if (localState) localState.textContent = item.connection_state || item.status || 'desconhecido';
+    if (remoteState) remoteState.textContent = item.remote_connection_state || 'Ainda não reconciliado';
+    if (reconciliationBadge) {
+      const reconciliationStatus = String(item.reconciliation_status || 'unknown').toLowerCase();
+      const labels = {
+        healthy: 'Consistente',
+        corrected: 'Corrigida',
+        unreachable: 'Evolution indisponível',
+        identity_mismatch: 'Número divergente',
+        unknown: 'Ainda não reconciliada'
+      };
+      reconciliationBadge.textContent = 'Reconciliação: ' + (labels[reconciliationStatus] || labels.unknown);
+      reconciliationBadge.classList.remove('badge-success', 'badge-warning', 'badge-danger');
+      if (reconciliationStatus === 'healthy') reconciliationBadge.classList.add('badge-success');
+      if (reconciliationStatus === 'corrected') reconciliationBadge.classList.add('badge-warning');
+      if (reconciliationStatus === 'unreachable' || reconciliationStatus === 'identity_mismatch') reconciliationBadge.classList.add('badge-danger');
+    }
+
     const qrForm = card.querySelector('[data-qr-code-form]');
     const connectedNote = card.querySelector('.channel-connected-note');
     if (item.status === 'connected') {

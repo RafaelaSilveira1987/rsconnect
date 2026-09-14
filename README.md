@@ -1,3 +1,18 @@
+# RS Connect 36.33.0
+
+## Production Readiness — Fase B: Evolution Reliability
+
+A Fase A (Go-Live e SLA) foi homologada. Esta versão fortalece o canal WhatsApp sem substituir as proteções já existentes: o webhook continua sendo o caminho de atualização em tempo real, enquanto uma nova camada de reconciliação consulta a Evolution diretamente para corrigir estado local perdido/desatualizado e registrar evidências da correção.
+
+- migration obrigatória: `114_evolution_reconciliation_observability.sql`;
+- manifesto esperado: **121 migrations**;
+- **Reconciliar agora** corrige estado local a partir da Evolution;
+- **Reaplicar webhook** reaplica apenas webhook/settings;
+- **Recuperar conexão** continua sendo a ação de restart/recuperação;
+- o Monitor Operacional reconcilia antes de tentar recuperar quedas técnicas;
+- idempotência transacional de webhooks permanece ativa via `webhook_security_events`;
+- consulte `TESTE_DA_VERSAO.md` antes de avançar para a Fase C.
+
 # RS Connect 36.32.2
 
 ## Hotfix do cálculo de SLA — 36.32.2

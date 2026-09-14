@@ -168,8 +168,11 @@ final class AppVersionService
     // RS Connect 36.32.1 — hotfix de fuso do relatório e consistência da primeira resposta humana/SLA.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.32.1 — Hotfix de relatório e SLA humano';
     // RS Connect 36.32.2 — corrige placeholders PDO nativos no cálculo de SLA e isola falhas dos indicadores.
-    public const PACKAGE_LABEL = 'RS Connect 36.32.2 — Hotfix do cálculo de SLA';
-    public const REQUIRED_MIGRATION = '113_human_first_response_report_consistency.sql';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.32.2 — Hotfix do cálculo de SLA';
+    // Compatibilidade histórica: REQUIRED_MIGRATION = '113_human_first_response_report_consistency.sql';
+    // RS Connect 36.33.0 — Production Readiness Fase B: reconciliação auditável e confiabilidade Evolution.
+    public const PACKAGE_LABEL = 'RS Connect 36.33.0 — Production Readiness: Evolution Reliability';
+    public const REQUIRED_MIGRATION = '114_evolution_reconciliation_observability.sql';
 
     private PDO $pdo;
 

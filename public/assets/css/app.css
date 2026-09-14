@@ -16478,3 +16478,12 @@ summary {
   .agent-weekday-checks label,.agent-payment-methods label{flex:1 1 calc(50% - 7px);justify-content:flex-start}
   .agent-special-route-title{align-items:flex-start}
 }
+
+/* RS Connect 36.33.0 — observabilidade da reconciliação Evolution */
+.instance-reconciliation-grid small {
+    display: block;
+    margin-top: 4px;
+    color: var(--text-muted, #64748b);
+    font-size: .72rem;
+    line-height: 1.35;
+}

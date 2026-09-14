@@ -1,5 +1,29 @@
 # Changelog — RS Connect
 
+## 36.33.0 — Production Readiness: Evolution Reliability
+
+### Adicionado
+- reconciliação explícita entre o estado salvo no RS Connect e o estado observado diretamente na Evolution API;
+- ação **Reconciliar agora** em Canais WhatsApp, separada de **Reaplicar webhook** e **Recuperar conexão**;
+- painel por conexão com **Estado no RS Connect**, **Estado observado na Evolution**, última reconciliação e último webhook;
+- histórico auditável em `evolution_reconciliation_runs`, incluindo estado local anterior, estado remoto, correção aplicada e erro;
+- reconciliação periódica pelo Monitor Operacional antes da recuperação automática;
+- contagem de falhas consecutivas de reconciliação e estado `unreachable` quando a Evolution não pode ser consultada;
+- trava de identidade preservada: uma conexão com número divergente nunca é marcada como saudável apenas porque a Evolution respondeu `open`.
+
+### Idempotência
+- a proteção transacional existente de `webhook_security_events` continua sendo a primeira barreira contra reprocessamento de webhooks duplicados;
+- `conversation_messages.evolution_message_id` continua como segunda barreira para mensagens duplicadas;
+- o `event_id` da Evolution passa a ser namespaced por evento + instância, evitando colisão entre canais diferentes;
+- eventos em processamento só podem ser retomados quando falham ou ficam obsoletos, evitando resposta/IA duplicadas em concorrência normal.
+
+### Migration
+- `114_evolution_reconciliation_observability.sql`;
+- manifesto esperado: **121 migrations de subida**.
+
+### Homologação
+Consulte `TESTE_DA_VERSAO.md`. A Fase B deve ser aprovada somente depois de validar estado saudável, divergência local, indisponibilidade da Evolution, recuperação e webhook duplicado.
+
 ## 36.32.2 — Hotfix do cálculo de SLA
 
 ### Corrigido

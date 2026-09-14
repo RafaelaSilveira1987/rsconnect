@@ -998,7 +998,7 @@ final class EvolutionWebhookController
         $externalId = trim((string) ($key['id'] ?? (is_array($data) ? ($data['id'] ?? '') : '') ?? ''));
         $eventId = trim((string) ($payload['event_id'] ?? $payload['id'] ?? ''));
         $eventKey = $security->eventKey('evolution', [
-            $eventId,
+            $eventId !== '' ? $event . '|' . $instance . '|' . $eventId : '',
             $externalId !== '' ? $event . '|' . $instance . '|' . $externalId : '',
             $event !== '' && $instance !== '' ? $event . '|' . $instance . '|' . hash('sha256', $rawBody) : '',
         ], $rawBody);

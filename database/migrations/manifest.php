@@ -133,5 +133,6 @@ return [
         ['sequence' => 118, 'file' => '111_agent_greeting_policy.sql'],
         ['sequence' => 119, 'file' => '112_tenant_lifecycle_go_live.sql'],
         ['sequence' => 120, 'file' => '113_human_first_response_report_consistency.sql'],
+        ['sequence' => 121, 'file' => '114_evolution_reconciliation_observability.sql'],
     ],
 ];

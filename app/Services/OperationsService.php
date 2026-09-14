@@ -85,6 +85,7 @@ final class OperationsService
             $this->recordCheck('database', 'Banco de dados', $this->checkDatabase());
             $this->recordCheck('migrations', 'Estrutura e migrations', $this->checkMigrations());
             $this->recordCheck('disk', 'Espaço em disco', $this->checkDisk());
+            $this->reconcileEvolutionInstances();
             $this->recoverEvolutionInstances();
             $this->recordCheck('evolution', 'WhatsApp / Evolution', $this->checkEvolution());
             $this->recordCheck('n8n', 'n8n', $this->checkN8n());
@@ -105,6 +106,43 @@ final class OperationsService
         } catch (Throwable $exception) {
             $this->finishMonitorRun($runId, $started, $exception->getMessage());
             throw $exception;
+        }
+    }
+
+    /** Atualiza o estado local a partir da fonte de verdade da Evolution antes de tentar qualquer recuperação. */
+    private function reconcileEvolutionInstances(): void
+    {
+        try {
+            $pdo = Database::connection();
+            $supported = (int) $pdo->query(
+                'SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = "evolution_instances"
+                   AND COLUMN_NAME IN ("remote_connection_state", "reconciliation_status", "last_reconciled_at")'
+            )->fetchColumn() === 3;
+            if (!$supported) {
+                return;
+            }
+
+            $statement = $pdo->query(
+                'SELECT * FROM evolution_instances
+                 WHERE COALESCE(api_key_encrypted, "") <> ""
+                   AND COALESCE(instance_name, "") <> ""
+                   AND (last_reconciled_at IS NULL OR last_reconciled_at < (NOW() - INTERVAL 5 MINUTE))
+                 ORDER BY COALESCE(last_reconciled_at, "1970-01-01") ASC
+                 LIMIT 8'
+            );
+            $rows = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $service = new EvolutionReconciliationService();
+            foreach ($rows as $instance) {
+                try {
+                    $service->reconcile($instance, 'monitor');
+                } catch (Throwable $exception) {
+                    error_log('[OperationsService::reconcileEvolutionInstances][instance_id=' . (int) ($instance['id'] ?? 0) . '] ' . $exception->getMessage());
+                }
+            }
+        } catch (Throwable $exception) {
+            // Reconciliação é complementar; os demais health checks continuam normalmente.
+            error_log('[OperationsService::reconcileEvolutionInstances] ' . $exception->getMessage());
         }
     }
 
