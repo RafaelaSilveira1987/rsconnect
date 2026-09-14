@@ -251,7 +251,7 @@ final class OnboardingGuideService
                     business_hours_json = :business_hours_json,
                     after_hours_message = :after_hours_message,
                     human_handoff_message = :human_handoff_message,
-                    handoff_action = "pause_ai",
+                    handoff_action = "paused",
                     cooldown_seconds = :cooldown_seconds
                 WHERE tenant_id = :tenant_id';
         $params = [

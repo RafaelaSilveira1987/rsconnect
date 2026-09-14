@@ -1,4 +1,40 @@
-# TESTE DA VERSÃO — RS Connect 36.34.0
+# TESTE DA VERSÃO — RS Connect 36.34.1
+
+## Hotfix — salvamento das Regras de atendimento
+
+Antes de continuar os cenários da Fase C abaixo, valide o problema observado na 36.34.0.
+
+### Teste H1 — salvar regras e SLA
+1. Abra Implantação / Regras de atendimento.
+2. Configure horário, dias, fuso e SLA (ex.: 15 min / 80%).
+3. Clique em Salvar.
+
+**Esperado:** mensagem de sucesso, sem `Warning 1265 Data truncated for column handoff_action`, e os valores persistem após recarregar a página.
+
+### Teste H2 — conferir o agente
+
+```sql
+SELECT id, name, handoff_action, business_hours_enabled, business_timezone
+FROM ai_agents
+WHERE tenant_id = SEU_TENANT_ID
+ORDER BY id;
+```
+
+**Esperado:** `handoff_action` deve ser apenas `paused` ou `human`. O onboarding sincroniza `paused` ao reaplicar as regras de atendimento.
+
+### Teste H3 — conferir a política de SLA
+
+```sql
+SELECT tenant_id, enabled, target_minutes, warning_percent, count_outside_business_hours, timezone, updated_at
+FROM tenant_sla_settings
+WHERE tenant_id = SEU_TENANT_ID;
+```
+
+**Esperado:** os valores correspondem ao formulário salvo.
+
+---
+
+## Roteiro completo da Fase C
 
 ## Objetivo
 

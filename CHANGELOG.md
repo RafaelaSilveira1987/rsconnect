@@ -1,5 +1,23 @@
 # Changelog — RS Connect
 
+## 36.34.1 — Hotfix do salvamento das regras de atendimento
+
+### Corrigido
+- o onboarding/implantação deixa de tentar gravar `handoff_action = "pause_ai"` em `ai_agents`;
+- o valor aplicado automaticamente agora é `paused`, que é compatível com o ENUM existente (`paused`, `human`);
+- salvar horário de atendimento, dias, fuso e política de SLA volta a funcionar sem `Warning 1265 Data truncated for column handoff_action`;
+- a semântica permanece a mesma: ao ocorrer handoff configurado pelo onboarding, a IA fica pausada para continuidade humana.
+
+### Banco de dados
+- **nenhuma migration nova**;
+- permanece obrigatória `115_sla_operational_policy.sql`;
+- manifesto permanece com **122 migrations de subida**.
+
+### Homologação
+- repetir o salvamento das Regras de atendimento;
+- validar que o formulário salva e que `ai_agents.handoff_action` permanece `paused` ou `human`;
+- depois continuar os testes da Fase C normalmente.
+
 ## 36.34.0 — Production Readiness: SLA operacional
 
 ### Adicionado

@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.34.0",
-  "release_name": "Production Readiness: SLA operacional",
+  "package_version": "36.34.1",
+  "release_name": "Hotfix do salvamento das regras de atendimento",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,11 +19,16 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.33.0",
-      "release_name": "Production Readiness: Evolution Reliability",
-      "required_migration": "114_evolution_reconciliation_observability.sql"
+      "package_version": "36.34.0",
+      "release_name": "Production Readiness: SLA operacional",
+      "required_migration": "115_sla_operational_policy.sql"
     },
     "historical_releases": [
+      {
+        "package_version": "36.34.0",
+        "release_name": "Production Readiness: SLA operacional",
+        "required_migration": "115_sla_operational_policy.sql"
+      },
       {
         "package_version": "36.33.0",
         "release_name": "Production Readiness: Evolution Reliability",

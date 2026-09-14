@@ -17,7 +17,7 @@ use Throwable;
  */
 final class TeamProfessionalReportService
 {
-    public const VERSION = '36.34.0-sla-operational-policy';
+    public const VERSION = '36.34.1-sla-operational-policy';
 
     private const HISTORICAL_CYCLE_SOURCES = ['migration_snapshot', 'migration_069_recovery'];
 

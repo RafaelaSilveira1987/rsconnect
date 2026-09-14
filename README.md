@@ -1,4 +1,7 @@
-# RS Connect 36.34.0
+# RS Connect 36.34.1
+
+> **Hotfix 36.34.1:** corrige o salvamento das Regras de atendimento quando o onboarding reaplica `handoff_action` ao agente. Não há migration nova; permanece `115_sla_operational_policy.sql`.
+
 
 ## Production Readiness — Fase C: SLA operacional
 
