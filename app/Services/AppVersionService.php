@@ -181,7 +181,9 @@ final class AppVersionService
     // RS Connect 36.34.2 — hotfix do trigger de SLA que bloqueava MESSAGES_UPSERT no MySQL.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.34.2 — Hotfix do recebimento Evolution e trigger de SLA';
     // RS Connect 36.34.3 — hotfix da leitura do expediente compacto salvo pelo onboarding.
-    public const PACKAGE_LABEL = 'RS Connect 36.34.3 — Hotfix do horário de atendimento';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.34.3 — Hotfix do horário de atendimento';
+    // RS Connect 36.34.4 — histórico de ausência não pode sobrescrever o estado operacional atual.
+    public const PACKAGE_LABEL = 'RS Connect 36.34.4 — Hotfix de autoridade do horário na IA';
     public const REQUIRED_MIGRATION = '116_sla_trigger_mysql_compat.sql';
 
     private PDO $pdo;

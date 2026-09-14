@@ -375,6 +375,10 @@ final class AiAutomationService
             // ausência é operacional (não é resposta gerada pela IA) e deve poder
             // ser enviada imediatamente, no máximo uma vez por dia local.
             $operatingPolicy = (new AgentOperatingPolicyService())->status($agent);
+            // 36.34.4: propaga o estado operacional real até o prompt/cache.
+            // Assim mensagens históricas de ausência não fazem a IA concluir que
+            // o expediente continua fechado depois da reabertura.
+            $agent['_operating_policy'] = $operatingPolicy;
             if (!empty($operatingPolicy['enforced']) && empty($operatingPolicy['inside'])) {
                 $afterHoursRecoveryService = new AiAfterHoursRecoveryService();
                 $pending = $afterHoursRecoveryService->markPending(
@@ -721,22 +725,33 @@ final class AiAutomationService
                         return;
                     }
                     $reply = trim((string) $cacheResult['reply']);
-                    $result = $this->sendAutomatedReplySequence($pdo, $instance, $conversation, $conversationId, $reply, 'ai.cache.replied', 'Resposta automática reutilizada do cache exato, sem chamada ao provedor.', $agent);
-                    $usageService->recordAvoidedAutoReply(
-                        (int) $instance['tenant_id'],
-                        $agent,
-                        $conversationId,
-                        $storedMessageId > 0 ? $storedMessageId : null,
-                        (int) ($result['_stored_message_id'] ?? 0),
-                        'exact_cache',
-                        'Cache exato #' . (int) ($cacheResult['cache_id'] ?? 0)
-                    );
-                    $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.cache.replied', 'success', null, $reply, [
-                        'strategy' => 'exact_cache',
-                        'cache_id' => $cacheResult['cache_id'] ?? null,
-                        'provider_call_avoided' => true,
-                    ]);
-                    return;
+                    if ($this->isStaleAfterHoursReply($reply, $agent, $operatingPolicy)) {
+                        // Um cache gravado quando o expediente estava fechado não pode
+                        // ser reaproveitado depois que o RS Connect confirmou reabertura.
+                        $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.cache.skipped', 'skipped', 'Cache descartado porque continha uma mensagem de ausência incompatível com o expediente atual.', null, [
+                            'strategy' => 'exact_cache',
+                            'cache_id' => $cacheResult['cache_id'] ?? null,
+                            'stale_after_hours_reply' => true,
+                            'operating_policy' => $operatingPolicy,
+                        ]);
+                    } else {
+                        $result = $this->sendAutomatedReplySequence($pdo, $instance, $conversation, $conversationId, $reply, 'ai.cache.replied', 'Resposta automática reutilizada do cache exato, sem chamada ao provedor.', $agent);
+                        $usageService->recordAvoidedAutoReply(
+                            (int) $instance['tenant_id'],
+                            $agent,
+                            $conversationId,
+                            $storedMessageId > 0 ? $storedMessageId : null,
+                            (int) ($result['_stored_message_id'] ?? 0),
+                            'exact_cache',
+                            'Cache exato #' . (int) ($cacheResult['cache_id'] ?? 0)
+                        );
+                        $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.cache.replied', 'success', null, $reply, [
+                            'strategy' => 'exact_cache',
+                            'cache_id' => $cacheResult['cache_id'] ?? null,
+                            'provider_call_avoided' => true,
+                        ]);
+                        return;
+                    }
                 }
             }
 
@@ -817,6 +832,35 @@ final class AiAutomationService
             }
             $failurePhase = 'ai.generate';
             $reply = $this->ai->generateReply($generationAgent, $messages, $conversation, $conversation);
+
+            // Defesa final: o backend é a fonte de verdade do expediente. Mesmo que o
+            // modelo tente ecoar uma antiga mensagem de ausência presente no histórico,
+            // nunca enviamos ao cliente a afirmação de que está fechado quando a política
+            // atual confirmou que está dentro do horário.
+            if ($this->isStaleAfterHoursReply($reply, $agent, $operatingPolicy)) {
+                $usageService->cancelReservation(
+                    $usageReservationId,
+                    'Resposta descartada por conflito com o estado atual do expediente.',
+                    false,
+                    array_merge($this->ai->lastUsage(), $efficiencyTelemetry)
+                );
+                $usageReservationId = 0;
+                $this->log(
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    'ai.operating_policy.blocked',
+                    'error',
+                    'A IA tentou responder como fora do horário, mas o RS Connect confirmou expediente aberto.',
+                    $reply,
+                    [
+                        'pending_reprocess' => true,
+                        'stale_after_hours_reply' => true,
+                        'operating_policy' => $operatingPolicy,
+                    ]
+                );
+                return;
+            }
 
             // O horário também é revalidado imediatamente antes do envio. Assim uma
             // resposta que começou dentro do expediente não é entregue depois do fechamento,
@@ -2804,6 +2848,64 @@ final class AiAutomationService
         }
 
         return 'O assistente não conseguiu responder uma conversa. Abra os detalhes da conversa e revise a configuração da IA.';
+    }
+
+    /**
+     * Impede reaproveitamento/geração de uma mensagem de ausência quando o
+     * expediente atual está aberto. A decisão do AgentOperatingPolicyService é
+     * determinística e sempre prevalece sobre histórico, memória, cache e LLM.
+     */
+    private function isStaleAfterHoursReply(string $reply, array $agent, array $operatingPolicy): bool
+    {
+        if (empty($operatingPolicy['enforced']) || empty($operatingPolicy['inside'])) {
+            return false;
+        }
+
+        $normalizedReply = $this->normalizeOperationalText($reply);
+        if ($normalizedReply === '') {
+            return false;
+        }
+
+        // Respostas que explicitamente negam o fechamento não são bloqueadas.
+        foreach (['nao estamos fora do horario', 'estamos dentro do horario', 'estamos em horario de atendimento', 'atendimento esta aberto'] as $allowed) {
+            if (str_contains($normalizedReply, $allowed)) {
+                return false;
+            }
+        }
+
+        $configured = $this->normalizeOperationalText((string) ($agent['after_hours_message'] ?? ''));
+        if ($configured !== '' && (
+            $normalizedReply === $configured
+            || ((function_exists('mb_strlen') ? mb_strlen($configured) : strlen($configured)) >= 20 && str_starts_with($normalizedReply, $configured))
+        )) {
+            return true;
+        }
+
+        foreach ([
+            'estamos fora do horario',
+            'fora do horario de atendimento',
+            'atendimento esta fechado',
+            'atendimento encerrado por hoje',
+            'retornaremos no proximo horario',
+        ] as $claim) {
+            if (str_contains($normalizedReply, $claim)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeOperationalText(string $value): string
+    {
+        $value = function_exists('mb_strtolower') ? mb_strtolower(trim($value)) : strtolower(trim($value));
+        $value = strtr($value, [
+            'á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a',
+            'é' => 'e', 'ê' => 'e', 'í' => 'i',
+            'ó' => 'o', 'ô' => 'o', 'õ' => 'o',
+            'ú' => 'u', 'ü' => 'u', 'ç' => 'c',
+        ]);
+        return trim((string) preg_replace('/[^a-z0-9]+/u', ' ', $value));
     }
 
     private function log(int $tenantId, int $conversationId, ?int $agentId, string $event, string $status, ?string $error, ?string $responsePreview, ?array $raw): void

@@ -1,3 +1,11 @@
+# Rollback — RS Connect 36.34.4
+
+A 36.34.4 não cria migration. Para rollback de aplicação, restaure os arquivos da 36.34.3 e reinicie o app. A migration `116_sla_trigger_mysql_compat.sql` deve permanecer aplicada.
+
+> Atenção: voltar para 36.34.3 reintroduz o risco de o LLM repetir uma mensagem histórica de ausência mesmo quando `AgentOperatingPolicyService` já considera o expediente aberto.
+
+---
+
 # Rollback — RS Connect 36.34.3
 
 A 36.34.3 não cria migration. Para rollback de aplicação, restaure os arquivos da 36.34.2 e reinicie o app. A migration `116_sla_trigger_mysql_compat.sql` deve permanecer aplicada.

@@ -66,6 +66,28 @@ final class AiContextBuilder
         );
         $statement->execute(['conversation_id' => $conversationId]);
         $baselineMessages = $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        // 36.34.4: quando o expediente atual está aberto, uma antiga mensagem
+        // operacional de ausência não deve virar contexto de verdade para o LLM.
+        // Ela continua persistida/auditável no histórico da conversa, mas é removida
+        // somente do contexto enviado ao provedor enquanto o status atual for aberto.
+        $operatingPolicy = is_array($agent['_operating_policy'] ?? null)
+            ? (array) $agent['_operating_policy']
+            : (new AgentOperatingPolicyService())->status($agent);
+        $afterHoursMessage = trim((string) ($agent['after_hours_message'] ?? ''));
+        if (!empty($operatingPolicy['enforced']) && !empty($operatingPolicy['inside']) && $afterHoursMessage !== '') {
+            $normalizedAfterHours = $this->normalizeOperationalMessage($afterHoursMessage);
+            $baselineMessages = array_values(array_filter(
+                $baselineMessages,
+                function (array $message) use ($normalizedAfterHours): bool {
+                    if ((string) ($message['direction'] ?? '') !== 'outgoing' || (string) ($message['sender_type'] ?? '') !== 'ai') {
+                        return true;
+                    }
+                    return $this->normalizeOperationalMessage((string) ($message['content'] ?? '')) !== $normalizedAfterHours;
+                }
+            ));
+        }
+
         $messages = count($baselineMessages) > $historyLimit
             ? array_slice($baselineMessages, -$historyLimit)
             : $baselineMessages;
@@ -216,6 +238,18 @@ final class AiContextBuilder
             $terms[$part] = true;
         }
         return $terms;
+    }
+
+    private function normalizeOperationalMessage(string $value): string
+    {
+        $value = function_exists('mb_strtolower') ? mb_strtolower(trim($value)) : strtolower(trim($value));
+        $value = strtr($value, [
+            'á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a',
+            'é' => 'e', 'ê' => 'e', 'í' => 'i',
+            'ó' => 'o', 'ô' => 'o', 'õ' => 'o',
+            'ú' => 'u', 'ü' => 'u', 'ç' => 'c',
+        ]);
+        return trim((string) preg_replace('/[^a-z0-9]+/u', ' ', $value));
     }
 
     private function normalize(string $value): string

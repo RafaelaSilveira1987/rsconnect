@@ -1,3 +1,21 @@
+# RS Connect 36.34.4
+
+## Hotfix de autoridade do horário na IA
+
+O estado atual do expediente passa a ser uma **fonte de verdade determinística** também para o contexto enviado ao provedor de IA. Quando o RS Connect confirma que a empresa está dentro do horário, mensagens antigas de ausência permanecem no histórico/auditoria, mas deixam de ser usadas como contexto capaz de induzir a IA a repetir “Estamos fora do horário”. O cache exato também descarta respostas antigas incompatíveis e existe uma trava final antes do envio.
+
+- nenhuma migration nova;
+- permanece obrigatória `116_sla_trigger_mysql_compat.sql`;
+- manifesto esperado: **123 migrations de subida**;
+- atualização: substituir os arquivos e reiniciar o app.
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php up
+php bin/migrate.php verify
+docker compose restart app
+```
+
 # RS Connect 36.34.3
 
 ## Hotfix do horário de atendimento

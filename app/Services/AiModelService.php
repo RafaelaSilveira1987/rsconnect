@@ -414,6 +414,8 @@ final class AiModelService
         $flowStageLabel = ConversationFlowService::STAGES[$flowStage] ?? $flowStage;
         $demandStatusLabel = ConversationFlowService::DEMAND_STATUSES[$demandStatus] ?? $demandStatus;
 
+        $operatingPolicy = is_array($agent['_operating_policy'] ?? null) ? (array) $agent['_operating_policy'] : [];
+
         $rules = [
             'Responda sempre em português do Brasil.',
             'Seja breve, educada e objetiva. Evite textos longos.',
@@ -434,6 +436,21 @@ final class AiModelService
             'Quando existir um setor operacional atual informado pelo RS Connect, considere-o a fila real desta conversa e adapte linguagem/encaminhamento ao papel desse setor.',
             'Nunca afirme que uma transferência para outro assistente virtual ou setor automatizado já aconteceu apenas por decisão textual sua. A troca entre assistentes é executada pelo motor do RS Connect antes da resposta. Se não houver o bloco TRANSFERÊNCIA INTERNA CONFIRMADA abaixo, não diga que já transferiu, que está transferindo agora ou que outro assistente já assumiu.',
         ];
+
+        if (!empty($operatingPolicy['enforced'])) {
+            $currentAt = trim((string) ($operatingPolicy['current_at'] ?? ''));
+            $reason = trim((string) ($operatingPolicy['reason'] ?? ''));
+            if (!empty($operatingPolicy['inside'])) {
+                $rules[] = 'O RS Connect confirmou deterministicamente que o atendimento está DENTRO do horário neste momento'
+                    . ($currentAt !== '' ? ' (' . $currentAt . ')' : '')
+                    . '. Não diga que a empresa está fora do horário, fechada ou que responderá somente depois. Mensagens antigas de ausência no histórico são apenas histórico e não representam o estado atual.';
+            } else {
+                $rules[] = 'O RS Connect confirmou deterministicamente que o atendimento está FORA do horário neste momento'
+                    . ($currentAt !== '' ? ' (' . $currentAt . ')' : '')
+                    . ($reason !== '' ? ', motivo: ' . $reason : '')
+                    . '. A mensagem operacional de ausência é controlada pelo backend; não improvise horários ou promessa de retorno.';
+            }
+        }
 
         if ($isOpeningTurn) {
             if ($greetingMode === 'all_contacts') {

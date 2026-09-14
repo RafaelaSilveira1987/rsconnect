@@ -1,3 +1,59 @@
+# TESTE DA VERSÃO — RS Connect 36.34.4
+
+## Hotfix H4 — estado atual do expediente prevalece sobre histórico da IA
+
+### 1. Atualizar
+
+Não há migration nova.
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php up
+php bin/migrate.php verify
+docker compose restart app
+```
+
+**Esperado:** manifesto com **123 migrations de subida** e nenhuma migration pendente.
+
+### 2. Manter a configuração real
+
+Para o agente Digi, preserve Seg–Sex, `08:00–18:00`, `America/Sao_Paulo`. Não apague o histórico antigo da conversa; ele faz parte deste teste.
+
+### 3. Repetir dentro do expediente
+
+Em uma segunda-feira entre 08:00 e 18:00, envie uma mensagem nova como:
+
+```text
+Teste horário 36.34.4
+```
+
+**Esperado:** a mensagem entra normalmente e a resposta automática **não** pode ser `Estamos fora do horário de atendimento agora.`.
+
+### 4. Conferir o log da IA
+
+```sql
+SELECT id, incoming_message_id, event, status, response_preview, error_message, raw_json, created_at
+FROM ai_automation_logs
+WHERE tenant_id = SEU_TENANT_ID
+  AND conversation_id = SUA_CONVERSA
+ORDER BY id DESC
+LIMIT 20;
+```
+
+**Esperado:** resposta normal via `ai.replied`, sem novo `ai.after_hours`. Caso o provedor ainda tente afirmar falsamente que está fechado, deve surgir `ai.operating_policy.blocked` e a frase incorreta não deve ser enviada ao WhatsApp.
+
+### 5. Validar o fechamento real
+
+Depois das 18:00, ou temporariamente com uma faixa que exclua o horário atual, envie nova mensagem.
+
+**Esperado:** agora sim o backend pode registrar `ai.after_hours` e enviar a mensagem configurada de ausência.
+
+### 6. Retomar Fase C
+
+Após validar dentro/fora do expediente, retome os cenários do SLA com conversa nova: dentro da meta → alerta em 80% → violação em 100% → primeira resposta humana.
+
+---
+
 # TESTE DA VERSÃO — RS Connect 36.34.3
 
 ## Hotfix H3 — expediente do onboarding interpretado corretamente

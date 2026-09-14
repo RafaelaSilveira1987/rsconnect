@@ -1,5 +1,25 @@
 # Changelog — RS Connect
 
+## 36.34.4 — Hotfix de autoridade do horário na IA
+
+### Corrigido
+- o estado calculado por `AgentOperatingPolicyService` é propagado até o prompt do provedor como fonte de verdade operacional;
+- quando o expediente atual está aberto, mensagens históricas de ausência continuam persistidas no banco, mas são removidas do contexto enviado ao LLM;
+- o prompt informa explicitamente que mensagens antigas dizendo “fora do horário” são históricas e não representam o estado atual;
+- o cache exato deixa de reaproveitar respostas de ausência gravadas durante um período fechado quando a empresa já está aberta;
+- uma defesa final bloqueia qualquer resposta gerada que ainda afirme falsamente que a empresa está fora do horário enquanto a política atual estiver `inside_business_hours`;
+- o bloqueio é registrado como `ai.operating_policy.blocked` para diagnóstico, sem enviar informação operacional incorreta ao contato.
+
+### Causa confirmada em homologação
+- a mensagem das 15:59 foi gerada corretamente pelo antigo caminho `ai.after_hours` antes do hotfix 36.34.3;
+- depois da correção do parser, às 16:18 e 16:20 a política já estava `inside_business_hours`, porém o provedor OpenAI repetiu a frase antiga porque ela ainda fazia parte do histórico enviado;
+- os logs `ai.replied` confirmaram que esses dois envios vieram do LLM, não da política de horário.
+
+### Banco de dados
+- **nenhuma migration nova**;
+- permanece obrigatória `116_sla_trigger_mysql_compat.sql`;
+- manifesto permanece com **123 migrations de subida**.
+
 ## 36.34.3 — Hotfix do horário de atendimento
 
 ### Corrigido
