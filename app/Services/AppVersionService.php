@@ -166,7 +166,9 @@ final class AppVersionService
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.32.0 — Production Readiness: Go-Live';
     // Compatibilidade histórica: REQUIRED_MIGRATION = '112_tenant_lifecycle_go_live.sql';
     // RS Connect 36.32.1 — hotfix de fuso do relatório e consistência da primeira resposta humana/SLA.
-    public const PACKAGE_LABEL = 'RS Connect 36.32.1 — Hotfix de relatório e SLA humano';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.32.1 — Hotfix de relatório e SLA humano';
+    // RS Connect 36.32.2 — corrige placeholders PDO nativos no cálculo de SLA e isola falhas dos indicadores.
+    public const PACKAGE_LABEL = 'RS Connect 36.32.2 — Hotfix do cálculo de SLA';
     public const REQUIRED_MIGRATION = '113_human_first_response_report_consistency.sql';
 
     private PDO $pdo;

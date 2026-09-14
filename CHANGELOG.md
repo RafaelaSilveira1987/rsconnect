@@ -1,5 +1,18 @@
 # Changelog — RS Connect
 
+## 36.32.2 — Hotfix do cálculo de SLA
+
+### Corrigido
+- o cálculo de SLA deixa de reutilizar o mesmo placeholder nomeado em PDO MySQL nativo (`ATTR_EMULATE_PREPARES=false`);
+- os limites `dentro da meta` e `fora da meta` agora usam `:sla_met_seconds` e `:sla_breached_seconds`, eliminando o erro `HY093` que fazia o card cair silenciosamente para `0/0`;
+- duração de ciclo, SLA e espera atual passam a ser consultados em blocos isolados: uma falha em um indicador não zera os demais;
+- logs de relatório distinguem `service-cycle.closed`, `service-cycle.sla` e `service-cycle.waiting`, facilitando diagnóstico em produção.
+
+### Banco de dados
+- **nenhuma migration nova**;
+- permanece obrigatória `113_human_first_response_report_consistency.sql`;
+- manifesto permanece com **120 migrations de subida**.
+
 ## 36.32.1 — Hotfix de relatório e SLA humano
 
 ### Corrigido

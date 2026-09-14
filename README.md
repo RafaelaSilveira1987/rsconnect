@@ -1,4 +1,13 @@
-# RS Connect 36.32.1
+# RS Connect 36.32.2
+
+## Hotfix do cálculo de SLA — 36.32.2
+
+Correção pontual da homologação da Fase A. O card **Tempo médio da 1ª resposta humana** já encontrava a resposta, mas o card de **SLA** retornava `0/0` porque a query reutilizava `:sla_seconds` duas vezes enquanto o projeto usa PDO MySQL com prepared statements nativos. A versão 36.32.2 usa placeholders exclusivos e isola as consultas operacionais para evitar que uma falha secundária apague o SLA calculado.
+
+- nenhuma migration nova;
+- permanece obrigatória `113_human_first_response_report_consistency.sql`;
+- manifesto esperado: **120 migrations**;
+- consulte `TESTE_DA_VERSAO.md` para repetir exatamente o cenário que apresentou `1 resposta medida` e `SLA 0/0`.
 
 ## Hotfix de relatório e SLA humano — 36.32.1
 
