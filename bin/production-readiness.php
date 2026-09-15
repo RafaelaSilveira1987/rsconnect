@@ -63,15 +63,22 @@ try {
 }
 
 try {
-    $total = (int) $scalar($pdo, 'SELECT COUNT(*) FROM evolution_instances WHERE receive_messages = 1');
-    $unhealthy = (int) $scalar($pdo, "SELECT COUNT(*) FROM evolution_instances WHERE receive_messages=1 AND (status <> 'connected' OR COALESCE(connection_state,'') <> 'open' OR identity_status <> 'verified' OR COALESCE(reconciliation_status,'unknown') NOT IN ('healthy','corrected'))");
-    if ($total < 1) {
-        $push('WARN', 'Evolution / WhatsApp', 'nenhuma instância com receive_messages=1');
+    $liveReceivers = (int) $scalar($pdo, "SELECT COUNT(*) FROM evolution_instances ei INNER JOIN tenants t ON t.id=ei.tenant_id WHERE ei.receive_messages=1 AND t.lifecycle_status='live'");
+    $unhealthyLive = (int) $scalar($pdo, "SELECT COUNT(*) FROM evolution_instances ei INNER JOIN tenants t ON t.id=ei.tenant_id WHERE ei.receive_messages=1 AND t.lifecycle_status='live' AND (ei.status <> 'connected' OR COALESCE(ei.connection_state,'') <> 'open' OR ei.identity_status <> 'verified' OR COALESCE(ei.reconciliation_status,'unknown') NOT IN ('healthy','corrected'))");
+    $nonLiveReceivers = (int) $scalar($pdo, "SELECT COUNT(*) FROM evolution_instances ei INNER JOIN tenants t ON t.id=ei.tenant_id WHERE ei.receive_messages=1 AND t.lifecycle_status <> 'live'");
+    $unhealthyNonLive = (int) $scalar($pdo, "SELECT COUNT(*) FROM evolution_instances ei INNER JOIN tenants t ON t.id=ei.tenant_id WHERE ei.receive_messages=1 AND t.lifecycle_status <> 'live' AND (ei.status <> 'connected' OR COALESCE(ei.connection_state,'') <> 'open' OR ei.identity_status <> 'verified' OR COALESCE(ei.reconciliation_status,'unknown') NOT IN ('healthy','corrected'))");
+
+    if ($liveReceivers < 1) {
+        $push('WARN', 'Evolution / WhatsApp LIVE', 'nenhuma instância receptora em tenant LIVE');
     } else {
-        $push($unhealthy === 0 ? 'OK' : 'BLOCK', 'Evolution / WhatsApp', $total . ' instância(s) receptoras; ' . $unhealthy . ' com estado/identidade/reconciliação pendente');
+        $push($unhealthyLive === 0 ? 'OK' : 'BLOCK', 'Evolution / WhatsApp LIVE', $liveReceivers . ' instância(s) receptora(s) em tenant LIVE; ' . $unhealthyLive . ' pendente(s)');
+    }
+
+    if ($nonLiveReceivers > 0) {
+        $push('INFO', 'Evolution fora de produção', $nonLiveReceivers . ' instância(s) receptora(s) em ONBOARDING/READY/SUSPENDED; ' . $unhealthyNonLive . ' pendente(s), sem bloquear a release');
     }
 } catch (Throwable $e) {
-    $push('BLOCK', 'Evolution / WhatsApp', 'falha na validação: ' . $e->getMessage());
+    $push('BLOCK', 'Evolution / WhatsApp LIVE', 'falha na validação: ' . $e->getMessage());
 }
 
 try {
@@ -84,11 +91,15 @@ try {
 }
 
 try {
-    $open = (int) $scalar($pdo, "SELECT COUNT(*) FROM conversations WHERE status IN ('open','pending')");
-    $unassigned = (int) $scalar($pdo, "SELECT COUNT(*) FROM conversations WHERE status IN ('open','pending') AND assigned_user_id IS NULL");
-    $push('OK', 'Carga operacional', $open . ' conversa(s) ativa(s); ' . $unassigned . ' sem responsável (indicador operacional, não bloqueio)');
+    $openLive = (int) $scalar($pdo, "SELECT COUNT(*) FROM conversations c INNER JOIN tenants t ON t.id=c.tenant_id WHERE t.lifecycle_status='live' AND c.status IN ('open','pending')");
+    $unassignedLive = (int) $scalar($pdo, "SELECT COUNT(*) FROM conversations c INNER JOIN tenants t ON t.id=c.tenant_id WHERE t.lifecycle_status='live' AND c.status IN ('open','pending') AND c.assigned_user_id IS NULL");
+    $openNonLive = (int) $scalar($pdo, "SELECT COUNT(*) FROM conversations c INNER JOIN tenants t ON t.id=c.tenant_id WHERE t.lifecycle_status <> 'live' AND c.status IN ('open','pending')");
+    $push('OK', 'Carga operacional LIVE', $openLive . ' conversa(s) ativa(s); ' . $unassignedLive . ' sem responsável (indicador operacional, não bloqueio)');
+    if ($openNonLive > 0) {
+        $push('INFO', 'Carga fora de produção', $openNonLive . ' conversa(s) aberta(s)/pendente(s) em tenants não LIVE, fora do indicador produtivo');
+    }
 } catch (Throwable $e) {
-    $push('WARN', 'Carga operacional', 'não foi possível consultar: ' . $e->getMessage());
+    $push('WARN', 'Carga operacional LIVE', 'não foi possível consultar: ' . $e->getMessage());
 }
 
 try {

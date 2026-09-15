@@ -1,3 +1,20 @@
+# RS Connect 36.36.1
+
+> **Hotfix do Production Readiness:** o preflight passa a tratar somente tenants `LIVE` como escopo bloqueante de Evolution/WhatsApp e de carga operacional produtiva. Ambientes `ONBOARDING`, `READY` e `SUSPENDED` continuam visíveis como informação, mas não bloqueiam a release. Não há migration nova.
+
+## Atualização rápida
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php up
+php bin/migrate.php verify
+php bin/production-readiness.php
+```
+
+Esperado no ambiente homologado: **1 instância receptora LIVE, 0 pendentes** e resultado **PRONTO PARA HOMOLOGAÇÃO FINAL**. Em EasyPanel, reinicie/rebuild o serviço pela interface quando o container não tiver o comando `docker`.
+
+Depois siga `docs/HOMOLOGACAO-FINAL-v36.36.1.md`.
+
 # RS Connect 36.36.0
 
 > **Fase E — Homologação final / Release Candidate:** consolida Go-Live, Evolution Reliability, SLA operacional e Carga Operacional já homologados nas Fases A–D. Não há nova migration nem novo módulo de negócio.

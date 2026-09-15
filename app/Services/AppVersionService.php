@@ -187,7 +187,9 @@ final class AppVersionService
     // RS Connect 36.35.0 — Production Readiness Fase D: carga operacional por responsável sem dependência de filas.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.35.0 — Production Readiness: Carga operacional';
     // RS Connect 36.36.0 — Production Readiness Fase E: homologação final e release candidate operacional.
-    public const PACKAGE_LABEL = 'RS Connect 36.36.0 — Production Readiness: Homologação final';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.0 — Production Readiness: Homologação final';
+    // RS Connect 36.36.1 — hotfix do preflight: bloqueios e carga produtiva consideram apenas tenants LIVE.
+    public const PACKAGE_LABEL = 'RS Connect 36.36.1 — Hotfix do Production Readiness';
     public const REQUIRED_MIGRATION = '116_sla_trigger_mysql_compat.sql';
 
     private PDO $pdo;

@@ -1,3 +1,12 @@
+## 36.36.1 — Hotfix do Production Readiness
+
+- corrige o escopo do preflight de Evolution/WhatsApp: apenas instâncias receptoras pertencentes a tenants `LIVE` podem bloquear a release;
+- instâncias em `ONBOARDING`, `READY` ou `SUSPENDED` permanecem visíveis como `INFO`, inclusive quando desconectadas ou ainda sem identidade verificada;
+- corrige a carga operacional do preflight para contabilizar como produtivas somente conversas de tenants `LIVE`;
+- conversas abertas de tenants não LIVE passam a ser exibidas separadamente como informação;
+- preserva todos os critérios de Go-Live, SLA, webhooks, observabilidade e a migration obrigatória `116_sla_trigger_mysql_compat.sql`;
+- não há migration nova; o manifesto permanece com **123 migrations**.
+
 ## 36.36.0 — Production Readiness: Homologação final
 
 - consolida as Fases A–D em uma release candidate sem ampliar o escopo funcional;

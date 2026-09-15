@@ -18,9 +18,9 @@ $guide = $read('docs/HOMOLOGACAO-FINAL-v36.36.0.md');
 $test = $read('TESTE_DA_VERSAO.md');
 $layout = $read('app/Views/layouts/app.php');
 
-$check(str_contains($version, "PACKAGE_LABEL = 'RS Connect 36.36.0 — Production Readiness: Homologação final'"), 'Pacote identifica a Fase E 36.36.0.');
+$check(str_contains($version, "PACKAGE_LABEL = 'RS Connect 36.36.0 — Production Readiness: Homologação final'"), 'Histórico mantém a Fase E 36.36.0.');
 $check(str_contains($version, "REQUIRED_MIGRATION = '116_sla_trigger_mysql_compat.sql'"), 'Fase E não adiciona migration.');
-$check(str_contains($manifest, '"package_version": "36.36.0"') && str_contains($manifest, '"required_migration": "116_sla_trigger_mysql_compat.sql"'), 'Manifesto identifica a release candidate e preserva migration 116.');
+$check((str_contains($manifest, '"package_version": "36.36.0"') || str_contains($manifest, '"package_version": "36.36.1"')) && str_contains($manifest, '"required_migration": "116_sla_trigger_mysql_compat.sql"'), 'Manifesto mantém a linha da release candidate e preserva migration 116.');
 $check(str_contains($preflight, 'HealthCheckService') && str_contains($preflight, 'schema_migrations'), 'Preflight valida readiness e migration obrigatória.');
 $check(str_contains($preflight, 'tenant_sla_settings') && str_contains($preflight, 'lifecycle_status'), 'Preflight valida Go-Live e política de SLA.');
 $check(str_contains($preflight, 'evolution_instances') && str_contains($preflight, 'identity_status') && str_contains($preflight, 'reconciliation_status'), 'Preflight valida conexão, identidade e reconciliação Evolution.');
@@ -29,7 +29,7 @@ $check(str_contains($preflight, "status IN ('open','pending')") && str_contains(
 $check(str_contains($guide, 'E1 — Lead novo') && str_contains($guide, 'E12 — Go-Live / suspensão'), 'Matriz final cobre E1 a E12.');
 $check(str_contains($guide, 'Evolution: idempotência') && str_contains($guide, 'Relatório e PDF') && str_contains($guide, 'Carga Operacional'), 'Matriz final inclui integrações, relatório e supervisão.');
 $check(str_contains($test, 'preflight sem bloqueios') && str_contains($test, 'E1–E12'), 'Roteiro da versão define critério objetivo de aprovação.');
-$check(str_contains($layout, 'app.css?v=36.36.0'), 'Cache-busting do frontend foi atualizado para 36.36.0.');
+$check(str_contains($layout, 'app.css?v=36.36.0') || str_contains($layout, 'app.css?v=36.36.1'), 'Cache-busting do frontend permanece na linha 36.36.x.');
 
 if ($failures > 0) {
     fwrite(STDERR, "\n{$failures} falha(s); {$passes} verificação(ões) aprovada(s).\n");

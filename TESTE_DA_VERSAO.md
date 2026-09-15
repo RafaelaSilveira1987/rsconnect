@@ -1,3 +1,38 @@
+# TESTE DA VERSÃO — RS Connect 36.36.1
+
+## Hotfix E1 — escopo LIVE do Production Readiness
+
+Não há migration nova. O manifesto continua com **123 migrations** e `116_sla_trigger_mysql_compat.sql`.
+
+### 1. Atualizar e validar
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php up
+php bin/migrate.php verify
+php bin/production-readiness.php
+```
+
+### 2. Critério principal
+
+Com o cenário homologado — RS Digital Lab `LIVE` saudável e outras empresas em `ONBOARDING` — o preflight deve mostrar:
+
+- Evolution / WhatsApp LIVE: `1` receptora, `0` pendentes;
+- Evolution fora de produção: informativo, sem `BLOCK`;
+- carga operacional produtiva restrita a tenants `LIVE`;
+- conversas de tenants não LIVE exibidas separadamente como `INFO`;
+- resultado final `PRONTO PARA HOMOLOGAÇÃO FINAL`, desde que os demais checks permaneçam sem bloqueios/atenções.
+
+### 3. Não fazer
+
+Não reconectar nem marcar artificialmente como saudáveis instâncias de tenants em onboarding apenas para satisfazer o preflight.
+
+### 4. Homologação final
+
+Após o preflight aprovado, siga `docs/HOMOLOGACAO-FINAL-v36.36.1.md`.
+
+---
+
 # TESTE DA VERSÃO — RS Connect 36.36.0
 
 ## Fase E — Homologação final / Release Candidate
