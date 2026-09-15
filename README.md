@@ -1,3 +1,19 @@
+# RS Connect 36.36.0
+
+> **Fase E — Homologação final / Release Candidate:** consolida Go-Live, Evolution Reliability, SLA operacional e Carga Operacional já homologados nas Fases A–D. Não há nova migration nem novo módulo de negócio.
+
+## Atualização rápida
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php up
+php bin/migrate.php verify
+docker compose restart app
+php bin/production-readiness.php
+```
+
+O preflight final deve terminar como **PRONTO PARA HOMOLOGAÇÃO FINAL** ou **PRONTO COM ATENÇÃO**, nunca como **BLOQUEADO**. Depois execute `docs/HOMOLOGACAO-FINAL-v36.36.0.md`.
+
 # RS Connect 36.35.0
 
 > **Fase D — Carga operacional:** adiciona uma visão de supervisão baseada no fluxo já usado pelo cliente, sem exigir filas ou distribuição automática. A tela consolida responsável, conversas ativas e SLA em risco/violado, mantendo a mesma política de SLA da caixa de entrada e dos relatórios. Não há migration nova; permanece `116_sla_trigger_mysql_compat.sql`.

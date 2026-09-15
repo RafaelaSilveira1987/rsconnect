@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.35.0",
-  "release_name": "Production Readiness: Carga operacional",
+  "package_version": "36.36.0",
+  "release_name": "Production Readiness: Homologação final",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,11 +19,16 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.34.4",
-      "release_name": "Hotfix de autoridade do horário na IA",
+      "package_version": "36.35.0",
+      "release_name": "Production Readiness: Carga operacional",
       "required_migration": "116_sla_trigger_mysql_compat.sql"
     },
     "historical_releases": [
+      {
+        "package_version": "36.35.0",
+        "release_name": "Production Readiness: Carga operacional",
+        "required_migration": "116_sla_trigger_mysql_compat.sql"
+      },
       {
         "package_version": "36.34.4",
         "release_name": "Hotfix de autoridade do horário na IA",

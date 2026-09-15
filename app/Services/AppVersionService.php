@@ -185,7 +185,9 @@ final class AppVersionService
     // RS Connect 36.34.4 — histórico de ausência não pode sobrescrever o estado operacional atual.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.34.4 — Hotfix de autoridade do horário na IA';
     // RS Connect 36.35.0 — Production Readiness Fase D: carga operacional por responsável sem dependência de filas.
-    public const PACKAGE_LABEL = 'RS Connect 36.35.0 — Production Readiness: Carga operacional';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.35.0 — Production Readiness: Carga operacional';
+    // RS Connect 36.36.0 — Production Readiness Fase E: homologação final e release candidate operacional.
+    public const PACKAGE_LABEL = 'RS Connect 36.36.0 — Production Readiness: Homologação final';
     public const REQUIRED_MIGRATION = '116_sla_trigger_mysql_compat.sql';
 
     private PDO $pdo;

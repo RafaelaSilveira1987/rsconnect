@@ -1,3 +1,13 @@
+## 36.36.0 — Production Readiness: Homologação final
+
+- consolida as Fases A–D em uma release candidate sem ampliar o escopo funcional;
+- adiciona `bin/production-readiness.php`, um preflight operacional que valida readiness da aplicação, migration obrigatória, Go-Live/SLA, Evolution/identidade/reconciliação, webhooks recentes, carga ativa e observabilidade;
+- classifica o ambiente em **PRONTO**, **PRONTO COM ATENÇÃO** ou **BLOQUEADO**, sem alterar dados;
+- adiciona roteiro final ponta a ponta em `docs/HOMOLOGACAO-FINAL-v36.36.0.md`;
+- preserva a operação sem filas obrigatórias: carga por responsável continua sendo a visão principal de supervisão;
+- não há migration nova; permanece `116_sla_trigger_mysql_compat.sql` como requisito de banco;
+- a Fase E é de validação, evidência e estabilidade: não adiciona novos módulos comerciais.
+
 ## 36.35.0 — Production Readiness: Carga operacional
 
 - adiciona a tela **Carga operacional** para supervisão do atendimento sem exigir o módulo de filas;

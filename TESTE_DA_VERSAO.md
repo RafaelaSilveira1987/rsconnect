@@ -1,3 +1,36 @@
+# TESTE DA VERSÃO — RS Connect 36.36.0
+
+## Fase E — Homologação final / Release Candidate
+
+Não há migration nova. A atualização preserva `116_sla_trigger_mysql_compat.sql` e **123 migrations**.
+
+### 1. Atualizar e validar
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php up
+php bin/migrate.php verify
+docker compose restart app
+php bin/production-readiness.php
+```
+
+**Esperado:** nenhuma migration pendente e nenhum resultado `BLOCK` no preflight.
+
+### 2. Executar matriz final
+
+Siga `docs/HOMOLOGACAO-FINAL-v36.36.0.md`. Os cenários E1–E12 cobrem entrada WhatsApp, cliente reconhecido, handoff, SLA dentro/fora da meta, reabertura, transferência, reconciliação, idempotência, relatório/PDF, carga operacional e Go-Live/suspensão.
+
+### 3. Critério de aprovação
+
+- [ ] preflight sem bloqueios;
+- [ ] E1–E12 aprovados ou formalmente marcados como não aplicáveis;
+- [ ] zero erro 5xx recorrente em webhook Evolution após o início da homologação;
+- [ ] Evolution conectada/verified/healthy;
+- [ ] SLA coerente entre Conversas, Carga Operacional e Relatórios;
+- [ ] backup/rollback conferidos.
+
+---
+
 # TESTE DA VERSÃO — RS Connect 36.35.0
 
 ## Objetivo
