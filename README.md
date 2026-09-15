@@ -1,3 +1,18 @@
+# RS Connect 36.35.0
+
+> **Fase D — Carga operacional:** adiciona uma visão de supervisão baseada no fluxo já usado pelo cliente, sem exigir filas ou distribuição automática. A tela consolida responsável, conversas ativas e SLA em risco/violado, mantendo a mesma política de SLA da caixa de entrada e dos relatórios. Não há migration nova; permanece `116_sla_trigger_mysql_compat.sql`.
+
+## Atualização rápida
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php up
+php bin/migrate.php verify
+docker compose restart app
+```
+
+Depois, acesse **Relacionamento → Carga operacional**.
+
 # RS Connect 36.34.4
 
 ## Hotfix de autoridade do horário na IA

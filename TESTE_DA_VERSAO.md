@@ -1,3 +1,131 @@
+# TESTE DA VERSÃO — RS Connect 36.35.0
+
+## Objetivo
+
+Homologar a Fase D de **Carga operacional sem dependência de filas**. A versão não ativa round-robin, setores nem balanceamento automático; usa somente conversas, responsável humano, modo de atendimento e SLA já existentes.
+
+## Pré-requisitos
+
+- RS Connect 36.35.0 instalado;
+- migration 116 já aplicada (não há migration nova nesta versão);
+- empresa em `LIVE` para validar os estados oficiais de SLA;
+- ao menos dois usuários ativos para testar transferência de responsável.
+
+## Configuração
+
+1. Execute `php bin/migrate.php verify` e confirme **123 migrations**.
+2. Entre em **Relacionamento → Carga operacional**.
+3. Para testes rápidos de SLA, mantenha a meta em 5 min e alerta em 80%, como na homologação da Fase C.
+
+## Cenário A — conversa sem responsável
+
+1. Inicie uma conversa nova sem atribuir responsável.
+2. Atualize **Carga operacional**.
+
+Esperado:
+
+- `Total ativo` aumenta em 1;
+- `Sem responsável` aumenta em 1;
+- a linha **Sem responsável** aparece na carga da equipe;
+- a conversa aparece na lista de atenção.
+
+## Cenário B — assumir conversa
+
+1. Abra a conversa e assuma como um usuário humano.
+2. Volte à Carga operacional.
+
+Esperado:
+
+- `Sem responsável` diminui;
+- o usuário responsável ganha 1 em `Ativos`;
+- se o modo estiver humano, também ganha 1 em `Humano`;
+- a conversa não é duplicada.
+
+## Cenário C — transferir responsável
+
+1. Transfira a mesma conversa de um usuário A para um usuário B.
+
+Esperado:
+
+- A perde 1 ativo;
+- B ganha 1 ativo;
+- total ativo não muda;
+- a conversa permanece única e abre pelo mesmo `conversation_id`.
+
+## Cenário D — SLA em risco
+
+1. Crie um novo ciclo sem resposta humana.
+2. Aguarde atingir 80% da meta.
+
+Esperado:
+
+- `Aguardando 1ª resposta` aumenta;
+- `SLA em risco` aumenta;
+- a conversa sobe na lista de atenção e recebe o rótulo **SLA em risco**;
+- a coluna `Em risco` é atribuída ao responsável atual ou a **Sem responsável**.
+
+## Cenário E — SLA violado
+
+1. Continue sem resposta humana até ultrapassar 100% da meta.
+
+Esperado:
+
+- a conversa deixa de contar como `Em risco` e passa a `Violados`;
+- o KPI `SLA violado` aumenta;
+- a conversa recebe o rótulo **SLA violado**.
+
+## Cenário F — resposta humana
+
+1. Responda a conversa como humano depois do alerta/violação.
+
+Esperado:
+
+- `Aguardando 1ª resposta` diminui;
+- a conversa deixa de contar nos KPIs atuais `Em risco` / `Violado`;
+- ela continua em `Total ativo` enquanto permanecer aberta;
+- o relatório histórico continua preservando se o SLA foi cumprido ou violado.
+
+## Cenário G — encerrar e reabrir
+
+1. Encerre a conversa.
+2. Confirme que ela sai da carga ativa.
+3. Gere uma nova mensagem e reabra o atendimento.
+
+Esperado:
+
+- novo ciclo volta à carga operacional;
+- o ciclo anterior permanece no relatório histórico;
+- o SLA da nova abertura começa independente do ciclo anterior.
+
+## Cenário H — filtros
+
+Valide conexão, responsável, status, modo e SLA.
+
+Esperado: todos os KPIs, equipe e lista de conversas respeitam os filtros selecionados.
+
+## Cenário I — atualização automática
+
+1. Deixe a tela aberta.
+2. Em outro navegador, assuma, transfira ou responda uma conversa.
+
+Esperado: em até aproximadamente 30 segundos a tela detecta a mudança e atualiza mantendo os filtros atuais.
+
+## Critérios para aprovar a Fase D
+
+- [ ] sem responsável reflete conversas reais;
+- [ ] assumir e transferir não duplica atendimento;
+- [ ] encerrar remove da carga ativa;
+- [ ] reabrir cria nova carga/ciclo sem apagar histórico;
+- [ ] SLA em risco e violado batem com a caixa de entrada;
+- [ ] resposta humana remove o risco operacional atual, sem apagar a violação histórica do relatório;
+- [ ] filtros e atualização automática funcionam;
+- [ ] nenhuma configuração de fila é exigida.
+
+
+---
+
+# Histórico de testes das versões anteriores
+
 # TESTE DA VERSÃO — RS Connect 36.34.4
 
 ## Hotfix H4 — estado atual do expediente prevalece sobre histórico da IA

@@ -1,3 +1,16 @@
+## 36.35.0 — Production Readiness: Carga operacional
+
+- adiciona a tela **Carga operacional** para supervisão do atendimento sem exigir o módulo de filas;
+- consolida conversas abertas e pendentes por responsável, incluindo **Sem responsável**;
+- exibe indicadores de total ativo, atendimento humano, aguardando primeira resposta, SLA em risco e SLA violado;
+- reutiliza a mesma `SlaPolicyService` da caixa de entrada e dos relatórios para evitar divergência de cálculo;
+- mostra apenas risco/violação de SLA ainda pendente de primeira resposta humana, evitando tratar violações históricas já respondidas como incidente atual;
+- adiciona filtros por conexão, responsável, status, modo e estado de SLA;
+- permite abrir a conversa diretamente a partir da visão de supervisão;
+- atualiza automaticamente a tela quando a carga muda, com verificação leve a cada 30 segundos;
+- não ativa round-robin, setores ou distribuição automática e não depende do módulo **Fila e setores**;
+- não há migration nova; permanece `116_sla_trigger_mysql_compat.sql` como requisito de banco.
+
 # Changelog — RS Connect
 
 ## 36.34.4 — Hotfix de autoridade do horário na IA

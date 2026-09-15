@@ -183,7 +183,9 @@ final class AppVersionService
     // RS Connect 36.34.3 — hotfix da leitura do expediente compacto salvo pelo onboarding.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.34.3 — Hotfix do horário de atendimento';
     // RS Connect 36.34.4 — histórico de ausência não pode sobrescrever o estado operacional atual.
-    public const PACKAGE_LABEL = 'RS Connect 36.34.4 — Hotfix de autoridade do horário na IA';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.34.4 — Hotfix de autoridade do horário na IA';
+    // RS Connect 36.35.0 — Production Readiness Fase D: carga operacional por responsável sem dependência de filas.
+    public const PACKAGE_LABEL = 'RS Connect 36.35.0 — Production Readiness: Carga operacional';
     public const REQUIRED_MIGRATION = '116_sla_trigger_mysql_compat.sql';
 
     private PDO $pdo;

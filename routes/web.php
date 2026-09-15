@@ -36,6 +36,7 @@ use App\Controllers\NotificationsController;
 use App\Controllers\OperationsController;
 use App\Controllers\OperationsCenterController;
 use App\Controllers\OperationalPanelController;
+use App\Controllers\OperationalLoadController;
 use App\Controllers\OperationalAlertsController;
 use App\Controllers\CommunicationsController;
 use App\Controllers\PaymentGatewayController;
@@ -118,6 +119,8 @@ return static function (Router $router): void {
     $router->post('/webhooks/messages/retention/run', [MessageGovernanceController::class, 'cron']);
     $router->post('/webhooks/n8n/callback', [N8nTemplateController::class, 'callback']);
 
+    $router->get('/carga-operacional', [OperationalLoadController::class, 'index'], ['auth', 'permission:conversations.view']);
+    $router->get('/carga-operacional/snapshot', [OperationalLoadController::class, 'snapshot'], ['auth', 'permission:conversations.view']);
     $router->get('/conversations', [ConversationController::class, 'index'], ['auth', 'permission:conversations.view']);
     $router->get('/conversations/poll', [ConversationController::class, 'poll'], ['auth', 'permission:conversations.view']);
     $router->get('/conversations/avatar', [ConversationController::class, 'avatar'], ['auth', 'permission:conversations.view']);

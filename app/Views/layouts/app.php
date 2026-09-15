@@ -186,7 +186,7 @@ $svgIcon = static function (string $name): string {
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
     <!-- Compatibilidade histórica v36.30.5: app.css?v=36.30.5 app.js?v=36.30.5 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.34.1')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.35.0')) ?>">
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
             width: 54px !important;
@@ -236,6 +236,9 @@ $svgIcon = static function (string $name): string {
             <?php endif; ?>
             <?php if (Auth::can('conversations.view') && $moduleVisible('conversations')): ?>
                 <a class="nav-link<?= $isActive('/conversations') ?>" href="<?= View::e(Router::url('/conversations')) ?>"><?= $svgIcon('chat') ?><span>Conversas</span><?= $notificationBadge($conversationUnread) ?></a>
+            <?php endif; ?>
+            <?php if (Auth::can('conversations.view') && $moduleVisible('conversations')): ?>
+                <a class="nav-link<?= $isActive('/carga-operacional') ?>" href="<?= View::e(Router::url('/carga-operacional')) ?>"><?= $svgIcon('operations') ?><span>Carga operacional</span></a>
             <?php endif; ?>
             <?php if (Auth::can('queue.view') && $moduleVisible('queue')): ?>
                 <a class="nav-link<?= $isActive('/queue') ?>" href="<?= View::e(Router::url('/queue')) ?>"><?= $svgIcon('users') ?><span>Fila e setores</span></a>

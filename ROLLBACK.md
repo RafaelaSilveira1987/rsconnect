@@ -1,3 +1,27 @@
+# ROLLBACK — RS Connect 36.35.0
+
+A 36.35.0 não possui migration nova. O banco permanece compatível com a 36.34.4.
+
+## Retorno
+
+1. Faça backup dos arquivos atuais.
+2. Restaure os arquivos da 36.34.4.
+3. Execute:
+
+```bash
+php bin/migrate.php verify
+docker compose restart app
+```
+
+Não execute rollback de banco: a última migration continua sendo `116_sla_trigger_mysql_compat.sql`.
+
+A tela **Carga operacional** deixa de existir ao restaurar a 36.34.4; conversas, responsáveis e métricas de SLA não são alterados por esse rollback.
+
+
+---
+
+# Histórico de rollback das versões anteriores
+
 # Rollback — RS Connect 36.34.4
 
 A 36.34.4 não cria migration. Para rollback de aplicação, restaure os arquivos da 36.34.3 e reinicie o app. A migration `116_sla_trigger_mysql_compat.sql` deve permanecer aplicada.
