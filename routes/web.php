@@ -64,6 +64,8 @@ return static function (Router $router): void {
     $router->post('/mobile/logout', [MobileApiController::class, 'logout']);
     $router->get('/mobile/me', [MobileApiController::class, 'me']);
     $router->get('/mobile/conversations', [MobileApiController::class, 'conversations']);
+    $router->get('/mobile/conversations/messages', [MobileApiController::class, 'conversationMessages']);
+    $router->post('/mobile/conversations/read', [MobileApiController::class, 'markConversationRead']);
     $router->post('/mobile/conversations/send', [MobileApiController::class, 'sendConversation']);
     $router->post('/mobile/conversations/mode', [MobileApiController::class, 'conversationMode']);
     $router->get('/mobile/contacts', [MobileApiController::class, 'contacts']);

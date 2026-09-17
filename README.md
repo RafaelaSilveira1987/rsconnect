@@ -1,4 +1,4 @@
-# RS Connect 36.36.1
+# RS Connect 36.36.3
 
 > **Hotfix do Production Readiness:** o preflight passa a tratar somente tenants `LIVE` como escopo bloqueante de Evolution/WhatsApp e de carga operacional produtiva. Ambientes `ONBOARDING`, `READY` e `SUSPENDED` continuam visíveis como informação, mas não bloqueiam a release. Não há migration nova.
 

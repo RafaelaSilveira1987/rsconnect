@@ -88,9 +88,7 @@ final class MobileApiController
     {
         [, $user] = $this->authenticate('conversations.view');
         $tenantId = $this->tenantId($user);
-        $pdo = Database::connection();
-
-        $statement = $pdo->prepare(
+        $statement = Database::connection()->prepare(
             'SELECT c.id, c.contact_id, c.status, c.attendance_mode, c.unread_count, c.last_message_at,
                     c.last_message_preview, ct.name, ct.phone, ct.status AS contact_status, ct.contact_group,
                     u.name AS assigned_name,
@@ -104,45 +102,10 @@ final class MobileApiController
              LIMIT 120'
         );
         $statement->execute(['tenant_id' => $tenantId]);
-        $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
-        $ids = array_map(static fn(array $row): int => (int) $row['id'], $rows);
-        $messagesByConversation = [];
-
-        if ($ids !== []) {
-            $placeholders = implode(',', array_fill(0, count($ids), '?'));
-            $msg = $pdo->prepare(
-                'SELECT id, conversation_id, direction, sender_type, content, delivered_content, sent_at
-                 FROM conversation_messages
-                 WHERE tenant_id = ? AND conversation_id IN (' . $placeholders . ')
-                 ORDER BY sent_at DESC, id DESC
-                 LIMIT 1800'
-            );
-            $msg->execute(array_merge([$tenantId], $ids));
-            foreach ($msg->fetchAll(PDO::FETCH_ASSOC) as $message) {
-                $conversationId = (int) $message['conversation_id'];
-                $messagesByConversation[$conversationId] ??= [];
-                if (count($messagesByConversation[$conversationId]) >= 80) {
-                    continue;
-                }
-                $messagesByConversation[$conversationId][] = [
-                    'id' => PublicId::encode('message', (int) $message['id']),
-                    'text' => (string) ($message['content'] ?: $message['delivered_content'] ?: ''),
-                    'time' => $this->timeLabel((string) $message['sent_at']),
-                    'direction' => $message['direction'] === 'outgoing' ? 'out' : 'in',
-                    'author' => $message['sender_type'] === 'ai' ? 'ai' : ($message['sender_type'] === 'contact' ? 'contact' : 'human'),
-                ];
-            }
-            foreach ($messagesByConversation as &$messages) {
-                $messages = array_reverse($messages);
-            }
-            unset($messages);
-        }
-
-        $conversations = array_map(function (array $row) use ($messagesByConversation): array {
+        $conversations = array_map(function (array $row): array {
             $name = trim((string) ($row['name'] ?? '')) ?: (string) $row['phone'];
-            $id = (int) $row['id'];
             return [
-                'id' => PublicId::encode('conversation', $id),
+                'id' => PublicId::encode('conversation', (int) $row['id']),
                 'contactId' => PublicId::encode('contact', (int) $row['contact_id']),
                 'name' => $name,
                 'initials' => $this->initials($name),
@@ -155,15 +118,71 @@ final class MobileApiController
                 'demand' => trim((string) ($row['demand'] ?? '')) ?: 'Demanda não informada',
                 'responsible' => trim((string) ($row['assigned_name'] ?? '')) ?: ((string) $row['attendance_mode'] === 'ai' ? 'Agente RS • IA' : 'Equipe de atendimento'),
                 'aiActive' => (string) $row['attendance_mode'] === 'ai',
-                'messages' => $messagesByConversation[$id] ?? [],
             ];
-        }, $rows);
+        }, $statement->fetchAll(PDO::FETCH_ASSOC));
 
         $this->json([
             'ok' => true,
             'conversations' => $conversations,
             'unread_total' => array_sum(array_column($conversations, 'unread')),
         ]);
+    }
+
+    public function conversationMessages(): void
+    {
+        [, $user] = $this->authenticate('conversations.view');
+        $conversationId = PublicId::decode('conversation', trim((string) ($_GET['conversation_id'] ?? '')));
+        if (!$conversationId) {
+            $this->json(['ok' => false, 'message' => 'Conversa inválida.'], 422);
+        }
+        $tenantId = $this->tenantId($user);
+        $check = Database::connection()->prepare('SELECT id FROM conversations WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+        $check->execute(['id' => $conversationId, 'tenant_id' => $tenantId]);
+        if (!$check->fetchColumn()) {
+            $this->json(['ok' => false, 'message' => 'Conversa não encontrada para sua empresa.'], 404);
+        }
+
+        $statement = Database::connection()->prepare(
+            'SELECT id, direction, sender_type, content, delivered_content, sent_at
+             FROM conversation_messages
+             WHERE tenant_id = :tenant_id AND conversation_id = :conversation_id
+             ORDER BY sent_at DESC, id DESC
+             LIMIT 120'
+        );
+        $statement->execute(['tenant_id' => $tenantId, 'conversation_id' => $conversationId]);
+        $rows = array_reverse($statement->fetchAll(PDO::FETCH_ASSOC));
+        $messages = array_map(function (array $message): array {
+            return [
+                'id' => PublicId::encode('message', (int) $message['id']),
+                'text' => (string) ($message['content'] ?: $message['delivered_content'] ?: ''),
+                'time' => $this->timeLabel((string) $message['sent_at']),
+                'direction' => $message['direction'] === 'outgoing' ? 'out' : 'in',
+                'author' => $message['sender_type'] === 'ai' ? 'ai' : ($message['sender_type'] === 'contact' ? 'contact' : 'human'),
+            ];
+        }, $rows);
+        $this->json(['ok' => true, 'messages' => $messages]);
+    }
+
+    public function markConversationRead(): void
+    {
+        [, $user] = $this->authenticate('conversations.view');
+        $body = $this->jsonBody();
+        $conversationId = PublicId::decode('conversation', trim((string) ($body['conversation_id'] ?? '')));
+        if (!$conversationId) {
+            $this->json(['ok' => false, 'message' => 'Conversa inválida.'], 422);
+        }
+        $statement = Database::connection()->prepare(
+            'UPDATE conversations SET unread_count = 0 WHERE id = :id AND tenant_id = :tenant_id'
+        );
+        $statement->execute(['id' => $conversationId, 'tenant_id' => $this->tenantId($user)]);
+        if ($statement->rowCount() < 1) {
+            $check = Database::connection()->prepare('SELECT id FROM conversations WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
+            $check->execute(['id' => $conversationId, 'tenant_id' => $this->tenantId($user)]);
+            if (!$check->fetchColumn()) {
+                $this->json(['ok' => false, 'message' => 'Conversa não encontrada para sua empresa.'], 404);
+            }
+        }
+        $this->json(['ok' => true]);
     }
 
     public function sendConversation(): void
