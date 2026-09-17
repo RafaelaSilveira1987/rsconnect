@@ -28,6 +28,7 @@ use App\Controllers\InstanceController;
 use App\Controllers\ImplementationController;
 use App\Controllers\HealthController;
 use App\Controllers\MessageGovernanceController;
+use App\Controllers\MobileApiController;
 use App\Controllers\OnboardingController;
 use App\Controllers\OpenAiUsageController;
 use App\Controllers\N8nFlowController;
@@ -57,6 +58,19 @@ use App\Controllers\WhiteLabelController;
 use App\Core\Router;
 
 return static function (Router $router): void {
+    // API nativa utilizada pelo aplicativo RS Connect Mobile.
+    // Autenticação Bearer própria; não usa cookie/CSRF do navegador.
+    $router->post('/auth/login', [MobileApiController::class, 'login']);
+    $router->post('/mobile/logout', [MobileApiController::class, 'logout']);
+    $router->get('/mobile/me', [MobileApiController::class, 'me']);
+    $router->get('/mobile/conversations', [MobileApiController::class, 'conversations']);
+    $router->post('/mobile/conversations/send', [MobileApiController::class, 'sendConversation']);
+    $router->post('/mobile/conversations/mode', [MobileApiController::class, 'conversationMode']);
+    $router->get('/mobile/contacts', [MobileApiController::class, 'contacts']);
+    $router->get('/mobile/appointments', [MobileApiController::class, 'appointments']);
+    $router->get('/mobile/agent', [MobileApiController::class, 'agent']);
+    $router->get('/mobile/dashboard', [MobileApiController::class, 'dashboard']);
+    $router->get('/mobile/notifications', [MobileApiController::class, 'notifications']);
     $router->get('/health/live', [HealthController::class, 'live']);
     $router->get('/health/ready', [HealthController::class, 'ready']);
     $router->get('/health/ready/details', [HealthController::class, 'readyDetails'], ['auth', 'super_admin']);

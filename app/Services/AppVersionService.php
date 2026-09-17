@@ -121,7 +121,7 @@ final class AppVersionService
     // RS Connect 36.28.8 — follow-up após restrição volta à conversa normal; intenção antiga não contamina o turno e dedupe não engole nova entrada.
     // RS Connect 36.29.0 — laboratório de assistentes com simulador, IA real opcional, regressão e replay de conversas.
     // RS Connect 36.29.1 — CLI do laboratório valida empresa/assistente, lista IDs reais e elimina exemplos ambíguos.
-    public const VERSION_LABEL = 'Beta Comercial 1.9.2';
+    public const VERSION_LABEL = 'Beta Comercial 1.9.3';
     // RS Connect 36.29.3 — seletor do laboratório sincronizado com o servidor e protegido contra restauração de formulário do navegador.
     // RS Connect 36.29.4 — agrupamento configurável de mensagens e prioridade ao turno atual antes de retomar o roteiro.
     // RS Connect 36.29.5 — fluxo do atendimento editável, efetivo e regras operacionais disponíveis ao cliente.
@@ -189,8 +189,8 @@ final class AppVersionService
     // RS Connect 36.36.0 — Production Readiness Fase E: homologação final e release candidate operacional.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.0 — Production Readiness: Homologação final';
     // RS Connect 36.36.1 — hotfix do preflight: bloqueios e carga produtiva consideram apenas tenants LIVE.
-    public const PACKAGE_LABEL = 'RS Connect 36.36.1 — Hotfix do Production Readiness';
-    public const REQUIRED_MIGRATION = '116_sla_trigger_mysql_compat.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.36.2 — API Mobile segura e integração do aplicativo';
+    public const REQUIRED_MIGRATION = '117_mobile_api_tokens.sql';
 
     private PDO $pdo;
 

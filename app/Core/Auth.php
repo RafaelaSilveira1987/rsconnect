@@ -156,6 +156,18 @@ final class Auth
         return true;
     }
 
+    /**
+     * Hydrates the current request with an already authenticated API identity.
+     * Used only after a mobile bearer token has been validated server-side.
+     *
+     * @param array<string,mixed> $user
+     */
+    public static function setApiUser(array $user): void
+    {
+        $_SESSION[self::SESSION_KEY] = $user;
+        self::$permissionCache = [];
+    }
+
     public static function logout(): void
     {
         $_SESSION = [];
