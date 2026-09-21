@@ -1251,10 +1251,42 @@ final class EvolutionWebhookController
             if ($phone === '') {
                 continue;
             }
-            $pushName = $this->extractWhatsappName($row);
-            $contactId = $this->upsertContact($pdo, $instance, $remoteJid, $phone, $pushName);
+
+            // CONTACTS_UPSERT/CONTACTS_UPDATE representam sincronização da agenda
+            // do WhatsApp. Esses eventos podem conter centenas ou milhares de números
+            // que nunca conversaram com a empresa. Portanto, eles SOMENTE enriquecem
+            // contatos que já existem no RS Connect; nunca criam novos registros.
+            $existing = $pdo->prepare(
+                'SELECT id
+                 FROM contacts
+                 WHERE tenant_id = :tenant_id
+                   AND (
+                        (evolution_instance_id = :instance_id AND remote_jid = :remote_jid)
+                        OR phone = :phone
+                   )
+                 ORDER BY CASE
+                    WHEN evolution_instance_id = :instance_id2 AND remote_jid = :remote_jid2 THEN 0
+                    WHEN evolution_instance_id IS NULL THEN 1
+                    ELSE 2
+                 END
+                 LIMIT 1'
+            );
+            $existing->execute([
+                'tenant_id' => (int) $instance['tenant_id'],
+                'instance_id' => (int) $instance['id'],
+                'remote_jid' => $remoteJid,
+                'phone' => $phone,
+                'instance_id2' => (int) $instance['id'],
+                'remote_jid2' => $remoteJid,
+            ]);
+            $contactId = (int) ($existing->fetchColumn() ?: 0);
             if ($contactId < 1) {
                 continue;
+            }
+
+            $pushName = $this->extractWhatsappName($row);
+            if ($this->contactIdentityColumnsAvailable($pdo)) {
+                $this->observeWhatsappContactName($pdo, $instance, $contactId, $phone, $pushName);
             }
 
             $hasAvatarField = array_key_exists('profilePicUrl', $row) || array_key_exists('profilePictureUrl', $row);
@@ -1418,6 +1450,24 @@ final class EvolutionWebhookController
             'phone' => $phone,
         ]);
         $contactId = (int) $pdo->lastInsertId();
+
+        if ($contactId > 0) {
+            try {
+                $pdo->prepare(
+                    'UPDATE contacts
+                     SET origin = CASE
+                        WHEN origin IN ("legacy", "whatsapp_sync") THEN "whatsapp_message"
+                        ELSE origin
+                     END
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute([
+                    'id' => $contactId,
+                    'tenant_id' => $tenantId,
+                ]);
+            } catch (Throwable) {
+                // Compatibilidade enquanto a migration de origem ainda não foi aplicada.
+            }
+        }
 
         if ($identityReady && $contactId > 0) {
             $this->observeWhatsappContactName($pdo, $instance, $contactId, $phone, $pushName);

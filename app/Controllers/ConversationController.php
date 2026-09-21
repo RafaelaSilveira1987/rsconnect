@@ -523,6 +523,21 @@ final class ConversationController
                 'name_source' => $name !== '' ? 'manual' : 'unknown',
             ]);
             $contactId = (int) $pdo->lastInsertId();
+            try {
+                $pdo->prepare(
+                    'UPDATE contacts
+                     SET origin = CASE
+                        WHEN origin IN ("legacy", "whatsapp_sync") THEN "human_outbound"
+                        ELSE origin
+                     END
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute([
+                    'id' => $contactId,
+                    'tenant_id' => (int) $instance['tenant_id'],
+                ]);
+            } catch (Throwable) {
+                // Compatibilidade enquanto a migration de origem ainda não foi aplicada.
+            }
 
             $assignmentUpdateSql = !empty($ownershipSettings['enabled'])
                 ? 'assigned_user_id = assigned_user_id,'

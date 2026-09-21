@@ -187,6 +187,7 @@ CREATE TABLE contacts (
     phone VARCHAR(30) NOT NULL,
     name VARCHAR(150) NULL,
     name_source VARCHAR(24) NOT NULL DEFAULT 'legacy',
+    origin VARCHAR(32) NOT NULL DEFAULT 'legacy',
     whatsapp_name_candidate VARCHAR(150) NULL,
     whatsapp_name_seen_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     email VARCHAR(190) NULL,
@@ -204,6 +205,7 @@ CREATE TABLE contacts (
     UNIQUE KEY uq_contacts_tenant_phone (tenant_id, phone),
     INDEX idx_contacts_tenant_name (tenant_id, name),
     INDEX idx_contacts_whatsapp_candidate (tenant_id, whatsapp_name_candidate),
+    INDEX idx_contacts_tenant_origin (tenant_id, origin),
     INDEX idx_contacts_instance (evolution_instance_id)
 ) ENGINE=InnoDB;
 

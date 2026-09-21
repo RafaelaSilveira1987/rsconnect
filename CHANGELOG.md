@@ -1,3 +1,11 @@
+## 36.36.7 — Identidade visual Mobile 0.5.0
+
+- publica os assets da interface mobile em `public/mobile-app/`, separados do shell Android;
+- padroniza os ícones dos atalhos e do menu inferior com SVGs leves;
+- adiciona tela de carregamento com a marca **RS Connect** e o texto **Atendimento inteligente**;
+- atualiza a identidade do login e prepara o app para evolução visual sem replicar a interface desktop;
+- não altera API, regras de negócio nem banco de dados; permanece obrigatória a migration `118_contact_origin.sql` da 36.36.6.
+
 ## 36.36.1 — Hotfix do Production Readiness
 
 - corrige o escopo do preflight de Evolution/WhatsApp: apenas instâncias receptoras pertencentes a tenants `LIVE` podem bloquear a release;

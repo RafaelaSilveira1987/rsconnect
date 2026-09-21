@@ -214,6 +214,13 @@ final class ContactController
                 'preferred_user_assigned_by_user_id' => $preferredUserId !== null ? Auth::id() : null,
             ]);
             $contactId = (int) Database::connection()->lastInsertId();
+            try {
+                Database::connection()->prepare(
+                    'UPDATE contacts SET origin = "manual" WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute(['id' => $contactId, 'tenant_id' => $tenantId]);
+            } catch (Throwable) {
+                // Compatibilidade enquanto a migration de origem ainda não foi aplicada.
+            }
             Audit::log('contact.created', ['contact_id' => $contactId, 'phone' => $phone], $tenantId);
             Flash::set('success', 'Contato cadastrado.');
             $this->redirect('/contacts?contact_id=' . $contactId);

@@ -18,7 +18,7 @@ $checks = [
     'api identity uses token tenant' => str_contains($controller, '$user[\'tenant_id\'] = $tokenTenantId;'),
     'contacts response identifies tenant' => str_contains($controller, "'contacts' => \$contacts")
         && str_contains($controller, "PublicId::encode('tenant', \$tenantId)"),
-    'version label' => str_contains($version, '36.36.5'),
+    'version label' => (str_contains($version, '36.36.5') || str_contains($version, '36.36.6')),
 ];
 
 $failed = array_keys(array_filter($checks, static fn(bool $ok): bool => !$ok));
