@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Audit;
 use App\Core\Auth;
 use App\Core\Database;
 use App\Core\PublicId;
 use App\Services\AccessControlService;
+use App\Services\AgentRoutingService;
+use App\Services\AiAfterHoursRecoveryService;
+use App\Services\ConversationOwnershipService;
 use PDO;
 use Throwable;
 
@@ -90,13 +94,15 @@ final class MobileApiController
         $tenantId = $this->tenantId($user);
         $statement = Database::connection()->prepare(
             'SELECT c.id, c.contact_id, c.status, c.attendance_mode, c.unread_count, c.last_message_at,
-                    c.last_message_preview, ct.name, ct.phone, ct.status AS contact_status, ct.contact_group,
-                    u.name AS assigned_name,
+                    c.last_message_preview, c.assigned_user_id, c.department_id,
+                    ct.name, ct.phone, ct.status AS contact_status, ct.contact_group,
+                    u.name AS assigned_name, d.name AS department_name,
                     (SELECT l.title FROM crm_leads l WHERE l.tenant_id = c.tenant_id AND l.contact_id = c.contact_id
                      ORDER BY l.updated_at DESC, l.id DESC LIMIT 1) AS demand
              FROM conversations c
              INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
-             LEFT JOIN users u ON u.id = c.assigned_user_id
+             LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
+             LEFT JOIN service_departments d ON d.id = c.department_id AND d.tenant_id = c.tenant_id
              WHERE c.tenant_id = :tenant_id
              ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
              LIMIT 120'
@@ -117,7 +123,12 @@ final class MobileApiController
                 'temperature' => $this->temperature((string) $row['contact_status'], (string) $row['contact_group']),
                 'demand' => trim((string) ($row['demand'] ?? '')) ?: 'Demanda não informada',
                 'responsible' => trim((string) ($row['assigned_name'] ?? '')) ?: ((string) $row['attendance_mode'] === 'ai' ? 'Agente RS • IA' : 'Equipe de atendimento'),
+                'responsibleUserId' => !empty($row['assigned_user_id']) ? PublicId::encode('user', (int) $row['assigned_user_id']) : null,
+                'department' => trim((string) ($row['department_name'] ?? '')),
+                'attendanceMode' => (string) ($row['attendance_mode'] ?? 'ai'),
                 'aiActive' => (string) $row['attendance_mode'] === 'ai',
+                'aiPaused' => (string) $row['attendance_mode'] === 'paused',
+                'isMine' => (int) ($row['assigned_user_id'] ?? 0) === (int) (Auth::id() ?? 0),
             ];
         }, $statement->fetchAll(PDO::FETCH_ASSOC));
 
@@ -126,6 +137,103 @@ final class MobileApiController
             'conversations' => $conversations,
             'unread_total' => array_sum(array_column($conversations, 'unread')),
         ]);
+    }
+
+    public function conversationContext(): void
+    {
+        [, $user] = $this->authenticate('conversations.view');
+        $conversationId = PublicId::decode('conversation', trim((string) ($_GET['conversation_id'] ?? '')));
+        if (!$conversationId) {
+            $this->json(['ok' => false, 'message' => 'Conversa inválida.'], 422);
+        }
+
+        $pdo = Database::connection();
+        $conversation = $this->findConversation($pdo, $this->tenantId($user), $conversationId);
+        if (!$conversation) {
+            $this->json(['ok' => false, 'message' => 'Conversa não encontrada para sua empresa.'], 404);
+        }
+
+        $this->json(['ok' => true] + $this->conversationContextPayload($pdo, $conversation));
+    }
+
+    public function conversationAssignment(): void
+    {
+        [, $user] = $this->authenticate('conversations.manage');
+        $body = $this->jsonBody();
+        $conversationId = PublicId::decode('conversation', trim((string) ($body['conversation_id'] ?? '')));
+        $action = trim((string) ($body['action'] ?? 'claim'));
+        $targetUserId = null;
+        if (!empty($body['assigned_user_id'])) {
+            $targetUserId = PublicId::decode('user', trim((string) $body['assigned_user_id']));
+            if (!$targetUserId) {
+                $this->json(['ok' => false, 'message' => 'Profissional inválido.'], 422);
+            }
+        }
+        if (!$conversationId || !in_array($action, ['claim', 'assign', 'transfer', 'release'], true)) {
+            $this->json(['ok' => false, 'message' => 'Ação de atendimento inválida.'], 422);
+        }
+
+        $pdo = Database::connection();
+        $tenantId = $this->tenantId($user);
+        $conversation = $this->findConversation($pdo, $tenantId, $conversationId);
+        if (!$conversation) {
+            $this->json(['ok' => false, 'message' => 'Conversa não encontrada para sua empresa.'], 404);
+        }
+
+        try {
+            $result = (new ConversationOwnershipService())->changeAssignment($pdo, $conversationId, $targetUserId, $action);
+            $name = trim((string) ($result['assigned_user_name'] ?? ''));
+            $description = match ($action) {
+                'claim' => 'Atendimento assumido por ' . ($name !== '' ? $name : (string) ($user['name'] ?? 'usuário')) . '.',
+                'release' => 'Conversa liberada para a equipe.',
+                'transfer' => 'Atendimento transferido para ' . ($name !== '' ? $name : 'outro profissional') . '.',
+                default => 'Responsável definido como ' . ($name !== '' ? $name : 'profissional selecionado') . '.',
+            };
+            $this->insertEvent($conversationId, $tenantId, 'ownership.' . $action, $description);
+            Audit::log('conversation.ownership_changed_mobile', $result, $tenantId);
+            $conversation = $this->findConversation($pdo, $tenantId, $conversationId) ?: $conversation;
+            $this->json(['ok' => true, 'message' => $description] + $this->conversationContextPayload($pdo, $conversation));
+        } catch (Throwable $exception) {
+            $this->json(['ok' => false, 'message' => $exception->getMessage()], 422);
+        }
+    }
+
+    public function conversationDepartment(): void
+    {
+        [, $user] = $this->authenticate('conversations.manage');
+        $body = $this->jsonBody();
+        $conversationId = PublicId::decode('conversation', trim((string) ($body['conversation_id'] ?? '')));
+        $targetDepartmentId = null;
+        if (!empty($body['department_id'])) {
+            $targetDepartmentId = PublicId::decode('department', trim((string) $body['department_id']));
+            if (!$targetDepartmentId) {
+                $this->json(['ok' => false, 'message' => 'Setor inválido.'], 422);
+            }
+        }
+        if (!$conversationId) {
+            $this->json(['ok' => false, 'message' => 'Conversa inválida.'], 422);
+        }
+
+        $pdo = Database::connection();
+        $tenantId = $this->tenantId($user);
+        $conversation = $this->findConversation($pdo, $tenantId, $conversationId);
+        if (!$conversation) {
+            $this->json(['ok' => false, 'message' => 'Conversa não encontrada para sua empresa.'], 404);
+        }
+
+        try {
+            $result = (new ConversationOwnershipService())->changeDepartment($pdo, $conversationId, $targetDepartmentId);
+            $departmentName = trim((string) ($result['department_name'] ?? ''));
+            $description = $targetDepartmentId !== null
+                ? 'Conversa transferida para o setor ' . ($departmentName !== '' ? $departmentName : 'selecionado') . '.'
+                : 'Conversa liberada da fila de setor.';
+            $this->insertEvent($conversationId, $tenantId, 'ownership.department_transfer', $description);
+            Audit::log('conversation.department_transferred_mobile', $result, $tenantId);
+            $conversation = $this->findConversation($pdo, $tenantId, $conversationId) ?: $conversation;
+            $this->json(['ok' => true, 'message' => $description] + $this->conversationContextPayload($pdo, $conversation));
+        } catch (Throwable $exception) {
+            $this->json(['ok' => false, 'message' => $exception->getMessage()], 422);
+        }
     }
 
     public function conversationMessages(): void
@@ -215,24 +323,119 @@ final class MobileApiController
         if (!$conversationId || !in_array($mode, ['ai', 'human', 'paused'], true)) {
             $this->json(['ok' => false, 'message' => 'Modo de atendimento inválido.'], 422);
         }
+
+        $pdo = Database::connection();
         $tenantId = $this->tenantId($user);
-        $statement = Database::connection()->prepare(
-            'UPDATE conversations
-             SET attendance_mode = :mode,
-                 assigned_user_id = IF(:mode = "human", :user_id, NULL),
-                 status = IF(status = "closed", "open", status)
-             WHERE id = :id AND tenant_id = :tenant_id'
-        );
-        $statement->execute([
-            'mode' => $mode,
-            'user_id' => (int) $user['id'],
-            'id' => $conversationId,
-            'tenant_id' => $tenantId,
-        ]);
-        if ($statement->rowCount() < 1) {
+        $conversation = $this->findConversation($pdo, $tenantId, $conversationId);
+        if (!$conversation) {
             $this->json(['ok' => false, 'message' => 'Conversa não encontrada para sua empresa.'], 404);
         }
-        $this->json(['ok' => true, 'mode' => $mode]);
+
+        $ownership = new ConversationOwnershipService();
+        $settings = $ownership->settingsForTenant($pdo, $tenantId);
+        $resolvedAfterHours = 0;
+
+        try {
+            $pdo->beginTransaction();
+            if (!empty($settings['enabled'])) {
+                $ownership->assertMayInteract($pdo, $conversation);
+                $conversation = $ownership->reopenIfClosed($pdo, $conversation);
+                if ($mode === 'human') {
+                    $conversation = $ownership->claimForHumanAction($pdo, $conversation);
+                    $pdo->prepare(
+                        'UPDATE conversations SET attendance_mode = "human" WHERE id = :id AND tenant_id = :tenant_id'
+                    )->execute(['id' => $conversationId, 'tenant_id' => $tenantId]);
+                    $resolvedAfterHours = (new AiAfterHoursRecoveryService())->resolveForHumanTakeover(
+                        $pdo,
+                        $tenantId,
+                        $conversationId,
+                        (int) ($user['id'] ?? 0),
+                        'mobile_mode_human'
+                    );
+                } elseif ($mode === 'ai') {
+                    if ((int) ($conversation['assigned_user_id'] ?? 0) > 0) {
+                        $ownership->changeAssignment($pdo, $conversationId, null, 'release');
+                    }
+                    $pdo->prepare(
+                        'UPDATE conversations SET attendance_mode = "ai", status = IF(status = "closed", "open", status)
+                         WHERE id = :id AND tenant_id = :tenant_id'
+                    )->execute(['id' => $conversationId, 'tenant_id' => $tenantId]);
+                } else {
+                    $pdo->prepare(
+                        'UPDATE conversations SET attendance_mode = "paused", status = IF(status = "closed", "open", status)
+                         WHERE id = :id AND tenant_id = :tenant_id'
+                    )->execute(['id' => $conversationId, 'tenant_id' => $tenantId]);
+                }
+            } else {
+                $assignedUserId = $mode === 'human' ? (int) ($user['id'] ?? 0) : null;
+                $pdo->prepare(
+                    'UPDATE conversations
+                     SET attendance_mode = :mode,
+                         assigned_user_id = :assigned_user_id,
+                         assigned_at = IF(:assigned_date IS NULL, NULL, CURRENT_TIMESTAMP),
+                         assignment_source = IF(:assigned_source IS NULL, "released", "manual_mode"),
+                         assignment_updated_by_user_id = :actor_id,
+                         assignment_released_at = IF(:assigned_release IS NULL, CURRENT_TIMESTAMP, NULL),
+                         status = IF(status = "closed", "open", status),
+                         status_changed_by_user_id = :status_actor
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute([
+                    'mode' => $mode,
+                    'assigned_user_id' => $assignedUserId,
+                    'assigned_date' => $assignedUserId,
+                    'assigned_source' => $assignedUserId,
+                    'assigned_release' => $assignedUserId,
+                    'actor_id' => (int) ($user['id'] ?? 0),
+                    'status_actor' => (int) ($user['id'] ?? 0),
+                    'id' => $conversationId,
+                    'tenant_id' => $tenantId,
+                ]);
+                if ($mode === 'human') {
+                    $resolvedAfterHours = (new AiAfterHoursRecoveryService())->resolveForHumanTakeover(
+                        $pdo,
+                        $tenantId,
+                        $conversationId,
+                        (int) ($user['id'] ?? 0),
+                        'mobile_mode_human'
+                    );
+                }
+            }
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $this->json(['ok' => false, 'message' => $exception->getMessage()], 422);
+        }
+
+        if ($mode === 'ai' && empty($conversation['ai_agent_id'])) {
+            try {
+                (new AgentRoutingService())->resolve(
+                    $pdo,
+                    ['id' => (int) ($conversation['evolution_instance_id'] ?? 0), 'tenant_id' => $tenantId],
+                    $conversationId,
+                    '',
+                    true
+                );
+            } catch (Throwable) {
+                // O roteamento também será resolvido na próxima mensagem recebida.
+            }
+        }
+
+        $descriptions = [
+            'ai' => 'IA ativada e atendimento liberado para automação.',
+            'human' => 'Atendimento assumido por ' . (string) ($user['name'] ?? 'usuário') . '.',
+            'paused' => 'IA pausada nesta conversa.',
+        ];
+        $this->insertEvent($conversationId, $tenantId, 'mode.' . $mode, $descriptions[$mode]);
+        Audit::log('conversation.mode_changed_mobile', [
+            'conversation_id' => $conversationId,
+            'mode' => $mode,
+            'after_hours_resolved' => $resolvedAfterHours,
+        ], $tenantId);
+
+        $conversation = $this->findConversation($pdo, $tenantId, $conversationId) ?: $conversation;
+        $this->json(['ok' => true, 'message' => $descriptions[$mode], 'mode' => $mode] + $this->conversationContextPayload($pdo, $conversation));
     }
 
     public function contacts(): void
@@ -360,7 +563,15 @@ final class MobileApiController
     /** @return array{0:string,1:array<string,mixed>} */
     private function authenticate(?string $permission = null): array
     {
-        $authorization = trim((string) ($_SERVER['HTTP_AUTHORIZATION'] ?? ''));
+        $authorization = trim((string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? ''));
+        if ($authorization === '' && function_exists('getallheaders')) {
+            foreach ((array) getallheaders() as $name => $value) {
+                if (strcasecmp((string) $name, 'Authorization') === 0) {
+                    $authorization = trim((string) $value);
+                    break;
+                }
+            }
+        }
         if (!preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches)) {
             $this->json(['ok' => false, 'message' => 'Token de acesso ausente.'], 401);
         }
@@ -393,6 +604,84 @@ final class MobileApiController
             $this->json(['ok' => false, 'message' => 'Seu perfil não possui permissão para esta função.'], 403);
         }
         return [$token, $user];
+    }
+
+    /** @return array<string,mixed>|null */
+    private function findConversation(PDO $pdo, int $tenantId, int $conversationId): ?array
+    {
+        $statement = $pdo->prepare(
+            'SELECT c.*, u.name AS assigned_user_name, d.name AS department_name,
+                    ct.name AS contact_name, ct.phone AS contact_phone
+             FROM conversations c
+             INNER JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
+             LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = c.tenant_id
+             LEFT JOIN service_departments d ON d.id = c.department_id AND d.tenant_id = c.tenant_id
+             WHERE c.id = :id AND c.tenant_id = :tenant_id
+             LIMIT 1'
+        );
+        $statement->execute(['id' => $conversationId, 'tenant_id' => $tenantId]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    /** @param array<string,mixed> $conversation @return array<string,mixed> */
+    private function conversationContextPayload(PDO $pdo, array $conversation): array
+    {
+        $ownership = new ConversationOwnershipService();
+        $snapshot = $ownership->snapshot($pdo, $conversation);
+        $team = array_map(static fn(array $member): array => [
+            'id' => PublicId::encode('user', (int) $member['id']),
+            'name' => (string) $member['name'],
+            'role' => (string) ($member['whatsapp_role_label'] ?: $member['role'] ?: ''),
+        ], $ownership->teamForTenant($pdo, (int) $conversation['tenant_id']));
+        $departments = array_map(static fn(array $department): array => [
+            'id' => PublicId::encode('department', (int) $department['id']),
+            'name' => (string) $department['name'],
+            'members' => (int) ($department['members_count'] ?? 0),
+        ], $ownership->departmentsForTenant($pdo, (int) $conversation['tenant_id']));
+
+        $mode = (string) ($conversation['attendance_mode'] ?? 'ai');
+        return [
+            'conversation' => [
+                'id' => PublicId::encode('conversation', (int) $conversation['id']),
+                'mode' => $mode,
+                'status' => (string) ($conversation['status'] ?? 'open'),
+                'responsible' => trim((string) ($conversation['assigned_user_name'] ?? '')) ?: ($mode === 'ai' ? 'Agente RS • IA' : 'Equipe de atendimento'),
+                'responsibleUserId' => !empty($conversation['assigned_user_id']) ? PublicId::encode('user', (int) $conversation['assigned_user_id']) : null,
+                'department' => trim((string) ($conversation['department_name'] ?? '')),
+                'departmentId' => !empty($conversation['department_id']) ? PublicId::encode('department', (int) $conversation['department_id']) : null,
+                'isMine' => (int) ($conversation['assigned_user_id'] ?? 0) === (int) (Auth::id() ?? 0),
+            ],
+            'actions' => [
+                'canManage' => Auth::can('conversations.manage'),
+                'canInteract' => !empty($snapshot['can_interact']),
+                'canClaim' => !empty($snapshot['can_claim']),
+                'canAssign' => !empty($snapshot['can_assign']),
+                'canTransfer' => !empty($snapshot['can_transfer']),
+                'canRelease' => !empty($snapshot['can_release']),
+                'lockedByOther' => !empty($snapshot['locked_by_other']),
+            ],
+            'team' => $team,
+            'departments' => $departments,
+        ];
+    }
+
+    private function insertEvent(int $conversationId, int $tenantId, string $type, string $description): void
+    {
+        try {
+            Database::connection()->prepare(
+                'INSERT INTO conversation_events (tenant_id, conversation_id, user_id, event_type, description)
+                 VALUES (:tenant_id, :conversation_id, :user_id, :event_type, :description)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'user_id' => Auth::id(),
+                'event_type' => $type,
+                'description' => mb_substr($description, 0, 255),
+            ]);
+        } catch (Throwable) {
+            // A ação principal não deve falhar se o histórico operacional estiver indisponível.
+        }
     }
 
     /** @param array<string,mixed> $user */

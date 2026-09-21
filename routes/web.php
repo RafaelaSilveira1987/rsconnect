@@ -61,13 +61,17 @@ return static function (Router $router): void {
     // API nativa utilizada pelo aplicativo RS Connect Mobile.
     // Autenticação Bearer própria; não usa cookie/CSRF do navegador.
     $router->post('/auth/login', [MobileApiController::class, 'login']);
+    $router->post('/mobile/auth/login', [MobileApiController::class, 'login']);
     $router->post('/mobile/logout', [MobileApiController::class, 'logout']);
     $router->get('/mobile/me', [MobileApiController::class, 'me']);
     $router->get('/mobile/conversations', [MobileApiController::class, 'conversations']);
     $router->get('/mobile/conversations/messages', [MobileApiController::class, 'conversationMessages']);
+    $router->get('/mobile/conversations/context', [MobileApiController::class, 'conversationContext']);
     $router->post('/mobile/conversations/read', [MobileApiController::class, 'markConversationRead']);
     $router->post('/mobile/conversations/send', [MobileApiController::class, 'sendConversation']);
     $router->post('/mobile/conversations/mode', [MobileApiController::class, 'conversationMode']);
+    $router->post('/mobile/conversations/assignment', [MobileApiController::class, 'conversationAssignment']);
+    $router->post('/mobile/conversations/department', [MobileApiController::class, 'conversationDepartment']);
     $router->get('/mobile/contacts', [MobileApiController::class, 'contacts']);
     $router->get('/mobile/appointments', [MobileApiController::class, 'appointments']);
     $router->get('/mobile/agent', [MobileApiController::class, 'agent']);

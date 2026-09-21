@@ -13,7 +13,7 @@ $checks = [
     'messages route' => str_contains($routes, "'/mobile/conversations/messages'"),
     'read route' => str_contains($routes, "'/mobile/conversations/read'"),
     'list does not eagerly load all messages' => !str_contains(substr($controller, strpos($controller, 'public function conversations()'), strpos($controller, 'public function conversationMessages()') - strpos($controller, 'public function conversations()')), 'FROM conversation_messages'),
-    'version label' => str_contains($version, '36.36.3'),
+    'version label' => str_contains($version, '36.36.3') || str_contains($version, '36.36.4'),
 ];
 
 $failed = array_keys(array_filter($checks, static fn(bool $ok): bool => !$ok));
