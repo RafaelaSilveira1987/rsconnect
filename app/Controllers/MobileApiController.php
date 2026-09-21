@@ -453,7 +453,7 @@ final class MobileApiController
                  SELECT c2.id FROM conversations c2 WHERE c2.tenant_id = ct.tenant_id AND c2.contact_id = ct.id
                  ORDER BY COALESCE(c2.last_message_at, c2.created_at) DESC, c2.id DESC LIMIT 1
              )
-             LEFT JOIN users u ON u.id = c.assigned_user_id
+             LEFT JOIN users u ON u.id = c.assigned_user_id AND u.tenant_id = ct.tenant_id
              WHERE ct.tenant_id = :tenant_id AND ct.status <> "inactive"
              ORDER BY COALESCE(c.last_message_at, ct.updated_at) DESC
              LIMIT 300'
@@ -473,7 +473,14 @@ final class MobileApiController
                 'lastContact' => $this->dateTimeLabel((string) ($row['last_message_at'] ?? $row['updated_at'] ?? '')),
             ];
         }, $statement->fetchAll(PDO::FETCH_ASSOC));
-        $this->json(['ok' => true, 'contacts' => $contacts]);
+        $this->json([
+            'ok' => true,
+            'tenant' => [
+                'id' => PublicId::encode('tenant', $tenantId),
+                'name' => (string) ($user['tenant_name'] ?? ''),
+            ],
+            'contacts' => $contacts,
+        ]);
     }
 
     public function appointments(): void
@@ -580,15 +587,16 @@ final class MobileApiController
             $this->json(['ok' => false, 'message' => 'Token de acesso inválido.'], 401);
         }
         $statement = Database::connection()->prepare(
-            'SELECT tkn.id AS token_id, u.id, u.tenant_id, u.name, u.email, u.role,
+            'SELECT tkn.id AS token_id, tkn.tenant_id AS token_tenant_id,
+                    u.id, u.tenant_id AS user_tenant_id, u.name, u.email, u.role,
                     tn.name AS tenant_name
              FROM mobile_api_tokens tkn
              INNER JOIN users u ON u.id = tkn.user_id AND u.status = "active"
-             LEFT JOIN tenants tn ON tn.id = u.tenant_id
+             LEFT JOIN tenants tn ON tn.id = tkn.tenant_id
              WHERE tkn.token_hash = :token_hash
                AND tkn.revoked_at IS NULL
                AND tkn.expires_at > NOW()
-               AND (u.tenant_id IS NULL OR tn.status = "active")
+               AND (tkn.tenant_id IS NULL OR tn.status = "active")
              LIMIT 1'
         );
         $statement->execute(['token_hash' => hash('sha256', $token)]);
@@ -596,6 +604,31 @@ final class MobileApiController
         if (!$user) {
             $this->json(['ok' => false, 'message' => 'Sua sessão expirou. Entre novamente.'], 401);
         }
+
+        $tokenTenantId = (int) ($user['token_tenant_id'] ?? 0);
+        $userTenantId = (int) ($user['user_tenant_id'] ?? 0);
+        $role = (string) ($user['role'] ?? '');
+
+        // O tenant capturado no momento do login é a fronteira de segurança do token mobile.
+        // Para usuários de cliente, qualquer divergência com o vínculo atual invalida a sessão
+        // em vez de silenciosamente trocar a empresa consultada pelo token já emitido.
+        if ($role !== 'super_admin') {
+            if ($tokenTenantId < 1 || $userTenantId < 1 || $tokenTenantId !== $userTenantId) {
+                Database::connection()->prepare(
+                    'UPDATE mobile_api_tokens SET revoked_at = NOW() WHERE id = :id'
+                )->execute(['id' => (int) $user['token_id']]);
+                $this->json([
+                    'ok' => false,
+                    'message' => 'O vínculo da sua empresa mudou. Entre novamente no aplicativo.',
+                ], 401);
+            }
+            $user['tenant_id'] = $tokenTenantId;
+        } else {
+            // Superadministradores continuam sem tenant implícito. Endpoints operacionais
+            // exigirão seleção explícita de empresa antes de liberar dados de cliente.
+            $user['tenant_id'] = $tokenTenantId > 0 ? $tokenTenantId : null;
+        }
+        unset($user['token_tenant_id'], $user['user_tenant_id']);
         Database::connection()->prepare('UPDATE mobile_api_tokens SET last_used_at = NOW() WHERE id = :id')
             ->execute(['id' => (int) $user['token_id']]);
         unset($user['token_id']);

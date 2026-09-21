@@ -20,7 +20,7 @@ $checks = [
     'department route' => str_contains($routes, "'/mobile/conversations/department'"),
     'mobile login alias' => str_contains($routes, "'/mobile/auth/login'"),
     'docker forwards authorization' => str_contains($docker, 'SetEnvIf Authorization'),
-    'version label' => str_contains($version, '36.36.4'),
+    'version label' => str_contains($version, '36.36.4') || str_contains($version, '36.36.5'),
 ];
 
 $failed = array_keys(array_filter($checks, static fn(bool $ok): bool => !$ok));
