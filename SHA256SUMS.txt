@@ -3,7 +3,7 @@
 26af3be20ef2792ee868f93e6da1a95d773aa46727672d19be82ab9b0beb7515  ./.env.local.example
 a9b27e3f3080987813b3305be48c13e1e54cdf650a5f954e1d7485a53bb38543  ./.env.vps.example
 515746cb32b412abe48d68d41108b11ae38b7c4d542fbccc0d149403c89da124  ./.gitignore
-8064f37b3ea72f8d0eba3a9599e99091ff253e7df0db7dd899a424f94554327d  ./CHANGELOG.md
+d6779b78821947ccc86a15756a08c247913b18f0c54c993e1a4cbd551b2ce6dd  ./CHANGELOG.md
 384e15708206ac4de668939ccc4f133bddebc98cbbd5cc46b7c0ca54009d97f2  ./Dockerfile
 900713180abc7f4932a3d8da0d86981997620879ffb22215278e704b74829a7a  ./README.md
 e1b7043b09b6bd9e7ddf0fbb8e45abaea03756a17d4421e762fd46b5b5d88c2b  ./ROLLBACK.md
@@ -108,7 +108,7 @@ f98077caae5b7beeb7dead715471527a4a58b64dbeb0c2505660b543228bfbcf  ./app/Services
 d73181c7c18f1585050d3f611b49303ced38528adb42ea46ad9cc05858f1f01a  ./app/Services/AiRouterService.php
 fe5c2b3eca0bfce848ac8ef3058623da97b8aa04d5565c2a67f4e6fc258ed0e5  ./app/Services/AiTurnContextService.php
 31f804dbc48f1506e82c9de1395a7f67650de453a03671900a8132a291cd1465  ./app/Services/AiUsageService.php
-468047d3e9e2a87c6e2df9710706ddcc4be51d079dae33c90c1c6d7f533b0e83  ./app/Services/AppVersionService.php
+90524ac5463358c10cc6911353014f272427a7ae87cd291f2822d69683a545c6  ./app/Services/AppVersionService.php
 827a1e1fb703b1ffa5cc9f663219e6116c7c043852661bbaa8b7514e73b715f6  ./app/Services/AutomationWebhookService.php
 1980cb493d0e0464cdcbeb155b5aea8739c318f78bd0aafd0c8acc6dc5e8f335  ./app/Services/BackupAutomationService.php
 ec4c8036b556935456fe05933de8074d1020866d3f256f203943dcfaf7be9b74  ./app/Services/BackupSchedulePolicyService.php
@@ -469,7 +469,7 @@ aba7c403021033b00861dd4814753999f68d05043e737993c87ce4c1a3c43151  ./database/mig
 dd42b647d3f23be8dc70249939738a51644ba738644e7f42052c501bbaf77ee1  ./database/migrations/117_mobile_api_tokens.sql
 41acb0e41436a587aef64669f33ec653470e9067e86a338bde19dcd0d888499c  ./database/migrations/118_contact_origin.sql
 12df46933ab1c8a3d209ca59d52ef5aba1f0bcc43ab669107a34ea530ad6a410  ./database/migrations/README.md
-14e18e000f645470290a6734daa04c5c59ac30e07a68ff366c82fa970176d8da  ./database/migrations/manifest.php
+9a143cecef004ffb099e83e871fd3e457148fe966bb4ca70cea63907e2cb6c78  ./database/migrations/manifest.php
 05e999af22704953905b79d2a8be8ce2a9e392b1ec015331b070b9249d19f192  ./database/schema.sql
 b95453c7e41e36de4059abdc821d4384011370c8b8f7094f5fcc1085ae798277  ./database/seed.reference.sql
 1615acd96e9ffb45b677f1dd749d073bf030f42a4d9542503cc54d1000efc1af  ./database/seed.sql
@@ -633,6 +633,7 @@ b6be3f26c29a882fdf84bb06af0e5a79b2c834f75e2fd51426ea22aed7aac036  ./docs/HOMOLOG
 2e6b97f2073a855add79b61094dd6589b2c31a48de1a05d1d9d3ee35d6b6bd31  ./docs/HOMOLOGACAO-FINAL-v36.6.7.md
 6f16a0cb1bc0d62f51322b721eae23e4ee0ee477b3643b496be772f6fcf90436  ./docs/HOMOLOGACAO-FINAL-v36.6.8.md
 071b06a942f177f72ee1e49032730ec86162837a7366ece189661ed14a0a25ae  ./docs/HOMOLOGACAO-FINAL-v36.6.9.md
+be323d0aea21e57523a852e8676a8c988302627c5018514f7af0809c22033332  ./docs/HOTFIX-v36.36.7-r1.md
 b504669ea05baa109b682490b9725615f047e57d85f84d9095821a2192bbed9d  ./docs/INSTALACAO-E-TESTES.md
 cea7ece06e5a05f81172b70ce67a3d6dd2f067123c16050e2898294847860d4b  ./docs/Manual_RS_Connect_Funcionalidades_e_Implantacao.docx
 4ecd008911791fd7fe0b337793a0fe8530ce29c158a4e28aea4f2254d9bfde05  ./docs/PAGAMENTOS-ZIP-36.0.md
@@ -739,6 +740,11 @@ bd3f28a610989ec4d99f29030753678612cbdc06c871a7832045a20580af2b84  ./public/asset
 880607a52fcd14e524d0509931b1958608a3299daccd0b4d7c1968c6d57f9f43  ./public/assets/js/reports.js
 d4518dbae875a6a9c7b99169714fa68df707532083ed8ce6637bb6988d173928  ./public/health.php
 55bd0fa4f936581a77ae6cfe0cf9489ca47ac83ca60d6980bfe10cfcde51dc35  ./public/index.php
+9f32115a126cc4d34a186e75642fb961e8e16180ce2c9d2af07a674a36e006af  ./public/mobile-app/icon.png
+c11c3f3afed6f928c02173dc39844d28852ccd02ae13f52e50e6bd5a0409c36c  ./public/mobile-app/index.html
+61bf33d4b73155270ac7e2f6aa2ee28535f0cc0dffead2098d04dc3d6bc7da35  ./public/mobile-app/splash.png
+5a4f6fb6f706f65a9c1571e168f633ba981931b17b70753e861c4ce2e98da140  ./public/mobile-app/ui-0.5.0.css
+443259a9c1620b29fade064045f1f37c742c9043d991ac9161735c6e44535bd5  ./public/mobile-app/ui-0.5.0.js
 dc150f3d4115e6a1cc730356a434c246fcdf3d3856f05ceb6184474c489af13c  ./public/router.php
 2c1763635a364c917bec9a5ad06644fb33246abcbd8d17994e633845d0fe589f  ./public/uploads/.htaccess
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./public/uploads/white-label/.gitkeep
@@ -913,6 +919,7 @@ cd70b02ad468e372a07903c0b7ac328dba10ad84b3d00cf32b2b35401da69a6d  ./tests/Featur
 73179df99f5ae48854287604af450b51ed02a174586fff70cbb93fce6aceb106  ./tests/Feature/mobile-api-v36363-smoke.php
 b7e86e7b22e2ec192a1ebc12c07e96a7c708dc7955719cc100d937a0cdc3b398  ./tests/Feature/mobile-api-v36364-smoke.php
 98bdb11a6ac4eb45571f3c717148180cfa44be2b1b205a37983ddd19c37ccb01  ./tests/Feature/mobile-api-v36365-smoke.php
+22e174f2283e5cec0a500f26e5effad54a0f367be957da643cda586104fcabe0  ./tests/Feature/mobile-ui-v36367-smoke.php
 6b1902b4406bf93abb101ea67b11f517fef24fdd156d25ae22308e6d6588ea90  ./tests/Feature/multi-agent-round-robin-v36270-smoke.php
 b2f4c74eb0ccb1e7489775d42bc96fafd9b6dbc4a418114d6264434be5378385  ./tests/Feature/multi-agent-routing-ui-v36272-smoke.php
 609c5c7445ce44887c9d47d2d50255ea88f39c1f3e869d7fd4b271802098f67d  ./tests/Feature/new-conversation-drawer-smoke.php
