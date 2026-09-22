@@ -1950,7 +1950,10 @@ final class AiAutomationService
                 }
             }
 
-            $result['scheduling_intent'] = $schedulingIntent || !empty($triageResult['scheduling_intent']) || !empty($result['resumed_after_triage']);
+            // Só o turno atual pode acionar o fail-closed da agenda. O last_intent persistido
+            // pela triagem é contexto, não prova de que ESTA mensagem precisa criar/atualizar
+            // um pré-agendamento. A retomada explícita ao concluir a triagem continua protegida.
+            $result['scheduling_intent'] = $schedulingIntent || !empty($result['resumed_after_triage']);
             return $result;
         } catch (Throwable $exception) {
             if ($schedulingIntent) {

@@ -523,6 +523,15 @@ final class OperationalLanguageService
     private static function detectKey(string ...$parts): string
     {
         $joined = self::fold(implode(' ', $parts));
+
+        // `ai.failed` também é usado quando a proteção fail-closed da agenda bloqueia
+        // a IA. Nesses casos o problema é da camada de agenda/pré-agendamento, não da
+        // credencial ou do saldo do provedor de IA.
+        if ((str_contains($joined, 'camada deterministica') && str_contains($joined, 'agenda'))
+            || str_contains($joined, 'calendar.pre_schedule')) {
+            return 'calendar';
+        }
+
         $patterns = [
             'database' => ['operations.alert.database', 'banco de dados', 'database', 'db_'],
             'migrations' => ['operations.alert.migrations', 'migration', 'estrutura obrigatoria', 'tabelas ausentes'],
@@ -594,6 +603,12 @@ final class OperationalLanguageService
 
         if ($key === 'disk' && preg_match('/(\d+(?:[\.,]\d+)?)\s*%/u', $raw, $match) === 1) {
             return 'O servidor está com aproximadamente ' . str_replace('.', ',', $match[1]) . '% de espaço livre.';
+        }
+
+        if ($key === 'calendar') {
+            if (str_contains($folded, 'camada deterministica') || str_contains($folded, 'pre-agendamento')) {
+                return 'A intenção de agenda foi identificada, mas este turno não concluiu uma criação ou atualização válida do pré-agendamento.';
+            }
         }
 
         if ($key === 'openai') {
