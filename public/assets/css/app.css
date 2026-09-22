@@ -3069,18 +3069,6 @@ pre.codebox {
   height: 16px;
   flex: 0 0 16px;
 }
-.conversation-select-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-.conversation-select-toggle.is-active {
-  border-color: #a9dcd8 !important;
-  background: #edfafa !important;
-  color: #075f5a !important;
-}
 .conversation-bulk-toolbar {
   display: grid;
   gap: 10px;
@@ -3222,12 +3210,6 @@ pre.codebox {
 .conversation-list-row.is-bulk-selected .conversation-list-item {
   background: transparent !important;
 }
-.conversation-list.is-selecting .conversation-list-item {
-  cursor: pointer;
-}
-.conversation-list.is-selecting .conversation-list-item:hover {
-  background: #f3faf9;
-}
 .conversation-select-control {
   width: 46px;
   flex-basis: 46px;
@@ -3279,7 +3261,6 @@ pre.codebox {
   .conversation-heading-actions { gap: 6px; }
   .conversation-heading-actions .btn-small,
   .conversation-heading-actions summary.btn-small { min-height: 40px; }
-  .conversation-select-toggle .button-icon { display: none; }
 
   .conversation-bulk-toolbar {
     position: fixed;

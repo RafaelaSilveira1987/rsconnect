@@ -188,8 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 (function () {
-  const toggle = document.querySelector('[data-toggle-bulk-read]');
-  const toggleLabel = toggle?.querySelector('[data-bulk-toggle-label]');
   const form = document.querySelector('[data-bulk-read-form]');
   const cancelButton = document.querySelector('[data-cancel-bulk-select]');
   const selectAll = document.querySelector('[data-select-all-conversations]');
@@ -197,49 +195,46 @@ document.addEventListener('DOMContentLoaded', () => {
   const submit = document.querySelector('[data-mark-read-button]');
   const deleteButton = document.querySelector('[data-delete-conversations-button]');
   const list = document.querySelector('[data-conversation-list]');
-  if (!toggle || !form || !list) return;
+  if (!form || !list) return;
 
   function checkboxes() {
     return Array.from(list.querySelectorAll('[data-conversation-select]'));
-  }
-
-  function isSelecting() {
-    return !form.hidden;
   }
 
   function selectedCount() {
     return checkboxes().filter((item) => item.checked).length;
   }
 
+  function setToolbarVisible(active) {
+    form.hidden = !active;
+    document.body.classList.toggle('conversation-bulk-mode', active);
+  }
+
   function refresh() {
     const items = checkboxes();
     const selected = items.filter((item) => item.checked).length;
+    const active = selected > 0;
+
+    setToolbarVisible(active);
     if (count) count.textContent = `${selected} selecionada${selected === 1 ? '' : 's'}`;
-    if (submit) submit.disabled = selected < 1;
-    if (deleteButton) deleteButton.disabled = selected < 1;
+    if (submit) submit.disabled = !active;
+    if (deleteButton) deleteButton.disabled = !active;
     if (selectAll) {
       selectAll.checked = items.length > 0 && selected === items.length;
       selectAll.indeterminate = selected > 0 && selected < items.length;
     }
 
-    list.classList.toggle('is-selecting', isSelecting());
-    document.body.classList.toggle('conversation-bulk-mode', isSelecting());
     items.forEach((item) => {
       item.closest('[data-conversation-row]')?.classList.toggle('is-bulk-selected', item.checked);
     });
   }
 
-  function setSelecting(active) {
-    form.hidden = !active;
-    toggle.setAttribute('aria-expanded', active ? 'true' : 'false');
-    toggle.classList.toggle('is-active', active);
-    if (toggleLabel) toggleLabel.textContent = active ? 'Cancelar' : 'Selecionar';
-    if (!active) checkboxes().forEach((item) => { item.checked = false; });
+  function clearSelection() {
+    checkboxes().forEach((item) => { item.checked = false; });
     refresh();
   }
 
-  toggle.addEventListener('click', () => setSelecting(!isSelecting()));
-  cancelButton?.addEventListener('click', () => setSelecting(false));
+  cancelButton?.addEventListener('click', clearSelection);
 
   selectAll?.addEventListener('change', () => {
     checkboxes().forEach((item) => { item.checked = Boolean(selectAll.checked); });
@@ -248,18 +243,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   list.addEventListener('change', (event) => {
     if (event.target.matches?.('[data-conversation-select]')) refresh();
-  });
-
-  list.addEventListener('click', (event) => {
-    if (!isSelecting()) return;
-    const conversationLink = event.target.closest?.('[data-conversation-item]');
-    if (!conversationLink) return;
-    event.preventDefault();
-    const row = conversationLink.closest('[data-conversation-row]');
-    const checkbox = row?.querySelector('[data-conversation-select]');
-    if (!checkbox) return;
-    checkbox.checked = !checkbox.checked;
-    refresh();
   });
 
   deleteButton?.addEventListener('click', async (event) => {
@@ -291,8 +274,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && isSelecting()) setSelecting(false);
+    if (event.key === 'Escape' && selectedCount() > 0) clearSelection();
   });
+
+  const observer = new MutationObserver(() => refresh());
+  observer.observe(list, { childList: true });
 
   refresh();
 })();
@@ -497,6 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const afterHoursQueueCount = document.querySelector('[data-after-hours-queue-count]');
   const quotePendingQueueCount = document.querySelector('[data-quote-pending-count]');
   const slaRiskCount = document.querySelector('[data-sla-risk-count]');
+  const bulkSelectionAvailable = Boolean(document.querySelector('[data-bulk-read-form]'));
   let searchTimer = null;
   const slaStatusMemory = new Map();
   let slaStatusPrimed = false;
@@ -860,11 +847,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const hasQuotePending = Boolean(item.quote_pending);
     const slaStatus = item?.sla && !item.sla.responded ? String(item.sla.status || '') : '';
     const slaClass = ['warning', 'breached'].includes(slaStatus) ? ` has-sla-${slaStatus}` : '';
-    return `<div class="conversation-list-row status-${conversationStatus}${unread > 0 ? ' has-unread' : ''}${hasAfterHoursQueue ? ' has-after-hours-queue' : ''}${hasQuotePending ? ' has-quote-pending' : ''}${slaClass}" data-conversation-row data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}" data-conversation-status="${conversationStatus}" data-after-hours-status="${escapeHtml(afterHoursStatus)}">
-      <label class="conversation-select-control" title="Selecionar ${escapeHtml(item.name || item.phone || 'conversa')}">
+    const selectionMarkup = bulkSelectionAvailable ? `<label class="conversation-select-control" title="Selecionar ${escapeHtml(item.name || item.phone || 'conversa')}">
         <input type="checkbox" name="conversation_ids[]" value="${Number(item.id)}" form="conversation-bulk-read-form" data-conversation-select aria-label="Selecionar conversa de ${escapeHtml(item.name || item.phone || 'contato')}">
         <span aria-hidden="true"></span>
-      </label>
+      </label>` : '';
+    return `<div class="conversation-list-row status-${conversationStatus}${unread > 0 ? ' has-unread' : ''}${hasAfterHoursQueue ? ' has-after-hours-queue' : ''}${hasQuotePending ? ' has-quote-pending' : ''}${slaClass}" data-conversation-row data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}" data-conversation-status="${conversationStatus}" data-after-hours-status="${escapeHtml(afterHoursStatus)}">
+      ${selectionMarkup}
       <a class="conversation-list-item${selectedClass}" data-conversation-item data-conversation-id="${Number(item.id)}" data-conversation-public-id="${escapeHtml(publicId)}" href="${escapeHtml(buildConversationUrl(item.id, publicId))}">
         ${avatarMarkup(item)}
         <span class="conversation-summary">

@@ -44,7 +44,7 @@ $clientManuals = [
             'Leia o histórico e verifique se o assistente virtual está ativo.',
             'Use “Assumir atendimento” quando uma pessoa precisar continuar a conversa.',
             'Responda pelo campo inferior ou reative o assistente quando o atendimento humano terminar.',
-            'Use o modo “Selecionar” para organizar várias conversas de uma vez.',
+            'Marque uma conversa pelo checkbox para exibir imediatamente as ações “Marcar como lidas” e “Excluir”; use “Selecionar todas” quando precisar agir em lote.',
         ],
         'tips' => ['Excluir uma conversa remove o histórico do RS Connect, mas não apaga mensagens do WhatsApp.'],
         'url' => '/conversations',

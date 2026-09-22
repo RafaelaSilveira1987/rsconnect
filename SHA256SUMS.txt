@@ -5,6 +5,7 @@ a9b27e3f3080987813b3305be48c13e1e54cdf650a5f954e1d7485a53bb38543  ./.env.vps.exa
 515746cb32b412abe48d68d41108b11ae38b7c4d542fbccc0d149403c89da124  ./.gitignore
 d6779b78821947ccc86a15756a08c247913b18f0c54c993e1a4cbd551b2ce6dd  ./CHANGELOG.md
 384e15708206ac4de668939ccc4f133bddebc98cbbd5cc46b7c0ca54009d97f2  ./Dockerfile
+66cb8a75a55f3b701da5e73eb40e98e00ffeb6fcbcbe4f21b545845bf958acc1  ./README-ATUALIZACAO-v36.36.7.md
 900713180abc7f4932a3d8da0d86981997620879ffb22215278e704b74829a7a  ./README.md
 e1b7043b09b6bd9e7ddf0fbb8e45abaea03756a17d4421e762fd46b5b5d88c2b  ./ROLLBACK.md
 ee317bf506f72fb569730e9d8ada995c97fc67f7c9499e6e4ba1c8bdab1d2c4c  ./TESTE_DA_VERSAO.md
@@ -203,14 +204,14 @@ f7101fd9d2b2f8ee4cf9747e8281f542f39365c738f96def00197660853d7113  ./app/Views/co
 bdde2128db00e21a487bde96b199d5f375fda7cefe68403199c3a4bab02c8613  ./app/Views/companies/overview.php
 d7eb53446e08295fa50aa5c1392a4796d2a6e82c88765a166e6769f503798db1  ./app/Views/companies/settings.php
 be6e014799974a20b13028a51de482b2d87bef99bb92d5fe20f5dccbdb80b2d7  ./app/Views/contacts/index.php
-2b7a6729cd08afa58779547d89503a8c8f690cccdfb4a3058e2c03902c05fbb9  ./app/Views/conversations/index.php
+bae1bf37699e957491478cd09c319e6b5082cbb0d43df509d7fb92cadd0e6940  ./app/Views/conversations/index.php
 57acd98bc4a9408dd0f13c97eead29dc3050396b9222ed57288066b330694d8f  ./app/Views/crm/admin.php
 59ac2e0c05a51c6eed6c18a02619c04cfe6fd338f56dc2c16096172840efb0c4  ./app/Views/crm/admin_setup.php
 193d90ae98cbf81c324a2fb1e6dc3d07a6c984a872963aca4be2c6846995d9b4  ./app/Views/crm/pipeline.php
 b8d96f111b633eb6a45a8fad7b353df1acd0f10544bfe45ae82095e9aeb3c286  ./app/Views/dashboard/admin.php
 73fc81cc65bc7d3397958082ce589ef302c76cdb4207d1ee63a4cab7022877a4  ./app/Views/dashboard/client.php
 9c98bcee8700d2667b93253e33fc219944a82ade84db0b3ceff419a90924805c  ./app/Views/docs/beta.php
-cbd73a7ea79122cfd5661e871195835e3e958ea83059460ee65cab859499bfc0  ./app/Views/docs/index.php
+b6d5aa1106983a0199f649fe39c6a456dc8f55687c1449eb953004cff84a28c6  ./app/Views/docs/index.php
 fc1ac16f6289c5b4624485295d6085fe46565d65642b24ab29a0709aa0c2e018  ./app/Views/docs/status.php
 e4d79eb032b6d92796a69ee8a172a3c2c73ac949dd9e318c40fb8b9805b5c37b  ./app/Views/errors/404.php
 c3123327a2e7e74fc8d5b95c407cbf7e44b2aa3715293ef585441d751977c525  ./app/Views/implementation/index.php
@@ -726,7 +727,7 @@ aeee5bc8e058b1d03890b79daaf9f39eef29e7e448efdc8b6d05d5678a01f1ac  ./docs/n8n_tem
 22347f12bacc2a5de89719e419f28f2e0a26bc5ecd4e467f396e2dc236d3fb34  ./docs/validation/homologacao-persistente-2026-09-01.json
 bc54013952d10fc798bed2bd1e96b49d5e9201dde4834035aef15e6501dfc52d  ./manifest.json
 c835b907d8eb7381a72224cfdc8b688ffbb9a7676f4f05f7bc84d18c4f61324e  ./public/.htaccess
-6e829b35122aa4c9d777409a162eda60ebf4b220ad0f0808b787d3508915364d  ./public/assets/css/app.css
+c1603d4b56e78179648b6d0dc1f783ac96eb419589485b076c95ccebc943abdc  ./public/assets/css/app.css
 a379eaa195764145459de3cd9172ea3ad08668586cb97b0377181b0cbf70a5bc  ./public/assets/css/reports.css
 eb9bc52f13a9bd152bfa27d7c522830ec59fdc580dd043a293531392c628cd70  ./public/assets/img/RS_Connect_horizontal_transparente.png
 8845f4643d846dc948141fb4de0df0bc1bb98124bf74913e664c792d1b2c07ab  ./public/assets/img/RS_Connect_horizontal_vetor.svg
@@ -734,7 +735,7 @@ eb9bc52f13a9bd152bfa27d7c522830ec59fdc580dd043a293531392c628cd70  ./public/asset
 e66fc5d2a230fa640104ac2370e09b6311388482db2ebd8f98d590ff3db642d9  ./public/assets/img/rs-connect-mark.png
 fecb9b583424227bc0e1a48936808e8a9be42d0c7a3573feb0f1e4498bbe9668  ./public/assets/img/rs-connect-report-mark.jpg
 00fb8db54d6e8e2cd085489e742109048ba0caa8c045177c08dc6d1ecd0cf0d1  ./public/assets/img/rs-digital-lab-report.jpg
-d678cb9412d96cfcf3ae40e8f84dba41de7815727f5bae3bde10dd7195105b08  ./public/assets/js/app.js
+57937faaf0687f4a081efda0e17161a2208107773f8c05793a5957c31cdc1524  ./public/assets/js/app.js
 bd3f28a610989ec4d99f29030753678612cbdc06c871a7832045a20580af2b84  ./public/assets/js/company-settings.js
 429e2971f0e10a6c60617af58e523854177da606636f184409e12f1ec003576d  ./public/assets/js/login-demo.js
 880607a52fcd14e524d0509931b1958608a3299daccd0b4d7c1968c6d57f9f43  ./public/assets/js/reports.js
@@ -760,11 +761,7 @@ e71c859b2d333cbb63db5f588a3753bbe81a07ad6673046ecf1112804d111887  ./scripts/rsco
 eb0d953e813962fd22ce9a78808b0d61ead079807de5bf35bf05286f7c31421b  ./scripts/verify-deploy-hardening.sh
 45b4c06dee1bc07abd19d1bf415c98369a3db38a12a10c63d6f91501fd9780c1  ./storage/README-APLICACAO.md
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/app/.gitkeep
-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/app/white-label/.gitkeep
 0a0dac2ccf941d5650017de17788c4d8f72accb65801ef08d18cc491530e9a7f  ./storage/apply-white-label-company-brand.sh
-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/cache/.gitkeep
-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/logs/.gitkeep
-a43888a354cae50bc7ee4ca98bb85aa2a619c12dd13ccae675a54eead19d9a4c  ./storage/logs/app.log
 72a48a02d968f194678cbda5e01aacedb229c60529efe55d48154f04c934fa90  ./tests/Contract/Fixtures/agent-policy-reliability-scenarios.json
 65e10c5121a88c6831503e6789ed136820f0a2e3e153bd7073e5110eda92b58c  ./tests/Contract/Fixtures/ai-metrics-accounting-scenarios.json
 d50b1524f01927464f7a65ee70971650a6e746bdb587fd8944a5662175eea2ee  ./tests/Contract/Fixtures/ai-quota-template-validation-scenarios.json
@@ -865,6 +862,7 @@ d23930e9b90b4d1818c093e742e7d188a84d03d628647adce5adf67378aef43d  ./tests/Featur
 b37f175d536fd4ba4765b94eab2edd5f1cdb46e04b09a86c82d90c3b4555eb2e  ./tests/Feature/contact-relationship-ai-context-v36298-smoke.php
 9d16fbb4c1056fac656886bc84c6760bb8abf93818c9c532bfcc4f8c8b589016  ./tests/Feature/contact-schedule-overlap-smoke.php
 97ffa26114f6279adc788e622a551f39a37151c6539d41eb9281f4abb48cde70  ./tests/Feature/conversation-attachments-smoke.php
+ba38e763d68856143e1dd642d848d5f34a1061d7549fbc44bfa8dcc08751f528  ./tests/Feature/conversation-bulk-selection-ux-smoke.php
 a2aec1da13a79dbed3567d116b915edb93b70dd708f69b478f04394506b766ff  ./tests/Feature/conversation-cycle-status-sync-smoke.php
 4fa169d3cf7ff91da669badfb676d64a5886c7abce661ba4fa696231a4013704  ./tests/Feature/conversation-data-drawer-v36309-smoke.php
 6519f54c70f12bc7a331be047671d7db8240e312c45b221e6f4e2b4245e36810  ./tests/Feature/conversation-explicit-selection-smoke.php

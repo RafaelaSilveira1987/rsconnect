@@ -216,12 +216,6 @@ $slaRiskCount = count(array_filter($conversations, static function (array $conve
                 </a>
                 <span class="conversation-sla-risk-counter" data-sla-risk-count title="Conversas com SLA em atenção ou violado" <?= $slaRiskCount > 0 ? '' : 'hidden' ?>><span aria-hidden="true">!</span><strong><?= (int) $slaRiskCount ?></strong><small>SLA</small></span>
                 <span class="badge" data-conversation-count><?= count($conversations) ?></span>
-                <?php if ($canManage && $conversations): ?>
-                    <button class="btn btn-outline btn-small conversation-select-toggle" type="button" data-toggle-bulk-read aria-expanded="false" aria-controls="conversation-bulk-read-form">
-                        <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="m14.5 17 2 2 4-5"/></svg>
-                        <span data-bulk-toggle-label>Selecionar</span>
-                    </button>
-                <?php endif; ?>
                 <?php if ($canManage): ?>
                     <button class="btn btn-primary btn-small" type="button" data-new-conversation-open aria-haspopup="dialog" aria-controls="new-conversation-drawer">+ Nova</button>
                 <?php endif; ?>
