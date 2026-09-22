@@ -62,6 +62,9 @@ final class PreSchedulingService
         $continuationContext = $this->isAgendaContinuationContext($existing, $flowContext);
         $intent = $this->detectIntent($content, $continuationContext);
         if (!$intent['has_intent']) {
+            $intent = $this->recoverIntentFromTriage($pdo, $tenantId, $conversationId, $flowContext, $intent);
+        }
+        if (!$intent['has_intent']) {
             return $result;
         }
 
@@ -1990,6 +1993,107 @@ final class PreSchedulingService
             }
             $this->notifyAvailabilityFailure($tenantId, $appointmentId, 0, $message);
             return ['ok' => false, 'message' => $message];
+        }
+    }
+
+
+    private function recoverIntentFromTriage(PDO $pdo, int $tenantId, int $conversationId, array $flowContext, array $currentIntent): array
+    {
+        $session = $this->triageScheduleSnapshot($pdo, $tenantId, $conversationId);
+        $flowIntent = (string) ($flowContext['last_intent'] ?? '');
+        $sessionIntent = (string) ($session['last_intent'] ?? '');
+
+        if (!in_array($flowIntent, ['schedule', 'reschedule'], true)
+            && !in_array($sessionIntent, ['schedule', 'reschedule'], true)) {
+            return $currentIntent;
+        }
+
+        $collected = is_array($session['collected'] ?? null) ? $session['collected'] : [];
+        $seedParts = [];
+        $preferredSchedule = trim((string) ($collected['preferred_schedule'] ?? ''));
+        $modality = trim((string) ($collected['modality'] ?? ''));
+
+        if ($preferredSchedule !== '') {
+            $seedParts[] = $preferredSchedule;
+        }
+        if ($modality !== '') {
+            $seedParts[] = $modality;
+        }
+        if ($seedParts === []) {
+            return $currentIntent;
+        }
+
+        $recovered = $this->detectIntent(implode("
+", $seedParts), true);
+        $recovered['preferred_date'] = (string) ($currentIntent['preferred_date'] ?? '') !== ''
+            ? (string) $currentIntent['preferred_date']
+            : (string) ($recovered['preferred_date'] ?? '');
+        $recovered['preferred_day'] = (string) ($currentIntent['preferred_day'] ?? '') !== ''
+            ? (string) $currentIntent['preferred_day']
+            : (string) ($recovered['preferred_day'] ?? '');
+        $recovered['preferred_time'] = (string) ($currentIntent['preferred_time'] ?? '') !== ''
+            ? (string) $currentIntent['preferred_time']
+            : (string) ($recovered['preferred_time'] ?? '');
+
+        $currentModality = trim((string) ($currentIntent['modality'] ?? ''));
+        if ($currentModality !== '') {
+            $recovered['modality'] = $currentModality;
+            $recovered['location_type'] = $currentModality === 'Presencial'
+                ? 'presencial'
+                : ($currentModality === 'Online' ? 'online' : ($currentModality === 'Telefone' ? 'telefone' : 'indefinida'));
+        }
+
+        $recovered['has_intent'] = $recovered['has_intent']
+            || (string) ($recovered['preferred_date'] ?? '') !== ''
+            || (string) ($recovered['preferred_day'] ?? '') !== ''
+            || (string) ($recovered['preferred_time'] ?? '') !== ''
+            || trim((string) ($recovered['modality'] ?? '')) !== '';
+
+        return $recovered;
+    }
+
+    private function triageScheduleSnapshot(PDO $pdo, int $tenantId, int $conversationId): array
+    {
+        if ($tenantId < 1 || $conversationId < 1 || !$this->tableExists('conversation_triage_sessions')) {
+            return [];
+        }
+
+        try {
+            $statement = $pdo->prepare(
+                'SELECT last_intent, collected_json
+                 FROM conversation_triage_sessions
+                 WHERE tenant_id = :tenant_id
+                   AND conversation_id = :conversation_id
+                 LIMIT 1'
+            );
+            $statement->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+            ]);
+            $row = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+            if ($row === []) {
+                return [];
+            }
+            $row['collected'] = $this->decodeJsonAssoc($row['collected_json'] ?? null);
+            return $row;
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    private function decodeJsonAssoc(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if (!is_string($value) || trim($value) === '') {
+            return [];
+        }
+        try {
+            $decoded = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+            return is_array($decoded) ? $decoded : [];
+        } catch (Throwable) {
+            return [];
         }
     }
 

@@ -74,7 +74,7 @@ code { padding: .12rem .38rem; border-radius: 6px; background: rgba(255,255,255,
 .accent-card p { color: rgba(255,255,255,.76); line-height: 1.7; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 20px; }
 .section-heading h2, .card h2 { margin: 4px 0 0; font-size: 1.2rem; }
-.badge { display: inline-flex; width: fit-content; padding: 6px 9px; border-radius: 999px; color: var(--rs-blue); background: #edf5fb; font-size: .72rem; font-weight: 800; }
+.badge { display: inline-flex; width: fit-content; padding: 6px 9px; border-radius: 999px; color: var(--rs-blue); background: #edf5fb; font-size: .72rem; font-weight: 800; white-space: nowrap; flex: 0 0 auto; }
 .badge-active, .badge-connected { color: #166534; background: #dcfce7; }
 .badge-inactive, .badge-disconnected { color: #991b1b; background: #fee2e2; }
 .badge-pending { color: #92400e; background: #fef3c7; }
@@ -13161,14 +13161,40 @@ body.login-demo-open{overflow:hidden}
 .agent-capability-grid .agent-rule-toggle { min-height: 96px; align-items: center; }
 .agent-rule-toggle.is-off { background: #f8fafc; opacity: .72; }
 .agent-rule-card-content { width: 100%; min-width: 0; }
+.agent-collection-grid,
+.agent-policy-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  align-items: start;
+}
 .agent-collection-card,
-.agent-policy-card { padding: 17px; }
+.agent-policy-card {
+  min-width: 0;
+  padding: 17px;
+}
+.agent-rule-toggle,
+.agent-collection-card,
+.agent-policy-card {
+  align-items: stretch;
+}
 .agent-rule-card-head,
 .agent-policy-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .agent-rule-card-head .field { flex: 1; }
 .agent-policy-card-head > div { display: grid; gap: 4px; min-width: 0; }
+.agent-policy-card-head .badge,
+.agent-rule-card-head .badge { align-self: flex-start; flex: 0 0 auto; white-space: nowrap; }
 .agent-policy-card-head strong { color: #25364c; font-size: .88rem; }
 .agent-policy-card-head small { color: var(--muted); line-height: 1.45; }
+.agent-rule-card-content { display: grid; gap: 14px; width: 100%; min-width: 0; }
+.agent-policy-card .form-grid.two,
+.agent-rule-card-content .form-grid.two {
+  grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+  gap: 12px;
+  align-items: start;
+}
+.agent-policy-card .field,
+.agent-rule-card-content .field { min-width: 0; }
+.agent-policy-card textarea,
+.agent-rule-card-content textarea { min-height: 112px; }
 .agent-rule-options {
   display: grid;
   gap: 8px;
@@ -13177,7 +13203,7 @@ body.login-demo-open{overflow:hidden}
   border-radius: 13px;
   background: #f8fafc;
 }
-.agent-rule-options.single-line { display: flex; }
+.agent-rule-options.single-line { display: flex; flex-wrap: wrap; }
 .agent-rule-options label { display: flex; align-items: flex-start; gap: 7px; color: #526174; font-size: .76rem; font-weight: 700; line-height: 1.35; }
 .agent-rule-options input { margin-top: 2px; accent-color: var(--primary, #01948e); }
 .agent-rule-technical { margin-top: 10px; }
@@ -13201,6 +13227,8 @@ body.login-demo-open{overflow:hidden}
   .agent-niche-grid { grid-template-columns: 1fr; }
   .agent-rules-intro { grid-template-columns: 1fr; }
   .agent-blueprint-actions { grid-template-columns: 1fr; }
+  .agent-policy-card .form-grid.two,
+  .agent-rule-card-content .form-grid.two { grid-template-columns: 1fr; }
   .agent-rules-panel { padding: 18px; }
 }
 @media (max-width: 620px) {
