@@ -210,6 +210,8 @@ final class AgentTriageService
             'collected' => [],
             'missing' => [],
             'profile' => [],
+            'schedule_resume_ready' => false,
+            'schedule_resume_content' => null,
         ];
         $tenantId = (int) ($instance['tenant_id'] ?? 0);
         if ($tenantId < 1 || $contactId < 1 || $conversationId < 1 || !$this->tableExists($pdo, 'tenant_agent_profiles')) {
@@ -324,6 +326,31 @@ final class AgentTriageService
             $result['code'] = (string) ($decision['code'] ?? 'allowed');
             $result['message'] = $decision['message'] ?? null;
             $result['decision'] = $decision;
+
+            // Retoma a agenda SOMENTE na transição em que a última informação
+            // obrigatória da triagem acabou de ser preenchida. Isso evita que uma
+            // intenção antiga de agenda contamine mensagens comuns posteriores.
+            $wasCollectingSchedule = in_array((string) ($session['last_intent'] ?? ''), ['schedule', 'reschedule'], true)
+                && (string) ($session['status'] ?? '') === 'collecting'
+                && $currentField !== null;
+            if ($schedulingIntent
+                && $wasCollectingSchedule
+                && $missingBeforeSchedule === []
+                && !empty($decision['allowed'])) {
+                $resumeParts = [];
+                $preferredSchedule = trim((string) ($collected['preferred_schedule'] ?? ''));
+                $modality = trim((string) ($collected['modality'] ?? ''));
+                if ($preferredSchedule !== '') {
+                    $resumeParts[] = $preferredSchedule;
+                }
+                if ($modality !== '') {
+                    $resumeParts[] = $modality;
+                }
+                if ($resumeParts !== []) {
+                    $result['schedule_resume_ready'] = true;
+                    $result['schedule_resume_content'] = 'agendar ' . implode(' ', $resumeParts);
+                }
+            }
 
             if (!$decision['allowed'] && in_array($decisionType, ['block', 'handoff'], true)) {
                 $alreadyLogged = $isScopedCalendarRestriction

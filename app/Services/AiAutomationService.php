@@ -1877,25 +1877,41 @@ final class AiAutomationService
             if (!empty($triageResult['handled'])) {
                 $result = $triageResult;
             } else {
-                $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
-                    $pdo,
-                    $instance,
-                    $contactId,
-                    $conversationId,
-                    $calendarContent,
-                    $messageId
-                );
-                $result = !empty($calendarSelection['handled'])
-                    ? $calendarSelection
-                    : (new PreSchedulingService())->handleIncoming(
+                $resumeScheduleContent = !empty($triageResult['schedule_resume_ready'])
+                    ? trim((string) ($triageResult['schedule_resume_content'] ?? ''))
+                    : '';
+                if ($resumeScheduleContent !== '') {
+                    $result = (new PreSchedulingService())->handleIncoming(
+                        $pdo,
+                        $instance,
+                        $contactId,
+                        $conversationId,
+                        $resumeScheduleContent,
+                        $flowContext,
+                        $messageId
+                    );
+                    $result['resumed_after_triage'] = true;
+                } else {
+                    $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
                         $pdo,
                         $instance,
                         $contactId,
                         $conversationId,
                         $calendarContent,
-                        $flowContext,
                         $messageId
                     );
+                    $result = !empty($calendarSelection['handled'])
+                        ? $calendarSelection
+                        : (new PreSchedulingService())->handleIncoming(
+                            $pdo,
+                            $instance,
+                            $contactId,
+                            $conversationId,
+                            $calendarContent,
+                            $flowContext,
+                            $messageId
+                        );
+                }
             }
             $result['calendar_burst_message_ids'] = $calendarBurst['message_ids'] ?? [$messageId];
             $result['calendar_burst_count'] = count((array) ($calendarBurst['message_ids'] ?? [$messageId]));
@@ -1934,7 +1950,7 @@ final class AiAutomationService
                 }
             }
 
-            $result['scheduling_intent'] = $schedulingIntent;
+            $result['scheduling_intent'] = $schedulingIntent || !empty($triageResult['scheduling_intent']) || !empty($result['resumed_after_triage']);
             return $result;
         } catch (Throwable $exception) {
             if ($schedulingIntent) {

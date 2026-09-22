@@ -555,25 +555,41 @@ final class EvolutionWebhookController
                         if (!empty($triageResult['handled'])) {
                             $preScheduleResult = $triageResult;
                         } else {
-                            $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
-                                $pdo,
-                                $instance,
-                                $contactId,
-                                $conversationId,
-                                $content,
-                                $storedMessageId
-                            );
-                            $preScheduleResult = !empty($calendarSelection['handled'])
-                                ? $calendarSelection
-                                : (new PreSchedulingService())->handleIncoming(
+                            $resumeScheduleContent = !empty($triageResult['schedule_resume_ready'])
+                                ? trim((string) ($triageResult['schedule_resume_content'] ?? ''))
+                                : '';
+                            if ($resumeScheduleContent !== '') {
+                                $preScheduleResult = (new PreSchedulingService())->handleIncoming(
+                                    $pdo,
+                                    $instance,
+                                    $contactId,
+                                    $conversationId,
+                                    $resumeScheduleContent,
+                                    $flowContext,
+                                    $storedMessageId
+                                );
+                                $preScheduleResult['resumed_after_triage'] = true;
+                            } else {
+                                $calendarSelection = (new CalendarConversationService())->handleIncomingSelection(
                                     $pdo,
                                     $instance,
                                     $contactId,
                                     $conversationId,
                                     $content,
-                                    $flowContext,
                                     $storedMessageId
                                 );
+                                $preScheduleResult = !empty($calendarSelection['handled'])
+                                    ? $calendarSelection
+                                    : (new PreSchedulingService())->handleIncoming(
+                                        $pdo,
+                                        $instance,
+                                        $contactId,
+                                        $conversationId,
+                                        $content,
+                                        $flowContext,
+                                        $storedMessageId
+                                    );
+                            }
                         }
                     }
                 } catch (Throwable $exception) {
