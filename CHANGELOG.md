@@ -1,3 +1,11 @@
+## 36.36.7-r2 — Triagem de idade e identificação inicial
+
+- corrige a coleta da idade para aceitar respostas numéricas curtas quando esse é o campo atual da triagem;
+- trata faixas aproximadas de idade com uma clarificação específica, evitando loop de perguntas repetidas;
+- garante que a primeira resposta automática se identifique pelo nome público configurado do assistente quando a saudação está ativa;
+- aplica a mesma identificação às saudações locais e protege contra falso positivo quando o nome do contato é parecido com o do assistente;
+- não adiciona migration nova.
+
 ## 36.36.7 — Identidade visual Mobile 0.5.0
 
 - publica os assets da interface mobile em `public/mobile-app/`, separados do shell Android;

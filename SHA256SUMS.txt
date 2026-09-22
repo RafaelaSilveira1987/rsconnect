@@ -3,12 +3,12 @@
 26af3be20ef2792ee868f93e6da1a95d773aa46727672d19be82ab9b0beb7515  ./.env.local.example
 a9b27e3f3080987813b3305be48c13e1e54cdf650a5f954e1d7485a53bb38543  ./.env.vps.example
 515746cb32b412abe48d68d41108b11ae38b7c4d542fbccc0d149403c89da124  ./.gitignore
-d6779b78821947ccc86a15756a08c247913b18f0c54c993e1a4cbd551b2ce6dd  ./CHANGELOG.md
+d152b39a414208cc73b5c98ea446dc0c50f8488317b45df7c10f3997722f2ab4  ./CHANGELOG.md
 384e15708206ac4de668939ccc4f133bddebc98cbbd5cc46b7c0ca54009d97f2  ./Dockerfile
-66cb8a75a55f3b701da5e73eb40e98e00ffeb6fcbcbe4f21b545845bf958acc1  ./README-ATUALIZACAO-v36.36.7.md
+ca6cf4a2419fd1154ede5e835a55f21769e552f47660652b341bd489cb11d24d  ./README-ATUALIZACAO-v36.36.7.md
 900713180abc7f4932a3d8da0d86981997620879ffb22215278e704b74829a7a  ./README.md
 e1b7043b09b6bd9e7ddf0fbb8e45abaea03756a17d4421e762fd46b5b5d88c2b  ./ROLLBACK.md
-ee317bf506f72fb569730e9d8ada995c97fc67f7c9499e6e4ba1c8bdab1d2c4c  ./TESTE_DA_VERSAO.md
+d3a1f12b518a0eb0fc6c94bc972afdae3809dec1e438ed80b62a538fc61372c8  ./TESTE_DA_VERSAO.md
 ce7249f53b73b4347f0db1bf484321162a24877aca6e7106d85afd34365ab179  ./app/Controllers/AccessController.php
 64dc9574317cd81b08f9669533f2b8cf57d8a8ba305760158a7ecff6dee51433  ./app/Controllers/AdminCrmController.php
 7a964baf4c3563146b922fd9fd3cea227dff01727aa798b8afacbf65cddf8894  ./app/Controllers/AgentBlueprintController.php
@@ -89,7 +89,7 @@ bd11912887d4a9b6ec4ec52406cc32674e60af0ece711760193b091266f44a78  ./app/Services
 fef82e2202035999b844e9d55c3614b748eb75169062ea29f5575a9c4b14221b  ./app/Services/AgentPolicyEngineService.php
 c9b4b044246eeb629d372d41f60431c10959ccd63aeb2e14017f7ef42c33c78c  ./app/Services/AgentRoutingService.php
 945cd74db31b1a8776ba2c62f5ef4bba04dd0cfbcd7d27c31a93d9f3f82b2b03  ./app/Services/AgentSimulationService.php
-9498288cf643e16952120d6267ba0e966a0f94bbf954785de4966494d26da5ba  ./app/Services/AgentTriageService.php
+8ceead58a4c933eed1e1f5e46a5d38671e49886017ee38900b91bb6618492869  ./app/Services/AgentTriageService.php
 17ef504cd1a33ef0296f9cc0af63ed8fd3d142af28b4e678e807596fa69496c4  ./app/Services/AiAfterHoursRecoveryService.php
 840fe66f4102a5b7200fecc413a5e48cfdfa2938059362a5d1eb8ae0d253fa9a  ./app/Services/AiAutomationService.php
 4c9a8c85a2ec266ab0d46a471deb8098581b4463dd7ff1c6f7eb5b3ac7d4a7d6  ./app/Services/AiBudgetPolicyService.php
@@ -100,8 +100,8 @@ d0a42adaa33dc08d1b4a1518bc3ef1312faeaabf2bb89e65e204f210b548f081  ./app/Services
 0077e7c436b6431b232d45978bd892fad6ba761a93dcb43089bd1b1021f897c0  ./app/Services/AiEfficiencyDashboardService.php
 dc6be686ae980fa98f9b1f3bc78beb7d649ed0629663c4666063b63ca82d7058  ./app/Services/AiEfficiencyPolicyService.php
 e6631b5987c9ede8bc0369a1d8f484778554010fc2a4869f6709fd4bfbb3eac9  ./app/Services/AiExactCacheService.php
-7584666825ae4d993c27510a2a15c03efe746aeafcc5b79363b249aa6459dcaa  ./app/Services/AiLocalReplyService.php
-4cd556261a8305acd395e43c9dd389ce24a74e77c39a174abd800ce695ea6c35  ./app/Services/AiModelService.php
+5625a29da0655140c7b31bdb2101877e245b8622bce7c9dd60efa4cd5069f712  ./app/Services/AiLocalReplyService.php
+629944c3fb1323dd085948c68baeb4d7274d3171d3976fd44406b4c3dc4596ce  ./app/Services/AiModelService.php
 aa159155e4a8510d7b5817b7d9e266991493b853ee9c1b05033d39bb3a485aaa  ./app/Services/AiProfitabilityHistoryService.php
 c52dcf76fb721289656e9d4e016148ee6c7b0d419fefaa84a7bd5ff626d8b11f  ./app/Services/AiProgressiveMemoryService.php
 0b2f0f4c29d39c1f399faa4100dcca2e7c5622c2f96545b70c6931b2b1152500  ./app/Services/AiReplyTimingService.php
@@ -635,6 +635,7 @@ b6be3f26c29a882fdf84bb06af0e5a79b2c834f75e2fd51426ea22aed7aac036  ./docs/HOMOLOG
 6f16a0cb1bc0d62f51322b721eae23e4ee0ee477b3643b496be772f6fcf90436  ./docs/HOMOLOGACAO-FINAL-v36.6.8.md
 071b06a942f177f72ee1e49032730ec86162837a7366ece189661ed14a0a25ae  ./docs/HOMOLOGACAO-FINAL-v36.6.9.md
 be323d0aea21e57523a852e8676a8c988302627c5018514f7af0809c22033332  ./docs/HOTFIX-v36.36.7-r1.md
+742ba5f1062ffc21b8696d99761fb149f651339dcccdbe66ad232b6899e808f5  ./docs/HOTFIX-v36.36.7-r2.md
 b504669ea05baa109b682490b9725615f047e57d85f84d9095821a2192bbed9d  ./docs/INSTALACAO-E-TESTES.md
 cea7ece06e5a05f81172b70ce67a3d6dd2f067123c16050e2898294847860d4b  ./docs/Manual_RS_Connect_Funcionalidades_e_Implantacao.docx
 4ecd008911791fd7fe0b337793a0fe8530ce29c158a4e28aea4f2254d9bfde05  ./docs/PAGAMENTOS-ZIP-36.0.md
@@ -761,6 +762,7 @@ e71c859b2d333cbb63db5f588a3753bbe81a07ad6673046ecf1112804d111887  ./scripts/rsco
 eb0d953e813962fd22ce9a78808b0d61ead079807de5bf35bf05286f7c31421b  ./scripts/verify-deploy-hardening.sh
 45b4c06dee1bc07abd19d1bf415c98369a3db38a12a10c63d6f91501fd9780c1  ./storage/README-APLICACAO.md
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/app/.gitkeep
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/app/white-label/.gitkeep
 0a0dac2ccf941d5650017de17788c4d8f72accb65801ef08d18cc491530e9a7f  ./storage/apply-white-label-company-brand.sh
 72a48a02d968f194678cbda5e01aacedb229c60529efe55d48154f04c934fa90  ./tests/Contract/Fixtures/agent-policy-reliability-scenarios.json
 65e10c5121a88c6831503e6789ed136820f0a2e3e153bd7073e5110eda92b58c  ./tests/Contract/Fixtures/ai-metrics-accounting-scenarios.json
@@ -800,6 +802,7 @@ a8c81ed558c6c53aa86720de02128def29685b221c11814e4b9948538818f3dd  ./tests/Featur
 9a673d67a4c14c8f2ca72486027ec7ea179b02d9fe7ad1b3b9297567c875e909  ./tests/Feature/after-hours-queue-display-v36183-smoke.php
 310cb720a8304563324e9004b40acb387a360e22b58e14611c9f7f6dae8f65ef  ./tests/Feature/after-hours-reply-timing-smoke.php
 56499d33482ad7c2c537f0bbda6ea0d3ea4586ef22c19d692a9f3866717e289c  ./tests/Feature/agenda-backup-contract-smoke.php
+95edc45df1dc6f7dd1371e138608baf7a6f560956b205b1b71247e03f382031e  ./tests/Feature/agent-age-opening-identity-v36367r2-smoke.php
 9c243a9ece457c0d0b18736b875409b905e4f81f7d2c12aec22f57a880874783  ./tests/Feature/agent-blueprint-policy-engine-v11-smoke.php
 345ed9947baec1d79b8c3147d8682b36858f4a63c2b4b06a4db32646bf19ab74  ./tests/Feature/agent-compact-scheduling-routing-v362715-smoke.php
 c896ee83f5d8e24bc3e9e60e807b01d57c0ab47303a973537169675d14698dbf  ./tests/Feature/agent-conversation-behavior-v36310-smoke.php

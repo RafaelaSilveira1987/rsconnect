@@ -155,11 +155,15 @@ final class AgentTriageService
             || $warnNeedsNotification;
         $promptMode = strtolower(trim((string) ($profile['interaction_mode'] ?? 'hybrid'))) === 'prompt';
         if ($schedulingIntent && $missingBeforeSchedule !== [] && !$handledByRule) {
+            $collectionMessage = trim((string) ($missingBeforeSchedule[0]['prompt_text'] ?? '')) ?: 'Antes de consultar a agenda, preciso confirmar uma informação.';
+            if ($nextField === 'patient_age' && $currentField === 'patient_age' && $this->isApproximateAgeAnswer($text)) {
+                $collectionMessage = 'Para registrar corretamente, qual é a idade exata da pessoa que será atendida?';
+            }
             $decision = [
                 'allowed' => false,
                 'decision' => 'collect',
                 'code' => 'triage_incomplete',
-                'message' => trim((string) ($missingBeforeSchedule[0]['prompt_text'] ?? '')) ?: 'Antes de consultar a agenda, preciso confirmar uma informação.',
+                'message' => $collectionMessage,
                 'policy_key' => 'required_before_schedule',
                 'evidence' => [
                     'next_field' => $nextField,
@@ -406,6 +410,11 @@ final class AgentTriageService
             if ($schedulingIntent && $missingBeforeSchedule !== []) {
                 $field = $missingBeforeSchedule[0];
                 $message = trim((string) ($field['prompt_text'] ?? '')) ?: 'Antes de consultar a agenda, preciso confirmar uma informação.';
+                if ((string) ($field['field_key'] ?? '') === 'patient_age'
+                    && $currentField === 'patient_age'
+                    && $this->isApproximateAgeAnswer($content)) {
+                    $message = 'Para registrar corretamente, qual é a idade exata da pessoa que será atendida?';
+                }
                 $interactionMode = strtolower(trim((string) ($profile['interaction_mode'] ?? 'hybrid')));
                 $result['handled'] = true;
                 $result['allowed'] = false;
@@ -548,7 +557,7 @@ final class AgentTriageService
             return null;
         }
         return match ($fieldKey) {
-            'patient_age' => $this->extractAge($message),
+            'patient_age' => $this->extractAgeAnswer($message),
             'modality' => preg_match('/\bpresencial\b/u', $normalized) ? 'presencial' : (preg_match('/\bonline\b|\bmeet\b/u', $normalized) ? 'online' : null),
             'is_for_self' => preg_match('/^(sim|sou eu|para mim|eu mesm[oa])\b/u', $normalized) ? true : (preg_match('/^(nao|não|minha|meu|para minha|para meu)\b/u', $normalized) ? false : null),
             'requester_name' => $this->looksLikeSimpleName($message) ? mb_substr($message, 0, 150) : null,
@@ -576,6 +585,33 @@ final class AgentTriageService
             }
         }
         return null;
+    }
+
+    /**
+     * Quando o campo atual é idade, respostas curtas como "30" são inequívocas.
+     * Fora desse contexto continuamos exigindo "30 anos" para não confundir preço,
+     * horário, quantidade ou outros números do histórico com idade.
+     */
+    private function extractAgeAnswer(string $text): ?int
+    {
+        $age = $this->extractAge($text);
+        if ($age !== null) {
+            return $age;
+        }
+
+        $normalized = $this->normalize($text);
+        if (!preg_match('/^(?:tenho\s+|idade\s+(?:de\s+|e\s+)?)?(\d{1,3})(?:\s+anos?)?$/u', $normalized, $match)) {
+            return null;
+        }
+
+        $age = (int) ($match[1] ?? 0);
+        return $age > 0 && $age < 130 ? $age : null;
+    }
+
+    private function isApproximateAgeAnswer(string $text): bool
+    {
+        $normalized = $this->normalize($text);
+        return preg_match('/^(?:mais\s+de|menos\s+de|acima\s+de|abaixo\s+de|cerca\s+de|aproximadamente|uns|umas)\s+\d{1,3}(?:\s+anos?)?$/u', $normalized) === 1;
     }
 
     private function hasSchedulingIntent(string $normalized): bool

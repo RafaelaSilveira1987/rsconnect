@@ -46,10 +46,55 @@ final class AiLocalReplyService
                 continue;
             }
 
-            return ['matched' => true, 'type' => $type, 'reply' => $rule['reply'], 'normalized' => $normalized];
+            $reply = (string) $rule['reply'];
+            if ($type === 'greeting' && !empty($conversation['_is_opening_turn'])) {
+                $reply = $this->ensureOpeningIdentity($reply, $agent);
+            }
+
+            return ['matched' => true, 'type' => $type, 'reply' => $reply, 'normalized' => $normalized];
         }
 
         return ['matched' => false, 'type' => null, 'reply' => null, 'normalized' => $normalized];
+    }
+
+    private function ensureOpeningIdentity(string $reply, array $agent): string
+    {
+        $reply = trim($reply);
+        $assistantName = trim((string) ($agent['name'] ?? ''));
+        if ($reply === '' || $assistantName === '') {
+            return $reply;
+        }
+
+        if ($this->replyContainsAssistantIdentity($reply, $assistantName)) {
+            return $reply;
+        }
+
+        $introduction = 'Eu sou ' . $assistantName . '.';
+        if (preg_match('/^((?:bom\s+dia|boa\s+tarde|boa\s+noite|olá|ola|oi)\b[^.!?]*[.!?]?\s*)/iu', $reply, $match) === 1) {
+            $opening = trim((string) ($match[1] ?? ''));
+            $offset = strlen((string) ($match[1] ?? ''));
+            $rest = ltrim(substr($reply, $offset));
+            return trim($opening . ' ' . $introduction . ($rest !== '' ? ' ' . $rest : ''));
+        }
+
+        return $introduction . ' ' . $reply;
+    }
+
+    private function replyContainsAssistantIdentity(string $reply, string $assistantName): bool
+    {
+        if ($assistantName === '') {
+            return false;
+        }
+        if (stripos($reply, $assistantName) !== false) {
+            return true;
+        }
+
+        $firstName = trim((string) preg_split('/[,_\-–—]/u', $assistantName, 2)[0]);
+        if ($firstName === '') {
+            return false;
+        }
+
+        return preg_match('/(?<![\p{L}\p{N}])' . preg_quote($firstName, '/') . '(?![\p{L}\p{N}])/iu', $reply) === 1;
     }
 
     private function greetingAllowed(array $agent, array $conversation): bool

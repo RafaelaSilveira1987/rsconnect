@@ -263,6 +263,8 @@ final class AiModelService
             return $reply;
         }
 
+        $reply = $this->ensureOpeningIdentity($reply, $agent);
+
         $prioritizeCurrentTurn = !array_key_exists('prioritize_current_turn', $agent)
             || (int) ($agent['prioritize_current_turn'] ?? 1) === 1;
         if (!$prioritizeCurrentTurn) {
@@ -272,6 +274,19 @@ final class AiModelService
         $currentTurn = trim((string) ($agent['_current_turn_text'] ?? ''));
         if ($currentTurn === '') {
             return $reply;
+        }
+
+        // Se o cliente respondeu a idade com uma faixa aproximada, não deixamos o
+        // modelo repetir mecanicamente a pergunta genérica. A resposta continua
+        // exigindo a idade exata, mas deixa claro por que a confirmação é necessária.
+        $approximateAge = preg_match('/\b(?:mais\s+de|menos\s+de|acima\s+de|abaixo\s+de|cerca\s+de|aproximadamente|uns|umas)\s+\d{1,3}(?:\s+anos?)?\b/iu', $currentTurn) === 1;
+        if ($approximateAge && preg_match('/\bqual\s+(?:é|e)?\s*a?\s*idade\b/iu', $reply) === 1) {
+            $reply = preg_replace(
+                '/(?:qual\s+(?:é|e)?\s*a?\s*idade)[^?]*\?/iu',
+                'Para registrar corretamente, qual é a idade exata da pessoa que será atendida?',
+                $reply,
+                1
+            ) ?? $reply;
         }
 
         // Se o cliente perguntou com quem está falando, o nome configurado no
@@ -304,6 +319,58 @@ final class AiModelService
         }
 
         return trim($reply);
+    }
+
+    /**
+     * Garante uma apresentação curta na primeira resposta automática quando a
+     * política de saudação está ativa. O nome público configurado no agente é a
+     * fonte de verdade e não é duplicado se a própria resposta já o mencionar.
+     */
+    private function ensureOpeningIdentity(string $reply, array $agent): string
+    {
+        if (empty($agent['_is_opening_turn'])) {
+            return $reply;
+        }
+
+        $greetingMode = strtolower(trim((string) ($agent['ai_greeting_mode'] ?? 'all_contacts')));
+        if ($greetingMode === 'disabled') {
+            return $reply;
+        }
+
+        $assistantName = trim((string) ($agent['name'] ?? ''));
+        if ($assistantName === '') {
+            return $reply;
+        }
+
+        if ($this->replyContainsAssistantIdentity($reply, $assistantName)) {
+            return $reply;
+        }
+
+        $introduction = 'Eu sou ' . $assistantName . '.';
+        if (preg_match('/^((?:bom\s+dia|boa\s+tarde|boa\s+noite|olá|ola|oi)\b[^.!?]*[.!?]?\s*)/iu', $reply, $match) === 1) {
+            $opening = trim((string) ($match[1] ?? ''));
+            $rest = ltrim(mb_substr($reply, mb_strlen((string) ($match[1] ?? ''))));
+            return trim($opening . ' ' . $introduction . ($rest !== '' ? ' ' . $rest : ''));
+        }
+
+        return $introduction . ' ' . ltrim($reply);
+    }
+
+    private function replyContainsAssistantIdentity(string $reply, string $assistantName): bool
+    {
+        if ($assistantName === '') {
+            return false;
+        }
+        if (mb_stripos($reply, $assistantName) !== false) {
+            return true;
+        }
+
+        $firstName = trim((string) preg_split('/[,_\-–—]/u', $assistantName, 2)[0]);
+        if ($firstName === '') {
+            return false;
+        }
+
+        return preg_match('/(?<![\p{L}\p{N}])' . preg_quote($firstName, '/') . '(?![\p{L}\p{N}])/iu', $reply) === 1;
     }
 
     private function provider(array $agent): string
@@ -454,7 +521,7 @@ final class AiModelService
 
         if ($isOpeningTurn) {
             if ($greetingMode === 'all_contacts') {
-                $rules[] = 'Esta é a primeira resposta desta conversa. Faça uma saudação curta antes de responder ao pedido, inclusive para lead, cliente e paciente.';
+                $rules[] = 'Esta é a primeira resposta desta conversa. Faça uma saudação curta, identifique-se pelo nome público do assistente informado pelo RS Connect e então responda ao pedido, inclusive para lead, cliente e paciente.';
                 if ($configuredGreeting !== '') {
                     $rules[] = 'Use a saudação configurada como referência de linguagem, sem repeti-la mecanicamente se a mensagem do contato pedir uma resposta mais direta: ' . $configuredGreeting;
                 }
@@ -463,12 +530,12 @@ final class AiModelService
                 }
             } elseif ($greetingMode === 'new_contacts') {
                 if ($isExistingCustomer || in_array($relationshipKey, ['customer', 'patient'], true)) {
-                    $rules[] = 'Esta é a primeira resposta desta conversa, mas o contato já foi reconhecido como cliente/paciente. Não use mensagem de boas-vindas de novo contato; responda com continuidade e naturalidade.';
+                    $rules[] = 'Esta é a primeira resposta desta conversa, mas o contato já foi reconhecido como cliente/paciente. Não use mensagem de boas-vindas de novo contato; identifique-se de forma curta pelo nome público do assistente e responda com continuidade e naturalidade.';
                     if ($greetingUseName && $contactName !== '') {
                         $rules[] = 'Quando combinar com o pedido, pode chamar a pessoa pelo primeiro nome sem transformar a resposta em uma apresentação formal: ' . $contactName . '.';
                     }
                 } else {
-                    $rules[] = 'Esta é a primeira resposta desta conversa e o contato ainda não é cliente/paciente reconhecido. Faça uma saudação curta antes de conduzir o atendimento.';
+                    $rules[] = 'Esta é a primeira resposta desta conversa e o contato ainda não é cliente/paciente reconhecido. Faça uma saudação curta, identifique-se pelo nome público do assistente informado pelo RS Connect e então conduza o atendimento.';
                     if ($configuredGreeting !== '') {
                         $rules[] = 'Use como referência a saudação configurada: ' . $configuredGreeting;
                     }
@@ -661,7 +728,7 @@ final class AiModelService
 "
                         . '- Dados estruturados já coletados: ' . ($collected !== [] ? json_encode($collected, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '{}') . "
 "
-                        . "REGRAS: nunca contrarie elegibilidade, capability ou bloqueio do RS Connect. Se houver pergunta ou pedido explícito no TURNO ATUAL, responda primeiro ao que for permitido; só depois retome o próximo campo obrigatório. Quando for retomar a coleta, faça somente uma pergunta por vez. Não afirme disponibilidade, pré-reserva ou confirmação por texto: essas ações só existem quando o backend as executa.
+                        . "REGRAS: nunca contrarie elegibilidade, capability ou bloqueio do RS Connect. Se houver pergunta ou pedido explícito no TURNO ATUAL, responda primeiro ao que for permitido; só depois retome o próximo campo obrigatório. Quando for retomar a coleta, faça somente uma pergunta por vez. Se o próximo campo for patient_age e o cliente tiver informado apenas uma faixa aproximada (por exemplo, 'mais de 30'), peça a idade exata de forma curta em vez de repetir literalmente a mesma pergunta. Não afirme disponibilidade, pré-reserva ou confirmação por texto: essas ações só existem quando o backend as executa.
 
 ";
                 }

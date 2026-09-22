@@ -1,3 +1,31 @@
+# TESTE DA VERSÃO — RS Connect 36.36.7-r2
+
+## Hotfix — idade e identificação inicial
+
+Não há migration nova.
+
+### Cenário A — identificação no primeiro contato
+
+1. Inicie uma conversa nova com `Bom dia` e uma pergunta sobre atendimento.
+2. Confirme que a primeira resposta automática informa o nome público do assistente configurado.
+3. Continue a conversa e confirme que a apresentação não é repetida nos turnos seguintes.
+
+### Cenário B — idade aproximada e idade numérica curta
+
+1. Entre no fluxo de agenda até a pergunta de idade.
+2. Responda `Mais de 30`.
+3. Confirme que o sistema pede a **idade exata** sem repetir literalmente a pergunta genérica.
+4. Responda `30`.
+5. Confirme que a triagem avança para o próximo campo e não pergunta a idade novamente.
+
+### Teste automatizado
+
+```bash
+php tests/Feature/agent-age-opening-identity-v36367r2-smoke.php
+```
+
+---
+
 # TESTE DA VERSÃO — RS Connect 36.36.1
 
 ## Hotfix E1 — escopo LIVE do Production Readiness
