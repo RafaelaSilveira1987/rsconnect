@@ -1327,6 +1327,13 @@ final class CalendarConversationService
     /** @param array<int,array<string,mixed>> $slots */
     private function findExactRequestedSlot(array $appointment, array $slots): ?array
     {
+        // Uma resposta "terça à tarde" é uma preferência de período, não uma
+        // escolha explícita das 14h. Nunca reservar automaticamente o horário
+        // padrão que o parser usa apenas para iniciar a busca.
+        $preferredTime = trim((string) ($appointment['preferred_time_text'] ?? ''));
+        if (preg_match('/^(?:[01]?\d|2[0-3]):[0-5]\d$/', $preferredTime) !== 1) {
+            return null;
+        }
         $requested = trim((string) ($appointment['starts_at'] ?? ''));
         if ($requested === '') {
             return null;

@@ -15,7 +15,7 @@ $checks = [
     'retomada exige que não existam mais campos obrigatórios antes da agenda' => str_contains($triage, '$missingBeforeSchedule === []'),
     'retomada reaproveita preferência e modalidade já coletadas' => str_contains($triage, "collected['preferred_schedule']") && str_contains($triage, "collected['modality']") && str_contains($triage, "'agendar ' . implode"),
     'webhook usa o sinal pontual sem reclassificar toda mensagem posterior' => str_contains($webhook, "triageResult['schedule_resume_ready']") && str_contains($webhook, 'resumed_after_triage'),
-    'fila/reprocessamento usa a mesma regra pontual' => str_contains($ai, "triageResult['schedule_resume_ready']") && str_contains($ai, "!empty(\$triageResult['scheduling_intent'])"),
+    'fila/reprocessamento usa a mesma regra pontual' => str_contains($ai, "triageResult['schedule_resume_ready']") && str_contains($ai, "\$result['scheduling_intent'] = \$schedulingIntent || !empty(\$result['resumed_after_triage'])"),
     'melhorias visuais das configurações foram preservadas' => str_contains($css, 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))') && str_contains($css, 'white-space: nowrap; flex: 0 0 auto;'),
 ];
 

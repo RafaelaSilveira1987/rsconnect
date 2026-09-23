@@ -1,3 +1,12 @@
+## 36.36.9 — 2026-09-23 — Hotfix de abertura, triagem e agenda
+
+- Primeira resposta determinística identifica a atendente segundo a política de saudação.
+- Demanda informada em resposta curta durante a triagem é sincronizada com a regra de grupo; pergunta genérica sobre funcionamento da terapia não é presumida como queixa.
+- Preferências de dia/período/modalidade em triagem ativa podem retomar a agenda sem contaminar perguntas comuns posteriores.
+- Agenda interna e seleção automática distinguem **período** de **horário exato** para não inventar uma reserva das 14h.
+- Cenários novos testados em `tests/Feature/triage-agenda-two-scenarios-regression-smoke.php` e documentados em `docs/HOTFIX-v36.36.9-DOIS-CENARIOS.md`.
+- Nenhuma migration nova.
+
 ## 36.36.7-r2 — Triagem de idade e identificação inicial
 
 - corrige a coleta da idade para aceitar respostas numéricas curtas quando esse é o campo atual da triagem;

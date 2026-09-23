@@ -44,7 +44,7 @@ final class ConversationAutomationMessageService
                  FROM conversation_messages m
                  WHERE m.conversation_id = :conversation_id
                    AND m.direction = "outgoing"
-                   AND m.content = :content
+                   AND (m.content = :content OR RIGHT(m.content, CHAR_LENGTH(:content_length)) = :content_suffix)
                    AND m.sent_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 SECOND)
                    AND m.id > COALESCE((
                        SELECT MAX(i.id)
@@ -55,7 +55,12 @@ final class ConversationAutomationMessageService
                  ORDER BY m.id DESC
                  LIMIT 1'
             );
-            $recent->execute(['conversation_id' => $conversationId, 'content' => $message]);
+            $recent->execute([
+                'conversation_id' => $conversationId,
+                'content' => $message,
+                'content_length' => $message,
+                'content_suffix' => $message,
+            ]);
             if ($recent->fetchColumn()) {
                 return ['ok' => true, 'error' => null, 'external_id' => null];
             }
@@ -64,6 +69,13 @@ final class ConversationAutomationMessageService
             if (is_array($agent) && !(new AgentOperatingPolicyService())->allowsConversationalAutomation($agent)) {
                 return ['ok' => false, 'error' => 'Mensagem aguardando horário de atendimento.', 'external_id' => null];
             }
+
+            $previous = $pdo->prepare(
+                'SELECT 1 FROM conversation_messages WHERE conversation_id = :conversation_id
+                   AND direction = "outgoing" AND status NOT IN ("failed", "cancelled") LIMIT 1'
+            );
+            $previous->execute(['conversation_id' => $conversationId]);
+            $message = FirstAutomatedReplyService::compose($message, is_array($agent) ? $agent : [], (bool) $previous->fetchColumn());
 
             $service = new EvolutionService(
                 (string) $instance['base_url'],

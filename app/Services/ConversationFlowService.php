@@ -272,6 +272,36 @@ final class ConversationFlowService
         return $this->context($pdo, $tenantId, $conversationId, $contactId);
     }
 
+    /**
+     * Alinha a demanda explicitamente coletada pela triagem com o fluxo de grupos.
+     * Não sobrescreve recusas ou demandas já registradas e não presume diagnóstico.
+     */
+    public function recordStructuredDemand(PDO $pdo, int $tenantId, int $conversationId, string $demand): bool
+    {
+        $demand = trim($demand);
+        if ($tenantId < 1 || $conversationId < 1 || $demand === '') {
+            return false;
+        }
+        try {
+            $stmt = $pdo->prepare(
+                'UPDATE conversation_flow_states
+                 SET demand_status = "collected", demand_summary = :demand,
+                     stage = CASE WHEN last_intent IN ("schedule", "reschedule") THEN "scheduling" ELSE "qualified" END,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE tenant_id = :tenant_id AND conversation_id = :conversation_id
+                   AND demand_status = "pending"'
+            );
+            $stmt->execute([
+                'demand' => mb_substr($demand, 0, 1200),
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+            ]);
+            return $stmt->rowCount() > 0;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
     public function schedulingDecision(PDO $pdo, array $instance, int $contactId, int $conversationId, string $content, array $flow = []): array
     {
         $tenantId = (int) ($instance['tenant_id'] ?? 0);
@@ -784,7 +814,7 @@ final class ConversationFlowService
     {
         if (mb_strlen(trim($original)) < 12) return '';
 
-        $signals = '/\b(ansiedade|depressao|panico|insonia|luto|relacionamento|autoestima|estresse|medo|trauma|crise|angustia|tristeza|terapia|acompanhamento|ajuda|preciso|porque|motivo|queixa|dificuldade|problema|sofrendo|sinto|estou com|tenho tido)\b/u';
+        $signals = '/\b(ansiedade|depressao|panico|insonia|luto|relacionamento|autoestima|estresse|medo|trauma|crise|angustia|tristeza|queixa|dificuldade|problema|sofrendo|sinto|estou com|tenho tido)\b/u';
         if (preg_match($signals, $text)) {
             return mb_substr(trim($original), 0, 1200);
         }

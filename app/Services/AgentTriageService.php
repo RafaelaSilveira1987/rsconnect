@@ -250,6 +250,19 @@ final class AgentTriageService
             $currentField = trim((string) ($session['current_field_key'] ?? '')) ?: null;
             $collected = $this->extractDeterministic($collected, $contextText, $normalizedContext, $currentField, $content);
 
+            // A triagem aceita respostas curtas a uma pergunta explícita sobre a demanda
+            // (ex.: "Ansiedade"), mas o fluxo de grupos usa outro extrator. Sincronizar
+            // evita deixar a agenda bloqueada como "demanda pendente" depois da coleta.
+            if ($currentField === 'brief_demand'
+                && trim((string) ($collected['brief_demand'] ?? '')) !== '') {
+                (new ConversationFlowService())->recordStructuredDemand(
+                    $pdo,
+                    $tenantId,
+                    $conversationId,
+                    (string) $collected['brief_demand']
+                );
+            }
+
             if (!empty($collected['is_for_self']) && empty($collected['patient_name']) && !empty($collected['requester_name'])) {
                 $collected['patient_name'] = $collected['requester_name'];
             }
@@ -569,7 +582,7 @@ final class AgentTriageService
             }
         }
 
-        if (($currentField === 'brief_demand' || (!isset($collected['brief_demand']) && preg_match('/\b(ansiedade|depress|terapia|psicolog|sofrimento|emocion|relacionamento|luto|crise|acompanhamento)\b/u', $normalized)))
+        if (($currentField === 'brief_demand' || (!isset($collected['brief_demand']) && preg_match('/\b(ansiedade|depress|sofrimento|emocion|relacionamento|luto|crise)\b/u', $normalized)))
             && mb_strlen(trim($latestMessage)) >= 12) {
             $collected['brief_demand'] = mb_substr(trim($latestMessage), 0, 1200);
         }

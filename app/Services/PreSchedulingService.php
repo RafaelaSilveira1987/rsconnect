@@ -60,6 +60,19 @@ final class PreSchedulingService
             );
         }
         $continuationContext = $this->isAgendaContinuationContext($existing, $flowContext);
+        if (!$continuationContext) {
+            // A triagem pode manter uma intenção de agenda enquanto o fluxo de grupos
+            // muda temporariamente de etapa. Só reaproveita esse contexto quando a
+            // mensagem ATUAL contém dia, período, horário ou modalidade; perguntas
+            // normais posteriores não reabrem a agenda.
+            $currentPreference = $this->detectIntent($content, true);
+            if (!empty($currentPreference['has_intent'])
+                && ($this->hasAnyPreference($currentPreference)
+                    || $this->isAvailabilityModality($this->intentSchedulingModality($currentPreference)))
+                && $this->hasCollectingTriageSchedule($pdo, $tenantId, $conversationId)) {
+                $continuationContext = true;
+            }
+        }
         $intent = $this->detectIntent($content, $continuationContext);
         if (!$intent['has_intent']) {
             return $result;
@@ -110,6 +123,13 @@ final class PreSchedulingService
         }
 
         if ($existing === null) {
+            // O fluxo de grupos pode ter sido carregado antes de a triagem atualizar
+            // uma demanda curta como "Ansiedade". Consulta novamente a fonte de verdade
+            // para não rejeitar uma coleta que acabou de ser concluída neste turno.
+            $currentFlow = (new ConversationFlowService())->context($pdo, $tenantId, $conversationId, $contactId);
+            if ($currentFlow !== []) {
+                $flowContext = $currentFlow;
+            }
             $decision = (new ConversationFlowService())->schedulingDecision(
                 $pdo,
                 $instance,
@@ -841,6 +861,27 @@ final class PreSchedulingService
         }
 
         return false;
+    }
+
+    private function hasCollectingTriageSchedule(PDO $pdo, int $tenantId, int $conversationId): bool
+    {
+        if ($tenantId < 1 || $conversationId < 1 || !$this->tableExists('conversation_triage_sessions')) {
+            return false;
+        }
+        try {
+            $statement = $pdo->prepare(
+                'SELECT 1 FROM conversation_triage_sessions
+                 WHERE tenant_id = :tenant_id AND conversation_id = :conversation_id
+                   AND last_intent IN ("schedule", "reschedule")
+                   AND status IN ("collecting", "ready")
+                   AND updated_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+                 LIMIT 1'
+            );
+            $statement->execute(['tenant_id' => $tenantId, 'conversation_id' => $conversationId]);
+            return (bool) $statement->fetchColumn();
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function pendingPreSchedule(PDO $pdo, int $tenantId, int $conversationId, int $contactId = 0): ?array

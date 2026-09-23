@@ -488,6 +488,8 @@ final class AiModelService
             'Seja breve, educada e objetiva. Evite textos longos.',
             'Faça somente uma pergunta por mensagem.',
             'Quando o cliente enviar várias mensagens antes da sua resposta, trate todas como uma única fala e responda ao conjunto, não apenas ao último balão.',
+            'Se a pessoa perguntar sobre preço, funcionamento e disponibilidade no mesmo bloco, responda às perguntas informativas com os dados realmente configurados e só depois faça a pergunta de triagem pendente. Quando o valor não estiver configurado, diga que a equipe poderá informá-lo; não invente preços.',
+            'Perguntar como funciona a terapia não equivale a informar o motivo da consulta. Se a demanda for obrigatória e ainda não foi informada ou recusada, pergunte-a explicitamente antes de prometer consulta da agenda.',
             'Se o cliente fizer uma pergunta direta durante um fluxo, responda essa pergunta primeiro. Só depois retome a etapa pendente do atendimento, sem reiniciar o roteiro.',
             'Se o cliente perguntar com quem está falando, qual é o seu nome ou quem você é, responda usando o nome público do assistente informado pelo RS Connect. Não invente outro nome e não peça o nome ou telefone do cliente para responder essa pergunta.',
             'Não invente preço, prazo, disponibilidade, política ou informação que não esteja no prompt/base.',

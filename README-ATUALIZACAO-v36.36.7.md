@@ -1,3 +1,13 @@
+# RS Connect 36.36.9 — Triagem e agenda: dois cenários
+
+Atualização pontual sobre o hotfix anterior. Consulte `docs/HOTFIX-v36.36.9-DOIS-CENARIOS.md` antes de aplicar; não há migration nova.
+
+As correções abrangem apresentação da primeira resposta determinística, demanda curta sincronizada com regras de grupo, continuação restrita de intenção de agenda após a triagem e proteção contra transformar período em horário exato.
+
+**Importante:** a validação local executou testes puros e smoke tests, mas não substitui uma homologação ponta a ponta com a configuração real da empresa e uma conversa de teste no WhatsApp.
+
+---
+
 # RS Connect 36.36.7 — Mobile 0.5.0 + hotfix conversacional r2
 
 O pacote preserva a identidade visual Mobile 0.5.0 e inclui duas correções no atendimento conversacional. Não há migration nova.

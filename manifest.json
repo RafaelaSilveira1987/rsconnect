@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.36.1",
-  "release_name": "Hotfix do Production Readiness",
+  "package_version": "36.36.9",
+  "release_name": "Triagem e pré-agendamento consistentes",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -10,7 +10,7 @@
   },
   "database": {
     "driver": "mysql",
-    "required_migration": "116_sla_trigger_mysql_compat.sql",
+    "required_migration": "118_contact_origin.sql",
     "migration_runner": "php bin/migrate.php"
   },
   "install": {
@@ -19,11 +19,16 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.36.0",
-      "release_name": "Production Readiness: Homologação final",
-      "required_migration": "116_sla_trigger_mysql_compat.sql"
+      "package_version": "36.36.7",
+      "release_name": "Mobile 0.5.0 + hotfix conversacional",
+      "required_migration": "118_contact_origin.sql"
     },
     "historical_releases": [
+      {
+        "package_version": "36.36.7",
+        "release_name": "Mobile 0.5.0 + hotfix conversacional",
+        "required_migration": "118_contact_origin.sql"
+      },
       {
         "package_version": "36.36.0",
         "release_name": "Production Readiness: Homologação final",
@@ -103,5 +108,6 @@
         "release_name": "Dados da conversa aprimorados"
       }
     ]
-  }
+  },
+  "hotfix_basis": "36.36.7 + correções de seleção, identificação, agenda e guarda determinística"
 }

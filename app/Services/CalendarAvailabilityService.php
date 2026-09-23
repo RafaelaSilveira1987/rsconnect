@@ -638,7 +638,11 @@ final class CalendarAvailabilityService
             // A preferência exata do lead é sempre testada primeiro. O intervalo entre
             // sugestões serve para montar alternativas, mas não deve rejeitar um horário
             // específico que esteja realmente livre e dentro das regras configuradas.
-            $exact = $this->validateInternalRequestedSlot($tenantId, $appointment, $settings, $requestedModality);
+            $preferredTime = trim((string) ($appointment['preferred_time_text'] ?? ''));
+            $hasExactTime = preg_match('/^(?:[01]?\d|2[0-3]):[0-5]\d$/', $preferredTime) === 1;
+            $exact = $hasExactTime
+                ? $this->validateInternalRequestedSlot($tenantId, $appointment, $settings, $requestedModality)
+                : ['ok' => false, 'code' => 'period_preference', 'message' => 'O contato informou um período, mas ainda não escolheu um horário exato.'];
             $slots = [];
             if (!empty($exact['ok']) && is_array($exact['slot'] ?? null)) {
                 $slots[] = $exact['slot'];

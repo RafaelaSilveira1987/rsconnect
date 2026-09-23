@@ -189,7 +189,8 @@ final class AppVersionService
     // RS Connect 36.36.0 — Production Readiness Fase E: homologação final e release candidate operacional.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.0 — Production Readiness: Homologação final';
     // RS Connect 36.36.1 — hotfix do preflight: bloqueios e carga produtiva consideram apenas tenants LIVE.
-    public const PACKAGE_LABEL = 'RS Connect 36.36.7 — Identidade visual Mobile 0.5.0';
+    // 36.36.9 — hotfix pontual dos cenários de triagem, abertura e preferências de agenda.
+    public const PACKAGE_LABEL = 'RS Connect 36.36.9 — Triagem e pré-agendamento consistentes';
     public const REQUIRED_MIGRATION = '118_contact_origin.sql';
 
     private PDO $pdo;
