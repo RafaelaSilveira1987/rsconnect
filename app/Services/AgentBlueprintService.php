@@ -791,56 +791,29 @@ final class AgentBlueprintService
             return $fields;
         }
 
-        $fallbackMap = [
-            'identify_intent' => ['requester_name'],
-            'identify_subject' => ['is_for_self', 'patient_name'],
-            'collect_age' => ['patient_age'],
-            'collect_modality' => ['modality'],
-            'collect_demand' => ['brief_demand'],
-            'collect_schedule' => ['preferred_schedule'],
-            'collect_source' => ['contact_source'],
-            'collect_service' => ['service'],
-            'collect_professional' => ['professional'],
-            'triage' => [],
-        ];
-
+        // A ordem executável vem exclusivamente do config_json salvo no banco.
+        // Não existe mais mapa de negócio hardcoded por step_key no runtime.
         $rank = [];
         $rankIndex = 0;
         foreach ($workflow as $step) {
-            if (!is_array($step) || empty($step['active'])) {
+            if (!is_array($step) || empty($step['active']) || (string) ($step['step_type'] ?? '') !== 'collect') {
                 continue;
             }
             $config = is_array($step['config'] ?? null) ? $step['config'] : [];
-            $stepKey = trim((string) ($step['step_key'] ?? ''));
-
             $keys = [];
-            if (!empty($config['field_key'])) {
-                $keys[] = (string) $config['field_key'];
+            if (trim((string) ($config['field_key'] ?? '')) !== '') {
+                $keys[] = trim((string) $config['field_key']);
             }
             if (is_array($config['field_keys'] ?? null)) {
                 foreach ($config['field_keys'] as $key) {
-                    if (trim((string) $key) !== '') {
-                        $keys[] = (string) $key;
+                    $key = trim((string) $key);
+                    if ($key !== '') {
+                        $keys[] = $key;
                     }
                 }
             }
-            if ($keys === [] && array_key_exists($stepKey, $fallbackMap)) {
-                $keys = $fallbackMap[$stepKey];
-            }
-
-            if ($stepKey === 'triage' && $keys === []) {
-                foreach ($fields as $field) {
-                    $key = trim((string) ($field['field_key'] ?? ''));
-                    if ($key !== '' && !array_key_exists($key, $rank)) {
-                        $rank[$key] = $rankIndex++;
-                    }
-                }
-                continue;
-            }
-
-            foreach ($keys as $key) {
-                $key = trim((string) $key);
-                if ($key !== '' && !array_key_exists($key, $rank)) {
+            foreach (array_values(array_unique($keys)) as $key) {
+                if (!array_key_exists($key, $rank)) {
                     $rank[$key] = $rankIndex++;
                 }
             }

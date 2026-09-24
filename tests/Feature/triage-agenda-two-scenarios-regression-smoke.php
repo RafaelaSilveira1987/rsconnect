@@ -76,7 +76,7 @@ $check((int) ($findExact->invoke($calendar, $exactAppointment, $slots)['id'] ?? 
 $flow = new ConversationFlowService();
 $demandCandidate = new ReflectionMethod($flow, 'demandCandidate');
 $check($demandCandidate->invoke($flow, 'Queria saber como funciona a terapia', 'queria saber como funciona a terapia') === '', 'pergunta sobre como funciona a terapia não é classificada como queixa');
-$check($demandCandidate->invoke($flow, 'Estou com muita ansiedade', 'estou com muita ansiedade') !== '', 'queixa explícita de ansiedade continua reconhecida');
+$check($demandCandidate->invoke($flow, 'Estou com muita ansiedade', 'estou com muita ansiedade') === '', 'demanda espontânea não é inferida fora da etapa configurada');
 
 // A gravação da resposta curta pode ser verificada sem banco real por um PDO de
 // gravação. Não valida o MySQL de produção; confere SQL e parâmetros usados.

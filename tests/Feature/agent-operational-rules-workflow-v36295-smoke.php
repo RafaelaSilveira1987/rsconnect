@@ -56,12 +56,12 @@ $fields = [
     ['field_key' => 'brief_demand', 'position' => 50],
 ];
 $workflow = [
-    ['step_key' => 'collect_modality', 'step_type' => 'collect', 'active' => 1, 'config' => []],
-    ['step_key' => 'identify_intent', 'step_type' => 'collect', 'active' => 1, 'config' => []],
-    ['step_key' => 'identify_subject', 'step_type' => 'collect', 'active' => 1, 'config' => []],
-    ['step_key' => 'collect_age', 'step_type' => 'collect', 'active' => 1, 'config' => []],
+    ['step_key' => 'collect_modality', 'step_type' => 'collect', 'active' => 1, 'config' => ['field_keys' => ['modality']]],
+    ['step_key' => 'identify_intent', 'step_type' => 'collect', 'active' => 1, 'config' => ['field_keys' => ['requester_name']]],
+    ['step_key' => 'identify_subject', 'step_type' => 'collect', 'active' => 1, 'config' => ['field_keys' => ['is_for_self']]],
+    ['step_key' => 'collect_age', 'step_type' => 'collect', 'active' => 1, 'config' => ['field_keys' => ['patient_age']]],
     ['step_key' => 'eligibility', 'step_type' => 'policy', 'active' => 1, 'config' => []],
-    ['step_key' => 'collect_demand', 'step_type' => 'collect', 'active' => 1, 'config' => []],
+    ['step_key' => 'collect_demand', 'step_type' => 'collect', 'active' => 1, 'config' => ['field_keys' => ['brief_demand']]],
 ];
 
 $ordered = $method->invoke($service, $fields, $workflow);

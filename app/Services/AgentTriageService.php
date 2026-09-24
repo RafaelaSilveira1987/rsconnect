@@ -159,7 +159,7 @@ final class AgentTriageService
         if ($schedulingIntent && $missingBeforeSchedule !== [] && !$handledByRule) {
             $collectionMessage = trim((string) ($missingBeforeSchedule[0]['prompt_text'] ?? '')) ?: 'Antes de consultar a agenda, preciso confirmar uma informação.';
             if ($nextField === 'patient_age' && $currentField === 'patient_age' && $this->isApproximateAgeAnswer($text)) {
-                $collectionMessage = 'Para registrar corretamente, qual é a idade exata da pessoa que será atendida?';
+                $collectionMessage = rtrim($collectionMessage, " .?!") . '. Informe um valor exato em anos.';
             }
             $decision = [
                 'allowed' => false,
@@ -227,6 +227,31 @@ final class AgentTriageService
             $result['profile'] = $profile;
             if (($profile['status'] ?? 'inactive') !== 'active' || empty($profile['capabilities']['triage.enabled'])) {
                 $result['code'] = 'triage_disabled';
+                return $result;
+            }
+
+            $runtimeAudit = (new AgentRuntimeConfigurationService())->audit($profile);
+            if (empty($runtimeAudit['ok'])) {
+                $result['handled'] = true;
+                $result['allowed'] = false;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['code'] = 'agent_configuration_invalid';
+                $result['configuration_errors'] = $runtimeAudit['errors'] ?? [];
+                $result['message'] = 'O atendimento automático está temporariamente indisponível porque a configuração do fluxo precisa ser revisada pela equipe.';
+                if ($sendMessages) {
+                    $send = (new ConversationAutomationMessageService())->send(
+                        $pdo,
+                        $instance,
+                        $conversationId,
+                        $contactId,
+                        (string) $result['message'],
+                        'agent.configuration.invalid',
+                        ['errors' => array_values((array) ($runtimeAudit['errors'] ?? []))]
+                    );
+                    $result['message_sent'] = !empty($send['ok']);
+                    $result['message_error'] = $send['error'] ?? null;
+                }
                 return $result;
             }
 
@@ -469,7 +494,7 @@ final class AgentTriageService
                 if ((string) ($field['field_key'] ?? '') === 'patient_age'
                     && $currentField === 'patient_age'
                     && $this->isApproximateAgeAnswer($content)) {
-                    $message = 'Para registrar corretamente, qual é a idade exata da pessoa que será atendida?';
+                    $message = rtrim($message, " .?!") . '. Informe um valor exato em anos.';
                 }
                 $interactionMode = strtolower(trim((string) ($profile['interaction_mode'] ?? 'hybrid')));
                 $behaviorService = new AgentConversationBehaviorService();
@@ -605,10 +630,9 @@ final class AgentTriageService
             }
         }
 
-        if (($currentField === 'brief_demand' || (!isset($collected['brief_demand']) && preg_match('/\b(ansiedade|depress|sofrimento|emocion|relacionamento|luto|crise)\b/u', $normalized)))
-            && mb_strlen(trim($latestMessage)) >= 12) {
-            $collected['brief_demand'] = mb_substr(trim($latestMessage), 0, 1200);
-        }
+        // A demanda não é mais inferida por palavras-chave de negócio no código.
+        // Ela só é gravada quando a etapa configurada de demanda está realmente ativa
+        // e a mensagem atual foi validada como resposta desse campo.
 
         return $collected;
     }

@@ -74,6 +74,16 @@ $agentRuleCapabilities = is_array($agentRulesProfile['capabilities'] ?? null) ? 
 $agentRuleFields = is_array($agentRulesProfile['triage_fields'] ?? null) ? $agentRulesProfile['triage_fields'] : [];
 $agentRulePolicies = is_array($agentRulesProfile['policies'] ?? null) ? $agentRulesProfile['policies'] : [];
 $agentRuleWorkflow = is_array($agentRulesProfile['workflow'] ?? null) ? $agentRulesProfile['workflow'] : [];
+$agentRuntimeAudit = is_array($agentRuntimeAudit ?? null) ? $agentRuntimeAudit : [];
+$agentRuntimeErrors = is_array($agentRuntimeAudit['errors'] ?? null) ? $agentRuntimeAudit['errors'] : [];
+$agentRuntimeWarnings = is_array($agentRuntimeAudit['warnings'] ?? null) ? $agentRuntimeAudit['warnings'] : [];
+$agentRuntimeSteps = is_array($agentRuntimeAudit['steps'] ?? null) ? $agentRuntimeAudit['steps'] : [];
+$agentFieldLabelsByKey = [];
+foreach ($agentRuleFields as $runtimeField) {
+    if (!is_array($runtimeField)) continue;
+    $runtimeFieldKey = trim((string) ($runtimeField['field_key'] ?? ''));
+    if ($runtimeFieldKey !== '') $agentFieldLabelsByKey[$runtimeFieldKey] = (string) ($runtimeField['label'] ?? $runtimeFieldKey);
+}
 $conversationBehavior = is_array($conversationBehavior ?? null) ? $conversationBehavior : [];
 $behaviorDemand = is_array($conversationBehavior['demand'] ?? null) ? $conversationBehavior['demand'] : [];
 $behaviorDelivery = is_array($conversationBehavior['response_delivery'] ?? null) ? $conversationBehavior['response_delivery'] : [];
@@ -232,6 +242,32 @@ $humanizeAgentRule = static function (string $key): string {
                         </div>
                     </div>
 
+                    <?php if ($agentRuntimeAudit !== []): ?>
+                        <div class="agent-runtime-audit <?= $agentRuntimeErrors === [] ? 'is-ok' : 'has-errors' ?>">
+                            <div class="agent-runtime-audit-head">
+                                <div>
+                                    <span class="eyebrow">Validação antes de atender</span>
+                                    <strong><?= $agentRuntimeErrors === [] ? 'Fluxo executável e orientado pela configuração' : 'Há ajustes necessários no fluxo' ?></strong>
+                                    <small>O runtime usa a ordem, as perguntas e as regras salvas abaixo. Conteúdo de negócio não é decidido por mapas internos do código.</small>
+                                </div>
+                                <span class="badge <?= $agentRuntimeErrors === [] ? 'badge-active' : 'badge-rejected' ?>"><?= $agentRuntimeErrors === [] ? 'Configuração válida' : count($agentRuntimeErrors) . ' erro(s)' ?></span>
+                            </div>
+                            <?php if ($agentRuntimeSteps !== []): ?>
+                                <div class="agent-runtime-order" aria-label="Ordem efetiva do atendimento">
+                                    <?php foreach ($agentRuntimeSteps as $runtimeIndex => $runtimeStep): ?>
+                                        <span><b><?= $runtimeIndex + 1 ?></b><?= View::e((string) ($runtimeStep['label'] ?? 'Etapa')) ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($agentRuntimeErrors !== [] || $agentRuntimeWarnings !== []): ?>
+                                <div class="agent-runtime-audit-messages">
+                                    <?php foreach ($agentRuntimeErrors as $runtimeMessage): ?><div class="is-error"><strong>Corrigir:</strong> <?= View::e((string) $runtimeMessage) ?></div><?php endforeach; ?>
+                                    <?php foreach ($agentRuntimeWarnings as $runtimeMessage): ?><div class="is-warning"><strong>Atenção:</strong> <?= View::e((string) $runtimeMessage) ?></div><?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+
                     <?php if ($agentRuleWorkflow !== []): ?>
                         <details class="agent-operation-section" open>
                             <summary>
@@ -239,7 +275,7 @@ $humanizeAgentRule = static function (string $key): string {
                                 <span class="drawer-chevron"></span>
                             </summary>
                             <div class="agent-operation-section-body">
-                                <p class="field-hint">A sequência vem do modelo escolhido no RS Admin, mas pode ser reorganizada para esta empresa. A ordem também passa a influenciar qual informação pendente o sistema pede primeiro.</p>
+                                <p class="field-hint">A sequência abaixo é a ordem efetiva do atendimento. Etapas de coleta posicionadas antes da ação de agenda precisam ser concluídas antes de consultar horários. As perguntas vêm dos campos configurados, não de textos fixos no código.</p>
                                 <div class="agent-workflow-editor" data-workflow-list>
                                     <?php foreach ($agentRuleWorkflow as $index => $step): ?>
                                         <?php
@@ -262,6 +298,21 @@ $humanizeAgentRule = static function (string $key): string {
                                                 </div>
                                                 <label class="field compact-field"><span>Nome da etapa</span><input name="workflow_steps[<?= View::e($workflowKey) ?>][label]" value="<?= View::e((string) ($step['label'] ?? $workflowKey)) ?>" maxlength="180"></label>
                                                 <input type="hidden" name="workflow_steps[<?= View::e($workflowKey) ?>][position]" value="<?= (int) ($step['position'] ?? (($index + 1) * 10)) ?>" data-workflow-position>
+                                                <?php
+                                                $workflowConfig = is_array($step['config'] ?? null) ? $step['config'] : [];
+                                                $workflowFieldKeys = [];
+                                                if (trim((string) ($workflowConfig['field_key'] ?? '')) !== '') $workflowFieldKeys[] = trim((string) $workflowConfig['field_key']);
+                                                if (is_array($workflowConfig['field_keys'] ?? null)) foreach ($workflowConfig['field_keys'] as $configuredFieldKey) { $configuredFieldKey = trim((string) $configuredFieldKey); if ($configuredFieldKey !== '') $workflowFieldKeys[] = $configuredFieldKey; }
+                                                $workflowFieldKeys = array_values(array_unique($workflowFieldKeys));
+                                                ?>
+                                                <?php if ($workflowType === 'collect'): ?>
+                                                    <div class="agent-workflow-contract">
+                                                        <span>Informações desta etapa</span>
+                                                        <strong><?= $workflowFieldKeys !== [] ? View::e(implode(' · ', array_map(static fn (string $key): string => $agentFieldLabelsByKey[$key] ?? $key, $workflowFieldKeys))) : 'Nenhuma informação vinculada' ?></strong>
+                                                    </div>
+                                                <?php elseif ($workflowType === 'action' && trim((string) ($workflowConfig['action_key'] ?? '')) !== ''): ?>
+                                                    <div class="agent-workflow-contract"><span>Ação validada</span><strong><?= View::e((string) $workflowConfig['action_key']) ?></strong></div>
+                                                <?php endif; ?>
                                             </div>
                                         </article>
                                     <?php endforeach; ?>

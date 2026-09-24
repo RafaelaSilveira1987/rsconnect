@@ -1,3 +1,14 @@
+## 36.36.20 — 2026-09-24 — Runtime do agente orientado pela configuração
+
+- remove o mapa hardcoded de `step_key -> campo` do runtime; cada etapa de coleta passa a usar os vínculos persistidos em `tenant_agent_workflow_steps.config_json`;
+- adiciona a migration `119_agent_workflow_runtime_contract.sql`, que grava os vínculos das etapas existentes e as ações técnicas da agenda nos modelos e empresas já configurados;
+- mantém a ordem cadastrada como ordem efetiva dos campos pendentes e valida conflitos como “campo obrigatório antes da agenda posicionado depois de Consultar agenda”;
+- remove a inferência automática de demanda por lista de sintomas/palavras-chave no PHP; a demanda positiva só é registrada quando a etapa configurada de demanda está sendo respondida;
+- adiciona um auditor de configuração no runtime e na tela de Assistentes; fluxo inconsistente falha de forma segura em vez de improvisar regras;
+- mostra na tela a ordem efetiva e quais informações cada etapa realmente controla;
+- preserva sem alteração os serviços de retomada fora do horário, cooldown UTC e deduplicação das versões 36.36.11/36.36.12;
+- mantém Policy Engine, regras de agenda, modalidade e aprovação humana como travas determinísticas.
+
 ## 36.36.19 — 2026-09-24 — Pré-agendamento com registro consolidado
 
 - Remove os cartões estreitos do bloco de contexto do pré-agendamento.

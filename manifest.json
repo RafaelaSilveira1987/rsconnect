@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.36.11",
-  "release_name": "Retomada pós-horário no fuso correto",
+  "package_version": "36.36.20",
+  "release_name": "Runtime do agente orientado pela configuração",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -10,7 +10,7 @@
   },
   "database": {
     "driver": "mysql",
-    "required_migration": "118_contact_origin.sql",
+    "required_migration": "119_agent_workflow_runtime_contract.sql",
     "migration_runner": "php bin/migrate.php"
   },
   "install": {
@@ -19,11 +19,56 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.36.10",
-      "release_name": "Apresentação única do assistente",
+      "package_version": "36.36.19",
+      "release_name": "Pré-agendamento com registro consolidado",
       "required_migration": "118_contact_origin.sql"
     },
     "historical_releases": [
+      {
+        "package_version": "36.36.19",
+        "release_name": "Pré-agendamento com registro consolidado",
+        "required_migration": "118_contact_origin.sql"
+      },
+      {
+        "package_version": "36.36.18",
+        "release_name": "Informações atuais do pré-agendamento",
+        "required_migration": "118_contact_origin.sql"
+      },
+      {
+        "package_version": "36.36.17",
+        "release_name": "Consistência das regras do agente e SLA",
+        "required_migration": "118_contact_origin.sql"
+      },
+      {
+        "package_version": "36.36.16",
+        "release_name": "Regras do agente como fonte de verdade",
+        "required_migration": "118_contact_origin.sql"
+      },
+      {
+        "package_version": "36.36.15",
+        "release_name": "SLA opcional por empresa",
+        "required_migration": "118_contact_origin.sql"
+      },
+      {
+        "package_version": "36.36.14",
+        "release_name": "Demanda obrigatória antes da agenda",
+        "required_migration": "118_contact_origin.sql"
+      },
+      {
+        "package_version": "36.36.13",
+        "release_name": "SLA por empresa no RS Admin",
+        "required_migration": "118_contact_origin.sql"
+      },
+      {
+        "package_version": "36.36.12",
+        "release_name": "Retomada com apresentação única e sem duplicidade",
+        "required_migration": "118_contact_origin.sql"
+      },
+      {
+        "package_version": "36.36.11",
+        "release_name": "Retomada pós-horário no fuso correto",
+        "required_migration": "118_contact_origin.sql"
+      },
       {
         "package_version": "36.36.10",
         "release_name": "Apresentação única do assistente",

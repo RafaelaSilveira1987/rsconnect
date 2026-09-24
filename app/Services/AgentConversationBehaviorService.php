@@ -232,17 +232,21 @@ final class AgentConversationBehaviorService
         unset($field);
 
         if (!$found) {
+            // Não inventa conteúdo operacional no PHP. Se a regra amigável aponta para
+            // uma informação que não existe no perfil, criamos apenas o contrato mínimo
+            // sem pergunta; o auditor de runtime sinaliza a configuração incompleta e o
+            // atendimento automático não deve improvisar essa etapa.
             $fields[] = [
                 'field_key' => 'brief_demand',
-                'label' => 'Motivo resumido do contato',
+                'label' => 'Demanda',
                 'field_type' => 'textarea',
-                'prompt_text' => trim((string) ($demand['prompt'] ?? ''))
-                    ?: 'Antes de verificar os horários, pode me contar brevemente o que você está buscando neste atendimento?',
+                'prompt_text' => trim((string) ($demand['prompt'] ?? '')),
                 'required_before_schedule' => $demandRequired,
                 'required_for_completion' => true,
                 'active' => true,
-                'position' => 60,
+                'position' => 9990,
                 'source' => 'conversation_behavior',
+                'configuration_incomplete' => true,
             ];
         }
 

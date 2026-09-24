@@ -230,13 +230,10 @@ final class ConversationFlowService
         if ($this->isDemandRefusal($text)) {
             $demandStatus = 'refused';
             $demandSummary = 'O contato preferiu não informar a demanda neste momento.';
-        } else {
-            $candidate = $this->demandCandidate($content, $text);
-            if ($candidate !== '') {
-                $demandStatus = 'collected';
-                $demandSummary = $candidate;
-            }
         }
+        // A coleta positiva da demanda é centralizada no AgentTriageService, que sabe
+        // qual campo está ativo e qual etapa configurada está sendo respondida. Aqui não
+        // inferimos demanda por sintomas, nicho ou palavras-chave de negócio.
 
         $stage = $this->stageFor($intent, $demandStatus, $existingPatient);
         $metadata = [
@@ -827,28 +824,12 @@ final class ConversationFlowService
         return (bool) preg_match('/\b(prefiro nao informar|nao quero falar|nao gostaria de explicar|nao me sinto confortavel|quero falar diretamente|prefiro conversar na consulta)\b/u', $text);
     }
 
+    /**
+     * Mantido apenas por compatibilidade interna. A demanda positiva não é mais
+     * inferida nesta camada; ela é registrada pelo campo configurado da triagem.
+     */
     private function demandCandidate(string $original, string $text): string
     {
-        if (mb_strlen(trim($original)) < 12) return '';
-
-        $signals = '/\b(ansiedade|depressao|panico|insonia|luto|relacionamento|autoestima|estresse|medo|trauma|crise|angustia|tristeza|queixa|dificuldade|problema|sofrendo|sinto|estou com|tenho tido)\b/u';
-        if (preg_match($signals, $text)) {
-            return mb_substr(trim($original), 0, 1200);
-        }
-
-        // 36.27.17: em empresas comerciais, a própria finalidade explícita do
-        // agendamento pode ser a demanda. Ex.: “agendar uma demonstração” ou
-        // “agendar uma reunião”. Mantemos a triagem para pedidos genéricos como
-        // “quero agendar” e para “agendar uma consulta”, preservando os fluxos
-        // clínicos que exigem motivo/queixa quando configurados assim.
-        if (in_array($this->intent($text), ['schedule', 'reschedule'], true)) {
-            $purpose = $this->schedulingPurposeCandidate($text);
-            if ($purpose !== '') {
-                return mb_substr(trim($original), 0, 1200);
-            }
-        }
-
-        if ($this->isOnlySchedulingMessage($text)) return '';
         return '';
     }
 

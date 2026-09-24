@@ -14,6 +14,7 @@ use App\Core\View;
 use App\Services\AiAutomationService;
 use App\Services\AgentBlueprintService;
 use App\Services\AgentConversationBehaviorService;
+use App\Services\AgentRuntimeConfigurationService;
 use App\Services\ConversationOwnershipService;
 use App\Services\PreSchedulingService;
 use App\Services\AgentRoutingService;
@@ -54,6 +55,7 @@ final class AgentController
         $conversationBehavior = [];
         $teamUsers = [];
         $preScheduleSettings = [];
+        $agentRuntimeAudit = [];
 
         if ($tenantId > 0) {
             $agentsStatement = $pdo->prepare(
@@ -107,9 +109,11 @@ final class AgentController
             try {
                 $agentBlueprintProfile = (new AgentBlueprintService())->profileForTenant($tenantId, true, $pdo);
                 $conversationBehavior = (new AgentConversationBehaviorService())->settingsFromProfile($agentBlueprintProfile);
+                $agentRuntimeAudit = (new AgentRuntimeConfigurationService())->audit($agentBlueprintProfile);
             } catch (Throwable) {
                 $agentBlueprintProfile = [];
                 $conversationBehavior = [];
+                $agentRuntimeAudit = [];
             }
 
             try {
@@ -164,6 +168,7 @@ final class AgentController
             'conversationBehavior' => $conversationBehavior,
             'teamUsers' => $teamUsers,
             'preScheduleSettings' => $preScheduleSettings,
+            'agentRuntimeAudit' => $agentRuntimeAudit,
         ]);
     }
 

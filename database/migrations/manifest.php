@@ -138,5 +138,6 @@ return [
         ['sequence' => 123, 'file' => '116_sla_trigger_mysql_compat.sql'],
         ['sequence' => 124, 'file' => '117_mobile_api_tokens.sql'],
         ['sequence' => 125, 'file' => '118_contact_origin.sql'],
+        ['sequence' => 126, 'file' => '119_agent_workflow_runtime_contract.sql'],
     ],
 ];

@@ -195,6 +195,7 @@ final class AppVersionService
     // 36.36.10 — evita apresentação duplicada quando o nome do agente inclui a função.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.10 — Apresentação única do assistente';
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.11 — Retomada pós-horário no fuso correto';
+    // Compatibilidade histórica: REQUIRED_MIGRATION = '118_contact_origin.sql';
     // 36.36.12 — preserva apresentação na retomada e impede respostas duplicadas após a abertura.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.12 — Retomada com apresentação única e sem duplicidade';
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.13 — SLA por empresa no RS Admin';
@@ -202,8 +203,8 @@ final class AppVersionService
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.15 — SLA operacional opcional por empresa';
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.16 — Regras do agente como fonte de verdade';
     // Compatibilidade histórica: RS Connect 36.36.17 — Consistência das regras do agente e SLA Admin
-    public const PACKAGE_LABEL = 'RS Connect 36.36.19 — Pré-agendamento com registro consolidado';
-    public const REQUIRED_MIGRATION = '118_contact_origin.sql';
+    public const PACKAGE_LABEL = 'RS Connect 36.36.20 — Runtime do agente orientado pela configuração';
+    public const REQUIRED_MIGRATION = '119_agent_workflow_runtime_contract.sql';
 
     private PDO $pdo;
 
