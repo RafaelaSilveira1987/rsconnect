@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.36.9",
-  "release_name": "Triagem e pré-agendamento consistentes",
+  "package_version": "36.36.10",
+  "release_name": "Apresentação única do assistente",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,11 +19,16 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.36.7",
-      "release_name": "Mobile 0.5.0 + hotfix conversacional",
+      "package_version": "36.36.9",
+      "release_name": "Triagem e pré-agendamento consistentes",
       "required_migration": "118_contact_origin.sql"
     },
     "historical_releases": [
+      {
+        "package_version": "36.36.9",
+        "release_name": "Triagem e pré-agendamento consistentes",
+        "required_migration": "118_contact_origin.sql"
+      },
       {
         "package_version": "36.36.7",
         "release_name": "Mobile 0.5.0 + hotfix conversacional",

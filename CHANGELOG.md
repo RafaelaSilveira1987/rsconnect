@@ -1,3 +1,11 @@
+## 36.36.10 — 2026-09-24 — Apresentação única do assistente
+
+- Corrige a composição da primeira resposta determinística quando o campo `name` do agente contém também a função, por exemplo `Rafa, Assistente da psicóloga Mariana Bernardes`.
+- Reconhece `Aqui é a Rafa`, `Eu sou Rafa` e formas como `Rafa, assistente...` como identificação já existente; não injeta uma segunda apresentação.
+- Usa apenas a parte nominal do cadastro na apresentação automática de fallback, evitando frases como `Eu sou Rafa, Assistente..., assistente virtual`.
+- Mantém a proteção contra falso positivo de nomes parecidos, como `Rafa` e `Rafaela`.
+- Nenhuma migration nova.
+
 ## 36.36.9 — 2026-09-23 — Hotfix de abertura, triagem e agenda
 
 - Primeira resposta determinística identifica a atendente segundo a política de saudação.

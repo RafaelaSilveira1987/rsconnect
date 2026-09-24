@@ -190,7 +190,9 @@ final class AppVersionService
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.0 — Production Readiness: Homologação final';
     // RS Connect 36.36.1 — hotfix do preflight: bloqueios e carga produtiva consideram apenas tenants LIVE.
     // 36.36.9 — hotfix pontual dos cenários de triagem, abertura e preferências de agenda.
-    public const PACKAGE_LABEL = 'RS Connect 36.36.9 — Triagem e pré-agendamento consistentes';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.9 — Triagem e pré-agendamento consistentes';
+    // 36.36.10 — evita apresentação duplicada quando o nome do agente inclui a função.
+    public const PACKAGE_LABEL = 'RS Connect 36.36.10 — Apresentação única do assistente';
     public const REQUIRED_MIGRATION = '118_contact_origin.sql';
 
     private PDO $pdo;

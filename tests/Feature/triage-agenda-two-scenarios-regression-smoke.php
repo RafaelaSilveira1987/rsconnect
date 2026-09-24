@@ -43,6 +43,21 @@ $check(FirstAutomatedReplyService::compose('O atendimento seria para você?', $a
 $check(FirstAutomatedReplyService::compose('O atendimento seria para você?', ['name' => 'Rafa', 'ai_greeting_mode' => 'disabled'], false) === 'O atendimento seria para você?', 'respeita a configuração de saudação desativada');
 $check(str_contains(FirstAutomatedReplyService::compose('Rafaela quer atendimento.', $agent, false), 'Eu sou Rafa'), 'nome Rafaela do cliente não é confundido com nome Rafa da assistente');
 
+$longAgent = [
+    'name' => 'Rafa, Assistente da psicóloga Mariana Bernardes',
+    'ai_greeting_mode' => 'all_contacts',
+    'ai_greeting_reply' => 'Olá! Aqui é a Rafa, assistente do consultório da psicóloga Mariana Bernardes – CRP 04/62451. Em que posso ajudar?',
+];
+$longOpening = FirstAutomatedReplyService::compose('O atendimento seria para você mesmo?', $longAgent, false);
+$check(substr_count($longOpening, 'Rafa') === 1 && !str_contains($longOpening, 'Eu sou Rafa'), 'saudação configurada que já apresenta Rafa não recebe uma segunda apresentação');
+$longFallback = FirstAutomatedReplyService::compose('O atendimento seria para você mesmo?', [
+    'name' => 'Rafa, Assistente da psicóloga Mariana Bernardes',
+    'ai_greeting_mode' => 'all_contacts',
+], false);
+$check(str_contains($longFallback, 'Eu sou Rafa, assistente virtual.') && !str_contains($longFallback, 'Eu sou Rafa, Assistente da psicóloga'), 'fallback fala somente o nome curto quando o cadastro inclui função');
+$alreadyIdentified = FirstAutomatedReplyService::compose('Olá! Aqui é a Rafa, assistente do consultório. Como posso ajudar?', $longAgent, false);
+$check(substr_count($alreadyIdentified, 'Rafa') === 1, 'mensagem determinística já identificada não recebe prefixo duplicado');
+
 $pre = new PreSchedulingService();
 $plainQuestion = $pre->detectIntent('Quanto é? E como funciona?', true);
 $check(empty($plainQuestion['has_intent']), 'pergunta normal após intenção antiga não reabre a agenda');
