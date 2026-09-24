@@ -115,12 +115,6 @@ $slaBusinessHoursLabel = $slaHoursSummary((string) ($slaSettings['business_hours
         <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" data-confirm="<?= View::e($company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?') ?>">
             <?= Csrf::input() ?>
             <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
-        <div class="settings-toggle-grid admin-company-sla-toggle-grid">
-            <label class="switch-card admin-company-sla-toggle">
-                <input type="checkbox" name="sla_enabled" value="1" <?= $slaEnabled ? 'checked' : '' ?>>
-                <span><strong>Usar SLA operacional nesta empresa</strong><small>Desative para não exibir relógio, alertas preventivos ou violações de SLA nas conversas e no painel operacional. A configuração permanece salva para ser reativada depois.</small></span>
-            </label>
-        </div>
             <input type="hidden" name="return_to" value="/companies/overview?id=<?= $tenantId ?>">
             <input type="hidden" name="plan" value="<?= View::e((string) $company['plan']) ?>">
             <input type="hidden" name="status" value="<?= $company['status'] === 'inactive' ? 'active' : 'inactive' ?>">
@@ -197,6 +191,13 @@ $slaBusinessHoursLabel = $slaHoursSummary((string) ($slaSettings['business_hours
     <form class="admin-company-sla-form" method="post" action="<?= View::e(Router::url('/companies/sla')) ?>">
         <?= Csrf::input() ?>
         <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
+        <div class="settings-toggle-grid admin-company-sla-toggle-grid">
+            <input type="hidden" name="sla_enabled" value="0">
+            <label class="switch-card admin-company-sla-toggle">
+                <input type="checkbox" name="sla_enabled" value="1" <?= $slaEnabled ? 'checked' : '' ?>>
+                <span><strong>Usar SLA operacional nesta empresa</strong><small>Quando desligado, a empresa continua operando normalmente, sem relógio, alertas preventivos ou classificação de violação de SLA. A meta e as demais configurações ficam preservadas para uma futura reativação.</small></span>
+            </label>
+        </div>
         <div class="form-grid three">
             <label class="field">
                 <span>Meta da 1ª resposta</span>

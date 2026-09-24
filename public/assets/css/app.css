@@ -16686,3 +16686,23 @@ summary {
   .admin-company-sla-actions { align-items: stretch; flex-direction: column; }
   .admin-company-sla-actions .btn { width: 100%; }
 }
+
+/* RS Connect 36.36.17 — SLA opcional dentro do próprio bloco operacional */
+.admin-company-sla-toggle-grid {
+  grid-template-columns: 1fr;
+  margin: 0 0 18px;
+}
+.admin-company-sla-toggle {
+  width: 100%;
+  align-items: center;
+  border-color: #dbe8eb;
+  background: #f7fbfb;
+}
+.admin-company-sla-toggle > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.admin-company-sla-toggle small {
+  max-width: 820px;
+}

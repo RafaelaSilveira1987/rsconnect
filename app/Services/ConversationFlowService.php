@@ -636,6 +636,8 @@ final class ConversationFlowService
             $status = (string) ($contact['status'] ?? '');
             $tags = $this->tags($contact['tags_json'] ?? null);
             $relationship = $this->relationshipProfile($contact);
+            $behaviorDemandRequired = $this->behaviorRequiresDemandBeforeSchedule($tenantId, $pdo);
+            $allowExistingCustomerDemandExemption = !empty($relationship['is_existing_customer']) && !$behaviorDemandRequired;
 
             $statement = $pdo->prepare(
                 'SELECT id, metadata_json
@@ -647,19 +649,19 @@ final class ConversationFlowService
                 'UPDATE conversation_flow_states
                  SET is_existing_patient = :is_existing_patient,
                      demand_summary = CASE
-                         WHEN :is_existing_customer_summary = 1 AND demand_status = "pending" AND (demand_summary IS NULL OR demand_summary = "")
+                         WHEN :allow_existing_customer_demand_exemption_summary = 1 AND demand_status = "pending" AND (demand_summary IS NULL OR demand_summary = "")
                              THEN "Contato já identificado como cliente/paciente; nova triagem de demanda dispensada."
                          ELSE demand_summary
                      END,
                      stage = CASE
-                         WHEN :is_existing_customer_stage = 1
+                         WHEN :allow_existing_customer_demand_exemption_stage = 1
                               AND demand_status = "pending"
                               AND stage IN ("identifying_contact", "understanding_demand", "collecting_demand")
                              THEN "qualified"
                          ELSE stage
                      END,
                      demand_status = CASE
-                         WHEN :is_existing_customer = 1 AND demand_status = "pending" THEN "not_required"
+                         WHEN :allow_existing_customer_demand_exemption = 1 AND demand_status = "pending" THEN "not_required"
                          ELSE demand_status
                      END,
                      metadata_json = :metadata_json,
@@ -680,12 +682,13 @@ final class ConversationFlowService
                 $metadata['relationship_key'] = (string) ($relationship['key'] ?? 'unclassified');
                 $metadata['relationship_label'] = (string) ($relationship['label'] ?? 'Relacionamento não identificado');
                 $isExistingCustomer = !empty($metadata['is_existing_customer']) ? 1 : 0;
+                $allowExemption = $allowExistingCustomerDemandExemption ? 1 : 0;
 
                 $update->execute([
                     'is_existing_patient' => $group === 'patient' ? 1 : 0,
-                    'is_existing_customer' => $isExistingCustomer,
-                    'is_existing_customer_summary' => $isExistingCustomer,
-                    'is_existing_customer_stage' => $isExistingCustomer,
+                    'allow_existing_customer_demand_exemption' => $allowExemption,
+                    'allow_existing_customer_demand_exemption_summary' => $allowExemption,
+                    'allow_existing_customer_demand_exemption_stage' => $allowExemption,
                     'metadata_json' => json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     'id' => (int) $row['id'],
                 ]);

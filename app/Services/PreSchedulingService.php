@@ -122,59 +122,58 @@ final class PreSchedulingService
             return $result;
         }
 
-        if ($existing === null) {
-            // O fluxo de grupos pode ter sido carregado antes de a triagem atualizar
-            // uma demanda curta como "Ansiedade". Consulta novamente a fonte de verdade
-            // para não rejeitar uma coleta que acabou de ser concluída neste turno.
-            $currentFlow = (new ConversationFlowService())->context($pdo, $tenantId, $conversationId, $contactId);
-            if ($currentFlow !== []) {
-                $flowContext = $currentFlow;
-            }
-            $decision = (new ConversationFlowService())->schedulingDecision(
+        // A regra de demanda/grupo é revalidada em TODA tentativa de agenda, inclusive
+        // quando já existe um pré-agendamento em andamento. Antes ela rodava apenas na
+        // criação e uma preferência posterior podia chegar à disponibilidade sem passar
+        // novamente pela regra configurada no agente.
+        $currentFlow = (new ConversationFlowService())->context($pdo, $tenantId, $conversationId, $contactId);
+        if ($currentFlow !== []) {
+            $flowContext = $currentFlow;
+        }
+        $decision = (new ConversationFlowService())->schedulingDecision(
+            $pdo,
+            $instance,
+            $contactId,
+            $conversationId,
+            $content,
+            $flowContext
+        );
+        if (empty($decision['allowed'])) {
+            $blockedReason = (string) ($decision['code'] ?? 'flow_blocked');
+            $blockedMessage = $this->publicBlockedMessage($blockedReason);
+            $send = $this->sendAgendaGateMessage(
                 $pdo,
                 $instance,
-                $contactId,
                 $conversationId,
-                $content,
-                $flowContext
+                $contactId,
+                $blockedMessage,
+                $blockedReason,
+                $incomingMessageId
             );
-            if (empty($decision['allowed'])) {
-                $blockedReason = (string) ($decision['code'] ?? 'flow_blocked');
-                $blockedMessage = $this->publicBlockedMessage($blockedReason);
-                $send = $this->sendAgendaGateMessage(
-                    $pdo,
-                    $instance,
+
+            $result['handled'] = true;
+            $result['blocked'] = true;
+            $result['blocked_reason'] = $blockedReason;
+            $result['blocked_message'] = $blockedMessage;
+            $result['blocked_message_sent'] = (bool) ($send['ok'] ?? false);
+            $result['blocked_message_error'] = $send['error'] ?? null;
+            $result['conversation_flow'] = $decision['flow'] ?? $flowContext;
+            $result['skip_ai'] = true;
+            $result['terminal_handled'] = true;
+            $result['availability_request_needed'] = false;
+
+            if (empty($send['ok'])) {
+                $this->notifyAvailabilityFailure(
+                    $tenantId,
+                    (int) ($existing['id'] ?? 0),
                     $conversationId,
-                    $contactId,
-                    $blockedMessage,
-                    $blockedReason,
-                    $incomingMessageId
+                    (string) ($send['error'] ?? 'Não foi possível enviar a mensagem da etapa anterior ao agendamento.')
                 );
-
-                $result['handled'] = true;
-                $result['blocked'] = true;
-                $result['blocked_reason'] = $blockedReason;
-                $result['blocked_message'] = $blockedMessage;
-                $result['blocked_message_sent'] = (bool) ($send['ok'] ?? false);
-                $result['blocked_message_error'] = $send['error'] ?? null;
-                $result['conversation_flow'] = $decision['flow'] ?? $flowContext;
-                $result['skip_ai'] = true;
-                $result['terminal_handled'] = true;
-                $result['availability_request_needed'] = false;
-
-                if (empty($send['ok'])) {
-                    $this->notifyAvailabilityFailure(
-                        $tenantId,
-                        0,
-                        $conversationId,
-                        (string) ($send['error'] ?? 'Não foi possível enviar a mensagem da etapa anterior ao agendamento.')
-                    );
-                }
-
-                return $result;
             }
-            $flowContext = is_array($decision['flow'] ?? null) ? $decision['flow'] : $flowContext;
+
+            return $result;
         }
+        $flowContext = is_array($decision['flow'] ?? null) ? $decision['flow'] : $flowContext;
 
         $this->markConversationIntent($pdo, $tenantId, $conversationId, $intent);
 

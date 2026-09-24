@@ -1,3 +1,22 @@
+## 36.36.17 — 2026-09-24 — Consistência das regras do agente e SLA Admin
+
+- corrige a posição do toggle **Usar SLA operacional nesta empresa**, que havia sido inserido dentro do formulário de ativação/inativação da empresa; o toggle agora fica exclusivamente dentro do bloco SLA e salva pela rota `/companies/sla`;
+- consolida a regra de demanda entre `conversation_behavior` e o campo técnico `brief_demand`, preservando a configuração mais restritiva existente na atualização e eliminando perda silenciosa de regra;
+- após o primeiro salvamento, `brief_demand` passa a ser sincronizado a partir do bloco **Entender a demanda**, removendo dois controles concorrentes para a mesma exigência;
+- preserva a ordem cadastrada no workflow depois das sobreposições operacionais; a regra de demanda não pode mais reordenar as etapas pelo `position` antigo;
+- mantém os gates determinísticos já existentes de agenda (triagem, elegibilidade, modalidade, disponibilidade e aprovação humana);
+- preserva integralmente a retomada pós-horário e as correções UTC/deduplicação das versões 36.36.11/36.36.12;
+- nenhuma migration nova.
+
+## 36.36.16 — 2026-09-24 — Regras do agente como fonte de verdade
+
+- torna `conversation_behavior[demand]` a fonte canônica em tempo de execução para **Exigir a demanda antes de consultar a agenda**, mesmo quando `tenant_triage_fields` estiver desatualizado;
+- revalida demanda e regras de grupo em **toda** tentativa de pré-agendamento, inclusive quando já existe um pré-agendamento em andamento;
+- impede respostas de outros campos (`online`, `sim`, idade, dia/horário ou pergunta de preço) de serem gravadas acidentalmente como demanda;
+- remove a desativação silenciosa da regra de demanda no contexto de cliente/paciente quando a configuração global exigir a coleta;
+- em turnos mistos no modo híbrido (ex.: “como funciona?”, “qual o valor?” + pedido de horário), permite que a IA responda primeiro às perguntas usando as informações configuradas e depois faça somente a próxima pergunta obrigatória;
+- não altera SLA, horário comercial, apresentação, disponibilidade real da agenda ou migrations.
+
 ## 36.36.15 — 2026-09-24 — SLA operacional opcional por empresa
 
 - adiciona no RS Admin a opção **Usar SLA operacional nesta empresa**;

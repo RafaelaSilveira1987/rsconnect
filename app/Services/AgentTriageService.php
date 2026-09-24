@@ -57,6 +57,7 @@ final class AgentTriageService
      */
     public function analyzeText(array $profile, array $collected, string $text, bool $forceScheduling = false): array
     {
+        $profile = (new AgentConversationBehaviorService())->applyOperationalOverridesToProfile($profile);
         $normalized = $this->normalize($text);
         $collected = $this->extractDeterministic($collected, $text, $normalized, null);
         $schedulingIntent = $forceScheduling
@@ -80,6 +81,7 @@ final class AgentTriageService
      */
     public function simulateTurn(array $profile, array $state, string $text): array
     {
+        $profile = (new AgentConversationBehaviorService())->applyOperationalOverridesToProfile($profile);
         $collected = is_array($state['collected'] ?? null) ? $state['collected'] : [];
         $currentField = trim((string) ($state['current_field_key'] ?? '')) ?: null;
         $normalized = $this->normalize($text);
@@ -221,6 +223,7 @@ final class AgentTriageService
         try {
             $blueprints = new AgentBlueprintService();
             $profile = $blueprints->profileForTenant($tenantId, true, $pdo);
+            $profile = (new AgentConversationBehaviorService())->applyOperationalOverridesToProfile($profile);
             $result['profile'] = $profile;
             if (($profile['status'] ?? 'inactive') !== 'active' || empty($profile['capabilities']['triage.enabled'])) {
                 $result['code'] = 'triage_disabled';
@@ -469,6 +472,8 @@ final class AgentTriageService
                     $message = 'Para registrar corretamente, qual é a idade exata da pessoa que será atendida?';
                 }
                 $interactionMode = strtolower(trim((string) ($profile['interaction_mode'] ?? 'hybrid')));
+                $behaviorService = new AgentConversationBehaviorService();
+                $mixedInformationalTurn = $interactionMode === 'hybrid' && $behaviorService->hasInformationalQuestion($content);
                 $result['handled'] = true;
                 $result['allowed'] = false;
                 $result['code'] = 'triage_incomplete';
@@ -484,14 +489,19 @@ final class AgentTriageService
                 ];
                 $this->logDecision($pdo, $tenantId, $conversationId, $contactId, $result['decision'], $collected);
 
-                if ($interactionMode === 'prompt' && !$sendMessages) {
+                if (($interactionMode === 'prompt' || $mixedInformationalTurn) && !$sendMessages) {
                     $result['skip_ai'] = false;
                     $result['terminal_handled'] = false;
-                } elseif ($interactionMode === 'prompt') {
-                    // No modo Prompt Studio, a IA redige a pergunta, mas a agenda continua bloqueada.
+                    $result['mixed_informational_turn'] = $mixedInformationalTurn;
+                } elseif ($interactionMode === 'prompt' || $mixedInformationalTurn) {
+                    // Prompt Studio redige a pergunta. No modo híbrido, um turno misto
+                    // (ex.: valor + pedido de agenda) também vai à IA para responder a
+                    // dúvida configurada e só então fazer a próxima pergunta obrigatória.
+                    // A agenda permanece bloqueada pela decisão collect acima.
                     $result['skip_ai'] = false;
                     $result['terminal_handled'] = false;
                     $result['prompt_mode'] = true;
+                    $result['mixed_informational_turn'] = $mixedInformationalTurn;
                 } else {
                     $result['skip_ai'] = true;
                     $result['terminal_handled'] = true;
@@ -617,9 +627,30 @@ final class AgentTriageService
             'patient_name' => $this->looksLikeSimpleName($message) ? mb_substr($message, 0, 150) : null,
             'service', 'professional', 'contact_source' => mb_strlen($message) <= 250 ? mb_substr($message, 0, 250) : null,
             'preferred_schedule' => $this->hasSchedulePreference($normalized) ? $this->extractSchedulePreference($message) : null,
-            'brief_demand' => mb_strlen($message) >= 3 ? mb_substr($message, 0, 1200) : null,
+            'brief_demand' => $this->looksLikeDemandAnswer($message, $normalized) ? mb_substr($message, 0, 1200) : null,
             default => mb_strlen($message) <= 500 ? mb_substr($message, 0, 500) : null,
         };
+    }
+
+    private function looksLikeDemandAnswer(string $message, string $normalized): bool
+    {
+        $message = trim($message);
+        if (mb_strlen($message) < 3) {
+            return false;
+        }
+
+        // Respostas de outros campos não podem satisfazer "demanda" por acidente.
+        if (preg_match('/^(sim|nao|não|online|presencial|telefone|manha|manhã|tarde|noite)$/u', $normalized)) {
+            return false;
+        }
+        if ($this->extractAgeAnswer($message) !== null || $this->hasSchedulePreference($normalized)) {
+            return false;
+        }
+        if (preg_match('/\b(qual|quanto|valor|preco|preço|pagamento|como funciona|tem horario|tem horário|disponibilidade)\b/u', $normalized)) {
+            return false;
+        }
+
+        return true;
     }
 
     private function extractAge(string $text): ?int

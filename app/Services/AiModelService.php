@@ -594,9 +594,17 @@ final class AiModelService
             $groupRule = [];
         }
         if ($isExistingCustomer) {
-            // Cadastro de cliente/paciente prevalece sobre regra antiga gravada no banco.
-            // Evita que uma configuração histórica reabra qualificação de quem já é cliente.
-            $groupRule['require_demand_before_pre_schedule'] = false;
+            // Cliente/paciente atual não reinicia a triagem inteira. A exigência global
+            // de demanda, porém, continua soberana quando ainda não existe demanda
+            // registrada nesta conversa. Não desligamos mais essa regra no prompt.
+            try {
+                $behavior = (new AgentConversationBehaviorService())->settingsForTenant($tenantId);
+                $demandBehavior = is_array($behavior['demand'] ?? null) ? $behavior['demand'] : [];
+                if (!empty($demandBehavior['required_before_schedule'])) {
+                    $groupRule['require_demand_before_pre_schedule'] = true;
+                }
+            } catch (Throwable) {
+            }
         }
         $groupInstructions = trim((string) ($groupRule['instructions'] ?? ''));
         $groupRuleBlock = '';

@@ -199,7 +199,9 @@ final class AppVersionService
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.12 — Retomada com apresentação única e sem duplicidade';
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.13 — SLA por empresa no RS Admin';
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.14 — Demanda obrigatória antes da agenda';
-    public const PACKAGE_LABEL = 'RS Connect 36.36.15 — SLA operacional opcional por empresa';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.15 — SLA operacional opcional por empresa';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.16 — Regras do agente como fonte de verdade';
+    public const PACKAGE_LABEL = 'RS Connect 36.36.17 — Consistência das regras do agente e SLA Admin';
     public const REQUIRED_MIGRATION = '118_contact_origin.sql';
 
     private PDO $pdo;

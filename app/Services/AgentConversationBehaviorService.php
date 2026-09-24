@@ -62,7 +62,32 @@ final class AgentConversationBehaviorService
             }
         }
 
-        return self::normalizeConfiguration($raw);
+        $normalized = self::normalizeConfiguration($raw);
+
+        // 36.36.17: as duas telas históricas não podem disputar a mesma regra.
+        // Se o campo estruturado brief_demand estiver marcado como obrigatório antes
+        // da agenda, essa exigência é preservada mesmo que conversation_behavior tenha
+        // sido salvo por uma versão anterior com o toggle desligado. A regra efetiva é
+        // a mais restritiva entre as fontes persistidas, evitando perda silenciosa de
+        // configuração durante upgrades.
+        foreach ((array) ($profile['triage_fields'] ?? []) as $field) {
+            if (!is_array($field) || (string) ($field['field_key'] ?? '') !== 'brief_demand') {
+                continue;
+            }
+            $triageRequired = !empty($field['active']) && !empty($field['required_before_schedule']);
+            if ($triageRequired) {
+                $normalized['demand']['enabled'] = true;
+                $normalized['demand']['required_before_schedule'] = true;
+            }
+            $behaviorPrompt = trim((string) (($raw['demand']['prompt'] ?? '')));
+            $triagePrompt = trim((string) ($field['prompt_text'] ?? ''));
+            if ($behaviorPrompt === '' && $triagePrompt !== '') {
+                $normalized['demand']['prompt'] = $triagePrompt;
+            }
+            break;
+        }
+
+        return $normalized;
     }
 
     /**
@@ -165,6 +190,87 @@ final class AgentConversationBehaviorService
         $base['special_routes'] = $routes;
 
         return $base;
+    }
+
+    /**
+     * Aplica as regras amigáveis do agente sobre o perfil operacional em memória.
+     *
+     * O config_json é a fonte canônica para "Exigir a demanda antes da agenda".
+     * Essa sobreposição impede que um tenant_triage_fields antigo/desalinhado libere
+     * a agenda mesmo quando a opção está marcada na tela do assistente.
+     *
+     * @param array<string,mixed> $profile
+     * @return array<string,mixed>
+     */
+    public function applyOperationalOverridesToProfile(array $profile): array
+    {
+        $settings = $this->settingsFromProfile($profile);
+        $demand = is_array($settings['demand'] ?? null) ? $settings['demand'] : [];
+        $demandEnabled = !empty($demand['enabled']);
+        $demandRequired = !empty($demand['required_before_schedule']);
+        if (!$demandEnabled && !$demandRequired) {
+            return $profile;
+        }
+
+        $fields = is_array($profile['triage_fields'] ?? null) ? array_values($profile['triage_fields']) : [];
+        $found = false;
+        foreach ($fields as &$field) {
+            if (!is_array($field) || (string) ($field['field_key'] ?? '') !== 'brief_demand') {
+                continue;
+            }
+            $found = true;
+            $field['active'] = true;
+            if ($demandRequired) {
+                $field['required_before_schedule'] = true;
+            }
+            $prompt = trim((string) ($demand['prompt'] ?? ''));
+            if ($prompt !== '') {
+                $field['prompt_text'] = $prompt;
+            }
+            break;
+        }
+        unset($field);
+
+        if (!$found) {
+            $fields[] = [
+                'field_key' => 'brief_demand',
+                'label' => 'Motivo resumido do contato',
+                'field_type' => 'textarea',
+                'prompt_text' => trim((string) ($demand['prompt'] ?? ''))
+                    ?: 'Antes de verificar os horários, pode me contar brevemente o que você está buscando neste atendimento?',
+                'required_before_schedule' => $demandRequired,
+                'required_for_completion' => true,
+                'active' => true,
+                'position' => 60,
+                'source' => 'conversation_behavior',
+            ];
+        }
+
+        // Não reordena aqui. profileForTenant já aplica a ordem configurada do
+        // workflow. Reordenar novamente pelo position original fazia a etapa cadastrada
+        // pelo usuário ser silenciosamente desfeita quando a regra de demanda estava ativa.
+        $profile['triage_fields'] = array_values($fields);
+        return $profile;
+    }
+
+    /**
+     * Retorna true quando o turno contém uma pergunta informativa que deve ser
+     * respondida antes de a IA retomar a próxima pergunta de triagem.
+     */
+    public function hasInformationalQuestion(string $content): bool
+    {
+        $text = $this->normalize($content);
+        if ($text === '') {
+            return false;
+        }
+        if (preg_match('/^(?:pode ser |prefiro |quero )?(online|presencial|telefone)(?: por favor)?$/u', $text)) {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/\b(qual|quanto|valor|preco|preço|pagamento|pagar|pix|cartao|cartão|transferencia|transferência|como funciona|como e|como é|onde|local|endereco|endereço|meet|online|presencial)\b/u',
+            $text
+        );
     }
 
     /** @param array<string,mixed> $profile */

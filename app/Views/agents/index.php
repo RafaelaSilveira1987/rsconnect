@@ -283,11 +283,21 @@ $humanizeAgentRule = static function (string $key): string {
                                         <article class="agent-operation-field-card">
                                             <div class="agent-operation-card-title"><strong><?= View::e((string) ($field['label'] ?? $fieldKey)) ?></strong><span><?= View::e($agentFieldTypeLabels[$fieldType] ?? 'Informação') ?></span></div>
                                             <label class="field compact-field"><span>Nome da informação</span><input name="triage_fields[<?= View::e($fieldKey) ?>][label]" value="<?= View::e((string) ($field['label'] ?? $fieldKey)) ?>"></label>
-                                            <label class="field compact-field"><span>Pergunta usada como padrão</span><textarea name="triage_fields[<?= View::e($fieldKey) ?>][prompt_text]" rows="2"><?= View::e((string) ($field['prompt_text'] ?? '')) ?></textarea></label>
-                                            <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="0">
-                                            <label class="check-field compact-check"><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="1" <?= !empty($field['active']) ? 'checked' : '' ?>><span>Usar esta informação</span></label>
-                                            <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="0">
-                                            <label class="check-field compact-check"><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="1" <?= !empty($field['required_before_schedule']) ? 'checked' : '' ?>><span>Exigir antes de consultar a agenda</span></label>
+                                            <?php if ($fieldKey === 'brief_demand'): ?>
+                                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][prompt_text]" value="<?= View::e((string) ($behaviorDemand['prompt'] ?? $field['prompt_text'] ?? '')) ?>">
+                                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="<?= !empty($behaviorDemand['enabled']) ? '1' : '0' ?>">
+                                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="<?= !empty($behaviorDemand['required_before_schedule']) ? '1' : '0' ?>">
+                                                <div class="agent-rule-fixed-note agent-demand-source-note">
+                                                    <strong>Controlado em “Entender a demanda”</strong>
+                                                    <span><?= !empty($behaviorDemand['required_before_schedule']) ? 'A demanda está obrigatória antes da agenda.' : (!empty($behaviorDemand['enabled']) ? 'A demanda é coletada quando necessária, mas não bloqueia a agenda.' : 'A coleta estruturada de demanda está desligada.') ?> Edite a pergunta e a exigência no bloco “Conversa, modalidades e encaminhamentos”.</span>
+                                                </div>
+                                            <?php else: ?>
+                                                <label class="field compact-field"><span>Pergunta usada como padrão</span><textarea name="triage_fields[<?= View::e($fieldKey) ?>][prompt_text]" rows="2"><?= View::e((string) ($field['prompt_text'] ?? '')) ?></textarea></label>
+                                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="0">
+                                                <label class="check-field compact-check"><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="1" <?= !empty($field['active']) ? 'checked' : '' ?>><span>Usar esta informação</span></label>
+                                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="0">
+                                                <label class="check-field compact-check"><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="1" <?= !empty($field['required_before_schedule']) ? 'checked' : '' ?>><span>Exigir antes de consultar a agenda</span></label>
+                                            <?php endif; ?>
                                             <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_for_completion]" value="0">
                                             <label class="check-field compact-check"><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][required_for_completion]" value="1" <?= !empty($field['required_for_completion']) ? 'checked' : '' ?>><span>Coletar antes de encerrar o atendimento</span></label>
                                         </article>
