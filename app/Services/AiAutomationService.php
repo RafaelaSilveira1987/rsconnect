@@ -833,6 +833,17 @@ final class AiAutomationService
             $failurePhase = 'ai.generate';
             $reply = $this->ai->generateReply($generationAgent, $messages, $conversation, $conversation);
 
+            // A mensagem de ausência fora do horário é operacional, não uma apresentação
+            // do assistente. Na primeira resposta conversacional após a reabertura, garante
+            // a mesma regra de identificação usada pelas respostas determinísticas.
+            if ($afterHoursRecovery) {
+                $reply = FirstAutomatedReplyService::compose(
+                    $reply,
+                    $agent,
+                    $this->hasPriorConversationalOutgoing($pdo, $conversationId, $agent)
+                );
+            }
+
             // Defesa final: o backend é a fonte de verdade do expediente. Mesmo que o
             // modelo tente ecoar uma antiga mensagem de ausência presente no histórico,
             // nunca enviamos ao cliente a afirmação de que está fechado quando a política
@@ -1789,6 +1800,72 @@ final class AiAutomationService
         }
     }
 
+    private function hasPriorConversationalOutgoing(PDO $pdo, int $conversationId, array $agent): bool
+    {
+        if ($conversationId < 1) {
+            return false;
+        }
+
+        $sql = 'SELECT 1
+                FROM conversation_messages
+                WHERE conversation_id = :conversation_id
+                  AND direction = "outgoing"
+                  AND status NOT IN ("failed", "cancelled")';
+        $params = ['conversation_id' => $conversationId];
+        $afterHoursMessage = trim((string) ($agent['after_hours_message'] ?? ''));
+        if ($afterHoursMessage !== '') {
+            $sql .= ' AND TRIM(content) <> :after_hours_message';
+            $params['after_hours_message'] = $afterHoursMessage;
+        }
+        $sql .= ' LIMIT 1';
+
+        try {
+            $statement = $pdo->prepare($sql);
+            $statement->execute($params);
+            return (bool) $statement->fetchColumn();
+        } catch (Throwable) {
+            // Em caso de dúvida, evita repetir apresentação em uma conversa já ativa.
+            return true;
+        }
+    }
+
+    private function equivalentOutgoingAfterLastIncoming(PDO $pdo, int $conversationId, string $message): int
+    {
+        $message = trim($message);
+        if ($conversationId < 1 || $message === '') {
+            return 0;
+        }
+
+        try {
+            $statement = $pdo->prepare(
+                'SELECT m.id
+                 FROM conversation_messages m
+                 WHERE m.conversation_id = :conversation_id
+                   AND m.direction = "outgoing"
+                   AND m.status IN ("sent", "delivered", "read")
+                   AND (TRIM(m.content) = :content OR RIGHT(TRIM(m.content), CHAR_LENGTH(:suffix_length)) = :suffix)
+                   AND m.id > COALESCE((
+                       SELECT MAX(i.id)
+                       FROM conversation_messages i
+                       WHERE i.conversation_id = m.conversation_id
+                         AND i.direction = "incoming"
+                   ), 0)
+                   AND m.sent_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 10 MINUTE)
+                 ORDER BY m.id DESC
+                 LIMIT 1'
+            );
+            $statement->execute([
+                'conversation_id' => $conversationId,
+                'content' => $message,
+                'suffix_length' => $message,
+                'suffix' => $message,
+            ]);
+            return (int) ($statement->fetchColumn() ?: 0);
+        } catch (Throwable) {
+            return 0;
+        }
+    }
+
     private function hasOutgoingAfterStoredMessage(PDO $pdo, int $conversationId, int $messageId): bool
     {
         $statement = $pdo->prepare(
@@ -2243,6 +2320,19 @@ final class AiAutomationService
         // disponibilidade, pré-reserva ou confirmação. Qualquer afirmação técnica de agenda
         // precisa estar respaldada pelo estado real de calendar_appointments.
         $reply = $this->guardUnsupportedCalendarClaim($pdo, (int) ($instance['tenant_id'] ?? 0), $conversationId, $reply);
+
+        // Se outra execução já enviou exatamente esta mesma resposta após a última
+        // mensagem do cliente, não envia novamente. Isso fecha a corrida entre monitor
+        // pós-horário, fila rápida e reprocessamento sem bloquear respostas a uma nova entrada.
+        $existingEquivalentId = $this->equivalentOutgoingAfterLastIncoming($pdo, $conversationId, $reply);
+        if ($existingEquivalentId > 0) {
+            return [
+                'status' => 200,
+                'body' => [],
+                '_stored_message_id' => $existingEquivalentId,
+                '_duplicate_suppressed' => true,
+            ];
+        }
 
         $senderDisplayName = $this->aiSenderDisplayName($pdo, (int) ($instance['tenant_id'] ?? 0), $conversationId, $agent);
         $signatureEnabled = $this->whatsappSenderIdentificationEnabled($pdo, (int) ($instance['tenant_id'] ?? 0));

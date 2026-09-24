@@ -70,11 +70,20 @@ final class ConversationAutomationMessageService
                 return ['ok' => false, 'error' => 'Mensagem aguardando horário de atendimento.', 'external_id' => null];
             }
 
-            $previous = $pdo->prepare(
-                'SELECT 1 FROM conversation_messages WHERE conversation_id = :conversation_id
-                   AND direction = "outgoing" AND status NOT IN ("failed", "cancelled") LIMIT 1'
-            );
-            $previous->execute(['conversation_id' => $conversationId]);
+            // O aviso de ausência fora do horário é operacional e não deve contar como
+            // "primeira resposta conversacional". Caso contrário, quando a conversa é
+            // retomada após a abertura, a triagem determinística perde a apresentação
+            // configurada do assistente.
+            $afterHoursMessage = is_array($agent) ? trim((string) ($agent['after_hours_message'] ?? '')) : '';
+            $previousSql = 'SELECT 1 FROM conversation_messages WHERE conversation_id = :conversation_id
+                   AND direction = "outgoing" AND status NOT IN ("failed", "cancelled")';
+            $previousParams = ['conversation_id' => $conversationId];
+            if ($afterHoursMessage !== '') {
+                $previousSql .= ' AND TRIM(content) <> :after_hours_message';
+                $previousParams['after_hours_message'] = $afterHoursMessage;
+            }
+            $previous = $pdo->prepare($previousSql . ' LIMIT 1');
+            $previous->execute($previousParams);
             $message = FirstAutomatedReplyService::compose($message, is_array($agent) ? $agent : [], (bool) $previous->fetchColumn());
 
             $service = new EvolutionService(

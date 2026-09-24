@@ -1,3 +1,11 @@
+## 36.36.12 — 2026-09-24 — Retomada com apresentação única e sem duplicidade
+
+- O aviso de ausência fora do horário deixa de contar como primeira resposta conversacional para a política de apresentação do assistente.
+- Na retomada após a abertura, respostas determinísticas e respostas do provedor de IA voltam a aplicar a apresentação configurada quando ainda não houve conversa ativa anterior.
+- Filtra os eventos terminais da recuperação pós-horário para que logs auxiliares de memória/integração não provoquem uma segunda tentativa da mesma demanda.
+- Adiciona proteção final contra envio da mesma resposta duas vezes quando monitor pós-horário e reprocessamento concorrem sem nova mensagem do cliente.
+- Nenhuma migration nova.
+
 ## 36.36.11 — 2026-09-24 — Retomada pós-horário no fuso correto
 
 - Corrige a leitura de `conversation_messages.sent_at`: timestamps técnicos são UTC e não podem ser reinterpretados como horário local pelo cooldown da IA.

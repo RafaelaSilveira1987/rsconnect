@@ -639,9 +639,34 @@ final class AiAfterHoursRecoveryService
 
     private function latestAttempt(PDO $pdo, int $messageId, int $conversationId, int $agentId, string $fallbackAfter): array
     {
+        // Considera somente eventos que encerram ou adiam a tentativa de recuperação.
+        // Logs auxiliares gravados depois da resposta (memória, integração, telemetria)
+        // não podem esconder um ai.replied/calendar.recovery.handled já concluído e
+        // fazer o monitor responder a mesma demanda novamente.
+        $terminalEvents = [
+            'ai.replied',
+            'calendar.recovery.handled',
+            'calendar.recovery.failed',
+            'ai.handoff',
+            'ai.cooldown',
+            'ai.quota.blocked',
+            'ai.recipient.unavailable',
+            'ai.failed',
+            'ai.operating_policy.blocked',
+            'ai.skipped',
+        ];
+        $placeholders = implode(',', array_fill(0, count($terminalEvents), '?'));
+
         try {
-            $statement = $pdo->prepare('SELECT event, status, error_message FROM ai_automation_logs WHERE incoming_message_id = :message_id ORDER BY id DESC LIMIT 1');
-            $statement->execute(['message_id' => $messageId]);
+            $statement = $pdo->prepare(
+                'SELECT event, status, error_message
+                 FROM ai_automation_logs
+                 WHERE incoming_message_id = ?
+                   AND event IN (' . $placeholders . ')
+                 ORDER BY id DESC
+                 LIMIT 1'
+            );
+            $statement->execute(array_merge([$messageId], $terminalEvents));
             $row = $statement->fetch(PDO::FETCH_ASSOC);
             if ($row) {
                 return $row;
@@ -651,16 +676,20 @@ final class AiAfterHoursRecoveryService
 
         try {
             $statement = $pdo->prepare(
-                'SELECT event, status, error_message FROM ai_automation_logs
-                 WHERE conversation_id = :conversation_id AND agent_id = :agent_id
-                   AND created_at >= :after_at
-                 ORDER BY id DESC LIMIT 1'
+                'SELECT event, status, error_message
+                 FROM ai_automation_logs
+                 WHERE conversation_id = ?
+                   AND agent_id = ?
+                   AND created_at >= ?
+                   AND event IN (' . $placeholders . ')
+                 ORDER BY id DESC
+                 LIMIT 1'
             );
-            $statement->execute([
-                'conversation_id' => $conversationId,
-                'agent_id' => $agentId,
-                'after_at' => $fallbackAfter !== '' ? $fallbackAfter : \App\Core\Clock::fromUnixUtc(time() - 120),
-            ]);
+            $statement->execute(array_merge([
+                $conversationId,
+                $agentId,
+                $fallbackAfter !== '' ? $fallbackAfter : \App\Core\Clock::fromUnixUtc(time() - 120),
+            ], $terminalEvents));
             return $statement->fetch(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
             return [];
