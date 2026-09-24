@@ -252,7 +252,14 @@ final class AiAfterHoursRecoveryService
                 }
 
                 $maxAgeHours = max(24, min(720, (int) Env::get('AI_AFTER_HOURS_MAX_AGE_HOURS', 168)));
-                $lastReceivedTs = strtotime((string) ($row['last_received_at'] ?? '')) ?: 0;
+                $lastReceivedRaw = trim((string) ($row['last_received_at'] ?? ''));
+                try {
+                    $lastReceivedTs = $lastReceivedRaw !== ''
+                        ? (new DateTimeImmutable($lastReceivedRaw, new \DateTimeZone(\App\Core\Clock::STORAGE_TIMEZONE)))->getTimestamp()
+                        : 0;
+                } catch (Throwable) {
+                    $lastReceivedTs = 0;
+                }
                 if ($lastReceivedTs > 0 && $lastReceivedTs < time() - ($maxAgeHours * 3600)) {
                     $this->finish($id, 'cancelled', 'Pendência expirada após ' . $maxAgeHours . ' horas sem recuperação automática.', null, $source);
                     $summary['expired']++;
@@ -652,7 +659,7 @@ final class AiAfterHoursRecoveryService
             $statement->execute([
                 'conversation_id' => $conversationId,
                 'agent_id' => $agentId,
-                'after_at' => $fallbackAfter !== '' ? $fallbackAfter : date('Y-m-d H:i:s', time() - 120),
+                'after_at' => $fallbackAfter !== '' ? $fallbackAfter : \App\Core\Clock::fromUnixUtc(time() - 120),
             ]);
             return $statement->fetch(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {

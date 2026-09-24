@@ -192,7 +192,9 @@ final class AppVersionService
     // 36.36.9 — hotfix pontual dos cenários de triagem, abertura e preferências de agenda.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.9 — Triagem e pré-agendamento consistentes';
     // 36.36.10 — evita apresentação duplicada quando o nome do agente inclui a função.
-    public const PACKAGE_LABEL = 'RS Connect 36.36.10 — Apresentação única do assistente';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.10 — Apresentação única do assistente';
+    // 36.36.11 — corrige UTC x fuso local na retomada automática após a abertura do expediente.
+    public const PACKAGE_LABEL = 'RS Connect 36.36.11 — Retomada pós-horário no fuso correto';
     public const REQUIRED_MIGRATION = '118_contact_origin.sql';
 
     private PDO $pdo;

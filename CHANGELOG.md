@@ -1,3 +1,11 @@
+## 36.36.11 — 2026-09-24 — Retomada pós-horário no fuso correto
+
+- Corrige a leitura de `conversation_messages.sent_at`: timestamps técnicos são UTC e não podem ser reinterpretados como horário local pelo cooldown da IA.
+- Corrige o monitor pós-horário para interpretar `last_run_at` em UTC; isso evita a rotina ser adiada por horas após a abertura do expediente.
+- Corrige expiração/fallback da fila pós-horário para usar o mesmo contrato UTC do banco.
+- Mantém o tempo de silêncio configurado: mensagem recebida segundos antes da abertura ainda aguarda apenas o saldo real do cooldown.
+- Nenhuma migration nova.
+
 ## 36.36.10 — 2026-09-24 — Apresentação única do assistente
 
 - Corrige a composição da primeira resposta determinística quando o campo `name` do agente contém também a função, por exemplo `Rafa, Assistente da psicóloga Mariana Bernardes`.

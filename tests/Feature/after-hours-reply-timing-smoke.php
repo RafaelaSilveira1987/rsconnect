@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../app/Core/Env.php';
+require_once __DIR__ . '/../../app/Core/Clock.php';
 require_once __DIR__ . '/../../app/Services/AiReplyTimingService.php';
 require_once __DIR__ . '/../../app/Services/AfterHoursAcknowledgementPolicyService.php';
 
@@ -28,6 +29,15 @@ $assert($timing->remainingSeconds(60, '2026-07-27 09:59:50', null, $now) === 50,
 $assert($timing->remainingSeconds(60, '2026-07-27 09:59:30', '2026-07-27 09:59:40', $now) === 40, 'ultima resposta de IA tambem protege contra resposta seguida');
 $assert($timing->remainingSeconds(60, '2026-07-27 09:58:30', '2026-07-27 09:58:40', $now) === 0, 'depois de 60s deve liberar');
 $assert($timing->remainingSeconds(60, '2026-07-27 09:59:55', '2026-07-27 09:58:00', $now) === 55, 'nova mensagem durante espera deve reiniciar o relogio');
+
+
+// Regressão 36.36.11: sent_at é UTC no banco, enquanto o PHP roda no fuso da empresa.
+// 11:32 UTC = 08:32 em São Paulo; às 09:06 o cooldown já expirou há muito tempo.
+$openingNow = new DateTimeImmutable('2026-09-24 09:06:00', new DateTimeZone('America/Sao_Paulo'));
+$assert(
+    $timing->remainingSeconds(60, '2026-09-24 11:32:00', null, $openingNow) === 0,
+    'timestamp UTC do banco nao pode manter cooldown ativo depois da abertura local'
+);
 
 $automationSource = file_get_contents(__DIR__ . '/../../app/Services/AiAutomationService.php') ?: '';
 $afterHoursPos = strpos($automationSource, '$operatingPolicy = (new AgentOperatingPolicyService())->status($agent);');

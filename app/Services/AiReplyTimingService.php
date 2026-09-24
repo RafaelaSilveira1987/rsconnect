@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Core\Clock;
 use DateTimeImmutable;
+use DateTimeZone;
 use PDO;
 use Throwable;
 
@@ -68,7 +70,8 @@ final class AiReplyTimingService
             return 0;
         }
 
-        $nowTs = ($now ?? new DateTimeImmutable('now'))->getTimestamp();
+        $storageTimezone = new DateTimeZone(Clock::STORAGE_TIMEZONE);
+        $nowTs = ($now ?? new DateTimeImmutable('now', $storageTimezone))->getTimestamp();
         $remaining = 0;
 
         foreach ([$lastIncomingAt, $lastAiReplyAt] as $timestamp) {
@@ -77,7 +80,11 @@ final class AiReplyTimingService
                 continue;
             }
             try {
-                $eventTs = (new DateTimeImmutable($timestamp))->getTimestamp();
+                // conversation_messages.sent_at é persistido em UTC. Sem informar
+                // explicitamente o fuso, o PHP usa APP_TIMEZONE e pode interpretar
+                // o horário do banco como se fosse local, mantendo o cooldown ativo
+                // por horas após a abertura do expediente.
+                $eventTs = (new DateTimeImmutable($timestamp, $storageTimezone))->getTimestamp();
             } catch (Throwable) {
                 $eventTs = strtotime($timestamp) ?: 0;
             }

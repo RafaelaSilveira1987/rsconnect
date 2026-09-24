@@ -18,7 +18,7 @@ $css = @file_get_contents($root . '/public/mobile-app/ui-0.5.0.css') ?: '';
 $version = @file_get_contents($root . '/app/Services/AppVersionService.php') ?: '';
 if (strpos($js, 'Mobile 0.5.0') === false) $errors[] = 'Versao mobile 0.5.0 nao encontrada no JS.';
 if (strpos($css, '.svgico') === false || strpos($css, '.startup') === false) $errors[] = 'Identidade visual mobile incompleta no CSS.';
-if (strpos($version, '36.36.7') === false && strpos($version, '36.36.9') === false && strpos($version, '36.36.10') === false) $errors[] = 'PACKAGE_LABEL mobile 0.5.0 ou hotfix compativel nao encontrado.';
+if (strpos($version, '36.36.7') === false && strpos($version, '36.36.9') === false && strpos($version, '36.36.10') === false && strpos($version, '36.36.11') === false) $errors[] = 'PACKAGE_LABEL mobile 0.5.0 ou hotfix compativel nao encontrado.';
 if ($errors) {
     fwrite(STDERR, "FAIL mobile-ui-v36367-smoke\n - " . implode("\n - ", $errors) . "\n");
     exit(1);

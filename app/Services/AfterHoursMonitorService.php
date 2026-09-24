@@ -8,6 +8,8 @@ use App\Core\Clock;
 use App\Core\Database;
 use App\Core\Env;
 use App\Core\Router;
+use DateTimeImmutable;
+use DateTimeZone;
 use PDO;
 use RuntimeException;
 use Throwable;
@@ -88,7 +90,7 @@ final class AfterHoursMonitorService
             return ['status' => 'disabled', 'message' => 'Monitor pós-horário desativado.'];
         }
 
-        $lastRunAt = strtotime((string) ($settings['last_run_at'] ?? '')) ?: 0;
+        $lastRunAt = $this->storageTimestamp((string) ($settings['last_run_at'] ?? ''));
         $intervalSeconds = max(300, ((int) ($settings['interval_minutes'] ?? 15)) * 60);
         if (!$force && $lastRunAt > 0 && $lastRunAt > time() - $intervalSeconds) {
             return [
@@ -193,6 +195,20 @@ final class AfterHoursMonitorService
             $statement->execute(['name' => self::LOCK_NAME]);
             $statement->fetchColumn();
         } catch (Throwable) {
+        }
+    }
+
+    private function storageTimestamp(string $value): int
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return 0;
+        }
+
+        try {
+            return (new DateTimeImmutable($value, new DateTimeZone(Clock::STORAGE_TIMEZONE)))->getTimestamp();
+        } catch (Throwable) {
+            return 0;
         }
     }
 
