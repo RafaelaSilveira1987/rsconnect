@@ -487,12 +487,15 @@ final class CompanyController
             $service = new SlaPolicyService($pdo);
             $before = $service->settings($tenantId);
             $after = $service->save($tenantId, [
+                'sla_enabled' => ((string) ($_POST['sla_enabled'] ?? '0')) === '1' ? '1' : '0',
                 'sla_target_minutes' => (int) ($_POST['sla_target_minutes'] ?? $before['target_minutes'] ?? SlaPolicyService::DEFAULT_TARGET_MINUTES),
                 'sla_warning_percent' => (int) ($_POST['sla_warning_percent'] ?? $before['warning_percent'] ?? SlaPolicyService::DEFAULT_WARNING_PERCENT),
                 'sla_count_outside_hours' => isset($_POST['sla_count_outside_hours']) ? '1' : '',
             ], Auth::id());
 
             Audit::log('company.sla_updated', [
+                'enabled_before' => (int) ($before['enabled'] ?? 1),
+                'enabled_after' => (int) ($after['enabled'] ?? 1),
                 'target_minutes_before' => (int) ($before['target_minutes'] ?? 0),
                 'target_minutes_after' => (int) ($after['target_minutes'] ?? 0),
                 'warning_percent_before' => (int) ($before['warning_percent'] ?? 0),
@@ -501,7 +504,7 @@ final class CompanyController
                 'count_outside_business_hours_after' => (int) ($after['count_outside_business_hours'] ?? 0),
             ], $tenantId);
 
-            Flash::set('success', 'SLA operacional da empresa atualizado.');
+            Flash::set('success', !empty($after['enabled']) ? 'SLA operacional da empresa atualizado.' : 'SLA operacional desativado para esta empresa.');
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível atualizar o SLA: ' . $exception->getMessage());
         }

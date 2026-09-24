@@ -163,6 +163,9 @@ final class ExecutiveMetricsPolicyService
                     continue;
                 }
                 $policy = $clock->policyForCycle($rowTenant, $row);
+                if (empty($policy['enabled'])) {
+                    continue;
+                }
                 // O filtro do relatório continua podendo simular outra meta;
                 // o relógio (expediente/fuso) permanece o snapshot do ciclo.
                 $policy['target_minutes'] = $slaMinutes;
@@ -215,7 +218,7 @@ final class ExecutiveMetricsPolicyService
                 $policy['target_minutes'] = $slaMinutes;
                 $elapsed = $clock->elapsedSeconds($rowTenant, (string) ($row['first_incoming_at'] ?? ''), $now, $policy);
                 $waitingSeconds[] = $elapsed;
-                if ($elapsed > $slaSeconds) {
+                if (!empty($policy['enabled']) && $elapsed > $slaSeconds) {
                     $waitingOver++;
                 }
             }

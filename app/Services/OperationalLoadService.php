@@ -29,15 +29,17 @@ final class OperationalLoadService
 
         $rows = $this->activeConversations($tenantId, $filters);
         $isLive = $this->lifecycle->isLive($tenantId);
+        $slaEnabled = !empty($this->sla->settings($tenantId)['enabled']);
         $prepared = [];
         foreach ($rows as $row) {
+            $row['sla_enabled'] = $slaEnabled;
             $row['sla'] = null;
             $row['awaiting_first_response'] = false;
             $firstIncoming = trim((string) ($row['sla_first_incoming_at'] ?? ''));
             $firstResponse = trim((string) ($row['sla_first_response_at'] ?? ''));
             if ($firstIncoming !== '') {
                 $row['awaiting_first_response'] = $firstResponse === '';
-                if ($isLive) {
+                if ($isLive && $slaEnabled) {
                     $policy = $this->sla->policyForCycle($tenantId, $row);
                     $row['sla'] = $this->sla->state(
                         $tenantId,
@@ -180,6 +182,7 @@ final class OperationalLoadService
             'instances' => $this->instances($tenantId),
             'users' => $this->activeUsers($tenantId),
             'tenant_live' => $isLive,
+            'sla_enabled' => $slaEnabled,
             'generated_at' => gmdate('Y-m-d H:i:s'),
         ];
         $payload['fingerprint'] = hash('sha256', json_encode([$summary, $team, array_map(static fn (array $row): array => [
@@ -266,6 +269,9 @@ final class OperationalLoadService
 
     private function slaLabel(array $row): string
     {
+        if (empty($row['sla_enabled'])) {
+            return 'SLA desativado';
+        }
         if (empty($row['awaiting_first_response'])) {
             return trim((string) ($row['sla_first_incoming_at'] ?? '')) === '' ? 'SLA ainda não iniciado' : '1ª resposta registrada';
         }
@@ -278,6 +284,9 @@ final class OperationalLoadService
 
     private function slaClass(array $row): string
     {
+        if (empty($row['sla_enabled'])) {
+            return 'resolved';
+        }
         if (empty($row['awaiting_first_response'])) {
             return 'resolved';
         }

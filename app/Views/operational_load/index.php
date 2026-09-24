@@ -11,6 +11,7 @@ $team = is_array($data['team'] ?? null) ? $data['team'] : [];
 $conversations = is_array($data['conversations'] ?? null) ? $data['conversations'] : [];
 $instances = is_array($data['instances'] ?? null) ? $data['instances'] : [];
 $users = is_array($data['users'] ?? null) ? $data['users'] : [];
+$slaEnabled = !empty($data['sla_enabled']);
 $queryBase = static function (array $override = []) use ($filters): string {
     $query = array_merge($filters, $override);
     $query = array_filter($query, static fn ($value): bool => $value !== '' && $value !== 0 && $value !== '0' && $value !== null);
@@ -34,6 +35,9 @@ $queryBase = static function (array $override = []) use ($filters): string {
 <?php if (empty($data['tenant_live']) && (int) ($filters['tenant_id'] ?? 0) > 0): ?>
     <div class="notice warning">A empresa não está em <strong>LIVE</strong>. A carga atual continua visível, mas os estados oficiais de SLA ficam desativados até o Go-Live.</div>
 <?php endif; ?>
+<?php if (!empty($data['tenant_live']) && !$slaEnabled && (int) ($filters['tenant_id'] ?? 0) > 0): ?>
+    <div class="notice info">O <strong>SLA operacional está desativado</strong> para esta empresa. A carga de atendimento continua disponível sem relógio, alerta preventivo ou violação de SLA.</div>
+<?php endif; ?>
 
 <form class="card operational-load-filters" method="get" action="<?= View::e(Router::url('/carga-operacional')) ?>">
     <?php if (Auth::isSuperAdmin()): ?>
@@ -43,7 +47,7 @@ $queryBase = static function (array $override = []) use ($filters): string {
     <label class="field"><span>Responsável</span><select name="assigned_user_id"><option value="">Todos</option><option value="unassigned" <?= ($filters['assigned_user_id'] ?? '') === 'unassigned' ? 'selected' : '' ?>>Sem responsável</option><?php foreach ($users as $user): ?><option value="<?= (int) $user['id'] ?>" <?= (string) ($filters['assigned_user_id'] ?? '') === (string) $user['id'] ? 'selected' : '' ?>><?= View::e((string) $user['name']) ?></option><?php endforeach; ?></select></label>
     <label class="field"><span>Status</span><select name="status"><option value="">Abertas + pendentes</option><option value="open" <?= ($filters['status'] ?? '') === 'open' ? 'selected' : '' ?>>Abertas</option><option value="pending" <?= ($filters['status'] ?? '') === 'pending' ? 'selected' : '' ?>>Pendentes</option></select></label>
     <label class="field"><span>Modo</span><select name="mode"><option value="">Todos</option><option value="human" <?= ($filters['mode'] ?? '') === 'human' ? 'selected' : '' ?>>Humano</option><option value="ai" <?= ($filters['mode'] ?? '') === 'ai' ? 'selected' : '' ?>>IA</option><option value="paused" <?= ($filters['mode'] ?? '') === 'paused' ? 'selected' : '' ?>>IA pausada</option></select></label>
-    <label class="field"><span>SLA atual</span><select name="sla"><option value="">Todos</option><option value="pending" <?= ($filters['sla'] ?? '') === 'pending' ? 'selected' : '' ?>>Aguardando 1ª resposta</option><option value="normal" <?= ($filters['sla'] ?? '') === 'normal' ? 'selected' : '' ?>>Dentro do prazo</option><option value="warning" <?= ($filters['sla'] ?? '') === 'warning' ? 'selected' : '' ?>>Em risco</option><option value="breached" <?= ($filters['sla'] ?? '') === 'breached' ? 'selected' : '' ?>>Violado</option></select></label>
+    <?php if ($slaEnabled): ?><label class="field"><span>SLA atual</span><select name="sla"><option value="">Todos</option><option value="pending" <?= ($filters['sla'] ?? '') === 'pending' ? 'selected' : '' ?>>Aguardando 1ª resposta</option><option value="normal" <?= ($filters['sla'] ?? '') === 'normal' ? 'selected' : '' ?>>Dentro do prazo</option><option value="warning" <?= ($filters['sla'] ?? '') === 'warning' ? 'selected' : '' ?>>Em risco</option><option value="breached" <?= ($filters['sla'] ?? '') === 'breached' ? 'selected' : '' ?>>Violado</option></select></label><?php endif; ?>
     <div class="operational-load-filter-actions"><button class="btn btn-primary" type="submit">Aplicar filtros</button><a class="btn btn-secondary" href="<?= View::e(Router::url('/carga-operacional' . (Auth::isSuperAdmin() && !empty($filters['tenant_id']) ? '?tenant_id=' . (int) $filters['tenant_id'] : ''))) ?>">Limpar</a></div>
 </form>
 
@@ -53,10 +57,12 @@ $queryBase = static function (array $override = []) use ($filters): string {
         ['active_total', 'Total ativo', 'Conversas abertas ou pendentes', 'neutral'],
         ['unassigned', 'Sem responsável', 'Ainda sem pessoa definida', 'attention'],
         ['human_active', 'Em atendimento humano', 'Atribuídas e no modo humano', 'human'],
-        ['awaiting_first_response', 'Aguardando 1ª resposta', 'Relógio humano ainda aberto', 'clock'],
-        ['sla_warning', 'SLA em risco', 'Atingiu o alerta preventivo', 'warning'],
-        ['sla_breached', 'SLA violado', 'Prazo da 1ª resposta excedido', 'danger'],
+        ['awaiting_first_response', 'Aguardando 1ª resposta', $slaEnabled ? 'Relógio humano ainda aberto' : 'Sem medição de SLA', 'clock'],
     ];
+    if ($slaEnabled) {
+        $cards[] = ['sla_warning', 'SLA em risco', 'Atingiu o alerta preventivo', 'warning'];
+        $cards[] = ['sla_breached', 'SLA violado', 'Prazo da 1ª resposta excedido', 'danger'];
+    }
     ?>
     <?php foreach ($cards as [$key, $label, $description, $class]): ?>
         <article class="card operational-load-kpi is-<?= View::e($class) ?>">
@@ -72,15 +78,15 @@ $queryBase = static function (array $override = []) use ($filters): string {
         <div class="section-heading"><div><span class="eyebrow">EQUIPE</span><h2>Carga por responsável</h2></div><small>Ordenado por criticidade</small></div>
         <div class="table-wrap">
             <table class="operational-load-table">
-                <thead><tr><th>Responsável</th><th>Ativos</th><th>Humano</th><th>Aguardando 1ª</th><th>Em risco</th><th>Violados</th><th>Não lidas</th></tr></thead>
+                <thead><tr><th>Responsável</th><th>Ativos</th><th>Humano</th><th>Aguardando 1ª</th><?php if ($slaEnabled): ?><th>Em risco</th><th>Violados</th><?php endif; ?><th>Não lidas</th></tr></thead>
                 <tbody>
-                <?php if ($team === []): ?><tr><td colspan="7" class="empty-cell">Nenhum atendimento ativo nos filtros atuais.</td></tr><?php endif; ?>
+                <?php if ($team === []): ?><tr><td colspan="<?= $slaEnabled ? 7 : 5 ?>" class="empty-cell">Nenhum atendimento ativo nos filtros atuais.</td></tr><?php endif; ?>
                 <?php foreach ($team as $member): ?>
                     <?php $assigneeFilter = (int) ($member['user_id'] ?? 0) > 0 ? (string) (int) $member['user_id'] : 'unassigned'; ?>
                     <tr>
                         <td><a href="<?= View::e(Router::url('/carga-operacional?' . $queryBase(['assigned_user_id' => $assigneeFilter]))) ?>"><strong><?= View::e((string) $member['name']) ?></strong></a></td>
                         <td><?= (int) $member['active'] ?></td><td><?= (int) $member['human_active'] ?></td><td><?= (int) $member['awaiting_first_response'] ?></td>
-                        <td class="metric-warning"><?= (int) $member['sla_warning'] ?></td><td class="metric-danger"><?= (int) $member['sla_breached'] ?></td><td><?= (int) $member['unread'] ?></td>
+                        <?php if ($slaEnabled): ?><td class="metric-warning"><?= (int) $member['sla_warning'] ?></td><td class="metric-danger"><?= (int) $member['sla_breached'] ?></td><?php endif; ?><td><?= (int) $member['unread'] ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -100,7 +106,7 @@ $queryBase = static function (array $override = []) use ($filters): string {
                         <span><?= View::e((string) (($conversation['last_message_preview'] ?? '') ?: 'Sem prévia de mensagem')) ?></span>
                     </div>
                     <div class="operational-load-conversation-side">
-                        <span class="sla-chip is-<?= View::e((string) ($conversation['sla_class'] ?? 'resolved')) ?>"><?= View::e((string) ($conversation['sla_label'] ?? '')) ?></span>
+                        <?php if ($slaEnabled): ?><span class="sla-chip is-<?= View::e((string) ($conversation['sla_class'] ?? 'resolved')) ?>"><?= View::e((string) ($conversation['sla_label'] ?? '')) ?></span><?php endif; ?>
                         <?php if (!empty($conversation['awaiting_first_response']) && is_array($conversation['sla'] ?? null)): ?>
                             <small><?= View::e((string) ($conversation['sla_elapsed_label'] ?? '')) ?> decorridos · <?= number_format((float) ($conversation['sla']['percent'] ?? 0), 0, ',', '.') ?>%</small>
                         <?php endif; ?>

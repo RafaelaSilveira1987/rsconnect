@@ -93,6 +93,9 @@ final class SlaPolicyService
         }
 
         $current = $this->settings($tenantId);
+        $enabled = array_key_exists('sla_enabled', $data) || array_key_exists('enabled', $data)
+            ? (((string) ($data['sla_enabled'] ?? $data['enabled'] ?? '0')) === '1' ? 1 : 0)
+            : (int) ($current['enabled'] ?? 1);
         $target = max(5, min(1440, (int) ($data['sla_target_minutes'] ?? $data['target_minutes'] ?? $current['target_minutes'])));
         $warning = max(50, min(99, (int) ($data['sla_warning_percent'] ?? $data['warning_percent'] ?? $current['warning_percent'])));
         $countOutside = !empty($data['sla_count_outside_hours']) || !empty($data['count_outside_business_hours']) ? 1 : 0;
@@ -112,7 +115,7 @@ final class SlaPolicyService
                  count_outside_business_hours, timezone, business_hours_json,
                  updated_by_user_id, updated_at)
              VALUES
-                (:tenant_id, 1, :target_minutes, :warning_percent,
+                (:tenant_id, :enabled, :target_minutes, :warning_percent,
                  :count_outside_business_hours, :timezone, :business_hours_json,
                  :updated_by_user_id, UTC_TIMESTAMP())
              ON DUPLICATE KEY UPDATE
@@ -127,6 +130,7 @@ final class SlaPolicyService
         );
         $statement->execute([
             'tenant_id' => $tenantId,
+            'enabled' => $enabled,
             'target_minutes' => $target,
             'warning_percent' => $warning,
             'count_outside_business_hours' => $countOutside,
@@ -147,6 +151,7 @@ final class SlaPolicyService
     {
         $current = $this->settings($tenantId);
         $payload = [
+            'sla_enabled' => (int) ($current['enabled'] ?? 1) === 1 ? '1' : '0',
             'sla_target_minutes' => (int) $current['target_minutes'],
             'sla_warning_percent' => (int) $current['warning_percent'],
             'sla_count_outside_hours' => (int) $current['count_outside_business_hours'] === 1 ? '1' : '',
@@ -212,6 +217,22 @@ final class SlaPolicyService
     {
         $policy = $this->normalizeSettings($policy ?? $this->settings($tenantId));
         $responded = trim((string) $firstResponseAt) !== '';
+        if (empty($policy['enabled'])) {
+            return [
+                'status' => 'disabled',
+                'enabled' => 0,
+                'responded' => $responded,
+                'elapsed_seconds' => 0,
+                'target_seconds' => max(300, (int) $policy['target_minutes'] * 60),
+                'warning_seconds' => 0,
+                'remaining_seconds' => 0,
+                'percent' => 0.0,
+                'target_minutes' => (int) $policy['target_minutes'],
+                'warning_percent' => (int) $policy['warning_percent'],
+                'count_outside_business_hours' => (int) $policy['count_outside_business_hours'],
+                'timezone' => (string) $policy['timezone'],
+            ];
+        }
         $clockEnd = $responded ? $firstResponseAt : ($asOfUtc ?? gmdate('Y-m-d H:i:s'));
         $elapsed = $this->elapsedSeconds($tenantId, $firstIncomingAt, $clockEnd, $policy);
         $targetSeconds = max(300, (int) $policy['target_minutes'] * 60);
@@ -230,6 +251,7 @@ final class SlaPolicyService
 
         return [
             'status' => $status,
+            'enabled' => 1,
             'responded' => $responded,
             'elapsed_seconds' => $elapsed,
             'target_seconds' => $targetSeconds,

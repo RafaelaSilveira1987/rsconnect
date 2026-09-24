@@ -78,7 +78,7 @@ final class OperationalLoadController
     {
         return [
             'summary' => ['active_total' => 0, 'unassigned' => 0, 'human_active' => 0, 'awaiting_first_response' => 0, 'sla_warning' => 0, 'sla_breached' => 0],
-            'team' => [], 'conversations' => [], 'instances' => [], 'users' => [], 'tenant_live' => false,
+            'team' => [], 'conversations' => [], 'instances' => [], 'users' => [], 'tenant_live' => false, 'sla_enabled' => false,
             'generated_at' => gmdate('Y-m-d H:i:s'), 'fingerprint' => '',
         ];
     }

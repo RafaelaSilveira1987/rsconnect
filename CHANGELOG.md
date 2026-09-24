@@ -1,3 +1,12 @@
+## 36.36.15 — 2026-09-24 — SLA operacional opcional por empresa
+
+- adiciona no RS Admin a opção **Usar SLA operacional nesta empresa**;
+- quando desligado, a empresa continua operando normalmente, mas sem relógio de SLA, alerta preventivo ou marcação de violação nas conversas e na carga operacional;
+- preserva meta, percentual de alerta e regra de expediente para uma futura reativação;
+- sincronizações de horário e salvamentos do onboarding não reativam o SLA silenciosamente;
+- relatórios continuam medindo tempos de primeira resposta, mas deixam de classificar novos resultados como cumprimento/violação de SLA enquanto a política estiver desativada;
+- reutiliza a coluna `enabled` já existente em `tenant_sla_settings`; sem migration nova.
+
 ## 36.36.14 — 2026-09-24 — Demanda obrigatória antes da agenda
 
 - Corrige a precedência da opção estruturada **Exigir a demanda antes de consultar a agenda**.

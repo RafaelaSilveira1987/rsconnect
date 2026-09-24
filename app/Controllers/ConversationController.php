@@ -2731,6 +2731,7 @@ final class ConversationController
         $service = new SlaPolicyService($pdo);
         $lifecycle = new TenantLifecycleService($pdo);
         $liveCache = [];
+        $slaEnabledCache = [];
         foreach ($rows as &$row) {
             $tenantId = (int) ($row['tenant_id'] ?? 0);
             if ($tenantId < 1) {
@@ -2740,7 +2741,10 @@ final class ConversationController
             if ($tenantId > 0 && !array_key_exists($tenantId, $liveCache)) {
                 $liveCache[$tenantId] = $lifecycle->isLive($tenantId);
             }
-            if ($tenantId < 1 || empty($liveCache[$tenantId]) || $firstIncoming === '' || (string) ($row['status'] ?? '') === 'closed') {
+            if ($tenantId > 0 && !array_key_exists($tenantId, $slaEnabledCache)) {
+                $slaEnabledCache[$tenantId] = !empty($service->settings($tenantId)['enabled']);
+            }
+            if ($tenantId < 1 || empty($liveCache[$tenantId]) || empty($slaEnabledCache[$tenantId]) || $firstIncoming === '' || (string) ($row['status'] ?? '') === 'closed') {
                 $row['sla'] = null;
                 continue;
             }

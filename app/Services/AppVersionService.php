@@ -186,6 +186,7 @@ final class AppVersionService
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.34.4 — Hotfix de autoridade do horário na IA';
     // RS Connect 36.35.0 — Production Readiness Fase D: carga operacional por responsável sem dependência de filas.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.35.0 — Production Readiness: Carga operacional';
+    // Compatibilidade histórica: REQUIRED_MIGRATION = '116_sla_trigger_mysql_compat.sql';
     // RS Connect 36.36.0 — Production Readiness Fase E: homologação final e release candidate operacional.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.0 — Production Readiness: Homologação final';
     // RS Connect 36.36.1 — hotfix do preflight: bloqueios e carga produtiva consideram apenas tenants LIVE.
@@ -197,7 +198,8 @@ final class AppVersionService
     // 36.36.12 — preserva apresentação na retomada e impede respostas duplicadas após a abertura.
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.12 — Retomada com apresentação única e sem duplicidade';
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.13 — SLA por empresa no RS Admin';
-    public const PACKAGE_LABEL = 'RS Connect 36.36.14 — Demanda obrigatória antes da agenda';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.14 — Demanda obrigatória antes da agenda';
+    public const PACKAGE_LABEL = 'RS Connect 36.36.15 — SLA operacional opcional por empresa';
     public const REQUIRED_MIGRATION = '118_contact_origin.sql';
 
     private PDO $pdo;

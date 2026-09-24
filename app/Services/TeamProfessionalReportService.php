@@ -342,12 +342,14 @@ final class TeamProfessionalReportService
                 $policy
             );
             $result[$uid]['first_responses']++;
-            $result[$uid]['sla_measured']++;
             $result[$uid]['_seconds_total'] += $elapsed;
-            if ($elapsed <= $slaSeconds) {
-                $result[$uid]['sla_met']++;
-            } else {
-                $result[$uid]['sla_breached']++;
+            if (!empty($policy['enabled'])) {
+                $result[$uid]['sla_measured']++;
+                if ($elapsed <= $slaSeconds) {
+                    $result[$uid]['sla_met']++;
+                } else {
+                    $result[$uid]['sla_breached']++;
+                }
             }
         }
         foreach ($result as &$item) {
@@ -426,7 +428,7 @@ final class TeamProfessionalReportService
             $result[$uid]['waiting_now']++;
             $result[$uid]['_seconds_total'] += $elapsed;
             $result[$uid]['max_current_wait_seconds'] = max((int) $result[$uid]['max_current_wait_seconds'], $elapsed);
-            if ($elapsed > $slaSeconds) {
+            if (!empty($policy['enabled']) && $elapsed > $slaSeconds) {
                 $result[$uid]['waiting_over_sla']++;
             }
         }
@@ -792,7 +794,7 @@ final class TeamProfessionalReportService
             $elapsed = $this->slaPolicy->elapsedSeconds($tenantId, (string) ($row['first_incoming_at'] ?? ''), $now, $policy);
             $indexed[$id]['waiting_now']++;
             $indexed[$id]['_waiting_total'] += $elapsed;
-            if ($elapsed > $slaSeconds) {
+            if (!empty($policy['enabled']) && $elapsed > $slaSeconds) {
                 $indexed[$id]['waiting_over_sla']++;
             }
         }
@@ -931,8 +933,11 @@ final class TeamProfessionalReportService
             $row['metric_cutover_at_local'] = (string) ($date['cutover_at_local'] ?? '');
             $row['metric_timezone'] = (string) ($date['timezone'] ?? 'America/Sao_Paulo');
             $row['operational_only'] = $operationalOnly;
+            $row['sla_enabled'] = !empty($policy['enabled']);
             $row['sla_target_minutes'] = max(5, min(1440, $slaMinutes));
-            $row['within_sla'] = (int) ($row['response_seconds'] ?? 0) <= ($row['sla_target_minutes'] * 60);
+            $row['within_sla'] = $row['sla_enabled']
+                ? (int) ($row['response_seconds'] ?? 0) <= ($row['sla_target_minutes'] * 60)
+                : null;
         }
         unset($row);
         return $rows;

@@ -50,6 +50,7 @@ $lifecycleLabel = TenantLifecycleService::label($lifecycleStatus);
 $lifecycleTargets = TenantLifecycleService::allowedTargets($lifecycleStatus);
 $lifecycleHistory = is_array($lifecycleHistory ?? null) ? $lifecycleHistory : [];
 $slaSettings = is_array($slaSettings ?? null) ? $slaSettings : [];
+$slaEnabled = !array_key_exists('enabled', $slaSettings) || !empty($slaSettings['enabled']);
 $slaTargetMinutes = max(5, (int) ($slaSettings['target_minutes'] ?? 30));
 $slaWarningPercent = max(50, min(99, (int) ($slaSettings['warning_percent'] ?? 80)));
 $slaWarningMinutes = max(1, (int) floor($slaTargetMinutes * ($slaWarningPercent / 100)));
@@ -114,6 +115,12 @@ $slaBusinessHoursLabel = $slaHoursSummary((string) ($slaSettings['business_hours
         <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" data-confirm="<?= View::e($company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?') ?>">
             <?= Csrf::input() ?>
             <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
+        <div class="settings-toggle-grid admin-company-sla-toggle-grid">
+            <label class="switch-card admin-company-sla-toggle">
+                <input type="checkbox" name="sla_enabled" value="1" <?= $slaEnabled ? 'checked' : '' ?>>
+                <span><strong>Usar SLA operacional nesta empresa</strong><small>Desative para não exibir relógio, alertas preventivos ou violações de SLA nas conversas e no painel operacional. A configuração permanece salva para ser reativada depois.</small></span>
+            </label>
+        </div>
             <input type="hidden" name="return_to" value="/companies/overview?id=<?= $tenantId ?>">
             <input type="hidden" name="plan" value="<?= View::e((string) $company['plan']) ?>">
             <input type="hidden" name="status" value="<?= $company['status'] === 'inactive' ? 'active' : 'inactive' ?>">
@@ -177,7 +184,7 @@ $slaBusinessHoursLabel = $slaHoursSummary((string) ($slaSettings['business_hours
             <h2>Primeira resposta humana</h2>
             <p>Defina a meta desta empresa sem alterar as configurações da IA, agenda ou atendimento automático.</p>
         </div>
-        <span class="badge badge-info">Meta <?= $slaTargetMinutes ?> min</span>
+        <span class="badge <?= $slaEnabled ? 'badge-success' : 'badge-muted' ?>"><?= $slaEnabled ? 'Ativo · meta ' . $slaTargetMinutes . ' min' : 'Desativado' ?></span>
     </div>
 
     <div class="admin-company-sla-summary">
@@ -208,7 +215,7 @@ $slaBusinessHoursLabel = $slaHoursSummary((string) ($slaSettings['business_hours
             </label>
         </div>
         <div class="admin-company-sla-actions">
-            <p>O expediente acima é apenas exibido aqui para referência e continua sincronizado com a configuração operacional da empresa. A nova meta vale para novos ciclos de SLA; ciclos já abertos preservam o snapshot anterior para manter o histórico consistente.</p>
+            <p><?= $slaEnabled ? 'O SLA está ativo nesta empresa. ' : 'O SLA está desativado nesta empresa. ' ?>O expediente acima é apenas exibido aqui para referência e continua sincronizado com a configuração operacional da empresa. Meta, alerta e forma de contagem ficam preservados mesmo quando o SLA estiver desligado.</p>
             <button class="btn btn-primary" type="submit">Salvar SLA da empresa</button>
         </div>
     </form>
