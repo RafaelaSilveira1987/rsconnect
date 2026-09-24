@@ -120,12 +120,19 @@ final class CalendarController
             }
 
             $statement = $pdo->prepare(
-                'SELECT a.*, ct.name AS contact_name, ct.phone, l.title AS lead_title,
-                        c.remote_jid, u.name AS owner_name, creator.name AS creator_name
+                'SELECT a.*, ct.name AS contact_name, ct.phone, ct.contact_group AS current_contact_group,
+                        l.title AS lead_title, c.remote_jid,
+                        fs.demand_status AS current_demand_status,
+                        fs.demand_summary AS current_demand_summary,
+                        ts.collected_json AS current_triage_collected_json,
+                        ts.status AS current_triage_status,
+                        u.name AS owner_name, creator.name AS creator_name
                  FROM calendar_appointments a
-                 LEFT JOIN contacts ct ON ct.id = a.contact_id
+                 LEFT JOIN contacts ct ON ct.id = a.contact_id AND ct.tenant_id = a.tenant_id
                  LEFT JOIN crm_leads l ON l.id = a.crm_lead_id
-                 LEFT JOIN conversations c ON c.id = a.conversation_id
+                 LEFT JOIN conversations c ON c.id = a.conversation_id AND c.tenant_id = a.tenant_id
+                 LEFT JOIN conversation_flow_states fs ON fs.conversation_id = a.conversation_id AND fs.tenant_id = a.tenant_id
+                 LEFT JOIN conversation_triage_sessions ts ON ts.conversation_id = a.conversation_id AND ts.tenant_id = a.tenant_id
                  LEFT JOIN users u ON u.id = a.owner_user_id
                  LEFT JOIN users creator ON creator.id = a.created_by_user_id
                  WHERE ' . implode(' AND ', $conditions) . '

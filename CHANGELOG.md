@@ -1,3 +1,12 @@
+## 36.36.18 — 2026-09-24 — Pré-agendamento com contexto operacional
+
+- reorganiza as informações do pré-agendamento na Agenda em um bloco estruturado, separando origem, grupo do contato, demanda e modalidade;
+- deixa de exibir o texto técnico histórico como descrição principal, evitando mostrar “não informado” depois que preferência/modalidade já foram atualizadas;
+- passa a carregar o grupo e a demanda atuais da conversa, com fallback para a triagem estruturada;
+- destaca a mensagem que originou o pedido e mantém o registro original disponível em um detalhe recolhido para auditoria;
+- melhora a responsividade do bloco em desktop, tablet e celular;
+- não altera regras do agente, agenda, SLA, retomada pós-horário ou banco de dados; nenhuma migration nova.
+
 ## 36.36.17 — 2026-09-24 — Consistência das regras do agente e SLA Admin
 
 - corrige a posição do toggle **Usar SLA operacional nesta empresa**, que havia sido inserido dentro do formulário de ativação/inativação da empresa; o toggle agora fica exclusivamente dentro do bloco SLA e salva pela rota `/companies/sla`;

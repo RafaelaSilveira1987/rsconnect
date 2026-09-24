@@ -4,6 +4,7 @@ use App\Core\Auth;
 use App\Core\Csrf;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\ConversationFlowService;
 
 $statusLabels = [
     'pre_scheduled' => 'Pré-agendado',
@@ -17,6 +18,27 @@ $statusLabels = [
     'no_show' => 'Não compareceu',
 ];
 $locationLabels = ['indefinida' => 'A definir', 'online' => 'Online', 'presencial' => 'Presencial', 'telefone' => 'Telefone'];
+$contactGroupLabels = ConversationFlowService::GROUPS;
+$demandStatusLabels = ConversationFlowService::DEMAND_STATUSES;
+$preScheduleSourceLabels = [
+    'ai_whatsapp' => 'WhatsApp / IA',
+    'manual' => 'Criado manualmente',
+    'converted' => 'Convertido para pré-agendamento',
+    'conversation' => 'Conversa',
+];
+$preScheduleLeadMessage = static function (string $description): string {
+    if ($description === '') return '';
+    if (preg_match('/(?:^|\R)Mensagem do lead:\s*(.+)$/us', $description, $match) === 1) {
+        return trim((string) ($match[1] ?? ''));
+    }
+    return '';
+};
+$triageCollected = static function (mixed $json): array {
+    if (is_array($json)) return $json;
+    if (!is_string($json) || trim($json) === '') return [];
+    $decoded = json_decode($json, true);
+    return is_array($decoded) ? $decoded : [];
+};
 $date = static function (?string $value, string $format = 'd/m/Y H:i'): string {
     if (!$value) return '—';
     try { return (new DateTime($value))->format($format); } catch (Throwable) { return $value; }
@@ -246,12 +268,69 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
             <?php
                 $isPreSchedule = !empty($appointment['is_pre_schedule']);
                 $hasPreSchedulePreference = trim((string) ($appointment['preferred_day_text'] ?? '')) !== '' && trim((string) ($appointment['preferred_time_text'] ?? '')) !== '';
+                $currentContactGroup = trim((string) ($appointment['current_contact_group'] ?? '')) ?: 'unclassified';
+                $triageData = $triageCollected($appointment['current_triage_collected_json'] ?? null);
+                $currentDemandSummary = trim((string) ($appointment['current_demand_summary'] ?? ''));
+                if ($currentDemandSummary === '') {
+                    $currentDemandSummary = trim((string) ($triageData['brief_demand'] ?? ''));
+                }
+                $currentDemandStatus = trim((string) ($appointment['current_demand_status'] ?? ''));
+                if ($currentDemandStatus === '') {
+                    $currentDemandStatus = $currentDemandSummary !== '' ? 'collected' : 'pending';
+                }
+                $currentModality = trim((string) ($appointment['appointment_modality'] ?? ''));
+                if ($currentModality === '' || $currentModality === 'indefinida') {
+                    $currentModality = trim((string) ($appointment['location_type'] ?? ''));
+                }
+                $leadMessage = $preScheduleLeadMessage((string) ($appointment['description'] ?? ''));
+                $sourceKey = trim((string) ($appointment['pre_schedule_source'] ?? ''));
+                $sourceLabel = $preScheduleSourceLabels[$sourceKey] ?? ($sourceKey !== '' ? ucfirst(str_replace('_', ' ', $sourceKey)) : 'Não identificada');
             ?>
             <article id="appointment-<?= (int) $appointment['id'] ?>" class="task-row calendar-row calendar-status-<?= View::e($appointment['status']) ?>">
                 <span class="activity-icon activity-<?= View::e($appointment['location_type']) ?>" aria-hidden="true"></span>
                 <div class="task-main">
                     <div class="task-title-line"><strong><?= View::e($appointment['title']) ?></strong><span class="badge badge-<?= View::e($appointment['status']) ?>"><?= View::e($statusLabels[$appointment['status']] ?? $appointment['status']) ?></span><span class="priority-text"><?= View::e($locationLabels[$appointment['location_type']] ?? $appointment['location_type']) ?></span></div>
-                    <p><?= View::e($appointment['description'] ?: 'Sem descrição') ?></p>
+                    <?php if ($isPreSchedule): ?>
+                        <section class="pre-schedule-context" aria-label="Contexto atual do pré-agendamento">
+                            <div class="pre-schedule-context-head">
+                                <div><span class="eyebrow">Contexto atual</span><strong>Informações do pré-agendamento</strong></div>
+                                <small>Os dados abaixo refletem o estado atual da conversa e da agenda.</small>
+                            </div>
+                            <div class="pre-schedule-context-grid">
+                                <div class="pre-schedule-context-item">
+                                    <span>Origem</span>
+                                    <strong><?= View::e($sourceLabel) ?></strong>
+                                </div>
+                                <div class="pre-schedule-context-item <?= $currentContactGroup === 'unclassified' ? 'is-warning' : '' ?>">
+                                    <span>Grupo do contato</span>
+                                    <strong><?= View::e($contactGroupLabels[$currentContactGroup] ?? ucfirst(str_replace('_', ' ', $currentContactGroup))) ?></strong>
+                                </div>
+                                <div class="pre-schedule-context-item <?= $currentDemandStatus === 'collected' || $currentDemandStatus === 'not_required' ? 'is-ok' : 'is-warning' ?>">
+                                    <span>Demanda</span>
+                                    <strong><?= View::e($demandStatusLabels[$currentDemandStatus] ?? ucfirst(str_replace('_', ' ', $currentDemandStatus))) ?></strong>
+                                    <?php if ($currentDemandSummary !== ''): ?><small><?= View::e($currentDemandSummary) ?></small><?php endif; ?>
+                                </div>
+                                <div class="pre-schedule-context-item">
+                                    <span>Modalidade</span>
+                                    <strong><?= View::e($locationLabels[$currentModality] ?? ($currentModality !== '' ? ucfirst($currentModality) : 'A definir')) ?></strong>
+                                </div>
+                            </div>
+                            <?php if ($leadMessage !== ''): ?>
+                                <div class="pre-schedule-lead-message">
+                                    <span>Mensagem que originou o pedido</span>
+                                    <p><?= View::e($leadMessage) ?></p>
+                                </div>
+                            <?php endif; ?>
+                            <?php if (trim((string) ($appointment['description'] ?? '')) !== ''): ?>
+                                <details class="pre-schedule-original-record">
+                                    <summary>Ver registro original</summary>
+                                    <div><?= nl2br(View::e((string) $appointment['description'])) ?></div>
+                                </details>
+                            <?php endif; ?>
+                        </section>
+                    <?php else: ?>
+                        <p><?= View::e($appointment['description'] ?: 'Sem descrição') ?></p>
+                    <?php endif; ?>
                     <?php if ($isPreSchedule): ?>
                         <div class="pre-schedule-note <?= $hasPreSchedulePreference ? 'ready' : 'pending' ?>">
                             <strong><?= $hasPreSchedulePreference ? 'Preferência recebida' : 'Aguardando preferência' ?></strong>
