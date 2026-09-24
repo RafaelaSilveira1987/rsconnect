@@ -1,3 +1,11 @@
+## 36.36.19 — 2026-09-24 — Pré-agendamento com registro consolidado
+
+- Remove os cartões estreitos do bloco de contexto do pré-agendamento.
+- Consolida origem, grupo, demanda, preferência, modalidade, responsável e mensagem do lead em um único registro legível.
+- Usa os dados atuais da conversa/agenda no lugar dos valores históricos desatualizados da descrição original.
+- Mantém o texto original apenas em um detalhe recolhido para auditoria.
+- Ajuste exclusivamente visual/consulta: regras da IA, agenda, SLA e recuperação fora do horário não foram alteradas.
+
 ## 36.36.18 — 2026-09-24 — Pré-agendamento com contexto operacional
 
 - reorganiza as informações do pré-agendamento na Agenda em um bloco estruturado, separando origem, grupo do contato, demanda e modalidade;

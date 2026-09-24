@@ -291,39 +291,29 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
                 <div class="task-main">
                     <div class="task-title-line"><strong><?= View::e($appointment['title']) ?></strong><span class="badge badge-<?= View::e($appointment['status']) ?>"><?= View::e($statusLabels[$appointment['status']] ?? $appointment['status']) ?></span><span class="priority-text"><?= View::e($locationLabels[$appointment['location_type']] ?? $appointment['location_type']) ?></span></div>
                     <?php if ($isPreSchedule): ?>
-                        <section class="pre-schedule-context" aria-label="Contexto atual do pré-agendamento">
-                            <div class="pre-schedule-context-head">
-                                <div><span class="eyebrow">Contexto atual</span><strong>Informações do pré-agendamento</strong></div>
-                                <small>Os dados abaixo refletem o estado atual da conversa e da agenda.</small>
+                        <section class="pre-schedule-record" aria-label="Informações atuais do pré-agendamento">
+                            <div class="pre-schedule-record-head">
+                                <div>
+                                    <span class="eyebrow">Pré-agendamento</span>
+                                    <strong>Informações registradas</strong>
+                                </div>
+                                <small>Dados atuais da conversa e da agenda.</small>
                             </div>
-                            <div class="pre-schedule-context-grid">
-                                <div class="pre-schedule-context-item">
-                                    <span>Origem</span>
-                                    <strong><?= View::e($sourceLabel) ?></strong>
-                                </div>
-                                <div class="pre-schedule-context-item <?= $currentContactGroup === 'unclassified' ? 'is-warning' : '' ?>">
-                                    <span>Grupo do contato</span>
-                                    <strong><?= View::e($contactGroupLabels[$currentContactGroup] ?? ucfirst(str_replace('_', ' ', $currentContactGroup))) ?></strong>
-                                </div>
-                                <div class="pre-schedule-context-item <?= $currentDemandStatus === 'collected' || $currentDemandStatus === 'not_required' ? 'is-ok' : 'is-warning' ?>">
-                                    <span>Demanda</span>
-                                    <strong><?= View::e($demandStatusLabels[$currentDemandStatus] ?? ucfirst(str_replace('_', ' ', $currentDemandStatus))) ?></strong>
-                                    <?php if ($currentDemandSummary !== ''): ?><small><?= View::e($currentDemandSummary) ?></small><?php endif; ?>
-                                </div>
-                                <div class="pre-schedule-context-item">
-                                    <span>Modalidade</span>
-                                    <strong><?= View::e($locationLabels[$currentModality] ?? ($currentModality !== '' ? ucfirst($currentModality) : 'A definir')) ?></strong>
-                                </div>
-                            </div>
-                            <?php if ($leadMessage !== ''): ?>
-                                <div class="pre-schedule-lead-message">
-                                    <span>Mensagem que originou o pedido</span>
-                                    <p><?= View::e($leadMessage) ?></p>
-                                </div>
-                            <?php endif; ?>
+                            <dl class="pre-schedule-record-list">
+                                <div><dt>Origem</dt><dd><?= View::e($sourceLabel) ?></dd></div>
+                                <div><dt>Grupo do contato</dt><dd><?= View::e($contactGroupLabels[$currentContactGroup] ?? ucfirst(str_replace('_', ' ', $currentContactGroup))) ?></dd></div>
+                                <div><dt>Situação da demanda</dt><dd><?= View::e($demandStatusLabels[$currentDemandStatus] ?? ucfirst(str_replace('_', ' ', $currentDemandStatus))) ?></dd></div>
+                                <div><dt>Modalidade</dt><dd><?= View::e($locationLabels[$currentModality] ?? ($currentModality !== '' ? ucfirst($currentModality) : 'A definir')) ?></dd></div>
+                                <div><dt>Dia/período informado</dt><dd><?= View::e(($appointment['preferred_day_text'] ?? '') ?: 'Não informado') ?></dd></div>
+                                <div><dt>Horário/período informado</dt><dd><?= View::e(($appointment['preferred_time_text'] ?? '') ?: 'Não informado') ?></dd></div>
+                                <div><dt>Contato</dt><dd><?= View::e(trim((string) ($appointment['contact_name'] ?? '')) ?: 'Não identificado') ?></dd></div>
+                                <div><dt>Responsável</dt><dd><?= View::e(trim((string) ($appointment['owner_name'] ?? '')) ?: 'Não definido') ?></dd></div>
+                                <div class="pre-schedule-record-wide"><dt>Demanda</dt><dd><?= View::e($currentDemandSummary !== '' ? $currentDemandSummary : 'Não informada') ?></dd></div>
+                                <div class="pre-schedule-record-wide"><dt>Mensagem que originou o pedido</dt><dd><?= View::e($leadMessage !== '' ? $leadMessage : 'Não registrada') ?></dd></div>
+                            </dl>
                             <?php if (trim((string) ($appointment['description'] ?? '')) !== ''): ?>
-                                <details class="pre-schedule-original-record">
-                                    <summary>Ver registro original</summary>
+                                <details class="pre-schedule-technical-record">
+                                    <summary>Ver texto original para auditoria</summary>
                                     <div><?= nl2br(View::e((string) $appointment['description'])) ?></div>
                                 </details>
                             <?php endif; ?>

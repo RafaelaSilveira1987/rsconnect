@@ -186,7 +186,7 @@ $svgIcon = static function (string $name): string {
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
     <!-- Compatibilidade histórica v36.30.5: app.css?v=36.30.5 app.js?v=36.30.5 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.36.18')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.36.19')) ?>">
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
             width: 54px !important;

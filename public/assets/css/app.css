@@ -1911,7 +1911,8 @@ body::before {
     color: var(--muted);
     font-size: .86rem;
 }
-.pre-schedule-context {
+/* Pré-agendamento: resumo operacional em formato de registro */
+.pre-schedule-record {
     display: grid;
     gap: 12px;
     margin: 9px 0 4px;
@@ -1920,63 +1921,68 @@ body::before {
     border-radius: 16px;
     background: #fbfdfd;
 }
-.pre-schedule-context-head {
+.pre-schedule-record-head {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     gap: 14px;
 }
-.pre-schedule-context-head > div { display: grid; gap: 2px; min-width: 0; }
-.pre-schedule-context-head strong { color: #24344b; font-size: .9rem; }
-.pre-schedule-context-head > small { max-width: 360px; color: #6b7789; text-align: right; line-height: 1.4; }
-.pre-schedule-context-grid {
+.pre-schedule-record-head > div { display: grid; gap: 2px; min-width: 0; }
+.pre-schedule-record-head strong { color: #24344b; font-size: .9rem; }
+.pre-schedule-record-head > small { color: #6b7789; line-height: 1.4; text-align: right; }
+.pre-schedule-record-list {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 9px;
-}
-.pre-schedule-context-item {
-    display: grid;
-    align-content: start;
-    gap: 4px;
-    min-width: 0;
-    padding: 10px 11px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 18px;
+    margin: 0;
+    padding: 0;
     border: 1px solid #e3ebef;
     border-radius: 12px;
     background: #fff;
+    overflow: hidden;
 }
-.pre-schedule-context-item > span,
-.pre-schedule-lead-message > span {
+.pre-schedule-record-list > div {
+    display: grid;
+    grid-template-columns: minmax(130px, .85fr) minmax(0, 1.65fr);
+    gap: 10px;
+    align-items: start;
+    min-width: 0;
+    padding: 10px 12px;
+    border-bottom: 1px solid #edf2f5;
+}
+.pre-schedule-record-list > div:nth-last-child(-n+2) { border-bottom: 0; }
+.pre-schedule-record-list > div:nth-child(odd):not(.pre-schedule-record-wide) { border-right: 1px solid #edf2f5; }
+.pre-schedule-record-list .pre-schedule-record-wide {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(130px, .42fr) minmax(0, 2.58fr);
+}
+.pre-schedule-record-list dt {
+    margin: 0;
     color: #6b7789;
-    font-size: .66rem;
+    font-size: .68rem;
     font-weight: 850;
-    letter-spacing: .06em;
+    letter-spacing: .05em;
     text-transform: uppercase;
 }
-.pre-schedule-context-item strong { color: #25364c; font-size: .78rem; overflow-wrap: anywhere; }
-.pre-schedule-context-item small { color: #5f6d80; line-height: 1.42; overflow-wrap: anywhere; }
-.pre-schedule-context-item.is-ok { border-color: #bfe7d2; background: #f2fbf6; }
-.pre-schedule-context-item.is-warning { border-color: #f2d6a3; background: #fffaf0; }
-.pre-schedule-lead-message {
-    display: grid;
-    gap: 5px;
-    padding: 11px 12px;
-    border-left: 3px solid #8bb8d6;
-    border-radius: 0 11px 11px 0;
-    background: #f4f8fb;
+.pre-schedule-record-list dd {
+    margin: 0;
+    color: #2f4158;
+    font-size: .78rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
 }
-.pre-schedule-lead-message p { margin: 0 !important; color: #33475e !important; line-height: 1.5; }
-.pre-schedule-original-record {
+.pre-schedule-technical-record {
+    padding-top: 4px;
     border-top: 1px dashed #d8e1e7;
-    padding-top: 8px;
 }
-.pre-schedule-original-record > summary {
+.pre-schedule-technical-record > summary {
     cursor: pointer;
     width: fit-content;
-    color: #526174;
-    font-size: .72rem;
-    font-weight: 800;
+    color: #6b7789;
+    font-size: .69rem;
+    font-weight: 750;
 }
-.pre-schedule-original-record > div {
+.pre-schedule-technical-record > div {
     margin-top: 8px;
     padding: 10px 11px;
     border-radius: 10px;
@@ -1986,13 +1992,25 @@ body::before {
     line-height: 1.55;
     overflow-wrap: anywhere;
 }
-@media (max-width: 1080px) {
-    .pre-schedule-context-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 920px) {
+    .pre-schedule-record-list { grid-template-columns: 1fr; }
+    .pre-schedule-record-list > div,
+    .pre-schedule-record-list .pre-schedule-record-wide {
+        grid-column: 1;
+        grid-template-columns: minmax(130px, .7fr) minmax(0, 1.3fr);
+        border-right: 0 !important;
+        border-bottom: 1px solid #edf2f5 !important;
+    }
+    .pre-schedule-record-list > div:last-child { border-bottom: 0 !important; }
 }
 @media (max-width: 680px) {
-    .pre-schedule-context-head { display: grid; }
-    .pre-schedule-context-head > small { max-width: none; text-align: left; }
-    .pre-schedule-context-grid { grid-template-columns: 1fr; }
+    .pre-schedule-record-head { display: grid; }
+    .pre-schedule-record-head > small { text-align: left; }
+    .pre-schedule-record-list > div,
+    .pre-schedule-record-list .pre-schedule-record-wide {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
 }
 .badge-pre_scheduled,
 .badge-awaiting_approval,
