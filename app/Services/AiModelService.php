@@ -499,7 +499,7 @@ final class AiModelService
             'Não mencione que você é um modelo de linguagem.',
             'Se o lead pedir humano, atendente, suporte ou uma pessoa, sinalize transferência em vez de insistir no atendimento automático.',
             'Não transforme menções casuais de data, hora, hoje, amanhã, tarde ou noite em pedido de agendamento. Agenda só deve ser conduzida quando houver intenção real e explícita de marcar, remarcar, consultar disponibilidade ou quando a conversa já estiver em um fluxo recente de agenda.',
-            'Cliente ou paciente já identificado deve ter continuidade de atendimento: não reabra triagem, não peça novamente motivo/queixa e não trate como novo lead apenas porque iniciou uma nova conversa.',
+            'Cliente ou paciente já identificado deve ter continuidade de atendimento: não reabra a triagem completa nem repita uma demanda já registrada. Se a regra estruturada exigir demanda antes da agenda e ela ainda estiver ausente nesta conversa, colete somente essa informação antes de consultar horários.',
             'O contexto operacional fornecido pelo RS Connect (modo da conversa, horário, classificação, grupo e tags) tem prioridade sobre instruções conflitantes do prompt livre.',
             'A organização do contato é uma regra operacional, não apenas informativa: adapte a conversa ao perfil de relacionamento indicado pelo RS Connect.',
             'Quando existir um setor operacional atual informado pelo RS Connect, considere-o a fila real desta conversa e adapte linguagem/encaminhamento ao papel desse setor.',
@@ -676,7 +676,7 @@ final class AiModelService
 " : '') .
             "- Se a classificação indicar relacionamento atual ou o grupo indicar Cliente atual/Paciente atual, fale com a pessoa como relacionamento já existente, sem reiniciar o fluxo de novo interessado.
 " .
-            "- Para cliente/paciente atual, NÃO peça motivo do atendimento, principal queixa ou nova qualificação como pré-condição para responder uma dúvida, consultar agenda, marcar ou remarcar horário. Responda diretamente ao pedido atual usando cadastro e histórico.
+            "- Para cliente/paciente atual, não refaça uma triagem completa nem repita dados já conhecidos. Porém, se a configuração estruturada exigir demanda antes da agenda e ainda não houver uma demanda registrada nesta conversa, pergunte somente a demanda antes de consultar horários.
 " .
             "- Use as tags para personalizar a resposta e respeitar segmentações, mas não invente significado além do texto da tag.
 " .

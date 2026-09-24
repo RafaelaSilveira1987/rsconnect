@@ -234,12 +234,25 @@ final class AgentTriageService
             if ($this->isUsableContactName($contactName, (string) ($contact['phone'] ?? ''))) {
                 $collected['requester_name'] = $collected['requester_name'] ?? $contactName;
             }
-            // Cliente/paciente atual não deve ser bloqueado por uma regra de demanda
-            // criada para novos interessados. Marcamos o campo como já conhecido no
-            // ciclo estruturado sem inventar ou expor um conteúdo clínico.
+            // 36.36.14: "Exigir a demanda antes de consultar a agenda" precisa prevalecer
+            // também para cliente/paciente atual quando ainda não houver demanda registrada
+            // nesta conversa. Antes era criado um placeholder de continuidade que satisfazia
+            // artificialmente o campo brief_demand e liberava a agenda sem perguntar a demanda.
             try {
                 $relationship = (new ConversationFlowService())->relationshipProfile($contact);
-                if (!empty($relationship['is_existing_customer']) && empty($collected['brief_demand'])) {
+                $behavior = (new AgentConversationBehaviorService())->settingsForTenant($tenantId, $pdo);
+                $demandBehavior = is_array($behavior['demand'] ?? null) ? $behavior['demand'] : [];
+                $behaviorDemandRequired = !empty($demandBehavior['required_before_schedule']);
+                $currentDemand = trim((string) ($collected['brief_demand'] ?? ''));
+
+                if ($behaviorDemandRequired && str_starts_with($currentDemand, '[continuidade:')) {
+                    unset($collected['brief_demand']);
+                    $currentDemand = '';
+                }
+
+                if (!empty($relationship['is_existing_customer'])
+                    && $currentDemand === ''
+                    && !$behaviorDemandRequired) {
                     $collected['brief_demand'] = '[continuidade: demanda anterior não precisa ser repetida]';
                 }
             } catch (Throwable) {

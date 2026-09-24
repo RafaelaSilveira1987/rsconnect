@@ -318,6 +318,7 @@ return static function (Router $router): void {
     $router->post('/companies/status', [CompanyController::class, 'updateStatus'], ['auth', 'super_admin', 'csrf']);
     $router->post('/companies/lifecycle', [CompanyController::class, 'updateLifecycle'], ['auth', 'super_admin', 'csrf']);
     $router->post('/companies/tracking', [CompanyController::class, 'updateTracking'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/companies/sla', [CompanyController::class, 'updateSla'], ['auth', 'super_admin', 'csrf']);
     $router->get('/company-settings', [CompanyController::class, 'settings'], ['auth', 'permission:company.view']);
     $router->post('/company-settings', [CompanyController::class, 'updateSettings'], ['auth', 'permission:company.manage', 'csrf']);
     $router->post('/messages/retention/run', [MessageGovernanceController::class, 'runManual'], ['auth', 'super_admin', 'csrf']);

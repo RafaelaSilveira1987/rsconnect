@@ -87,7 +87,7 @@ final class ConversationFlowService
                 'key' => 'patient',
                 'label' => 'Paciente atual',
                 'description' => 'Continuidade do atendimento: usar cadastro e histórico e não reiniciar a triagem de um novo lead.',
-                'ai_instruction' => 'Trate como paciente atual. Priorize continuidade, dúvidas, acompanhamento e agenda; não faça qualificação comercial de novo lead e não peça novamente dados ou motivo já conhecidos.',
+                'ai_instruction' => 'Trate como paciente atual. Priorize continuidade, dúvidas, acompanhamento e agenda; não refaça dados já conhecidos. Se a empresa exigir demanda antes da agenda e ainda não houver uma demanda registrada nesta conversa, faça somente essa pergunta obrigatória antes de consultar horários.',
                 'is_existing_customer' => true,
                 'is_new_lead' => false,
                 'should_create_commercial_lead' => false,
@@ -99,7 +99,7 @@ final class ConversationFlowService
                 'key' => 'customer',
                 'label' => 'Cliente atual',
                 'description' => 'Relacionamento já existente: resolver a necessidade atual sem reiniciar a prospecção.',
-                'ai_instruction' => 'Trate como cliente atual. Use cadastro e histórico, responda ao pedido corrente e não reinicie roteiro de captação, descoberta ou qualificação de novo lead.',
+                'ai_instruction' => 'Trate como cliente atual. Use cadastro e histórico e não reinicie roteiro de captação. Se a empresa exigir demanda antes da agenda e ela ainda não estiver registrada nesta conversa, colete apenas essa informação antes de consultar horários.',
                 'is_existing_customer' => true,
                 'is_new_lead' => false,
                 'should_create_commercial_lead' => false,
@@ -206,10 +206,21 @@ final class ConversationFlowService
         }
         $demandStatus = (string) ($state['demand_status'] ?? 'pending');
         $demandSummary = trim((string) ($state['demand_summary'] ?? ''));
+        $behaviorDemandRequired = $this->behaviorRequiresDemandBeforeSchedule($tenantId, $pdo);
 
-        // Cliente/paciente já identificado não deve voltar para a triagem de novo interessado.
-        // Se ainda não existe uma demanda registrada, ela deixa de ser pré-requisito para agenda.
-        if ($existingCustomer && $demandStatus === 'pending') {
+        // 36.36.14: a opção amigável "Exigir a demanda antes de consultar a agenda"
+        // é a regra de maior prioridade. Antes, cliente/paciente atual era dispensado
+        // incondicionalmente e isso podia anular uma configuração explícita da empresa.
+        // Mantemos a continuidade somente quando essa exigência global estiver desligada.
+        if ($behaviorDemandRequired
+            && in_array($intent, ['schedule', 'reschedule'], true)
+            && $demandStatus === 'not_required'
+            && $this->isAutomaticExistingCustomerDemandExemption($demandSummary)) {
+            $demandStatus = 'pending';
+            $demandSummary = '';
+        }
+
+        if ($existingCustomer && $demandStatus === 'pending' && !$behaviorDemandRequired) {
             $demandStatus = 'not_required';
             $demandSummary = $demandSummary !== ''
                 ? $demandSummary
@@ -313,6 +324,8 @@ final class ConversationFlowService
         $rule = $this->ruleForInstance($pdo, $tenantId, (int) ($instance['id'] ?? 0), $group, $conversationId);
         $demandStatus = (string) ($flow['demand_status'] ?? 'pending');
         $isReschedule = $this->isReschedule($this->normalize($content));
+        $behaviorDemandRequired = $this->behaviorRequiresDemandBeforeSchedule($tenantId, $pdo);
+        $demandRequired = $behaviorDemandRequired || !empty($rule['require_demand_before_pre_schedule']);
 
         if (empty($rule['allow_pre_schedule'])) {
             return [
@@ -324,9 +337,10 @@ final class ConversationFlowService
             ];
         }
 
-        // A classificação cadastral é fonte de verdade: cliente/paciente existente não precisa
-        // repetir motivo/queixa para simplesmente consultar, marcar ou remarcar horário.
-        if (!empty($flow['is_existing_customer']) && $demandStatus === 'pending') {
+        // Cliente/paciente existente só é dispensado quando nenhuma configuração ativa
+        // exige a demanda. Se a empresa marcou "Exigir a demanda antes de consultar a agenda",
+        // a agenda permanece fechada até haver demanda coletada (ou recusa registrada).
+        if (!empty($flow['is_existing_customer']) && $demandStatus === 'pending' && !$demandRequired) {
             $this->markDemandNotRequired($pdo, $tenantId, $conversationId, 'Contato já identificado como cliente/paciente; demanda não exigida para agenda.');
             $flow = $this->context($pdo, $tenantId, $conversationId, $contactId);
             return [
@@ -348,7 +362,7 @@ final class ConversationFlowService
             return ['allowed' => true, 'code' => 'patient_reschedule', 'message' => null, 'flow' => $flow, 'rule' => $rule];
         }
 
-        if (empty($rule['require_demand_before_pre_schedule'])) {
+        if (!$demandRequired) {
             return ['allowed' => true, 'code' => 'demand_not_required_by_rule', 'message' => null, 'flow' => $flow, 'rule' => $rule];
         }
 
@@ -855,6 +869,25 @@ final class ConversationFlowService
         $without = preg_replace('/\b\d{1,2}([:\/\-]\d{1,4})*\b/u', ' ', $without) ?? $without;
         $without = preg_replace('/\s+/u', ' ', trim($without)) ?? trim($without);
         return mb_strlen($without) < 10;
+    }
+
+    private function behaviorRequiresDemandBeforeSchedule(int $tenantId, PDO $pdo): bool
+    {
+        try {
+            $behavior = (new AgentConversationBehaviorService())->settingsForTenant($tenantId, $pdo);
+            $demand = is_array($behavior['demand'] ?? null) ? $behavior['demand'] : [];
+            return !empty($demand['required_before_schedule']);
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function isAutomaticExistingCustomerDemandExemption(string $summary): bool
+    {
+        $summary = $this->normalize($summary);
+        return str_contains($summary, 'contato ja identificado como cliente paciente')
+            || str_contains($summary, 'nova triagem de demanda dispensada')
+            || str_contains($summary, 'demanda nao exigida para agenda');
     }
 
     private function markDemandNotRequired(PDO $pdo, int $tenantId, int $conversationId, string $summary): void

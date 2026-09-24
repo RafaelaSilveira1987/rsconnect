@@ -77,9 +77,12 @@ final class AgentConversationBehaviorService
         $base = $fallback !== [] ? array_replace_recursive($defaults, $fallback) : $defaults;
 
         $demand = is_array($raw['demand'] ?? null) ? $raw['demand'] : [];
+        $demandRequiredBeforeSchedule = !empty($demand['required_before_schedule']);
         $base['demand'] = [
-            'enabled' => !empty($demand['enabled']),
-            'required_before_schedule' => !empty($demand['required_before_schedule']),
+            // Exigir a demanda antes da agenda implica manter a coleta de demanda ativa.
+            // Evita configuração contraditória: "exigir" ligado com "perguntar" desligado.
+            'enabled' => !empty($demand['enabled']) || $demandRequiredBeforeSchedule,
+            'required_before_schedule' => $demandRequiredBeforeSchedule,
             'prompt' => self::cleanText($demand['prompt'] ?? ($base['demand']['prompt'] ?? ''), 1000),
         ];
 

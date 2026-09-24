@@ -16625,3 +16625,64 @@ summary {
 @media(max-width:1180px){.operational-load-filters{grid-template-columns:repeat(3,minmax(0,1fr))}.operational-load-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.operational-load-grid{grid-template-columns:1fr}}
 @media(max-width:720px){.operational-load-hero{align-items:flex-start;flex-direction:column;padding:20px}.operational-load-live{width:100%}.operational-load-filters{grid-template-columns:1fr 1fr}.operational-load-kpis{grid-template-columns:1fr 1fr}.operational-load-conversation{grid-template-columns:1fr}.operational-load-conversation-side{align-items:flex-start;text-align:left}.operational-load-filter-actions{grid-column:1/-1}}
 @media(max-width:480px){.operational-load-filters,.operational-load-kpis{grid-template-columns:1fr}}
+
+/* RS Connect 36.36.13 — SLA por empresa no RS Admin */
+.admin-company-sla-card {
+  margin-bottom: 16px;
+  border-color: #d7e8eb;
+  background: linear-gradient(180deg, #ffffff, #fbfefe);
+}
+.admin-company-sla-card .section-heading { align-items: flex-start; }
+.admin-company-sla-card .section-heading p { max-width: 760px; margin: 5px 0 0; color: var(--rs-muted); line-height: 1.45; }
+.admin-company-sla-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.admin-company-sla-summary > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e3ebef;
+  border-radius: 14px;
+  background: #f9fcfd;
+}
+.admin-company-sla-summary span {
+  color: var(--rs-muted);
+  font-size: .68rem;
+  font-weight: 850;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.admin-company-sla-summary strong { color: var(--rs-text); font-size: .92rem; line-height: 1.35; overflow-wrap: anywhere; }
+.admin-company-sla-summary small { color: var(--rs-muted); line-height: 1.4; }
+.admin-company-sla-form {
+  padding-top: 17px;
+  border-top: 1px solid #e8eef1;
+}
+.admin-company-sla-form .field { min-width: 0; }
+.admin-company-sla-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 2px;
+}
+.admin-company-sla-actions p {
+  margin: 0;
+  max-width: 760px;
+  color: var(--rs-muted);
+  font-size: .76rem;
+  line-height: 1.45;
+}
+.admin-company-sla-actions .btn { flex: 0 0 auto; }
+@media (max-width: 1050px) {
+  .admin-company-sla-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  .admin-company-sla-summary { grid-template-columns: 1fr; }
+  .admin-company-sla-actions { align-items: stretch; flex-direction: column; }
+  .admin-company-sla-actions .btn { width: 100%; }
+}

@@ -195,7 +195,9 @@ final class AppVersionService
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.10 — Apresentação única do assistente';
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.11 — Retomada pós-horário no fuso correto';
     // 36.36.12 — preserva apresentação na retomada e impede respostas duplicadas após a abertura.
-    public const PACKAGE_LABEL = 'RS Connect 36.36.12 — Retomada com apresentação única e sem duplicidade';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.12 — Retomada com apresentação única e sem duplicidade';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.13 — SLA por empresa no RS Admin';
+    public const PACKAGE_LABEL = 'RS Connect 36.36.14 — Demanda obrigatória antes da agenda';
     public const REQUIRED_MIGRATION = '118_contact_origin.sql';
 
     private PDO $pdo;

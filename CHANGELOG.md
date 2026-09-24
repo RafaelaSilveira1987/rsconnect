@@ -1,3 +1,22 @@
+## 36.36.14 — 2026-09-24 — Demanda obrigatória antes da agenda
+
+- Corrige a precedência da opção estruturada **Exigir a demanda antes de consultar a agenda**.
+- A exigência passa a valer mesmo quando o contato já estiver classificado como cliente/paciente, desde que ainda não exista demanda registrada nesta conversa.
+- Remove o preenchimento artificial de `brief_demand` que podia liberar a agenda sem pergunta real.
+- Reabre estados antigos `not_required` criados automaticamente quando uma nova solicitação de agenda chega com a exigência ativa.
+- Marcar **Exigir a demanda** passa a ativar a coleta de demanda automaticamente, evitando configuração contraditória.
+- Mantém continuidade: dados já conhecidos não são repetidos; somente a demanda pendente é solicitada antes da agenda.
+- Sem migration nova.
+
+## 36.36.13 — 2026-09-24 — SLA por empresa no RS Admin
+
+- adiciona um bloco **SLA operacional** na visão geral de cada empresa dentro do RS Admin;
+- permite ao Super Admin alterar a meta da primeira resposta humana, o percentual de alerta preventivo e a contagem fora do expediente;
+- exibe a prévia da meta, minuto de alerta, modo do relógio, expediente e fuso usados pela política;
+- reaproveita `SlaPolicyService` e `tenant_sla_settings`, sem criar configuração paralela nem nova migration;
+- registra auditoria `company.sla_updated` e mantém snapshot histórico dos ciclos já abertos;
+- não altera IA, agenda, triagem, recuperação pós-horário ou regras de atendimento.
+
 ## 36.36.12 — 2026-09-24 — Retomada com apresentação única e sem duplicidade
 
 - O aviso de ausência fora do horário deixa de contar como primeira resposta conversacional para a política de apresentação do assistente.

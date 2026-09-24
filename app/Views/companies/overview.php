@@ -49,6 +49,47 @@ $lifecycleStatus = (string) ($company['lifecycle_status'] ?? TenantLifecycleServ
 $lifecycleLabel = TenantLifecycleService::label($lifecycleStatus);
 $lifecycleTargets = TenantLifecycleService::allowedTargets($lifecycleStatus);
 $lifecycleHistory = is_array($lifecycleHistory ?? null) ? $lifecycleHistory : [];
+$slaSettings = is_array($slaSettings ?? null) ? $slaSettings : [];
+$slaTargetMinutes = max(5, (int) ($slaSettings['target_minutes'] ?? 30));
+$slaWarningPercent = max(50, min(99, (int) ($slaSettings['warning_percent'] ?? 80)));
+$slaWarningMinutes = max(1, (int) floor($slaTargetMinutes * ($slaWarningPercent / 100)));
+$slaCountsOutside = !empty($slaSettings['count_outside_business_hours']);
+$slaTimezone = trim((string) ($slaSettings['timezone'] ?? 'America/Sao_Paulo')) ?: 'America/Sao_Paulo';
+$slaHoursSummary = static function (string $json): string {
+    $decoded = json_decode($json, true);
+    if (!is_array($decoded)) return 'Horário operacional não informado';
+    $labels = ['mon' => 'Seg', 'tue' => 'Ter', 'wed' => 'Qua', 'thu' => 'Qui', 'fri' => 'Sex', 'sat' => 'Sáb', 'sun' => 'Dom'];
+    if (isset($decoded['days'], $decoded['start'], $decoded['end']) && is_array($decoded['days'])) {
+        $days = [];
+        foreach ($decoded['days'] as $day) {
+            $key = strtolower(trim((string) $day));
+            if (isset($labels[$key])) $days[] = $labels[$key];
+        }
+        $start = trim((string) $decoded['start']);
+        $end = trim((string) $decoded['end']);
+        return ($days ? implode(', ', $days) : 'Sem dias ativos') . (($start !== '' && $end !== '') ? ' · ' . $start . '–' . $end : '');
+    }
+    $groups = [];
+    foreach ($labels as $key => $label) {
+        $ranges = is_array($decoded[$key] ?? null) ? $decoded[$key] : [];
+        $parts = [];
+        foreach ($ranges as $range) {
+            if (!is_array($range) || count($range) < 2) continue;
+            $start = trim((string) ($range[0] ?? ''));
+            $end = trim((string) ($range[1] ?? ''));
+            if ($start !== '' && $end !== '') $parts[] = $start . '–' . $end;
+        }
+        if ($parts) {
+            $rangeText = implode(', ', $parts);
+            $groups[$rangeText][] = $label;
+        }
+    }
+    if (!$groups) return 'Horário operacional não informado';
+    $summary = [];
+    foreach ($groups as $rangeText => $days) $summary[] = implode(', ', $days) . ' · ' . $rangeText;
+    return implode(' | ', $summary);
+};
+$slaBusinessHoursLabel = $slaHoursSummary((string) ($slaSettings['business_hours_json'] ?? ''));
 ?>
 
 <nav class="admin-breadcrumb" aria-label="Navegação"><a href="<?= View::e(Router::url('/companies')) ?>">Empresas</a><span>›</span><strong><?= View::e((string) $company['name']) ?></strong></nav>
@@ -67,6 +108,7 @@ $lifecycleHistory = is_array($lifecycleHistory ?? null) ? $lifecycleHistory : []
         <a class="btn btn-primary" href="<?= View::e(Router::url('/company-settings?id=' . $tenantId)) ?>">Editar empresa</a>
         <a class="btn btn-outline" href="<?= View::e(Router::url('/company-settings?id=' . $tenantId)) ?>#company-module-settings">Menus do cliente</a>
         <a class="btn btn-outline" href="<?= View::e(Router::url('/implementation?tenant_id=' . $tenantId)) ?>">Ver implantação</a>
+        <a class="btn btn-outline" href="#company-sla">SLA operacional</a>
         <a class="btn btn-outline" href="<?= View::e(Router::url('/companies/health?tenant_id=' . $tenantId)) ?>">Saúde e diagnóstico</a>
         <a class="btn btn-quiet" href="<?= View::e(Router::url('/conversations?tenant_id=' . $tenantId)) ?>">Abrir conversas</a>
         <form method="post" action="<?= View::e(Router::url('/companies/status')) ?>" data-confirm="<?= View::e($company['status'] === 'inactive' ? 'Reativar esta empresa e liberar o acesso dos usuários?' : 'Inativar esta empresa e bloquear o acesso dos usuários do cliente?') ?>">
@@ -126,6 +168,50 @@ $lifecycleHistory = is_array($lifecycleHistory ?? null) ? $lifecycleHistory : []
             </div>
         </details>
     <?php endif; ?>
+</section>
+
+<section class="card admin-company-sla-card" id="company-sla">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">SLA operacional</span>
+            <h2>Primeira resposta humana</h2>
+            <p>Defina a meta desta empresa sem alterar as configurações da IA, agenda ou atendimento automático.</p>
+        </div>
+        <span class="badge badge-info">Meta <?= $slaTargetMinutes ?> min</span>
+    </div>
+
+    <div class="admin-company-sla-summary">
+        <div><span>Meta atual</span><strong><?= $slaTargetMinutes ?> min</strong><small>Tempo máximo para a primeira resposta humana.</small></div>
+        <div><span>Alerta preventivo</span><strong><?= $slaWarningMinutes ?> min</strong><small><?= $slaWarningPercent ?>% da meta configurada.</small></div>
+        <div><span>Relógio</span><strong><?= $slaCountsOutside ? 'Tempo corrido' : 'Somente expediente' ?></strong><small><?= $slaCountsOutside ? 'Continua contando fora do horário.' : 'Pausa fora do horário operacional.' ?></small></div>
+        <div><span>Expediente usado</span><strong><?= View::e($slaBusinessHoursLabel) ?></strong><small><?= View::e($slaTimezone) ?></small></div>
+    </div>
+
+    <form class="admin-company-sla-form" method="post" action="<?= View::e(Router::url('/companies/sla')) ?>">
+        <?= Csrf::input() ?>
+        <input type="hidden" name="tenant_id" value="<?= $tenantId ?>">
+        <div class="form-grid three">
+            <label class="field">
+                <span>Meta da 1ª resposta</span>
+                <div class="team-report-sla-input"><input type="number" name="sla_target_minutes" min="5" max="1440" step="5" value="<?= $slaTargetMinutes ?>" required><small>min</small></div>
+                <small>De 5 minutos a 24 horas.</small>
+            </label>
+            <label class="field">
+                <span>Alerta preventivo</span>
+                <div class="team-report-sla-input"><input type="number" name="sla_warning_percent" min="50" max="99" step="1" value="<?= $slaWarningPercent ?>" required><small>%</small></div>
+                <small>Percentual da meta em que o alerta começa.</small>
+            </label>
+            <label class="field checkbox-field sla-clock-toggle">
+                <span>Relógio fora do expediente</span>
+                <span class="checkbox-control"><input type="checkbox" name="sla_count_outside_hours" value="1" <?= $slaCountsOutside ? 'checked' : '' ?>><span>Contabilizar também fora do horário</span></span>
+                <small>Desmarcado: mensagens recebidas fora do expediente só começam a consumir SLA quando a operação abre.</small>
+            </label>
+        </div>
+        <div class="admin-company-sla-actions">
+            <p>O expediente acima é apenas exibido aqui para referência e continua sincronizado com a configuração operacional da empresa. A nova meta vale para novos ciclos de SLA; ciclos já abertos preservam o snapshot anterior para manter o histórico consistente.</p>
+            <button class="btn btn-primary" type="submit">Salvar SLA da empresa</button>
+        </div>
+    </form>
 </section>
 
 <?php if (!empty($company['attention_reasons'])): ?>

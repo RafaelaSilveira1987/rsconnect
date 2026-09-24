@@ -351,7 +351,7 @@ $humanizeAgentRule = static function (string $key): string {
                                     <input type="hidden" name="conversation_behavior[demand][required_before_schedule]" value="0">
                                     <label class="check-field compact-check"><input type="checkbox" name="conversation_behavior[demand][required_before_schedule]" value="1" <?= !empty($behaviorDemand['required_before_schedule']) ? 'checked' : '' ?>><span>Exigir a demanda antes de consultar a agenda</span></label>
                                     <label class="field compact-field"><span>Pergunta sugerida</span><textarea name="conversation_behavior[demand][prompt]" rows="3" placeholder="Ex.: Antes de avançarmos, pode me contar brevemente o que você está buscando neste atendimento?"><?= View::e((string) ($behaviorDemand['prompt'] ?? '')) ?></textarea></label>
-                                    <p class="field-hint">Clientes e pacientes atuais continuam usando o histórico e não são obrigados a refazer uma triagem já conhecida.</p>
+                                    <p class="field-hint">Quando “Exigir a demanda” estiver marcado, a agenda só é consultada depois que a demanda estiver registrada nesta conversa. Para clientes/pacientes atuais, os demais dados conhecidos não são perguntados novamente.</p>
                                 </article>
 
                                 <article class="agent-behavior-card">
@@ -759,7 +759,7 @@ $humanizeAgentRule = static function (string $key): string {
                                             <div><span class="eyebrow">Grupo</span><h4><?= View::e($groupLabel) ?></h4></div>
                                             <label class="check-field compact-check"><input type="checkbox" name="group_rules[<?= View::e($groupKey) ?>][allow_pre_schedule]" value="1" <?= $allow === 1 ? 'checked' : '' ?>><span>Permitir pré-agendamento</span></label>
                                             <?php if (in_array($groupKey, ['customer', 'patient'], true)): ?>
-                                                <div class="agent-rule-fixed-note"><strong>Triagem já conhecida</strong><span>Para clientes e pacientes atuais, o assistente usa o histórico e não exige novamente o motivo do atendimento antes da agenda.</span></div>
+                                                <div class="agent-rule-fixed-note"><strong>Triagem já conhecida</strong><span>O assistente reutiliza cadastro e histórico. A opção global “Exigir a demanda antes de consultar a agenda” continua valendo quando ainda não houver demanda registrada nesta conversa.</span></div>
                                             <?php else: ?>
                                                 <label class="check-field compact-check"><input type="checkbox" name="group_rules[<?= View::e($groupKey) ?>][require_demand_before_pre_schedule]" value="1" <?= $require === 1 ? 'checked' : '' ?>><span>Pedir o motivo antes de consultar a agenda</span></label>
                                             <?php endif; ?>

@@ -18,6 +18,7 @@ use App\Services\TenantLifecycleService;
 use App\Services\OnboardingGuideService;
 use App\Services\MessageGovernanceService;
 use App\Services\ConversationOwnershipService;
+use App\Services\SlaPolicyService;
 use PDO;
 use Throwable;
 
@@ -59,6 +60,7 @@ final class CompanyController
             'title' => 'Visão geral da empresa',
             'company' => $company,
             'lifecycleHistory' => (new TenantLifecycleService())->history($tenantId, 12),
+            'slaSettings' => (new SlaPolicyService())->settings($tenantId),
         ]);
     }
 
@@ -462,6 +464,49 @@ final class CompanyController
         Audit::log('company.updated', ['company_name' => $name, 'profile_enriched' => !Auth::isSuperAdmin()], $tenantId);
         Flash::set('success', 'Dados da empresa atualizados. As novas informações já podem ser usadas pelos assistentes.');
         $this->redirect('/company-settings' . (Auth::isSuperAdmin() ? '?id=' . $tenantId : ''));
+    }
+
+    public function updateSla(): void
+    {
+        $tenantId = (int) ($_POST['tenant_id'] ?? 0);
+        if ($tenantId < 1) {
+            Flash::set('error', 'Empresa inválida para configuração do SLA.');
+            $this->redirect('/companies');
+        }
+
+        $pdo = Database::connection();
+        $companyStatement = $pdo->prepare('SELECT id, name FROM tenants WHERE id = :id LIMIT 1');
+        $companyStatement->execute(['id' => $tenantId]);
+        $company = $companyStatement->fetch(PDO::FETCH_ASSOC);
+        if (!$company) {
+            Flash::set('error', 'Empresa não encontrada.');
+            $this->redirect('/companies');
+        }
+
+        try {
+            $service = new SlaPolicyService($pdo);
+            $before = $service->settings($tenantId);
+            $after = $service->save($tenantId, [
+                'sla_target_minutes' => (int) ($_POST['sla_target_minutes'] ?? $before['target_minutes'] ?? SlaPolicyService::DEFAULT_TARGET_MINUTES),
+                'sla_warning_percent' => (int) ($_POST['sla_warning_percent'] ?? $before['warning_percent'] ?? SlaPolicyService::DEFAULT_WARNING_PERCENT),
+                'sla_count_outside_hours' => isset($_POST['sla_count_outside_hours']) ? '1' : '',
+            ], Auth::id());
+
+            Audit::log('company.sla_updated', [
+                'target_minutes_before' => (int) ($before['target_minutes'] ?? 0),
+                'target_minutes_after' => (int) ($after['target_minutes'] ?? 0),
+                'warning_percent_before' => (int) ($before['warning_percent'] ?? 0),
+                'warning_percent_after' => (int) ($after['warning_percent'] ?? 0),
+                'count_outside_business_hours_before' => (int) ($before['count_outside_business_hours'] ?? 0),
+                'count_outside_business_hours_after' => (int) ($after['count_outside_business_hours'] ?? 0),
+            ], $tenantId);
+
+            Flash::set('success', 'SLA operacional da empresa atualizado.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível atualizar o SLA: ' . $exception->getMessage());
+        }
+
+        $this->redirect('/companies/overview?id=' . $tenantId . '#company-sla');
     }
 
     public function updateLifecycle(): void
