@@ -283,7 +283,7 @@ final class AgentConversationBehaviorService
     }
 
     /** @param array<string,mixed> $profile */
-    public function promptBlock(array $profile): string
+    public function promptBlock(array $profile, string $currentTurnText = ''): string
     {
         $settings = $this->settingsFromProfile($profile);
         $lines = [];
@@ -328,27 +328,35 @@ final class AgentConversationBehaviorService
             }
         }
 
+        $delivery = $settings['response_delivery'] ?? [];
+        $scope = (string) ($delivery['scope'] ?? 'asked_only');
+
         $payment = $settings['payment'] ?? [];
         if (!empty($payment['enabled'])) {
-            $parts = [];
-            if (trim((string) ($payment['value_text'] ?? '')) !== '') {
-                $parts[] = 'valor: ' . trim((string) $payment['value_text']);
-            }
-            if (!empty($payment['methods'])) {
-                $parts[] = 'pagamento: ' . implode(', ', array_map('strval', (array) $payment['methods']));
-            }
-            if (trim((string) ($payment['message'] ?? '')) !== '') {
-                $parts[] = trim((string) $payment['message']);
-            }
-            if ($parts !== []) {
-                $lines[] = '- Valores/pagamento: ' . implode(' · ', $parts) . '.';
-                $lines[] = '  Quando modalidade e pagamento fizerem parte da mesma resposta, explique primeiro como será o atendimento e depois informe valor/formas de pagamento.';
+            $canExposePayment = $scope !== 'asked_only'
+                || trim($currentTurnText) === ''
+                || $this->turnAsksPayment($currentTurnText);
+            if ($canExposePayment) {
+                $parts = [];
+                if (trim((string) ($payment['value_text'] ?? '')) !== '') {
+                    $parts[] = 'valor: ' . trim((string) $payment['value_text']);
+                }
+                if (!empty($payment['methods'])) {
+                    $parts[] = 'pagamento: ' . implode(', ', array_map('strval', (array) $payment['methods']));
+                }
+                if (trim((string) ($payment['message'] ?? '')) !== '') {
+                    $parts[] = trim((string) $payment['message']);
+                }
+                if ($parts !== []) {
+                    $lines[] = '- Valores/pagamento: ' . implode(' · ', $parts) . '.';
+                    $lines[] = '  Informe estes dados somente quando o turno atual pedir valor, preço, pagamento ou quando a configuração de ritmo permitir antecipação.';
+                }
+            } else {
+                $lines[] = '- Valores/pagamento: existem dados configurados, mas eles estão OCULTOS neste turno porque o cliente não perguntou sobre valor ou pagamento. Não mencione preço nem formas de pagamento agora.';
             }
         }
 
-        $delivery = $settings['response_delivery'] ?? [];
         $mode = (string) ($delivery['mode'] ?? 'auto');
-        $scope = (string) ($delivery['scope'] ?? 'asked_only');
         if ($scope === 'asked_only') {
             $lines[] = '- Ritmo da conversa: responda somente o que o contato perguntou ou informou no TURNO ATUAL. Não antecipe valor, pagamento, modalidade, endereço, disponibilidade ou outras informações só porque estejam configuradas. Depois de responder ao pedido atual, retome somente a PRÓXIMA etapa obrigatória da Ordem do atendimento, com no máximo uma pergunta de coleta, e aguarde a resposta antes de avançar.';
         } else {
@@ -380,6 +388,141 @@ final class AgentConversationBehaviorService
         return "COMPORTAMENTO OPERACIONAL CONFIGURADO PELA EMPRESA (prioridade sobre estilo livre):\n"
             . implode("\n", $lines)
             . "\n\n";
+    }
+
+    /**
+     * Defesa determinística do ritmo "responder só ao que foi perguntado".
+     *
+     * O conteúdo de negócio continua vindo exclusivamente da configuração. Esta camada
+     * não inventa respostas: ela apenas impede que uma resposta gerada antecipe um tema
+     * estruturado que o cliente ainda não pediu e limita a coleta a uma pergunta por turno.
+     */
+    public function enforceTurnScope(int $tenantId, string $currentTurnText, string $reply, ?PDO $pdo = null): string
+    {
+        return $this->enforceTurnScopeWithSettings(
+            $this->settingsForTenant($tenantId, $pdo),
+            $currentTurnText,
+            $reply
+        );
+    }
+
+    /** @param array<string,mixed> $settings */
+    public function enforceTurnScopeWithSettings(array $settings, string $currentTurnText, string $reply): string
+    {
+        $reply = trim($reply);
+        if ($reply === '') {
+            return '';
+        }
+
+        $delivery = is_array($settings['response_delivery'] ?? null) ? $settings['response_delivery'] : [];
+        if ((string) ($delivery['scope'] ?? 'asked_only') !== 'asked_only') {
+            return $reply;
+        }
+
+        $payment = is_array($settings['payment'] ?? null) ? $settings['payment'] : [];
+        if (!empty($payment['enabled']) && !$this->turnAsksPayment($currentTurnText)) {
+            $reply = $this->stripUnaskedPaymentDisclosure($reply, $payment);
+        }
+
+        // O modo asked_only sempre termina, no máximo, com a primeira pergunta de coleta.
+        // Assim o modelo não consegue avançar duas etapas numa única resposta mesmo que
+        // o prompt livre ou a base de conhecimento tentem fazê-lo.
+        $reply = $this->keepOnlyFirstQuestion($reply);
+
+        return trim($reply);
+    }
+
+    private function turnAsksPayment(string $content): bool
+    {
+        $text = $this->normalize($content);
+        if ($text === '') {
+            return false;
+        }
+        return preg_match(
+            '/\b(quanto\s+custa|quanto\s+fica|qual(?:\s+e|\s+é)?\s+o\s+valor|valor|preco|preço|pagamento|pagar|pix|cartao|cartão|transferencia|transferência|forma(?:s)?\s+de\s+pagamento)\b/u',
+            $text
+        ) === 1;
+    }
+
+    /** @param array<string,mixed> $payment */
+    private function stripUnaskedPaymentDisclosure(string $reply, array $payment): string
+    {
+        $sentences = preg_split('/(?<=[\.!?])\s+/u', trim($reply)) ?: [trim($reply)];
+        $kept = [];
+        foreach ($sentences as $sentence) {
+            $sentence = trim((string) $sentence);
+            if ($sentence === '') {
+                continue;
+            }
+
+            $cleaned = $this->stripPaymentClause($sentence, $payment);
+            if ($cleaned !== '') {
+                $kept[] = $cleaned;
+            }
+        }
+        return trim(implode(' ', $kept));
+    }
+
+    /** @param array<string,mixed> $payment */
+    private function stripPaymentClause(string $sentence, array $payment): string
+    {
+        $patterns = [
+            '/\b(?:o\s+)?(?:valor|preço|preco|investimento)\b/iu',
+            '/\b(?:pagamento|pagar|pix|cart[aã]o|transfer[eê]ncia)\b/iu',
+            '/R\$\s*\d/iu',
+            '/\b\d+(?:[\.,]\d{1,2})?\s*reais\b/iu',
+        ];
+
+        foreach ((array) ($payment['methods'] ?? []) as $method) {
+            $method = trim((string) $method);
+            if ($method !== '') {
+                $patterns[] = '/(?<![\p{L}\p{N}])' . preg_quote($method, '/') . '(?![\p{L}\p{N}])/iu';
+            }
+        }
+
+        $firstOffset = null;
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $sentence, $match, PREG_OFFSET_CAPTURE) === 1) {
+                $offset = (int) ($match[0][1] ?? 0);
+                $firstOffset = $firstOffset === null ? $offset : min($firstOffset, $offset);
+            }
+        }
+        if ($firstOffset === null) {
+            return $sentence;
+        }
+
+        $prefix = rtrim(substr($sentence, 0, $firstOffset));
+        // Retira a conjunção/pontuação que introduzia a informação de pagamento.
+        $prefix = preg_replace('/(?:,\s*)?(?:e|al[eé]m\s+disso)\s*$/iu', '', $prefix) ?? $prefix;
+        $prefix = rtrim($prefix, " ,;:-\t\n\r\0\x0B");
+        if (mb_strlen($prefix) < 12) {
+            return '';
+        }
+        return rtrim($prefix, '.!?') . '.';
+    }
+
+    private function keepOnlyFirstQuestion(string $reply): string
+    {
+        if (substr_count($reply, '?') <= 1) {
+            return $reply;
+        }
+        $sentences = preg_split('/(?<=[\.!?])\s+/u', trim($reply)) ?: [trim($reply)];
+        $kept = [];
+        $questionSeen = false;
+        foreach ($sentences as $sentence) {
+            $sentence = trim((string) $sentence);
+            if ($sentence === '') {
+                continue;
+            }
+            if (str_contains($sentence, '?')) {
+                if ($questionSeen) {
+                    continue;
+                }
+                $questionSeen = true;
+            }
+            $kept[] = $sentence;
+        }
+        return trim(implode(' ', $kept));
     }
 
     /** @return array<int,string> */

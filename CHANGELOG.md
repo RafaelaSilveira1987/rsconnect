@@ -1,3 +1,13 @@
+# 36.36.22 — Escopo estrito por turno
+
+- O modo **Responder só ao que foi perguntado e avançar 1 etapa** deixa de ser apenas uma instrução ao modelo e passa a ter proteção determinística antes da entrega.
+- Valores e formas de pagamento configurados ficam ocultos do contexto operacional quando o cliente não perguntou por esse tema.
+- Se o modelo ainda antecipar valor/pagamento, a camada de entrega remove essa informação antes do WhatsApp, preservando o restante da resposta.
+- O modo estrito mantém no máximo uma pergunta de coleta por turno.
+- Cache exato também passa pela mesma guarda, evitando reutilizar uma resposta antiga mais ampla do que a configuração atual permite.
+- Nenhuma informação de negócio foi codificada no PHP: valor, métodos e mensagens continuam vindo da configuração da empresa/agente.
+- Não há migration nova; permanece obrigatória a 119_agent_workflow_runtime_contract.sql.
+
 # 36.36.21 — Ritmo conversacional e entrega em blocos
 
 - A configuração de respostas agora define também o ritmo: responder apenas ao que foi perguntado e avançar uma única etapa por turno, ou permitir antecipação de informações relacionadas.

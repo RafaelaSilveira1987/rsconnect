@@ -725,6 +725,12 @@ final class AiAutomationService
                         return;
                     }
                     $reply = trim((string) $cacheResult['reply']);
+                    $reply = $conversationBehavior->enforceTurnScope(
+                        (int) ($instance['tenant_id'] ?? 0),
+                        $currentTurnContent,
+                        $reply,
+                        $pdo
+                    );
                     if ($this->isStaleAfterHoursReply($reply, $agent, $operatingPolicy)) {
                         // Um cache gravado quando o expediente estava fechado não pode
                         // ser reaproveitado depois que o RS Connect confirmou reabertura.
@@ -832,6 +838,12 @@ final class AiAutomationService
             }
             $failurePhase = 'ai.generate';
             $reply = $this->ai->generateReply($generationAgent, $messages, $conversation, $conversation);
+            $reply = $conversationBehavior->enforceTurnScope(
+                (int) ($instance['tenant_id'] ?? 0),
+                $currentTurnContent,
+                $reply,
+                $pdo
+            );
 
             // A mensagem de ausência fora do horário é operacional, não uma apresentação
             // do assistente. Na primeira resposta conversacional após a reabertura, garante
