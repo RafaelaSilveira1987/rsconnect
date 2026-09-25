@@ -1,3 +1,12 @@
+# 36.36.23 — Ordem de atendimento por turno e isolamento da agenda
+
+- corrige o cursor da triagem para que a **Ordem do atendimento** governe também turnos informativos, não apenas mensagens já classificadas como intenção de agenda;
+- o Prompt da IA passa a receber o campo atual, o rótulo e a **pergunta configurada** para a próxima etapa, impedindo que o modelo escolha outra pergunta por conta própria;
+- uma resposta como “Sim, estou passando por uma perda...” preenche somente a etapa em andamento e não é promovida automaticamente para uma etapa futura;
+- confirmações e seleções da agenda deixam de reaproveitar pré-agendamentos de outra conversa apenas porque pertencem ao mesmo contato;
+- a detecção de confirmação deixa de considerar qualquer frase iniciada por “sim” como confirmação de horário, exigindo sinal explícito de agenda quando houver texto adicional;
+- preserva regras de agenda, retomada fora do horário, SLA, escopo estrito por turno e a migration obrigatória 119; não há migration nova.
+
 # 36.36.22 — Escopo estrito por turno
 
 - O modo **Responder só ao que foi perguntado e avançar 1 etapa** deixa de ser apenas uma instrução ao modelo e passa a ter proteção determinística antes da entrega.

@@ -708,6 +708,7 @@ final class AiModelService
         if ($tenantId > 0) {
             try {
                 $agentProfile = (new AgentBlueprintService())->profileForTenant($tenantId, true);
+                $agentProfile = (new AgentConversationBehaviorService())->applyOperationalOverridesToProfile($agentProfile);
                 $triageContext = is_array($conversation['_simulation_triage_context'] ?? null)
                     ? $conversation['_simulation_triage_context']
                     : (new AgentTriageService())->context($tenantId, (int) ($conversation['id'] ?? $conversation['conversation_id'] ?? 0));
@@ -718,6 +719,19 @@ final class AiModelService
                         $collected['brief_demand'] = '[já coletada e registrada]';
                     }
                     $missing = is_array($triageContext['missing'] ?? null) ? $triageContext['missing'] : [];
+                    $currentFieldKey = trim((string) ($triageContext['current_field_key'] ?? ''));
+                    $currentFieldLabel = '';
+                    $currentFieldPrompt = '';
+                    if ($currentFieldKey !== '') {
+                        foreach ((array) ($agentProfile['triage_fields'] ?? []) as $configuredField) {
+                            if (!is_array($configuredField) || (string) ($configuredField['field_key'] ?? '') !== $currentFieldKey) {
+                                continue;
+                            }
+                            $currentFieldLabel = trim((string) ($configuredField['label'] ?? ''));
+                            $currentFieldPrompt = trim((string) ($configuredField['prompt_text'] ?? ''));
+                            break;
+                        }
+                    }
                     $policyEngineBlock = "POLICY ENGINE / BLUEPRINT DO RS CONNECT (fonte de verdade, prioridade máxima):
 "
                         . '- Nicho: ' . (string) ($agentProfile['niche_name'] ?? 'não definido') . "
@@ -732,13 +746,17 @@ final class AiModelService
 "
                         . '- Motivo de bloqueio: ' . (trim((string) ($triageContext['block_reason'] ?? '')) ?: 'nenhum') . "
 "
-                        . '- Próximo campo obrigatório: ' . (trim((string) ($triageContext['current_field_key'] ?? '')) ?: 'nenhum') . "
+                        . '- Próximo campo obrigatório: ' . ($currentFieldKey !== '' ? $currentFieldKey : 'nenhum') . "
+"
+                        . '- Nome da próxima informação: ' . ($currentFieldLabel !== '' ? $currentFieldLabel : 'não definido') . "
+"
+                        . '- Pergunta configurada para a próxima informação: ' . ($currentFieldPrompt !== '' ? $currentFieldPrompt : 'não definida') . "
 "
                         . '- Campos ainda faltantes: ' . ($missing !== [] ? implode(', ', array_map('strval', $missing)) : 'nenhum obrigatório conhecido') . "
 "
                         . '- Dados estruturados já coletados: ' . ($collected !== [] ? json_encode($collected, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '{}') . "
 "
-                        . "REGRAS: nunca contrarie elegibilidade, capability ou bloqueio do RS Connect. Se houver pergunta ou pedido explícito no TURNO ATUAL, responda primeiro ao que for permitido; só depois retome o próximo campo obrigatório. Quando for retomar a coleta, faça somente uma pergunta por vez. Se o próximo campo for patient_age e o cliente tiver informado apenas uma faixa aproximada (por exemplo, 'mais de 30'), peça a idade exata de forma curta em vez de repetir literalmente a mesma pergunta. Não afirme disponibilidade, pré-reserva ou confirmação por texto: essas ações só existem quando o backend as executa.
+                        . "REGRAS: nunca contrarie elegibilidade, capability ou bloqueio do RS Connect. Se houver pergunta ou pedido explícito no TURNO ATUAL, responda primeiro ao que for permitido; depois avance SOMENTE para o campo indicado em 'Próximo campo obrigatório'. Não escolha uma etapa posterior por iniciativa própria. Quando existir uma 'Pergunta configurada', preserve o sentido dela e faça apenas essa pergunta de coleta, em linguagem natural quando o modo permitir. Faça somente uma pergunta de coleta por turno e aguarde a resposta antes de avançar. Se o próximo campo for nenhum, não invente uma nova etapa de triagem. Se o próximo campo for patient_age e o cliente tiver informado apenas uma faixa aproximada (por exemplo, 'mais de 30'), peça a idade exata de forma curta em vez de repetir literalmente a mesma pergunta. Não afirme disponibilidade, pré-reserva ou confirmação por texto: essas ações só existem quando o backend as executa.
 
 ";
                 }

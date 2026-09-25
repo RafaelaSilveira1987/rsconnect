@@ -138,6 +138,12 @@ final class AgentTriageService
         } else {
             $eligibility = !empty($profile['capabilities']['eligibility.enabled']) ? 'eligible' : 'not_required';
             $status = $missingCompletion === [] ? 'ready' : 'collecting';
+            // A ordem configurada também governa conversas informativas. Sem este
+            // ponteiro o modelo recebia "próximo campo: nenhum" e podia escolher uma
+            // etapa posterior por conta própria.
+            if ($missingCompletion !== []) {
+                $nextField = (string) ($missingCompletion[0]['field_key'] ?? '');
+            }
         }
 
         $notifiedPolicies = is_array($state['notified_policy_codes'] ?? null) ? $state['notified_policy_codes'] : [];
@@ -357,6 +363,11 @@ final class AgentTriageService
             } else {
                 $eligibility = !empty($profile['capabilities']['eligibility.enabled']) ? 'eligible' : 'not_required';
                 $status = $missingCompletion === [] ? 'ready' : 'collecting';
+                // Mantém o cursor da triagem no primeiro campo pendente da Ordem do
+                // atendimento mesmo quando o turno atual é apenas informativo.
+                if ($missingCompletion !== []) {
+                    $nextField = (string) ($missingCompletion[0]['field_key'] ?? '');
+                }
             }
 
             $this->saveSession(

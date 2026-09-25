@@ -741,17 +741,15 @@ final class CalendarConversationService
 '
                 . '  AND a.updated_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)
 '
-                . '  AND (a.conversation_id = :conversation_id OR a.contact_id = :contact_id)
+                . '  AND a.conversation_id = :conversation_id
 '
-                . 'ORDER BY (a.conversation_id = :conversation_id_order) DESC, a.updated_at DESC, a.id DESC
+                . 'ORDER BY a.updated_at DESC, a.id DESC
 '
                 . 'LIMIT 1'
             );
             $statement->execute([
                 'tenant_id' => $tenantId,
                 'conversation_id' => $conversationId,
-                'contact_id' => $contactId,
-                'conversation_id_order' => $conversationId,
             ]);
             $row = $statement->fetch(PDO::FETCH_ASSOC);
             return $row ?: null;
@@ -780,15 +778,13 @@ final class CalendarConversationService
                    AND a.availability_status IN ("slot_selected", "validated")
                    AND COALESCE(a.chosen_availability_slot_id, 0) > 0
                    AND COALESCE(a.approval_status, "pending") <> "approved"
-                   AND (a.conversation_id = :conversation_id OR a.contact_id = :contact_id)
-                 ORDER BY (a.conversation_id = :conversation_id_order) DESC, a.updated_at DESC, a.id DESC
+                   AND a.conversation_id = :conversation_id
+                 ORDER BY a.updated_at DESC, a.id DESC
                  LIMIT 1'
             );
             $statement->execute([
                 'tenant_id' => $tenantId,
                 'conversation_id' => $conversationId,
-                'contact_id' => $contactId,
-                'conversation_id_order' => $conversationId,
             ]);
             $row = $statement->fetch(PDO::FETCH_ASSOC);
             return $row ?: null;
@@ -829,6 +825,7 @@ final class CalendarConversationService
         }
 
         if (preg_match('/^(sim|pode|claro|ok|confirmo)\b/u', $value) === 1
+            && preg_match('/\b(confirmar|confirma|agendar|marcar|horario|horário|opcao|opção|esse|este|pode)\b/u', $value) === 1
             && preg_match('/\b(nao|não|outro|trocar|mudar|remarcar|cancelar)\b/u', $value) !== 1) {
             return 'affirmative';
         }
@@ -1215,16 +1212,14 @@ final class CalendarConversationService
                   AND a.availability_request_id IS NOT NULL
                   AND a.availability_options_request_id = a.availability_request_id
                   AND (a.availability_selection_expires_at IS NULL OR a.availability_selection_expires_at >= NOW())
-                  AND (a.conversation_id = :conversation_id OR a.contact_id = :contact_id)
-                ORDER BY (a.conversation_id = :conversation_id_order) DESC, a.updated_at DESC, a.id DESC
+                  AND a.conversation_id = :conversation_id
+                ORDER BY a.updated_at DESC, a.id DESC
                 LIMIT 1';
         try {
             $statement = $pdo->prepare($sql);
             $statement->execute([
                 'tenant_id' => $tenantId,
                 'conversation_id' => $conversationId,
-                'contact_id' => $contactId,
-                'conversation_id_order' => $conversationId,
             ]);
             $row = $statement->fetch(PDO::FETCH_ASSOC);
             return $row ?: null;
@@ -1243,15 +1238,13 @@ final class CalendarConversationService
                    AND a.availability_status = "options_sent"
                    AND a.availability_request_id IS NOT NULL
                    AND a.availability_options_request_id = a.availability_request_id
-                   AND (a.conversation_id = :conversation_id OR a.contact_id = :contact_id)
-                 ORDER BY (a.conversation_id = :conversation_id_order) DESC, a.updated_at DESC, a.id DESC
+                   AND a.conversation_id = :conversation_id
+                 ORDER BY a.updated_at DESC, a.id DESC
                  LIMIT 1'
             );
             $statement->execute([
                 'tenant_id' => $tenantId,
                 'conversation_id' => $conversationId,
-                'contact_id' => $contactId,
-                'conversation_id_order' => $conversationId,
             ]);
             $row = $statement->fetch(PDO::FETCH_ASSOC);
             return $row ?: null;
