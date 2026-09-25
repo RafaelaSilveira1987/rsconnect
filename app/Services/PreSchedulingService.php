@@ -77,6 +77,7 @@ final class PreSchedulingService
         if (!$intent['has_intent']) {
             return $result;
         }
+        $availabilityInquiry = $this->asksAvailabilityOptions($content);
 
         $result['handled'] = true;
         $result['has_preference'] = $this->hasAnyPreference($intent);
@@ -225,7 +226,9 @@ final class PreSchedulingService
                 'request_needed' => false,
                 'message' => null,
             ];
-            if ($this->hasFullPreference($intent) || $this->isAvailabilityModality($this->intentSchedulingModality($intent))) {
+            if ($this->hasFullPreference($intent)
+                || $this->isAvailabilityModality($this->intentSchedulingModality($intent))
+                || ($availabilityInquiry && $this->hasAnyPreference($intent))) {
                 $transition = $this->prepareExistingForNewPreference($pdo, $tenantId, $conversationId, $existing, $intent);
                 if (empty($transition['ok'])) {
                     $result = array_merge($result, [
@@ -277,6 +280,52 @@ final class PreSchedulingService
                 $result['modality_question_error'] = $question['error'] ?? null;
                 $result['skip_ai'] = true;
                 $result['terminal_handled'] = true;
+                return $result;
+            }
+
+            // Perguntas como "qual horário tem disponível?" significam CONSULTAR a
+            // agenda, não confirmar um horário. Se a modalidade já é conhecida, a busca
+            // pode ser ampla: o calendário retorna opções reais e a camada de regras
+            // filtra somente os dias permitidos para aquela modalidade (ex.: presencial
+            // apenas às segundas). Não inventamos um horário preferido só para satisfazer
+            // o parser e não pedimos novamente um dado que o lead não precisa escolher
+            // antes de ver as opções.
+            if ($availabilityInquiry && empty($update['has_full_preference'])) {
+                $browseAppointment = is_array($update['appointment'] ?? null) ? $update['appointment'] : $existing;
+
+                // Se o lead informou um dia (mas não um horário), valida a regra desse dia
+                // antes da consulta. Sem dia informado, a busca é ampla e os slots serão
+                // filtrados depois pelas regras estruturadas da modalidade.
+                if ($this->hasAnyPreference($intent)) {
+                    $preferenceRule = (new AgentConversationBehaviorService())->schedulingPreferenceRule($tenantId, $browseAppointment);
+                    if (empty($preferenceRule['allowed'])) {
+                        $ruleMessage = trim((string) ($preferenceRule['message'] ?? ''));
+                        $send = $this->sendAgendaGateMessage(
+                            $pdo,
+                            $instance,
+                            $conversationId,
+                            $contactId,
+                            $ruleMessage !== '' ? $ruleMessage : 'Esse dia não está disponível para a modalidade escolhida. Pode me informar outro dia?',
+                            (string) ($preferenceRule['code'] ?? 'modality_day_not_allowed'),
+                            $incomingMessageId
+                        );
+                        $result['rule_blocked'] = true;
+                        $result['rule_code'] = (string) ($preferenceRule['code'] ?? 'modality_day_not_allowed');
+                        $result['rule_message_sent'] = !empty($send['ok']);
+                        $result['rule_message_error'] = $send['error'] ?? null;
+                        $result['skip_ai'] = true;
+                        $result['terminal_handled'] = true;
+                        $result['availability_request_needed'] = false;
+                        return $result;
+                    }
+                }
+
+                $result['availability_browse'] = true;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['availability_request_needed'] = !empty($transition['request_needed'])
+                    || empty($existing['availability_request_id'])
+                    || !in_array((string) ($existing['availability_status'] ?? ''), ['requested', 'sent'], true);
                 return $result;
             }
 
@@ -1559,6 +1608,19 @@ final class PreSchedulingService
         $text = mb_strtolower($content);
         $map = ['á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a', 'é' => 'e', 'ê' => 'e', 'í' => 'i', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ú' => 'u', 'ç' => 'c'];
         return strtr($text, $map);
+    }
+
+    private function asksAvailabilityOptions(string $content): bool
+    {
+        $text = $this->normalizeText($content);
+        if ($text === '') {
+            return false;
+        }
+
+        return preg_match(
+            '/\b(qual|quais|tem|ha|existe|ver|consultar|mostrar|mostra)\b.{0,35}\b(horario|horarios|vaga|vagas|disponibilidade)\b|\b(horario|horarios|vaga|vagas)\b.{0,30}\b(disponivel|disponiveis)\b/u',
+            $text
+        ) === 1;
     }
 
     private function extractDateText(string $text): string

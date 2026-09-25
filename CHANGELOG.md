@@ -1,3 +1,13 @@
+# 36.36.28 — Consulta real de horários e confirmação sem falso positivo
+
+- corrige o falso positivo em que mensagens como **“Sim, qual horário tem disponível?”** eram classificadas como confirmação de agendamento só por começarem com “sim” e conterem “horário”;
+- a guarda de confirmação sem slot real passa a aceitar somente pedidos explícitos de confirmar/agendar, deixando respostas genéricas como “sim”, “ok” e perguntas de disponibilidade seguirem o fluxo correto;
+- quando a modalidade já está definida e o lead pergunta quais horários estão disponíveis, o backend passa a consultar a agenda real mesmo sem exigir que ele invente previamente um horário específico;
+- a busca ampla continua submetida às regras estruturadas do agente: por exemplo, se presencial é permitido apenas às segundas-feiras, somente slots reais de segunda-feira podem ser apresentados;
+- respostas de consulta ampla deixam de dizer que “o horário solicitado não está disponível” quando nenhum horário específico foi solicitado;
+- o contrato do cache exato foi atualizado para 36.36.28, evitando reaproveitar respostas antigas incompatíveis com o novo fluxo;
+- não há migration nova; permanece obrigatória `120_agent_turn_state_cursor.sql`.
+
 # 36.36.27 — Agenda factual e sem promessas duplicadas
 
 - Faz a **Ordem do atendimento** iniciar a ação de agenda automaticamente quando a última etapa de coleta é concluída, sem deixar a IA inventar um encaminhamento para a profissional.

@@ -60,7 +60,8 @@ final class CalendarConversationService
         // A preferência exata informada pelo lead continua sendo validada tecnicamente e,
         // se estiver livre, pode virar uma pré-reserva real conforme o modo de confirmação.
         // Assim, desligar sugestões não desliga a própria agenda nem força respostas falsas.
-        $canSuggestAlternatives = !empty($settings['ai_can_suggest_slots']);
+        $isAvailabilityBrowse = $this->isAvailabilityBrowseAppointment($appointment);
+        $canSuggestAlternatives = !empty($settings['ai_can_suggest_slots']) || $isAvailabilityBrowse;
 
         if ($this->requestAlreadyCommunicated($appointment, $requestId)) {
             return $this->result(false, 'already_communicated');
@@ -102,7 +103,9 @@ final class CalendarConversationService
         if ($slots === []) {
             $message = $this->safeNoAvailabilityMessage(
                 (string) ($settings['no_availability_message'] ?? ''),
-                'Não encontrei horários disponíveis para essa preferência. Pode me informar outro dia ou período?'
+                $isAvailabilityBrowse
+                    ? 'Não encontrei horários disponíveis no período pesquisado para essa modalidade. Quer tentar outro dia ou período?'
+                    : 'Não encontrei horários disponíveis para essa preferência. Pode me informar outro dia ou período?'
             );
             $send = $this->sendAppointmentMessage(
                 $appointment,
@@ -653,7 +656,11 @@ final class CalendarConversationService
         string $content,
         int $incomingMessageId = 0
     ): array {
-        $decision = $this->confirmationDecision($content);
+        // Sem slot real selecionado, respostas genéricas como "sim", "ok" ou
+        // perguntas de disponibilidade NÃO são confirmações. A guarda só atua quando
+        // o contato pede explicitamente para confirmar/agendar um horário que ainda
+        // não foi tecnicamente selecionado.
+        $decision = $this->confirmationDecision($content, false);
         if ($decision === '') {
             return $this->incomingResult(false, false, 'not_a_confirmation_guard');
         }
@@ -799,11 +806,20 @@ final class CalendarConversationService
         }
     }
 
-    private function confirmationDecision(string $content): string
+    private function confirmationDecision(string $content, bool $allowBareAffirmative = true): string
     {
-        $value = trim(preg_replace('/\s+/u', ' ', $this->normalize($content)) ?? '');
-        $value = trim($value, " \t\n\r\0\x0B.!?,;:");
+        $raw = trim(preg_replace('/\s+/u', ' ', $this->normalize($content)) ?? '');
+        $value = trim($raw, " \t\n\r\0\x0B.!?,;:");
         if ($value === '') {
+            return '';
+        }
+
+        // Uma pergunta sobre agenda/disponibilidade nunca é confirmação. O bug anterior
+        // classificava "Sim, qual horário tem disponível?" como confirmação apenas
+        // porque a frase começava com "sim" e continha a palavra "horário".
+        if (preg_match('/[?]/u', $content) === 1
+            || preg_match('/\b(qual|quais|quando|onde|como)\b.{0,40}\b(horario|horarios|disponibilidade|vaga|vagas)\b/u', $value) === 1
+            || preg_match('/\b(tem|ha|existe|possui)\b.{0,35}\b(horario|horarios|vaga|vagas)\b.{0,20}\b(disponivel|disponiveis)\b/u', $value) === 1) {
             return '';
         }
 
@@ -815,8 +831,21 @@ final class CalendarConversationService
         ];
         foreach ($negative as $candidate) {
             if ($value === $this->normalize($candidate)) {
-                return 'negative';
+                return $allowBareAffirmative ? 'negative' : '';
             }
+        }
+
+        // Sem slot selecionado, a guarda aceita somente um pedido EXPLÍCITO de
+        // confirmação/agendamento. Isso impede que um "sim" responda à pergunta
+        // anterior do agente e seja indevidamente tratado como confirmação de agenda.
+        if (!$allowBareAffirmative) {
+            if (preg_match('/\b(confirmo|confirmar|confirma|confirmado|agendar|agende|marcar|marque)\b/u', $value) !== 1) {
+                return '';
+            }
+            if (preg_match('/\b(nao|não|outro|trocar|mudar|remarcar|cancelar)\b/u', $value) === 1) {
+                return '';
+            }
+            return 'affirmative';
         }
 
         $affirmative = [
@@ -831,7 +860,7 @@ final class CalendarConversationService
         }
 
         if (preg_match('/^(sim|pode|claro|ok|confirmo)\b/u', $value) === 1
-            && preg_match('/\b(confirmar|confirma|agendar|marcar|horario|horário|opcao|opção|esse|este|pode)\b/u', $value) === 1
+            && preg_match('/\b(confirmar|confirma|agendar|marcar|esse|este|pode)\b/u', $value) === 1
             && preg_match('/\b(nao|não|outro|trocar|mudar|remarcar|cancelar)\b/u', $value) !== 1) {
             return 'affirmative';
         }
@@ -1448,6 +1477,18 @@ final class CalendarConversationService
     /** @param array<int,array<string,mixed>> $slots */
     private function optionsMessage(array $settings, array $appointment, array $slots): string
     {
+        if ($this->isAvailabilityBrowseAppointment($appointment)) {
+            return trim(
+                "Encontrei estes horários disponíveis:
+
+"
+                . $this->formatOptions($slots)
+                . "
+
+Responda com o número ou com o horário que prefere."
+            );
+        }
+
         $template = $this->safeAvailabilityTemplate(
             (string) ($settings['availability_options_message'] ?? ''),
             "O horário solicitado não está disponível. Encontrei estas opções:
@@ -1462,6 +1503,12 @@ Responda com o número ou com o horário que prefere."
             '{{horario_preferido}}' => (string) ($appointment['preferred_time_text'] ?? ''),
             '{{nome}}' => (string) ($appointment['contact_name'] ?? ''),
         ]));
+    }
+
+    /** @param array<string,mixed> $appointment */
+    private function isAvailabilityBrowseAppointment(array $appointment): bool
+    {
+        return trim((string) ($appointment['preferred_time_text'] ?? '')) === '';
     }
 
     /** @param array<int,array<string,mixed>> $slots */

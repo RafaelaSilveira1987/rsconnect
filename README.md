@@ -1,3 +1,7 @@
+# RS Connect 36.36.28
+
+> **Hotfix da agenda conversacional:** perguntas como “Sim, qual horário tem disponível?” não são mais tratadas como confirmação. Com a modalidade já definida, o RS Connect consulta a agenda real e apresenta somente horários que respeitam as regras cadastradas do agente. Não há migration nova; permanece `120_agent_turn_state_cursor.sql`.
+
 # RS Connect 36.36.3
 
 > **Hotfix do Production Readiness:** o preflight passa a tratar somente tenants `LIVE` como escopo bloqueante de Evolution/WhatsApp e de carga operacional produtiva. Ambientes `ONBOARDING`, `READY` e `SUSPENDED` continuam visíveis como informação, mas não bloqueiam a release. Não há migration nova.

@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.36.27",
-  "release_name": "Agenda factual e sem promessas duplicadas",
+  "package_version": "36.36.28",
+  "release_name": "Consulta real de horários e confirmação sem falso positivo",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",

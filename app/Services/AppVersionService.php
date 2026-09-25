@@ -210,7 +210,8 @@ final class AppVersionService
     // Compatibilidade histórica: REQUIRED_MIGRATION = '119_agent_workflow_runtime_contract.sql';
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.26 — Motor de IA com contrato de resposta';
     // Compatibilidade histórica: REQUIRED_MIGRATION = '120_agent_turn_state_cursor.sql';
-    public const PACKAGE_LABEL = 'RS Connect 36.36.27 — Agenda factual e sem promessas duplicadas';
+    // Marcador histórico: RS Connect 36.36.27 — Agenda factual e sem promessas duplicadas
+    public const PACKAGE_LABEL = 'RS Connect 36.36.28 — Consulta real de horários e confirmação sem falso positivo';
     public const REQUIRED_MIGRATION = '120_agent_turn_state_cursor.sql';
 
     private PDO $pdo;
