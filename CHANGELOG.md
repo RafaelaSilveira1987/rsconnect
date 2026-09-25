@@ -1,3 +1,10 @@
+# 36.36.21 — Ritmo conversacional e entrega em blocos
+
+- A configuração de respostas agora define também o ritmo: responder apenas ao que foi perguntado e avançar uma única etapa por turno, ou permitir antecipação de informações relacionadas.
+- O modo “Automático conforme o conteúdo” passa a separar respostas longas mesmo quando o provedor devolve um único parágrafo.
+- Respostas determinísticas de triagem/políticas também respeitam a configuração de blocos, inclusive a apresentação inicial seguida da próxima pergunta.
+- Nenhuma regra de agenda, SLA, fora do horário ou workflow foi removida; a migration obrigatória continua sendo a 119.
+
 ## 36.36.20 — 2026-09-24 — Runtime do agente orientado pela configuração
 
 - remove o mapa hardcoded de `step_key -> campo` do runtime; cada etapa de coleta passa a usar os vínculos persistidos em `tenant_agent_workflow_steps.config_json`;

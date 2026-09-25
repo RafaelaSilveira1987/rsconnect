@@ -116,9 +116,14 @@ final class AgentConversationBehaviorService
         if (!in_array($mode, ['single', 'blocks', 'auto'], true)) {
             $mode = 'auto';
         }
+        $scope = strtolower(trim((string) ($delivery['scope'] ?? $base['response_delivery']['scope'] ?? 'asked_only')));
+        if (!in_array($scope, ['asked_only', 'related'], true)) {
+            $scope = 'asked_only';
+        }
         $base['response_delivery'] = [
             'mode' => $mode,
             'max_blocks' => max(2, min(4, (int) ($delivery['max_blocks'] ?? $base['response_delivery']['max_blocks'] ?? 3))),
+            'scope' => $scope,
         ];
 
         $modalitiesRaw = is_array($raw['modalities'] ?? null) ? $raw['modalities'] : [];
@@ -343,9 +348,19 @@ final class AgentConversationBehaviorService
 
         $delivery = $settings['response_delivery'] ?? [];
         $mode = (string) ($delivery['mode'] ?? 'auto');
+        $scope = (string) ($delivery['scope'] ?? 'asked_only');
+        if ($scope === 'asked_only') {
+            $lines[] = '- Ritmo da conversa: responda somente o que o contato perguntou ou informou no TURNO ATUAL. Não antecipe valor, pagamento, modalidade, endereço, disponibilidade ou outras informações só porque estejam configuradas. Depois de responder ao pedido atual, retome somente a PRÓXIMA etapa obrigatória da Ordem do atendimento, com no máximo uma pergunta de coleta, e aguarde a resposta antes de avançar.';
+        } else {
+            $lines[] = '- Ritmo da conversa: você pode acrescentar informações diretamente relacionadas ao assunto perguntado, mas ainda deve fazer no máximo uma pergunta de coleta por resposta e respeitar a próxima etapa da Ordem do atendimento.';
+        }
         if ($mode !== 'single') {
             $max = (int) ($delivery['max_blocks'] ?? 3);
-            $lines[] = '- Forma de resposta no WhatsApp: organize respostas com assuntos diferentes em até ' . $max . ' blocos curtos, separados por uma linha em branco. Cada bloco deve fazer sentido sozinho; evite fragmentar frases.';
+            if ($mode === 'blocks') {
+                $lines[] = '- Forma de resposta no WhatsApp: prefira mensagens separadas para assuntos diferentes, em até ' . $max . ' blocos curtos. Cada bloco deve fazer sentido sozinho; evite fragmentar frases.';
+            } else {
+                $lines[] = '- Forma de resposta no WhatsApp: quando houver mais de um assunto necessário na mesma resposta, separe-os em parágrafos curtos; o sistema poderá entregá-los em até ' . $max . ' balões. Evite um parágrafo único muito longo.';
+            }
         }
 
         $noAvailability = $settings['no_availability'] ?? [];
@@ -391,22 +406,31 @@ final class AgentConversationBehaviorService
         if (count($paragraphs) >= 2) {
             return $this->capBlocks($paragraphs, $max);
         }
-        if ($mode === 'auto' || mb_strlen($reply) < 170) {
-            return [$reply];
-        }
 
         $sentences = array_values(array_filter(array_map('trim', preg_split('/(?<=[\.!?])\s+(?=[\p{Lu}\d])/u', $reply) ?: [])));
         if (count($sentences) < 2) {
             return [$reply];
         }
 
-        $target = min($max, count($sentences));
-        $blocks = array_fill(0, $target, '');
-        foreach ($sentences as $index => $sentence) {
-            $slot = min($target - 1, (int) floor($index * $target / count($sentences)));
-            $blocks[$slot] = trim($blocks[$slot] . ' ' . $sentence);
+        // "Automático" não depende apenas de o modelo inserir linhas em branco.
+        // Respostas longas ou com uma pergunta final são separadas pelo backend para
+        // respeitar a configuração mesmo quando o provedor devolve um parágrafo único.
+        if ($mode === 'auto') {
+            $hasFinalQuestion = str_ends_with(trim((string) end($sentences)), '?');
+            if (mb_strlen($reply) < 190 && !$hasFinalQuestion) {
+                return [$reply];
+            }
+            $target = min($max, max(2, (int) ceil(mb_strlen($reply) / 220)));
+            if ($hasFinalQuestion && count($sentences) >= 2) {
+                $question = array_pop($sentences);
+                $body = trim(implode(' ', $sentences));
+                $bodyBlocks = $body !== '' ? $this->balancedSentenceBlocks($body, max(1, $target - 1)) : [];
+                return $this->capBlocks(array_values(array_filter(array_merge($bodyBlocks, [$question]))), $max);
+            }
+            return $this->balancedSentenceBlocks($reply, $target);
         }
-        return array_values(array_filter($blocks));
+
+        return $this->balancedSentenceBlocks($reply, min($max, count($sentences)));
     }
 
     /** @return array<string,mixed>|null */
@@ -626,7 +650,7 @@ final class AgentConversationBehaviorService
                 'required_before_schedule' => false,
                 'prompt' => 'Antes de avançarmos, pode me contar brevemente o que você está buscando neste atendimento?',
             ],
-            'response_delivery' => ['mode' => 'auto', 'max_blocks' => 3],
+            'response_delivery' => ['mode' => 'auto', 'max_blocks' => 3, 'scope' => 'asked_only'],
             'modalities' => [
                 'online' => ['enabled' => false, 'channel' => '', 'location' => '', 'allowed_days' => [], 'message' => ''],
                 'presencial' => ['enabled' => false, 'channel' => '', 'location' => '', 'allowed_days' => [], 'message' => ''],
@@ -639,6 +663,25 @@ final class AgentConversationBehaviorService
             ],
             'special_routes' => [],
         ];
+    }
+
+    /** @return array<int,string> */
+    private function balancedSentenceBlocks(string $reply, int $target): array
+    {
+        $sentences = array_values(array_filter(array_map('trim', preg_split('/(?<=[\.!?])\s+(?=[\p{Lu}\d])/u', trim($reply)) ?: [])));
+        if ($sentences === []) {
+            return [trim($reply)];
+        }
+        $target = max(1, min($target, count($sentences)));
+        if ($target === 1) {
+            return [trim(implode(' ', $sentences))];
+        }
+        $blocks = array_fill(0, $target, '');
+        foreach ($sentences as $index => $sentence) {
+            $slot = min($target - 1, (int) floor($index * $target / count($sentences)));
+            $blocks[$slot] = trim($blocks[$slot] . ' ' . $sentence);
+        }
+        return array_values(array_filter($blocks));
     }
 
     /** @param array<int,string> $blocks @return array<int,string> */

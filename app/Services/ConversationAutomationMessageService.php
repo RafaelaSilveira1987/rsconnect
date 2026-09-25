@@ -86,6 +86,11 @@ final class ConversationAutomationMessageService
             $previous->execute($previousParams);
             $message = FirstAutomatedReplyService::compose($message, is_array($agent) ? $agent : [], (bool) $previous->fetchColumn());
 
+            $blocks = (new AgentConversationBehaviorService())->splitReply($tenantId, $message, $pdo);
+            if ($blocks === []) {
+                $blocks = [$message];
+            }
+
             $service = new EvolutionService(
                 (string) $instance['base_url'],
                 Crypto::decrypt((string) $instance['api_key_encrypted']),
@@ -94,65 +99,85 @@ final class ConversationAutomationMessageService
                 filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL) !== false,
                 trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) !== '' ? trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) : null
             );
-            $response = $service->sendText($phone, $message);
-            $body = is_array($response['body'] ?? null) ? $response['body'] : [];
-            $externalId = $this->extractMessageId($body);
-            $sentAt = Clock::nowUtc();
 
             $senderDisplayName = trim((string) ($agent['name'] ?? ''));
             $hasSenderDisplay = $this->hasColumn($pdo, 'conversation_messages', 'sender_display_name');
-            if ($hasSenderDisplay) {
+            $externalId = null;
+            $lastSentAt = Clock::nowUtc();
+            $lastBlock = '';
+
+            foreach ($blocks as $index => $block) {
+                $block = trim((string) $block);
+                if ($block === '') {
+                    continue;
+                }
+
+                $response = $service->sendText($phone, $block);
+                $body = is_array($response['body'] ?? null) ? $response['body'] : [];
+                $externalId = $this->extractMessageId($body);
+                $lastSentAt = Clock::nowUtc();
+                $lastBlock = $block;
+
+                if ($hasSenderDisplay) {
+                    $pdo->prepare(
+                        'INSERT INTO conversation_messages
+                            (tenant_id, conversation_id, evolution_message_id, direction, sender_type, sender_display_name, message_type, content, status, raw_payload_json, sent_at)
+                         VALUES
+                            (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", :sender_display_name, "text", :content, "sent", :raw_payload, :sent_at)'
+                    )->execute([
+                        'tenant_id' => $tenantId,
+                        'conversation_id' => $conversationId,
+                        'external_id' => $externalId,
+                        'sender_display_name' => $senderDisplayName !== '' ? $senderDisplayName : null,
+                        'content' => $block,
+                        'raw_payload' => json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        'sent_at' => $lastSentAt,
+                    ]);
+                } else {
+                    $pdo->prepare(
+                        'INSERT INTO conversation_messages
+                            (tenant_id, conversation_id, evolution_message_id, direction, sender_type, message_type, content, status, raw_payload_json, sent_at)
+                         VALUES
+                            (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", "text", :content, "sent", :raw_payload, :sent_at)'
+                    )->execute([
+                        'tenant_id' => $tenantId,
+                        'conversation_id' => $conversationId,
+                        'external_id' => $externalId,
+                        'content' => $block,
+                        'raw_payload' => json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        'sent_at' => $lastSentAt,
+                    ]);
+                }
+
+                $eventMetadata = $metadata;
+                if (count($blocks) > 1) {
+                    $eventMetadata['delivery_block'] = $index + 1;
+                    $eventMetadata['delivery_blocks_total'] = count($blocks);
+                }
                 $pdo->prepare(
-                    'INSERT INTO conversation_messages
-                        (tenant_id, conversation_id, evolution_message_id, direction, sender_type, sender_display_name, message_type, content, status, raw_payload_json, sent_at)
-                     VALUES
-                        (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", :sender_display_name, "text", :content, "sent", :raw_payload, :sent_at)'
+                    'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
+                     VALUES (:tenant_id, :conversation_id, :event_type, :description, :metadata_json)'
                 )->execute([
                     'tenant_id' => $tenantId,
                     'conversation_id' => $conversationId,
-                    'external_id' => $externalId,
-                    'sender_display_name' => $senderDisplayName !== '' ? $senderDisplayName : null,
-                    'content' => $message,
-                    'raw_payload' => json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    'sent_at' => $sentAt,
-                ]);
-            } else {
-                $pdo->prepare(
-                    'INSERT INTO conversation_messages
-                        (tenant_id, conversation_id, evolution_message_id, direction, sender_type, message_type, content, status, raw_payload_json, sent_at)
-                     VALUES
-                        (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", "text", :content, "sent", :raw_payload, :sent_at)'
-                )->execute([
-                    'tenant_id' => $tenantId,
-                    'conversation_id' => $conversationId,
-                    'external_id' => $externalId,
-                    'content' => $message,
-                    'raw_payload' => json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    'sent_at' => $sentAt,
+                    'event_type' => mb_substr($eventType, 0, 120),
+                    'description' => mb_substr($block, 0, 500),
+                    'metadata_json' => $eventMetadata !== [] ? json_encode($eventMetadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
                 ]);
             }
 
-            $pdo->prepare(
-                'UPDATE conversations SET last_message_at = :sent_at, last_message_preview = :preview,
-                     status = IF(status = "closed", "open", status)
-                 WHERE id = :id AND tenant_id = :tenant_id'
-            )->execute([
-                'sent_at' => $sentAt,
-                'preview' => mb_substr($message, 0, 255),
-                'id' => $conversationId,
-                'tenant_id' => $tenantId,
-            ]);
-
-            $pdo->prepare(
-                'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
-                 VALUES (:tenant_id, :conversation_id, :event_type, :description, :metadata_json)'
-            )->execute([
-                'tenant_id' => $tenantId,
-                'conversation_id' => $conversationId,
-                'event_type' => mb_substr($eventType, 0, 120),
-                'description' => mb_substr($message, 0, 500),
-                'metadata_json' => $metadata !== [] ? json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
-            ]);
+            if ($lastBlock !== '') {
+                $pdo->prepare(
+                    'UPDATE conversations SET last_message_at = :sent_at, last_message_preview = :preview,
+                         status = IF(status = "closed", "open", status)
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute([
+                    'sent_at' => $lastSentAt,
+                    'preview' => mb_substr($lastBlock, 0, 255),
+                    'id' => $conversationId,
+                    'tenant_id' => $tenantId,
+                ]);
+            }
 
             return ['ok' => true, 'error' => null, 'external_id' => $externalId];
         } catch (Throwable $exception) {
