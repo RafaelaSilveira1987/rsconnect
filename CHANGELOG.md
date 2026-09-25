@@ -1,3 +1,13 @@
+# 36.36.25 — Respostas naturais guiadas pelas regras
+
+- corrige o modo **Natural com regras** para que perguntas obrigatórias da triagem deixem de ser enviadas como texto literal antes da IA; o backend continua escolhendo a etapa e bloqueando a agenda, enquanto o modelo redige a mensagem;
+- o texto cadastrado em cada etapa passa a ser tratado como **objetivo de coleta** nos modos Natural e Prompt Studio, permitindo acolhimento, contexto e transições naturais sem perder a ordem configurada;
+- o modo **Perguntas exatamente como cadastradas** permanece disponível de forma explícita para empresas que realmente desejam texto fixo;
+- pedidos como “quero saber mais”, “me explique melhor” e “como funciona” são tratados como solicitações informativas mesmo sem ponto de interrogação e devem ser respondidos usando somente prompt, base de conhecimento e regras cadastradas;
+- reforça o tom acolhedor: quando o turno trouxer relato emocionalmente relevante, a resposta deve reconhecer brevemente o contexto antes da próxima pergunta;
+- remove do prompt central a regra específica “como funciona a terapia” e a substitui por uma regra genérica orientada pela configuração, evitando conteúdo de nicho no motor;
+- mantém Policy Engine, ordem do atendimento, disponibilidade real, aprovação humana e migration obrigatória 119; não há migration nova.
+
 # 36.36.24 — Tom configurável, humanização e Ordem do atendimento expansível
 
 - adiciona **Tom do atendimento** por assistente, com opções simples como acolhedor e empático, cordial e profissional, objetivo, leve ou personalizado;

@@ -161,7 +161,8 @@ final class AgentTriageService
 
         $handledByRule = (empty($decision['allowed']) && in_array($decisionType, ['block', 'handoff'], true))
             || $warnNeedsNotification;
-        $promptMode = strtolower(trim((string) ($profile['interaction_mode'] ?? 'hybrid'))) === 'prompt';
+        $interactionMode = strtolower(trim((string) ($profile['interaction_mode'] ?? 'hybrid')));
+        $usesAiComposer = in_array($interactionMode, ['hybrid', 'prompt'], true);
         if ($schedulingIntent && $missingBeforeSchedule !== [] && !$handledByRule) {
             $collectionMessage = trim((string) ($missingBeforeSchedule[0]['prompt_text'] ?? '')) ?: 'Antes de consultar a agenda, preciso confirmar uma informação.';
             if ($nextField === 'patient_age' && $currentField === 'patient_age' && $this->isApproximateAgeAnswer($text)) {
@@ -200,7 +201,10 @@ final class AgentTriageService
             'conversation_continues' => $isScopedCalendarRestriction || $decisionType !== 'block',
             'calendar_allowed' => $schedulingIntent ? !empty($decision['allowed']) : ($eligibility !== 'blocked'),
             'should_use_rule_message' => $handledByRule && trim((string) ($decision['message'] ?? '')) !== '',
-            'should_use_ai' => !$handledByRule && !($schedulingIntent && $missingBeforeSchedule !== [] && !$promptMode),
+            // Nos modos Natural com regras e Prompt Studio, o texto da etapa é um
+            // objetivo de coleta para a IA, não uma resposta pronta. Somente o modo
+            // Formulário envia literalmente a pergunta cadastrada.
+            'should_use_ai' => !$handledByRule && !($schedulingIntent && $missingBeforeSchedule !== [] && !$usesAiComposer),
         ];
     }
 
@@ -508,8 +512,9 @@ final class AgentTriageService
                     $message = rtrim($message, " .?!") . '. Informe um valor exato em anos.';
                 }
                 $interactionMode = strtolower(trim((string) ($profile['interaction_mode'] ?? 'hybrid')));
+                $usesAiComposer = in_array($interactionMode, ['hybrid', 'prompt'], true);
                 $behaviorService = new AgentConversationBehaviorService();
-                $mixedInformationalTurn = $interactionMode === 'hybrid' && $behaviorService->hasInformationalQuestion($content);
+                $mixedInformationalTurn = $usesAiComposer && $behaviorService->hasInformationalQuestion($content);
                 $result['handled'] = true;
                 $result['allowed'] = false;
                 $result['code'] = 'triage_incomplete';
@@ -525,18 +530,15 @@ final class AgentTriageService
                 ];
                 $this->logDecision($pdo, $tenantId, $conversationId, $contactId, $result['decision'], $collected);
 
-                if (($interactionMode === 'prompt' || $mixedInformationalTurn) && !$sendMessages) {
+                if ($usesAiComposer) {
+                    // Natural com regras e Prompt Studio sempre deixam a IA redigir a
+                    // próxima pergunta. O backend continua escolhendo qual é a etapa,
+                    // persistindo o estado e bloqueando a agenda; o modelo controla só
+                    // a linguagem, o acolhimento e a resposta informativa do turno.
                     $result['skip_ai'] = false;
                     $result['terminal_handled'] = false;
-                    $result['mixed_informational_turn'] = $mixedInformationalTurn;
-                } elseif ($interactionMode === 'prompt' || $mixedInformationalTurn) {
-                    // Prompt Studio redige a pergunta. No modo híbrido, um turno misto
-                    // (ex.: valor + pedido de agenda) também vai à IA para responder a
-                    // dúvida configurada e só então fazer a próxima pergunta obrigatória.
-                    // A agenda permanece bloqueada pela decisão collect acima.
-                    $result['skip_ai'] = false;
-                    $result['terminal_handled'] = false;
-                    $result['prompt_mode'] = true;
+                    $result['ai_compose_collection'] = true;
+                    $result['prompt_mode'] = $interactionMode === 'prompt';
                     $result['mixed_informational_turn'] = $mixedInformationalTurn;
                 } else {
                     $result['skip_ai'] = true;

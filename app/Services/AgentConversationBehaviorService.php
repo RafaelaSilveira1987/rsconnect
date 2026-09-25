@@ -277,7 +277,7 @@ final class AgentConversationBehaviorService
         }
 
         return (bool) preg_match(
-            '/\b(qual|quanto|valor|preco|preço|pagamento|pagar|pix|cartao|cartão|transferencia|transferência|como funciona|como e|como é|onde|local|endereco|endereço|meet|online|presencial)\b/u',
+            '/\b(qual|quanto|valor|preco|preço|pagamento|pagar|pix|cartao|cartão|transferencia|transferência|como funciona|como e|como é|onde|local|endereco|endereço|meet|online|presencial|quero saber mais|gostaria de saber mais|saber mais|mais informacoes|mais informações|me explique|pode explicar)\b/u',
             $text
         );
     }
@@ -287,6 +287,14 @@ final class AgentConversationBehaviorService
     {
         $settings = $this->settingsFromProfile($profile);
         $lines = [];
+        $interactionMode = strtolower(trim((string) ($profile['interaction_mode'] ?? 'hybrid')));
+        if ($interactionMode === 'form') {
+            $lines[] = '- Redação das perguntas: modo Formulário. Preserve o texto cadastrado para a etapa atual.';
+        } elseif ($interactionMode === 'prompt') {
+            $lines[] = '- Redação das perguntas: use o Prompt Studio para formular naturalmente a etapa atual. A pergunta cadastrada define o objetivo de coleta e não precisa ser copiada literalmente.';
+        } else {
+            $lines[] = '- Redação das perguntas: use linguagem natural e o tom configurado. A pergunta cadastrada define o objetivo da etapa, não uma resposta pronta. Se o turno atual trouxer contexto, dúvida ou relato sensível, responda/reconheça brevemente antes da próxima pergunta.';
+        }
 
         if (!empty($settings['demand']['enabled'])) {
             $prompt = trim((string) ($settings['demand']['prompt'] ?? ''));

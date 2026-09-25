@@ -205,7 +205,8 @@ final class AppVersionService
     // Compatibilidade histórica: RS Connect 36.36.17 — Consistência das regras do agente e SLA Admin
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.20 — Runtime do agente orientado pela configuração';
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.21 — Ritmo conversacional e entrega em blocos';
-    public const PACKAGE_LABEL = 'RS Connect 36.36.24 — Tom configurável e fluxo personalizável';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.24 — Tom configurável e fluxo personalizável';
+    public const PACKAGE_LABEL = 'RS Connect 36.36.25 — Respostas naturais guiadas pelas regras';
     public const REQUIRED_MIGRATION = '119_agent_workflow_runtime_contract.sql';
 
     private PDO $pdo;

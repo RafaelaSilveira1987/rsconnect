@@ -243,10 +243,10 @@ $humanizeAgentRule = static function (string $key): string {
                             <span>Como o assistente faz as perguntas</span>
                             <select name="agent_interaction_mode">
                                 <option value="hybrid" <?= ($agentRulesProfile['interaction_mode'] ?? 'hybrid') === 'hybrid' ? 'selected' : '' ?>>Natural com regras — recomendado</option>
-                                <option value="form" <?= ($agentRulesProfile['interaction_mode'] ?? '') === 'form' ? 'selected' : '' ?>>Perguntas configuradas</option>
+                                <option value="form" <?= ($agentRulesProfile['interaction_mode'] ?? '') === 'form' ? 'selected' : '' ?>>Perguntas exatamente como cadastradas</option>
                                 <option value="prompt" <?= ($agentRulesProfile['interaction_mode'] ?? '') === 'prompt' ? 'selected' : '' ?>>Prompt Studio com as mesmas travas</option>
                             </select>
-                            <small>A forma de falar pode variar; as regras abaixo continuam sendo verificadas pelo sistema.</small>
+                            <small>Em “Natural com regras” e “Prompt Studio”, a IA redige a resposta e a próxima pergunta respeitando tom, contexto e regras. O modo exato reproduz o texto cadastrado.</small>
                         </label>
                         <div class="agent-operation-version">
                             <span>Modelo aplicado</span>

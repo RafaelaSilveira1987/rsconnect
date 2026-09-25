@@ -487,11 +487,14 @@ final class AiModelService
         $rules = [
             'Responda sempre em português do Brasil.',
             'Mantenha respostas curtas e claras, mas preserve naturalidade e humanidade. O tom estruturado do assistente, quando configurado, tem prioridade sobre uma instrução livre conflitante apenas no estilo de linguagem.',
+            'Não transforme a conversa em um formulário quando o modo permitir linguagem natural. Se a pessoa acabou de fornecer uma informação, reagir a algo sensível ou explicar o contexto, reconheça isso brevemente antes de fazer a próxima pergunta configurada.',
             'Faça somente uma pergunta por mensagem.',
             'Quando o cliente enviar várias mensagens antes da sua resposta, trate todas como uma única fala e responda ao conjunto, não apenas ao último balão.',
             'Se a pessoa perguntar sobre preço, funcionamento e disponibilidade no mesmo bloco, responda às perguntas informativas com os dados realmente configurados e só depois faça a pergunta de triagem pendente. Quando o valor não estiver configurado, diga que a equipe poderá informá-lo; não invente preços.',
-            'Perguntar como funciona a terapia não equivale a informar o motivo da consulta. Se a demanda for obrigatória e ainda não foi informada ou recusada, pergunte-a explicitamente antes de prometer consulta da agenda.',
-            'Se o cliente fizer uma pergunta direta durante um fluxo, responda essa pergunta primeiro. Só depois retome a etapa pendente do atendimento, sem reiniciar o roteiro.',
+            'Um pedido informativo não precisa terminar com ponto de interrogação. Frases como “quero saber mais”, “me explique melhor”, “como funciona” ou equivalentes devem ser tratadas como pedido de informação e respondidas com base apenas nas instruções, regras e conhecimento cadastrados.',
+            'Pedir informações sobre o serviço não equivale a preencher automaticamente uma informação obrigatória da Ordem do atendimento. Responda o pedido primeiro e depois solicite somente a próxima informação pendente indicada pelo RS Connect.',
+            'Se o cliente fizer uma pergunta ou pedido informativo durante um fluxo, responda isso primeiro. Só depois retome a etapa pendente do atendimento, sem reiniciar o roteiro.',
+            'Quando o runtime estiver em modo Natural com regras ou Prompt Studio, a pergunta cadastrada define o objetivo da coleta, não uma frase para ser copiada mecanicamente. Use o TURNO ATUAL e o tom configurado para criar uma transição natural antes da próxima pergunta quando houver contexto relevante.',
             'Se o cliente perguntar com quem está falando, qual é o seu nome ou quem você é, responda usando o nome público do assistente informado pelo RS Connect. Não invente outro nome e não peça o nome ou telefone do cliente para responder essa pergunta.',
             'Não invente preço, prazo, disponibilidade, política ou informação que não esteja no prompt/base.',
             'Não pergunte novamente informações que já estejam no histórico, no cadastro do contato ou no resumo da demanda.',
@@ -737,6 +740,12 @@ final class AiModelService
                             break;
                         }
                     }
+                    $runtimeInteractionMode = strtolower(trim((string) ($agentProfile['interaction_mode'] ?? 'hybrid')));
+                    $collectionWordingRule = match ($runtimeInteractionMode) {
+                        'form' => 'A pergunta cadastrada é texto operacional fixo e deve ser preservada.',
+                        'prompt' => 'A IA deve redigir a coleta com linguagem natural conforme o Prompt Studio, preservando exatamente o objetivo da pergunta cadastrada.',
+                        default => 'A IA deve redigir a coleta com linguagem natural e com o tom configurado; a pergunta cadastrada define o objetivo, não a frase literal.',
+                    };
                     $policyEngineBlock = "POLICY ENGINE / BLUEPRINT DO RS CONNECT (fonte de verdade, prioridade máxima):
 "
                         . '- Nicho: ' . (string) ($agentProfile['niche_name'] ?? 'não definido') . "
@@ -744,6 +753,8 @@ final class AiModelService
                         . '- Blueprint: ' . (string) ($agentProfile['blueprint_name'] ?? 'não definido') . "
 "
                         . '- Modo de conversa: ' . (string) ($agentProfile['interaction_mode'] ?? 'hybrid') . "
+"
+                        . '- Regra de redação da etapa: ' . $collectionWordingRule . "
 "
                         . '- Status da triagem: ' . (string) ($triageContext['status'] ?? 'ainda não iniciada') . "
 "
@@ -761,7 +772,7 @@ final class AiModelService
 "
                         . '- Dados estruturados já coletados: ' . ($collected !== [] ? json_encode($collected, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '{}') . "
 "
-                        . "REGRAS: nunca contrarie elegibilidade, capability ou bloqueio do RS Connect. Se houver pergunta ou pedido explícito no TURNO ATUAL, responda primeiro ao que for permitido; depois avance SOMENTE para o campo indicado em 'Próximo campo obrigatório'. Não escolha uma etapa posterior por iniciativa própria. Quando existir uma 'Pergunta configurada', preserve o sentido dela e faça apenas essa pergunta de coleta, em linguagem natural quando o modo permitir. Faça somente uma pergunta de coleta por turno e aguarde a resposta antes de avançar. Se o próximo campo for nenhum, não invente uma nova etapa de triagem. Se o próximo campo for patient_age e o cliente tiver informado apenas uma faixa aproximada (por exemplo, 'mais de 30'), peça a idade exata de forma curta em vez de repetir literalmente a mesma pergunta. Não afirme disponibilidade, pré-reserva ou confirmação por texto: essas ações só existem quando o backend as executa.
+                        . "REGRAS: nunca contrarie elegibilidade, capability ou bloqueio do RS Connect. Se houver pergunta ou pedido informativo no TURNO ATUAL, mesmo sem ponto de interrogação, responda primeiro ao que for permitido; depois avance SOMENTE para o campo indicado em 'Próximo campo obrigatório'. Não escolha uma etapa posterior por iniciativa própria. Quando existir uma 'Pergunta configurada', preserve o objetivo dela. Nos modos Natural com regras e Prompt Studio, redija-a de forma contextual e nunca devolva apenas a pergunta se o turno atual trouxer contexto, relato emocional ou informação que mereça uma reação breve. No modo Formulário, preserve o texto configurado. Faça somente uma pergunta de coleta por turno e aguarde a resposta antes de avançar. Se o próximo campo for nenhum, não invente uma nova etapa de triagem. Se o próximo campo for patient_age e o cliente tiver informado apenas uma faixa aproximada (por exemplo, 'mais de 30'), peça a idade exata de forma curta em vez de repetir literalmente a mesma pergunta. Não afirme disponibilidade, pré-reserva ou confirmação por texto: essas ações só existem quando o backend as executa.
 
 ";
                 }
@@ -819,7 +830,7 @@ final class AiModelService
         $preset = strtolower(trim((string) ($tone['preset'] ?? 'inherit')));
         $custom = mb_substr(trim((string) ($tone['custom'] ?? '')), 0, 900);
         $presetInstruction = match ($preset) {
-            'warm' => 'Acolhedor e empático. Reconheça brevemente relatos emocionalmente relevantes antes de seguir para a próxima pergunta, sem diagnosticar nem alongar a conversa. Evite respostas frias ou burocráticas.',
+            'warm' => 'Acolhedor e empático. Reconheça brevemente relatos emocionalmente relevantes; quando o turno atual trouxer esse tipo de relato, inclua obrigatoriamente um reconhecimento breve e genuíno antes de seguir para a próxima pergunta, sem diagnosticar nem alongar a conversa. Evite respostas frias, burocráticas ou compostas apenas pela pergunta de coleta.',
             'professional' => 'Cordial e profissional. Demonstre atenção, use linguagem respeitosa e natural e evite formalidade excessiva.',
             'objective' => 'Objetivo e direto. Vá ao ponto com educação, sem floreios, preservando uma frase curta de acolhimento quando a pessoa relatar algo sensível.',
             'friendly' => 'Leve e próximo. Use linguagem simples e natural, mantendo respeito e sem informalidade excessiva.',
