@@ -17,19 +17,19 @@ final class AgentTriageService
      */
     public function handleIncoming(PDO $pdo, array $instance, int $contactId, int $conversationId, string $content, int $incomingMessageId = 0): array
     {
-        return $this->process($pdo, $instance, $contactId, $conversationId, $content, true, false);
+        return $this->process($pdo, $instance, $contactId, $conversationId, $content, true, false, $incomingMessageId);
     }
 
     /** @return array<string,mixed> */
     public function schedulingGate(PDO $pdo, array $instance, int $contactId, int $conversationId, string $content): array
     {
-        return $this->process($pdo, $instance, $contactId, $conversationId, $content, false, true);
+        return $this->process($pdo, $instance, $contactId, $conversationId, $content, false, true, 0);
     }
 
     /** @return array<string,mixed> */
-    public function context(int $tenantId, int $conversationId): array
+    public function context(int $tenantId, int $conversationId, ?PDO $pdo = null): array
     {
-        $pdo = Database::connection();
+        $pdo ??= Database::connection();
         if (!$this->tableExists($pdo, 'conversation_triage_sessions')) {
             return [];
         }
@@ -208,8 +208,36 @@ final class AgentTriageService
         ];
     }
 
+    /**
+     * Simula um burst de mensagens exatamente como o runtime agrupado o consome.
+     * Útil para regressão de respostas enviadas em balões separados antes da IA falar.
+     *
+     * @param array<string,mixed> $profile
+     * @param array<string,mixed> $state
+     * @param array<int,string> $messages
+     * @return array<string,mixed>
+     */
+    public function simulateMessageBurst(array $profile, array $state, array $messages): array
+    {
+        $profile = (new AgentConversationBehaviorService())->applyOperationalOverridesToProfile($profile);
+        $fields = is_array($profile['triage_fields'] ?? null) ? $profile['triage_fields'] : [];
+        $collected = is_array($state['collected'] ?? null) ? $state['collected'] : [];
+        $currentField = trim((string) ($state['current_field_key'] ?? '')) ?: null;
+        $rows = [];
+        foreach (array_values($messages) as $index => $message) {
+            $rows[] = ['id' => $index + 1, 'content' => (string) $message];
+        }
+        $result = $this->consumeTurnMessages($fields, $collected, $currentField, $rows, 0);
+        return [
+            'collected' => $result['collected'],
+            'current_field_key' => $result['current_field'],
+            'demand_captured' => $result['demand_captured'],
+            'last_processed_incoming_id' => $result['last_processed_incoming_id'],
+        ];
+    }
+
     /** @return array<string,mixed> */
-    private function process(PDO $pdo, array $instance, int $contactId, int $conversationId, string $content, bool $sendMessages, bool $forceScheduling): array
+    private function process(PDO $pdo, array $instance, int $contactId, int $conversationId, string $content, bool $sendMessages, bool $forceScheduling, int $incomingMessageId = 0): array
     {
         $result = [
             'handled' => false,
@@ -296,26 +324,50 @@ final class AgentTriageService
             } catch (Throwable) {
             }
 
-            $contextText = $this->recentIncomingContext($pdo, $conversationId, $content);
-            $normalizedContext = $this->normalize($contextText);
+            $fields = is_array($profile['triage_fields'] ?? null) ? $profile['triage_fields'] : [];
             $currentField = trim((string) ($session['current_field_key'] ?? '')) ?: null;
-            $collected = $this->extractDeterministic($collected, $contextText, $normalizedContext, $currentField, $content);
+            $startingCurrentField = $currentField;
+            $lastProcessedIncomingId = max(0, (int) ($session['last_processed_incoming_id'] ?? 0));
+
+            // Mensagens agrupadas precisam ser consumidas UMA A UMA. Antes desta
+            // correção o burst "Aline\ntem 19 anos" era passado inteiro para o
+            // extrator do campo patient_name; como o bloco já não parecia um nome
+            // simples, o nome era perdido e o cursor voltava a perguntar a mesma coisa.
+            // O cursor persistido por mensagem também impede que um webhook posterior
+            // reinterprete o início do mesmo burst como resposta de outra etapa.
+            $turnMessages = $this->incomingTurnMessages(
+                $pdo,
+                $conversationId,
+                $lastProcessedIncomingId,
+                $incomingMessageId,
+                $content
+            );
+            $consumedTurn = $this->consumeTurnMessages(
+                $fields,
+                $collected,
+                $currentField,
+                $turnMessages,
+                $lastProcessedIncomingId
+            );
+            $collected = $consumedTurn['collected'];
+            $currentField = $consumedTurn['current_field'];
+            $contextParts = $consumedTurn['context_parts'];
+            $processedIncomingId = $consumedTurn['last_processed_incoming_id'];
+            $demandCapturedThisTurn = $consumedTurn['demand_captured'];
+
+            $contextText = $contextParts !== [] ? implode("\n", $contextParts) : $content;
+            $normalizedContext = $this->normalize($contextText);
 
             // A triagem aceita respostas curtas a uma pergunta explícita sobre a demanda
             // (ex.: "Ansiedade"), mas o fluxo de grupos usa outro extrator. Sincronizar
             // evita deixar a agenda bloqueada como "demanda pendente" depois da coleta.
-            if ($currentField === 'brief_demand'
-                && trim((string) ($collected['brief_demand'] ?? '')) !== '') {
+            if ($demandCapturedThisTurn && trim((string) ($collected['brief_demand'] ?? '')) !== '') {
                 (new ConversationFlowService())->recordStructuredDemand(
                     $pdo,
                     $tenantId,
                     $conversationId,
                     (string) $collected['brief_demand']
                 );
-            }
-
-            if (!empty($collected['is_for_self']) && empty($collected['patient_name']) && !empty($collected['requester_name'])) {
-                $collected['patient_name'] = $collected['requester_name'];
             }
 
             $schedulingIntent = $this->resolveSchedulingIntent(
@@ -328,7 +380,6 @@ final class AgentTriageService
 
             $action = $schedulingIntent ? 'calendar.pre_schedule' : 'conversation';
             $decision = (new AgentPolicyEngineService())->evaluate($profile, $collected, $action);
-            $fields = is_array($profile['triage_fields'] ?? null) ? $profile['triage_fields'] : [];
             $missingBeforeSchedule = (new AgentPolicyEngineService())->missingRequiredBeforeSchedule($fields, $collected);
             $missingCompletion = (new AgentPolicyEngineService())->missingForCompletion($fields, $collected);
             $missingKeys = array_values(array_map(static fn (array $field): string => (string) ($field['field_key'] ?? ''), $missingCompletion));
@@ -385,7 +436,8 @@ final class AgentTriageService
                 $nextField,
                 $collected,
                 $missingKeys,
-                $lastIntent
+                $lastIntent,
+                $processedIncomingId
             );
             $this->syncContactName($pdo, $tenantId, $contactId, $contact, $collected);
 
@@ -401,7 +453,7 @@ final class AgentTriageService
             // intenção antiga de agenda contamine mensagens comuns posteriores.
             $wasCollectingSchedule = in_array((string) ($session['last_intent'] ?? ''), ['schedule', 'reschedule'], true)
                 && (string) ($session['status'] ?? '') === 'collecting'
-                && $currentField !== null;
+                && $startingCurrentField !== null;
             if ($schedulingIntent
                 && $wasCollectingSchedule
                 && $missingBeforeSchedule === []
@@ -683,6 +735,9 @@ final class AgentTriageService
         if ($this->extractAgeAnswer($message) !== null || $this->hasSchedulePreference($normalized)) {
             return false;
         }
+        if ((new AgentConversationBehaviorService())->hasInformationalQuestion($message)) {
+            return false;
+        }
         if (preg_match('/\b(qual|quanto|valor|preco|preço|pagamento|como funciona|tem horario|tem horário|disponibilidade)\b/u', $normalized)) {
             return false;
         }
@@ -791,6 +846,148 @@ final class AgentTriageService
     }
 
     /**
+     * @return array<int,array{id:int,content:string}>
+     */
+    private function consumeTurnMessages(array $fields, array $collected, ?string $currentField, array $turnMessages, int $lastProcessedIncomingId): array
+    {
+        $contextParts = [];
+        $processedIncomingId = max(0, $lastProcessedIncomingId);
+        $demandCaptured = false;
+
+        foreach ($turnMessages as $turnMessage) {
+            if (!is_array($turnMessage)) {
+                continue;
+            }
+            $messageText = trim((string) ($turnMessage['content'] ?? ''));
+            if ($messageText === '') {
+                continue;
+            }
+            $contextParts[] = $messageText;
+            $messageId = max(0, (int) ($turnMessage['id'] ?? 0));
+            if ($messageId > 0) {
+                $processedIncomingId = max($processedIncomingId, $messageId);
+            }
+
+            if ($currentField === null || $this->hasCollectedValue($collected, $currentField)) {
+                $currentField = $this->firstMissingCompletionFieldKey($fields, $collected);
+            }
+
+            $beforeDemand = trim((string) ($collected['brief_demand'] ?? ''));
+            $normalizedMessage = $this->normalize($messageText);
+            $collected = $this->extractDeterministic(
+                $collected,
+                $messageText,
+                $normalizedMessage,
+                $currentField,
+                $messageText
+            );
+            $afterDemand = trim((string) ($collected['brief_demand'] ?? ''));
+            if ($beforeDemand === '' && $afterDemand !== '') {
+                $demandCaptured = true;
+            }
+
+            if (!empty($collected['is_for_self']) && empty($collected['patient_name']) && !empty($collected['requester_name'])) {
+                $collected['patient_name'] = $collected['requester_name'];
+            }
+
+            $currentField = $this->firstMissingCompletionFieldKey($fields, $collected);
+        }
+
+        return [
+            'collected' => $collected,
+            'current_field' => $currentField,
+            'context_parts' => $contextParts,
+            'last_processed_incoming_id' => $processedIncomingId,
+            'demand_captured' => $demandCaptured,
+        ];
+    }
+
+    /**
+     * @return array<int,array{id:int,content:string}>
+     */
+    private function incomingTurnMessages(PDO $pdo, int $conversationId, int $lastProcessedIncomingId, int $throughIncomingId, string $fallback): array
+    {
+        if ($conversationId < 1 || $throughIncomingId < 1) {
+            return [['id' => max(0, $throughIncomingId), 'content' => $fallback]];
+        }
+
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT m.id, m.content
+                 FROM conversation_messages m
+                 WHERE m.conversation_id = :conversation_id
+                   AND m.direction = "incoming"
+                   AND m.message_type = "text"
+                   AND m.id > GREATEST(
+                       :last_processed_id,
+                       COALESCE((
+                           SELECT MAX(o.id)
+                           FROM conversation_messages o
+                           WHERE o.conversation_id = :outgoing_conversation_id
+                             AND o.direction = "outgoing"
+                       ), 0)
+                   )
+                   AND m.id <= :through_incoming_id
+                 ORDER BY m.id ASC
+                 LIMIT 24'
+            );
+            $stmt->execute([
+                'conversation_id' => $conversationId,
+                'last_processed_id' => max(0, $lastProcessedIncomingId),
+                'outgoing_conversation_id' => $conversationId,
+                'through_incoming_id' => $throughIncomingId,
+            ]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $messages = [];
+            foreach ($rows as $row) {
+                $text = trim((string) ($row['content'] ?? ''));
+                if ($text === '') {
+                    continue;
+                }
+                $messages[] = [
+                    'id' => max(0, (int) ($row['id'] ?? 0)),
+                    'content' => $text,
+                ];
+            }
+            if ($messages !== []) {
+                return $messages;
+            }
+        } catch (Throwable) {
+        }
+
+        return [['id' => max(0, $throughIncomingId), 'content' => $fallback]];
+    }
+
+    /** @param array<int,array<string,mixed>> $fields */
+    private function firstMissingCompletionFieldKey(array $fields, array $collected): ?string
+    {
+        $missing = (new AgentPolicyEngineService())->missingForCompletion($fields, $collected);
+        if ($missing === []) {
+            return null;
+        }
+        $key = trim((string) ($missing[0]['field_key'] ?? $missing[0]['key'] ?? ''));
+        return $key !== '' ? $key : null;
+    }
+
+    private function hasCollectedValue(array $collected, string $fieldKey): bool
+    {
+        if ($fieldKey === '' || !array_key_exists($fieldKey, $collected)) {
+            return false;
+        }
+        $value = $collected[$fieldKey];
+        if ($value === null) {
+            return false;
+        }
+        if (is_string($value)) {
+            return trim($value) !== '';
+        }
+        if (is_array($value)) {
+            return $value !== [];
+        }
+        return true;
+    }
+
+    /**
      * Resolve a intenção do turno sem carregar uma intenção de agenda já encerrada.
      * Quando uma regra deixou a conversa ativa, mas bloqueou somente a agenda, uma
      * mensagem comum posterior precisa voltar ao diálogo normal. Uma nova tentativa
@@ -836,8 +1033,43 @@ final class AgentTriageService
         return $row;
     }
 
-    private function saveSession(PDO $pdo, int $tenantId, int $conversationId, int $contactId, string $status, string $eligibility, ?string $blockReason, ?string $currentField, array $collected, array $missing, string $lastIntent): void
+    private function saveSession(PDO $pdo, int $tenantId, int $conversationId, int $contactId, string $status, string $eligibility, ?string $blockReason, ?string $currentField, array $collected, array $missing, string $lastIntent, int $lastProcessedIncomingId = 0): void
     {
+        $params = [
+            'tenant_id' => $tenantId,
+            'conversation_id' => $conversationId,
+            'contact_id' => $contactId,
+            'status' => $status,
+            'eligibility' => $eligibility,
+            'block_reason' => $blockReason,
+            'current_field' => $currentField !== '' ? $currentField : null,
+            'collected_json' => json_encode($collected, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'missing_json' => json_encode($missing, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'last_intent' => $lastIntent,
+        ];
+
+        if ($this->columnExists($pdo, 'conversation_triage_sessions', 'last_processed_incoming_id')) {
+            $params['last_processed_incoming_id'] = $lastProcessedIncomingId > 0 ? $lastProcessedIncomingId : null;
+            $pdo->prepare(
+                'INSERT INTO conversation_triage_sessions
+                    (tenant_id, conversation_id, contact_id, status, eligibility_status, block_reason,
+                     current_field_key, collected_json, missing_json, last_intent, last_processed_incoming_id, last_evaluated_at)
+                 VALUES
+                    (:tenant_id, :conversation_id, :contact_id, :status, :eligibility, :block_reason,
+                     :current_field, :collected_json, :missing_json, :last_intent, :last_processed_incoming_id, NOW())
+                 ON DUPLICATE KEY UPDATE
+                    contact_id = VALUES(contact_id), status = VALUES(status), eligibility_status = VALUES(eligibility_status),
+                    block_reason = VALUES(block_reason), current_field_key = VALUES(current_field_key),
+                    collected_json = VALUES(collected_json), missing_json = VALUES(missing_json), last_intent = VALUES(last_intent),
+                    last_processed_incoming_id = CASE
+                        WHEN VALUES(last_processed_incoming_id) IS NULL THEN last_processed_incoming_id
+                        ELSE GREATEST(COALESCE(last_processed_incoming_id, 0), VALUES(last_processed_incoming_id))
+                    END,
+                    last_evaluated_at = NOW(), updated_at = CURRENT_TIMESTAMP'
+            )->execute($params);
+            return;
+        }
+
         $pdo->prepare(
             'INSERT INTO conversation_triage_sessions
                 (tenant_id, conversation_id, contact_id, status, eligibility_status, block_reason,
@@ -850,18 +1082,7 @@ final class AgentTriageService
                 block_reason = VALUES(block_reason), current_field_key = VALUES(current_field_key),
                 collected_json = VALUES(collected_json), missing_json = VALUES(missing_json), last_intent = VALUES(last_intent),
                 last_evaluated_at = NOW(), updated_at = CURRENT_TIMESTAMP'
-        )->execute([
-            'tenant_id' => $tenantId,
-            'conversation_id' => $conversationId,
-            'contact_id' => $contactId,
-            'status' => $status,
-            'eligibility' => $eligibility,
-            'block_reason' => $blockReason,
-            'current_field' => $currentField !== '' ? $currentField : null,
-            'collected_json' => json_encode($collected, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            'missing_json' => json_encode($missing, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            'last_intent' => $lastIntent,
-        ]);
+        )->execute($params);
     }
 
     private function hasPriorPolicyDecision(PDO $pdo, int $tenantId, int $conversationId, string $policyKey, string $reasonCode): bool
@@ -1076,6 +1297,29 @@ final class AgentTriageService
             return (bool) $stmt->fetchColumn();
         } catch (Throwable) {
             return false;
+        }
+    }
+
+    private function columnExists(PDO $pdo, string $table, string $column): bool
+    {
+        static $cache = [];
+        $key = $table . '.' . $column;
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT 1
+                 FROM information_schema.columns
+                 WHERE table_schema = DATABASE()
+                   AND table_name = :table
+                   AND column_name = :column
+                 LIMIT 1'
+            );
+            $stmt->execute(['table' => $table, 'column' => $column]);
+            return $cache[$key] = (bool) $stmt->fetchColumn();
+        } catch (Throwable) {
+            return $cache[$key] = false;
         }
     }
 }

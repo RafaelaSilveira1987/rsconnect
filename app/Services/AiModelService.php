@@ -499,7 +499,7 @@ final class AiModelService
             'Não invente preço, prazo, disponibilidade, política ou informação que não esteja no prompt/base.',
             'Não pergunte novamente informações que já estejam no histórico, no cadastro do contato ou no resumo da demanda.',
             'Quando o telefone já estiver disponível no cadastro do WhatsApp, não peça o telefone novamente como condição para continuar um atendimento comum.',
-            'Se a pergunta exigir decisão humana, peça uma confirmação e diga que encaminhará para atendimento.',
+            'Só diga que precisa de confirmação humana quando o RS Connect indicar explicitamente handoff/aprovação humana ou quando uma regra cadastrada exigir isso. Perguntas como “vocês conseguem ajudar com isso?”, “a profissional atende esse caso?” ou equivalentes são pedidos informativos: explique o escopo realmente cadastrado, sem diagnosticar, garantir resultado ou inventar que consultará alguém e retornará depois.',
             'Não mencione que você é um modelo de linguagem.',
             'Se o lead pedir humano, atendente, suporte ou uma pessoa, sinalize transferência em vez de insistir no atendimento automático.',
             'Não transforme menções casuais de data, hora, hoje, amanhã, tarde ou noite em pedido de agendamento. Agenda só deve ser conduzida quando houver intenção real e explícita de marcar, remarcar, consultar disponibilidade ou quando a conversa já estiver em um fluxo recente de agenda.',
@@ -712,6 +712,7 @@ final class AiModelService
         }
 
         $policyEngineBlock = '';
+        $responseContractBlock = '';
         $conversationBehaviorBlock = '';
         if ($tenantId > 0) {
             try {
@@ -722,6 +723,7 @@ final class AiModelService
                     : (new AgentTriageService())->context($tenantId, (int) ($conversation['id'] ?? $conversation['conversation_id'] ?? 0));
                 if (($agentProfile['status'] ?? 'inactive') === 'active') {
                     $conversationBehaviorBlock = (new AgentConversationBehaviorService())->promptBlock($agentProfile, $currentTurnText);
+                    $responseContractBlock = (new AiResponseContractService())->promptBlock($agentProfile, $triageContext, $currentTurnText);
                     $collected = is_array($triageContext['collected'] ?? null) ? $triageContext['collected'] : [];
                     if (isset($collected['brief_demand'])) {
                         $collected['brief_demand'] = '[já coletada e registrada]';
@@ -778,8 +780,21 @@ final class AiModelService
                 }
             } catch (Throwable) {
                 $policyEngineBlock = '';
+                $responseContractBlock = '';
                 $conversationBehaviorBlock = '';
             }
+        }
+
+        $repairInstruction = trim((string) ($agent['_reply_contract_repair'] ?? ''));
+        $previousInvalidReply = trim((string) ($agent['_previous_invalid_reply'] ?? ''));
+        $repairBlock = '';
+        if ($repairInstruction !== '') {
+            $repairBlock = "CORREÇÃO OBRIGATÓRIA DA RESPOSTA ANTERIOR:\n"
+                . $repairInstruction . "\n"
+                . ($previousInvalidReply !== ''
+                    ? "Resposta anterior inválida (não repita):\n---\n" . mb_substr($previousInvalidReply, 0, 1400) . "\n---\n"
+                    : '')
+                . "Produza agora somente a nova resposta corrigida.\n\n";
         }
 
         $memorySummary = trim((string) ($agent['_conversation_memory_summary'] ?? ''));
@@ -798,9 +813,22 @@ final class AiModelService
             $memoryBlock .= "Use esta memória para manter continuidade e não repetir perguntas. Se uma mensagem recente contradisser a memória, a mensagem recente prevalece.\n\n";
         }
 
-        return trim($base . "
+        $configuredRulesBlock = $base !== ''
+            ? "REGRAS/PROMPT CADASTRADOS PELO USUÁRIO — OBRIGATÓRIOS:\n"
+                . $base
+                . "\nEstas regras são a fonte de verdade do comportamento do negócio. O modelo não pode ignorá-las, substituí-las por respostas genéricas ou criar uma regra própria.\n\n"
+            : '';
+        $runtimePriorityBlock = "ORDEM DE PRIORIDADE DO RUNTIME:\n"
+            . "1. Estado e ações determinísticas do RS Connect (Policy Engine, agenda, handoff e contrato de resposta).\n"
+            . "2. Regras/prompt cadastrados pelo usuário e configurações estruturadas do agente.\n"
+            . "3. Base de conhecimento cadastrada.\n"
+            . "4. Histórico da conversa, sempre preservando os dados já coletados e dando prioridade à fala atual.\n"
+            . "Nunca troque uma regra cadastrada por uma suposição do modelo.\n\n";
 
-" .
+        return trim($runtimePriorityBlock .
+            $responseContractBlock .
+            $repairBlock .
+            $configuredRulesBlock .
             $currentTurnBlock .
             $structuredContext .
             $policyEngineBlock .

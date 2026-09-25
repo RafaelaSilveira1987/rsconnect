@@ -1,3 +1,15 @@
+# 36.36.26 — Motor de IA com contrato de resposta
+
+- Refatora o runtime conversacional para separar estado/regras determinísticas da redação do LLM.
+- Processa bursts de mensagens recebidas em ordem, uma a uma, preservando o cursor da triagem e evitando repetir nome, idade ou demanda já informados.
+- Adiciona `last_processed_incoming_id` à sessão de triagem para impedir que mensagens do mesmo turno sejam reinterpretadas como respostas de etapas posteriores.
+- Remove a reinserção literal da pergunta cadastrada nos modos **Natural com regras** e **Prompt Studio**; texto fixo permanece exclusivo do modo Formulário.
+- Introduz um contrato obrigatório de resposta com prioridade explícita para regras/prompt cadastrados, estado da conversa e próxima etapa permitida.
+- Valida a resposta gerada antes do envio e executa uma reescrita automática quando a IA ignora a próxima etapa ou inventa consulta humana/agenda.
+- Trata perguntas como “consegue ajudar?” como pedidos informativos, sem simular confirmação com a profissional ou promessa de retorno inexistente.
+- Invalida respostas antigas do cache exato por versão do contrato de runtime.
+- Nova migration obrigatória: `120_agent_turn_state_cursor.sql`.
+
 # 36.36.25 — Respostas naturais guiadas pelas regras
 
 - corrige o modo **Natural com regras** para que perguntas obrigatórias da triagem deixem de ser enviadas como texto literal antes da IA; o backend continua escolhendo a etapa e bloqueando a agenda, enquanto o modelo redige a mensagem;

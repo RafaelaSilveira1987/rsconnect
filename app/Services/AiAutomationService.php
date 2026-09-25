@@ -190,6 +190,7 @@ final class AiAutomationService
         $usageService = new AiUsageService();
         $generationAgent = null;
         $efficiencyTelemetry = [];
+        $providerUsageTelemetry = [];
         $aiRoute = null;
         $reply = null;
         $routingTransition = null;
@@ -732,7 +733,22 @@ final class AiAutomationService
                         $pdo,
                         $conversationId
                     );
-                    if ($this->isStaleAfterHoursReply($reply, $agent, $operatingPolicy)) {
+                    $cacheContract = (new AiResponseContractService())->validateForConversation(
+                        $pdo,
+                        (int) ($instance['tenant_id'] ?? 0),
+                        $conversationId,
+                        $currentTurnContent,
+                        $reply
+                    );
+                    if (empty($cacheContract['ok'])) {
+                        // Cache de uma versão anterior do runtime não pode reintroduzir
+                        // pergunta travada, promessa falsa ou perda de continuidade.
+                        $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.cache.skipped', 'skipped', 'Cache descartado por violar o contrato atual da conversa.', null, [
+                            'strategy' => 'exact_cache',
+                            'cache_id' => $cacheResult['cache_id'] ?? null,
+                            'contract_violations' => $cacheContract['violations'] ?? [],
+                        ]);
+                    } elseif ($this->isStaleAfterHoursReply($reply, $agent, $operatingPolicy)) {
                         // Um cache gravado quando o expediente estava fechado não pode
                         // ser reaproveitado depois que o RS Connect confirmou reabertura.
                         $this->log((int) $instance['tenant_id'], $conversationId, (int) $agent['id'], 'ai.cache.skipped', 'skipped', 'Cache descartado porque continha uma mensagem de ausência incompatível com o expediente atual.', null, [
@@ -839,6 +855,7 @@ final class AiAutomationService
             }
             $failurePhase = 'ai.generate';
             $reply = $this->ai->generateReply($generationAgent, $messages, $conversation, $conversation);
+            $providerUsageTelemetry = $this->mergeAiUsageTelemetry($providerUsageTelemetry, $this->ai->lastUsage());
             $reply = $conversationBehavior->enforceTurnScope(
                 (int) ($instance['tenant_id'] ?? 0),
                 $currentTurnContent,
@@ -846,6 +863,56 @@ final class AiAutomationService
                 $pdo,
                 $conversationId
             );
+
+            // Validação pós-LLM. Em vez de anexar uma pergunta fixa no PHP, o runtime
+            // verifica se a resposta respeitou o estado/regras e, se necessário, pede
+            // ao próprio modelo uma única reescrita explícita. Assim a regra permanece
+            // obrigatória sem transformar a conversa em respostas hardcoded.
+            $responseContract = new AiResponseContractService();
+            $contractValidation = $responseContract->validateForConversation(
+                $pdo,
+                (int) ($instance['tenant_id'] ?? 0),
+                $conversationId,
+                $currentTurnContent,
+                $reply
+            );
+            if (empty($contractValidation['ok'])) {
+                $invalidReply = $reply;
+                $repairAgent = $generationAgent;
+                $repairAgent['_reply_contract_repair'] = (string) ($contractValidation['repair_instruction'] ?? 'Reescreva respeitando o contrato do turno.');
+                $repairAgent['_previous_invalid_reply'] = $invalidReply;
+                $failurePhase = 'ai.generate.contract_repair';
+                $reply = $this->ai->generateReply($repairAgent, $messages, $conversation, $conversation);
+                $providerUsageTelemetry = $this->mergeAiUsageTelemetry($providerUsageTelemetry, $this->ai->lastUsage());
+                $reply = $conversationBehavior->enforceTurnScope(
+                    (int) ($instance['tenant_id'] ?? 0),
+                    $currentTurnContent,
+                    $reply,
+                    $pdo,
+                    $conversationId
+                );
+                $secondValidation = $responseContract->validateForConversation(
+                    $pdo,
+                    (int) ($instance['tenant_id'] ?? 0),
+                    $conversationId,
+                    $currentTurnContent,
+                    $reply
+                );
+                $this->log(
+                    (int) $instance['tenant_id'],
+                    $conversationId,
+                    (int) $agent['id'],
+                    'ai.contract.repair',
+                    !empty($secondValidation['ok']) ? 'success' : 'warning',
+                    !empty($secondValidation['ok']) ? null : 'A segunda resposta ainda apresentou violações do contrato.',
+                    $reply,
+                    [
+                        'first_violations' => $contractValidation['violations'] ?? [],
+                        'second_violations' => $secondValidation['violations'] ?? [],
+                        'invalid_reply_preview' => mb_substr($invalidReply, 0, 500),
+                    ]
+                );
+            }
 
             // A mensagem de ausência fora do horário é operacional, não uma apresentação
             // do assistente. Na primeira resposta conversacional após a reabertura, garante
@@ -867,7 +934,7 @@ final class AiAutomationService
                     $usageReservationId,
                     'Resposta descartada por conflito com o estado atual do expediente.',
                     false,
-                    array_merge($this->ai->lastUsage(), $efficiencyTelemetry)
+                    array_merge($providerUsageTelemetry, $efficiencyTelemetry)
                 );
                 $usageReservationId = 0;
                 $this->log(
@@ -892,7 +959,7 @@ final class AiAutomationService
             // e nenhuma integração/prompt consegue ultrapassar a regra operacional.
             $sendPolicy = (new AgentOperatingPolicyService())->status($agent);
             if (!empty($sendPolicy['enforced']) && empty($sendPolicy['inside'])) {
-                $usageService->cancelReservation($usageReservationId, 'Resposta descartada porque o expediente encerrou antes do envio.', false, array_merge($this->ai->lastUsage(), $efficiencyTelemetry));
+                $usageService->cancelReservation($usageReservationId, 'Resposta descartada porque o expediente encerrou antes do envio.', false, array_merge($providerUsageTelemetry, $efficiencyTelemetry));
                 $usageReservationId = 0;
                 (new AiAfterHoursRecoveryService())->markPending(
                     $pdo,
@@ -918,7 +985,7 @@ final class AiAutomationService
             // Revalida imediatamente antes do envio externo para que assumir atendimento pause a IA de fato.
             $conversation = $this->conversation($pdo, $conversationId);
             if (!$this->conversationAllowsAutomaticReply($conversation)) {
-                $usageService->cancelReservation($usageReservationId, 'Resposta descartada porque o atendimento foi assumido ou a IA foi pausada.', false, array_merge($this->ai->lastUsage(), $efficiencyTelemetry));
+                $usageService->cancelReservation($usageReservationId, 'Resposta descartada porque o atendimento foi assumido ou a IA foi pausada.', false, array_merge($providerUsageTelemetry, $efficiencyTelemetry));
                 $usageReservationId = 0;
                 $this->log(
                     (int) $instance['tenant_id'],
@@ -935,7 +1002,7 @@ final class AiAutomationService
 
             $failurePhase = 'evolution.send';
             $result = $this->sendAutomatedReplySequence($pdo, $instance, $conversation, $conversationId, $reply, 'ai.replied', 'Resposta automática enviada pela IA.', $agent);
-            $usageService->completeAutoReply($usageReservationId, (int) ($result['_stored_message_id'] ?? 0), array_merge($this->ai->lastUsage(), $efficiencyTelemetry));
+            $usageService->completeAutoReply($usageReservationId, (int) ($result['_stored_message_id'] ?? 0), array_merge($providerUsageTelemetry, $efficiencyTelemetry));
             $usageReservationId = 0;
 
             // O cache é opcional, exato e invalidado automaticamente quando prompt, base ou modelo mudam.
@@ -1025,7 +1092,7 @@ final class AiAutomationService
                     $usageReservationId,
                     $exception->getMessage(),
                     !$recipientUnavailable,
-                    array_merge($this->ai->lastUsage(), $efficiencyTelemetry)
+                    array_merge($this->mergeAiUsageTelemetry($providerUsageTelemetry, $this->ai->lastUsage()), $efficiencyTelemetry)
                 );
                 $usageReservationId = 0;
             }
@@ -3029,6 +3096,28 @@ final class AiAutomationService
             'ú' => 'u', 'ü' => 'u', 'ç' => 'c',
         ]);
         return trim((string) preg_replace('/[^a-z0-9]+/u', ' ', $value));
+    }
+
+    /** @param array<string,mixed> $aggregate @param array<string,mixed> $usage @return array<string,mixed> */
+    private function mergeAiUsageTelemetry(array $aggregate, array $usage): array
+    {
+        if ($aggregate === []) {
+            return $usage;
+        }
+        if ($usage === []) {
+            return $aggregate;
+        }
+
+        $merged = $aggregate;
+        foreach (['input_tokens', 'output_tokens', 'total_tokens', 'cached_tokens'] as $key) {
+            $a = isset($aggregate[$key]) && $aggregate[$key] !== null ? (int) $aggregate[$key] : null;
+            $b = isset($usage[$key]) && $usage[$key] !== null ? (int) $usage[$key] : null;
+            $merged[$key] = ($a === null && $b === null) ? null : max(0, (int) ($a ?? 0) + (int) ($b ?? 0));
+        }
+        $merged['provider_calls'] = max(0, (int) ($aggregate['provider_calls'] ?? 0)) + max(0, (int) ($usage['provider_calls'] ?? 0));
+        $merged['provider'] = $usage['provider'] ?? $aggregate['provider'] ?? null;
+        $merged['model'] = $usage['model'] ?? $aggregate['model'] ?? null;
+        return $merged;
     }
 
     private function log(int $tenantId, int $conversationId, ?int $agentId, string $event, string $status, ?string $error, ?string $responsePreview, ?array $raw): void

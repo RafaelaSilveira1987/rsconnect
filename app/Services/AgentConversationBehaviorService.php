@@ -277,7 +277,7 @@ final class AgentConversationBehaviorService
         }
 
         return (bool) preg_match(
-            '/\b(qual|quanto|valor|preco|preço|pagamento|pagar|pix|cartao|cartão|transferencia|transferência|como funciona|como e|como é|onde|local|endereco|endereço|meet|online|presencial|quero saber mais|gostaria de saber mais|saber mais|mais informacoes|mais informações|me explique|pode explicar)\b/u',
+            '/\b(qual|quanto|valor|preco|preço|pagamento|pagar|pix|cartao|cartão|transferencia|transferência|como funciona|como e|como é|onde|local|endereco|endereço|meet|online|presencial|quero saber mais|gostaria de saber mais|saber mais|mais informacoes|mais informações|me explique|pode explicar|consegue ajudar|conseguem ajudar|pode ajudar|podem ajudar|voc[eê]s ajudam|atende esse|atende essa|atendem esse|atendem essa|serve para|e indicado|é indicado|e indicada|é indicada)\b/u',
             $text
         );
     }
@@ -476,7 +476,13 @@ final class AgentConversationBehaviorService
                 $reply = $this->stripPrematureCalendarActionClaims($reply);
             }
 
-            if (!str_contains($reply, '?')) {
+            // Somente o modo Formulário possui texto fixo. Nos modos Natural com
+            // regras e Prompt Studio o prompt cadastrado descreve o OBJETIVO da etapa;
+            // anexá-lo literalmente aqui anulava o tom, o contexto e até a resposta
+            // informativa gerada pelo modelo. A validação/segunda tentativa da IA é
+            // responsável por garantir a continuidade sem transformar o fluxo em formulário.
+            $interactionMode = strtolower(trim((string) ($profile['interaction_mode'] ?? 'hybrid')));
+            if ($interactionMode === 'form' && !str_contains($reply, '?')) {
                 $reply = trim($reply);
                 $reply = $reply !== '' ? $reply . "\n\n" . $prompt : $prompt;
             }
