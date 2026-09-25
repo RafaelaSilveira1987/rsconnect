@@ -578,13 +578,15 @@ final class AiModelService
                 if (!empty($settings['ai_can_confirm']) && empty($settings['require_human_approval'])) {
                     $rules[] = 'A confirmação final é executada tecnicamente pelo RS Connect depois que um horário real foi selecionado e o cliente responde afirmativamente. Você pode pedir confirmação, mas não diga que está confirmado antes de o sistema registrar o compromisso como confirmado.';
                 } else {
-                    $rules[] = 'Se o contato informou preferência de dia ou horário, deixe claro que a escolha depende de confirmação humana. Não diga que está marcado ou confirmado.';
+                    $rules[] = 'A aprovação humana só se aplica depois que o backend selecionar ou pré-reservar um horário real. Enquanto estiver apenas coletando preferência ou aguardando a agenda, não diga que vai encaminhar para a profissional, registrar para ela verificar ou avisar após confirmação.';
                 }
+                $rules[] = 'Se a agenda não devolver a causa da indisponibilidade, diga apenas que o horário não está disponível. Nunca converta isso em ocupado, preenchido, lotado ou agenda cheia.';
+                $rules[] = 'Não prometa avisar quando surgir vaga ou encaixe a menos que o RS Connect tenha criado explicitamente uma ação de lista de espera.';
                 $preScheduleBlock = "Configurações de pré-agendamento do cliente:\n" .
                     '- Modo das perguntas de coleta: ' . ($agendaMessageMode === 'prompt' ? 'Prompt Studio' : 'Formulário') . "\n" .
                     '- Mensagem inicial do formulário: ' . (string) ($settings['initial_collect_message'] ?? '') . "\n" .
                     '- Mensagem para coletar dia/horário: ' . (string) ($settings['collect_message'] ?? '') . "\n" .
-                    '- Mensagem enquanto a agenda é consultada: ' . (string) ($settings['default_message'] ?? '') . "\n" .
+                    '- A mensagem de estado da consulta é exclusiva do backend e NÃO deve ser reproduzida pela IA.\n' .
                     '- IA pode confirmar sozinha: ' . (!empty($settings['ai_can_confirm']) ? 'sim' : 'não') . "\n" .
                     '- Aprovação humana obrigatória: ' . (!empty($settings['require_human_approval']) ? 'sim' : 'não') . "\n\n";
             }

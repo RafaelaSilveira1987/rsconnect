@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.36.26",
-  "release_name": "Motor de IA com contrato de resposta",
+  "package_version": "36.36.27",
+  "release_name": "Agenda factual e sem promessas duplicadas",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,11 +19,16 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.36.25",
-      "release_name": "Respostas naturais guiadas pelas regras",
-      "required_migration": "119_agent_workflow_runtime_contract.sql"
+      "package_version": "36.36.26",
+      "release_name": "Motor de IA com contrato de resposta",
+      "required_migration": "120_agent_turn_state_cursor.sql"
     },
     "historical_releases": [
+      {
+        "package_version": "36.36.26",
+        "release_name": "Motor de IA com contrato de resposta",
+        "required_migration": "120_agent_turn_state_cursor.sql"
+      },
       {
         "package_version": "36.36.25",
         "release_name": "Respostas naturais guiadas pelas regras",

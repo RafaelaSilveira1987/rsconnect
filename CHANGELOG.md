@@ -1,3 +1,14 @@
+# 36.36.27 — Agenda factual e sem promessas duplicadas
+
+- Faz a **Ordem do atendimento** iniciar a ação de agenda automaticamente quando a última etapa de coleta é concluída, sem deixar a IA inventar um encaminhamento para a profissional.
+- Remove a mensagem de confirmação de preferência antes da consulta real de disponibilidade; o contato recebe somente a pergunta necessária ou o resultado técnico da agenda.
+- Valida regras estruturadas de modalidade **antes** de consultar horários: se presencial estiver permitido somente em determinados dias, o agente informa essa regra em vez de dizer falsamente que o horário está ocupado/preenchido.
+- Bloqueia respostas que prometem encaminhar para alguém verificar a agenda, avisar quando abrir encaixe ou atribuir causa não comprovada à indisponibilidade.
+- Mensagens antigas/customizadas de indisponibilidade que afirmem “ocupado”, “preenchido”, “agenda cheia” ou promessa de lista de espera são neutralizadas em runtime por texto factual.
+- Se até a segunda tentativa do LLM violar o contrato, o backend agora opera em **fail-closed** e envia uma resposta derivada somente do estado persistido de triagem/agenda.
+- Invalida o cache exato do contrato para impedir reaproveitamento de respostas anteriores inseguras.
+- Mantém a migration obrigatória `120_agent_turn_state_cursor.sql`; não há nova migration nesta versão.
+
 # 36.36.26 — Motor de IA com contrato de resposta
 
 - Refatora o runtime conversacional para separar estado/regras determinísticas da redação do LLM.

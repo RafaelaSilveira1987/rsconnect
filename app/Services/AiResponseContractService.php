@@ -67,10 +67,13 @@ final class AiResponseContractService
             $triageContext = (new AgentTriageService())->context($tenantId, $conversationId, $pdo);
             return $this->validate($profile, $triageContext, $currentTurnText, $reply);
         } catch (Throwable) {
+            // Falha de leitura do estado não pode liberar uma resposta livre justamente
+            // quando o contrato não pôde ser verificado. O caller fará uma tentativa de
+            // reparo e, persistindo a falha, cairá no fallback determinístico.
             return [
-                'ok' => true,
-                'violations' => [],
-                'repair_instruction' => '',
+                'ok' => false,
+                'violations' => ['runtime_contract_unavailable'],
+                'repair_instruction' => 'O estado operacional do turno não pôde ser validado. Não invente agenda, encaminhamento, confirmação ou dados do atendimento; responda apenas de forma neutra e sem executar ações.',
                 'mode' => 'unknown',
                 'current_field' => '',
             ];
@@ -106,20 +109,37 @@ final class AiResponseContractService
             $violations[] = 'informational_request_ignored';
         }
 
-        // A geração textual não pode fingir uma consulta humana que não aconteceu.
+        // A geração textual não pode fingir uma consulta/encaminhamento humano que não aconteceu.
+        $lowerReply = mb_strtolower($reply);
         if ($reply !== '' && preg_match(
-            '/\b(vou|iremos)\s+(?:verificar|confirmar|consultar|falar|perguntar)\s+(?:com|pra|para)\s+(?:a|o|uma|um)?\s*(?:profissional|psic[oó]log[ao]|m[eé]dic[ao]|especialista|equipe|respons[aá]vel)|\bte\s+retorno\s+assim\s+que|\bretorno\s+assim\s+que/u',
-            mb_strtolower($reply)
+            '/\b(vou|iremos)\s+(?:verificar|confirmar|consultar|falar|perguntar)\s+(?:com|pra|para)\s+(?:a|o|uma|um)?\s*(?:profissional|psic[oó]log[ao]|m[eé]dic[ao]|especialista|equipe|respons[aá]vel)|\b(?:vou|iremos)\s+(?:registrar[^.!?]{0,120}e\s+)?encaminhar[^.!?]{0,100}(?:verificar|consultar|confirmar)[^.!?]{0,80}(?:agenda|disponibilidade|vaga|hor[aá]rio)|\bte\s+retorno\s+assim\s+que|\bretorno\s+assim\s+que/u',
+            $lowerReply
         )) {
             $violations[] = 'unsupported_human_check';
         }
 
         // Consultar agenda é ação do backend, nunca uma promessa textual do modelo.
         if ($reply !== '' && preg_match(
-            '/\b(vou|iremos)\s+(?:verificar|consultar|checar)\s+(?:a\s+)?(?:agenda|disponibilidade|vaga|hor[aá]rios?)\b/u',
-            mb_strtolower($reply)
+            '/\b(vou|iremos)\s+(?:verificar|consultar|checar)\s+(?:a\s+)?(?:agenda|disponibilidade|vaga|hor[aá]rios?)\b|\bencaminhar[^.!?]{0,120}(?:verificar|consultar|confirmar)[^.!?]{0,80}(?:agenda|disponibilidade|vaga|hor[aá]rio)/u',
+            $lowerReply
         )) {
             $violations[] = 'unsupported_calendar_action';
+        }
+
+        // O calendário informa disponibilidade; ele não informa, por si só, a causa da
+        // indisponibilidade. A IA não pode transformar "indisponível" em "ocupado".
+        if ($reply !== '' && preg_match(
+            '/(?:hor[aá]rio|op[cç][aã]o|vaga|agenda)[^.!?]{0,70}(?:preenchid[ao]|ocupad[ao]|lotad[ao]|cheia)|(?:preenchid[ao]|ocupad[ao]|lotad[ao])[^.!?]{0,70}(?:hor[aá]rio|op[cç][aã]o|vaga|agenda)/u',
+            $lowerReply
+        )) {
+            $violations[] = 'unsupported_calendar_reason';
+        }
+
+        if ($reply !== '' && preg_match(
+            '/\b(?:te\s+)?avis(?:o|amos|arei|aremos)[^.!?]{0,100}assim\s+que[^.!?]{0,80}(?:abrir|surgir)[^.!?]{0,60}(?:vaga|encaixe|hor[aá]rio)|\bavisar[^.!?]{0,100}(?:abrir|surgir)[^.!?]{0,60}(?:vaga|encaixe|hor[aá]rio)/u',
+            $lowerReply
+        )) {
+            $violations[] = 'unsupported_waitlist_promise';
         }
 
         $violations = array_values(array_unique($violations));
@@ -133,7 +153,7 @@ final class AiResponseContractService
                 . ($mode === 'form'
                     ? 'Preserve o texto de formulário quando aplicável. '
                     : 'Não copie mecanicamente a pergunta cadastrada; use linguagem natural e o tom configurado. ')
-                . 'Não simule consulta com humano, agenda, vaga, confirmação ou transferência que o backend não executou.';
+                . 'Não simule consulta com humano, agenda, vaga, confirmação, lista de espera ou transferência que o backend não executou e não invente o motivo de uma indisponibilidade.';
         }
 
         return [
@@ -143,6 +163,56 @@ final class AiResponseContractService
             'mode' => $mode,
             'current_field' => $fieldKey,
         ];
+    }
+
+    /**
+     * Última barreira determinística quando até a segunda tentativa do LLM viola o
+     * contrato. Nunca cria fatos de agenda; apenas reflete o estado persistido.
+     */
+    public function safeFallbackForConversation(PDO $pdo, int $tenantId, int $conversationId): string
+    {
+        try {
+            $profile = (new AgentBlueprintService())->profileForTenant($tenantId, true, $pdo);
+            $profile = (new AgentConversationBehaviorService())->applyOperationalOverridesToProfile($profile);
+            $triage = (new AgentTriageService())->context($tenantId, $conversationId, $pdo);
+            $field = $this->currentField($profile, $triage);
+            $prompt = trim((string) ($field['prompt_text'] ?? ''));
+            if ($prompt !== '') {
+                return $prompt;
+            }
+
+            $stmt = $pdo->prepare(
+                'SELECT * FROM calendar_appointments
+                 WHERE tenant_id = :tenant_id AND conversation_id = :conversation_id
+                 ORDER BY id DESC LIMIT 1'
+            );
+            $stmt->execute(['tenant_id' => $tenantId, 'conversation_id' => $conversationId]);
+            $appointment = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            if ($appointment !== []) {
+                $settings = (new PreSchedulingService())->settings($tenantId);
+                $modality = strtolower(trim((string) ($appointment['appointment_modality'] ?? $appointment['location_type'] ?? '')));
+                $day = trim((string) ($appointment['preferred_day_text'] ?? ''));
+                $time = trim((string) ($appointment['preferred_time_text'] ?? ''));
+                $availability = trim((string) ($appointment['availability_status'] ?? ''));
+
+                if (!in_array($modality, ['online', 'presencial', 'telefone'], true)) {
+                    return trim((string) ($settings['modality_message'] ?? '')) ?: 'Você prefere atendimento online ou presencial?';
+                }
+                if ($day === '' || $time === '') {
+                    return trim((string) ($settings['collect_message'] ?? '')) ?: 'Qual o melhor dia e horário para você?';
+                }
+                if ($availability === 'empty') {
+                    return 'Não encontrei disponibilidade para essa preferência. Pode me informar outro dia ou horário?';
+                }
+                if (in_array($availability, ['requested', 'sent', 'communicating'], true)) {
+                    return 'Recebi sua preferência e a consulta da agenda está em andamento. Assim que a agenda retornar, eu mostro as opções disponíveis.';
+                }
+            }
+        } catch (Throwable) {
+            // Fallback final abaixo: melhor uma resposta neutra que um fato inventado.
+        }
+
+        return 'Certo. Posso continuar te orientando por aqui.';
     }
 
     /** @param array<string,mixed> $profile */

@@ -100,8 +100,10 @@ final class CalendarConversationService
         }
 
         if ($slots === []) {
-            $message = trim((string) ($settings['no_availability_message'] ?? ''))
-                ?: 'Não encontrei horários disponíveis para essa preferência. Pode me informar outro dia ou período?';
+            $message = $this->safeNoAvailabilityMessage(
+                (string) ($settings['no_availability_message'] ?? ''),
+                'Não encontrei horários disponíveis para essa preferência. Pode me informar outro dia ou período?'
+            );
             $send = $this->sendAppointmentMessage(
                 $appointment,
                 $message,
@@ -153,8 +155,10 @@ final class CalendarConversationService
             ));
             $diagnostic = trim($diagnostic . ' ' . (string) ($apply['message'] ?? 'Falha ao pré-reservar o horário solicitado.'));
             if ($slots === []) {
-                $message = trim((string) ($settings['no_availability_message'] ?? ''))
-                    ?: 'O horário solicitado acabou de ficar indisponível e não encontrei outra opção agora. Pode me informar outro dia ou período?';
+                $message = $this->safeNoAvailabilityMessage(
+                    (string) ($settings['no_availability_message'] ?? ''),
+                    'O horário solicitado não está disponível e não encontrei outra opção agora. Pode me informar outro dia ou período?'
+                );
                 $send = $this->sendAppointmentMessage(
                     $appointment,
                     $message,
@@ -180,8 +184,10 @@ final class CalendarConversationService
         // desativou sugestões, não apresenta opções aproximadas: pede outra preferência e
         // mantém o registro como pré-agendamento sem slot, sem ocupar o calendário.
         if (!$canSuggestAlternatives) {
-            $message = trim((string) ($settings['no_availability_message'] ?? ''))
-                ?: 'Esse horário não está disponível. Pode me informar outro dia ou horário de preferência?';
+            $message = $this->safeNoAvailabilityMessage(
+                (string) ($settings['no_availability_message'] ?? ''),
+                'Esse horário não está disponível. Pode me informar outro dia ou horário de preferência?'
+            );
             $send = $this->sendAppointmentMessage(
                 $appointment,
                 $message,
@@ -1413,11 +1419,43 @@ final class CalendarConversationService
         return ['signal' => true, 'slot' => null, 'reason' => 'time_not_found'];
     }
 
+    private function safeNoAvailabilityMessage(string $configured, string $fallback): string
+    {
+        return $this->safeAvailabilityTemplate($configured, $fallback);
+    }
+
+    /**
+     * Mensagens antigas/customizadas podem atribuir uma causa que o calendário não
+     * forneceu ("preenchido", "ocupado", "agenda cheia") ou prometer lista de espera.
+     * Nesses casos o runtime usa um texto factual neutro em vez de repetir a mentira.
+     */
+    private function safeAvailabilityTemplate(string $configured, string $fallback): string
+    {
+        $message = trim($configured);
+        if ($message === '') {
+            return $fallback;
+        }
+        $lower = mb_strtolower($message);
+        $unsafeCause = preg_match(
+            '/(?:hor[aá]rio|op[cç][aã]o|vaga|agenda)[^.!?]{0,80}(?:preenchid[ao]|ocupad[ao]|lotad[ao]|cheia)|(?:preenchid[ao]|ocupad[ao]|lotad[ao])[^.!?]{0,80}(?:hor[aá]rio|op[cç][aã]o|vaga|agenda)/u',
+            $lower
+        ) === 1;
+        $unsafeWaitlist = preg_match('/avis[^.!?]{0,100}assim\s+que[^.!?]{0,80}(?:abrir|surgir)[^.!?]{0,60}(?:vaga|encaixe|hor[aá]rio)/u', $lower) === 1;
+        $unsafeHandoff = preg_match('/encaminh[^.!?]{0,120}(?:verificar|consultar|confirmar)[^.!?]{0,80}(?:agenda|disponibilidade|vaga|hor[aá]rio)/u', $lower) === 1;
+        return ($unsafeCause || $unsafeWaitlist || $unsafeHandoff) ? $fallback : $message;
+    }
+
     /** @param array<int,array<string,mixed>> $slots */
     private function optionsMessage(array $settings, array $appointment, array $slots): string
     {
-        $template = trim((string) ($settings['availability_options_message'] ?? ''))
-            ?: "O horário solicitado não está disponível. Encontrei estas opções:\n\n{{opcoes}}\n\nResponda com o número ou com o horário que prefere.";
+        $template = $this->safeAvailabilityTemplate(
+            (string) ($settings['availability_options_message'] ?? ''),
+            "O horário solicitado não está disponível. Encontrei estas opções:
+
+{{opcoes}}
+
+Responda com o número ou com o horário que prefere."
+        );
         return trim(strtr($template, [
             '{{opcoes}}' => $this->formatOptions($slots),
             '{{dia_preferido}}' => (string) ($appointment['preferred_day_text'] ?? ''),

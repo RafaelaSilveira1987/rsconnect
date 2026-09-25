@@ -138,7 +138,7 @@ final class AiExactCacheService
     private function contextHash(array $agent): string
     {
         return hash('sha256', json_encode([
-            'runtime_contract' => '36.36.26',
+            'runtime_contract' => '36.36.27',
             'prompt' => (string) ($agent['system_prompt'] ?? ''),
             'knowledge' => (string) ($agent['knowledge_base'] ?? ''),
             'model' => (string) ($agent['_ai_selected_model'] ?? $agent['model_name'] ?? ''),

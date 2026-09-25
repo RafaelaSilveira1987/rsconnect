@@ -912,6 +912,26 @@ final class AiAutomationService
                         'invalid_reply_preview' => mb_substr($invalidReply, 0, 500),
                     ]
                 );
+                if (empty($secondValidation['ok'])) {
+                    // Fail-closed: duas violações consecutivas não podem chegar ao WhatsApp.
+                    // A resposta final passa a ser derivada exclusivamente do estado
+                    // persistido de triagem/agenda, sem fatos criados pelo modelo.
+                    $reply = $responseContract->safeFallbackForConversation(
+                        $pdo,
+                        (int) ($instance['tenant_id'] ?? 0),
+                        $conversationId
+                    );
+                    $this->log(
+                        (int) $instance['tenant_id'],
+                        $conversationId,
+                        (int) $agent['id'],
+                        'ai.contract.fail_closed',
+                        'success',
+                        null,
+                        $reply,
+                        ['violations' => $secondValidation['violations'] ?? []]
+                    );
+                }
             }
 
             // A mensagem de ausência fora do horário é operacional, não uma apresentação
@@ -2262,8 +2282,9 @@ final class AiAutomationService
         $claimsConfirmed = preg_match('/\b(agendad[oa]|confirmad[oa]|ficou\s+marcad[oa]|marquei|agendei|reservei|pre-reservei)\b/u', $normalized) === 1;
         $claimsAvailable = preg_match('/\b(tenho\s+disponibilidade|encontrei\s+disponibilidade|horario\s+(?:esta\s+)?disponivel|esse\s+horario\s+esta\s+livre)\b/u', $normalized) === 1;
         $claimsUnavailable = preg_match('/\b(nao\s+tenho\s+disponibilidade|sem\s+disponibilidade|horario\s+indisponivel|horario\s+nao\s+esta\s+disponivel|nao\s+esta\s+disponivel)\b/u', $normalized) === 1;
+        $claimsBusyCause = preg_match('/(?:horario|opcao|vaga|agenda)[^.!?]{0,70}(?:preenchid[ao]|ocupad[ao]|lotad[ao]|cheia)|(?:preenchid[ao]|ocupad[ao]|lotad[ao])[^.!?]{0,70}(?:horario|opcao|vaga|agenda)/u', $normalized) === 1;
         $asksTechnicalConfirmation = preg_match('/\b(posso\s+confirmar|quer\s+que\s+eu\s+confirme|deseja\s+confirmar)\b/u', $normalized) === 1;
-        if (!$claimsConfirmed && !$claimsAvailable && !$claimsUnavailable && !$asksTechnicalConfirmation) {
+        if (!$claimsConfirmed && !$claimsAvailable && !$claimsUnavailable && !$claimsBusyCause && !$asksTechnicalConfirmation) {
             return $reply;
         }
 
@@ -2291,9 +2312,13 @@ final class AiAutomationService
             && in_array((string) ($appointment['availability_status'] ?? ''), ['slot_selected', 'validated'], true)) {
             return $reply;
         }
-        if ($claimsUnavailable && is_array($appointment)
+        if ($claimsUnavailable && !$claimsBusyCause && is_array($appointment)
             && (string) ($appointment['availability_status'] ?? '') === 'empty') {
             return $reply;
+        }
+        if ($claimsBusyCause && is_array($appointment)
+            && (string) ($appointment['availability_status'] ?? '') === 'empty') {
+            return 'Não encontrei disponibilidade para essa preferência. Pode me informar outro dia ou horário?';
         }
         if ($asksTechnicalConfirmation && is_array($appointment)
             && empty($settings['require_human_approval'])
@@ -2336,12 +2361,12 @@ final class AiAutomationService
         }
         if (in_array($availabilityStatus, ['requested', 'sent', 'communicating'], true)) {
             return (new PreSchedulingService())->renderMessage(
-                trim((string) ($settings['default_message'] ?? '')) ?: 'Vou verificar a disponibilidade para {{dia_preferido}} às {{horario_preferido}}.',
+                'A consulta de disponibilidade para {{dia_preferido}} às {{horario_preferido}} está em andamento.',
                 $appointment
             );
         }
 
-        return 'Ainda não confirmei esse horário. Vou validar a disponibilidade real da agenda antes de informar qualquer confirmação.';
+        return 'Esse horário ainda não está confirmado. A disponibilidade só será informada a partir do resultado real da agenda.';
     }
 
     /**

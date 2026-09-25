@@ -301,11 +301,37 @@ final class PreSchedulingService
             }
 
             if (!empty($update['ready_for_availability'])) {
-                // Preferência completa + modalidade válida são tratadas pela agenda.
-                // Nunca deixa a IA reutilizar opções antigas do histórico como se fossem atuais.
-                $ack = $this->sendPreferenceAcknowledgement($pdo, $instance, $conversationId, $contactId, $update['appointment'], $intent);
-                $result['ack_sent'] = $ack['ok'];
-                $result['ack_error'] = $ack['error'];
+                // A regra estruturada da modalidade é validada ANTES da agenda.
+                // Se presencial estiver configurado apenas para determinados dias, por
+                // exemplo, o sistema explica essa regra em vez de dizer que o horário
+                // está "ocupado" ou "preenchido" sem evidência técnica.
+                $preferenceRule = (new AgentConversationBehaviorService())->schedulingPreferenceRule($tenantId, $update['appointment']);
+                if (empty($preferenceRule['allowed'])) {
+                    $ruleMessage = trim((string) ($preferenceRule['message'] ?? ''));
+                    $send = $this->sendAgendaGateMessage(
+                        $pdo,
+                        $instance,
+                        $conversationId,
+                        $contactId,
+                        $ruleMessage !== '' ? $ruleMessage : 'Essa preferência não atende às regras configuradas para a modalidade. Pode me informar outro dia?',
+                        (string) ($preferenceRule['code'] ?? 'modality_day_not_allowed'),
+                        $incomingMessageId
+                    );
+                    $result['rule_blocked'] = true;
+                    $result['rule_code'] = (string) ($preferenceRule['code'] ?? 'modality_day_not_allowed');
+                    $result['rule_message_sent'] = !empty($send['ok']);
+                    $result['rule_message_error'] = $send['error'] ?? null;
+                    $result['skip_ai'] = true;
+                    $result['terminal_handled'] = true;
+                    $result['availability_request_needed'] = false;
+                    return $result;
+                }
+
+                // Não envia mais uma promessa textual antes da consulta real. A versão
+                // anterior usava default_message (inclusive textos antigos como
+                // "encaminhar para a profissional verificar") e depois a agenda ainda
+                // respondia novamente. Agora a próxima mensagem sobre disponibilidade
+                // vem somente do resultado técnico da agenda.
                 $result['skip_ai'] = true;
                 $result['terminal_handled'] = true;
                 $result['availability_request_needed'] = !empty($transition['request_needed'])
@@ -530,15 +556,38 @@ final class PreSchedulingService
                 'title' => $title,
                 'starts_at' => $period['starts_at'],
                 'ends_at' => $period['ends_at'],
+                'timezone' => 'America/Sao_Paulo',
                 'preferred_day_text' => $this->displayDay($intent),
                 'preferred_time_text' => $this->displayTime($intent),
                 'location_type' => $this->isAvailabilityModality($intentModality) ? $intentModality : 'indefinida',
                 'appointment_modality' => $intentModality,
                 'location' => $this->isAvailabilityModality($intentModality) ? ucfirst($intentModality) : null,
             ];
-            $ack = $this->sendPreferenceAcknowledgement($pdo, $instance, $conversationId, $contactId, $appointment, $intent);
-            $result['ack_sent'] = $ack['ok'];
-            $result['ack_error'] = $ack['error'];
+            $preferenceRule = (new AgentConversationBehaviorService())->schedulingPreferenceRule($tenantId, $appointment);
+            if (empty($preferenceRule['allowed'])) {
+                $ruleMessage = trim((string) ($preferenceRule['message'] ?? ''));
+                $send = $this->sendAgendaGateMessage(
+                    $pdo,
+                    $instance,
+                    $conversationId,
+                    $contactId,
+                    $ruleMessage !== '' ? $ruleMessage : 'Essa preferência não atende às regras configuradas para a modalidade. Pode me informar outro dia?',
+                    (string) ($preferenceRule['code'] ?? 'modality_day_not_allowed'),
+                    $incomingMessageId
+                );
+                $result['rule_blocked'] = true;
+                $result['rule_code'] = (string) ($preferenceRule['code'] ?? 'modality_day_not_allowed');
+                $result['rule_message_sent'] = !empty($send['ok']);
+                $result['rule_message_error'] = $send['error'] ?? null;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['availability_request_needed'] = false;
+                return $result;
+            }
+
+            // A confirmação de preferência deixou de ser uma mensagem separada. O contato
+            // recebe apenas o resultado real da consulta de agenda (ou o retorno assíncrono
+            // quando Google/n8n concluir), eliminando mensagens duplicadas e promessas.
             $result['skip_ai'] = true;
             $result['terminal_handled'] = true;
             $result['availability_request_needed'] = true;
@@ -628,7 +677,7 @@ final class PreSchedulingService
             'default_duration_minutes' => 50,
             'message_mode' => 'form',
             'initial_collect_message' => 'Claro! Qual o melhor dia e horário para você? E prefere atendimento online ou presencial?',
-            'default_message' => 'Perfeito. Vou verificar a disponibilidade para {{dia_preferido}} às {{horario_preferido}}.',
+            'default_message' => 'A consulta de disponibilidade para {{dia_preferido}} às {{horario_preferido}} está em andamento.',
             'collect_message' => 'Qual o melhor dia e horário para você?',
             'modality_message' => 'Você prefere atendimento online ou presencial?',
             'approved_message' => 'Seu agendamento foi confirmado para {{data}} às {{hora}}. {{local}}',
@@ -667,7 +716,7 @@ final class PreSchedulingService
 
         $messages = [
             'initial_collect_message' => 'Claro! Qual o melhor dia e horário para você? E prefere atendimento online ou presencial?',
-            'default_message' => 'Perfeito. Vou verificar a disponibilidade para {{dia_preferido}} às {{horario_preferido}}.',
+            'default_message' => 'A consulta de disponibilidade para {{dia_preferido}} às {{horario_preferido}} está em andamento.',
             'collect_message' => 'Qual o melhor dia e horário para você?',
             'modality_message' => 'Você prefere atendimento online ou presencial?',
             'approved_message' => 'Seu agendamento foi confirmado para {{data}} às {{hora}}. {{local}}',
@@ -1250,111 +1299,8 @@ final class PreSchedulingService
         return $hasDateOrDay && $hasTime;
     }
 
-    private function sendPreferenceAcknowledgement(PDO $pdo, array $instance, int $conversationId, int $contactId, array $appointment, array $intent): array
-    {
-        try {
-            $tenantId = (int) ($instance['tenant_id'] ?? 0);
-            if (!$this->conversationAllowsAutomation($pdo, $tenantId, $conversationId)) {
-                return ['ok' => false, 'error' => 'Automação de agenda pausada: conversa em atendimento humano ou fechada.'];
-            }
-            $agent = (new AgentRoutingService())->resolveForAutomation($pdo, $instance, $conversationId, '', false);
-            if (is_array($agent) && !(new AgentOperatingPolicyService())->allowsConversationalAutomation($agent)) {
-                return ['ok' => false, 'error' => 'Automação de agenda aguardando o próximo horário de atendimento.'];
-            }
-            $contact = $this->findContact($pdo, $tenantId, $contactId);
-            $phone = preg_replace('/\D+/', '', (string) ($contact['phone'] ?? '')) ?: '';
-            if ($phone === '') {
-                return ['ok' => false, 'error' => 'Contato sem telefone para confirmação de preferência.'];
-            }
-
-            $settings = $this->settings($tenantId);
-            $template = trim((string) ($settings['default_message'] ?? '')) ?: 'Perfeito. Vou verificar a disponibilidade para {{dia_preferido}} às {{horario_preferido}}.';
-            $message = $this->renderMessage($template, array_merge($appointment, [
-                'contact_name' => $contact['name'] ?? '',
-                'name' => $contact['name'] ?? '',
-                'phone' => $phone,
-                'preferred_day_text' => $this->displayDay($intent),
-                'preferred_time_text' => $this->displayTime($intent),
-            ]));
-
-            if ($this->recentOutgoingSameMessage($pdo, $conversationId, $message)) {
-                return ['ok' => true, 'error' => null];
-            }
-
-            $service = new EvolutionService(
-                (string) $instance['base_url'],
-                Crypto::decrypt((string) $instance['api_key_encrypted']),
-                (string) $instance['instance_name'],
-                24,
-                filter_var(Env::get('EVOLUTION_SSL_VERIFY', true), FILTER_VALIDATE_BOOL) !== false,
-                trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) !== '' ? trim((string) Env::get('EVOLUTION_CA_BUNDLE', '')) : null
-            );
-            $senderDisplayName = $this->agendaSenderDisplayName($pdo, $instance, $conversationId, $agent);
-            $signatureEnabled = (new MessageGovernanceService())->whatsappSenderIdentificationEnabled($pdo, $tenantId);
-            $deliveredMessage = $this->withAiWhatsappSignature($message, $senderDisplayName, $signatureEnabled);
-            $response = $service->sendText($phone, $deliveredMessage);
-            $externalId = $this->extractMessageId($response['body'] ?? []);
-            $sentAt = \App\Core\Clock::nowUtc();
-
-            if ($this->hasColumn($pdo, 'conversation_messages', 'sender_display_name')) {
-                $pdo->prepare(
-                    'INSERT INTO conversation_messages
-                        (tenant_id, conversation_id, evolution_message_id, direction, sender_type, sender_display_name, message_type, content, status, raw_payload_json, sent_at)
-                     VALUES
-                        (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", :sender_display_name, "text", :content, "sent", :raw_payload, :sent_at)'
-                )->execute([
-                    'tenant_id' => $tenantId,
-                    'conversation_id' => $conversationId,
-                    'external_id' => $externalId,
-                    'sender_display_name' => $senderDisplayName !== '' ? $senderDisplayName : null,
-                    'content' => $message,
-                    'raw_payload' => json_encode($response['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    'sent_at' => $sentAt,
-                ]);
-            } else {
-                $pdo->prepare(
-                    'INSERT INTO conversation_messages
-                        (tenant_id, conversation_id, evolution_message_id, direction, sender_type, message_type, content, status, raw_payload_json, sent_at)
-                     VALUES
-                        (:tenant_id, :conversation_id, :external_id, "outgoing", "ai", "text", :content, "sent", :raw_payload, :sent_at)'
-                )->execute([
-                    'tenant_id' => $tenantId,
-                    'conversation_id' => $conversationId,
-                    'external_id' => $externalId,
-                    'content' => $message,
-                    'raw_payload' => json_encode($response['body'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    'sent_at' => $sentAt,
-                ]);
-            }
-
-            $pdo->prepare(
-                'UPDATE conversations
-                 SET last_message_at = :sent_at,
-                     last_message_preview = :preview,
-                     status = IF(status = "closed", "open", status)
-                 WHERE id = :id AND tenant_id = :tenant_id'
-            )->execute([
-                'sent_at' => $sentAt,
-                'preview' => mb_substr($message, 0, 255),
-                'id' => $conversationId,
-                'tenant_id' => $tenantId,
-            ]);
-
-            $pdo->prepare(
-                'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
-                 VALUES (:tenant_id, :conversation_id, "calendar.pre_schedule_ack_sent", :description, :metadata_json)'
-            )->execute([
-                'tenant_id' => $tenantId,
-                'conversation_id' => $conversationId,
-                'description' => 'Mensagem de registro da preferência enviada automaticamente.',
-                'metadata_json' => json_encode(['appointment_id' => (int) ($appointment['id'] ?? 0)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            ]);
-
-            return ['ok' => true, 'error' => null];
-        } catch (Throwable $exception) {
-            return ['ok' => false, 'error' => $exception->getMessage()];
-        }
-    }
+    // A confirmação prévia de preferência foi removida na 36.36.27.
+    // Disponibilidade só pode gerar mensagem depois da consulta técnica real.
 
     private function publicBlockedMessage(string $reason): string
     {

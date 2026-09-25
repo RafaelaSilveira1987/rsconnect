@@ -819,6 +819,65 @@ final class AgentConversationBehaviorService
         ];
     }
 
+    /**
+     * Valida regras estruturadas da modalidade antes de consultar a agenda.
+     * O retorno nunca pressupõe que um horário esteja ocupado; ele descreve apenas
+     * a regra cadastrada no agente (por exemplo, presencial somente às segundas).
+     *
+     * @param array<string,mixed> $appointment
+     * @return array{allowed:bool,code:string,message:string,allowed_days:array<int,string>,requested_day:string}
+     */
+    public function schedulingPreferenceRule(int $tenantId, array $appointment): array
+    {
+        $settings = $this->settingsForTenant($tenantId);
+        $modality = strtolower(trim((string) ($appointment['appointment_modality'] ?? $appointment['location_type'] ?? '')));
+        if (!in_array($modality, ['presencial', 'online'], true)) {
+            return ['allowed' => true, 'code' => 'modality_not_applicable', 'message' => '', 'allowed_days' => [], 'requested_day' => ''];
+        }
+
+        $config = is_array($settings['modalities'][$modality] ?? null) ? $settings['modalities'][$modality] : [];
+        $days = is_array($config['allowed_days'] ?? null) ? array_values($config['allowed_days']) : [];
+        if (empty($config['enabled']) || $days === []) {
+            return ['allowed' => true, 'code' => 'no_day_restriction', 'message' => '', 'allowed_days' => $days, 'requested_day' => ''];
+        }
+
+        $requestedDay = '';
+        $startsAt = trim((string) ($appointment['starts_at'] ?? ''));
+        if ($startsAt !== '') {
+            try {
+                $timezoneName = trim((string) ($appointment['timezone'] ?? 'America/Sao_Paulo')) ?: 'America/Sao_Paulo';
+                $tz = new DateTimeZone($timezoneName);
+                $date = new DateTimeImmutable($startsAt, $tz);
+                $requestedDay = [1 => 'mon', 2 => 'tue', 3 => 'wed', 4 => 'thu', 5 => 'fri', 6 => 'sat', 7 => 'sun'][(int) $date->format('N')] ?? '';
+            } catch (Throwable) {
+                $requestedDay = '';
+            }
+        }
+
+        if ($requestedDay === '' || in_array($requestedDay, $days, true)) {
+            return ['allowed' => true, 'code' => 'allowed_day', 'message' => '', 'allowed_days' => $days, 'requested_day' => $requestedDay];
+        }
+
+        $allowedLabels = array_values(array_map([$this, 'dayLabel'], $days));
+        $custom = trim((string) ($config['message'] ?? ''));
+        $modalityLabel = $modality === 'presencial' ? 'presencial' : 'online';
+        $dayText = $this->humanList($allowedLabels);
+        $message = $custom !== ''
+            ? $custom
+            : 'Para atendimento ' . $modalityLabel . ', os dias configurados são ' . $dayText . '.';
+        if (!str_contains($message, '?')) {
+            $message = rtrim($message) . ' Você prefere um desses dias?';
+        }
+
+        return [
+            'allowed' => false,
+            'code' => 'modality_day_not_allowed',
+            'message' => $message,
+            'allowed_days' => $days,
+            'requested_day' => $requestedDay,
+        ];
+    }
+
     /** @param array<string,mixed> $appointment */
     public function handleNoAvailability(int $tenantId, int $conversationId, array $appointment = []): array
     {
@@ -991,6 +1050,20 @@ final class AgentConversationBehaviorService
         }
         $value = preg_replace('/[^a-z0-9\s]+/u', ' ', $value) ?? $value;
         return trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
+    }
+
+    /** @param array<int,string> $items */
+    private function humanList(array $items): string
+    {
+        $items = array_values(array_filter(array_map('trim', $items)));
+        if ($items === []) {
+            return 'os dias cadastrados';
+        }
+        if (count($items) === 1) {
+            return $items[0];
+        }
+        $last = array_pop($items);
+        return implode(', ', $items) . ' e ' . $last;
     }
 
     private function dayLabel(string $day): string

@@ -448,14 +448,19 @@ final class AgentTriageService
             $result['message'] = $decision['message'] ?? null;
             $result['decision'] = $decision;
 
-            // Retoma a agenda SOMENTE na transição em que a última informação
-            // obrigatória da triagem acabou de ser preenchida. Isso evita que uma
-            // intenção antiga de agenda contamine mensagens comuns posteriores.
+            // Retoma a agenda exatamente na transição em que a coleta obrigatória
+            // terminou. Há dois caminhos válidos:
+            // 1) o lead já tinha pedido agenda antes da triagem; ou
+            // 2) a própria Ordem do atendimento configurada possui uma ação de agenda
+            //    logo após a coleta. No segundo caso não exigimos que o lead repita
+            //    "quero agendar": a configuração do agente é a fonte de verdade.
             $wasCollectingSchedule = in_array((string) ($session['last_intent'] ?? ''), ['schedule', 'reschedule'], true)
                 && (string) ($session['status'] ?? '') === 'collecting'
                 && $startingCurrentField !== null;
-            if ($schedulingIntent
-                && $wasCollectingSchedule
+            $workflowCalendarReady = $startingCurrentField !== null
+                && $missingCompletion === []
+                && $this->workflowHasCalendarAction($profile);
+            if (($schedulingIntent && $wasCollectingSchedule || $workflowCalendarReady)
                 && $missingBeforeSchedule === []
                 && !empty($decision['allowed'])) {
                 $resumeParts = [];
@@ -467,10 +472,9 @@ final class AgentTriageService
                 if ($modality !== '') {
                     $resumeParts[] = $modality;
                 }
-                if ($resumeParts !== []) {
-                    $result['schedule_resume_ready'] = true;
-                    $result['schedule_resume_content'] = 'agendar ' . implode(' ', $resumeParts);
-                }
+                $result['schedule_resume_ready'] = true;
+                $result['schedule_resume_content'] = trim('agendar ' . implode(' ', $resumeParts));
+                $result['schedule_resume_reason'] = $workflowCalendarReady ? 'configured_workflow' : 'prior_schedule_intent';
             }
 
             if (!$decision['allowed'] && in_array($decisionType, ['block', 'handoff'], true)) {
@@ -1199,6 +1203,21 @@ final class AgentTriageService
             // O Policy Engine continua fail-closed: se a atualização operacional
             // falhar, skip_ai permanece verdadeiro e a IA não executa a ação.
         }
+    }
+
+    /** @param array<string,mixed> $profile */
+    private function workflowHasCalendarAction(array $profile): bool
+    {
+        foreach ((array) ($profile['workflow'] ?? []) as $step) {
+            if (!is_array($step) || empty($step['active']) || (string) ($step['step_type'] ?? '') !== 'action') {
+                continue;
+            }
+            $config = is_array($step['config'] ?? null) ? $step['config'] : [];
+            if (str_starts_with(trim((string) ($config['action_key'] ?? '')), 'calendar.')) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function redactEvidence(array $collected): array
