@@ -1,3 +1,14 @@
+# 36.36.24 — Tom configurável, humanização e Ordem do atendimento expansível
+
+- adiciona **Tom do atendimento** por assistente, com opções simples como acolhedor e empático, cordial e profissional, objetivo, leve ou personalizado;
+- o tom é salvo de forma estruturada no próprio agente e aplicado pelo runtime sem alterar regras, permissões ou conteúdo de negócio;
+- no tom acolhedor, relatos sensíveis recebem um reconhecimento breve antes da próxima pergunta configurada, evitando respostas frias ou burocráticas;
+- a **Ordem do atendimento** passa a permitir incluir uma informação já cadastrada ou criar uma nova pergunta personalizada sem editar código;
+- novas perguntas personalizadas criam automaticamente o campo de triagem e a etapa executável antes da agenda, podendo depois ser reordenadas;
+- frases condicionais como “se tiver vaga, prefiro online” registram apenas a modalidade e não são tratadas como preferência completa de agenda;
+- enquanto existir uma etapa de coleta antes da ação de agenda, a camada final remove promessas prematuras de consulta/disponibilidade e garante a pergunta configurada da etapa pendente;
+- preserva ordem configurada, Policy Engine, regras de agenda, retorno fora do horário, SLA opcional e migration obrigatória 119; não há migration nova.
+
 # 36.36.23 — Ordem de atendimento por turno e isolamento da agenda
 
 - corrige o cursor da triagem para que a **Ordem do atendimento** governe também turnos informativos, não apenas mensagens já classificadas como intenção de agenda;

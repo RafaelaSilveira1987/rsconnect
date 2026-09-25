@@ -204,6 +204,8 @@ final class AgentController
                 'triage_fields' => is_array($_POST['triage_fields'] ?? null) ? $_POST['triage_fields'] : [],
                 'policies' => is_array($_POST['agent_policies'] ?? null) ? $_POST['agent_policies'] : [],
                 'workflow' => is_array($_POST['workflow_steps'] ?? null) ? $_POST['workflow_steps'] : [],
+                'workflow_add_field_key' => trim((string) ($_POST['workflow_add_field_key'] ?? '')),
+                'workflow_new' => is_array($_POST['workflow_new'] ?? null) ? $_POST['workflow_new'] : [],
                 'conversation_behavior' => is_array($_POST['conversation_behavior'] ?? null) ? $_POST['conversation_behavior'] : [],
             ]);
 
@@ -482,6 +484,13 @@ final class AgentController
 
         $pdo = Database::connection();
 
+        $agentConfigStmt = $pdo->prepare(
+            'SELECT prompt_builder_json FROM ai_agents WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+        );
+        $agentConfigStmt->execute(['id' => $agentId, 'tenant_id' => $tenantId]);
+        $currentPromptBuilderJson = (string) ($agentConfigStmt->fetchColumn() ?: '');
+        $promptBuilderJson = $this->promptBuilderJsonWithToneFromPost($currentPromptBuilderJson);
+
         if (!Auth::isSuperAdmin()) {
             $technicalStmt = $pdo->prepare(
                 'SELECT n8n_webhook_url, n8n_enabled
@@ -541,7 +550,8 @@ final class AgentController
                      cooldown_seconds = :cooldown_seconds,
                      message_grouping_enabled = :message_grouping_enabled,
                      prioritize_current_turn = :prioritize_current_turn,
-                     reply_to_reactions = :reply_to_reactions
+                     reply_to_reactions = :reply_to_reactions,
+                     prompt_builder_json = :prompt_builder_json
                  WHERE id = :id AND tenant_id = :tenant_id'
             );
             $update->execute([
@@ -578,6 +588,7 @@ final class AgentController
                 'message_grouping_enabled' => $messageGroupingEnabled ? 1 : 0,
                 'prioritize_current_turn' => $prioritizeCurrentTurn ? 1 : 0,
                 'reply_to_reactions' => $replyToReactions ? 1 : 0,
+                'prompt_builder_json' => $promptBuilderJson,
                 'id' => $agentId,
                 'tenant_id' => $tenantId,
             ]);
@@ -734,6 +745,31 @@ final class AgentController
         }
 
         $this->redirectToAgents($tenantId);
+    }
+
+    private function promptBuilderJsonWithToneFromPost(string $currentJson): ?string
+    {
+        $builder = json_decode($currentJson, true);
+        $builder = is_array($builder) ? $builder : [];
+
+        $preset = strtolower(trim((string) ($_POST['agent_tone_preset'] ?? 'inherit')));
+        if (!in_array($preset, ['inherit', 'warm', 'professional', 'objective', 'friendly', 'custom'], true)) {
+            $preset = 'inherit';
+        }
+        $custom = mb_substr(trim((string) ($_POST['agent_tone_custom'] ?? '')), 0, 900);
+
+        if ($preset === 'inherit' && $custom === '') {
+            unset($builder['conversation_tone']);
+        } else {
+            $builder['conversation_tone'] = [
+                'preset' => $preset,
+                'custom' => $custom,
+            ];
+        }
+
+        return $builder !== []
+            ? json_encode($builder, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            : null;
     }
 
     private function guidedPromptFromPost(string $name, string $segment): string

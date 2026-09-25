@@ -729,7 +729,8 @@ final class AiAutomationService
                         (int) ($instance['tenant_id'] ?? 0),
                         $currentTurnContent,
                         $reply,
-                        $pdo
+                        $pdo,
+                        $conversationId
                     );
                     if ($this->isStaleAfterHoursReply($reply, $agent, $operatingPolicy)) {
                         // Um cache gravado quando o expediente estava fechado não pode
@@ -842,7 +843,8 @@ final class AiAutomationService
                 (int) ($instance['tenant_id'] ?? 0),
                 $currentTurnContent,
                 $reply,
-                $pdo
+                $pdo,
+                $conversationId
             );
 
             // A mensagem de ausência fora do horário é operacional, não uma apresentação

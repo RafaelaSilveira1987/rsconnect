@@ -84,6 +84,19 @@ foreach ($agentRuleFields as $runtimeField) {
     $runtimeFieldKey = trim((string) ($runtimeField['field_key'] ?? ''));
     if ($runtimeFieldKey !== '') $agentFieldLabelsByKey[$runtimeFieldKey] = (string) ($runtimeField['label'] ?? $runtimeFieldKey);
 }
+$workflowLinkedFieldKeys = [];
+foreach ($agentRuleWorkflow as $workflowStepForCatalog) {
+    if (!is_array($workflowStepForCatalog)) continue;
+    $workflowCatalogConfig = is_array($workflowStepForCatalog['config'] ?? null) ? $workflowStepForCatalog['config'] : [];
+    if (trim((string) ($workflowCatalogConfig['field_key'] ?? '')) !== '') $workflowLinkedFieldKeys[] = trim((string) $workflowCatalogConfig['field_key']);
+    if (is_array($workflowCatalogConfig['field_keys'] ?? null)) foreach ($workflowCatalogConfig['field_keys'] as $catalogFieldKey) { $catalogFieldKey = trim((string) $catalogFieldKey); if ($catalogFieldKey !== '') $workflowLinkedFieldKeys[] = $catalogFieldKey; }
+}
+$workflowLinkedFieldKeys = array_values(array_unique($workflowLinkedFieldKeys));
+$workflowAddableFields = array_values(array_filter($agentRuleFields, static function ($field) use ($workflowLinkedFieldKeys): bool {
+    if (!is_array($field)) return false;
+    $key = trim((string) ($field['field_key'] ?? ''));
+    return $key !== '' && !in_array($key, $workflowLinkedFieldKeys, true);
+}));
 $conversationBehavior = is_array($conversationBehavior ?? null) ? $conversationBehavior : [];
 $behaviorDemand = is_array($conversationBehavior['demand'] ?? null) ? $conversationBehavior['demand'] : [];
 $behaviorDelivery = is_array($conversationBehavior['response_delivery'] ?? null) ? $conversationBehavior['response_delivery'] : [];
@@ -317,6 +330,21 @@ $humanizeAgentRule = static function (string $key): string {
                                         </article>
                                     <?php endforeach; ?>
                                 </div>
+                                <div class="agent-workflow-additions">
+                                    <div class="agent-workflow-add-card">
+                                        <div><strong>Adicionar uma informação já cadastrada</strong><small>Inclua na Ordem do atendimento uma informação que já existe abaixo, sem recriar pergunta ou regra.</small></div>
+                                        <label class="field compact-field"><span>Informação</span><select name="workflow_add_field_key"><option value="">Nenhuma</option><?php foreach ($workflowAddableFields as $addableField): $addableKey = (string) ($addableField['field_key'] ?? ''); ?><option value="<?= View::e($addableKey) ?>"><?= View::e((string) ($addableField['label'] ?? $addableKey)) ?><?= empty($addableField['active']) ? ' — desativada' : '' ?></option><?php endforeach; ?></select></label>
+                                    </div>
+                                    <div class="agent-workflow-add-card">
+                                        <div><strong>Criar uma nova pergunta</strong><small>Use para adicionar uma informação personalizada ao roteiro. O RS Connect salva o campo e cria a etapa automaticamente antes da agenda.</small></div>
+                                        <div class="form-grid two">
+                                            <label class="field compact-field"><span>Nome da informação</span><input name="workflow_new[label]" maxlength="160" placeholder="Ex.: Objetivo principal do atendimento"></label>
+                                            <label class="field compact-field"><span>Pergunta que o assistente deve fazer</span><input name="workflow_new[prompt]" maxlength="1000" placeholder="Ex.: O que você espera conseguir com este atendimento?"></label>
+                                        </div>
+                                        <label class="check-field compact-check"><input type="checkbox" name="workflow_new[required_before_schedule]" value="1"><span>Esta informação precisa ser respondida antes de consultar a agenda</span></label>
+                                        <small class="field-hint">Depois de salvar, a nova etapa aparece na lista acima e pode ser movida normalmente.</small>
+                                    </div>
+                                </div>
                             </div>
                         </details>
                     <?php endif; ?>
@@ -514,6 +542,11 @@ $humanizeAgentRule = static function (string $key): string {
         <div class="agent-grid">
             <?php foreach ($agents as $agent): ?>
                 <?php
+                $agentPromptBuilder = json_decode((string) ($agent['prompt_builder_json'] ?? ''), true);
+                $agentPromptBuilder = is_array($agentPromptBuilder) ? $agentPromptBuilder : [];
+                $agentTone = is_array($agentPromptBuilder['conversation_tone'] ?? null) ? $agentPromptBuilder['conversation_tone'] : [];
+                $agentTonePreset = (string) ($agentTone['preset'] ?? 'inherit');
+                $agentToneCustom = (string) ($agentTone['custom'] ?? '');
                 $dayHours = $businessHoursByDay($agent['business_hours_json'] ?? null);
                 $agentChannelBindings = [];
                 foreach (($agent['channels'] ?? []) as $channelBinding) {
@@ -718,6 +751,15 @@ $humanizeAgentRule = static function (string $key): string {
                                     <small class="field-hint">Depois da última mensagem do cliente, o assistente espera esse período de silêncio antes de responder. Se chegar outra mensagem, a contagem recomeça.</small>
                                 </label>
                             </div>
+                            <section class="ai-local-automation-card agent-tone-settings" style="margin-top:12px">
+                                <div class="ai-local-automation-body">
+                                    <div class="ai-local-automation-intro"><span class="eyebrow">Tom do atendimento</span><strong>Como este assistente deve soar na conversa?</strong><p class="field-hint">O tom altera a forma de falar, não muda regras, ordem do atendimento ou permissões da agenda.</p></div>
+                                    <div class="form-grid two">
+                                        <label class="field compact-field"><span>Tom principal</span><select name="agent_tone_preset"><option value="inherit" <?= $agentTonePreset === 'inherit' ? 'selected' : '' ?>>Usar as instruções atuais</option><option value="warm" <?= $agentTonePreset === 'warm' ? 'selected' : '' ?>>Acolhedor e empático</option><option value="professional" <?= $agentTonePreset === 'professional' ? 'selected' : '' ?>>Cordial e profissional</option><option value="objective" <?= $agentTonePreset === 'objective' ? 'selected' : '' ?>>Objetivo e direto</option><option value="friendly" <?= $agentTonePreset === 'friendly' ? 'selected' : '' ?>>Leve e próximo</option><option value="custom" <?= $agentTonePreset === 'custom' ? 'selected' : '' ?>>Personalizado</option></select></label>
+                                        <label class="field compact-field"><span>Orientação complementar</span><input name="agent_tone_custom" maxlength="900" value="<?= View::e($agentToneCustom) ?>" placeholder="Ex.: acolha relatos sensíveis em uma frase curta antes da próxima pergunta"><small class="field-hint">Opcional. Não coloque regras de agenda ou dados comerciais aqui; use este campo apenas para estilo e linguagem.</small></label>
+                                    </div>
+                                </div>
+                            </section>
                             <section class="ai-local-automation-card" style="margin-top:12px">
                                 <div class="ai-local-automation-body">
                                     <div class="ai-local-automation-intro"><span class="eyebrow">Conversa natural</span><strong>Responder o conjunto da conversa, não só o último balão</strong><p class="field-hint">Recomendado para WhatsApp: o cliente costuma enviar a mesma ideia em duas ou três mensagens seguidas.</p></div>

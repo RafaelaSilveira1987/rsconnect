@@ -368,6 +368,16 @@ final class AgentBlueprintService
                 $this->updateWorkflowConfiguration($pdo, $tenantId, $workflowRows);
             }
 
+            $workflowAddFieldKey = trim((string) ($data['workflow_add_field_key'] ?? ''));
+            if ($workflowAddFieldKey !== '') {
+                $this->addExistingFieldToWorkflow($pdo, $tenantId, $workflowAddFieldKey);
+            }
+
+            $workflowNew = is_array($data['workflow_new'] ?? null) ? $data['workflow_new'] : [];
+            if (trim((string) ($workflowNew['label'] ?? '')) !== '' || trim((string) ($workflowNew['prompt'] ?? '')) !== '') {
+                $this->addCustomCollectionStep($pdo, $tenantId, $workflowNew);
+            }
+
             if (is_array($currentConfig['conversation_behavior'] ?? null)) {
                 $this->syncConversationBehavior($pdo, $tenantId, $currentConfig['conversation_behavior']);
             }
@@ -774,6 +784,193 @@ final class AgentBlueprintService
                 'step_key' => (string) $row['step_key'],
             ]);
         }
+    }
+
+    private function addExistingFieldToWorkflow(PDO $pdo, int $tenantId, string $fieldKey): void
+    {
+        $fieldKey = mb_substr(trim($fieldKey), 0, 120);
+        if ($fieldKey === '') {
+            return;
+        }
+
+        $fieldStmt = $pdo->prepare(
+            'SELECT field_key, label FROM tenant_triage_fields
+             WHERE tenant_id = :tenant_id AND field_key = :field_key LIMIT 1'
+        );
+        $fieldStmt->execute(['tenant_id' => $tenantId, 'field_key' => $fieldKey]);
+        $field = $fieldStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$field) {
+            throw new \RuntimeException('A informação escolhida não existe mais na configuração da empresa.');
+        }
+
+        if ($this->workflowAlreadyCollectsField($pdo, $tenantId, $fieldKey)) {
+            return;
+        }
+
+        // Ao escolher uma informação para a Ordem do atendimento, ela passa a fazer
+        // parte efetiva do fluxo. Mantemos as demais travas como estavam configuradas.
+        $pdo->prepare(
+            'UPDATE tenant_triage_fields SET active = 1, source = "tenant" WHERE tenant_id = :tenant_id AND field_key = :field_key'
+        )->execute(['tenant_id' => $tenantId, 'field_key' => $fieldKey]);
+
+        $this->insertCollectionStepBeforeFirstAction(
+            $pdo,
+            $tenantId,
+            $this->uniqueWorkflowStepKey($pdo, $tenantId, 'collect_' . $fieldKey),
+            (string) ($field['label'] ?? $fieldKey),
+            $fieldKey
+        );
+    }
+
+    /** @param array<string,mixed> $raw */
+    private function addCustomCollectionStep(PDO $pdo, int $tenantId, array $raw): void
+    {
+        $label = mb_substr(trim((string) ($raw['label'] ?? '')), 0, 160);
+        $prompt = mb_substr(trim((string) ($raw['prompt'] ?? '')), 0, 1000);
+        if ($label === '' || $prompt === '') {
+            throw new \RuntimeException('Para criar uma nova etapa, informe o nome da informação e a pergunta que o assistente deve fazer.');
+        }
+
+        $fieldKeyBase = 'custom_' . $this->slugKey($label);
+        $fieldKey = $this->uniqueTriageFieldKey($pdo, $tenantId, $fieldKeyBase !== 'custom_' ? $fieldKeyBase : 'custom_info');
+        $requiredBeforeSchedule = !empty($raw['required_before_schedule']) ? 1 : 0;
+
+        $positionStmt = $pdo->prepare('SELECT COALESCE(MAX(position), 0) FROM tenant_triage_fields WHERE tenant_id = :tenant_id');
+        $positionStmt->execute(['tenant_id' => $tenantId]);
+        $fieldPosition = max(10, (int) $positionStmt->fetchColumn() + 10);
+
+        $pdo->prepare(
+            'INSERT INTO tenant_triage_fields
+                (tenant_id, field_key, label, field_type, prompt_text,
+                 required_before_schedule, required_for_completion, active, position, source)
+             VALUES
+                (:tenant_id, :field_key, :label, "text", :prompt_text,
+                 :required_before_schedule, 1, 1, :position, "tenant")'
+        )->execute([
+            'tenant_id' => $tenantId,
+            'field_key' => $fieldKey,
+            'label' => $label,
+            'prompt_text' => $prompt,
+            'required_before_schedule' => $requiredBeforeSchedule,
+            'position' => $fieldPosition,
+        ]);
+
+        $this->insertCollectionStepBeforeFirstAction(
+            $pdo,
+            $tenantId,
+            $this->uniqueWorkflowStepKey($pdo, $tenantId, 'collect_' . $fieldKey),
+            'Coletar ' . $label,
+            $fieldKey
+        );
+    }
+
+    private function workflowAlreadyCollectsField(PDO $pdo, int $tenantId, string $fieldKey): bool
+    {
+        $stmt = $pdo->prepare(
+            'SELECT config_json FROM tenant_agent_workflow_steps
+             WHERE tenant_id = :tenant_id AND step_type = "collect" AND active = 1'
+        );
+        $stmt->execute(['tenant_id' => $tenantId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+            $config = $this->decodeJson((string) ($row['config_json'] ?? ''));
+            $keys = [];
+            if (trim((string) ($config['field_key'] ?? '')) !== '') {
+                $keys[] = trim((string) $config['field_key']);
+            }
+            if (is_array($config['field_keys'] ?? null)) {
+                $keys = array_merge($keys, array_map('strval', $config['field_keys']));
+            }
+            if (in_array($fieldKey, array_map('trim', $keys), true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function insertCollectionStepBeforeFirstAction(PDO $pdo, int $tenantId, string $stepKey, string $label, string $fieldKey): void
+    {
+        $rowsStmt = $pdo->prepare(
+            'SELECT id, position, step_type FROM tenant_agent_workflow_steps
+             WHERE tenant_id = :tenant_id ORDER BY position, id'
+        );
+        $rowsStmt->execute(['tenant_id' => $tenantId]);
+        $rows = $rowsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $insertIndex = count($rows);
+        foreach ($rows as $index => $row) {
+            if ((string) ($row['step_type'] ?? '') !== 'collect') {
+                $insertIndex = $index;
+                break;
+            }
+        }
+
+        // Abre espaço e reindexa para manter uma ordem simples e determinística.
+        $positionUpdate = $pdo->prepare(
+            'UPDATE tenant_agent_workflow_steps SET position = :position WHERE id = :id AND tenant_id = :tenant_id'
+        );
+        foreach ($rows as $index => $row) {
+            $newIndex = $index >= $insertIndex ? $index + 1 : $index;
+            $positionUpdate->execute([
+                'position' => ($newIndex + 1) * 10,
+                'id' => (int) $row['id'],
+                'tenant_id' => $tenantId,
+            ]);
+        }
+
+        $pdo->prepare(
+            'INSERT INTO tenant_agent_workflow_steps
+                (tenant_id, step_key, label, step_type, config_json, active, position, source)
+             VALUES
+                (:tenant_id, :step_key, :label, "collect", :config_json, 1, :position, "tenant")'
+        )->execute([
+            'tenant_id' => $tenantId,
+            'step_key' => mb_substr($stepKey, 0, 120),
+            'label' => mb_substr($label, 0, 180),
+            'config_json' => json_encode(['field_keys' => [$fieldKey]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'position' => ($insertIndex + 1) * 10,
+        ]);
+    }
+
+    private function uniqueWorkflowStepKey(PDO $pdo, int $tenantId, string $base): string
+    {
+        $base = mb_substr($this->slugKey($base), 0, 100);
+        $base = $base !== '' ? $base : 'collect_custom';
+        $candidate = $base;
+        for ($suffix = 2; $suffix < 100; $suffix++) {
+            $stmt = $pdo->prepare('SELECT COUNT(*) FROM tenant_agent_workflow_steps WHERE tenant_id = :tenant_id AND step_key = :step_key');
+            $stmt->execute(['tenant_id' => $tenantId, 'step_key' => $candidate]);
+            if ((int) $stmt->fetchColumn() === 0) {
+                return $candidate;
+            }
+            $candidate = mb_substr($base, 0, 112) . '_' . $suffix;
+        }
+        throw new \RuntimeException('Não foi possível gerar uma identificação única para a nova etapa.');
+    }
+
+    private function uniqueTriageFieldKey(PDO $pdo, int $tenantId, string $base): string
+    {
+        $base = mb_substr($this->slugKey($base), 0, 100);
+        $candidate = $base !== '' ? $base : 'custom_info';
+        for ($suffix = 2; $suffix < 100; $suffix++) {
+            $stmt = $pdo->prepare('SELECT COUNT(*) FROM tenant_triage_fields WHERE tenant_id = :tenant_id AND field_key = :field_key');
+            $stmt->execute(['tenant_id' => $tenantId, 'field_key' => $candidate]);
+            if ((int) $stmt->fetchColumn() === 0) {
+                return $candidate;
+            }
+            $candidate = mb_substr($base, 0, 112) . '_' . $suffix;
+        }
+        throw new \RuntimeException('Não foi possível gerar uma identificação única para a nova informação.');
+    }
+
+    private function slugKey(string $value): string
+    {
+        $value = mb_strtolower(trim($value));
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+        if (is_string($ascii) && $ascii !== '') {
+            $value = strtolower($ascii);
+        }
+        $value = preg_replace('/[^a-z0-9]+/', '_', $value) ?? $value;
+        return trim($value, '_');
     }
 
     /**

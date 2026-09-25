@@ -433,6 +433,7 @@ final class AiModelService
         $timezone = trim((string) ($agent['business_timezone'] ?? Env::get('APP_TIMEZONE', 'America/Sao_Paulo')));
         $assistantName = trim((string) ($agent['name'] ?? ''));
         $assistantRole = trim((string) ($agent['segment'] ?? ''));
+        $conversationTone = $this->conversationToneInstruction($agent);
         $prioritizeCurrentTurn = !array_key_exists('prioritize_current_turn', $agent)
             || (int) ($agent['prioritize_current_turn'] ?? 1) === 1;
         $currentTurnText = trim((string) ($agent['_current_turn_text'] ?? ''));
@@ -485,7 +486,7 @@ final class AiModelService
 
         $rules = [
             'Responda sempre em português do Brasil.',
-            'Seja breve, educada e objetiva. Evite textos longos.',
+            'Mantenha respostas curtas e claras, mas preserve naturalidade e humanidade. O tom estruturado do assistente, quando configurado, tem prioridade sobre uma instrução livre conflitante apenas no estilo de linguagem.',
             'Faça somente uma pergunta por mensagem.',
             'Quando o cliente enviar várias mensagens antes da sua resposta, trate todas como uma única fala e responda ao conjunto, não apenas ao último balão.',
             'Se a pessoa perguntar sobre preço, funcionamento e disponibilidade no mesmo bloco, responda às perguntas informativas com os dados realmente configurados e só depois faça a pergunta de triagem pendente. Quando o valor não estiver configurado, diga que a equipe poderá informá-lo; não invente preços.',
@@ -499,12 +500,16 @@ final class AiModelService
             'Não mencione que você é um modelo de linguagem.',
             'Se o lead pedir humano, atendente, suporte ou uma pessoa, sinalize transferência em vez de insistir no atendimento automático.',
             'Não transforme menções casuais de data, hora, hoje, amanhã, tarde ou noite em pedido de agendamento. Agenda só deve ser conduzida quando houver intenção real e explícita de marcar, remarcar, consultar disponibilidade ou quando a conversa já estiver em um fluxo recente de agenda.',
+            'Uma frase condicional como “se tiver vaga” ou “se houver horário”, sem dia, período ou horário informado, expressa apenas interesse. Não diga que já está verificando a disponibilidade e não registre isso como preferência completa. Continue pela próxima informação configurada na Ordem do atendimento.',
             'Cliente ou paciente já identificado deve ter continuidade de atendimento: não reabra a triagem completa nem repita uma demanda já registrada. Se a regra estruturada exigir demanda antes da agenda e ela ainda estiver ausente nesta conversa, colete somente essa informação antes de consultar horários.',
             'O contexto operacional fornecido pelo RS Connect (modo da conversa, horário, classificação, grupo e tags) tem prioridade sobre instruções conflitantes do prompt livre.',
             'A organização do contato é uma regra operacional, não apenas informativa: adapte a conversa ao perfil de relacionamento indicado pelo RS Connect.',
             'Quando existir um setor operacional atual informado pelo RS Connect, considere-o a fila real desta conversa e adapte linguagem/encaminhamento ao papel desse setor.',
             'Nunca afirme que uma transferência para outro assistente virtual ou setor automatizado já aconteceu apenas por decisão textual sua. A troca entre assistentes é executada pelo motor do RS Connect antes da resposta. Se não houver o bloco TRANSFERÊNCIA INTERNA CONFIRMADA abaixo, não diga que já transferiu, que está transferindo agora ou que outro assistente já assumiu.',
         ];
+        if ($conversationTone !== '') {
+            $rules[] = 'Tom configurado para este assistente: ' . $conversationTone;
+        }
 
         if (!empty($operatingPolicy['enforced'])) {
             $currentAt = trim((string) ($operatingPolicy['current_at'] ?? ''));
@@ -800,6 +805,29 @@ final class AiModelService
             "Regras obrigatórias:
 - " . implode("
 - ", $rules));
+    }
+
+    /** @param array<string,mixed> $agent */
+    private function conversationToneInstruction(array $agent): string
+    {
+        $builder = json_decode((string) ($agent['prompt_builder_json'] ?? ''), true);
+        if (!is_array($builder) || !is_array($builder['conversation_tone'] ?? null)) {
+            return '';
+        }
+
+        $tone = $builder['conversation_tone'];
+        $preset = strtolower(trim((string) ($tone['preset'] ?? 'inherit')));
+        $custom = mb_substr(trim((string) ($tone['custom'] ?? '')), 0, 900);
+        $presetInstruction = match ($preset) {
+            'warm' => 'Acolhedor e empático. Reconheça brevemente relatos emocionalmente relevantes antes de seguir para a próxima pergunta, sem diagnosticar nem alongar a conversa. Evite respostas frias ou burocráticas.',
+            'professional' => 'Cordial e profissional. Demonstre atenção, use linguagem respeitosa e natural e evite formalidade excessiva.',
+            'objective' => 'Objetivo e direto. Vá ao ponto com educação, sem floreios, preservando uma frase curta de acolhimento quando a pessoa relatar algo sensível.',
+            'friendly' => 'Leve e próximo. Use linguagem simples e natural, mantendo respeito e sem informalidade excessiva.',
+            'custom' => '',
+            default => '',
+        };
+
+        return trim(implode(' ', array_filter([$presetInstruction, $custom], static fn (string $value): bool => trim($value) !== '')));
     }
 
     private function contactStatusLabel(string $status): string

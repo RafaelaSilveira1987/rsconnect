@@ -16836,3 +16836,29 @@ summary {
 @media (max-width: 760px) {
   .agent-runtime-audit-head { flex-direction: column; }
 }
+
+/* RS Connect 36.36.24 — personalização do fluxo e tom por assistente */
+.agent-workflow-additions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.agent-workflow-add-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px dashed #cfdbe4;
+  border-radius: 16px;
+  background: #fbfcfd;
+}
+.agent-workflow-add-card > div:first-child {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.agent-workflow-add-card > div:first-child strong { color: #25364c; font-size: .82rem; }
+.agent-workflow-add-card > div:first-child small { color: var(--muted); font-size: .72rem; line-height: 1.45; }
+.agent-tone-settings { border-color: rgba(1,148,142,.18); background: #f8fcfb; }
+@media (max-width: 880px) {
+  .agent-workflow-additions { grid-template-columns: 1fr; }
+}

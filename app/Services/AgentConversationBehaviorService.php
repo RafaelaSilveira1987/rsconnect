@@ -397,13 +397,19 @@ final class AgentConversationBehaviorService
      * não inventa respostas: ela apenas impede que uma resposta gerada antecipe um tema
      * estruturado que o cliente ainda não pediu e limita a coleta a uma pergunta por turno.
      */
-    public function enforceTurnScope(int $tenantId, string $currentTurnText, string $reply, ?PDO $pdo = null): string
+    public function enforceTurnScope(int $tenantId, string $currentTurnText, string $reply, ?PDO $pdo = null, int $conversationId = 0): string
     {
-        return $this->enforceTurnScopeWithSettings(
+        $reply = $this->enforceTurnScopeWithSettings(
             $this->settingsForTenant($tenantId, $pdo),
             $currentTurnText,
             $reply
         );
+
+        if ($conversationId > 0 && trim($reply) !== '') {
+            $reply = $this->enforcePendingConfiguredQuestion($tenantId, $conversationId, $reply, $pdo);
+        }
+
+        return trim($reply);
     }
 
     /** @param array<string,mixed> $settings */
@@ -430,6 +436,110 @@ final class AgentConversationBehaviorService
         $reply = $this->keepOnlyFirstQuestion($reply);
 
         return trim($reply);
+    }
+
+    private function enforcePendingConfiguredQuestion(int $tenantId, int $conversationId, string $reply, ?PDO $pdo = null): string
+    {
+        try {
+            $context = (new AgentTriageService())->context($tenantId, $conversationId);
+            $currentFieldKey = trim((string) ($context['current_field_key'] ?? ''));
+            if ($currentFieldKey === '') {
+                return $reply;
+            }
+
+            $profile = (new AgentBlueprintService())->profileForTenant($tenantId, true, $pdo);
+            $prompt = '';
+            foreach ((array) ($profile['triage_fields'] ?? []) as $field) {
+                if (!is_array($field) || (string) ($field['field_key'] ?? '') !== $currentFieldKey) {
+                    continue;
+                }
+                $prompt = trim((string) ($field['prompt_text'] ?? ''));
+                break;
+            }
+            if ($prompt === '') {
+                return $reply;
+            }
+
+            // Enquanto ainda existe uma etapa de coleta antes da ação de agenda, uma
+            // frase gerada pela IA não pode transformar interesse em execução. O conteúdo
+            // da pergunta vem do banco; esta camada apenas impede uma promessa operacional
+            // prematura e garante que a pergunta configurada continue visível.
+            if ($this->fieldComesBeforeCalendarAction($profile, $currentFieldKey)) {
+                $reply = $this->stripPrematureCalendarActionClaims($reply);
+            }
+
+            if (!str_contains($reply, '?')) {
+                $reply = trim($reply);
+                $reply = $reply !== '' ? $reply . "\n\n" . $prompt : $prompt;
+            }
+
+            return trim($reply);
+        } catch (Throwable) {
+            return $reply;
+        }
+    }
+
+    /** @param array<string,mixed> $profile */
+    private function fieldComesBeforeCalendarAction(array $profile, string $fieldKey): bool
+    {
+        $fieldPosition = null;
+        $calendarPosition = null;
+        foreach ((array) ($profile['workflow'] ?? []) as $step) {
+            if (!is_array($step) || empty($step['active'])) {
+                continue;
+            }
+            $position = (int) ($step['position'] ?? 0);
+            $config = is_array($step['config'] ?? null) ? $step['config'] : [];
+            if ((string) ($step['step_type'] ?? '') === 'action'
+                && str_starts_with(trim((string) ($config['action_key'] ?? '')), 'calendar.')) {
+                $calendarPosition = $calendarPosition === null ? $position : min($calendarPosition, $position);
+            }
+            if ((string) ($step['step_type'] ?? '') !== 'collect') {
+                continue;
+            }
+            $keys = [];
+            if (trim((string) ($config['field_key'] ?? '')) !== '') {
+                $keys[] = trim((string) $config['field_key']);
+            }
+            if (is_array($config['field_keys'] ?? null)) {
+                foreach ($config['field_keys'] as $key) {
+                    $key = trim((string) $key);
+                    if ($key !== '') {
+                        $keys[] = $key;
+                    }
+                }
+            }
+            if (in_array($fieldKey, $keys, true)) {
+                $fieldPosition = $position;
+            }
+        }
+
+        return $fieldPosition !== null && $calendarPosition !== null && $fieldPosition < $calendarPosition;
+    }
+
+    private function stripPrematureCalendarActionClaims(string $reply): string
+    {
+        $sentences = preg_split('/(?<=[\.!?])\s+/u', trim($reply)) ?: [trim($reply)];
+        $kept = [];
+        foreach ($sentences as $sentence) {
+            $sentence = trim((string) $sentence);
+            if ($sentence === '') {
+                continue;
+            }
+            $normalized = $this->normalize($sentence);
+            $claimsAction = preg_match(
+                '/\b(vou|vamos|iremos|estou|ja|já)\b.{0,70}\b(registrar|anotar|encaminhar|verificar|consultar|buscar|checar)\b.{0,80}\b(preferencia|preferência|agenda|disponibilidade|horario|horário|vaga)\b/u',
+                $normalized
+            ) === 1;
+            $claimsFollowup = preg_match(
+                '/\b(assim que|quando)\b.{0,45}\b(confirmar|confirmado|disponibilidade|retorno)\b.{0,60}\b(aviso|avisar|comunico|retorno)\b/u',
+                $normalized
+            ) === 1;
+            if (!$claimsAction && !$claimsFollowup) {
+                $kept[] = $sentence;
+            }
+        }
+        return trim(implode(' ', $kept));
     }
 
     private function turnAsksPayment(string $content): bool
