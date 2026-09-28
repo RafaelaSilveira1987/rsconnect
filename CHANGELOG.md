@@ -1,3 +1,15 @@
+# 36.37.0 — Motor genérico de atendimento por configuração
+
+- transforma a **Ordem do atendimento** na fonte efetiva para a fronteira da agenda: campos vinculados a etapas de coleta antes de `calendar.*` passam a ser exigidos antes da consulta;
+- permite editar, dentro de cada etapa de coleta, **quais informações pertencem à etapa**, inclusive a antiga “Triagem administrativa”;
+- adiciona **Forma de atendimento** com três estratégias por empresa: `Não se aplica`, `Uma única forma` e `Mais de uma forma / cliente escolhe`;
+- em modalidade única, o backend preenche automaticamente `online` ou `presencial` e não pergunta ao contato;
+- quando modalidade não se aplica, a Agenda interna e o callback de disponibilidade passam a aceitar `indefinida` sem bloquear a consulta;
+- o campo técnico `modality` é retirado do runtime de triagem quando a configuração já resolveu a modalidade, evitando repetição como a vista no WhatsApp;
+- o template atual do n8n para eventos VAGO deixa de impor Online/Presencial universalmente e aceita negócios sem esse conceito;
+- mantém compatibilidade com configurações antigas: duas modalidades ativas viram “cliente escolhe”; apenas uma ativa vira “modalidade única”;
+- não há migration nova; permanece obrigatória `120_agent_turn_state_cursor.sql`.
+
 # 36.36.28 — Consulta real de horários e confirmação sem falso positivo
 
 - corrige o falso positivo em que mensagens como **“Sim, qual horário tem disponível?”** eram classificadas como confirmação de agendamento só por começarem com “sim” e conterem “horário”;

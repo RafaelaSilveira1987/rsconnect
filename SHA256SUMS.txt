@@ -3,9 +3,9 @@
 26af3be20ef2792ee868f93e6da1a95d773aa46727672d19be82ab9b0beb7515  ./.env.local.example
 a9b27e3f3080987813b3305be48c13e1e54cdf650a5f954e1d7485a53bb38543  ./.env.vps.example
 515746cb32b412abe48d68d41108b11ae38b7c4d542fbccc0d149403c89da124  ./.gitignore
-281df6f31f693d693371c9e06b0c224a150bd68f699fd31581c437d03564a975  ./CHANGELOG.md
+d7368649b75738e54e7804aa31ebb4d63c917a8085e7f3fa686f481ce5f65305  ./CHANGELOG.md
 384e15708206ac4de668939ccc4f133bddebc98cbbd5cc46b7c0ca54009d97f2  ./Dockerfile
-accef0e34ea7abbd25bd7f4346d6a5a94a40d3133afb3d6c1f4b017e6169947f  ./README.md
+60fbdd099457a2413af4deef89d6db13c9cdba46d612e18aed9fa75a3adc4d74  ./README.md
 ce7249f53b73b4347f0db1bf484321162a24877aca6e7106d85afd34365ab179  ./app/Controllers/AccessController.php
 64dc9574317cd81b08f9669533f2b8cf57d8a8ba305760158a7ecff6dee51433  ./app/Controllers/AdminCrmController.php
 7a964baf4c3563146b922fd9fd3cea227dff01727aa798b8afacbf65cddf8894  ./app/Controllers/AgentBlueprintController.php
@@ -80,8 +80,8 @@ bcb7dd6d63e63baeab2fe89e1e5ce45dc61a5d83939abf5f24311411ea7835b7  ./app/Services
 b26b8c1216e5971df04bf0a7c556cb1f8a3380b4dfb797df69f400df86a4f7a9  ./app/Services/AdminExecutiveReportService.php
 d4b60128e7862666e107469585a07497e5576161959f4b5b85299eeceb678f49  ./app/Services/AfterHoursAcknowledgementPolicyService.php
 d86b7388f1b1ccf5ad5e1bf8fddae18aa4b8f97f24af874480d8afe49de04770  ./app/Services/AfterHoursMonitorService.php
-96f4c8e4149e1bd8c9de7def66a7213af109e949e1bb40f335833e2a344c9b81  ./app/Services/AgentBlueprintService.php
-770e29f50b8dab65f6ff92ae532af868006258e2f319a91fd45cbb251ebc610f  ./app/Services/AgentConversationBehaviorService.php
+055c25ec0b84732906e5750829ef7ed37f91263b994a76d411535ae957d061be  ./app/Services/AgentBlueprintService.php
+72d3c9b1efd0f33150e3b16ce5a358a5ffcd3d920daa398c1ac072609868c593  ./app/Services/AgentConversationBehaviorService.php
 bd11912887d4a9b6ec4ec52406cc32674e60af0ece711760193b091266f44a78  ./app/Services/AgentOperatingPolicyService.php
 fef82e2202035999b844e9d55c3614b748eb75169062ea29f5575a9c4b14221b  ./app/Services/AgentPolicyEngineService.php
 c9b4b044246eeb629d372d41f60431c10959ccd63aeb2e14017f7ef42c33c78c  ./app/Services/AgentRoutingService.php
@@ -108,13 +108,13 @@ f98077caae5b7beeb7dead715471527a4a58b64dbeb0c2505660b543228bfbcf  ./app/Services
 d73181c7c18f1585050d3f611b49303ced38528adb42ea46ad9cc05858f1f01a  ./app/Services/AiRouterService.php
 fe5c2b3eca0bfce848ac8ef3058623da97b8aa04d5565c2a67f4e6fc258ed0e5  ./app/Services/AiTurnContextService.php
 31f804dbc48f1506e82c9de1395a7f67650de453a03671900a8132a291cd1465  ./app/Services/AiUsageService.php
-9e768e7e5b0d7ae648bd958bf5099270c905c67e94f63c41dc08747786d27d45  ./app/Services/AppVersionService.php
+e1c997630142770fb6a8c8aab495bf37361889aa9a0e68505538c3bffefe90e1  ./app/Services/AppVersionService.php
 827a1e1fb703b1ffa5cc9f663219e6116c7c043852661bbaa8b7514e73b715f6  ./app/Services/AutomationWebhookService.php
 1980cb493d0e0464cdcbeb155b5aea8739c318f78bd0aafd0c8acc6dc5e8f335  ./app/Services/BackupAutomationService.php
 ec4c8036b556935456fe05933de8074d1020866d3f256f203943dcfaf7be9b74  ./app/Services/BackupSchedulePolicyService.php
 97dfc002e8a346fa8896fea84aa0c0cc5bc1d85832a4ae92b9a9fffa035326c6  ./app/Services/BillingReminderService.php
 2bf9bb83642fd63e3446dd2b5bb5aa12de92f9e2093246b3854359e7a669ad30  ./app/Services/BrandingService.php
-f0a9af6b6fff0a388d1ee59c8dfb7662e0c6e1446df3faf4965ba1d6e3aa6a02  ./app/Services/CalendarAvailabilityService.php
+f83e3fcb64c05b955f337e1b3f11a1cde02d46fb30884d23e1e386393987a222  ./app/Services/CalendarAvailabilityService.php
 6318dcf494eb1df4d500a07dd3216abbf7c3cf120e2899d02a78a1d146b6307d  ./app/Services/CalendarConversationService.php
 a1d6fb07ea071e08f6dce7bceca2ea26173f6054e957eb2839f8e4ee90479cee  ./app/Services/CalendarGoogleLifecycleService.php
 83f0f28b9f43ab4c2a21c5faa15500fccd5e51fd59b91161418971c50a910c15  ./app/Services/ClientCommunicationService.php
@@ -156,7 +156,7 @@ a47ed943cbdd9f615002871f98209d5edc7781e9eda6f6de25b650212f3dd175  ./app/Services
 a1061ea5c3de5e9932680ed4816453384a5cad37eaeb3760ee8568b57ea45346  ./app/Services/OperationsService.php
 346df55219d9a93a701ee81ee721fccfc8447c4df4421ec3d88cb1484d5e559e  ./app/Services/PageHelpService.php
 5895b5e7b2bf19ede16815760bce7cfe41f4f4157a55386bd55f2ac2cf1552cc  ./app/Services/PaymentGatewayService.php
-4186482e62c68f168638c18216b9ba582b4807ed7ee5e010f931c9263fac9438  ./app/Services/PreSchedulingService.php
+a5093c07b6d1c2c34a8cd9ef26bf8bbcf0b4820bc24996d12a0e5bb4075c8a1a  ./app/Services/PreSchedulingService.php
 20749fd706af20d93682e9cf720531d823f9f1d8c473b882834aa1bb536eb99a  ./app/Services/PrivacyService.php
 83525f5ab9d30fdf9a27af0993d6c360ac200b6d29b7fb9e054cfc2b36b5e5d6  ./app/Services/ProfessionalCalendarService.php
 602626a3603723a0e6bd6f11b798c3ced3f4c5bdee310bb8fba6dd5189f0caf7  ./app/Services/PromptStudioService.php
@@ -183,7 +183,7 @@ ec861528deaace2a81cb1def4edcff586a91ad738435498348cd581ea3826799  ./app/Services
 e52bc6f57c62684cbfedd567491a121fbd458db932b81cebdfd57a14e8ee9e9c  ./app/Views/access/restricted.php
 ce00a338321692dd3d319c209f3ed9af6da1c94e93daec1b8d257901b55c7bcb  ./app/Views/agent_blueprints/index.php
 247cb55f2fd928992e389a95a1cf0cf2d5860ad1d3a0a40387210fcd3785515d  ./app/Views/agent_tests/index.php
-cdd141e3c0d8bd2832514c42fa93259bd2ceb8d8e514b7b860d3268695381e18  ./app/Views/agents/index.php
+7231c95efc222171bffd7428a702eb01d1313517c871305759fe3f2bfe6967da  ./app/Views/agents/index.php
 19c4f1430fc084c811b416a67825174352023381503439927e819e4c685ac8d1  ./app/Views/ai_attention/index.php
 e445a62fa08e30acfe977b2b2b5e321ea778a6c5bfc58f235da63749c533b4c3  ./app/Views/ai_credentials/index.php
 f678138f334c4373ca81ba45871f205e3ab4d3ed4d0b8d957faf4d6a7d328739  ./app/Views/ai_profitability/index.php
@@ -282,7 +282,7 @@ bfa3ae2f885cbba3088bf26450b981d0011a4ad903946ba5533103f8d16f2443  ./bin/operatio
 a7a04f26e9eaf021317b931775fba4962390e2cf833f5e8e365b6b1acc66f6b8  ./bin/tenant-health-check.php
 4e97ecf611d56dc21e6b896e785547908ba2226eac7be4021be55f4214aae555  ./bin/test-agent.php
 12d6f16903cd0daba026122017b3d05251247cfbc1897d61c01d99291dca02f2  ./bootstrap.php
-5a9c8bb0d8ea6ed0652e5e791d0ce9a70f9d9b5d868215a16b22456b6bc0c9c8  ./build-full-release.sh
+4549cc68933409118482040b5230880855995b859f1ae9bd5df03a5db49eeb02  ./build-full-release.sh
 f0fb883481b96a815d67be3ffff7daf101c0a7d43fe17c20ea260318042ca848  ./composer.json
 d961936c656d78eccec1bd5c866ae3938674435f62670b8765077a2b56d32f9e  ./database/073_hotfix_indice_fk_operational_alert_delivery.sql
 d026e58321490464667590b5049217e3eff1b7db527818cf19ebfd940333055e  ./database/HOTFIX-11.1-REPARAR-ASSINATURAS.sql
@@ -561,6 +561,7 @@ a1a6b4c92046da374f12c262b611260d9ccddd2903bf71232a430505db99441d  ./docs/ATUALIZ
 d4b49eada567c9b754f59e4b0b858243f5e98e5a37cb92a47868f3a6c2daf3ad  ./docs/ATUALIZACAO-v36.36.4.md
 b2778d9c6bf5d1c033d171617ff9067eb93a6acafc5b170cf93024297c84274c  ./docs/ATUALIZACAO-v36.36.5.md
 46950f1f005cbb43062652470ae7de98ea8948eb3fcbe626006afbc7cb91044c  ./docs/ATUALIZACAO-v36.36.6.md
+3d2ae137dfc5d49a22e14dfdbb900b9bf6054f90b25c0aaa1277c7db47cb20b6  ./docs/ATUALIZACAO-v36.37.0.md
 cc0ed1b48f4448f2256c8f0972a37cf24342ab7e5f5bbed6af6e39e53c5f1199  ./docs/ATUALIZACAO-v36.6.10.md
 868c8f2f58490d04357c95b2140d696d937530632228b736617ef378607ea7c7  ./docs/ATUALIZACAO-v36.6.11.md
 c5429636c9356d6548b356466f8244aeec21e6a4f63c6f30671951717e101361  ./docs/ATUALIZACAO-v36.6.12.md
@@ -716,7 +717,7 @@ bb1abfe4c06846f6e790095a8286b3a78d03e45d3b6ea2ef20596eeb27a07c5b  ./docs/n8n_tem
 8ecc081b69e29c94ac99d0d89105d42c415d9addd1dc9cfb4d4925b3f43a25de  ./docs/n8n_templates/template-agenda-google-espacos-livres.json
 3baa48f98634caa3dbc6d911fc79e597f5ea2276b2e76a3d1a9872159c910a9e  ./docs/n8n_templates/template-agenda-google-eventos-vago-36.2.2.json
 2128e16114a090b560017ef692604c2b7299236a7638cff74333e2e24810ffa5  ./docs/n8n_templates/template-agenda-google-eventos-vago-36.2.6-ordem-callback.json
-f75fe418885519b5e54342977da7ad03719c95018c5805c24a07a52f2d796931  ./docs/n8n_templates/template-agenda-google-eventos-vago.json
+73829b053a8c2132ec7a7256867a8b8184fc469b4e2a8da58fa138803c2696af  ./docs/n8n_templates/template-agenda-google-eventos-vago.json
 e73c574e525d84029eaa08f8fc12927d7f0e23e165a26d32721ed390cf3468cc  ./docs/n8n_templates/template-ai-reprocessamento-agendado.json
 1b0b0f839cb530ae70d440bb16f62e39b57c4d90cc96ca1377d4238c0f4b98d1  ./docs/n8n_templates/template-backup-rsconnect.json
 6c49017ed24d7d4b9aaa6baa735a97e4c42d0cfd52879952bd6d2abbed07367a  ./docs/n8n_templates/template-billing-cron.json
@@ -733,9 +734,9 @@ aeee5bc8e058b1d03890b79daaf9f39eef29e7e448efdc8b6d05d5678a01f1ac  ./docs/n8n_tem
 752c18986f14e103d9eb9950a0aab494d88b10c541cd3a470a051d790b7bdc11  ./docs/validation/HOMOLOGACAO-PERSISTENTE-2026-09-01.md
 006d6da9b25d9788d3afbc7c1f275a6b9d6d12ffcb1181961f519c05bfdb79cf  ./docs/validation/calendar-source-v7.md
 22347f12bacc2a5de89719e419f28f2e0a26bc5ecd4e467f396e2dc236d3fb34  ./docs/validation/homologacao-persistente-2026-09-01.json
-2a14a3cf72214d14720f3c2263c86bb78d73592b8c38c4c07579f1be20379515  ./manifest.json
+81573674b602739d52e23f9f601e7080a6825cd1c36f50558c90067a56a9e6fc  ./manifest.json
 c835b907d8eb7381a72224cfdc8b688ffbb9a7676f4f05f7bc84d18c4f61324e  ./public/.htaccess
-b646eb8ad437d4954617b2446081c9275eec04c7921aaa42c5282a51d8d90737  ./public/assets/css/app.css
+33ae97fe02bc5814c8bf4102c36e7571e23da0ccc02fb1cb9647c51b1406a736  ./public/assets/css/app.css
 a379eaa195764145459de3cd9172ea3ad08668586cb97b0377181b0cbf70a5bc  ./public/assets/css/reports.css
 eb9bc52f13a9bd152bfa27d7c522830ec59fdc580dd043a293531392c628cd70  ./public/assets/img/RS_Connect_horizontal_transparente.png
 8845f4643d846dc948141fb4de0df0bc1bb98124bf74913e664c792d1b2c07ab  ./public/assets/img/RS_Connect_horizontal_vetor.svg
@@ -818,8 +819,9 @@ efb592a359270a8dd496999dec64743395fdd1bcf2f0ffbcf77655f65303714e  ./tests/Featur
 7c7acc6a73d9e946c8b34d82a4142a6ac3bb1362490b7b7ff100429ace1d9e23  ./tests/Feature/agent-calendar-truth-contract-v363627-smoke.php
 345ed9947baec1d79b8c3147d8682b36858f4a63c2b4b06a4db32646bf19ab74  ./tests/Feature/agent-compact-scheduling-routing-v362715-smoke.php
 58a74c76f10ab7d421efb08e4b0a908ac696676f1ba80ebdc09c938be56a2dfc  ./tests/Feature/agent-config-runtime-contract-v363620-smoke.php
-e6eeb6af4d1256abe5f49256ae12671676855bd8595e987c8dc7ca08cc93f8e5  ./tests/Feature/agent-configured-order-v363620-smoke.php
+5e1fa8472a88efe24e6305a609f9449dede59ca008e6f59f32853303410f5907  ./tests/Feature/agent-configured-order-v363620-smoke.php
 c896ee83f5d8e24bc3e9e60e807b01d57c0ab47303a973537169675d14698dbf  ./tests/Feature/agent-conversation-behavior-v36310-smoke.php
+74bf6563465d3b0baeb19067a77d852fd3c0dec9d5a80d2fba3c22fb91cd4a48  ./tests/Feature/agent-generic-workflow-v36370-smoke.php
 a2f3bb1d98655784ea2abfa8161c0b397b42db447a260c83f6bfcff34a1cb03b  ./tests/Feature/agent-greeting-hotfix-v36313-smoke.php
 000a385134d0eec44527f3137e2180057221316f2246e67052fc61ccdf1c65c7  ./tests/Feature/agent-greeting-policy-v36312-smoke.php
 d60fc79c0e2f4b8b57c747b879499687ace0805373eb8e2da4d8d34409b2aa62  ./tests/Feature/agent-instance-linking-v36182-smoke.php
@@ -831,7 +833,7 @@ d60fc79c0e2f4b8b57c747b879499687ace0805373eb8e2da4d8d34409b2aa62  ./tests/Featur
 cf0903188ea5610d11a7f2a6a2bca962cd8ab1c843a81fca45f0f864b5e396d0  ./tests/Feature/agent-policy-calendar-scope-v17-smoke.php
 17a2f3a15a3758fecd1e25eb022c57736225230d307e42a9fd2608a0ba2e1d75  ./tests/Feature/agent-policy-followup-v36288-smoke.php
 30eda428760d8263187373bb2ff5d0b789d24b9e2d945743df2550d3ed78d40d  ./tests/Feature/agent-policy-reliability-smoke.php
-08f8b32983b933adeb23b629b0783f0aa411826ee35e1a3c433f12e01d7e1d54  ./tests/Feature/agent-runtime-response-contract-v363626-smoke.php
+47d8d94b977f23869a702c560b1b9aa7c4679b05290dd30d85ac7933abef116b  ./tests/Feature/agent-runtime-response-contract-v363626-smoke.php
 2ecbbb73e6a4d091c940fcf8a185764d08ab39040f5f41d1eaf70e95012ae53a  ./tests/Feature/agent-settings-responsive-v14-smoke.php
 2b933584e1a4e68886332ad546d8355315cab7e47e9c481044efcede5826786f  ./tests/Feature/agent-testing-cli-v36291-smoke.php
 6e4d6aa5aebaf7e242fd0cc981646468ed67bdcdb0ee3fa0371eb50f832d24f6  ./tests/Feature/agent-testing-lab-v36290-smoke.php
@@ -869,7 +871,7 @@ e5a618179f4efa406f83d7e52c8de20d72e97cf64fd4bdaed7e493c3dd20fa6a  ./tests/Featur
 2ce224811d0ca241c3e08ad9949b1e44b57ebfc080af5615e642f6cbaa1b5277  ./tests/Feature/calendar-intent-persistence-v362717-smoke.php
 3fcf8546fa0db8735ac7b0be955026cc385feb5bdb6137279369957408c24ba0  ./tests/Feature/calendar-internal-auto-request-v8-smoke.php
 b9d3291ae36c91064f255a69f19ec673477c92f3c5c4637d1bac20b0bff52ffb  ./tests/Feature/calendar-maintenance-auditability-smoke.php
-c7d4df24973e0485a5bb812139db1510478a1180bdb6fb27ef67c23b44acfe73  ./tests/Feature/calendar-modality-before-availability-smoke.php
+47bfd9b364608e63142a1de4d1ab509f08f42c85fd4c25506c123455bd47eba8  ./tests/Feature/calendar-modality-before-availability-smoke.php
 b0a1e75195180371b671a20b843e6a8065d3888aa0f1c38a8e0b867334904880  ./tests/Feature/calendar-orphan-conversation-rebind-v362721-smoke.php
 bbb3b6d8408d9a375f4089fce22367d7bd75eb87985f8c35730ed2872823cea0  ./tests/Feature/calendar-prompt-or-form-v9-smoke.php
 fab911c65603d475b0ba1d363ee69da144225c837e276ad338bfe7872c6876fc  ./tests/Feature/calendar-recovery-contact-identity-smoke.php

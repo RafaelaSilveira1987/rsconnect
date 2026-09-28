@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.36.28",
-  "release_name": "Consulta real de horários e confirmação sem falso positivo",
+  "package_version": "36.37.0",
+  "release_name": "Motor genérico de atendimento por configuração",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,8 +19,8 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.36.26",
-      "release_name": "Motor de IA com contrato de resposta",
+      "package_version": "36.36.28",
+      "release_name": "Consulta real de horários e confirmação sem falso positivo",
       "required_migration": "120_agent_turn_state_cursor.sql"
     },
     "historical_releases": [

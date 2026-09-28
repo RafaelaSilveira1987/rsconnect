@@ -77,6 +77,21 @@ final class PreSchedulingService
         if (!$intent['has_intent']) {
             return $result;
         }
+
+        // 36.37.0 — modalidade deixa de ser uma trava universal. A empresa define se
+        // esse conceito não se aplica, se existe uma única forma de atendimento ou se
+        // o contato realmente precisa escolher. Em modalidade única, o valor é
+        // preenchido automaticamente e nunca vira pergunta ao cliente.
+        $behaviorService = new AgentConversationBehaviorService();
+        $modalityPolicy = $behaviorService->modalityPolicy($tenantId, $pdo);
+        $modalityChoiceRequiredBeforeSchedule = !empty($modalityPolicy['requires_choice'])
+            && $behaviorService->modalityRequiredBeforeSchedule($tenantId, $pdo);
+        if (($modalityPolicy['mode'] ?? '') === 'single'
+            && !$this->isAvailabilityModality($this->intentSchedulingModality($intent))) {
+            $fixedModality = (string) ($modalityPolicy['fixed_modality'] ?? 'presencial');
+            $intent['location_type'] = $fixedModality;
+            $intent['modality'] = $fixedModality === 'online' ? 'Online' : 'Presencial';
+        }
         $availabilityInquiry = $this->asksAvailabilityOptions($content);
 
         $result['handled'] = true;
@@ -261,7 +276,7 @@ final class PreSchedulingService
             ]);
 
             $conversationSettings = $this->settings($tenantId);
-            if (empty($update['has_scheduling_modality'])) {
+            if (empty($update['has_scheduling_modality']) && $modalityChoiceRequiredBeforeSchedule) {
                 $result['modality_required'] = true;
                 $result['availability_request_needed'] = false;
 
@@ -553,7 +568,7 @@ final class PreSchedulingService
         $result['created'] = true;
         $result['appointment_id'] = $appointmentId;
 
-        if (!$this->isAvailabilityModality($intentModality)) {
+        if (!$this->isAvailabilityModality($intentModality) && $modalityChoiceRequiredBeforeSchedule) {
             $result['modality_required'] = true;
             $result['availability_request_needed'] = false;
 

@@ -587,14 +587,9 @@ final class CalendarAvailabilityService
         $settings = (array) ($professionalContext['settings'] ?? $settings);
 
         $requestedModality = $this->normalizeModality((string) ($appointment['appointment_modality'] ?? $appointment['location_type'] ?? 'indefinida'));
-        if (!in_array($requestedModality, ['online', 'presencial'], true)) {
-            return [
-                'ok' => false,
-                'skipped' => true,
-                'code' => 'modality_required',
-                'message' => 'Defina se o atendimento é online ou presencial antes de consultar a disponibilidade.',
-            ];
-        }
+        // 36.37.0 — "indefinida" é válida quando a empresa configurou que forma de
+        // atendimento não se aplica. A disponibilidade não pode mais impor online/
+        // presencial como requisito universal.
 
         $mode = $this->normalizeMode((string) ($settings['availability_mode'] ?? 'free_slots'));
         $token = bin2hex(random_bytes(16));
@@ -899,7 +894,6 @@ final class CalendarAvailabilityService
                              AND a.status IN ("pre_scheduled","awaiting_approval","rescheduled")
                              AND c.attendance_mode = "ai"
                              AND c.status <> "closed"
-                             AND COALESCE(NULLIF(a.appointment_modality, ""), NULLIF(a.location_type, ""), "indefinida") IN ("online","presencial")
                              AND a.starts_at IS NOT NULL
                              AND a.ends_at IS NOT NULL
                              AND a.chosen_availability_slot_id IS NULL
@@ -1455,14 +1449,6 @@ final class CalendarAvailabilityService
 
         $currentAppointment = $this->appointment((int) $request['tenant_id'], (int) $request['appointment_id']);
         $requestedModality = $this->normalizeModality((string) ($currentAppointment['appointment_modality'] ?? $currentAppointment['location_type'] ?? 'indefinida'));
-        if (!in_array($requestedModality, ['online', 'presencial'], true)) {
-            return [
-                'ok' => true,
-                'ignored' => 'modality_not_defined',
-                'message' => 'Callback ignorado porque a modalidade ainda não foi definida como Online ou Presencial.',
-                'request_id' => (int) $request['id'],
-            ];
-        }
         $currentRequestId = (int) ($currentAppointment['availability_request_id'] ?? 0);
         if ($currentRequestId > 0 && $currentRequestId !== (int) $request['id'] && $currentRequestId > (int) $request['id']) {
             return [
@@ -1519,10 +1505,13 @@ final class CalendarAvailabilityService
             }
 
             $modality = $this->normalizeModality((string) ($slot['modality'] ?? 'indefinida'));
-            if ($modality === 'indefinida') {
+            if ($modality === 'indefinida' && in_array($requestedModality, ['online', 'presencial'], true)) {
                 $modality = $requestedModality;
             }
-            if ($modality !== $requestedModality) {
+            // Quando a forma de atendimento não se aplica, aceitamos slots sem
+            // modalidade e também slots de provedores legados que ainda enviem esse
+            // metadado. Só filtramos quando a empresa/pedido definiu uma modalidade.
+            if (in_array($requestedModality, ['online', 'presencial'], true) && $modality !== $requestedModality) {
                 continue;
             }
             $dedupeKey = $googleEventId !== ''

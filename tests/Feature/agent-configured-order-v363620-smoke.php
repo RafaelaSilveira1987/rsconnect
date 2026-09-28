@@ -27,6 +27,11 @@ $profile = [
                 'required_before_schedule' => true,
                 'prompt' => 'Conte brevemente o motivo do atendimento.',
             ],
+            'service_mode' => ['mode' => 'choice', 'fixed_modality' => 'presencial'],
+            'modalities' => [
+                'online' => ['enabled' => true],
+                'presencial' => ['enabled' => true],
+            ],
         ],
     ],
     'capabilities' => [

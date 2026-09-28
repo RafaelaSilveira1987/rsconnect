@@ -30,6 +30,8 @@ $profile = [
     'interaction_mode' => 'hybrid',
     'config' => ['conversation_behavior' => [
         'demand' => ['enabled'=>true,'required_before_schedule'=>true,'prompt'=>'Tem acontecido alguma coisa que fez você perceber que seria importante iniciar a psicoterapia?'],
+        'service_mode' => ['mode'=>'choice','fixed_modality'=>'presencial'],
+        'modalities' => ['online'=>['enabled'=>true], 'presencial'=>['enabled'=>true]],
         'response_delivery' => ['mode'=>'auto','max_blocks'=>3,'scope'=>'asked_only'],
     ]],
     'capabilities' => ['triage.enabled'=>true,'eligibility.enabled'=>true,'calendar.pre_schedule'=>true],

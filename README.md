@@ -1,4 +1,4 @@
-# RS Connect 36.36.28
+# RS Connect 36.37.0
 
 > **Hotfix da agenda conversacional:** perguntas como “Sim, qual horário tem disponível?” não são mais tratadas como confirmação. Com a modalidade já definida, o RS Connect consulta a agenda real e apresenta somente horários que respeitam as regras cadastradas do agente. Não há migration nova; permanece `120_agent_turn_state_cursor.sql`.
 

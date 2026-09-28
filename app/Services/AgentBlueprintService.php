@@ -381,6 +381,13 @@ final class AgentBlueprintService
             if (is_array($currentConfig['conversation_behavior'] ?? null)) {
                 $this->syncConversationBehavior($pdo, $tenantId, $currentConfig['conversation_behavior']);
             }
+
+            // A Ordem do atendimento é a fonte final da fronteira da agenda:
+            // toda informação vinculada a uma etapa de coleta posicionada antes da
+            // primeira ação calendar.* passa a ser obrigatória antes da consulta.
+            // Executa depois das compatibilidades históricas para nenhuma regra antiga
+            // (como brief_demand) voltar a sobrescrever a ordem escolhida pelo usuário.
+            $this->syncWorkflowScheduleRequirements($pdo, $tenantId);
             $this->syncCalendarDefaults($pdo, $tenantId, $this->capabilities($tenantId, 0, $pdo));
             $pdo->commit();
             (new AgentConversationBehaviorService())->clearCache($tenantId);
@@ -717,7 +724,7 @@ final class AgentBlueprintService
     private function updateWorkflowConfiguration(PDO $pdo, int $tenantId, array $postedRows): void
     {
         $currentStmt = $pdo->prepare(
-            'SELECT step_key, label, step_type, active, position
+            'SELECT step_key, label, step_type, config_json, active, position
              FROM tenant_agent_workflow_steps
              WHERE tenant_id = :tenant_id
              ORDER BY position, id'
@@ -740,6 +747,16 @@ final class AgentBlueprintService
                 continue;
             }
             $position = max(1, min(9990, (int) ($posted['position'] ?? $currentByKey[$stepKey]['position'] ?? 100)));
+            $config = $this->decodeJson((string) ($currentByKey[$stepKey]['config_json'] ?? ''));
+            if ((string) ($currentByKey[$stepKey]['step_type'] ?? '') === 'collect' && array_key_exists('field_keys_present', $posted)) {
+                $postedFieldKeys = is_array($posted['field_keys'] ?? null) ? $posted['field_keys'] : [];
+                $postedFieldKeys = array_values(array_unique(array_filter(array_map(
+                    static fn (mixed $key): string => mb_substr(trim((string) $key), 0, 120),
+                    $postedFieldKeys
+                ))));
+                $config['field_keys'] = $postedFieldKeys;
+                unset($config['field_key']);
+            }
             $ordered[] = [
                 'step_key' => $stepKey,
                 'position' => $position,
@@ -748,6 +765,7 @@ final class AgentBlueprintService
                     0,
                     180
                 ),
+                'config_json' => json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ];
         }
 
@@ -763,6 +781,7 @@ final class AgentBlueprintService
                 'step_key' => $key,
                 'position' => (int) ($row['position'] ?? 100),
                 'label' => (string) ($row['label'] ?? $key),
+                'config_json' => (string) ($row['config_json'] ?? '{}'),
             ];
         }
 
@@ -773,15 +792,77 @@ final class AgentBlueprintService
 
         $update = $pdo->prepare(
             'UPDATE tenant_agent_workflow_steps
-             SET label = :label, position = :position, source = "tenant"
+             SET label = :label, position = :position, config_json = :config_json, source = "tenant"
              WHERE tenant_id = :tenant_id AND step_key = :step_key'
         );
         foreach ($ordered as $index => $row) {
             $update->execute([
                 'label' => (string) $row['label'],
                 'position' => ($index + 1) * 10,
+                'config_json' => (string) ($row['config_json'] ?? '{}'),
                 'tenant_id' => $tenantId,
                 'step_key' => (string) $row['step_key'],
+            ]);
+        }
+    }
+
+    private function syncWorkflowScheduleRequirements(PDO $pdo, int $tenantId): void
+    {
+        $stmt = $pdo->prepare(
+            'SELECT step_type, position, config_json FROM tenant_agent_workflow_steps
+             WHERE tenant_id = :tenant_id AND active = 1 ORDER BY position, id'
+        );
+        $stmt->execute(['tenant_id' => $tenantId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $calendarPosition = null;
+        foreach ($rows as $row) {
+            if ((string) ($row['step_type'] ?? '') !== 'action') continue;
+            $config = $this->decodeJson((string) ($row['config_json'] ?? ''));
+            if (str_starts_with(trim((string) ($config['action_key'] ?? '')), 'calendar.')) {
+                $calendarPosition = (int) ($row['position'] ?? 0);
+                break;
+            }
+        }
+        if ($calendarPosition === null) return;
+
+        // Limpa exigências antigas antes de derivar novamente a fronteira da agenda.
+        // Assim um campo removido/movido na Ordem do atendimento não continua
+        // bloqueando a agenda por configuração histórica invisível.
+        $pdo->prepare(
+            'UPDATE tenant_triage_fields SET required_before_schedule = 0 WHERE tenant_id = :tenant_id'
+        )->execute(['tenant_id' => $tenantId]);
+
+        $before = [];
+        $allWorkflowFields = [];
+        foreach ($rows as $row) {
+            if ((string) ($row['step_type'] ?? '') !== 'collect') continue;
+            $config = $this->decodeJson((string) ($row['config_json'] ?? ''));
+            $keys = [];
+            $one = trim((string) ($config['field_key'] ?? ''));
+            if ($one !== '') $keys[] = $one;
+            if (is_array($config['field_keys'] ?? null)) {
+                foreach ($config['field_keys'] as $key) {
+                    $key = trim((string) $key);
+                    if ($key !== '') $keys[] = $key;
+                }
+            }
+            foreach (array_unique($keys) as $key) {
+                $allWorkflowFields[$key] = true;
+                if ((int) ($row['position'] ?? 0) < $calendarPosition) $before[$key] = true;
+            }
+        }
+        if ($allWorkflowFields === []) return;
+
+        $update = $pdo->prepare(
+            'UPDATE tenant_triage_fields
+             SET required_before_schedule = :required, active = 1, source = "tenant"
+             WHERE tenant_id = :tenant_id AND field_key = :field_key'
+        );
+        foreach (array_keys($allWorkflowFields) as $fieldKey) {
+            $update->execute([
+                'required' => isset($before[$fieldKey]) ? 1 : 0,
+                'tenant_id' => $tenantId,
+                'field_key' => $fieldKey,
             ]);
         }
     }

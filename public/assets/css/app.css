@@ -16862,3 +16862,29 @@ summary {
 @media (max-width: 880px) {
   .agent-workflow-additions { grid-template-columns: 1fr; }
 }
+
+/* 36.37.0 — composição editável das etapas e forma de atendimento genérica. */
+.agent-workflow-fields-editor {
+  display: grid;
+  gap: 8px;
+}
+.agent-workflow-field-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.agent-workflow-field-options .compact-inline-check {
+  padding: 6px 9px;
+  border: 1px solid #dce7ea;
+  border-radius: 10px;
+  background: #fff;
+}
+.agent-service-mode-card {
+  margin-bottom: 12px;
+}
+@media (max-width: 760px) {
+  .agent-workflow-field-options {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

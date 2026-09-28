@@ -100,6 +100,7 @@ $workflowAddableFields = array_values(array_filter($agentRuleFields, static func
 $conversationBehavior = is_array($conversationBehavior ?? null) ? $conversationBehavior : [];
 $behaviorDemand = is_array($conversationBehavior['demand'] ?? null) ? $conversationBehavior['demand'] : [];
 $behaviorDelivery = is_array($conversationBehavior['response_delivery'] ?? null) ? $conversationBehavior['response_delivery'] : [];
+$behaviorServiceMode = is_array($conversationBehavior['service_mode'] ?? null) ? $conversationBehavior['service_mode'] : ['mode' => 'not_applicable', 'fixed_modality' => 'presencial'];
 $behaviorModalities = is_array($conversationBehavior['modalities'] ?? null) ? $conversationBehavior['modalities'] : [];
 $behaviorPayment = is_array($conversationBehavior['payment'] ?? null) ? $conversationBehavior['payment'] : [];
 $behaviorNoAvailability = is_array($conversationBehavior['no_availability'] ?? null) ? $conversationBehavior['no_availability'] : [];
@@ -319,9 +320,18 @@ $humanizeAgentRule = static function (string $key): string {
                                                 $workflowFieldKeys = array_values(array_unique($workflowFieldKeys));
                                                 ?>
                                                 <?php if ($workflowType === 'collect'): ?>
-                                                    <div class="agent-workflow-contract">
+                                                    <div class="agent-workflow-contract agent-workflow-fields-editor">
                                                         <span>Informações desta etapa</span>
-                                                        <strong><?= $workflowFieldKeys !== [] ? View::e(implode(' · ', array_map(static fn (string $key): string => $agentFieldLabelsByKey[$key] ?? $key, $workflowFieldKeys))) : 'Nenhuma informação vinculada' ?></strong>
+                                                        <input type="hidden" name="workflow_steps[<?= View::e($workflowKey) ?>][field_keys_present]" value="1">
+                                                        <div class="agent-workflow-field-options">
+                                                            <?php foreach ($agentRuleFields as $workflowAvailableField): if (!is_array($workflowAvailableField)) continue; $availableFieldKey = trim((string) ($workflowAvailableField['field_key'] ?? '')); if ($availableFieldKey === '') continue; ?>
+                                                                <label class="compact-inline-check">
+                                                                    <input type="checkbox" name="workflow_steps[<?= View::e($workflowKey) ?>][field_keys][]" value="<?= View::e($availableFieldKey) ?>" <?= in_array($availableFieldKey, $workflowFieldKeys, true) ? 'checked' : '' ?>>
+                                                                    <span><?= View::e((string) ($workflowAvailableField['label'] ?? $availableFieldKey)) ?></span>
+                                                                </label>
+                                                            <?php endforeach; ?>
+                                                        </div>
+                                                        <small>Marque exatamente os dados que esta etapa deve coletar. A ordem desta etapa em relação à agenda passa a definir a trava operacional.</small>
                                                     </div>
                                                 <?php elseif ($workflowType === 'action' && trim((string) ($workflowConfig['action_key'] ?? '')) !== ''): ?>
                                                     <div class="agent-workflow-contract"><span>Ação validada</span><strong><?= View::e((string) $workflowConfig['action_key']) ?></strong></div>
@@ -341,8 +351,7 @@ $humanizeAgentRule = static function (string $key): string {
                                             <label class="field compact-field"><span>Nome da informação</span><input name="workflow_new[label]" maxlength="160" placeholder="Ex.: Objetivo principal do atendimento"></label>
                                             <label class="field compact-field"><span>Pergunta que o assistente deve fazer</span><input name="workflow_new[prompt]" maxlength="1000" placeholder="Ex.: O que você espera conseguir com este atendimento?"></label>
                                         </div>
-                                        <label class="check-field compact-check"><input type="checkbox" name="workflow_new[required_before_schedule]" value="1"><span>Esta informação precisa ser respondida antes de consultar a agenda</span></label>
-                                        <small class="field-hint">Depois de salvar, a nova etapa aparece na lista acima e pode ser movida normalmente.</small>
+                                        <small class="field-hint">A nova etapa é criada antes da agenda e, por isso, será exigida antes da consulta. Depois de salvar, você pode movê-la; a trava acompanha automaticamente a posição da etapa.</small>
                                     </div>
                                 </div>
                             </div>
@@ -453,7 +462,21 @@ $humanizeAgentRule = static function (string $key): string {
                             </div>
 
                             <div class="agent-behavior-subsection">
-                                <div class="agent-behavior-subhead"><div><span class="eyebrow">Modalidades</span><strong>Online e presencial</strong></div><small>Estas informações entram no contexto operacional da IA e os dias presenciais também filtram horários oferecidos pela agenda conversacional.</small></div>
+                                <div class="agent-behavior-subhead"><div><span class="eyebrow">Forma de atendimento</span><strong>Defina se modalidade existe neste negócio</strong></div><small>A RS Connect não obriga mais todos os segmentos a escolher entre online e presencial.</small></div>
+                                <div class="agent-behavior-card agent-service-mode-card">
+                                    <div class="form-grid two">
+                                        <label class="field compact-field"><span>Como funciona neste negócio</span><select name="conversation_behavior[service_mode][mode]">
+                                            <option value="not_applicable" <?= ($behaviorServiceMode['mode'] ?? 'not_applicable') === 'not_applicable' ? 'selected' : '' ?>>Não se aplica — não perguntar modalidade</option>
+                                            <option value="single" <?= ($behaviorServiceMode['mode'] ?? '') === 'single' ? 'selected' : '' ?>>Uma única forma — preencher automaticamente</option>
+                                            <option value="choice" <?= ($behaviorServiceMode['mode'] ?? '') === 'choice' ? 'selected' : '' ?>>Mais de uma forma — cliente pode escolher</option>
+                                        </select><small>Ex.: clínica somente presencial = “Uma única forma”. Um negócio sem conceito de modalidade = “Não se aplica”.</small></label>
+                                        <label class="field compact-field"><span>Forma única / padrão</span><select name="conversation_behavior[service_mode][fixed_modality]">
+                                            <option value="presencial" <?= ($behaviorServiceMode['fixed_modality'] ?? 'presencial') === 'presencial' ? 'selected' : '' ?>>Presencial</option>
+                                            <option value="online" <?= ($behaviorServiceMode['fixed_modality'] ?? '') === 'online' ? 'selected' : '' ?>>Online</option>
+                                        </select><small>Usada automaticamente quando “Uma única forma” estiver selecionada.</small></label>
+                                    </div>
+                                </div>
+                                <div class="agent-behavior-subhead"><div><span class="eyebrow">Detalhes das formas</span><strong>Online e presencial</strong></div><small>Ative e descreva apenas as formas realmente oferecidas. Em modo de escolha, elas serão as opções disponíveis ao agente.</small></div>
                                 <div class="agent-behavior-grid agent-modality-grid">
                                     <?php $online = is_array($behaviorModalities['online'] ?? null) ? $behaviorModalities['online'] : []; ?>
                                     <article class="agent-behavior-card modality-card">

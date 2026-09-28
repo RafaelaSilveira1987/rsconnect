@@ -14,45 +14,64 @@ if (!function_exists('mb_substr')) {
 
 require dirname(__DIR__, 2) . '/bootstrap.php';
 
+use App\Services\AgentConversationBehaviorService;
 use App\Services\PreSchedulingService;
 
 $service = new PreSchedulingService();
+$behavior = new AgentConversationBehaviorService();
 
 $initial = $service->detectIntent('Quero marcar uma reuniao amanha as 10h', false);
 if (empty($initial['has_intent']) || ($initial['location_type'] ?? '') !== 'indefinida') {
-    throw new RuntimeException('Pedido de agenda sem modalidade deve permanecer indefinido.');
+    throw new RuntimeException('Pedido de agenda sem modalidade deve permanecer indefinido no parser.');
 }
 
-$online = $service->detectIntent('online', true);
-if (empty($online['has_intent']) || ($online['location_type'] ?? '') !== 'online') {
-    throw new RuntimeException('Resposta online deve continuar o fluxo e definir modalidade online.');
+$legacySingle = $behavior->settingsFromProfile([
+    'config' => ['conversation_behavior' => [
+        'modalities' => [
+            'online' => ['enabled' => false],
+            'presencial' => ['enabled' => true],
+        ],
+    ]],
+    'triage_fields' => [],
+]);
+if (($legacySingle['service_mode']['mode'] ?? '') !== 'single' || ($legacySingle['service_mode']['fixed_modality'] ?? '') !== 'presencial') {
+    throw new RuntimeException('Configuração legada somente presencial deve migrar em memória para modalidade única presencial.');
 }
 
-$presencial = $service->detectIntent('presencial', true);
-if (empty($presencial['has_intent']) || ($presencial['location_type'] ?? '') !== 'presencial') {
-    throw new RuntimeException('Resposta presencial deve continuar o fluxo e definir modalidade presencial.');
+$choiceProfile = [
+    'config' => ['conversation_behavior' => [
+        'service_mode' => ['mode' => 'choice', 'fixed_modality' => 'presencial'],
+        'modalities' => [
+            'online' => ['enabled' => true],
+            'presencial' => ['enabled' => true],
+        ],
+    ]],
+    'triage_fields' => [
+        ['field_key' => 'modality', 'active' => 1, 'required_before_schedule' => 1, 'required_for_completion' => 1],
+    ],
+];
+$choiceEffective = $behavior->applyOperationalOverridesToProfile($choiceProfile);
+if (empty($choiceEffective['triage_fields'][0]['active'])) {
+    throw new RuntimeException('Quando existe escolha real, o campo modalidade deve continuar coletável.');
+}
+
+$singleProfile = $choiceProfile;
+$singleProfile['config']['conversation_behavior']['service_mode']['mode'] = 'single';
+$singleEffective = $behavior->applyOperationalOverridesToProfile($singleProfile);
+if (!empty($singleEffective['triage_fields'][0]['active']) || empty($singleEffective['triage_fields'][0]['operationally_resolved'])) {
+    throw new RuntimeException('Modalidade única deve resolver o campo sem perguntar ao contato.');
 }
 
 $availabilitySource = file_get_contents(dirname(__DIR__, 2) . '/app/Services/CalendarAvailabilityService.php');
 if (!is_string($availabilitySource)
-    || !str_contains($availabilitySource, "code' => 'modality_required")
-    || !str_contains($availabilitySource, 'if ($modality !== $requestedModality)')) {
-    throw new RuntimeException('CalendarAvailabilityService precisa bloquear busca sem modalidade e filtrar o callback pela modalidade solicitada.');
+    || str_contains($availabilitySource, "'code' => 'modality_required'")
+    || !str_contains($availabilitySource, 'in_array($requestedModality, [\'online\', \'presencial\'], true) && $modality !== $requestedModality')) {
+    throw new RuntimeException('CalendarAvailabilityService deve aceitar modalidade indefinida e filtrar apenas quando houver modalidade efetiva.');
 }
 
-$template = json_decode((string) file_get_contents(dirname(__DIR__, 2) . '/docs/n8n_templates/template-agenda-google-eventos-vago.json'), true);
-if (!is_array($template)) {
-    throw new RuntimeException('Template Eventos VAGO inválido.');
-}
-$code = '';
-foreach (($template['nodes'] ?? []) as $node) {
-    if (($node['name'] ?? '') === 'Normalizar operação') {
-        $code = (string) ($node['parameters']['jsCode'] ?? '');
-        break;
-    }
-}
-if (!str_contains($code, "!['online', 'presencial'].includes(requestedModality)")) {
-    throw new RuntimeException('Template VAGO precisa recusar busca sem Online/Presencial.');
+$template = (string) file_get_contents(dirname(__DIR__, 2) . '/docs/n8n_templates/template-agenda-google-eventos-vago.json');
+if (str_contains($template, 'A modalidade precisa ser definida como online ou presencial antes de consultar eventos VAGO.')) {
+    throw new RuntimeException('Template VAGO não pode mais impor modalidade universalmente.');
 }
 
-fwrite(STDOUT, "OK - modalidade Online/Presencial é obrigatória antes da disponibilidade e filtra o Google Agenda.\n");
+fwrite(STDOUT, "OK - forma de atendimento pode ser opcional, única ou escolhida pelo contato.\n");

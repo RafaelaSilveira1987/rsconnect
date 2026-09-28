@@ -211,7 +211,9 @@ final class AppVersionService
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.26 — Motor de IA com contrato de resposta';
     // Compatibilidade histórica: REQUIRED_MIGRATION = '120_agent_turn_state_cursor.sql';
     // Marcador histórico: RS Connect 36.36.27 — Agenda factual e sem promessas duplicadas
-    public const PACKAGE_LABEL = 'RS Connect 36.36.28 — Consulta real de horários e confirmação sem falso positivo';
+    // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.28 — Consulta real de horários e confirmação sem falso positivo';
+    // RS Connect 36.37.0 — motor genérico: fluxo, triagem e modalidade obedecem à configuração efetiva da empresa.
+    public const PACKAGE_LABEL = 'RS Connect 36.37.0 — Motor genérico de atendimento por configuração';
     public const REQUIRED_MIGRATION = '120_agent_turn_state_cursor.sql';
 
     private PDO $pdo;
@@ -635,11 +637,11 @@ final class AppVersionService
         $calendarModalityReady = $this->columnExists('tenant_pre_schedule_settings', 'modality_message')
             && $this->columnExists('calendar_appointments', 'appointment_modality');
         $checks[] = $this->check(
-            'Modalidade antes da disponibilidade',
+            'Forma de atendimento configurável',
             $calendarModalityReady ? 'ok' : 'blocked',
             $calendarModalityReady
-                ? 'Online/Presencial é coletado antes da consulta e enviado como filtro obrigatório para a Agenda Google.'
-                : 'A agenda ainda não possui a estrutura da modalidade obrigatória antes da busca de horários.',
+                ? 'A estrutura de agenda suporta forma de atendimento configurável: opcional, única ou escolhida pelo contato.'
+                : 'A agenda ainda não possui a estrutura necessária para configurar a forma de atendimento.',
             'Executar database/migrations/057_calendar_modality_before_availability.sql.'
         );
 

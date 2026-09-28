@@ -126,6 +126,22 @@ final class AgentConversationBehaviorService
             'scope' => $scope,
         ];
 
+        $hasExplicitServiceMode = is_array($raw['service_mode'] ?? null);
+        $serviceModeRaw = $hasExplicitServiceMode ? $raw['service_mode'] : [];
+        $serviceMode = strtolower(trim((string) ($serviceModeRaw['mode'] ?? '')));
+        if (!$hasExplicitServiceMode || !in_array($serviceMode, ['not_applicable', 'single', 'choice'], true)) {
+            $legacyModalities = is_array($raw['modalities'] ?? null) ? $raw['modalities'] : [];
+            $legacyOnline = !empty($legacyModalities['online']['enabled']);
+            $legacyPresencial = !empty($legacyModalities['presencial']['enabled']);
+            $serviceMode = ($legacyOnline && $legacyPresencial) ? 'choice' : (($legacyOnline || $legacyPresencial) ? 'single' : 'not_applicable');
+        }
+        $fixedModality = strtolower(trim((string) ($serviceModeRaw['fixed_modality'] ?? '')));
+        if (!$hasExplicitServiceMode || !in_array($fixedModality, ['online', 'presencial'], true)) {
+            $legacyModalities = is_array($raw['modalities'] ?? null) ? $raw['modalities'] : [];
+            $fixedModality = !empty($legacyModalities['online']['enabled']) && empty($legacyModalities['presencial']['enabled']) ? 'online' : 'presencial';
+        }
+        $base['service_mode'] = ['mode' => $serviceMode, 'fixed_modality' => $fixedModality];
+
         $modalitiesRaw = is_array($raw['modalities'] ?? null) ? $raw['modalities'] : [];
         foreach (['online', 'presencial'] as $key) {
             $item = is_array($modalitiesRaw[$key] ?? null) ? $modalitiesRaw[$key] : [];
@@ -213,11 +229,28 @@ final class AgentConversationBehaviorService
         $demand = is_array($settings['demand'] ?? null) ? $settings['demand'] : [];
         $demandEnabled = !empty($demand['enabled']);
         $demandRequired = !empty($demand['required_before_schedule']);
+        $serviceMode = is_array($settings['service_mode'] ?? null) ? $settings['service_mode'] : [];
+        $modalityMode = (string) ($serviceMode['mode'] ?? 'not_applicable');
+
+        $fields = is_array($profile['triage_fields'] ?? null) ? array_values($profile['triage_fields']) : [];
+        // Modalidade só é um dado coletável quando existe escolha real. Nos modos
+        // "não se aplica" e "forma única", manter o campo ativo faria a triagem
+        // perguntar algo que a configuração já resolveu.
+        foreach ($fields as &$operationalField) {
+            if (is_array($operationalField) && (string) ($operationalField['field_key'] ?? '') === 'modality' && $modalityMode !== 'choice') {
+                $operationalField['active'] = false;
+                $operationalField['required_before_schedule'] = false;
+                $operationalField['required_for_completion'] = false;
+                $operationalField['operationally_resolved'] = true;
+            }
+        }
+        unset($operationalField);
+
         if (!$demandEnabled && !$demandRequired) {
+            $profile['triage_fields'] = array_values($fields);
             return $profile;
         }
 
-        $fields = is_array($profile['triage_fields'] ?? null) ? array_values($profile['triage_fields']) : [];
         $found = false;
         foreach ($fields as &$field) {
             if (!is_array($field) || (string) ($field['field_key'] ?? '') !== 'brief_demand') {
@@ -303,6 +336,17 @@ final class AgentConversationBehaviorService
                 $lines[] = '  Pergunta sugerida: ' . $prompt;
             }
             $lines[] = '  Cliente/paciente atual não deve ser requalificado nem obrigado a repetir uma demanda já conhecida.';
+        }
+
+        $serviceMode = is_array($settings['service_mode'] ?? null) ? $settings['service_mode'] : [];
+        $mode = (string) ($serviceMode['mode'] ?? 'not_applicable');
+        $fixedModality = (string) ($serviceMode['fixed_modality'] ?? 'presencial');
+        if ($mode === 'not_applicable') {
+            $lines[] = '- Forma de atendimento: não se aplica a este negócio. Não pergunte online/presencial e não bloqueie a agenda por ausência de modalidade.';
+        } elseif ($mode === 'single') {
+            $lines[] = '- Forma de atendimento: modalidade única ' . ($fixedModality === 'online' ? 'online' : 'presencial') . '. Considere-a automaticamente; não pergunte ao contato qual modalidade prefere.';
+        } else {
+            $lines[] = '- Forma de atendimento: o contato pode escolher entre as modalidades habilitadas. Pergunte a preferência somente quando a Ordem do atendimento exigir essa informação.';
         }
 
         $online = $settings['modalities']['online'] ?? [];
@@ -827,6 +871,73 @@ final class AgentConversationBehaviorService
      * @param array<string,mixed> $appointment
      * @return array{allowed:bool,code:string,message:string,allowed_days:array<int,string>,requested_day:string}
      */
+    public function modalityRequiredBeforeSchedule(int $tenantId, ?PDO $pdo = null): bool
+    {
+        if ($tenantId < 1) {
+            return false;
+        }
+        try {
+            $pdo ??= Database::connection();
+            $stmt = $pdo->prepare(
+                'SELECT step_type, position, config_json
+                 FROM tenant_agent_workflow_steps
+                 WHERE tenant_id = :tenant_id AND active = 1
+                 ORDER BY position, id'
+            );
+            $stmt->execute(['tenant_id' => $tenantId]);
+            $calendarPosition = null;
+            $modalityPosition = null;
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+                $type = (string) ($row['step_type'] ?? '');
+                $position = (int) ($row['position'] ?? 0);
+                $config = json_decode((string) ($row['config_json'] ?? ''), true);
+                $config = is_array($config) ? $config : [];
+                if ($type === 'action' && str_starts_with(trim((string) ($config['action_key'] ?? '')), 'calendar.')) {
+                    $calendarPosition ??= $position;
+                }
+                if ($type !== 'collect') {
+                    continue;
+                }
+                $keys = [];
+                $one = trim((string) ($config['field_key'] ?? ''));
+                if ($one !== '') $keys[] = $one;
+                if (is_array($config['field_keys'] ?? null)) {
+                    foreach ($config['field_keys'] as $key) {
+                        $key = trim((string) $key);
+                        if ($key !== '') $keys[] = $key;
+                    }
+                }
+                if (in_array('modality', $keys, true)) {
+                    $modalityPosition = $modalityPosition === null ? $position : min($modalityPosition, $position);
+                }
+            }
+            return $calendarPosition !== null && $modalityPosition !== null && $modalityPosition < $calendarPosition;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /** @return array{mode:string,fixed_modality:string,requires_choice:bool,uses_modality:bool} */
+    public function modalityPolicy(int $tenantId, ?PDO $pdo = null): array
+    {
+        $settings = $this->settingsForTenant($tenantId, $pdo);
+        $serviceMode = is_array($settings['service_mode'] ?? null) ? $settings['service_mode'] : [];
+        $mode = strtolower(trim((string) ($serviceMode['mode'] ?? 'not_applicable')));
+        if (!in_array($mode, ['not_applicable', 'single', 'choice'], true)) {
+            $mode = 'not_applicable';
+        }
+        $fixed = strtolower(trim((string) ($serviceMode['fixed_modality'] ?? 'presencial')));
+        if (!in_array($fixed, ['online', 'presencial'], true)) {
+            $fixed = 'presencial';
+        }
+        return [
+            'mode' => $mode,
+            'fixed_modality' => $fixed,
+            'requires_choice' => $mode === 'choice',
+            'uses_modality' => $mode !== 'not_applicable',
+        ];
+    }
+
     public function schedulingPreferenceRule(int $tenantId, array $appointment): array
     {
         $settings = $this->settingsForTenant($tenantId);
@@ -977,6 +1088,7 @@ final class AgentConversationBehaviorService
                 'prompt' => 'Antes de avançarmos, pode me contar brevemente o que você está buscando neste atendimento?',
             ],
             'response_delivery' => ['mode' => 'auto', 'max_blocks' => 3, 'scope' => 'asked_only'],
+            'service_mode' => ['mode' => 'not_applicable', 'fixed_modality' => 'presencial'],
             'modalities' => [
                 'online' => ['enabled' => false, 'channel' => '', 'location' => '', 'allowed_days' => [], 'message' => ''],
                 'presencial' => ['enabled' => false, 'channel' => '', 'location' => '', 'allowed_days' => [], 'message' => ''],
