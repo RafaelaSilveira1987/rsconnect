@@ -64,20 +64,14 @@ final class AgentConversationBehaviorService
 
         $normalized = self::normalizeConfiguration($raw);
 
-        // 36.36.17: as duas telas históricas não podem disputar a mesma regra.
-        // Se o campo estruturado brief_demand estiver marcado como obrigatório antes
-        // da agenda, essa exigência é preservada mesmo que conversation_behavior tenha
-        // sido salvo por uma versão anterior com o toggle desligado. A regra efetiva é
-        // a mais restritiva entre as fontes persistidas, evitando perda silenciosa de
-        // configuração durante upgrades.
+        // 36.37.2: a Ordem do atendimento é a única autoridade para decidir se
+        // "Motivo resumido do contato" existe no fluxo e se ele vem antes da agenda.
+        // A configuração histórica conversation_behavior.demand permanece apenas como
+        // compatibilidade de dados/texto; ela não pode mais reativar ou tornar obrigatório
+        // um campo que o workflow não exige. Mantemos somente o prompt como fallback visual.
         foreach ((array) ($profile['triage_fields'] ?? []) as $field) {
             if (!is_array($field) || (string) ($field['field_key'] ?? '') !== 'brief_demand') {
                 continue;
-            }
-            $triageRequired = !empty($field['active']) && !empty($field['required_before_schedule']);
-            if ($triageRequired) {
-                $normalized['demand']['enabled'] = true;
-                $normalized['demand']['required_before_schedule'] = true;
             }
             $behaviorPrompt = trim((string) (($raw['demand']['prompt'] ?? '')));
             $triagePrompt = trim((string) ($field['prompt_text'] ?? ''));
@@ -226,13 +220,11 @@ final class AgentConversationBehaviorService
     public function applyOperationalOverridesToProfile(array $profile): array
     {
         $settings = $this->settingsFromProfile($profile);
-        $demand = is_array($settings['demand'] ?? null) ? $settings['demand'] : [];
-        $demandEnabled = !empty($demand['enabled']);
-        $demandRequired = !empty($demand['required_before_schedule']);
         $serviceMode = is_array($settings['service_mode'] ?? null) ? $settings['service_mode'] : [];
         $modalityMode = (string) ($serviceMode['mode'] ?? 'not_applicable');
 
         $fields = is_array($profile['triage_fields'] ?? null) ? array_values($profile['triage_fields']) : [];
+
         // Modalidade só é um dado coletável quando existe escolha real. Nos modos
         // "não se aplica" e "forma única", manter o campo ativo faria a triagem
         // perguntar algo que a configuração já resolveu.
@@ -246,51 +238,10 @@ final class AgentConversationBehaviorService
         }
         unset($operationalField);
 
-        if (!$demandEnabled && !$demandRequired) {
-            $profile['triage_fields'] = array_values($fields);
-            return $profile;
-        }
-
-        $found = false;
-        foreach ($fields as &$field) {
-            if (!is_array($field) || (string) ($field['field_key'] ?? '') !== 'brief_demand') {
-                continue;
-            }
-            $found = true;
-            $field['active'] = true;
-            if ($demandRequired) {
-                $field['required_before_schedule'] = true;
-            }
-            $prompt = trim((string) ($demand['prompt'] ?? ''));
-            if ($prompt !== '') {
-                $field['prompt_text'] = $prompt;
-            }
-            break;
-        }
-        unset($field);
-
-        if (!$found) {
-            // Não inventa conteúdo operacional no PHP. Se a regra amigável aponta para
-            // uma informação que não existe no perfil, criamos apenas o contrato mínimo
-            // sem pergunta; o auditor de runtime sinaliza a configuração incompleta e o
-            // atendimento automático não deve improvisar essa etapa.
-            $fields[] = [
-                'field_key' => 'brief_demand',
-                'label' => 'Demanda',
-                'field_type' => 'textarea',
-                'prompt_text' => trim((string) ($demand['prompt'] ?? '')),
-                'required_before_schedule' => $demandRequired,
-                'required_for_completion' => true,
-                'active' => true,
-                'position' => 9990,
-                'source' => 'conversation_behavior',
-                'configuration_incomplete' => true,
-            ];
-        }
-
-        // Não reordena aqui. profileForTenant já aplica a ordem configurada do
-        // workflow. Reordenar novamente pelo position original fazia a etapa cadastrada
-        // pelo usuário ser silenciosamente desfeita quando a regra de demanda estava ativa.
+        // 36.37.2: não existe mais sobreposição operacional para brief_demand aqui.
+        // Se a demanda estiver na Ordem do atendimento, o workflow a coleta no ponto
+        // configurado. Se não estiver, esta camada não a cria, não a reativa e não a
+        // antecipa. Isso elimina a dupla condução que fazia a mesma pergunta reaparecer.
         $profile['triage_fields'] = array_values($fields);
         return $profile;
     }
@@ -329,14 +280,7 @@ final class AgentConversationBehaviorService
             $lines[] = '- Redação das perguntas: use linguagem natural e o tom configurado. A pergunta cadastrada define o objetivo da etapa, não uma resposta pronta. Se o turno atual trouxer contexto, dúvida ou relato sensível, responda/reconheça brevemente antes da próxima pergunta.';
         }
 
-        if (!empty($settings['demand']['enabled'])) {
-            $prompt = trim((string) ($settings['demand']['prompt'] ?? ''));
-            $lines[] = '- Demanda: para novo lead/interessado, entenda a necessidade antes de avançar' . (!empty($settings['demand']['required_before_schedule']) ? ' e antes de consultar a agenda' : '') . '.';
-            if ($prompt !== '') {
-                $lines[] = '  Pergunta sugerida: ' . $prompt;
-            }
-            $lines[] = '  Cliente/paciente atual não deve ser requalificado nem obrigado a repetir uma demanda já conhecida.';
-        }
+        $lines[] = '- Coleta estruturada: siga exclusivamente a próxima informação indicada pela Ordem do atendimento. Não antecipe "demanda", idade, modalidade ou qualquer outro campo só por existir uma configuração histórica em outra seção.';
 
         $serviceMode = is_array($settings['service_mode'] ?? null) ? $settings['service_mode'] : [];
         $mode = (string) ($serviceMode['mode'] ?? 'not_applicable');

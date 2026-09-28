@@ -139,7 +139,8 @@ final class AiExactCacheService
     {
         return hash('sha256', json_encode([
             // Compatibilidade histórica: 'runtime_contract' => '36.36.27'
-            'runtime_contract' => '36.36.28',
+            // Compatibilidade histórica: 'runtime_contract' => '36.37.2'
+            'runtime_contract' => '36.37.3',
             'prompt' => (string) ($agent['system_prompt'] ?? ''),
             'knowledge' => (string) ($agent['knowledge_base'] ?? ''),
             'model' => (string) ($agent['_ai_selected_model'] ?? $agent['model_name'] ?? ''),

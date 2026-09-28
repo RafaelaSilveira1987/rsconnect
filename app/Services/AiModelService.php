@@ -565,8 +565,8 @@ final class AiModelService
             $preScheduling = new PreSchedulingService();
             if ($agendaContextActive && $preScheduling->isEnabled($tenantId)) {
                 $settings = $preScheduling->settings($tenantId);
-                $rules[] = 'A conversa está em contexto real de agenda. Antes de conduzir ao pré-agendamento, siga a regra do grupo informada abaixo; quando ela exigir demanda, confirme que foi coletada ou recusada.';
-                $rules[] = 'Quando o contato estiver liberado pelas regras do grupo e do fluxo e demonstrar intenção real de agendar, colete dia/período/horário preferido e modalidade. Nunca invente disponibilidade e nunca declare um compromisso confirmado apenas por decisão textual sua.';
+                $rules[] = 'A conversa está em contexto real de agenda. A Ordem do atendimento define quais informações precisam existir antes da consulta; não crie uma triagem paralela por conta própria.';
+                $rules[] = 'Quando o contato demonstrar intenção real de agendar, colete somente os dados que a Ordem do atendimento e a configuração de forma de atendimento exigirem. Modalidade não é universal: não pergunte online/presencial quando o negócio marcou que não se aplica ou usa uma forma única. Nunca invente disponibilidade e nunca declare um compromisso confirmado apenas por decisão textual sua.';
                 $agendaMessageMode = strtolower(trim((string) ($settings['message_mode'] ?? 'form')));
                 if ($agendaMessageMode === 'prompt') {
                     $rules[] = 'As perguntas de coleta da agenda estão no modo Prompt Studio. Use as instruções do assistente para formular a resposta de modo natural, perguntando somente os dados que ainda faltam.';
@@ -603,19 +603,9 @@ final class AiModelService
         } catch (Throwable) {
             $groupRule = [];
         }
-        if ($isExistingCustomer) {
-            // Cliente/paciente atual não reinicia a triagem inteira. A exigência global
-            // de demanda, porém, continua soberana quando ainda não existe demanda
-            // registrada nesta conversa. Não desligamos mais essa regra no prompt.
-            try {
-                $behavior = (new AgentConversationBehaviorService())->settingsForTenant($tenantId);
-                $demandBehavior = is_array($behavior['demand'] ?? null) ? $behavior['demand'] : [];
-                if (!empty($demandBehavior['required_before_schedule'])) {
-                    $groupRule['require_demand_before_pre_schedule'] = true;
-                }
-            } catch (Throwable) {
-            }
-        }
+        // 36.37.2: ruleForAgent já normaliza a exigência de demanda pela Ordem do
+        // atendimento quando existe workflow executável. Não reintroduza aqui uma
+        // segunda autoridade vinda de conversation_behavior.
         $groupInstructions = trim((string) ($groupRule['instructions'] ?? ''));
         $groupRuleBlock = '';
         if ($agendaContextActive) {

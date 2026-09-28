@@ -97,6 +97,40 @@ $workflowAddableFields = array_values(array_filter($agentRuleFields, static func
     $key = trim((string) ($field['field_key'] ?? ''));
     return $key !== '' && !in_array($key, $workflowLinkedFieldKeys, true);
 }));
+$hasExecutableWorkflow = false;
+$workflowCalendarPosition = null;
+$workflowDemandPosition = null;
+$workflowDemandStepLabel = '';
+foreach ($agentRuleWorkflow as $workflowStateStep) {
+    if (!is_array($workflowStateStep) || empty($workflowStateStep['active'])) continue;
+    $hasExecutableWorkflow = true;
+    $workflowStateConfig = is_array($workflowStateStep['config'] ?? null) ? $workflowStateStep['config'] : [];
+    $workflowStatePosition = (int) ($workflowStateStep['position'] ?? 0);
+    if ((string) ($workflowStateStep['step_type'] ?? '') === 'action'
+        && $workflowCalendarPosition === null
+        && str_starts_with(trim((string) ($workflowStateConfig['action_key'] ?? '')), 'calendar.')) {
+        $workflowCalendarPosition = $workflowStatePosition;
+    }
+    if ((string) ($workflowStateStep['step_type'] ?? '') !== 'collect') continue;
+    $workflowStateKeys = [];
+    $workflowStateSingle = trim((string) ($workflowStateConfig['field_key'] ?? ''));
+    if ($workflowStateSingle !== '') $workflowStateKeys[] = $workflowStateSingle;
+    if (is_array($workflowStateConfig['field_keys'] ?? null)) {
+        foreach ($workflowStateConfig['field_keys'] as $workflowStateFieldKey) {
+            $workflowStateFieldKey = trim((string) $workflowStateFieldKey);
+            if ($workflowStateFieldKey !== '') $workflowStateKeys[] = $workflowStateFieldKey;
+        }
+    }
+    if (in_array('brief_demand', $workflowStateKeys, true)
+        && ($workflowDemandPosition === null || $workflowStatePosition < $workflowDemandPosition)) {
+        $workflowDemandPosition = $workflowStatePosition;
+        $workflowDemandStepLabel = trim((string) ($workflowStateStep['label'] ?? ''));
+    }
+}
+$workflowDemandConfigured = $workflowDemandPosition !== null;
+$workflowDemandBeforeCalendar = $workflowDemandConfigured
+    && $workflowCalendarPosition !== null
+    && $workflowDemandPosition < $workflowCalendarPosition;
 $conversationBehavior = is_array($conversationBehavior ?? null) ? $conversationBehavior : [];
 $behaviorDemand = is_array($conversationBehavior['demand'] ?? null) ? $conversationBehavior['demand'] : [];
 $behaviorDelivery = is_array($conversationBehavior['response_delivery'] ?? null) ? $conversationBehavior['response_delivery'] : [];
@@ -374,13 +408,21 @@ $humanizeAgentRule = static function (string $key): string {
                                         <article class="agent-operation-field-card">
                                             <div class="agent-operation-card-title"><strong><?= View::e((string) ($field['label'] ?? $fieldKey)) ?></strong><span><?= View::e($agentFieldTypeLabels[$fieldType] ?? 'Informação') ?></span></div>
                                             <label class="field compact-field"><span>Nome da informação</span><input name="triage_fields[<?= View::e($fieldKey) ?>][label]" value="<?= View::e((string) ($field['label'] ?? $fieldKey)) ?>"></label>
-                                            <?php if ($fieldKey === 'brief_demand'): ?>
+                                            <?php if ($fieldKey === 'brief_demand' && $hasExecutableWorkflow): ?>
+                                                <label class="field compact-field"><span>Pergunta usada como padrão</span><textarea name="triage_fields[<?= View::e($fieldKey) ?>][prompt_text]" rows="2"><?= View::e((string) ($field['prompt_text'] ?? $behaviorDemand['prompt'] ?? '')) ?></textarea></label>
+                                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="<?= $workflowDemandConfigured ? '1' : '0' ?>">
+                                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="<?= $workflowDemandBeforeCalendar ? '1' : '0' ?>">
+                                                <div class="agent-rule-fixed-note agent-demand-source-note">
+                                                    <strong>Controlado pela Ordem do atendimento</strong>
+                                                    <span><?php if (!$workflowDemandConfigured): ?>Esta informação não está no roteiro e não será perguntada.<?php elseif ($workflowDemandBeforeCalendar): ?>Está na etapa “<?= View::e($workflowDemandStepLabel !== '' ? $workflowDemandStepLabel : 'Coleta') ?>” antes da agenda; por isso é perguntada uma única vez antes da consulta.<?php else: ?>Está na etapa “<?= View::e($workflowDemandStepLabel !== '' ? $workflowDemandStepLabel : 'Coleta') ?>”, mas não é uma trava anterior à agenda.<?php endif; ?> Para deixar de coletar, remova “Motivo resumido do contato” da etapa ou exclua a etapa de coleta correspondente.</span>
+                                                </div>
+                                            <?php elseif ($fieldKey === 'brief_demand'): ?>
                                                 <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][prompt_text]" value="<?= View::e((string) ($behaviorDemand['prompt'] ?? $field['prompt_text'] ?? '')) ?>">
                                                 <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][active]" value="<?= !empty($behaviorDemand['enabled']) ? '1' : '0' ?>">
                                                 <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_before_schedule]" value="<?= !empty($behaviorDemand['required_before_schedule']) ? '1' : '0' ?>">
                                                 <div class="agent-rule-fixed-note agent-demand-source-note">
-                                                    <strong>Controlado em “Entender a demanda”</strong>
-                                                    <span><?= !empty($behaviorDemand['required_before_schedule']) ? 'A demanda está obrigatória antes da agenda.' : (!empty($behaviorDemand['enabled']) ? 'A demanda é coletada quando necessária, mas não bloqueia a agenda.' : 'A coleta estruturada de demanda está desligada.') ?> Edite a pergunta e a exigência no bloco “Conversa, modalidades e encaminhamentos”.</span>
+                                                    <strong>Compatibilidade de fluxo antigo</strong>
+                                                    <span>Esta empresa ainda não possui uma Ordem do atendimento executável. Enquanto o roteiro não for configurado, a regra histórica de demanda continua disponível abaixo.</span>
                                                 </div>
                                             <?php else: ?>
                                                 <label class="field compact-field"><span>Pergunta usada como padrão</span><textarea name="triage_fields[<?= View::e($fieldKey) ?>][prompt_text]" rows="2"><?= View::e((string) ($field['prompt_text'] ?? '')) ?></textarea></label>
@@ -446,13 +488,21 @@ $humanizeAgentRule = static function (string $key): string {
 
                             <div class="agent-behavior-grid">
                                 <article class="agent-behavior-card">
-                                    <div class="agent-behavior-card-head"><span class="agent-behavior-index">1</span><div><strong>Entender a demanda</strong><small>Evita avançar para agenda sem saber o que a pessoa precisa.</small></div></div>
-                                    <input type="hidden" name="conversation_behavior[demand][enabled]" value="0">
-                                    <label class="check-field compact-check"><input type="checkbox" name="conversation_behavior[demand][enabled]" value="1" <?= !empty($behaviorDemand['enabled']) ? 'checked' : '' ?>><span>Perguntar a demanda quando ainda não estiver clara</span></label>
-                                    <input type="hidden" name="conversation_behavior[demand][required_before_schedule]" value="0">
-                                    <label class="check-field compact-check"><input type="checkbox" name="conversation_behavior[demand][required_before_schedule]" value="1" <?= !empty($behaviorDemand['required_before_schedule']) ? 'checked' : '' ?>><span>Exigir a demanda antes de consultar a agenda</span></label>
-                                    <label class="field compact-field"><span>Pergunta sugerida</span><textarea name="conversation_behavior[demand][prompt]" rows="3" placeholder="Ex.: Antes de avançarmos, pode me contar brevemente o que você está buscando neste atendimento?"><?= View::e((string) ($behaviorDemand['prompt'] ?? '')) ?></textarea></label>
-                                    <p class="field-hint">Quando “Exigir a demanda” estiver marcado, a agenda só é consultada depois que a demanda estiver registrada nesta conversa. Para clientes/pacientes atuais, os demais dados conhecidos não são perguntados novamente.</p>
+                                    <div class="agent-behavior-card-head"><span class="agent-behavior-index">1</span><div><strong>Demanda / motivo do contato</strong><small>A coleta não possui mais uma regra paralela ao roteiro.</small></div></div>
+                                    <?php if ($hasExecutableWorkflow): ?>
+                                        <div class="agent-rule-fixed-note agent-demand-source-note">
+                                            <strong>Seguindo a Ordem do atendimento</strong>
+                                            <span><?php if (!$workflowDemandConfigured): ?>“Motivo resumido do contato” não está em nenhuma etapa ativa e o agente não deve perguntá-lo.<?php elseif ($workflowDemandBeforeCalendar): ?>A demanda está configurada antes da agenda na etapa “<?= View::e($workflowDemandStepLabel !== '' ? $workflowDemandStepLabel : 'Coleta') ?>”. Ela será coletada quando o cursor chegar a essa etapa, sem antecipação e sem repetição.<?php else: ?>A demanda existe no roteiro, mas não bloqueia a consulta da agenda. Ela será tratada somente no ponto configurado.<?php endif; ?></span>
+                                        </div>
+                                        <p class="field-hint">Para alterar esse comportamento, edite a etapa correspondente em <strong>Ordem do atendimento</strong>. Esta seção não cria mais uma segunda trava de demanda.</p>
+                                    <?php else: ?>
+                                        <input type="hidden" name="conversation_behavior[demand][enabled]" value="0">
+                                        <label class="check-field compact-check"><input type="checkbox" name="conversation_behavior[demand][enabled]" value="1" <?= !empty($behaviorDemand['enabled']) ? 'checked' : '' ?>><span>Perguntar a demanda quando ainda não estiver clara</span></label>
+                                        <input type="hidden" name="conversation_behavior[demand][required_before_schedule]" value="0">
+                                        <label class="check-field compact-check"><input type="checkbox" name="conversation_behavior[demand][required_before_schedule]" value="1" <?= !empty($behaviorDemand['required_before_schedule']) ? 'checked' : '' ?>><span>Exigir a demanda antes de consultar a agenda</span></label>
+                                        <label class="field compact-field"><span>Pergunta sugerida</span><textarea name="conversation_behavior[demand][prompt]" rows="3" placeholder="Ex.: Antes de avançarmos, pode me contar brevemente o que você está buscando neste atendimento?"><?= View::e((string) ($behaviorDemand['prompt'] ?? '')) ?></textarea></label>
+                                        <p class="field-hint">Compatibilidade para empresas sem Ordem do atendimento executável. Ao configurar o roteiro, a demanda passará a ser controlada somente pela posição da etapa.</p>
+                                    <?php endif; ?>
                                 </article>
 
                                 <article class="agent-behavior-card">
@@ -889,7 +939,9 @@ $humanizeAgentRule = static function (string $key): string {
                                             <div><span class="eyebrow">Grupo</span><h4><?= View::e($groupLabel) ?></h4></div>
                                             <label class="check-field compact-check"><input type="checkbox" name="group_rules[<?= View::e($groupKey) ?>][allow_pre_schedule]" value="1" <?= $allow === 1 ? 'checked' : '' ?>><span>Permitir pré-agendamento</span></label>
                                             <?php if (in_array($groupKey, ['customer', 'patient'], true)): ?>
-                                                <div class="agent-rule-fixed-note"><strong>Triagem já conhecida</strong><span>O assistente reutiliza cadastro e histórico. A opção global “Exigir a demanda antes de consultar a agenda” continua valendo quando ainda não houver demanda registrada nesta conversa.</span></div>
+                                                <div class="agent-rule-fixed-note"><strong>Triagem já conhecida</strong><span><?php if ($hasExecutableWorkflow): ?>O assistente reutiliza cadastro e histórico, mas a Ordem do atendimento continua sendo a autoridade: se “Motivo resumido do contato” estiver configurado como etapa necessária, ele será coletado somente no ponto indicado pelo roteiro.<?php else: ?>O assistente reutiliza cadastro e histórico. Enquanto esta empresa não possuir uma Ordem do atendimento executável, aplicam-se as regras legadas de continuidade.<?php endif; ?></span></div>
+                                            <?php elseif ($hasExecutableWorkflow): ?>
+                                                <div class="agent-rule-fixed-note"><strong>Demanda segue o roteiro</strong><span><?= $workflowDemandBeforeCalendar ? 'A Ordem do atendimento já exige o motivo antes da agenda.' : 'A Ordem do atendimento não exige o motivo antes da agenda.' ?> Esta regra por grupo não cria uma segunda pergunta.</span></div>
                                             <?php else: ?>
                                                 <label class="check-field compact-check"><input type="checkbox" name="group_rules[<?= View::e($groupKey) ?>][require_demand_before_pre_schedule]" value="1" <?= $require === 1 ? 'checked' : '' ?>><span>Pedir o motivo antes de consultar a agenda</span></label>
                                             <?php endif; ?>

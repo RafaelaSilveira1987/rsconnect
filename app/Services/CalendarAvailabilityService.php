@@ -1959,20 +1959,87 @@ final class CalendarAvailabilityService
     {
         $timezone = new DateTimeZone((string) ($settings['timezone'] ?? 'America/Sao_Paulo'));
         $now = new DateTimeImmutable('now', $timezone);
-        $start = $now->add(new DateInterval('PT' . max(0, (int) ($settings['min_notice_hours'] ?? 4)) . 'H'));
+        $noticeStart = $now->add(new DateInterval('PT' . max(0, (int) ($settings['min_notice_hours'] ?? 4)) . 'H'));
+        $start = $noticeStart;
+        $preferred = null;
         if (!empty($appointment['starts_at'])) {
             try {
                 $preferred = new DateTimeImmutable((string) $appointment['starts_at'], $timezone);
-                if ($preferred > $start) {
-                    // Respeita também a hora pedida pelo lead. Antes a busca voltava
-                    // para 00:00 do dia e sugeria horários anteriores ao solicitado.
-                    $start = $preferred;
-                }
             } catch (Throwable) {
+                $preferred = null;
             }
+        }
+
+        $preferredDayText = trim((string) ($appointment['preferred_day_text'] ?? ''));
+        $preferredTimeText = trim((string) ($appointment['preferred_time_text'] ?? ''));
+        $period = $this->normalizePeriodPreference($preferredTimeText);
+        $hasExactTime = preg_match('/^(?:[01]?\d|2[0-3]):[0-5]\d$/', $preferredTimeText) === 1;
+
+        // 36.37.3 — consultas da Agenda interna respeitam o ESCOPO pedido pelo contato.
+        // "quinta pela manhã" consulta somente a próxima quinta de manhã; "quinta"
+        // consulta somente aquela quinta. Antes a janela começava na preferência e
+        // seguia por vários dias, podendo devolver sexta/segunda como se fossem quinta.
+        if ($preferred instanceof DateTimeImmutable && $preferredDayText !== '' && !$hasExactTime) {
+            $date = $preferred->format('Y-m-d');
+            if ($period !== '') {
+                [$periodStart, $periodEnd] = $this->periodBounds($date, $period, $timezone);
+                $start = $periodStart > $noticeStart ? $periodStart : $noticeStart;
+                $end = $periodEnd;
+            } else {
+                $dayStart = new DateTimeImmutable($date . ' 00:00:00', $timezone);
+                $dayEnd = $dayStart->add(new DateInterval('P1D'));
+                $start = $dayStart > $noticeStart ? $dayStart : $noticeStart;
+                $end = $dayEnd;
+            }
+
+            if ($start >= $end) {
+                $start = $end;
+            }
+            return ['start' => $start->format('Y-m-d H:i:s'), 'end' => $end->format('Y-m-d H:i:s')];
+        }
+
+        if ($preferred instanceof DateTimeImmutable && $preferred > $start) {
+            // Horário exato continua sendo testado primeiro. Se ele estiver ocupado,
+            // a política de sugestões pode oferecer alternativas posteriores.
+            $start = $preferred;
         }
         $end = $start->add(new DateInterval('P' . max(1, (int) ($settings['search_days_ahead'] ?? 14)) . 'D'));
         return ['start' => $start->format('Y-m-d H:i:s'), 'end' => $end->format('Y-m-d H:i:s')];
+    }
+
+    private function normalizePeriodPreference(string $value): string
+    {
+        $value = mb_strtolower(trim($value));
+        $value = strtr($value, ['ã' => 'a', 'á' => 'a', 'à' => 'a', 'â' => 'a', 'é' => 'e', 'ê' => 'e', 'í' => 'i', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ú' => 'u', 'ç' => 'c']);
+        return match ($value) {
+            'manha' => 'morning',
+            'tarde' => 'afternoon',
+            'noite' => 'night',
+            default => '',
+        };
+    }
+
+    /** @return array{0:DateTimeImmutable,1:DateTimeImmutable} */
+    private function periodBounds(string $date, string $period, DateTimeZone $timezone): array
+    {
+        return match ($period) {
+            'morning' => [
+                new DateTimeImmutable($date . ' 00:00:00', $timezone),
+                new DateTimeImmutable($date . ' 12:00:00', $timezone),
+            ],
+            'afternoon' => [
+                new DateTimeImmutable($date . ' 12:00:00', $timezone),
+                new DateTimeImmutable($date . ' 18:00:00', $timezone),
+            ],
+            'night' => [
+                new DateTimeImmutable($date . ' 18:00:00', $timezone),
+                (new DateTimeImmutable($date . ' 00:00:00', $timezone))->add(new DateInterval('P1D')),
+            ],
+            default => [
+                new DateTimeImmutable($date . ' 00:00:00', $timezone),
+                (new DateTimeImmutable($date . ' 00:00:00', $timezone))->add(new DateInterval('P1D')),
+            ],
+        };
     }
 
     /**

@@ -305,9 +305,6 @@ final class AgentBlueprintService
             }
 
             $fieldRows = is_array($data['triage_fields'] ?? null) ? $data['triage_fields'] : [];
-            $effectiveDemand = is_array($currentConfig['conversation_behavior']['demand'] ?? null)
-                ? $currentConfig['conversation_behavior']['demand']
-                : [];
             foreach ($fieldRows as $fieldKey => $posted) {
                 if (!is_array($posted)) {
                     continue;
@@ -317,19 +314,6 @@ final class AgentBlueprintService
                 $active = !empty($posted['active']) ? 1 : 0;
                 $requiredBeforeSchedule = !empty($posted['required_before_schedule']) ? 1 : 0;
                 $promptText = mb_substr(trim((string) ($posted['prompt_text'] ?? '')), 0, 1000);
-
-                // brief_demand possui uma única fonte editável na UI: o bloco
-                // "Entender a demanda". O campo técnico continua persistido para o
-                // Policy Engine, mas é sincronizado automaticamente para não existir
-                // dois checkboxes contraditórios controlando a mesma regra.
-                if ($fieldKey === 'brief_demand' && $effectiveDemand !== []) {
-                    $active = !empty($effectiveDemand['enabled']) ? 1 : 0;
-                    $requiredBeforeSchedule = !empty($effectiveDemand['required_before_schedule']) ? 1 : 0;
-                    $behaviorPrompt = mb_substr(trim((string) ($effectiveDemand['prompt'] ?? '')), 0, 1000);
-                    if ($behaviorPrompt !== '') {
-                        $promptText = $behaviorPrompt;
-                    }
-                }
 
                 $pdo->prepare(
                     'UPDATE tenant_triage_fields
@@ -616,39 +600,9 @@ final class AgentBlueprintService
     /** @param array<string,mixed> $behavior */
     private function syncConversationBehavior(PDO $pdo, int $tenantId, array $behavior): void
     {
-        $demand = is_array($behavior['demand'] ?? null) ? $behavior['demand'] : [];
-        if ($this->tableExists($pdo, 'tenant_triage_fields')) {
-            try {
-                $prompt = mb_substr(trim((string) ($demand['prompt'] ?? '')), 0, 1000);
-                $enabled = !empty($demand['enabled']) || !empty($demand['required_before_schedule']);
-                $required = !empty($demand['required_before_schedule']);
-
-                $pdo->prepare(
-                    'INSERT INTO tenant_triage_fields
-                        (tenant_id, field_key, label, field_type, prompt_text,
-                         required_before_schedule, required_for_completion, active, position, source)
-                     VALUES
-                        (:tenant_id, "brief_demand", "Motivo resumido do contato", "textarea", :prompt_insert,
-                         :required_insert, 1, :active_insert, 60, "tenant")
-                     ON DUPLICATE KEY UPDATE
-                        active = :active_update,
-                        required_before_schedule = :required_update,
-                        prompt_text = CASE WHEN :prompt_check <> "" THEN :prompt_update ELSE prompt_text END,
-                        source = "tenant"'
-                )->execute([
-                    'tenant_id' => $tenantId,
-                    'prompt_insert' => $prompt !== '' ? $prompt : null,
-                    'required_insert' => $required ? 1 : 0,
-                    'active_insert' => $enabled ? 1 : 0,
-                    'active_update' => $enabled ? 1 : 0,
-                    'required_update' => $required ? 1 : 0,
-                    'prompt_check' => $prompt,
-                    'prompt_update' => $prompt,
-                ]);
-            } catch (Throwable) {
-            }
-        }
-
+        // 36.37.2: conversation_behavior não sincroniza mais brief_demand. A existência,
+        // pergunta e trava de demanda pertencem ao campo/etapa da Ordem do atendimento.
+        // Mantemos aqui apenas configurações conversacionais que não disputam o workflow.
         $noAvailability = is_array($behavior['no_availability'] ?? null) ? $behavior['no_availability'] : [];
         $message = mb_substr(trim((string) ($noAvailability['message'] ?? '')), 0, 1200);
         if ($message !== '' && $this->tableExists($pdo, 'tenant_pre_schedule_settings')) {
@@ -989,6 +943,12 @@ final class AgentBlueprintService
         );
         $stmt->execute(['tenant_id' => $tenantId]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        if ($rows === []) {
+            // Tenant legado sem Ordem do atendimento executável: não altere a triagem
+            // histórica. A compatibilidade continua funcionando até o roteiro ser salvo.
+            return;
+        }
+
         $calendarPosition = null;
         foreach ($rows as $row) {
             if ((string) ($row['step_type'] ?? '') !== 'action') continue;
@@ -998,14 +958,6 @@ final class AgentBlueprintService
                 break;
             }
         }
-        if ($calendarPosition === null) return;
-
-        // Limpa exigências antigas antes de derivar novamente a fronteira da agenda.
-        // Assim um campo removido/movido na Ordem do atendimento não continua
-        // bloqueando a agenda por configuração histórica invisível.
-        $pdo->prepare(
-            'UPDATE tenant_triage_fields SET required_before_schedule = 0 WHERE tenant_id = :tenant_id'
-        )->execute(['tenant_id' => $tenantId]);
 
         $before = [];
         $allWorkflowFields = [];
@@ -1023,10 +975,26 @@ final class AgentBlueprintService
             }
             foreach (array_unique($keys) as $key) {
                 $allWorkflowFields[$key] = true;
-                if ((int) ($row['position'] ?? 0) < $calendarPosition) $before[$key] = true;
+                if ($calendarPosition !== null && (int) ($row['position'] ?? 0) < $calendarPosition) {
+                    $before[$key] = true;
+                }
             }
         }
-        if ($allWorkflowFields === []) return;
+
+        // 36.37.2: o workflow também é a fonte da lista de informações ativas, não
+        // apenas da trava de agenda. Antes, remover um campo de uma etapa podia deixá-lo
+        // active=1 em tenant_triage_fields; o cursor então o perguntava mais tarde como
+        // uma "etapa fantasma". Agora tudo que não está em uma etapa de Coleta ativa
+        // fica disponível no catálogo, porém fora do runtime.
+        $pdo->prepare(
+            'UPDATE tenant_triage_fields
+             SET required_before_schedule = 0, active = 0
+             WHERE tenant_id = :tenant_id'
+        )->execute(['tenant_id' => $tenantId]);
+
+        if ($allWorkflowFields === []) {
+            return;
+        }
 
         $update = $pdo->prepare(
             'UPDATE tenant_triage_fields

@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.37.1",
-  "release_name": "Exclusão segura de etapas da Ordem do atendimento",
+  "package_version": "36.37.3",
+  "release_name": "Consulta assertiva da Agenda interna e modalidade orientada pelo workflow",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,8 +19,8 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.37.0",
-      "release_name": "Motor genérico de atendimento por configuração",
+      "package_version": "36.37.1",
+      "release_name": "Exclusão segura de etapas da Ordem do atendimento",
       "required_migration": "120_agent_turn_state_cursor.sql"
     },
     "historical_releases": [

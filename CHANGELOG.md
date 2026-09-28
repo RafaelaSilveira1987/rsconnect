@@ -1,3 +1,27 @@
+# 36.37.3 — Consulta assertiva da Agenda interna
+
+- corrige a trava residual que ainda exigia `online/presencial` em `requestAvailabilityIfNeeded()` mesmo quando a empresa configurou **Forma de atendimento = Não se aplica**, modalidade única ou posicionou a escolha depois da ação de agenda;
+- a prontidão para consultar disponibilidade deixa de depender universalmente de modalidade e passa a seguir a **Ordem do atendimento**;
+- modalidade única é aplicada automaticamente também a pré-agendamentos antigos que ainda estejam com `appointment_modality = indefinida`;
+- consultas como **“quinta pela manhã, quais horários tem disponível?”** usam a Agenda interna do RS Connect e limitam a busca à próxima quinta no período da manhã, sem vazar sugestões de sexta/segunda como se fossem da preferência pedida;
+- períodos `manhã`, `tarde` e `noite` são tratados como busca de opções, não como horário exato; somente `HH:MM` pode ser considerado preferência exata para seleção automática;
+- a proteção final da IA deixa de perguntar modalidade em empresas onde ela não é exigida antes da agenda;
+- invalida o cache exato com contrato `36.37.3`;
+- não há migration nova; permanece obrigatória `120_agent_turn_state_cursor.sql`.
+
+# 36.37.2 — Ordem do atendimento como fonte única da demanda
+
+- corrige a duplicação da pergunta de **demanda/motivo do contato** causada pela convivência entre a Ordem do atendimento e o antigo bloco **Entender a demanda**;
+- quando existe uma Ordem do atendimento executável, `brief_demand` passa a ser controlado exclusivamente pela etapa em que foi incluído: a camada `conversation_behavior` não antecipa, não reativa e não torna o campo obrigatório;
+- o bloco **Demanda / motivo do contato** vira um status explicativo quando o workflow está ativo, removendo os dois checkboxes concorrentes. Empresas legadas sem workflow continuam com os controles antigos por compatibilidade;
+- a pergunta de demanda passa a ser editada no próprio campo estruturado, e sua trava de agenda é derivada da posição da etapa em relação a `calendar.*`;
+- regras por grupo de contato deixam de criar uma segunda exigência de demanda quando existe workflow; sem workflow, o comportamento legado permanece preservado;
+- ao salvar a Ordem do atendimento, informações que não estejam ligadas a nenhuma etapa de **Coleta** ficam inativas no runtime, evitando perguntas “fantasmas” mesmo que o registro técnico continue disponível para reutilização;
+- o prompt do agente recebe uma instrução explícita para não antecipar demanda, idade, modalidade ou qualquer outro campo fora da próxima etapa permitida;
+- a agenda deixa de instruir o modelo a coletar modalidade universalmente e passa a respeitar a configuração de forma de atendimento;
+- invalida o cache exato de respostas com contrato `36.37.2`, evitando reaproveitamento de respostas geradas pelo comportamento anterior;
+- não há migration nova; permanece obrigatória `120_agent_turn_state_cursor.sql`.
+
 # 36.37.1 — Exclusão segura de etapas da Ordem do atendimento
 
 - adiciona o botão **Excluir etapa** em cada etapa do tipo **Coleta** nas telas de configuração do agente;

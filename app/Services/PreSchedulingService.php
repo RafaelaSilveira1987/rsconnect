@@ -84,6 +84,10 @@ final class PreSchedulingService
         // preenchido automaticamente e nunca vira pergunta ao cliente.
         $behaviorService = new AgentConversationBehaviorService();
         $modalityPolicy = $behaviorService->modalityPolicy($tenantId, $pdo);
+        // 36.37.3 — a modalidade só é trava quando a própria Ordem do atendimento
+        // colocou uma escolha de modalidade antes da ação de agenda. Negócios sem
+        // modalidade, com modalidade única ou que coletam isso depois da agenda não
+        // podem ser bloqueados por uma regra técnica residual do pré-agendamento.
         $modalityChoiceRequiredBeforeSchedule = !empty($modalityPolicy['requires_choice'])
             && $behaviorService->modalityRequiredBeforeSchedule($tenantId, $pdo);
         if (($modalityPolicy['mode'] ?? '') === 'single'
@@ -470,7 +474,8 @@ final class PreSchedulingService
         $title = 'Pré-agendamento - ' . mb_substr($titleName, 0, 90);
         $description = $this->buildDescription($content, $intent, $flowContext);
         $intentModality = $this->intentSchedulingModality($intent);
-        $readyForAvailability = $this->hasFullPreference($intent) && $this->isAvailabilityModality($intentModality);
+        $readyForAvailability = $this->hasFullPreference($intent)
+            && (!$modalityChoiceRequiredBeforeSchedule || $this->isAvailabilityModality($intentModality));
         // Preferência completa ainda NÃO é compromisso. Só vira awaiting_approval quando
         // CalendarAvailabilityService aplicar um slot realmente livre.
         $status = 'pre_scheduled';
@@ -1296,7 +1301,12 @@ final class PreSchedulingService
 
         $mergedHasFullPreference = trim((string) ($params['preferred_day_text'] ?? '')) !== ''
             && trim((string) ($params['preferred_time_text'] ?? '')) !== '';
-        $readyForAvailability = $mergedHasFullPreference && $this->isAvailabilityModality($effectiveModality);
+        $behaviorService = new AgentConversationBehaviorService();
+        $modalityPolicy = $behaviorService->modalityPolicy($tenantId, $pdo);
+        $modalityChoiceRequiredBeforeSchedule = !empty($modalityPolicy['requires_choice'])
+            && $behaviorService->modalityRequiredBeforeSchedule($tenantId, $pdo);
+        $readyForAvailability = $mergedHasFullPreference
+            && (!$modalityChoiceRequiredBeforeSchedule || $this->isAvailabilityModality($effectiveModality));
         // Não promove para awaiting_approval antes da validação real da agenda.
         $statusSet = $readyForAvailability ? ', status = "pre_scheduled"' : '';
 
@@ -1335,8 +1345,10 @@ final class PreSchedulingService
             'tenant_id' => $tenantId,
             'conversation_id' => $conversationId,
             'description' => $readyForAvailability
-                ? 'Preferência de dia/horário e modalidade recebidas; pré-agendamento pronto para consultar disponibilidade.'
-                : ($mergedHasFullPreference ? 'Dia/horário recebidos; aguardando modalidade antes de consultar disponibilidade.' : 'Pré-agendamento atualizado com nova informação do lead.'),
+                ? ($this->isAvailabilityModality($effectiveModality)
+                    ? 'Preferência de dia/horário e modalidade recebidas; pré-agendamento pronto para consultar disponibilidade.'
+                    : 'Preferência de dia/horário recebida; pré-agendamento pronto para consultar disponibilidade conforme a configuração do atendimento.')
+                : ($mergedHasFullPreference ? 'Dia/horário recebidos; aguardando a informação configurada antes de consultar disponibilidade.' : 'Pré-agendamento atualizado com nova informação do lead.'),
             'metadata_json' => json_encode(['appointment_id' => (int) $appointment['id'], 'intent' => $intent], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ]);
 
@@ -2017,14 +2029,43 @@ final class PreSchedulingService
             if ($calendarSource !== 'internal' && empty($settings['auto_request_on_pre_schedule'])) {
                 return ['ok' => false, 'skipped' => true, 'code' => 'auto_request_disabled', 'message' => 'Consulta automática de disponibilidade desativada.'];
             }
-            $appointment = $this->appointmentById(Database::connection(), $tenantId, $appointmentId);
+            $pdo = Database::connection();
+            $appointment = $this->appointmentById($pdo, $tenantId, $appointmentId);
             $modality = is_array($appointment) ? $this->appointmentSchedulingModality($appointment) : 'indefinida';
-            if (!$this->isAvailabilityModality($modality)) {
+            $behaviorService = new AgentConversationBehaviorService();
+            $modalityPolicy = $behaviorService->modalityPolicy($tenantId, $pdo);
+            $modalityChoiceRequiredBeforeSchedule = !empty($modalityPolicy['requires_choice'])
+                && $behaviorService->modalityRequiredBeforeSchedule($tenantId, $pdo);
+
+            // Modalidade única também funciona para pré-agendamentos antigos criados
+            // antes dessa configuração: normalizamos o compromisso sem perguntar de novo.
+            if (!$this->isAvailabilityModality($modality) && ($modalityPolicy['mode'] ?? '') === 'single') {
+                $fixedModality = $this->normalizeSchedulingModality((string) ($modalityPolicy['fixed_modality'] ?? 'presencial'));
+                if ($this->isAvailabilityModality($fixedModality)) {
+                    $pdo->prepare(
+                        'UPDATE calendar_appointments
+                         SET appointment_modality = :modality,
+                             location_type = :location_type,
+                             location = :location,
+                             updated_at = CURRENT_TIMESTAMP
+                         WHERE id = :id AND tenant_id = :tenant_id'
+                    )->execute([
+                        'modality' => $fixedModality,
+                        'location_type' => $fixedModality,
+                        'location' => ucfirst($fixedModality),
+                        'id' => $appointmentId,
+                        'tenant_id' => $tenantId,
+                    ]);
+                    $modality = $fixedModality;
+                }
+            }
+
+            if ($modalityChoiceRequiredBeforeSchedule && !$this->isAvailabilityModality($modality)) {
                 return [
                     'ok' => false,
                     'skipped' => true,
                     'code' => 'modality_required',
-                    'message' => 'Defina se o atendimento é online ou presencial antes de consultar disponibilidade.',
+                    'message' => 'A forma de atendimento precisa ser escolhida antes da agenda porque essa etapa está configurada antes da consulta.',
                 ];
             }
             $result = $service->requestForAppointment($tenantId, $appointmentId, 'pre_schedule_ai');

@@ -1,3 +1,11 @@
+# RS Connect 36.37.3
+
+> **Agenda interna guiada pela configuração:** a consulta de horários passa a respeitar integralmente a Ordem do atendimento e a política de forma de atendimento. Negócios sem modalidade não são bloqueados; modalidade única é aplicada automaticamente; períodos como “quinta pela manhã” pesquisam somente a faixa solicitada na Agenda interna e retornam opções reais sem transformar “manhã” em um horário confirmado. Não há migration nova; permanece `120_agent_turn_state_cursor.sql`.
+
+# RS Connect 36.37.2
+
+> **Triagem sem dupla autoridade:** quando existe uma **Ordem do atendimento**, demanda/motivo, idade, modalidade e demais informações são conduzidos somente pelo workflow. O antigo bloco “Entender a demanda” deixa de criar uma segunda pergunta e passa a mostrar o estado do roteiro. Empresas sem workflow continuam com a compatibilidade legada. Não há migration nova; permanece `120_agent_turn_state_cursor.sql`.
+
 # RS Connect 36.37.1
 
 > **Ordem do atendimento editável até o fim:** etapas de **Coleta** agora podem ser excluídas pela própria tela. A exclusão é confirmada antes de salvar, remove a etapa do workflow, desativa informações que ficarem sem outro vínculo e preserva esses campos para futura reutilização. Etapas técnicas de ação/validação continuam protegidas. Não há migration nova; permanece `120_agent_turn_state_cursor.sql`.

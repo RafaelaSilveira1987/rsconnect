@@ -300,31 +300,32 @@ final class AgentTriageService
             if ($this->isUsableContactName($contactName, (string) ($contact['phone'] ?? ''))) {
                 $collected['requester_name'] = $collected['requester_name'] ?? $contactName;
             }
-            // 36.36.14: "Exigir a demanda antes de consultar a agenda" precisa prevalecer
-            // também para cliente/paciente atual quando ainda não houver demanda registrada
-            // nesta conversa. Antes era criado um placeholder de continuidade que satisfazia
-            // artificialmente o campo brief_demand e liberava a agenda sem perguntar a demanda.
+            $fields = is_array($profile['triage_fields'] ?? null) ? $profile['triage_fields'] : [];
+
+            // 36.37.2: demanda segue a mesma regra de qualquer outra informação do
+            // workflow. Não consultamos mais conversation_behavior para decidir se ela
+            // deve ser pedida. Isso evita que a camada de comportamento antecipe a
+            // pergunta e o cursor da Ordem do atendimento a faça novamente mais tarde.
             try {
                 $relationship = (new ConversationFlowService())->relationshipProfile($contact);
-                $behavior = (new AgentConversationBehaviorService())->settingsForTenant($tenantId, $pdo);
-                $demandBehavior = is_array($behavior['demand'] ?? null) ? $behavior['demand'] : [];
-                $behaviorDemandRequired = !empty($demandBehavior['required_before_schedule']);
+                $demandField = $this->fieldByKey($fields, 'brief_demand');
+                $demandMustBeCollected = is_array($demandField)
+                    && !empty($demandField['active'])
+                    && (!empty($demandField['required_before_schedule']) || !empty($demandField['required_for_completion']));
                 $currentDemand = trim((string) ($collected['brief_demand'] ?? ''));
 
-                if ($behaviorDemandRequired && str_starts_with($currentDemand, '[continuidade:')) {
+                if ($demandMustBeCollected && str_starts_with($currentDemand, '[continuidade:')) {
                     unset($collected['brief_demand']);
                     $currentDemand = '';
                 }
 
                 if (!empty($relationship['is_existing_customer'])
                     && $currentDemand === ''
-                    && !$behaviorDemandRequired) {
+                    && !$demandMustBeCollected) {
                     $collected['brief_demand'] = '[continuidade: demanda anterior não precisa ser repetida]';
                 }
             } catch (Throwable) {
             }
-
-            $fields = is_array($profile['triage_fields'] ?? null) ? $profile['triage_fields'] : [];
             $currentField = trim((string) ($session['current_field_key'] ?? '')) ?: null;
             $startingCurrentField = $currentField;
             $lastProcessedIncomingId = max(0, (int) ($session['last_processed_incoming_id'] ?? 0));
@@ -960,6 +961,20 @@ final class AgentTriageService
         }
 
         return [['id' => max(0, $throughIncomingId), 'content' => $fallback]];
+    }
+
+    /** @param array<int,array<string,mixed>> $fields */
+    private function fieldByKey(array $fields, string $fieldKey): ?array
+    {
+        foreach ($fields as $field) {
+            if (!is_array($field)) {
+                continue;
+            }
+            if ((string) ($field['field_key'] ?? $field['key'] ?? '') === $fieldKey) {
+                return $field;
+            }
+        }
+        return null;
     }
 
     /** @param array<int,array<string,mixed>> $fields */

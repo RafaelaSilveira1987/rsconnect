@@ -2304,6 +2304,10 @@ final class AiAutomationService
         }
 
         $settings = (new PreSchedulingService())->settings($tenantId);
+        $behaviorService = new AgentConversationBehaviorService();
+        $modalityPolicy = $behaviorService->modalityPolicy($tenantId, $pdo);
+        $modalityChoiceRequiredBeforeSchedule = !empty($modalityPolicy['requires_choice'])
+            && $behaviorService->modalityRequiredBeforeSchedule($tenantId, $pdo);
         if ($claimsConfirmed && is_array($appointment) && (string) ($appointment['status'] ?? '') === 'confirmed') {
             return $reply;
         }
@@ -2329,7 +2333,9 @@ final class AiAutomationService
         }
 
         if (!is_array($appointment)) {
-            return 'Antes de confirmar qualquer horário, preciso registrar sua preferência de dia, horário e modalidade. Qual opção funciona melhor para você?';
+            return $modalityChoiceRequiredBeforeSchedule
+                ? 'Antes de confirmar qualquer horário, preciso registrar sua preferência de dia, período ou horário e forma de atendimento. Qual opção funciona melhor para você?'
+                : 'Antes de confirmar qualquer horário, preciso registrar sua preferência de dia, período ou horário. Qual opção funciona melhor para você?';
         }
 
         $modality = strtolower(trim((string) ($appointment['appointment_modality'] ?? $appointment['location_type'] ?? '')));
@@ -2338,8 +2344,8 @@ final class AiAutomationService
         $availabilityStatus = trim((string) ($appointment['availability_status'] ?? ''));
         $slotId = (int) ($appointment['chosen_availability_slot_id'] ?? 0);
 
-        if (!in_array($modality, ['online', 'presencial', 'telefone'], true)) {
-            return trim((string) ($settings['modality_message'] ?? '')) ?: 'Você prefere atendimento online ou presencial?';
+        if ($modalityChoiceRequiredBeforeSchedule && !in_array($modality, ['online', 'presencial', 'telefone'], true)) {
+            return trim((string) ($settings['modality_message'] ?? '')) ?: 'Qual forma de atendimento você prefere?';
         }
         if ($day === '' || $time === '') {
             return trim((string) ($settings['collect_message'] ?? '')) ?: 'Qual o melhor dia e horário para você?';

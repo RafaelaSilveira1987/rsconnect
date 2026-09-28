@@ -206,13 +206,13 @@ final class ConversationFlowService
         }
         $demandStatus = (string) ($state['demand_status'] ?? 'pending');
         $demandSummary = trim((string) ($state['demand_summary'] ?? ''));
-        $behaviorDemandRequired = $this->behaviorRequiresDemandBeforeSchedule($tenantId, $pdo);
+        $configuredDemandRequired = $this->configuredDemandRequiredBeforeSchedule($tenantId, $pdo);
 
         // 36.36.14: a opção amigável "Exigir a demanda antes de consultar a agenda"
         // é a regra de maior prioridade. Antes, cliente/paciente atual era dispensado
         // incondicionalmente e isso podia anular uma configuração explícita da empresa.
         // Mantemos a continuidade somente quando essa exigência global estiver desligada.
-        if ($behaviorDemandRequired
+        if ($configuredDemandRequired
             && in_array($intent, ['schedule', 'reschedule'], true)
             && $demandStatus === 'not_required'
             && $this->isAutomaticExistingCustomerDemandExemption($demandSummary)) {
@@ -220,7 +220,7 @@ final class ConversationFlowService
             $demandSummary = '';
         }
 
-        if ($existingCustomer && $demandStatus === 'pending' && !$behaviorDemandRequired) {
+        if ($existingCustomer && $demandStatus === 'pending' && !$configuredDemandRequired) {
             $demandStatus = 'not_required';
             $demandSummary = $demandSummary !== ''
                 ? $demandSummary
@@ -321,8 +321,8 @@ final class ConversationFlowService
         $rule = $this->ruleForInstance($pdo, $tenantId, (int) ($instance['id'] ?? 0), $group, $conversationId);
         $demandStatus = (string) ($flow['demand_status'] ?? 'pending');
         $isReschedule = $this->isReschedule($this->normalize($content));
-        $behaviorDemandRequired = $this->behaviorRequiresDemandBeforeSchedule($tenantId, $pdo);
-        $demandRequired = $behaviorDemandRequired || !empty($rule['require_demand_before_pre_schedule']);
+        $configuredDemandRequired = $this->configuredDemandRequiredBeforeSchedule($tenantId, $pdo);
+        $demandRequired = $configuredDemandRequired || !empty($rule['require_demand_before_pre_schedule']);
 
         if (empty($rule['allow_pre_schedule'])) {
             return [
@@ -463,36 +463,45 @@ final class ConversationFlowService
 
     public function ruleForAgent(PDO $pdo, int $tenantId, int $agentId, string $group): array
     {
-        $defaults = $this->defaultRule($group);
-        if ($agentId < 1) {
-            return $defaults;
-        }
-        try {
-            $statement = $pdo->prepare(
-                'SELECT allow_pre_schedule, require_demand_before_pre_schedule,
-                        allow_reschedule_without_demand, instructions
-                 FROM ai_agent_group_rules
-                 WHERE tenant_id = :tenant_id AND agent_id = :agent_id AND contact_group = :contact_group
-                 LIMIT 1'
-            );
-            $statement->execute([
-                'tenant_id' => $tenantId,
-                'agent_id' => $agentId,
-                'contact_group' => $group,
-            ]);
-            $row = $statement->fetch(PDO::FETCH_ASSOC);
-            if (!$row) {
-                return $defaults;
+        $rule = $this->defaultRule($group);
+        if ($agentId > 0) {
+            try {
+                $statement = $pdo->prepare(
+                    'SELECT allow_pre_schedule, require_demand_before_pre_schedule,
+                            allow_reschedule_without_demand, instructions
+                     FROM ai_agent_group_rules
+                     WHERE tenant_id = :tenant_id AND agent_id = :agent_id AND contact_group = :contact_group
+                     LIMIT 1'
+                );
+                $statement->execute([
+                    'tenant_id' => $tenantId,
+                    'agent_id' => $agentId,
+                    'contact_group' => $group,
+                ]);
+                $row = $statement->fetch(PDO::FETCH_ASSOC);
+                if ($row) {
+                    $rule = [
+                        'allow_pre_schedule' => (int) $row['allow_pre_schedule'] === 1,
+                        'require_demand_before_pre_schedule' => (int) $row['require_demand_before_pre_schedule'] === 1,
+                        'allow_reschedule_without_demand' => (int) $row['allow_reschedule_without_demand'] === 1,
+                        'instructions' => trim((string) ($row['instructions'] ?? '')),
+                    ];
+                }
+            } catch (Throwable) {
             }
-            return [
-                'allow_pre_schedule' => (int) $row['allow_pre_schedule'] === 1,
-                'require_demand_before_pre_schedule' => (int) $row['require_demand_before_pre_schedule'] === 1,
-                'allow_reschedule_without_demand' => (int) $row['allow_reschedule_without_demand'] === 1,
-                'instructions' => trim((string) ($row['instructions'] ?? '')),
-            ];
-        } catch (Throwable) {
-            return $defaults;
         }
+
+        // 36.37.2: em tenants com Ordem do atendimento executável, a posição da
+        // etapa brief_demand em relação à primeira ação calendar.* substitui a trava
+        // histórica por grupo. Assim "Pedir o motivo" não vira uma segunda fonte de
+        // verdade capaz de antecipar/repetir a pergunta. Em tenants legados sem workflow,
+        // a configuração por grupo continua preservada.
+        $workflowDemand = $this->workflowDemandPolicy($pdo, $tenantId);
+        if (!empty($workflowDemand['managed'])) {
+            $rule['require_demand_before_pre_schedule'] = !empty($workflowDemand['required']);
+        }
+
+        return $rule;
     }
 
     public function saveGroupRules(PDO $pdo, int $tenantId, int $agentId, array $postedRules): void
@@ -633,8 +642,8 @@ final class ConversationFlowService
             $status = (string) ($contact['status'] ?? '');
             $tags = $this->tags($contact['tags_json'] ?? null);
             $relationship = $this->relationshipProfile($contact);
-            $behaviorDemandRequired = $this->behaviorRequiresDemandBeforeSchedule($tenantId, $pdo);
-            $allowExistingCustomerDemandExemption = !empty($relationship['is_existing_customer']) && !$behaviorDemandRequired;
+            $configuredDemandRequired = $this->configuredDemandRequiredBeforeSchedule($tenantId, $pdo);
+            $allowExistingCustomerDemandExemption = !empty($relationship['is_existing_customer']) && !$configuredDemandRequired;
 
             $statement = $pdo->prepare(
                 'SELECT id, metadata_json
@@ -855,14 +864,106 @@ final class ConversationFlowService
         return mb_strlen($without) < 10;
     }
 
-    private function behaviorRequiresDemandBeforeSchedule(int $tenantId, PDO $pdo): bool
+    private function configuredDemandRequiredBeforeSchedule(int $tenantId, PDO $pdo): bool
     {
+        $workflow = $this->workflowDemandPolicy($pdo, $tenantId);
+        if (!empty($workflow['managed'])) {
+            return !empty($workflow['required']);
+        }
+
+        // Compatibilidade para instalações antigas que ainda não possuem workflow
+        // executável: respeita o campo técnico persistido e, por último, a configuração
+        // histórica de comportamento. Assim a correção não quebra empresas legadas.
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT active, required_before_schedule
+                 FROM tenant_triage_fields
+                 WHERE tenant_id = :tenant_id AND field_key = "brief_demand"
+                 LIMIT 1'
+            );
+            $stmt->execute(['tenant_id' => $tenantId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($row) {
+                return (int) ($row['active'] ?? 0) === 1 && (int) ($row['required_before_schedule'] ?? 0) === 1;
+            }
+        } catch (Throwable) {
+        }
+
         try {
             $behavior = (new AgentConversationBehaviorService())->settingsForTenant($tenantId, $pdo);
             $demand = is_array($behavior['demand'] ?? null) ? $behavior['demand'] : [];
             return !empty($demand['required_before_schedule']);
         } catch (Throwable) {
             return false;
+        }
+    }
+
+    /** @return array{managed:bool,required:bool} */
+    private function workflowDemandPolicy(PDO $pdo, int $tenantId): array
+    {
+        if ($tenantId < 1) {
+            return ['managed' => false, 'required' => false];
+        }
+
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT step_type, position, config_json
+                 FROM tenant_agent_workflow_steps
+                 WHERE tenant_id = :tenant_id AND active = 1
+                 ORDER BY position, id'
+            );
+            $stmt->execute(['tenant_id' => $tenantId]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            if ($rows === []) {
+                return ['managed' => false, 'required' => false];
+            }
+
+            $calendarPosition = null;
+            foreach ($rows as $row) {
+                if ((string) ($row['step_type'] ?? '') !== 'action') {
+                    continue;
+                }
+                $config = json_decode((string) ($row['config_json'] ?? ''), true);
+                $config = is_array($config) ? $config : [];
+                $actionKey = trim((string) ($config['action_key'] ?? ''));
+                if (str_starts_with($actionKey, 'calendar.')) {
+                    $calendarPosition = (int) ($row['position'] ?? 0);
+                    break;
+                }
+            }
+
+            if ($calendarPosition === null) {
+                return ['managed' => true, 'required' => false];
+            }
+
+            foreach ($rows as $row) {
+                if ((string) ($row['step_type'] ?? '') !== 'collect'
+                    || (int) ($row['position'] ?? 0) >= $calendarPosition) {
+                    continue;
+                }
+                $config = json_decode((string) ($row['config_json'] ?? ''), true);
+                $config = is_array($config) ? $config : [];
+                $keys = [];
+                $single = trim((string) ($config['field_key'] ?? ''));
+                if ($single !== '') {
+                    $keys[] = $single;
+                }
+                if (is_array($config['field_keys'] ?? null)) {
+                    foreach ($config['field_keys'] as $fieldKey) {
+                        $fieldKey = trim((string) $fieldKey);
+                        if ($fieldKey !== '') {
+                            $keys[] = $fieldKey;
+                        }
+                    }
+                }
+                if (in_array('brief_demand', $keys, true)) {
+                    return ['managed' => true, 'required' => true];
+                }
+            }
+
+            return ['managed' => true, 'required' => false];
+        } catch (Throwable) {
+            return ['managed' => false, 'required' => false];
         }
     }
 

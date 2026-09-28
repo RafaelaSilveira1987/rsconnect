@@ -1508,7 +1508,11 @@ Responda com o número ou com o horário que prefere."
     /** @param array<string,mixed> $appointment */
     private function isAvailabilityBrowseAppointment(array $appointment): bool
     {
-        return trim((string) ($appointment['preferred_time_text'] ?? '')) === '';
+        $preferredTime = trim((string) ($appointment['preferred_time_text'] ?? ''));
+        // Períodos como "manhã", "tarde" e "noite" significam que o contato quer
+        // VER opções dentro de uma faixa, não que escolheu um horário específico.
+        // Só HH:MM é tratado como preferência exata passível de seleção automática.
+        return preg_match('/^(?:[01]?\d|2[0-3]):[0-5]\d$/', $preferredTime) !== 1;
     }
 
     /** @param array<int,array<string,mixed>> $slots */
