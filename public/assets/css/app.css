@@ -13666,6 +13666,18 @@ body.login-demo-open{overflow:hidden}
 }
 .agent-workflow-type { background: #edf8f7; color: #08766f; }
 .agent-workflow-protected { background: #eef4ff; color: #355c9b; }
+.workflow-delete-btn {
+  margin-left: auto;
+  padding: 5px 9px;
+  border: 1px solid #f0c7c7;
+  border-radius: 8px;
+  background: #fff;
+  color: #a33b3b;
+  font-size: .68rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.workflow-delete-btn:hover { border-color: #dc8d8d; background: #fff5f5; color: #8f2525; }
 .agent-workflow-editor-content > small { display: block; margin-top: 6px; color: #748296; font-size: .69rem; line-height: 1.4; }
 
 .agent-operation-fields-grid {
@@ -16888,3 +16900,5 @@ summary {
     grid-template-columns: 1fr;
   }
 }
+
+/* 36.37.1 — exclusão segura de etapas de coleta na Ordem do atendimento. */

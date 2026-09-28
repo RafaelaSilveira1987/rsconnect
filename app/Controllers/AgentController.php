@@ -204,6 +204,7 @@ final class AgentController
                 'triage_fields' => is_array($_POST['triage_fields'] ?? null) ? $_POST['triage_fields'] : [],
                 'policies' => is_array($_POST['agent_policies'] ?? null) ? $_POST['agent_policies'] : [],
                 'workflow' => is_array($_POST['workflow_steps'] ?? null) ? $_POST['workflow_steps'] : [],
+                'workflow_delete_keys' => is_array($_POST['workflow_delete_keys'] ?? null) ? $_POST['workflow_delete_keys'] : [],
                 'workflow_add_field_key' => trim((string) ($_POST['workflow_add_field_key'] ?? '')),
                 'workflow_new' => is_array($_POST['workflow_new'] ?? null) ? $_POST['workflow_new'] : [],
                 'conversation_behavior' => is_array($_POST['conversation_behavior'] ?? null) ? $_POST['conversation_behavior'] : [],

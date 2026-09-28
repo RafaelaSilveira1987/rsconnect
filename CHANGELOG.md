@@ -1,3 +1,14 @@
+# 36.37.1 — Exclusão segura de etapas da Ordem do atendimento
+
+- adiciona o botão **Excluir etapa** em cada etapa do tipo **Coleta** nas telas de configuração do agente;
+- pede confirmação antes da remoção e atualiza imediatamente a numeração visual das etapas restantes;
+- envia uma lista explícita de etapas a excluir, evitando que simples ausência no formulário apague itens por acidente;
+- impede no backend a exclusão de etapas técnicas (`Ação`, `Validação`, `Equipe` e `Conclusão`);
+- quando uma etapa removida era o último vínculo de uma informação, o campo fica inativo e deixa de ser exigido pelo runtime, mas permanece cadastrado para poder ser adicionado novamente;
+- ao remover o último vínculo de `brief_demand`, também desliga a compatibilidade antiga de demanda para impedir que a pergunta seja recriada silenciosamente;
+- recompõe as posições do workflow após a exclusão e recalcula as travas antes da agenda;
+- não há migration nova; permanece obrigatória `120_agent_turn_state_cursor.sql`.
+
 # 36.37.0 — Motor genérico de atendimento por configuração
 
 - transforma a **Ordem do atendimento** na fonte efetiva para a fronteira da agenda: campos vinculados a etapas de coleta antes de `calendar.*` passam a ser exigidos antes da consulta;

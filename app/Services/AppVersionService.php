@@ -212,8 +212,9 @@ final class AppVersionService
     // Compatibilidade histórica: REQUIRED_MIGRATION = '120_agent_turn_state_cursor.sql';
     // Marcador histórico: RS Connect 36.36.27 — Agenda factual e sem promessas duplicadas
     // Compatibilidade histórica: PACKAGE_LABEL = 'RS Connect 36.36.28 — Consulta real de horários e confirmação sem falso positivo';
-    // RS Connect 36.37.0 — motor genérico: fluxo, triagem e modalidade obedecem à configuração efetiva da empresa.
-    public const PACKAGE_LABEL = 'RS Connect 36.37.0 — Motor genérico de atendimento por configuração';
+    // Marcador histórico: RS Connect 36.37.0 — motor genérico de atendimento por configuração.
+    // RS Connect 36.37.1 — exclusão segura de etapas de coleta na Ordem do atendimento.
+    public const PACKAGE_LABEL = 'RS Connect 36.37.1 — Exclusão segura de etapas da Ordem do atendimento';
     public const REQUIRED_MIGRATION = '120_agent_turn_state_cursor.sql';
 
     private PDO $pdo;

@@ -1,3 +1,7 @@
+# RS Connect 36.37.1
+
+> **Ordem do atendimento editável até o fim:** etapas de **Coleta** agora podem ser excluídas pela própria tela. A exclusão é confirmada antes de salvar, remove a etapa do workflow, desativa informações que ficarem sem outro vínculo e preserva esses campos para futura reutilização. Etapas técnicas de ação/validação continuam protegidas. Não há migration nova; permanece `120_agent_turn_state_cursor.sql`.
+
 # RS Connect 36.37.0
 
 > **Hotfix da agenda conversacional:** perguntas como “Sim, qual horário tem disponível?” não são mais tratadas como confirmação. Com a modalidade já definida, o RS Connect consulta a agenda real e apresenta somente horários que respeitam as regras cadastradas do agente. Não há migration nova; permanece `120_agent_turn_state_cursor.sql`.

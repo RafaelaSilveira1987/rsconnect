@@ -260,8 +260,23 @@ final class AgentBlueprintService
             );
         }
 
+        $workflowDeleteKeys = $this->normalizeWorkflowDeleteKeys(
+            is_array($data['workflow_delete_keys'] ?? null) ? $data['workflow_delete_keys'] : []
+        );
+
         $pdo->beginTransaction();
         try {
+            // Excluir uma etapa de coleta precisa vencer compatibilidades antigas.
+            // Se o último vínculo de "demanda" for removido, a camada amigável não
+            // pode recriar a pergunta silenciosamente no próximo carregamento.
+            $orphanedByDeletion = $this->orphanedFieldKeysAfterWorkflowDeletion($pdo, $tenantId, $workflowDeleteKeys);
+            if (in_array('brief_demand', $orphanedByDeletion, true)) {
+                $currentConfig['conversation_behavior'] = is_array($currentConfig['conversation_behavior'] ?? null)
+                    ? $currentConfig['conversation_behavior']
+                    : AgentConversationBehaviorService::normalizeConfiguration([]);
+                $currentConfig['conversation_behavior']['demand']['enabled'] = false;
+                $currentConfig['conversation_behavior']['demand']['required_before_schedule'] = false;
+            }
             $pdo->prepare(
                 'UPDATE tenant_agent_profiles
                  SET interaction_mode = :mode, config_json = :config_json, customized = 1
@@ -380,6 +395,10 @@ final class AgentBlueprintService
 
             if (is_array($currentConfig['conversation_behavior'] ?? null)) {
                 $this->syncConversationBehavior($pdo, $tenantId, $currentConfig['conversation_behavior']);
+            }
+
+            if ($workflowDeleteKeys !== []) {
+                $this->deleteWorkflowSteps($pdo, $tenantId, $workflowDeleteKeys);
             }
 
             // A Ordem do atendimento é a fonte final da fronteira da agenda:
@@ -769,8 +788,8 @@ final class AgentBlueprintService
             ];
         }
 
-        // Etapas não enviadas nunca são excluídas. Elas permanecem no fim, preservando
-        // compatibilidade e evitando que um formulário antigo desmonte o fluxo.
+        // A simples ausência no POST nunca exclui uma etapa. Exclusão exige o marcador
+        // workflow_delete_keys[], preservando compatibilidade com formulários antigos.
         $sentKeys = array_column($ordered, 'step_key');
         foreach ($currentRows as $row) {
             $key = (string) ($row['step_key'] ?? '');
@@ -802,6 +821,162 @@ final class AgentBlueprintService
                 'config_json' => (string) ($row['config_json'] ?? '{}'),
                 'tenant_id' => $tenantId,
                 'step_key' => (string) $row['step_key'],
+            ]);
+        }
+    }
+
+    /**
+     * @param array<int,mixed> $raw
+     * @return array<int,string>
+     */
+    private function normalizeWorkflowDeleteKeys(array $raw): array
+    {
+        $keys = [];
+        foreach ($raw as $key) {
+            $key = mb_substr(trim((string) $key), 0, 120);
+            if ($key !== '') {
+                $keys[] = $key;
+            }
+        }
+        return array_values(array_unique($keys));
+    }
+
+    /**
+     * Retorna quais informações ficariam sem nenhuma etapa de coleta ativa caso as
+     * etapas solicitadas fossem excluídas. Etapas técnicas não são removíveis.
+     *
+     * @param array<int,string> $stepKeys
+     * @return array<int,string>
+     */
+    private function orphanedFieldKeysAfterWorkflowDeletion(PDO $pdo, int $tenantId, array $stepKeys): array
+    {
+        if ($stepKeys === []) {
+            return [];
+        }
+
+        $requested = array_fill_keys($stepKeys, true);
+        $stmt = $pdo->prepare(
+            'SELECT step_key, step_type, config_json, active
+             FROM tenant_agent_workflow_steps
+             WHERE tenant_id = :tenant_id
+             ORDER BY position, id'
+        );
+        $stmt->execute(['tenant_id' => $tenantId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $candidateFields = [];
+        $remainingFields = [];
+        foreach ($rows as $row) {
+            $stepKey = trim((string) ($row['step_key'] ?? ''));
+            $stepType = (string) ($row['step_type'] ?? '');
+            $isRequested = $stepKey !== '' && isset($requested[$stepKey]);
+
+            if ($isRequested && $stepType !== 'collect') {
+                throw new \RuntimeException('Somente etapas de coleta podem ser excluídas da Ordem do atendimento.');
+            }
+
+            if ($stepType !== 'collect' || empty($row['active'])) {
+                continue;
+            }
+
+            $config = $this->decodeJson((string) ($row['config_json'] ?? ''));
+            $keys = [];
+            $one = trim((string) ($config['field_key'] ?? ''));
+            if ($one !== '') {
+                $keys[] = $one;
+            }
+            if (is_array($config['field_keys'] ?? null)) {
+                foreach ($config['field_keys'] as $fieldKey) {
+                    $fieldKey = trim((string) $fieldKey);
+                    if ($fieldKey !== '') {
+                        $keys[] = $fieldKey;
+                    }
+                }
+            }
+
+            foreach (array_unique($keys) as $fieldKey) {
+                if ($isRequested) {
+                    $candidateFields[$fieldKey] = true;
+                } else {
+                    $remainingFields[$fieldKey] = true;
+                }
+            }
+        }
+
+        return array_values(array_diff(array_keys($candidateFields), array_keys($remainingFields)));
+    }
+
+    /**
+     * Exclui somente etapas de coleta explicitamente solicitadas pelo formulário.
+     * Os campos permanecem cadastrados para poderem ser adicionados novamente, mas
+     * ficam inativos quando não houver outra etapa do workflow usando-os.
+     *
+     * @param array<int,string> $stepKeys
+     */
+    private function deleteWorkflowSteps(PDO $pdo, int $tenantId, array $stepKeys): void
+    {
+        if ($stepKeys === []) {
+            return;
+        }
+
+        $orphanedFields = $this->orphanedFieldKeysAfterWorkflowDeletion($pdo, $tenantId, $stepKeys);
+
+        $select = $pdo->prepare(
+            'SELECT step_type FROM tenant_agent_workflow_steps
+             WHERE tenant_id = :tenant_id AND step_key = :step_key LIMIT 1'
+        );
+        $delete = $pdo->prepare(
+            'DELETE FROM tenant_agent_workflow_steps
+             WHERE tenant_id = :tenant_id AND step_key = :step_key AND step_type = "collect"'
+        );
+
+        foreach ($stepKeys as $stepKey) {
+            $select->execute(['tenant_id' => $tenantId, 'step_key' => $stepKey]);
+            $row = $select->fetch(PDO::FETCH_ASSOC);
+            if (!$row) {
+                continue;
+            }
+            if ((string) ($row['step_type'] ?? '') !== 'collect') {
+                throw new \RuntimeException('Somente etapas de coleta podem ser excluídas da Ordem do atendimento.');
+            }
+            $delete->execute(['tenant_id' => $tenantId, 'step_key' => $stepKey]);
+        }
+
+        if ($orphanedFields !== []) {
+            $deactivate = $pdo->prepare(
+                'UPDATE tenant_triage_fields
+                 SET active = 0,
+                     required_before_schedule = 0,
+                     required_for_completion = 0,
+                     source = "tenant"
+                 WHERE tenant_id = :tenant_id AND field_key = :field_key'
+            );
+            foreach ($orphanedFields as $fieldKey) {
+                $deactivate->execute([
+                    'tenant_id' => $tenantId,
+                    'field_key' => $fieldKey,
+                ]);
+            }
+        }
+
+        // Recompacta a sequência depois da exclusão para que UI, runtime e auditoria
+        // continuem exibindo 1, 2, 3... sem posições históricas vazias.
+        $order = $pdo->prepare(
+            'SELECT step_key FROM tenant_agent_workflow_steps
+             WHERE tenant_id = :tenant_id ORDER BY position, id'
+        );
+        $order->execute(['tenant_id' => $tenantId]);
+        $remaining = $order->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $reposition = $pdo->prepare(
+            'UPDATE tenant_agent_workflow_steps
+             SET position = :position, source = "tenant"
+             WHERE tenant_id = :tenant_id AND step_key = :step_key'
+        );
+        foreach ($remaining as $index => $row) {
+            $reposition->execute([
+                'position' => ($index + 1) * 10,
+                'tenant_id' => $tenantId,
+                'step_key' => (string) ($row['step_key'] ?? ''),
             ]);
         }
     }

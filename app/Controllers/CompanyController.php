@@ -386,6 +386,7 @@ final class CompanyController
                         'triage_fields' => is_array($_POST['triage_fields'] ?? null) ? $_POST['triage_fields'] : [],
                         'policies' => is_array($_POST['agent_policies'] ?? null) ? $_POST['agent_policies'] : [],
                         'workflow' => is_array($_POST['workflow_steps'] ?? null) ? $_POST['workflow_steps'] : [],
+                        'workflow_delete_keys' => is_array($_POST['workflow_delete_keys'] ?? null) ? $_POST['workflow_delete_keys'] : [],
                     ]);
                 }
             } catch (Throwable $exception) {

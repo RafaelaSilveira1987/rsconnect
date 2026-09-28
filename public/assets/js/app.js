@@ -4563,9 +4563,42 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshWorkflowList(list);
 
     list.addEventListener('click', (event) => {
-      const button = event.target instanceof Element
-        ? event.target.closest('[data-workflow-move]')
-        : null;
+      const target = event.target instanceof Element ? event.target : null;
+      const deleteButton = target?.closest('[data-workflow-delete]');
+      if (deleteButton instanceof HTMLButtonElement) {
+        event.preventDefault();
+
+        const step = deleteButton.closest('[data-workflow-step]');
+        const form = list.closest('form');
+        const stepKey = (deleteButton.dataset.workflowKey || step?.dataset.workflowKey || '').trim();
+        if (!(step instanceof HTMLElement) || !(form instanceof HTMLFormElement) || stepKey === '') return;
+
+        const labelInput = step.querySelector('input[name$="[label]"]');
+        const stepLabel = labelInput instanceof HTMLInputElement && labelInput.value.trim() !== ''
+          ? labelInput.value.trim()
+          : 'esta etapa';
+        const confirmed = window.confirm(
+          `Excluir “${stepLabel}” da Ordem do atendimento?\n\n` +
+          'As informações desta etapa deixarão de ser exigidas pelo fluxo. Você poderá adicioná-las novamente depois.'
+        );
+        if (!confirmed) return;
+
+        const alreadyMarked = [...form.querySelectorAll('input[name="workflow_delete_keys[]"]')]
+          .some((input) => input instanceof HTMLInputElement && input.value === stepKey);
+        if (!alreadyMarked) {
+          const marker = document.createElement('input');
+          marker.type = 'hidden';
+          marker.name = 'workflow_delete_keys[]';
+          marker.value = stepKey;
+          form.appendChild(marker);
+        }
+
+        step.remove();
+        refreshWorkflowList(list);
+        return;
+      }
+
+      const button = target?.closest('[data-workflow-move]');
       if (!(button instanceof HTMLButtonElement)) return;
       event.preventDefault();
 

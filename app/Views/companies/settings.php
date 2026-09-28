@@ -262,7 +262,7 @@ $queueEnabled = (bool) (($moduleSettings['queue']['is_enabled'] ?? null) ?? ($qu
                         'complete' => 'Conclusão',
                     ][$workflowType] ?? 'Etapa';
                     ?>
-                    <article class="agent-workflow-editor-step" data-workflow-step>
+                    <article class="agent-workflow-editor-step" data-workflow-step data-workflow-key="<?= View::e($workflowKey) ?>">
                         <div class="agent-workflow-order">
                             <span class="agent-workflow-number" data-workflow-number><?= $index + 1 ?></span>
                             <div class="agent-workflow-move">
@@ -274,6 +274,9 @@ $queueEnabled = (bool) (($moduleSettings['queue']['is_enabled'] ?? null) ?? ($qu
                             <div class="agent-workflow-editor-head">
                                 <span class="agent-workflow-type"><?= View::e($workflowTypeLabel) ?></span>
                                 <?php if ($workflowType !== 'collect'): ?><span class="agent-workflow-protected">Proteção do sistema</span><?php endif; ?>
+                                <?php if ($workflowType === 'collect'): ?>
+                                    <button type="button" class="workflow-delete-btn" data-workflow-delete data-workflow-key="<?= View::e($workflowKey) ?>" aria-label="Excluir etapa <?= View::e((string) ($step['label'] ?? $workflowKey)) ?>">Excluir etapa</button>
+                                <?php endif; ?>
                             </div>
                             <label class="field compact-field">
                                 <span>Nome da etapa</span>
