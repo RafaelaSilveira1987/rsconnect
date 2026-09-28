@@ -216,7 +216,8 @@ final class AppVersionService
     // RS Connect 36.37.1 — exclusão segura de etapas de coleta na Ordem do atendimento.
     // RS Connect 36.37.2 — Ordem do atendimento como fonte única da demanda.
     // RS Connect 36.37.3 — Agenda interna respeita o workflow e a preferência real do contato.
-    public const PACKAGE_LABEL = 'RS Connect 36.37.3 — Consulta assertiva da Agenda interna';
+    // RS Connect 36.37.4 — cursor vivo do workflow, Agenda interna compartilhada e pré-agendamento legível.
+    public const PACKAGE_LABEL = 'RS Connect 36.37.4 — Fluxo contínuo e pré-agendamento legível';
     public const REQUIRED_MIGRATION = '120_agent_turn_state_cursor.sql';
 
     private PDO $pdo;

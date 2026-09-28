@@ -16906,3 +16906,81 @@ summary {
 /* 36.37.2 — fonte única da triagem; ajustes visuais reutilizam componentes existentes. */
 
 /* 36.37.3 — agenda interna orientada por preferência e workflow; sem mudança visual. */
+
+
+/* =========================================================
+   RS Connect 36.37.4 — pré-agendamento legível e sem colunas espremidas
+   ========================================================= */
+.calendar-row.is-pre-schedule {
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: start;
+}
+.calendar-row.is-pre-schedule > .activity-icon { grid-column: 1; grid-row: 1; }
+.calendar-row.is-pre-schedule > .task-main { grid-column: 2; min-width: 0; }
+.calendar-row.is-pre-schedule > .task-deadline,
+.calendar-row.is-pre-schedule > .calendar-actions {
+  grid-column: 2;
+  min-width: 0;
+}
+.calendar-row.is-pre-schedule > .task-deadline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 10px 12px;
+  border: 1px solid #e5edf1;
+  border-radius: 12px;
+  background: #f8fafb;
+}
+.calendar-row.is-pre-schedule > .task-deadline small,
+.calendar-row.is-pre-schedule > .task-deadline strong { white-space: normal; }
+.calendar-row.is-pre-schedule > .calendar-actions {
+  justify-content: flex-start;
+  min-width: 0;
+}
+.calendar-row.is-pre-schedule .pre-schedule-record {
+  width: 100%;
+  margin-top: 12px;
+  padding: 16px;
+}
+.calendar-row.is-pre-schedule .pre-schedule-record-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+  border: 0;
+  background: #f5f8fa;
+  overflow: visible;
+}
+.calendar-row.is-pre-schedule .pre-schedule-record-list > div,
+.calendar-row.is-pre-schedule .pre-schedule-record-list .pre-schedule-record-wide {
+  grid-column: auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid #e2e9ed !important;
+  border-radius: 11px;
+  background: #fff;
+}
+.calendar-row.is-pre-schedule .pre-schedule-record-list .pre-schedule-record-wide {
+  grid-column: 1 / -1;
+}
+.calendar-row.is-pre-schedule .pre-schedule-record-list dt {
+  line-height: 1.25;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.calendar-row.is-pre-schedule .pre-schedule-record-list dd {
+  font-size: .82rem;
+  line-height: 1.45;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+@media (max-width: 760px) {
+  .calendar-row.is-pre-schedule { grid-template-columns: 36px minmax(0, 1fr); }
+  .calendar-row.is-pre-schedule > .task-deadline,
+  .calendar-row.is-pre-schedule > .calendar-actions { grid-column: 1 / -1; }
+  .calendar-row.is-pre-schedule .pre-schedule-record-list { grid-template-columns: 1fr; }
+  .calendar-row.is-pre-schedule .pre-schedule-record-list .pre-schedule-record-wide { grid-column: 1; }
+}

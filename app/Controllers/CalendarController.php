@@ -96,6 +96,7 @@ final class CalendarController
         $leads = [];
         $conversations = [];
         $team = [];
+        $triageFieldLabels = [];
         $metrics = ['today_count' => 0, 'upcoming_count' => 0, 'pending_sync' => 0, 'completed_count' => 0];
 
         if ($tenantId > 0) {
@@ -175,6 +176,26 @@ final class CalendarController
             $teamStatement->execute(['tenant_id' => $tenantId]);
             $team = $teamStatement->fetchAll(PDO::FETCH_ASSOC);
 
+            // 36.37.4: o cartão do pré-agendamento não pode conhecer campos de nicho
+            // por código. Carregamos os rótulos configurados pela própria empresa para
+            // apresentar qualquer informação coletada pela Ordem do atendimento.
+            try {
+                $triageFieldStatement = $pdo->prepare(
+                    'SELECT field_key, label FROM tenant_triage_fields WHERE tenant_id = :tenant_id ORDER BY position, id'
+                );
+                $triageFieldStatement->execute(['tenant_id' => $tenantId]);
+                foreach ($triageFieldStatement->fetchAll(PDO::FETCH_ASSOC) as $triageField) {
+                    $fieldKey = trim((string) ($triageField['field_key'] ?? ''));
+                    if ($fieldKey === '') {
+                        continue;
+                    }
+                    $label = trim((string) ($triageField['label'] ?? ''));
+                    $triageFieldLabels[$fieldKey] = $label !== '' ? $label : $fieldKey;
+                }
+            } catch (Throwable) {
+                $triageFieldLabels = [];
+            }
+
             $metricStatement = $pdo->prepare(
                 'SELECT
                     COALESCE(SUM(status IN ("scheduled", "confirmed") AND DATE(starts_at) = CURDATE()), 0) AS today_count,
@@ -197,6 +218,7 @@ final class CalendarController
             'leads' => $leads,
             'conversations' => $conversations,
             'team' => $team,
+            'triageFieldLabels' => $triageFieldLabels,
             'metrics' => $metrics,
             'filters' => $filters,
             'canManage' => Auth::can('calendar.manage'),

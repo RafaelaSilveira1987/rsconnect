@@ -266,7 +266,17 @@ final class ProfessionalCalendarService
 
         $ownerUserId = (int) ($appointment['owner_user_id'] ?? 0);
         if ($ownerUserId < 1) {
-            if (!empty($tenantSettings['require_owner'])) {
+            // 36.37.4: a Agenda interna do RS Connect também funciona como agenda
+            // compartilhada da empresa. Exigir um profissional ANTES de sequer mostrar
+            // horários criava um beco sem saída em fluxos que não possuem a etapa
+            // "profissional". Sem responsável definido, a consulta interna usa as regras
+            // gerais e considera os compromissos de toda a empresa; a exigência de dono
+            // continua valendo na confirmação/aprovação, onde o CalendarController já a
+            // valida. Google/agenda individual continuam exigindo o profissional quando
+            // a empresa marcou essa opção.
+            $usesInternalSharedCalendar = empty($tenantAvailability['use_n8n'])
+                && !empty($tenantAvailability['use_internal_fallback']);
+            if (!empty($tenantSettings['require_owner']) && !$usesInternalSharedCalendar) {
                 return [
                     'ok' => false,
                     'code' => 'professional_required',
@@ -280,6 +290,7 @@ final class ProfessionalCalendarService
                 'ok' => true,
                 'settings' => $tenantAvailability,
                 'professional' => null,
+                'owner_pending' => !empty($tenantSettings['require_owner']),
                 'tenant_settings' => $tenantSettings,
             ];
         }

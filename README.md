@@ -1,3 +1,7 @@
+# RS Connect 36.37.4
+
+> **Fluxo contínuo + Agenda interna sem beco sem saída:** conversas em andamento passam a respeitar imediatamente a ordem atual das etapas, a última coleta retoma a consulta de agenda e a Agenda interna pode pesquisar horários compartilhados mesmo antes de um profissional ser definido. O card de pré-agendamento foi refeito para permanecer legível e agora mostra também campos personalizados da Ordem do atendimento sem regras específicas por nicho. Não há migration nova; permanece `120_agent_turn_state_cursor.sql`.
+
 # RS Connect 36.37.3
 
 > **Agenda interna guiada pela configuração:** a consulta de horários passa a respeitar integralmente a Ordem do atendimento e a política de forma de atendimento. Negócios sem modalidade não são bloqueados; modalidade única é aplicada automaticamente; períodos como “quinta pela manhã” pesquisam somente a faixa solicitada na Agenda interna e retornam opções reais sem transformar “manhã” em um horário confirmado. Não há migration nova; permanece `120_agent_turn_state_cursor.sql`.

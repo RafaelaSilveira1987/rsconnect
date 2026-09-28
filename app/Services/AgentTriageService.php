@@ -83,7 +83,25 @@ final class AgentTriageService
     {
         $profile = (new AgentConversationBehaviorService())->applyOperationalOverridesToProfile($profile);
         $collected = is_array($state['collected'] ?? null) ? $state['collected'] : [];
+        $fields = is_array($profile['triage_fields'] ?? null) ? $profile['triage_fields'] : [];
         $currentField = trim((string) ($state['current_field_key'] ?? '')) ?: null;
+
+        // Mantém o laboratório em paridade com o runtime: um cursor antigo não pode
+        // vencer a sequência atual do fluxo depois que a empresa reorganiza as etapas.
+        $expectedCurrentField = null;
+        if (in_array((string) ($state['last_intent'] ?? ''), ['schedule', 'reschedule'], true)) {
+            $pendingScheduleFields = (new AgentPolicyEngineService())->missingRequiredBeforeSchedule($fields, $collected);
+            if ($pendingScheduleFields !== []) {
+                $expectedCurrentField = trim((string) ($pendingScheduleFields[0]['field_key'] ?? '')) ?: null;
+            }
+        }
+        if ($expectedCurrentField === null) {
+            $expectedCurrentField = $this->firstMissingCompletionFieldKey($fields, $collected);
+        }
+        if ($expectedCurrentField !== $currentField) {
+            $currentField = $expectedCurrentField;
+        }
+
         $normalized = $this->normalize($text);
         $collected = $this->extractDeterministic($collected, $text, $normalized, $currentField, $text);
 
@@ -103,7 +121,6 @@ final class AgentTriageService
         $action = $schedulingIntent ? 'calendar.pre_schedule' : 'conversation';
         $engine = new AgentPolicyEngineService();
         $decision = $engine->evaluate($profile, $collected, $action);
-        $fields = is_array($profile['triage_fields'] ?? null) ? $profile['triage_fields'] : [];
         $missingBeforeSchedule = $engine->missingRequiredBeforeSchedule($fields, $collected);
         $missingCompletion = $engine->missingForCompletion($fields, $collected);
         $missingKeys = array_values(array_map(static fn (array $field): string => (string) ($field['field_key'] ?? ''), $missingCompletion));
@@ -327,6 +344,26 @@ final class AgentTriageService
             } catch (Throwable) {
             }
             $currentField = trim((string) ($session['current_field_key'] ?? '')) ?: null;
+
+            // 36.37.4: o cursor salvo pertence ao estado da conversa, mas a Ordem do
+            // atendimento pertence à configuração atual da empresa. Se o usuário mover,
+            // adicionar ou remover etapas com uma conversa em andamento, o cursor antigo
+            // não pode continuar impondo a sequência anterior. Reconciliamos o próximo
+            // campo a cada turno usando a ordem efetiva já normalizada pelo blueprint.
+            $expectedCurrentField = null;
+            if ($forceScheduling || in_array((string) ($session['last_intent'] ?? ''), ['schedule', 'reschedule'], true)) {
+                $pendingScheduleFields = (new AgentPolicyEngineService())->missingRequiredBeforeSchedule($fields, $collected);
+                if ($pendingScheduleFields !== []) {
+                    $expectedCurrentField = trim((string) ($pendingScheduleFields[0]['field_key'] ?? '')) ?: null;
+                }
+            }
+            if ($expectedCurrentField === null) {
+                $expectedCurrentField = $this->firstMissingCompletionFieldKey($fields, $collected);
+            }
+            if ($expectedCurrentField !== $currentField) {
+                $currentField = $expectedCurrentField;
+            }
+
             $startingCurrentField = $currentField;
             $lastProcessedIncomingId = max(0, (int) ($session['last_processed_incoming_id'] ?? 0));
 

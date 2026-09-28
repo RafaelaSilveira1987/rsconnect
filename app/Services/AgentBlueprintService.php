@@ -988,7 +988,9 @@ final class AgentBlueprintService
         // fica disponível no catálogo, porém fora do runtime.
         $pdo->prepare(
             'UPDATE tenant_triage_fields
-             SET required_before_schedule = 0, active = 0
+             SET required_before_schedule = 0,
+                 required_for_completion = 0,
+                 active = 0
              WHERE tenant_id = :tenant_id'
         )->execute(['tenant_id' => $tenantId]);
 
@@ -998,7 +1000,10 @@ final class AgentBlueprintService
 
         $update = $pdo->prepare(
             'UPDATE tenant_triage_fields
-             SET required_before_schedule = :required, active = 1, source = "tenant"
+             SET required_before_schedule = :required,
+                 required_for_completion = 1,
+                 active = 1,
+                 source = "tenant"
              WHERE tenant_id = :tenant_id AND field_key = :field_key'
         );
         foreach (array_keys($allWorkflowFields) as $fieldKey) {
@@ -1212,9 +1217,26 @@ final class AgentBlueprintService
             return $fields;
         }
 
+        // 36.37.4: o runtime não depende de um novo "Salvar" para refletir mudanças
+        // de Ordem do atendimento já persistidas. A própria ordem executável determina
+        // quais campos estão ativos, quais fazem parte da conclusão e quais ficam antes
+        // da primeira ação de agenda. Isso também neutraliza flags antigos do catálogo.
+        $calendarPosition = null;
+        foreach ($workflow as $step) {
+            if (!is_array($step) || empty($step['active']) || (string) ($step['step_type'] ?? '') !== 'action') {
+                continue;
+            }
+            $config = is_array($step['config'] ?? null) ? $step['config'] : [];
+            if (str_starts_with(trim((string) ($config['action_key'] ?? '')), 'calendar.')) {
+                $calendarPosition = (int) ($step['position'] ?? 0);
+                break;
+            }
+        }
+
         // A ordem executável vem exclusivamente do config_json salvo no banco.
         // Não existe mais mapa de negócio hardcoded por step_key no runtime.
         $rank = [];
+        $workflowFieldPosition = [];
         $rankIndex = 0;
         foreach ($workflow as $step) {
             if (!is_array($step) || empty($step['active']) || (string) ($step['step_type'] ?? '') !== 'collect') {
@@ -1236,14 +1258,27 @@ final class AgentBlueprintService
             foreach (array_values(array_unique($keys)) as $key) {
                 if (!array_key_exists($key, $rank)) {
                     $rank[$key] = $rankIndex++;
+                    $workflowFieldPosition[$key] = (int) ($step['position'] ?? 0);
                 }
             }
         }
 
         $originalOrder = [];
-        foreach ($fields as $index => $field) {
-            $originalOrder[(string) ($field['field_key'] ?? '')] = $index;
+        foreach ($fields as $index => &$field) {
+            $key = (string) ($field['field_key'] ?? '');
+            $originalOrder[$key] = $index;
+            if ($rank !== []) {
+                $inWorkflow = array_key_exists($key, $rank);
+                $field['active'] = $inWorkflow ? 1 : 0;
+                $field['required_for_completion'] = $inWorkflow ? 1 : 0;
+                $field['required_before_schedule'] = $inWorkflow
+                    && $calendarPosition !== null
+                    && (int) ($workflowFieldPosition[$key] ?? PHP_INT_MAX) < $calendarPosition
+                    ? 1
+                    : 0;
+            }
         }
+        unset($field);
 
         usort($fields, static function (array $a, array $b) use ($rank, $originalOrder): int {
             $aKey = (string) ($a['field_key'] ?? '');

@@ -1,3 +1,17 @@
+# 36.37.4 — Fluxo contínuo e pré-agendamento legível
+
+- reconcilia o cursor salvo da conversa com a **Ordem do atendimento atual** a cada turno; mover etapas com conversas em andamento deixa de manter a sequência antiga em memória;
+- o runtime passa a derivar `active`, `required_for_completion` e `required_before_schedule` diretamente do workflow já persistido, sem depender de um novo salvamento para neutralizar flags legados do catálogo;
+- campos personalizados de coleta (como uma nova **Demanda**) continuam válidos e avançam para a próxima etapa configurada, inclusive quando o cursor antigo apontava para preferência de agenda;
+- ao concluir a última coleta anterior a `calendar.*`, o pedido de agenda é retomado automaticamente usando os dados já coletados, sem exigir que o contato repita “quero agendar”;
+- a **Agenda interna** pode consultar disponibilidade compartilhada da empresa mesmo quando a agenda por profissional está habilitada e ainda não existe responsável definido; a exigência de profissional continua protegida na aprovação/confirmação;
+- evita o silêncio após a última etapa de coleta causado por `professional_required` antes da própria consulta da Agenda interna;
+- redesenha o card de **Pré-agendamento** na lista da agenda: o conteúdo passa a ocupar a largura útil, campos são exibidos em cards legíveis e valores deixam de quebrar uma letra por linha;
+- o card passa a listar também as **informações personalizadas coletadas** usando os rótulos configurados pelo tenant; `Demanda`, `Convênio`, `Unidade` e outros campos deixam de depender de nomes fixos no código;
+- a situação de demanda legada só aparece quando existe uma demanda legada real, evitando mostrar “pendente” para empresas que usam um campo personalizado de coleta;
+- invalida CSS/JS e cache exato com contrato `36.37.4`;
+- não há migration nova; permanece obrigatória `120_agent_turn_state_cursor.sql`.
+
 # 36.37.3 — Consulta assertiva da Agenda interna
 
 - corrige a trava residual que ainda exigia `online/presencial` em `requestAvailabilityIfNeeded()` mesmo quando a empresa configurou **Forma de atendimento = Não se aplica**, modalidade única ou posicionou a escolha depois da ação de agenda;
