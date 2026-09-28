@@ -433,6 +433,12 @@ $humanizeAgentRule = static function (string $key): string {
                                             <?php endif; ?>
                                             <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][required_for_completion]" value="0">
                                             <label class="check-field compact-check"><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][required_for_completion]" value="1" <?= !empty($field['required_for_completion']) ? 'checked' : '' ?>><span>Coletar antes de encerrar o atendimento</span></label>
+                                            <?php if (str_starts_with($fieldKey, 'custom_')): ?>
+                                                <?php $customFieldOptions = is_array($field['options'] ?? null) ? $field['options'] : []; ?>
+                                                <input type="hidden" name="triage_fields[<?= View::e($fieldKey) ?>][accept_question_as_answer]" value="0">
+                                                <label class="check-field compact-check"><input type="checkbox" name="triage_fields[<?= View::e($fieldKey) ?>][accept_question_as_answer]" value="1" <?= !empty($customFieldOptions['accept_question_as_answer']) ? 'checked' : '' ?>><span>Aceitar uma pergunta do contato como resposta desta informação</span></label>
+                                                <small class="field-hint">Deixe desmarcado para que dúvidas como “qual o valor?” sejam respondidas sem preencher esta informação. Ative apenas quando a própria pergunta do contato for o dado que você quer registrar.</small>
+                                            <?php endif; ?>
                                         </article>
                                     <?php endforeach; ?>
                                 </div>

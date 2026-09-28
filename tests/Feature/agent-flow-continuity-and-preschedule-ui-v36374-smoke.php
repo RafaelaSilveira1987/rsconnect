@@ -121,7 +121,8 @@ $checks = [
     'demanda legada só aparece quando o legado possui valor real' => str_contains($calendarView, '$showLegacyDemand = $currentDemandSummary !==')
         && str_contains($calendarView, '<?php if ($showLegacyDemand): ?>'),
     'valores do pré-agendamento não quebram letra por letra' => str_contains($css, 'overflow-wrap: break-word') && str_contains($css, 'word-break: normal'),
-    'cache exato foi invalidado' => str_contains($cachePhp, "'runtime_contract' => '36.37.4'"),
+    'cache exato foi invalidado' => preg_match_all("/'runtime_contract' => '([0-9.]+)'/", $cachePhp, $cacheVersionMatches) >= 1
+        && version_compare((string) (end($cacheVersionMatches[1]) ?: '0'), '36.37.4', '>='),
     'pacote identifica versão 36.37.4' => str_contains($versionPhp, 'RS Connect 36.37.4'),
 ];
 

@@ -217,7 +217,8 @@ final class AppVersionService
     // RS Connect 36.37.2 — Ordem do atendimento como fonte única da demanda.
     // RS Connect 36.37.3 — Agenda interna respeita o workflow e a preferência real do contato.
     // RS Connect 36.37.4 — cursor vivo do workflow, Agenda interna compartilhada e pré-agendamento legível.
-    public const PACKAGE_LABEL = 'RS Connect 36.37.4 — Fluxo contínuo e pré-agendamento legível';
+    // RS Connect 36.37.5 — perguntas informativas não preenchem campos personalizados por acidente.
+    public const PACKAGE_LABEL = 'RS Connect 36.37.5 — Coleta personalizada sem contaminação por dúvidas';
     public const REQUIRED_MIGRATION = '120_agent_turn_state_cursor.sql';
 
     private PDO $pdo;

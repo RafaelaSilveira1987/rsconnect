@@ -315,11 +315,26 @@ final class AgentBlueprintService
                 $requiredBeforeSchedule = !empty($posted['required_before_schedule']) ? 1 : 0;
                 $promptText = mb_substr(trim((string) ($posted['prompt_text'] ?? '')), 0, 1000);
 
+                // Preserva opções específicas do campo e permite que perguntas criadas
+                // pelo próprio tenant declarem explicitamente quando uma pergunta do
+                // contato também pode ser considerada resposta válida. O padrão é falso
+                // para evitar que dúvidas como "qual o valor?" preencham um campo livre.
+                $optionStmt = $pdo->prepare(
+                    'SELECT options_json FROM tenant_triage_fields WHERE tenant_id = :tenant_id AND field_key = :field_key LIMIT 1'
+                );
+                $optionStmt->execute(['tenant_id' => $tenantId, 'field_key' => $fieldKey]);
+                $currentFieldRow = $optionStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+                $fieldOptions = $this->decodeJson($currentFieldRow['options_json'] ?? null);
+                if (str_starts_with($fieldKey, 'custom_')) {
+                    $fieldOptions['accept_question_as_answer'] = !empty($posted['accept_question_as_answer']);
+                }
+
                 $pdo->prepare(
                     'UPDATE tenant_triage_fields
                      SET label = :label, prompt_text = :prompt_text,
                          required_before_schedule = :required_before_schedule,
                          required_for_completion = :required_for_completion,
+                         options_json = :options_json,
                          active = :active, source = "tenant"
                      WHERE tenant_id = :tenant_id AND field_key = :field_key'
                 )->execute([
@@ -327,6 +342,7 @@ final class AgentBlueprintService
                     'prompt_text' => $promptText !== '' ? $promptText : null,
                     'required_before_schedule' => $requiredBeforeSchedule,
                     'required_for_completion' => !empty($posted['required_for_completion']) ? 1 : 0,
+                    'options_json' => json_encode($fieldOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     'active' => $active,
                     'tenant_id' => $tenantId,
                     'field_key' => $fieldKey,

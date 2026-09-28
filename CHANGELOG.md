@@ -1,3 +1,13 @@
+# 36.37.5 — Coleta personalizada sem contaminação por dúvidas
+
+- impede que uma pergunta informativa do contato (ex.: “qual o valor da consulta?”) seja gravada automaticamente no próximo campo personalizado da Ordem do atendimento;
+- mantém o cursor na informação pendente e permite que a IA responda a dúvida antes de retomar a coleta;
+- preserva o consumo em sequência de respostas determinísticas em bursts (nome, idade, modalidade, preferência etc.);
+- adiciona, para campos personalizados, a opção explícita “Aceitar uma pergunta do contato como resposta desta informação”, desligada por padrão;
+- preserva as demais opções do campo ao salvar a nova configuração;
+- invalida cache exato e assets para o contrato 36.37.5;
+- sem nova migration.
+
 # 36.37.4 — Fluxo contínuo e pré-agendamento legível
 
 - reconcilia o cursor salvo da conversa com a **Ordem do atendimento atual** a cada turno; mover etapas com conversas em andamento deixa de manter a sequência antiga em memória;

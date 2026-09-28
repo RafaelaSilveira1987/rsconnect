@@ -103,7 +103,14 @@ final class AgentTriageService
         }
 
         $normalized = $this->normalize($text);
-        $collected = $this->extractDeterministic($collected, $text, $normalized, $currentField, $text);
+        $collected = $this->extractDeterministic(
+            $collected,
+            $text,
+            $normalized,
+            $currentField,
+            $text,
+            $currentField !== null ? $this->fieldByKey($fields, $currentField) : null
+        );
 
         if (!empty($collected['is_for_self']) && empty($collected['patient_name']) && !empty($collected['requester_name'])) {
             $collected['patient_name'] = $collected['requester_name'];
@@ -691,7 +698,7 @@ final class AgentTriageService
         }
     }
 
-    private function extractDeterministic(array $collected, string $contextText, string $normalized, ?string $currentField = null, ?string $latestMessage = null): array
+    private function extractDeterministic(array $collected, string $contextText, string $normalized, ?string $currentField = null, ?string $latestMessage = null, ?array $currentFieldDefinition = null): array
     {
         $latestMessage ??= $contextText;
         $latestNormalized = $this->normalize($latestMessage);
@@ -731,7 +738,7 @@ final class AgentTriageService
         }
 
         if ($currentField !== null && $currentField !== '') {
-            $value = $this->captureCurrentFieldValue($currentField, $latestMessage, $latestNormalized);
+            $value = $this->captureCurrentFieldValue($currentField, $latestMessage, $latestNormalized, $currentFieldDefinition);
             if ($value !== null && $value !== '') {
                 $collected[$currentField] = $value;
             }
@@ -744,7 +751,7 @@ final class AgentTriageService
         return $collected;
     }
 
-    private function captureCurrentFieldValue(string $fieldKey, string $message, string $normalized): mixed
+    private function captureCurrentFieldValue(string $fieldKey, string $message, string $normalized, ?array $fieldDefinition = null): mixed
     {
         $message = trim($message);
         if ($message === '') {
@@ -759,8 +766,58 @@ final class AgentTriageService
             'service', 'professional', 'contact_source' => mb_strlen($message) <= 250 ? mb_substr($message, 0, 250) : null,
             'preferred_schedule' => $this->hasSchedulePreference($normalized) ? $this->extractSchedulePreference($message) : null,
             'brief_demand' => $this->looksLikeDemandAnswer($message, $normalized) ? mb_substr($message, 0, 1200) : null,
-            default => mb_strlen($message) <= 500 ? mb_substr($message, 0, 500) : null,
+            default => $this->captureConfiguredFreeTextValue($fieldKey, $message, $normalized, $fieldDefinition),
         };
+    }
+
+    /**
+     * Campos personalizados não podem consumir uma dúvida informativa como se fosse
+     * resposta da etapa. Isso acontecia principalmente em bursts: o primeiro balão
+     * concluía "Modalidade" e o segundo (ex.: "Qual o valor da consulta?") era
+     * gravado automaticamente no próximo campo livre, como "Demanda".
+     *
+     * A regra é genérica e configurável: por padrão, campos custom_* aguardam uma
+     * resposta declarativa. Se o negócio realmente criou um campo cuja resposta pode
+     * ser uma pergunta (ex.: "Qual é a sua principal dúvida?"), a opção
+     * accept_question_as_answer pode ser habilitada no próprio campo.
+     */
+    private function captureConfiguredFreeTextValue(string $fieldKey, string $message, string $normalized, ?array $fieldDefinition = null): ?string
+    {
+        if (mb_strlen($message) > 500) {
+            return null;
+        }
+
+        if (str_starts_with($fieldKey, 'custom_') && !$this->fieldAcceptsQuestionAsAnswer($fieldDefinition)) {
+            $behavior = new AgentConversationBehaviorService();
+            if ($behavior->hasInformationalQuestion($message) || $this->looksLikeStandaloneQuestion($message, $normalized)) {
+                return null;
+            }
+        }
+
+        return mb_substr($message, 0, 500);
+    }
+
+    private function fieldAcceptsQuestionAsAnswer(?array $fieldDefinition): bool
+    {
+        if (!is_array($fieldDefinition)) {
+            return false;
+        }
+        $options = is_array($fieldDefinition['options'] ?? null) ? $fieldDefinition['options'] : [];
+        return !empty($options['accept_question_as_answer']);
+    }
+
+    private function looksLikeStandaloneQuestion(string $message, string $normalized): bool
+    {
+        $message = trim($message);
+        if ($message === '') {
+            return false;
+        }
+
+        if (str_ends_with($message, '?')) {
+            return true;
+        }
+
+        return preg_match('/^(qual|quais|quanto|quantos|quanta|quantas|como|quando|onde|porque|por que|quem|tem|voc[eê]s?|pode|podem|aceita|aceitam|faz|fazem|atende|atendem|existe|ha|há)\b/u', $normalized) === 1;
     }
 
     private function looksLikeDemandAnswer(string $message, string $normalized): bool
@@ -921,7 +978,8 @@ final class AgentTriageService
                 $messageText,
                 $normalizedMessage,
                 $currentField,
-                $messageText
+                $messageText,
+                $currentField !== null ? $this->fieldByKey($fields, $currentField) : null
             );
             $afterDemand = trim((string) ($collected['brief_demand'] ?? ''));
             if ($beforeDemand === '' && $afterDemand !== '') {
