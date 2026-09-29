@@ -1,3 +1,20 @@
+# 36.39.0 — Continuidade do agendamento e confirmações automáticas
+
+- adiciona uma camada determinística de **agendamento existente** antes da triagem e de qualquer novo fluxo de disponibilidade;
+- perguntas como “minha consulta está confirmada?”, “que horas é?”, “onde será?”, “quero cancelar” e “preciso remarcar” passam a consultar o compromisso real do contato;
+- preserva a intenção de consulta sobre compromisso também na retomada pós-expediente, impedindo que a fila reabra uma busca de novos horários;
+- permite, por configuração, responder informações do próprio compromisso imediatamente fora do horário comercial;
+- separa o **status do compromisso** da **confirmação do cliente**, com estados para aguardando resposta, presença confirmada, não comparecimento informado, pedido de cancelamento e pedido de remarcação;
+- cria configuração por empresa para disparos ao cliente ao registrar, confirmar, cancelar/recusar e remarcar um agendamento;
+- adiciona lembrete automático configurável em minutos antes do compromisso e pedido automático de confirmação de presença;
+- reaproveita o cron de notificações existente para processar a fila de mensagens da Agenda, sem exigir um segundo agendador;
+- ao alterar a política de lembrete/confirmação, recalcula os disparos futuros dos compromissos já confirmados;
+- pedidos de cancelamento/remarcação recebidos pelo WhatsApp não liberam o horário automaticamente: a equipe é avisada e o compromisso só muda após alteração efetiva na Agenda;
+- mostra o estado de confirmação do cliente nos cards da Agenda;
+- adiciona em **Agenda → Configurações** o painel “Comunicação e confirmação do agendamento”, com mensagens editáveis e variáveis de data, hora, local, modalidade e profissional;
+- nova migration obrigatória: `122_calendar_client_communications.sql`;
+- incrementa o manifesto de migrations para a sequência 129.
+
 # 36.38.2 — Navegação única e proporcional da Agenda
 
 - elimina a navegação duplicada entre **Compromissos / Disponibilidade** e as quatro abas internas da Agenda;

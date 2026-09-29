@@ -13,6 +13,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\CalendarAvailabilityService;
+use App\Services\CalendarClientCommunicationService;
 use App\Services\CalendarGoogleLifecycleService;
 use App\Services\InternalCalendarSlotService;
 use App\Services\ProfessionalCalendarService;
@@ -72,7 +73,33 @@ final class CalendarAvailabilityController
             'publishedSlots' => $publishedSlots,
             'professionalCalendarSettings' => $tenantId > 0 ? $professionalCalendarService->tenantSettings($tenantId) : ['enabled' => false, 'require_owner' => true, 'auto_from_conversation' => false],
             'professionalProfiles' => $tenantId > 0 ? $professionalCalendarService->teamProfiles($tenantId) : [],
+            'calendarClientSettings' => $tenantId > 0 ? (new CalendarClientCommunicationService())->settings($tenantId) : [],
         ]);
+    }
+
+    public function saveClientCommunicationSettings(): void
+    {
+        Csrf::validate($_POST['_token'] ?? null);
+        $tenantId = $this->resolveTenantFromPost();
+        if ($tenantId < 1) {
+            Flash::set('error', 'Selecione uma empresa para configurar a comunicação da agenda.');
+            $this->redirect('/calendar?section=availability&tab=settings');
+        }
+
+        try {
+            (new CalendarClientCommunicationService())->saveSettings($tenantId, $_POST, Auth::id());
+            Audit::log('calendar.client_communication_settings_updated', [
+                'lookup_enabled' => !empty($_POST['client_lookup_enabled']),
+                'lookup_outside_hours' => !empty($_POST['client_lookup_outside_hours']),
+                'send_confirmed_enabled' => !empty($_POST['client_send_confirmed_enabled']),
+                'reminder_enabled' => !empty($_POST['client_reminder_enabled']),
+                'presence_request_enabled' => !empty($_POST['client_presence_request_enabled']),
+            ], $tenantId);
+            Flash::set('success', 'Comunicação automática da agenda salva.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar a comunicação da agenda: ' . $exception->getMessage());
+        }
+        $this->redirect('/calendar?section=availability&tab=settings&tenant_id=' . $tenantId . '#comunicacao-cliente');
     }
 
     public function saveSettings(): void

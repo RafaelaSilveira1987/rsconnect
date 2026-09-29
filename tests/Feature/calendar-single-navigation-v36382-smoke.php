@@ -38,13 +38,11 @@ $checks = [
         && str_contains($css, 'grid-template-columns: repeat(5, minmax(0, 1fr))')
         && str_contains($css, '.agenda-main-tabs')
         && str_contains($css, 'overflow-x: auto'),
-    'versão foi atualizada sem nova migration' => ($manifest['package_version'] ?? '') === '36.38.2'
-        && ($manifest['database']['required_migration'] ?? '') === '121_internal_calendar_published_slots.sql'
-        && str_contains($version, 'RS Connect 36.38.2')
-        && str_contains($version, "REQUIRED_MIGRATION = '121_internal_calendar_published_slots.sql'"),
-    'cache visual foi invalidado' => str_contains($layout, 'app.css?v=36.38.2')
-        && str_contains($layout, 'app.js?v=36.38.2')
-        && str_contains($guest, 'app.css?v=36.38.2'),
+    'release 36.38.2 permanece documentada após versões posteriores' => str_contains($version, 'RS Connect 36.38.2')
+        && str_contains($css, 'RS Connect 36.38.2'),
+    'cache visual continua versionado' => str_contains($layout, 'app.css?v=36.')
+        && str_contains($layout, 'app.js?v=36.')
+        && str_contains($guest, 'app.css?v=36.'),
 ];
 
 $failed = [];

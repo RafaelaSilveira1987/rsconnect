@@ -14,6 +14,7 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\AutomationWebhookService;
 use App\Services\CalendarAvailabilityService;
+use App\Services\CalendarClientCommunicationService;
 use App\Services\CalendarGoogleLifecycleService;
 use App\Services\EvolutionService;
 use App\Services\NotificationService;
@@ -401,6 +402,13 @@ final class CalendarController
             $normalized['starts_at'],
             $notificationContext
         );
+        // 36.39.0: comunicação com o cliente é uma camada separada dos avisos internos.
+        // O envio ao criar é opt-in; confirmações/lembretes seguem a configuração da Agenda.
+        try {
+            (new CalendarClientCommunicationService())->handleAppointmentCreated($tenantId, $appointmentId);
+        } catch (Throwable) {
+            // A criação do compromisso não deve falhar se a comunicação automática estiver indisponível.
+        }
         Flash::set('success', $isPreSchedule === 1 ? 'Pré-agendamento criado para aprovação.' : 'Agendamento criado.');
         $this->redirect('/calendar?tenant_id=' . $tenantId);
     }
@@ -732,7 +740,17 @@ final class CalendarController
                     ['status' => $status]
                 );
             }
-            $messageResult = $this->trySendPreScheduleStatusMessage($appointmentId, $tenantId, $status);
+            $clientCommunicationResult = (new CalendarClientCommunicationService())->handleStatusChange(
+                $tenantId,
+                $appointmentId,
+                (string) ($appointmentBefore['status'] ?? ''),
+                $status
+            );
+            $clientDelivery = is_array($clientCommunicationResult['delivery'] ?? null)
+                ? $clientCommunicationResult['delivery']
+                : [];
+            $clientMessageAttempted = !empty($clientCommunicationResult['queued']);
+            $clientMessageOk = !$clientMessageAttempted || (int) ($clientDelivery['failed'] ?? 0) === 0;
             if ($status === 'confirmed' && $wasPreSchedule) {
                 Database::connection()->prepare(
                     'UPDATE calendar_appointments
@@ -753,13 +771,13 @@ final class CalendarController
             if ($googleLifecycleWarning !== null) {
                 $warnings[] = 'Sincronização do Google Agenda: ' . $googleLifecycleWarning;
             }
-            if ($messageResult['attempted'] && !$messageResult['ok']) {
-                $warnings[] = 'A mensagem automática não foi enviada: ' . $messageResult['error'];
+            if ($clientMessageAttempted && !$clientMessageOk) {
+                $warnings[] = 'Uma comunicação automática com o cliente ficou pendente de nova tentativa.';
             }
             if ($warnings !== []) {
                 Flash::set('warning', 'Status atualizado. ' . implode(' ', $warnings));
             } else {
-                Flash::set('success', $messageResult['attempted'] ? 'Status atualizado e mensagem enviada ao cliente.' : 'Status do agendamento atualizado.');
+                Flash::set('success', $clientMessageAttempted ? 'Status atualizado e comunicação com o cliente processada.' : 'Status do agendamento atualizado.');
             }
         }
 

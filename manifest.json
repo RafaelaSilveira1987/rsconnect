@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.38.2",
-  "release_name": "Navegação única e proporcional da Agenda",
+  "package_version": "36.39.0",
+  "release_name": "Continuidade do agendamento e confirmações automáticas",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -10,7 +10,7 @@
   },
   "database": {
     "driver": "mysql",
-    "required_migration": "121_internal_calendar_published_slots.sql",
+    "required_migration": "122_calendar_client_communications.sql",
     "migration_runner": "php bin/migrate.php"
   },
   "install": {
@@ -19,8 +19,8 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.38.1",
-      "release_name": "Agenda organizada por abas e disponibilidades operacionais",
+      "package_version": "36.38.2",
+      "release_name": "Navegação única e proporcional da Agenda",
       "required_migration": "121_internal_calendar_published_slots.sql"
     },
     "historical_releases": [

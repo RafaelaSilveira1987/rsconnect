@@ -221,8 +221,9 @@ final class AppVersionService
     // RS Connect 36.38.0 — disponibilidade publicada na Agenda interna.
     // RS Connect 36.38.1 — Agenda organizada por abas e disponibilidades operacionais.
     // RS Connect 36.38.2 — navegação única e proporcional da Agenda.
-    public const PACKAGE_LABEL = 'RS Connect 36.38.2 — Navegação única e proporcional da Agenda';
-    public const REQUIRED_MIGRATION = '121_internal_calendar_published_slots.sql';
+    // RS Connect 36.39.0 — continuidade de compromissos e comunicação automática com o cliente.
+    public const PACKAGE_LABEL = 'RS Connect 36.39.0 — Continuidade do agendamento e confirmações automáticas';
+    public const REQUIRED_MIGRATION = '122_calendar_client_communications.sql';
 
     private PDO $pdo;
 

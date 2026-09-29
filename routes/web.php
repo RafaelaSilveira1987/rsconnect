@@ -277,6 +277,7 @@ return static function (Router $router): void {
     $router->get('/agenda-disponibilidade', [CalendarController::class, 'availability'], ['auth', 'permission:calendar.view']);
     $router->get('/calendar/availability', [CalendarController::class, 'availability'], ['auth', 'permission:calendar.view']);
     $router->post('/calendar/availability/settings', [CalendarAvailabilityController::class, 'saveSettings'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->post('/calendar/availability/client-communications', [CalendarAvailabilityController::class, 'saveClientCommunicationSettings'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/professional-settings', [CalendarAvailabilityController::class, 'saveProfessionalSettings'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/professional-profile', [CalendarAvailabilityController::class, 'saveProfessionalProfile'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/internal-slots/publish', [CalendarAvailabilityController::class, 'publishInternalSlots'], ['auth', 'permission:calendar.manage', 'csrf']);

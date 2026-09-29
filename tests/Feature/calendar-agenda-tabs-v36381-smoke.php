@@ -41,12 +41,10 @@ $checks = [
         && str_contains($css, '.agenda-section-tabs')
         && str_contains($css, '.availability-slot-card')
         && str_contains($css, '@media (max-width: 600px)'),
-    'versão visual foi atualizada sem nova migration' => ($manifest['package_version'] ?? '') === '36.38.1'
-        && ($manifest['database']['required_migration'] ?? '') === '121_internal_calendar_published_slots.sql'
-        && str_contains($version, 'RS Connect 36.38.1')
-        && str_contains($version, "REQUIRED_MIGRATION = '121_internal_calendar_published_slots.sql'"),
-    'cache de assets foi invalidado' => str_contains($layout, 'app.css?v=36.38.1')
-        && str_contains($layout, 'app.js?v=36.38.1'),
+    'release 36.38.1 permanece documentada após versões posteriores' => str_contains($version, 'RS Connect 36.38.1')
+        && str_contains($css, 'RS Connect 36.38.1'),
+    'assets continuam versionados no layout' => str_contains($layout, 'app.css?v=36.')
+        && str_contains($layout, 'app.js?v=36.'),
 ];
 
 $failed = [];

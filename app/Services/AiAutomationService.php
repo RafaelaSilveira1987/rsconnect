@@ -2032,6 +2032,24 @@ final class AiAutomationService
         $calendarBurst = $this->calendarBurstForMessage($pdo, $conversationId, $messageId, $content);
         $calendarContent = (string) ($calendarBurst['content'] ?? $content);
 
+        // 36.39.0: perguntas sobre um compromisso existente têm precedência sobre
+        // triagem e criação de um novo pré-agendamento, inclusive na retomada pós-horário.
+        $existingAppointment = (new ExistingAppointmentConversationService())->handleIncoming(
+            $pdo,
+            $instance,
+            $contactId,
+            $conversationId,
+            $calendarContent,
+            $messageId,
+            false
+        );
+        if (!empty($existingAppointment['handled'])) {
+            $existingAppointment['calendar_burst_message_ids'] = $calendarBurst['message_ids'] ?? [$messageId];
+            $existingAppointment['calendar_burst_count'] = count((array) ($calendarBurst['message_ids'] ?? [$messageId]));
+            $existingAppointment['scheduling_intent'] = false;
+            return $existingAppointment;
+        }
+
         $intentProbe = (new PreSchedulingService())->detectIntent($calendarContent, false);
         $schedulingIntent = !empty($intentProbe['has_intent']);
 

@@ -1,3 +1,20 @@
+# RS Connect 36.39.0
+> **36.39.0** fecha a continuidade operacional da Agenda: antes de iniciar uma nova triagem, o RS Connect identifica perguntas sobre compromissos já existentes e responde a partir do registro real. A Agenda também ganha confirmação automática, lembretes, pedido de presença e mensagens configuráveis por empresa, preservando status do compromisso e confirmação do cliente como estados separados.
+
+## Atualização 36.39.0
+
+Execute a migration obrigatória:
+
+```bash
+php bin/migrate.php verify
+php bin/migrate.php up
+php bin/migrate.php verify
+```
+
+Migration desta versão: `122_calendar_client_communications.sql`.
+
+Depois do deploy, configure em **Agenda → Configurações → Comunicação e confirmação do agendamento** se a empresa deve responder consultas de compromisso fora do expediente, quais eventos disparam mensagens, quando enviar lembretes e quando solicitar confirmação de presença. O cron já utilizado para notificações passa a processar também a fila de mensagens da Agenda.
+
 # RS Connect 36.38.2
 > **36.38.2** simplifica a Agenda para uma única navegação proporcional. Compromissos, Visão geral, Disponibilidades, Pré-agendamentos e Configurações ficam na mesma barra, sem menu superior e menu interno concorrendo pelo mesmo espaço. A lógica de disponibilidade publicada da 36.38.0/36.38.1 permanece inalterada.
 

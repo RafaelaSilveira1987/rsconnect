@@ -611,9 +611,19 @@ final class CalendarConversationService
         }
 
         $confirmedAppointment = $this->appointmentForMessaging($tenantId, $appointmentId) ?: $appointment;
-        $template = trim((string) ($settings['approved_message'] ?? ''))
-            ?: 'Seu agendamento foi confirmado para {{data}} às {{hora}}. {{local}}';
-        $message = (new PreSchedulingService())->renderMessage($template, $confirmedAppointment);
+        $template = '';
+        try {
+            $clientCommunicationSettings = (new CalendarClientCommunicationService())->settings($tenantId);
+            if (!empty($clientCommunicationSettings['ready'])) {
+                $template = trim((string) ($clientCommunicationSettings['confirmed_message'] ?? ''));
+            }
+        } catch (Throwable) {
+        }
+        if ($template === '') {
+            $template = trim((string) ($settings['approved_message'] ?? ''))
+                ?: 'Seu agendamento foi confirmado para {{data}} às {{hora}}. {{local}}';
+        }
+        $message = (new CalendarClientCommunicationService())->renderAppointmentTemplate($template, $confirmedAppointment);
         if ($message === '') {
             $message = 'Confirmado! Seu agendamento está registrado na agenda.';
         }
@@ -637,6 +647,14 @@ final class CalendarConversationService
             $appointmentId,
             $slotId ?: null
         );
+
+        try {
+            // A própria conversa já respondeu a confirmação neste turno. Agenda apenas
+            // lembrete/pedido de presença para evitar uma segunda confirmação imediata.
+            (new CalendarClientCommunicationService())->scheduleConfirmedAutomation($tenantId, $appointmentId);
+        } catch (Throwable) {
+            // Automação futura não desfaz um compromisso já confirmado.
+        }
 
         return array_merge($this->incomingResult(true, true, 'appointment_confirmed'), [
             'appointment_id' => $appointmentId,

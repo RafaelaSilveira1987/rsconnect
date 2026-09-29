@@ -13,6 +13,7 @@ use App\Core\View;
 use App\Services\NotificationService;
 use App\Services\NotificationOrchestratorService;
 use App\Services\NotificationDeliveryService;
+use App\Services\CalendarClientCommunicationService;
 use Throwable;
 
 final class NotificationsController
@@ -103,14 +104,19 @@ final class NotificationsController
     {
         try {
             $result = (new NotificationDeliveryService())->process(50, Auth::tenantId());
+            $calendarClient = (new CalendarClientCommunicationService())->processDueJobs(50, Auth::tenantId());
             Flash::set('success', sprintf(
-                'Fila processada: %d enviada(s), %d em nova tentativa e %d falha(s).',
+                'Filas processadas: equipe %d enviada(s), %d em nova tentativa e %d falha(s); agenda do cliente %d enviada(s), %d em nova tentativa, %d ignorada(s) e %d falha(s).',
                 (int) ($result['sent'] ?? 0),
                 (int) ($result['retry'] ?? 0),
-                (int) ($result['failed'] ?? 0)
+                (int) ($result['failed'] ?? 0),
+                (int) ($calendarClient['sent'] ?? 0),
+                (int) ($calendarClient['retry'] ?? 0),
+                (int) ($calendarClient['skipped'] ?? 0),
+                (int) ($calendarClient['failed'] ?? 0)
             ));
         } catch (Throwable $exception) {
-            Flash::set('error', 'Não foi possível processar a fila: ' . $exception->getMessage());
+            Flash::set('error', 'Não foi possível processar as filas: ' . $exception->getMessage());
         }
         $this->redirect('/settings/notifications#automatic-notifications');
     }
@@ -131,7 +137,12 @@ final class NotificationsController
         try {
             $limit = max(1, min(200, (int) ($_GET['limit'] ?? $_POST['limit'] ?? 50)));
             $result = (new NotificationDeliveryService())->process($limit);
-            echo json_encode(['ok' => true, 'result' => $result], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $calendarClient = (new CalendarClientCommunicationService())->processDueJobs($limit);
+            echo json_encode([
+                'ok' => true,
+                'result' => $result,
+                'calendar_client_messages' => $calendarClient,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         } catch (Throwable $exception) {
             http_response_code(500);
             echo json_encode(['ok' => false, 'error' => $exception->getMessage()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

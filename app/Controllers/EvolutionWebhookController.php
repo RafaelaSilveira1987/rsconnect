@@ -26,6 +26,7 @@ use App\Services\ConversationOwnershipService;
 use App\Services\ConversationAttachmentService;
 use App\Services\EvolutionService;
 use App\Services\EvolutionInstanceSafetyService;
+use App\Services\ExistingAppointmentConversationService;
 use App\Services\NotificationService;
 use App\Services\PreSchedulingService;
 use App\Services\WebhookSecurityService;
@@ -349,6 +350,7 @@ final class EvolutionWebhookController
             $outsideBusinessHours = false;
             $afterHoursPending = ['pending_id' => 0, 'should_ack' => false];
             $afterHoursAcknowledgement = ['sent' => false, 'reason' => 'not_required'];
+            $existingAppointmentResult = ['handled' => false, 'skip_ai' => false];
             $replyWaitRemaining = 0;
             $waitingReplyWindow = false;
 
@@ -361,10 +363,34 @@ final class EvolutionWebhookController
                         $operatingPolicy = (new AgentOperatingPolicyService())->status($resolvedAgent);
                         $outsideBusinessHours = !empty($operatingPolicy['enforced']) && empty($operatingPolicy['inside']);
 
+                        // 36.39.0: consultas sobre um compromisso já existente têm precedência
+                        // sobre o fluxo de novo agendamento. Fora do expediente, a empresa pode
+                        // optar por responder essas informações operacionais imediatamente.
+                        if ($outsideBusinessHours) {
+                            try {
+                                $existingAppointmentResult = (new ExistingAppointmentConversationService())->handleIncoming(
+                                    $pdo,
+                                    $instance,
+                                    $contactId,
+                                    $conversationId,
+                                    $content,
+                                    $storedMessageId,
+                                    true
+                                );
+                            } catch (Throwable $exception) {
+                                $processingWarnings[] = 'existing_appointment_lookup';
+                                $this->logWebhookFailure($exception, [
+                                    'phase' => 'existing_appointment_lookup_after_hours',
+                                    'conversation_id' => $conversationId,
+                                    'stored_message_id' => $storedMessageId,
+                                ]);
+                            }
+                        }
+
                         // 36.20.10: a fila e o aviso fora do horário são operacionais.
                         // A mensagem fixa deve ser enviada tanto em modo IA quanto em modo humano,
                         // sem chamar o provedor de IA e sem duplicar o aviso no mesmo dia local.
-                        if ($outsideBusinessHours) {
+                        if ($outsideBusinessHours && empty($existingAppointmentResult['handled'])) {
                             $modeStatement = $pdo->prepare(
                                 'SELECT attendance_mode FROM conversations WHERE id = :conversation_id AND tenant_id = :tenant_id LIMIT 1'
                             );
@@ -519,7 +545,11 @@ final class EvolutionWebhookController
                 }
 
                 try {
-                    if ($outsideBusinessHours) {
+                    if (!empty($existingAppointmentResult['handled'])) {
+                        // A consulta/ação sobre compromisso existente já recebeu resposta e não
+                        // pode cair na triagem ou abrir uma nova pesquisa de disponibilidade.
+                        $preScheduleResult = $existingAppointmentResult;
+                    } elseif ($outsideBusinessHours) {
                         // A fila e o aviso já foram tratados na camada operacional acima.
                         // Nenhuma chamada ao provedor de IA deve ocorrer enquanto a empresa está fechada.
                         $preScheduleResult = [
@@ -541,6 +571,20 @@ final class EvolutionWebhookController
                             'reply_wait_remaining' => $replyWaitRemaining,
                         ];
                     } else {
+                        // 36.39.0: antes da triagem de um novo atendimento, verifica se a mensagem
+                        // pertence a um compromisso futuro já registrado para este contato.
+                        $existingAppointmentResult = (new ExistingAppointmentConversationService())->handleIncoming(
+                            $pdo,
+                            $instance,
+                            $contactId,
+                            $conversationId,
+                            $content,
+                            $storedMessageId,
+                            false
+                        );
+                        if (!empty($existingAppointmentResult['handled'])) {
+                            $preScheduleResult = $existingAppointmentResult;
+                        } else {
                         // 36.28.0: triagem/policies vêm ANTES da agenda e da IA. O LLM pode
                         // conversar, mas não pode liberar uma ação que o Policy Engine bloqueou.
                         $triageResult = (new AgentTriageService())->handleIncoming(
@@ -590,6 +634,7 @@ final class EvolutionWebhookController
                                         $storedMessageId
                                     );
                             }
+                        }
                         }
                     }
                 } catch (Throwable $exception) {

@@ -64,7 +64,7 @@ $checks = [
         && str_contains($view, 'não inventa horários entre essas opções'),
     'estilos do painel publicados' => str_contains($css, 'RS Connect 36.38.0')
         && str_contains($css, '.internal-strategy-grid'),
-    'pacote exige migration nova' => str_contains($version, "REQUIRED_MIGRATION = '121_internal_calendar_published_slots.sql'"),
+    'migration 121 permanece registrada após releases posteriores' => str_contains($manifest, "121_internal_calendar_published_slots.sql"),
     'versão e cache foram atualizados' => str_contains($version, 'RS Connect 36.38.0')
         && str_contains($cache, "'runtime_contract' => '36.38.0'"),
 ];

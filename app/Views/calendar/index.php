@@ -17,6 +17,22 @@ $statusLabels = [
     'rescheduled' => 'Remarcado',
     'no_show' => 'Não compareceu',
 ];
+$clientConfirmationLabels = [
+    'not_requested' => 'Confirmação do cliente não solicitada',
+    'pending' => 'Aguardando confirmação do cliente',
+    'confirmed' => 'Cliente confirmou presença',
+    'declined' => 'Cliente informou que não comparecerá',
+    'cancel_requested' => 'Cliente solicitou cancelamento',
+    'reschedule_requested' => 'Cliente solicitou remarcação',
+];
+$clientConfirmationClasses = [
+    'not_requested' => '',
+    'pending' => 'badge-warning',
+    'confirmed' => 'badge-success',
+    'declined' => 'badge-danger',
+    'cancel_requested' => 'badge-danger',
+    'reschedule_requested' => 'badge-warning',
+];
 $locationLabels = ['indefinida' => 'A definir', 'online' => 'Online', 'presencial' => 'Presencial', 'telefone' => 'Telefone'];
 $contactGroupLabels = ConversationFlowService::GROUPS;
 $demandStatusLabels = ConversationFlowService::DEMAND_STATUSES;
@@ -335,6 +351,15 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
                 <span class="activity-icon activity-<?= View::e($appointment['location_type']) ?>" aria-hidden="true"></span>
                 <div class="task-main">
                     <div class="task-title-line"><strong><?= View::e($appointment['title']) ?></strong><span class="badge badge-<?= View::e($appointment['status']) ?>"><?= View::e($statusLabels[$appointment['status']] ?? $appointment['status']) ?></span><span class="priority-text"><?= View::e($locationLabels[$appointment['location_type']] ?? $appointment['location_type']) ?></span></div>
+                    <?php $clientConfirmationStatus = trim((string) ($appointment['client_confirmation_status'] ?? 'not_requested')); ?>
+                    <?php if ($clientConfirmationStatus !== '' && $clientConfirmationStatus !== 'not_requested' && isset($clientConfirmationLabels[$clientConfirmationStatus])): ?>
+                        <div class="pre-schedule-note <?= $clientConfirmationStatus === 'confirmed' ? 'ready' : 'pending' ?>">
+                            <strong>Confirmação do cliente</strong>
+                            <span class="badge <?= View::e($clientConfirmationClasses[$clientConfirmationStatus] ?? '') ?>"><?= View::e($clientConfirmationLabels[$clientConfirmationStatus]) ?></span>
+                            <?php if (!empty($appointment['client_confirmation_requested_at'])): ?><small>Solicitada em <?= View::e($date($appointment['client_confirmation_requested_at'])) ?></small><?php endif; ?>
+                            <?php if (!empty($appointment['client_confirmation_responded_at'])): ?><small>Respondida em <?= View::e($date($appointment['client_confirmation_responded_at'])) ?></small><?php endif; ?>
+                        </div>
+                    <?php endif; ?>
                     <?php if ($isPreSchedule): ?>
                         <section class="pre-schedule-record" aria-label="Informações atuais do pré-agendamento">
                             <div class="pre-schedule-record-head">
