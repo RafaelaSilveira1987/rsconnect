@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.39.1",
-  "release_name": "Consulta fiel dos horários publicados",
+  "package_version": "36.39.2",
+  "release_name": "Agenda publicada sem filtros residuais",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,9 +19,9 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.38.2",
-      "release_name": "Navegação única e proporcional da Agenda",
-      "required_migration": "121_internal_calendar_published_slots.sql"
+      "package_version": "36.39.1",
+      "release_name": "Consulta fiel dos horários publicados",
+      "required_migration": "122_calendar_client_communications.sql"
     },
     "historical_releases": [
       {

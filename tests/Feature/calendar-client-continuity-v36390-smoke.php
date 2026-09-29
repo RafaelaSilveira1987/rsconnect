@@ -68,7 +68,7 @@ $checks += [
         && str_contains($migration, 'calendar_client_message_jobs')
         && str_contains($migration, 'client_confirmation_status'),
     'manifest inclui migration 122 em sequência 129' => str_contains($manifest, "['sequence' => 129, 'file' => '122_calendar_client_communications.sql']"),
-    'pacote identifica 36.39.0 e migration obrigatória' => str_contains($version, 'RS Connect 36.39.0')
+    'pacote preserva contrato 36.39.0 e migration obrigatória' => (str_contains($version, 'RS Connect 36.39.0') || str_contains($version, 'RS Connect 36.39.1') || str_contains($version, 'RS Connect 36.39.2'))
         && str_contains($version, "REQUIRED_MIGRATION = '122_calendar_client_communications.sql'"),
 ];
 

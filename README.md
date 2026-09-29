@@ -1,5 +1,15 @@
-# RS Connect 36.39.1
-> **36.39.1** corrige a consulta da Agenda interna publicada para que o agente use de forma determinística os horários realmente liberados. A busca ampla deixa de herdar horário exato antigo, preferências não confirmadas deixam de bloquear o próprio contato, vagas publicadas prevalecem sobre regras genéricas de dia e a publicação de horários ativa automaticamente a estratégia publicada quando a origem é a Agenda interna.
+# RS Connect 36.39.2
+> **36.39.2** corrige um filtro residual da Agenda publicada que podia esconder horários liberados quando o pré-agendamento carregava responsável/slot de uma tentativa anterior. A descoberta de vagas da IA passa a consultar a disponibilidade publicada sem ficar presa ao owner automático, e qualquer nova preferência limpa a seleção técnica anterior antes da nova consulta.
+
+## Atualização 36.39.2
+
+- Horários publicados podem ser descobertos independentemente do responsável automático da conversa.
+- Alterar dia/período/horário libera uma pré-reserva anterior e limpa `chosen_availability_slot_id`.
+- A vaga publicada escolhida continua definindo o profissional de forma atômica.
+- A ativação da estratégia publicada usa UPSERT e funciona em bases antigas.
+- Slots publicados em versões anteriores são usados como compatibilidade quando a busca calculada retornaria vazia.
+- Sem migration nova: permanece `122_calendar_client_communications.sql`.
+
 
 ## Atualização 36.39.1
 

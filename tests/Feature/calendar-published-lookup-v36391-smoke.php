@@ -44,10 +44,10 @@ $checks = [
     'vaga publicada prevalece sobre dia genérico da modalidade' => count($behavior->filterSlotsWithSettings($settings, $appointment, $published)) === 1,
     'vaga calculada continua respeitando dia genérico da modalidade' => count($behavior->filterSlotsWithSettings($settings, $appointment, $calculated)) === 0,
     'pré-agendamento IA descobre profissional pelo slot publicado' => str_contains($availability, '$publishedDiscoveryUnbound')
-        && str_contains($availability, '$publishedDiscoveryUnbound ? 0 :'),
+        && str_contains($availability, '$publishedOwnerFilter'),
     'publicar vaga ativa estratégia publicada na agenda interna' => str_contains($controller, 'activatePublishedInternalStrategy')
         && str_contains($availability, 'internal_availability_strategy = "published"'),
-    'versão identifica 36.39.1 sem migration nova' => str_contains($version, 'RS Connect 36.39.1')
+    'versão atual preserva contrato 36.39.1 sem migration nova' => (str_contains($version, 'RS Connect 36.39.1') || str_contains($version, 'RS Connect 36.39.2'))
         && str_contains($version, "REQUIRED_MIGRATION = '122_calendar_client_communications.sql'"),
 ];
 

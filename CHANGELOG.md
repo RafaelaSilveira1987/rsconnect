@@ -1,3 +1,13 @@
+# 36.39.2 — Agenda publicada sem filtros residuais
+
+- A consulta conversacional da Agenda publicada deixa de restringir vagas pelo responsável salvo automaticamente no pré-agendamento; a vaga escolhida passa a definir o profissional.
+- Nova preferência libera hold anterior, invalida o slot escolhido e limpa o cursor técnico da disponibilidade antes de uma nova busca.
+- Busca publicada possui fallback defensivo sem filtro de profissional para pré-agendamentos automáticos antigos.
+- Empresas que já tinham horários publicados antes da 36.39.1 usam essas vagas quando o modo calculado não encontra opções, evitando falso “sem horários”.
+- Publicar horários ativa a estratégia `published` com UPSERT, inclusive em tenants antigos sem linha prévia de configuração de disponibilidade.
+- Payload diagnóstico da busca interna passa a registrar janela, modalidade e filtro de profissional efetivamente usados.
+- Sem migration nova; permanece `122_calendar_client_communications.sql`.
+
 # 36.39.1 — Consulta fiel dos horários publicados
 
 - corrige a consulta ampla após uma tentativa exata sem vaga: “na quarta-feira tem algum horário?” limpa o horário anterior e pesquisa o dia solicitado;

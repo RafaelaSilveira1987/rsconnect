@@ -1148,6 +1148,16 @@ final class PreSchedulingService
             }
         }
 
+        // 36.39.2 — qualquer nova preferência invalida a vaga publicada escolhida na
+        // tentativa anterior. Sem essa limpeza, chosen_availability_slot_id/hold e um
+        // owner_user_id antigo podiam prender a consulta e fazer a Agenda publicada
+        // responder "sem horários" mesmo existindo vagas no período solicitado.
+        try {
+            (new InternalCalendarSlotService())->releaseForAppointment($tenantId, $appointmentId);
+        } catch (Throwable) {
+            // Compatibilidade defensiva com instalações sem a migration 121.
+        }
+
         try {
             $pdo->prepare(
                 'UPDATE calendar_availability_requests
@@ -1185,6 +1195,8 @@ final class PreSchedulingService
                      availability_selection_expires_at = NULL,
                      availability_selected_at = NULL,
                      availability_selected_by = NULL,
+                     chosen_availability_slot_id = NULL,
+                     google_event_state = CASE WHEN google_event_state = "held" THEN NULL ELSE google_event_state END,
                      updated_at = CURRENT_TIMESTAMP
                  WHERE id = :appointment_id AND tenant_id = :tenant_id'
             )->execute(['appointment_id' => $appointmentId, 'tenant_id' => $tenantId]);
@@ -1196,6 +1208,7 @@ final class PreSchedulingService
                      availability_request_id = NULL,
                      availability_slot_count = 0,
                      availability_error = NULL,
+                     chosen_availability_slot_id = NULL,
                      updated_at = CURRENT_TIMESTAMP
                  WHERE id = :appointment_id AND tenant_id = :tenant_id'
             )->execute(['appointment_id' => $appointmentId, 'tenant_id' => $tenantId]);

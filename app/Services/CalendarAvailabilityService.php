@@ -114,14 +114,19 @@ final class CalendarAvailabilityService
             return;
         }
 
+        // INSERT garante a ativação também em bases antigas nas quais a empresa já
+        // possuía Agenda interna/onboarding, mas ainda não tinha linha nesta tabela.
         Database::connection()->prepare(
-            'UPDATE tenant_calendar_availability_settings
-             SET enabled = 1,
-                 internal_availability_strategy = "published",
-                 use_n8n = 0,
-                 use_internal_fallback = 1,
-                 updated_at = CURRENT_TIMESTAMP
-             WHERE tenant_id = :tenant_id'
+            'INSERT INTO tenant_calendar_availability_settings
+                (tenant_id, enabled, internal_availability_strategy, use_n8n, use_internal_fallback)
+             VALUES
+                (:tenant_id, 1, "published", 0, 1)
+             ON DUPLICATE KEY UPDATE
+                enabled = 1,
+                internal_availability_strategy = "published",
+                use_n8n = 0,
+                use_internal_fallback = 1,
+                updated_at = CURRENT_TIMESTAMP'
         )->execute(['tenant_id' => $tenantId]);
     }
 
@@ -621,12 +626,15 @@ final class CalendarAvailabilityService
         $internalStrategyForContext = (new InternalCalendarSlotService())->normalizeStrategy(
             (string) ($settings['internal_availability_strategy'] ?? 'calculated')
         );
+        // 36.39.2 — em uma consulta conversacional da Agenda publicada, o responsável
+        // salvo no pré-agendamento não pode esconder vagas de outros profissionais.
+        // O owner_user_id pode ter vindo do responsável da conversa ou de uma tentativa
+        // anterior; enquanto o pré-agendamento é da IA (não manual), a própria vaga
+        // publicada é quem define o profissional no momento da escolha.
         $publishedDiscoveryUnbound = $calendarSource === 'internal'
             && $internalStrategyForContext === InternalCalendarSlotService::STRATEGY_PUBLISHED
             && (int) ($appointment['is_pre_schedule'] ?? 0) === 1
-            && trim((string) ($appointment['pre_schedule_source'] ?? '')) === 'ai_whatsapp'
-            && (int) ($appointment['chosen_availability_slot_id'] ?? 0) < 1
-            && !in_array((string) ($appointment['availability_status'] ?? ''), ['slot_selected', 'validated'], true);
+            && trim((string) ($appointment['pre_schedule_source'] ?? '')) !== 'manual';
 
         // Em disponibilidade publicada, o profissional da conversa não restringe a
         // descoberta antes da escolha do slot. A própria vaga publicada pode definir
@@ -707,15 +715,38 @@ final class CalendarAvailabilityService
                 // 36.38.0 — no modo publicado, "agenda vazia" não significa vaga.
                 // O agente recebe exclusivamente slots que alguém liberou de forma
                 // explícita na Agenda interna.
+                $publishedOwnerFilter = $publishedDiscoveryUnbound
+                    ? 0
+                    : (int) ($appointment['owner_user_id'] ?? 0);
                 $slots = $this->generatePublishedInternalSlots(
                     $tenantId,
                     $window,
                     $settings,
-                    $publishedDiscoveryUnbound ? 0 : (int) ($appointment['owner_user_id'] ?? 0),
+                    $publishedOwnerFilter,
                     (int) ($appointment['contact_id'] ?? 0),
                     $appointmentId,
                     $requestedModality
                 );
+
+                // Defesa contra dados históricos: versões anteriores podiam manter no
+                // pré-agendamento um profissional derivado da conversa/slot anterior.
+                // Se isso zerar a descoberta, uma consulta não manual deve repetir a
+                // leitura sem owner e deixar o slot publicado definir o responsável.
+                if ($slots === []
+                    && $publishedOwnerFilter > 0
+                    && (int) ($appointment['is_pre_schedule'] ?? 0) === 1
+                    && trim((string) ($appointment['pre_schedule_source'] ?? '')) !== 'manual') {
+                    $slots = $this->generatePublishedInternalSlots(
+                        $tenantId,
+                        $window,
+                        $settings,
+                        0,
+                        (int) ($appointment['contact_id'] ?? 0),
+                        $appointmentId,
+                        $requestedModality
+                    );
+                    $publishedOwnerFilter = 0;
+                }
                 $preferredTime = trim((string) ($appointment['preferred_time_text'] ?? ''));
                 $hasExactTime = preg_match('/^(?:[01]?\d|2[0-3]):[0-5]\d$/', $preferredTime) === 1;
                 if ($hasExactTime) {
@@ -771,6 +802,35 @@ final class CalendarAvailabilityService
                         break;
                     }
                 }
+
+                // 36.39.2 — compatibilidade para horários publicados antes da 36.39.1.
+                // Nessas empresas a tabela de slots já pode conter vagas reais enquanto
+                // a configuração ainda permanece em "calculated". Só recorremos às
+                // vagas explícitas quando o cálculo não encontrou nada, evitando uma
+                // falsa resposta de agenda vazia sem alterar empresas que possuem vagas
+                // calculadas normalmente.
+                if ($slots === [] && (new InternalCalendarSlotService())->tableAvailable()) {
+                    $publishedCompatibility = $this->generatePublishedInternalSlots(
+                        $tenantId,
+                        $window,
+                        $settings,
+                        0,
+                        (int) ($appointment['contact_id'] ?? 0),
+                        $appointmentId,
+                        $requestedModality
+                    );
+                    if ($publishedCompatibility !== []) {
+                        $slots = $publishedCompatibility;
+                        $internalStrategy = InternalCalendarSlotService::STRATEGY_PUBLISHED;
+                        $internalSource = 'internal_published';
+                        $publishedOwnerFilter = 0;
+                        $exact = [
+                            'ok' => false,
+                            'code' => 'published_legacy_compatibility',
+                            'message' => 'Foram usadas vagas explicitamente liberadas na Agenda interna.',
+                        ];
+                    }
+                }
             }
 
             $internalPayload = [
@@ -789,6 +849,12 @@ final class CalendarAvailabilityService
                         : 'rs_connect_internal_calculated',
                     'google_used' => false,
                     'n8n_used' => false,
+                    'search_start_at' => (string) ($window['start'] ?? ''),
+                    'search_end_at' => (string) ($window['end'] ?? ''),
+                    'requested_modality' => $requestedModality,
+                    'published_owner_filter' => $internalStrategy === InternalCalendarSlotService::STRATEGY_PUBLISHED
+                        ? ($publishedOwnerFilter ?? null)
+                        : null,
                 ],
             ];
             $this->storeSlots($requestId, $tenantId, $appointmentId, $slots, $internalSource, $internalPayload);
@@ -1235,10 +1301,12 @@ final class CalendarAvailabilityService
 
             $publishedOwnerId = (int) ($hold['owner_user_id'] ?? 0);
             $currentOwnerId = (int) ($appointment['owner_user_id'] ?? 0);
+            // Em pré-agendamento conversacional, a vaga publicada é a fonte de
+            // verdade do profissional. Dados históricos de owner/slot não podem impedir
+            // que a nova escolha atribua o responsável correto. Pré-agendamentos
+            // manuais continuam respeitando o profissional selecionado pela equipe.
             $canPublishedSlotDefineOwner = (int) ($appointment['is_pre_schedule'] ?? 0) === 1
-                && trim((string) ($appointment['pre_schedule_source'] ?? '')) === 'ai_whatsapp'
-                && (int) ($appointment['chosen_availability_slot_id'] ?? 0) < 1
-                && !in_array((string) ($appointment['availability_status'] ?? ''), ['slot_selected', 'validated'], true);
+                && trim((string) ($appointment['pre_schedule_source'] ?? '')) !== 'manual';
             if ($publishedOwnerId > 0
                 && $currentOwnerId > 0
                 && $publishedOwnerId !== $currentOwnerId
