@@ -1,3 +1,19 @@
+# 36.38.0 — Horários publicados na Agenda interna
+
+- adiciona a estratégia opt-in **Oferecer somente horários liberados** para a Agenda interna;
+- preserva **Calcular pelos horários de trabalho** como padrão para empresas existentes, sem mudança silenciosa de comportamento;
+- cria `calendar_internal_slots` para separar disponibilidade explícita de compromissos reais;
+- permite liberar faixas que são convertidas em vagas concretas por duração e intervalo, com repetição opcional no mesmo dia da semana por até 52 semanas;
+- permite disponibilidade geral da empresa ou vinculada a um profissional e modalidade;
+- o agente consulta somente vagas publicadas quando a estratégia estiver ativa e nunca infere que um espaço vazio é disponibilidade;
+- vagas conflitantes com compromissos reais são descartadas da consulta;
+- ao escolher uma opção, a vaga é pré-reservada de forma concorrente/atômica e não pode ser consumida por duas conversas;
+- a escolha de uma vaga de profissional pode atribuir automaticamente o responsável ao pré-agendamento;
+- confirmação marca a vaga como utilizada; cancelamento, recusa e remarcação devolvem a vaga à disponibilidade;
+- adiciona painel **Horários liberados** em Agenda → Horários e regras;
+- nova migration obrigatória: `121_internal_calendar_published_slots.sql`;
+- invalida cache exato e assets para o contrato `36.38.0`.
+
 # 36.37.5 — Coleta personalizada sem contaminação por dúvidas
 
 - impede que uma pergunta informativa do contato (ex.: “qual o valor da consulta?”) seja gravada automaticamente no próximo campo personalizado da Ordem do atendimento;

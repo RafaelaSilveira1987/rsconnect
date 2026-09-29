@@ -462,8 +462,11 @@ final class CalendarController
             }
         }
 
-        if ((string) ($appointment['availability_source'] ?? '') === 'google_marked_slots'
-            && in_array((string) ($appointment['google_event_state'] ?? ''), ['held', 'confirmed', 'hold_requested', 'confirm_requested'], true)) {
+        if (
+            ((string) ($appointment['availability_source'] ?? '') === 'google_marked_slots'
+                && in_array((string) ($appointment['google_event_state'] ?? ''), ['held', 'confirmed', 'hold_requested', 'confirm_requested'], true))
+            || (string) ($appointment['availability_source'] ?? '') === 'internal_published'
+        ) {
             $released = (new CalendarAvailabilityService())->releaseSelectedSlot($tenantId, $appointmentId);
             if (empty($released['ok'])) {
                 Flash::set('error', 'Não foi possível trocar o profissional porque o horário anterior não foi liberado: ' . (string) ($released['message'] ?? 'erro não informado'));

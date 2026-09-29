@@ -22,6 +22,7 @@ final class CalendarAvailabilityService
             'tenant_id' => $tenantId,
             'enabled' => 0,
             'availability_mode' => 'free_slots',
+            'internal_availability_strategy' => 'calculated',
             'require_before_approval' => 1,
             'auto_request_on_pre_schedule' => 1,
             'use_n8n' => 1,
@@ -87,6 +88,7 @@ final class CalendarAvailabilityService
             }
 
             $row['availability_mode'] = $this->normalizeMode((string) ($row['availability_mode'] ?? 'free_slots'));
+            $row['internal_availability_strategy'] = (new InternalCalendarSlotService())->normalizeStrategy((string) ($row['internal_availability_strategy'] ?? 'calculated'));
             return array_merge($defaults, $row);
         } catch (Throwable) {
             return $defaults;
@@ -136,6 +138,7 @@ final class CalendarAvailabilityService
         $payload = array_merge($current, [
             'enabled' => 1,
             'availability_mode' => 'free_slots',
+            'internal_availability_strategy' => (new InternalCalendarSlotService())->normalizeStrategy((string) ($data['internal_availability_strategy'] ?? $current['internal_availability_strategy'] ?? 'calculated')),
             'require_before_approval' => 1,
             'auto_request_on_pre_schedule' => 1,
             'use_n8n' => 0,
@@ -358,6 +361,7 @@ final class CalendarAvailabilityService
 
         $current = $this->settings($tenantId);
         $mode = $this->normalizeMode((string) ($data['availability_mode'] ?? $current['availability_mode'] ?? 'free_slots'));
+        $internalStrategy = (new InternalCalendarSlotService())->normalizeStrategy((string) ($data['internal_availability_strategy'] ?? $current['internal_availability_strategy'] ?? 'calculated'));
         $duration = max(15, min(240, (int) ($data['default_duration_minutes'] ?? 50)));
         $interval = max(5, min(240, (int) ($data['slot_interval_minutes'] ?? 30)));
         $buffer = max(0, min(180, (int) ($data['buffer_minutes'] ?? 10)));
@@ -515,6 +519,14 @@ final class CalendarAvailabilityService
             'max_suggestions' => $maxSuggestions,
         ]);
 
+        if ($this->hasColumn('tenant_calendar_availability_settings', 'internal_availability_strategy')) {
+            Database::connection()->prepare(
+                'UPDATE tenant_calendar_availability_settings
+                 SET internal_availability_strategy = :strategy, updated_at = CURRENT_TIMESTAMP
+                 WHERE tenant_id = :tenant_id'
+            )->execute(['strategy' => $internalStrategy, 'tenant_id' => $tenantId]);
+        }
+
         if ($this->hasColumn('tenant_calendar_availability_settings', 'calendar_event_webhook_url_encrypted')) {
             Database::connection()->prepare(
                 'UPDATE tenant_calendar_availability_settings
@@ -628,62 +640,118 @@ final class CalendarAvailabilityService
             ]);
 
         if ($calendarSource === 'internal') {
-            $this->updateAppointmentAvailability($tenantId, $appointmentId, 'requested', $requestId, 0, null, 'internal_fallback');
-
-            // A preferência exata do lead é sempre testada primeiro. O intervalo entre
-            // sugestões serve para montar alternativas, mas não deve rejeitar um horário
-            // específico que esteja realmente livre e dentro das regras configuradas.
-            $preferredTime = trim((string) ($appointment['preferred_time_text'] ?? ''));
-            $hasExactTime = preg_match('/^(?:[01]?\d|2[0-3]):[0-5]\d$/', $preferredTime) === 1;
-            $exact = $hasExactTime
-                ? $this->validateInternalRequestedSlot($tenantId, $appointment, $settings, $requestedModality)
-                : ['ok' => false, 'code' => 'period_preference', 'message' => 'O contato informou um período, mas ainda não escolheu um horário exato.'];
-            $slots = [];
-            if (!empty($exact['ok']) && is_array($exact['slot'] ?? null)) {
-                $slots[] = $exact['slot'];
-            }
-
-            $generated = $this->generateInternalSlots(
-                $tenantId,
-                $window,
-                $settings,
-                (int) ($appointment['owner_user_id'] ?? 0),
-                (int) ($appointment['contact_id'] ?? 0),
-                $appointmentId,
-                $requestedModality
+            $internalStrategy = (new InternalCalendarSlotService())->normalizeStrategy(
+                (string) ($settings['internal_availability_strategy'] ?? 'calculated')
             );
-            foreach ($generated as $candidate) {
-                $candidateKey = (string) ($candidate['start'] ?? '') . '|' . (string) ($candidate['end'] ?? '');
-                $duplicate = false;
-                foreach ($slots as $current) {
-                    if (((string) ($current['start'] ?? '') . '|' . (string) ($current['end'] ?? '')) === $candidateKey) {
-                        $duplicate = true;
+            $internalSource = $internalStrategy === InternalCalendarSlotService::STRATEGY_PUBLISHED
+                ? 'internal_published'
+                : 'internal_fallback';
+            $this->updateAppointmentAvailability($tenantId, $appointmentId, 'requested', $requestId, 0, null, $internalSource);
+
+            $slots = [];
+            $exact = ['ok' => false, 'code' => 'not_checked', 'message' => null];
+
+            // Compatibilidade histórica: A preferência exata do lead é sempre testada primeiro
+            // dentro da estratégia ativa. No modo publicado, "exata" significa existir entre
+            // os horários explicitamente liberados; no modo calculado, usa a validação legada.
+            if ($internalStrategy === InternalCalendarSlotService::STRATEGY_PUBLISHED) {
+                // 36.38.0 — no modo publicado, "agenda vazia" não significa vaga.
+                // O agente recebe exclusivamente slots que alguém liberou de forma
+                // explícita na Agenda interna.
+                $slots = $this->generatePublishedInternalSlots(
+                    $tenantId,
+                    $window,
+                    $settings,
+                    (int) ($appointment['owner_user_id'] ?? 0),
+                    (int) ($appointment['contact_id'] ?? 0),
+                    $appointmentId,
+                    $requestedModality
+                );
+                $preferredTime = trim((string) ($appointment['preferred_time_text'] ?? ''));
+                $hasExactTime = preg_match('/^(?:[01]?\d|2[0-3]):[0-5]\d$/', $preferredTime) === 1;
+                if ($hasExactTime) {
+                    $exactMatch = false;
+                    foreach ($slots as $publishedSlot) {
+                        if (substr((string) ($publishedSlot['start'] ?? ''), 11, 5) === str_pad($preferredTime, 5, '0', STR_PAD_LEFT)) {
+                            $exactMatch = true;
+                            break;
+                        }
+                    }
+                    $exact = [
+                        'ok' => $exactMatch,
+                        'code' => $exactMatch ? 'published_exact_match' : 'published_exact_unavailable',
+                        'message' => $exactMatch
+                            ? 'O horário solicitado foi liberado na Agenda interna.'
+                            : 'O horário exato não está entre as vagas liberadas.',
+                    ];
+                }
+            } else {
+                // Compatibilidade: empresas existentes continuam usando o cálculo por
+                // jornada menos compromissos até optarem por horários publicados.
+                $preferredTime = trim((string) ($appointment['preferred_time_text'] ?? ''));
+                $hasExactTime = preg_match('/^(?:[01]?\d|2[0-3]):[0-5]\d$/', $preferredTime) === 1;
+                $exact = $hasExactTime
+                    ? $this->validateInternalRequestedSlot($tenantId, $appointment, $settings, $requestedModality)
+                    : ['ok' => false, 'code' => 'period_preference', 'message' => 'O contato informou um período, mas ainda não escolheu um horário exato.'];
+                if (!empty($exact['ok']) && is_array($exact['slot'] ?? null)) {
+                    $slots[] = $exact['slot'];
+                }
+
+                $generated = $this->generateInternalSlots(
+                    $tenantId,
+                    $window,
+                    $settings,
+                    (int) ($appointment['owner_user_id'] ?? 0),
+                    (int) ($appointment['contact_id'] ?? 0),
+                    $appointmentId,
+                    $requestedModality
+                );
+                foreach ($generated as $candidate) {
+                    $candidateKey = (string) ($candidate['start'] ?? '') . '|' . (string) ($candidate['end'] ?? '');
+                    $duplicate = false;
+                    foreach ($slots as $current) {
+                        if (((string) ($current['start'] ?? '') . '|' . (string) ($current['end'] ?? '')) === $candidateKey) {
+                            $duplicate = true;
+                            break;
+                        }
+                    }
+                    if (!$duplicate) {
+                        $slots[] = $candidate;
+                    }
+                    if (count($slots) >= max(1, (int) ($settings['max_suggestions'] ?? 5))) {
                         break;
                     }
-                }
-                if (!$duplicate) {
-                    $slots[] = $candidate;
-                }
-                if (count($slots) >= max(1, (int) ($settings['max_suggestions'] ?? 5))) {
-                    break;
                 }
             }
 
             $internalPayload = [
                 'slots' => $slots,
-                'source' => 'internal_fallback',
+                'source' => $internalSource,
                 'calendar_source' => 'internal',
+                'internal_availability_strategy' => $internalStrategy,
                 'exact_preference' => [
                     'ok' => !empty($exact['ok']),
                     'code' => $exact['code'] ?? null,
                     'message' => $exact['message'] ?? null,
                 ],
-                'meta' => ['engine' => 'rs_connect_internal', 'google_used' => false, 'n8n_used' => false],
+                'meta' => [
+                    'engine' => $internalStrategy === InternalCalendarSlotService::STRATEGY_PUBLISHED
+                        ? 'rs_connect_internal_published'
+                        : 'rs_connect_internal_calculated',
+                    'google_used' => false,
+                    'n8n_used' => false,
+                ],
             ];
-            $this->storeSlots($requestId, $tenantId, $appointmentId, $slots, 'internal_fallback', $internalPayload);
-            $message = $slots === []
-                ? 'Nenhum horário livre encontrado na Agenda interna do RS Connect para essa preferência.'
-                : 'Horários disponíveis encontrados na Agenda interna do RS Connect.';
+            $this->storeSlots($requestId, $tenantId, $appointmentId, $slots, $internalSource, $internalPayload);
+            if ($internalStrategy === InternalCalendarSlotService::STRATEGY_PUBLISHED) {
+                $message = $slots === []
+                    ? 'Não há horários liberados na Agenda interna para essa preferência.'
+                    : 'Encontrei horários liberados pelo profissional na Agenda interna.';
+            } else {
+                $message = $slots === []
+                    ? 'Nenhum horário livre encontrado na Agenda interna do RS Connect para essa preferência.'
+                    : 'Horários disponíveis encontrados na Agenda interna do RS Connect.';
+            }
             $request = $this->findRequest($requestId, $token) ?: [
                 'id' => $requestId,
                 'tenant_id' => $tenantId,
@@ -695,10 +763,9 @@ final class CalendarAvailabilityService
                 'request_id' => $requestId,
                 'appointment_id' => $appointmentId,
                 'slots' => count($slots),
+                'strategy' => $internalStrategy,
             ], $tenantId);
             return [
-                // Uma busca interna sem vagas foi processada corretamente: não é falha
-                // técnica. O estado/WhatsApp já foi atualizado por handleAvailabilityResult().
                 'ok' => true,
                 'available' => $slots !== [],
                 'slots' => count($slots),
@@ -706,6 +773,7 @@ final class CalendarAvailabilityService
                 'message' => $message,
                 'conversation' => $conversation,
                 'calendar_source' => 'internal',
+                'internal_availability_strategy' => $internalStrategy,
             ];
         }
 
@@ -1101,6 +1169,59 @@ final class CalendarAvailabilityService
         }
 
         $source = trim((string) ($slot['source'] ?? ''));
+        if ($source === 'internal_published') {
+            $settings = $this->settings($tenantId);
+            $hold = (new InternalCalendarSlotService())->holdFromAvailabilitySlot(
+                $tenantId,
+                $appointmentId,
+                $slot,
+                (int) ($settings['hold_minutes'] ?? 30)
+            );
+            if (empty($hold['ok'])) {
+                return ['ok' => false, 'message' => (string) ($hold['message'] ?? 'O horário publicado não está mais disponível.')];
+            }
+
+            $publishedOwnerId = (int) ($hold['owner_user_id'] ?? 0);
+            $currentOwnerId = (int) ($appointment['owner_user_id'] ?? 0);
+            if ($publishedOwnerId > 0 && $currentOwnerId > 0 && $publishedOwnerId !== $currentOwnerId) {
+                (new InternalCalendarSlotService())->releaseForAppointment($tenantId, $appointmentId);
+                return ['ok' => false, 'message' => 'Esse horário foi liberado para outro profissional. Faça uma nova consulta.'];
+            }
+
+            // Revalida conflitos reais no instante da escolha. O slot publicado define
+            // disponibilidade; compromissos continuam tendo precedência.
+            $effectiveOwnerId = $publishedOwnerId > 0 ? $publishedOwnerId : $currentOwnerId;
+            $busy = $this->busyPeriods(
+                $tenantId,
+                (string) ($slot['starts_at'] ?? ''),
+                (string) ($slot['ends_at'] ?? ''),
+                $effectiveOwnerId,
+                $appointmentId
+            );
+            try {
+                $candidateStart = new DateTimeImmutable((string) ($slot['starts_at'] ?? ''));
+                $candidateEnd = new DateTimeImmutable((string) ($slot['ends_at'] ?? ''));
+                if ($this->overlapsBusy($candidateStart, $candidateEnd, $busy, max(0, (int) ($settings['buffer_minutes'] ?? 0)))) {
+                    (new InternalCalendarSlotService())->releaseForAppointment($tenantId, $appointmentId);
+                    return ['ok' => false, 'message' => 'Esse horário recebeu outro compromisso e deixou de estar disponível. Faça uma nova consulta.'];
+                }
+            } catch (Throwable) {
+                (new InternalCalendarSlotService())->releaseForAppointment($tenantId, $appointmentId);
+                return ['ok' => false, 'message' => 'O horário publicado possui datas inválidas. Faça uma nova consulta.'];
+            }
+
+            if ($publishedOwnerId > 0 && $currentOwnerId < 1) {
+                Database::connection()->prepare(
+                    'UPDATE calendar_appointments SET owner_user_id = :owner_user_id, updated_at = CURRENT_TIMESTAMP
+                     WHERE id = :id AND tenant_id = :tenant_id AND owner_user_id IS NULL'
+                )->execute([
+                    'owner_user_id' => $publishedOwnerId,
+                    'id' => $appointmentId,
+                    'tenant_id' => $tenantId,
+                ]);
+                $appointment['owner_user_id'] = $publishedOwnerId;
+            }
+        }
         if ($source === 'internal_fallback') {
             $settings = $this->settings($tenantId);
             $context = $professionalService->contextForAppointment($tenantId, $appointment, $settings);
@@ -1187,6 +1308,9 @@ final class CalendarAvailabilityService
         if (!$appointment) {
             return ['attempted' => false, 'ok' => false, 'message' => 'Pré-agendamento não encontrado.'];
         }
+        if ((string) ($appointment['availability_source'] ?? '') === 'internal_published') {
+            return (new InternalCalendarSlotService())->confirmForAppointment($tenantId, $appointmentId);
+        }
         if ((string) ($appointment['availability_source'] ?? '') !== 'google_marked_slots') {
             return ['attempted' => false, 'ok' => true, 'message' => null];
         }
@@ -1215,6 +1339,9 @@ final class CalendarAvailabilityService
         $appointment = $this->appointment($tenantId, $appointmentId);
         if (!$appointment) {
             return ['attempted' => false, 'ok' => false, 'message' => 'Pré-agendamento não encontrado.'];
+        }
+        if ((string) ($appointment['availability_source'] ?? '') === 'internal_published') {
+            return (new InternalCalendarSlotService())->releaseForAppointment($tenantId, $appointmentId);
         }
         if ((string) ($appointment['availability_source'] ?? '') !== 'google_marked_slots') {
             return ['attempted' => false, 'ok' => true, 'message' => null];
@@ -1302,6 +1429,13 @@ final class CalendarAvailabilityService
         if ((string) ($appointment['availability_source'] ?? '') === 'google_marked_slots'
             && !in_array((string) ($appointment['google_event_state'] ?? ''), ['held', 'confirmed'], true)) {
             return ['ok' => false, 'message' => 'O evento VAGO ainda não foi pré-reservado no Google Agenda.'];
+        }
+
+        if ((string) ($appointment['availability_source'] ?? '') === 'internal_published') {
+            $publishedCheck = (new InternalCalendarSlotService())->validateHeldForAppointment($tenantId, (int) ($appointment['id'] ?? 0));
+            if (empty($publishedCheck['ok'])) {
+                return ['ok' => false, 'message' => (string) ($publishedCheck['message'] ?? 'A vaga publicada não está mais reservada.')];
+            }
         }
 
         if ((string) ($appointment['availability_source'] ?? '') === 'internal_fallback') {
@@ -2139,6 +2273,95 @@ final class CalendarAvailabilityService
                 'raw' => ['generated_by' => 'RS Connect internal exact preference', 'exact_preference' => true],
             ],
         ];
+    }
+
+    /**
+     * Retorna somente vagas explicitamente publicadas pela empresa/profissional.
+     * Espaços vazios do expediente não entram nesta lista.
+     */
+    private function generatePublishedInternalSlots(
+        int $tenantId,
+        array $window,
+        array $settings,
+        int $ownerUserId = 0,
+        int $contactId = 0,
+        int $ignoreAppointmentId = 0,
+        string $requestedModality = 'indefinida'
+    ): array
+    {
+        $max = max(1, (int) ($settings['max_suggestions'] ?? 5));
+        $buffer = max(0, (int) ($settings['buffer_minutes'] ?? 0));
+        $published = (new InternalCalendarSlotService())->availableForWindow(
+            $tenantId,
+            (string) $window['start'],
+            (string) $window['end'],
+            $ownerUserId,
+            $requestedModality,
+            $max * 3
+        );
+        if ($published === []) {
+            return [];
+        }
+
+        $professionalSettings = (new ProfessionalCalendarService())->tenantSettings($tenantId);
+        $busyCache = [];
+        $contactBusy = [];
+        if (!empty($professionalSettings['enabled'])
+            && !empty($professionalSettings['prevent_contact_overlap'])
+            && $contactId > 0) {
+            $contactBusy = $this->contactBusyPeriods(
+                $tenantId,
+                $contactId,
+                (string) $window['start'],
+                (string) $window['end'],
+                $ignoreAppointmentId
+            );
+        }
+
+        $slots = [];
+        foreach ($published as $row) {
+            $slotOwnerId = (int) ($row['owner_user_id'] ?? 0);
+            $effectiveOwnerId = $slotOwnerId > 0 ? $slotOwnerId : $ownerUserId;
+            if (!array_key_exists($effectiveOwnerId, $busyCache)) {
+                $busyCache[$effectiveOwnerId] = $this->busyPeriods(
+                    $tenantId,
+                    (string) $window['start'],
+                    (string) $window['end'],
+                    $effectiveOwnerId,
+                    $ignoreAppointmentId
+                );
+            }
+            $busy = array_merge($busyCache[$effectiveOwnerId], $contactBusy);
+            try {
+                $start = new DateTimeImmutable((string) $row['starts_at']);
+                $end = new DateTimeImmutable((string) $row['ends_at']);
+            } catch (Throwable) {
+                continue;
+            }
+            if ($this->overlapsBusy($start, $end, $busy, $buffer)) {
+                continue;
+            }
+
+            $slots[] = [
+                'start' => (string) $row['starts_at'],
+                'end' => (string) $row['ends_at'],
+                'label' => date('d/m/Y H:i', strtotime((string) $row['starts_at'])),
+                'source' => 'internal_published',
+                'modality' => $this->normalizeModality((string) ($row['modality'] ?? $requestedModality)),
+                'event_state' => 'available',
+                'raw' => [
+                    'generated_by' => 'RS Connect published availability',
+                    'internal_slot_id' => (int) ($row['id'] ?? 0),
+                    'owner_user_id' => $slotOwnerId > 0 ? $slotOwnerId : null,
+                    'owner_name' => trim((string) ($row['owner_name'] ?? '')) ?: null,
+                    'published' => true,
+                ],
+            ];
+            if (count($slots) >= $max) {
+                break;
+            }
+        }
+        return $slots;
     }
 
     private function generateInternalSlots(

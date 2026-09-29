@@ -1002,6 +1002,7 @@ final class AgentBlueprintService
         // active=1 em tenant_triage_fields; o cursor então o perguntava mais tarde como
         // uma "etapa fantasma". Agora tudo que não está em uma etapa de Coleta ativa
         // fica disponível no catálogo, porém fora do runtime.
+        // Compatibilidade com o smoke test 36.37.2: SET required_before_schedule = 0, active = 0
         $pdo->prepare(
             'UPDATE tenant_triage_fields
              SET required_before_schedule = 0,

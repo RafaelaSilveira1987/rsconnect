@@ -14,6 +14,7 @@ use App\Core\Router;
 use App\Core\View;
 use App\Services\CalendarAvailabilityService;
 use App\Services\CalendarGoogleLifecycleService;
+use App\Services\InternalCalendarSlotService;
 use App\Services\ProfessionalCalendarService;
 use PDO;
 use Throwable;
@@ -40,6 +41,13 @@ final class CalendarAvailabilityController
         ];
 
         $professionalCalendarService = new ProfessionalCalendarService();
+        $internalSlotService = new InternalCalendarSlotService();
+        $publishedSlots = [];
+        if ($tenantId > 0 && $internalSlotService->tableAvailable()) {
+            $from = date('Y-m-d 00:00:00');
+            $to = date('Y-m-d 23:59:59', strtotime('+60 days'));
+            $publishedSlots = $internalSlotService->listSlots($tenantId, $from, $to, 0, true);
+        }
 
         View::render('calendar_availability.index', [
             'title' => 'Agenda — disponibilidade',
@@ -55,6 +63,7 @@ final class CalendarAvailabilityController
             'integration' => $dashboard['integration'] ?? [],
             'maintenance' => $dashboard['maintenance'] ?? [],
             'canManage' => Auth::can('calendar.manage'),
+            'publishedSlots' => $publishedSlots,
             'professionalCalendarSettings' => $tenantId > 0 ? $professionalCalendarService->tenantSettings($tenantId) : ['enabled' => false, 'require_owner' => true, 'auto_from_conversation' => false],
             'professionalProfiles' => $tenantId > 0 ? $professionalCalendarService->teamProfiles($tenantId) : [],
         ]);
@@ -85,6 +94,43 @@ final class CalendarAvailabilityController
             Flash::set('error', 'Não foi possível salvar: ' . $exception->getMessage());
         }
         $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId);
+    }
+
+
+    public function publishInternalSlots(): void
+    {
+        Csrf::validate($_POST['_token'] ?? null);
+        $tenantId = $this->resolveTenantFromPost();
+        if ($tenantId < 1) {
+            Flash::set('error', 'Selecione uma empresa para liberar horários.');
+            $this->redirect('/calendar?section=availability');
+        }
+
+        try {
+            $settings = (new CalendarAvailabilityService())->settings($tenantId);
+            $_POST['timezone'] = (string) ($settings['timezone'] ?? 'America/Sao_Paulo');
+            if (empty($_POST['slot_duration_minutes'])) {
+                $_POST['slot_duration_minutes'] = (int) ($settings['default_duration_minutes'] ?? 50);
+            }
+            if (empty($_POST['slot_interval_minutes'])) {
+                $_POST['slot_interval_minutes'] = (int) ($settings['slot_interval_minutes'] ?? 30);
+            }
+            $result = (new InternalCalendarSlotService())->publish($tenantId, $_POST, Auth::id());
+            Flash::set(($result['created'] ?? 0) > 0 ? 'success' : 'warning', (string) ($result['message'] ?? 'Disponibilidade processada.'));
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível liberar os horários: ' . $exception->getMessage());
+        }
+        $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId . '#horarios-liberados');
+    }
+
+    public function cancelInternalSlot(): void
+    {
+        Csrf::validate($_POST['_token'] ?? null);
+        $tenantId = $this->resolveTenantFromPost();
+        $slotId = (int) ($_POST['slot_id'] ?? 0);
+        $result = (new InternalCalendarSlotService())->cancelSlot($tenantId, $slotId);
+        Flash::set(!empty($result['ok']) ? 'success' : 'warning', (string) ($result['message'] ?? 'Horário processado.'));
+        $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId . '#horarios-liberados');
     }
 
 

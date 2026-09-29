@@ -279,6 +279,8 @@ return static function (Router $router): void {
     $router->post('/calendar/availability/settings', [CalendarAvailabilityController::class, 'saveSettings'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/professional-settings', [CalendarAvailabilityController::class, 'saveProfessionalSettings'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/professional-profile', [CalendarAvailabilityController::class, 'saveProfessionalProfile'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->post('/calendar/availability/internal-slots/publish', [CalendarAvailabilityController::class, 'publishInternalSlots'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->post('/calendar/availability/internal-slots/cancel', [CalendarAvailabilityController::class, 'cancelInternalSlot'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/request', [CalendarAvailabilityController::class, 'request'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/apply', [CalendarAvailabilityController::class, 'applySlot'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/availability/release', [CalendarAvailabilityController::class, 'releaseSlot'], ['auth', 'permission:calendar.manage', 'csrf']);

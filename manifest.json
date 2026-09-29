@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.37.4",
-  "release_name": "Fluxo contínuo e pré-agendamento legível",
+  "package_version": "36.38.0",
+  "release_name": "Horários publicados na Agenda interna",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -10,7 +10,7 @@
   },
   "database": {
     "driver": "mysql",
-    "required_migration": "120_agent_turn_state_cursor.sql",
+    "required_migration": "121_internal_calendar_published_slots.sql",
     "migration_runner": "php bin/migrate.php"
   },
   "install": {
@@ -19,11 +19,16 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.37.3",
-      "release_name": "Consulta assertiva da Agenda interna",
+      "package_version": "36.37.5",
+      "release_name": "Coleta personalizada sem contaminação por dúvidas",
       "required_migration": "120_agent_turn_state_cursor.sql"
     },
     "historical_releases": [
+      {
+        "package_version": "36.37.4",
+        "release_name": "Fluxo contínuo e pré-agendamento legível",
+        "required_migration": "120_agent_turn_state_cursor.sql"
+      },
       {
         "package_version": "36.36.28",
         "release_name": "Consulta real de horários e confirmação sem falso positivo",

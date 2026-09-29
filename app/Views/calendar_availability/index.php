@@ -19,6 +19,8 @@ $integration = $integration ?? [];
 $maintenance = $maintenance ?? [];
 $professionalCalendarSettings = $professionalCalendarSettings ?? ['enabled' => false, 'require_owner' => true, 'auto_from_conversation' => false];
 $professionalProfiles = $professionalProfiles ?? [];
+$publishedSlots = $publishedSlots ?? [];
+$internalStrategy = (($settings['internal_availability_strategy'] ?? 'calculated') === 'published') ? 'published' : 'calculated';
 $isRsAdmin = Auth::isSuperAdmin();
 $availabilityMode = ($settings['availability_mode'] ?? 'free_slots') === 'marked_events' ? 'marked_events' : 'free_slots';
 $workdays = json_decode((string) ($settings['workdays_json'] ?? '[]'), true);
@@ -54,7 +56,8 @@ $statusLabels = [
 $sourceLabels = [
     'google_free_slots' => 'Espaços livres do Google',
     'google_marked_slots' => 'Eventos VAGO do Google',
-    'internal_fallback' => 'Agenda interna RS Connect',
+    'internal_fallback' => 'Agenda interna RS Connect · calculada',
+    'internal_published' => 'Agenda interna RS Connect · horários liberados',
     'n8n' => 'n8n',
     'n8n_google_calendar' => 'Google Agenda',
 ];
@@ -96,7 +99,7 @@ $requestInsight = static function (array $request): string {
     $raw = json_decode((string) ($request['response_payload_json'] ?? ''), true);
     $requestedSource = is_array($requested) ? (string) ($requested['calendar_source'] ?? '') : '';
     $responseSource = is_array($raw) ? (string) ($raw['calendar_source'] ?? $raw['source'] ?? '') : '';
-    if ($requestedSource === 'internal' || in_array($responseSource, ['internal', 'internal_fallback'], true)) {
+    if ($requestedSource === 'internal' || in_array($responseSource, ['internal', 'internal_fallback', 'internal_published'], true)) {
         return 'Agenda interna do RS Connect · Google/n8n não utilizados';
     }
     if (!is_array($raw)) {
@@ -410,7 +413,21 @@ $requestInsight = static function (array $request): string {
             </div>
 
             <div data-calendar-source-panel="internal">
-                <div class="section-heading compact" style="margin-top:16px"><div><span class="eyebrow">Agenda interna</span><h3>Disponibilidade dentro do RS Connect</h3><p>Esses horários são cruzados com compromissos já cadastrados na agenda interna e, quando habilitado, com a agenda individual do profissional.</p></div><span class="badge badge-success">Sem Google</span></div>
+                <div class="section-heading compact" style="margin-top:16px"><div><span class="eyebrow">Agenda interna</span><h3>Como determinar os horários disponíveis?</h3><p>Escolha entre manter o cálculo atual ou oferecer somente vagas liberadas explicitamente pela equipe.</p></div><span class="badge badge-success">Sem Google</span></div>
+                <div class="internal-strategy-grid" data-internal-strategy-choices>
+                    <label class="calendar-mode-card <?= $internalStrategy === 'calculated' ? 'is-selected' : '' ?>">
+                        <input type="radio" name="internal_availability_strategy" value="calculated" <?= $internalStrategy === 'calculated' ? 'checked' : '' ?>>
+                        <span class="calendar-mode-icon" aria-hidden="true">∑</span>
+                        <span><strong>Calcular pelos horários de trabalho</strong><small>Comportamento atual. Considera expediente menos compromissos e bloqueios.</small></span>
+                    </label>
+                    <label class="calendar-mode-card <?= $internalStrategy === 'published' ? 'is-selected' : '' ?>">
+                        <input type="radio" name="internal_availability_strategy" value="published" <?= $internalStrategy === 'published' ? 'checked' : '' ?>>
+                        <span class="calendar-mode-icon" aria-hidden="true">✓</span>
+                        <span><strong>Oferecer somente horários liberados</strong><small>O agente só informa vagas publicadas manualmente para a empresa ou profissional.</small></span>
+                    </label>
+                </div>
+                <div class="calendar-inline-info" data-internal-strategy-panel="published"><strong>Fonte de verdade: vagas publicadas.</strong><span>Um espaço vazio no calendário não será considerado disponível. Primeiro libere os horários no painel “Horários liberados” abaixo.</span></div>
+                <div data-internal-strategy-panel="calculated">
                 <div class="internal-calendar-days">
                     <?php foreach ($internalHoursByDay as $dayNumber => $dayConfig): ?>
                         <div class="internal-calendar-day">
@@ -421,6 +438,7 @@ $requestInsight = static function (array $request): string {
                     <?php endforeach; ?>
                 </div>
                 <div class="calendar-inline-info"><strong>Fonte de verdade interna.</strong><span>Quando essa opção estiver ativa, pedidos como “quinta-feira às 14:00” são validados somente contra a Agenda do RS Connect. Nenhuma consulta é enviada ao Google.</span></div>
+                </div>
             </div>
 
             <div class="field" data-calendar-source-panel="google">
@@ -557,6 +575,86 @@ $requestInsight = static function (array $request): string {
 </form>
 </details>
 
+<?php if ($tenantId > 0 && $calendarSource === 'internal'): ?>
+<section class="card internal-published-slots-card" id="horarios-liberados" style="margin-top:16px">
+    <div class="section-heading">
+        <div>
+            <span class="eyebrow">Agenda interna</span>
+            <h2>Horários liberados</h2>
+            <p>Publique as vagas que o agente realmente pode oferecer. Compromissos continuam bloqueando automaticamente qualquer vaga conflitante.</p>
+        </div>
+        <span class="badge <?= $internalStrategy === 'published' ? 'badge-success' : 'badge-warning' ?>"><?= $internalStrategy === 'published' ? 'Usados pelo agente' : 'Modo calculado ativo' ?></span>
+    </div>
+
+    <?php if ($internalStrategy !== 'published'): ?>
+        <div class="message-info">
+            <strong>Nenhuma mudança automática foi aplicada.</strong>
+            <span>Para usar estas vagas como fonte de verdade, escolha <b>Oferecer somente horários liberados</b> em “Regras da agenda” e salve. Enquanto isso, a empresa continua com o cálculo atual.</span>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($canManage): ?>
+    <form method="post" action="<?= View::e(Router::url('/calendar/availability/internal-slots/publish')) ?>" class="internal-slot-publish-form form-stack">
+        <?= Csrf::input() ?>
+        <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
+        <div class="field-grid three">
+            <label class="field"><span>Data</span><input type="date" name="slot_date" min="<?= View::e(date('Y-m-d')) ?>" value="<?= View::e(date('Y-m-d', strtotime('+1 day'))) ?>" required></label>
+            <label class="field"><span>Início da faixa</span><input type="time" name="slot_start" value="08:00" required></label>
+            <label class="field"><span>Fim da faixa</span><input type="time" name="slot_end" value="12:00" required></label>
+        </div>
+        <div class="field-grid three">
+            <label class="field"><span>Duração de cada atendimento</span><div class="input-with-suffix"><input type="number" name="slot_duration_minutes" min="15" max="240" value="<?= (int) ($settings['default_duration_minutes'] ?? 50) ?>"><span>min</span></div></label>
+            <label class="field"><span>Início de uma vaga para a próxima</span><div class="input-with-suffix"><input type="number" name="slot_interval_minutes" min="5" max="240" value="<?= (int) ($settings['slot_interval_minutes'] ?? 30) ?>"><span>min</span></div><small class="muted-text">Ex.: duração 50 e intervalo 60 libera 14:00, 15:00, 16:00.</small></label>
+            <label class="field"><span>Repetir no mesmo dia da semana</span><div class="input-with-suffix"><input type="number" name="repeat_weeks" min="1" max="52" value="1"><span>sem.</span></div><small class="muted-text">1 = somente esta data. 8 = esta data + próximas 7 semanas.</small></label>
+        </div>
+        <div class="field-grid three">
+            <label class="field"><span>Modalidade</span><select name="modality"><option value="indefinida">Qualquer / não se aplica</option><option value="online">Online</option><option value="presencial">Presencial</option><option value="telefone">Telefone</option></select></label>
+            <label class="field"><span>Profissional</span><select name="owner_user_id"><option value="0">Disponibilidade geral da empresa</option><?php foreach ($professionalProfiles as $profile): ?><option value="<?= (int) ($profile['id'] ?? 0) ?>"><?= View::e((string) ($profile['name'] ?? 'Profissional')) ?></option><?php endforeach; ?></select><small class="muted-text">Quando houver profissional, a escolha da vaga também atribui esse responsável ao pré-agendamento.</small></label>
+            <label class="field"><span>Observação interna</span><input type="text" name="notes" maxlength="500" placeholder="Ex.: agenda aberta para avaliações"></label>
+        </div>
+        <div class="calendar-inline-info"><strong>Faixa vira vagas concretas.</strong><span>Se liberar 14:00–18:00 com duração de 50 min e intervalo de 60 min, o agente poderá receber 14:00, 15:00, 16:00 e 17:00. Use “Repetir” para publicar a mesma faixa nas próximas semanas. O agente não inventa horários entre essas opções.</span></div>
+        <div><button class="btn btn-primary" type="submit">Liberar horários</button></div>
+    </form>
+    <?php endif; ?>
+
+    <div class="internal-slot-list" style="margin-top:18px">
+        <?php
+            $visiblePublishedSlots = array_values(array_filter($publishedSlots, static fn (array $slot): bool => (string) ($slot['status'] ?? '') !== 'cancelled'));
+            $publishedStatusLabels = ['available' => 'Disponível', 'held' => 'Pré-reservado', 'booked' => 'Confirmado', 'blocked' => 'Bloqueado', 'expired' => 'Expirado'];
+        ?>
+        <?php if ($visiblePublishedSlots): ?>
+            <div class="table-wrap">
+                <table class="internal-slot-table">
+                    <thead><tr><th>Data</th><th>Horário</th><th>Profissional</th><th>Modalidade</th><th>Status</th><th>Observação</th><th></th></tr></thead>
+                    <tbody>
+                    <?php foreach ($visiblePublishedSlots as $publishedSlot): ?>
+                        <?php $publishedStatus = (string) ($publishedSlot['status'] ?? 'available'); ?>
+                        <tr>
+                            <td><?= View::e($date($publishedSlot['starts_at'] ?? null, 'd/m/Y')) ?></td>
+                            <td><strong><?= View::e($date($publishedSlot['starts_at'] ?? null, 'H:i')) ?></strong>–<?= View::e($date($publishedSlot['ends_at'] ?? null, 'H:i')) ?></td>
+                            <td><?= View::e(($publishedSlot['owner_name'] ?? '') ?: 'Disponibilidade geral') ?></td>
+                            <td><?= View::e(match ((string) ($publishedSlot['modality'] ?? 'indefinida')) { 'online' => 'Online', 'presencial' => 'Presencial', 'telefone' => 'Telefone', default => 'Qualquer' }) ?></td>
+                            <td><span class="badge <?= $publishedStatus === 'available' ? 'badge-success' : ($publishedStatus === 'held' ? 'badge-warning' : '') ?>"><?= View::e($publishedStatusLabels[$publishedStatus] ?? $publishedStatus) ?></span><?php if ($publishedStatus === 'held' && !empty($publishedSlot['hold_expires_at'])): ?><small class="muted-text internal-slot-hold-expiry">até <?= View::e($date($publishedSlot['hold_expires_at'], 'H:i')) ?></small><?php endif; ?></td>
+                            <td><?= View::e((string) ($publishedSlot['notes'] ?? '')) ?><?php if (!empty($publishedSlot['hold_appointment_title'])): ?><small class="muted-text internal-slot-hold-expiry"><?= View::e((string) $publishedSlot['hold_appointment_title']) ?></small><?php endif; ?></td>
+                            <td>
+                                <?php if ($canManage && in_array($publishedStatus, ['available', 'blocked'], true)): ?>
+                                    <form method="post" action="<?= View::e(Router::url('/calendar/availability/internal-slots/cancel')) ?>" onsubmit="return confirm('Remover este horário da disponibilidade?');">
+                                        <?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>"><input type="hidden" name="slot_id" value="<?= (int) ($publishedSlot['id'] ?? 0) ?>"><button class="btn btn-small btn-quiet" type="submit">Remover</button>
+                                    </form>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <div class="empty-state">Ainda não há horários liberados para os próximos 60 dias.</div>
+        <?php endif; ?>
+    </div>
+</section>
+<?php endif; ?>
+
 <?php if ($isRsAdmin): ?>
 <section class="card calendar-maintenance-card" id="calendar-maintenance" style="margin-top:16px">
     <div class="section-heading">
@@ -674,11 +772,16 @@ $requestInsight = static function (array $request): string {
     const sourcePanels = Array.from(form.querySelectorAll('[data-calendar-source-panel]'));
     const modePanels = Array.from(form.querySelectorAll('[data-calendar-mode]'));
     const sourceCards = Array.from(form.querySelectorAll('[data-calendar-source-choices] .calendar-mode-card'));
+    const internalStrategyInputs = Array.from(form.querySelectorAll('input[name="internal_availability_strategy"]'));
+    const internalStrategyPanels = Array.from(form.querySelectorAll('[data-internal-strategy-panel]'));
+    const internalStrategyCards = Array.from(form.querySelectorAll('[data-internal-strategy-choices] .calendar-mode-card'));
 
     const refresh = () => {
         const checked = sourceInputs.find((input) => input.checked);
         const source = checked ? checked.value : 'none';
         const mode = modeSelect ? modeSelect.value : 'free_slots';
+        const internalStrategyChecked = internalStrategyInputs.find((input) => input.checked);
+        const internalStrategy = internalStrategyChecked ? internalStrategyChecked.value : 'calculated';
         const autoRequestToggle = form.querySelector('[data-auto-request-toggle]');
 
         // A Agenda interna é conversacional: ao escolhê-la, a consulta automática
@@ -704,9 +807,18 @@ $requestInsight = static function (array $request): string {
             if (panel.hasAttribute('data-calendar-source-panel')) return;
             panel.style.display = panel.getAttribute('data-calendar-mode') === mode ? '' : 'none';
         });
+
+        internalStrategyCards.forEach((card) => {
+            const input = card.querySelector('input[name="internal_availability_strategy"]');
+            card.classList.toggle('is-selected', !!input && input.checked);
+        });
+        internalStrategyPanels.forEach((panel) => {
+            panel.style.display = panel.getAttribute('data-internal-strategy-panel') === internalStrategy ? '' : 'none';
+        });
     };
 
     sourceInputs.forEach((input) => input.addEventListener('change', refresh));
+    internalStrategyInputs.forEach((input) => input.addEventListener('change', refresh));
     if (modeSelect) modeSelect.addEventListener('change', refresh);
     refresh();
 })();

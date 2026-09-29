@@ -1,3 +1,13 @@
+# RS Connect 36.38.0
+
+## Disponibilidade publicada da Agenda interna
+
+A Agenda interna agora possui uma estratégia opcional **Oferecer somente horários liberados**. Quando ativada, um espaço vazio no calendário não é considerado vaga: o agente consulta exclusivamente horários publicados pela empresa ou profissional. A estratégia anterior, **Calcular pelos horários de trabalho**, continua como padrão para todas as empresas existentes.
+
+A tela **Agenda → Horários e regras** permite liberar uma faixa (data, início, fim, duração e intervalo), repeti-la no mesmo dia da semana, associar a um profissional e modalidade, visualizar o estado da vaga e removê-la enquanto ainda estiver livre. Ao escolher uma vaga, o RS Connect faz pré-reserva atômica; ao confirmar, marca a vaga como utilizada; ao cancelar/recusar/remarcar, devolve a vaga à disponibilidade.
+
+> **Migration obrigatória:** `121_internal_calendar_published_slots.sql`. Ela adiciona a estratégia de disponibilidade e a tabela `calendar_internal_slots`. Nenhuma empresa é migrada automaticamente para o novo comportamento.
+
 # RS Connect 36.37.5
 
 ## Correção 36.37.5

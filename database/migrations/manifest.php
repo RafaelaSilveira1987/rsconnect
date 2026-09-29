@@ -140,5 +140,6 @@ return [
         ['sequence' => 125, 'file' => '118_contact_origin.sql'],
         ['sequence' => 126, 'file' => '119_agent_workflow_runtime_contract.sql'],
         ['sequence' => 127, 'file' => '120_agent_turn_state_cursor.sql'],
+        ['sequence' => 128, 'file' => '121_internal_calendar_published_slots.sql'],
     ],
 ];

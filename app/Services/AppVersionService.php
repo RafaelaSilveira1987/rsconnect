@@ -218,8 +218,9 @@ final class AppVersionService
     // RS Connect 36.37.3 — Agenda interna respeita o workflow e a preferência real do contato.
     // RS Connect 36.37.4 — cursor vivo do workflow, Agenda interna compartilhada e pré-agendamento legível.
     // RS Connect 36.37.5 — perguntas informativas não preenchem campos personalizados por acidente.
-    public const PACKAGE_LABEL = 'RS Connect 36.37.5 — Coleta personalizada sem contaminação por dúvidas';
-    public const REQUIRED_MIGRATION = '120_agent_turn_state_cursor.sql';
+    // RS Connect 36.38.0 — disponibilidade publicada na Agenda interna.
+    public const PACKAGE_LABEL = 'RS Connect 36.38.0 — Horários publicados na Agenda interna';
+    public const REQUIRED_MIGRATION = '121_internal_calendar_published_slots.sql';
 
     private PDO $pdo;
 
