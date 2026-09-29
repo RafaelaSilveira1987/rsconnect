@@ -1,3 +1,16 @@
+
+## 36.40.1 — Isolamento de ciclo e respostas antecipadas
+
+### Corrigido
+- memória progressiva de atendimento anterior deixa de competir com a triagem estruturada do ciclo atual;
+- novo ciclo remove também a memória progressiva específica da conversa;
+- identidade estruturada da pessoa atendida prevalece sobre nomes presentes em histórico/memória antigos;
+- mensagens rápidas podem preencher antecipadamente um único campo futuro de forma inequívoca sem alterar a ordem das perguntas;
+- relato já enviado antes da etapa de modalidade não é descartado e não precisa ser solicitado novamente depois;
+- incluído `bin/reset-test-conversation.php` para limpar de forma explícita e limitada o estado/histórico de contatos de homologação.
+
+### Migration
+- nenhuma nova; permanece `122_calendar_client_communications.sql`.
 # 36.40.0 — Preferências de agenda normalizadas
 
 - centraliza a interpretação de dia, data, horário, período e modalidade em um resolvedor único e genérico, usado pela Agenda sem regras específicas para Psicologia ou outro nicho;

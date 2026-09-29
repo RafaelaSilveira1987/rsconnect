@@ -30,6 +30,12 @@ final class AiContextBuilder
     {
         $profile = $this->policy->profile($agent);
         $memory = (new AiProgressiveMemoryService())->context($pdo, $conversationId);
+        // 36.40.1 — durante uma nova coleta estruturada, memória progressiva antiga
+        // não pode competir com os dados do ciclo atual. Isso é especialmente
+        // importante quando o mesmo contato agenda para pessoas diferentes.
+        if ($memory !== null && $this->hasActiveStructuredTriage($pdo, $conversationId)) {
+            $memory = null;
+        }
         $historyLimit = (int) $profile['history_limit'];
         if ($memory !== null) {
             $memoryHistoryLimit = match ((string) ($profile['mode'] ?? 'balanced')) {
@@ -159,6 +165,26 @@ final class AiContextBuilder
                 'current_turn_messages' => max(1, (int) ($currentTurn['count'] ?? 0)),
             ],
         ];
+    }
+
+    private function hasActiveStructuredTriage(PDO $pdo, int $conversationId): bool
+    {
+        if ($conversationId < 1) {
+            return false;
+        }
+        try {
+            $statement = $pdo->prepare(
+                'SELECT 1
+                 FROM conversation_triage_sessions
+                 WHERE conversation_id = :conversation_id
+                   AND (current_field_key IS NOT NULL OR status IN ("collecting", "ready", "blocked"))
+                 LIMIT 1'
+            );
+            $statement->execute(['conversation_id' => $conversationId]);
+            return (bool) $statement->fetchColumn();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function selectKnowledge(string $knowledge, string $query, int $budget): string

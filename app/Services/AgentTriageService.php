@@ -1018,6 +1018,7 @@ final class AgentTriageService
             }
 
             $beforeDemand = trim((string) ($collected['brief_demand'] ?? ''));
+            $beforeCollected = $collected;
             $normalizedMessage = $this->normalize($messageText);
             $collected = $this->extractDeterministic(
                 $collected,
@@ -1027,6 +1028,29 @@ final class AgentTriageService
                 $messageText,
                 $currentField !== null ? $this->fieldByKey($fields, $currentField) : null
             );
+
+            // 36.40.1 — uma informação espontânea não pode ser descartada só porque
+            // chegou alguns balões antes da etapa correspondente. A ordem continua
+            // mandando em QUAL pergunta fazer, mas o runtime pode registrar uma resposta
+            // antecipada quando ela encaixa de forma inequívoca em exatamente um campo
+            // futuro ainda pendente. Isso evita repetir "demanda", "objetivo", "serviço"
+            // ou outro dado personalizado depois que o contato já o informou.
+            if ($currentField !== null
+                && !$this->hasCollectedValue($collected, $currentField)
+                && $this->changedCollectedKeys($beforeCollected, $collected) === []) {
+                $futureCapture = $this->captureUnambiguousFutureFieldValue(
+                    $fields,
+                    $collected,
+                    $currentField,
+                    $messageText,
+                    $normalizedMessage
+                );
+                $collected = $futureCapture['collected'];
+                if (($futureCapture['field_key'] ?? '') === 'brief_demand') {
+                    $demandCaptured = true;
+                }
+            }
+
             $afterDemand = trim((string) ($collected['brief_demand'] ?? ''));
             if ($beforeDemand === '' && $afterDemand !== '') {
                 $demandCaptured = true;
@@ -1046,6 +1070,73 @@ final class AgentTriageService
             'last_processed_incoming_id' => $processedIncomingId,
             'demand_captured' => $demandCaptured,
         ];
+    }
+
+
+    /**
+     * Quando uma mensagem não responde ao campo atual, tenta preservá-la somente se
+     * houver UM ÚNICO campo futuro que aceite aquele conteúdo. Com mais de um candidato
+     * o dado permanece não coletado, evitando adivinhação entre campos livres.
+     *
+     * @param array<int,array<string,mixed>> $fields
+     * @param array<string,mixed> $collected
+     * @return array{collected:array<string,mixed>,field_key:?string}
+     */
+    private function captureUnambiguousFutureFieldValue(array $fields, array $collected, string $currentField, string $message, string $normalized): array
+    {
+        $currentIndex = null;
+        foreach (array_values($fields) as $index => $field) {
+            if (!is_array($field)) {
+                continue;
+            }
+            $key = trim((string) ($field['field_key'] ?? $field['key'] ?? ''));
+            if ($key === $currentField) {
+                $currentIndex = $index;
+                break;
+            }
+        }
+        if ($currentIndex === null) {
+            return ['collected' => $collected, 'field_key' => null];
+        }
+
+        $candidates = [];
+        foreach (array_values($fields) as $index => $field) {
+            if ($index <= $currentIndex || !is_array($field) || empty($field['active'])) {
+                continue;
+            }
+            $key = trim((string) ($field['field_key'] ?? $field['key'] ?? ''));
+            if ($key === '' || $this->hasCollectedValue($collected, $key)) {
+                continue;
+            }
+            $value = $this->captureCurrentFieldValue($key, $message, $normalized, $field);
+            if ($value === null || $value === '') {
+                continue;
+            }
+            $candidates[] = ['field_key' => $key, 'value' => $value];
+        }
+
+        if (count($candidates) !== 1) {
+            return ['collected' => $collected, 'field_key' => null];
+        }
+
+        $candidate = $candidates[0];
+        $collected[(string) $candidate['field_key']] = $candidate['value'];
+        return ['collected' => $collected, 'field_key' => (string) $candidate['field_key']];
+    }
+
+    /** @return list<string> */
+    private function changedCollectedKeys(array $before, array $after): array
+    {
+        $keys = array_values(array_unique(array_merge(array_keys($before), array_keys($after))));
+        $changed = [];
+        foreach ($keys as $key) {
+            $beforeValue = array_key_exists($key, $before) ? $before[$key] : null;
+            $afterValue = array_key_exists($key, $after) ? $after[$key] : null;
+            if (serialize($beforeValue) !== serialize($afterValue)) {
+                $changed[] = (string) $key;
+            }
+        }
+        return $changed;
     }
 
     /**

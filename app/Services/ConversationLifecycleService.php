@@ -26,7 +26,7 @@ final class ConversationLifecycleService
             return;
         }
 
-        foreach (['conversation_flow_states', 'conversation_triage_sessions'] as $table) {
+        foreach (['conversation_flow_states', 'conversation_triage_sessions', 'conversation_ai_memory'] as $table) {
             if (!$this->tableExists($pdo, $table)) {
                 continue;
             }

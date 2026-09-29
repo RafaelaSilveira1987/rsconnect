@@ -1,3 +1,10 @@
+# RS Connect 36.40.1
+> **36.40.1** corrige contaminação entre ciclos de atendimento e repetição de informações já enviadas em mensagens rápidas. Durante uma triagem estruturada, memória de atendimentos anteriores deixa de competir com o estado atual; respostas antecipadas e inequívocas para um único campo futuro são preservadas sem alterar a ordem das perguntas. Inclui também utilitário seguro de reset para contatos de homologação. Não há migration nova; permanece `122_calendar_client_communications.sql`.
+
+## Homologação recomendada
+
+Para um contato de teste que já acumulou histórico antigo, primeiro faça a prévia com `php bin/reset-test-conversation.php --tenant=ID_OU_SLUG --contact=Tester --agent=Rafa`. Se os registros exibidos forem os corretos, aplique `--apply --purge-messages`. Depois teste um burst como: nome da pessoa, idade e um relato/objetivo enviados em balões seguidos; o sistema deve preservar os três dados, continuar perguntando somente a etapa ainda pendente e nunca recuperar o nome de um beneficiário de outro ciclo.
+
 # RS Connect 36.40.0
 > **36.40.0** normaliza o estado da Agenda: dia, período/horário e forma de atendimento são interpretados por uma única camada genérica. A configuração da empresa continua sendo a autoridade, e correções como “quero trocar a modalidade” ou “na verdade prefiro presencial às 14h” invalidam opções antigas antes de uma nova consulta. Não há migration nova; permanece `122_calendar_client_communications.sql`.
 

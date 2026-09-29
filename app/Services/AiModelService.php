@@ -721,6 +721,16 @@ final class AiModelService
                         $collected['brief_demand'] = '[já coletada e registrada]';
                     }
                     $missing = is_array($triageContext['missing'] ?? null) ? $triageContext['missing'] : [];
+                    $currentPatientName = trim((string) ($collected['patient_name'] ?? ''));
+                    $currentRequesterName = trim((string) ($collected['requester_name'] ?? ''));
+                    $identityRule = '';
+                    if ($currentPatientName !== '') {
+                        $identityRule = 'Pessoa atendida confirmada neste ciclo: ' . $currentPatientName
+                            . '. Não use nome de beneficiário/paciente vindo do histórico ou da memória de outro atendimento.';
+                    } elseif (!empty($collected['is_for_self']) && $currentRequesterName !== '') {
+                        $identityRule = 'Pessoa atendida confirmada neste ciclo: ' . $currentRequesterName
+                            . '. Não substitua esse nome por nomes encontrados no histórico ou em memória anterior.';
+                    }
                     $currentFieldKey = trim((string) ($triageContext['current_field_key'] ?? ''));
                     $currentFieldLabel = '';
                     $currentFieldPrompt = '';
@@ -766,7 +776,9 @@ final class AiModelService
 "
                         . '- Dados estruturados já coletados: ' . ($collected !== [] ? json_encode($collected, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '{}') . "
 "
-                        . "REGRAS: nunca contrarie elegibilidade, capability ou bloqueio do RS Connect. Se houver pergunta ou pedido informativo no TURNO ATUAL, mesmo sem ponto de interrogação, responda primeiro ao que for permitido; depois avance SOMENTE para o campo indicado em 'Próximo campo obrigatório'. Não escolha uma etapa posterior por iniciativa própria. Quando existir uma 'Pergunta configurada', preserve o objetivo dela. Nos modos Natural com regras e Prompt Studio, redija-a de forma contextual e nunca devolva apenas a pergunta se o turno atual trouxer contexto, relato emocional ou informação que mereça uma reação breve. No modo Formulário, preserve o texto configurado. Faça somente uma pergunta de coleta por turno e aguarde a resposta antes de avançar. Se o próximo campo for nenhum, não invente uma nova etapa de triagem. Se o próximo campo for patient_age e o cliente tiver informado apenas uma faixa aproximada (por exemplo, 'mais de 30'), peça a idade exata de forma curta em vez de repetir literalmente a mesma pergunta. Não afirme disponibilidade, pré-reserva ou confirmação por texto: essas ações só existem quando o backend as executa.
+                        . ($identityRule !== '' ? '- Identidade válida para este ciclo: ' . $identityRule . "
+" : '')
+                        . "REGRAS: nunca contrarie elegibilidade, capability ou bloqueio do RS Connect. Dados estruturados do ciclo atual sempre vencem histórico e memória. Nunca reutilize o nome de uma pessoa atendida em atendimento anterior quando patient_name/is_for_self deste ciclo indicar outra pessoa. Se houver pergunta ou pedido informativo no TURNO ATUAL, mesmo sem ponto de interrogação, responda primeiro ao que for permitido; depois avance SOMENTE para o campo indicado em 'Próximo campo obrigatório'. Não escolha uma etapa posterior por iniciativa própria. Quando existir uma 'Pergunta configurada', preserve o objetivo dela. Nos modos Natural com regras e Prompt Studio, redija-a de forma contextual e nunca devolva apenas a pergunta se o turno atual trouxer contexto, relato emocional ou informação que mereça uma reação breve. No modo Formulário, preserve o texto configurado. Faça somente uma pergunta de coleta por turno e aguarde a resposta antes de avançar. Se o próximo campo for nenhum, não invente uma nova etapa de triagem. Se o próximo campo for patient_age e o cliente tiver informado apenas uma faixa aproximada (por exemplo, 'mais de 30'), peça a idade exata de forma curta em vez de repetir literalmente a mesma pergunta. Não afirme disponibilidade, pré-reserva ou confirmação por texto: essas ações só existem quando o backend as executa.
 
 ";
                 }
