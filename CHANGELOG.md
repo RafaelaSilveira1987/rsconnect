@@ -1,3 +1,18 @@
+# 36.40.0 — Preferências de agenda normalizadas
+
+- centraliza a interpretação de dia, data, horário, período e modalidade em um resolvedor único e genérico, usado pela Agenda sem regras específicas para Psicologia ou outro nicho;
+- pedidos com “vaga/vagas” passam a abrir intenção de agenda de forma explícita, inclusive antes da triagem;
+- números soltos usados como idade deixam de ser interpretados como horário; somente `HH:MM`, `14h`, `14h30` ou construções inequívocas como “às 14” viram horário;
+- “quero trocar a modalidade” passa a ser reconhecido como correção de preferência e, no modo de escolha, reabre a pergunta de modalidade sem inventar uma resposta;
+- pedidos de troca com origem e destino, como “trocar de presencial para online”, usam sempre a modalidade de destino; compromissos já confirmados reconhecem a troca como ajuste do próprio agendamento sem sobrescrever silenciosamente o horário atual;
+- quando o contato informa a nova modalidade, consultas/opções anteriores são invalidadas antes da nova busca; uma opção da modalidade antiga nunca é escolhida só porque o texto também contém um horário;
+- a política configurada pela empresa prevalece em todas as camadas: `not_applicable` ignora modalidade, `single` mantém a modalidade fixa e `choice` permite alteração;
+- a triagem e o pré-agendamento passam a usar a mesma política efetiva, evitando que um texto do contato reintroduza modalidade em um negócio que não trabalha com esse conceito;
+- correções de modalidade e preferência sincronizam o estado estruturado da conversa para não deixar o prompt da IA com dados antigos;
+- consultas apenas por dia não inventam 09:00 e o mesmo dia da semana é considerado hoje antes de pular sete dias, preservando vagas futuras do próprio dia;
+- a resposta de indisponibilidade passa a refletir o escopo realmente pesquisado, reduzindo confusão entre vagas publicadas em dias diferentes; uma vaga liberada na quarta não é reutilizada para um pedido de quinta;
+- sem migration nova; permanece obrigatória `122_calendar_client_communications.sql`.
+
 # 36.39.2 — Agenda publicada sem filtros residuais
 
 - A consulta conversacional da Agenda publicada deixa de restringir vagas pelo responsável salvo automaticamente no pré-agendamento; a vaga escolhida passa a definir o profissional.

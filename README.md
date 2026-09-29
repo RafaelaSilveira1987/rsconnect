@@ -1,3 +1,10 @@
+# RS Connect 36.40.0
+> **36.40.0** normaliza o estado da Agenda: dia, período/horário e forma de atendimento são interpretados por uma única camada genérica. A configuração da empresa continua sendo a autoridade, e correções como “quero trocar a modalidade” ou “na verdade prefiro presencial às 14h” invalidam opções antigas antes de uma nova consulta. Não há migration nova; permanece `122_calendar_client_communications.sql`.
+
+## Homologação recomendada
+
+Teste pelo menos três perfis diferentes: um negócio sem modalidade, um com modalidade única e outro com escolha Online/Presencial. Para a Agenda publicada, valide também “tem vaga quinta pela manhã?”, troca de modalidade depois de opções já exibidas, “trocar de presencial para online” e uma resposta numérica de idade para confirmar que ela não vira horário. A busca é estrita ao dia solicitado: horários publicados na quarta não devem aparecer quando o contato pediu quinta.
+
 # RS Connect 36.39.2
 > **36.39.2** corrige um filtro residual da Agenda publicada que podia esconder horários liberados quando o pré-agendamento carregava responsável/slot de uma tentativa anterior. A descoberta de vagas da IA passa a consultar a disponibilidade publicada sem ficar presa ao owner automático, e qualquer nova preferência limpa a seleção técnica anterior antes da nova consulta.
 

@@ -85,6 +85,19 @@ final class ExistingAppointmentConversationService
         }
 
         $appointmentId = (int) ($appointment['id'] ?? 0);
+
+        // Enquanto o contato ainda está escolhendo/aguardando validação de uma vaga,
+        // uma troca de modalidade pertence à máquina normal de pré-agendamento. Não a
+        // interceptamos aqui: PreSchedulingService invalida a busca antiga, libera hold
+        // e consulta novamente usando a configuração atual da empresa.
+        if ($intent === 'modality_change'
+            && in_array((string) ($appointment['status'] ?? ''), ['pre_scheduled', 'awaiting_approval'], true)) {
+            return array_merge($this->result(false, false, 'pending_schedule_modality_change'), [
+                'intent' => $intent,
+                'appointment_id' => $appointmentId,
+            ]);
+        }
+
         $message = '';
         if (in_array($intent, ['status', 'details'], true)) {
             $message = $this->appointmentStatusMessage($appointment, $intent);
@@ -96,6 +109,60 @@ final class ExistingAppointmentConversationService
             $this->updateClientConfirmation($pdo, $tenantId, $appointmentId, 'declined');
             $message = 'Entendi. Registrei que você não poderá comparecer. A equipe foi avisada para orientar os próximos passos.';
             $this->notifyTeam($tenantId, $appointment, 'Cliente informou que não poderá comparecer', 'calendar.client_presence_declined');
+        } elseif ($intent === 'modality_change') {
+            $preference = (new SchedulingPreferenceResolverService())->resolve($content, true);
+            $requestedModality = (string) ($preference['location_type'] ?? 'indefinida');
+            $currentModality = strtolower(trim((string) ($appointment['appointment_modality'] ?? $appointment['location_type'] ?? '')));
+            $behavior = new AgentConversationBehaviorService();
+            $policy = $behavior->modalityPolicy($tenantId, $pdo);
+            $mode = (string) ($policy['mode'] ?? 'not_applicable');
+
+            if ($mode === 'not_applicable') {
+                $message = 'A forma de atendimento não é uma opção configurada para este agendamento.';
+            } elseif ($mode === 'single') {
+                $fixed = strtolower(trim((string) ($policy['fixed_modality'] ?? 'presencial')));
+                $label = $fixed === 'online' ? 'online' : 'presencial';
+                $message = $currentModality === $fixed
+                    ? 'Seu agendamento já está registrado como ' . $label . '.'
+                    : 'Este atendimento está configurado somente como ' . $label . '. A equipe pode orientar caso seja necessário algum ajuste.';
+            } else {
+                $behaviorSettings = $behavior->settingsForTenant($tenantId, $pdo);
+                $enabled = [];
+                foreach (['online' => 'online', 'presencial' => 'presencial'] as $key => $label) {
+                    if (!empty($behaviorSettings['modalities'][$key]['enabled'])) {
+                        $enabled[$key] = $label;
+                    }
+                }
+
+                if (!in_array($requestedModality, ['online', 'presencial'], true)) {
+                    $labels = array_values($enabled);
+                    $message = $labels !== []
+                        ? 'Claro. Para qual forma de atendimento você quer alterar: ' . implode(' ou ', $labels) . '?'
+                        : 'A empresa não possui outra forma de atendimento habilitada para este agendamento.';
+                } elseif (!isset($enabled[$requestedModality])) {
+                    $labels = array_values($enabled);
+                    $message = $labels !== []
+                        ? 'Essa forma de atendimento não está habilitada. As opções configuradas são: ' . implode(' e ', $labels) . '.'
+                        : 'Essa forma de atendimento não está habilitada para este agendamento.';
+                } elseif ($currentModality === $requestedModality) {
+                    $message = 'Seu agendamento já está registrado como ' . $enabled[$requestedModality] . '.';
+                } else {
+                    // Em compromisso já confirmado/agendado, mudar modalidade pode alterar
+                    // local, link, profissional ou disponibilidade. Por segurança não
+                    // sobrescrevemos o compromisso em silêncio: registramos como ajuste e
+                    // preservamos o horário atual até a validação da nova configuração.
+                    $this->updateClientConfirmation($pdo, $tenantId, $appointmentId, 'reschedule_requested');
+                    $message = 'Registrei seu pedido para alterar a forma de atendimento para ' . $enabled[$requestedModality]
+                        . '. O agendamento atual de ' . $this->dateTimeLabel($appointment)
+                        . ' permanece válido até a alteração ser confirmada.';
+                    $this->notifyTeam(
+                        $tenantId,
+                        $appointment,
+                        'Cliente solicitou troca da forma de atendimento para ' . $enabled[$requestedModality],
+                        'calendar.client_modality_change_requested'
+                    );
+                }
+            }
         } elseif ($intent === 'cancel') {
             $this->updateClientConfirmation($pdo, $tenantId, $appointmentId, 'cancel_requested');
             $message = 'Registrei seu pedido de cancelamento do atendimento de ' . $this->dateTimeLabel($appointment) . '. A equipe foi avisada e confirmará a alteração por aqui.';
@@ -146,6 +213,11 @@ final class ExistingAppointmentConversationService
             '/\b(agendamento|consulta|sessao|atendimento|horario|retorno|compromisso|reserva)\b/u',
             $text
         );
+
+        if ((bool) preg_match('/\b(trocar|mudar|alterar|passar)\b.{0,40}\b(modalidade|forma\s+de\s+atendimento|online|presencial)\b/u', $text)
+            || (bool) preg_match('/\b(em\s+vez\s+de|na\s+verdade)\b.{0,35}\b(online|presencial)\b/u', $text)) {
+            return 'modality_change';
+        }
 
         if ((bool) preg_match('/\b(remarcar|reagendar)\b/u', $text)
             || (bool) preg_match('/\b(trocar|mudar|alterar)\b.{0,24}\b(dia|data|horario|consulta|agendamento)\b/u', $text)) {

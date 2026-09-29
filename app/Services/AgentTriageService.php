@@ -397,6 +397,52 @@ final class AgentTriageService
             $collected = $consumedTurn['collected'];
             $currentField = $consumedTurn['current_field'];
             $contextParts = $consumedTurn['context_parts'];
+
+            // 36.40.0 — forma de atendimento também obedece à configuração efetiva
+            // durante a triagem. Um texto contendo "online" não pode criar modalidade
+            // em um negócio onde ela não se aplica, nem substituir uma modalidade única.
+            $behaviorSettings = (new AgentConversationBehaviorService())->settingsFromProfile($profile);
+            $serviceMode = is_array($behaviorSettings['service_mode'] ?? null) ? $behaviorSettings['service_mode'] : [];
+            $serviceModeName = (string) ($serviceMode['mode'] ?? 'not_applicable');
+            if ($serviceModeName === 'not_applicable') {
+                unset($collected['modality']);
+            } elseif ($serviceModeName === 'single') {
+                $fixedModality = strtolower(trim((string) ($serviceMode['fixed_modality'] ?? 'presencial')));
+                $collected['modality'] = $fixedModality === 'online' ? 'online' : 'presencial';
+            } elseif ($serviceModeName === 'choice') {
+                $preferenceIntent = (new SchedulingPreferenceResolverService())->resolve($content, true);
+                $requestedModality = (string) ($preferenceIntent['location_type'] ?? 'indefinida');
+                $modalities = is_array($behaviorSettings['modalities'] ?? null) ? $behaviorSettings['modalities'] : [];
+
+                // O extrator genérico vê palavras isoladas. Em uma correção como
+                // "trocar de presencial para online", porém, o destino precisa prevalecer
+                // sobre a primeira palavra citada. O resolver é a fonte canônica dessa
+                // intenção e impede a sessão de triagem de manter a modalidade antiga.
+                if (!empty($preferenceIntent['modality_change_requested'])
+                    && in_array($requestedModality, ['online', 'presencial'], true)) {
+                    if (!empty($modalities[$requestedModality]['enabled'])) {
+                        $collected['modality'] = $requestedModality;
+                    } else {
+                        unset($collected['modality']);
+                    }
+                } elseif (!empty($preferenceIntent['modality_change_requested'])) {
+                    // "Quero trocar a modalidade" reabre somente esse dado já coletado.
+                    // A Ordem continua intacta; após a nova resposta o cursor volta para
+                    // o primeiro campo realmente pendente.
+                    unset($collected['modality']);
+                    $currentField = $this->firstMissingCompletionFieldKey($fields, $collected);
+                }
+
+                // Estado histórico também é reconciliado com a configuração atual.
+                // Se uma modalidade foi desabilitada na empresa, ela deixa de satisfazer
+                // a coleta em conversas antigas em vez de sobreviver escondida na sessão.
+                $storedModality = strtolower(trim((string) ($collected['modality'] ?? '')));
+                if (in_array($storedModality, ['online', 'presencial'], true)
+                    && empty($modalities[$storedModality]['enabled'])) {
+                    unset($collected['modality']);
+                    $currentField = $this->firstMissingCompletionFieldKey($fields, $collected);
+                }
+            }
             $processedIncomingId = $consumedTurn['last_processed_incoming_id'];
             $demandCapturedThisTurn = $consumedTurn['demand_captured'];
 
@@ -891,13 +937,13 @@ final class AgentTriageService
 
     private function hasSchedulingIntent(string $normalized): bool
     {
-        return (bool) preg_match('/\b(agendar|agendamento|marcar|remarcar|desmarcar|consulta|horario|horário|disponibilidade|encaixe|demonstracao|demonstração|reuniao|reunião)\b/u', $normalized)
+        return (bool) preg_match('/\b(agendar|agendamento|marcar|remarcar|desmarcar|consulta|horario|horário|vaga|vagas|disponibilidade|encaixe|demonstracao|demonstração|reuniao|reunião)\b/u', $normalized)
             && !preg_match('/\b(nao quero agendar|não quero agendar|sem agendar)\b/u', $normalized);
     }
 
     private function hasSchedulePreference(string $normalized): bool
     {
-        return (bool) preg_match('/\b(segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo|amanha|amanhã|hoje)\b/u', $normalized)
+        return (bool) preg_match('/\b(segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo|amanha|amanhã|hoje|manha|manhã|tarde|noite)\b/u', $normalized)
             || (bool) preg_match('/\b\d{1,2}(?::\d{2})?\s*h\b/u', $normalized)
             || (bool) preg_match('/\b\d{1,2}:\d{2}\b/u', $normalized);
     }

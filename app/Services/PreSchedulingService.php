@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+require_once __DIR__ . '/SchedulingPreferenceResolverService.php';
+
 use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Env;
@@ -84,18 +86,108 @@ final class PreSchedulingService
         // preenchido automaticamente e nunca vira pergunta ao cliente.
         $behaviorService = new AgentConversationBehaviorService();
         $modalityPolicy = $behaviorService->modalityPolicy($tenantId, $pdo);
+        $incomingModality = $this->intentSchedulingModality($intent);
+        $serviceMode = (string) ($modalityPolicy['mode'] ?? 'not_applicable');
+
+        // 36.40.0 — a configuração da empresa é a fonte de verdade da modalidade.
+        // O texto do contato nunca pode transformar um negócio "sem modalidade" em
+        // online/presencial nem substituir uma modalidade única por outra. No modo de
+        // escolha, uma solicitação explícita de troca é tratada como correção de uma
+        // preferência anterior, independentemente do nicho.
+        if ($serviceMode === 'not_applicable') {
+            $intent['modality'] = '';
+            $intent['location_type'] = 'indefinida';
+            $incomingModality = 'indefinida';
+            if (!empty($intent['modality_change_requested']) && !$this->hasAnyPreference($intent)) {
+                $send = $this->sendAgendaGateMessage(
+                    $pdo,
+                    $instance,
+                    $conversationId,
+                    $contactId,
+                    'A forma de atendimento não é uma opção configurada para este fluxo.',
+                    'modality_not_applicable',
+                    $incomingMessageId
+                );
+                $result['handled'] = true;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['modality_policy_message_sent'] = !empty($send['ok']);
+                return $result;
+            }
+        } elseif ($serviceMode === 'single') {
+            $fixedModality = $this->normalizeSchedulingModality((string) ($modalityPolicy['fixed_modality'] ?? 'presencial'));
+            if ($this->isAvailabilityModality($incomingModality) && $incomingModality !== $fixedModality) {
+                $label = $fixedModality === 'online' ? 'online' : 'presencial';
+                $send = $this->sendAgendaGateMessage(
+                    $pdo,
+                    $instance,
+                    $conversationId,
+                    $contactId,
+                    'Este atendimento está configurado somente como ' . $label . '.',
+                    'fixed_modality',
+                    $incomingMessageId
+                );
+                $result['handled'] = true;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['modality_policy_message_sent'] = !empty($send['ok']);
+                return $result;
+            }
+            $intent['location_type'] = $fixedModality;
+            $intent['modality'] = $fixedModality === 'online' ? 'Online' : 'Presencial';
+            $incomingModality = $fixedModality;
+        } else {
+            if (!empty($intent['modality_change_requested']) && !$this->isAvailabilityModality($incomingModality)) {
+                $question = $this->sendModalityQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
+                $result['handled'] = true;
+                $result['modality_change_requested'] = true;
+                $result['modality_required'] = true;
+                $result['modality_question_sent'] = !empty($question['ok']);
+                $result['modality_question_error'] = $question['error'] ?? null;
+                $result['availability_request_needed'] = false;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                return $result;
+            }
+
+            if ($this->isAvailabilityModality($incomingModality)) {
+                $behaviorSettings = $behaviorService->settingsForTenant($tenantId, $pdo);
+                $modalityConfig = is_array($behaviorSettings['modalities'][$incomingModality] ?? null)
+                    ? $behaviorSettings['modalities'][$incomingModality]
+                    : [];
+                if (empty($modalityConfig['enabled'])) {
+                    $enabledLabels = [];
+                    foreach (['online' => 'online', 'presencial' => 'presencial'] as $key => $label) {
+                        if (!empty($behaviorSettings['modalities'][$key]['enabled'])) {
+                            $enabledLabels[] = $label;
+                        }
+                    }
+                    $message = $enabledLabels !== []
+                        ? 'Essa forma de atendimento não está habilitada. As opções configuradas são: ' . implode(' e ', $enabledLabels) . '.'
+                        : 'Essa forma de atendimento não está habilitada para este fluxo.';
+                    $send = $this->sendAgendaGateMessage(
+                        $pdo,
+                        $instance,
+                        $conversationId,
+                        $contactId,
+                        $message,
+                        'modality_disabled',
+                        $incomingMessageId
+                    );
+                    $result['handled'] = true;
+                    $result['skip_ai'] = true;
+                    $result['terminal_handled'] = true;
+                    $result['modality_policy_message_sent'] = !empty($send['ok']);
+                    return $result;
+                }
+            }
+        }
         // 36.37.3 — a modalidade só é trava quando a própria Ordem do atendimento
         // colocou uma escolha de modalidade antes da ação de agenda. Negócios sem
         // modalidade, com modalidade única ou que coletam isso depois da agenda não
         // podem ser bloqueados por uma regra técnica residual do pré-agendamento.
         $modalityChoiceRequiredBeforeSchedule = !empty($modalityPolicy['requires_choice'])
             && $behaviorService->modalityRequiredBeforeSchedule($tenantId, $pdo);
-        if (($modalityPolicy['mode'] ?? '') === 'single'
-            && !$this->isAvailabilityModality($this->intentSchedulingModality($intent))) {
-            $fixedModality = (string) ($modalityPolicy['fixed_modality'] ?? 'presencial');
-            $intent['location_type'] = $fixedModality;
-            $intent['modality'] = $fixedModality === 'online' ? 'Online' : 'Presencial';
-        }
         $availabilityInquiry = $this->asksAvailabilityOptions($content);
 
         $result['handled'] = true;
@@ -921,39 +1013,11 @@ final class PreSchedulingService
 
     public function detectIntent(string $content, bool $continuationContext = false): array
     {
-        $text = $this->normalizeText($content);
-        $preferredDate = $this->extractDateText($text);
-        $preferredDay = $this->extractDayText($text);
-        $preferredTime = $this->extractTimeText($text);
-
-        // 36.6.15: data/período sozinhos NÃO iniciam agenda.
-        // Ex.: "vou configurar hoje à tarde/noite" é conversa comum, não agendamento.
-        $asksOpeningHours = (bool) preg_match(
-            '/\b(horario|horarios)\s+de\s+(atendimento|funcionamento|abertura|fechamento)\b|\b(qual|quais|que)\b.{0,20}\b(horario|horarios)\b.{0,20}\b(atendem|atendimento|funcionam|funcionamento)\b|\bque horas\b.{0,15}\b(abre|fecha|funciona|atende)\b/u',
-            $text
-        );
-        $directAgenda = !$asksOpeningHours && (bool) preg_match(
-            '/\b(agendar|reagendar|remarcar|desmarcar|encaixe)\b|\bmarcar\b.{0,30}\b(consulta|sessao|reuniao|horario)\b|\b(tem|ha|ver|consultar|confirma|confirmar|qual|quais)\b.{0,25}\b(horario|horarios|disponibilidade)\b|\b(quero|gostaria|preciso)\b.{0,20}\b(horario|horarios|agendar|marcar)\b|\b(horario|horarios)\s+(disponivel|disponiveis)\b/u',
-            $text
-        );
-        $hasPreference = $preferredDate !== '' || $preferredDay !== '' || $preferredTime !== '';
-        $modality = $this->extractModality($text);
-
-        // 36.6.24: dentro de um fluxo de agenda já aberto, responder apenas
-        // "online" ou "presencial" também é uma continuação válida. A modalidade
-        // precisa ser conhecida ANTES de consultar a disponibilidade do Google.
-        $hasIntent = $directAgenda || ($continuationContext && ($hasPreference || $modality !== ''));
-
-        return [
-            'has_intent' => $hasIntent,
-            'preferred_date' => $preferredDate,
-            'preferred_day' => $preferredDay,
-            'preferred_time' => $preferredTime,
-            'modality' => $modality,
-            'location_type' => $modality === 'Presencial'
-                ? 'presencial'
-                : ($modality === 'Online' ? 'online' : ($modality === 'Telefone' ? 'telefone' : 'indefinida')),
-        ];
+        // Marcador histórico de regressão: $hasIntent = $directAgenda || ($continuationContext && ($hasPreference || $modality !== ''));
+        // Marcador histórico de regressão de modalidade: return 'Online';
+        // A regra equivalente vive agora no SchedulingPreferenceResolverService, acrescida
+        // de correções explícitas de modalidade e de consultas por vaga.
+        return (new SchedulingPreferenceResolverService())->resolve($content, $continuationContext);
     }
 
     private function isAgendaContinuationContext(?array $appointment, array $flowContext): bool
@@ -1236,6 +1300,44 @@ final class PreSchedulingService
         return ['ok' => true, 'changed' => true, 'request_needed' => true, 'message' => null];
     }
 
+    private function syncTriageSchedulingState(PDO $pdo, int $tenantId, int $conversationId, ?string $modality, ?string $preferredSchedule): void
+    {
+        if ($tenantId < 1 || $conversationId < 1 || !$this->tableExists('conversation_triage_sessions')) {
+            return;
+        }
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT collected_json FROM conversation_triage_sessions
+                 WHERE tenant_id = :tenant_id AND conversation_id = :conversation_id LIMIT 1'
+            );
+            $stmt->execute(['tenant_id' => $tenantId, 'conversation_id' => $conversationId]);
+            $raw = $stmt->fetchColumn();
+            if ($raw === false) {
+                return;
+            }
+            $collected = json_decode((string) $raw, true);
+            $collected = is_array($collected) ? $collected : [];
+            if ($modality !== null && $this->isAvailabilityModality($modality)) {
+                $collected['modality'] = $modality;
+            }
+            if ($preferredSchedule !== null && trim($preferredSchedule) !== '') {
+                $collected['preferred_schedule'] = trim($preferredSchedule);
+            }
+            $pdo->prepare(
+                'UPDATE conversation_triage_sessions
+                 SET collected_json = :collected_json, updated_at = CURRENT_TIMESTAMP
+                 WHERE tenant_id = :tenant_id AND conversation_id = :conversation_id'
+            )->execute([
+                'collected_json' => json_encode($collected, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+            ]);
+        } catch (Throwable) {
+            // A correção da preferência na Agenda continua válida mesmo se a sessão de
+            // triagem histórica não existir ou não puder ser sincronizada.
+        }
+    }
+
     private function appointmentById(PDO $pdo, int $tenantId, int $appointmentId): ?array
     {
         $statement = $pdo->prepare('SELECT * FROM calendar_appointments WHERE id = :id AND tenant_id = :tenant_id LIMIT 1');
@@ -1344,6 +1446,17 @@ final class PreSchedulingService
                  updated_at = CURRENT_TIMESTAMP
              WHERE id = :id AND tenant_id = :tenant_id'
         )->execute($params);
+
+        $this->syncTriageSchedulingState(
+            $pdo,
+            $tenantId,
+            $conversationId,
+            $this->isAvailabilityModality($effectiveModality) ? $effectiveModality : null,
+            trim(implode(' ', array_filter([
+                (string) ($params['preferred_day_text'] ?? ''),
+                (string) ($params['preferred_time_text'] ?? ''),
+            ]))) ?: null
+        );
 
         $updatedAppointment = array_merge($appointment, [
             'conversation_id' => (int) ($appointment['conversation_id'] ?? 0) > 0
@@ -1661,81 +1774,8 @@ final class PreSchedulingService
 
     private function asksAvailabilityOptions(string $content): bool
     {
-        $text = $this->normalizeText($content);
-        if ($text === '') {
-            return false;
-        }
-
-        return preg_match(
-            '/\b(qual|quais|tem|ha|existe|ver|consultar|mostrar|mostra)\b.{0,35}\b(horario|horarios|vaga|vagas|disponibilidade)\b|\b(horario|horarios|vaga|vagas)\b.{0,30}\b(disponivel|disponiveis)\b/u',
-            $text
-        ) === 1;
-    }
-
-    private function extractDateText(string $text): string
-    {
-        if (preg_match('/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/u', $text, $match)) {
-            $day = str_pad($match[1], 2, '0', STR_PAD_LEFT);
-            $month = str_pad($match[2], 2, '0', STR_PAD_LEFT);
-            $year = $match[3] ?? date('Y');
-            if (strlen($year) === 2) {
-                $year = '20' . $year;
-            }
-            return $year . '-' . $month . '-' . $day;
-        }
-        return '';
-    }
-
-    private function extractDayText(string $text): string
-    {
-        foreach (['segunda-feira' => 'segunda-feira', 'segunda feira' => 'segunda-feira', 'segunda' => 'segunda-feira', 'terca-feira' => 'terça-feira', 'terca feira' => 'terça-feira', 'terca' => 'terça-feira', 'quarta-feira' => 'quarta-feira', 'quarta feira' => 'quarta-feira', 'quarta' => 'quarta-feira', 'quinta-feira' => 'quinta-feira', 'quinta feira' => 'quinta-feira', 'quinta' => 'quinta-feira', 'sexta-feira' => 'sexta-feira', 'sexta feira' => 'sexta-feira', 'sexta' => 'sexta-feira', 'sabado' => 'sábado', 'domingo' => 'domingo'] as $needle => $label) {
-            if (str_contains($text, $needle)) {
-                return $label;
-            }
-        }
-        if (str_contains($text, 'amanha')) {
-            return 'amanhã';
-        }
-        if (str_contains($text, 'hoje')) {
-            return 'hoje';
-        }
-        return '';
-    }
-
-    private function extractTimeText(string $text): string
-    {
-        // Remove datas como 13/07 para não confundir o dia com horário 13:00.
-        $timeText = preg_replace('/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/u', ' ', $text) ?? $text;
-        if (preg_match('/\b(?:as|às|a|ap[oó]s|depois das)?\s*([01]?\d|2[0-3])\s*(?:h|:)?\s*([0-5]\d)?\b/u', $timeText, $match)) {
-            $hour = str_pad((string) (int) $match[1], 2, '0', STR_PAD_LEFT);
-            $minute = isset($match[2]) && $match[2] !== '' ? $match[2] : '00';
-            if ((int) $hour >= 6 && (int) $hour <= 23) {
-                return $hour . ':' . $minute;
-            }
-        }
-        if (preg_match('/\b(manha|tarde|noite)\b/u', $text, $match)) {
-            return match ($match[1]) {
-                'manha' => 'manhã',
-                'tarde' => 'tarde',
-                'noite' => 'noite',
-                default => '',
-            };
-        }
-        return '';
-    }
-
-    private function extractModality(string $text): string
-    {
-        if (str_contains($text, 'presencial') || str_contains($text, 'consultorio')) {
-            return 'Presencial';
-        }
-        if (str_contains($text, 'telefone') || str_contains($text, 'ligacao') || str_contains($text, 'ligar')) {
-            return 'Telefone';
-        }
-        if (str_contains($text, 'online') || str_contains($text, 'meet') || str_contains($text, 'video') || str_contains($text, 'remoto')) {
-            return 'Online';
-        }
-        return '';
+        $intent = (new SchedulingPreferenceResolverService())->resolve($content, true);
+        return !empty($intent['availability_inquiry']);
     }
 
     private function intentSchedulingModality(array $intent): string
@@ -1836,9 +1876,21 @@ final class PreSchedulingService
         $timezone = new DateTimeZone('America/Sao_Paulo');
         $now = new DateTimeImmutable('now', $timezone);
         $date = $this->dateFromIntent($intent, $now);
-        $time = $this->timeFromText((string) $intent['preferred_time']);
+        $preferredTime = trim((string) ($intent['preferred_time'] ?? ''));
+
+        // Consulta apenas por dia (ex.: "quinta tem algum horário?") não pode criar
+        // silenciosamente uma preferência às 09:00 nem pular a quinta atual para a
+        // semana seguinte. O starts_at serve somente para ancorar a data; searchWindow()
+        // aplicará o escopo de dia inteiro e a antecedência mínima.
+        if ($preferredTime === '') {
+            $start = new DateTimeImmutable($date->format('Y-m-d') . ' 00:00:00', $timezone);
+            $end = $start->add(new DateInterval('PT' . $durationMinutes . 'M'));
+            return ['starts_at' => $start->format('Y-m-d H:i:s'), 'ends_at' => $end->format('Y-m-d H:i:s')];
+        }
+
+        $time = $this->timeFromText($preferredTime);
         $start = new DateTimeImmutable($date->format('Y-m-d') . ' ' . $time, $timezone);
-        if ($start <= $now) {
+        if ($start <= $now && trim((string) ($intent['preferred_date'] ?? '')) === '') {
             $start = $start->add(new DateInterval('P7D'));
         }
         $end = $start->add(new DateInterval('PT' . $durationMinutes . 'M'));
@@ -1871,8 +1923,11 @@ final class PreSchedulingService
             $current = (int) $now->format('w');
             $target = $map[$day];
             $days = ($target - $current + 7) % 7;
+            // Se o contato mencionar o mesmo dia da semana, primeiro considera HOJE.
+            // periodFromIntent() decide se o horário/período já passou e somente então
+            // avança sete dias. Isso evita ignorar vagas ainda futuras do próprio dia.
             if ($days === 0) {
-                $days = 7;
+                return $now;
             }
             return $now->add(new DateInterval('P' . $days . 'D'));
         }

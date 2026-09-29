@@ -103,9 +103,7 @@ final class CalendarConversationService
         if ($slots === []) {
             $message = $this->safeNoAvailabilityMessage(
                 (string) ($settings['no_availability_message'] ?? ''),
-                $isAvailabilityBrowse
-                    ? 'Não encontrei horários disponíveis no período pesquisado para essa modalidade. Quer tentar outro dia ou período?'
-                    : 'Não encontrei horários disponíveis para essa preferência. Pode me informar outro dia ou período?'
+                $this->noAvailabilityFallback($appointment, $isAvailabilityBrowse)
             );
             $send = $this->sendAppointmentMessage(
                 $appointment,
@@ -325,7 +323,7 @@ final class CalendarConversationService
             return $this->incomingResult(false, false, 'options_missing');
         }
 
-        $selection = $this->resolveSelection($content, $slots);
+        $selection = $this->resolveSelection($content, $slots, $appointment);
         if (empty($selection['signal'])) {
             return $this->incomingResult(false, false, 'not_a_selection');
         }
@@ -1394,10 +1392,28 @@ final class CalendarConversationService
     }
 
     /** @param array<int,array<string,mixed>> $slots @return array<string,mixed> */
-    private function resolveSelection(string $content, array $slots): array
+    private function resolveSelection(string $content, array $slots, array $appointment = []): array
     {
         $normalized = $this->normalize($content);
-        $intent = (new PreSchedulingService())->detectIntent($content);
+        $intent = (new PreSchedulingService())->detectIntent($content, true);
+
+        // Correções de modalidade têm precedência sobre a seleção de uma opção antiga.
+        // Ex.: se as opções exibidas eram Online e o contato diz "prefiro presencial às
+        // 14h", 14h não pode ser aplicado ao slot Online antes de atualizar a modalidade
+        // e refazer a consulta. A mensagem volta ao PreSchedulingService como nova
+        // preferência e a Agenda invalida as opções anteriores de forma determinística.
+        $requestedModality = strtolower(trim((string) ($intent['location_type'] ?? '')));
+        $currentModality = strtolower(trim((string) ($appointment['appointment_modality'] ?? $appointment['location_type'] ?? '')));
+        if (in_array($requestedModality, ['online', 'presencial'], true)
+            && $requestedModality !== $currentModality) {
+            return ['signal' => true, 'slot' => null, 'reason' => 'new_modality', 'new_preference' => true];
+        }
+
+        if (!empty($intent['modality_change_requested'])
+            && !in_array($requestedModality, ['online', 'presencial'], true)) {
+            return ['signal' => false, 'slot' => null, 'reason' => 'modality_change_without_target'];
+        }
+
         $position = null;
 
         $ordinals = [
@@ -1468,7 +1484,29 @@ final class CalendarConversationService
 
     private function safeNoAvailabilityMessage(string $configured, string $fallback): string
     {
+        $normalized = $this->normalize(trim($configured));
+        $legacyDefaults = [
+            $this->normalize('Não encontrei horários disponíveis para essa preferência. Pode me informar outro dia ou período?'),
+            $this->normalize('Não encontrei horários disponíveis no período pesquisado para essa modalidade. Quer tentar outro dia ou período?'),
+        ];
+        if ($normalized === '' || in_array($normalized, $legacyDefaults, true)) {
+            return $fallback;
+        }
         return $this->safeAvailabilityTemplate($configured, $fallback);
+    }
+
+    /** @param array<string,mixed> $appointment */
+    private function noAvailabilityFallback(array $appointment, bool $browse): string
+    {
+        $day = trim((string) ($appointment['preferred_day_text'] ?? ''));
+        $time = trim((string) ($appointment['preferred_time_text'] ?? ''));
+        $scope = trim(implode(', ', array_filter([$day, $time])));
+        if ($scope !== '') {
+            return 'Não encontrei horários disponíveis para ' . $scope . '. Quer tentar outro dia ou período?';
+        }
+        return $browse
+            ? 'Não encontrei horários disponíveis no dia ou período solicitado. Quer tentar outro dia ou período?'
+            : 'Não encontrei horários disponíveis para essa preferência. Pode me informar outro dia ou período?';
     }
 
     /**

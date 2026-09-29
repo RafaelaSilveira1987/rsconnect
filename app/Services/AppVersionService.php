@@ -224,7 +224,8 @@ final class AppVersionService
     // RS Connect 36.39.0 — continuidade de compromissos e comunicação automática com o cliente.
     // RS Connect 36.39.1 — consulta determinística dos horários publicados na Agenda interna.
     // RS Connect 36.39.2 — descoberta publicada independente de owner/cursor histórico.
-    public const PACKAGE_LABEL = 'RS Connect 36.39.2 — Agenda publicada sem filtros residuais';
+    // RS Connect 36.40.0 — preferência de agenda e modalidade como estado canônico, sem regras por nicho.
+    public const PACKAGE_LABEL = 'RS Connect 36.40.0 — Preferências de agenda normalizadas';
     public const REQUIRED_MIGRATION = '122_calendar_client_communications.sql';
 
     private PDO $pdo;
