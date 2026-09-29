@@ -178,14 +178,21 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
 ?>
 
 
-<nav class="agenda-unified-tabs" aria-label="Áreas da agenda">
-    <a class="agenda-unified-tab is-active" href="<?= View::e(Router::url('/calendar' . (($filters['tenant_id'] ?? 0) > 0 ? '?tenant_id=' . (int) $filters['tenant_id'] : ''))) ?>">
-        <span class="agenda-tab-icon" aria-hidden="true">1</span>
-        <span><strong>Compromissos</strong><small>Agendamentos e pré-agendamentos</small></span>
+<nav class="agenda-main-tabs" aria-label="Áreas da agenda">
+    <a class="agenda-main-tab is-active" aria-current="page" href="<?= View::e(Router::url('/calendar' . (($filters['tenant_id'] ?? 0) > 0 ? '?tenant_id=' . (int) $filters['tenant_id'] : ''))) ?>">
+        <strong>Compromissos</strong><small>Agenda marcada</small>
     </a>
-    <a class="agenda-unified-tab" href="<?= View::e(Router::url('/calendar?section=availability' . (($filters['tenant_id'] ?? 0) > 0 ? '&tenant_id=' . (int) $filters['tenant_id'] : ''))) ?>">
-        <span class="agenda-tab-icon" aria-hidden="true">2</span>
-        <span><strong>Disponibilidade</strong><small>Vagas, pré-agendamentos e regras</small></span>
+    <a class="agenda-main-tab" href="<?= View::e(Router::url('/calendar?section=availability&tab=overview' . (($filters['tenant_id'] ?? 0) > 0 ? '&tenant_id=' . (int) $filters['tenant_id'] : ''))) ?>">
+        <strong>Visão geral</strong><small>Resumo da agenda</small>
+    </a>
+    <a class="agenda-main-tab" href="<?= View::e(Router::url('/calendar?section=availability&tab=availability' . (($filters['tenant_id'] ?? 0) > 0 ? '&tenant_id=' . (int) $filters['tenant_id'] : ''))) ?>">
+        <strong>Disponibilidades</strong><small>Horários liberados</small>
+    </a>
+    <a class="agenda-main-tab" href="<?= View::e(Router::url('/calendar?section=availability&tab=preschedules' . (($filters['tenant_id'] ?? 0) > 0 ? '&tenant_id=' . (int) $filters['tenant_id'] : ''))) ?>">
+        <strong>Pré-agendamentos</strong><small>Pedidos e validações</small>
+    </a>
+    <a class="agenda-main-tab" href="<?= View::e(Router::url('/calendar?section=availability&tab=settings' . (($filters['tenant_id'] ?? 0) > 0 ? '&tenant_id=' . (int) $filters['tenant_id'] : ''))) ?>">
+        <strong>Configurações</strong><small>Regras da agenda</small>
     </a>
 </nav>
 

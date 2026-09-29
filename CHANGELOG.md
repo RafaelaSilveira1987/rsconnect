@@ -1,3 +1,14 @@
+# 36.38.2 — Navegação única e proporcional da Agenda
+
+- elimina a navegação duplicada entre **Compromissos / Disponibilidade** e as quatro abas internas da Agenda;
+- consolida toda a navegação em uma única barra com cinco áreas: **Compromissos**, **Visão geral**, **Disponibilidades**, **Pré-agendamentos** e **Configurações**;
+- distribui as cinco opções em colunas de mesma proporção no desktop, evitando uma aba superior larga e outra inferior redundante;
+- mantém a mesma barra tanto na tela de compromissos quanto nas telas de disponibilidade, deixando claro em que área o usuário está;
+- em telas menores, mantém uma única navegação com rolagem horizontal em vez de empilhar dois menus;
+- remove o botão redundante **Ver compromissos** do cabeçalho das telas de disponibilidade, pois o acesso agora está na própria barra principal;
+- não altera workflow, consulta da Agenda interna, horários publicados, pré-reserva, integrações ou banco de dados;
+- invalida apenas os assets visuais para `36.38.2`; não há nova migration e permanece obrigatória `121_internal_calendar_published_slots.sql`.
+
 # 36.38.1 — Agenda organizada por abas e disponibilidades operacionais
 
 - reorganiza **Agenda → Disponibilidade** em quatro abas internas: **Visão geral**, **Disponibilidades**, **Pré-agendamentos** e **Configurações**;

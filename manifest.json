@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.38.1",
-  "release_name": "Agenda organizada por abas e disponibilidades operacionais",
+  "package_version": "36.38.2",
+  "release_name": "Navegação única e proporcional da Agenda",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,8 +19,8 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.38.0",
-      "release_name": "Horários publicados na Agenda interna",
+      "package_version": "36.38.1",
+      "release_name": "Agenda organizada por abas e disponibilidades operacionais",
       "required_migration": "121_internal_calendar_published_slots.sql"
     },
     "historical_releases": [

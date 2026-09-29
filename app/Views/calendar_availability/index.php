@@ -162,14 +162,21 @@ $requestInsight = static function (array $request): string {
 ?>
 
 
-<nav class="agenda-unified-tabs" aria-label="Áreas da agenda">
-    <a class="agenda-unified-tab" href="<?= View::e(Router::url('/calendar' . ($tenantId > 0 ? '?tenant_id=' . (int) $tenantId : ''))) ?>">
-        <span class="agenda-tab-icon" aria-hidden="true">1</span>
-        <span><strong>Compromissos</strong><small>Agendamentos e pré-agendamentos</small></span>
+<nav class="agenda-main-tabs" aria-label="Áreas da agenda">
+    <a class="agenda-main-tab" href="<?= View::e(Router::url('/calendar' . ($tenantId > 0 ? '?tenant_id=' . (int) $tenantId : ''))) ?>">
+        <strong>Compromissos</strong><small>Agenda marcada</small>
     </a>
-    <a class="agenda-unified-tab is-active" href="<?= View::e(Router::url('/calendar?section=availability' . ($tenantId > 0 ? '&tenant_id=' . (int) $tenantId : ''))) ?>">
-        <span class="agenda-tab-icon" aria-hidden="true">2</span>
-        <span><strong>Disponibilidade</strong><small>Vagas, pré-agendamentos e regras</small></span>
+    <a class="agenda-main-tab <?= $activeTab === 'overview' ? 'is-active' : '' ?>" href="<?= View::e($tabUrl('overview')) ?>" <?= $activeTab === 'overview' ? 'aria-current="page"' : '' ?>>
+        <strong>Visão geral</strong><small>Resumo da agenda</small>
+    </a>
+    <a class="agenda-main-tab <?= $activeTab === 'availability' ? 'is-active' : '' ?>" href="<?= View::e($tabUrl('availability')) ?>" <?= $activeTab === 'availability' ? 'aria-current="page"' : '' ?>>
+        <strong>Disponibilidades</strong><small>Horários liberados</small>
+    </a>
+    <a class="agenda-main-tab <?= $activeTab === 'preschedules' ? 'is-active' : '' ?>" href="<?= View::e($tabUrl('preschedules')) ?>" <?= $activeTab === 'preschedules' ? 'aria-current="page"' : '' ?>>
+        <strong>Pré-agendamentos</strong><small>Pedidos e validações</small>
+    </a>
+    <a class="agenda-main-tab <?= $activeTab === 'settings' ? 'is-active' : '' ?>" href="<?= View::e($tabUrl('settings')) ?>" <?= $activeTab === 'settings' ? 'aria-current="page"' : '' ?>>
+        <strong>Configurações</strong><small>Regras da agenda</small>
     </a>
 </nav>
 
@@ -190,7 +197,6 @@ $requestInsight = static function (array $request): string {
         }) ?></p>
     </div>
     <div class="hero-actions operations-hero-actions">
-        <a class="btn btn-quiet" href="<?= View::e(Router::url('/calendar?tenant_id=' . (int) $tenantId)) ?>">Ver compromissos</a>
         <?php if ($isRsAdmin): ?><a class="btn btn-primary" href="<?= View::e(Router::url('/n8n-templates')) ?>">Fluxos n8n</a><?php endif; ?>
         <span class="badge <?= !empty($settings['enabled']) ? 'badge-success' : 'badge-warning' ?>"><?= !empty($settings['enabled']) ? 'Busca automática ativa' : 'Busca automática desativada' ?></span>
     </div>
@@ -209,15 +215,6 @@ $requestInsight = static function (array $request): string {
         <button class="btn btn-secondary" type="submit">Carregar</button>
     </form>
 <?php endif; ?>
-
-<nav class="agenda-section-tabs" aria-label="Seções de disponibilidade da agenda">
-    <?php foreach ($tabLabels as $tabKey => $tabMeta): ?>
-        <a class="agenda-section-tab <?= $activeTab === $tabKey ? 'is-active' : '' ?>" href="<?= View::e($tabUrl($tabKey)) ?>" <?= $activeTab === $tabKey ? 'aria-current="page"' : '' ?>>
-            <strong><?= View::e($tabMeta[0]) ?></strong>
-            <small><?= View::e($tabMeta[1]) ?></small>
-        </a>
-    <?php endforeach; ?>
-</nav>
 
 <?php if ($activeTab === 'overview'): ?>
 <div class="report-kpi-grid operations-kpis agenda-overview-kpis">

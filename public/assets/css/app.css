@@ -17255,3 +17255,78 @@ summary {
   .availability-slot-time { grid-template-columns: auto auto; justify-content: start; align-items: baseline; gap: 6px; }
   .availability-slot-actions { min-width: 0; }
 }
+
+/* =========================================================
+   RS Connect 36.38.2 — navegação única e proporcional da Agenda
+   ========================================================= */
+.agenda-main-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0 0 18px;
+  padding: 6px;
+  border: 1px solid #dde7ed;
+  border-radius: 18px;
+  background: rgba(255,255,255,.88);
+  box-shadow: 0 7px 22px rgba(15,23,42,.035);
+}
+.agenda-main-tab {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 62px;
+  padding: 11px 14px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  color: var(--rs-ink);
+  text-decoration: none;
+  text-align: left;
+  transition: background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.agenda-main-tab:hover {
+  border-color: #e0e8ed;
+  background: #f8fbfc;
+  transform: translateY(-1px);
+}
+.agenda-main-tab strong {
+  min-width: 0;
+  font-size: .9rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.agenda-main-tab small {
+  min-width: 0;
+  color: var(--rs-muted);
+  font-size: .72rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.agenda-main-tab.is-active {
+  border-color: #bee3df;
+  background: linear-gradient(135deg, #edf9f7 0%, #f7fcfb 100%);
+  color: #0f766e;
+  box-shadow: inset 0 0 0 1px rgba(15,118,110,.02), 0 5px 14px rgba(15,118,110,.06);
+}
+.agenda-main-tab.is-active strong { color: #0f766e; }
+
+@media (max-width: 980px) {
+  .agenda-main-tabs {
+    display: flex;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scroll-snap-type: x proximity;
+  }
+  .agenda-main-tab {
+    flex: 1 0 180px;
+    min-height: 58px;
+    scroll-snap-align: start;
+  }
+}
+@media (max-width: 600px) {
+  .agenda-main-tabs { gap: 5px; padding: 5px; border-radius: 15px; }
+  .agenda-main-tab { flex-basis: 165px; min-height: 54px; padding: 9px 11px; border-radius: 11px; }
+  .agenda-main-tab strong { font-size: .84rem; }
+  .agenda-main-tab small { font-size: .69rem; }
+}
