@@ -185,7 +185,7 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
     </a>
     <a class="agenda-unified-tab" href="<?= View::e(Router::url('/calendar?section=availability' . (($filters['tenant_id'] ?? 0) > 0 ? '&tenant_id=' . (int) $filters['tenant_id'] : ''))) ?>">
         <span class="agenda-tab-icon" aria-hidden="true">2</span>
-        <span><strong>Disponibilidade</strong><small>Dias, horários e regras</small></span>
+        <span><strong>Disponibilidade</strong><small>Vagas, pré-agendamentos e regras</small></span>
     </a>
 </nav>
 
@@ -377,7 +377,7 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
                                     <span>Evento Google: <?= View::e(match ($appointment['google_event_state'] ?? '') { 'held' => 'pré-reservado', 'confirmed' => 'confirmado', 'created' => 'criado', 'updated' => 'atualizado', 'deleted' => 'removido', 'released' => 'liberado', 'hold_requested' => 'pré-reserva em processamento', 'confirm_requested' => 'confirmação em processamento', 'release_requested' => 'liberação em processamento', 'create_requested' => 'criação em processamento', 'update_requested' => 'atualização em processamento', 'delete_requested' => 'remoção em processamento', 'error' => 'falha na sincronização', default => ($appointment['google_event_state'] ?? 'não vinculado') }) ?><?= !empty($appointment['google_event_summary']) ? ' · ' . View::e($appointment['google_event_summary']) : '' ?></span>
                                 <?php endif; ?>
                                 <?php if (!empty($appointment['availability_error'])): ?><span class="text-danger"><?= View::e($appointment['availability_error']) ?></span><?php endif; ?>
-                                <?php if (!empty($appointment['availability_slot_count'])): ?><span><a href="<?= View::e(Router::url('/calendar?section=availability&tenant_id=' . (int) $appointment['tenant_id'] . '#horarios-disponiveis')) ?>">Ver horários disponíveis</a></span><?php endif; ?>
+                                <?php if (!empty($appointment['availability_slot_count'])): ?><span><a href="<?= View::e(Router::url('/calendar?section=availability&tab=preschedules&tenant_id=' . (int) $appointment['tenant_id'] . '#horarios-disponiveis')) ?>">Ver horários disponíveis</a></span><?php endif; ?>
                             </div>
                         <?php endif; ?>
                     <?php endif; ?>

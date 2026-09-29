@@ -611,13 +611,13 @@ final class CalendarController
             $availabilityCheck = $availabilityService->canApprove($tenantId, $appointmentBefore);
             if (empty($availabilityCheck['ok'])) {
                 Flash::set('error', (string) $availabilityCheck['message']);
-                $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId);
+                $this->redirect('/calendar?section=availability&tab=preschedules&tenant_id=' . $tenantId);
             }
 
             $googleConfirmation = $availabilityService->confirmMarkedAppointment($tenantId, $appointmentId);
             if (!empty($googleConfirmation['attempted']) && empty($googleConfirmation['ok'])) {
                 Flash::set('error', 'O pré-agendamento não foi aprovado: ' . (string) ($googleConfirmation['message'] ?? 'falha ao confirmar o evento no Google Agenda.'));
-                $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId);
+                $this->redirect('/calendar?section=availability&tab=preschedules&tenant_id=' . $tenantId);
             }
         }
 
@@ -627,7 +627,7 @@ final class CalendarController
                 $settings = $availabilityService->settings($tenantId);
                 if (!empty($settings['require_google_sync_on_confirm'])) {
                     Flash::set('error', 'O agendamento não foi confirmado porque o Google Agenda não concluiu a sincronização: ' . (string) ($freeSlotSync['message'] ?? 'falha não informada.'));
-                    $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId);
+                    $this->redirect('/calendar?section=availability&tab=preschedules&tenant_id=' . $tenantId);
                 }
                 $googleLifecycleWarning = (string) ($freeSlotSync['message'] ?? 'O evento ainda não foi criado no Google Agenda.');
             }

@@ -1,3 +1,16 @@
+# 36.38.1 — Agenda organizada por abas e disponibilidades operacionais
+
+- reorganiza **Agenda → Disponibilidade** em quatro abas internas: **Visão geral**, **Disponibilidades**, **Pré-agendamentos** e **Configurações**;
+- remove a mistura visual entre horários, pré-agendamentos, regras estruturais e diagnósticos técnicos;
+- move **Agenda por profissional**, **Regras da agenda**, manutenção e diagnóstico RS para a aba **Configurações**;
+- concentra buscas, opções encontradas e validação do cliente na aba **Pré-agendamentos**;
+- redesenha a aba **Disponibilidades** com resumo por status, formulário de publicação em blocos, filtros por período/profissional/modalidade/status e listagem agrupada por dia;
+- mantém a estratégia e a tabela `calendar_internal_slots` da 36.38.0 sem alterar o contrato de disponibilidade do agente;
+- preserva empresas em modo calculado e Google Agenda; nenhuma estratégia é trocada automaticamente;
+- mantém os retornos de salvar/publicar/buscar dentro da aba correta para evitar que o usuário volte a uma tela diferente após cada ação;
+- atualiza os links da Agenda para abrir resultados diretamente em **Pré-agendamentos**;
+- invalida apenas os assets visuais para `36.38.1`; não há nova migration e permanece obrigatória `121_internal_calendar_published_slots.sql`.
+
 # 36.38.0 — Horários publicados na Agenda interna
 
 - adiciona a estratégia opt-in **Oferecer somente horários liberados** para a Agenda interna;

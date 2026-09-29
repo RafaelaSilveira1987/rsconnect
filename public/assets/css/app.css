@@ -17026,3 +17026,232 @@ summary {
     min-width: 780px;
   }
 }
+
+/* =========================================================
+   RS Connect 36.38.1 — navegação da Agenda e gestão de disponibilidades
+   ========================================================= */
+.agenda-section-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 6px;
+  border: 1px solid #e1e9ef;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 7px 22px rgba(15,23,42,.035);
+}
+.agenda-section-tab {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  color: var(--rs-ink);
+  text-decoration: none;
+  transition: background .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.agenda-section-tab strong { font-size: .9rem; }
+.agenda-section-tab small { color: var(--rs-muted); line-height: 1.35; }
+.agenda-section-tab:hover { background: #f8fbfc; border-color: #e0e8ed; }
+.agenda-section-tab.is-active {
+  border-color: #cae6e2;
+  background: #effaf8;
+  box-shadow: 0 4px 12px rgba(15,118,110,.06);
+}
+.agenda-section-tab.is-active strong { color: #0f766e; }
+
+.agenda-overview-kpis { margin-top: 0; }
+.agenda-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+.agenda-overview-card {
+  min-width: 0;
+  padding: 20px;
+  border-radius: 20px;
+}
+.agenda-overview-card-wide { grid-column: 1 / -1; }
+.agenda-overview-card-head,
+.agenda-overview-settings-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.agenda-overview-card h3 { margin: 8px 0 5px; }
+.agenda-overview-card p { margin: 0 0 16px; color: var(--rs-muted); line-height: 1.5; }
+.agenda-overview-mini-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0 18px;
+}
+.agenda-overview-mini-stats > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid #e6ecef;
+  border-radius: 12px;
+  background: #fafcfd;
+}
+.agenda-overview-mini-stats strong { font-size: 1.1rem; color: var(--rs-ink); }
+.agenda-overview-mini-stats span { font-size: .75rem; color: var(--rs-muted); }
+.agenda-overview-settings-line > div { min-width: 0; }
+.agenda-overview-settings-line .btn { flex: 0 0 auto; }
+
+.availability-workspace-card { padding: 22px; }
+.availability-workspace-heading { align-items: flex-start; }
+.availability-workspace-heading p { max-width: 760px; margin: 5px 0 0; color: var(--rs-muted); }
+.availability-heading-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.availability-empty-source {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 22px;
+  border: 1px dashed #d6e0e6;
+  border-radius: 16px;
+  background: #fafcfd;
+}
+.availability-empty-source p { margin: 0; max-width: 760px; color: var(--rs-muted); line-height: 1.5; }
+.availability-strategy-note { margin-bottom: 14px; }
+.availability-status-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  margin: 14px 0;
+}
+.availability-status-strip > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px 13px;
+  border: 1px solid #e4ebef;
+  border-radius: 13px;
+  background: #fafcfd;
+}
+.availability-status-strip span { color: var(--rs-muted); font-size: .78rem; }
+.availability-status-strip strong { color: var(--rs-ink); font-size: 1.05rem; }
+.availability-publisher-panel,
+.availability-list-panel {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid #e1e9ed;
+  border-radius: 18px;
+  background: #fff;
+}
+.availability-publisher-panel { background: #f9fcfc; }
+.availability-panel-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.availability-panel-title h3 { margin: 4px 0 0; }
+.availability-panel-title > small { max-width: 470px; color: var(--rs-muted); text-align: right; line-height: 1.45; }
+.availability-publish-form { margin: 0; }
+.availability-form-section {
+  padding: 14px 0;
+  border-top: 1px solid #e8eef1;
+}
+.availability-form-section > strong {
+  display: block;
+  margin-bottom: 10px;
+  color: #35465c;
+  font-size: .83rem;
+}
+.availability-form-section-last { padding-bottom: 4px; }
+.availability-publish-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid #e8eef1;
+}
+.availability-publish-footer p { margin: 0; color: var(--rs-muted); font-size: .78rem; line-height: 1.45; }
+.availability-publish-footer .btn { flex: 0 0 auto; }
+.availability-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(130px, 1fr)) auto;
+  gap: 9px;
+  align-items: end;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid #e7edf0;
+  border-radius: 14px;
+  background: #fafcfd;
+}
+.availability-filter-bar .field { margin: 0; min-width: 0; }
+.availability-filter-actions { display: flex; gap: 7px; align-items: center; }
+.availability-day-groups { display: grid; gap: 13px; }
+.availability-day-group {
+  overflow: hidden;
+  border: 1px solid #e3eaee;
+  border-radius: 16px;
+  background: #fff;
+}
+.availability-day-group > header {
+  padding: 11px 14px;
+  border-bottom: 1px solid #e8eef1;
+  background: #f7fafb;
+}
+.availability-day-group > header > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.availability-day-group header small { color: var(--rs-muted); }
+.availability-slot-card-list { display: grid; }
+.availability-slot-card {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 13px 14px;
+}
+.availability-slot-card + .availability-slot-card { border-top: 1px solid #edf1f3; }
+.availability-slot-time { display: grid; gap: 2px; }
+.availability-slot-time strong { font-size: 1.05rem; color: var(--rs-ink); }
+.availability-slot-time span { color: var(--rs-muted); font-size: .75rem; }
+.availability-slot-details { display: grid; gap: 4px; min-width: 0; }
+.availability-slot-details > strong,
+.availability-slot-details > small { overflow-wrap: anywhere; }
+.availability-slot-details > small { color: var(--rs-muted); }
+.availability-slot-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 2px; }
+.availability-slot-actions { display: flex; justify-content: flex-end; min-width: 100px; }
+
+@media (max-width: 1100px) {
+  .availability-filter-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .availability-filter-actions { grid-column: auto; }
+}
+@media (max-width: 860px) {
+  .agenda-section-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agenda-overview-grid { grid-template-columns: 1fr; }
+  .agenda-overview-card-wide { grid-column: 1; }
+  .availability-status-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .availability-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .availability-slot-card { grid-template-columns: 78px minmax(0, 1fr); }
+  .availability-slot-actions { grid-column: 1 / -1; justify-content: flex-start; }
+}
+@media (max-width: 600px) {
+  .agenda-section-tabs { grid-template-columns: 1fr; }
+  .agenda-section-tab { padding: 10px 12px; }
+  .agenda-overview-card-head,
+  .agenda-overview-settings-line,
+  .availability-workspace-heading,
+  .availability-panel-title,
+  .availability-publish-footer { align-items: flex-start; flex-direction: column; }
+  .agenda-overview-mini-stats { grid-template-columns: 1fr; }
+  .availability-status-strip,
+  .availability-filter-bar { grid-template-columns: 1fr; }
+  .availability-panel-title > small { text-align: left; }
+  .availability-filter-actions { width: 100%; }
+  .availability-filter-actions .btn { flex: 1; }
+  .availability-slot-card { grid-template-columns: 1fr; gap: 9px; }
+  .availability-slot-time { grid-template-columns: auto auto; justify-content: start; align-items: baseline; gap: 6px; }
+  .availability-slot-actions { min-width: 0; }
+}

@@ -49,8 +49,14 @@ final class CalendarAvailabilityController
             $publishedSlots = $internalSlotService->listSlots($tenantId, $from, $to, 0, true);
         }
 
+        $activeTab = strtolower(trim((string) ($_GET['tab'] ?? 'overview')));
+        if (!in_array($activeTab, ['overview', 'availability', 'preschedules', 'settings'], true)) {
+            $activeTab = 'overview';
+        }
+
         View::render('calendar_availability.index', [
             'title' => 'Agenda — disponibilidade',
+            'activeTab' => $activeTab,
             'tenantId' => $tenantId,
             'tenants' => $tenants,
             'settings' => $dashboard['settings'],
@@ -75,7 +81,7 @@ final class CalendarAvailabilityController
         $tenantId = $this->resolveTenantFromPost();
         if ($tenantId < 1) {
             Flash::set('error', 'Selecione uma empresa para salvar a configuração.');
-            $this->redirect('/calendar?section=availability');
+            $this->redirect('/calendar?section=availability&tab=settings');
         }
 
         try {
@@ -93,7 +99,7 @@ final class CalendarAvailabilityController
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível salvar: ' . $exception->getMessage());
         }
-        $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId);
+        $this->redirect('/calendar?section=availability&tab=settings&tenant_id=' . $tenantId);
     }
 
 
@@ -103,7 +109,7 @@ final class CalendarAvailabilityController
         $tenantId = $this->resolveTenantFromPost();
         if ($tenantId < 1) {
             Flash::set('error', 'Selecione uma empresa para liberar horários.');
-            $this->redirect('/calendar?section=availability');
+            $this->redirect('/calendar?section=availability&tab=availability');
         }
 
         try {
@@ -120,7 +126,7 @@ final class CalendarAvailabilityController
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível liberar os horários: ' . $exception->getMessage());
         }
-        $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId . '#horarios-liberados');
+        $this->redirect('/calendar?section=availability&tab=availability&tenant_id=' . $tenantId . '#horarios-liberados');
     }
 
     public function cancelInternalSlot(): void
@@ -130,7 +136,7 @@ final class CalendarAvailabilityController
         $slotId = (int) ($_POST['slot_id'] ?? 0);
         $result = (new InternalCalendarSlotService())->cancelSlot($tenantId, $slotId);
         Flash::set(!empty($result['ok']) ? 'success' : 'warning', (string) ($result['message'] ?? 'Horário processado.'));
-        $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId . '#horarios-liberados');
+        $this->redirect('/calendar?section=availability&tab=availability&tenant_id=' . $tenantId . '#horarios-liberados');
     }
 
 
@@ -140,7 +146,7 @@ final class CalendarAvailabilityController
         $tenantId = $this->resolveTenantFromPost();
         if ($tenantId < 1) {
             Flash::set('error', 'Selecione uma empresa para configurar a agenda por profissional.');
-            $this->redirect('/calendar?section=availability');
+            $this->redirect('/calendar?section=availability&tab=settings');
         }
 
         try {
@@ -149,7 +155,7 @@ final class CalendarAvailabilityController
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível salvar: ' . $exception->getMessage());
         }
-        $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId . '#agenda-profissionais');
+        $this->redirect('/calendar?section=availability&tab=settings&tenant_id=' . $tenantId . '#agenda-profissionais');
     }
 
     public function saveProfessionalProfile(): void
@@ -159,7 +165,7 @@ final class CalendarAvailabilityController
         $userId = (int) ($_POST['user_id'] ?? 0);
         if ($tenantId < 1 || $userId < 1) {
             Flash::set('error', 'Empresa ou profissional inválido.');
-            $this->redirect('/calendar?section=availability');
+            $this->redirect('/calendar?section=availability&tab=settings');
         }
 
         try {
@@ -168,7 +174,7 @@ final class CalendarAvailabilityController
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível salvar: ' . $exception->getMessage());
         }
-        $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId . '#profissional-' . $userId);
+        $this->redirect('/calendar?section=availability&tab=settings&tenant_id=' . $tenantId . '#profissional-' . $userId);
     }
 
     public function request(): void
@@ -179,7 +185,7 @@ final class CalendarAvailabilityController
         $returnTo = trim((string) ($_POST['return_to'] ?? ''));
         $result = (new CalendarAvailabilityService())->requestForAppointment($tenantId, $appointmentId, 'manual_panel');
         Flash::set(!empty($result['ok']) ? 'success' : 'warning', (string) ($result['message'] ?? 'Solicitação processada.'));
-        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?section=availability&tenant_id=' . $tenantId);
+        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?section=availability&tab=preschedules&tenant_id=' . $tenantId);
     }
 
     public function applySlot(): void
@@ -191,7 +197,7 @@ final class CalendarAvailabilityController
         $returnTo = trim((string) ($_POST['return_to'] ?? ''));
         $result = (new CalendarAvailabilityService())->applySlot($tenantId, $appointmentId, $slotId);
         Flash::set(!empty($result['ok']) ? 'success' : 'error', (string) ($result['message'] ?? 'Horário processado.'));
-        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?section=availability&tenant_id=' . $tenantId);
+        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?section=availability&tab=preschedules&tenant_id=' . $tenantId);
     }
 
     public function releaseSlot(): void
@@ -202,7 +208,7 @@ final class CalendarAvailabilityController
         $returnTo = trim((string) ($_POST['return_to'] ?? ''));
         $result = (new CalendarAvailabilityService())->releaseSelectedSlot($tenantId, $appointmentId);
         Flash::set(!empty($result['ok']) ? 'success' : 'error', (string) ($result['message'] ?? 'Liberação processada.'));
-        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?section=availability&tenant_id=' . $tenantId);
+        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?section=availability&tab=preschedules&tenant_id=' . $tenantId);
     }
 
 
@@ -212,7 +218,7 @@ final class CalendarAvailabilityController
         $tenantId = $this->resolveTenantFromPost();
         if ($tenantId < 1) {
             Flash::set('error', 'Selecione uma empresa para executar a manutenção da agenda.');
-            $this->redirect('/calendar?section=availability');
+            $this->redirect('/calendar?section=availability&tab=settings');
         }
 
         $result = (new CalendarGoogleLifecycleService())->runMaintenance($tenantId, 'manual');
@@ -224,7 +230,7 @@ final class CalendarAvailabilityController
         } else {
             Flash::set('error', 'Não foi possível concluir a manutenção da agenda: ' . (string) ($result['message'] ?? 'erro não informado'));
         }
-        $this->redirect('/calendar?section=availability&tenant_id=' . $tenantId . '#calendar-maintenance');
+        $this->redirect('/calendar?section=availability&tab=settings&tenant_id=' . $tenantId . '#calendar-maintenance');
     }
 
     public function maintenanceCron(): void
