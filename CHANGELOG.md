@@ -1,3 +1,13 @@
+## 36.40.2 — Reset de homologação compatível com prepares nativos
+
+### Corrigido
+- `bin/reset-test-conversation.php` deixa de reutilizar o mesmo placeholder nomeado em consultas `OR`, compatibilizando o utilitário com `PDO::ATTR_EMULATE_PREPARES=false`;
+- lookup de empresa por nome/slug e de contato por nome/telefone passa a usar parâmetros distintos;
+- erros inesperados do utilitário CLI passam a ser exibidos diretamente no terminal, sem depender do `APP_DEBUG`, facilitando diagnóstico seguro.
+
+### Migration
+- nenhuma nova; permanece `122_calendar_client_communications.sql`.
+
 
 ## 36.40.1 — Isolamento de ciclo e respostas antecipadas
 

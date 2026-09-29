@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.40.1",
-  "release_name": "Isolamento de ciclo e coleta sem repetição",
+  "package_version": "36.40.2",
+  "release_name": "Reset de homologação compatível com prepares nativos",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,8 +19,8 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.40.0",
-      "release_name": "Preferências de agenda normalizadas",
+      "package_version": "36.40.1",
+      "release_name": "Isolamento de ciclo e coleta sem repetição",
       "required_migration": "122_calendar_client_communications.sql"
     },
     "historical_releases": [

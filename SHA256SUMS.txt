@@ -3,9 +3,9 @@
 26af3be20ef2792ee868f93e6da1a95d773aa46727672d19be82ab9b0beb7515  ./.env.local.example
 a9b27e3f3080987813b3305be48c13e1e54cdf650a5f954e1d7485a53bb38543  ./.env.vps.example
 515746cb32b412abe48d68d41108b11ae38b7c4d542fbccc0d149403c89da124  ./.gitignore
-4d45dce1222408d4187354a0417f635a5598915ba8ce0b2349245a6bd7ba30e0  ./CHANGELOG.md
+0c219916288c750f021fdccecf8b88127493e398f919d98adcba4483651faa6f  ./CHANGELOG.md
 384e15708206ac4de668939ccc4f133bddebc98cbbd5cc46b7c0ca54009d97f2  ./Dockerfile
-80bef94e90e0be9999adc8bfb100fbfef630874f2b0f3fb2f2da57b5de57faa1  ./README.md
+557750feec80c1997ab6d02675a3b7f5ee8a7fd740206bad4bbeafc5f7259503  ./README.md
 ce7249f53b73b4347f0db1bf484321162a24877aca6e7106d85afd34365ab179  ./app/Controllers/AccessController.php
 64dc9574317cd81b08f9669533f2b8cf57d8a8ba305760158a7ecff6dee51433  ./app/Controllers/AdminCrmController.php
 7a964baf4c3563146b922fd9fd3cea227dff01727aa798b8afacbf65cddf8894  ./app/Controllers/AgentBlueprintController.php
@@ -282,12 +282,12 @@ bfa3ae2f885cbba3088bf26450b981d0011a4ad903946ba5533103f8d16f2443  ./bin/operatio
 163d828f8c3c11245a1db3bc72f7ad40b7a11bffb2a5fad2dd5839d9e49ade2d  ./bin/plan-limits-audit.php
 20b76e16372b66883830ebb3ede14a80dc3f3b5aee395a2d7f710bc0297139d2  ./bin/process-notifications.php
 650ae79a1cf2a80080d515bbeaa8feca0121b03fd29532729fc01c87c7409149  ./bin/production-readiness.php
-c774b91cd1101974b092503d43a6b1692ce1695808997839babce4a6b529e426  ./bin/reset-test-conversation.php
+48a25f6071fcf662e94ecdd27e5cd08b7dd5c09dd70f9dd00868dfe1df6ac597  ./bin/reset-test-conversation.php
 55a969daff72c5a9c4322f86b38fee3a2af6df97439da7b0de6cbd2e510e717b  ./bin/scheduled-reports.php
 a7a04f26e9eaf021317b931775fba4962390e2cf833f5e8e365b6b1acc66f6b8  ./bin/tenant-health-check.php
 4e97ecf611d56dc21e6b896e785547908ba2226eac7be4021be55f4214aae555  ./bin/test-agent.php
 12d6f16903cd0daba026122017b3d05251247cfbc1897d61c01d99291dca02f2  ./bootstrap.php
-f6e7510884b98268205f4595f7ad5a014b062e1c51a8e7fe6da9f0fead73942b  ./build-full-release.sh
+4f5373c83c3e118a0062d488282d61c1b4cd0c162bfd2c44337e5294739eb1cc  ./build-full-release.sh
 f0fb883481b96a815d67be3ffff7daf101c0a7d43fe17c20ea260318042ca848  ./composer.json
 d961936c656d78eccec1bd5c866ae3938674435f62670b8765077a2b56d32f9e  ./database/073_hotfix_indice_fk_operational_alert_delivery.sql
 d026e58321490464667590b5049217e3eff1b7db527818cf19ebfd940333055e  ./database/HOTFIX-11.1-REPARAR-ASSINATURAS.sql
@@ -748,7 +748,7 @@ aeee5bc8e058b1d03890b79daaf9f39eef29e7e448efdc8b6d05d5678a01f1ac  ./docs/n8n_tem
 752c18986f14e103d9eb9950a0aab494d88b10c541cd3a470a051d790b7bdc11  ./docs/validation/HOMOLOGACAO-PERSISTENTE-2026-09-01.md
 006d6da9b25d9788d3afbc7c1f275a6b9d6d12ffcb1181961f519c05bfdb79cf  ./docs/validation/calendar-source-v7.md
 22347f12bacc2a5de89719e419f28f2e0a26bc5ecd4e467f396e2dc236d3fb34  ./docs/validation/homologacao-persistente-2026-09-01.json
-0959f4b0a6ade8fe2157ec1467801acc84c7a938c4fd6cd0913f6d9a8c8b9016  ./manifest.json
+3ebf49f270e21c9131caeda306b0354352c9ee7b273d27de4c322d673ae3803e  ./manifest.json
 c835b907d8eb7381a72224cfdc8b688ffbb9a7676f4f05f7bc84d18c4f61324e  ./public/.htaccess
 e2e17535d3058c8c6f5b55f7f4ad0875dac594940ec9111ad83c0d18e1a08bef  ./public/assets/css/app.css
 a379eaa195764145459de3cd9172ea3ad08668586cb97b0377181b0cbf70a5bc  ./public/assets/css/reports.css

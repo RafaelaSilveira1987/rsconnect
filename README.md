@@ -1,5 +1,5 @@
-# RS Connect 36.40.1
-> **36.40.1** corrige contaminação entre ciclos de atendimento e repetição de informações já enviadas em mensagens rápidas. Durante uma triagem estruturada, memória de atendimentos anteriores deixa de competir com o estado atual; respostas antecipadas e inequívocas para um único campo futuro são preservadas sem alterar a ordem das perguntas. Inclui também utilitário seguro de reset para contatos de homologação. Não há migration nova; permanece `122_calendar_client_communications.sql`.
+# RS Connect 36.40.2
+> **36.40.2** mantém as correções de isolamento de ciclo da 36.40.1 e corrige o utilitário seguro de reset de homologação para funcionar com os prepares nativos do PDO usados pelo RS Connect. Não há migration nova; permanece `122_calendar_client_communications.sql`.
 
 ## Homologação recomendada
 

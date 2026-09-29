@@ -8,6 +8,14 @@ require dirname(__DIR__) . '/bootstrap.php';
 use App\Core\Database;
 use App\Services\ConversationCycleService;
 
+// Este utilitário roda no CLI. O bootstrap global oculta detalhes de exceções
+// quando APP_DEBUG está desativado, o que dificulta diagnosticar um comando
+// administrativo. Aqui exibimos somente a mensagem técnica no terminal.
+set_exception_handler(static function (Throwable $exception): void {
+    fwrite(STDERR, "Falha no utilitário de reset: " . $exception->getMessage() . PHP_EOL);
+    exit(1);
+});
+
 $options = getopt('', [
     'tenant:',
     'contact:',
@@ -59,11 +67,17 @@ $columnExists = static function (PDO $pdo, string $table, string $column): bool 
     return (bool) $stmt->fetchColumn();
 };
 
-$tenantSql = ctype_digit($tenantRef)
-    ? 'SELECT id, name, slug FROM tenants WHERE id = :ref LIMIT 2'
-    : 'SELECT id, name, slug FROM tenants WHERE slug = :ref OR name = :ref LIMIT 2';
+if (ctype_digit($tenantRef)) {
+    $tenantSql = 'SELECT id, name, slug FROM tenants WHERE id = :ref LIMIT 2';
+    $tenantParams = ['ref' => $tenantRef];
+} else {
+    // PDO usa prepares nativos (ATTR_EMULATE_PREPARES=false), portanto o mesmo
+    // placeholder nomeado não pode ser reutilizado duas vezes na instrução.
+    $tenantSql = 'SELECT id, name, slug FROM tenants WHERE slug = :slug_ref OR name = :name_ref LIMIT 2';
+    $tenantParams = ['slug_ref' => $tenantRef, 'name_ref' => $tenantRef];
+}
 $stmt = $pdo->prepare($tenantSql);
-$stmt->execute(['ref' => $tenantRef]);
+$stmt->execute($tenantParams);
 $tenants = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 if (count($tenants) !== 1) {
     fwrite(STDERR, count($tenants) === 0 ? "Empresa não encontrada.\n" : "Empresa ambígua; use o ID.\n");
@@ -72,11 +86,15 @@ if (count($tenants) !== 1) {
 $tenant = $tenants[0];
 $tenantId = (int) $tenant['id'];
 
-$contactSql = ctype_digit($contactRef)
-    ? 'SELECT id, name, phone FROM contacts WHERE tenant_id = :tenant_id AND id = :ref LIMIT 2'
-    : 'SELECT id, name, phone FROM contacts WHERE tenant_id = :tenant_id AND (name = :ref OR phone = :ref) LIMIT 2';
+if (ctype_digit($contactRef)) {
+    $contactSql = 'SELECT id, name, phone FROM contacts WHERE tenant_id = :tenant_id AND id = :ref LIMIT 2';
+    $contactParams = ['tenant_id' => $tenantId, 'ref' => $contactRef];
+} else {
+    $contactSql = 'SELECT id, name, phone FROM contacts WHERE tenant_id = :tenant_id AND (name = :name_ref OR phone = :phone_ref) LIMIT 2';
+    $contactParams = ['tenant_id' => $tenantId, 'name_ref' => $contactRef, 'phone_ref' => $contactRef];
+}
 $stmt = $pdo->prepare($contactSql);
-$stmt->execute(['tenant_id' => $tenantId, 'ref' => $contactRef]);
+$stmt->execute($contactParams);
 $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 if (count($contacts) !== 1) {
     fwrite(STDERR, count($contacts) === 0 ? "Contato não encontrado nesta empresa.\n" : "Contato ambíguo; use o ID ou telefone exato.\n");
