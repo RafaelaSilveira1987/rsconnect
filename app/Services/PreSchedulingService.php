@@ -271,7 +271,7 @@ final class PreSchedulingService
                 }
             }
 
-            $update = $this->updatePendingPreSchedule($pdo, $tenantId, $conversationId, $existing, $intent, $content);
+            $update = $this->updatePendingPreSchedule($pdo, $tenantId, $conversationId, $existing, $intent, $content, $availabilityInquiry);
             $result = array_merge($result, [
                 'updated' => true,
                 'appointment_id' => (int) ($existing['id'] ?? 0),
@@ -1252,7 +1252,7 @@ final class PreSchedulingService
         }
     }
 
-    private function updatePendingPreSchedule(PDO $pdo, int $tenantId, int $conversationId, array $appointment, array $intent, string $content): array
+    private function updatePendingPreSchedule(PDO $pdo, int $tenantId, int $conversationId, array $appointment, array $intent, string $content, bool $availabilityInquiry = false): array
     {
         $settings = $this->settings($tenantId);
         $day = $this->displayDay($intent);
@@ -1274,13 +1274,22 @@ final class PreSchedulingService
             }
         }
 
+        // 36.39.1 — uma consulta ampla de disponibilidade não pode herdar um
+        // horário exato de uma tentativa anterior. Ex.: depois de perguntar por 17h,
+        // "na quarta-feira tem algum horário?" deve pesquisar a quarta inteira, em vez
+        // de continuar preso silenciosamente às 17h. O dia anterior é preservado quando
+        // o contato pergunta apenas "tem algum horário?", mas o horário exato é limpo.
+        $preferredTime = $time !== ''
+            ? $time
+            : ($availabilityInquiry ? null : ($appointment['preferred_time_text'] ?? null));
+
         $params = [
             'id' => (int) $appointment['id'],
             'tenant_id' => $tenantId,
             'conversation_id' => $conversationId,
             'description' => mb_substr($description, 0, 2000),
             'preferred_day_text' => $day !== '' ? $day : ($appointment['preferred_day_text'] ?? null),
-            'preferred_time_text' => $time !== '' ? $time : ($appointment['preferred_time_text'] ?? null),
+            'preferred_time_text' => $preferredTime,
             'location_type' => $this->isAvailabilityModality($effectiveModality) ? $effectiveModality : 'indefinida',
             'appointment_modality' => $effectiveModality,
             'location' => $this->isAvailabilityModality($effectiveModality) ? ucfirst($effectiveModality) : null,

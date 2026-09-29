@@ -149,7 +149,19 @@ final class CalendarAvailabilityController
                 $_POST['slot_interval_minutes'] = (int) ($settings['slot_interval_minutes'] ?? 30);
             }
             $result = (new InternalCalendarSlotService())->publish($tenantId, $_POST, Auth::id());
-            Flash::set(($result['created'] ?? 0) > 0 ? 'success' : 'warning', (string) ($result['message'] ?? 'Disponibilidade processada.'));
+            if (($result['created'] ?? 0) > 0) {
+                $calendarAvailability = new CalendarAvailabilityService();
+                $beforeStrategy = (string) ($settings['internal_availability_strategy'] ?? 'calculated');
+                $calendarAvailability->activatePublishedInternalStrategy($tenantId);
+                $message = (string) ($result['message'] ?? 'Disponibilidade processada.');
+                if ($beforeStrategy !== InternalCalendarSlotService::STRATEGY_PUBLISHED
+                    && (string) (($calendarAvailability->calendarSourceSettings($tenantId)['source'] ?? 'none')) === 'internal') {
+                    $message .= ' A Agenda interna passou a usar somente os horários liberados como fonte do agente.';
+                }
+                Flash::set('success', $message);
+            } else {
+                Flash::set('warning', (string) ($result['message'] ?? 'Disponibilidade processada.'));
+            }
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível liberar os horários: ' . $exception->getMessage());
         }

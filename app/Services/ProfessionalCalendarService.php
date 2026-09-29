@@ -400,16 +400,15 @@ final class ProfessionalCalendarService
                       AND (
                             a.status IN ("scheduled", "confirmed")
                             OR (
-                                a.status IN ("pre_scheduled", "awaiting_approval")
+                                a.status IN ("pre_scheduled", "awaiting_approval", "rescheduled")
                                 AND (
                                     COALESCE(a.pre_schedule_source, "") = "manual"
                                     OR (
-                                        COALESCE(a.preferred_day_text, "") <> ""
-                                        AND COALESCE(a.preferred_time_text, "") <> ""
+                                        COALESCE(a.chosen_availability_slot_id, 0) > 0
+                                        AND COALESCE(a.availability_status, "") IN ("slot_selected", "validated")
                                     )
-                                    OR COALESCE(a.chosen_availability_slot_id, 0) > 0
-                                    OR COALESCE(a.availability_status, "") IN ("slot_selected", "validated")
                                 )
+                                AND (a.availability_selection_expires_at IS NULL OR a.availability_selection_expires_at >= NOW())
                             )
                       )
                       AND a.starts_at < :ends_at

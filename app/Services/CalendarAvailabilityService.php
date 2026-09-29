@@ -95,6 +95,36 @@ final class CalendarAvailabilityService
         }
     }
 
+    /**
+     * Ativa a disponibilidade publicada quando o usuário deliberadamente publica
+     * vagas na Agenda interna. Empresas que nunca publicam horários continuam no
+     * modo calculado, preservando compatibilidade; a publicação passa a ser um ato
+     * explícito suficiente para tornar aquelas vagas a fonte de verdade do agente.
+     */
+    public function activatePublishedInternalStrategy(int $tenantId): void
+    {
+        if ($tenantId < 1
+            || !$this->tableExists('tenant_calendar_availability_settings')
+            || !$this->hasColumn('tenant_calendar_availability_settings', 'internal_availability_strategy')) {
+            return;
+        }
+
+        $source = (string) (($this->calendarSourceSettings($tenantId)['source'] ?? 'none'));
+        if ($source !== 'internal') {
+            return;
+        }
+
+        Database::connection()->prepare(
+            'UPDATE tenant_calendar_availability_settings
+             SET enabled = 1,
+                 internal_availability_strategy = "published",
+                 use_n8n = 0,
+                 use_internal_fallback = 1,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE tenant_id = :tenant_id'
+        )->execute(['tenant_id' => $tenantId]);
+    }
+
     /** @param array<string, mixed> $data */
     public function configureInternalMode(int $tenantId, array $data): void
     {
@@ -587,7 +617,26 @@ final class CalendarAvailabilityService
             $settings['use_internal_fallback'] = 1;
             $settings['availability_mode'] = 'free_slots';
         }
-        $professionalContext = (new ProfessionalCalendarService())->contextForAppointment($tenantId, $appointment, $settings);
+
+        $internalStrategyForContext = (new InternalCalendarSlotService())->normalizeStrategy(
+            (string) ($settings['internal_availability_strategy'] ?? 'calculated')
+        );
+        $publishedDiscoveryUnbound = $calendarSource === 'internal'
+            && $internalStrategyForContext === InternalCalendarSlotService::STRATEGY_PUBLISHED
+            && (int) ($appointment['is_pre_schedule'] ?? 0) === 1
+            && trim((string) ($appointment['pre_schedule_source'] ?? '')) === 'ai_whatsapp'
+            && (int) ($appointment['chosen_availability_slot_id'] ?? 0) < 1
+            && !in_array((string) ($appointment['availability_status'] ?? ''), ['slot_selected', 'validated'], true);
+
+        // Em disponibilidade publicada, o profissional da conversa não restringe a
+        // descoberta antes da escolha do slot. A própria vaga publicada pode definir
+        // o responsável quando o cliente selecionar o horário.
+        $appointmentForContext = $appointment;
+        if ($publishedDiscoveryUnbound) {
+            $appointmentForContext['owner_user_id'] = null;
+        }
+
+        $professionalContext = (new ProfessionalCalendarService())->contextForAppointment($tenantId, $appointmentForContext, $settings);
         if (empty($professionalContext['ok'])) {
             return [
                 'ok' => false,
@@ -662,7 +711,7 @@ final class CalendarAvailabilityService
                     $tenantId,
                     $window,
                     $settings,
-                    (int) ($appointment['owner_user_id'] ?? 0),
+                    $publishedDiscoveryUnbound ? 0 : (int) ($appointment['owner_user_id'] ?? 0),
                     (int) ($appointment['contact_id'] ?? 0),
                     $appointmentId,
                     $requestedModality
@@ -1133,11 +1182,15 @@ final class CalendarAvailabilityService
             return ['ok' => false, 'message' => 'Pré-agendamento não encontrado.'];
         }
 
+        $source = trim((string) ($slot['source'] ?? ''));
         $professionalService = new ProfessionalCalendarService();
         $professionalSettings = $professionalService->tenantSettings($tenantId);
         if (!empty($professionalSettings['enabled'])) {
             $ownerUserId = (int) ($appointment['owner_user_id'] ?? 0);
-            if ($ownerUserId > 0) {
+            // Para vagas publicadas, o responsável real vem do próprio slot e é
+            // revalidado logo abaixo. Evita que uma atribuição automática da conversa
+            // bloqueie uma vaga publicada por outro profissional antes da escolha.
+            if ($ownerUserId > 0 && $source !== 'internal_published') {
                 $professionalConflict = $professionalService->conflict(
                     $tenantId,
                     $ownerUserId,
@@ -1168,7 +1221,6 @@ final class CalendarAvailabilityService
             }
         }
 
-        $source = trim((string) ($slot['source'] ?? ''));
         if ($source === 'internal_published') {
             $settings = $this->settings($tenantId);
             $hold = (new InternalCalendarSlotService())->holdFromAvailabilitySlot(
@@ -1183,7 +1235,14 @@ final class CalendarAvailabilityService
 
             $publishedOwnerId = (int) ($hold['owner_user_id'] ?? 0);
             $currentOwnerId = (int) ($appointment['owner_user_id'] ?? 0);
-            if ($publishedOwnerId > 0 && $currentOwnerId > 0 && $publishedOwnerId !== $currentOwnerId) {
+            $canPublishedSlotDefineOwner = (int) ($appointment['is_pre_schedule'] ?? 0) === 1
+                && trim((string) ($appointment['pre_schedule_source'] ?? '')) === 'ai_whatsapp'
+                && (int) ($appointment['chosen_availability_slot_id'] ?? 0) < 1
+                && !in_array((string) ($appointment['availability_status'] ?? ''), ['slot_selected', 'validated'], true);
+            if ($publishedOwnerId > 0
+                && $currentOwnerId > 0
+                && $publishedOwnerId !== $currentOwnerId
+                && !$canPublishedSlotDefineOwner) {
                 (new InternalCalendarSlotService())->releaseForAppointment($tenantId, $appointmentId);
                 return ['ok' => false, 'message' => 'Esse horário foi liberado para outro profissional. Faça uma nova consulta.'];
             }
@@ -1210,10 +1269,10 @@ final class CalendarAvailabilityService
                 return ['ok' => false, 'message' => 'O horário publicado possui datas inválidas. Faça uma nova consulta.'];
             }
 
-            if ($publishedOwnerId > 0 && $currentOwnerId < 1) {
+            if ($publishedOwnerId > 0 && ($currentOwnerId < 1 || $canPublishedSlotDefineOwner)) {
                 Database::connection()->prepare(
                     'UPDATE calendar_appointments SET owner_user_id = :owner_user_id, updated_at = CURRENT_TIMESTAMP
-                     WHERE id = :id AND tenant_id = :tenant_id AND owner_user_id IS NULL'
+                     WHERE id = :id AND tenant_id = :tenant_id'
                 )->execute([
                     'owner_user_id' => $publishedOwnerId,
                     'id' => $appointmentId,
@@ -2507,16 +2566,15 @@ final class CalendarAvailabilityService
                       AND (
                             status IN ("scheduled", "confirmed")
                             OR (
-                                status IN ("pre_scheduled", "awaiting_approval")
+                                status IN ("pre_scheduled", "awaiting_approval", "rescheduled")
                                 AND (
                                     COALESCE(pre_schedule_source, "") = "manual"
                                     OR (
-                                        COALESCE(preferred_day_text, "") <> ""
-                                        AND COALESCE(preferred_time_text, "") <> ""
+                                        COALESCE(chosen_availability_slot_id, 0) > 0
+                                        AND COALESCE(availability_status, "") IN ("slot_selected", "validated")
                                     )
-                                    OR COALESCE(chosen_availability_slot_id, 0) > 0
-                                    OR COALESCE(availability_status, "") IN ("slot_selected", "validated")
                                 )
+                                AND (availability_selection_expires_at IS NULL OR availability_selection_expires_at >= NOW())
                             )
                       )
                       AND starts_at < :end_at

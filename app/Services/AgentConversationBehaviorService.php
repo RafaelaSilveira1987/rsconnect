@@ -1002,12 +1002,26 @@ final class AgentConversationBehaviorService
         }
         $dayMap = [1 => 'mon', 2 => 'tue', 3 => 'wed', 4 => 'thu', 5 => 'fri', 6 => 'sat', 7 => 'sun'];
         return array_values(array_filter($slots, static function (array $slot) use ($days, $tz, $dayMap): bool {
+            // 36.39.1 — uma vaga publicada na Agenda interna já é uma liberação
+            // explícita daquele dia. Ela não pode ser descartada depois por uma regra
+            // genérica de dias da modalidade; a própria vaga (e sua modalidade) passa a
+            // ser a fonte mais específica. Regras de dias continuam valendo para vagas
+            // calculadas e para integrações externas.
+            if (trim((string) ($slot['source'] ?? '')) === 'internal_published') {
+                return true;
+            }
+
             $startsAt = trim((string) ($slot['starts_at'] ?? $slot['start'] ?? ''));
             if ($startsAt === '') {
                 return false;
             }
             try {
-                $date = new DateTimeImmutable($startsAt, new DateTimeZone('UTC'));
+                // DATETIME da Agenda interna é persistido no fuso local, sem offset.
+                // Só convertemos de UTC/offset quando a string realmente carrega zona.
+                $hasZone = preg_match('/(?:Z|[+-]\d{2}:?\d{2})$/', $startsAt) === 1;
+                $date = $hasZone
+                    ? new DateTimeImmutable($startsAt)
+                    : new DateTimeImmutable($startsAt, $tz);
                 $local = $date->setTimezone($tz);
                 $key = $dayMap[(int) $local->format('N')] ?? '';
                 return in_array($key, $days, true);

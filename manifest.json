@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.39.0",
-  "release_name": "Continuidade do agendamento e confirmações automáticas",
+  "package_version": "36.39.1",
+  "release_name": "Consulta fiel dos horários publicados",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",

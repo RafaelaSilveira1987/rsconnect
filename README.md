@@ -1,3 +1,12 @@
+# RS Connect 36.39.1
+> **36.39.1** corrige a consulta da Agenda interna publicada para que o agente use de forma determinística os horários realmente liberados. A busca ampla deixa de herdar horário exato antigo, preferências não confirmadas deixam de bloquear o próprio contato, vagas publicadas prevalecem sobre regras genéricas de dia e a publicação de horários ativa automaticamente a estratégia publicada quando a origem é a Agenda interna.
+
+## Atualização 36.39.1
+
+Não há migration nova. Permanece obrigatória `122_calendar_client_communications.sql`.
+
+Depois do deploy, horários publicados em **Agenda → Disponibilidades** passam a ser a fonte ativa do agente assim que forem liberados. Uma pergunta como “na quarta-feira tem algum horário?” pesquisa o dia inteiro e não reutiliza silenciosamente uma tentativa anterior, como 17h.
+
 # RS Connect 36.39.0
 > **36.39.0** fecha a continuidade operacional da Agenda: antes de iniciar uma nova triagem, o RS Connect identifica perguntas sobre compromissos já existentes e responde a partir do registro real. A Agenda também ganha confirmação automática, lembretes, pedido de presença e mensagens configuráveis por empresa, preservando status do compromisso e confirmação do cliente como estados separados.
 

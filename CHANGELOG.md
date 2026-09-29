@@ -1,3 +1,15 @@
+# 36.39.1 — Consulta fiel dos horários publicados
+
+- corrige a consulta ampla após uma tentativa exata sem vaga: “na quarta-feira tem algum horário?” limpa o horário anterior e pesquisa o dia solicitado;
+- impede que pré-agendamentos antigos contendo apenas preferência de dia/horário sejam tratados como compromissos ocupados do próprio contato;
+- alinha a verificação de conflito do contato com a regra já usada pela Agenda: somente compromisso real, pré-agendamento manual ou slot efetivamente selecionado bloqueia;
+- no modo **Horários liberados**, a vaga publicada é a regra mais específica e não é descartada posteriormente por filtros genéricos de dia da modalidade;
+- corrige a interpretação de DATETIME local ao aplicar filtros de dia, evitando conversão UTC indevida;
+- em pré-agendamentos de IA ainda sem slot escolhido, a busca publicada não fica presa ao responsável automático da conversa; o profissional pode ser definido pela própria vaga escolhida;
+- ao publicar horários na Agenda interna, a estratégia **somente horários liberados** passa a ser ativada automaticamente para aquela empresa; empresas que nunca publicam horários continuam preservadas no modo anterior;
+- mantém todas as correções de continuidade, confirmações automáticas e comunicação da 36.39.0;
+- não há migration nova; permanece obrigatória `122_calendar_client_communications.sql`.
+
 # 36.39.0 — Continuidade do agendamento e confirmações automáticas
 
 - adiciona uma camada determinística de **agendamento existente** antes da triagem e de qualquer novo fluxo de disponibilidade;
