@@ -544,11 +544,63 @@ final class CalendarController
         $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : $fallback);
     }
 
+    public function updateMeetingLink(): void
+    {
+        $tenantId = $this->resolveTenantFromPost();
+        $appointmentId = (int) ($_POST['appointment_id'] ?? 0);
+        $returnTo = trim((string) ($_POST['return_to'] ?? ''));
+        $fallback = '/calendar?tenant_id=' . $tenantId;
+        $meetingUrl = trim((string) ($_POST['meeting_url'] ?? ''));
+
+        $appointment = $this->findAppointment($appointmentId, $tenantId);
+        if (!$appointment) {
+            Flash::set('error', 'Agendamento não encontrado.');
+            $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : $fallback);
+        }
+        if (!$this->isValidMeetingUrl($meetingUrl)) {
+            Flash::set('error', 'Informe um link válido iniciado por http:// ou https://.');
+            $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : $fallback);
+        }
+
+        Database::connection()->prepare(
+            'UPDATE calendar_appointments
+             SET meeting_url = :meeting_url,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id AND tenant_id = :tenant_id'
+        )->execute([
+            'meeting_url' => $meetingUrl !== '' ? $meetingUrl : null,
+            'id' => $appointmentId,
+            'tenant_id' => $tenantId,
+        ]);
+
+        Audit::log('calendar.meeting_link_updated', [
+            'appointment_id' => $appointmentId,
+            'has_meeting_url' => $meetingUrl !== '',
+        ], $tenantId);
+        $this->trySyncToN8n($appointmentId, $tenantId, 'meeting_link_updated');
+
+        $syncWarning = null;
+        if ((string) ($appointment['status'] ?? '') === 'confirmed') {
+            $googleSync = (new CalendarGoogleLifecycleService())->syncConfirmedAppointment($tenantId, $appointmentId, true, false);
+            if (!empty($googleSync['attempted']) && empty($googleSync['ok'])) {
+                $syncWarning = (string) ($googleSync['message'] ?? 'O Google Agenda ainda não recebeu a atualização do link.');
+            }
+        }
+
+        if ($syncWarning !== null) {
+            Flash::set('warning', 'Link da consulta salvo no RS Connect. Sincronização do Google Agenda: ' . $syncWarning);
+        } else {
+            Flash::set('success', $meetingUrl !== '' ? 'Link da consulta salvo.' : 'Link da consulta removido.');
+        }
+        $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : $fallback);
+    }
+
     public function updateStatus(): void
     {
         $tenantId = $this->resolveTenantFromPost();
         $appointmentId = (int) ($_POST['appointment_id'] ?? 0);
         $status = (string) ($_POST['status'] ?? 'scheduled');
+        $returnTo = trim((string) ($_POST['return_to'] ?? ''));
 
         if (!in_array($status, ['pre_scheduled', 'awaiting_approval', 'scheduled', 'confirmed', 'completed', 'cancelled', 'rejected', 'rescheduled', 'no_show'], true)) {
             Flash::set('error', 'Status de agendamento inválido.');
@@ -558,7 +610,30 @@ final class CalendarController
         $appointmentBefore = $this->findAppointment($appointmentId, $tenantId);
         if (!$appointmentBefore) {
             Flash::set('error', 'Agendamento não encontrado.');
-            $this->redirect('/calendar?tenant_id=' . $tenantId);
+            $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?tenant_id=' . $tenantId);
+        }
+
+        // 36.41.4: em atendimentos online o link pode ser informado no próprio ato
+        // de confirmar o pré-agendamento. Persistimos antes da sincronização Google e
+        // antes da comunicação com o cliente, para que {{local}}/{{link_consulta}}
+        // já usem o endereço correto na confirmação imediata.
+        if (array_key_exists('meeting_url', $_POST)) {
+            $meetingUrl = trim((string) ($_POST['meeting_url'] ?? ''));
+            if (!$this->isValidMeetingUrl($meetingUrl)) {
+                Flash::set('error', 'Informe um link válido iniciado por http:// ou https://.');
+                $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?tenant_id=' . $tenantId);
+            }
+            Database::connection()->prepare(
+                'UPDATE calendar_appointments
+                 SET meeting_url = :meeting_url,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            )->execute([
+                'meeting_url' => $meetingUrl !== '' ? $meetingUrl : null,
+                'id' => $appointmentId,
+                'tenant_id' => $tenantId,
+            ]);
+            $appointmentBefore['meeting_url'] = $meetingUrl !== '' ? $meetingUrl : null;
         }
 
         $wasPreSchedule = (int) ($appointmentBefore['is_pre_schedule'] ?? 0) === 1;
@@ -781,9 +856,8 @@ final class CalendarController
             }
         }
 
-        $return = trim((string) ($_POST['return_to'] ?? ''));
-        if ($return !== '' && str_starts_with($return, '/')) {
-            $this->redirect($return);
+        if ($returnTo !== '' && str_starts_with($returnTo, '/')) {
+            $this->redirect($returnTo);
         }
         $this->redirect('/calendar?tenant_id=' . $tenantId);
     }
@@ -1207,6 +1281,19 @@ final class CalendarController
         } catch (Throwable) {
             return false;
         }
+    }
+
+    private function isValidMeetingUrl(string $value): bool
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return true;
+        }
+        if (mb_strlen($value) > 500 || filter_var($value, FILTER_VALIDATE_URL) === false) {
+            return false;
+        }
+        $scheme = strtolower((string) parse_url($value, PHP_URL_SCHEME));
+        return in_array($scheme, ['http', 'https'], true);
     }
 
     private function escapeIcs(string $value): string

@@ -1,3 +1,18 @@
+## 36.41.4 — Contexto confirmado e link da consulta online
+
+### Melhorado
+- compromissos convertidos de pré-agendamento continuam exibindo os dados estruturados da triagem depois da confirmação, tanto na lista quanto no modal do calendário;
+- o modal deixa de apresentar a descrição técnica/original quando existe contexto estruturado, evitando textos como “Preferência recebida...” e “Mensagem do lead”;
+- novos pré-agendamentos deixam de gravar a mensagem original do lead dentro da descrição operacional duplicada;
+- atendimentos Online ganham campo **Link da consulta online** no próprio formulário de confirmação do pré-agendamento;
+- o link é persistido antes da sincronização e da comunicação de confirmação, permitindo que `{{local}}` e `{{link_consulta}}` já tragam o endereço na mensagem imediata;
+- o detalhe do compromisso Online permite cadastrar, alterar, remover e abrir o link da consulta após a confirmação;
+- atualizações do link são auditadas, sincronizadas com o fluxo n8n e, quando aplicável, forçam atualização do evento confirmado no Google Agenda;
+- o payload do modo Eventos VAGO passa a carregar `meeting_url` na confirmação.
+
+### Migration
+- nenhuma nova; permanece obrigatória `123_published_slots_min_notice_policy.sql`.
+
 ## 36.41.3 — Confirmação resiliente do pré-agendamento
 
 ### Corrigido

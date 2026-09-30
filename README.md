@@ -1,3 +1,10 @@
+# RS Connect 36.41.4
+> **36.41.4** mantém as informações estruturadas do pré-agendamento visíveis depois da confirmação e elimina do compromisso a exibição do texto técnico/original. Em atendimentos **Online**, o link da consulta pode ser informado antes de confirmar — entrando na mensagem imediata — e também editado depois no detalhe do compromisso. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
+
+## Homologação rápida 36.41.4
+
+Confirme um pré-agendamento Online com um link de Meet/Zoom/Teams. No calendário, abra o compromisso confirmado: o modal deve mostrar os mesmos dados estruturados do pré-agendamento (origem, modalidade, preferência, demanda e campos configurados), sem o bloco técnico “Preferência recebida.../Mensagem do lead”. O bloco **Link da consulta** deve permitir abrir ou alterar o endereço. A variável `{{link_consulta}}` também fica disponível nas mensagens automáticas.
+
 # RS Connect 36.41.3
 > **36.41.3** corrige a confirmação do pré-agendamento quando uma busca posterior sobrescreve apenas o estado visual da disponibilidade. A vaga escolhida passa a ser preservada, revalidada no momento da aprovação e só é liberada por ação explícita. A busca manual não substitui mais silenciosamente um horário já escolhido. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
 

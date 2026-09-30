@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.41.3",
-  "release_name": "Confirmação resiliente do pré-agendamento",
+  "package_version": "36.41.4",
+  "release_name": "Contexto confirmado e link da consulta online",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,8 +19,8 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.41.2",
-      "release_name": "Confirmação do pré-agendamento na validação",
+      "package_version": "36.41.3",
+      "release_name": "Confirmação resiliente do pré-agendamento",
       "required_migration": "123_published_slots_min_notice_policy.sql"
     },
     "historical_releases": [

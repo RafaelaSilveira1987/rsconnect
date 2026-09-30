@@ -65,6 +65,74 @@ $formatTriageValue = static function (mixed $value): string {
     if (str_starts_with($text, '[continuidade:')) return '';
     return $text;
 };
+$hasPreScheduleContext = static function (array $appointment): bool {
+    return trim((string) ($appointment['pre_schedule_source'] ?? '')) !== ''
+        || trim((string) ($appointment['preferred_day_text'] ?? '')) !== ''
+        || trim((string) ($appointment['preferred_time_text'] ?? '')) !== '';
+};
+$appointmentContextRows = static function (array $appointment) use (
+    $triageCollected,
+    $formatTriageValue,
+    $triageFieldLabels,
+    $locationLabels,
+    $contactGroupLabels,
+    $demandStatusLabels,
+    $preScheduleSourceLabels
+): array {
+    $triageData = $triageCollected($appointment['current_triage_collected_json'] ?? null);
+    $contactGroup = trim((string) ($appointment['current_contact_group'] ?? '')) ?: 'unclassified';
+    $demandSummary = trim((string) ($appointment['current_demand_summary'] ?? ''));
+    if ($demandSummary === '') {
+        $demandSummary = trim((string) ($triageData['brief_demand'] ?? ''));
+    }
+    $demandStatus = trim((string) ($appointment['current_demand_status'] ?? ''));
+    if ($demandStatus === '') {
+        $demandStatus = $demandSummary !== '' ? 'collected' : 'pending';
+    }
+    if (array_key_exists('appointment_modality', $appointment)) {
+        $modality = trim((string) ($appointment['appointment_modality'] ?? '')) ?: 'indefinida';
+    } else {
+        $modality = trim((string) ($appointment['location_type'] ?? ''));
+    }
+    $sourceKey = trim((string) ($appointment['pre_schedule_source'] ?? ''));
+    $rows = [
+        ['label' => 'Origem', 'value' => $preScheduleSourceLabels[$sourceKey] ?? ($sourceKey !== '' ? ucfirst(str_replace('_', ' ', $sourceKey)) : 'Não identificada')],
+        ['label' => 'Grupo do contato', 'value' => $contactGroupLabels[$contactGroup] ?? ucfirst(str_replace('_', ' ', $contactGroup))],
+        ['label' => 'Modalidade', 'value' => $locationLabels[$modality] ?? ($modality !== '' ? ucfirst($modality) : 'A definir')],
+        ['label' => 'Dia/período informado', 'value' => trim((string) ($appointment['preferred_day_text'] ?? '')) ?: 'Não informado'],
+        ['label' => 'Horário/período informado', 'value' => trim((string) ($appointment['preferred_time_text'] ?? '')) ?: 'Não informado'],
+        ['label' => 'Contato', 'value' => trim((string) ($appointment['contact_name'] ?? '')) ?: 'Não identificado'],
+        ['label' => 'Responsável', 'value' => trim((string) ($appointment['owner_name'] ?? '')) ?: 'Não definido'],
+    ];
+
+    $dedicatedTriageKeys = ['modality', 'preferred_schedule', 'brief_demand'];
+    foreach ($triageFieldLabels as $fieldKey => $fieldLabel) {
+        if (in_array((string) $fieldKey, $dedicatedTriageKeys, true)
+            || !array_key_exists((string) $fieldKey, $triageData)) {
+            continue;
+        }
+        $formattedValue = $formatTriageValue($triageData[(string) $fieldKey]);
+        if ($formattedValue === '') {
+            continue;
+        }
+        $rows[] = [
+            'label' => trim((string) $fieldLabel) !== '' ? (string) $fieldLabel : (string) $fieldKey,
+            'value' => $formattedValue,
+            'wide' => true,
+        ];
+    }
+
+    if ($demandSummary !== '') {
+        $rows[] = ['label' => 'Situação da demanda', 'value' => $demandStatusLabels[$demandStatus] ?? ucfirst(str_replace('_', ' ', $demandStatus))];
+        $rows[] = [
+            'label' => $triageFieldLabels['brief_demand'] ?? 'Demanda',
+            'value' => $demandSummary,
+            'wide' => true,
+        ];
+    }
+
+    return $rows;
+};
 $date = static function (?string $value, string $format = 'd/m/Y H:i'): string {
     if (!$value) return '—';
     try { return (new DateTime($value))->format($format); } catch (Throwable) { return $value; }
@@ -164,22 +232,38 @@ $calendarDisplayAppointments = array_values(array_filter($appointments, static f
     return $chosenSlotId > 0 && in_array($availabilityStatus, ['slot_selected', 'validated'], true);
 }));
 
-$calendarEvents = array_map(static function (array $appointment) use ($statusLabels, $locationLabels, $googleLink, $calendarQueryBase): array {
+$calendarEvents = array_map(static function (array $appointment) use (
+    $statusLabels,
+    $locationLabels,
+    $googleLink,
+    $calendarQueryBase,
+    $hasPreScheduleContext,
+    $appointmentContextRows
+): array {
     $listQuery = $calendarQueryBase;
     $listQuery['view'] = 'list';
     $listQuery['date_from'] = substr((string) ($appointment['starts_at'] ?? ''), 0, 10);
     $listQuery['date_to'] = substr((string) ($appointment['starts_at'] ?? ''), 0, 10);
+    if (array_key_exists('appointment_modality', $appointment)) {
+        $modality = trim((string) ($appointment['appointment_modality'] ?? '')) ?: 'indefinida';
+    } else {
+        $modality = trim((string) ($appointment['location_type'] ?? ''));
+    }
+    $hasStructuredContext = $hasPreScheduleContext($appointment);
     return [
         'id' => (int) ($appointment['id'] ?? 0),
         'title' => (string) ($appointment['title'] ?? 'Agendamento'),
         'description' => (string) ($appointment['description'] ?? ''),
         'status' => (string) ($appointment['status'] ?? 'scheduled'),
         'status_label' => (string) ($statusLabels[$appointment['status'] ?? ''] ?? ($appointment['status'] ?? 'Agendado')),
-        'location_label' => (string) ($locationLabels[$appointment['location_type'] ?? ''] ?? ($appointment['location_type'] ?? 'A definir')),
+        'location_type' => $modality !== '' ? $modality : 'indefinida',
+        'location_label' => (string) ($locationLabels[$modality] ?? ($modality !== '' ? ucfirst($modality) : 'A definir')),
+        'meeting_url' => trim((string) ($appointment['meeting_url'] ?? '')),
         'contact_name' => (string) (($appointment['contact_name'] ?? '') ?: (($appointment['phone'] ?? '') ?: 'Sem contato')),
         'owner_name' => (string) (($appointment['owner_name'] ?? '') ?: 'Não definido'),
         'starts_at' => str_replace(' ', 'T', (string) ($appointment['starts_at'] ?? '')),
         'ends_at' => str_replace(' ', 'T', (string) ($appointment['ends_at'] ?? '')),
+        'context_rows' => $hasStructuredContext ? $appointmentContextRows($appointment) : [],
         'google_url' => $googleLink($appointment),
         'list_url' => Router::url('/calendar?' . http_build_query($listQuery)) . '#appointment-' . (int) ($appointment['id'] ?? 0),
     ];
@@ -300,6 +384,7 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
         <?php foreach ($appointments as $appointment): ?>
             <?php
                 $isPreSchedule = !empty($appointment['is_pre_schedule']);
+                $showStructuredContext = $isPreSchedule || $hasPreScheduleContext($appointment);
                 $hasPreSchedulePreference = trim((string) ($appointment['preferred_day_text'] ?? '')) !== '' && trim((string) ($appointment['preferred_time_text'] ?? '')) !== '';
                 $currentContactGroup = trim((string) ($appointment['current_contact_group'] ?? '')) ?: 'unclassified';
                 $triageData = $triageCollected($appointment['current_triage_collected_json'] ?? null);
@@ -311,8 +396,9 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
                 if ($currentDemandStatus === '') {
                     $currentDemandStatus = $currentDemandSummary !== '' ? 'collected' : 'pending';
                 }
-                $currentModality = trim((string) ($appointment['appointment_modality'] ?? ''));
-                if ($currentModality === '' || $currentModality === 'indefinida') {
+                if (array_key_exists('appointment_modality', $appointment)) {
+                    $currentModality = trim((string) ($appointment['appointment_modality'] ?? '')) ?: 'indefinida';
+                } else {
                     $currentModality = trim((string) ($appointment['location_type'] ?? ''));
                 }
                 $sourceKey = trim((string) ($appointment['pre_schedule_source'] ?? ''));
@@ -340,9 +426,9 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
                 $showLegacyDemand = $currentDemandSummary !== '';
             ?>
             <article id="appointment-<?= (int) $appointment['id'] ?>" class="task-row calendar-row <?= $isPreSchedule ? 'is-pre-schedule' : '' ?> calendar-status-<?= View::e($appointment['status']) ?>">
-                <span class="activity-icon activity-<?= View::e($appointment['location_type']) ?>" aria-hidden="true"></span>
+                <span class="activity-icon activity-<?= View::e($currentModality !== '' ? $currentModality : 'indefinida') ?>" aria-hidden="true"></span>
                 <div class="task-main">
-                    <div class="task-title-line"><strong><?= View::e($appointment['title']) ?></strong><span class="badge badge-<?= View::e($appointment['status']) ?>"><?= View::e($statusLabels[$appointment['status']] ?? $appointment['status']) ?></span><span class="priority-text"><?= View::e($locationLabels[$appointment['location_type']] ?? $appointment['location_type']) ?></span></div>
+                    <div class="task-title-line"><strong><?= View::e($appointment['title']) ?></strong><span class="badge badge-<?= View::e($appointment['status']) ?>"><?= View::e($statusLabels[$appointment['status']] ?? $appointment['status']) ?></span><span class="priority-text"><?= View::e($locationLabels[$currentModality] ?? ($currentModality !== '' ? ucfirst($currentModality) : 'A definir')) ?></span></div>
                     <?php $clientConfirmationStatus = trim((string) ($appointment['client_confirmation_status'] ?? 'not_requested')); ?>
                     <?php if ($clientConfirmationStatus !== '' && $clientConfirmationStatus !== 'not_requested' && isset($clientConfirmationLabels[$clientConfirmationStatus])): ?>
                         <div class="pre-schedule-note <?= $clientConfirmationStatus === 'confirmed' ? 'ready' : 'pending' ?>">
@@ -352,14 +438,14 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
                             <?php if (!empty($appointment['client_confirmation_responded_at'])): ?><small>Respondida em <?= View::e($date($appointment['client_confirmation_responded_at'])) ?></small><?php endif; ?>
                         </div>
                     <?php endif; ?>
-                    <?php if ($isPreSchedule): ?>
-                        <section class="pre-schedule-record" aria-label="Informações atuais do pré-agendamento">
+                    <?php if ($showStructuredContext): ?>
+                        <section class="pre-schedule-record" aria-label="Informações do atendimento">
                             <div class="pre-schedule-record-head">
                                 <div>
-                                    <span class="eyebrow">Pré-agendamento</span>
-                                    <strong>Informações registradas</strong>
+                                    <span class="eyebrow"><?= $isPreSchedule ? 'Pré-agendamento' : 'Atendimento confirmado' ?></span>
+                                    <strong><?= $isPreSchedule ? 'Informações registradas' : 'Informações trazidas do pré-agendamento' ?></strong>
                                 </div>
-                                <small>Dados atuais da conversa e da agenda.</small>
+                                <small>Dados estruturados da conversa e da agenda.</small>
                             </div>
                             <dl class="pre-schedule-record-list">
                                 <div><dt>Origem</dt><dd><?= View::e($sourceLabel) ?></dd></div>
@@ -479,8 +565,8 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
 </section>
 
 <dialog class="calendar-event-dialog" data-calendar-event-dialog>
-    <form method="dialog" class="calendar-event-dialog-shell">
-        <button class="calendar-dialog-close" value="cancel" aria-label="Fechar">×</button>
+    <div class="calendar-event-dialog-shell">
+        <button class="calendar-dialog-close" type="button" data-calendar-dialog-close aria-label="Fechar">×</button>
         <span class="eyebrow" data-calendar-dialog-status>Agendamento</span>
         <h2 data-calendar-dialog-title>Compromisso</h2>
         <div class="calendar-dialog-meta">
@@ -489,12 +575,39 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
             <div><span>Profissional</span><strong data-calendar-dialog-owner>—</strong></div>
             <div><span>Modalidade</span><strong data-calendar-dialog-location>—</strong></div>
         </div>
+        <section class="calendar-dialog-context" data-calendar-dialog-context hidden>
+            <div class="calendar-dialog-section-head">
+                <span class="eyebrow">Informações do atendimento</span>
+                <small>Dados preservados do pré-agendamento.</small>
+            </div>
+            <dl class="calendar-dialog-context-list" data-calendar-dialog-context-list></dl>
+        </section>
         <p data-calendar-dialog-description>Sem descrição.</p>
+        <section class="calendar-dialog-meeting" data-calendar-dialog-meeting hidden>
+            <div class="calendar-dialog-section-head">
+                <span class="eyebrow">Consulta online</span>
+                <strong>Link da consulta</strong>
+            </div>
+            <?php if ($canManage): ?>
+                <form method="post" action="<?= View::e(Router::url('/calendar/meeting-link')) ?>" class="calendar-dialog-meeting-form" data-calendar-dialog-meeting-form>
+                    <?= Csrf::input() ?>
+                    <input type="hidden" name="tenant_id" value="<?= (int) ($filters['tenant_id'] ?? 0) ?>">
+                    <input type="hidden" name="appointment_id" value="" data-calendar-dialog-meeting-id>
+                    <input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>" data-calendar-dialog-meeting-return>
+                    <input type="url" name="meeting_url" maxlength="500" placeholder="https://meet.google.com/..." data-calendar-dialog-meeting-input>
+                    <button class="btn btn-small btn-primary" type="submit">Salvar link</button>
+                    <a class="btn btn-small btn-quiet" href="#" target="_blank" rel="noopener" data-calendar-dialog-meeting-open hidden>Abrir link</a>
+                </form>
+            <?php else: ?>
+                <a class="btn btn-small btn-quiet" href="#" target="_blank" rel="noopener" data-calendar-dialog-meeting-open hidden>Abrir link da consulta</a>
+                <small class="muted-text" data-calendar-dialog-meeting-empty>Nenhum link informado.</small>
+            <?php endif; ?>
+        </section>
         <div class="calendar-dialog-actions">
             <a class="btn btn-primary" data-calendar-dialog-open href="#">Abrir na lista</a>
             <a class="btn btn-quiet" data-calendar-dialog-google href="#" target="_blank" rel="noopener">Adicionar ao Google</a>
-            <button class="btn btn-secondary" value="cancel">Fechar</button>
+            <button class="btn btn-secondary" type="button" data-calendar-dialog-close>Fechar</button>
         </div>
-    </form>
+    </div>
 </dialog>
 <?php endif; ?>

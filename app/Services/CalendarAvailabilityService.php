@@ -2387,6 +2387,7 @@ final class CalendarAvailabilityService
             'google_event_id' => $googleEventId,
             'google_event_etag' => trim((string) ($slot['google_event_etag'] ?? '')),
             'modality' => $modality,
+            'meeting_url' => trim((string) ($appointment['meeting_url'] ?? '')),
             'customer_name' => trim((string) ($appointment['contact_name'] ?? 'Cliente')) ?: 'Cliente',
             'customer_phone' => trim((string) ($appointment['phone'] ?? '')),
             'notes' => trim((string) ($appointment['description'] ?? '')),

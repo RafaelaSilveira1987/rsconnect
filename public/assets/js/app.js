@@ -3749,7 +3749,44 @@ document.addEventListener('DOMContentLoaded', function () {
     setText('[data-calendar-dialog-contact]', event.contact_name || 'Sem contato');
     setText('[data-calendar-dialog-owner]', event.owner_name || 'Não definido');
     setText('[data-calendar-dialog-location]', event.location_label || 'A definir');
-    setText('[data-calendar-dialog-description]', event.description || 'Sem descrição.');
+
+    const contextSection = dialog.querySelector('[data-calendar-dialog-context]');
+    const contextList = dialog.querySelector('[data-calendar-dialog-context-list]');
+    const description = dialog.querySelector('[data-calendar-dialog-description]');
+    const contextRows = Array.isArray(event.context_rows) ? event.context_rows : [];
+    if (contextList) {
+      contextList.replaceChildren();
+      contextRows.forEach((row) => {
+        const wrapper = element('div', row && row.wide ? 'is-wide' : '');
+        const label = element('dt', '', String(row?.label || 'Informação'));
+        const value = element('dd', '', String(row?.value || '—'));
+        wrapper.append(label, value);
+        contextList.appendChild(wrapper);
+      });
+    }
+    if (contextSection) contextSection.hidden = contextRows.length === 0;
+    if (description) {
+      const hasStructuredContext = contextRows.length > 0;
+      description.hidden = hasStructuredContext || !String(event.description || '').trim();
+      description.textContent = String(event.description || '').trim() || 'Sem descrição.';
+    }
+
+    const meetingSection = dialog.querySelector('[data-calendar-dialog-meeting]');
+    const meetingInput = dialog.querySelector('[data-calendar-dialog-meeting-input]');
+    const meetingId = dialog.querySelector('[data-calendar-dialog-meeting-id]');
+    const meetingOpen = dialog.querySelector('[data-calendar-dialog-meeting-open]');
+    const meetingEmpty = dialog.querySelector('[data-calendar-dialog-meeting-empty]');
+    const meetingUrl = String(event.meeting_url || '').trim();
+    const isOnline = String(event.location_type || '').toLowerCase() === 'online';
+    if (meetingSection) meetingSection.hidden = !isOnline;
+    if (meetingInput) meetingInput.value = meetingUrl;
+    if (meetingId) meetingId.value = String(event.id || '');
+    if (meetingOpen) {
+      meetingOpen.href = meetingUrl || '#';
+      meetingOpen.hidden = meetingUrl === '';
+    }
+    if (meetingEmpty) meetingEmpty.hidden = meetingUrl !== '';
+
     const openLink = dialog.querySelector('[data-calendar-dialog-open]');
     const googleLink = dialog.querySelector('[data-calendar-dialog-google]');
     if (openLink) openLink.href = event.list_url || '#';
@@ -3758,6 +3795,13 @@ document.addEventListener('DOMContentLoaded', function () {
     if (typeof dialog.showModal === 'function') dialog.showModal();
     else dialog.setAttribute('open', '');
   };
+
+  dialog?.querySelectorAll('[data-calendar-dialog-close]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (typeof dialog.close === 'function') dialog.close();
+      else dialog.removeAttribute('open');
+    });
+  });
 
   const eventButton = (event, compact = false) => {
     const button = element('button', `calendar-event-card calendar-event-${statusClass(event.status)}${compact ? ' is-compact' : ''}`);

@@ -1003,6 +1003,7 @@ final class PreSchedulingService
             '{{hora}}' => $hour,
             '{{inicio}}' => trim($date . ' ' . $hour),
             '{{local}}' => $locationText,
+            '{{link_consulta}}' => trim((string) ($appointment['meeting_url'] ?? '')),
             '{{modalidade}}' => (string) ($appointment['location_type'] ?? ''),
             '{{dia_preferido}}' => (string) ($appointment['preferred_day_text'] ?? ''),
             '{{horario_preferido}}' => (string) ($appointment['preferred_time_text'] ?? ''),
@@ -1751,18 +1752,10 @@ final class PreSchedulingService
 
     private function buildDescription(string $content, array $intent, array $flowContext = []): string
     {
-        return implode("\n", array_filter([
-            'Preferência recebida pelo WhatsApp/IA. Necessita aprovação humana antes de confirmar.',
-            'Grupo do contato: ' . ((string) ($flowContext['contact_group_label'] ?? $flowContext['contact_group'] ?? 'não identificado')),
-            'Situação da demanda: ' . ((string) ($flowContext['demand_status_label'] ?? $flowContext['demand_status'] ?? 'não informada')),
-            trim((string) ($flowContext['demand_summary'] ?? '')) !== ''
-                ? 'Resumo da demanda: ' . mb_substr(trim((string) $flowContext['demand_summary']), 0, 800)
-                : null,
-            'Dia/período informado: ' . ($this->displayDay($intent) ?: 'não informado'),
-            'Horário/período informado: ' . ($this->displayTime($intent) ?: 'não informado'),
-            'Modalidade: ' . ($intent['modality'] ?: 'não informada'),
-            'Mensagem do lead: ' . mb_substr($content, 0, 500),
-        ]));
+        // 36.41.4: os dados de atendimento vivem nos campos estruturados do
+        // pré-agendamento/triagem. A descrição deixa de duplicar texto técnico e a
+        // mensagem original do lead, que poluíam o compromisso após a confirmação.
+        return 'Pré-agendamento recebido pelo WhatsApp/IA. Informações estruturadas registradas para validação humana.';
     }
 
     private function normalizeText(string $content): string

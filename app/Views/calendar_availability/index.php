@@ -353,6 +353,12 @@ $requestInsight = static function (array $request): string {
                 $requiresOwner = !empty($professionalCalendarSettings['enabled'])
                     && !empty($professionalCalendarSettings['require_owner']);
                 $hasOwner = (int) ($appointment['owner_user_id'] ?? 0) > 0;
+                if (array_key_exists('appointment_modality', $appointment)) {
+                    $appointmentModality = trim((string) ($appointment['appointment_modality'] ?? '')) ?: 'indefinida';
+                } else {
+                    $appointmentModality = trim((string) ($appointment['location_type'] ?? ''));
+                }
+                $isOnlineAppointment = $appointmentModality === 'online';
                 $canConfirmPreSchedule = $hasPreference
                     && (!$requiresAvailabilityBeforeApproval || $isReady)
                     && (!$requiresOwner || $hasOwner);
@@ -424,12 +430,18 @@ $requestInsight = static function (array $request): string {
                     <?php endif; ?>
                     <?php if ($canManage): ?>
                         <?php if ($canConfirmPreSchedule): ?>
-                            <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>">
+                            <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>" class="calendar-preschedule-confirm-form">
                                 <?= Csrf::input() ?>
                                 <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
                                 <input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>">
                                 <input type="hidden" name="status" value="confirmed">
                                 <input type="hidden" name="return_to" value="/calendar?section=availability&amp;tab=preschedules&amp;tenant_id=<?= (int) $tenantId ?>">
+                                <?php if ($isOnlineAppointment): ?>
+                                    <label class="calendar-preschedule-meeting-field">
+                                        <span>Link da consulta online</span>
+                                        <input type="url" name="meeting_url" maxlength="500" value="<?= View::e((string) ($appointment['meeting_url'] ?? '')) ?>" placeholder="https://meet.google.com/...">
+                                    </label>
+                                <?php endif; ?>
                                 <button class="btn btn-small btn-primary" type="submit">Confirmar agendamento</button>
                             </form>
                         <?php else: ?>
@@ -492,7 +504,7 @@ $requestInsight = static function (array $request): string {
 
             <div class="message-info">
                 <strong>Variáveis disponíveis nas mensagens</strong>
-                <span><code>{{nome}}</code> · <code>{{data}}</code> · <code>{{hora}}</code> · <code>{{local}}</code> · <code>{{modalidade}}</code> · <code>{{profissional}}</code></span>
+                <span><code>{{nome}}</code> · <code>{{data}}</code> · <code>{{hora}}</code> · <code>{{local}}</code> · <code>{{link_consulta}}</code> · <code>{{modalidade}}</code> · <code>{{profissional}}</code></span>
             </div>
 
             <div class="form-grid two calendar-client-automation-grid">

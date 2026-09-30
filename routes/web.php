@@ -294,6 +294,7 @@ return static function (Router $router): void {
     $router->post('/calendar/appointments', [CalendarController::class, 'store'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/status', [CalendarController::class, 'updateStatus'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/owner', [CalendarController::class, 'updateOwner'], ['auth', 'permission:calendar.manage', 'csrf']);
+    $router->post('/calendar/meeting-link', [CalendarController::class, 'updateMeetingLink'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->post('/calendar/delete', [CalendarController::class, 'delete'], ['auth', 'permission:calendar.manage', 'csrf']);
     $router->get('/calendar/ics', [CalendarController::class, 'ics'], ['auth', 'permission:calendar.view']);
     $router->post('/tasks', [TaskController::class, 'store'], ['auth', 'permission:tasks.manage', 'csrf']);
