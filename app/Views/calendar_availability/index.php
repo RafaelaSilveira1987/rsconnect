@@ -20,6 +20,18 @@ $maintenance = $maintenance ?? [];
 $professionalCalendarSettings = $professionalCalendarSettings ?? ['enabled' => false, 'require_owner' => true, 'auto_from_conversation' => false];
 $professionalProfiles = $professionalProfiles ?? [];
 $calendarClientSettings = $calendarClientSettings ?? ['ready' => false, 'lookup_enabled' => 1, 'lookup_outside_hours' => 0, 'send_created_enabled' => 0, 'send_confirmed_enabled' => 1, 'send_cancelled_enabled' => 1, 'send_rescheduled_enabled' => 1, 'reminder_enabled' => 0, 'reminder_minutes' => 120, 'presence_request_enabled' => 0, 'presence_request_minutes' => 1440];
+$leadTimeParts = static function (int $minutes, int $minimum = 1): array {
+    $minutes = max($minimum, $minutes);
+    if ($minutes % 1440 === 0) {
+        return ['value' => max(1, intdiv($minutes, 1440)), 'unit' => 'days'];
+    }
+    if ($minutes % 60 === 0) {
+        return ['value' => max(1, intdiv($minutes, 60)), 'unit' => 'hours'];
+    }
+    return ['value' => $minutes, 'unit' => 'minutes'];
+};
+$reminderLead = $leadTimeParts((int) ($calendarClientSettings['reminder_minutes'] ?? 120), 5);
+$presenceLead = $leadTimeParts((int) ($calendarClientSettings['presence_request_minutes'] ?? 1440), 15);
 $publishedSlots = $publishedSlots ?? [];
 $internalStrategy = (($settings['internal_availability_strategy'] ?? 'calculated') === 'published') ? 'published' : 'calculated';
 $activeTab = in_array((string) ($activeTab ?? 'overview'), ['overview', 'availability', 'preschedules', 'settings'], true)
@@ -424,35 +436,79 @@ $requestInsight = static function (array $request): string {
             </div>
             <label class="field"><span>Mensagem quando o contato pergunta por um agendamento e nenhum compromisso ativo é encontrado</span><textarea name="client_lookup_no_appointment_message" rows="3" maxlength="4000"><?= View::e((string) ($calendarClientSettings['lookup_no_appointment_message'] ?? '')) ?></textarea></label>
 
-            <div class="section-heading compact" style="margin-top:8px"><div><span class="eyebrow">Disparos automáticos</span><h3>Eventos do agendamento</h3><p>Os disparos usam o contato vinculado ao compromisso. Desativar uma opção não altera o status da Agenda.</p></div></div>
-            <div class="settings-toggle-grid">
-                <label class="switch-card"><input type="checkbox" name="client_send_created_enabled" value="1" <?= !empty($calendarClientSettings['send_created_enabled']) ? 'checked' : '' ?>><span><strong>Ao registrar um agendamento</strong><small>Envia uma mensagem assim que o compromisso é criado.</small></span></label>
-                <label class="switch-card"><input type="checkbox" name="client_send_confirmed_enabled" value="1" <?= !empty($calendarClientSettings['send_confirmed_enabled']) ? 'checked' : '' ?>><span><strong>Ao confirmar o agendamento</strong><small>Informa ao cliente quando a equipe altera o compromisso para Confirmado.</small></span></label>
-                <label class="switch-card"><input type="checkbox" name="client_send_cancelled_enabled" value="1" <?= !empty($calendarClientSettings['send_cancelled_enabled']) ? 'checked' : '' ?>><span><strong>Ao cancelar ou recusar</strong><small>Avisa sobre o cancelamento somente depois que o status real da Agenda for alterado.</small></span></label>
-                <label class="switch-card"><input type="checkbox" name="client_send_rescheduled_enabled" value="1" <?= !empty($calendarClientSettings['send_rescheduled_enabled']) ? 'checked' : '' ?>><span><strong>Ao solicitar remarcação</strong><small>Informa que o pedido de ajuste entrou no fluxo sem inventar um novo horário.</small></span></label>
+            <div class="section-heading compact" style="margin-top:8px">
+                <div>
+                    <span class="eyebrow">Disparos automáticos</span>
+                    <h3>Confirmação, lembrete e presença</h3>
+                    <p>As automações abaixo só usam dados reais do compromisso confirmado. Alterar uma regra recalcula os disparos futuros já pendentes.</p>
+                </div>
             </div>
 
-            <div class="form-grid two">
+            <div class="message-info">
+                <strong>Variáveis disponíveis nas mensagens</strong>
+                <span><code>{{nome}}</code> · <code>{{data}}</code> · <code>{{hora}}</code> · <code>{{local}}</code> · <code>{{modalidade}}</code> · <code>{{profissional}}</code></span>
+            </div>
+
+            <div class="form-grid two calendar-client-automation-grid">
                 <div class="card-subtle form-stack">
-                    <label class="switch-card"><input type="checkbox" name="client_reminder_enabled" value="1" <?= !empty($calendarClientSettings['reminder_enabled']) ? 'checked' : '' ?>><span><strong>Lembrete automático</strong><small>Agenda um lembrete somente para compromissos confirmados.</small></span></label>
-                    <label class="field"><span>Enviar quantos minutos antes?</span><input type="number" name="client_reminder_minutes" min="5" max="10080" step="5" value="<?= (int) ($calendarClientSettings['reminder_minutes'] ?? 120) ?>"><small>Ex.: 120 = 2 horas; 1440 = 1 dia.</small></label>
+                    <label class="switch-card">
+                        <input type="checkbox" name="client_send_confirmed_enabled" value="1" <?= !empty($calendarClientSettings['send_confirmed_enabled']) ? 'checked' : '' ?>>
+                        <span><strong>Confirmação do agendamento</strong><small>Envia imediatamente quando o compromisso passa efetivamente para Confirmado.</small></span>
+                    </label>
+                    <label class="field"><span>Mensagem de confirmação</span><textarea name="client_confirmed_message" rows="4" maxlength="4000"><?= View::e((string) ($calendarClientSettings['confirmed_message'] ?? '')) ?></textarea></label>
                 </div>
+
                 <div class="card-subtle form-stack">
-                    <label class="switch-card"><input type="checkbox" name="client_presence_request_enabled" value="1" <?= !empty($calendarClientSettings['presence_request_enabled']) ? 'checked' : '' ?>><span><strong>Pedir confirmação de presença</strong><small>Envia uma pergunta antes do atendimento e registra a resposta separadamente do status do compromisso.</small></span></label>
-                    <label class="field"><span>Pedir confirmação quantos minutos antes?</span><input type="number" name="client_presence_request_minutes" min="15" max="20160" step="15" value="<?= (int) ($calendarClientSettings['presence_request_minutes'] ?? 1440) ?>"><small>Ex.: 1440 = 24 horas; 2880 = 48 horas.</small></label>
+                    <label class="switch-card">
+                        <input type="checkbox" name="client_reminder_enabled" value="1" <?= !empty($calendarClientSettings['reminder_enabled']) ? 'checked' : '' ?>>
+                        <span><strong>Lembrete automático</strong><small>Envia um aviso antes do horário somente para compromissos que continuam confirmados.</small></span>
+                    </label>
+                    <div class="form-grid two">
+                        <label class="field"><span>Enviar antes</span><input type="number" name="client_reminder_lead_value" min="1" max="10080" step="1" value="<?= (int) ($reminderLead['value'] ?? 2) ?>"></label>
+                        <label class="field"><span>Unidade</span><select name="client_reminder_lead_unit">
+                            <option value="minutes" <?= ($reminderLead['unit'] ?? '') === 'minutes' ? 'selected' : '' ?>>minuto(s)</option>
+                            <option value="hours" <?= ($reminderLead['unit'] ?? '') === 'hours' ? 'selected' : '' ?>>hora(s)</option>
+                            <option value="days" <?= ($reminderLead['unit'] ?? '') === 'days' ? 'selected' : '' ?>>dia(s)</option>
+                        </select></label>
+                    </div>
+                    <label class="field"><span>Mensagem do lembrete</span><textarea name="client_reminder_message" rows="4" maxlength="4000"><?= View::e((string) ($calendarClientSettings['reminder_message'] ?? '')) ?></textarea></label>
                 </div>
+
+                <div class="card-subtle form-stack">
+                    <label class="switch-card">
+                        <input type="checkbox" name="client_presence_request_enabled" value="1" <?= !empty($calendarClientSettings['presence_request_enabled']) ? 'checked' : '' ?>>
+                        <span><strong>Pedir confirmação de presença</strong><small>O cliente pode responder naturalmente: confirmar, cancelar ou pedir remarcação. A resposta fica separada do status do compromisso.</small></span>
+                    </label>
+                    <div class="form-grid two">
+                        <label class="field"><span>Solicitar antes</span><input type="number" name="client_presence_request_lead_value" min="1" max="20160" step="1" value="<?= (int) ($presenceLead['value'] ?? 1) ?>"></label>
+                        <label class="field"><span>Unidade</span><select name="client_presence_request_lead_unit">
+                            <option value="minutes" <?= ($presenceLead['unit'] ?? '') === 'minutes' ? 'selected' : '' ?>>minuto(s)</option>
+                            <option value="hours" <?= ($presenceLead['unit'] ?? '') === 'hours' ? 'selected' : '' ?>>hora(s)</option>
+                            <option value="days" <?= ($presenceLead['unit'] ?? '') === 'days' ? 'selected' : '' ?>>dia(s)</option>
+                        </select></label>
+                    </div>
+                    <label class="field"><span>Mensagem para confirmação de presença</span><textarea name="client_presence_request_message" rows="4" maxlength="4000"><?= View::e((string) ($calendarClientSettings['presence_request_message'] ?? '')) ?></textarea></label>
+                </div>
+
+                <div class="card-subtle form-stack">
+                    <div class="section-heading compact"><div><span class="eyebrow">Regras complementares</span><h3>Outros eventos</h3><p>Mensagens opcionais para o ciclo do compromisso.</p></div></div>
+                    <label class="switch-card"><input type="checkbox" name="client_send_created_enabled" value="1" <?= !empty($calendarClientSettings['send_created_enabled']) ? 'checked' : '' ?>><span><strong>Ao registrar um agendamento</strong><small>Útil quando a criação do compromisso precisa ser comunicada antes da confirmação.</small></span></label>
+                    <label class="switch-card"><input type="checkbox" name="client_send_cancelled_enabled" value="1" <?= !empty($calendarClientSettings['send_cancelled_enabled']) ? 'checked' : '' ?>><span><strong>Ao cancelar ou recusar</strong><small>Avisa somente depois que o status real da Agenda for alterado.</small></span></label>
+                    <label class="switch-card"><input type="checkbox" name="client_send_rescheduled_enabled" value="1" <?= !empty($calendarClientSettings['send_rescheduled_enabled']) ? 'checked' : '' ?>><span><strong>Ao registrar remarcação</strong><small>Comunica que o compromisso entrou no fluxo de ajuste sem inventar uma nova data.</small></span></label>
+                </div>
+            </div>
+
+            <div class="message-info">
+                <strong>Sem mensagens duplicadas no mesmo instante</strong>
+                <span>Se lembrete e pedido de confirmação estiverem configurados para o mesmo momento, o pedido de confirmação de presença tem prioridade e o lembrete simples não é enviado.</span>
             </div>
 
             <details class="calendar-settings-disclosure" style="margin-top:8px">
-                <summary><span><strong>Editar mensagens automáticas</strong><small>Personalize os textos sem alterar as regras de disparo.</small></span><span class="calendar-settings-chevron" aria-hidden="true">⌄</span></summary>
+                <summary><span><strong>Mensagens dos eventos complementares</strong><small>Edite apenas se utilizar registro, cancelamento ou remarcação automáticos.</small></span><span class="calendar-settings-chevron" aria-hidden="true">⌄</span></summary>
                 <div class="form-stack" style="padding-top:16px">
-                    <div class="message-info"><strong>Variáveis disponíveis</strong><span><code>{{nome}}</code> · <code>{{data}}</code> · <code>{{hora}}</code> · <code>{{local}}</code> · <code>{{modalidade}}</code> · <code>{{profissional}}</code></span></div>
                     <label class="field"><span>Agendamento registrado</span><textarea name="client_created_message" rows="3" maxlength="4000"><?= View::e((string) ($calendarClientSettings['created_message'] ?? '')) ?></textarea></label>
-                    <label class="field"><span>Agendamento confirmado</span><textarea name="client_confirmed_message" rows="3" maxlength="4000"><?= View::e((string) ($calendarClientSettings['confirmed_message'] ?? '')) ?></textarea></label>
                     <label class="field"><span>Agendamento cancelado</span><textarea name="client_cancelled_message" rows="3" maxlength="4000"><?= View::e((string) ($calendarClientSettings['cancelled_message'] ?? '')) ?></textarea></label>
                     <label class="field"><span>Remarcação</span><textarea name="client_rescheduled_message" rows="3" maxlength="4000"><?= View::e((string) ($calendarClientSettings['rescheduled_message'] ?? '')) ?></textarea></label>
-                    <label class="field"><span>Lembrete</span><textarea name="client_reminder_message" rows="3" maxlength="4000"><?= View::e((string) ($calendarClientSettings['reminder_message'] ?? '')) ?></textarea></label>
-                    <label class="field"><span>Pedido de confirmação de presença</span><textarea name="client_presence_request_message" rows="3" maxlength="4000"><?= View::e((string) ($calendarClientSettings['presence_request_message'] ?? '')) ?></textarea></label>
                 </div>
             </details>
 

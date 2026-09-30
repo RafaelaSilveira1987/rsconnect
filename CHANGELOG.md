@@ -1,3 +1,17 @@
+## 36.41.0 — Comunicação da Agenda organizada
+
+### Melhorado
+- remove da tela de pré-agendamento o bloco “Ver texto original para auditoria”; as informações estruturadas continuam sendo a fonte visual do atendimento e o texto técnico permanece disponível internamente quando necessário;
+- reorganiza a configuração de comunicação da Agenda em três automações principais: confirmação do agendamento, lembrete automático e solicitação de confirmação de presença;
+- horários de disparo passam a ser configurados em minutos, horas ou dias, sem exigir conversão manual para minutos;
+- respostas de presença continuam separadas do status do compromisso e podem ser reconhecidas naturalmente pelo WhatsApp;
+- se lembrete e pedido de confirmação forem programados para o mesmo instante, o pedido de presença tem prioridade para evitar mensagens duplicadas;
+- pedidos de presença pendentes deixam de ser enviados se o cliente já respondeu, e lembretes são suprimidos quando o cliente informou ausência, cancelamento ou remarcação;
+- ao salvar a política, os disparos futuros de compromissos já confirmados continuam sendo recalculados automaticamente.
+
+### Migration
+- nenhuma nova; permanece obrigatória `123_published_slots_min_notice_policy.sql`.
+
 ## 36.40.5 — Ordem preservada na coleta antecipada
 
 - Corrige o caso em que um pedido como “quero/queria marcar uma consulta” podia ser salvo silenciosamente em um campo textual futuro (Demanda, Objetivo, Necessidade etc.) apenas por ser o único campo livre compatível.

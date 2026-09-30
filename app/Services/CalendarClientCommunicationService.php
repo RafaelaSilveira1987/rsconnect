@@ -142,6 +142,21 @@ final class CalendarClientCommunicationService
                 updated_by_user_id = VALUES(updated_by_user_id),
                 updated_at = CURRENT_TIMESTAMP'
         );
+        $reminderMinutes = $this->leadTimeMinutes(
+            $data,
+            'client_reminder',
+            (int) ($data['client_reminder_minutes'] ?? 120),
+            5,
+            10080
+        );
+        $presenceRequestMinutes = $this->leadTimeMinutes(
+            $data,
+            'client_presence_request',
+            (int) ($data['client_presence_request_minutes'] ?? 1440),
+            15,
+            20160
+        );
+
         $statement->execute([
             'tenant_id' => $tenantId,
             'lookup_enabled' => !empty($data['client_lookup_enabled']) ? 1 : 0,
@@ -151,9 +166,9 @@ final class CalendarClientCommunicationService
             'send_cancelled_enabled' => !empty($data['client_send_cancelled_enabled']) ? 1 : 0,
             'send_rescheduled_enabled' => !empty($data['client_send_rescheduled_enabled']) ? 1 : 0,
             'reminder_enabled' => !empty($data['client_reminder_enabled']) ? 1 : 0,
-            'reminder_minutes' => max(5, min(10080, (int) ($data['client_reminder_minutes'] ?? 120))),
+            'reminder_minutes' => $reminderMinutes,
             'presence_request_enabled' => !empty($data['client_presence_request_enabled']) ? 1 : 0,
-            'presence_request_minutes' => max(15, min(20160, (int) ($data['client_presence_request_minutes'] ?? 1440))),
+            'presence_request_minutes' => $presenceRequestMinutes,
             'updated_by_user_id' => $userId && $userId > 0 ? $userId : null,
         ] + $messages);
 
@@ -529,20 +544,40 @@ final class CalendarClientCommunicationService
 
         $queued = 0;
         $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
-        if (!empty($settings['reminder_enabled'])) {
-            $minutes = max(5, (int) ($settings['reminder_minutes'] ?? 120));
-            $scheduled = $startUtc->sub(new DateInterval('PT' . $minutes . 'M'));
+        $clientConfirmationStatus = trim((string) ($appointment['client_confirmation_status'] ?? 'not_requested'));
+        $presenceEligible = !empty($settings['presence_request_enabled'])
+            && in_array($clientConfirmationStatus, ['', 'not_requested'], true);
+        $reminderMinutes = max(5, (int) ($settings['reminder_minutes'] ?? 120));
+        $presenceMinutes = max(15, (int) ($settings['presence_request_minutes'] ?? 1440));
+
+        // Se as duas automações forem configuradas para o mesmo instante, o pedido
+        // de presença já funciona como lembrete e tem prioridade para evitar duas
+        // mensagens automáticas consecutivas para o mesmo compromisso.
+        $presenceSupersedesReminder = $presenceEligible
+            && !empty($settings['reminder_enabled'])
+            && $reminderMinutes === $presenceMinutes;
+
+        if (!empty($settings['reminder_enabled']) && !$presenceSupersedesReminder) {
+            $scheduled = $startUtc->sub(new DateInterval('PT' . $reminderMinutes . 'M'));
             if ($scheduled > $now) {
-                $queued += $this->enqueue($appointment, self::EVENT_REMINDER, $scheduled->format('Y-m-d H:i:s'), 'm' . $minutes);
+                $queued += $this->enqueue(
+                    $appointment,
+                    self::EVENT_REMINDER,
+                    $scheduled->format('Y-m-d H:i:s'),
+                    'm' . $reminderMinutes
+                );
             }
         }
-        $clientConfirmationStatus = trim((string) ($appointment['client_confirmation_status'] ?? 'not_requested'));
-        if (!empty($settings['presence_request_enabled'])
-            && in_array($clientConfirmationStatus, ['', 'not_requested'], true)) {
-            $minutes = max(15, (int) ($settings['presence_request_minutes'] ?? 1440));
-            $scheduled = $startUtc->sub(new DateInterval('PT' . $minutes . 'M'));
+
+        if ($presenceEligible) {
+            $scheduled = $startUtc->sub(new DateInterval('PT' . $presenceMinutes . 'M'));
             if ($scheduled > $now) {
-                $queued += $this->enqueue($appointment, self::EVENT_PRESENCE_REQUEST, $scheduled->format('Y-m-d H:i:s'), 'm' . $minutes);
+                $queued += $this->enqueue(
+                    $appointment,
+                    self::EVENT_PRESENCE_REQUEST,
+                    $scheduled->format('Y-m-d H:i:s'),
+                    'm' . $presenceMinutes
+                );
             }
         }
         return $queued;
@@ -618,7 +653,19 @@ final class CalendarClientCommunicationService
             return true;
         }
         if (in_array($event, [self::EVENT_REMINDER, self::EVENT_PRESENCE_REQUEST, self::EVENT_CONFIRMED], true)) {
-            return $status !== 'confirmed';
+            if ($status !== 'confirmed') {
+                return true;
+            }
+            $clientConfirmationStatus = trim((string) ($appointment['client_confirmation_status'] ?? 'not_requested'));
+            if ($event === self::EVENT_PRESENCE_REQUEST
+                && !in_array($clientConfirmationStatus, ['', 'not_requested'], true)) {
+                return true;
+            }
+            if ($event === self::EVENT_REMINDER
+                && in_array($clientConfirmationStatus, ['declined', 'cancel_requested', 'reschedule_requested'], true)) {
+                return true;
+            }
+            return false;
         }
         if ($event === self::EVENT_CANCELLED) {
             return !in_array($status, ['cancelled', 'rejected'], true);
@@ -826,6 +873,26 @@ final class CalendarClientCommunicationService
     {
         $id = $body['key']['id'] ?? $body['messageId'] ?? $body['id'] ?? $body['data']['key']['id'] ?? null;
         return is_scalar($id) && trim((string) $id) !== '' ? trim((string) $id) : null;
+    }
+
+    /** @param array<string,mixed> $data */
+    private function leadTimeMinutes(array $data, string $prefix, int $fallbackMinutes, int $minimum, int $maximum): int
+    {
+        $valueKey = $prefix . '_lead_value';
+        $unitKey = $prefix . '_lead_unit';
+        if (!array_key_exists($valueKey, $data)) {
+            return max($minimum, min($maximum, $fallbackMinutes));
+        }
+
+        $value = max(1, (int) ($data[$valueKey] ?? 1));
+        $unit = strtolower(trim((string) ($data[$unitKey] ?? 'minutes')));
+        $factor = match ($unit) {
+            'days' => 1440,
+            'hours' => 60,
+            default => 1,
+        };
+
+        return max($minimum, min($maximum, $value * $factor));
     }
 
     private function messageOrDefault(string $message, string $default): string

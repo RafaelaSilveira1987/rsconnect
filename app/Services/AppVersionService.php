@@ -222,6 +222,7 @@ final class AppVersionService
     // RS Connect 36.38.1 — Agenda organizada por abas e disponibilidades operacionais.
     // RS Connect 36.38.2 — navegação única e proporcional da Agenda.
     // RS Connect 36.39.0 — continuidade de compromissos e comunicação automática com o cliente.
+    // Compatibilidade histórica: REQUIRED_MIGRATION = '122_calendar_client_communications.sql';
     // RS Connect 36.39.1 — consulta determinística dos horários publicados na Agenda interna.
     // RS Connect 36.39.2 — descoberta publicada independente de owner/cursor histórico.
     // RS Connect 36.40.0 — preferência de agenda e modalidade como estado canônico, sem regras por nicho.
@@ -229,7 +230,8 @@ final class AppVersionService
     // RS Connect 36.40.3 — antecedência explícita na Agenda publicada e triagem sem preenchimento por frases de continuação.
     // RS Connect 36.40.4 — coleta textual confiável: interesse genérico não vira dado estruturado e respostas explícitas prevalecem.
     // RS Connect 36.40.5 — intenção de agenda não pode preencher antecipadamente campos livres da Ordem do atendimento.
-    public const PACKAGE_LABEL = 'RS Connect 36.40.5 — Ordem preservada na coleta antecipada';
+    // RS Connect 36.41.0 — comunicação da Agenda organizada, com confirmação, lembrete e presença configuráveis.
+    public const PACKAGE_LABEL = 'RS Connect 36.41.0 — Comunicação da Agenda organizada';
     public const REQUIRED_MIGRATION = '123_published_slots_min_notice_policy.sql';
 
     private PDO $pdo;

@@ -1,5 +1,5 @@
-# RS Connect 36.40.5
-> **36.40.5** mantém todas as correções anteriores e impede que pedidos operacionais de agenda, como “quero marcar uma consulta”, sejam capturados antecipadamente como Demanda/Objetivo/outro campo livre futuro. A Ordem do atendimento permanece a fonte da sequência; a coleta antecipada só preserva conteúdo compatível e não operacional. Permanece necessária `123_published_slots_min_notice_policy.sql`.
+# RS Connect 36.41.0
+> **36.41.0** mantém as correções de triagem e Agenda anteriores, remove o bloco técnico de texto original do pré-agendamento e organiza a comunicação automática em confirmação, lembrete e confirmação de presença. Os tempos podem ser configurados em minutos, horas ou dias, com proteção contra disparos duplicados no mesmo instante e contra lembretes incompatíveis com uma resposta posterior do cliente. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
 
 ## Homologação recomendada
 

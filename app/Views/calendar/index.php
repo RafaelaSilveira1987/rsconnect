@@ -386,12 +386,6 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
                                 <?php endif; ?>
                                 <div class="pre-schedule-record-wide"><dt>Mensagem que originou o pedido</dt><dd><?= View::e($leadMessage !== '' ? $leadMessage : 'Não registrada') ?></dd></div>
                             </dl>
-                            <?php if (trim((string) ($appointment['description'] ?? '')) !== ''): ?>
-                                <details class="pre-schedule-technical-record">
-                                    <summary>Ver texto original para auditoria</summary>
-                                    <div><?= nl2br(View::e((string) $appointment['description'])) ?></div>
-                                </details>
-                            <?php endif; ?>
                         </section>
                     <?php else: ?>
                         <p><?= View::e($appointment['description'] ?: 'Sem descrição') ?></p>

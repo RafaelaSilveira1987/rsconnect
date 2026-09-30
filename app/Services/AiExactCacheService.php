@@ -145,7 +145,8 @@ final class AiExactCacheService
             // Compatibilidade histórica: 'runtime_contract' => '36.38.0'
             // Compatibilidade histórica: 'runtime_contract' => '36.39.2'
             // Compatibilidade histórica: 'runtime_contract' => '36.40.4'
-            'runtime_contract' => '36.40.5',
+            // Compatibilidade histórica: 'runtime_contract' => '36.40.5'
+            'runtime_contract' => '36.41.0',
             'prompt' => (string) ($agent['system_prompt'] ?? ''),
             'knowledge' => (string) ($agent['knowledge_base'] ?? ''),
             'model' => (string) ($agent['_ai_selected_model'] ?? $agent['model_name'] ?? ''),
