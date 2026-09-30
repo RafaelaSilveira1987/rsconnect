@@ -233,7 +233,8 @@ final class AppVersionService
     // RS Connect 36.41.0 — comunicação da Agenda organizada, com confirmação, lembrete e presença configuráveis.
     // RS Connect 36.41.1 — lembretes usam o contato vinculado, cron CLI processa a fila do cliente e a Agenda remove o texto original redundante.
     // RS Connect 36.41.2 — a aba de pré-agendamentos permite confirmar o horário escolhido e converter o pedido em agendamento confirmado.
-    public const PACKAGE_LABEL = 'RS Connect 36.41.2 — Confirmação do pré-agendamento na validação';
+    // RS Connect 36.41.3 — preserva a vaga escolhida, revalida a seleção na confirmação e impede nova busca de apagar o estado do pré-agendamento.
+    public const PACKAGE_LABEL = 'RS Connect 36.41.3 — Confirmação resiliente do pré-agendamento';
     public const REQUIRED_MIGRATION = '123_published_slots_min_notice_policy.sql';
 
     private PDO $pdo;

@@ -308,7 +308,7 @@ $requestInsight = static function (array $request): string {
                                         <input type="hidden" name="return_to" value="/calendar?section=availability&amp;tab=preschedules&amp;tenant_id=<?= (int) $tenantId ?>#horarios-<?= (int) $slot['appointment_id'] ?>">
                                         <button class="btn btn-small btn-secondary" type="submit">Usar este horário</button>
                                     </form>
-                                <?php elseif ($isMarkedSlot && in_array($eventState, ['held', 'confirmed'], true)): ?>
+                                <?php elseif ($isSelected || ($isMarkedSlot && in_array($eventState, ['held', 'confirmed'], true))): ?>
                                     <form method="post" action="<?= View::e(Router::url('/calendar/availability/release')) ?>">
                                         <?= Csrf::input() ?>
                                         <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
@@ -341,9 +341,12 @@ $requestInsight = static function (array $request): string {
                 $availabilityStatus = (string) ($appointment['availability_status'] ?? '');
                 $googleState = (string) ($appointment['google_event_state'] ?? '');
                 $source = (string) ($appointment['availability_source'] ?? '');
+                $hasChosenSlot = (int) ($appointment['chosen_availability_slot_id'] ?? 0) > 0;
                 $isMarked = $source === 'google_marked_slots';
-                $isReady = in_array($availabilityStatus, ['slot_selected', 'validated'], true)
-                    && (!$isMarked || in_array($googleState, ['held', 'confirmed'], true));
+                // 36.41.3: a escolha persistida não pode desaparecer visualmente só
+                // porque uma busca antiga sobrescreveu availability_status. O backend
+                // revalida/reaplica a vaga no instante da confirmação.
+                $isReady = $hasChosenSlot || in_array($availabilityStatus, ['slot_selected', 'validated'], true);
                 $hasPreference = trim((string) ($appointment['preferred_day_text'] ?? '')) !== ''
                     && trim((string) ($appointment['preferred_time_text'] ?? '')) !== '';
                 $requiresAvailabilityBeforeApproval = !empty($settings['enabled']) && !empty($settings['require_before_approval']);
@@ -360,7 +363,9 @@ $requestInsight = static function (array $request): string {
                         : (($requiresAvailabilityBeforeApproval && !$isReady)
                             ? 'Escolha e valide um horário antes de confirmar.'
                             : 'Este pré-agendamento ainda não pode ser confirmado.'));
-                $statusText = $statusLabels[$availabilityStatus] ?? ($availabilityStatus ?: 'Disponibilidade ainda não consultada');
+                $statusText = $hasChosenSlot
+                    ? 'Horário escolhido'
+                    : ($statusLabels[$availabilityStatus] ?? ($availabilityStatus ?: 'Disponibilidade ainda não consultada'));
             ?>
             <article class="calendar-appointment-card <?= $isReady ? 'is-ready' : '' ?>">
                 <div class="calendar-appointment-main">
@@ -400,13 +405,23 @@ $requestInsight = static function (array $request): string {
                     <?php if (!empty($appointment['availability_slot_count'])): ?>
                         <a class="btn btn-small btn-quiet" href="#horarios-<?= (int) $appointment['id'] ?>">Ver <?= (int) $appointment['availability_slot_count'] ?> horário(s)</a>
                     <?php endif; ?>
-                    <form method="post" action="<?= View::e(Router::url('/calendar/availability/request')) ?>">
-                        <?= Csrf::input() ?>
-                        <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
-                        <input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>">
-                        <input type="hidden" name="return_to" value="/calendar?section=availability&amp;tab=preschedules&amp;tenant_id=<?= (int) $tenantId ?>#horarios-<?= (int) $appointment['id'] ?>">
-                        <button class="btn btn-small btn-primary" type="submit">Buscar disponibilidade</button>
-                    </form>
+                    <?php if ($hasChosenSlot): ?>
+                        <form method="post" action="<?= View::e(Router::url('/calendar/availability/release')) ?>">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
+                            <input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>">
+                            <input type="hidden" name="return_to" value="/calendar?section=availability&amp;tab=preschedules&amp;tenant_id=<?= (int) $tenantId ?>">
+                            <button class="btn btn-small btn-quiet" type="submit">Liberar horário</button>
+                        </form>
+                    <?php else: ?>
+                        <form method="post" action="<?= View::e(Router::url('/calendar/availability/request')) ?>">
+                            <?= Csrf::input() ?>
+                            <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
+                            <input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>">
+                            <input type="hidden" name="return_to" value="/calendar?section=availability&amp;tab=preschedules&amp;tenant_id=<?= (int) $tenantId ?>#horarios-<?= (int) $appointment['id'] ?>">
+                            <button class="btn btn-small btn-primary" type="submit">Buscar disponibilidade</button>
+                        </form>
+                    <?php endif; ?>
                     <?php if ($canManage): ?>
                         <?php if ($canConfirmPreSchedule): ?>
                             <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>">

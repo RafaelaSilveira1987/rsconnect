@@ -63,7 +63,8 @@ $checks = [
     'tela explica proteção contra disparo duplicado' => str_contains($settingsView, 'Sem mensagens duplicadas no mesmo instante'),
     'pacote mantém histórico da versão 36.41.1 e identifica a atual' => str_contains($version, 'RS Connect 36.41.1')
         && str_contains($version, 'RS Connect 36.41.2')
-        && ($manifest['package_version'] ?? '') === '36.41.2',
+        && str_contains($version, 'RS Connect 36.41.3')
+        && ($manifest['package_version'] ?? '') === '36.41.3',
     'migration obrigatória permanece 123' => ($manifest['database']['required_migration'] ?? '') === '123_published_slots_min_notice_policy.sql',
 ];
 
@@ -80,4 +81,4 @@ if ($failed !== []) {
     exit(1);
 }
 
-echo "OK - 36.41.2 mantém a automação da agenda e adiciona a confirmação operacional do pré-agendamento.\n";
+echo "OK - a automação da agenda e a confirmação operacional permanecem ativas na versão atual.\n";

@@ -624,6 +624,28 @@ final class CalendarAvailabilityService
             return ['ok' => false, 'message' => 'Agendamento não encontrado.'];
         }
 
+        // 36.41.3 — uma busca manual nunca pode apagar/despriorizar um horário já
+        // escolhido. Enquanto existir chosen_availability_slot_id, o operador deve
+        // confirmar ou liberar explicitamente a seleção antes de procurar outra vaga.
+        // Isso evita o estado inconsistente “Nenhum horário encontrado” + horário
+        // escolhido ainda gravado no pré-agendamento.
+        if ($origin === 'manual_panel' && (int) ($appointment['chosen_availability_slot_id'] ?? 0) > 0) {
+            $approval = $this->canApprove($tenantId, $appointment);
+            if (!empty($approval['ok'])) {
+                return [
+                    'ok' => true,
+                    'preserved_selection' => true,
+                    'message' => 'Este pré-agendamento já possui um horário escolhido. Confirme o agendamento ou libere o horário antes de fazer outra busca.',
+                ];
+            }
+
+            return [
+                'ok' => false,
+                'preserved_selection' => true,
+                'message' => 'O horário escolhido ainda está vinculado ao pré-agendamento, mas precisa ser revalidado: ' . (string) ($approval['message'] ?? 'não foi possível validar a reserva.') . ' Libere o horário para procurar outra opção.',
+            ];
+        }
+
         $settings = $this->settings($tenantId);
         $calendarSourceConfig = $this->calendarSourceSettings($tenantId);
         $calendarSource = (string) ($calendarSourceConfig['source'] ?? 'none');
@@ -1501,7 +1523,73 @@ final class CalendarAvailabilityService
 
     public function releaseSelectedSlot(int $tenantId, int $appointmentId): array
     {
-        return $this->releaseMarkedAppointment($tenantId, $appointmentId, true);
+        $appointment = $this->appointment($tenantId, $appointmentId);
+        if (!$appointment) {
+            return ['attempted' => false, 'ok' => false, 'message' => 'Pré-agendamento não encontrado.'];
+        }
+
+        $source = trim((string) ($appointment['availability_source'] ?? ''));
+        $release = ['attempted' => false, 'ok' => true, 'message' => null];
+        if ($source === 'internal_published') {
+            $release = (new InternalCalendarSlotService())->releaseForAppointment($tenantId, $appointmentId);
+        } elseif ($source === 'google_marked_slots') {
+            $release = $this->releaseMarkedAppointment($tenantId, $appointmentId, true);
+        }
+
+        if (empty($release['ok'])) {
+            return $release;
+        }
+
+        $slotId = (int) ($appointment['chosen_availability_slot_id'] ?? 0);
+        $pdo = Database::connection();
+        try {
+            if ($slotId > 0) {
+                $pdo->prepare(
+                    'UPDATE calendar_availability_slots
+                     SET selected_at = NULL,
+                         event_state = CASE WHEN event_state IN ("selected", "held") THEN "available" ELSE event_state END,
+                         hold_expires_at = NULL
+                     WHERE id = :id AND tenant_id = :tenant_id AND appointment_id = :appointment_id'
+                )->execute([
+                    'id' => $slotId,
+                    'tenant_id' => $tenantId,
+                    'appointment_id' => $appointmentId,
+                ]);
+            }
+
+            $pdo->prepare(
+                'UPDATE calendar_appointments
+                 SET chosen_availability_slot_id = NULL,
+                     availability_status = CASE WHEN COALESCE(availability_slot_count, 0) > 0 THEN "received" ELSE NULL END,
+                     availability_selected_at = NULL,
+                     availability_selected_by = NULL,
+                     availability_selection_expires_at = NULL,
+                     availability_error = NULL,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :appointment_id AND tenant_id = :tenant_id'
+            )->execute([
+                'appointment_id' => $appointmentId,
+                'tenant_id' => $tenantId,
+            ]);
+        } catch (Throwable $exception) {
+            return [
+                'attempted' => true,
+                'ok' => false,
+                'message' => 'O horário foi liberado, mas não foi possível limpar a seleção local: ' . $exception->getMessage(),
+            ];
+        }
+
+        Audit::log('calendar.availability_slot_released', [
+            'appointment_id' => $appointmentId,
+            'slot_id' => $slotId ?: null,
+            'source' => $source,
+        ], $tenantId);
+
+        return [
+            'attempted' => !empty($release['attempted']) || $slotId > 0,
+            'ok' => true,
+            'message' => 'Horário liberado. O pré-agendamento foi mantido e já pode receber uma nova busca de disponibilidade.',
+        ];
     }
 
     public function confirmMarkedAppointment(int $tenantId, int $appointmentId): array
@@ -1622,25 +1710,77 @@ final class CalendarAvailabilityService
             return ['ok' => true, 'message' => null];
         }
 
-        $status = (string) ($appointment['availability_status'] ?? '');
+        $appointmentId = (int) ($appointment['id'] ?? 0);
         $chosenSlot = (int) ($appointment['chosen_availability_slot_id'] ?? 0);
-        if (!in_array($status, ['slot_selected', 'validated'], true) || $chosenSlot < 1) {
+        if ($appointmentId < 1 || $chosenSlot < 1) {
             return ['ok' => false, 'message' => 'Antes de aprovar, busque disponibilidade e clique em “Usar este horário”.'];
         }
 
-        if ((string) ($appointment['availability_source'] ?? '') === 'google_marked_slots'
+        // 36.41.3 — chosen_availability_slot_id é a referência persistida da escolha.
+        // availability_status pode ter sido sobrescrito por uma busca manual antiga
+        // (requested/received/empty) sem apagar a escolha. Primeiro restauramos apenas
+        // os metadados quando a reserva real continua válida; só tentamos reaplicar o
+        // slot quando a reserva técnica realmente deixou de existir.
+        $status = (string) ($appointment['availability_status'] ?? '');
+        $source = (string) ($appointment['availability_source'] ?? '');
+        $statusReady = in_array($status, ['slot_selected', 'validated'], true);
+        $reservationValid = false;
+        $mustReapply = false;
+
+        if ($source === 'internal_published') {
+            $publishedCheck = (new InternalCalendarSlotService())->validateHeldForAppointment($tenantId, $appointmentId);
+            $reservationValid = !empty($publishedCheck['ok']);
+            $mustReapply = !$reservationValid;
+        } elseif ($source === 'google_marked_slots') {
+            $reservationValid = in_array((string) ($appointment['google_event_state'] ?? ''), ['held', 'confirmed'], true);
+            $mustReapply = !$reservationValid;
+        } elseif (!$statusReady) {
+            $mustReapply = true;
+        }
+
+        $recovered = false;
+        if (!$statusReady && $reservationValid) {
+            if (!$this->restoreSelectedSlotMetadata($tenantId, $appointmentId, $chosenSlot)) {
+                return ['ok' => false, 'message' => 'O horário escolhido está reservado, mas o vínculo local da seleção não pôde ser restaurado. Libere o horário e faça uma nova busca.'];
+            }
+            $recovered = true;
+            $appointment = $this->appointment($tenantId, $appointmentId) ?: $appointment;
+            $status = (string) ($appointment['availability_status'] ?? '');
+            $statusReady = in_array($status, ['slot_selected', 'validated'], true);
+        }
+
+        if ($mustReapply) {
+            $recovery = $this->applySlot($tenantId, $appointmentId, $chosenSlot);
+            if (empty($recovery['ok'])) {
+                return [
+                    'ok' => false,
+                    'message' => 'O horário escolhido não pôde ser revalidado: ' . (string) ($recovery['message'] ?? 'a vaga não está mais disponível.') . ' Libere esse horário e faça uma nova busca.',
+                ];
+            }
+            $recovered = true;
+            $appointment = $this->appointment($tenantId, $appointmentId) ?: $appointment;
+            $status = (string) ($appointment['availability_status'] ?? '');
+            $source = (string) ($appointment['availability_source'] ?? $source);
+            $statusReady = in_array($status, ['slot_selected', 'validated'], true);
+        }
+
+        if (!$statusReady) {
+            return ['ok' => false, 'message' => 'O horário escolhido ainda não foi validado para aprovação.'];
+        }
+
+        if ($source === 'google_marked_slots'
             && !in_array((string) ($appointment['google_event_state'] ?? ''), ['held', 'confirmed'], true)) {
             return ['ok' => false, 'message' => 'O evento VAGO ainda não foi pré-reservado no Google Agenda.'];
         }
 
-        if ((string) ($appointment['availability_source'] ?? '') === 'internal_published') {
-            $publishedCheck = (new InternalCalendarSlotService())->validateHeldForAppointment($tenantId, (int) ($appointment['id'] ?? 0));
+        if ($source === 'internal_published') {
+            $publishedCheck = (new InternalCalendarSlotService())->validateHeldForAppointment($tenantId, $appointmentId);
             if (empty($publishedCheck['ok'])) {
                 return ['ok' => false, 'message' => (string) ($publishedCheck['message'] ?? 'A vaga publicada não está mais reservada.')];
             }
         }
 
-        if ((string) ($appointment['availability_source'] ?? '') === 'internal_fallback') {
+        if ($source === 'internal_fallback') {
             $recheck = $this->validateInternalRequestedSlot(
                 $tenantId,
                 $appointment,
@@ -1652,7 +1792,7 @@ final class CalendarAvailabilityService
                 return ['ok' => false, 'message' => 'O horário deixou de estar disponível na Agenda interna: ' . (string) ($recheck['message'] ?? 'conflito detectado.')];
             }
         }
-        return ['ok' => true, 'message' => null];
+        return ['ok' => true, 'message' => null, 'recovered' => $recovered];
     }
 
     public function dashboard(int $tenantId): array
@@ -2861,6 +3001,52 @@ final class CalendarAvailabilityService
         $statement->execute(['id' => $slotId, 'tenant_id' => $tenantId, 'appointment_id' => $appointmentId]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
         return $row ?: null;
+    }
+
+    private function restoreSelectedSlotMetadata(int $tenantId, int $appointmentId, int $slotId): bool
+    {
+        $slot = $this->findSlot($tenantId, $appointmentId, $slotId);
+        if (!$slot) {
+            return false;
+        }
+
+        try {
+            Database::connection()->prepare(
+                'UPDATE calendar_appointments
+                 SET starts_at = :starts_at,
+                     ends_at = :ends_at,
+                     availability_status = "slot_selected",
+                     availability_request_id = :request_id,
+                     chosen_availability_slot_id = :slot_id,
+                     availability_source = :availability_source,
+                     appointment_modality = :modality,
+                     availability_error = NULL,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :appointment_id AND tenant_id = :tenant_id'
+            )->execute([
+                'starts_at' => $slot['starts_at'],
+                'ends_at' => $slot['ends_at'],
+                'request_id' => (int) ($slot['request_id'] ?? 0),
+                'slot_id' => $slotId,
+                'availability_source' => trim((string) ($slot['source'] ?? '')) ?: 'n8n',
+                'modality' => $this->normalizeModality((string) ($slot['modality'] ?? 'indefinida')),
+                'appointment_id' => $appointmentId,
+                'tenant_id' => $tenantId,
+            ]);
+            Database::connection()->prepare(
+                'UPDATE calendar_availability_slots
+                 SET selected_at = COALESCE(selected_at, NOW()),
+                     event_state = CASE WHEN event_state = "available" THEN "selected" ELSE event_state END
+                 WHERE id = :id AND tenant_id = :tenant_id AND appointment_id = :appointment_id'
+            )->execute([
+                'id' => $slotId,
+                'tenant_id' => $tenantId,
+                'appointment_id' => $appointmentId,
+            ]);
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function findSelectedSlot(int $tenantId, int $appointmentId): ?array

@@ -1,3 +1,10 @@
+# RS Connect 36.41.3
+> **36.41.3** corrige a confirmação do pré-agendamento quando uma busca posterior sobrescreve apenas o estado visual da disponibilidade. A vaga escolhida passa a ser preservada, revalidada no momento da aprovação e só é liberada por ação explícita. A busca manual não substitui mais silenciosamente um horário já escolhido. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
+
+## Homologação rápida 36.41.3
+
+Com um pré-agendamento que já mostre **Horário escolhido**, clique diretamente em **Confirmar agendamento**. O backend revalida/reaplica a vaga escolhida e confirma o compromisso. Para procurar outro horário, use **Liberar horário** primeiro; somente depois a ação **Buscar disponibilidade** volta a aparecer.
+
 # RS Connect 36.41.2
 > **36.41.2** conclui a validação operacional do pré-agendamento: depois que um horário é escolhido, a própria aba **Pré-agendamentos** exibe a ação **Confirmar agendamento**, que usa o fluxo real de aprovação, confirma a vaga, converte o pré-agendamento e dispara a comunicação configurada. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
 

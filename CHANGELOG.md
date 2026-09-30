@@ -1,3 +1,16 @@
+## 36.41.3 — Confirmação resiliente do pré-agendamento
+
+### Corrigido
+- um pré-agendamento com `chosen_availability_slot_id` deixa de aparecer como “Nenhum horário encontrado” só porque uma busca manual posterior sobrescreveu `availability_status`;
+- a confirmação passa a revalidar e reaplicar a vaga persistida quando o estado visual ficou inconsistente;
+- vagas publicadas cuja pré-reserva expirou podem ser novamente reservadas no ato da confirmação se continuarem livres;
+- **Buscar disponibilidade** não substitui mais silenciosamente uma vaga já escolhida: primeiro é necessário **Liberar horário**;
+- a liberação limpa a seleção local (`chosen_availability_slot_id`, instante/origem da escolha e expiração), preservando o próprio pré-agendamento para uma nova busca;
+- o botão **Confirmar agendamento** continua disponível quando existe uma vaga escolhida persistida, deixando a revalidação final para o backend.
+
+### Migration
+- nenhuma nova; permanece obrigatória `123_published_slots_min_notice_policy.sql`.
+
 ## 36.41.0 — Comunicação da Agenda organizada
 
 ### Melhorado
