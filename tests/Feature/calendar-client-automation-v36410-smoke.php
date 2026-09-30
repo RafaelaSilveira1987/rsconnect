@@ -61,8 +61,8 @@ $checks = [
         ['status' => 'confirmed', 'starts_at' => '2026-10-10 10:00:00', 'client_confirmation_status' => 'confirmed']
     ) === false,
     'tela explica proteção contra disparo duplicado' => str_contains($settingsView, 'Sem mensagens duplicadas no mesmo instante'),
-    'pacote identifica a versão 36.41.0' => str_contains($version, 'RS Connect 36.41.0')
-        && ($manifest['package_version'] ?? '') === '36.41.0',
+    'pacote identifica a versão 36.41.1' => str_contains($version, 'RS Connect 36.41.1')
+        && ($manifest['package_version'] ?? '') === '36.41.1',
     'migration obrigatória permanece 123' => ($manifest['database']['required_migration'] ?? '') === '123_published_slots_min_notice_policy.sql',
 ];
 
@@ -79,4 +79,4 @@ if ($failed !== []) {
     exit(1);
 }
 
-echo "OK - 36.41.0 organiza confirmação, lembrete e presença sem duplicar o mesmo instante.\n";
+echo "OK - 36.41.1 organiza confirmação, lembrete e presença e reforça a entrega ao contato vinculado.\n";

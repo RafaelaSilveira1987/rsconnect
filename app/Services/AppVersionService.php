@@ -231,7 +231,8 @@ final class AppVersionService
     // RS Connect 36.40.4 — coleta textual confiável: interesse genérico não vira dado estruturado e respostas explícitas prevalecem.
     // RS Connect 36.40.5 — intenção de agenda não pode preencher antecipadamente campos livres da Ordem do atendimento.
     // RS Connect 36.41.0 — comunicação da Agenda organizada, com confirmação, lembrete e presença configuráveis.
-    public const PACKAGE_LABEL = 'RS Connect 36.41.0 — Comunicação da Agenda organizada';
+    // RS Connect 36.41.1 — lembretes usam o contato vinculado, cron CLI processa a fila do cliente e a Agenda remove o texto original redundante.
+    public const PACKAGE_LABEL = 'RS Connect 36.41.1 — Comunicação da Agenda e lembretes confiáveis';
     public const REQUIRED_MIGRATION = '123_published_slots_min_notice_policy.sql';
 
     private PDO $pdo;

@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.41.0",
-  "release_name": "Comunicação da Agenda organizada",
+  "package_version": "36.41.1",
+  "release_name": "Comunicação da Agenda e lembretes confiáveis",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,8 +19,8 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.40.5",
-      "release_name": "Ordem preservada na coleta antecipada",
+      "package_version": "36.41.0",
+      "release_name": "Comunicação da Agenda organizada",
       "required_migration": "123_published_slots_min_notice_policy.sql"
     },
     "historical_releases": [

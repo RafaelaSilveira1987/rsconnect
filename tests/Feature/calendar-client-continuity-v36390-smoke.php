@@ -35,6 +35,7 @@ $clientCommunication = (string) file_get_contents($root . '/app/Services/Calenda
 $calendarController = (string) file_get_contents($root . '/app/Controllers/CalendarController.php');
 $conversation = (string) file_get_contents($root . '/app/Services/CalendarConversationService.php');
 $notifications = (string) file_get_contents($root . '/app/Controllers/NotificationsController.php');
+$notificationCli = (string) file_get_contents($root . '/bin/process-notifications.php');
 $settingsView = (string) file_get_contents($root . '/app/Views/calendar_availability/index.php');
 $calendarView = (string) file_get_contents($root . '/app/Views/calendar/index.php');
 $migration = (string) file_get_contents($root . '/database/migrations/122_calendar_client_communications.sql');
@@ -58,12 +59,15 @@ $checks += [
     'confirmação pela conversa agenda automações futuras sem duplicar confirmação imediata' => str_contains($conversation, 'scheduleConfirmedAutomation')
         && str_contains($conversation, 'evitar uma segunda confirmação imediata'),
     'cron existente também processa mensagens automáticas da agenda' => str_contains($notifications, 'calendar_client_messages')
-        && str_contains($notifications, 'CalendarClientCommunicationService'),
+        && str_contains($notifications, 'CalendarClientCommunicationService')
+        && str_contains($notificationCli, 'calendar_client_messages')
+        && str_contains($notificationCli, 'CalendarClientCommunicationService'),
     'configuração fica dentro da aba Configurações da Agenda' => str_contains($settingsView, 'Comunicação e confirmação do agendamento')
         && str_contains($settingsView, 'Pedir confirmação de presença')
         && str_contains($settingsView, 'Responder sobre a própria agenda fora do expediente'),
     'agenda mostra confirmação do cliente separada do status do compromisso' => str_contains($calendarView, 'Confirmação do cliente')
         && str_contains($calendarView, 'Cliente confirmou presença'),
+    'agenda não exibe mais o texto original redundante no pré-agendamento' => !str_contains($calendarView, 'Mensagem que originou o pedido'),
     'migration cria configurações fila e estado do cliente' => str_contains($migration, 'tenant_calendar_client_settings')
         && str_contains($migration, 'calendar_client_message_jobs')
         && str_contains($migration, 'client_confirmation_status'),

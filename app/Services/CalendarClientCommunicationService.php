@@ -423,7 +423,11 @@ final class CalendarClientCommunicationService
         $message = trim($message);
         $tenantId = (int) ($appointment['tenant_id'] ?? 0);
         $conversationId = (int) ($appointment['conversation_id'] ?? 0);
-        $phoneSource = trim((string) (($appointment['phone'] ?? '') ?: ($appointment['remote_jid'] ?? '')));
+        $phoneSource = trim((string) (
+            ($appointment['phone'] ?? '')
+            ?: ($appointment['remote_jid'] ?? '')
+            ?: ($appointment['conversation_remote_jid'] ?? '')
+        ));
         $phone = preg_replace('/\D+/', '', $phoneSource) ?: '';
         if ($tenantId < 1 || $phone === '' || $message === '') {
             return ['ok' => false, 'error' => 'Contato ou mensagem inválida.', 'external_id' => null];
@@ -478,10 +482,12 @@ final class CalendarClientCommunicationService
             'SELECT a.*, ct.name AS contact_name, ct.phone, ct.remote_jid,
                     ct.evolution_instance_id AS contact_instance_id,
                     c.evolution_instance_id AS conversation_instance_id,
+                    c.remote_jid AS conversation_remote_jid,
+                    COALESCE(a.contact_id, c.contact_id) AS resolved_contact_id,
                     u.name AS owner_name
              FROM calendar_appointments a
-             LEFT JOIN contacts ct ON ct.id = a.contact_id AND ct.tenant_id = a.tenant_id
              LEFT JOIN conversations c ON c.id = a.conversation_id AND c.tenant_id = a.tenant_id
+             LEFT JOIN contacts ct ON ct.id = COALESCE(a.contact_id, c.contact_id) AND ct.tenant_id = a.tenant_id
              LEFT JOIN users u ON u.id = a.owner_user_id AND u.tenant_id = a.tenant_id
              WHERE a.id = :id AND a.tenant_id = :tenant_id
              LIMIT 1'

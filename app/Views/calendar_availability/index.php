@@ -440,7 +440,7 @@ $requestInsight = static function (array $request): string {
                 <div>
                     <span class="eyebrow">Disparos automáticos</span>
                     <h3>Confirmação, lembrete e presença</h3>
-                    <p>As automações abaixo só usam dados reais do compromisso confirmado. Alterar uma regra recalcula os disparos futuros já pendentes.</p>
+                    <p>As automações abaixo só usam dados reais do compromisso confirmado. O WhatsApp é obtido do contato vinculado ao agendamento/conversa, e alterar uma regra recalcula os disparos futuros já pendentes.</p>
                 </div>
             </div>
 

@@ -5,7 +5,7 @@ a9b27e3f3080987813b3305be48c13e1e54cdf650a5f954e1d7485a53bb38543  ./.env.vps.exa
 515746cb32b412abe48d68d41108b11ae38b7c4d542fbccc0d149403c89da124  ./.gitignore
 ef4fe18b020a66e3dfc4e2fdb1f5ef4b1d7f4fd1387d18ea5391773c122d3d53  ./CHANGELOG.md
 384e15708206ac4de668939ccc4f133bddebc98cbbd5cc46b7c0ca54009d97f2  ./Dockerfile
-23f2517267533154a669b0f7ce8d0ba7b8ebad97266dfca6dff8efbfc4d6393a  ./README.md
+ad1e9c4f9cfe69c7d68e699cc35b1709f19f5cf84287477cd69acf9313fe8f09  ./README.md
 ce7249f53b73b4347f0db1bf484321162a24877aca6e7106d85afd34365ab179  ./app/Controllers/AccessController.php
 64dc9574317cd81b08f9669533f2b8cf57d8a8ba305760158a7ecff6dee51433  ./app/Controllers/AdminCrmController.php
 7a964baf4c3563146b922fd9fd3cea227dff01727aa798b8afacbf65cddf8894  ./app/Controllers/AgentBlueprintController.php
@@ -108,14 +108,14 @@ f98077caae5b7beeb7dead715471527a4a58b64dbeb0c2505660b543228bfbcf  ./app/Services
 d73181c7c18f1585050d3f611b49303ced38528adb42ea46ad9cc05858f1f01a  ./app/Services/AiRouterService.php
 fe5c2b3eca0bfce848ac8ef3058623da97b8aa04d5565c2a67f4e6fc258ed0e5  ./app/Services/AiTurnContextService.php
 31f804dbc48f1506e82c9de1395a7f67650de453a03671900a8132a291cd1465  ./app/Services/AiUsageService.php
-e6d9bf76d2c5f6e0fbdf32fd3080379662805adde63e079081a86af29e0404d3  ./app/Services/AppVersionService.php
+cb49c014897bb66a71c201a21413ec4035048ae5faf9b460d4679121047bd490  ./app/Services/AppVersionService.php
 827a1e1fb703b1ffa5cc9f663219e6116c7c043852661bbaa8b7514e73b715f6  ./app/Services/AutomationWebhookService.php
 1980cb493d0e0464cdcbeb155b5aea8739c318f78bd0aafd0c8acc6dc5e8f335  ./app/Services/BackupAutomationService.php
 ec4c8036b556935456fe05933de8074d1020866d3f256f203943dcfaf7be9b74  ./app/Services/BackupSchedulePolicyService.php
 97dfc002e8a346fa8896fea84aa0c0cc5bc1d85832a4ae92b9a9fffa035326c6  ./app/Services/BillingReminderService.php
 2bf9bb83642fd63e3446dd2b5bb5aa12de92f9e2093246b3854359e7a669ad30  ./app/Services/BrandingService.php
 d00e0643714d6784b5ad96b2559ebd321e062e4b19188caf90366f2f0ac8449d  ./app/Services/CalendarAvailabilityService.php
-879b5070de4dd2a66d08be47d403adb14f6e2824d6c1b55b31dbd36c245dfc20  ./app/Services/CalendarClientCommunicationService.php
+ccd0411972ff19186ecd57092b5e545df1e67afec2ca45b9e7c5460d9e817f5a  ./app/Services/CalendarClientCommunicationService.php
 bacd513e713177e89d3a7f5c7da7ea5dc59b2165f9584e477089ccbf461d5e7b  ./app/Services/CalendarConversationService.php
 a1d6fb07ea071e08f6dce7bceca2ea26173f6054e957eb2839f8e4ee90479cee  ./app/Services/CalendarGoogleLifecycleService.php
 83f0f28b9f43ab4c2a21c5faa15500fccd5e51fd59b91161418971c50a910c15  ./app/Services/ClientCommunicationService.php
@@ -197,8 +197,8 @@ d0a63f0481859473d73985e0e5198b481e17d213b0608b1c3ba35271afbe1281  ./app/Views/bi
 422d3d44f8024af6b78f405ea1b4b75591c4431dbd4f5749461d3f3cf2bce0b4  ./app/Views/billing/subscription.php
 c5344a9d085a23af11d9f3c40a0f17efa9f86e640d9b734bd22734643bd2402e  ./app/Views/billing/subscription_admin.php
 3b4c28cd8d1ff174c105338028f8a88a18afa957c74ef87a7c3ac01a908fd342  ./app/Views/billing_reminders/index.php
-305faa60b522f9df3126b2606e698923af2aa6e71441fa30f5fe89f5779401f3  ./app/Views/calendar/index.php
-c1966bcc98fc5204d35f1987466e378ad3eb95b02be0f98abc4ab235c19629c1  ./app/Views/calendar_availability/index.php
+27e493e778f0186a2c2ff37a50d61d892b9e6fb85a8f76c0e15aa569ffc9dbe1  ./app/Views/calendar/index.php
+0076d23a2f7a90e684f7e1e5676f6d8ab8d6a6820bf87982b9be83ae7c0a90d7  ./app/Views/calendar_availability/index.php
 af1e7c6cd2c9f93600534a79ea1dc962f932352bf1bde4fe8113f15933caa6b2  ./app/Views/campaigns/index.php
 8c3184f2058776bf2ec3d706242b61f633eb337f0e28e45925cb39d8abc19498  ./app/Views/communications/index.php
 aebc1eba66568a85460da59dc6d742ef86b8defd98e044b3e824fe0ff53e618a  ./app/Views/companies/_account_tabs.php
@@ -280,7 +280,7 @@ afae98e3c346cda463c4ab1f655f23af01f5dfebf94cd5340652ac444523c664  ./bin/monitori
 b13804c24ef730a1b4d747da0a99341579e41e9613d0b99e2c3fef9726847d8f  ./bin/operational-alerts-audit.php
 bfa3ae2f885cbba3088bf26450b981d0011a4ad903946ba5533103f8d16f2443  ./bin/operations-monitor.php
 163d828f8c3c11245a1db3bc72f7ad40b7a11bffb2a5fad2dd5839d9e49ade2d  ./bin/plan-limits-audit.php
-20b76e16372b66883830ebb3ede14a80dc3f3b5aee395a2d7f710bc0297139d2  ./bin/process-notifications.php
+f8ce4252bc0601c70ab13d218ef50c976ba9563fa72581732150e98f80e2da55  ./bin/process-notifications.php
 650ae79a1cf2a80080d515bbeaa8feca0121b03fd29532729fc01c87c7409149  ./bin/production-readiness.php
 48a25f6071fcf662e94ecdd27e5cd08b7dd5c09dd70f9dd00868dfe1df6ac597  ./bin/reset-test-conversation.php
 55a969daff72c5a9c4322f86b38fee3a2af6df97439da7b0de6cbd2e510e717b  ./bin/scheduled-reports.php
@@ -577,6 +577,7 @@ b2778d9c6bf5d1c033d171617ff9067eb93a6acafc5b170cf93024297c84274c  ./docs/ATUALIZ
 676aaa157b98cd71d97d1403f5a3032891e324b94b0c4f3a8a317861e54abc47  ./docs/ATUALIZACAO-v36.39.2.md
 53903f36e18fec63d4b6da58136f791569c02a6dba17dada9f322aca40267396  ./docs/ATUALIZACAO-v36.40.0.md
 933bd04dc9ff17dc3283a85b05846ce3d82bd41539515bfc67c37d7efec6662a  ./docs/ATUALIZACAO-v36.40.1.md
+5befe3c867bdc8a8fd45705b0b174b60947e4aba19f4463362067a53cac88743  ./docs/ATUALIZACAO-v36.41.1.md
 cc0ed1b48f4448f2256c8f0972a37cf24342ab7e5f5bbed6af6e39e53c5f1199  ./docs/ATUALIZACAO-v36.6.10.md
 868c8f2f58490d04357c95b2140d696d937530632228b736617ef378607ea7c7  ./docs/ATUALIZACAO-v36.6.11.md
 c5429636c9356d6548b356466f8244aeec21e6a4f63c6f30671951717e101361  ./docs/ATUALIZACAO-v36.6.12.md
@@ -749,7 +750,7 @@ aeee5bc8e058b1d03890b79daaf9f39eef29e7e448efdc8b6d05d5678a01f1ac  ./docs/n8n_tem
 752c18986f14e103d9eb9950a0aab494d88b10c541cd3a470a051d790b7bdc11  ./docs/validation/HOMOLOGACAO-PERSISTENTE-2026-09-01.md
 006d6da9b25d9788d3afbc7c1f275a6b9d6d12ffcb1181961f519c05bfdb79cf  ./docs/validation/calendar-source-v7.md
 22347f12bacc2a5de89719e419f28f2e0a26bc5ecd4e467f396e2dc236d3fb34  ./docs/validation/homologacao-persistente-2026-09-01.json
-bf61d9d06bafefcd71c9411173cba6dab1439be8d76fcff19ecab7fc2ac2f48e  ./manifest.json
+43253ba74a527165135d91548e1e3bb7ee4cda9c8997092de50d8366ae670754  ./manifest.json
 c835b907d8eb7381a72224cfdc8b688ffbb9a7676f4f05f7bc84d18c4f61324e  ./public/.htaccess
 e2e17535d3058c8c6f5b55f7f4ad0875dac594940ec9111ad83c0d18e1a08bef  ./public/assets/css/app.css
 a379eaa195764145459de3cd9172ea3ad08668586cb97b0377181b0cbf70a5bc  ./public/assets/css/reports.css
@@ -785,7 +786,11 @@ e71c859b2d333cbb63db5f588a3753bbe81a07ad6673046ecf1112804d111887  ./scripts/rsco
 eb0d953e813962fd22ce9a78808b0d61ead079807de5bf35bf05286f7c31421b  ./scripts/verify-deploy-hardening.sh
 45b4c06dee1bc07abd19d1bf415c98369a3db38a12a10c63d6f91501fd9780c1  ./storage/README-APLICACAO.md
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/app/.gitkeep
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/app/white-label/.gitkeep
 0a0dac2ccf941d5650017de17788c4d8f72accb65801ef08d18cc491530e9a7f  ./storage/apply-white-label-company-brand.sh
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/cache/.gitkeep
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/logs/.gitkeep
+9f452350ffeac23fb568c3a1757b9540954d4481ae1f29e6b1f7e14eda47ab15  ./storage/logs/app.log
 72a48a02d968f194678cbda5e01aacedb229c60529efe55d48154f04c934fa90  ./tests/Contract/Fixtures/agent-policy-reliability-scenarios.json
 65e10c5121a88c6831503e6789ed136820f0a2e3e153bd7073e5110eda92b58c  ./tests/Contract/Fixtures/ai-metrics-accounting-scenarios.json
 d50b1524f01927464f7a65ee70971650a6e746bdb587fd8944a5662175eea2ee  ./tests/Contract/Fixtures/ai-quota-template-validation-scenarios.json
@@ -886,8 +891,8 @@ d864fbbf7051aeebd53d43e81676f9e841dc7a8f3b95e03c421e3305ea960481  ./tests/Featur
 79366aa16a1dab14d8ce13f3f0b700313b54e5d5c57d966a29e6d5cfac60e112  ./tests/Feature/calendar-assertive-v10-smoke.php
 1f02a248fd0bb5830f1be944e395943a9a3118b9fb23f2b36e28b3fde8bad8e8  ./tests/Feature/calendar-availability-inquiry-v363628-smoke.php
 b0893f624ee42e37549db9fbc1d9840535314a458e594fd41069cc2ee5907877  ./tests/Feature/calendar-before-ai-guard-v362718-smoke.php
-2a1353e8f40d438a38d51d73dd7a9ba56a6c8bae0bb20af0f3de6b4d1a90d168  ./tests/Feature/calendar-client-automation-v36410-smoke.php
-8687adbca1efd513496bef20475b3ee8ecf227257e7a7918ba8f74130248a824  ./tests/Feature/calendar-client-continuity-v36390-smoke.php
+256481877aceff2ad56274b3d09738babeb194e78fd3968f4b21b11557560423  ./tests/Feature/calendar-client-automation-v36410-smoke.php
+58e6dc274f9c4df630723b0f04304a6c0492268d2f6568828f2e5bdbb5bd7010  ./tests/Feature/calendar-client-continuity-v36390-smoke.php
 93ab1e0b575fb5c09aa88bdc937b6bb24e005840f8b789673e2464d774e9cb8c  ./tests/Feature/calendar-conversation-calendar-consistency-v362719-smoke.php
 e559ae1d0139d1880591557f876d49583d0741361b447b5f24615b3161870cdd  ./tests/Feature/calendar-conversational-confirmation-v362716-smoke.php
 cda426cd426924425cba9fc72a9db06d4677057ab2342a238bd01e9d3491cd6e  ./tests/Feature/calendar-fail-closed-current-turn-v36368-smoke.php

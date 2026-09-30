@@ -42,13 +42,6 @@ $preScheduleSourceLabels = [
     'converted' => 'Convertido para pré-agendamento',
     'conversation' => 'Conversa',
 ];
-$preScheduleLeadMessage = static function (string $description): string {
-    if ($description === '') return '';
-    if (preg_match('/(?:^|\R)Mensagem do lead:\s*(.+)$/us', $description, $match) === 1) {
-        return trim((string) ($match[1] ?? ''));
-    }
-    return '';
-};
 $triageCollected = static function (mixed $json): array {
     if (is_array($json)) return $json;
     if (!is_string($json) || trim($json) === '') return [];
@@ -322,7 +315,6 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
                 if ($currentModality === '' || $currentModality === 'indefinida') {
                     $currentModality = trim((string) ($appointment['location_type'] ?? ''));
                 }
-                $leadMessage = $preScheduleLeadMessage((string) ($appointment['description'] ?? ''));
                 $sourceKey = trim((string) ($appointment['pre_schedule_source'] ?? ''));
                 $sourceLabel = $preScheduleSourceLabels[$sourceKey] ?? ($sourceKey !== '' ? ucfirst(str_replace('_', ' ', $sourceKey)) : 'Não identificada');
 
@@ -384,7 +376,6 @@ $calendarEvents = array_map(static function (array $appointment) use ($statusLab
                                     <div><dt>Situação da demanda</dt><dd><?= View::e($demandStatusLabels[$currentDemandStatus] ?? ucfirst(str_replace('_', ' ', $currentDemandStatus))) ?></dd></div>
                                     <div class="pre-schedule-record-wide"><dt><?= View::e($triageFieldLabels['brief_demand'] ?? 'Demanda') ?></dt><dd><?= View::e($currentDemandSummary) ?></dd></div>
                                 <?php endif; ?>
-                                <div class="pre-schedule-record-wide"><dt>Mensagem que originou o pedido</dt><dd><?= View::e($leadMessage !== '' ? $leadMessage : 'Não registrada') ?></dd></div>
                             </dl>
                         </section>
                     <?php else: ?>
