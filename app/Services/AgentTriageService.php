@@ -84,6 +84,7 @@ final class AgentTriageService
         $profile = (new AgentConversationBehaviorService())->applyOperationalOverridesToProfile($profile);
         $collected = is_array($state['collected'] ?? null) ? $state['collected'] : [];
         $fields = is_array($profile['triage_fields'] ?? null) ? $profile['triage_fields'] : [];
+        $collected = $this->sanitizeWeakCollectedFreeTextValues($fields, $collected);
         $currentField = trim((string) ($state['current_field_key'] ?? '')) ?: null;
 
         // Mantém o laboratório em paridade com o runtime: um cursor antigo não pode
@@ -325,6 +326,14 @@ final class AgentTriageService
                 $collected['requester_name'] = $collected['requester_name'] ?? $contactName;
             }
             $fields = is_array($profile['triage_fields'] ?? null) ? $profile['triage_fields'] : [];
+
+            // 36.40.4 — valores livres capturados fora de contexto em versões anteriores
+            // não podem continuar satisfazendo uma etapa estruturada. Frases genéricas de
+            // interesse como “gostaria de saber sobre a terapia” são intenção/conversa,
+            // não uma resposta operacional confiável para Demanda/Objetivo/etc. A limpeza
+            // é limitada a campos livres configuráveis e ao brief_demand legado; dados
+            // determinísticos (nome, idade, modalidade, preferência) nunca passam aqui.
+            $collected = $this->sanitizeWeakCollectedFreeTextValues($fields, $collected);
 
             // 36.37.2: demanda segue a mesma regra de qualquer outra informação do
             // workflow. Não consultamos mais conversation_behavior para decidir se ela
@@ -833,7 +842,8 @@ final class AgentTriageService
             return null;
         }
 
-        if ($this->looksLikeLowInformationContinuation($normalized)) {
+        if ($this->looksLikeLowInformationContinuation($normalized)
+            || $this->looksLikeGenericInformationalOpening($message, $normalized)) {
             return null;
         }
 
@@ -876,7 +886,8 @@ final class AgentTriageService
         if (mb_strlen($message) < 3) {
             return false;
         }
-        if ($this->looksLikeLowInformationContinuation($normalized)) {
+        if ($this->looksLikeLowInformationContinuation($normalized)
+            || $this->looksLikeGenericInformationalOpening($message, $normalized)) {
             return false;
         }
 
@@ -924,6 +935,77 @@ final class AgentTriageService
         }
 
         return false;
+    }
+
+    /**
+     * Mensagens de abertura/interesse não devem virar automaticamente o conteúdo de um
+     * campo livre. A regra descreve a função linguística da frase, não o segmento do
+     * negócio: serve igualmente para terapia, consulta, orçamento, procedimento, aula,
+     * serviço ou qualquer outro assunto configurado pela empresa.
+     */
+    private function looksLikeGenericInformationalOpening(string $message, string $normalized): bool
+    {
+        $message = trim($message);
+        $normalized = trim($normalized);
+        if ($message === '' || $normalized === '') {
+            return true;
+        }
+
+        // Perguntas e pedidos explícitos de explicação já são tratados como interrupção
+        // informativa. Mantemos também as formas declarativas equivalentes, que antes
+        // escapavam por não terminarem em "?".
+        if ((new AgentConversationBehaviorService())->hasInformationalQuestion($message)) {
+            return true;
+        }
+
+        return preg_match(
+            '/^(?:oi[,! ]*)?(?:eu )?(?:gostaria|queria|quero|vim|estou (?:aqui )?para|estou (?:aqui )?pra)\s+(?:de\s+)?(?:saber|entender|conhecer|ter|receber)\s+(?:mais\s+)?(?:sobre|informacoes?|informações?|detalhes?|como funciona|a respeito)\b/u',
+            $normalized
+        ) === 1
+        || preg_match('/^(?:tenho|teria)\s+interesse\s+(?:em|no|na|nos|nas)\b/u', $normalized) === 1
+        || preg_match('/^(?:gostaria|queria|quero)\s+(?:de\s+)?(?:mais\s+)?informacoes?\b/u', $normalized) === 1
+        || preg_match('/^(?:gostaria|queria|quero)\s+(?:de\s+)?(?:mais\s+)?informações\b/u', $normalized) === 1;
+    }
+
+    /**
+     * Remove somente valores textuais fracos que foram persistidos como se fossem uma
+     * resposta estruturada. Isso corrige sessões já iniciadas sem apagar respostas
+     * substanciais nem dados determinísticos. Um valor explícito e descritivo permanece.
+     *
+     * @param array<int,array<string,mixed>> $fields
+     * @param array<string,mixed> $collected
+     * @return array<string,mixed>
+     */
+    private function sanitizeWeakCollectedFreeTextValues(array $fields, array $collected): array
+    {
+        foreach ($fields as $field) {
+            if (!is_array($field) || empty($field['active'])) {
+                continue;
+            }
+            $fieldKey = trim((string) ($field['field_key'] ?? $field['key'] ?? ''));
+            if ($fieldKey === '' || !array_key_exists($fieldKey, $collected)) {
+                continue;
+            }
+
+            $fieldType = strtolower(trim((string) ($field['field_type'] ?? 'text')));
+            if (!in_array($fieldType, ['text', 'textarea'], true)) {
+                continue;
+            }
+            if ($fieldKey !== 'brief_demand' && !str_starts_with($fieldKey, 'custom_')) {
+                continue;
+            }
+
+            $value = trim((string) ($collected[$fieldKey] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+            $normalizedValue = $this->normalize($value);
+            if ($this->looksLikeLowInformationContinuation($normalizedValue)
+                || $this->looksLikeGenericInformationalOpening($value, $normalizedValue)) {
+                unset($collected[$fieldKey]);
+            }
+        }
+        return $collected;
     }
 
     private function extractAge(string $text): ?int

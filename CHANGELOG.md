@@ -1,3 +1,16 @@
+## 36.40.4 — Coleta textual confiável
+
+### Corrigido
+- mensagens genéricas de interesse, como “gostaria de saber sobre a terapia/serviço”, deixam de preencher automaticamente Demanda, Objetivo ou outros campos textuais configuráveis;
+- valores textuais fracos persistidos em sessões de triagem anteriores são revalidados antes de satisfazer uma etapa, evitando que a Agenda exiba uma frase de abertura no lugar da resposta real;
+- quando a etapa textual está realmente ativa, a resposta declarativa do contato permanece como fonte válida e o fluxo avança normalmente;
+- a regra é linguística e genérica, sem depender de Psicologia, Nutrição, Fisioterapia ou do nome específico do campo;
+- contrato do cache exato foi renovado para não reaproveitar resposta produzida pelo runtime anterior.
+
+### Migration
+- nenhuma nova; permanece `123_published_slots_min_notice_policy.sql`.
+
+
 ## 36.40.3 — Agenda publicada e antecedência coerente
 
 ### Corrigido

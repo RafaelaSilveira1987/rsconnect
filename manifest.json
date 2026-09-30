@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.40.3",
-  "release_name": "Agenda publicada e antecedência coerente",
+  "package_version": "36.40.4",
+  "release_name": "Coleta textual confiável",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,9 +19,9 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.40.2",
-      "release_name": "Reset de homologação compatível com prepares nativos",
-      "required_migration": "122_calendar_client_communications.sql"
+      "package_version": "36.40.3",
+      "release_name": "Agenda publicada e antecedência coerente",
+      "required_migration": "123_published_slots_min_notice_policy.sql"
     },
     "historical_releases": [
       {

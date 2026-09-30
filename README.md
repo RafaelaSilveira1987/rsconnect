@@ -1,5 +1,5 @@
-# RS Connect 36.40.3
-> **36.40.3** mantém todas as correções anteriores e torna explícita a política de antecedência mínima da Agenda publicada. A empresa pode decidir se vagas liberadas manualmente respeitam ou substituem a antecedência mínima. A triagem também deixa de aceitar frases de continuação sem conteúdo suficiente como demanda/campo livre. Requer `123_published_slots_min_notice_policy.sql`.
+# RS Connect 36.40.4
+> **36.40.4** mantém todas as correções anteriores e fortalece a coleta estruturada: mensagens genéricas de interesse não podem preencher Demanda/Objetivo/outros campos livres, valores fracos persistidos em sessões antigas são revalidados e a resposta explícita da etapa passa a prevalecer. Permanece necessária `123_published_slots_min_notice_policy.sql`.
 
 ## Homologação recomendada
 
