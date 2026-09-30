@@ -833,6 +833,10 @@ final class AgentTriageService
             return null;
         }
 
+        if ($this->looksLikeLowInformationContinuation($normalized)) {
+            return null;
+        }
+
         if (str_starts_with($fieldKey, 'custom_') && !$this->fieldAcceptsQuestionAsAnswer($fieldDefinition)) {
             $behavior = new AgentConversationBehaviorService();
             if ($behavior->hasInformationalQuestion($message) || $this->looksLikeStandaloneQuestion($message, $normalized)) {
@@ -872,6 +876,9 @@ final class AgentTriageService
         if (mb_strlen($message) < 3) {
             return false;
         }
+        if ($this->looksLikeLowInformationContinuation($normalized)) {
+            return false;
+        }
 
         // Respostas de outros campos não podem satisfazer "demanda" por acidente.
         if (preg_match('/^(sim|nao|não|online|presencial|telefone|manha|manhã|tarde|noite)$/u', $normalized)) {
@@ -888,6 +895,35 @@ final class AgentTriageService
         }
 
         return true;
+    }
+
+    /**
+     * Rejeita respostas de continuação/justificativa que não carregam conteúdo suficiente
+     * para preencher um campo textual livre. É uma regra linguística, não de nicho:
+     * evita que frases como "é melhor para ela" ou "prefiro assim" virem demanda,
+     * objetivo, procedimento ou qualquer outro campo configurável.
+     */
+    private function looksLikeLowInformationContinuation(string $normalized): bool
+    {
+        $normalized = trim($normalized);
+        if ($normalized === '') {
+            return true;
+        }
+
+        if (preg_match('/^(sim|nao|ok|okay|certo|entendi|beleza|perfeito|otimo|isso|isso mesmo|exatamente|por isso)$/u', $normalized)) {
+            return true;
+        }
+        if (preg_match('/^(e )?(melhor|e melhor|fica melhor|mais facil|e mais facil)( (para|pra) (mim|ele|ela|nos|a gente))?$/u', $normalized)) {
+            return true;
+        }
+        if (preg_match('/^(prefiro|quero|pode ser) (assim|desse jeito|dessa forma)$/u', $normalized)) {
+            return true;
+        }
+        if (preg_match('/^(e )?melhor (para|pra) (mim|ele|ela|nos|a gente)$/u', $normalized)) {
+            return true;
+        }
+
+        return false;
     }
 
     private function extractAge(string $text): ?int

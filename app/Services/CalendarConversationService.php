@@ -101,10 +101,13 @@ final class CalendarConversationService
         }
 
         if ($slots === []) {
-            $message = $this->safeNoAvailabilityMessage(
-                (string) ($settings['no_availability_message'] ?? ''),
-                $this->noAvailabilityFallback($appointment, $isAvailabilityBrowse)
-            );
+            $constraintMessage = $this->availabilityConstraintMessage($request);
+            $message = $constraintMessage !== null
+                ? $constraintMessage
+                : $this->safeNoAvailabilityMessage(
+                    (string) ($settings['no_availability_message'] ?? ''),
+                    $this->noAvailabilityFallback($appointment, $isAvailabilityBrowse)
+                );
             $send = $this->sendAppointmentMessage(
                 $appointment,
                 $message,
@@ -1480,6 +1483,41 @@ final class CalendarConversationService
             return ['signal' => true, 'slot' => null, 'reason' => 'new_preference', 'new_preference' => true];
         }
         return ['signal' => true, 'slot' => null, 'reason' => 'time_not_found'];
+    }
+
+    /** @param array<string,mixed> $request */
+    private function availabilityConstraintMessage(array $request): ?string
+    {
+        $payload = json_decode((string) ($request['requested_payload_json'] ?? ''), true);
+        if (!is_array($payload)) {
+            return null;
+        }
+        $search = is_array($payload['search'] ?? null) ? $payload['search'] : [];
+        $reason = trim((string) ($search['blocked_reason'] ?? ''));
+        if ($reason === '') {
+            return null;
+        }
+
+        if ($reason === 'min_notice') {
+            $hours = max(0, (int) ($search['min_notice_hours'] ?? 0));
+            $noticeStart = trim((string) ($search['notice_start_at'] ?? ''));
+            $suffix = '';
+            if ($noticeStart !== '') {
+                try {
+                    $date = new DateTimeImmutable($noticeStart);
+                    $suffix = ' Posso verificar horários a partir de ' . $date->format('d/m') . ' às ' . $date->format('H:i') . '.';
+                } catch (Throwable) {
+                    $suffix = '';
+                }
+            }
+            return 'Esse período está dentro da antecedência mínima de ' . $hours . ' hora(s) configurada para novos agendamentos.' . $suffix;
+        }
+
+        if ($reason === 'past_period') {
+            return 'Esse período já passou. Pode me informar outro dia ou horário de preferência?';
+        }
+
+        return null;
     }
 
     private function safeNoAvailabilityMessage(string $configured, string $fallback): string

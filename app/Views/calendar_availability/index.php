@@ -602,7 +602,11 @@ $requestInsight = static function (array $request): string {
                         <span><strong>Oferecer somente horários liberados</strong><small>O agente só informa vagas publicadas manualmente para a empresa ou profissional.</small></span>
                     </label>
                 </div>
-                <div class="calendar-inline-info" data-internal-strategy-panel="published"><strong>Fonte de verdade: vagas publicadas.</strong><span>Um espaço vazio no calendário não será considerado disponível. Primeiro libere os horários na aba “Disponibilidades”.</span></div>
+                <div data-internal-strategy-panel="published">
+                    <div class="calendar-inline-info"><strong>Fonte de verdade: vagas publicadas.</strong><span>Um espaço vazio no calendário não será considerado disponível. Primeiro libere os horários na aba “Disponibilidades”.</span></div>
+                    <label class="switch-inline" style="margin-top:12px"><input type="checkbox" name="published_slots_respect_min_notice" value="1" <?= !array_key_exists('published_slots_respect_min_notice', $settings) || !empty($settings['published_slots_respect_min_notice']) ? 'checked' : '' ?>><span>Aplicar a antecedência mínima também aos horários liberados</span></label>
+                    <small class="muted-text">Ativado: uma vaga publicada só pode ser oferecida depois da antecedência configurada. Desativado: publicar a vaga autoriza o agente a oferecê-la mesmo com antecedência menor, desde que o horário ainda seja futuro e esteja livre.</small>
+                </div>
                 <div data-internal-strategy-panel="calculated">
                 <div class="internal-calendar-days">
                     <?php foreach ($internalHoursByDay as $dayNumber => $dayConfig): ?>
@@ -642,7 +646,7 @@ $requestInsight = static function (array $request): string {
                 </div>
             </div>
             <div class="field-grid two">
-                <div class="field"><label>Antecedência mínima</label><div class="input-with-suffix"><input type="number" name="min_notice_hours" min="0" max="720" value="<?= (int) ($settings['min_notice_hours'] ?? 4) ?>"><span>h</span></div></div>
+                <div class="field"><label>Antecedência mínima</label><div class="input-with-suffix"><input type="number" name="min_notice_hours" min="0" max="720" value="<?= (int) ($settings['min_notice_hours'] ?? 4) ?>"><span>h</span></div><small class="muted-text">Ex.: 48h impede novos agendamentos para períodos que terminem antes de 48 horas a partir de agora. Em horários liberados, a regra pode ser desligada acima.</small></div>
                 <div class="field"><label>Quantidade de sugestões</label><input type="number" name="max_suggestions" min="1" max="50" value="<?= (int) ($settings['max_suggestions'] ?? 5) ?>"></div>
             </div>
             <div class="field-grid two">

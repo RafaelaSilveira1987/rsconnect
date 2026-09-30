@@ -142,5 +142,6 @@ return [
         ['sequence' => 127, 'file' => '120_agent_turn_state_cursor.sql'],
         ['sequence' => 128, 'file' => '121_internal_calendar_published_slots.sql'],
         ['sequence' => 129, 'file' => '122_calendar_client_communications.sql'],
+        ['sequence' => 130, 'file' => '123_published_slots_min_notice_policy.sql'],
     ],
 ];

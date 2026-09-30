@@ -1,3 +1,17 @@
+## 36.40.3 — Agenda publicada e antecedência coerente
+
+### Corrigido
+- diagnóstico confirmou que a Agenda publicada estava correta, mas a preferência “quarta pela manhã” era zerada pela antecedência mínima de 48h (`search_start_at = search_end_at = 12:00`);
+- períodos totalmente bloqueados por antecedência mínima deixam de virar uma busca vazia artificial e passam a registrar o motivo operacional real;
+- o WhatsApp informa quando a preferência está dentro da antecedência mínima, em vez de afirmar genericamente que não existem horários;
+- horários publicados ganham uma política própria: por padrão respeitam a antecedência mínima, mas a empresa pode desligar essa trava quando a publicação explícita da vaga deve autorizar agendamento de curto prazo;
+- frases de continuação como “é melhor para ela”, “prefiro assim” e confirmações curtas não preenchem demanda ou outros campos livres por acidente;
+- regra é genérica e não depende de Psicologia ou de nomes de campos específicos.
+
+### Migration
+- nova `123_published_slots_min_notice_policy.sql`.
+
+
 ## 36.40.2 — Reset de homologação compatível com prepares nativos
 
 ### Corrigido

@@ -1,5 +1,5 @@
-# RS Connect 36.40.2
-> **36.40.2** mantém as correções de isolamento de ciclo da 36.40.1 e corrige o utilitário seguro de reset de homologação para funcionar com os prepares nativos do PDO usados pelo RS Connect. Não há migration nova; permanece `122_calendar_client_communications.sql`.
+# RS Connect 36.40.3
+> **36.40.3** mantém todas as correções anteriores e torna explícita a política de antecedência mínima da Agenda publicada. A empresa pode decidir se vagas liberadas manualmente respeitam ou substituem a antecedência mínima. A triagem também deixa de aceitar frases de continuação sem conteúdo suficiente como demanda/campo livre. Requer `123_published_slots_min_notice_policy.sql`.
 
 ## Homologação recomendada
 

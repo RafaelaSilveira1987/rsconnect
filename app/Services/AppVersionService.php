@@ -226,8 +226,9 @@ final class AppVersionService
     // RS Connect 36.39.2 — descoberta publicada independente de owner/cursor histórico.
     // RS Connect 36.40.0 — preferência de agenda e modalidade como estado canônico, sem regras por nicho.
     // RS Connect 36.40.1 — isolamento de ciclo, identidade atual e coleta antecipada sem repetição.
-    public const PACKAGE_LABEL = 'RS Connect 36.40.1 — Isolamento de ciclo e coleta sem repetição';
-    public const REQUIRED_MIGRATION = '122_calendar_client_communications.sql';
+    // RS Connect 36.40.3 — antecedência explícita na Agenda publicada e triagem sem preenchimento por frases de continuação.
+    public const PACKAGE_LABEL = 'RS Connect 36.40.3 — Agenda publicada e antecedência coerente';
+    public const REQUIRED_MIGRATION = '123_published_slots_min_notice_policy.sql';
 
     private PDO $pdo;
 

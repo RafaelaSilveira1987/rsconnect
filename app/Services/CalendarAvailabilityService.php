@@ -23,6 +23,7 @@ final class CalendarAvailabilityService
             'enabled' => 0,
             'availability_mode' => 'free_slots',
             'internal_availability_strategy' => 'calculated',
+            'published_slots_respect_min_notice' => 1,
             'require_before_approval' => 1,
             'auto_request_on_pre_schedule' => 1,
             'use_n8n' => 1,
@@ -174,6 +175,9 @@ final class CalendarAvailabilityService
             'enabled' => 1,
             'availability_mode' => 'free_slots',
             'internal_availability_strategy' => (new InternalCalendarSlotService())->normalizeStrategy((string) ($data['internal_availability_strategy'] ?? $current['internal_availability_strategy'] ?? 'calculated')),
+            'published_slots_respect_min_notice' => array_key_exists('published_slots_respect_min_notice', $data)
+                ? (!empty($data['published_slots_respect_min_notice']) ? 1 : 0)
+                : (!empty($current['published_slots_respect_min_notice']) ? 1 : 0),
             'require_before_approval' => 1,
             'auto_request_on_pre_schedule' => 1,
             'use_n8n' => 0,
@@ -397,6 +401,9 @@ final class CalendarAvailabilityService
         $current = $this->settings($tenantId);
         $mode = $this->normalizeMode((string) ($data['availability_mode'] ?? $current['availability_mode'] ?? 'free_slots'));
         $internalStrategy = (new InternalCalendarSlotService())->normalizeStrategy((string) ($data['internal_availability_strategy'] ?? $current['internal_availability_strategy'] ?? 'calculated'));
+        $publishedSlotsRespectMinNotice = array_key_exists('published_slots_respect_min_notice', $data)
+            ? (!empty($data['published_slots_respect_min_notice']) ? 1 : 0)
+            : (!empty($current['published_slots_respect_min_notice']) ? 1 : 0);
         $duration = max(15, min(240, (int) ($data['default_duration_minutes'] ?? 50)));
         $interval = max(5, min(240, (int) ($data['slot_interval_minutes'] ?? 30)));
         $buffer = max(0, min(180, (int) ($data['buffer_minutes'] ?? 10)));
@@ -562,6 +569,17 @@ final class CalendarAvailabilityService
             )->execute(['strategy' => $internalStrategy, 'tenant_id' => $tenantId]);
         }
 
+        if ($this->hasColumn('tenant_calendar_availability_settings', 'published_slots_respect_min_notice')) {
+            Database::connection()->prepare(
+                'UPDATE tenant_calendar_availability_settings
+                 SET published_slots_respect_min_notice = :respect_notice, updated_at = CURRENT_TIMESTAMP
+                 WHERE tenant_id = :tenant_id'
+            )->execute([
+                'respect_notice' => $publishedSlotsRespectMinNotice,
+                'tenant_id' => $tenantId,
+            ]);
+        }
+
         if ($this->hasColumn('tenant_calendar_availability_settings', 'calendar_event_webhook_url_encrypted')) {
             Database::connection()->prepare(
                 'UPDATE tenant_calendar_availability_settings
@@ -662,7 +680,9 @@ final class CalendarAvailabilityService
 
         $mode = $this->normalizeMode((string) ($settings['availability_mode'] ?? 'free_slots'));
         $token = bin2hex(random_bytes(16));
-        $window = $this->searchWindow($settings, $appointment);
+        $settingsForWindow = $settings;
+        $settingsForWindow['_calendar_source'] = $calendarSource;
+        $window = $this->searchWindow($settingsForWindow, $appointment);
         $pdo = Database::connection();
 
         $pdo->prepare(
@@ -695,6 +715,61 @@ final class CalendarAvailabilityService
                 'id' => $requestId,
                 'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ]);
+
+        // 36.40.3 — uma preferência totalmente fora da janela operacional não é
+        // convertida em uma busca vazia artificial. Registramos o motivo real para a
+        // conversa responder de forma assertiva (antecedência mínima/período passado).
+        $blockedReason = trim((string) ($window['blocked_reason'] ?? ''));
+        if ($blockedReason !== '') {
+            $internalStrategy = (new InternalCalendarSlotService())->normalizeStrategy(
+                (string) ($settings['internal_availability_strategy'] ?? 'calculated')
+            );
+            $blockedSource = $calendarSource === 'internal'
+                ? ($internalStrategy === InternalCalendarSlotService::STRATEGY_PUBLISHED ? 'internal_published' : 'internal_fallback')
+                : 'availability_policy';
+            $noticeHours = max(0, (int) ($window['min_notice_hours'] ?? $settings['min_notice_hours'] ?? 0));
+            $diagnostic = $blockedReason === 'min_notice'
+                ? 'A preferência informada está dentro da antecedência mínima de ' . $noticeHours . ' hora(s) configurada para a agenda.'
+                : 'O período informado já passou e não pode mais ser oferecido.';
+            $blockedPayload = [
+                'slots' => [],
+                'source' => $blockedSource,
+                'calendar_source' => $calendarSource,
+                'meta' => [
+                    'engine' => 'rs_connect_availability_policy',
+                    'blocked_reason' => $blockedReason,
+                    'search_start_at' => (string) ($window['start'] ?? ''),
+                    'search_end_at' => (string) ($window['end'] ?? ''),
+                    'notice_start_at' => (string) ($window['notice_start'] ?? ''),
+                    'min_notice_hours' => $noticeHours,
+                    'respect_min_notice' => !empty($window['respect_min_notice']),
+                ],
+            ];
+            $this->storeSlots($requestId, $tenantId, $appointmentId, [], $blockedSource, $blockedPayload, $diagnostic);
+            $request = $this->findRequest($requestId, $token) ?: [
+                'id' => $requestId,
+                'tenant_id' => $tenantId,
+                'appointment_id' => $appointmentId,
+                'origin' => $origin,
+            ];
+            $conversation = (new CalendarConversationService())->handleAvailabilityResult($request, $diagnostic);
+            Audit::log('calendar.availability_blocked_by_policy', [
+                'request_id' => $requestId,
+                'appointment_id' => $appointmentId,
+                'reason' => $blockedReason,
+                'min_notice_hours' => $noticeHours,
+            ], $tenantId);
+            return [
+                'ok' => true,
+                'available' => false,
+                'slots' => 0,
+                'request_id' => $requestId,
+                'message' => $diagnostic,
+                'conversation' => $conversation,
+                'calendar_source' => $calendarSource,
+                'blocked_reason' => $blockedReason,
+            ];
+        }
 
         if ($calendarSource === 'internal') {
             $internalStrategy = (new InternalCalendarSlotService())->normalizeStrategy(
@@ -2095,6 +2170,10 @@ final class CalendarAvailabilityService
                 'slot_interval_minutes' => (int) ($settings['slot_interval_minutes'] ?? 30),
                 'buffer_minutes' => (int) ($settings['buffer_minutes'] ?? 10),
                 'min_notice_hours' => (int) ($settings['min_notice_hours'] ?? 4),
+                'published_slots_respect_min_notice' => !empty($settings['published_slots_respect_min_notice']),
+                'blocked_reason' => $window['blocked_reason'] ?? null,
+                'notice_start_at' => $window['notice_start'] ?? null,
+                'respect_min_notice' => !empty($window['respect_min_notice']),
                 'timezone' => (string) ($settings['timezone'] ?? 'America/Sao_Paulo'),
                 'utc_offset' => (string) ($settings['google_utc_offset'] ?? '-03:00'),
                 'max_suggestions' => (int) ($settings['max_suggestions'] ?? 5),
@@ -2220,8 +2299,21 @@ final class CalendarAvailabilityService
     {
         $timezone = new DateTimeZone((string) ($settings['timezone'] ?? 'America/Sao_Paulo'));
         $now = new DateTimeImmutable('now', $timezone);
-        $noticeStart = $now->add(new DateInterval('PT' . max(0, (int) ($settings['min_notice_hours'] ?? 4)) . 'H'));
-        $start = $noticeStart;
+        $noticeHours = max(0, (int) ($settings['min_notice_hours'] ?? 4));
+        $noticeStart = $now->add(new DateInterval('PT' . $noticeHours . 'H'));
+
+        $internalStrategy = (new InternalCalendarSlotService())->normalizeStrategy(
+            (string) ($settings['internal_availability_strategy'] ?? 'calculated')
+        );
+        $publishedRespectsNotice = !array_key_exists('published_slots_respect_min_notice', $settings)
+            || !empty($settings['published_slots_respect_min_notice']);
+        $calendarSource = trim((string) ($settings['_calendar_source'] ?? 'internal'));
+        $publishedOverrideEligible = $calendarSource === 'internal'
+            && $internalStrategy === InternalCalendarSlotService::STRATEGY_PUBLISHED;
+        $respectNotice = !($publishedOverrideEligible && !$publishedRespectsNotice);
+        $minimumStart = $respectNotice ? $noticeStart : $now;
+
+        $start = $minimumStart;
         $preferred = null;
         if (!empty($appointment['starts_at'])) {
             try {
@@ -2237,26 +2329,46 @@ final class CalendarAvailabilityService
         $hasExactTime = preg_match('/^(?:[01]?\d|2[0-3]):[0-5]\d$/', $preferredTimeText) === 1;
 
         // 36.37.3 — consultas da Agenda interna respeitam o ESCOPO pedido pelo contato.
-        // "quinta pela manhã" consulta somente a próxima quinta de manhã; "quinta"
-        // consulta somente aquela quinta. Antes a janela começava na preferência e
-        // seguia por vários dias, podendo devolver sexta/segunda como se fossem quinta.
+        // Quando o contato informou um dia e um período, preservamos a janela realmente
+        // pedida no diagnóstico. A antecedência mínima é tratada como uma restrição
+        // explícita, e não mais colapsando a busca em start=end (ex.: 12:00/12:00).
         if ($preferred instanceof DateTimeImmutable && $preferredDayText !== '' && !$hasExactTime) {
             $date = $preferred->format('Y-m-d');
             if ($period !== '') {
-                [$periodStart, $periodEnd] = $this->periodBounds($date, $period, $timezone);
-                $start = $periodStart > $noticeStart ? $periodStart : $noticeStart;
-                $end = $periodEnd;
+                [$requestedStart, $requestedEnd] = $this->periodBounds($date, $period, $timezone);
             } else {
-                $dayStart = new DateTimeImmutable($date . ' 00:00:00', $timezone);
-                $dayEnd = $dayStart->add(new DateInterval('P1D'));
-                $start = $dayStart > $noticeStart ? $dayStart : $noticeStart;
-                $end = $dayEnd;
+                $requestedStart = new DateTimeImmutable($date . ' 00:00:00', $timezone);
+                $requestedEnd = $requestedStart->add(new DateInterval('P1D'));
             }
 
-            if ($start >= $end) {
-                $start = $end;
+            $blockedReason = null;
+            if ($requestedEnd <= $now) {
+                $blockedReason = 'past_period';
+            } elseif ($respectNotice && $requestedEnd <= $noticeStart) {
+                $blockedReason = 'min_notice';
             }
-            return ['start' => $start->format('Y-m-d H:i:s'), 'end' => $end->format('Y-m-d H:i:s')];
+
+            if ($blockedReason !== null) {
+                return [
+                    'start' => $requestedStart->format('Y-m-d H:i:s'),
+                    'end' => $requestedEnd->format('Y-m-d H:i:s'),
+                    'blocked_reason' => $blockedReason,
+                    'notice_start' => $noticeStart->format('Y-m-d H:i:s'),
+                    'min_notice_hours' => $noticeHours,
+                    'respect_min_notice' => $respectNotice,
+                ];
+            }
+
+            $start = $requestedStart > $minimumStart ? $requestedStart : $minimumStart;
+            $end = $requestedEnd;
+            return [
+                'start' => $start->format('Y-m-d H:i:s'),
+                'end' => $end->format('Y-m-d H:i:s'),
+                'blocked_reason' => null,
+                'notice_start' => $noticeStart->format('Y-m-d H:i:s'),
+                'min_notice_hours' => $noticeHours,
+                'respect_min_notice' => $respectNotice,
+            ];
         }
 
         if ($preferred instanceof DateTimeImmutable && $preferred > $start) {
@@ -2265,7 +2377,14 @@ final class CalendarAvailabilityService
             $start = $preferred;
         }
         $end = $start->add(new DateInterval('P' . max(1, (int) ($settings['search_days_ahead'] ?? 14)) . 'D'));
-        return ['start' => $start->format('Y-m-d H:i:s'), 'end' => $end->format('Y-m-d H:i:s')];
+        return [
+            'start' => $start->format('Y-m-d H:i:s'),
+            'end' => $end->format('Y-m-d H:i:s'),
+            'blocked_reason' => null,
+            'notice_start' => $noticeStart->format('Y-m-d H:i:s'),
+            'min_notice_hours' => $noticeHours,
+            'respect_min_notice' => $respectNotice,
+        ];
     }
 
     private function normalizePeriodPreference(string $value): string

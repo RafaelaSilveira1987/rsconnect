@@ -20,8 +20,8 @@ $checks = [
         && str_contains($availability, 'ON DUPLICATE KEY UPDATE'),
     'diagnóstico registra janela e owner' => str_contains($availability, "'search_start_at' =>")
         && str_contains($availability, "'published_owner_filter' =>"),
-    'versão 36.39.2 sem migration nova' => str_contains($version, 'RS Connect 36.39.2')
-        && str_contains($version, "REQUIRED_MIGRATION = '122_calendar_client_communications.sql'"),
+    'contrato 36.39.2 permanece preservado em versões posteriores' => (str_contains($version, 'RS Connect 36.39.2') || str_contains($version, 'RS Connect 36.40.3'))
+        && (str_contains($version, "REQUIRED_MIGRATION = '122_calendar_client_communications.sql'") || str_contains($version, "REQUIRED_MIGRATION = '123_published_slots_min_notice_policy.sql'")),
 ];
 
 $failed=[];
