@@ -1,3 +1,11 @@
+## 36.40.5 — Ordem preservada na coleta antecipada
+
+- Corrige o caso em que um pedido como “quero/queria marcar uma consulta” podia ser salvo silenciosamente em um campo textual futuro (Demanda, Objetivo, Necessidade etc.) apenas por ser o único campo livre compatível.
+- A auto-coleta de campos futuros continua disponível para conteúdo espontâneo útil, mas intenções operacionais de agenda nunca satisfazem antecipadamente campos textuais.
+- Valores históricos curtos de pedido de agenda já persistidos em campos livres são revalidados e removidos do estado estruturado.
+- A etapa configurada volta a ser perguntada no ponto correto da Ordem do atendimento; campos determinísticos (idade, modalidade, preferência) continuam podendo ser aproveitados quando inequívocos.
+- Não há migration nova; permanece obrigatória `123_published_slots_min_notice_policy.sql`.
+
 ## 36.40.4 — Coleta textual confiável
 
 ### Corrigido

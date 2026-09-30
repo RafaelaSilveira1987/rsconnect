@@ -1,5 +1,5 @@
-# RS Connect 36.40.4
-> **36.40.4** mantém todas as correções anteriores e fortalece a coleta estruturada: mensagens genéricas de interesse não podem preencher Demanda/Objetivo/outros campos livres, valores fracos persistidos em sessões antigas são revalidados e a resposta explícita da etapa passa a prevalecer. Permanece necessária `123_published_slots_min_notice_policy.sql`.
+# RS Connect 36.40.5
+> **36.40.5** mantém todas as correções anteriores e impede que pedidos operacionais de agenda, como “quero marcar uma consulta”, sejam capturados antecipadamente como Demanda/Objetivo/outro campo livre futuro. A Ordem do atendimento permanece a fonte da sequência; a coleta antecipada só preserva conteúdo compatível e não operacional. Permanece necessária `123_published_slots_min_notice_policy.sql`.
 
 ## Homologação recomendada
 

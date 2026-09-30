@@ -887,7 +887,8 @@ final class AgentTriageService
             return false;
         }
         if ($this->looksLikeLowInformationContinuation($normalized)
-            || $this->looksLikeGenericInformationalOpening($message, $normalized)) {
+            || $this->looksLikeGenericInformationalOpening($message, $normalized)
+            || $this->looksLikeStandaloneSchedulingRequest($normalized)) {
             return false;
         }
 
@@ -935,6 +936,26 @@ final class AgentTriageService
         }
 
         return false;
+    }
+
+    /**
+     * Pedidos operacionais curtos de agenda descrevem a ação que o contato quer executar,
+     * não o conteúdo de um campo livre futuro. A classificação é intencionalmente
+     * genérica: consulta, atendimento, horário, reunião, reserva ou simplesmente
+     * "quero agendar" devem preservar o cursor da Ordem do atendimento.
+     */
+    private function looksLikeStandaloneSchedulingRequest(string $normalized): bool
+    {
+        $normalized = trim($normalized);
+        if ($normalized === '') {
+            return false;
+        }
+
+        return preg_match(
+            '/^(?:oi[,! ]*)?(?:eu )?(?:gostaria|queria|quero|preciso|desejo)(?:\s+de)?\s+(?:agendar|marcar|remarcar|reservar)(?:\s+(?:uma?|o|a))?(?:\s+(?:consulta|atendimento|horario|horário|sessao|sessão|reuniao|reunião|vaga|reserva))?(?:\s+(?:para|pra)\s+(?:mim|me|hoje|amanha|amanhã|[a-z0-9_-]+))?[.!?]*$/u',
+            $normalized
+        ) === 1
+        || preg_match('/^(?:tem|teria|ha|há)\s+(?:alguma\s+)?(?:vaga|horario|horário|disponibilidade)(?:\s+(?:para|pra)\s+.+)?[.!?]*$/u', $normalized) === 1;
     }
 
     /**
@@ -1001,7 +1022,8 @@ final class AgentTriageService
             }
             $normalizedValue = $this->normalize($value);
             if ($this->looksLikeLowInformationContinuation($normalizedValue)
-                || $this->looksLikeGenericInformationalOpening($value, $normalizedValue)) {
+                || $this->looksLikeGenericInformationalOpening($value, $normalizedValue)
+                || $this->looksLikeStandaloneSchedulingRequest($normalizedValue)) {
                 unset($collected[$fieldKey]);
             }
         }
@@ -1226,6 +1248,22 @@ final class AgentTriageService
             if ($key === '' || $this->hasCollectedValue($collected, $key)) {
                 continue;
             }
+
+            // 36.40.5 — auto-coleta antecipada é uma conveniência, nunca uma forma de
+            // transformar a intenção operacional do turno em conteúdo do próximo campo
+            // livre. "Quero marcar uma consulta" mantém a intenção de agenda, mas não
+            // pode virar Demanda/Objetivo/Necessidade apenas porque esse é o único campo
+            // textual futuro. Quando esse campo chegar ao cursor, sua resposta será
+            // coletada normalmente. Campos determinísticos continuam podendo ser
+            // aproveitados antecipadamente.
+            $fieldType = strtolower(trim((string) ($field['field_type'] ?? 'text')));
+            $isFreeTextFutureField = $key === 'brief_demand'
+                || str_starts_with($key, 'custom_')
+                || in_array($fieldType, ['text', 'textarea'], true);
+            if ($isFreeTextFutureField && $this->hasSchedulingIntent($normalized)) {
+                continue;
+            }
+
             $value = $this->captureCurrentFieldValue($key, $message, $normalized, $field);
             if ($value === null || $value === '') {
                 continue;

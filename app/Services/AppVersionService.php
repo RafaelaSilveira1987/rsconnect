@@ -228,7 +228,8 @@ final class AppVersionService
     // RS Connect 36.40.1 — isolamento de ciclo, identidade atual e coleta antecipada sem repetição.
     // RS Connect 36.40.3 — antecedência explícita na Agenda publicada e triagem sem preenchimento por frases de continuação.
     // RS Connect 36.40.4 — coleta textual confiável: interesse genérico não vira dado estruturado e respostas explícitas prevalecem.
-    public const PACKAGE_LABEL = 'RS Connect 36.40.4 — Coleta textual confiável';
+    // RS Connect 36.40.5 — intenção de agenda não pode preencher antecipadamente campos livres da Ordem do atendimento.
+    public const PACKAGE_LABEL = 'RS Connect 36.40.5 — Ordem preservada na coleta antecipada';
     public const REQUIRED_MIGRATION = '123_published_slots_min_notice_policy.sql';
 
     private PDO $pdo;

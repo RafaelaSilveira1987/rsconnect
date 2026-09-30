@@ -1,6 +1,6 @@
 {
   "name": "RS Connect",
-  "package_version": "36.40.4",
+  "package_version": "36.40.5",
   "release_name": "Coleta textual confiável",
   "runtime": {
     "php": ">=8.2",
