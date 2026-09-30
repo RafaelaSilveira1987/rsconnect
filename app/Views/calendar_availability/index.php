@@ -342,7 +342,24 @@ $requestInsight = static function (array $request): string {
                 $googleState = (string) ($appointment['google_event_state'] ?? '');
                 $source = (string) ($appointment['availability_source'] ?? '');
                 $isMarked = $source === 'google_marked_slots';
-                $isReady = $availabilityStatus === 'slot_selected' && (!$isMarked || in_array($googleState, ['held', 'confirmed'], true));
+                $isReady = in_array($availabilityStatus, ['slot_selected', 'validated'], true)
+                    && (!$isMarked || in_array($googleState, ['held', 'confirmed'], true));
+                $hasPreference = trim((string) ($appointment['preferred_day_text'] ?? '')) !== ''
+                    && trim((string) ($appointment['preferred_time_text'] ?? '')) !== '';
+                $requiresAvailabilityBeforeApproval = !empty($settings['enabled']) && !empty($settings['require_before_approval']);
+                $requiresOwner = !empty($professionalCalendarSettings['enabled'])
+                    && !empty($professionalCalendarSettings['require_owner']);
+                $hasOwner = (int) ($appointment['owner_user_id'] ?? 0) > 0;
+                $canConfirmPreSchedule = $hasPreference
+                    && (!$requiresAvailabilityBeforeApproval || $isReady)
+                    && (!$requiresOwner || $hasOwner);
+                $confirmDisabledReason = !$hasPreference
+                    ? 'Informe dia e horário antes de confirmar.'
+                    : (($requiresOwner && !$hasOwner)
+                        ? 'Selecione o profissional responsável antes de confirmar.'
+                        : (($requiresAvailabilityBeforeApproval && !$isReady)
+                            ? 'Escolha e valide um horário antes de confirmar.'
+                            : 'Este pré-agendamento ainda não pode ser confirmado.'));
                 $statusText = $statusLabels[$availabilityStatus] ?? ($availabilityStatus ?: 'Disponibilidade ainda não consultada');
             ?>
             <article class="calendar-appointment-card <?= $isReady ? 'is-ready' : '' ?>">
@@ -390,6 +407,20 @@ $requestInsight = static function (array $request): string {
                         <input type="hidden" name="return_to" value="/calendar?section=availability&amp;tab=preschedules&amp;tenant_id=<?= (int) $tenantId ?>#horarios-<?= (int) $appointment['id'] ?>">
                         <button class="btn btn-small btn-primary" type="submit">Buscar disponibilidade</button>
                     </form>
+                    <?php if ($canManage): ?>
+                        <?php if ($canConfirmPreSchedule): ?>
+                            <form method="post" action="<?= View::e(Router::url('/calendar/status')) ?>">
+                                <?= Csrf::input() ?>
+                                <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
+                                <input type="hidden" name="appointment_id" value="<?= (int) $appointment['id'] ?>">
+                                <input type="hidden" name="status" value="confirmed">
+                                <input type="hidden" name="return_to" value="/calendar?section=availability&amp;tab=preschedules&amp;tenant_id=<?= (int) $tenantId ?>">
+                                <button class="btn btn-small btn-primary" type="submit">Confirmar agendamento</button>
+                            </form>
+                        <?php else: ?>
+                            <button class="btn btn-small btn-disabled" type="button" disabled title="<?= View::e($confirmDisabledReason) ?>">Confirmar agendamento</button>
+                        <?php endif; ?>
+                    <?php endif; ?>
                 </div>
             </article>
         <?php endforeach; ?>

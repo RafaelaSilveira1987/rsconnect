@@ -1,5 +1,5 @@
-# RS Connect 36.41.1
-> **36.41.1** conclui o fluxo de comunicação da Agenda com o cliente: remove da interface o texto original redundante do pré-agendamento, resolve o WhatsApp pelo contato vinculado ao compromisso/conversa e garante que o cron CLI processe também confirmações, lembretes e pedidos de presença. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
+# RS Connect 36.41.2
+> **36.41.2** conclui a validação operacional do pré-agendamento: depois que um horário é escolhido, a própria aba **Pré-agendamentos** exibe a ação **Confirmar agendamento**, que usa o fluxo real de aprovação, confirma a vaga, converte o pré-agendamento e dispara a comunicação configurada. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
 
 # RS Connect 36.41.0
 > **36.41.0** mantém as correções de triagem e Agenda anteriores e organiza a comunicação automática em confirmação, lembrete e confirmação de presença. Os tempos podem ser configurados em minutos, horas ou dias, com proteção contra disparos duplicados no mesmo instante e contra lembretes incompatíveis com uma resposta posterior do cliente. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
