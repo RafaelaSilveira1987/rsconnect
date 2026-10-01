@@ -235,7 +235,8 @@ final class AppVersionService
     // RS Connect 36.41.2 — a aba de pré-agendamentos permite confirmar o horário escolhido e converter o pedido em agendamento confirmado.
     // RS Connect 36.41.3 — preserva a vaga escolhida, revalida a seleção na confirmação e impede nova busca de apagar o estado do pré-agendamento.
     // RS Connect 36.41.4 — compromisso confirmado preserva o contexto estruturado e permite cadastrar o link da consulta online antes/depois da confirmação.
-    public const PACKAGE_LABEL = 'RS Connect 36.41.4 — Contexto confirmado e link da consulta online';
+    // RS Connect 36.41.5 — horário de atendimento volta a prevalecer sobre toda automação conversacional, inclusive Agenda existente.
+    public const PACKAGE_LABEL = 'RS Connect 36.41.5 — Horário de atendimento como autoridade global';
     public const REQUIRED_MIGRATION = '123_published_slots_min_notice_policy.sql';
 
     private PDO $pdo;

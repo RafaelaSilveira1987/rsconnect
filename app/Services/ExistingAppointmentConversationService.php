@@ -34,6 +34,15 @@ final class ExistingAppointmentConversationService
             return $this->result(false, false, 'invalid_input');
         }
 
+        // O horário comercial é autoridade global. Esta camada pode reconhecer e agir
+        // sobre compromissos existentes somente durante o expediente. Fora dele, o
+        // webhook preserva a mensagem na fila pós-horário e a reexecuta na abertura.
+        if ($outsideBusinessHours) {
+            return array_merge($this->result(false, false, 'deferred_outside_hours'), [
+                'deferred' => true,
+            ]);
+        }
+
         $communication = new CalendarClientCommunicationService();
         $settings = $communication->settings($tenantId);
         if (empty($settings['lookup_enabled'])) {
@@ -50,13 +59,6 @@ final class ExistingAppointmentConversationService
         $intent = $this->detectIntent($content, $presencePending);
         if ($intent === '') {
             return $this->result(false, false, 'not_existing_appointment_intent');
-        }
-
-        if ($outsideBusinessHours && empty($settings['lookup_outside_hours'])) {
-            return array_merge($this->result(false, false, 'deferred_outside_hours'), [
-                'deferred' => true,
-                'intent' => $intent,
-            ]);
         }
 
         if (!$appointment) {

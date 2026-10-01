@@ -24,9 +24,9 @@ $checks = [
     'aprovação processa comunicação com o cliente' => str_contains($controller, 'new CalendarClientCommunicationService()')
         && str_contains($controller, '->handleStatusChange('),
     'pacote preserva o marco 36.41.2 e identifica a versão atual' => str_contains($version, 'RS Connect 36.41.2')
-        && str_contains($version, 'RS Connect 36.41.4')
+        && str_contains($version, 'RS Connect 36.41.5')
         && str_contains($version, 'RS Connect 36.41.3')
-        && ($manifest['package_version'] ?? '') === '36.41.4',
+        && ($manifest['package_version'] ?? '') === '36.41.5',
     'migration obrigatória permanece 123' => ($manifest['database']['required_migration'] ?? '') === '123_published_slots_min_notice_policy.sql',
 ];
 

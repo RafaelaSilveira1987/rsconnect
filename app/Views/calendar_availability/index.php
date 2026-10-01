@@ -487,10 +487,11 @@ $requestInsight = static function (array $request): string {
                     <input type="checkbox" name="client_lookup_enabled" value="1" <?= !empty($calendarClientSettings['lookup_enabled']) ? 'checked' : '' ?>>
                     <span><strong>Identificar compromisso existente</strong><small>Consulta o próximo agendamento ativo do contato quando a mensagem se refere à consulta, horário, local, confirmação, cancelamento ou remarcação.</small></span>
                 </label>
-                <label class="switch-card">
-                    <input type="checkbox" name="client_lookup_outside_hours" value="1" <?= !empty($calendarClientSettings['lookup_outside_hours']) ? 'checked' : '' ?>>
-                    <span><strong>Responder sobre a própria agenda fora do expediente</strong><small>Permite respostas operacionais sobre um compromisso já registrado mesmo quando o atendimento comercial estiver fechado.</small></span>
-                </label>
+                <input type="hidden" name="client_lookup_outside_hours" value="0">
+                <div class="message-info" style="margin:0">
+                    <strong>Horário de atendimento é prioritário</strong>
+                    <span>Fora do expediente, inclusive pedidos sobre um agendamento existente entram na fila de fora do horário. A consulta, confirmação, remarcação ou cancelamento só é processado após a reabertura.</span>
+                </div>
             </div>
             <label class="field"><span>Mensagem quando o contato pergunta por um agendamento e nenhum compromisso ativo é encontrado</span><textarea name="client_lookup_no_appointment_message" rows="3" maxlength="4000"><?= View::e((string) ($calendarClientSettings['lookup_no_appointment_message'] ?? '')) ?></textarea></label>
 

@@ -1,3 +1,10 @@
+# RS Connect 36.41.5
+> **36.41.5** restaura o horário de atendimento como autoridade global do fluxo conversacional. Fora do expediente, qualquer mensagem — inclusive consulta, confirmação, cancelamento ou remarcação de um compromisso já existente — entra na fila pós-horário, recebe somente o aviso configurado (uma vez por dia local) e é processada após a reabertura. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
+
+## Homologação rápida 36.41.5
+
+Configure o dia atual para abrir depois do horário do teste (por exemplo, 09:00) e envie antes da abertura: “quero reagendar minha consulta de amanhã”, “consigo ir mais cedo” e “pode ser às 10h”. A conversa deve permanecer em **Fora do horário/Aguardando horário**, enviar no máximo um aviso de ausência e manter todas as mensagens na mesma pendência. Após a abertura e a execução da recuperação pós-horário, a demanda deve ser retomada pela camada determinística da Agenda.
+
 # RS Connect 36.41.4
 > **36.41.4** mantém as informações estruturadas do pré-agendamento visíveis depois da confirmação e elimina do compromisso a exibição do texto técnico/original. Em atendimentos **Online**, o link da consulta pode ser informado antes de confirmar — entrando na mensagem imediata — e também editado depois no detalhe do compromisso. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
 

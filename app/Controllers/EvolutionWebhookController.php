@@ -363,34 +363,15 @@ final class EvolutionWebhookController
                         $operatingPolicy = (new AgentOperatingPolicyService())->status($resolvedAgent);
                         $outsideBusinessHours = !empty($operatingPolicy['enforced']) && empty($operatingPolicy['inside']);
 
-                        // 36.39.0: consultas sobre um compromisso já existente têm precedência
-                        // sobre o fluxo de novo agendamento. Fora do expediente, a empresa pode
-                        // optar por responder essas informações operacionais imediatamente.
-                        if ($outsideBusinessHours) {
-                            try {
-                                $existingAppointmentResult = (new ExistingAppointmentConversationService())->handleIncoming(
-                                    $pdo,
-                                    $instance,
-                                    $contactId,
-                                    $conversationId,
-                                    $content,
-                                    $storedMessageId,
-                                    true
-                                );
-                            } catch (Throwable $exception) {
-                                $processingWarnings[] = 'existing_appointment_lookup';
-                                $this->logWebhookFailure($exception, [
-                                    'phase' => 'existing_appointment_lookup_after_hours',
-                                    'conversation_id' => $conversationId,
-                                    'stored_message_id' => $storedMessageId,
-                                ]);
-                            }
-                        }
-
-                        // 36.20.10: a fila e o aviso fora do horário são operacionais.
+                        // 36.41.5: o horário de atendimento volta a ser a autoridade global.
+                        // Nenhuma ação conversacional da Agenda (consulta, cancelamento, remarcação,
+                        // confirmação etc.) pode furar o expediente. Toda entrada recebida com a
+                        // empresa fechada entra primeiro na fila pós-horário e só é interpretada na
+                        // reabertura, quando a recuperação reexecuta a camada determinística da Agenda.
+                        //
                         // A mensagem fixa deve ser enviada tanto em modo IA quanto em modo humano,
                         // sem chamar o provedor de IA e sem duplicar o aviso no mesmo dia local.
-                        if ($outsideBusinessHours && empty($existingAppointmentResult['handled'])) {
+                        if ($outsideBusinessHours) {
                             $modeStatement = $pdo->prepare(
                                 'SELECT attendance_mode FROM conversations WHERE id = :conversation_id AND tenant_id = :tenant_id LIMIT 1'
                             );

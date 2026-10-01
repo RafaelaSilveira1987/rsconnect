@@ -1,3 +1,15 @@
+## 36.41.5 — Horário de atendimento como autoridade global
+
+### Corrigido
+- pedidos sobre compromissos existentes deixam de furar o horário comercial; remarcação, cancelamento, confirmação, consulta de horário/local e troca de modalidade recebidos fora do expediente são preservados para a reabertura;
+- toda mensagem recebida fora do horário volta a criar/atualizar a mesma pendência em `ai_after_hours_pending`, independentemente da intenção de Agenda;
+- o aviso de ausência continua operacional e deduplicado por dia local, sem chamar IA ou processar Agenda enquanto a empresa estiver fechada;
+- na reabertura, a recuperação pós-horário reentra na camada determinística de compromisso existente/Agenda antes de qualquer chamada ao provedor;
+- a configuração visual que permitia “Responder sobre a própria agenda fora do expediente” foi retirada para eliminar conflito com a política global de horário; o campo legado é gravado como desativado ao salvar as configurações.
+
+### Migration
+- nenhuma nova; permanece obrigatória `123_published_slots_min_notice_policy.sql`.
+
 ## 36.41.4 — Contexto confirmado e link da consulta online
 
 ### Melhorado

@@ -47,8 +47,7 @@ $checks += [
         && str_contains($webhook, 'antes da triagem de um novo atendimento'),
     'recuperação posterior ao expediente preserva intenção original da agenda' => str_contains($reprocess, 'ExistingAppointmentConversationService')
         && str_contains($reprocess, 'existingAppointment'),
-    'configuração separa lookup, confirmação, lembrete e presença' => str_contains($clientCommunication, 'lookup_outside_hours')
-        && str_contains($clientCommunication, 'presence_request_enabled')
+    'configuração separa lookup, confirmação, lembrete e presença' => str_contains($clientCommunication, 'presence_request_enabled')
         && str_contains($clientCommunication, 'reminder_enabled'),
     'fila automática é específica do cliente do compromisso' => str_contains($clientCommunication, 'calendar_client_message_jobs')
         && str_contains($clientCommunication, 'processDueJobs'),
@@ -62,9 +61,10 @@ $checks += [
         && str_contains($notifications, 'CalendarClientCommunicationService')
         && str_contains($notificationCli, 'calendar_client_messages')
         && str_contains($notificationCli, 'CalendarClientCommunicationService'),
-    'configuração fica dentro da aba Configurações da Agenda' => str_contains($settingsView, 'Comunicação e confirmação do agendamento')
+    'configuração fica dentro da aba Configurações da Agenda e subordina continuidade ao expediente' => str_contains($settingsView, 'Comunicação e confirmação do agendamento')
         && str_contains($settingsView, 'Pedir confirmação de presença')
-        && str_contains($settingsView, 'Responder sobre a própria agenda fora do expediente'),
+        && str_contains($settingsView, 'Horário de atendimento é prioritário')
+        && str_contains($settingsView, 'name="client_lookup_outside_hours" value="0"'),
     'agenda mostra confirmação do cliente separada do status do compromisso' => str_contains($calendarView, 'Confirmação do cliente')
         && str_contains($calendarView, 'Cliente confirmou presença'),
     'agenda não exibe mais o texto original redundante no pré-agendamento' => !str_contains($calendarView, 'Mensagem que originou o pedido'),
