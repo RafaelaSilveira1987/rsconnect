@@ -565,6 +565,10 @@ final class PreSchedulingService
         $titleName = trim((string) ($contact['name'] ?? '')) ?: trim((string) ($contact['phone'] ?? 'Paciente'));
         $title = 'Pré-agendamento - ' . mb_substr($titleName, 0, 90);
         $description = $this->buildDescription($content, $intent, $flowContext);
+        $rescheduleOfAppointmentId = max(0, (int) ($flowContext['reschedule_of_appointment_id'] ?? 0));
+        $preScheduleSource = $rescheduleOfAppointmentId > 0
+            ? 'ai_reschedule:' . $rescheduleOfAppointmentId
+            : 'ai_whatsapp';
         $intentModality = $this->intentSchedulingModality($intent);
         $readyForAvailability = $this->hasFullPreference($intent)
             && (!$modalityChoiceRequiredBeforeSchedule || $this->isAvailabilityModality($intentModality));
@@ -595,7 +599,7 @@ final class PreSchedulingService
                  preferred_day_text, preferred_time_text, approval_status, approval_notes)
              VALUES
                 (:tenant_id, :contact_id, :conversation_id, :owner_user_id, :title, :description, :starts_at, :ends_at, :timezone, :status,
-                 :location_type, :location, 60, "pending", 1, "ai_whatsapp", :appointment_modality,
+                 :location_type, :location, 60, "pending", 1, :pre_schedule_source, :appointment_modality,
                  :preferred_day_text, :preferred_time_text, "pending", :approval_notes)'
         );
         $statement->execute([
@@ -611,10 +615,13 @@ final class PreSchedulingService
             'status' => $status,
             'location_type' => $this->isAvailabilityModality($intentModality) ? $intentModality : 'indefinida',
             'location' => $this->isAvailabilityModality($intentModality) ? ucfirst($intentModality) : null,
+            'pre_schedule_source' => $preScheduleSource,
             'appointment_modality' => $intentModality,
             'preferred_day_text' => $this->displayDay($intent) ?: null,
             'preferred_time_text' => $this->displayTime($intent) ?: null,
-            'approval_notes' => 'Criado automaticamente a partir da intenção de agenda detectada na conversa #' . $conversationId,
+            'approval_notes' => $rescheduleOfAppointmentId > 0
+                ? 'Remarcação do agendamento #' . $rescheduleOfAppointmentId . ' solicitada automaticamente pela conversa #' . $conversationId
+                : 'Criado automaticamente a partir da intenção de agenda detectada na conversa #' . $conversationId,
         ]);
         $appointmentId = (int) $pdo->lastInsertId();
 
@@ -627,7 +634,11 @@ final class PreSchedulingService
             'description' => $this->hasFullPreference($intent)
                 ? 'Pré-agendamento criado com preferência de dia/horário para aprovação humana.'
                 : 'Pré-agendamento criado aguardando preferência de dia/horário.',
-            'metadata_json' => json_encode(['appointment_id' => $appointmentId, 'intent' => $intent], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'metadata_json' => json_encode([
+                'appointment_id' => $appointmentId,
+                'intent' => $intent,
+                'reschedule_of_appointment_id' => $rescheduleOfAppointmentId > 0 ? $rescheduleOfAppointmentId : null,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ]);
 
         // O evento externo é devolvido ao controller para ser enviado somente depois
@@ -645,6 +656,7 @@ final class PreSchedulingService
             'contact_group' => (string) ($flowContext['contact_group'] ?? 'unclassified'),
             'demand_status' => (string) ($flowContext['demand_status'] ?? 'pending'),
             'demand_summary' => (string) ($flowContext['demand_summary'] ?? ''),
+            'reschedule_of_appointment_id' => $rescheduleOfAppointmentId > 0 ? $rescheduleOfAppointmentId : null,
         ];
 
         $preferenceLabel = trim($this->displayDay($intent) . ' ' . $this->displayTime($intent));
@@ -664,6 +676,10 @@ final class PreSchedulingService
 
         $result['created'] = true;
         $result['appointment_id'] = $appointmentId;
+        if ($rescheduleOfAppointmentId > 0) {
+            $result['reschedule_of_appointment_id'] = $rescheduleOfAppointmentId;
+            $result['existing_appointment_reschedule'] = true;
+        }
 
         if (!$this->isAvailabilityModality($intentModality) && $modalityChoiceRequiredBeforeSchedule) {
             $result['modality_required'] = true;

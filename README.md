@@ -1,3 +1,10 @@
+# RS Connect 36.41.6
+> **36.41.6** corrige a continuidade da remarcação de um compromisso existente. Em vez de apenas responder que o pedido foi registrado, a conversa entra no fluxo real de pré-agendamento e disponibilidade, inclusive quando a intenção foi acumulada na fila fora do horário. O compromisso antigo permanece válido até a nova vaga ser confirmada; depois da aprovação, ele é encerrado como remarcado e os lembretes antigos são cancelados. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
+
+## Homologação rápida 36.41.6
+
+Com um compromisso futuro já confirmado, envie fora do expediente: “quero reagendar minha consulta de amanhã”, “consigo ir mais cedo” e “pode ser às 10h”. Após a abertura, o sistema deve interpretar o bloco completo, consultar a disponibilidade real para **amanhã às 10:00** e seguir o fluxo normal de escolha/validação. Uma nova mensagem “Consigo remarcar?” não deve repetir o texto “pedido de remarcação registrado”; deve continuar a coleta/consulta da Agenda. O compromisso atual só é encerrado quando a nova vaga for efetivamente confirmada.
+
 # RS Connect 36.41.5
 > **36.41.5** restaura o horário de atendimento como autoridade global do fluxo conversacional. Fora do expediente, qualquer mensagem — inclusive consulta, confirmação, cancelamento ou remarcação de um compromisso já existente — entra na fila pós-horário, recebe somente o aviso configurado (uma vez por dia local) e é processada após a reabertura. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
 

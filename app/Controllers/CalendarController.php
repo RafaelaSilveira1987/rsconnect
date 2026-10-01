@@ -637,6 +637,9 @@ final class CalendarController
         }
 
         $wasPreSchedule = (int) ($appointmentBefore['is_pre_schedule'] ?? 0) === 1;
+        $rescheduleOriginalAppointmentId = ($status === 'confirmed' && $wasPreSchedule)
+            ? $this->rescheduleOriginAppointmentId($appointmentBefore)
+            : 0;
         $professionalCalendarService = new ProfessionalCalendarService();
         $professionalCalendarSettings = $professionalCalendarService->tenantSettings($tenantId);
         if ($status === 'confirmed' && !empty($professionalCalendarSettings['enabled'])) {
@@ -683,6 +686,7 @@ final class CalendarController
         $googleLifecycleService = new CalendarGoogleLifecycleService();
         $googleReleaseWarning = null;
         $googleLifecycleWarning = null;
+        $rescheduleFinalizeWarning = null;
 
         if ($status === 'confirmed' && $wasPreSchedule) {
             $preferredDay = trim((string) ($appointmentBefore['preferred_day_text'] ?? ''));
@@ -838,6 +842,16 @@ final class CalendarController
                          updated_at = CURRENT_TIMESTAMP
                      WHERE id = :id AND tenant_id = :tenant_id'
                 )->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
+
+                if ($rescheduleOriginalAppointmentId > 0) {
+                    $rescheduleFinalizeWarning = $this->finalizeOriginalAfterReschedule(
+                        $tenantId,
+                        $rescheduleOriginalAppointmentId,
+                        $appointmentId,
+                        $availabilityService,
+                        $googleLifecycleService
+                    );
+                }
             }
             $warnings = [];
             if ($googleReleaseWarning !== null) {
@@ -848,6 +862,9 @@ final class CalendarController
             }
             if ($clientMessageAttempted && !$clientMessageOk) {
                 $warnings[] = 'Uma comunicação automática com o cliente ficou pendente de nova tentativa.';
+            }
+            if ($rescheduleFinalizeWarning !== null) {
+                $warnings[] = $rescheduleFinalizeWarning;
             }
             if ($warnings !== []) {
                 Flash::set('warning', 'Status atualizado. ' . implode(' ', $warnings));
@@ -1187,6 +1204,135 @@ final class CalendarController
         $statement->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
         $appointment = $statement->fetch(PDO::FETCH_ASSOC);
         return $appointment ?: null;
+    }
+
+    private function rescheduleOriginAppointmentId(array $appointment): int
+    {
+        $source = trim((string) ($appointment['pre_schedule_source'] ?? ''));
+        if (preg_match('/^ai_reschedule:(\d+)$/', $source, $match) !== 1) {
+            return 0;
+        }
+        $id = (int) ($match[1] ?? 0);
+        return $id > 0 && $id !== (int) ($appointment['id'] ?? 0) ? $id : 0;
+    }
+
+    /**
+     * Conclui o lado antigo de uma remarcação somente depois que o novo horário foi
+     * realmente confirmado. O cliente recebe a confirmação do NOVO compromisso; o
+     * registro antigo vira histórico de remarcação e seus lembretes pendentes são
+     * cancelados sem disparar a mensagem genérica de "pedido de remarcação".
+     */
+    private function finalizeOriginalAfterReschedule(
+        int $tenantId,
+        int $originalAppointmentId,
+        int $replacementAppointmentId,
+        CalendarAvailabilityService $availabilityService,
+        CalendarGoogleLifecycleService $googleLifecycleService
+    ): ?string {
+        if ($tenantId < 1 || $originalAppointmentId < 1 || $replacementAppointmentId < 1
+            || $originalAppointmentId === $replacementAppointmentId) {
+            return null;
+        }
+
+        $original = $this->findAppointment($originalAppointmentId, $tenantId);
+        if (!$original) {
+            return 'O novo horário foi confirmado, mas o compromisso original da remarcação não foi localizado para encerramento automático.';
+        }
+
+        if ((string) ($original['status'] ?? '') === 'rescheduled') {
+            return null;
+        }
+
+        $warnings = [];
+        try {
+            $release = $availabilityService->releaseMarkedAppointment($tenantId, $originalAppointmentId);
+            if (!empty($release['attempted']) && empty($release['ok'])) {
+                $warnings[] = (string) ($release['message'] ?? 'não foi possível liberar a reserva antiga');
+            }
+        } catch (Throwable $exception) {
+            $warnings[] = $exception->getMessage();
+        }
+
+        try {
+            $cancel = $googleLifecycleService->cancelAppointment($tenantId, $originalAppointmentId);
+            if (!empty($cancel['attempted']) && empty($cancel['ok'])) {
+                $warnings[] = (string) ($cancel['message'] ?? 'não foi possível remover o evento antigo do Google Agenda');
+            }
+        } catch (Throwable $exception) {
+            $warnings[] = $exception->getMessage();
+        }
+
+        try {
+            $pdo = Database::connection();
+            $pdo->prepare(
+                'UPDATE calendar_appointments
+                 SET status = "rescheduled",
+                     client_confirmation_status = "rescheduled",
+                     status_changed_by_user_id = :user_id,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id AND tenant_id = :tenant_id'
+            )->execute([
+                'user_id' => Auth::id(),
+                'id' => $originalAppointmentId,
+                'tenant_id' => $tenantId,
+            ]);
+
+            // Lembretes/solicitações de presença do horário antigo não podem sobreviver
+            // à confirmação da nova vaga.
+            try {
+                $pdo->prepare(
+                    'UPDATE calendar_client_message_jobs
+                     SET status = "skipped",
+                         last_error = "Substituído por remarcação confirmada.",
+                         locked_at = NULL,
+                         updated_at = CURRENT_TIMESTAMP
+                     WHERE tenant_id = :tenant_id
+                       AND appointment_id = :appointment_id
+                       AND status IN ("pending","retry","processing")'
+                )->execute([
+                    'tenant_id' => $tenantId,
+                    'appointment_id' => $originalAppointmentId,
+                ]);
+            } catch (Throwable) {
+                // Compatibilidade com instalações sem a migration 122.
+            }
+
+            if ((int) ($original['conversation_id'] ?? 0) > 0) {
+                try {
+                    $pdo->prepare(
+                        'INSERT INTO conversation_events
+                            (tenant_id, conversation_id, user_id, event_type, description, metadata_json)
+                         VALUES
+                            (:tenant_id, :conversation_id, :user_id, "calendar.reschedule_completed", :description, :metadata_json)'
+                    )->execute([
+                        'tenant_id' => $tenantId,
+                        'conversation_id' => (int) $original['conversation_id'],
+                        'user_id' => Auth::id(),
+                        'description' => 'Remarcação concluída após confirmação de uma nova vaga.',
+                        'metadata_json' => json_encode([
+                            'original_appointment_id' => $originalAppointmentId,
+                            'replacement_appointment_id' => $replacementAppointmentId,
+                        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    ]);
+                } catch (Throwable) {
+                }
+            }
+
+            Audit::log('calendar.appointment_reschedule_completed', [
+                'original_appointment_id' => $originalAppointmentId,
+                'replacement_appointment_id' => $replacementAppointmentId,
+            ], $tenantId);
+        } catch (Throwable $exception) {
+            $warnings[] = $exception->getMessage();
+        }
+
+        if ($warnings === []) {
+            return null;
+        }
+        $warnings = array_values(array_unique(array_filter(array_map('trim', $warnings))));
+        return $warnings !== []
+            ? 'O novo horário foi confirmado, mas a finalização do compromisso anterior exige revisão: ' . implode(' / ', $warnings) . '.'
+            : null;
     }
 
     private function instanceForMessaging(array $appointment, int $tenantId): ?array

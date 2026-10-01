@@ -37,10 +37,10 @@ $checks = [
     'mensagens automáticas expõem variável específica do link' => str_contains($preScheduling, "'{{link_consulta}}'")
         && str_contains($availabilityView, '<code>{{link_consulta}}</code>'),
     'confirmação de evento VAGO recebe meeting_url' => str_contains($availabilityService, "'meeting_url' => trim((string) (\$appointment['meeting_url'] ?? ''))"),
-    'cache de CSS e JS foi renovado' => str_contains($layout, '/assets/css/app.css?v=36.41.5')
-        && str_contains($layout, '/assets/js/app.js?v=36.41.5'),
-    'versão atual é 36.41.5 sem migration nova' => str_contains($version, 'RS Connect 36.41.5')
-        && ($manifest['package_version'] ?? '') === '36.41.5'
+    'cache de CSS e JS foi renovado' => str_contains($layout, '/assets/css/app.css?v=36.41.6')
+        && str_contains($layout, '/assets/js/app.js?v=36.41.6'),
+    'versão atual é 36.41.6 sem migration nova' => str_contains($version, 'RS Connect 36.41.6')
+        && ($manifest['package_version'] ?? '') === '36.41.6'
         && ($manifest['database']['required_migration'] ?? '') === '123_published_slots_min_notice_policy.sql',
 ];
 
@@ -57,4 +57,4 @@ if ($failed !== []) {
     exit(1);
 }
 
-echo "OK - 36.41.5 preserva o contexto do pré-agendamento e gerencia o link da consulta online.\n";
+echo "OK - 36.41.6 preserva o contexto do pré-agendamento e gerencia o link da consulta online.\n";

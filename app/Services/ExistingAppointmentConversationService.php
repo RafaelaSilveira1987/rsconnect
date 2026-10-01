@@ -88,6 +88,27 @@ final class ExistingAppointmentConversationService
 
         $appointmentId = (int) ($appointment['id'] ?? 0);
 
+        // Se a própria busca de remarcação já criou um pré-agendamento, novas frases
+        // como "consigo remarcar?" ou "pode ser outro horário" pertencem à continuação
+        // desse fluxo. Não podemos tratar o pré-agendamento como se fosse o compromisso
+        // original a ser substituído.
+        if ($intent === 'reschedule'
+            && in_array((string) ($appointment['status'] ?? ''), ['pre_scheduled', 'awaiting_approval'], true)) {
+            $source = trim((string) ($appointment['pre_schedule_source'] ?? ''));
+            $rescheduleOfAppointmentId = 0;
+            if (preg_match('/^ai_reschedule:(\d+)$/', $source, $match) === 1) {
+                $rescheduleOfAppointmentId = (int) ($match[1] ?? 0);
+            }
+            return array_merge($this->result(false, false, 'pending_reschedule_continuation'), [
+                'intent' => 'reschedule',
+                'appointment_id' => $appointmentId,
+                'reschedule_of_appointment_id' => $rescheduleOfAppointmentId,
+                'reschedule_requested' => $rescheduleOfAppointmentId > 0,
+                'scheduling_intent' => true,
+                'route_to_pre_scheduling' => true,
+            ]);
+        }
+
         // Enquanto o contato ainda está escolhendo/aguardando validação de uma vaga,
         // uma troca de modalidade pertence à máquina normal de pré-agendamento. Não a
         // interceptamos aqui: PreSchedulingService invalida a busca antiga, libera hold
@@ -170,9 +191,25 @@ final class ExistingAppointmentConversationService
             $message = 'Registrei seu pedido de cancelamento do atendimento de ' . $this->dateTimeLabel($appointment) . '. A equipe foi avisada e confirmará a alteração por aqui.';
             $this->notifyTeam($tenantId, $appointment, 'Cliente solicitou cancelamento', 'calendar.client_cancel_requested');
         } elseif ($intent === 'reschedule') {
+            // 36.41.6 — remarcação de um compromisso existente não é mais uma resposta
+            // terminal genérica. O compromisso atual continua preservado, mas o pedido
+            // segue para a mesma máquina determinística de pré-agendamento/disponibilidade
+            // usada em novos horários. Assim um bloco como "quero remarcar / amanhã / 10h"
+            // é realmente consultado na Agenda em vez de apenas registrar a intenção.
+            $previousClientStatus = trim((string) ($appointment['client_confirmation_status'] ?? ''));
             $this->updateClientConfirmation($pdo, $tenantId, $appointmentId, 'reschedule_requested');
-            $message = 'Registrei seu pedido de remarcação do atendimento de ' . $this->dateTimeLabel($appointment) . '. O horário atual permanece registrado até a nova opção ser validada.';
-            $this->notifyTeam($tenantId, $appointment, 'Cliente solicitou remarcação', 'calendar.client_reschedule_requested');
+            if ($previousClientStatus !== 'reschedule_requested') {
+                $this->notifyTeam($tenantId, $appointment, 'Cliente solicitou remarcação', 'calendar.client_reschedule_requested');
+            }
+
+            return array_merge($this->result(false, false, 'route_to_reschedule_flow'), [
+                'intent' => 'reschedule',
+                'appointment_id' => $appointmentId,
+                'reschedule_of_appointment_id' => $appointmentId,
+                'reschedule_requested' => true,
+                'scheduling_intent' => true,
+                'route_to_pre_scheduling' => true,
+            ]);
         }
 
         if ($message === '') {

@@ -566,6 +566,30 @@ final class EvolutionWebhookController
                         if (!empty($existingAppointmentResult['handled'])) {
                             $preScheduleResult = $existingAppointmentResult;
                         } else {
+                        $rescheduleOfAppointmentId = (int) ($existingAppointmentResult['reschedule_of_appointment_id'] ?? 0);
+                        $routeExistingReschedule = !empty($existingAppointmentResult['route_to_pre_scheduling']);
+                        if ($routeExistingReschedule) {
+                            // 36.41.6: remarcação de compromisso existente segue diretamente
+                            // pela máquina de agenda. As regras de grupo/demanda continuam sendo
+                            // revalidadas dentro de PreSchedulingService.
+                            $flowContext = is_array($flowContext ?? null) ? $flowContext : [];
+                            if ($rescheduleOfAppointmentId > 0) {
+                                $flowContext['reschedule_of_appointment_id'] = $rescheduleOfAppointmentId;
+                            }
+                            $preScheduleResult = (new PreSchedulingService())->handleIncoming(
+                                $pdo,
+                                $instance,
+                                $contactId,
+                                $conversationId,
+                                $content,
+                                $flowContext,
+                                $storedMessageId
+                            );
+                            if ($rescheduleOfAppointmentId > 0) {
+                                $preScheduleResult['reschedule_of_appointment_id'] = $rescheduleOfAppointmentId;
+                                $preScheduleResult['existing_appointment_reschedule'] = true;
+                            }
+                        } else {
                         // 36.28.0: triagem/policies vêm ANTES da agenda e da IA. O LLM pode
                         // conversar, mas não pode liberar uma ação que o Policy Engine bloqueou.
                         $triageResult = (new AgentTriageService())->handleIncoming(
@@ -615,6 +639,7 @@ final class EvolutionWebhookController
                                         $storedMessageId
                                     );
                             }
+                        }
                         }
                         }
                     }

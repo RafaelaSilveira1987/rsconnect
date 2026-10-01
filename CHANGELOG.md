@@ -1,3 +1,17 @@
+## 36.41.6 — Remarcação com busca real de disponibilidade
+
+### Corrigido
+- remarcações de compromissos existentes deixam de terminar na resposta genérica “pedido de remarcação registrado” e passam a seguir o fluxo determinístico de pré-agendamento e consulta real de disponibilidade;
+- a retomada pós-horário reaproveita o bloco acumulado de mensagens, preservando combinações como “remarcar / amanhã / 10h”;
+- um pré-agendamento de remarcação recebe vínculo operacional com o compromisso original através de `pre_schedule_source`, sem nova coluna ou migration;
+- novas mensagens durante a remarcação continuam o pré-agendamento existente em vez de reiniciar ou repetir a mesma resposta;
+- o compromisso antigo permanece ativo enquanto a nova opção está sendo validada;
+- quando a nova vaga é confirmada, o compromisso anterior passa para histórico de remarcação, sua vaga/integração é liberada quando aplicável e os lembretes pendentes do horário antigo são cancelados;
+- a confirmação enviada ao cliente é a do novo compromisso, evitando a mensagem genérica de solicitação de remarcação depois que a troca já foi concluída.
+
+### Migration
+- nenhuma nova; permanece obrigatória `123_published_slots_min_notice_policy.sql`.
+
 ## 36.41.5 — Horário de atendimento como autoridade global
 
 ### Corrigido

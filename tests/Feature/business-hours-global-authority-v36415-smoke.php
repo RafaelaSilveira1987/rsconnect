@@ -61,7 +61,7 @@ $check(str_contains($automation, 'processSchedulingDuringReprocess') && str_cont
 $check(str_contains($settingsView, 'Horário de atendimento é prioritário'), 'Tela explica que Agenda respeita o horário global.');
 $check(!str_contains($settingsView, 'type="checkbox" name="client_lookup_outside_hours"'), 'Não existe mais opção visual para furar o expediente.');
 $check(str_contains($settingsView, 'name="client_lookup_outside_hours" value="0"'), 'Ao salvar, configuração legada de bypass é zerada.');
-$check(str_contains($version, 'RS Connect 36.41.5') && (($manifest['package_version'] ?? '') === '36.41.5'), 'Pacote identifica a versão 36.41.5.');
+$check(str_contains($version, 'RS Connect 36.41.6') && (($manifest['package_version'] ?? '') === '36.41.6'), 'Pacote identifica a versão 36.41.6.');
 
 if ($failures !== []) {
     fwrite(STDERR, "\nFALHAS:\n- " . implode("\n- ", $failures) . "\n");

@@ -2052,6 +2052,8 @@ final class AiAutomationService
 
         $intentProbe = (new PreSchedulingService())->detectIntent($calendarContent, false);
         $schedulingIntent = !empty($intentProbe['has_intent']);
+        $rescheduleOfAppointmentId = (int) ($existingAppointment['reschedule_of_appointment_id'] ?? 0);
+        $routeExistingReschedule = !empty($existingAppointment['route_to_pre_scheduling']);
 
         try {
             $flowContext = (new ConversationFlowService())->ingestIncoming(
@@ -2062,6 +2064,26 @@ final class AiAutomationService
                 $calendarContent
             );
 
+            if ($routeExistingReschedule) {
+                // 36.41.6: a retomada pós-horário preserva o bloco completo
+                // (ex.: "remarcar / amanhã / 10h") e o entrega à agenda real.
+                if ($rescheduleOfAppointmentId > 0) {
+                    $flowContext['reschedule_of_appointment_id'] = $rescheduleOfAppointmentId;
+                }
+                $result = (new PreSchedulingService())->handleIncoming(
+                    $pdo,
+                    $instance,
+                    $contactId,
+                    $conversationId,
+                    $calendarContent,
+                    $flowContext,
+                    $messageId
+                );
+                if ($rescheduleOfAppointmentId > 0) {
+                    $result['reschedule_of_appointment_id'] = $rescheduleOfAppointmentId;
+                    $result['existing_appointment_reschedule'] = true;
+                }
+            } else {
             $triageResult = (new AgentTriageService())->handleIncoming(
                 $pdo,
                 $instance,
@@ -2108,6 +2130,7 @@ final class AiAutomationService
                             $messageId
                         );
                 }
+            }
             }
             $result['calendar_burst_message_ids'] = $calendarBurst['message_ids'] ?? [$messageId];
             $result['calendar_burst_count'] = count((array) ($calendarBurst['message_ids'] ?? [$messageId]));
