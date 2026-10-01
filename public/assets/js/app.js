@@ -3778,7 +3778,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const meetingEmpty = dialog.querySelector('[data-calendar-dialog-meeting-empty]');
     const meetingUrl = String(event.meeting_url || '').trim();
     const isOnline = String(event.location_type || '').toLowerCase() === 'online';
-    if (meetingSection) meetingSection.hidden = !isOnline;
+    // 36.41.8: o editor do link não pode desaparecer apenas porque a modalidade
+    // ainda está como "A definir". Quem gerencia a Agenda precisa conseguir
+    // cadastrar/alterar o link diretamente no compromisso confirmado. Para
+    // usuários sem permissão, o bloco continua aparecendo somente quando o
+    // atendimento é online ou quando já existe um link salvo.
+    const canManageMeeting = meetingSection?.dataset.calendarDialogMeetingManage === '1';
+    if (meetingSection) meetingSection.hidden = !(canManageMeeting || isOnline || meetingUrl !== '');
     if (meetingInput) meetingInput.value = meetingUrl;
     if (meetingId) meetingId.value = String(event.id || '');
     if (meetingOpen) {

@@ -26,7 +26,7 @@ $checks = [
     'pacote preserva o marco 36.41.2 e identifica a versão atual' => str_contains($version, 'RS Connect 36.41.2')
         && str_contains($version, 'RS Connect 36.41.6')
         && str_contains($version, 'RS Connect 36.41.3')
-        && ($manifest['package_version'] ?? '') === '36.41.6',
+        && ($manifest['package_version'] ?? '') === '36.41.8',
     'migration obrigatória permanece 123' => ($manifest['database']['required_migration'] ?? '') === '123_published_slots_min_notice_policy.sql',
 ];
 

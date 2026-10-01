@@ -17,6 +17,7 @@ use App\Services\CalendarAvailabilityService;
 use App\Services\CalendarClientCommunicationService;
 use App\Services\CalendarGoogleLifecycleService;
 use App\Services\EvolutionService;
+use App\Services\InternalCalendarSlotService;
 use App\Services\NotificationService;
 use App\Services\NotificationOrchestratorService;
 use App\Services\PreSchedulingService;
@@ -1276,6 +1277,15 @@ final class CalendarController
                 'id' => $originalAppointmentId,
                 'tenant_id' => $tenantId,
             ]);
+
+            // 36.41.7: a mudança de status acima passa a ser também uma segunda
+            // garantia de liberação da vaga publicada. Isso corrige instalações em
+            // que o vínculo técnico da disponibilidade ficou inconsistente e a
+            // primeira tentativa de release não encontrou o slot.
+            (new InternalCalendarSlotService())->releaseInactiveBookedSlots(
+                $tenantId,
+                $originalAppointmentId
+            );
 
             // Lembretes/solicitações de presença do horário antigo não podem sobreviver
             // à confirmação da nova vaga.

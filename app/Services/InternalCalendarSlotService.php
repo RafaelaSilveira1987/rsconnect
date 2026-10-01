@@ -52,7 +52,10 @@ final class InternalCalendarSlotService
         }
 
         $this->releaseExpiredHolds($tenantId);
-        $sql = 'SELECT s.*, u.name AS owner_name, a.title AS hold_appointment_title
+        // 36.41.7: booked slots linked to appointments that are already cancelled,
+        // rejected or rescheduled must not remain visually/operationally blocked.
+        $this->releaseInactiveBookedSlots($tenantId);
+        $sql = 'SELECT s.*, u.name AS owner_name, a.title AS hold_appointment_title, a.status AS hold_appointment_status
                 FROM calendar_internal_slots s
                 LEFT JOIN users u ON u.id = s.owner_user_id
                 LEFT JOIN calendar_appointments a ON a.id = s.hold_appointment_id
@@ -246,6 +249,9 @@ final class InternalCalendarSlotService
             return [];
         }
         $this->releaseExpiredHolds($tenantId);
+        // Keep conversational availability consistent even if an older remarcação
+        // left the published slot in booked state after the appointment became inactive.
+        $this->releaseInactiveBookedSlots($tenantId);
         $modality = $this->normalizeModality($requestedModality);
         $sql = 'SELECT s.*, u.name AS owner_name
                 FROM calendar_internal_slots s
@@ -405,6 +411,52 @@ final class InternalCalendarSlotService
             Audit::log('calendar.internal_slot_released', ['appointment_id' => $appointmentId], $tenantId);
         }
         return ['attempted' => $attempted, 'ok' => true, 'message' => $attempted ? 'Horário devolvido à disponibilidade da Agenda interna.' : null];
+    }
+
+    /**
+     * Reconciles published slots that stayed booked after the linked appointment
+     * was effectively cancelled/rejected/rescheduled. This is intentionally
+     * conservative: active confirmed/scheduled appointments are never released.
+     *
+     * @return int number of slots returned to availability
+     */
+    public function releaseInactiveBookedSlots(int $tenantId, int $appointmentId = 0): int
+    {
+        if ($tenantId < 1 || !$this->tableAvailable()) {
+            return 0;
+        }
+
+        $sql = 'UPDATE calendar_internal_slots s
+                INNER JOIN calendar_appointments a
+                        ON a.id = s.hold_appointment_id
+                       AND a.tenant_id = s.tenant_id
+                SET s.status = "available",
+                    s.hold_appointment_id = NULL,
+                    s.hold_expires_at = NULL,
+                    s.updated_at = CURRENT_TIMESTAMP
+                WHERE s.tenant_id = :tenant_id
+                  AND s.status = "booked"
+                  AND a.status IN ("cancelled","rejected","rescheduled")';
+        $params = ['tenant_id' => $tenantId];
+        if ($appointmentId > 0) {
+            $sql .= ' AND a.id = :appointment_id';
+            $params['appointment_id'] = $appointmentId;
+        }
+
+        try {
+            $statement = Database::connection()->prepare($sql);
+            $statement->execute($params);
+            $released = $statement->rowCount();
+            if ($released > 0) {
+                Audit::log('calendar.internal_slots_inactive_released', [
+                    'appointment_id' => $appointmentId > 0 ? $appointmentId : null,
+                    'released' => $released,
+                ], $tenantId);
+            }
+            return $released;
+        } catch (Throwable) {
+            return 0;
+        }
     }
 
     public function validateHeldForAppointment(int $tenantId, int $appointmentId): array

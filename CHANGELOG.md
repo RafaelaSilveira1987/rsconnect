@@ -1,3 +1,25 @@
+## 36.41.8 — Link de atendimento sempre editável
+
+### Corrigido
+- o campo de link do atendimento não fica mais escondido quando a modalidade do compromisso está `A definir`;
+- usuários com permissão de gerenciar a Agenda sempre podem cadastrar, alterar ou remover o link diretamente no modal do compromisso;
+- para usuários sem permissão de edição, o bloco continua visível somente quando o atendimento é online ou quando já existe link salvo;
+- o link continua validado como `http://`/`https://`, preservado no compromisso e sincronizado com o Google Agenda quando aplicável.
+
+### Migration
+- nenhuma nova; permanece obrigatória `123_published_slots_min_notice_policy.sql`.
+
+## 36.41.7 — Liberação automática da vaga remarcada
+
+### Corrigido
+- quando uma remarcação é concluída, o horário do compromisso anterior volta automaticamente para `Disponível` na Agenda publicada;
+- a finalização da remarcação executa uma segunda reconciliação depois que o compromisso antigo passa para `rescheduled`, cobrindo vínculos técnicos antigos/inconsistentes;
+- a própria listagem de horários publicados e a busca conversacional reconciliam slots `booked` ligados a compromissos já `cancelled`, `rejected` ou `rescheduled`, evitando que uma vaga desmarcada continue bloqueada;
+- compromissos ativos (`scheduled`/`confirmed`) nunca são liberados por essa reconciliação.
+
+### Migration
+- nenhuma nova; permanece obrigatória `123_published_slots_min_notice_policy.sql`.
+
 ## 36.41.6 — Remarcação com busca real de disponibilidade
 
 ### Corrigido

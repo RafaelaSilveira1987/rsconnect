@@ -1,3 +1,17 @@
+# RS Connect 36.41.8
+> **36.41.8** corrige a edição do link de atendimento no detalhe do compromisso: usuários com permissão de Agenda agora sempre veem o campo **Link de atendimento online**, mesmo quando a modalidade ainda aparece como **A definir**. O link continua opcional, validado como HTTP/HTTPS, sincronizável com Google Agenda e disponível nas mensagens automáticas por `{{link_consulta}}`. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
+
+## Homologação rápida 36.41.8
+
+Abra qualquer compromisso confirmado na Agenda, inclusive um que ainda mostre **Modalidade: A definir**. O bloco **Consulta online / Link de atendimento online** deve aparecer antes das ações do modal. Cole um endereço `https://...`, clique em **Salvar link**, reabra o compromisso e confirme que o endereço permaneceu salvo e que **Abrir link** está disponível.
+
+# RS Connect 36.41.7
+> **36.41.7** conclui o ciclo da remarcação na Agenda publicada: depois que o novo horário é confirmado, a vaga antiga volta automaticamente para **Disponível**. Também há reconciliação de segurança para horários que tenham ficado como **Confirmado** em versões anteriores mesmo quando o compromisso já está cancelado, recusado ou remarcado. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
+
+## Homologação rápida 36.41.7
+
+Confirme uma remarcação entre dois horários publicados. O novo horário deve ficar **Confirmado** e o anterior deve voltar a **Disponível**. Para corrigir um registro que já ficou preso em versão anterior, basta abrir **Agenda → Disponibilidades**: a reconciliação é executada na leitura e devolve à disponibilidade slots `booked` cujo compromisso vinculado já está `rescheduled`, `cancelled` ou `rejected`.
+
 # RS Connect 36.41.6
 > **36.41.6** corrige a continuidade da remarcação de um compromisso existente. Em vez de apenas responder que o pedido foi registrado, a conversa entra no fluxo real de pré-agendamento e disponibilidade, inclusive quando a intenção foi acumulada na fila fora do horário. O compromisso antigo permanece válido até a nova vaga ser confirmada; depois da aprovação, ele é encerrado como remarcado e os lembretes antigos são cancelados. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
 

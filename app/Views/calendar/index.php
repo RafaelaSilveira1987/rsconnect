@@ -583,10 +583,10 @@ $calendarEvents = array_map(static function (array $appointment) use (
             <dl class="calendar-dialog-context-list" data-calendar-dialog-context-list></dl>
         </section>
         <p data-calendar-dialog-description>Sem descrição.</p>
-        <section class="calendar-dialog-meeting" data-calendar-dialog-meeting hidden>
+        <section class="calendar-dialog-meeting" data-calendar-dialog-meeting data-calendar-dialog-meeting-manage="<?= $canManage ? '1' : '0' ?>" hidden>
             <div class="calendar-dialog-section-head">
                 <span class="eyebrow">Consulta online</span>
-                <strong>Link da consulta</strong>
+                <strong>Link de atendimento online</strong>
             </div>
             <?php if ($canManage): ?>
                 <form method="post" action="<?= View::e(Router::url('/calendar/meeting-link')) ?>" class="calendar-dialog-meeting-form" data-calendar-dialog-meeting-form>
@@ -594,7 +594,7 @@ $calendarEvents = array_map(static function (array $appointment) use (
                     <input type="hidden" name="tenant_id" value="<?= (int) ($filters['tenant_id'] ?? 0) ?>">
                     <input type="hidden" name="appointment_id" value="" data-calendar-dialog-meeting-id>
                     <input type="hidden" name="return_to" value="<?= View::e($returnUrl) ?>" data-calendar-dialog-meeting-return>
-                    <input type="url" name="meeting_url" maxlength="500" placeholder="https://meet.google.com/..." data-calendar-dialog-meeting-input>
+                    <input type="url" name="meeting_url" maxlength="500" placeholder="https://meet.google.com/..." aria-label="Link de atendimento online" data-calendar-dialog-meeting-input>
                     <button class="btn btn-small btn-primary" type="submit">Salvar link</button>
                     <a class="btn btn-small btn-quiet" href="#" target="_blank" rel="noopener" data-calendar-dialog-meeting-open hidden>Abrir link</a>
                 </form>

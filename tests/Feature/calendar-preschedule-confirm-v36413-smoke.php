@@ -27,9 +27,10 @@ $checks = [
     'busca só reaparece sem slot escolhido' => str_contains($view, '<?php if ($hasChosenSlot): ?>')
         && str_contains($view, '<?php else: ?>')
         && str_contains($view, 'Buscar disponibilidade'),
-    'versão atual é 36.41.6' => str_contains($version, 'RS Connect 36.41.6')
+    'versão atual é 36.41.8' => str_contains($version, 'RS Connect 36.41.8')
+        && str_contains($version, 'RS Connect 36.41.6')
         && str_contains($version, 'RS Connect 36.41.3')
-        && ($manifest['package_version'] ?? '') === '36.41.6',
+        && ($manifest['package_version'] ?? '') === '36.41.8',
     'sem migration nova' => ($manifest['database']['required_migration'] ?? '') === '123_published_slots_min_notice_policy.sql',
 ];
 
