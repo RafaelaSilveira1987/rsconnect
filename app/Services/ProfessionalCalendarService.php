@@ -342,7 +342,14 @@ final class ProfessionalCalendarService
         ];
     }
 
-    public function conflict(int $tenantId, int $ownerUserId, string $startsAt, string $endsAt, int $ignoreAppointmentId = 0): ?array
+    public function conflict(
+        int $tenantId,
+        int $ownerUserId,
+        string $startsAt,
+        string $endsAt,
+        int $ignoreAppointmentId = 0,
+        array $allowedAppointmentIds = []
+    ): ?array
     {
         if ($tenantId < 1 || $ownerUserId < 1 || $startsAt === '' || $endsAt === '') {
             return null;
@@ -364,6 +371,19 @@ final class ProfessionalCalendarService
             if ($ignoreAppointmentId > 0) {
                 $sql .= ' AND id <> :ignore_id';
                 $params['ignore_id'] = $ignoreAppointmentId;
+            }
+            $allowedAppointmentIds = array_values(array_unique(array_filter(
+                array_map('intval', $allowedAppointmentIds),
+                static fn (int $id): bool => $id > 0 && $id !== $ignoreAppointmentId
+            )));
+            if ($allowedAppointmentIds !== []) {
+                $placeholders = [];
+                foreach ($allowedAppointmentIds as $index => $allowedId) {
+                    $key = 'allowed_capacity_' . $index;
+                    $placeholders[] = ':' . $key;
+                    $params[$key] = $allowedId;
+                }
+                $sql .= ' AND id NOT IN (' . implode(',', $placeholders) . ')';
             }
             $sql .= ' ORDER BY starts_at LIMIT 1';
             $statement = Database::connection()->prepare($sql);

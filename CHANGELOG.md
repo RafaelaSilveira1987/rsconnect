@@ -1,3 +1,26 @@
+## 36.42.0 — Agenda sem ambiguidades e capacidade por horário
+
+### Corrigido
+- consultas como “queria confirmar meu atendimento” passam a ser tratadas como consulta de status quando não existe uma solicitação explícita de confirmação de presença;
+- compromissos já marcados como `rescheduled` deixam de concorrer como se ainda fossem o compromisso ativo do contato;
+- quando um contato possui dois ou mais compromissos futuros ativos, confirmação, consulta, cancelamento e remarcação não escolhem mais o primeiro registro silenciosamente: o agente lista as opções e aguarda número/horário;
+- a escolha pendente de um compromisso permanece aberta até o cliente identificar a opção, evitando que uma resposta genérica faça o fluxo cair no compromisso errado;
+- ao trocar uma pré-reserva por outra, uma tentativa em horário que acabou de lotar não libera a vaga anterior do cliente.
+
+### Capacidade por horário
+- adicionados os modelos de ocupação **Atendimento individual** e **Atendimento por capacidade / turma** na configuração da Agenda interna;
+- o modo por capacidade permite definir a lotação padrão (ex.: 4 pessoas) e sobrescrevê-la ao publicar uma faixa específica;
+- um horário é publicado apenas uma vez e passa a manter alocações individuais `held`/`booked`, permitindo várias pessoas no mesmo intervalo sem duplicar visualmente a disponibilidade;
+- a tela de horários publicados exibe ocupação, reservas e vagas livres (`2/4 ocupadas · 2 livres`);
+- a grade visual da Agenda consolida participantes do mesmo slot-capacidade em um único bloco de turma, enquanto a lista operacional continua individual por pessoa;
+- pré-reserva e confirmação usam bloqueio transacional e contagem atômica para impedir overbooking quando duas conversas tentam consumir a última vaga;
+- participantes do mesmo slot-capacidade não entram em conflito entre si, mas outros compromissos sobrepostos do profissional continuam bloqueando o horário;
+- contatos continuam protegidos contra dois compromissos sobrepostos quando essa política estiver habilitada;
+- empresas existentes permanecem no modo individual, com capacidade 1, até alteração explícita.
+
+### Migration
+- obrigatória `124_calendar_slot_capacity_mode.sql`, que adiciona as preferências de capacidade, `calendar_internal_slots.capacity_total` e a tabela `calendar_internal_slot_allocations`, migrando holds/bookings legados de forma compatível.
+
 ## 36.41.8 — Link de atendimento sempre editável
 
 ### Corrigido

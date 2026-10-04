@@ -232,6 +232,46 @@ $calendarDisplayAppointments = array_values(array_filter($appointments, static f
     return $chosenSlotId > 0 && in_array($availabilityStatus, ['slot_selected', 'validated'], true);
 }));
 
+// 36.42.0: na grade visual, uma turma/capacidade aparece como um único bloco.
+// A lista operacional abaixo da grade continua individual por participante, para que
+// confirmação, cancelamento, contato e observações permaneçam independentes.
+$capacityGroups = [];
+$calendarVisualAppointments = [];
+foreach ($calendarDisplayAppointments as $calendarDisplayAppointment) {
+    $slotId = (int) ($calendarDisplayAppointment['internal_slot_id'] ?? 0);
+    $capacity = max(1, (int) ($calendarDisplayAppointment['slot_capacity_total'] ?? 1));
+    if ($slotId > 0 && $capacity > 1) {
+        $capacityGroups[$slotId][] = $calendarDisplayAppointment;
+        continue;
+    }
+    $calendarVisualAppointments[] = $calendarDisplayAppointment;
+}
+foreach ($capacityGroups as $slotId => $groupAppointments) {
+    if ($groupAppointments === []) {
+        continue;
+    }
+    $representative = $groupAppointments[0];
+    $capacity = max(2, (int) ($representative['slot_capacity_total'] ?? 2));
+    $occupied = max(count($groupAppointments), (int) ($representative['slot_occupied_count'] ?? 0));
+    $remaining = max(0, $capacity - $occupied);
+    $participantNames = [];
+    foreach ($groupAppointments as $participantAppointment) {
+        $participantName = trim((string) (($participantAppointment['contact_name'] ?? '') ?: ($participantAppointment['phone'] ?? '')));
+        if ($participantName !== '') {
+            $participantNames[] = $participantName;
+        }
+    }
+    $participantNames = array_values(array_unique($participantNames));
+    $representative['_capacity_group'] = true;
+    $representative['_capacity_group_slot_id'] = (int) $slotId;
+    $representative['_capacity_group_occupied'] = $occupied;
+    $representative['_capacity_group_capacity'] = $capacity;
+    $representative['_capacity_group_remaining'] = $remaining;
+    $representative['_capacity_group_participants'] = $participantNames;
+    $calendarVisualAppointments[] = $representative;
+}
+usort($calendarVisualAppointments, static fn (array $a, array $b): int => strcmp((string) ($a['starts_at'] ?? ''), (string) ($b['starts_at'] ?? '')));
+
 $calendarEvents = array_map(static function (array $appointment) use (
     $statusLabels,
     $locationLabels,
@@ -252,22 +292,42 @@ $calendarEvents = array_map(static function (array $appointment) use (
     $hasStructuredContext = $hasPreScheduleContext($appointment);
     return [
         'id' => (int) ($appointment['id'] ?? 0),
-        'title' => (string) ($appointment['title'] ?? 'Agendamento'),
+        'title' => !empty($appointment['_capacity_group'])
+            ? ((string) (($appointment['title'] ?? '') ?: 'Atendimento em grupo'))
+            : (string) ($appointment['title'] ?? 'Agendamento'),
         'description' => (string) ($appointment['description'] ?? ''),
         'status' => (string) ($appointment['status'] ?? 'scheduled'),
-        'status_label' => (string) ($statusLabels[$appointment['status'] ?? ''] ?? ($appointment['status'] ?? 'Agendado')),
+        'status_label' => !empty($appointment['_capacity_group'])
+            ? ((int) ($appointment['_capacity_group_occupied'] ?? 0) . '/' . (int) ($appointment['_capacity_group_capacity'] ?? 1) . ' ocupadas')
+            : (string) ($statusLabels[$appointment['status'] ?? ''] ?? ($appointment['status'] ?? 'Agendado')),
         'location_type' => $modality !== '' ? $modality : 'indefinida',
         'location_label' => (string) ($locationLabels[$modality] ?? ($modality !== '' ? ucfirst($modality) : 'A definir')),
         'meeting_url' => trim((string) ($appointment['meeting_url'] ?? '')),
-        'contact_name' => (string) (($appointment['contact_name'] ?? '') ?: (($appointment['phone'] ?? '') ?: 'Sem contato')),
+        'contact_name' => !empty($appointment['_capacity_group'])
+            ? ((int) ($appointment['_capacity_group_occupied'] ?? 0) . '/' . (int) ($appointment['_capacity_group_capacity'] ?? 1)
+                . ' ocupadas · ' . (int) ($appointment['_capacity_group_remaining'] ?? 0) . ' livre(s)')
+            : (string) (($appointment['contact_name'] ?? '') ?: (($appointment['phone'] ?? '') ?: 'Sem contato')),
         'owner_name' => (string) (($appointment['owner_name'] ?? '') ?: 'Não definido'),
         'starts_at' => str_replace(' ', 'T', (string) ($appointment['starts_at'] ?? '')),
         'ends_at' => str_replace(' ', 'T', (string) ($appointment['ends_at'] ?? '')),
-        'context_rows' => $hasStructuredContext ? $appointmentContextRows($appointment) : [],
+        'context_rows' => !empty($appointment['_capacity_group'])
+            ? array_merge(
+                [[
+                    'label' => 'Ocupação da turma',
+                    'value' => (int) ($appointment['_capacity_group_occupied'] ?? 0) . ' de ' . (int) ($appointment['_capacity_group_capacity'] ?? 1) . ' vaga(s)',
+                    'wide' => false,
+                ]],
+                !empty($appointment['_capacity_group_participants']) ? [[
+                    'label' => 'Participantes',
+                    'value' => implode(', ', (array) $appointment['_capacity_group_participants']),
+                    'wide' => true,
+                ]] : []
+            )
+            : ($hasStructuredContext ? $appointmentContextRows($appointment) : []),
         'google_url' => $googleLink($appointment),
         'list_url' => Router::url('/calendar?' . http_build_query($listQuery)) . '#appointment-' . (int) ($appointment['id'] ?? 0),
     ];
-}, $calendarDisplayAppointments);
+}, $calendarVisualAppointments);
 ?>
 
 

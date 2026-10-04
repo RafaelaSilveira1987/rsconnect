@@ -1,3 +1,23 @@
+# RS Connect 36.42.0
+> **36.42.0** corrige a conversa sobre confirmação/remarcação quando um mesmo contato possui mais de um compromisso futuro e adiciona um modelo de **capacidade por horário** para operações como Pilates, turmas, salas e atendimentos simultâneos. A empresa pode continuar no modo individual ou habilitar capacidade (ex.: 4 pessoas no mesmo horário), sem publicar quatro linhas duplicadas. Esta versão exige a migration `124_calendar_slot_capacity_mode.sql`.
+
+## Homologação rápida 36.42.0
+
+1. Execute `php bin/migrate.php up` e confirme que a migration `124_calendar_slot_capacity_mode.sql` foi aplicada.
+2. Em **Agenda → Configurações → Modelo de ocupação**, mantenha **Atendimento individual** para empresas de uma pessoa por vaga ou escolha **Atendimento por capacidade / turma** e informe a lotação padrão.
+3. Publique um horário com capacidade 4 e confirme que a disponibilidade aparece uma única vez, com ocupação `0/4`; faça reservas sucessivas e valide `1/4`, `2/4`, `3/4`, até fechar em `4/4`.
+4. Com um contato que possua dois compromissos futuros, envie “queria confirmar meu atendimento”: o agente deve perguntar **qual compromisso** antes de responder. Respostas como `1`, `14h` ou `15h` selecionam explicitamente o compromisso.
+5. Em uma remarcação com mais de um compromisso ativo, o agente também deve pedir qual compromisso será alterado antes de procurar a nova vaga. O compromisso antigo só vira histórico `Remarcado` quando a nova vaga for realmente confirmada.
+
+## O que muda na Agenda
+
+- **Individual:** mantém exatamente o comportamento anterior, uma pessoa por horário publicado.
+- **Capacidade / turma:** cada horário publicado recebe uma capacidade total; as reservas são armazenadas separadamente e o horário continua oferecido até atingir a lotação. A reserva é atômica para evitar exceder a capacidade em acessos simultâneos.
+- A própria tela de **Disponibilidades** mostra ocupadas e vagas livres no mesmo card, evitando duplicar quatro horários iguais para uma turma de quatro pessoas.
+- Empresas existentes permanecem em **Individual / capacidade 1** após a migration; a mudança para capacidade é opt-in.
+
+---
+
 # RS Connect 36.41.8
 > **36.41.8** corrige a edição do link de atendimento no detalhe do compromisso: usuários com permissão de Agenda agora sempre veem o campo **Link de atendimento online**, mesmo quando a modalidade ainda aparece como **A definir**. O link continua opcional, validado como HTTP/HTTPS, sincronizável com Google Agenda e disponível nas mensagens automáticas por `{{link_consulta}}`. Não há migration nova; permanece necessária `123_published_slots_min_notice_policy.sql`.
 

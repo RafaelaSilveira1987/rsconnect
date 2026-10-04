@@ -23,6 +23,8 @@ final class CalendarAvailabilityService
             'enabled' => 0,
             'availability_mode' => 'free_slots',
             'internal_availability_strategy' => 'calculated',
+            'booking_capacity_mode' => 'single',
+            'default_slot_capacity' => 1,
             'published_slots_respect_min_notice' => 1,
             'require_before_approval' => 1,
             'auto_request_on_pre_schedule' => 1,
@@ -90,6 +92,8 @@ final class CalendarAvailabilityService
 
             $row['availability_mode'] = $this->normalizeMode((string) ($row['availability_mode'] ?? 'free_slots'));
             $row['internal_availability_strategy'] = (new InternalCalendarSlotService())->normalizeStrategy((string) ($row['internal_availability_strategy'] ?? 'calculated'));
+            $row['booking_capacity_mode'] = $this->normalizeCapacityMode((string) ($row['booking_capacity_mode'] ?? 'single'));
+            $row['default_slot_capacity'] = max(1, min(100, (int) ($row['default_slot_capacity'] ?? 1)));
             return array_merge($defaults, $row);
         } catch (Throwable) {
             return $defaults;
@@ -175,6 +179,8 @@ final class CalendarAvailabilityService
             'enabled' => 1,
             'availability_mode' => 'free_slots',
             'internal_availability_strategy' => (new InternalCalendarSlotService())->normalizeStrategy((string) ($data['internal_availability_strategy'] ?? $current['internal_availability_strategy'] ?? 'calculated')),
+            'booking_capacity_mode' => $this->normalizeCapacityMode((string) ($data['booking_capacity_mode'] ?? $current['booking_capacity_mode'] ?? 'single')),
+            'default_slot_capacity' => max(1, min(100, (int) ($data['default_slot_capacity'] ?? $current['default_slot_capacity'] ?? 1))),
             'published_slots_respect_min_notice' => array_key_exists('published_slots_respect_min_notice', $data)
                 ? (!empty($data['published_slots_respect_min_notice']) ? 1 : 0)
                 : (!empty($current['published_slots_respect_min_notice']) ? 1 : 0),
@@ -401,6 +407,10 @@ final class CalendarAvailabilityService
         $current = $this->settings($tenantId);
         $mode = $this->normalizeMode((string) ($data['availability_mode'] ?? $current['availability_mode'] ?? 'free_slots'));
         $internalStrategy = (new InternalCalendarSlotService())->normalizeStrategy((string) ($data['internal_availability_strategy'] ?? $current['internal_availability_strategy'] ?? 'calculated'));
+        $capacityMode = $this->normalizeCapacityMode((string) ($data['booking_capacity_mode'] ?? $current['booking_capacity_mode'] ?? 'single'));
+        $defaultSlotCapacity = $capacityMode === 'capacity'
+            ? max(2, min(100, (int) ($data['default_slot_capacity'] ?? $current['default_slot_capacity'] ?? 4)))
+            : 1;
         $publishedSlotsRespectMinNotice = array_key_exists('published_slots_respect_min_notice', $data)
             ? (!empty($data['published_slots_respect_min_notice']) ? 1 : 0)
             : (!empty($current['published_slots_respect_min_notice']) ? 1 : 0);
@@ -479,7 +489,7 @@ final class CalendarAvailabilityService
 
         $statement = Database::connection()->prepare(
             'INSERT INTO tenant_calendar_availability_settings
-                (tenant_id, enabled, availability_mode, require_before_approval, auto_request_on_pre_schedule,
+                (tenant_id, enabled, availability_mode, booking_capacity_mode, default_slot_capacity, require_before_approval, auto_request_on_pre_schedule,
                  use_n8n, use_internal_fallback, n8n_webhook_url_encrypted, free_slots_webhook_url_encrypted,
                  marked_events_webhook_url_encrypted, secret_token_encrypted, google_calendar_id, timezone,
                  google_utc_offset, ignore_transparent_events, marked_require_transparent, marked_online_title,
@@ -487,7 +497,7 @@ final class CalendarAvailabilityService
                  revalidate_before_update, restore_on_cancel, default_duration_minutes, slot_interval_minutes,
                  buffer_minutes, search_days_ahead, workdays_json, working_hours_json, min_notice_hours, max_suggestions)
              VALUES
-                (:tenant_id, :enabled, :availability_mode, :require_before_approval, :auto_request_on_pre_schedule,
+                (:tenant_id, :enabled, :availability_mode, :booking_capacity_mode, :default_slot_capacity, :require_before_approval, :auto_request_on_pre_schedule,
                  :use_n8n, :use_internal_fallback, :n8n_webhook_url_encrypted, :free_slots_webhook_url_encrypted,
                  :marked_events_webhook_url_encrypted, :secret_token_encrypted, :google_calendar_id, :timezone,
                  :google_utc_offset, :ignore_transparent_events, :marked_require_transparent, :marked_online_title,
@@ -497,6 +507,8 @@ final class CalendarAvailabilityService
              ON DUPLICATE KEY UPDATE
                 enabled = VALUES(enabled),
                 availability_mode = VALUES(availability_mode),
+                booking_capacity_mode = VALUES(booking_capacity_mode),
+                default_slot_capacity = VALUES(default_slot_capacity),
                 require_before_approval = VALUES(require_before_approval),
                 auto_request_on_pre_schedule = VALUES(auto_request_on_pre_schedule),
                 use_n8n = VALUES(use_n8n),
@@ -531,6 +543,8 @@ final class CalendarAvailabilityService
             'tenant_id' => $tenantId,
             'enabled' => !empty($data['enabled']) ? 1 : 0,
             'availability_mode' => $mode,
+            'booking_capacity_mode' => $capacityMode,
+            'default_slot_capacity' => $defaultSlotCapacity,
             'require_before_approval' => !empty($data['require_before_approval']) ? 1 : 0,
             'auto_request_on_pre_schedule' => !empty($data['auto_request_on_pre_schedule']) ? 1 : 0,
             'use_n8n' => $useN8n ? 1 : 0,
@@ -1415,12 +1429,21 @@ final class CalendarAvailabilityService
             // Revalida conflitos reais no instante da escolha. O slot publicado define
             // disponibilidade; compromissos continuam tendo precedência.
             $effectiveOwnerId = $publishedOwnerId > 0 ? $publishedOwnerId : $currentOwnerId;
+            $publishedCapacity = $this->capacityFromAvailabilitySlot($slot);
+            $sameCapacityAppointments = [];
+            if ($publishedCapacity > 1) {
+                $sameCapacityAppointments = (new InternalCalendarSlotService())->activeAppointmentIdsForSlot(
+                    $tenantId,
+                    (int) ($hold['internal_slot_id'] ?? 0)
+                );
+            }
             $busy = $this->busyPeriods(
                 $tenantId,
                 (string) ($slot['starts_at'] ?? ''),
                 (string) ($slot['ends_at'] ?? ''),
                 $effectiveOwnerId,
-                $appointmentId
+                $appointmentId,
+                $sameCapacityAppointments
             );
             try {
                 $candidateStart = new DateTimeImmutable((string) ($slot['starts_at'] ?? ''));
@@ -2709,16 +2732,44 @@ final class CalendarAvailabilityService
         foreach ($published as $row) {
             $slotOwnerId = (int) ($row['owner_user_id'] ?? 0);
             $effectiveOwnerId = $slotOwnerId > 0 ? $slotOwnerId : $ownerUserId;
-            if (!array_key_exists($effectiveOwnerId, $busyCache)) {
-                $busyCache[$effectiveOwnerId] = $this->busyPeriods(
+            $capacityTotal = max(1, (int) ($row['capacity_total'] ?? 1));
+            // Horários com capacidade > 1 representam uma turma/recurso simultâneo.
+            // Compromissos já alocados NESTE mesmo slot não podem bloquear a próxima
+            // vaga. O limite real passa a ser a capacidade do slot, controlada de forma
+            // atômica por InternalCalendarSlotService. O conflito do próprio contato é
+            // preservado quando a política de sobreposição estiver habilitada.
+            if ($capacityTotal > 1) {
+                // Ignore somente os participantes alocados NESTE slot-capacidade.
+                // Qualquer outro compromisso sobreposto do profissional continua
+                // sendo conflito, evitando abrir uma turma sobre um atendimento
+                // individual que já exista por engano.
+                $sameSlotAppointmentIds = (new InternalCalendarSlotService())->activeAppointmentIdsForSlot(
                     $tenantId,
-                    (string) $window['start'],
-                    (string) $window['end'],
-                    $effectiveOwnerId,
-                    $ignoreAppointmentId
+                    (int) ($row['id'] ?? 0)
                 );
+                $busy = array_merge(
+                    $this->busyPeriods(
+                        $tenantId,
+                        (string) $window['start'],
+                        (string) $window['end'],
+                        $effectiveOwnerId,
+                        $ignoreAppointmentId,
+                        $sameSlotAppointmentIds
+                    ),
+                    $contactBusy
+                );
+            } else {
+                if (!array_key_exists($effectiveOwnerId, $busyCache)) {
+                    $busyCache[$effectiveOwnerId] = $this->busyPeriods(
+                        $tenantId,
+                        (string) $window['start'],
+                        (string) $window['end'],
+                        $effectiveOwnerId,
+                        $ignoreAppointmentId
+                    );
+                }
+                $busy = array_merge($busyCache[$effectiveOwnerId], $contactBusy);
             }
-            $busy = array_merge($busyCache[$effectiveOwnerId], $contactBusy);
             try {
                 $start = new DateTimeImmutable((string) $row['starts_at']);
                 $end = new DateTimeImmutable((string) $row['ends_at']);
@@ -2742,6 +2793,9 @@ final class CalendarAvailabilityService
                     'owner_user_id' => $slotOwnerId > 0 ? $slotOwnerId : null,
                     'owner_name' => trim((string) ($row['owner_name'] ?? '')) ?: null,
                     'published' => true,
+                    'capacity_total' => $capacityTotal,
+                    'occupied_count' => max(0, (int) ($row['occupied_count'] ?? 0)),
+                    'remaining_capacity' => max(0, (int) ($row['remaining_capacity'] ?? ($capacityTotal - (int) ($row['occupied_count'] ?? 0)))),
                 ],
             ];
             if (count($slots) >= $max) {
@@ -2833,7 +2887,14 @@ final class CalendarAvailabilityService
         return $slots;
     }
 
-    private function busyPeriods(int $tenantId, string $start, string $end, int $ownerUserId = 0, int $ignoreAppointmentId = 0): array
+    private function busyPeriods(
+        int $tenantId,
+        string $start,
+        string $end,
+        int $ownerUserId = 0,
+        int $ignoreAppointmentId = 0,
+        array $ignoreAppointmentIds = []
+    ): array
     {
         try {
             // Além dos confirmados, um horário realmente selecionado pelo fluxo de
@@ -2866,6 +2927,19 @@ final class CalendarAvailabilityService
             if ($ignoreAppointmentId > 0) {
                 $sql .= ' AND id <> :ignore_appointment_id';
                 $params['ignore_appointment_id'] = $ignoreAppointmentId;
+            }
+            $ignoreAppointmentIds = array_values(array_unique(array_filter(
+                array_map('intval', $ignoreAppointmentIds),
+                static fn (int $id): bool => $id > 0 && $id !== $ignoreAppointmentId
+            )));
+            if ($ignoreAppointmentIds !== []) {
+                $ignorePlaceholders = [];
+                foreach ($ignoreAppointmentIds as $index => $ignoredId) {
+                    $key = 'ignore_capacity_' . $index;
+                    $ignorePlaceholders[] = ':' . $key;
+                    $params[$key] = $ignoredId;
+                }
+                $sql .= ' AND id NOT IN (' . implode(',', $ignorePlaceholders) . ')';
             }
             $statement = Database::connection()->prepare($sql);
             $statement->execute($params);
@@ -3297,6 +3371,11 @@ final class CalendarAvailabilityService
         return $mode === 'marked_events' ? 'marked_events' : 'free_slots';
     }
 
+    private function normalizeCapacityMode(string $mode): string
+    {
+        return strtolower(trim($mode)) === 'capacity' ? 'capacity' : 'single';
+    }
+
     private function normalizeModality(string $modality): string
     {
         $normalized = mb_strtolower(trim($modality));
@@ -3307,6 +3386,18 @@ final class CalendarAvailabilityService
             return 'presencial';
         }
         return 'indefinida';
+    }
+
+    private function capacityFromAvailabilitySlot(array $slot): int
+    {
+        $raw = [];
+        if (isset($slot['raw']) && is_array($slot['raw'])) {
+            $raw = $slot['raw'];
+        } elseif (!empty($slot['raw_json'])) {
+            $decoded = json_decode((string) $slot['raw_json'], true);
+            $raw = is_array($decoded) ? $decoded : [];
+        }
+        return max(1, (int) ($raw['capacity_total'] ?? 1));
     }
 
     private function tableExists(string $table): bool

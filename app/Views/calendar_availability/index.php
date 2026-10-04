@@ -34,6 +34,8 @@ $reminderLead = $leadTimeParts((int) ($calendarClientSettings['reminder_minutes'
 $presenceLead = $leadTimeParts((int) ($calendarClientSettings['presence_request_minutes'] ?? 1440), 15);
 $publishedSlots = $publishedSlots ?? [];
 $internalStrategy = (($settings['internal_availability_strategy'] ?? 'calculated') === 'published') ? 'published' : 'calculated';
+$bookingCapacityMode = (($settings['booking_capacity_mode'] ?? 'single') === 'capacity') ? 'capacity' : 'single';
+$defaultSlotCapacity = $bookingCapacityMode === 'capacity' ? max(2, (int) ($settings['default_slot_capacity'] ?? 4)) : 1;
 $activeTab = in_array((string) ($activeTab ?? 'overview'), ['overview', 'availability', 'preschedules', 'settings'], true)
     ? (string) ($activeTab ?? 'overview')
     : 'overview';
@@ -59,9 +61,15 @@ $availabilityFromFilter = preg_match('/^\d{4}-\d{2}-\d{2}$/', $availabilityFromF
 $availabilityToFilter = preg_match('/^\d{4}-\d{2}-\d{2}$/', $availabilityToFilter) === 1 ? $availabilityToFilter : '';
 $allPublishedSlots = array_values(array_filter($publishedSlots, static fn (array $slot): bool => (string) ($slot['status'] ?? '') !== 'cancelled'));
 $publishedSlotStats = array_fill_keys(array_keys($publishedStatusLabels), 0);
+$publishedSeatStats = ['capacity' => 0, 'occupied' => 0, 'remaining' => 0];
 foreach ($allPublishedSlots as $publishedSlotForStats) {
     $statusForStats = (string) ($publishedSlotForStats['status'] ?? 'available');
     if (array_key_exists($statusForStats, $publishedSlotStats)) $publishedSlotStats[$statusForStats]++;
+    $slotCapacityForStats = max(1, (int) ($publishedSlotForStats['capacity_total'] ?? 1));
+    $slotOccupiedForStats = max(0, min($slotCapacityForStats, (int) ($publishedSlotForStats['occupied_count'] ?? 0)));
+    $publishedSeatStats['capacity'] += $slotCapacityForStats;
+    $publishedSeatStats['occupied'] += $slotOccupiedForStats;
+    $publishedSeatStats['remaining'] += max(0, $slotCapacityForStats - $slotOccupiedForStats);
 }
 $visiblePublishedSlots = array_values(array_filter($allPublishedSlots, static function (array $slot) use ($availabilityStatusFilter, $availabilityModalityFilter, $availabilityOwnerFilter, $availabilityFromFilter, $availabilityToFilter): bool {
     $status = (string) ($slot['status'] ?? 'available');
@@ -243,9 +251,15 @@ $requestInsight = static function (array $request): string {
         <h3>Disponibilidade</h3>
         <p><?= $calendarSource === 'internal' && $internalStrategy === 'published' ? 'O agente oferece apenas vagas explicitamente publicadas.' : 'Consulte e organize os horários que podem ser apresentados aos clientes.' ?></p>
         <div class="agenda-overview-mini-stats">
-            <div><strong><?= (int) ($publishedSlotStats['available'] ?? 0) ?></strong><span>disponíveis</span></div>
-            <div><strong><?= (int) ($publishedSlotStats['held'] ?? 0) ?></strong><span>pré-reservados</span></div>
-            <div><strong><?= (int) ($publishedSlotStats['booked'] ?? 0) ?></strong><span>confirmados</span></div>
+            <?php if ($bookingCapacityMode === 'capacity'): ?>
+                <div><strong><?= (int) $publishedSeatStats['occupied'] ?></strong><span>ocupações</span></div>
+                <div><strong><?= (int) $publishedSeatStats['remaining'] ?></strong><span>vagas livres</span></div>
+                <div><strong><?= (int) $publishedSeatStats['capacity'] ?></strong><span>capacidade total</span></div>
+            <?php else: ?>
+                <div><strong><?= (int) ($publishedSlotStats['available'] ?? 0) ?></strong><span>disponíveis</span></div>
+                <div><strong><?= (int) ($publishedSlotStats['held'] ?? 0) ?></strong><span>pré-reservados</span></div>
+                <div><strong><?= (int) ($publishedSlotStats['booked'] ?? 0) ?></strong><span>confirmados</span></div>
+            <?php endif; ?>
         </div>
         <a class="btn btn-secondary" href="<?= View::e($tabUrl('availability')) ?>">Gerenciar disponibilidades</a>
     </section>
@@ -721,6 +735,23 @@ $requestInsight = static function (array $request): string {
                     <div class="calendar-inline-info"><strong>Fonte de verdade: vagas publicadas.</strong><span>Um espaço vazio no calendário não será considerado disponível. Primeiro libere os horários na aba “Disponibilidades”.</span></div>
                     <label class="switch-inline" style="margin-top:12px"><input type="checkbox" name="published_slots_respect_min_notice" value="1" <?= !array_key_exists('published_slots_respect_min_notice', $settings) || !empty($settings['published_slots_respect_min_notice']) ? 'checked' : '' ?>><span>Aplicar a antecedência mínima também aos horários liberados</span></label>
                     <small class="muted-text">Ativado: uma vaga publicada só pode ser oferecida depois da antecedência configurada. Desativado: publicar a vaga autoriza o agente a oferecê-la mesmo com antecedência menor, desde que o horário ainda seja futuro e esteja livre.</small>
+
+                    <div class="section-heading compact" style="margin-top:18px"><div><span class="eyebrow">Tipo de agendamento da empresa</span><h3>Quantas pessoas podem ocupar o mesmo horário?</h3><p>Esta regra evita duplicar linhas de horário e permite representar turmas, pilates, aulas e atendimentos simultâneos de forma organizada.</p></div></div>
+                    <div class="internal-strategy-grid" data-capacity-mode-choices>
+                        <label class="calendar-mode-card <?= $bookingCapacityMode === 'single' ? 'is-selected' : '' ?>">
+                            <input type="radio" name="booking_capacity_mode" value="single" <?= $bookingCapacityMode === 'single' ? 'checked' : '' ?>>
+                            <span class="calendar-mode-icon" aria-hidden="true">1</span>
+                            <span><strong>Atendimento individual</strong><small>Cada horário aceita uma pessoa. Ao confirmar, a vaga fica totalmente ocupada.</small></span>
+                        </label>
+                        <label class="calendar-mode-card <?= $bookingCapacityMode === 'capacity' ? 'is-selected' : '' ?>">
+                            <input type="radio" name="booking_capacity_mode" value="capacity" <?= $bookingCapacityMode === 'capacity' ? 'checked' : '' ?>>
+                            <span class="calendar-mode-icon" aria-hidden="true">N</span>
+                            <span><strong>Atendimento por capacidade / turma</strong><small>O mesmo horário recebe várias pessoas até atingir o limite configurado.</small></span>
+                        </label>
+                    </div>
+                    <div data-capacity-mode-panel="capacity" style="margin-top:12px">
+                        <label class="field"><span>Capacidade padrão por horário</span><div class="input-with-suffix"><input type="number" name="default_slot_capacity" min="2" max="100" value="<?= (int) $defaultSlotCapacity ?>"><span>pessoas</span></div><small class="muted-text">Ex.: Pilates com 4 pessoas por hora → capacidade 4. Cada horário aparece uma única vez com o indicador 0/4, 1/4, 2/4...</small></label>
+                    </div>
                 </div>
                 <div data-internal-strategy-panel="calculated">
                 <div class="internal-calendar-days">
@@ -904,10 +935,17 @@ $requestInsight = static function (array $request): string {
         <?php endif; ?>
 
         <div class="availability-status-strip" aria-label="Resumo dos horários publicados">
-            <div><span>Disponíveis</span><strong><?= (int) ($publishedSlotStats['available'] ?? 0) ?></strong></div>
-            <div><span>Pré-reservados</span><strong><?= (int) ($publishedSlotStats['held'] ?? 0) ?></strong></div>
-            <div><span>Confirmados</span><strong><?= (int) ($publishedSlotStats['booked'] ?? 0) ?></strong></div>
-            <div><span>Bloqueados</span><strong><?= (int) ($publishedSlotStats['blocked'] ?? 0) ?></strong></div>
+            <?php if ($bookingCapacityMode === 'capacity'): ?>
+                <div><span>Capacidade total</span><strong><?= (int) $publishedSeatStats['capacity'] ?></strong></div>
+                <div><span>Ocupações</span><strong><?= (int) $publishedSeatStats['occupied'] ?></strong></div>
+                <div><span>Vagas livres</span><strong><?= (int) $publishedSeatStats['remaining'] ?></strong></div>
+                <div><span>Horários publicados</span><strong><?= count($allPublishedSlots) ?></strong></div>
+            <?php else: ?>
+                <div><span>Disponíveis</span><strong><?= (int) ($publishedSlotStats['available'] ?? 0) ?></strong></div>
+                <div><span>Pré-reservados</span><strong><?= (int) ($publishedSlotStats['held'] ?? 0) ?></strong></div>
+                <div><span>Confirmados</span><strong><?= (int) ($publishedSlotStats['booked'] ?? 0) ?></strong></div>
+                <div><span>Bloqueados</span><strong><?= (int) ($publishedSlotStats['blocked'] ?? 0) ?></strong></div>
+            <?php endif; ?>
         </div>
 
         <?php if ($canManage): ?>
@@ -934,6 +972,11 @@ $requestInsight = static function (array $request): string {
                         <label class="field"><span>Intervalo entre inícios</span><div class="input-with-suffix"><input type="number" name="slot_interval_minutes" min="5" max="240" value="<?= (int) ($settings['slot_interval_minutes'] ?? 30) ?>"><span>min</span></div><small class="muted-text">Ex.: 50 min de duração + 60 min de intervalo libera 14:00, 15:00, 16:00...</small></label>
                         <label class="field"><span>Repetir no mesmo dia da semana</span><div class="input-with-suffix"><input type="number" name="repeat_weeks" min="1" max="52" value="1"><span>sem.</span></div><small class="muted-text">1 = somente esta data.</small></label>
                     </div>
+                    <?php if ($bookingCapacityMode === 'capacity'): ?>
+                        <label class="field" style="margin-top:12px"><span>Capacidade destes horários</span><div class="input-with-suffix"><input type="number" name="capacity_total" min="2" max="100" value="<?= (int) $defaultSlotCapacity ?>"><span>pessoas</span></div><small class="muted-text">Você pode sobrescrever a capacidade padrão nesta publicação sem criar quatro horários duplicados.</small></label>
+                    <?php else: ?>
+                        <input type="hidden" name="capacity_total" value="1">
+                    <?php endif; ?>
                 </div>
                 <div class="availability-form-section availability-form-section-last">
                     <strong>Contexto</strong>
@@ -982,14 +1025,17 @@ $requestInsight = static function (array $request): string {
                                 <?php
                                     $publishedStatus = (string) ($publishedSlot['status'] ?? 'available');
                                     $publishedModality = match ((string) ($publishedSlot['modality'] ?? 'indefinida')) { 'online' => 'Online', 'presencial' => 'Presencial', 'telefone' => 'Telefone', default => 'Qualquer modalidade' };
+                                    $capacityTotal = max(1, (int) ($publishedSlot['capacity_total'] ?? 1));
+                                    $occupiedCount = max(0, (int) ($publishedSlot['occupied_count'] ?? 0));
+                                    $remainingCapacity = max(0, $capacityTotal - $occupiedCount);
                                 ?>
                                 <div class="availability-slot-card">
                                     <div class="availability-slot-time"><strong><?= View::e($date($publishedSlot['starts_at'] ?? null, 'H:i')) ?></strong><span>até <?= View::e($date($publishedSlot['ends_at'] ?? null, 'H:i')) ?></span></div>
                                     <div class="availability-slot-details">
-                                        <div class="availability-slot-badges"><span class="badge <?= View::e($publishedStatusClasses[$publishedStatus] ?? '') ?>"><?= View::e($publishedStatusLabels[$publishedStatus] ?? $publishedStatus) ?></span><span class="badge badge-info"><?= View::e($publishedModality) ?></span></div>
+                                        <div class="availability-slot-badges"><span class="badge <?= View::e($publishedStatusClasses[$publishedStatus] ?? '') ?>"><?= View::e($publishedStatusLabels[$publishedStatus] ?? $publishedStatus) ?></span><span class="badge badge-info"><?= View::e($publishedModality) ?></span><?php if ($capacityTotal > 1): ?><span class="badge"><?= (int) $occupiedCount ?>/<?= (int) $capacityTotal ?> ocupadas · <?= (int) $remainingCapacity ?> livre(s)</span><?php endif; ?></div>
                                         <strong><?= View::e(($publishedSlot['owner_name'] ?? '') ?: 'Disponibilidade geral da empresa') ?></strong>
                                         <?php if (!empty($publishedSlot['notes'])): ?><small><?= View::e((string) $publishedSlot['notes']) ?></small><?php endif; ?>
-                                        <?php if ($publishedStatus === 'held' && !empty($publishedSlot['hold_expires_at'])): ?><small>Pré-reserva até <?= View::e($date($publishedSlot['hold_expires_at'], 'H:i')) ?><?= !empty($publishedSlot['hold_appointment_title']) ? ' · ' . View::e((string) $publishedSlot['hold_appointment_title']) : '' ?></small><?php endif; ?>
+                                        <?php if ($capacityTotal > 1 && (int) ($publishedSlot['held_count'] ?? 0) > 0): ?><small><?= (int) ($publishedSlot['held_count'] ?? 0) ?> vaga(s) em pré-reserva · <?= (int) ($publishedSlot['booked_count'] ?? 0) ?> confirmada(s)</small><?php elseif ($publishedStatus === 'held' && !empty($publishedSlot['hold_expires_at'])): ?><small>Pré-reserva até <?= View::e($date($publishedSlot['hold_expires_at'], 'H:i')) ?><?= !empty($publishedSlot['hold_appointment_title']) ? ' · ' . View::e((string) $publishedSlot['hold_appointment_title']) : '' ?></small><?php endif; ?>
                                     </div>
                                     <div class="availability-slot-actions">
                                         <?php if ($canManage && in_array($publishedStatus, ['available', 'blocked'], true)): ?>
@@ -1132,6 +1178,9 @@ $requestInsight = static function (array $request): string {
     const internalStrategyInputs = Array.from(form.querySelectorAll('input[name="internal_availability_strategy"]'));
     const internalStrategyPanels = Array.from(form.querySelectorAll('[data-internal-strategy-panel]'));
     const internalStrategyCards = Array.from(form.querySelectorAll('[data-internal-strategy-choices] .calendar-mode-card'));
+    const capacityModeInputs = Array.from(form.querySelectorAll('input[name="booking_capacity_mode"]'));
+    const capacityModePanels = Array.from(form.querySelectorAll('[data-capacity-mode-panel]'));
+    const capacityModeCards = Array.from(form.querySelectorAll('[data-capacity-mode-choices] .calendar-mode-card'));
 
     const refresh = () => {
         const checked = sourceInputs.find((input) => input.checked);
@@ -1139,6 +1188,8 @@ $requestInsight = static function (array $request): string {
         const mode = modeSelect ? modeSelect.value : 'free_slots';
         const internalStrategyChecked = internalStrategyInputs.find((input) => input.checked);
         const internalStrategy = internalStrategyChecked ? internalStrategyChecked.value : 'calculated';
+        const capacityModeChecked = capacityModeInputs.find((input) => input.checked);
+        const capacityMode = capacityModeChecked ? capacityModeChecked.value : 'single';
         const autoRequestToggle = form.querySelector('[data-auto-request-toggle]');
 
         // A Agenda interna é conversacional: ao escolhê-la, a consulta automática
@@ -1172,10 +1223,18 @@ $requestInsight = static function (array $request): string {
         internalStrategyPanels.forEach((panel) => {
             panel.style.display = panel.getAttribute('data-internal-strategy-panel') === internalStrategy ? '' : 'none';
         });
+        capacityModeCards.forEach((card) => {
+            const input = card.querySelector('input[name="booking_capacity_mode"]');
+            card.classList.toggle('is-selected', !!input && input.checked);
+        });
+        capacityModePanels.forEach((panel) => {
+            panel.style.display = panel.getAttribute('data-capacity-mode-panel') === capacityMode ? '' : 'none';
+        });
     };
 
     sourceInputs.forEach((input) => input.addEventListener('change', refresh));
     internalStrategyInputs.forEach((input) => input.addEventListener('change', refresh));
+    capacityModeInputs.forEach((input) => input.addEventListener('change', refresh));
     if (modeSelect) modeSelect.addEventListener('change', refresh);
     refresh();
 })();

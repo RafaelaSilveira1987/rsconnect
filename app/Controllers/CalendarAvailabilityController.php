@@ -148,6 +148,11 @@ final class CalendarAvailabilityController
             if (empty($_POST['slot_interval_minutes'])) {
                 $_POST['slot_interval_minutes'] = (int) ($settings['slot_interval_minutes'] ?? 30);
             }
+            if (($settings['booking_capacity_mode'] ?? 'single') === 'capacity') {
+                $_POST['capacity_total'] = max(2, min(100, (int) ($_POST['capacity_total'] ?? $settings['default_slot_capacity'] ?? 4)));
+            } else {
+                $_POST['capacity_total'] = 1;
+            }
             $result = (new InternalCalendarSlotService())->publish($tenantId, $_POST, Auth::id());
             if (($result['created'] ?? 0) > 0) {
                 $calendarAvailability = new CalendarAvailabilityService();

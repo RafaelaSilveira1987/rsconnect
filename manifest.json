@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.41.8",
-  "release_name": "Link de atendimento sempre editável",
+  "package_version": "36.42.0",
+  "release_name": "Agenda sem ambiguidades e capacidade por horário",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -10,7 +10,7 @@
   },
   "database": {
     "driver": "mysql",
-    "required_migration": "123_published_slots_min_notice_policy.sql",
+    "required_migration": "124_calendar_slot_capacity_mode.sql",
     "migration_runner": "php bin/migrate.php"
   },
   "install": {
@@ -19,8 +19,8 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.41.7",
-      "release_name": "Liberação automática da vaga remarcada",
+      "package_version": "36.41.8",
+      "release_name": "Link de atendimento sempre editável",
       "required_migration": "123_published_slots_min_notice_policy.sql"
     },
     "historical_releases": [

@@ -53,12 +53,95 @@ final class ExistingAppointmentConversationService
             return $this->result(true, true, 'already_handled');
         }
 
-        $appointment = $this->findRelevantAppointment($pdo, $tenantId, $contactId, $conversationId);
-        $presencePending = is_array($appointment)
-            && (string) ($appointment['client_confirmation_status'] ?? '') === 'pending';
-        $intent = $this->detectIntent($content, $presencePending);
+        $appointments = $this->findRelevantAppointments($pdo, $tenantId, $contactId, $conversationId);
+        $pendingDisambiguation = $this->pendingDisambiguation($pdo, $tenantId, $conversationId);
+        $appointment = null;
+        $intent = '';
+
+        // 36.42.0: quando existem dois ou mais compromissos ativos do mesmo contato,
+        // nunca escolhemos silenciosamente o primeiro. Se a conversa já estava numa
+        // pergunta de desambiguação, uma resposta curta como "1" ou "15h" resolve o
+        // compromisso alvo e reaproveita a intenção original.
+        if ($pendingDisambiguation) {
+            $candidateIds = array_values(array_filter(array_map('intval', (array) ($pendingDisambiguation['appointment_ids'] ?? []))));
+            $candidates = array_values(array_filter(
+                $appointments,
+                static fn (array $row): bool => in_array((int) ($row['id'] ?? 0), $candidateIds, true)
+            ));
+            $selected = $this->selectAppointmentCandidate($content, $candidates);
+            if ($selected || count($candidates) === 1) {
+                $appointment = $selected ?: $candidates[0];
+                $intent = trim((string) ($pendingDisambiguation['intent'] ?? ''));
+                $this->markDisambiguationResolved($pdo, $tenantId, $conversationId, (int) ($appointment['id'] ?? 0), $intent);
+            } elseif (count($candidates) > 1) {
+                // Enquanto uma pergunta de desambiguação estiver aberta, jamais
+                // caímos silenciosamente no primeiro compromisso do contato.
+                $context = $this->contactContext($pdo, $tenantId, $contactId, $conversationId);
+                if ($context) {
+                    $pendingIntent = trim((string) ($pendingDisambiguation['intent'] ?? 'status')) ?: 'status';
+                    $message = "Ainda preciso saber qual atendimento você quer considerar.\n\n"
+                        . $this->appointmentDisambiguationOptions($candidates);
+                    $send = $communication->sendAppointmentMessage(
+                        $context,
+                        $message,
+                        'calendar.existing_appointment_disambiguation_retry',
+                        ['intent' => $pendingIntent, 'incoming_message_id' => $incomingMessageId ?: null]
+                    );
+                    $this->markHandled($pdo, $tenantId, $conversationId, $incomingMessageId, $pendingIntent, 0, !empty($send['ok']));
+                    return array_merge($this->result(true, true, 'appointment_disambiguation_pending'), [
+                        'intent' => $pendingIntent,
+                        'message_sent' => !empty($send['ok']),
+                        'send_error' => $send['error'] ?? null,
+                    ]);
+                }
+            }
+        }
+
+        if (!$appointment) {
+            $appointment = $appointments[0] ?? null;
+            $presencePending = false;
+            foreach ($appointments as $candidate) {
+                if ((string) ($candidate['client_confirmation_status'] ?? '') === 'pending') {
+                    $presencePending = true;
+                    break;
+                }
+            }
+            $intent = $this->detectIntent($content, $presencePending);
+        }
         if ($intent === '') {
             return $this->result(false, false, 'not_existing_appointment_intent');
+        }
+
+        if (count($appointments) > 1 && !$pendingDisambiguation) {
+            $selected = $this->selectAppointmentCandidate($content, $appointments);
+            if ($selected) {
+                $appointment = $selected;
+            } elseif (in_array($intent, ['status', 'details', 'presence_confirm', 'presence_decline', 'cancel', 'reschedule', 'modality_change'], true)) {
+                $context = $this->contactContext($pdo, $tenantId, $contactId, $conversationId);
+                if ($context) {
+                    $message = $this->appointmentDisambiguationMessage($appointments, $intent);
+                    $send = $communication->sendAppointmentMessage(
+                        $context,
+                        $message,
+                        'calendar.existing_appointment_disambiguation',
+                        ['intent' => $intent, 'incoming_message_id' => $incomingMessageId ?: null]
+                    );
+                    $this->markDisambiguation(
+                        $pdo,
+                        $tenantId,
+                        $conversationId,
+                        $appointments,
+                        $intent,
+                        $incomingMessageId
+                    );
+                    $this->markHandled($pdo, $tenantId, $conversationId, $incomingMessageId, $intent, 0, !empty($send['ok']));
+                    return array_merge($this->result(true, true, 'appointment_disambiguation_required'), [
+                        'intent' => $intent,
+                        'message_sent' => !empty($send['ok']),
+                        'send_error' => $send['error'] ?? null,
+                    ]);
+                }
+            }
         }
 
         if (!$appointment) {
@@ -285,6 +368,15 @@ final class ExistingAppointmentConversationService
             return 'presence_confirm';
         }
 
+        // "Queria confirmar meu atendimento" costuma ser uma consulta de status.
+        // Só vira confirmação de presença quando a própria mensagem tem linguagem
+        // afirmativa ("confirmo", "pode confirmar") ou existe pedido de presença pendente.
+        if ($appointmentReference
+            && !$presencePending
+            && (bool) preg_match('/\b(quero|queria|gostaria|preciso|so\s+queria)?\s*confirmar\b.{0,24}\b(agendamento|consulta|sessao|atendimento|horario|retorno|compromisso|reserva)\b/u', $text)) {
+            return 'status';
+        }
+
         if (!$appointmentReference) {
             return '';
         }
@@ -309,7 +401,8 @@ final class ExistingAppointmentConversationService
     }
 
     /** @return array<string,mixed>|null */
-    private function findRelevantAppointment(PDO $pdo, int $tenantId, int $contactId, int $conversationId): ?array
+    /** @return list<array<string,mixed>> */
+    private function findRelevantAppointments(PDO $pdo, int $tenantId, int $contactId, int $conversationId): array
     {
         try {
             $statement = $pdo->prepare(
@@ -323,10 +416,9 @@ final class ExistingAppointmentConversationService
                  LEFT JOIN users u ON u.id = a.owner_user_id AND u.tenant_id = a.tenant_id
                  WHERE a.tenant_id = :tenant_id
                    AND (a.contact_id = :contact_id OR a.conversation_id = :conversation_id)
-                   AND a.status IN ("pre_scheduled","awaiting_approval","scheduled","confirmed","rescheduled")
+                   AND a.status IN ("pre_scheduled","awaiting_approval","scheduled","confirmed")
                    AND COALESCE(a.ends_at, a.starts_at) >= NOW()
                  ORDER BY
-                   a.starts_at ASC,
                    CASE a.status
                      WHEN "confirmed" THEN 0
                      WHEN "scheduled" THEN 1
@@ -334,18 +426,165 @@ final class ExistingAppointmentConversationService
                      WHEN "pre_scheduled" THEN 3
                      ELSE 4
                    END,
+                   a.starts_at ASC,
                    a.id DESC
-                 LIMIT 1'
+                 LIMIT 12'
             );
             $statement->execute([
                 'tenant_id' => $tenantId,
                 'contact_id' => $contactId,
                 'conversation_id' => $conversationId,
             ]);
+            return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /** @param list<array<string,mixed>> $appointments */
+    private function selectAppointmentCandidate(string $content, array $appointments): ?array
+    {
+        if ($appointments === []) {
+            return null;
+        }
+        $text = $this->normalize($content);
+        if (preg_match('/^\s*(\d{1,2})\s*[.)-]?\s*$/u', $text, $match) === 1) {
+            $index = (int) ($match[1] ?? 0) - 1;
+            if ($index >= 0 && isset($appointments[$index])) {
+                return $appointments[$index];
+            }
+        }
+
+        $preference = (new SchedulingPreferenceResolverService())->resolve($content, true);
+        $preferredTime = trim((string) ($preference['preferred_time'] ?? ''));
+        $preferredDate = trim((string) ($preference['preferred_date'] ?? ''));
+        $matches = [];
+        foreach ($appointments as $appointment) {
+            $startsAt = trim((string) ($appointment['starts_at'] ?? ''));
+            if ($startsAt === '') {
+                continue;
+            }
+            $timestamp = strtotime($startsAt);
+            if ($timestamp === false) {
+                continue;
+            }
+            if ($preferredDate !== '' && date('Y-m-d', $timestamp) !== $preferredDate) {
+                continue;
+            }
+            if (preg_match('/^(?:[01]?\d|2[0-3]):[0-5]\d$/', $preferredTime) === 1
+                && date('H:i', $timestamp) !== str_pad($preferredTime, 5, '0', STR_PAD_LEFT)) {
+                continue;
+            }
+            if ($preferredDate !== '' || preg_match('/^(?:[01]?\d|2[0-3]):[0-5]\d$/', $preferredTime) === 1) {
+                $matches[] = $appointment;
+            }
+        }
+        return count($matches) === 1 ? $matches[0] : null;
+    }
+
+    /** @param list<array<string,mixed>> $appointments */
+    private function appointmentDisambiguationMessage(array $appointments, string $intent): string
+    {
+        $action = match ($intent) {
+            'reschedule' => 'remarcar',
+            'cancel' => 'cancelar',
+            'presence_confirm' => 'confirmar presença',
+            'presence_decline' => 'informar ausência',
+            'modality_change' => 'alterar a modalidade',
+            default => 'consultar',
+        };
+        return "Encontrei mais de um atendimento futuro para você e não quero usar o horário errado. Qual deles você quer {$action}?\n\n"
+            . $this->appointmentDisambiguationOptions($appointments);
+    }
+
+    /** @param list<array<string,mixed>> $appointments */
+    private function appointmentDisambiguationOptions(array $appointments): string
+    {
+        $lines = [];
+        foreach (array_slice($appointments, 0, 5) as $index => $appointment) {
+            $parts = [$this->dateTimeLabel($appointment)];
+            $modality = match ((string) ($appointment['location_type'] ?? '')) {
+                'online' => 'Online',
+                'presencial' => 'Presencial',
+                'telefone' => 'Telefone',
+                default => '',
+            };
+            if ($modality !== '') {
+                $parts[] = $modality;
+            }
+            $owner = trim((string) ($appointment['owner_name'] ?? ''));
+            if ($owner !== '') {
+                $parts[] = $owner;
+            }
+            $lines[] = ($index + 1) . '. ' . implode(' · ', $parts);
+        }
+        return implode("\n", $lines)
+            . "\n\nResponda com o número ou com o horário (por exemplo, 14h).";
+    }
+
+    /** @return array<string,mixed>|null */
+    private function pendingDisambiguation(PDO $pdo, int $tenantId, int $conversationId): ?array
+    {
+        try {
+            $statement = $pdo->prepare(
+                'SELECT event_type, metadata_json
+                 FROM conversation_events
+                 WHERE tenant_id = :tenant_id
+                   AND conversation_id = :conversation_id
+                   AND event_type IN ("calendar.existing_appointment_disambiguation","calendar.existing_appointment_disambiguation_resolved")
+                   AND created_at >= DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+                 ORDER BY id DESC
+                 LIMIT 1'
+            );
+            $statement->execute(['tenant_id' => $tenantId, 'conversation_id' => $conversationId]);
             $row = $statement->fetch(PDO::FETCH_ASSOC);
-            return $row ?: null;
+            if (!$row || (string) ($row['event_type'] ?? '') !== 'calendar.existing_appointment_disambiguation') {
+                return null;
+            }
+            $metadata = json_decode((string) ($row['metadata_json'] ?? ''), true);
+            return is_array($metadata) ? $metadata : null;
         } catch (Throwable) {
             return null;
+        }
+    }
+
+    /** @param list<array<string,mixed>> $appointments */
+    private function markDisambiguation(PDO $pdo, int $tenantId, int $conversationId, array $appointments, string $intent, int $incomingMessageId): void
+    {
+        try {
+            $pdo->prepare(
+                'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
+                 VALUES (:tenant_id, :conversation_id, "calendar.existing_appointment_disambiguation", :description, :metadata_json)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'description' => 'Aguardando o contato escolher qual compromisso futuro deseja tratar.',
+                'metadata_json' => json_encode([
+                    'intent' => $intent,
+                    'appointment_ids' => array_values(array_map(static fn (array $row): int => (int) ($row['id'] ?? 0), array_slice($appointments, 0, 5))),
+                    'incoming_message_id' => $incomingMessageId > 0 ? $incomingMessageId : null,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+        } catch (Throwable) {
+        }
+    }
+
+    private function markDisambiguationResolved(PDO $pdo, int $tenantId, int $conversationId, int $appointmentId, string $intent): void
+    {
+        try {
+            $pdo->prepare(
+                'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)
+                 VALUES (:tenant_id, :conversation_id, "calendar.existing_appointment_disambiguation_resolved", :description, :metadata_json)'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'conversation_id' => $conversationId,
+                'description' => 'Compromisso alvo selecionado pelo contato.',
+                'metadata_json' => json_encode([
+                    'intent' => $intent,
+                    'appointment_id' => $appointmentId,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+        } catch (Throwable) {
         }
     }
 
@@ -382,7 +621,7 @@ final class ExistingAppointmentConversationService
         $status = (string) ($appointment['status'] ?? '');
         $when = $this->dateTimeLabel($appointment);
         $base = match ($status) {
-            'confirmed' => 'Sim. Seu atendimento está confirmado para ' . $when . '.',
+            'confirmed' => 'Seu atendimento está confirmado para ' . $when . '.',
             'scheduled' => 'Seu atendimento está agendado para ' . $when . '.',
             'awaiting_approval' => 'Seu pré-agendamento está registrado para ' . $when . ' e ainda aguarda aprovação da equipe.',
             'pre_scheduled' => 'Sua preferência de atendimento está registrada para ' . $when . ' e ainda aguarda validação da agenda.',

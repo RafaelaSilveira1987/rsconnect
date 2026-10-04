@@ -145,6 +145,28 @@ final class CalendarController
             $statement->execute($params);
             $appointments = $statement->fetchAll(PDO::FETCH_ASSOC);
 
+            // 36.42.0: cada participante permanece um compromisso independente,
+            // enquanto a grade pode consolidar participantes do mesmo slot-capacidade
+            // em um único bloco visual.
+            if ($appointments !== []) {
+                $capacityMap = (new InternalCalendarSlotService())->capacitySummariesForAppointments(
+                    $tenantId,
+                    array_map(static fn (array $row): int => (int) ($row['id'] ?? 0), $appointments)
+                );
+                foreach ($appointments as &$calendarAppointment) {
+                    $summary = $capacityMap[(int) ($calendarAppointment['id'] ?? 0)] ?? null;
+                    if (is_array($summary)) {
+                        $calendarAppointment['internal_slot_id'] = (int) ($summary['slot_id'] ?? 0);
+                        $calendarAppointment['slot_capacity_total'] = (int) ($summary['capacity_total'] ?? 1);
+                        $calendarAppointment['slot_held_count'] = (int) ($summary['held_count'] ?? 0);
+                        $calendarAppointment['slot_booked_count'] = (int) ($summary['booked_count'] ?? 0);
+                        $calendarAppointment['slot_occupied_count'] = (int) ($summary['occupied_count'] ?? 0);
+                        $calendarAppointment['slot_remaining_capacity'] = (int) ($summary['remaining_capacity'] ?? 0);
+                    }
+                }
+                unset($calendarAppointment);
+            }
+
             $contactStatement = $pdo->prepare(
                 'SELECT id, name, phone FROM contacts WHERE tenant_id = :tenant_id AND status <> "inactive" ORDER BY COALESCE(name, phone)'
             );
@@ -641,6 +663,9 @@ final class CalendarController
         $rescheduleOriginalAppointmentId = ($status === 'confirmed' && $wasPreSchedule)
             ? $this->rescheduleOriginAppointmentId($appointmentBefore)
             : 0;
+        $publishedSlotCapacity = ($status === 'confirmed' && (string) ($appointmentBefore['availability_source'] ?? '') === 'internal_published')
+            ? (new InternalCalendarSlotService())->capacityForAppointment($tenantId, $appointmentId)
+            : 1;
         $professionalCalendarService = new ProfessionalCalendarService();
         $professionalCalendarSettings = $professionalCalendarService->tenantSettings($tenantId);
         if ($status === 'confirmed' && !empty($professionalCalendarSettings['enabled'])) {
@@ -670,12 +695,27 @@ final class CalendarController
                     Flash::set('error', 'O profissional selecionado não está recebendo agendamentos.');
                     $this->redirect('/calendar?tenant_id=' . $tenantId);
                 }
+                // Em horários publicados com capacidade > 1, os participantes já
+                // alocados no MESMO slot não são conflito entre si. Compromissos
+                // externos à turma continuam bloqueando o profissional normalmente.
+                $allowedCapacityAppointmentIds = [];
+                if ($publishedSlotCapacity > 1) {
+                    $slotSummary = (new InternalCalendarSlotService())->capacitySummariesForAppointments(
+                        $tenantId,
+                        [$appointmentId]
+                    );
+                    $slotId = (int) ($slotSummary[$appointmentId]['slot_id'] ?? 0);
+                    if ($slotId > 0) {
+                        $allowedCapacityAppointmentIds = (new InternalCalendarSlotService())->activeAppointmentIdsForSlot($tenantId, $slotId);
+                    }
+                }
                 $conflict = $professionalCalendarService->conflict(
                     $tenantId,
                     $ownerUserId,
                     (string) ($appointmentBefore['starts_at'] ?? ''),
                     (string) ($appointmentBefore['ends_at'] ?? ''),
-                    $appointmentId
+                    $appointmentId,
+                    $allowedCapacityAppointmentIds
                 );
                 if ($conflict) {
                     Flash::set('error', 'O profissional já possui “' . (string) ($conflict['title'] ?? 'outro compromisso') . '” nesse horário.');
