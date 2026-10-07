@@ -1008,8 +1008,32 @@ final class PreSchedulingService
     {
         $date = !empty($appointment['starts_at']) ? date('d/m/Y', strtotime((string) $appointment['starts_at'])) : '';
         $hour = !empty($appointment['starts_at']) ? date('H:i', strtotime((string) $appointment['starts_at'])) : '';
-        $location = trim((string) (($appointment['meeting_url'] ?? '') ?: ($appointment['location'] ?? '')));
-        $locationText = $location !== '' ? 'Local/link: ' . $location : '';
+        $meetingUrl = trim((string) ($appointment['meeting_url'] ?? ''));
+        $location = trim((string) ($appointment['location'] ?? ''));
+        $modality = strtolower(trim((string) (($appointment['appointment_modality'] ?? '') ?: ($appointment['location_type'] ?? ''))));
+        $genericLocation = in_array(strtolower($location), ['online', 'presencial', 'telefone', 'indefinida', 'a definir'], true);
+
+        // {{local}} representa o compromisso atual. Em atendimento online, um link só
+        // aparece quando pertence ao próprio appointment; nunca usamos o texto genérico
+        // "Online" como se fosse URL. Isso também deixa explícito quando o link ainda
+        // precisa ser cadastrado no compromisso confirmado.
+        if ($meetingUrl !== '') {
+            if ($modality === 'online') {
+                $locationText = "Atendimento: Online\nLink: " . $meetingUrl;
+            } elseif ($location !== '' && !$genericLocation) {
+                $locationText = 'Local: ' . $location . "\nLink: " . $meetingUrl;
+            } else {
+                $locationText = 'Link: ' . $meetingUrl;
+            }
+        } elseif ($modality === 'online') {
+            $locationText = 'Atendimento: Online';
+        } elseif ($modality === 'presencial') {
+            $locationText = $location !== '' && !$genericLocation ? 'Local: ' . $location : 'Atendimento: Presencial';
+        } elseif ($modality === 'telefone') {
+            $locationText = 'Atendimento: Telefone';
+        } else {
+            $locationText = $location !== '' && !$genericLocation ? 'Local: ' . $location : '';
+        }
 
         $replacements = [
             '{{nome}}' => (string) ($appointment['contact_name'] ?? $appointment['name'] ?? ''),

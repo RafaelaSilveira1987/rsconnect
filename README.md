@@ -1,3 +1,16 @@
+# RS Connect 36.42.1
+> **36.42.1** corrige o disparo divergente de confirmação/lembrete: ao confirmar um compromisso, o RS Connect processa imediatamente somente a fila daquele `appointment_id`. Jobs antigos de outros agendamentos não são mais drenados junto da confirmação atual e automações vencidas deixam de ser enviadas depois que o compromisso já começou. Em atendimento online, o link enviado é exclusivamente o `meeting_url` salvo no próprio compromisso. Não há migration nova; permanece necessária `124_calendar_slot_capacity_mode.sql`.
+
+## Homologação rápida 36.42.1
+
+1. Mantenha um agendamento antigo para o contato (de preferência com um link diferente) e crie um novo horário futuro.
+2. No novo pré-agendamento online, informe o link atual e clique em **Confirmar agendamento**.
+3. O WhatsApp deve receber somente a confirmação do novo horário e somente o link salvo nesse novo compromisso.
+4. Um job antigo de lembrete/presença cujo compromisso já começou deve ser marcado como ignorado pelo worker, sem envio ao cliente.
+5. Execute `php tests/Feature/calendar-client-appointment-isolation-v36421-smoke.php` para validar o hotfix.
+
+---
+
 # RS Connect 36.42.0
 > **36.42.0** corrige a conversa sobre confirmação/remarcação quando um mesmo contato possui mais de um compromisso futuro e adiciona um modelo de **capacidade por horário** para operações como Pilates, turmas, salas e atendimentos simultâneos. A empresa pode continuar no modo individual ou habilitar capacidade (ex.: 4 pessoas no mesmo horário), sem publicar quatro linhas duplicadas. Esta versão exige a migration `124_calendar_slot_capacity_mode.sql`.
 

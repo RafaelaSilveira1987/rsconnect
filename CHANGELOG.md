@@ -1,3 +1,15 @@
+## 36.42.1 — Confirmação e lembretes isolados por agendamento
+
+### Corrigido
+- confirmar um agendamento deixa de processar a fila inteira de mensagens automáticas da empresa; o envio imediato agora é limitado ao `appointment_id` que acabou de mudar de status;
+- lembretes, pedidos de confirmação de presença e confirmações que ficaram pendentes não são enviados depois que o horário do compromisso já começou; jobs antigos são marcados como ignorados quando o worker os reencontra;
+- a recuperação de jobs travados em `processing` respeita o mesmo filtro de empresa/agendamento quando o processamento é transacional, evitando efeitos colaterais em outras filas;
+- `{{local}}` deixa de exibir `Local/link: Online`: para atendimento online sem URL mostra apenas `Atendimento: Online`; quando existe `meeting_url` no próprio compromisso, a mensagem usa `Link: ...` desse mesmo registro;
+- o fluxo continua salvando o link informado na confirmação antes de montar a mensagem ao cliente, preservando data, horário, modalidade e URL do mesmo agendamento.
+
+### Migration
+- nenhuma nova; permanece obrigatória `124_calendar_slot_capacity_mode.sql`.
+
 ## 36.42.0 — Agenda sem ambiguidades e capacidade por horário
 
 ### Corrigido

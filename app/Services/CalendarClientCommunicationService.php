@@ -195,7 +195,10 @@ final class CalendarClientCommunicationService
             $queued += (int) ($result['queued'] ?? 0);
         }
         if ($queued > 0) {
-            $this->processDueJobs(20, $tenantId);
+            // O envio transacional deste compromisso não pode drenar a fila inteira da empresa.
+            // Jobs vencidos de outro agendamento (inclusive testes/compromissos antigos) ficam
+            // para o worker geral, que os revalida antes de qualquer envio.
+            $this->processDueJobs(20, $tenantId, $appointmentId);
         }
         return ['attempted' => true, 'queued' => $queued, 'reason' => 'created'];
     }
@@ -239,7 +242,10 @@ final class CalendarClientCommunicationService
             $this->cancelPendingFutureJobs($tenantId, $appointmentId);
         }
 
-        $delivery = $queued > 0 ? $this->processDueJobs(30, $tenantId) : ['sent' => 0, 'failed' => 0, 'retry' => 0];
+        // Processa imediatamente SOMENTE os jobs do compromisso que acabou de mudar.
+        // Antes, confirmar um horário também drenava jobs vencidos de outros compromissos do
+        // mesmo tenant, podendo enviar lembrete/link antigo junto da confirmação atual.
+        $delivery = $queued > 0 ? $this->processDueJobs(30, $tenantId, $appointmentId) : ['sent' => 0, 'failed' => 0, 'retry' => 0];
         return ['attempted' => true, 'queued' => $queued, 'delivery' => $delivery, 'reason' => 'status_change'];
     }
 
@@ -327,7 +333,7 @@ final class CalendarClientCommunicationService
     }
 
     /** @return array<string,int> */
-    public function processDueJobs(int $limit = 50, ?int $tenantId = null): array
+    public function processDueJobs(int $limit = 50, ?int $tenantId = null, ?int $appointmentId = null): array
     {
         $summary = ['selected' => 0, 'sent' => 0, 'skipped' => 0, 'retry' => 0, 'failed' => 0];
         if (!$this->tableExists('calendar_client_message_jobs')) {
@@ -335,11 +341,20 @@ final class CalendarClientCommunicationService
         }
 
         $pdo = Database::connection();
-        $pdo->prepare(
-            'UPDATE calendar_client_message_jobs
-             SET status = "retry", locked_at = NULL, next_attempt_at = UTC_TIMESTAMP()
-             WHERE status = "processing" AND locked_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 10 MINUTE)'
-        )->execute();
+        $recoverySql = 'UPDATE calendar_client_message_jobs
+                        SET status = "retry", locked_at = NULL, next_attempt_at = UTC_TIMESTAMP()
+                        WHERE status = "processing"
+                          AND locked_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 10 MINUTE)';
+        $recoveryParams = [];
+        if ($tenantId !== null && $tenantId > 0) {
+            $recoverySql .= ' AND tenant_id = :recovery_tenant_id';
+            $recoveryParams['recovery_tenant_id'] = $tenantId;
+        }
+        if ($appointmentId !== null && $appointmentId > 0) {
+            $recoverySql .= ' AND appointment_id = :recovery_appointment_id';
+            $recoveryParams['recovery_appointment_id'] = $appointmentId;
+        }
+        $pdo->prepare($recoverySql)->execute($recoveryParams);
 
         $sql = 'SELECT id FROM calendar_client_message_jobs
                 WHERE status IN ("pending", "retry")
@@ -348,10 +363,16 @@ final class CalendarClientCommunicationService
         if ($tenantId !== null && $tenantId > 0) {
             $sql .= ' AND tenant_id = :tenant_id';
         }
+        if ($appointmentId !== null && $appointmentId > 0) {
+            $sql .= ' AND appointment_id = :appointment_id';
+        }
         $sql .= ' ORDER BY next_attempt_at ASC, id ASC LIMIT :limit';
         $statement = $pdo->prepare($sql);
         if ($tenantId !== null && $tenantId > 0) {
             $statement->bindValue('tenant_id', $tenantId, PDO::PARAM_INT);
+        }
+        if ($appointmentId !== null && $appointmentId > 0) {
+            $statement->bindValue('appointment_id', $appointmentId, PDO::PARAM_INT);
         }
         $statement->bindValue('limit', max(1, min(200, $limit)), PDO::PARAM_INT);
         $statement->execute();
@@ -662,6 +683,13 @@ final class CalendarClientCommunicationService
             if ($status !== 'confirmed') {
                 return true;
             }
+
+            // Comunicação que depende de um compromisso futuro nunca pode ser entregue depois
+            // que o atendimento já começou. Isso elimina jobs antigos que ficaram pendentes por
+            // cron indisponível/retry e evita datas/links históricos reaparecendo no WhatsApp.
+            if ($this->appointmentAlreadyStarted($appointment)) {
+                return true;
+            }
             $clientConfirmationStatus = trim((string) ($appointment['client_confirmation_status'] ?? 'not_requested'));
             if ($event === self::EVENT_PRESENCE_REQUEST
                 && !in_array($clientConfirmationStatus, ['', 'not_requested'], true)) {
@@ -683,6 +711,25 @@ final class CalendarClientCommunicationService
             return in_array($status, ['cancelled', 'rejected'], true);
         }
         return false;
+    }
+
+
+    /** @param array<string,mixed> $appointment */
+    private function appointmentAlreadyStarted(array $appointment): bool
+    {
+        $startsAt = trim((string) ($appointment['starts_at'] ?? ''));
+        if ($startsAt === '') {
+            return false;
+        }
+
+        $timezone = Clock::safeTimezone((string) ($appointment['timezone'] ?? Clock::appTimezone()));
+        try {
+            $start = new DateTimeImmutable($startsAt, new DateTimeZone($timezone));
+            $now = new DateTimeImmutable('now', new DateTimeZone($timezone));
+            return $start <= $now;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function cancelPendingFutureJobs(int $tenantId, int $appointmentId, array $eventKeys = []): void

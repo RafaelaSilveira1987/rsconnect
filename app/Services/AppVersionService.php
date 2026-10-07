@@ -240,7 +240,8 @@ final class AppVersionService
     // RS Connect 36.41.7 — vaga anterior de remarcação volta automaticamente à disponibilidade publicada.
     // RS Connect 36.41.8 — link de atendimento permanece editável no compromisso mesmo com modalidade ainda indefinida.
     // RS Connect 36.42.0 — confirmação/remarcação sem ambiguidade e horários com capacidade simultânea.
-    public const PACKAGE_LABEL = 'RS Connect 36.42.0 — Agenda sem ambiguidades e capacidade por horário';
+    // RS Connect 36.42.1 — confirmação imediata isolada por appointment_id e descarte de automações vencidas.
+    public const PACKAGE_LABEL = 'RS Connect 36.42.1 — Confirmação e lembretes isolados por agendamento';
     public const REQUIRED_MIGRATION = '124_calendar_slot_capacity_mode.sql';
 
     private PDO $pdo;
