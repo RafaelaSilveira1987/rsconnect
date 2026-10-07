@@ -1,3 +1,14 @@
+## 36.42.2 — Antecedência clara e Demanda preservada
+
+### Corrigido
+- a mensagem de bloqueio por antecedência deixa de usar o texto técnico “dentro da antecedência mínima” e passa a informar, em linguagem natural, que o agendamento exige pelo menos X horas de antecedência e que o período solicitado não pode ser marcado;
+- respostas que são apenas preferência de agenda, como “quinta-feira pela manhã”, deixam de preencher campos livres como **Demanda**, **Objetivo** ou **Observação** por acidente;
+- campos configurados como **Demanda** (`brief_demand`, `custom_demanda` ou rótulo “Demanda”) passam a usar a validação própria de resposta de demanda, rejeitando idade isolada, modalidade, perguntas informativas e preferências de agenda;
+- sessões já contaminadas com uma preferência de agenda salva em campo livre são saneadas no próximo turno, mantendo a preferência no campo correto e recolocando a informação livre como pendente.
+
+### Migration
+- nenhuma nova; permanece obrigatória `124_calendar_slot_capacity_mode.sql`.
+
 ## 36.42.1 — Confirmação e lembretes isolados por agendamento
 
 ### Corrigido

@@ -1510,7 +1510,8 @@ final class CalendarConversationService
                     $suffix = '';
                 }
             }
-            return 'Esse período está dentro da antecedência mínima de ' . $hours . ' hora(s) configurada para novos agendamentos.' . $suffix;
+            $hoursLabel = $hours === 1 ? '1 hora' : $hours . ' horas';
+            return 'Infelizmente, os agendamentos precisam ser feitos com pelo menos ' . $hoursLabel . ' de antecedência, então não é possível agendar no período solicitado.' . $suffix;
         }
 
         if ($reason === 'past_period') {

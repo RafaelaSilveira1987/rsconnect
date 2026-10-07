@@ -821,7 +821,9 @@ final class AgentTriageService
             'service', 'professional', 'contact_source' => mb_strlen($message) <= 250 ? mb_substr($message, 0, 250) : null,
             'preferred_schedule' => $this->hasSchedulePreference($normalized) ? $this->extractSchedulePreference($message) : null,
             'brief_demand' => $this->looksLikeDemandAnswer($message, $normalized) ? mb_substr($message, 0, 1200) : null,
-            default => $this->captureConfiguredFreeTextValue($fieldKey, $message, $normalized, $fieldDefinition),
+            default => $this->isConfiguredDemandField($fieldKey, $fieldDefinition)
+                ? ($this->looksLikeDemandAnswer($message, $normalized) ? mb_substr($message, 0, 1200) : null)
+                : $this->captureConfiguredFreeTextValue($fieldKey, $message, $normalized, $fieldDefinition),
         };
     }
 
@@ -836,6 +838,19 @@ final class AgentTriageService
      * ser uma pergunta (ex.: "Qual é a sua principal dúvida?"), a opção
      * accept_question_as_answer pode ser habilitada no próprio campo.
      */
+    private function isConfiguredDemandField(string $fieldKey, ?array $fieldDefinition): bool
+    {
+        if ($fieldKey === 'brief_demand' || $fieldKey === 'custom_demanda' || str_starts_with($fieldKey, 'custom_demanda_')) {
+            return true;
+        }
+        if (!is_array($fieldDefinition)) {
+            return false;
+        }
+
+        $label = $this->normalize((string) ($fieldDefinition['label'] ?? ''));
+        return in_array($label, ['demanda', 'demanda principal'], true);
+    }
+
     private function captureConfiguredFreeTextValue(string $fieldKey, string $message, string $normalized, ?array $fieldDefinition = null): ?string
     {
         if (mb_strlen($message) > 500) {
@@ -844,6 +859,15 @@ final class AgentTriageService
 
         if ($this->looksLikeLowInformationContinuation($normalized)
             || $this->looksLikeGenericInformationalOpening($message, $normalized)) {
+            return null;
+        }
+
+        // 36.42.2 — uma preferência inequívoca de agenda (ex.: "quinta-feira pela manhã")
+        // não pode preencher um campo livre como Demanda, Objetivo ou Observação apenas
+        // porque esse campo ainda está no cursor. Campos personalizados explicitamente
+        // relacionados à agenda continuam podendo receber esse tipo de resposta.
+        if ($this->looksLikeStandaloneSchedulePreference($normalized)
+            && !$this->fieldAcceptsSchedulePreferenceAsAnswer($fieldKey, $fieldDefinition)) {
             return null;
         }
 
@@ -864,6 +888,48 @@ final class AgentTriageService
         }
         $options = is_array($fieldDefinition['options'] ?? null) ? $fieldDefinition['options'] : [];
         return !empty($options['accept_question_as_answer']);
+    }
+
+    private function fieldAcceptsSchedulePreferenceAsAnswer(string $fieldKey, ?array $fieldDefinition): bool
+    {
+        if ($fieldKey === 'preferred_schedule') {
+            return true;
+        }
+        if (!is_array($fieldDefinition)) {
+            return false;
+        }
+
+        $semanticText = $this->normalize(
+            trim((string) ($fieldDefinition['label'] ?? '')) . ' ' .
+            trim((string) ($fieldDefinition['prompt_text'] ?? ''))
+        );
+        if ($semanticText === '') {
+            return false;
+        }
+
+        return preg_match('/\b(dia|data|horario|periodo|turno|agenda|disponibilidade|preferencia)\b/u', $semanticText) === 1;
+    }
+
+    private function looksLikeStandaloneSchedulePreference(string $normalized): bool
+    {
+        $normalized = trim($normalized);
+        if ($normalized === '' || !$this->hasSchedulePreference($normalized)) {
+            return false;
+        }
+
+        // Remove somente o vocabulário funcional de uma preferência de agenda. Se
+        // restar conteúdo descritivo (ex.: "quinta de manhã porque fico muito ansiosa"),
+        // a mensagem não é tratada como uma preferência isolada e pode alimentar um
+        // campo livre quando a configuração assim determinar.
+        $remainder = preg_replace(
+            '/\b(prefiro|preferia|preferencia|quero|gostaria|pode|poderia|ser|melhor|para|pra|na|no|de|do|da|das|dos|pela|pelo|pelas|pelos|parte|feira|as|a|por|volta|entre|e|ou|segunda|terca|quarta|quinta|sexta|sabado|domingo|hoje|amanha|manha|tarde|noite|dia|data|horario|periodo|turno)\b/u',
+            ' ',
+            $normalized
+        ) ?? $normalized;
+        $remainder = preg_replace('/\b\d{1,4}\b|:/u', ' ', $remainder) ?? $remainder;
+        $remainder = trim((string) preg_replace('/\s+/u', ' ', $remainder));
+
+        return $remainder === '';
     }
 
     private function looksLikeStandaloneQuestion(string $message, string $normalized): bool
@@ -1021,9 +1087,14 @@ final class AgentTriageService
                 continue;
             }
             $normalizedValue = $this->normalize($value);
+            $invalidConfiguredDemand = $this->isConfiguredDemandField($fieldKey, $field)
+                && !$this->looksLikeDemandAnswer($value, $normalizedValue);
             if ($this->looksLikeLowInformationContinuation($normalizedValue)
                 || $this->looksLikeGenericInformationalOpening($value, $normalizedValue)
-                || $this->looksLikeStandaloneSchedulingRequest($normalizedValue)) {
+                || $this->looksLikeStandaloneSchedulingRequest($normalizedValue)
+                || $invalidConfiguredDemand
+                || ($this->looksLikeStandaloneSchedulePreference($normalizedValue)
+                    && !$this->fieldAcceptsSchedulePreferenceAsAnswer($fieldKey, $field))) {
                 unset($collected[$fieldKey]);
             }
         }

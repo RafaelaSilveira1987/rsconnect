@@ -82,7 +82,7 @@ $message = $constraint->invoke($conversation, [
         ],
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
 ]);
-$check(is_string($message) && str_contains($message, '48 hora(s)') && str_contains($message, 'a partir de'), 'WhatsApp explica a antecedência mínima em vez de afirmar agenda vazia');
+$check(is_string($message) && str_contains($message, 'pelo menos 48 horas de antecedência') && str_contains($message, 'não é possível agendar no período solicitado') && str_contains($message, 'a partir de'), 'WhatsApp explica a antecedência mínima em linguagem natural em vez de afirmar agenda vazia');
 
 $triage = new AgentTriageService();
 $looksDemand = new ReflectionMethod(AgentTriageService::class, 'looksLikeDemandAnswer');

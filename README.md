@@ -1,3 +1,16 @@
+# RS Connect 36.42.2
+> **36.42.2** ajusta a mensagem de antecedência para uma linguagem natural e corrige a integridade da coleta de **Demanda**: respostas de agenda como “quinta-feira pela manhã” não podem mais preencher Demanda/Objetivo por engano. Valores antigos desse tipo são saneados no próximo processamento da conversa. Não há migration nova; permanece necessária `124_calendar_slot_capacity_mode.sql`.
+
+## Homologação rápida 36.42.2
+
+1. Configure antecedência mínima de 24 horas e solicite um período dentro dessa janela: a mensagem deve explicar que o agendamento precisa ser feito com pelo menos 24 horas de antecedência e que o período solicitado não pode ser marcado.
+2. Responda à pergunta de Demanda com um relato livre e, depois, informe idade e preferência de dia/período.
+3. No pré-agendamento, **Demanda** deve manter o relato original; a preferência deve aparecer apenas em **Dia/período** / **Horário/período**.
+4. Se existir uma sessão antiga com “quinta-feira pela manhã” gravado em Demanda, a próxima interação deve descartar esse valor e voltar a solicitar a Demanda correta, sem perder a preferência de agenda.
+5. Execute `php tests/Feature/calendar-notice-and-demand-integrity-v36422-smoke.php`.
+
+---
+
 # RS Connect 36.42.1
 > **36.42.1** corrige o disparo divergente de confirmação/lembrete: ao confirmar um compromisso, o RS Connect processa imediatamente somente a fila daquele `appointment_id`. Jobs antigos de outros agendamentos não são mais drenados junto da confirmação atual e automações vencidas deixam de ser enviadas depois que o compromisso já começou. Em atendimento online, o link enviado é exclusivamente o `meeting_url` salvo no próprio compromisso. Não há migration nova; permanece necessária `124_calendar_slot_capacity_mode.sql`.
 
