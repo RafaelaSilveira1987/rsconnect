@@ -545,6 +545,7 @@ $requestInsight = static function (array $request): string {
                         </select></label>
                     </div>
                     <label class="field"><span>Mensagem do lembrete</span><textarea name="client_reminder_message" rows="4" maxlength="4000"><?= View::e((string) ($calendarClientSettings['reminder_message'] ?? '')) ?></textarea></label>
+                    <small class="field-hint">O horário e o texto são lidos desta configuração da empresa. A rotina interna apenas processa a fila automaticamente no momento devido.</small>
                 </div>
 
                 <div class="card-subtle form-stack">

@@ -242,7 +242,8 @@ final class AppVersionService
     // RS Connect 36.42.0 — confirmação/remarcação sem ambiguidade e horários com capacidade simultânea.
     // RS Connect 36.42.1 — confirmação imediata isolada por appointment_id e descarte de automações vencidas.
     // RS Connect 36.42.2 — antecedência em linguagem natural e proteção da Demanda contra preferência de agenda.
-    public const PACKAGE_LABEL = 'RS Connect 36.42.2 — Antecedência clara e Demanda preservada';
+    // RS Connect 36.42.3 — worker interno de lembretes e ação Remarcar restaurada para compromissos ativos.
+    public const PACKAGE_LABEL = 'RS Connect 36.42.3 — Lembretes autônomos e remarcação restaurada';
     public const REQUIRED_MIGRATION = '124_calendar_slot_capacity_mode.sql';
 
     private PDO $pdo;

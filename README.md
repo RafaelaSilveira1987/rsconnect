@@ -1,3 +1,6 @@
+# RS Connect 36.42.3
+> **36.42.3** torna a fila de lembretes da Agenda autônoma no container: o worker interno apenas processa os jobs vencidos, enquanto ativação, antecedência e mensagem continuam vindo da configuração de cada empresa. Também restaura a ação **Remarcar** para compromissos ativos/confirmados. Não há migration nova; permanece necessária `124_calendar_slot_capacity_mode.sql`.
+
 # RS Connect 36.42.2
 > **36.42.2** ajusta a mensagem de antecedência para uma linguagem natural e corrige a integridade da coleta de **Demanda**: respostas de agenda como “quinta-feira pela manhã” não podem mais preencher Demanda/Objetivo por engano. Valores antigos desse tipo são saneados no próximo processamento da conversa. Não há migration nova; permanece necessária `124_calendar_slot_capacity_mode.sql`.
 

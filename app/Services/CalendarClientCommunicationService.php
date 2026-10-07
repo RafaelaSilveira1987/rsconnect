@@ -311,7 +311,7 @@ final class CalendarClientCommunicationService
                 'SELECT id FROM calendar_appointments
                  WHERE tenant_id = :tenant_id
                    AND status = "confirmed"
-                   AND starts_at > NOW()
+                   AND starts_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 14 HOUR)
                  ORDER BY starts_at ASC
                  LIMIT :limit'
             );
@@ -330,6 +330,44 @@ final class CalendarClientCommunicationService
         } catch (Throwable) {
             return ['appointments' => 0, 'queued' => 0];
         }
+    }
+
+    /**
+     * Reconcilia a fila futura de todas as empresas que possuem automação temporal
+     * de Agenda habilitada. Usado somente na inicialização do worker para recuperar
+     * instalações que já tinham a configuração salva antes do runtime interno existir.
+     *
+     * @return array{tenants:int,appointments:int,queued:int}
+     */
+    public function rescheduleAllConfiguredUpcomingJobs(int $limitPerTenant = 500): array
+    {
+        $summary = ['tenants' => 0, 'appointments' => 0, 'queued' => 0];
+        if (!$this->tableExists('tenant_calendar_client_settings') || !$this->tableExists('calendar_client_message_jobs')) {
+            return $summary;
+        }
+
+        try {
+            $statement = Database::connection()->query(
+                'SELECT tenant_id
+                 FROM tenant_calendar_client_settings
+                 WHERE reminder_enabled = 1 OR presence_request_enabled = 1
+                 ORDER BY tenant_id ASC'
+            );
+            $tenantIds = array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN));
+            foreach ($tenantIds as $configuredTenantId) {
+                if ($configuredTenantId < 1) {
+                    continue;
+                }
+                $result = $this->rescheduleUpcomingConfirmedJobs($configuredTenantId, $limitPerTenant);
+                $summary['tenants']++;
+                $summary['appointments'] += (int) ($result['appointments'] ?? 0);
+                $summary['queued'] += (int) ($result['queued'] ?? 0);
+            }
+        } catch (Throwable) {
+            return $summary;
+        }
+
+        return $summary;
     }
 
     /** @return array<string,int> */

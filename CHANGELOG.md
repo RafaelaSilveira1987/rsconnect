@@ -1,3 +1,17 @@
+## 36.42.3 — Lembretes autônomos e remarcação restaurada
+
+### Corrigido
+- a fila de lembretes e confirmações de presença da Agenda passa a ter um processador interno iniciado junto com o container, sem depender de clique manual ou de um cron/n8n externo para os disparos configurados pela empresa;
+- na inicialização, o worker reconcilia compromissos futuros das empresas que já tinham lembrete/confirmação de presença habilitados, recuperando configurações existentes antes desta versão;
+- a reconciliação deixa de comparar `starts_at` local diretamente com `NOW()` do MySQL e usa uma janela segura antes da validação por fuso do próprio compromisso, evitando perder agendamentos próximos quando o banco opera em UTC;
+- o processador interno não define horário, texto ou ativação de lembrete: ele apenas executa a fila; antecedência, mensagem e habilitação continuam vindo de `tenant_calendar_client_settings` de cada empresa;
+- o intervalo técnico do worker é configurável por `RS_NOTIFICATION_WORKER_INTERVAL_SECONDS` (30 segundos por padrão) e pode ser desativado por `RS_NOTIFICATION_WORKER_ENABLED=false` quando a instalação já possui um scheduler externo dedicado;
+- compromissos ativos/confirmados voltam a exibir a ação **Remarcar** na Agenda; a opção havia ficado restrita aos estados de pré-agendamento;
+- a tela de configuração deixa explícito que a política do lembrete é lida da própria empresa e que a rotina interna somente processa a fila no momento devido.
+
+### Migration
+- nenhuma nova; permanece obrigatória `124_calendar_slot_capacity_mode.sql`.
+
 ## 36.42.2 — Antecedência clara e Demanda preservada
 
 ### Corrigido

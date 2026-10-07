@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.42.2",
-  "release_name": "Antecedência clara e Demanda preservada",
+  "package_version": "36.42.3",
+  "release_name": "Lembretes autônomos e remarcação restaurada",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,8 +19,8 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.42.1",
-      "release_name": "Confirmação e lembretes isolados por agendamento",
+      "package_version": "36.42.2",
+      "release_name": "Antecedência clara e Demanda preservada",
       "required_migration": "124_calendar_slot_capacity_mode.sql"
     },
     "historical_releases": [

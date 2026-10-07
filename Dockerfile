@@ -33,9 +33,12 @@ RUN printf '%s\n' \
     && mkdir -p /var/www/html/storage/logs /var/www/html/storage/cache /var/www/html/storage/conversation-attachments /var/www/html/storage/generated-reports /var/www/html/storage/app/white-label \
     && chown -R www-data:www-data /var/www/html/storage \
     && php -r "require '/var/www/html/app/Core/Autoloader.php'; App\\Core\\Autoloader::register('/var/www/html/app'); if (!class_exists('App\\Core\\Router')) { fwrite(STDERR, 'Router autoload validation failed.\n'); exit(1); }" \
+    && chmod +x /var/www/html/bin/rs-connect-start.sh \
     && php /var/www/html/bin/migrate.php verify
 
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://127.0.0.1/health/live >/dev/null || exit 1
+
+CMD ["/var/www/html/bin/rs-connect-start.sh"]
