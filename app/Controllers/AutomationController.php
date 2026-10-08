@@ -68,7 +68,7 @@ final class AutomationController
             'stats' => $stats,
             'openaiConfigured' => trim((string) Env::get('OPENAI_API_KEY', '')) !== '',
             'geminiConfigured' => trim((string) Env::get('GEMINI_API_KEY', Env::get('GOOGLE_GEMINI_API_KEY', ''))) !== '',
-            'n8nConfigured' => $tenantN8nFlows > 0 || trim((string) Env::get('N8N_WEBHOOK_URL', '')) !== '',
+            'n8nConfigured' => $tenantN8nFlows > 0,
             'tenantN8nFlows' => $tenantN8nFlows,
             'autoReplyEnabled' => filter_var(Env::get('AI_AUTOREPLY_ENABLED', true), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) !== false,
         ]);

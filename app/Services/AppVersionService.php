@@ -243,7 +243,8 @@ final class AppVersionService
     // RS Connect 36.42.1 — confirmação imediata isolada por appointment_id e descarte de automações vencidas.
     // RS Connect 36.42.2 — antecedência em linguagem natural e proteção da Demanda contra preferência de agenda.
     // RS Connect 36.42.3 — worker interno de lembretes e ação Remarcar restaurada para compromissos ativos.
-    public const PACKAGE_LABEL = 'RS Connect 36.42.3 — Lembretes autônomos e remarcação restaurada';
+    // RS Connect 36.42.4 — fluxos n8n inativos deixam de participar do barramento por empresa e não geram falsas execuções.
+    public const PACKAGE_LABEL = 'RS Connect 36.42.4 — Fluxos inativos isolados por empresa';
     public const REQUIRED_MIGRATION = '124_calendar_slot_capacity_mode.sql';
 
     private PDO $pdo;

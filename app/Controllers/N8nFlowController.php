@@ -47,7 +47,7 @@ final class N8nFlowController
             $metrics['flows_total'] = (int) $pdo->query('SELECT COUNT(*) FROM n8n_tenant_flows')->fetchColumn();
             $metrics['flows_active'] = (int) $pdo->query("SELECT COUNT(*) FROM n8n_tenant_flows WHERE status = 'active'")->fetchColumn();
             $metrics['tenants_covered'] = (int) $pdo->query("SELECT COUNT(DISTINCT tenant_id) FROM n8n_tenant_flows WHERE status = 'active'")->fetchColumn();
-            $metrics['executions_24h'] = (int) $pdo->query("SELECT COUNT(*) FROM n8n_flow_logs WHERE created_at >= (NOW() - INTERVAL 24 HOUR)")->fetchColumn();
+            $metrics['executions_24h'] = (int) $pdo->query("SELECT COUNT(*) FROM n8n_flow_logs WHERE status IN ('success','error') AND created_at >= (NOW() - INTERVAL 24 HOUR)")->fetchColumn();
             $metrics['success_24h'] = (int) $pdo->query("SELECT COUNT(*) FROM n8n_flow_logs WHERE status = 'success' AND created_at >= (NOW() - INTERVAL 24 HOUR)")->fetchColumn();
             $metrics['errors_24h'] = (int) $pdo->query("SELECT COUNT(*) FROM n8n_flow_logs WHERE status = 'error' AND created_at >= (NOW() - INTERVAL 24 HOUR)")->fetchColumn();
             $recentLogs = $pdo->query(
@@ -55,6 +55,7 @@ final class N8nFlowController
                  FROM n8n_flow_logs l
                  LEFT JOIN n8n_tenant_flows f ON f.id = l.flow_id
                  INNER JOIN tenants t ON t.id = l.tenant_id
+                 WHERE l.status IN ("success", "error")
                  ORDER BY l.created_at DESC LIMIT 12'
             )->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
@@ -95,6 +96,7 @@ final class N8nFlowController
              FROM n8n_flow_logs l
              LEFT JOIN n8n_tenant_flows f ON f.id = l.flow_id
              INNER JOIN tenants t ON t.id = l.tenant_id
+             WHERE l.status IN ("success", "error")
              ORDER BY l.created_at DESC
              LIMIT 120'
         )->fetchAll(PDO::FETCH_ASSOC);

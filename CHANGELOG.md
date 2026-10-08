@@ -1,3 +1,17 @@
+## 36.42.4 — Fluxos inativos isolados por empresa
+
+### Corrigido
+- eventos com `tenant_id` identificado consultam somente fluxos `active` daquela empresa e, quando não existe correspondência, encerram sem enviar HTTP;
+- o `N8N_WEBHOOK_URL` global deixa de atuar como fallback para empresas identificadas, impedindo que um fluxo inativo seja contornado por configuração global da instalação;
+- URLs legadas configuradas em outros módulos passam a respeitar o status do fluxo cadastrado: se a mesma URL pertence a um fluxo inativo da empresa, nenhuma chamada automática é realizada;
+- o botão administrativo **Testar fluxo** continua podendo chamar explicitamente um fluxo inativo, sem reativá-lo;
+- ausência de fluxo ativo ou bloqueio por status deixa de gerar registros `skipped` em `n8n_flow_logs`; esses casos não são execuções externas;
+- os painéis **Execuções recentes** e **Últimos envios ao n8n** passam a exibir somente tentativas HTTP reais (`success`/`error`), eliminando a impressão de que fluxos inativos continuam recebendo eventos;
+- integrações nativas da empresa, como Agenda, lembretes e IA, continuam independentes do status dos cards n8n, salvo quando usam explicitamente a mesma URL de um fluxo n8n cadastrado e inativo.
+
+### Migration
+- nenhuma nova; permanece obrigatória `124_calendar_slot_capacity_mode.sql`.
+
 ## 36.42.3 — Lembretes autônomos e remarcação restaurada
 
 ### Corrigido

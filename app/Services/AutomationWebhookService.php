@@ -19,7 +19,8 @@ final class AutomationWebhookService
      * Regras:
      * 1. Se $url for informado, envia diretamente para ele (compatibilidade com campos antigos).
      * 2. Se $tenantId for informado, usa os fluxos ativos cadastrados para aquela empresa.
-     * 3. Se nenhum fluxo existir, cai no N8N_WEBHOOK_URL global do .env, apenas como fallback legado.
+     * 3. Eventos com empresa identificada nunca caem em fallback global: somente fluxos ativos da própria empresa podem receber.
+     * 4. O N8N_WEBHOOK_URL global fica restrito a chamadas legadas sem tenant identificado.
      *
      * @return array<int,array<string,mixed>>
      */
@@ -31,14 +32,15 @@ final class AutomationWebhookService
 
         $explicitUrl = trim((string) ($url ?? ''));
         if ($explicitUrl !== '') {
-            // URLs legadas configuradas diretamente no agente não podem burlar o contrato
-            // dos fluxos cadastrados. Se essa URL pertencer ao writer do Google Calendar,
-            // somente calendar.appointment.created pode chegar até ela.
+            // URLs legadas configuradas diretamente em outros módulos não podem burlar
+            // o status do cadastro por empresa nem o contrato de eventos do fluxo.
+            // A única exceção é o botão administrativo "Testar fluxo", que é uma ação
+            // explícita e deve funcionar mesmo quando o fluxo está inativo.
             $guard = $this->explicitTargetGuard($tenantId, $explicitUrl, $event);
             if (!empty($guard['blocked'])) {
-                $this->log($tenantId > 0 ? $tenantId : null, $guard['flow_id'] ?? null, $event, 'skipped', null, $this->maskUrl($explicitUrl), (string) ($guard['reason'] ?? 'Evento bloqueado pelo contrato do fluxo.'), $payload);
+                // Bloqueio não é execução. Não polui n8n_flow_logs/"Execuções recentes".
                 return [[
-                    'ok' => true,
+                    'ok' => false,
                     'skipped' => true,
                     'reason' => $guard['reason'] ?? 'protected_flow_contract',
                     'flow_id' => $guard['flow_id'] ?? null,
@@ -56,20 +58,21 @@ final class AutomationWebhookService
                 $results[] = $this->sendToUrl($target, $event, $payload, $tenantId, (int) $flow['id'], $secret, (string) $flow['name']);
             }
 
-            if ($results !== []) {
-                return $results;
-            }
-
-            $this->log($tenantId, null, $event, 'skipped', null, null, 'Nenhum fluxo n8n ativo para este evento/empresa.', $payload);
+            // Uma empresa identificada é sempre governada pelos próprios cadastros.
+            // Sem fluxo ativo compatível, encerra silenciosamente: não grava "skipped"
+            // como se fosse execução e, principalmente, não cai no webhook global do .env.
+            return $results;
         }
 
+        // Compatibilidade estritamente legada: somente eventos sem tenant identificado
+        // podem usar o endpoint global. Isso impede um fluxo inativo de uma empresa ser
+        // contornado pelo N8N_WEBHOOK_URL da instalação.
         $fallback = trim((string) Env::get('N8N_WEBHOOK_URL', ''));
         if ($fallback !== '') {
             $guard = $this->explicitTargetGuard($tenantId, $fallback, $event);
             if (!empty($guard['blocked'])) {
-                $this->log($tenantId > 0 ? $tenantId : null, $guard['flow_id'] ?? null, $event, 'skipped', null, $this->maskUrl($fallback), (string) ($guard['reason'] ?? 'Fallback bloqueado pelo contrato do fluxo.'), $payload);
                 return [[
-                    'ok' => true,
+                    'ok' => false,
                     'skipped' => true,
                     'reason' => $guard['reason'] ?? 'protected_flow_contract',
                     'flow_id' => $guard['flow_id'] ?? null,
@@ -154,47 +157,62 @@ final class AutomationWebhookService
             return $result;
         }
 
+        $isManualTest = $event === 'n8n.flow.test';
+        $normalizedTarget = $this->normalizeComparableUrl($target);
+
+        // Primeiro cruza a URL com qualquer fluxo cadastrado da empresa, inclusive
+        // inativo. Assim um campo legado não consegue reativar silenciosamente um
+        // endpoint que o administrador desligou no módulo n8n.
+        if ($tenantId > 0) {
+            try {
+                $statement = Database::connection()->prepare(
+                    'SELECT id, flow_key, template_key, name, events_json, status, webhook_url_encrypted
+                     FROM n8n_tenant_flows
+                     WHERE tenant_id = :tenant_id'
+                );
+                $statement->execute(['tenant_id' => $tenantId]);
+                foreach ($statement->fetchAll(PDO::FETCH_ASSOC) ?: [] as $flow) {
+                    $registered = Crypto::decrypt((string) ($flow['webhook_url_encrypted'] ?? ''));
+                    if ($registered === '' || $this->normalizeComparableUrl($registered) !== $normalizedTarget) {
+                        continue;
+                    }
+
+                    $result['flow_id'] = (int) ($flow['id'] ?? 0) ?: null;
+                    $result['flow_name'] = (string) ($flow['name'] ?? '');
+
+                    // Teste manual é deliberado e não altera o status do fluxo.
+                    if ($isManualTest) {
+                        return $result;
+                    }
+
+                    if ((string) ($flow['status'] ?? '') !== 'active') {
+                        $result['blocked'] = true;
+                        $result['reason'] = 'Fluxo inativo: nenhuma chamada automática foi realizada.';
+                        return $result;
+                    }
+
+                    if (!$this->flowAllowsEvent($flow, $event)) {
+                        $result['blocked'] = true;
+                        $result['reason'] = 'Evento ' . $event . ' bloqueado: a URL pertence a um fluxo com contrato restrito.';
+                    }
+                    return $result;
+                }
+            } catch (Throwable) {
+                // Em deploys antigos sem a tabela, mantém compatibilidade com URLs
+                // explícitas; a proteção por endpoint abaixo continua ativa.
+            }
+        }
+
         // Proteção independente do cadastro em n8n_tenant_flows. O writer oficial
-        // usa /webhook/rsconnect-agenda-cliente e pode existir apenas no campo legado
-        // do assistente. Mesmo sem registro no banco, ai.replied/message.received nunca
-        // podem chegar a esse endpoint de efeito colateral forte.
+        // usa /webhook/rsconnect-agenda-cliente e pode existir apenas no campo legado.
+        // Testes manuais continuam permitidos; automações comuns não podem acioná-lo.
         $path = mb_strtolower((string) (parse_url($target, PHP_URL_PATH) ?? ''));
-        if (str_contains($path, 'rsconnect-agenda-cliente')) {
-            $result['flow_name'] = 'Agenda Google Calendar por Empresa';
+        if (str_contains($path, 'rsconnect-agenda-cliente') && !$isManualTest) {
+            $result['flow_name'] = $result['flow_name'] ?: 'Agenda Google Calendar por Empresa';
             if ($event !== 'calendar.appointment.created') {
                 $result['blocked'] = true;
                 $result['reason'] = 'Evento ' . $event . ' bloqueado: o endpoint rsconnect-agenda-cliente aceita somente calendar.appointment.created.';
             }
-            return $result;
-        }
-
-        if ($tenantId < 1) {
-            return $result;
-        }
-
-        try {
-            $statement = Database::connection()->prepare(
-                'SELECT id, flow_key, template_key, name, events_json, webhook_url_encrypted
-                 FROM n8n_tenant_flows
-                 WHERE tenant_id = :tenant_id AND status = "active"'
-            );
-            $statement->execute(['tenant_id' => $tenantId]);
-            $normalizedTarget = $this->normalizeComparableUrl($target);
-            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) ?: [] as $flow) {
-                $registered = Crypto::decrypt((string) ($flow['webhook_url_encrypted'] ?? ''));
-                if ($registered === '' || $this->normalizeComparableUrl($registered) !== $normalizedTarget) {
-                    continue;
-                }
-                $result['flow_id'] = (int) ($flow['id'] ?? 0) ?: null;
-                $result['flow_name'] = (string) ($flow['name'] ?? '');
-                if (!$this->flowAllowsEvent($flow, $event)) {
-                    $result['blocked'] = true;
-                    $result['reason'] = 'Evento ' . $event . ' bloqueado: a URL pertence a um fluxo com contrato restrito.';
-                }
-                return $result;
-            }
-        } catch (Throwable) {
-            // Em deploys antigos, mantém compatibilidade; o gate do workflow continua sendo a segunda defesa.
         }
 
         return $result;

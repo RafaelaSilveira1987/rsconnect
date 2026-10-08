@@ -24,11 +24,11 @@ require __DIR__ . '/_nav.php';
     <a class="card n8n-hub-card" href="<?= View::e(Router::url('/n8n-templates')) ?>"><span class="eyebrow">Biblioteca</span><h3>Templates n8n</h3><p>Agenda, cobrança, backup e rotinas prontas para importar e adaptar no n8n.</p><strong>Abrir templates →</strong></a>
 </div>
 <section class="card n8n-hub-history">
-    <div class="section-heading"><div><span class="eyebrow">Evidência operacional</span><h2>Execuções recentes</h2><p>Últimos retornos registrados pelos fluxos configurados.</p></div><span class="badge"><?= count($recentLogs) ?> registro(s)</span></div>
+    <div class="section-heading"><div><span class="eyebrow">Evidência operacional</span><h2>Execuções recentes</h2><p>Somente chamadas HTTP realmente tentadas por fluxos ativos ou por teste manual.</p></div><span class="badge"><?= count($recentLogs) ?> registro(s)</span></div>
     <div class="admin-log-list">
         <?php foreach ($recentLogs as $log): ?>
             <article class="admin-log-item is-<?= View::e((string) ($log['status'] ?? 'info')) ?>">
-                <div><strong><?= View::e((string) ($log['flow_name'] ?? 'Fluxo não identificado')) ?></strong><span><?= View::e((string) ($log['tenant_name'] ?? 'Empresa')) ?> · <?= View::e((string) ($log['event'] ?? 'evento')) ?></span><small><?= View::e($formatDate($log['created_at'] ?? null)) ?> · HTTP <?= View::e((string) ($log['http_status'] ?? '—')) ?></small></div>
+                <div><strong><?= View::e((string) ($log['flow_name'] ?? 'Integração externa')) ?></strong><span><?= View::e((string) ($log['tenant_name'] ?? 'Empresa')) ?> · <?= View::e((string) ($log['event'] ?? 'evento')) ?></span><small><?= View::e($formatDate($log['created_at'] ?? null)) ?> · HTTP <?= View::e((string) ($log['http_status'] ?? '—')) ?></small></div>
                 <span class="badge badge-<?= View::e((string) ($log['status'] ?? 'info')) ?>"><?= View::e((string) ($log['status'] ?? 'info')) ?></span>
             </article>
         <?php endforeach; ?>
