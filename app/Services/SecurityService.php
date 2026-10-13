@@ -784,13 +784,19 @@ final class SecurityService
         $activeBillingRules = $this->tableExists('billing_reminder_rules')
             ? $this->count("SELECT COUNT(*) FROM billing_reminder_rules WHERE status = 'active'")
             : 0;
+        $activeLifecycleRules = $this->tableExists('subscription_notification_rules')
+            ? $this->count("SELECT COUNT(*) FROM subscription_notification_rules WHERE status = 'active'")
+            : 0;
+        $activeFinancialRules = $activeBillingRules + $activeLifecycleRules;
         $review[] = [
             'key' => 'BILLING_CRON_TOKEN',
-            'label' => 'Cron da régua de cobrança',
-            'status' => $billingToken ? 'ok' : ($activeBillingRules > 0 ? 'warning' : 'optional'),
+            'label' => 'Acionamento externo da comunicação financeira',
+            'status' => $billingToken ? 'ok' : 'optional',
             'detail' => $billingToken
-                ? 'Token configurado para o acionamento automático da régua de cobrança.'
-                : ($activeBillingRules > 0 ? 'Há regras de cobrança ativas, mas o cron externo não pode executar sem este token.' : 'Sem regras ativas; token opcional neste momento.'),
+                ? 'Token configurado para permitir acionamento externo seguro da régua financeira. O worker nativo continua independente dele.'
+                : ($activeFinancialRules > 0
+                    ? $activeFinancialRules . ' regra(s) financeira(s)/de vigência ativa(s) são processadas pelo worker nativo. Este token só é necessário se um sistema externo chamar o endpoint de cron.'
+                    : 'Nenhuma regra financeira ativa exige acionamento externo. O token é opcional e o worker nativo não depende dele.'),
             'action' => '/billing-reminders',
         ];
 

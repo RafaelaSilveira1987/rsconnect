@@ -31,40 +31,43 @@ $check(
 
 $check(
     str_contains($operations, "channel IN ('n8n','whatsapp','email')")
-        && str_contains($operations, 'regra(s) de cobrança ativa(s) configurada(s) para n8n/externo'),
-    'dependências de cobrança ainda ativas impedem falso verde ao desligar n8n'
+        && str_contains($operations, "subscription_notification_rules")
+        && str_contains($operations, 'financeira(s)/de vigência ativa(s) configurada(s) para n8n/externo'),
+    'dependências financeiras externas ainda ativas impedem falso verde ao desligar n8n'
 );
 
 $check(
-    str_contains($operations, '$activeRules = $this->count("SELECT COUNT(*) FROM billing_reminder_rules WHERE status = \'active\'")')
-        && str_contains($operations, 'Nenhuma regra de lembrete de cobrança está ativa. Não há execução automática de cobrança pendente.'),
-    'monitor de cobrança fica normal quando não existe regra ativa'
+    str_contains($operations, '$activeRules = $billingRules + $lifecycleRules')
+        && str_contains($operations, 'Nenhuma regra financeira, de vigência ou de teste está ativa. Não há execução automática pendente.'),
+    'monitor financeiro fica normal quando não existe regra ativa'
 );
 
 $check(
     str_contains($language, 'Nenhuma automação externa está ativa ou é necessária neste momento.')
-        && str_contains($language, 'Há avisos de cobrança ativos configurados para automação externa, mas o n8n está desativado.'),
-    'linguagem operacional diferencia integração desativada de configuração incompatível'
+        && str_contains($language, 'Há avisos financeiros ou de vigência configurados para automação externa, mas o n8n está desativado.'),
+    'linguagem operacional diferencia integração desativada de configuração financeira incompatível'
 );
 
 $check(
-    str_contains($playbook, 'Se o n8n foi desativado intencionalmente, marque como Inativas as regras configuradas para n8n/externo.'),
-    'playbook orienta resolver a configuração em vez de exigir n8n por padrão'
+    str_contains($playbook, 'Para WhatsApp nativo, confirme a conexão central da plataforma selecionada no topo da tela.')
+        && str_contains($playbook, 'troque o canal para RS Connect/WhatsApp nativo'),
+    'playbook preserva n8n opcional e orienta os canais nativos'
 );
 
 $check(
     str_contains($billing, 'public function automationState(): array')
         && str_contains($billingController, "'automationState' => \$service->automationState()")
-        && str_contains($billingView, 'Existem regras ativas que ainda dependem do n8n')
-        && str_contains($billingView, 'altere a Situação para <strong>Inativa</strong>'),
-    'tela da régua explica diretamente por que o alerta continua quando n8n está desligado'
+        && str_contains($billingView, 'Existem regras que ainda usam integração externa')
+        && str_contains($billingView, 'WhatsApp nativo da plataforma'),
+    'tela financeira explica quando uma regra ainda depende de n8n e oferece canal nativo'
 );
 
 $check(
     str_contains($version, 'RS Connect 36.42.5 — Monitoramento coerente sem n8n')
-        && ($manifest['package_version'] ?? '') === '36.42.5'
-        && ($manifest['database']['required_migration'] ?? '') === '124_calendar_slot_capacity_mode.sql',
-    'release 36.42.5 registrada sem migration nova'
+        && str_contains($version, 'RS Connect 36.43.0 — Notificações financeiras e de vigência nativas')
+        && ($manifest['package_version'] ?? '') === '36.43.0'
+        && ($manifest['database']['required_migration'] ?? '') === '125_native_financial_lifecycle_notifications.sql',
+    'release 36.42.5 preservada e 36.43.0 registrada com migration 125'
 );
 
 exit($failed > 0 ? 1 : 0);

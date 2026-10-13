@@ -391,6 +391,8 @@ return static function (Router $router): void {
     $router->get('/billing-reminders', [BillingReminderController::class, 'index'], ['auth', 'super_admin']);
     $router->post('/payment-gateways/save', [PaymentGatewayController::class, 'save'], ['auth', 'super_admin', 'csrf']);
     $router->post('/billing-reminders/rules/save', [BillingReminderController::class, 'saveRule'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/billing-reminders/platform-settings/save', [BillingReminderController::class, 'savePlatformSettings'], ['auth', 'super_admin', 'csrf']);
+    $router->post('/billing-reminders/lifecycle-rules/save', [BillingReminderController::class, 'saveLifecycleRule'], ['auth', 'super_admin', 'csrf']);
     $router->post('/billing-reminders/run', [BillingReminderController::class, 'run'], ['auth', 'super_admin', 'csrf']);
     $router->post('/payment-gateways/invoices/create-link', [PaymentGatewayController::class, 'createInvoiceLink'], ['auth', 'super_admin', 'csrf']);
     $router->post('/payment-gateways/invoices/import-external', [PaymentGatewayController::class, 'importExternalCharge'], ['auth', 'super_admin', 'csrf']);

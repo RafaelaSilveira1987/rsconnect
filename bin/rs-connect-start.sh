@@ -31,4 +31,28 @@ case "$(printf '%s' "$worker_enabled" | tr '[:upper:]' '[:lower:]')" in
         ;;
 esac
 
+# Worker nativo da comunicação financeira da plataforma. Ele não define prazo,
+# canal ou texto: apenas executa as regras ativas persistidas no banco.
+financial_worker_enabled="${RS_FINANCIAL_NOTIFICATION_WORKER_ENABLED:-true}"
+case "$(printf '%s' "$financial_worker_enabled" | tr '[:upper:]' '[:lower:]')" in
+    1|true|yes|on)
+        financial_interval="${RS_FINANCIAL_NOTIFICATION_WORKER_INTERVAL_SECONDS:-300}"
+        case "$financial_interval" in
+            ''|*[!0-9]*) financial_interval=300 ;;
+        esac
+        if [ "$financial_interval" -lt 60 ]; then financial_interval=60; fi
+        if [ "$financial_interval" -gt 3600 ]; then financial_interval=3600; fi
+
+        (
+            sleep 15
+            while true; do
+                output="$(php /var/www/html/bin/process-financial-notifications.php 2>&1)" || {
+                    printf '[rs-connect][financial-notification-worker] %s\n' "$output" >&2
+                }
+                sleep "$financial_interval"
+            done
+        ) &
+        ;;
+esac
+
 exec apache2-foreground

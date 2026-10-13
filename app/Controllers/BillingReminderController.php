@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Audit;
+use App\Core\Auth;
 use App\Core\Env;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\BillingReminderService;
+use App\Services\PlatformNotificationService;
+use App\Services\SubscriptionLifecycleReminderService;
 use App\Services\OperationsService;
 use Throwable;
 
@@ -18,14 +21,22 @@ final class BillingReminderController
     public function index(): void
     {
         $service = new BillingReminderService();
+        $platformNotifications = new PlatformNotificationService();
+        $lifecycle = new SubscriptionLifecycleReminderService();
         View::render('billing_reminders.index', [
-            'title' => 'Lembretes de cobrança',
+            'title' => 'Lembretes financeiros e de vigência',
             'rules' => $service->rules(),
             'logs' => $service->logs(),
             'preview' => $service->preview(),
             'automationState' => $service->automationState(),
             'eventLabels' => BillingReminderService::EVENT_LABELS,
             'channelLabels' => BillingReminderService::CHANNEL_LABELS,
+            'platformNotificationSettings' => $platformNotifications->settings(),
+            'platformWhatsappInstances' => $platformNotifications->whatsappInstances(),
+            'lifecycleRules' => $lifecycle->rules(),
+            'lifecycleLogs' => $lifecycle->logs(),
+            'lifecycleTargetLabels' => SubscriptionLifecycleReminderService::TARGET_LABELS,
+            'lifecycleChannelLabels' => SubscriptionLifecycleReminderService::CHANNEL_LABELS,
         ]);
     }
 
@@ -41,13 +52,49 @@ final class BillingReminderController
         $this->redirect('/billing-reminders');
     }
 
+    public function savePlatformSettings(): void
+    {
+        try {
+            $instanceId = (int) ($_POST['whatsapp_instance_id'] ?? 0);
+            (new PlatformNotificationService())->saveSettings($instanceId > 0 ? $instanceId : null, Auth::id());
+            Audit::log('billing.platform_notification_settings_saved', ['whatsapp_instance_id' => $instanceId]);
+            Flash::set('success', $instanceId > 0
+                ? 'Canal de WhatsApp da plataforma salvo.'
+                : 'Canal de WhatsApp da plataforma removido. Avisos internos continuam disponíveis.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar o canal da plataforma: ' . $exception->getMessage());
+        }
+        $this->redirect('/billing-reminders');
+    }
+
+    public function saveLifecycleRule(): void
+    {
+        try {
+            (new SubscriptionLifecycleReminderService())->saveRule($_POST);
+            Audit::log('billing.lifecycle_rule_saved', ['id' => (int) ($_POST['id'] ?? 0)]);
+            Flash::set('success', 'Regra de vigência/teste salva.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar a regra de vigência/teste: ' . $exception->getMessage());
+        }
+        $this->redirect('/billing-reminders');
+    }
+
     public function run(): void
     {
         try {
-            $result = (new BillingReminderService())->runDueReminders('manual');
+            $billing = (new BillingReminderService())->runDueReminders('manual');
+            $lifecycle = (new SubscriptionLifecycleReminderService())->runDueReminders('manual');
+            $result = [
+                'created' => (int) $billing['created'] + (int) $lifecycle['created'],
+                'dispatched' => (int) $billing['dispatched'] + (int) $lifecycle['dispatched'],
+                'ignored' => (int) $billing['ignored'] + (int) $lifecycle['ignored'],
+                'errors' => array_merge((array) $billing['errors'], (array) $lifecycle['errors']),
+                'billing' => $billing,
+                'lifecycle' => $lifecycle,
+            ];
             Audit::log('billing.reminder_run', $result);
             $message = sprintf(
-                'Régua processada: %d aviso(s) criado(s), %d enviado(s), %d ignorado(s).',
+                'Rotinas processadas: %d aviso(s) criado(s), %d encaminhado(s), %d ignorado(s).',
                 (int) $result['created'],
                 (int) $result['dispatched'],
                 (int) $result['ignored']
@@ -86,7 +133,16 @@ final class BillingReminderController
         }
 
         try {
-            $result = (new BillingReminderService())->runDueReminders('cron');
+            $billing = (new BillingReminderService())->runDueReminders('cron');
+            $lifecycle = (new SubscriptionLifecycleReminderService())->runDueReminders('cron');
+            $result = [
+                'created' => (int) $billing['created'] + (int) $lifecycle['created'],
+                'dispatched' => (int) $billing['dispatched'] + (int) $lifecycle['dispatched'],
+                'ignored' => (int) $billing['ignored'] + (int) $lifecycle['ignored'],
+                'errors' => array_merge((array) $billing['errors'], (array) $lifecycle['errors']),
+                'billing' => $billing,
+                'lifecycle' => $lifecycle,
+            ];
             (new OperationsService())->refreshBillingCronCheck();
             http_response_code(200);
             header('Content-Type: application/json; charset=utf-8');

@@ -144,5 +144,6 @@ return [
         ['sequence' => 129, 'file' => '122_calendar_client_communications.sql'],
         ['sequence' => 130, 'file' => '123_published_slots_min_notice_policy.sql'],
         ['sequence' => 131, 'file' => '124_calendar_slot_capacity_mode.sql'],
+        ['sequence' => 132, 'file' => '125_native_financial_lifecycle_notifications.sql'],
     ],
 ];

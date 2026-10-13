@@ -581,6 +581,9 @@ final class OperationsService
         $billingRulesDependingOnN8n = $this->count(
             "SELECT COUNT(*) FROM billing_reminder_rules
              WHERE status = 'active' AND channel IN ('n8n','whatsapp','email')"
+        ) + $this->count(
+            "SELECT COUNT(*) FROM subscription_notification_rules
+             WHERE status = 'active' AND channel = 'n8n'"
         );
 
         // n8n é integração opcional. Se não existe nenhum fluxo ativo no cadastro local,
@@ -592,7 +595,7 @@ final class OperationsService
                 return [
                     'status' => 'warning',
                     'message' => 'Não há fluxo n8n ativo, mas existem ' . $billingRulesDependingOnN8n
-                        . ' regra(s) de cobrança ativa(s) configurada(s) para n8n/externo. '
+                        . ' regra(s) financeira(s)/de vigência ativa(s) configurada(s) para n8n/externo. '
                         . 'Desative essas regras se a automação externa não será mais usada ou reative um fluxo compatível.',
                     'latency_ms' => null,
                 ];
@@ -1246,11 +1249,13 @@ final class OperationsService
 
     private function checkBillingCron(): array
     {
-        $activeRules = $this->count("SELECT COUNT(*) FROM billing_reminder_rules WHERE status = 'active'");
+        $billingRules = $this->count("SELECT COUNT(*) FROM billing_reminder_rules WHERE status = 'active'");
+        $lifecycleRules = $this->count("SELECT COUNT(*) FROM subscription_notification_rules WHERE status = 'active'");
+        $activeRules = $billingRules + $lifecycleRules;
         if ($activeRules < 1) {
             return [
                 'status' => 'ok',
-                'message' => 'Nenhuma regra de lembrete de cobrança está ativa. Não há execução automática de cobrança pendente.',
+                'message' => 'Nenhuma regra financeira, de vigência ou de teste está ativa. Não há execução automática pendente.',
                 'latency_ms' => null,
             ];
         }
@@ -1258,6 +1263,9 @@ final class OperationsService
         $externalRules = $this->count(
             "SELECT COUNT(*) FROM billing_reminder_rules
              WHERE status = 'active' AND channel IN ('n8n','whatsapp','email')"
+        ) + $this->count(
+            "SELECT COUNT(*) FROM subscription_notification_rules
+             WHERE status = 'active' AND channel = 'n8n'"
         );
         $activeN8nFlows = $this->count("SELECT COUNT(*) FROM n8n_tenant_flows WHERE status = 'active'")
             + $this->count("SELECT COUNT(*) FROM n8n_flows WHERE status = 'active'");
@@ -1265,12 +1273,35 @@ final class OperationsService
         if ($externalRules > 0 && $activeN8nFlows < 1) {
             return [
                 'status' => 'warning',
-                'message' => 'Há ' . $activeRules . ' regra(s) de cobrança ativa(s); ' . $externalRules
-                    . ' dependem de n8n/externo, mas nenhum fluxo n8n está ativo. '
-                    . 'Se a régua foi desativada intencionalmente, marque as regras como Inativas. '
-                    . 'Se deseja continuar os avisos externos, reative/configure o fluxo correspondente.',
+                'message' => 'Há ' . $activeRules . ' regra(s) financeira(s)/de vigência ativa(s); ' . $externalRules
+                    . ' ainda dependem de n8n/externo, mas nenhum fluxo n8n está ativo. '
+                    . 'Troque o canal dessas regras para RS Connect/WhatsApp nativo ou reative uma integração externa compatível.',
                 'latency_ms' => null,
             ];
+        }
+
+        $nativeWhatsappRules = $this->count(
+            "SELECT COUNT(*) FROM billing_reminder_rules
+             WHERE status = 'active' AND channel IN ('native_whatsapp','native_both')"
+        ) + $this->count(
+            "SELECT COUNT(*) FROM subscription_notification_rules
+             WHERE status = 'active' AND channel IN ('native_whatsapp','native_both')"
+        );
+        if ($nativeWhatsappRules > 0) {
+            $senderReady = $this->count(
+                "SELECT COUNT(*)
+                 FROM platform_notification_settings pns
+                 INNER JOIN evolution_instances ei ON ei.id = pns.whatsapp_instance_id
+                 WHERE pns.id = 1 AND ei.status = 'connected'
+                   AND ei.api_key_encrypted IS NOT NULL AND ei.api_key_encrypted <> ''"
+            );
+            if ($senderReady < 1) {
+                return [
+                    'status' => 'warning',
+                    'message' => 'Há ' . $nativeWhatsappRules . ' regra(s) usando WhatsApp nativo, mas a conexão central da plataforma não está configurada ou conectada.',
+                    'latency_ms' => null,
+                ];
+            }
         }
 
         $heartbeat = $this->fetchOne(
@@ -1279,8 +1310,8 @@ final class OperationsService
 
         if ($heartbeat) {
             $message = (string) ($heartbeat['message'] ?? '');
-            // A partir da 36.5.6 somente o endpoint de cron grava o marcador “Régua (cron)”.
-            // Heartbeats antigos também eram gravados por execução manual e não comprovam automação.
+            // O marcador “Régua (cron)” comprova execução automática tanto pelo worker nativo
+            // quanto pelo endpoint externo autenticado. Execuções manuais usam outro marcador.
             $trustedCronHeartbeat = str_contains($message, 'Régua (cron)');
             if ($trustedCronHeartbeat) {
                 $checkedAt = strtotime((string) ($heartbeat['checked_at'] ?? '')) ?: 0;
@@ -1305,14 +1336,14 @@ final class OperationsService
         if (!$last) {
             return [
                 'status' => 'warning',
-                'message' => 'Nenhuma execução automática do cron foi registrada. Importe e ative o template “Cron da régua de cobrança” no n8n e valide a URL do webhook.',
+                'message' => 'Nenhuma execução automática da rotina financeira nativa foi registrada. Reinicie/reimplante o container e confirme que RS_FINANCIAL_NOTIFICATION_WORKER_ENABLED não está desativado.',
                 'latency_ms' => null,
             ];
         }
 
         return [
             'status' => 'warning',
-            'message' => 'Há processamento da régua registrado em ' . ($last['created_at'] ?? '') . ', mas ainda não existe um heartbeat comprovando execução automática. Importe/ative o cron n8n e execute-o uma vez.',
+            'message' => 'Há processamento financeiro registrado em ' . ($last['created_at'] ?? '') . ', mas ainda não existe heartbeat recente do worker financeiro nativo. Reinicie/reimplante o container e valide o worker interno.',
             'latency_ms' => null,
         ];
     }

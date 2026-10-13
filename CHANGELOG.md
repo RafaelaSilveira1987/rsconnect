@@ -1,3 +1,21 @@
+## 36.43.0 — Notificações financeiras e de vigência nativas
+
+### Adicionado
+- canais nativos `RS Connect (interno)`, `WhatsApp nativo da plataforma` e `RS Connect + WhatsApp nativo` na régua financeira;
+- configuração de uma conexão WhatsApp central da plataforma para cobrar/avisar empresas sem reutilizar o número da própria empresa cliente como remetente;
+- regras configuráveis para fim de vigência, fim de trial e fim da tolerância, com dias relativos, mensagem e canal definidos no painel;
+- worker financeiro interno iniciado com o container, sem prazo, texto ou canal comercial fixado no código;
+- vínculo entre `notification_jobs` e os históricos de cobrança/vigência para refletir fila, envio, erro e descarte reais;
+- monitor operacional valida remetente central quando houver regras nativas de WhatsApp e mantém n8n somente como dependência explícita de regras externas.
+
+### Compatibilidade
+- regras existentes configuradas para n8n não são alteradas silenciosamente; o administrador escolhe o novo canal no painel;
+- `BILLING_CRON_TOKEN` passa a ser opcional para o worker nativo e continua válido apenas para acionamento externo autenticado;
+- funcionalidades nativas não dependem de workflow n8n ativo.
+
+### Migration
+- `125_native_financial_lifecycle_notifications.sql`.
+
 ## 36.42.5 — Monitoramento coerente sem n8n
 
 ### Corrigido

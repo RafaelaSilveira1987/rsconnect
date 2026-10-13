@@ -592,8 +592,8 @@ final class OperationalLanguageService
             if (preg_match('/(\d+)\s+falha\(s\) consecutiva/iu', $raw, $match) === 1) {
                 return 'A automação apresentou ' . (int) $match[1] . ' tentativas seguidas sem conclusão.';
             }
-            if (str_contains($folded, 'regras de cobranca') && str_contains($folded, 'nenhum fluxo n8n')) {
-                return 'Há regras de cobrança ativas configuradas para automação externa, mas nenhum fluxo n8n está ativo para executá-las.';
+            if ((str_contains($folded, 'regras de cobranca') || str_contains($folded, 'financeira') || str_contains($folded, 'vigencia')) && str_contains($folded, 'nenhum fluxo n8n')) {
+                return 'Há regras financeiras ou de vigência configuradas para automação externa, mas nenhum fluxo n8n está ativo para executá-las.';
             }
             if (str_contains($folded, 'desativada intencionalmente')) {
                 return 'Nenhuma automação externa está ativa ou é necessária neste momento.';
@@ -604,11 +604,11 @@ final class OperationalLanguageService
         }
 
         if ($key === 'billing_cron') {
-            if (str_contains($folded, 'nenhuma regra de lembrete de cobranca esta ativa')) {
-                return 'Nenhuma regra automática de cobrança está ativa; não há processamento pendente.';
+            if (str_contains($folded, 'nenhuma regra financeira') || str_contains($folded, 'nenhuma regra de lembrete de cobranca esta ativa')) {
+                return 'Nenhuma regra financeira, de vigência ou de teste está ativa; não há processamento pendente.';
             }
             if (str_contains($folded, 'dependem de n8n') && str_contains($folded, 'nenhum fluxo n8n')) {
-                return 'Há avisos de cobrança ativos configurados para automação externa, mas o n8n está desativado.';
+                return 'Há avisos financeiros ou de vigência configurados para automação externa, mas o n8n está desativado.';
             }
         }
 

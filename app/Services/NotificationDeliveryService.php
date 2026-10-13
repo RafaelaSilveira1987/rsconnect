@@ -58,6 +58,7 @@ final class NotificationDeliveryService
             try {
                 if ($this->shouldSkip($job)) {
                     $this->finish($id, 'skipped');
+                    $this->syncJobSource($job);
                     $summary['skipped']++;
                     continue;
                 }
@@ -65,6 +66,7 @@ final class NotificationDeliveryService
                 if ((string) $job['channel'] === 'in_app') {
                     if (!$this->sendInApp($job)) {
                         $this->finish($id, 'skipped');
+                        $this->syncJobSource($job);
                         $summary['skipped']++;
                         continue;
                     }
@@ -75,9 +77,11 @@ final class NotificationDeliveryService
                 }
 
                 $this->finish($id, 'sent');
+                $this->syncJobSource($job);
                 $summary['sent']++;
             } catch (Throwable $exception) {
                 $result = $this->fail($job, $exception->getMessage());
+                $this->syncJobSource($job);
                 $summary[$result]++;
             }
         }
@@ -109,7 +113,12 @@ final class NotificationDeliveryService
     private function sendInApp(array $job): bool
     {
         $event = (string) ($job['event_key'] ?? 'system');
-        $category = str_starts_with($event, 'calendar.') ? 'calendar' : 'system';
+        $category = str_starts_with($event, 'calendar.')
+            ? 'calendar'
+            : ((str_starts_with($event, 'billing.') || str_starts_with($event, 'subscription.')) ? 'billing' : 'system');
+        $type = str_starts_with($event, 'commercial.')
+            ? 'commercial_request'
+            : ((str_starts_with($event, 'billing.') || str_starts_with($event, 'subscription.')) ? 'billing' : 'calendar');
         $payload = json_decode((string) ($job['payload_json'] ?? ''), true);
         return (new NotificationService())->createIfEnabled(
             (int) $job['tenant_id'],
@@ -118,7 +127,7 @@ final class NotificationDeliveryService
             (string) $job['message'],
             (string) $job['severity'],
             (string) ($job['action_url'] ?? ''),
-            str_starts_with($event, 'commercial.') ? 'commercial_request' : 'calendar',
+            $type,
             $event,
             (string) $job['entity_type'],
             (int) $job['entity_id'],
@@ -135,9 +144,29 @@ final class NotificationDeliveryService
             throw new RuntimeException('Destinatário de WhatsApp inválido.');
         }
 
-        $instance = $this->instance((int) $job['tenant_id']);
+        $sourceType = trim((string) ($job['source_type'] ?? ''));
+        $platformFinancialJob = in_array($sourceType, ['billing_reminder_log', 'subscription_notification_log'], true);
+        if ($platformFinancialJob) {
+            $senderInstanceId = $this->platformSenderInstanceId();
+            if ($senderInstanceId < 1) {
+                throw new RuntimeException('Nenhuma conexão WhatsApp central da plataforma está configurada para os avisos financeiros.');
+            }
+            // Usa sempre a configuração central atual. Assim um job em retry se recupera
+            // quando o administrador troca/reconecta o remetente, sem usar o número do tenant.
+            Database::connection()->prepare(
+                'UPDATE notification_jobs SET sender_instance_id = :sender_instance_id WHERE id = :id'
+            )->execute(['sender_instance_id' => $senderInstanceId, 'id' => (int) ($job['id'] ?? 0)]);
+            $instance = $this->instanceById($senderInstanceId);
+        } else {
+            $senderInstanceId = (int) ($job['sender_instance_id'] ?? 0);
+            $instance = $senderInstanceId > 0
+                ? $this->instanceById($senderInstanceId)
+                : $this->instance((int) $job['tenant_id']);
+        }
         if (!$instance) {
-            throw new RuntimeException('Nenhuma conexão WhatsApp ativa está disponível para a empresa.');
+            throw new RuntimeException($platformFinancialJob || $senderInstanceId > 0
+                ? 'A conexão WhatsApp da plataforma não está disponível ou conectada.'
+                : 'Nenhuma conexão WhatsApp ativa está disponível para a empresa.');
         }
         $ownPhone = preg_replace('/\D+/', '', (string) ($instance['profile_phone'] ?? '')) ?: '';
         if ($ownPhone !== '' && $recipient === $ownPhone) {
@@ -175,6 +204,109 @@ final class NotificationDeliveryService
         $statement->execute(['tenant_id' => $tenantId]);
         $instance = $statement->fetch(PDO::FETCH_ASSOC);
         return $instance ?: null;
+    }
+
+    private function platformSenderInstanceId(): int
+    {
+        try {
+            $statement = Database::connection()->query(
+                'SELECT whatsapp_instance_id FROM platform_notification_settings WHERE id = 1 LIMIT 1'
+            );
+            return (int) ($statement->fetchColumn() ?: 0);
+        } catch (Throwable) {
+            return 0;
+        }
+    }
+
+    /** @return array<string,mixed>|null */
+    private function instanceById(int $instanceId): ?array
+    {
+        $statement = Database::connection()->prepare(
+            'SELECT id, tenant_id, base_url, api_key_encrypted, instance_name, status, connection_state, profile_phone
+             FROM evolution_instances
+             WHERE id = :id
+               AND status = "connected"
+               AND api_key_encrypted IS NOT NULL
+               AND api_key_encrypted <> ""
+             LIMIT 1'
+        );
+        $statement->execute(['id' => $instanceId]);
+        $instance = $statement->fetch(PDO::FETCH_ASSOC);
+        return $instance ?: null;
+    }
+
+    /**
+     * Sincroniza o histórico funcional que originou jobs nativos. Um aviso com
+     * dois canais só é concluído quando todos os jobs deixam de estar pendentes.
+     */
+    public function syncSourceStatus(string $sourceType, int $sourceId): void
+    {
+        $sourceType = trim($sourceType);
+        if ($sourceType === '' || $sourceId < 1 || !$this->columnExists('notification_jobs', 'source_type')) {
+            return;
+        }
+
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT status, COUNT(*) total
+                 FROM notification_jobs
+                 WHERE source_type = :source_type AND source_id = :source_id
+                 GROUP BY status'
+            );
+            $statement->execute(['source_type' => $sourceType, 'source_id' => $sourceId]);
+            $counts = [];
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $counts[(string) $row['status']] = (int) $row['total'];
+            }
+            if ($counts === []) {
+                return;
+            }
+
+            $waiting = (int) ($counts['pending'] ?? 0) + (int) ($counts['processing'] ?? 0) + (int) ($counts['retry'] ?? 0);
+            if ($waiting > 0) {
+                $status = 'queued';
+                $processedAt = null;
+            } elseif ((int) ($counts['failed'] ?? 0) > 0) {
+                $status = 'error';
+                $processedAt = 'NOW()';
+            } elseif ((int) ($counts['sent'] ?? 0) > 0) {
+                $status = 'sent';
+                $processedAt = 'NOW()';
+            } else {
+                $status = 'skipped';
+                $processedAt = 'NOW()';
+            }
+
+            $table = match ($sourceType) {
+                'billing_reminder_log' => 'billing_reminder_logs',
+                'subscription_notification_log' => 'subscription_notification_logs',
+                default => null,
+            };
+            if ($table === null || !$this->tableExists($table)) {
+                return;
+            }
+
+            $result = json_encode(['notification_jobs' => $counts], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $sql = 'UPDATE ' . $table . ' SET status = :status, result_json = :result, processed_at = '
+                . ($processedAt === null ? 'NULL' : $processedAt) . ' WHERE id = :id';
+            Database::connection()->prepare($sql)->execute([
+                'status' => $status,
+                'result' => $result,
+                'id' => $sourceId,
+            ]);
+        } catch (Throwable) {
+            // A entrega não deve falhar apenas porque o histórico auxiliar não pôde ser sincronizado.
+        }
+    }
+
+    /** @param array<string,mixed> $job */
+    private function syncJobSource(array $job): void
+    {
+        $sourceType = trim((string) ($job['source_type'] ?? ''));
+        $sourceId = (int) ($job['source_id'] ?? 0);
+        if ($sourceType !== '' && $sourceId > 0) {
+            $this->syncSourceStatus($sourceType, $sourceId);
+        }
     }
 
     /** @param array<string,mixed> $job */
@@ -278,6 +410,20 @@ final class NotificationDeliveryService
                  WHERE table_schema = DATABASE() AND table_name = :table_name'
             );
             $statement->execute(['table_name' => $table]);
+            return (int) $statement->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        try {
+            $statement = Database::connection()->prepare(
+                'SELECT COUNT(*) FROM information_schema.columns
+                 WHERE table_schema = DATABASE() AND table_name = :table_name AND column_name = :column_name'
+            );
+            $statement->execute(['table_name' => $table, 'column_name' => $column]);
             return (int) $statement->fetchColumn() > 0;
         } catch (Throwable) {
             return false;

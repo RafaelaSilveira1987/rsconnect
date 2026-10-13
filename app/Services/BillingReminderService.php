@@ -18,9 +18,12 @@ final class BillingReminderService
     ];
 
     public const CHANNEL_LABELS = [
-        'n8n' => 'n8n / externo',
-        'whatsapp' => 'WhatsApp via n8n',
-        'email' => 'E-mail via n8n',
+        'native_in_app' => 'RS Connect (interno)',
+        'native_whatsapp' => 'WhatsApp nativo da plataforma',
+        'native_both' => 'RS Connect + WhatsApp nativo',
+        'n8n' => 'Integração externa (n8n)',
+        'whatsapp' => 'Legado: WhatsApp via n8n',
+        'email' => 'Legado: E-mail via n8n',
         'manual' => 'Somente registrar',
     ];
 
@@ -105,7 +108,7 @@ final class BillingReminderService
         $label = trim((string) ($input['label'] ?? ''));
         $daysFromDue = (int) ($input['days_from_due'] ?? 0);
         $event = (string) ($input['event_key'] ?? 'billing.reminder.due_today');
-        $channel = (string) ($input['channel'] ?? 'n8n');
+        $channel = (string) ($input['channel'] ?? 'native_in_app');
         $status = (string) ($input['status'] ?? 'active');
         $autoMarkOverdue = isset($input['auto_mark_overdue']) ? 1 : 0;
         $autoSuspend = isset($input['auto_suspend']) ? 1 : 0;
@@ -118,7 +121,7 @@ final class BillingReminderService
             $event = 'billing.reminder.due_today';
         }
         if (!array_key_exists($channel, self::CHANNEL_LABELS)) {
-            $channel = 'n8n';
+            $channel = 'native_in_app';
         }
         if (!in_array($status, ['active', 'inactive'], true)) {
             $status = 'active';
@@ -180,7 +183,7 @@ final class BillingReminderService
             $invoices = $this->invoicesForRule($rule);
             foreach ($invoices as $invoice) {
                 try {
-                    if ($this->logExists((int) $rule['id'], (int) $invoice['id'])) {
+                    if ($this->logExists((int) $rule['id'], (int) $invoice['id'], $origin === 'manual')) {
                         $ignored++;
                         continue;
                     }
@@ -196,10 +199,38 @@ final class BillingReminderService
 
                     $payload = $this->payloadForInvoice($rule, $invoice);
                     $logId = $this->createLog((int) $rule['id'], (int) $invoice['tenant_id'], (int) $invoice['id'], 'pending', $payload);
-                    (new NotificationService())->createBillingNotification($payload, (int) $invoice['id']);
                     $created++;
+                    $channel = (string) ($rule['channel'] ?? 'native_in_app');
 
-                    if (($rule['channel'] ?? 'n8n') !== 'manual') {
+                    if (in_array($channel, PlatformNotificationService::NATIVE_CHANNELS, true)) {
+                        $recipient = (string) (($invoice['tenant_commercial_whatsapp'] ?? '') ?: ($invoice['tenant_phone'] ?? ''));
+                        $result = (new PlatformNotificationService())->dispatch(
+                            (int) $invoice['tenant_id'],
+                            (string) $rule['event_key'],
+                            'invoice',
+                            (int) $invoice['id'],
+                            $channel,
+                            $recipient,
+                            $this->titleForRule($rule),
+                            (string) $payload['message'],
+                            '/subscription',
+                            $this->severityForRule($rule),
+                            $payload,
+                            'billing_reminder_log',
+                            $logId
+                        );
+                        if (!empty($result['errors'])) {
+                            $this->finishLog($logId, 'error', $result);
+                            foreach ((array) $result['errors'] as $error) {
+                                $errors[] = (string) $error;
+                            }
+                        } elseif ((int) ($result['queued'] ?? 0) > 0) {
+                            (new NotificationDeliveryService())->syncSourceStatus('billing_reminder_log', $logId);
+                            $dispatched++;
+                        } else {
+                            $this->finishLog($logId, 'skipped', $result);
+                        }
+                    } elseif (in_array($channel, ['n8n', 'whatsapp', 'email'], true)) {
                         $result = (new AutomationWebhookService())->dispatch((string) $rule['event_key'], $payload, null, (int) $invoice['tenant_id']);
                         $success = false;
                         foreach ($result as $item) {
@@ -261,6 +292,7 @@ final class BillingReminderService
     {
         $statement = Database::connection()->prepare(
             'SELECT i.*, t.name AS tenant_name, t.legal_name AS tenant_legal_name, t.email AS tenant_email, t.phone AS tenant_phone,
+                    t.commercial_whatsapp AS tenant_commercial_whatsapp,
                     t.document AS tenant_document, ts.id AS subscription_id, ts.billing_status,
                     sp.name AS plan_name, DATEDIFF(CURDATE(), i.due_date) AS days_from_due
              FROM tenant_invoices i
@@ -298,7 +330,7 @@ final class BillingReminderService
                 'id' => (int) $invoice['tenant_id'],
                 'name' => (string) ($invoice['tenant_name'] ?? ''),
                 'email' => (string) ($invoice['tenant_email'] ?? ''),
-                'phone' => (string) ($invoice['tenant_phone'] ?? ''),
+                'phone' => (string) (($invoice['tenant_commercial_whatsapp'] ?? '') ?: ($invoice['tenant_phone'] ?? '')),
             ],
             'invoice' => [
                 'id' => (int) $invoice['id'],
@@ -325,11 +357,31 @@ final class BillingReminderService
         ];
     }
 
-    private function logExists(int $ruleId, int $invoiceId): bool
+    private function titleForRule(array $rule): string
+    {
+        return match ((string) ($rule['event_key'] ?? 'billing.reminder.due_today')) {
+            'billing.reminder.before_due' => 'Cobrança próxima do vencimento',
+            'billing.reminder.due_today' => 'Cobrança vence hoje',
+            'billing.reminder.overdue' => 'Cobrança em atraso',
+            'billing.subscription.suspended' => 'Assinatura sinalizada para suspensão',
+            default => 'Atualização financeira',
+        };
+    }
+
+    private function severityForRule(array $rule): string
+    {
+        if ((string) ($rule['event_key'] ?? '') === 'billing.subscription.suspended') {
+            return 'danger';
+        }
+        return (int) ($rule['days_from_due'] ?? 0) > 0 ? 'warning' : 'info';
+    }
+
+    private function logExists(int $ruleId, int $invoiceId, bool $allowRetryErrors = false): bool
     {
         $statement = Database::connection()->prepare(
             'SELECT COUNT(*) FROM billing_reminder_logs
              WHERE rule_id = :rule_id AND invoice_id = :invoice_id AND DATE(created_at) = CURDATE()'
+             . ($allowRetryErrors ? ' AND status NOT IN ("error","skipped")' : '')
         );
         $statement->execute(['rule_id' => $ruleId, 'invoice_id' => $invoiceId]);
         return (int) $statement->fetchColumn() > 0;

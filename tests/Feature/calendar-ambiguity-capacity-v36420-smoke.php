@@ -74,7 +74,7 @@ $check(
 );
 $check(
     str_contains($migrationManifest, "124_calendar_slot_capacity_mode.sql")
-    && ($packageManifest['database']['required_migration'] ?? '') === '124_calendar_slot_capacity_mode.sql',
+    && ($packageManifest['database']['required_migration'] ?? '') === '125_native_financial_lifecycle_notifications.sql',
     'migration 124 está registrada como requisito do pacote'
 );
 $check(
@@ -115,11 +115,11 @@ $check(
 $check(
     str_contains($appVersion, 'RS Connect 36.42.0')
     && str_contains($appVersion, 'RS Connect 36.42.1')
-    && str_contains($appVersion, "REQUIRED_MIGRATION = '124_calendar_slot_capacity_mode.sql'")
+    && str_contains($appVersion, "REQUIRED_MIGRATION = '125_native_financial_lifecycle_notifications.sql'")
     && str_contains($appVersion, 'RS Connect 36.42.2')
     && str_contains($appVersion, 'RS Connect 36.42.3')
-    && ($packageManifest['package_version'] ?? '') === '36.42.5',
-    'marcos 36.42.0–36.42.3 preservados e versão 36.42.5 mantém a migration 124'
+    && ($packageManifest['package_version'] ?? '') === '36.43.0',
+    'marcos 36.42.0–36.42.3 preservados e versão 36.43.0 requer a migration 125 mantendo a 124 no histórico'
 );
 
 if ($failures !== []) {
