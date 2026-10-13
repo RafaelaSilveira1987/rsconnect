@@ -23,6 +23,7 @@ final class BillingReminderController
             'rules' => $service->rules(),
             'logs' => $service->logs(),
             'preview' => $service->preview(),
+            'automationState' => $service->automationState(),
             'eventLabels' => BillingReminderService::EVENT_LABELS,
             'channelLabels' => BillingReminderService::CHANNEL_LABELS,
         ]);

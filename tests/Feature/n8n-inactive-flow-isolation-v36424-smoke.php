@@ -73,10 +73,10 @@ $check(
 );
 
 $check(
-    str_contains($version, "RS Connect 36.42.4 — Fluxos inativos isolados por empresa")
-        && ($manifest['package_version'] ?? '') === '36.42.4'
+    str_contains($version, "RS Connect 36.42.4")
+        && ($manifest['package_version'] ?? '') === '36.42.5'
         && ($manifest['database']['required_migration'] ?? '') === '124_calendar_slot_capacity_mode.sql',
-    'release 36.42.4 registrada sem migration nova'
+    'release 36.42.4 preservada na 36.42.5 sem migration nova'
 );
 
 exit($failed > 0 ? 1 : 0);

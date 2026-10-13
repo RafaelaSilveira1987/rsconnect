@@ -592,8 +592,23 @@ final class OperationalLanguageService
             if (preg_match('/(\d+)\s+falha\(s\) consecutiva/iu', $raw, $match) === 1) {
                 return 'A automação apresentou ' . (int) $match[1] . ' tentativas seguidas sem conclusão.';
             }
+            if (str_contains($folded, 'regras de cobranca') && str_contains($folded, 'nenhum fluxo n8n')) {
+                return 'Há regras de cobrança ativas configuradas para automação externa, mas nenhum fluxo n8n está ativo para executá-las.';
+            }
+            if (str_contains($folded, 'desativada intencionalmente')) {
+                return 'Nenhuma automação externa está ativa ou é necessária neste momento.';
+            }
             if (str_contains($folded, 'nenhum fluxo') || str_contains($folded, 'nao ha sucesso')) {
                 return 'As automações não possuem uma conclusão recente confirmada.';
+            }
+        }
+
+        if ($key === 'billing_cron') {
+            if (str_contains($folded, 'nenhuma regra de lembrete de cobranca esta ativa')) {
+                return 'Nenhuma regra automática de cobrança está ativa; não há processamento pendente.';
+            }
+            if (str_contains($folded, 'dependem de n8n') && str_contains($folded, 'nenhum fluxo n8n')) {
+                return 'Há avisos de cobrança ativos configurados para automação externa, mas o n8n está desativado.';
             }
         }
 
@@ -661,7 +676,7 @@ final class OperationalLanguageService
             'disk' => 'O servidor possui espaço disponível dentro do esperado.',
             'evolution' => 'A conexão do WhatsApp foi confirmada.',
             'openai' => 'O assistente virtual apresentou uma resposta concluída recentemente.',
-            'n8n' => 'As automações possuem uma execução recente concluída.',
+            'n8n' => 'As integrações externas estão saudáveis ou não estão em uso.',
             'webhooks' => 'O RS Connect está recebendo atualizações normalmente.',
             'message_queue' => 'Não há acúmulo relevante de mensagens aguardando envio.',
             'calendar' => 'A agenda apresentou atualização recente.',

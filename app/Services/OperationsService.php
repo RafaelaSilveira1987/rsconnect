@@ -578,6 +578,33 @@ final class OperationsService
     {
         $localActiveFlows = $this->count("SELECT COUNT(*) FROM n8n_tenant_flows WHERE status = 'active'")
             + $this->count("SELECT COUNT(*) FROM n8n_flows WHERE status = 'active'");
+        $billingRulesDependingOnN8n = $this->count(
+            "SELECT COUNT(*) FROM billing_reminder_rules
+             WHERE status = 'active' AND channel IN ('n8n','whatsapp','email')"
+        );
+
+        // n8n é integração opcional. Se não existe nenhum fluxo ativo no cadastro local,
+        // o monitor não deve consultar/ exigir workflows externos nem manter incidente por
+        // simples ausência de execução. A única exceção é quando outra configuração ativa
+        // ainda declara dependência explícita do n8n (ex.: régua de cobrança externa).
+        if ($localActiveFlows < 1) {
+            if ($billingRulesDependingOnN8n > 0) {
+                return [
+                    'status' => 'warning',
+                    'message' => 'Não há fluxo n8n ativo, mas existem ' . $billingRulesDependingOnN8n
+                        . ' regra(s) de cobrança ativa(s) configurada(s) para n8n/externo. '
+                        . 'Desative essas regras se a automação externa não será mais usada ou reative um fluxo compatível.',
+                    'latency_ms' => null,
+                ];
+            }
+
+            return [
+                'status' => 'ok',
+                'message' => 'Nenhum fluxo n8n está ativo no RS Connect. A integração externa está desativada intencionalmente e nenhuma execução n8n é esperada.',
+                'latency_ms' => null,
+            ];
+        }
+
         $success24 = $this->count("SELECT COUNT(*) FROM n8n_flow_logs WHERE status = 'success' AND created_at >= (NOW() - INTERVAL 24 HOUR)");
         $errors24 = $this->count("SELECT COUNT(*) FROM n8n_flow_logs WHERE status = 'error' AND created_at >= (NOW() - INTERVAL 24 HOUR)");
         $lastSuccess = $this->fetchOne("SELECT created_at FROM n8n_flow_logs WHERE status = 'success' ORDER BY id DESC LIMIT 1");
@@ -1219,6 +1246,33 @@ final class OperationsService
 
     private function checkBillingCron(): array
     {
+        $activeRules = $this->count("SELECT COUNT(*) FROM billing_reminder_rules WHERE status = 'active'");
+        if ($activeRules < 1) {
+            return [
+                'status' => 'ok',
+                'message' => 'Nenhuma regra de lembrete de cobrança está ativa. Não há execução automática de cobrança pendente.',
+                'latency_ms' => null,
+            ];
+        }
+
+        $externalRules = $this->count(
+            "SELECT COUNT(*) FROM billing_reminder_rules
+             WHERE status = 'active' AND channel IN ('n8n','whatsapp','email')"
+        );
+        $activeN8nFlows = $this->count("SELECT COUNT(*) FROM n8n_tenant_flows WHERE status = 'active'")
+            + $this->count("SELECT COUNT(*) FROM n8n_flows WHERE status = 'active'");
+
+        if ($externalRules > 0 && $activeN8nFlows < 1) {
+            return [
+                'status' => 'warning',
+                'message' => 'Há ' . $activeRules . ' regra(s) de cobrança ativa(s); ' . $externalRules
+                    . ' dependem de n8n/externo, mas nenhum fluxo n8n está ativo. '
+                    . 'Se a régua foi desativada intencionalmente, marque as regras como Inativas. '
+                    . 'Se deseja continuar os avisos externos, reative/configure o fluxo correspondente.',
+                'latency_ms' => null,
+            ];
+        }
+
         $heartbeat = $this->fetchOne(
             "SELECT status, message, checked_at FROM system_health_checks WHERE check_key = 'billing_cron_heartbeat' ORDER BY id DESC LIMIT 1"
         );

@@ -47,6 +47,43 @@ final class BillingReminderService
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /** @return array<string,int> */
+    public function automationState(): array
+    {
+        $pdo = Database::connection();
+        $activeRules = 0;
+        $externalRules = 0;
+        $activeN8nFlows = 0;
+
+        try {
+            $activeRules = (int) $pdo->query(
+                "SELECT COUNT(*) FROM billing_reminder_rules WHERE status = 'active'"
+            )->fetchColumn();
+            $externalRules = (int) $pdo->query(
+                "SELECT COUNT(*) FROM billing_reminder_rules
+                 WHERE status = 'active' AND channel IN ('n8n','whatsapp','email')"
+            )->fetchColumn();
+        } catch (Throwable) {
+            // Instalações antigas sem a régua ainda retornam um estado neutro.
+        }
+
+        foreach (['n8n_tenant_flows', 'n8n_flows'] as $table) {
+            try {
+                $activeN8nFlows += (int) $pdo->query(
+                    "SELECT COUNT(*) FROM {$table} WHERE status = 'active'"
+                )->fetchColumn();
+            } catch (Throwable) {
+                // `n8n_flows` é legado e pode não existir em instalações atuais.
+            }
+        }
+
+        return [
+            'active_rules' => $activeRules,
+            'external_rules' => $externalRules,
+            'active_n8n_flows' => $activeN8nFlows,
+        ];
+    }
+
     public function preview(): array
     {
         $statement = Database::connection()->query(

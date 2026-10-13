@@ -1,3 +1,15 @@
+## 36.42.5 — Monitoramento coerente sem n8n
+
+### Corrigido
+- o monitor deixa de tratar a ausência de workflows n8n como falha quando não existe nenhum fluxo ativo cadastrado nem outra configuração ativa dependente da integração externa;
+- regras de cobrança ativas com canal `n8n`, `WhatsApp via n8n` ou `E-mail via n8n` passam a gerar uma mensagem explícita de incompatibilidade quando todos os fluxos n8n estão desligados;
+- `Lembretes de cobrança` deixa de manter incidente aberto quando não existe nenhuma regra ativa;
+- a tela da régua mostra um aviso direto quando há regras ativas ainda dependentes do n8n, orientando a inativá-las caso a automação externa tenha sido desligada de propósito;
+- incidentes antigos de automações/cobrança são encerrados automaticamente na próxima verificação quando a configuração estiver coerente.
+
+### Migration
+- nenhuma nova; permanece obrigatória `124_calendar_slot_capacity_mode.sql`.
+
 ## 36.42.4 — Fluxos inativos isolados por empresa
 
 ### Corrigido

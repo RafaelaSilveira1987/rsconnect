@@ -1,5 +1,12 @@
-# RS Connect 36.42.4
-> **36.42.4** isola fluxos n8n inativos por empresa: eventos automáticos só alcançam fluxos ativos do tenant, não caem mais no webhook global e não geram falsas execuções `skipped`. O botão **Testar fluxo** permanece manualmente disponível. Não há migration nova; permanece necessária `124_calendar_slot_capacity_mode.sql`.
+# RS Connect 36.42.5
+> **36.42.5** corrige o monitoramento quando o n8n foi desativado intencionalmente e diferencia essa situação de regras de cobrança que ainda continuam ativas e dependentes de automação externa. Sem fluxo n8n ativo e sem dependência configurada, a Central passa a considerar a integração como não utilizada; a régua de cobrança também deixa de gerar alerta quando não possui nenhuma regra ativa. Não há migration nova; permanece necessária `124_calendar_slot_capacity_mode.sql`.
+
+## Homologação rápida 36.42.5
+
+1. Com todos os fluxos n8n inativos, desative também as regras de cobrança que usam n8n/externo e execute **Verificar sistema agora**: `Automações` e `Lembretes de cobrança` devem ficar normais.
+2. Reative apenas uma regra de cobrança configurada para n8n/externo, mantendo todos os fluxos n8n inativos: o sistema deve mostrar uma atenção explícita de configuração incompatível.
+3. Abra **Lembretes de cobrança** e confirme que a própria tela explica quais regras ainda dependem do n8n.
+4. Execute `php tests/Feature/operations-optional-n8n-billing-monitor-v36425-smoke.php`.
 
 # RS Connect 36.42.2
 > **36.42.2** ajusta a mensagem de antecedência para uma linguagem natural e corrige a integridade da coleta de **Demanda**: respostas de agenda como “quinta-feira pela manhã” não podem mais preencher Demanda/Objetivo por engano. Valores antigos desse tipo são saneados no próximo processamento da conversa. Não há migration nova; permanece necessária `124_calendar_slot_capacity_mode.sql`.

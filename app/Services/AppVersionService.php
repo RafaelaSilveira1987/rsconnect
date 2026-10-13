@@ -244,7 +244,8 @@ final class AppVersionService
     // RS Connect 36.42.2 — antecedência em linguagem natural e proteção da Demanda contra preferência de agenda.
     // RS Connect 36.42.3 — worker interno de lembretes e ação Remarcar restaurada para compromissos ativos.
     // RS Connect 36.42.4 — fluxos n8n inativos deixam de participar do barramento por empresa e não geram falsas execuções.
-    public const PACKAGE_LABEL = 'RS Connect 36.42.4 — Fluxos inativos isolados por empresa';
+    // RS Connect 36.42.5 — n8n passa a ser opcional no monitor e a régua de cobrança só gera alerta quando existem regras ativas incompatíveis com a automação disponível.
+    public const PACKAGE_LABEL = 'RS Connect 36.42.5 — Monitoramento coerente sem n8n';
     public const REQUIRED_MIGRATION = '124_calendar_slot_capacity_mode.sql';
 
     private PDO $pdo;
