@@ -1,14 +1,14 @@
-# RS Connect 36.43.0
-> **36.43.0** adiciona comunicação financeira e de vigência nativa: cobrança, fim de vigência, trial e tolerância podem gerar notificação interna e/ou WhatsApp pela própria fila do RS Connect. O n8n permanece opcional. O WhatsApp financeiro usa uma conexão central escolhida pelo super administrador, sem enviar cobrança pelo número da empresa cliente. Esta versão exige `125_native_financial_lifecycle_notifications.sql`.
+# RS Connect 36.43.1
+> **36.43.1** corrige a agenda por capacidade: horários parcialmente ocupados continuam pesquisáveis até atingir a lotação e a tela passa a exibir ocupação ao vivo (`1/4`, `2/4`, vagas restantes) nas opções e nos pré-agendamentos. Mantém as notificações financeiras/vigência nativas da 36.43.0 e exige `125_native_financial_lifecycle_notifications.sql`.
 
-## Homologação rápida 36.43.0
+## Homologação rápida 36.43.1
 
 1. Execute `php bin/migrate.php verify` e `php bin/migrate.php up`.
 2. Em **Lembretes financeiros e de vigência**, selecione o **WhatsApp usado pelo RS Connect**.
 3. Edite as regras antigas que ainda usam n8n e escolha `RS Connect (interno)`, `WhatsApp nativo da plataforma` ou os dois, conforme a operação desejada.
 4. Ative/configure os avisos de vigência/trial que devem ser usados; os modelos iniciais são criados inativos.
 5. Faça rebuild/redeploy do container para iniciar o worker `RS_FINANCIAL_NOTIFICATION_WORKER_*`.
-6. Consulte `docs/ATUALIZACAO-v36.43.0.md` para o roteiro completo.
+6. Consulte `docs/ATUALIZACAO-v36.43.1.md` para o roteiro completo.
 
 ---
 

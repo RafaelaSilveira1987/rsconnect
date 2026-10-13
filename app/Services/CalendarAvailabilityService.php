@@ -1842,6 +1842,26 @@ final class CalendarAvailabilityService
             );
             $statement->execute(['tenant_id' => $tenantId]);
             $pending = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+            if ($pending !== []) {
+                $pendingCapacityMap = (new InternalCalendarSlotService())->capacitySummariesForAppointments(
+                    $tenantId,
+                    array_map(static fn (array $row): int => (int) ($row['id'] ?? 0), $pending)
+                );
+                foreach ($pending as &$pendingAppointment) {
+                    $capacity = $pendingCapacityMap[(int) ($pendingAppointment['id'] ?? 0)] ?? null;
+                    if (!is_array($capacity)) {
+                        continue;
+                    }
+                    $pendingAppointment['internal_slot_id'] = (int) ($capacity['slot_id'] ?? 0);
+                    $pendingAppointment['slot_capacity_total'] = max(1, (int) ($capacity['capacity_total'] ?? 1));
+                    $pendingAppointment['slot_held_count'] = max(0, (int) ($capacity['held_count'] ?? 0));
+                    $pendingAppointment['slot_booked_count'] = max(0, (int) ($capacity['booked_count'] ?? 0));
+                    $pendingAppointment['slot_occupied_count'] = max(0, (int) ($capacity['occupied_count'] ?? 0));
+                    $pendingAppointment['slot_remaining_capacity'] = max(0, (int) ($capacity['remaining_capacity'] ?? 0));
+                }
+                unset($pendingAppointment);
+            }
         }
 
         if ($tenantId > 0 && $this->tableExists('calendar_availability_requests')) {
@@ -1873,6 +1893,49 @@ final class CalendarAvailabilityService
             );
             $statement->execute(['tenant_id' => $tenantId]);
             $slots = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+            // 36.43.1: os cards da última busca precisam mostrar a ocupação atual
+            // do slot-capacidade (1/4, 2/4...). O raw_json preserva o vínculo com
+            // calendar_internal_slots, mas a contagem exibida é recalculada agora
+            // para não ficar congelada no momento em que a busca foi realizada.
+            $internalSlotIds = [];
+            foreach ($slots as &$availabilitySlot) {
+                if ((string) ($availabilitySlot['source'] ?? '') !== 'internal_published') {
+                    continue;
+                }
+                $raw = json_decode((string) ($availabilitySlot['raw_json'] ?? ''), true);
+                $raw = is_array($raw) ? $raw : [];
+                $internalSlotId = max(0, (int) ($raw['internal_slot_id'] ?? 0));
+                if ($internalSlotId < 1) {
+                    continue;
+                }
+                $availabilitySlot['internal_slot_id'] = $internalSlotId;
+                $availabilitySlot['capacity_total'] = max(1, (int) ($raw['capacity_total'] ?? 1));
+                $availabilitySlot['occupied_count'] = max(0, (int) ($raw['occupied_count'] ?? 0));
+                $availabilitySlot['remaining_capacity'] = max(
+                    0,
+                    (int) ($raw['remaining_capacity'] ?? ((int) $availabilitySlot['capacity_total'] - (int) $availabilitySlot['occupied_count']))
+                );
+                $internalSlotIds[] = $internalSlotId;
+            }
+            unset($availabilitySlot);
+
+            if ($internalSlotIds !== []) {
+                $liveCapacity = (new InternalCalendarSlotService())->capacitySummariesForSlots($tenantId, $internalSlotIds);
+                foreach ($slots as &$availabilitySlot) {
+                    $internalSlotId = (int) ($availabilitySlot['internal_slot_id'] ?? 0);
+                    $capacity = $liveCapacity[$internalSlotId] ?? null;
+                    if (!is_array($capacity)) {
+                        continue;
+                    }
+                    $availabilitySlot['capacity_total'] = max(1, (int) ($capacity['capacity_total'] ?? 1));
+                    $availabilitySlot['held_count'] = max(0, (int) ($capacity['held_count'] ?? 0));
+                    $availabilitySlot['booked_count'] = max(0, (int) ($capacity['booked_count'] ?? 0));
+                    $availabilitySlot['occupied_count'] = max(0, (int) ($capacity['occupied_count'] ?? 0));
+                    $availabilitySlot['remaining_capacity'] = max(0, (int) ($capacity['remaining_capacity'] ?? 0));
+                }
+                unset($availabilitySlot);
+            }
         }
 
         if ($tenantId > 0 && $this->tableExists('calendar_google_sync_logs')) {

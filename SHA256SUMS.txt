@@ -3,9 +3,9 @@ b120bf9aab24a7af2508366edfdd491c9fbf1e84aa8a6813071e7e879fcc713f  ./.env.example
 8abd9ed4a24a60e4b826614c347ab57bfe1f332f0bd2bec12353aaa4d4787c64  ./.env.local.example
 6f6304859390dbc16f455473253ce2a34a9b3a5ba1991b947954dc75aaa812f7  ./.env.vps.example
 515746cb32b412abe48d68d41108b11ae38b7c4d542fbccc0d149403c89da124  ./.gitignore
-44a471276cf1a3ae517cbe43a6790bd4cecc06cf7ca19bc56196518a78133065  ./CHANGELOG.md
+4a4e32100c1268049cc06bc0c1e6a595fc8713b16a7769498134d83dbd672185  ./CHANGELOG.md
 96ee8942f836814a6cdd3f426900090682506ced66aeb37510b50d13a65ea03b  ./Dockerfile
-1990793bd8439de97b4421693db00a717bf4f09f0890af96f00b96f14eb68ed3  ./README.md
+2ef63bfd0c03205c8016c3dd1eeff789cc4e7b871554b3d57b1b0ae5b68289aa  ./README.md
 ce7249f53b73b4347f0db1bf484321162a24877aca6e7106d85afd34365ab179  ./app/Controllers/AccessController.php
 64dc9574317cd81b08f9669533f2b8cf57d8a8ba305760158a7ecff6dee51433  ./app/Controllers/AdminCrmController.php
 7a964baf4c3563146b922fd9fd3cea227dff01727aa798b8afacbf65cddf8894  ./app/Controllers/AgentBlueprintController.php
@@ -108,13 +108,13 @@ f98077caae5b7beeb7dead715471527a4a58b64dbeb0c2505660b543228bfbcf  ./app/Services
 d73181c7c18f1585050d3f611b49303ced38528adb42ea46ad9cc05858f1f01a  ./app/Services/AiRouterService.php
 fe5c2b3eca0bfce848ac8ef3058623da97b8aa04d5565c2a67f4e6fc258ed0e5  ./app/Services/AiTurnContextService.php
 31f804dbc48f1506e82c9de1395a7f67650de453a03671900a8132a291cd1465  ./app/Services/AiUsageService.php
-eef3f92e379400e2c5643943605235894aa309b5d4b0fbb97f38fbd54b97638e  ./app/Services/AppVersionService.php
+1aa812eaea6fd9c095c308a75c53b92942d8b1edf6c1d7cca5411c5030d61289  ./app/Services/AppVersionService.php
 fd3930cbc4ac42de16879da1ada644c4312d192a620715cf4687c01c5ac2fb5e  ./app/Services/AutomationWebhookService.php
 1980cb493d0e0464cdcbeb155b5aea8739c318f78bd0aafd0c8acc6dc5e8f335  ./app/Services/BackupAutomationService.php
 ec4c8036b556935456fe05933de8074d1020866d3f256f203943dcfaf7be9b74  ./app/Services/BackupSchedulePolicyService.php
 0b026b6271f53d470fa15ebda901bd3306c0f0c63fc90665a893cfda6270247a  ./app/Services/BillingReminderService.php
 2bf9bb83642fd63e3446dd2b5bb5aa12de92f9e2093246b3854359e7a669ad30  ./app/Services/BrandingService.php
-4c9e99dd9734c7956470c112016cd387783e06eed8c5949e60218296bbece9f7  ./app/Services/CalendarAvailabilityService.php
+08ce1f0bd909d79973c9e4b21f667921d936af3ddd80303f64738c35ff8a60e1  ./app/Services/CalendarAvailabilityService.php
 b58bb2c5974fadf42a46abd5c7af29782177f6f955ad975cdb4b6665c757673e  ./app/Services/CalendarClientCommunicationService.php
 3f2fba497274094dcababeae39ccd34322c27d911b5ae912302b9b13ccb50dab  ./app/Services/CalendarConversationService.php
 a1d6fb07ea071e08f6dce7bceca2ea26173f6054e957eb2839f8e4ee90479cee  ./app/Services/CalendarGoogleLifecycleService.php
@@ -140,7 +140,7 @@ d680de4f02308aa544de667bee91205b689994475a96d39c492275af13a635c0  ./app/Services
 0b913bf53bcda56afb6e088b273c59b20105883bc43d3653216b37ca4bd6f6db  ./app/Services/FreeTrialService.php
 24be9e48d76b271d37dc7633e533634b9c7a25c587d2968bd149a446ef03ec08  ./app/Services/HealthCheckService.php
 eff817426c47514c4eea068be4cb8e8c3e9c0c0805c09bf195e3bf2fd5cfc523  ./app/Services/ImplementationChecklistService.php
-6213cb013abc7dd781039dadb1604c6f11deaed7f796c7eafcc708cc02f8a384  ./app/Services/InternalCalendarSlotService.php
+e5acf39b3fc1ada830963c39c585b166e733c09889a7c8487d8d6df88bcf8d11  ./app/Services/InternalCalendarSlotService.php
 e181db4f8af87ece7fea955ffc8317a5639e5af5f7ccebc162858587e8db85d0  ./app/Services/MessageGovernanceService.php
 401077b6bbd105f73fd78b7cf91e0bb8ec9b2f454bb08dd61526b9d74108f0fc  ./app/Services/MigrationService.php
 e99c6c467085e6941f57f3137f81735916ef804e64f0f04886d72b945a9fe77a  ./app/Services/N8nLiveMetricsService.php
@@ -200,7 +200,7 @@ d0a63f0481859473d73985e0e5198b481e17d213b0608b1c3ba35271afbe1281  ./app/Views/bi
 c5344a9d085a23af11d9f3c40a0f17efa9f86e640d9b734bd22734643bd2402e  ./app/Views/billing/subscription_admin.php
 5ab352086633b6ffcc049d834a8bbdbbeada2e1d09f98ffc1685d010c4b75c3d  ./app/Views/billing_reminders/index.php
 cf7fe0aeaf61c983b13854ff58fee5326d877f3d50e115f92a640c5935690dc5  ./app/Views/calendar/index.php
-52df7975bfe37257b877003d9a5526aead37f18dceff89b79208afc5d0cef726  ./app/Views/calendar_availability/index.php
+5b0e69bd4009b3dfde5c2ffc6e7b120065dace2edfba91ee137e664e217ebe64  ./app/Views/calendar_availability/index.php
 af1e7c6cd2c9f93600534a79ea1dc962f932352bf1bde4fe8113f15933caa6b2  ./app/Views/campaigns/index.php
 8c3184f2058776bf2ec3d706242b61f633eb337f0e28e45925cb39d8abc19498  ./app/Views/communications/index.php
 aebc1eba66568a85460da59dc6d742ef86b8defd98e044b3e824fe0ff53e618a  ./app/Views/companies/_account_tabs.php
@@ -292,7 +292,7 @@ f8ce4252bc0601c70ab13d218ef50c976ba9563fa72581732150e98f80e2da55  ./bin/process-
 a7a04f26e9eaf021317b931775fba4962390e2cf833f5e8e365b6b1acc66f6b8  ./bin/tenant-health-check.php
 4e97ecf611d56dc21e6b896e785547908ba2226eac7be4021be55f4214aae555  ./bin/test-agent.php
 12d6f16903cd0daba026122017b3d05251247cfbc1897d61c01d99291dca02f2  ./bootstrap.php
-8bc0d8e14220f315577223f03508f16fbe2dea119662affdbe54e25910e5353a  ./build-full-release.sh
+74099dc800703da03e8aca7ebd2a2609d89aed185b824fe718ccb9b19f5f648f  ./build-full-release.sh
 f0fb883481b96a815d67be3ffff7daf101c0a7d43fe17c20ea260318042ca848  ./composer.json
 d961936c656d78eccec1bd5c866ae3938674435f62670b8765077a2b56d32f9e  ./database/073_hotfix_indice_fk_operational_alert_delivery.sql
 d026e58321490464667590b5049217e3eff1b7db527818cf19ebfd940333055e  ./database/HOTFIX-11.1-REPARAR-ASSINATURAS.sql
@@ -593,6 +593,7 @@ bb834940d0f61c46c5a0bc75539e54e58fe094e5b1984468a0bd8409e2b88a11  ./docs/ATUALIZ
 00305c76b30c4b23644c550303ae644e99f21f2977c716289ccd39287361eb74  ./docs/ATUALIZACAO-v36.42.4.md
 2d493f54b6b59238b5c307bcad8440a85549048ffca34939a0ea71c79a338142  ./docs/ATUALIZACAO-v36.42.5.md
 421b227dbd7105c93c09389182d7cce41ca3886637ea4079ce6d031dc573f4c8  ./docs/ATUALIZACAO-v36.43.0.md
+b265da8349de28f4ee33089f99ee8587b54619105881a141081dc99443fe52c5  ./docs/ATUALIZACAO-v36.43.1.md
 cc0ed1b48f4448f2256c8f0972a37cf24342ab7e5f5bbed6af6e39e53c5f1199  ./docs/ATUALIZACAO-v36.6.10.md
 868c8f2f58490d04357c95b2140d696d937530632228b736617ef378607ea7c7  ./docs/ATUALIZACAO-v36.6.11.md
 c5429636c9356d6548b356466f8244aeec21e6a4f63c6f30671951717e101361  ./docs/ATUALIZACAO-v36.6.12.md
@@ -765,7 +766,7 @@ aeee5bc8e058b1d03890b79daaf9f39eef29e7e448efdc8b6d05d5678a01f1ac  ./docs/n8n_tem
 752c18986f14e103d9eb9950a0aab494d88b10c541cd3a470a051d790b7bdc11  ./docs/validation/HOMOLOGACAO-PERSISTENTE-2026-09-01.md
 006d6da9b25d9788d3afbc7c1f275a6b9d6d12ffcb1181961f519c05bfdb79cf  ./docs/validation/calendar-source-v7.md
 22347f12bacc2a5de89719e419f28f2e0a26bc5ecd4e467f396e2dc236d3fb34  ./docs/validation/homologacao-persistente-2026-09-01.json
-5eb3dfb49a2601e9f1e339916f4bab0d6aeb76e24855f7fb0e99846798cf9265  ./manifest.json
+3c6169f73fe1a5817cc89756a49297459bdb8987e03138ff097dd3d9d5a64628  ./manifest.json
 c835b907d8eb7381a72224cfdc8b688ffbb9a7676f4f05f7bc84d18c4f61324e  ./public/.htaccess
 88e7114f896c6f2a50f54039e9147b887017687342aa7d7560c6d7531e24a39a  ./public/assets/css/app.css
 a379eaa195764145459de3cd9172ea3ad08668586cb97b0377181b0cbf70a5bc  ./public/assets/css/reports.css
@@ -900,11 +901,12 @@ f50634314398322fc567e50b792485f2f43c1e974f9de157da260a1100a42232  ./tests/Featur
 d864fbbf7051aeebd53d43e81676f9e841dc7a8f3b95e03c421e3305ea960481  ./tests/Feature/business-hours-compact-v36343-smoke.php
 7abe4029f1aabbcb69db9053320d94f67d3d3bb8f42c048b93e3905e17efd00f  ./tests/Feature/business-hours-global-authority-v36415-smoke.php
 4c48703d28058544510d9fa3221c8e3fbbf7e3eb73b8c69b8826b413269bee1d  ./tests/Feature/calendar-agenda-tabs-v36381-smoke.php
-c64e8e171193f9a61cd1be92e7967a9fae77568509bcc161e204ad373ef355fe  ./tests/Feature/calendar-ambiguity-capacity-v36420-smoke.php
+eace6c0cb9bea02077df9256c34eab7c99a03357ac04ab40a7713cb9abe833d5  ./tests/Feature/calendar-ambiguity-capacity-v36420-smoke.php
 79366aa16a1dab14d8ce13f3f0b700313b54e5d5c57d966a29e6d5cfac60e112  ./tests/Feature/calendar-assertive-v10-smoke.php
 1f02a248fd0bb5830f1be944e395943a9a3118b9fb23f2b36e28b3fde8bad8e8  ./tests/Feature/calendar-availability-inquiry-v363628-smoke.php
 b0893f624ee42e37549db9fbc1d9840535314a458e594fd41069cc2ee5907877  ./tests/Feature/calendar-before-ai-guard-v362718-smoke.php
-99f5da40574e99e74056db2785ea280d4389ba6903d1f61a09d79eaae15e8f24  ./tests/Feature/calendar-client-appointment-isolation-v36421-smoke.php
+6cb4e22ae38f569a4a116127c1f2079f5f34737782d3cf466cca2c2e67fb6e21  ./tests/Feature/calendar-capacity-live-availability-v36431-smoke.php
+06ff1bc769880eed1894dc3ed1815ff4050f9d2dcf49df99b99ff5e4845ef387  ./tests/Feature/calendar-client-appointment-isolation-v36421-smoke.php
 8bc71b115ee7448c34291786e7681d246d0c256906de2bcf5761a2a38670225f  ./tests/Feature/calendar-client-automation-v36410-smoke.php
 5dec2e6f73b426a5b7d4e4cf700462dfb83b30be8486b82ee8c6072c517740d9  ./tests/Feature/calendar-client-continuity-v36390-smoke.php
 08dfd7abf6ca4a3cff7835e603dc8eac05820670d1d763d19f9f4477d45a9545  ./tests/Feature/calendar-confirmed-context-meeting-v36414-smoke.php
@@ -930,7 +932,7 @@ bbb3b6d8408d9a375f4089fce22367d7bd75eb87985f8c35730ed2872823cea0  ./tests/Featur
 9a0f9c716889b114d358e7801f8c6d716abd80911cc0db32db411b2a550607cf  ./tests/Feature/calendar-published-lookup-v36391-smoke.php
 fb014fc2d0b2ad4079fa61b4a3ec17633647b44f0f275e5e882dfa2db21d5d2a  ./tests/Feature/calendar-published-owner-reset-v36392-smoke.php
 fab911c65603d475b0ba1d363ee69da144225c837e276ad338bfe7872c6876fc  ./tests/Feature/calendar-recovery-contact-identity-smoke.php
-bc08f9a817f14c65303f9955b4df0af243b41f64f7a7d02a5b223914d6192e12  ./tests/Feature/calendar-reminder-runtime-and-reschedule-v36423-smoke.php
+439df6db6c441c5d2fea98c2d199d973d80d10d9cc45a603d33601f0f3f0cf52  ./tests/Feature/calendar-reminder-runtime-and-reschedule-v36423-smoke.php
 befbe54af6c784e30028a888f937b152f7f5fa6a325839d343b64b6c15205434  ./tests/Feature/calendar-reschedule-release-v36417-smoke.php
 b1df68aa0629a62c787a24e2fb4bf2bc523c8314a0fe27b56a2819ec991e56f7  ./tests/Feature/calendar-single-navigation-v36382-smoke.php
 80e558895c2ffa941411ec52016f3cc9e8d899e872a018b86edaa508a072b4c6  ./tests/Feature/calendar-source-choice-v7-smoke.php
@@ -1010,8 +1012,8 @@ b7e86e7b22e2ec192a1ebc12c07e96a7c708dc7955719cc100d937a0cdc3b398  ./tests/Featur
 3e27406331795a3ad2406ca00936616ba7c51de48d1e7e3a24a124c00335fd69  ./tests/Feature/mobile-ui-v36367-smoke.php
 6b1902b4406bf93abb101ea67b11f517fef24fdd156d25ae22308e6d6588ea90  ./tests/Feature/multi-agent-round-robin-v36270-smoke.php
 b2f4c74eb0ccb1e7489775d42bc96fafd9b6dbc4a418114d6264434be5378385  ./tests/Feature/multi-agent-routing-ui-v36272-smoke.php
-18a75870ca51dc80d3cd449924712f5f16c8c2851125c9fa25017c56b1fbd8e7  ./tests/Feature/n8n-inactive-flow-isolation-v36424-smoke.php
-d3d1a11082b17ce1dfc04190e54bfebf3fc51f07401807c6d141217722e7b7d8  ./tests/Feature/native-financial-lifecycle-notifications-v36430-smoke.php
+38209195230f3478d55c31a947c3b6c1954d21326488b6ffb69f78712f7b9905  ./tests/Feature/n8n-inactive-flow-isolation-v36424-smoke.php
+65308d01dad38683a57c0032c0309baefd875494bd4b88dc442ac36eaa25c4cf  ./tests/Feature/native-financial-lifecycle-notifications-v36430-smoke.php
 609c5c7445ce44887c9d47d2d50255ea88f39c1f3e869d7fd4b271802098f67d  ./tests/Feature/new-conversation-drawer-smoke.php
 494f2468e21074abf06258c34ff444bfe846c8332c5037987c9a05a1bec71ae1  ./tests/Feature/notification-migration-mysql-v36231-smoke.php
 573dd44fe7f0815c8f1350105c29d4ac162f72f4f4003c37fedd8c2d17a7f8ae  ./tests/Feature/notification-orchestration-v36230-smoke.php
@@ -1032,7 +1034,7 @@ e2ad8de82b459e5f4645015349f0bd24d3e150e99bc13cc718106596bc95c931  ./tests/Featur
 98823fd7a4092ff30fae3cba06184a41b9d54d6cdb2e68937edc171a8db30fef  ./tests/Feature/operations-monitor-workflow-autoreactivate-v362712-smoke.php
 49ba5741b0b8705695b4958775aceb3702ade742ae9c3cae1b2f1237f112641c  ./tests/Feature/operations-monitor-workflow-identity-v362713-smoke.php
 7807e22f5b612af04b4858b4b43ad04dc013a2475eb45ee228ef692617cf4180  ./tests/Feature/operations-monitoring-dashboard-v36268-smoke.php
-49d76fff25ea7b979a72a6cb80a0148eddfa55aee5af9bdc7bd5b5651bfe782a  ./tests/Feature/operations-optional-n8n-billing-monitor-v36425-smoke.php
+7b2b2827472578f4d4633774ed80b51ba29117e1a02d0ffe80d5b7b633695e76  ./tests/Feature/operations-optional-n8n-billing-monitor-v36425-smoke.php
 831252025a9c910b5455731ea660fb24895ed7707aef758c469ec4abfa7b99a8  ./tests/Feature/payment-asaas-webhook-status-mapping.php
 037c1344fdd0f313514de0cc5a56c5bb743cd4eaa4314818575d69f0bd98c686  ./tests/Feature/payment-gateway-credentials-v36252-smoke.php
 f67f3066f767258cd70fe1fdd8d6757fb8c80edf2085356e4b80ab631cde5bcf  ./tests/Feature/payment-monitor-recovery-v36262-smoke.php

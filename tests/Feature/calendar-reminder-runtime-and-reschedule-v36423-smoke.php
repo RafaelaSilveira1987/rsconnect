@@ -95,9 +95,9 @@ $check(
 
 $check(
     str_contains($appVersion, 'RS Connect 36.42.3')
-    && ($manifest['package_version'] ?? '') === '36.43.0'
+    && ($manifest['package_version'] ?? '') === '36.43.1'
     && ($manifest['database']['required_migration'] ?? '') === '125_native_financial_lifecycle_notifications.sql',
-    'versão 36.43.0 preserva a 36.42.3 e requer a migration 125 mantendo a 124 no histórico'
+    'versão 36.43.1 preserva a 36.42.3 e requer a migration 125 mantendo a 124 no histórico'
 );
 
 if ($failures !== []) {

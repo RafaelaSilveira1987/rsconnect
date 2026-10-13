@@ -114,6 +114,86 @@ final class InternalCalendarSlotService
         }
     }
 
+    /**
+     * Retorna a ocupação atual dos horários publicados informados.
+     *
+     * A leitura usa as alocações como fonte de verdade em vez do campo status do
+     * horário. Isso é importante no modo capacidade: um slot 1/4 ou 2/4 continua
+     * ofertável enquanto houver vaga, mesmo se um estado legado estiver desatualizado.
+     *
+     * @param list<int> $slotIds
+     * @return array<int,array<string,int>> mapa por slot_id
+     */
+    public function capacitySummariesForSlots(int $tenantId, array $slotIds): array
+    {
+        $slotIds = array_values(array_unique(array_filter(array_map('intval', $slotIds), static fn (int $id): bool => $id > 0)));
+        if ($tenantId < 1 || $slotIds === [] || !$this->tableAvailable()) {
+            return [];
+        }
+
+        $this->releaseExpiredHolds($tenantId);
+        $this->releaseInactiveBookedSlots($tenantId);
+
+        $placeholders = implode(',', array_fill(0, count($slotIds), '?'));
+        if ($this->allocationTableAvailable()) {
+            $sql = 'SELECT s.id AS slot_id,
+                           COALESCE(s.capacity_total, 1) AS capacity_total,
+                           COALESCE(summary.held_count, 0) AS held_count,
+                           COALESCE(summary.booked_count, 0) AS booked_count,
+                           COALESCE(summary.occupied_count, 0) AS occupied_count,
+                           GREATEST(COALESCE(s.capacity_total, 1) - COALESCE(summary.occupied_count, 0), 0) AS remaining_capacity
+                    FROM calendar_internal_slots s
+                    LEFT JOIN (
+                        SELECT tenant_id, slot_id,
+                               SUM(CASE WHEN state = "held" THEN 1 ELSE 0 END) AS held_count,
+                               SUM(CASE WHEN state = "booked" THEN 1 ELSE 0 END) AS booked_count,
+                               COUNT(*) AS occupied_count
+                        FROM calendar_internal_slot_allocations
+                        WHERE tenant_id = ?
+                          AND state IN ("held","booked")
+                          AND (state <> "held" OR expires_at IS NULL OR expires_at >= NOW())
+                        GROUP BY tenant_id, slot_id
+                    ) summary ON summary.tenant_id = s.tenant_id AND summary.slot_id = s.id
+                    WHERE s.tenant_id = ?
+                      AND s.id IN (' . $placeholders . ')';
+            $params = array_merge([$tenantId, $tenantId], $slotIds);
+        } else {
+            $sql = 'SELECT s.id AS slot_id,
+                           COALESCE(s.capacity_total, 1) AS capacity_total,
+                           0 AS held_count,
+                           CASE WHEN s.status = "booked" THEN 1 ELSE 0 END AS booked_count,
+                           CASE WHEN s.status IN ("held","booked") THEN 1 ELSE 0 END AS occupied_count,
+                           CASE WHEN s.status = "available" THEN 1 ELSE 0 END AS remaining_capacity
+                    FROM calendar_internal_slots s
+                    WHERE s.tenant_id = ?
+                      AND s.id IN (' . $placeholders . ')';
+            $params = array_merge([$tenantId], $slotIds);
+        }
+
+        try {
+            $statement = Database::connection()->prepare($sql);
+            $statement->execute($params);
+            $map = [];
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+                $slotId = (int) ($row['slot_id'] ?? 0);
+                if ($slotId < 1) {
+                    continue;
+                }
+                $map[$slotId] = [
+                    'slot_id' => $slotId,
+                    'capacity_total' => max(1, (int) ($row['capacity_total'] ?? 1)),
+                    'held_count' => max(0, (int) ($row['held_count'] ?? 0)),
+                    'booked_count' => max(0, (int) ($row['booked_count'] ?? 0)),
+                    'occupied_count' => max(0, (int) ($row['occupied_count'] ?? 0)),
+                    'remaining_capacity' => max(0, (int) ($row['remaining_capacity'] ?? 0)),
+                ];
+            }
+            return $map;
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
     /** @return list<int> */
     public function activeAppointmentIdsForSlot(int $tenantId, int $slotId): array
     {
@@ -391,14 +471,58 @@ final class InternalCalendarSlotService
         // left the published slot in booked state after the appointment became inactive.
         $this->releaseInactiveBookedSlots($tenantId);
         $modality = $this->normalizeModality($requestedModality);
-        $sql = 'SELECT s.*, u.name AS owner_name
-                FROM calendar_internal_slots s
-                LEFT JOIN users u ON u.id = s.owner_user_id
-                WHERE s.tenant_id = :tenant_id
-                  AND s.status = "available"
-                  AND s.starts_at >= :start_at
-                  AND s.ends_at <= :end_at';
-        $params = ['tenant_id' => $tenantId, 'start_at' => $start, 'end_at' => $end];
+        $withAllocations = $this->allocationTableAvailable();
+
+        if ($withAllocations) {
+            // 36.43.1: capacidade é a fonte de verdade. Um horário 1/4, 2/4 ou 3/4
+            // continua disponível para novas buscas. Não dependemos de s.status =
+            // "available", porque bases migradas ou estados legados podem manter o
+            // status visual atrasado mesmo quando ainda existem vagas.
+            $sql = 'SELECT s.*, u.name AS owner_name,
+                           COALESCE(al.held_count, 0) AS held_count,
+                           COALESCE(al.booked_count, 0) AS booked_count,
+                           COALESCE(al.occupied_count, 0) AS occupied_count,
+                           GREATEST(COALESCE(s.capacity_total, 1) - COALESCE(al.occupied_count, 0), 0) AS remaining_capacity
+                    FROM calendar_internal_slots s
+                    LEFT JOIN users u ON u.id = s.owner_user_id
+                    LEFT JOIN (
+                        SELECT slot_id,
+                               SUM(CASE WHEN state = "held" THEN 1 ELSE 0 END) AS held_count,
+                               SUM(CASE WHEN state = "booked" THEN 1 ELSE 0 END) AS booked_count,
+                               COUNT(*) AS occupied_count
+                        FROM calendar_internal_slot_allocations
+                        WHERE tenant_id = :allocation_tenant_id
+                          AND state IN ("held","booked")
+                          AND (state <> "held" OR expires_at IS NULL OR expires_at >= NOW())
+                        GROUP BY slot_id
+                    ) al ON al.slot_id = s.id
+                    WHERE s.tenant_id = :tenant_id
+                      AND s.status NOT IN ("cancelled","blocked","expired")
+                      AND COALESCE(al.occupied_count, 0) < GREATEST(COALESCE(s.capacity_total, 1), 1)
+                      AND s.starts_at >= :start_at
+                      AND s.ends_at <= :end_at';
+            $params = [
+                'allocation_tenant_id' => $tenantId,
+                'tenant_id' => $tenantId,
+                'start_at' => $start,
+                'end_at' => $end,
+            ];
+        } else {
+            // Compatibilidade com instalações anteriores à migration de capacidade.
+            $sql = 'SELECT s.*, u.name AS owner_name,
+                           0 AS held_count,
+                           0 AS booked_count,
+                           0 AS occupied_count,
+                           1 AS remaining_capacity
+                    FROM calendar_internal_slots s
+                    LEFT JOIN users u ON u.id = s.owner_user_id
+                    WHERE s.tenant_id = :tenant_id
+                      AND s.status = "available"
+                      AND s.starts_at >= :start_at
+                      AND s.ends_at <= :end_at';
+            $params = ['tenant_id' => $tenantId, 'start_at' => $start, 'end_at' => $end];
+        }
+
         if ($ownerUserId > 0) {
             $sql .= ' AND (s.owner_user_id = :owner_user_id OR s.owner_user_id IS NULL)';
             $params['owner_user_id'] = $ownerUserId;

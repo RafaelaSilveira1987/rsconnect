@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.43.0",
-  "release_name": "Notificações financeiras e de vigência nativas",
+  "package_version": "36.43.1",
+  "release_name": "Capacidade da agenda ao vivo",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,9 +19,9 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.42.5",
-      "release_name": "Monitoramento coerente sem n8n",
-      "required_migration": "124_calendar_slot_capacity_mode.sql"
+      "package_version": "36.43.0",
+      "release_name": "Notificações financeiras e de vigência nativas",
+      "required_migration": "125_native_financial_lifecycle_notifications.sql"
     },
     "historical_releases": [
       {

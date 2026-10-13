@@ -304,11 +304,15 @@ $requestInsight = static function (array $request): string {
                             $eventState = (string) ($slot['event_state'] ?? 'available');
                             $isSelected = !empty($slot['selected_at']);
                             $isMarkedSlot = ($slot['source'] ?? '') === 'google_marked_slots' || !empty($slot['google_event_id']);
+                            $slotCapacityTotal = max(1, (int) ($slot['capacity_total'] ?? 1));
+                            $slotOccupiedCount = max(0, min($slotCapacityTotal, (int) ($slot['occupied_count'] ?? 0)));
+                            $slotRemainingCapacity = max(0, (int) ($slot['remaining_capacity'] ?? ($slotCapacityTotal - $slotOccupiedCount)));
                         ?>
                         <div class="calendar-slot-row <?= $isSelected ? 'is-selected' : '' ?>">
                             <div>
                                 <strong><?= View::e($date($slot['starts_at'])) ?> até <?= View::e($date($slot['ends_at'], 'H:i')) ?></strong>
                                 <?php if (!empty($slot['suggestion_position'])): ?><span class="badge badge-info">Opção <?= (int) $slot['suggestion_position'] ?></span><?php endif; ?>
+                                <?php if ($slotCapacityTotal > 1): ?><span class="badge <?= $slotRemainingCapacity > 0 ? 'badge-success' : 'badge-warning' ?>"><?= (int) $slotOccupiedCount ?>/<?= (int) $slotCapacityTotal ?> ocupadas · <?= (int) $slotRemainingCapacity ?> livre(s)</span><?php endif; ?>
                                 <small><?= View::e($sourceLabels[$slot['source'] ?? ''] ?? ($slot['source'] ?? 'n8n')) ?><?= ($slot['modality'] ?? 'indefinida') !== 'indefinida' ? ' · ' . View::e(ucfirst((string) $slot['modality'])) : '' ?></small>
                                 <?php if ($isMarkedSlot): ?><small>Evento: <?= View::e($eventStateLabels[$eventState] ?? $eventState) ?><?= !empty($slot['event_summary']) ? ' · ' . View::e($slot['event_summary']) : '' ?></small><?php endif; ?>
                             </div>
@@ -383,15 +387,23 @@ $requestInsight = static function (array $request): string {
                         : (($requiresAvailabilityBeforeApproval && !$isReady)
                             ? 'Escolha e valide um horário antes de confirmar.'
                             : 'Este pré-agendamento ainda não pode ser confirmado.'));
+                $currentAppointmentSlots = $slotsByAppointment[(int) ($appointment['id'] ?? 0)] ?? [];
+                $currentSlotCount = count($currentAppointmentSlots);
                 $statusText = $hasChosenSlot
                     ? 'Horário escolhido'
-                    : ($statusLabels[$availabilityStatus] ?? ($availabilityStatus ?: 'Disponibilidade ainda não consultada'));
+                    : ($currentSlotCount > 0
+                        ? ($currentSlotCount . ' horário(s) disponível(is)')
+                        : ($statusLabels[$availabilityStatus] ?? ($availabilityStatus ?: 'Disponibilidade ainda não consultada')));
+                $appointmentCapacityTotal = max(1, (int) ($appointment['slot_capacity_total'] ?? 1));
+                $appointmentOccupiedCount = max(0, min($appointmentCapacityTotal, (int) ($appointment['slot_occupied_count'] ?? 0)));
+                $appointmentRemainingCapacity = max(0, (int) ($appointment['slot_remaining_capacity'] ?? ($appointmentCapacityTotal - $appointmentOccupiedCount)));
             ?>
             <article class="calendar-appointment-card <?= $isReady ? 'is-ready' : '' ?>">
                 <div class="calendar-appointment-main">
                     <div class="calendar-title-line">
                         <strong><?= View::e($appointment['title'] ?? 'Pré-agendamento') ?></strong>
                         <span class="badge <?= $isReady ? 'badge-success' : 'badge-warning' ?>"><?= View::e($statusText) ?></span>
+                        <?php if ($appointmentCapacityTotal > 1): ?><span class="badge badge-success"><?= (int) $appointmentOccupiedCount ?>/<?= (int) $appointmentCapacityTotal ?> ocupadas · <?= (int) $appointmentRemainingCapacity ?> livre(s)</span><?php endif; ?>
                         <?php if (($appointment['appointment_modality'] ?? 'indefinida') !== 'indefinida'): ?><span class="badge badge-info"><?= View::e(ucfirst((string) $appointment['appointment_modality'])) ?></span><?php endif; ?>
                     </div>
                     <p><?= View::e(($appointment['contact_name'] ?? '') ?: ($appointment['phone'] ?? 'Sem contato identificado')) ?></p>

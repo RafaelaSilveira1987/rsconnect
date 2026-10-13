@@ -1,3 +1,17 @@
+## 36.43.1 — Capacidade da agenda ao vivo
+
+### Corrigido
+- horários publicados com capacidade parcial (`1/4`, `2/4`, `3/4`) continuam aparecendo em **Buscar disponibilidade** até que a capacidade real seja atingida;
+- a busca deixa de depender exclusivamente do `status` legado do slot e passa a considerar as alocações ativas como fonte de verdade para a capacidade restante;
+- as opções da última busca exibem ocupação e vagas livres em tempo real, por exemplo `1/4 ocupadas · 3 livres`;
+- pré-agendamentos que já seguram uma vaga mostram a ocupação atual da turma;
+- o painel não exibe mais “Nenhum horário encontrado” quando a consulta atual possui opções persistidas para aquele pré-agendamento;
+- a ocupação exibida é recalculada ao abrir o painel, evitando números congelados do momento da busca.
+
+### Compatibilidade
+- nenhuma migration nova;
+- permanece obrigatória `125_native_financial_lifecycle_notifications.sql`; a estrutura de capacidade continua sendo a migration histórica `124_calendar_slot_capacity_mode.sql`.
+
 ## 36.43.0 — Notificações financeiras e de vigência nativas
 
 ### Adicionado
