@@ -328,6 +328,11 @@ final class OnboardingGuideService
             'collect_message' => (string) ($currentPreSchedule['collect_message'] ?? 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.'),
         ];
 
+        // MySQL faz COMMIT implicito em CREATE TABLE / ALTER TABLE, inclusive com
+        // IF NOT EXISTS. Preparar o schema antes da transacao impede um salvamento
+        // parcial seguido de "There is no active transaction" no commit().
+        $this->prepareBusinessOperationStorage();
+
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) {
             $this->pdo->beginTransaction();
@@ -358,6 +363,11 @@ final class OnboardingGuideService
             ]);
 
             if ($ownsTransaction) {
+                // Falhar de forma explicita caso um colaborador futuro execute DDL
+                // indevidamente durante a operacao transacional.
+                if (!$this->pdo->inTransaction()) {
+                    throw new \RuntimeException('A transação do atendimento foi encerrada inesperadamente. Revise as migrations e os registros antes de tentar novamente.');
+                }
                 $this->pdo->commit();
             }
         } catch (Throwable $exception) {
@@ -1503,8 +1513,12 @@ final class OnboardingGuideService
 
     private function ensureTables(): void
     {
-        $this->pdo->exec(
-            'CREATE TABLE IF NOT EXISTS tenant_onboarding_progress (
+        // DDL dentro de uma transacao MySQL faz COMMIT implicito mesmo quando
+        // a tabela ja existe. Nao executar CREATE TABLE desnecessariamente.
+        if (!$this->tableExists('tenant_onboarding_progress')) {
+            $this->assertSchemaChangeAllowed('tenant_onboarding_progress');
+            $this->pdo->exec(
+                'CREATE TABLE IF NOT EXISTS tenant_onboarding_progress (
                 id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                 tenant_id BIGINT UNSIGNED NOT NULL,
                 step_key VARCHAR(80) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -1518,9 +1532,12 @@ final class OnboardingGuideService
                 UNIQUE KEY uq_tenant_onboarding_step (tenant_id, step_key),
                 KEY idx_tenant_onboarding_status (tenant_id, status)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
-        );
-        $this->pdo->exec(
-            'CREATE TABLE IF NOT EXISTS tenant_onboarding_events (
+            );
+        }
+        if (!$this->tableExists('tenant_onboarding_events')) {
+            $this->assertSchemaChangeAllowed('tenant_onboarding_events');
+            $this->pdo->exec(
+                'CREATE TABLE IF NOT EXISTS tenant_onboarding_events (
                 id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                 tenant_id BIGINT UNSIGNED NOT NULL,
                 user_id BIGINT UNSIGNED NULL,
@@ -1532,12 +1549,14 @@ final class OnboardingGuideService
                 KEY idx_tenant_onboarding_events (tenant_id, created_at),
                 KEY idx_tenant_onboarding_event (event)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
-        );
+            );
+        }
     }
 
     private function ensureOnboardingSettingsTable(): void
     {
         if (!$this->tableExists('tenant_onboarding_settings')) {
+            $this->assertSchemaChangeAllowed('tenant_onboarding_settings');
             $this->pdo->exec(
                 'CREATE TABLE IF NOT EXISTS tenant_onboarding_settings (
                     tenant_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
@@ -1564,6 +1583,7 @@ final class OnboardingGuideService
     private function ensurePreScheduleTable(): void
     {
         if (!$this->tableExists('tenant_pre_schedule_settings')) {
+            $this->assertSchemaChangeAllowed('tenant_pre_schedule_settings');
             $this->pdo->exec(
                 'CREATE TABLE IF NOT EXISTS tenant_pre_schedule_settings (
                     tenant_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
@@ -1599,7 +1619,36 @@ final class OnboardingGuideService
     private function addColumnIfMissing(string $table, string $column, string $definition): void
     {
         if ($this->tableExists($table) && !$this->columnExists($table, $column)) {
+            $this->assertSchemaChangeAllowed($table . '.' . $column);
             $this->pdo->exec('ALTER TABLE ' . $table . ' ADD COLUMN ' . $column . ' ' . $definition);
+        }
+    }
+
+    /**
+     * Preflight do salvamento express: DDL so pode ocorrer antes de BEGIN.
+     * O checklist de implantacao e complementar e nao deve impedir o atendimento.
+     */
+    private function prepareBusinessOperationStorage(): void
+    {
+        $this->ensureTables();
+        $this->ensureOnboardingSettingsTable();
+        $this->ensurePreScheduleTable();
+
+        try {
+            (new ImplementationChecklistService())->prepareStorageForWrite();
+        } catch (Throwable $exception) {
+            // A etapa de implantacao e opcional, mas jamais pode executar DDL
+            // dentro da transacao principal; syncImplementation ja trata falhas.
+            error_log('[onboarding] Nao foi possivel preparar checklist: ' . $exception->getMessage());
+        }
+    }
+
+    private function assertSchemaChangeAllowed(string $object): void
+    {
+        if ($this->pdo->inTransaction()) {
+            throw new \RuntimeException(
+                'Estrutura de banco pendente (' . $object . '). Aplique as migrations antes de salvar a configuração do atendimento.'
+            );
         }
     }
 }

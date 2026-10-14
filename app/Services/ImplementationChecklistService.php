@@ -612,12 +612,23 @@ final class ImplementationChecklistService
         return 'tenant_implementation_checklist';
     }
 
+    /** Prepara a estrutura opcional do checklist fora de transacoes de negocio. */
+    public function prepareStorageForWrite(): void
+    {
+        $this->checklistTableForWrite();
+    }
+
     private function ensureManualChecklistTable(): void
     {
         if ($this->tableExists('tenant_implementation_checklist')
             && $this->columnExists('tenant_implementation_checklist', 'item_key')
             && $this->columnExists('tenant_implementation_checklist', 'manual_status')) {
             return;
+        }
+
+        // CREATE TABLE (mesmo IF NOT EXISTS) causa COMMIT implicito no MySQL.
+        if ($this->pdo->inTransaction()) {
+            throw new \RuntimeException('Checklist de implantação sem migration aplicada: finalize a estrutura antes da transação.');
         }
 
         // Sem FKs para evitar erro de collation/tipo em bases que vieram de versões antigas.

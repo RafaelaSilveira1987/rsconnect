@@ -477,12 +477,20 @@ final class OnboardingController
         $tenantId = (int) Auth::tenantId();
         try {
             (new OnboardingGuideService())->saveBusinessOperation($tenantId, $_POST, Auth::id());
-            Audit::log('onboarding.business_operation_saved', [], $tenantId);
-            Flash::set('success', 'Configuração do atendimento salva e validada. O RS Connect organizou perguntas, agenda e limites automaticamente.');
         } catch (Throwable $exception) {
             Flash::set('error', 'Não foi possível salvar a configuração do atendimento: ' . $exception->getMessage());
             $this->redirect('/onboarding?step=attendance_rules#attendance_rules');
         }
+
+        // O commit ja aconteceu. Uma indisponibilidade do log de auditoria
+        // complementar nao pode dizer ao usuario que a configuracao nao foi salva.
+        // O historico do onboarding e gravado dentro da transacao principal.
+        try {
+            Audit::log('onboarding.business_operation_saved', [], $tenantId);
+        } catch (Throwable $exception) {
+            error_log('[onboarding] Auditoria complementar indisponível: ' . $exception->getMessage());
+        }
+        Flash::set('success', 'Configuração do atendimento salva e validada. O RS Connect organizou perguntas, agenda e limites automaticamente.');
         $this->redirect('/onboarding');
     }
 
