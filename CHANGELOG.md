@@ -1,3 +1,16 @@
+## 36.44.2 — Ativação Assistida enxuta
+
+- Redesenha o onboarding para quatro blocos de negócio: **Sua empresa**, **Como atender**, **Conectar** e **Testar e ativar**.
+- Mantém as oito validações internas e a auditoria existentes, mas mostra apenas uma tarefa por vez para reduzir carga visual e navegação desnecessária.
+- Move opções técnicas e pouco frequentes para **Ajustes avançados/opcionais**, preservando os mesmos serviços e regras no backend.
+- Simplifica o cadastro inicial: segmento, nome e contato ficam no fluxo principal; blueprint, dados oficiais e site ficam secundários. O blueprint continua selecionado automaticamente por segmento.
+- Simplifica o atendimento: dias e horário ficam como decisão principal; fuso, SLA, mensagens e cooldown ficam recolhidos com valores já preenchidos.
+- Leva a capacidade simultânea para o onboarding da Agenda interna, permitindo configurar **uma pessoa por horário** ou **capacidade por horário** sem abrir outra tela.
+- Troca os três checkboxes de confirmação da agenda por uma decisão simples: **a equipe confirma** ou **confirmar automaticamente**.
+- Simplifica Limites e Condutas com decisões objetivas e respostas detalhadas sob demanda.
+- Renomeia a navegação do cliente para **Ativação Assistida** e recolhe o histórico operacional.
+- Sem migration nova. Permanece obrigatória `125_native_financial_lifecycle_notifications.sql`.
+
 ## 36.44.1 — Cadastro orientado por segmento
 
 ### Alterado

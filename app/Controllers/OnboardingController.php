@@ -57,7 +57,7 @@ final class OnboardingController
         $guide = (new OnboardingGuideService())->dashboard($tenantId, Auth::id());
 
         View::render('onboarding.index', [
-            'title' => 'Primeiros passos',
+            'title' => 'Ativação Assistida',
             'company' => $company,
             'instances' => $instances,
             'agents' => $agents,

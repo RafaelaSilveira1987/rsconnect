@@ -188,7 +188,7 @@ $svgIcon = static function (string $name): string {
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
     <!-- Compatibilidade histórica v36.30.5: app.css?v=36.30.5 app.js?v=36.30.5 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.44.1')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.44.2')) ?>">
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
             width: 54px !important;
@@ -230,7 +230,7 @@ $svgIcon = static function (string $name): string {
             <a class="nav-link<?= $isActive('/') ?>" href="<?= View::e(Router::url('/')) ?>"><?= $svgIcon('dashboard') ?><span>Visão geral</span></a>
 
             <?php if (!Auth::isSuperAdmin() && Auth::can('onboarding.manage')): ?>
-                <a class="nav-link<?= $isActive('/onboarding') ?>" href="<?= View::e(Router::url('/onboarding')) ?>"><?= $svgIcon('check') ?><span>Primeiros passos</span></a>
+                <a class="nav-link<?= $isActive('/onboarding') ?>" href="<?= View::e(Router::url('/onboarding')) ?>"><?= $svgIcon('check') ?><span>Ativação Assistida</span></a>
             <?php endif; ?>
 
             <?php if ((Auth::can('conversations.view') && $moduleVisible('conversations')) || (Auth::can('queue.view') && $moduleVisible('queue')) || (Auth::can('contacts.view') && $moduleVisible('contacts')) || (Auth::can('crm.view') && $moduleVisible('crm')) || (Auth::can('tasks.view') && $moduleVisible('tasks')) || (Auth::can('calendar.view') && $moduleVisible('calendar'))): ?>

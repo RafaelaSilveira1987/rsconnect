@@ -1,5 +1,15 @@
-# RS Connect 36.44.1
-> **36.44.1** move a escolha do segmento para a própria empresa e torna essa decisão obrigatória no primeiro passo do onboarding. O segmento seleciona/aplica o blueprint inicial que prepara perguntas, permissões, políticas e fluxo do assistente. O cadastro feito pelo RS Admin não define mais segmento/modelo. Não há migration nova; permanece necessária `125_native_financial_lifecycle_notifications.sql`.
+# RS Connect 36.44.2
+> **36.44.2** simplifica a tela de onboarding em uma Ativação Assistida com quatro blocos de negócio e uma tarefa por vez. Campos técnicos continuam disponíveis, mas ficam recolhidos em “Ajustes avançados”. O segmento continua obrigatório e aplica o blueprint inicial; agenda passa a perguntar diretamente capacidade por horário e quem confirma o agendamento. Não há migration nova; permanece necessária `125_native_financial_lifecycle_notifications.sql`.
+
+## Homologação rápida 36.44.2
+
+- A tela lateral deve mostrar **Ativação Assistida** e o topo deve exibir apenas quatro blocos: Sua empresa, Como atender, Conectar e Testar e ativar.
+- Somente a tarefa atual deve aparecer aberta; etapas já concluídas ficam no resumo “O que já está pronto” e podem ser reabertas por **Editar**.
+- No cadastro, o usuário escolhe segmento, nome e contato; o modelo recomendado fica em **Ajustes opcionais** e é escolhido automaticamente pelo segmento.
+- Em Atendimento, dias/horários aparecem primeiro; SLA, fuso, mensagens e agrupamento ficam recolhidos.
+- Na Agenda interna, validar os modos **uma pessoa por horário** e **mais de uma pessoa no mesmo horário**, incluindo capacidade padrão.
+- Em Limites, desconto, reembolso, exceção e faixa etária devem aparecer como decisões simples, com textos detalhados apenas ao abrir “Personalizar resposta”.
+- O Histórico da ativação deve iniciar recolhido.
 
 ## Homologação rápida 36.44.1
 1. Cadastre uma nova empresa pelo RS Admin e confirme que não existe campo de segmento/modelo nesse formulário.

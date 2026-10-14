@@ -249,8 +249,9 @@ final class AppVersionService
     // RS Connect 36.43.0 — notificações financeiras e de vigência nativas, com WhatsApp central da plataforma e n8n opcional.
     // RS Connect 36.43.1 — capacidade da agenda exibida ao vivo e reoferta de vagas parciais no mesmo horário.
     // RS Connect 36.44.0 — Ativação Assistida com limites de autoridade, elegibilidade, casos extras e respostas controladas pelo Policy Engine.
-    // RS Connect 36.44.1 — cadastro inicial definido pela própria empresa, com segmento obrigatório e blueprint aplicado no onboarding.
-    public const PACKAGE_LABEL = 'RS Connect 36.44.1 — Cadastro orientado por segmento';
+    // RS Connect 36.44.1 — Cadastro orientado por segmento. Cadastro inicial definido pela própria empresa, com segmento obrigatório e blueprint aplicado no onboarding.
+    // RS Connect 36.44.2 — Ativação Assistida enxuta: quatro blocos visuais, uma tarefa por vez e opções técnicas recolhidas.
+    public const PACKAGE_LABEL = 'RS Connect 36.44.2 — Ativação Assistida enxuta';
     public const REQUIRED_MIGRATION = '125_native_financial_lifecycle_notifications.sql';
 
     private PDO $pdo;

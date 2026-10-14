@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.44.1",
-  "release_name": "Cadastro orientado por segmento",
+  "package_version": "36.44.2",
+  "release_name": "Ativação Assistida enxuta",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,8 +19,8 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.44.0",
-      "release_name": "Ativação Assistida: Limites e Condutas",
+      "package_version": "36.44.1",
+      "release_name": "Cadastro orientado por segmento",
       "required_migration": "125_native_financial_lifecycle_notifications.sql"
     },
     "historical_releases": [
