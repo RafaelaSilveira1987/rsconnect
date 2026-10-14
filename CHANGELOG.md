@@ -951,3 +951,10 @@ Consulte `TESTE_DA_VERSAO.md`. A Fase B deve ser aprovada somente depois de vali
 
 ### Atenção na atualização
 A migration coloca empresas existentes em `onboarding` por padrão. Isso é intencional: o primeiro Go-Live após esta atualização deve ser confirmado conscientemente no Superadmin. O histórico anterior não é classificado retroativamente como produção oficial.
+
+## 2026-10-14 — Hotfix Readiness: credenciais por agente, empresa e ambiente
+
+- Validador de ativação passa a consultar a mesma precedência de credenciais do runtime, incluindo chaves do ambiente por provedor.
+- Bloqueia chave criptografada ilegível (APP_KEY incorreta) e provedor sem implementação; não relaxa os demais requisitos críticos.
+- Avisos de ativação e checklist utilizam o termo voltado ao cliente “Serviço de respostas”.
+- Incluídos testes de fallback, isolamento entre provedores e não vazamento de chaves.

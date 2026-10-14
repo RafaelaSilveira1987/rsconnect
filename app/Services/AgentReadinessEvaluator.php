@@ -70,9 +70,15 @@ final class AgentReadinessEvaluator
         $add('channel_integration', 'Conexão com WhatsApp', $connected ? 'ok' : 'error', 'critical',
             $channelMessage, 18);
 
-        $hasCredential = !empty($snapshot['credentials']);
-        $add('channel_integration', 'Credencial de IA', $hasCredential ? 'ok' : 'error', 'critical',
-            $hasCredential ? 'Credencial de provedor de IA ativa encontrada.' : 'Nenhuma credencial de IA ativa para o agente ou sua empresa.', 14);
+        $credential = $snapshot['credentials'] ?? null;
+        // Compatibilidade com relatórios existentes que armazenavam apenas um ID.
+        $hasCredential = is_array($credential) && array_key_exists('available', $credential)
+            ? ($credential['available'] === true) : !empty($credential);
+        $credentialMessage = is_array($credential) && is_string($credential['message'] ?? null)
+            ? $credential['message']
+            : ($hasCredential ? 'Acesso ao serviço de respostas configurado.' : 'Acesso ao serviço de respostas não configurado.');
+        $add('channel_integration', 'Serviço de respostas', $hasCredential ? 'ok' : 'error', 'critical',
+            $credentialMessage, 14);
 
         $hoursOk = $this->validBusinessHours($agent);
         $add('routing_and_schedule', 'Horário e fuso operacional', $hoursOk ? 'ok' : 'error', 'critical',

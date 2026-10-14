@@ -643,7 +643,7 @@ final class AgentController
                     $critical = array_values(array_filter($readiness['checklist'],
                         static fn (array $check): bool => $check['severity'] === 'critical' && $check['status'] === 'error'));
                     $labels = array_column(array_slice($critical, 0, 3), 'item');
-                    throw new \RuntimeException('Ativação impedida pelo Validador de Prontidão: ' . implode(', ', $labels) . '.');
+                    throw new \RuntimeException('Não foi possível ativar o atendimento. Verifique: ' . implode(', ', $labels) . '.');
                 }
             }
             $pdo->commit();

@@ -83,13 +83,18 @@ final class AgentReadinessService
         $instanceQuery->execute(['tid'=>$tenantId]);
         $instances = $instanceQuery->fetchAll(PDO::FETCH_ASSOC);
 
+        // Mesma prioridade de AgentRoutingService: chave específica do agente,
+        // depois chave compartilhada do tenant; na ausência, fallback por provedor
+        // às variáveis do servidor usadas por AiModelService.
         $credentialQuery = $pdo->prepare(
-            'SELECT id FROM ai_provider_credentials
+            'SELECT agent_id,provider,api_key_encrypted
+             FROM ai_provider_credentials
              WHERE tenant_id=:tid AND status="active" AND (agent_id=:aid OR agent_id IS NULL)
              ORDER BY (agent_id IS NOT NULL) DESC,is_default DESC,id DESC LIMIT 1'
         );
         $credentialQuery->execute(['tid'=>$tenantId,'aid'=>$agentId]);
-        $credentials = $credentialQuery->fetchColumn() ?: null;
+        $selectedCredential = $credentialQuery->fetch(PDO::FETCH_ASSOC) ?: null;
+        $credentials = (new AgentCredentialAvailabilityService())->evaluate($agent, $selectedCredential);
 
         $fieldQuery = $pdo->prepare(
             'SELECT field_key,label,prompt_text,active,required_before_schedule,required_for_completion,position
