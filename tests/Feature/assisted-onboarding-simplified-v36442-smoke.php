@@ -60,10 +60,10 @@ $checks['histórico e opções técnicas não disputam atenção com a tarefa at
 $checks['navegação e título usam Ativação Assistida'] =
     str_contains($controller, "'title' => 'Ativação Assistida'")
     && str_contains($layout, '<span>Ativação Assistida</span>')
-    && str_contains($layout, '/assets/css/app.css?v=36.44.2');
+    && str_contains($layout, '/assets/css/app.css?v=36.44.3');
 
 $checks['release 36.44.2 não exige migration nova'] =
-    ($manifest['package_version'] ?? '') === '36.44.2'
+    ($manifest['package_version'] ?? '') === '36.44.3'
     && ($manifest['database']['required_migration'] ?? '') === '125_native_financial_lifecycle_notifications.sql'
     && str_contains($version, 'RS Connect 36.44.2 — Ativação Assistida enxuta')
     && str_contains($version, "REQUIRED_MIGRATION = '125_native_financial_lifecycle_notifications.sql'");

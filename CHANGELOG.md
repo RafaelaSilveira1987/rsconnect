@@ -1,3 +1,12 @@
+## 36.44.3 — Ativação Assistida refinada
+
+- Corrige o espaçamento da primeira etapa: o card de **Configuração recomendada** não estica mais a altura do bloco e **Ajustes opcionais** mantém o mesmo ritmo visual do restante do onboarding.
+- SLA passa a ser **opt-in** no onboarding, com controle claro **Medir SLA — Ativado/Desativado**; empresas novas não começam a medir tempo de resposta sem decisão explícita.
+- A configuração do assistente deixa de enviar o usuário para a tela avançada de Assistentes. Nome, tom e WhatsApp são definidos diretamente na Ativação Assistida.
+- O backend do onboarding cria/atualiza o assistente preservando modelo técnico existente, aplica o tom em `prompt_builder_json`, mantém o vínculo do canal e usa o blueprint/políticas estruturadas como fonte de verdade.
+- Um assistente novo é preparado com resposta automática desligada até a etapa de validação/ativação; nenhuma regra comercial ou de agenda é codificada no prompt.
+- Sem migration nova. Permanece obrigatória `125_native_financial_lifecycle_notifications.sql`.
+
 ## 36.44.2 — Ativação Assistida enxuta
 
 - Redesenha o onboarding para quatro blocos de negócio: **Sua empresa**, **Como atender**, **Conectar** e **Testar e ativar**.

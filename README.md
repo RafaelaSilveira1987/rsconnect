@@ -1,3 +1,17 @@
+# RS Connect 36.44.3
+> **36.44.3** corrige a experiência inicial da Ativação Assistida: remove o espaçamento incoerente do cadastro, transforma SLA em uma opção explícita e permite preparar o assistente sem sair do onboarding para a tela avançada. Não há migration nova; permanece necessária `125_native_financial_lifecycle_notifications.sql`.
+
+## Homologação rápida 36.44.3
+
+1. Abra **Ativação Assistida → Cadastro da empresa** e confirme que **Configuração recomendada** termina logo após seu conteúdo, sem o grande espaço vazio visto na 36.44.2. Abra/feche **Ajustes opcionais** e valide que os cards permanecem alinhados.
+2. Em **Como será o atendimento → Ajustes avançados**, confira o controle **Medir SLA**. Desativado, os campos da meta ficam recolhidos; ativado, aparecem meta, alerta preventivo e regra fora do expediente.
+3. Salve com SLA desativado e reabra: ele deve permanecer desativado. Ative, salve e reabra: deve permanecer ativado.
+4. Em **Preparar o assistente virtual**, não deve haver redirecionamento obrigatório para `/agents`. Escolha nome, tom e um WhatsApp conectado e salve dentro do próprio onboarding.
+5. Confirme no cadastro do assistente que o canal ficou vinculado, o tom foi salvo e as perguntas/regras continuam vindo do blueprint e das políticas estruturadas.
+6. Execute `php tests/Feature/assisted-onboarding-refinement-v36443-smoke.php`.
+
+---
+
 # RS Connect 36.44.2
 > **36.44.2** simplifica a tela de onboarding em uma Ativação Assistida com quatro blocos de negócio e uma tarefa por vez. Campos técnicos continuam disponíveis, mas ficam recolhidos em “Ajustes avançados”. O segmento continua obrigatório e aplica o blueprint inicial; agenda passa a perguntar diretamente capacidade por horário e quem confirma o agendamento. Não há migration nova; permanece necessária `125_native_financial_lifecycle_notifications.sql`.
 

@@ -266,48 +266,100 @@ final class OnboardingController
     public function saveAgent(): void
     {
         $tenantId = (int) Auth::tenantId();
+        $pdo = Database::connection();
         $instanceId = (int) ($_POST['instance_id'] ?? 0);
-        $name = trim((string) ($_POST['name'] ?? ''));
-        $segment = trim((string) ($_POST['segment'] ?? ''));
-        $modelProvider = (string) ($_POST['model_provider'] ?? 'google');
-        $modelName = trim((string) ($_POST['model_name'] ?? 'gemini-2.0-flash'));
-        $temperature = (float) ($_POST['temperature'] ?? 0.2);
-        $prompt = trim((string) ($_POST['system_prompt'] ?? ''));
-
-        if ($name === '' || $segment === '' || $prompt === '' || !in_array($modelProvider, ['google', 'openai', 'anthropic', 'custom'], true)) {
-            Flash::set('error', 'Informe nome, segmento, provedor e prompt do agente.');
-            $this->redirect('/onboarding');
+        $name = mb_substr(trim((string) ($_POST['name'] ?? '')), 0, 140);
+        $tonePreset = strtolower(trim((string) ($_POST['agent_tone_preset'] ?? 'professional')));
+        if (!in_array($tonePreset, ['warm', 'professional', 'objective', 'friendly'], true)) {
+            $tonePreset = 'professional';
         }
 
-        $temperature = max(0, min(1, $temperature));
-        $pdo = Database::connection();
+        $tenantStatement = $pdo->prepare(
+            'SELECT name, segment, business_niche_id, agent_blueprint_id
+             FROM tenants WHERE id = :id LIMIT 1'
+        );
+        $tenantStatement->execute(['id' => $tenantId]);
+        $tenant = $tenantStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        $currentStatement = $pdo->prepare(
+            'SELECT * FROM ai_agents
+             WHERE tenant_id = :tenant_id
+             ORDER BY is_default DESC, created_at DESC, id DESC
+             LIMIT 1'
+        );
+        $currentStatement->execute(['tenant_id' => $tenantId]);
+        $currentAgent = $currentStatement->fetch(PDO::FETCH_ASSOC) ?: [];
+        $agentId = (int) ($currentAgent['id'] ?? 0);
+
+        $profile = (new AgentBlueprintService())->profileForTenant($tenantId, false, $pdo);
+        $segment = trim((string) ($tenant['segment'] ?? ''));
+        if ($segment === '') {
+            $segment = trim((string) ($profile['niche_name'] ?? ''));
+        }
+        if ($name === '') {
+            $companyName = trim((string) ($tenant['name'] ?? ''));
+            $name = $companyName !== '' ? 'Assistente ' . $companyName : 'Assistente virtual';
+        }
+
         $instance = $pdo->prepare(
-            'SELECT id FROM evolution_instances WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+            'SELECT id, status FROM evolution_instances
+             WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
         );
         $instance->execute(['id' => $instanceId, 'tenant_id' => $tenantId]);
-        if (!$instance->fetchColumn()) {
-            Flash::set('error', 'Selecione uma instância válida da sua empresa.');
-            $this->redirect('/onboarding');
+        $instanceRow = $instance->fetch(PDO::FETCH_ASSOC) ?: [];
+        if (!$instanceRow || ($instanceRow['status'] ?? '') !== 'connected') {
+            Flash::set('error', 'Conecte o WhatsApp antes de preparar o assistente. Somente conexões ativas podem ser usadas nesta etapa.');
+            $this->redirect('/onboarding?step=ai_agent#ai_agent');
         }
+        if ($segment === '') {
+            Flash::set('error', 'O segmento da empresa precisa estar definido antes de preparar o assistente.');
+            $this->redirect('/onboarding?step=company_profile#company_profile');
+        }
+
+        $provider = trim((string) ($currentAgent['model_provider'] ?? 'openai')) ?: 'openai';
+        $model = trim((string) ($currentAgent['model_name'] ?? 'gpt-4o-mini')) ?: 'gpt-4o-mini';
+        $temperature = isset($currentAgent['temperature']) ? (float) $currentAgent['temperature'] : 0.2;
+        $prompt = trim((string) ($currentAgent['system_prompt'] ?? ''));
+        if ($prompt === '') {
+            $guidance = trim((string) ($profile['prompt_guidance'] ?? ''));
+            $promptParts = [
+                '# Papel',
+                'Você é ' . $name . ', assistente virtual da empresa ' . (trim((string) ($tenant['name'] ?? '')) ?: 'atendida pelo RS Connect') . '.',
+                '',
+                '# Fonte de verdade',
+                'Use as configurações estruturadas do RS Connect para triagem, ordem do atendimento, agenda, permissões, limites e políticas da empresa. Essas regras prevalecem sobre qualquer suposição do modelo.',
+                'Não invente preços, disponibilidade, descontos, exceções ou informações que não estejam configuradas. Quando uma decisão exigir pessoa responsável, aplique o encaminhamento configurado.',
+            ];
+            if ($guidance !== '') {
+                $promptParts[] = '';
+                $promptParts[] = '# Orientação do segmento';
+                $promptParts[] = $guidance;
+            }
+            $prompt = trim(implode("
+", $promptParts));
+        }
+
+        $builder = json_decode((string) ($currentAgent['prompt_builder_json'] ?? ''), true);
+        $builder = is_array($builder) ? $builder : [];
+        $builder['conversation_tone'] = [
+            'preset' => $tonePreset,
+            'custom' => '',
+        ];
+        $promptBuilderJson = json_encode($builder, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null;
 
         try {
             $pdo->beginTransaction();
-
-            $currentAgent = $pdo->prepare(
-                'SELECT id FROM ai_agents WHERE tenant_id = :tenant_id AND is_default = 1 LIMIT 1'
-            );
-            $currentAgent->execute(['tenant_id' => $tenantId]);
-            $agentId = (int) ($currentAgent->fetchColumn() ?: 0);
 
             $agentData = [
                 'tenant_id' => $tenantId,
                 'instance_id' => $instanceId,
                 'name' => $name,
                 'segment' => $segment,
-                'model_provider' => $modelProvider,
-                'model_name' => $modelName,
-                'temperature' => $temperature,
+                'model_provider' => $provider,
+                'model_name' => $model,
+                'temperature' => max(0, min(1, $temperature)),
                 'system_prompt' => $prompt,
+                'prompt_builder_json' => $promptBuilderJson,
             ];
 
             if ($agentId > 0) {
@@ -316,6 +368,7 @@ final class OnboardingController
                      SET instance_id = :instance_id, name = :name, segment = :segment,
                          model_provider = :model_provider, model_name = :model_name,
                          temperature = :temperature, system_prompt = :system_prompt,
+                         prompt_builder_json = :prompt_builder_json,
                          status = "active", is_default = 1
                      WHERE id = :agent_id AND tenant_id = :tenant_id'
                 );
@@ -323,36 +376,80 @@ final class OnboardingController
             } else {
                 $insert = $pdo->prepare(
                     'INSERT INTO ai_agents
-                        (tenant_id, instance_id, name, segment, model_provider, model_name, temperature, system_prompt, status, is_default)
+                        (tenant_id, instance_id, name, segment, model_provider, model_name, temperature,
+                         system_prompt, prompt_builder_json, status, is_default, auto_reply_enabled)
                      VALUES
-                        (:tenant_id, :instance_id, :name, :segment, :model_provider, :model_name, :temperature, :system_prompt, "active", 1)'
+                        (:tenant_id, :instance_id, :name, :segment, :model_provider, :model_name, :temperature,
+                         :system_prompt, :prompt_builder_json, "active", 1, 0)'
                 );
                 $insert->execute($agentData);
                 $agentId = (int) $pdo->lastInsertId();
             }
 
-            $reset = $pdo->prepare(
+            $pdo->prepare(
                 'UPDATE ai_agents SET is_default = IF(id = :agent_id, 1, 0) WHERE tenant_id = :tenant_id'
-            );
-            $reset->execute(['agent_id' => $agentId, 'tenant_id' => $tenantId]);
+            )->execute(['agent_id' => $agentId, 'tenant_id' => $tenantId]);
 
-            $complete = $pdo->prepare(
-                'UPDATE tenants SET onboarding_step = GREATEST(onboarding_step, 4) WHERE id = :id'
-            );
-            $complete->execute(['id' => $tenantId]);
+            // Mantém também o vínculo N:N atual para que o onboarding não dependa da
+            // tela avançada de Assistentes. Em instalações antigas, a coluna instance_id
+            // continua funcionando e este bloco é simplesmente ignorado.
+            try {
+                $pdo->prepare(
+                    'UPDATE ai_agent_instance_bindings
+                     SET is_primary = 0
+                     WHERE tenant_id = :tenant_id AND instance_id = :instance_id AND agent_id <> :agent_id'
+                )->execute(['tenant_id' => $tenantId, 'instance_id' => $instanceId, 'agent_id' => $agentId]);
+                $pdo->prepare(
+                    'INSERT INTO ai_agent_instance_bindings
+                        (tenant_id, agent_id, instance_id, is_primary, priority, routing_keywords, status)
+                     VALUES
+                        (:tenant_id, :agent_id, :instance_id, 1, 200, NULL, "active")
+                     ON DUPLICATE KEY UPDATE
+                        is_primary = 1, priority = 200, routing_keywords = NULL, status = "active"'
+                )->execute(['tenant_id' => $tenantId, 'agent_id' => $agentId, 'instance_id' => $instanceId]);
+            } catch (Throwable) {
+                // Compatibilidade com bancos anteriores ao vínculo N:N.
+            }
+
+            $pdo->prepare(
+                'UPDATE tenants SET onboarding_step = GREATEST(onboarding_step, 6) WHERE id = :id'
+            )->execute(['id' => $tenantId]);
 
             $pdo->commit();
-            (new PromptStudioService())->createVersion($tenantId, $agentId, $prompt, 'onboarding', Auth::id(), null, null, 'Prompt criado no onboarding');
+
+            if ($agentId > 0 && trim((string) ($currentAgent['system_prompt'] ?? '')) === '') {
+                (new PromptStudioService())->createVersion(
+                    $tenantId,
+                    $agentId,
+                    $prompt,
+                    'onboarding_assisted',
+                    Auth::id(),
+                    null,
+                    null,
+                    'Instruções-base criadas pela Ativação Assistida'
+                );
+            }
+
             $guideService = new OnboardingGuideService();
             $guideService->applyStoredAttendanceToAgent($tenantId, $agentId);
-            Audit::log('onboarding.agent_completed', ['agent_id' => $agentId], $tenantId);
-            $guideService->saveStep($tenantId, 'ai_agent', 'complete', 'Agente IA criado/revisado e regras operacionais aplicadas.', Auth::id());
-            Flash::set('success', 'Agente IA salvo com as regras de atendimento. Agora execute o teste final.');
+            Audit::log('onboarding.agent_completed', [
+                'agent_id' => $agentId,
+                'tone' => $tonePreset,
+                'instance_id' => $instanceId,
+            ], $tenantId);
+            $guideService->saveStep(
+                $tenantId,
+                'ai_agent',
+                'complete',
+                'Assistente preparado pela Ativação Assistida com identidade, tom e WhatsApp definidos.',
+                Auth::id()
+            );
+            Flash::set('success', 'Assistente preparado. As regras, perguntas e limites continuam sendo controlados pela configuração da empresa.');
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            Flash::set('error', 'Não foi possível salvar o agente. Verifique os dados informados.');
+            Flash::set('error', 'Não foi possível preparar o assistente: ' . $exception->getMessage());
         }
 
         $this->redirect('/onboarding');

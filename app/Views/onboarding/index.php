@@ -12,7 +12,10 @@ $instances = $guide['instances'] ?? ($instances ?? []);
 $agents = $guide['agents'] ?? ($agents ?? []);
 $defaultAgent = $guide['default_agent'] ?? ($agents[0] ?? []);
 $attendanceSettings = $guide['attendance_settings'] ?? [];
-$slaSettings = $guide['sla_settings'] ?? ['target_minutes' => 30, 'warning_percent' => 80, 'count_outside_business_hours' => 0];
+$slaSettings = $guide['sla_settings'] ?? ['enabled' => 0, 'target_minutes' => 30, 'warning_percent' => 80, 'count_outside_business_hours' => 0];
+// SLA é opt-in no onboarding. Empresas que já salvaram uma política preservam o estado atual;
+// uma empresa nova não começa a medir tempo de resposta sem decisão explícita.
+$slaEnabled = !empty($slaSettings['updated_at']) ? !empty($slaSettings['enabled']) : false;
 $preSchedule = $guide['pre_schedule'] ?? [];
 $agentLimits = $guide['agent_limits'] ?? [];
 $businessNiches = $guide['business_niches'] ?? [];
@@ -25,6 +28,35 @@ $events = $guide['events'] ?? [];
 $company = $guide['tenant'] ?? ($company ?? []);
 $percent = max(0, min(100, (int) ($summary['percent'] ?? 0)));
 $statusText = $summary['is_complete'] ?? false ? 'Configuração concluída' : ($next ? 'Próxima etapa: ' . ($next['short'] ?? $next['title']) : 'Em andamento');
+
+$assistantPromptBuilder = json_decode((string) ($defaultAgent['prompt_builder_json'] ?? ''), true);
+$assistantPromptBuilder = is_array($assistantPromptBuilder) ? $assistantPromptBuilder : [];
+$assistantToneConfig = is_array($assistantPromptBuilder['conversation_tone'] ?? null) ? $assistantPromptBuilder['conversation_tone'] : [];
+$assistantTonePreset = (string) ($assistantToneConfig['preset'] ?? 'professional');
+if (!in_array($assistantTonePreset, ['warm', 'professional', 'objective', 'friendly'], true)) {
+    $assistantTonePreset = 'professional';
+}
+$assistantInstanceId = (int) ($defaultAgent['instance_id'] ?? 0);
+if ($assistantInstanceId < 1) {
+    foreach ($instances as $candidateInstance) {
+        if (($candidateInstance['status'] ?? '') === 'connected') {
+            $assistantInstanceId = (int) ($candidateInstance['id'] ?? 0);
+            if (!empty($candidateInstance['is_default'])) break;
+        }
+    }
+}
+$assistantName = trim((string) ($defaultAgent['name'] ?? ''));
+if ($assistantName === '') {
+    $companyDisplayName = trim((string) ($company['name'] ?? ''));
+    $assistantName = $companyDisplayName !== '' ? 'Assistente ' . $companyDisplayName : 'Assistente virtual';
+}
+$hasConnectedInstance = false;
+foreach ($instances as $candidateInstance) {
+    if (($candidateInstance['status'] ?? '') === 'connected') {
+        $hasConnectedInstance = true;
+        break;
+    }
+}
 
 $hours = ['start' => '08:00', 'end' => '18:00', 'days' => ['mon', 'tue', 'wed', 'thu', 'fri']];
 $hoursSource = $attendanceSettings['business_hours_json'] ?? ($defaultAgent['business_hours_json'] ?? null);
@@ -274,18 +306,38 @@ foreach ($activationPhases as $phaseIndex => $phase) {
                         </div>
                     </div>
                 <?php elseif ($step['key'] === 'ai_agent'): ?>
-                    <div class="onboarding-action-grid">
-                        <div>
-                            <h3>Prepare o assistente virtual</h3><p class="muted-text">O segmento já preparou regras, perguntas e limites. Nesta etapa você revisa identidade, tom de voz e a conexão que o assistente usará.</p>
-                            <?php foreach ($agents as $agent): ?>
-                                <div class="mini-status-row"><strong><?= View::e($agent['name'] ?? 'Agente IA') ?></strong><span class="badge <?= ($agent['status'] ?? '') === 'active' ? 'badge-success' : 'badge-warning' ?>"><?= View::e($agent['status'] ?? 'pendente') ?></span></div>
-                            <?php endforeach; ?>
-                            <?php if (!$agents): ?><div class="empty-state compact-empty">Nenhum agente criado.</div><?php endif; ?>
-                        </div>
-                        <div class="onboarding-actions-box">
-                            <a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/agents')) ?>">Preparar assistente</a>
-                        </div>
-                    </div>
+                    <form class="wizard-card onboarding-inline-form onboarding-assistant-quick" method="post" action="<?= View::e(Router::url('/onboarding/agent')) ?>">
+                        <?= Csrf::input() ?>
+                        <div class="onboarding-pre-agent-note"><strong>O RS Connect já preparou a parte técnica.</strong><span>Você só escolhe o nome, o tom de conversa e qual WhatsApp o assistente usará. Perguntas, fluxo, agenda e limites continuam vindo das configurações das etapas anteriores.</span></div>
+
+                        <section class="onboarding-essential-card">
+                            <div class="section-heading compact"><div><span class="eyebrow">Essencial</span><h3>Como o assistente vai se apresentar?</h3><p>Não é necessário abrir a tela avançada de Assistentes para concluir a ativação.</p></div><span class="badge badge-success">Configuração rápida</span></div>
+                            <div class="form-grid two">
+                                <label class="field"><span>Nome do assistente</span><input name="name" value="<?= View::e($assistantName) ?>" required><small class="field-hint">Ex.: Assistente Mariana, Atendimento RS ou Recepção.</small></label>
+                                <label class="field"><span>Tom da conversa</span><select name="agent_tone_preset" required>
+                                    <option value="warm" <?= $assistantTonePreset === 'warm' ? 'selected' : '' ?>>Acolhedor e empático</option>
+                                    <option value="professional" <?= $assistantTonePreset === 'professional' ? 'selected' : '' ?>>Cordial e profissional</option>
+                                    <option value="objective" <?= $assistantTonePreset === 'objective' ? 'selected' : '' ?>>Objetivo e direto</option>
+                                    <option value="friendly" <?= $assistantTonePreset === 'friendly' ? 'selected' : '' ?>>Leve e próximo</option>
+                                </select><small class="field-hint">O tom muda a forma de escrever, não as regras da empresa.</small></label>
+                                <label class="field onboarding-assistant-channel"><span>WhatsApp usado pelo assistente</span><select name="instance_id" required>
+                                    <option value="">Selecione uma conexão conectada</option>
+                                    <?php foreach ($instances as $instance): ?>
+                                        <?php $instanceConnected = ($instance['status'] ?? '') === 'connected'; ?>
+                                        <option value="<?= (int) ($instance['id'] ?? 0) ?>" <?= $assistantInstanceId === (int) ($instance['id'] ?? 0) ? 'selected' : '' ?> <?= !$instanceConnected ? 'disabled' : '' ?>><?= View::e((string) ($instance['name'] ?? $instance['instance_name'] ?? 'WhatsApp')) ?><?= $instanceConnected ? '' : ' — não conectado' ?></option>
+                                    <?php endforeach; ?>
+                                </select><small class="field-hint">Somente conexões realmente conectadas podem receber o assistente.</small></label>
+                                <div class="onboarding-assistant-ready-note"><span class="eyebrow">Já preparado</span><strong><?= View::e((string) ($agentBlueprintProfile['blueprint_name'] ?? $company['segment'] ?? 'Modelo da empresa')) ?></strong><small>Triagem, políticas, permissões e ordem do atendimento são lidas da configuração estruturada da empresa — não de um prompt gigante.</small></div>
+                            </div>
+                        </section>
+
+                        <?php if (!$hasConnectedInstance): ?>
+                            <div class="message-warning"><strong>Conecte o WhatsApp antes de continuar.</strong><span>Volte ao passo anterior e finalize a leitura do QR Code. Assim que a conexão ficar conectada, ela aparecerá disponível aqui.</span></div>
+                        <?php endif; ?>
+
+                        <div class="message-info onboarding-assistant-advanced-note"><strong>Configurações avançadas ficam para depois.</strong><span>Modelo de IA, instruções técnicas, memória e outros ajustes permanecem disponíveis na área de Assistentes, mas não são necessários para colocar o atendimento inicial em funcionamento.</span></div>
+                        <div class="form-actions"><button class="btn btn-primary" type="submit" <?= !$hasConnectedInstance ? 'disabled' : '' ?>>Salvar assistente e continuar</button></div>
+                    </form>
                 <?php elseif ($step['key'] === 'attendance_rules'): ?>
                     <form class="wizard-card onboarding-inline-form" method="post" action="<?= View::e(Router::url('/onboarding/attendance')) ?>">
                         <?= Csrf::input() ?>
@@ -303,9 +355,16 @@ foreach ($activationPhases as $phaseIndex => $phase) {
                             <summary><span><strong>Ajustes avançados</strong><small>Mensagens, SLA, fuso horário e tempo de agrupamento</small></span><em>Opcional</em></summary>
                             <div class="onboarding-simple-details-body">
                                 <label class="field"><span>Fuso horário</span><input name="business_timezone" value="<?= View::e($attendanceSettings['business_timezone'] ?? ($defaultAgent['business_timezone'] ?? 'America/Sao_Paulo')) ?>"></label>
-                                <div class="onboarding-sla-policy">
-                                    <div class="section-heading compact"><div><span class="eyebrow">SLA operacional</span><h3>Primeira resposta humana</h3><p>Use somente se a equipe acompanhar tempo de resposta.</p></div></div>
-                                    <div class="form-grid three">
+                                <div class="onboarding-sla-policy" data-sla-policy>
+                                    <div class="section-heading compact onboarding-sla-heading">
+                                        <div><span class="eyebrow">SLA operacional</span><h3>Primeira resposta humana</h3><p>Ative somente se sua equipe quiser medir e receber alertas sobre tempo de resposta.</p></div>
+                                        <label class="onboarding-enable-toggle">
+                                            <input type="hidden" name="sla_enabled" value="0">
+                                            <input type="checkbox" name="sla_enabled" value="1" data-sla-enabled <?= $slaEnabled ? 'checked' : '' ?>>
+                                            <span><strong>Medir SLA</strong><small><?= $slaEnabled ? 'Ativado' : 'Desativado' ?></small></span>
+                                        </label>
+                                    </div>
+                                    <div class="form-grid three onboarding-sla-fields" data-sla-fields <?= $slaEnabled ? '' : 'hidden' ?>>
                                         <label class="field"><span>Meta da 1ª resposta</span><div class="team-report-sla-input"><input type="number" name="sla_target_minutes" min="5" max="1440" step="5" value="<?= (int) ($slaSettings['target_minutes'] ?? 30) ?>"><small>min</small></div></label>
                                         <label class="field"><span>Alerta preventivo</span><div class="team-report-sla-input"><input type="number" name="sla_warning_percent" min="50" max="99" step="1" value="<?= (int) ($slaSettings['warning_percent'] ?? 80) ?>"><small>%</small></div></label>
                                         <label class="field checkbox-field sla-clock-toggle"><span>Relógio fora do expediente</span><span class="checkbox-control"><input type="checkbox" name="sla_count_outside_hours" value="1" <?= !empty($slaSettings['count_outside_business_hours']) ? 'checked' : '' ?>><span>Contabilizar também fora do horário</span></span></label>
@@ -581,6 +640,19 @@ foreach ($activationPhases as $phaseIndex => $phase) {
             niche.addEventListener('change', () => syncBlueprints(true));
             blueprint.addEventListener('change', syncPreview);
             syncBlueprints(false);
+        })();
+
+        (function () {
+            const toggle = document.querySelector('[data-sla-enabled]');
+            const fields = document.querySelector('[data-sla-fields]');
+            if (!toggle || !fields) return;
+            const sync = () => {
+                fields.hidden = !toggle.checked;
+                const label = toggle.closest('.onboarding-enable-toggle')?.querySelector('small');
+                if (label) label.textContent = toggle.checked ? 'Ativado' : 'Desativado';
+            };
+            toggle.addEventListener('change', sync);
+            sync();
         })();
         </script>
 

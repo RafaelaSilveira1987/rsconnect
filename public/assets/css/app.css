@@ -17471,7 +17471,7 @@ summary {
 .onboarding-company-section .section-heading p { margin: 5px 0 0; color: #6d7d91; font-size: .8rem; line-height: 1.5; }
 .onboarding-blueprint-field select option[hidden] { display: none; }
 .onboarding-segment-preview {
-  min-height: 100%;
+  min-height: 0;
   padding: 14px 16px;
   border: 1px solid #d7e8e5;
   border-radius: 15px;
@@ -17873,4 +17873,112 @@ summary {
   .onboarding-choice-grid { grid-template-columns: 1fr; }
   .onboarding-essential-card { padding: 14px; }
   .onboarding-phase-card { flex-basis: 210px; }
+}
+
+
+/* RS Connect 36.44.3 — onboarding coerente, SLA opt-in e assistente rápido */
+.onboarding-company-setup > .onboarding-simple-details,
+.onboarding-company-setup > .onboarding-company-model-note {
+  margin-top: 0;
+}
+.onboarding-essential-card .onboarding-segment-preview {
+  margin-top: 14px;
+}
+.onboarding-segment-preview {
+  align-self: start;
+  height: auto;
+}
+.onboarding-company-advanced[open] {
+  overflow: visible;
+}
+.onboarding-company-advanced .onboarding-simple-details-body {
+  padding-top: 14px;
+}
+
+.onboarding-sla-heading {
+  align-items: center;
+  gap: 16px;
+}
+.onboarding-enable-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  min-width: 170px;
+  padding: 10px 12px;
+  border: 1px solid #d9e4eb;
+  border-radius: 13px;
+  background: #fff;
+  cursor: pointer;
+}
+.onboarding-enable-toggle:has(input:checked) {
+  border-color: #9ed8d2;
+  background: #f2fbf9;
+}
+.onboarding-enable-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--rs-teal);
+}
+.onboarding-enable-toggle strong,
+.onboarding-enable-toggle small {
+  display: block;
+}
+.onboarding-enable-toggle strong {
+  color: #2a3c52;
+  font-size: .76rem;
+}
+.onboarding-enable-toggle small {
+  margin-top: 2px;
+  color: #748398;
+  font-size: .67rem;
+}
+.onboarding-sla-fields[hidden] {
+  display: none !important;
+}
+.onboarding-sla-fields {
+  margin-top: 14px;
+}
+
+.onboarding-assistant-quick {
+  display: grid;
+  gap: 14px;
+}
+.onboarding-assistant-ready-note {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid #d7e8e5;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f4fbf9 0%, #fbfdfd 100%);
+}
+.onboarding-assistant-ready-note strong {
+  color: #255768;
+  font-size: .82rem;
+}
+.onboarding-assistant-ready-note small {
+  color: #718196;
+  font-size: .69rem;
+  line-height: 1.45;
+}
+.onboarding-assistant-channel select option:disabled {
+  color: #9aa7b7;
+}
+.onboarding-assistant-advanced-note {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .onboarding-sla-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .onboarding-enable-toggle {
+    width: 100%;
+    min-width: 0;
+  }
 }
