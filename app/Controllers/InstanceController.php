@@ -15,6 +15,7 @@ use App\Services\EvolutionService;
 use App\Services\EvolutionInstanceSafetyService;
 use App\Services\EvolutionReconciliationService;
 use App\Services\AgentRoutingService;
+use App\Services\AgentReadinessService;
 use App\Services\SubscriptionService;
 use App\Services\WebhookSecurityService;
 use PDO;
@@ -963,6 +964,16 @@ final class InstanceController
                     'is_primary' => $isDefault ? 1 : 0,
                     'priority' => $isDefault ? 200 : 100,
                 ]);
+            }
+            // Esta tela técnica também pode ativar respostas automáticas;
+            // a auditoria precisa cobrir esse segundo caminho de ativação.
+            if ($status === 'active' && $autoReply) {
+                $readiness = (new AgentReadinessService($pdo))->audit((int) $agent['tenant_id'], $agentId);
+                if (!$readiness['can_operate']) {
+                    $critical = array_values(array_filter($readiness['checklist'],
+                        static fn (array $c): bool => $c['severity'] === 'critical' && $c['status'] === 'error'));
+                    throw new \RuntimeException('Ativação bloqueada: ' . implode(', ', array_column(array_slice($critical, 0, 3), 'item')) . '.');
+                }
             }
             $pdo->commit();
 

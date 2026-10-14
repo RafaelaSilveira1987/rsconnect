@@ -15,6 +15,15 @@ final class Router
 {
     private array $routes = [];
 
+    /** @var array<string,string> Named captures for parameterized routes. */
+    private static array $routeParameters = [];
+
+    public static function routeParam(string $key): ?string
+    {
+        return self::$routeParameters[$key] ?? null;
+    }
+
+
     public function get(string $path, callable|array $handler, array $middleware = []): void
     {
         $this->add('GET', $path, $handler, $middleware);
@@ -69,7 +78,11 @@ final class Router
             return;
         }
 
+        self::$routeParameters = [];
         $route = $this->routes[strtoupper($method)][$this->normalize($path)] ?? null;
+        if ($route === null) {
+            $route = $this->matchParameterizedRoute(strtoupper($method), $this->normalize($path));
+        }
         if ($route === null) {
             http_response_code(404);
             View::render('errors.404', ['title' => 'Página não encontrada'], Auth::check() ? 'app' : 'guest');
@@ -126,6 +139,24 @@ final class Router
         }
 
         $handler();
+    }
+
+    /** @return array{handler:callable|array,middleware:array}|null */
+    private function matchParameterizedRoute(string $method, string $path): ?array
+    {
+        foreach ($this->routes[$method] ?? [] as $template => $route) {
+            if (!str_contains($template, '{')) continue;
+            $regex = preg_replace_callback('/\\\{([A-Za-z][A-Za-z0-9_]*)\\\}/',
+                static fn (array $m): string => '(?P<' . $m[1] . '>[A-Za-z0-9-]{1,64})',
+                preg_quote($template, '~'));
+            if ($regex === null || preg_match('~^' . $regex . '$~D', $path, $matches) !== 1) continue;
+            self::$routeParameters = [];
+            foreach ($matches as $key => $value) {
+                if (is_string($key)) self::$routeParameters[$key] = $value;
+            }
+            return $route;
+        }
+        return null;
     }
 
     private function runMiddleware(string $middleware): bool

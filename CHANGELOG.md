@@ -1,3 +1,13 @@
+## Fase 2 (pré-homologação) — Validador de Prontidão determinístico
+
+- Adicionados `AgentReadinessEvaluator`, `AgentReadinessService` e `AgentAutoFixService` sem novas migrations.
+- Contratos JSON `GET /api/v1/agents/{id}/readiness` e `POST /api/v1/agents/{id}/autofix` com UUID público, tenant isolado, permissões e CSRF.
+- Score de 0 a 100 com dez verificações; qualquer erro crítico bloqueia `can_operate` independentemente da pontuação.
+- Auto-Fix transacional para ação fora do expediente e desativação segura do link de confirmação; atualização condicionada à falha atual, auditoria pós-correção e log.
+- Ativação automática impedida nos cadastros e edições de agente enquanto houver erro crítico (telas de agentes e edição técnica de instâncias).
+- A API é um diagnóstico do banco, **não um ping em tempo real** de serviços externos. Não desativa agentes já ativos nem executa gate por mensagem no webhook nesta etapa.
+- Sem mudança na versão oficial do manifesto até homologação integrada com MySQL/WhatsApp; documentação em `docs/FASE2_VALIDADOR_PRONTIDAO.md`.
+
 ## 36.44.4 — Configuração de negócio simplificada
 
 - Une **Atendimento**, **Agenda** e **Limites** em uma única experiência de configuração orientada ao negócio dentro da Ativação Assistida.

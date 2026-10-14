@@ -15,6 +15,7 @@ use App\Services\AiAutomationService;
 use App\Services\AgentBlueprintService;
 use App\Services\AgentConversationBehaviorService;
 use App\Services\AgentRuntimeConfigurationService;
+use App\Services\AgentReadinessService;
 use App\Services\ConversationOwnershipService;
 use App\Services\PreSchedulingService;
 use App\Services\AgentRoutingService;
@@ -390,6 +391,18 @@ final class AgentController
                 // Compatibilidade antes da migration 055: o vínculo legado instance_id continua válido.
             }
 
+            // A criação sempre é permitida como rascunho; nunca habilite respostas
+            // automáticas antes de todas as dependências críticas existirem.
+            $readinessBlockedOnCreation = false;
+            if ($autoReplyEnabled) {
+                $readiness = (new AgentReadinessService($pdo))->audit((int) $tenantId, $agentId);
+                if (!$readiness['can_operate']) {
+                    $pdo->prepare('UPDATE ai_agents SET auto_reply_enabled=0 WHERE id=:aid AND tenant_id=:tid')
+                        ->execute(['aid'=>$agentId,'tid'=>$tenantId]);
+                    $readinessBlockedOnCreation = true;
+                    $autoReplyEnabled = false;
+                }
+            }
             $pdo->commit();
             $promptSource = trim((string) ($_POST['prompt_studio_generated'] ?? '')) === '1' ? 'prompt_studio' : 'manual';
             $answers = null;
@@ -409,9 +422,11 @@ final class AgentController
                 $guideService->saveStep($tenantId, 'ai_agent', 'complete', 'Agente criado e regras operacionais aplicadas durante o primeiro acesso.', Auth::id());
             }
             Audit::log('agent.created', ['agent_id' => $agentId, 'name' => $name], $tenantId);
-            Flash::set('success', $guideService->requiresGuidedAccess($tenantId)
-                ? 'Assistente criado com as regras operacionais. Volte aos Primeiros passos para executar o teste final.'
-                : 'Assistente criado. Revise as instruções e faça uma conversa de teste antes de liberar o atendimento.');
+            Flash::set($readinessBlockedOnCreation ? 'warning' : 'success', $readinessBlockedOnCreation
+                ? 'Assistente criado em modo seguro, sem respostas automáticas. Corrija os itens críticos no Validador de Prontidão antes de ativar.'
+                : ($guideService->requiresGuidedAccess($tenantId)
+                    ? 'Assistente criado com as regras operacionais. Volte aos Primeiros passos para executar o teste final.'
+                    : 'Assistente criado. Revise as instruções e faça uma conversa de teste antes de liberar o atendimento.'));
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -613,6 +628,18 @@ final class AgentController
                 );
             }
 
+            // Bloqueio obrigatório antes da ativação do atendimento automático.
+            // Reavalia o estado persistido DENTRO da transação para incluir
+            // horários e vínculos alterados neste próprio formulário.
+            if ($status === 'active' && $autoReplyEnabled) {
+                $readiness = (new AgentReadinessService($pdo))->audit((int) $tenantId, $agentId);
+                if (!$readiness['can_operate']) {
+                    $critical = array_values(array_filter($readiness['checklist'],
+                        static fn (array $check): bool => $check['severity'] === 'critical' && $check['status'] === 'error'));
+                    $labels = array_column(array_slice($critical, 0, 3), 'item');
+                    throw new \RuntimeException('Ativação impedida pelo Validador de Prontidão: ' . implode(', ', $labels) . '.');
+                }
+            }
             $pdo->commit();
             Audit::log('agent.status_updated', [
                 'agent_id' => $agentId,

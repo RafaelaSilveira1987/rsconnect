@@ -144,7 +144,8 @@ final class OnboardingGuideService
         $step = $this->currentStepKey($tenantId, $userId);
         // Wizard express fica acessível após a etapa de aceite de privacidade,
         // sem liberar essa rota como atalho para LGPD/primeiro cadastro.
-        if ($path === '/api/agents/express' && in_array($step, [
+        if (($path === '/api/agents/express' || str_starts_with($path, '/api/v1/agents/')
+            || str_starts_with($path, '/api/v1/agent/')) && in_array($step, [
             'attendance_rules', 'agenda_setup', 'agent_limits',
             'whatsapp_connection', 'ai_agent', 'final_test',
         ], true)) {
