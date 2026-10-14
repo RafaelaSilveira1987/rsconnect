@@ -64,7 +64,7 @@ final class AgentTriageService
             || $this->hasSchedulingIntent($normalized)
             || $this->hasSchedulePreference($normalized);
         $action = $schedulingIntent ? 'calendar.pre_schedule' : 'conversation';
-        $decision = (new AgentPolicyEngineService())->evaluate($profile, $collected, $action);
+        $decision = (new AgentPolicyEngineService())->evaluate($profile, $this->policyContext($collected, $normalized), $action);
         return [
             'collected' => $collected,
             'scheduling_intent' => $schedulingIntent,
@@ -128,7 +128,7 @@ final class AgentTriageService
 
         $action = $schedulingIntent ? 'calendar.pre_schedule' : 'conversation';
         $engine = new AgentPolicyEngineService();
-        $decision = $engine->evaluate($profile, $collected, $action);
+        $decision = $engine->evaluate($profile, $this->policyContext($collected, $normalized), $action);
         $missingBeforeSchedule = $engine->missingRequiredBeforeSchedule($fields, $collected);
         $missingCompletion = $engine->missingForCompletion($fields, $collected);
         $missingKeys = array_values(array_map(static fn (array $field): string => (string) ($field['field_key'] ?? ''), $missingCompletion));
@@ -184,8 +184,10 @@ final class AgentTriageService
             $notifiedPolicies[] = $policyFingerprint;
         }
 
+        $genericWarn = $decisionType === 'warn' && !$isScopedCalendarRestriction;
         $handledByRule = (empty($decision['allowed']) && in_array($decisionType, ['block', 'handoff'], true))
-            || $warnNeedsNotification;
+            || $warnNeedsNotification
+            || $genericWarn;
         $interactionMode = strtolower(trim((string) ($profile['interaction_mode'] ?? 'hybrid')));
         $usesAiComposer = in_array($interactionMode, ['hybrid', 'prompt'], true);
         if ($schedulingIntent && $missingBeforeSchedule !== [] && !$handledByRule) {
@@ -479,7 +481,7 @@ final class AgentTriageService
             $result['scheduling_intent'] = $schedulingIntent;
 
             $action = $schedulingIntent ? 'calendar.pre_schedule' : 'conversation';
-            $decision = (new AgentPolicyEngineService())->evaluate($profile, $collected, $action);
+            $decision = (new AgentPolicyEngineService())->evaluate($profile, $this->policyContext($collected, $normalizedContext), $action);
             $missingBeforeSchedule = (new AgentPolicyEngineService())->missingRequiredBeforeSchedule($fields, $collected);
             $missingCompletion = (new AgentPolicyEngineService())->missingForCompletion($fields, $collected);
             $missingKeys = array_values(array_map(static fn (array $field): string => (string) ($field['field_key'] ?? ''), $missingCompletion));
@@ -608,6 +610,33 @@ final class AgentTriageService
                     $this->handoffConversation($pdo, $tenantId, $conversationId, $decision);
                     $result['attendance_mode'] = 'paused';
                     $result['operational_status'] = 'waiting_agent';
+                }
+                return $result;
+            }
+
+            if ($decisionType === 'warn' && !$isScopedCalendarRestriction) {
+                // Avisos de autoridade (ex.: desconto não autorizado) usam exatamente
+                // a resposta aprovada pela empresa. A IA não negocia no mesmo turno.
+                $this->logDecision($pdo, $tenantId, $conversationId, $contactId, $decision, $collected);
+                $result['handled'] = true;
+                $result['skip_ai'] = true;
+                $result['terminal_handled'] = true;
+                $result['conversation_continues'] = true;
+                if ($sendMessages && trim((string) ($decision['message'] ?? '')) !== '') {
+                    $send = (new ConversationAutomationMessageService())->send(
+                        $pdo,
+                        $instance,
+                        $conversationId,
+                        $contactId,
+                        (string) $decision['message'],
+                        'agent.policy.notice',
+                        [
+                            'policy' => $decision['policy_key'] ?? null,
+                            'code' => $decision['code'] ?? null,
+                        ]
+                    );
+                    $result['message_sent'] = !empty($send['ok']);
+                    $result['message_error'] = $send['error'] ?? null;
                 }
                 return $result;
             }
@@ -1759,6 +1788,62 @@ final class AgentTriageService
             return false;
         }
         return (bool) preg_match('/^[\p{L}][\p{L}\p{M}\'\-\. ]{1,79}$/u', $value);
+    }
+
+    /**
+     * Contexto efêmero do turno para políticas de autoridade. Chaves `_turn_*`
+     * nunca são persistidas, então um pedido de desconto não contamina os turnos
+     * seguintes depois de a regra ser aplicada.
+     *
+     * @param array<string,mixed> $collected
+     * @return array<string,mixed>
+     */
+    private function policyContext(array $collected, string $normalizedTurn): array
+    {
+        $context = $collected;
+        $context['_turn_text'] = $normalizedTurn;
+        $intent = $this->policyTurnIntent($normalizedTurn);
+        if ($intent !== null) {
+            $context['_turn_intent'] = $intent;
+        }
+        return $context;
+    }
+
+    private function policyTurnIntent(string $normalized): ?string
+    {
+        $text = ' ' . trim($normalized) . ' ';
+        if ($text === '  ') {
+            return null;
+        }
+
+        $patterns = [
+            'discount_request' => [
+                '/\\bdesconto\\b/', '/\\babatimento\\b/', '/\\bvalor menor\\b/',
+                '/\\bmelhor preco\\b/', '/\\bpreco melhor\\b/', '/\\bcondicao especial\\b/',
+                '/\\bconsegue baixar\\b/', '/\\bda para reduzir\\b/'
+            ],
+            'refund_request' => [
+                '/\\breembolso\\b/', '/\\bestorno\\b/', '/\\bdevolver o dinheiro\\b/',
+                '/\\bdevolucao do valor\\b/', '/\\bquero meu dinheiro de volta\\b/'
+            ],
+            'exception_request' => [
+                '/\\bexcecao\\b/', '/\\bencaixe\\b/', '/\\bfora da regra\\b/',
+                '/\\bfora do horario\\b/', '/\\babrir uma vaga\\b/', '/\\bconsegue mesmo assim\\b/'
+            ],
+            'emergency_request' => [
+                '/\\bemergencia\\b/', '/\\burgente\\b/', '/\\bsocorro\\b/',
+                '/\\brisco imediato\\b/', '/\\bpreciso de ajuda agora\\b/'
+            ],
+        ];
+
+        foreach ($patterns as $intent => $checks) {
+            foreach ($checks as $pattern) {
+                if (preg_match($pattern, $text) === 1) {
+                    return $intent;
+                }
+            }
+        }
+        return null;
     }
 
     private function normalize(string $value): string

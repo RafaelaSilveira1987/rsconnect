@@ -103,6 +103,7 @@ final class OnboardingGuideService
             'calendar_access' => $this->calendarAccessSettings($tenantId),
             'calendar_availability' => (new CalendarAvailabilityService())->settings($tenantId),
             'pre_schedule' => $this->preScheduleSettings($tenantId),
+            'agent_limits' => $this->agentLimitsSettings($tenantId),
             'privacy' => $this->privacyStatus($tenantId, $userId),
             'events' => $this->events($tenantId),
             'quick_links' => $this->quickLinks(),
@@ -396,10 +397,354 @@ final class OnboardingGuideService
         $this->recordEvent($tenantId, $userId, 'calendar.smart_access_updated', 'Agenda inteligente: ' . $status . '.', ['status' => $status]);
     }
 
+    /**
+     * Salva limites e condutas como políticas estruturadas do Policy Engine.
+     * Nenhuma decisão comercial/eligibilidade fica presa ao prompt do modelo.
+     *
+     * @param array<string,mixed> $data
+     */
+    public function saveAgentLimits(int $tenantId, array $data, ?int $userId): void
+    {
+        if (!$this->tableExists('tenant_agent_policies')) {
+            throw new \RuntimeException('A estrutura de políticas do assistente ainda não foi aplicada.');
+        }
+
+        $discountEnabled = !empty($data['discount_rule_enabled']);
+        $discountAction = $this->normalizeLimitAction((string) ($data['discount_action'] ?? 'handoff'), ['handoff', 'warn']);
+        $discountMessage = mb_substr(trim((string) ($data['discount_message'] ?? 'Posso encaminhar sua solicitação para o responsável avaliar uma condição possível. O assistente não autoriza descontos por conta própria.')), 0, 1200);
+        $this->upsertAssistedPolicy(
+            $tenantId,
+            'assisted.discount_request',
+            'json',
+            [
+                'condition' => ['field' => '_turn_intent', 'operator' => 'eq', 'value' => 'discount_request'],
+                'applies_to' => ['conversation', 'calendar.*'],
+            ],
+            $discountAction,
+            $discountMessage,
+            $discountEnabled,
+            20
+        );
+
+        $refundEnabled = !empty($data['refund_rule_enabled']);
+        $refundAction = $this->normalizeLimitAction((string) ($data['refund_action'] ?? 'handoff'), ['handoff', 'warn']);
+        $refundMessage = mb_substr(trim((string) ($data['refund_message'] ?? 'Essa decisão precisa ser avaliada pela equipe responsável. Vou encaminhar sua solicitação.')), 0, 1200);
+        $this->upsertAssistedPolicy(
+            $tenantId,
+            'assisted.refund_request',
+            'json',
+            [
+                'condition' => ['field' => '_turn_intent', 'operator' => 'eq', 'value' => 'refund_request'],
+                'applies_to' => ['conversation', 'calendar.*'],
+            ],
+            $refundAction,
+            $refundMessage,
+            $refundEnabled,
+            30
+        );
+
+        $exceptionEnabled = !empty($data['exception_rule_enabled']);
+        $exceptionAction = $this->normalizeLimitAction((string) ($data['exception_action'] ?? 'handoff'), ['handoff', 'warn']);
+        $exceptionMessage = mb_substr(trim((string) ($data['exception_message'] ?? 'Essa exceção precisa ser analisada pela equipe. Posso encaminhar seu pedido para avaliação.')), 0, 1200);
+        $this->upsertAssistedPolicy(
+            $tenantId,
+            'assisted.exception_request',
+            'json',
+            [
+                'condition' => ['field' => '_turn_intent', 'operator' => 'eq', 'value' => 'exception_request'],
+                'applies_to' => ['conversation', 'calendar.*'],
+            ],
+            $exceptionAction,
+            $exceptionMessage,
+            $exceptionEnabled,
+            40
+        );
+
+        $minimumAge = max(0, min(130, (int) ($data['minimum_age'] ?? 0)));
+        $maximumAge = max(0, min(130, (int) ($data['maximum_age'] ?? 0)));
+        if ($minimumAge > 0 && $maximumAge > 0 && $maximumAge < $minimumAge) {
+            throw new \RuntimeException('A idade máxima não pode ser menor que a idade mínima.');
+        }
+        $ageAction = $this->normalizeLimitAction((string) ($data['age_action'] ?? 'block_schedule'), ['block_schedule', 'handoff', 'block']);
+        $minimumMessage = mb_substr(trim((string) ($data['minimum_age_message'] ?? 'Atualmente os atendimentos são realizados a partir de {{minimum_age}} anos. Por isso, não consigo seguir com o agendamento para a idade informada.')), 0, 1200);
+        $maximumMessage = mb_substr(trim((string) ($data['maximum_age_message'] ?? ($maximumAge > 0 ? 'Atualmente os atendimentos são realizados até ' . $maximumAge . ' anos. Por isso, não consigo seguir com o agendamento para a idade informada.' : ''))), 0, 1200);
+
+        // Mantém a chave histórica minimum_age para compatibilidade com blueprints e
+        // com o tratamento especial que injeta {{minimum_age}} na resposta.
+        $this->upsertAssistedPolicy(
+            $tenantId,
+            'minimum_age',
+            'number',
+            $minimumAge,
+            $ageAction,
+            $minimumMessage,
+            $minimumAge > 0,
+            10
+        );
+        $this->upsertAssistedPolicy(
+            $tenantId,
+            'assisted.maximum_age',
+            'json',
+            [
+                'condition' => ['field' => 'patient_age', 'operator' => 'gt', 'value' => $maximumAge],
+                'applies_to' => ['conversation', 'calendar.*'],
+            ],
+            $ageAction,
+            $maximumMessage,
+            $maximumAge > 0,
+            11
+        );
+
+        // Casos extras configuráveis sem adicionar ifs de negócio no código.
+        // Cada expressão vira uma política JSON independente, avaliada pelo texto do
+        // turno atual. A lista é curta de propósito para manter regras auditáveis.
+        $customEnabled = !empty($data['custom_case_enabled']);
+        $customAction = $this->normalizeLimitAction((string) ($data['custom_case_action'] ?? 'handoff'), ['handoff', 'warn', 'block']);
+        $customMessage = mb_substr(trim((string) ($data['custom_case_message'] ?? 'Este caso precisa ser analisado pela equipe responsável. Vou encaminhar sua solicitação.')), 0, 1200);
+        $customRaw = trim((string) ($data['custom_case_terms'] ?? ''));
+        $customTerms = [];
+        foreach (preg_split('/\\R+/', $customRaw) ?: [] as $line) {
+            $display = trim((string) $line);
+            $normalized = $this->normalizeLimitTerm($display);
+            if ($display === '' || $normalized === '') continue;
+            $customTerms[$normalized] = mb_substr($display, 0, 120);
+            if (count($customTerms) >= 10) break;
+        }
+        $this->pdo->prepare('DELETE FROM tenant_agent_policies WHERE tenant_id = :tenant_id AND policy_key LIKE "assisted.custom_case.%"')
+            ->execute(['tenant_id' => $tenantId]);
+        if ($customEnabled) {
+            $position = 60;
+            foreach ($customTerms as $normalized => $display) {
+                $this->upsertAssistedPolicy(
+                    $tenantId,
+                    'assisted.custom_case.' . $position,
+                    'json',
+                    [
+                        'condition' => ['field' => '_turn_text', 'operator' => 'contains', 'value' => $normalized],
+                        'applies_to' => ['conversation', 'calendar.*'],
+                        'display_value' => $display,
+                    ],
+                    $customAction,
+                    $customMessage,
+                    true,
+                    $position
+                );
+                $position++;
+            }
+        }
+
+        $emergencyEnabled = !empty($data['emergency_rule_enabled']);
+        $emergencyAction = $this->normalizeLimitAction((string) ($data['emergency_action'] ?? 'handoff'), ['handoff', 'block', 'warn']);
+        $emergencyMessage = mb_substr(trim((string) ($data['emergency_message'] ?? 'Essa situação precisa de atenção humana. Vou interromper o fluxo automático e encaminhar sua mensagem para a equipe responsável.')), 0, 1200);
+        $this->upsertAssistedPolicy(
+            $tenantId,
+            'assisted.emergency_request',
+            'json',
+            [
+                'condition' => ['field' => '_turn_intent', 'operator' => 'eq', 'value' => 'emergency_request'],
+                'applies_to' => ['conversation', 'calendar.*'],
+            ],
+            $emergencyAction,
+            $emergencyMessage,
+            $emergencyEnabled,
+            5
+        );
+
+        $this->saveStep(
+            $tenantId,
+            'agent_limits',
+            'complete',
+            'Limites de autoridade, elegibilidade e encaminhamento revisados. O Policy Engine executa as decisões antes da IA.',
+            $userId
+        );
+        $this->recordEvent($tenantId, $userId, 'onboarding.agent_limits_saved', 'Limites e condutas do assistente atualizados.', [
+            'discount_rule_enabled' => $discountEnabled,
+            'refund_rule_enabled' => $refundEnabled,
+            'exception_rule_enabled' => $exceptionEnabled,
+            'minimum_age' => $minimumAge,
+            'maximum_age' => $maximumAge,
+            'emergency_rule_enabled' => $emergencyEnabled,
+            'custom_case_count' => count($customTerms),
+        ]);
+    }
+
+    /** @return array<string,mixed> */
+    public function agentLimitsSettings(int $tenantId): array
+    {
+        $defaults = [
+            'discount_rule_enabled' => 1,
+            'discount_action' => 'handoff',
+            'discount_message' => 'Posso encaminhar sua solicitação para o responsável avaliar uma condição possível. O assistente não autoriza descontos por conta própria.',
+            'refund_rule_enabled' => 1,
+            'refund_action' => 'handoff',
+            'refund_message' => 'Essa decisão precisa ser avaliada pela equipe responsável. Vou encaminhar sua solicitação.',
+            'exception_rule_enabled' => 1,
+            'exception_action' => 'handoff',
+            'exception_message' => 'Essa exceção precisa ser analisada pela equipe. Posso encaminhar seu pedido para avaliação.',
+            'minimum_age' => 0,
+            'maximum_age' => 0,
+            'age_action' => 'block_schedule',
+            'minimum_age_message' => 'Atualmente os atendimentos são realizados a partir de {{minimum_age}} anos. Por isso, não consigo seguir com o agendamento para a idade informada.',
+            'maximum_age_message' => '',
+            'custom_case_enabled' => 0,
+            'custom_case_terms' => '',
+            'custom_case_action' => 'handoff',
+            'custom_case_message' => 'Este caso precisa ser analisado pela equipe responsável. Vou encaminhar sua solicitação.',
+            'emergency_rule_enabled' => 0,
+            'emergency_action' => 'handoff',
+            'emergency_message' => 'Essa situação precisa de atenção humana. Vou interromper o fluxo automático e encaminhar sua mensagem para a equipe responsável.',
+            'configured' => false,
+        ];
+        if (!$this->tableExists('tenant_agent_policies')) {
+            return $defaults;
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT policy_key, policy_type, value_json, action_key, customer_message, enabled
+             FROM tenant_agent_policies
+             WHERE tenant_id = :tenant_id
+               AND (
+                    policy_key IN (
+                        "minimum_age", "assisted.maximum_age", "assisted.discount_request",
+                        "assisted.refund_request", "assisted.exception_request", "assisted.emergency_request"
+                    )
+                    OR policy_key LIKE "assisted.custom_case.%"
+               )'
+        );
+        $stmt->execute(['tenant_id' => $tenantId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        if ($rows === []) {
+            return $defaults;
+        }
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(string) $row['policy_key']] = $row + ['value' => $this->decodeJsonValue($row['value_json'] ?? null)];
+        }
+        $out = $defaults;
+        $out['configured'] = false;
+        foreach (array_keys($map) as $policyKey) {
+            if (str_starts_with((string) $policyKey, 'assisted.')) {
+                $out['configured'] = true;
+                break;
+            }
+        }
+        foreach ([
+            'discount' => 'assisted.discount_request',
+            'refund' => 'assisted.refund_request',
+            'exception' => 'assisted.exception_request',
+            'emergency' => 'assisted.emergency_request',
+        ] as $prefix => $key) {
+            if (!isset($map[$key])) continue;
+            $out[$prefix . '_rule_enabled'] = (int) ($map[$key]['enabled'] ?? 0);
+            $out[$prefix . '_action'] = (string) ($map[$key]['action_key'] ?? $out[$prefix . '_action']);
+            $out[$prefix . '_message'] = (string) ($map[$key]['customer_message'] ?? $out[$prefix . '_message']);
+        }
+        if (isset($map['minimum_age'])) {
+            $out['minimum_age'] = (int) ($map['minimum_age']['value'] ?? 0);
+            $out['age_action'] = (string) ($map['minimum_age']['action_key'] ?? $out['age_action']);
+            $out['minimum_age_message'] = (string) ($map['minimum_age']['customer_message'] ?? $out['minimum_age_message']);
+        }
+        if (isset($map['assisted.maximum_age'])) {
+            $rule = is_array($map['assisted.maximum_age']['value'] ?? null) ? $map['assisted.maximum_age']['value'] : [];
+            $condition = is_array($rule['condition'] ?? null) ? $rule['condition'] : [];
+            $out['maximum_age'] = (int) ($condition['value'] ?? 0);
+            $out['age_action'] = (string) ($map['assisted.maximum_age']['action_key'] ?? $out['age_action']);
+            $out['maximum_age_message'] = (string) ($map['assisted.maximum_age']['customer_message'] ?? $out['maximum_age_message']);
+        }
+        $customRows = [];
+        foreach ($map as $key => $row) {
+            if (!str_starts_with((string) $key, 'assisted.custom_case.')) continue;
+            $rule = is_array($row['value'] ?? null) ? $row['value'] : [];
+            $condition = is_array($rule['condition'] ?? null) ? $rule['condition'] : [];
+            $display = trim((string) ($rule['display_value'] ?? $condition['value'] ?? ''));
+            if ($display !== '') $customRows[] = $display;
+            $out['custom_case_action'] = (string) ($row['action_key'] ?? $out['custom_case_action']);
+            $out['custom_case_message'] = (string) ($row['customer_message'] ?? $out['custom_case_message']);
+        }
+        if ($customRows !== []) {
+            $out['custom_case_enabled'] = 1;
+            $out['custom_case_terms'] = implode("\n", array_values(array_unique($customRows)));
+        }
+        return $out;
+    }
+
+    /** @return array{status:string,message:string} */
+    private function agentLimitsStatus(int $tenantId): array
+    {
+        $settings = $this->agentLimitsSettings($tenantId);
+        if (empty($settings['configured'])) {
+            return ['status' => 'pending', 'message' => 'Revise o que o assistente pode ou não decidir sozinho e configure os casos que exigem resposta controlada ou encaminhamento.'];
+        }
+        return ['status' => 'complete', 'message' => 'Limites de autoridade e elegibilidade estão configurados no Policy Engine.'];
+    }
+
+    private function normalizeLimitAction(string $action, array $allowed): string
+    {
+        $action = strtolower(trim($action));
+        return in_array($action, $allowed, true) ? $action : (string) ($allowed[0] ?? 'block');
+    }
+
+    private function normalizeLimitTerm(string $value): string
+    {
+        $value = mb_strtolower(trim($value));
+        $value = strtr($value, [
+            'á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a',
+            'é' => 'e', 'ê' => 'e', 'í' => 'i',
+            'ó' => 'o', 'ô' => 'o', 'õ' => 'o',
+            'ú' => 'u', 'ü' => 'u', 'ç' => 'c',
+        ]);
+        return trim((string) preg_replace('/[^a-z0-9]+/u', ' ', $value));
+    }
+
+    private function upsertAssistedPolicy(
+        int $tenantId,
+        string $key,
+        string $type,
+        mixed $value,
+        string $action,
+        string $message,
+        bool $enabled,
+        int $priority
+    ): void {
+        $this->pdo->prepare(
+            'INSERT INTO tenant_agent_policies
+                (tenant_id, policy_key, policy_type, value_json, action_key, customer_message, enabled, priority, source)
+             VALUES
+                (:tenant_id, :policy_key, :policy_type, :value_json, :action_key, :customer_message, :enabled, :priority, "tenant")
+             ON DUPLICATE KEY UPDATE
+                policy_type = VALUES(policy_type),
+                value_json = VALUES(value_json),
+                action_key = VALUES(action_key),
+                customer_message = VALUES(customer_message),
+                enabled = VALUES(enabled),
+                priority = VALUES(priority),
+                source = "tenant",
+                updated_at = NOW()'
+        )->execute([
+            'tenant_id' => $tenantId,
+            'policy_key' => mb_substr($key, 0, 120),
+            'policy_type' => $type,
+            'value_json' => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'action_key' => mb_substr($action, 0, 120),
+            'customer_message' => $message !== '' ? $message : null,
+            'enabled' => $enabled ? 1 : 0,
+            'priority' => max(1, $priority),
+        ]);
+    }
+
+    private function decodeJsonValue(mixed $raw): mixed
+    {
+        if (is_array($raw) || is_bool($raw) || is_int($raw) || is_float($raw)) {
+            return $raw;
+        }
+        $decoded = json_decode((string) $raw, true);
+        return json_last_error() === JSON_ERROR_NONE ? $decoded : null;
+    }
+
     public function finish(int $tenantId, string $notes, ?int $userId): void
     {
         $this->saveStep($tenantId, 'final_test', 'complete', $notes !== '' ? $notes : 'Teste final validado pelo cliente/RS.', $userId);
-        $this->pdo->prepare('UPDATE tenants SET onboarding_step = 7, onboarding_completed_at = COALESCE(onboarding_completed_at, NOW()) WHERE id = :id')
+        $this->pdo->prepare('UPDATE tenants SET onboarding_step = 8, onboarding_completed_at = COALESCE(onboarding_completed_at, NOW()) WHERE id = :id')
             ->execute(['id' => $tenantId]);
         $this->recordEvent($tenantId, $userId, 'onboarding.completed', 'Onboarding guiado concluído.', ['notes' => $notes]);
     }
@@ -419,7 +764,7 @@ final class OnboardingGuideService
         }
         $completeSql = ((bool) ($summary['is_complete'] ?? false)) ? ', onboarding_completed_at = COALESCE(onboarding_completed_at, NOW())' : '';
         $statement = $this->pdo->prepare('UPDATE tenants SET onboarding_step = :step' . $completeSql . ' WHERE id = :id');
-        $statement->execute(['step' => min(7, $current), 'id' => $tenantId]);
+        $statement->execute(['step' => min(8, $current), 'id' => $tenantId]);
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -432,7 +777,8 @@ final class OnboardingGuideService
             ['key' => 'agenda_setup', 'title' => 'Agenda', 'short' => 'Agenda', 'subtitle' => 'Etapa 4', 'description' => 'Escolha se a empresa usará agenda interna, integração configurada ou se esta etapa não se aplica.', 'action_label' => 'Configurar agenda', 'action_url' => '#agenda-setup', 'icon' => 'calendar'],
             ['key' => 'whatsapp_connection', 'title' => 'Conectar o WhatsApp', 'short' => 'WhatsApp', 'subtitle' => 'Etapa 5', 'description' => 'Conecte o número de atendimento e confirme que ele está pronto antes de criar o assistente.', 'action_label' => 'Abrir conexões', 'action_url' => '/instances', 'icon' => 'whatsapp'],
             ['key' => 'ai_agent', 'title' => 'Criar o assistente virtual', 'short' => 'Assistente', 'subtitle' => 'Etapa 6', 'description' => 'Escreva instruções claras, escolha em qual número o assistente atuará e use as regras definidas nas etapas anteriores.', 'action_label' => 'Abrir assistentes', 'action_url' => '/agents', 'icon' => 'ai'],
-            ['key' => 'final_test', 'title' => 'Teste final', 'short' => 'Teste', 'subtitle' => 'Etapa 7', 'description' => 'Valide uma conversa real, pausa humana, horário e agenda quando aplicável antes de liberar o painel completo.', 'action_label' => 'Executar teste', 'action_url' => '/conversations', 'icon' => 'check'],
+            ['key' => 'agent_limits', 'title' => 'Limites e condutas do assistente', 'short' => 'Limites', 'subtitle' => 'Etapa 7', 'description' => 'Defina o que o assistente não pode decidir sozinho, quando deve interromper uma ação e como responder ou encaminhar casos especiais.', 'action_label' => 'Definir limites', 'action_url' => '#agent-limits', 'icon' => 'shield'],
+            ['key' => 'final_test', 'title' => 'Teste final', 'short' => 'Teste', 'subtitle' => 'Etapa 8', 'description' => 'Valide uma conversa real, os limites configurados, pausa humana, horário e agenda quando aplicável antes de liberar o painel completo.', 'action_label' => 'Executar teste', 'action_url' => '/conversations', 'icon' => 'check'],
         ];
     }
 
@@ -454,6 +800,7 @@ final class OnboardingGuideService
             'company_profile' => $this->companyStatus($tenantId),
             'whatsapp_connection' => $this->whatsappStatus($tenantId),
             'ai_agent' => $this->aiStatus($tenantId),
+            'agent_limits' => $this->agentLimitsStatus($tenantId),
             'attendance_rules' => $this->attendanceStatus($tenantId),
             'agenda_setup' => $this->agendaStatus($tenantId),
             'lgpd_acceptance' => $this->lgpdStatus($tenantId),
@@ -471,7 +818,8 @@ final class OnboardingGuideService
             'agenda_setup' => ['attendance_rules'],
             'whatsapp_connection' => ['agenda_setup'],
             'ai_agent' => ['whatsapp_connection'],
-            'final_test' => ['ai_agent'],
+            'agent_limits' => ['ai_agent'],
+            'final_test' => ['agent_limits'],
         ];
         foreach ($requirements[$key] ?? [] as $requiredKey) {
             foreach ($previousSteps as $step) {

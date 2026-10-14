@@ -1,3 +1,18 @@
+# RS Connect 36.44.0
+> **36.44.0** inicia a Ativação Assistida com uma etapa obrigatória de **Limites e Condutas do Assistente**. Desconto, reembolso, exceções, faixa etária, casos personalizados e situações sensíveis passam a ser decisões estruturadas do Policy Engine antes da IA. Não há migration nova; permanece necessária `125_native_financial_lifecycle_notifications.sql`.
+
+## Homologação rápida 36.44.0
+
+1. Execute `php bin/migrate.php verify` e confirme que a migration 125 está aplicada.
+2. Em **Primeiros passos**, conclua o Assistente e abra **Limites e condutas**.
+3. Ative **Pedido de desconto** como `Encaminhar para responsável` e salve uma resposta aprovada.
+4. No Laboratório ou WhatsApp, envie “Consegue me dar 20% de desconto?”: a IA não deve negociar; a resposta configurada deve ser usada e a conversa deve ir para atendimento humano.
+5. Configure idade mínima/máxima e teste uma pessoa fora da faixa: a agenda deve permanecer protegida conforme a ação escolhida.
+6. Cadastre um caso extra objetivo (ex.: “terapia de casal”) e valide a resposta controlada.
+7. Execute `php tests/Feature/assisted-activation-agent-limits-v36440-smoke.php`.
+
+---
+
 # RS Connect 36.43.1
 > **36.43.1** corrige a agenda por capacidade: horários parcialmente ocupados continuam pesquisáveis até atingir a lotação e a tela passa a exibir ocupação ao vivo (`1/4`, `2/4`, vagas restantes) nas opções e nos pré-agendamentos. Mantém as notificações financeiras/vigência nativas da 36.43.0 e exige `125_native_financial_lifecycle_notifications.sql`.
 

@@ -5,7 +5,7 @@ use App\Core\Router;
 use App\Core\View;
 
 $guide = $guide ?? [];
-$summary = $guide['summary'] ?? ['percent' => 0, 'done' => 0, 'total' => 7, 'pending' => 0, 'attention' => 0, 'blocked' => 0];
+$summary = $guide['summary'] ?? ['percent' => 0, 'done' => 0, 'total' => 8, 'pending' => 0, 'attention' => 0, 'blocked' => 0];
 $steps = $guide['steps'] ?? [];
 $next = $guide['next'] ?? null;
 $instances = $guide['instances'] ?? ($instances ?? []);
@@ -14,6 +14,7 @@ $defaultAgent = $guide['default_agent'] ?? ($agents[0] ?? []);
 $attendanceSettings = $guide['attendance_settings'] ?? [];
 $slaSettings = $guide['sla_settings'] ?? ['target_minutes' => 30, 'warning_percent' => 80, 'count_outside_business_hours' => 0];
 $preSchedule = $guide['pre_schedule'] ?? [];
+$agentLimits = $guide['agent_limits'] ?? [];
 $calendarAccess = $guide['calendar_access'] ?? [];
 $calendarAvailability = $guide['calendar_availability'] ?? [];
 $events = $guide['events'] ?? [];
@@ -300,6 +301,75 @@ $statusClass = static fn (string $status): string => match ($status) {
                             <small class="field-hint">O aceite será registrado com usuário, data, versão da política e informações de auditoria.</small>
                         </div>
                     </div>
+                <?php elseif ($step['key'] === 'agent_limits'): ?>
+                    <form class="wizard-card onboarding-inline-form" method="post" action="<?= View::e(Router::url('/onboarding/limits')) ?>">
+                        <?= Csrf::input() ?>
+                        <div class="onboarding-pre-agent-note">
+                            <strong>Limites são regras de negócio, não sugestões para a IA.</strong>
+                            <span>O RS Connect valida estas situações no Policy Engine antes do modelo responder ou executar uma ação crítica.</span>
+                        </div>
+
+                        <div class="section-heading compact"><div><span class="eyebrow">Autoridade comercial</span><h3>O que exige decisão humana</h3><p>Ative apenas os casos que fazem sentido para a empresa. “Encaminhar” pausa a automação e coloca a conversa para atendimento humano.</p></div></div>
+
+                        <div class="card" style="padding:16px;margin-bottom:14px">
+                            <label class="checkbox-field"><span>Pedido de desconto</span><span class="checkbox-control"><input type="checkbox" name="discount_rule_enabled" value="1" <?= !empty($agentLimits['discount_rule_enabled']) ? 'checked' : '' ?>><span>O assistente não pode conceder desconto sozinho</span></span></label>
+                            <div class="form-grid two">
+                                <label class="field"><span>Quando pedirem desconto</span><select name="discount_action"><option value="handoff" <?= ($agentLimits['discount_action'] ?? 'handoff') === 'handoff' ? 'selected' : '' ?>>Encaminhar para responsável e pausar IA</option><option value="warn" <?= ($agentLimits['discount_action'] ?? '') === 'warn' ? 'selected' : '' ?>>Informar a regra e continuar atendimento</option></select></label>
+                                <label class="field"><span>Resposta aprovada</span><textarea name="discount_message" rows="3"><?= View::e($agentLimits['discount_message'] ?? '') ?></textarea></label>
+                            </div>
+                        </div>
+
+                        <div class="card" style="padding:16px;margin-bottom:14px">
+                            <label class="checkbox-field"><span>Reembolso / estorno</span><span class="checkbox-control"><input type="checkbox" name="refund_rule_enabled" value="1" <?= !empty($agentLimits['refund_rule_enabled']) ? 'checked' : '' ?>><span>Exigir avaliação humana</span></span></label>
+                            <div class="form-grid two">
+                                <label class="field"><span>Ação</span><select name="refund_action"><option value="handoff" <?= ($agentLimits['refund_action'] ?? 'handoff') === 'handoff' ? 'selected' : '' ?>>Encaminhar para responsável</option><option value="warn" <?= ($agentLimits['refund_action'] ?? '') === 'warn' ? 'selected' : '' ?>>Informar a regra e continuar</option></select></label>
+                                <label class="field"><span>Resposta aprovada</span><textarea name="refund_message" rows="3"><?= View::e($agentLimits['refund_message'] ?? '') ?></textarea></label>
+                            </div>
+                        </div>
+
+                        <div class="card" style="padding:16px;margin-bottom:14px">
+                            <label class="checkbox-field"><span>Pedidos de exceção / encaixe fora da regra</span><span class="checkbox-control"><input type="checkbox" name="exception_rule_enabled" value="1" <?= !empty($agentLimits['exception_rule_enabled']) ? 'checked' : '' ?>><span>O assistente não cria exceções por conta própria</span></span></label>
+                            <div class="form-grid two">
+                                <label class="field"><span>Ação</span><select name="exception_action"><option value="handoff" <?= ($agentLimits['exception_action'] ?? 'handoff') === 'handoff' ? 'selected' : '' ?>>Encaminhar para responsável</option><option value="warn" <?= ($agentLimits['exception_action'] ?? '') === 'warn' ? 'selected' : '' ?>>Informar a regra e continuar</option></select></label>
+                                <label class="field"><span>Resposta aprovada</span><textarea name="exception_message" rows="3"><?= View::e($agentLimits['exception_message'] ?? '') ?></textarea></label>
+                            </div>
+                        </div>
+
+                        <div class="section-heading compact"><div><span class="eyebrow">Elegibilidade</span><h3>Faixa etária atendida</h3><p>Deixe 0 quando não houver limite. A idade informada pelo contato é comparada à regra antes de liberar a agenda.</p></div></div>
+                        <div class="form-grid three">
+                            <label class="field"><span>Idade mínima</span><input type="number" name="minimum_age" min="0" max="130" value="<?= (int) ($agentLimits['minimum_age'] ?? 0) ?>"><small>0 = sem mínimo.</small></label>
+                            <label class="field"><span>Idade máxima</span><input type="number" name="maximum_age" min="0" max="130" value="<?= (int) ($agentLimits['maximum_age'] ?? 0) ?>"><small>0 = sem máximo.</small></label>
+                            <label class="field"><span>Quando estiver fora da faixa</span><select name="age_action"><option value="block_schedule" <?= ($agentLimits['age_action'] ?? 'block_schedule') === 'block_schedule' ? 'selected' : '' ?>>Não permitir agenda, mas continuar conversa</option><option value="handoff" <?= ($agentLimits['age_action'] ?? '') === 'handoff' ? 'selected' : '' ?>>Encaminhar para humano</option><option value="block" <?= ($agentLimits['age_action'] ?? '') === 'block' ? 'selected' : '' ?>>Interromper o fluxo automático</option></select></label>
+                        </div>
+                        <div class="form-grid two">
+                            <label class="field"><span>Resposta abaixo da idade mínima</span><textarea name="minimum_age_message" rows="3"><?= View::e($agentLimits['minimum_age_message'] ?? '') ?></textarea><small>Pode usar <code>{{minimum_age}}</code>.</small></label>
+                            <label class="field"><span>Resposta acima da idade máxima</span><textarea name="maximum_age_message" rows="3" placeholder="Ex.: Atualmente os atendimentos são realizados até 60 anos."><?= View::e($agentLimits['maximum_age_message'] ?? '') ?></textarea></label>
+                        </div>
+
+                        <div class="section-heading compact"><div><span class="eyebrow">Casos extras</span><h3>Situações específicas da empresa</h3><p>Cadastre expressões objetivas, uma por linha. Ex.: “terapia de casal”, “convênio X”, “atendimento domiciliar”. O texto do turno é validado antes da IA.</p></div></div>
+                        <div class="card" style="padding:16px;margin-bottom:14px">
+                            <label class="checkbox-field"><span>Aplicar regra para casos personalizados</span><span class="checkbox-control"><input type="checkbox" name="custom_case_enabled" value="1" <?= !empty($agentLimits['custom_case_enabled']) ? 'checked' : '' ?>><span>Usar resposta controlada quando uma expressão cadastrada aparecer</span></span></label>
+                            <div class="form-grid two">
+                                <label class="field"><span>Casos / serviços não atendidos</span><textarea name="custom_case_terms" rows="5" placeholder="Um por linha"><?= View::e($agentLimits['custom_case_terms'] ?? '') ?></textarea><small>Máximo de 10 expressões. Prefira nomes específicos para evitar falsos positivos.</small></label>
+                                <div>
+                                    <label class="field"><span>Ação</span><select name="custom_case_action"><option value="handoff" <?= ($agentLimits['custom_case_action'] ?? 'handoff') === 'handoff' ? 'selected' : '' ?>>Encaminhar para responsável</option><option value="warn" <?= ($agentLimits['custom_case_action'] ?? '') === 'warn' ? 'selected' : '' ?>>Informar a regra e continuar</option><option value="block" <?= ($agentLimits['custom_case_action'] ?? '') === 'block' ? 'selected' : '' ?>>Interromper o fluxo automático</option></select></label>
+                                    <label class="field"><span>Resposta aprovada</span><textarea name="custom_case_message" rows="3"><?= View::e($agentLimits['custom_case_message'] ?? '') ?></textarea></label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="section-heading compact"><div><span class="eyebrow">Casos sensíveis</span><h3>Interromper automação quando necessário</h3><p>Esta regra é opcional. Use a mensagem definida e revisada pela própria empresa.</p></div></div>
+                        <div class="card" style="padding:16px;margin-bottom:14px">
+                            <label class="checkbox-field"><span>Situação urgente / emergência</span><span class="checkbox-control"><input type="checkbox" name="emergency_rule_enabled" value="1" <?= !empty($agentLimits['emergency_rule_enabled']) ? 'checked' : '' ?>><span>Aplicar resposta controlada antes da IA</span></span></label>
+                            <div class="form-grid two">
+                                <label class="field"><span>Ação</span><select name="emergency_action"><option value="handoff" <?= ($agentLimits['emergency_action'] ?? 'handoff') === 'handoff' ? 'selected' : '' ?>>Encaminhar para atendimento humano</option><option value="block" <?= ($agentLimits['emergency_action'] ?? '') === 'block' ? 'selected' : '' ?>>Interromper automação</option><option value="warn" <?= ($agentLimits['emergency_action'] ?? '') === 'warn' ? 'selected' : '' ?>>Enviar orientação e continuar</option></select></label>
+                                <label class="field"><span>Resposta aprovada pela empresa</span><textarea name="emergency_message" rows="4"><?= View::e($agentLimits['emergency_message'] ?? '') ?></textarea></label>
+                            </div>
+                        </div>
+
+                        <div class="message-info"><strong>Regra global de segurança</strong><span>O assistente não recebe autorização para inventar desconto, reembolso, exceção ou elegibilidade. Quando uma regra acima é acionada, a decisão estruturada prevalece sobre o texto gerado pela IA.</span></div>
+                        <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar limites e continuar</button></div>
+                    </form>
                 <?php elseif ($step['key'] === 'final_test'): ?>
                     <div class="onboarding-action-grid">
                         <div>

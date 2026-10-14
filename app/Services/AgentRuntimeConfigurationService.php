@@ -112,6 +112,27 @@ final class AgentRuntimeConfigurationService
             }
         }
 
+
+        $policies = is_array($profile['policies'] ?? null) ? $profile['policies'] : [];
+        foreach ($policies as $policy) {
+            if (!is_array($policy) || empty($policy['enabled'])) {
+                continue;
+            }
+            $policyKey = trim((string) ($policy['policy_key'] ?? ''));
+            $actionKey = strtolower(trim((string) ($policy['action_key'] ?? 'block')));
+            $message = trim((string) ($policy['customer_message'] ?? ''));
+            if (($policyKey !== '') && in_array($actionKey, ['block', 'block_schedule', 'handoff', 'warn'], true) && $message === '') {
+                $warnings[] = 'A regra “' . $policyKey . '” está ativa, mas não possui resposta aprovada para o cliente.';
+            }
+            if ((string) ($policy['policy_type'] ?? '') === 'json') {
+                $rule = is_array($policy['value'] ?? null) ? $policy['value'] : [];
+                $condition = is_array($rule['condition'] ?? null) ? $rule['condition'] : $rule;
+                if (trim((string) ($condition['field'] ?? '')) === '') {
+                    $errors[] = 'A regra estruturada “' . ($policyKey !== '' ? $policyKey : 'sem identificação') . '” não possui condição executável.';
+                }
+            }
+        }
+
         return [
             'ok' => $errors === [],
             'errors' => array_values(array_unique($errors)),

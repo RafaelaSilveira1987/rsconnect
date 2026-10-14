@@ -328,6 +328,19 @@ final class OnboardingController
         $this->redirect('/onboarding#agenda-setup');
     }
 
+    public function saveAgentLimits(): void
+    {
+        $tenantId = (int) Auth::tenantId();
+        try {
+            (new OnboardingGuideService())->saveAgentLimits($tenantId, $_POST, Auth::id());
+            Audit::log('onboarding.agent_limits_saved', [], $tenantId);
+            Flash::set('success', 'Limites e condutas salvos. As decisões críticas serão validadas antes da IA.');
+        } catch (Throwable $exception) {
+            Flash::set('error', $exception->getMessage());
+        }
+        $this->redirect('/onboarding#agent-limits');
+    }
+
     public function finish(): void
     {
         $tenantId = (int) Auth::tenantId();

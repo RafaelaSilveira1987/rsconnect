@@ -1,3 +1,25 @@
+## 36.44.0 — Ativação Assistida: Limites e Condutas
+
+### Adicionado
+- nova etapa **Limites e condutas do assistente** no onboarding guiado, elevando o roteiro para 8 etapas;
+- regras estruturadas para pedido de desconto, reembolso/estorno e pedidos de exceção/encaixe, com opção de encaminhar ao humano ou responder e continuar;
+- faixa etária mínima e máxima configurável, com decisão `bloquear agenda`, `encaminhar` ou `interromper fluxo`;
+- casos extras configuráveis por expressões objetivas, sem adicionar regras específicas da empresa ao código;
+- regra opcional para situações urgentes/sensíveis com resposta aprovada pela empresa;
+- detecção efêmera de intenção do turno (`desconto`, `reembolso`, `exceção`, `emergência`), usada somente pelo Policy Engine e nunca persistida como dado do cliente;
+- avisos estruturados (`warn`) agora podem responder com texto aprovado sem deixar a IA renegociar ou reescrever a decisão no mesmo turno;
+- auditoria do runtime alerta políticas ativas sem resposta aprovada e rejeita políticas JSON sem condição executável.
+
+### Arquitetura
+- decisões críticas continuam em `tenant_agent_policies`; não foi criada uma segunda fonte de regras;
+- o modelo interpreta/conversa, mas não decide autorização comercial nem elegibilidade;
+- respostas configuradas por política prevalecem sobre o texto gerado pela IA quando a condição é acionada.
+
+### Compatibilidade
+- nenhuma migration nova;
+- permanece obrigatória `125_native_financial_lifecycle_notifications.sql`;
+- configurações e blueprints existentes continuam válidos.
+
 ## 36.43.1 — Capacidade da agenda ao vivo
 
 ### Corrigido

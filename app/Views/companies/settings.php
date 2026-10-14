@@ -51,7 +51,7 @@ $queueEnabled = (bool) (($moduleSettings['queue']['is_enabled'] ?? null) ?? ($qu
     <div class="readonly-grid">
         <div><span>Slug</span><strong><?= View::e($company['slug']) ?></strong></div>
         <div><span>Plano</span><strong><?= View::e(ucfirst($company['plan'])) ?></strong></div>
-        <div><span>Onboarding</span><strong><?= $company['onboarding_completed_at'] ? 'Concluído' : 'Etapa ' . (int) $company['onboarding_step'] . '/7' ?></strong></div>
+        <div><span>Onboarding</span><strong><?= $company['onboarding_completed_at'] ? 'Concluído' : 'Etapa ' . (int) $company['onboarding_step'] . '/8' ?></strong></div>
     </div>
 
 
@@ -803,7 +803,7 @@ $queueEnabled = (bool) (($moduleSettings['queue']['is_enabled'] ?? null) ?? ($qu
         <div class="client-settings-accordion-body readonly-grid">
             <div><span>Identificador</span><strong><?= View::e($company['slug']) ?></strong></div>
             <div><span>Plano</span><strong><?= View::e(ucfirst($company['plan'])) ?></strong></div>
-            <div><span>Primeiros passos</span><strong><?= $company['onboarding_completed_at'] ? 'Concluídos' : 'Etapa ' . (int) $company['onboarding_step'] . '/7' ?></strong></div>
+            <div><span>Primeiros passos</span><strong><?= $company['onboarding_completed_at'] ? 'Concluídos' : 'Etapa ' . (int) $company['onboarding_step'] . '/8' ?></strong></div>
         </div>
     </details>
 

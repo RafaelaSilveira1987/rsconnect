@@ -342,6 +342,7 @@ return static function (Router $router): void {
     $router->post('/onboarding/step', [OnboardingController::class, 'updateStep'], ['auth', 'permission:onboarding.manage', 'csrf']);
     $router->post('/onboarding/attendance', [OnboardingController::class, 'saveAttendance'], ['auth', 'permission:onboarding.manage', 'csrf']);
     $router->post('/onboarding/agenda', [OnboardingController::class, 'saveAgenda'], ['auth', 'permission:onboarding.manage', 'csrf']);
+    $router->post('/onboarding/limits', [OnboardingController::class, 'saveAgentLimits'], ['auth', 'permission:onboarding.manage', 'csrf']);
     $router->post('/onboarding/final-test', [OnboardingController::class, 'finish'], ['auth', 'permission:onboarding.manage', 'csrf']);
 
     $router->get('/instances', [InstanceController::class, 'index'], ['auth', 'permission:instances.view']);
