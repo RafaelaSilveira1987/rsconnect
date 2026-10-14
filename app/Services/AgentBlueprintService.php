@@ -10,6 +10,12 @@ use Throwable;
 
 final class AgentBlueprintService
 {
+    /** Deterministic phase-1 compiler; does not access or change the database. */
+    public function compileExpress(\App\DTO\ExpressOnboardingData $data, array $baseConfig): array
+    {
+        return (new ExpressBlueprintCompiler())->compile($data, $baseConfig);
+    }
+
     public function niches(bool $activeOnly = true): array
     {
         $pdo = Database::connection();

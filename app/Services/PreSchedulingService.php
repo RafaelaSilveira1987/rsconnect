@@ -80,6 +80,23 @@ final class PreSchedulingService
             return $result;
         }
 
+        // Proteção também na chamada direta ao fluxo de pré-agendamento.
+        if ((int) ($flowContext['reschedule_of_appointment_id'] ?? 0) > 0
+            && !(new AgentBlueprintService())->can($tenantId, 'calendar.reschedule', 0, true, $pdo)) {
+            $send = $this->sendAgendaGateMessage(
+                $pdo, $instance, $conversationId, $contactId,
+                'A remarcação automática não está habilitada. A equipe poderá orientar você.',
+                'reschedule_disabled', $incomingMessageId
+            );
+            $result['handled'] = true;
+            $result['blocked'] = true;
+            $result['blocked_reason'] = 'reschedule_disabled';
+            $result['blocked_message_sent'] = !empty($send['ok']);
+            $result['skip_ai'] = true;
+            $result['terminal_handled'] = true;
+            return $result;
+        }
+
         // 36.37.0 — modalidade deixa de ser uma trava universal. A empresa define se
         // esse conceito não se aplica, se existe uma única forma de atendimento ou se
         // o contato realmente precisa escolher. Em modalidade única, o valor é

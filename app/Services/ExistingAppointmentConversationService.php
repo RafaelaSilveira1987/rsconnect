@@ -112,6 +112,23 @@ final class ExistingAppointmentConversationService
             return $this->result(false, false, 'not_existing_appointment_intent');
         }
 
+        // Wizard: bloqueio executável, sem depender da resposta da LLM.
+        if ($intent === 'reschedule'
+            && !(new AgentBlueprintService())->can($tenantId, 'calendar.reschedule', 0, true, $pdo)) {
+            $context = $this->contactContext($pdo, $tenantId, $contactId, $conversationId);
+            $send = $context ? $communication->sendAppointmentMessage(
+                $context,
+                'A remarcação automática não está habilitada. Nossa equipe pode orientar sobre os próximos passos.',
+                'calendar.reschedule_disabled',
+                ['incoming_message_id' => $incomingMessageId ?: null]
+            ) : ['ok'=>false,'error'=>'Contato não identificado'];
+            $this->markHandled($pdo, $tenantId, $conversationId, $incomingMessageId, 'reschedule', 0, !empty($send['ok']));
+            return array_merge($this->result(true, true, 'reschedule_disabled'), [
+                'intent'=>'reschedule', 'message_sent'=>!empty($send['ok']),
+                'send_error'=>$send['error'] ?? null,
+            ]);
+        }
+
         if (count($appointments) > 1 && !$pendingDisambiguation) {
             $selected = $this->selectAppointmentCandidate($content, $appointments);
             if ($selected) {

@@ -704,7 +704,22 @@ final class CalendarClientCommunicationService
             self::EVENT_PRESENCE_REQUEST => (string) ($settings['presence_request_message'] ?? ''),
             default => '',
         };
-        return $template !== '' ? $this->renderAppointmentTemplate($template, $appointment) : '';
+        if ($template === '') return '';
+        if ($eventKey === self::EVENT_CONFIRMED) {
+            $linkRule = (new ExpressConfirmationLinkService())->forConfirmedAppointment($appointment);
+            if ($linkRule['configured']) {
+                // Ao contrário de um prompt, isto exige agendamento confirmado e modalidade online.
+                $appointment['meeting_url'] = $linkRule['url'] ?? '';
+                $message = $this->renderAppointmentTemplate($template, $appointment);
+                if ($linkRule['url'] !== null
+                    && !str_contains($template, '{{local}}')
+                    && !str_contains($template, '{{link_consulta}}')) {
+                    $message .= "\nLink do atendimento: " . $linkRule['url'];
+                }
+                return trim($message);
+            }
+        }
+        return $this->renderAppointmentTemplate($template, $appointment);
     }
 
     private function shouldSkipJob(array $job, array $appointment): bool

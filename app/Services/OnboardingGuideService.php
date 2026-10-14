@@ -142,6 +142,14 @@ final class OnboardingGuideService
             return true;
         }
         $step = $this->currentStepKey($tenantId, $userId);
+        // Wizard express fica acessível após a etapa de aceite de privacidade,
+        // sem liberar essa rota como atalho para LGPD/primeiro cadastro.
+        if ($path === '/api/agents/express' && in_array($step, [
+            'attendance_rules', 'agenda_setup', 'agent_limits',
+            'whatsapp_connection', 'ai_agent', 'final_test',
+        ], true)) {
+            return true;
+        }
         return match ($step) {
             'lgpd_acceptance' => in_array($path, ['/privacy/accept'], true),
             'attendance_rules', 'agenda_setup', 'agent_limits' => str_starts_with($path, '/agents') || str_starts_with($path, '/calendar'),

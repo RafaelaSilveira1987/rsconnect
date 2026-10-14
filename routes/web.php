@@ -6,6 +6,7 @@ use App\Controllers\AccessController;
 use App\Controllers\AgentController;
 use App\Controllers\AgentTestController;
 use App\Controllers\AgentBlueprintController;
+use App\Controllers\ExpressOnboardingController;
 use App\Controllers\AdminCrmController;
 use App\Controllers\AiCredentialController;
 use App\Controllers\AiProfitabilityController;
@@ -58,6 +59,9 @@ use App\Controllers\WhiteLabelController;
 use App\Core\Router;
 
 return static function (Router $router): void {
+    // Wizard determinístico: tenant da sessão; requisição JSON com X-CSRF-TOKEN.
+    $router->post('/api/agents/express', [ExpressOnboardingController::class, 'apply'], ['auth', 'csrf']);
+
     // API nativa utilizada pelo aplicativo RS Connect Mobile.
     // Autenticação Bearer própria; não usa cookie/CSRF do navegador.
     $router->post('/auth/login', [MobileApiController::class, 'login']);
