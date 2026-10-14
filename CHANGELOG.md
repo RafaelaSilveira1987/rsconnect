@@ -1,3 +1,21 @@
+## 2026-10-14 — Painel de Negócios /agents (entrega frontend)
+
+- Tela de empresa em `/agents` substituída por configurações fechadas, FAQ, canais, prontidão e simulador lado a lado.
+- Rota de salvamento preserva contrato Express Fase 1 e permissões de agentes; simulação isolada utiliza laboratório existente.
+- Renderização segura, mudança pendente antes do teste, auditoria e auto-fix preservados.
+- Editor técnico do superadmin continua disponível.
+- Consulte `docs/FASE4_PAINEL_NEGOCIOS_AGENTS.md` para limites de migração e testes.
+
+## Interface Configuração Expressa + Prontidão — Fase 3 (14/10/2026)
+
+- Nova rota `/onboarding/express` para configuração por decisões de negócio, mantendo PHP e JavaScript nativos.
+- Componentes `AgentWizard` e `ReadinessDashboard`: inputs, cards de segmento, ações comerciais, triagem, horários, FAQ, resumo, donut e auto-fix com confirmação.
+- Prefill pelo perfil da empresa, seleção de agentes com UUID público e isolamento por tenant; sem migrations.
+- POST Express passa a exigir `onboarding.manage`, além de CSRF; readiness mantém RBAC individual.
+- CSS isolado, responsivo, sem dependências JS externas; atalho em Ativação Assistida.
+- Ação de salvar não ativa automaticamente o atendimento. Empresas com configurações anteriores recebem confirmação antes de substituir regras.
+- Testes: `php tests/Feature/agent-express-frontend-smoke.php`.
+
 ## Fase 2 (pré-homologação) — Validador de Prontidão determinístico
 
 - Adicionados `AgentReadinessEvaluator`, `AgentReadinessService` e `AgentAutoFixService` sem novas migrations.

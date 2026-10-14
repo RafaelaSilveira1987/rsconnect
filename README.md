@@ -1,3 +1,5 @@
+> **Novo:** Configuração Expressa com três passos, revisão e painel de prontidão em `/onboarding/express`. Consulte `docs/FASE3_WIZARD_PRONTIDAO_FRONTEND.md` e `FASE3_LEIA_PRIMEIRO.txt`. A aplicação continua baseada em PHP 8.2 e JavaScript nativo.
+
 # RS Connect 36.44.4
 > **36.44.4** transforma a configuração do atendimento em uma tela de negócio: perguntas, horário, agenda, capacidade, aprovação e limites são definidos sem expor workflow, capabilities ou actions. O salvamento é transacional: se alguma regra falhar, nenhuma parte é publicada pela metade. Não há migration nova; permanece necessária `125_native_financial_lifecycle_notifications.sql`.
 

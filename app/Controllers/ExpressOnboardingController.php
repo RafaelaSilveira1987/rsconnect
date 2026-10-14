@@ -21,7 +21,7 @@ final class ExpressOnboardingController
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store');
         $tenantId = (int) (Auth::tenantId() ?? 0);
-        if ($tenantId <= 0) {
+        if ($tenantId <= 0 || (!Auth::can('onboarding.manage') && !Auth::can('agents.manage'))) {
             $this->reply(403, ['ok'=>false,'message'=>'Sessão sem empresa vinculada.']);
             return;
         }

@@ -30,6 +30,12 @@ final class AgentController
 {
     public function index(): void
     {
+        // O painel de negócio substitui o formulário técnico para a empresa.
+        // Superadmin mantém o console de manutenção legado sem editar o tenant errado.
+        if (!Auth::isSuperAdmin()) {
+            (new ExpressSetupController())->businessDashboard();
+            return;
+        }
         $pdo = Database::connection();
         $tenantId = $this->resolveTenantId();
         $tenants = [];

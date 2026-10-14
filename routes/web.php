@@ -7,7 +7,9 @@ use App\Controllers\AgentController;
 use App\Controllers\AgentTestController;
 use App\Controllers\AgentBlueprintController;
 use App\Controllers\ExpressOnboardingController;
+use App\Controllers\ExpressSetupController;
 use App\Controllers\AgentReadinessController;
+use App\Controllers\AgentBusinessSimulationController;
 use App\Controllers\AdminCrmController;
 use App\Controllers\AiCredentialController;
 use App\Controllers\AiProfitabilityController;
@@ -61,9 +63,13 @@ use App\Core\Router;
 
 return static function (Router $router): void {
     // Wizard determinístico: tenant da sessão; requisição JSON com X-CSRF-TOKEN.
-    $router->post('/api/agents/express', [ExpressOnboardingController::class, 'apply'], ['auth', 'csrf']);
+    $router->get('/onboarding/express', [ExpressSetupController::class, 'index'], ['auth', 'permission:onboarding.manage']);
+    $router->post('/api/agents/express', [ExpressOnboardingController::class, 'apply'], ['auth', 'permission:onboarding.manage', 'csrf']);
+    // Painel de negócios: mesma validação e mesmo serviço, com permissão de agentes.
+    $router->post('/api/v1/agents/business-save', [ExpressOnboardingController::class, 'apply'], ['auth', 'permission:agents.manage', 'csrf']);
 
     // Phase 2: UUID público na URL; tenant resolvido exclusivamente pela sessão.
+    $router->post('/api/v1/agents/{id}/simulate', [AgentBusinessSimulationController::class, 'simulate'], ['auth', 'permission:agents.manage', 'csrf']);
     $router->get('/api/v1/agents/{id}/readiness', [AgentReadinessController::class, 'show'], ['auth', 'permission:agents.view']);
     $router->post('/api/v1/agents/{id}/autofix', [AgentReadinessController::class, 'autofix'], ['auth', 'permission:agents.manage', 'csrf']);
     // Alias GET compatível com o contrato singular inicial.

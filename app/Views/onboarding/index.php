@@ -203,6 +203,8 @@ foreach ($activationPhases as $phaseIndex => $phase) {
     </div>
 </section>
 
+<section class="card" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:16px 0"><div><strong>Prepare seu assistente em poucos minutos</strong><p style="margin:4px 0 0">Defina nome, perguntas, preços, horários e respostas em uma única tela.</p></div><a class="btn btn-primary" href="<?= View::e(Router::url('/onboarding/express')) ?>">Abrir configuração rápida</a></section>
+
 <nav class="onboarding-phase-strip" aria-label="Etapas da ativação assistida">
     <?php foreach ($activationPhases as $phaseIndex => $phase): ?>
         <a class="onboarding-phase-card is-<?= View::e((string) $phase['status']) ?>" href="<?= View::e(Router::url('/onboarding?step=' . $phase['anchor'])) ?>#<?= View::e((string) $phase['anchor']) ?>">

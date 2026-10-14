@@ -189,6 +189,8 @@ $svgIcon = static function (string $name): string {
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
     <!-- Compatibilidade histórica v36.30.5: app.css?v=36.30.5 app.js?v=36.30.5 -->
     <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.44.4')) ?>">
+    <?php if (!empty($expressAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-express.css?v=1')) ?>"><?php endif; ?>
+    <?php if (!empty($businessDashboardAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-business.css?v=1')) ?>"><?php endif; ?>
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
             width: 54px !important;
@@ -231,6 +233,7 @@ $svgIcon = static function (string $name): string {
 
             <?php if (!Auth::isSuperAdmin() && Auth::can('onboarding.manage')): ?>
                 <a class="nav-link<?= $isActive('/onboarding') ?>" href="<?= View::e(Router::url('/onboarding')) ?>"><?= $svgIcon('check') ?><span>Ativação Assistida</span></a>
+                <a class="nav-link<?= $isActive('/onboarding/express') ?>" href="<?= View::e(Router::url('/onboarding/express')) ?>"><?= $svgIcon('agent') ?><span>Preparar atendimento</span></a>
             <?php endif; ?>
 
             <?php if ((Auth::can('conversations.view') && $moduleVisible('conversations')) || (Auth::can('queue.view') && $moduleVisible('queue')) || (Auth::can('contacts.view') && $moduleVisible('contacts')) || (Auth::can('crm.view') && $moduleVisible('crm')) || (Auth::can('tasks.view') && $moduleVisible('tasks')) || (Auth::can('calendar.view') && $moduleVisible('calendar'))): ?>
@@ -306,7 +309,7 @@ $svgIcon = static function (string $name): string {
                     <a class="nav-link<?= $isActive('/instances') ?>" href="<?= View::e(Router::url('/instances')) ?>"><?= $svgIcon('instance') ?><span>Canais WhatsApp</span></a>
                 <?php endif; ?>
                 <?php if (Auth::can('agents.view') && $moduleVisible('agents')): ?>
-                    <a class="nav-link<?= $isActive('/agents') ?>" href="<?= View::e(Router::url('/agents')) ?>"><?= $svgIcon('agent') ?><span>Assistentes de IA</span></a>
+                    <a class="nav-link<?= $isActive('/agents') ?>" href="<?= View::e(Router::url('/agents')) ?>"><?= $svgIcon('agent') ?><span>Assistentes</span></a>
                 <?php endif; ?>
                 <?php if (Auth::can('automations.view') && $moduleVisible('automations')): ?>
                     <a class="nav-link<?= $isActive('/automations') ?>" href="<?= View::e(Router::url('/automations')) ?>"><?= $svgIcon('automation') ?><span>Automações</span></a>
@@ -542,5 +545,7 @@ $svgIcon = static function (string $name): string {
 <!-- Marcador histórico de regressão: app.js?v=36.20.5 -->
 <!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 app.js?v=36.20.8 app.js?v=36.20.9 -->
 <script src="<?= View::e(Router::url('/assets/js/app.js?v=36.41.8')) ?>" defer></script>
+<?php if (!empty($expressAssets)): ?><script src="<?= View::e(Router::url('/assets/js/agent-express.js?v=1')) ?>" defer></script><?php endif; ?>
+<?php if (!empty($businessDashboardAssets)): ?><script src="<?= View::e(Router::url('/assets/js/agent-business.js?v=1')) ?>" defer></script><?php endif; ?>
 </body>
 </html>
